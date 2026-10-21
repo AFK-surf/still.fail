@@ -11,7 +11,8 @@ frames it drew (MBUI_DRAW_LOG=1: their DRAWHASH lines), kept in screens/text-mac
 src/sfscreens embeds it (moon.pkg's pre-build) and gives each screen's Tester its own section: a run's glyphs are
 numbered in the order it met them (and placed in its atlas so), so each screen keeps its own run's.
 
-  scripts/screens.py keep MODE LOG     LOG's lines kept as MODE's section (scripts/screens.sh rec)
+  scripts/screens.py keep MODE LOG [KEPT]     LOG's lines kept as MODE's section (scripts/screens.sh rec; KEPT another
+                                              host's: screens/text-android.textrec, scripts/android-ref.sh text)
 """
 import os, sys
 
@@ -60,7 +61,9 @@ def keep_log(mode, log):
     print(f"{mode}: {len(rec)} lines of text, frame {last[0]} hash {last[5]}")
 
 
-if sys.argv[1:2] == ["keep"] and len(sys.argv) == 4:
+if sys.argv[1:2] == ["keep"] and len(sys.argv) in (4, 5):
+    if len(sys.argv) == 5:
+        kept = os.path.abspath(sys.argv[4])
     keep_log(sys.argv[2], sys.argv[3])
 else:
     sys.exit(__doc__)

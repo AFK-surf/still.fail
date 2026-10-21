@@ -314,7 +314,13 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         if go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core)) {
           (core.push)(BarSettings)
         }
-        if go_row(c, "go-files", tr("android-settings.files.title")) {
+        // what this device keeps, in all (SettingsHome.kt: KeptFiles.read's total), once the core has said
+        kept_read(c, core)
+        let kept_value = match kept.chats {
+          Some(chats) => size_words(chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") }))
+          None => ""
+        }
+        if go_row(c, "go-files", tr("android-settings.files.title"), value=kept_value) {
           (core.push)(KeptFiles)
         }
         // notifications on this device, local notices and pushes alike (SettingsHome.kt Notify): as the core's

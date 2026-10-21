@@ -3,17 +3,27 @@
 # screen of client/fixtures/screens is the core's JSON both apps draw it from (Android's ScreensRefTest, sffix's
 # MBUI_FIXTURE=json: src/sfapp/fixture_json.mbt). Android's pictures are the references, kept in the repository
 # (client/fixtures/screens/android/, with android.json: the emulator's system they were taken on); the mbui app's are
-# drawn on each run and compared with them pixel by pixel (scripts/android_ref.py), the regions allowed.json lets
-# differ left out. The system's bars are in demo mode for both (the same clock, battery and signal).
+# not taken of the app running: each screen is drawn in a Tester over the Android host's text (src/sfscreens/
+# android_ref_wbtest.mbt), its draw list drawn offscreen by mbui-render on the same emulator, and compared with
+# Android's pixel by pixel (scripts/android_ref.py), the regions allowed.json lets differ left out.
 #
 #   scripts/android-ref.sh refs [NAME…]      Android's pictures taken anew (its app and test APKs installed: ANDROID_APK,
 #                                            ANDROID_TEST_APK), into client/fixtures/screens/android/ with android.json
-#   scripts/android-ref.sh mbui [NAME…]      the mbui app's (APP=sffix's debug APK installed: MBUI_APK) into
-#                                            out/android-ref/mbui/, on the references' system (else it fails, saying so)
+#   scripts/android-ref.sh text [NAME…]      the Android host's text for each (screens/text-android.textrec): the mbui
+#                                            app (APP=sffix's debug APK: MBUI_APK) run once to the screen's moment; for a
+#                                            screen whose text the Tester lacks
+#   scripts/android-ref.sh lists [NAME…]     the Tester's draw lists (out/android-ref/dl/), each with its picture's key
+#   scripts/android-ref.sh need [NAME…]      the screens whose pictures are not kept for their keys (PICS)
+#   scripts/android-ref.sh mbui [NAME…]      the mbui app's pictures into out/android-ref/mbui/: kept ones as they are,
+#                                            the others' draw lists drawn by mbui-render (RENDER_APK: scripts/
+#                                            render_android.sh's app) on the references' system (else it fails, saying
+#                                            so) and kept
 #   scripts/android-ref.sh compare [NAME…]   each against its reference: out/android-ref/<name>.png (Android | mbui |
 #                                            the pixels that differ), out/android-ref/report.md; fails on a difference
 #                                            allowed.json does not allow
-#   scripts/android-ref.sh ci                CI's: refs (REFS=1, or none kept yet: then held to those kept), mbui, compare
+#   scripts/android-ref.sh ci                CI's: refs (REFS=1, or none kept yet: then held to those kept), text (TEXT=1),
+#                                            lists, mbui, compare; with no emulator where neither is asked for and every
+#                                            picture is kept
 #
 # ADB (the emulator's: adb -s emulator-$EMU_PORT, 5554 by default). NAMEs: client/fixtures/screens/*.json by default.
 set -u
@@ -25,9 +35,24 @@ R=$S/android
 O=$A/out/android-ref
 SDK=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}
 ADB=${ADB:-$SDK/platform-tools/adb -s emulator-${EMU_PORT:-5554}}
+MBUI_DIR=${MBUI_DIR:-$A/mbui}
 PKG=${MBUI_PKG:-fail.still.mbui.debug}
 M=fail.still.android.motion
 die() { echo "android-ref: $*" >&2; exit 1; }
+# the mbui pictures kept by their keys (lists): the Actions cache's in CI
+PICS=${PICS:-$A/out/android-ref-pics}
+# What draws a draw list into the pictures compared, by its files' contents: mbui's renderer and what it reads of the
+# draw list, its Android host and text, how its app is built, and this script and android_ref.py (how the window is put
+# on the screen); the sources alone (an app build puts its .so beside them). Another of these, every screen drawn anew.
+render_code() {
+  (cd $ROOT && find apps/mbui/mbui/src/render apps/mbui/mbui/src/host/android_host.c apps/mbui/mbui/src/host/corner* \
+    apps/mbui/mbui/src/ui/drawlist.mbt apps/mbui/mbui/src/ui/scene.mbt apps/mbui/mbui/src/ui/line.mbt \
+    apps/mbui/mbui/src/ui/smooth.mbt apps/mbui/mbui/android/app/src/main/java apps/mbui/mbui/android/app/src/main/res \
+    apps/mbui/mbui/android/app/src/main/AndroidManifest.xml apps/mbui/mbui/android/apk.json \
+    apps/mbui/mbui/android/apk.lock apps/mbui/mbui/scripts/apk.py apps/mbui/mbui/scripts/android.sh \
+    apps/mbui/mbui/scripts/render_android_hook.sh apps/mbui/scripts/android-ref.sh apps/mbui/scripts/android_ref.py \
+    -type f | LC_ALL=C sort | xargs shasum -a 256) || die "what draws the pictures not read"
+}
 cmd=${1:-}; shift || true
 names=${*:-$(cd $S && ls *.json | sed 's/\.json$//' | grep -v -x allowed)}
 
@@ -82,50 +107,99 @@ case "$cmd" in
     machine | python3 -c 'import json,sys; m=json.load(sys.stdin); t,b=sys.argv[1].split(); m["bars"]={"top":int(t),"bottom":int(b)}; print(json.dumps(m))' "$bars" > $R/android.json
     echo "android-ref: Android's pictures of $(echo $names | wc -w | tr -d ' ') screens in $R, taken on $(cat $R/android.json)"
     ;;
-  mbui)
+  text)
+    # The Android host's text for each screen (screens/text-android.textrec, a section a screen): the mbui app run once
+    # on the emulator over the screen's JSON to the moment it names (MBView's shot_at, its own clock), its text and its
+    # frames on its log (MBUI_TEXT_RECORD, MBUI_DRAW_LOG); the run's end its own word (SHOT, or its crash: never a
+    # time). Only what the Tester then lacks makes this needed (src/sfscreens/android_ref_wbtest.mbt says which).
+    [ -n "${MBUI_APK:-}" ] && { $ADB install -r "$MBUI_APK" > /dev/null || die "the mbui app not installed"; }
+    uid=$($ADB shell pm list packages -U $PKG | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\).*/\1/p")
+    mkdir -p $O/text
+    # each screen's moment as the Tester takes it (its words on it, then `at`: MBUI_ANDROID_REF=moments), in the window
+    # this emulator gives the app (its screen between the bars android.json says, in its density's points)
     [ -f $R/android.json ] || die "no references ($R/android.json): scripts/android-ref.sh refs first"
+    win=$(machine | python3 -c 'import json,sys; m=json.load(sys.stdin); b=json.load(open(sys.argv[1]))["bars"]; w,h=map(int,m["size"].split("x")); s=int(m["density"])/160; print(w/s, (h-b["top"]-b["bottom"])/s, s)' $R/android.json)
+    (cd $A && MBUI_ANDROID_REF=moments MBUI_ANDROID_WINDOW="$win" moon test --target js -p stillfail/sfscreens 2>&1) > $O/text/moments.txt \
+      || { grep -a -E "failed|FAILED" $O/text/moments.txt | head -10; die "the screens' moments not found (src/sfscreens/android_ref_wbtest.mbt)"; }
+    for n in $names; do
+      json=$(python3 -c 'import json,sys,base64; print(base64.b64encode(json.dumps(json.load(open(sys.argv[1])),ensure_ascii=False,separators=(",",":")).encode()).decode())' $S/$n.json)
+      # (the run to that moment on its clock: MBView draws until its clock reaches it, that frame the last)
+      at=$(awk -v n="$n" '$1 == "MOMENT" && $2 == n { printf "%d", ($3 == int($3)) ? $3 : int($3) + 1 }' $O/text/moments.txt)
+      [ -n "$at" ] || die "$n: no moment said for it ($O/text/moments.txt)"
+      $ADB shell am force-stop $PKG
+      $ADB shell run-as $PKG rm -f files/run.log || true
+      $ADB logcat -b all -c
+      $ADB shell am start -n $PKG/dev.mbui.MainActivity --ei shot_at $at \
+        --es env "'MBUI_FIXTURE=json;MBUI_FIXTURE_JSON_B64=$json;MBUI_TEXT_RECORD=1;MBUI_DRAW_LOG=1;MBUI_LOG_FILE=run.log'" > /dev/null
+      python3 "$MBUI_DIR/scripts/android_end.py" --adb "$ADB" --app $PKG --uid $uid --file run.log \
+        --end "SHOT |FATAL EXCEPTION|Fatal signal" > $O/text/$n.end || { cat $O/text/$n.end; die "$n: no picture's moment"; }
+      grep -q "SHOT " $O/text/$n.end || { cat $O/text/$n.end; die "$n: the app ended before its moment"; }
+      $ADB exec-out run-as $PKG cat files/run.log > $O/text/$n.log
+      $ADB shell am force-stop $PKG
+      python3 "$A/scripts/screens.py" keep $n $O/text/$n.log "$A/screens/text-android.textrec" || exit 1
+    done
+    ;;
+  lists)
+    # Each screen's draw list as the Tester draws it over the Android host's text (src/sfscreens/android_ref_wbtest.mbt,
+    # MBUI_ANDROID_REF=1: out/android-ref/dl/NAME.dl), and the key of its picture: the draw list's bytes, what draws
+    # it (render_code: mbui's renderer, its Android host, how the window is put on the screen) and the references'
+    # system (android.json). A picture of that key is the same picture: drawn once, kept (PICS, the Actions cache).
+    [ -f $R/android.json ] || die "no references ($R/android.json): scripts/android-ref.sh refs first"
+    rm -rf $O/dl && mkdir -p $O/dl
+    (cd $A && MBUI_ANDROID_REF=1 moon test --target js -p stillfail/sfscreens 2>&1) > $O/dl/print.txt \
+      || { grep -a -E "failed|FAILED|lacks|no Android text" $O/dl/print.txt | head -20; die "the screens' draw lists not drawn (src/sfscreens/android_ref_wbtest.mbt)"; }
+    code=$(render_code) && [ -n "$code" ] || die "what draws the pictures not read"
+    for n in $names; do
+      awk -v n="$n" '$0 == "DLEND " n {p=0} p {print} $0 == "DLBEGIN " n {p=1}' $O/dl/print.txt > $O/dl/$n.dl
+      [ -s $O/dl/$n.dl ] || die "$n: no draw list"
+      { cat $O/dl/$n.dl; echo "$code"; cat $R/android.json; } | shasum -a 256 | cut -c1-32 > $O/dl/$n.key
+    done
+    ;;
+  need)
+    # the screens whose pictures are not kept (PICS) for their keys (lists): what mbui must draw on the emulator
+    for n in $names; do [ -f "$PICS/$(cat $O/dl/$n.key)-$n.png" ] || echo $n; done
+    ;;
+  mbui)
+    # The mbui app's pictures: each screen's draw list (lists) drawn offscreen by mbui-render on the emulator (its GL
+    # renderer and its text: RENDER_APK, scripts/render_android.sh's app) into the window's pixels, then put where the
+    # window is on the screen (between the bars android.json says) as Android's picture is of the whole screen; a
+    # picture kept for its key (PICS) taken as it is, the emulator not asked.
+    rm -rf $O/mbui && mkdir -p $O/mbui "$PICS"
+    draw=""
+    for n in $names; do
+      k=$(cat $O/dl/$n.key) || die "$n: no draw list (scripts/android-ref.sh lists)"
+      if [ -f "$PICS/$k-$n.png" ]; then cp "$PICS/$k-$n.png" $O/mbui/$n.png; echo "$n: its picture kept ($k)"; else draw="$draw $n"; fi
+    done
+    [ -n "$draw" ] || exit 0
     have=$(machine | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"])')
     want=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["fingerprint"])' $R/android.json)
     [ "$have" = "$want" ] || die "the emulator's system is not the references': this one is $have, they were taken on $want (make them again: the refs job)"
-    [ -n "${MBUI_APK:-}" ] && { $ADB install -r "$MBUI_APK" > /dev/null || die "the mbui app not installed"; }
-    demo
-    rm -rf $O/mbui && mkdir -p $O/mbui
-    fail=0
-    for n in $names; do
-      json=$(python3 -c 'import json,sys,base64; print(base64.b64encode(json.dumps(json.load(open(sys.argv[1])),ensure_ascii=False,separators=(",",":")).encode()).decode())' $S/$n.json)
-      # the moment pictured: the one the screen names (`at`) on the app's own clock (mbui's MBView shot_at: its frames
-      # 1/60 s apart from 0, the clock still while the app awaits its host, an image decoding), told once that frame
-      # is on the screen in the app's window ("SHOT n t"): adb's screencap takes it
-      at=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("at", 3000))' $S/$n.json)
-      log=$O/mbui/$n.log
-      $ADB shell am force-stop $PKG
+    [ -n "${RENDER_APK:-}" ] && { $ADB install -r "$RENDER_APK" > /dev/null || die "mbui-render not installed"; }
+    RID=dev.mbui.demo
+    F=/data/user/0/$RID/files
+    $ADB shell input keyevent KEYCODE_WAKEUP
+    $ADB shell wm dismiss-keyguard
+    size=$($ADB shell wm size | sed 's/.*: //' | tr -d '\r')
+    top=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["bars"]["top"])' $R/android.json)
+    for n in $draw; do
+      $ADB shell am force-stop $RID
+      $ADB shell run-as $RID mkdir -p files
+      $ADB shell run-as $RID rm -f files/$n.png
+      $ADB exec-in "run-as $RID sh -c 'cat > files/$n.dl'" < $O/dl/$n.dl
       $ADB logcat -c
-      FIFO=$O/mbui/$n.fifo; rm -f $FIFO && mkfifo $FIFO
-      $ADB logcat -v raw -s mbui:I AndroidRuntime:E > $FIFO 2>/dev/null &
-      LCAT=$!
-      exec 3< $FIFO
-      $ADB shell am start -n $PKG/dev.mbui.MainActivity --ei shot_at $at --es env "'MBUI_FIXTURE=json;MBUI_FIXTURE_JSON_B64=$json'" > /dev/null
-      ok=0
-      # (the run ends at its shot, or the app's death is logged; the app says its way there every 30 frames, "shot:
-      # frame n at t": 120 s with no word from it is a failure, however long the way takes on a machine drawing slowly)
-      while :; do
-        IFS= read -r -t 120 line <&3 || { echo "the log ended, or 120 s with no word from the app" >> $log; break; }
-        echo "$line" >> $log
-        case "$line" in
-          "SHOT "*) $ADB exec-out screencap -p < /dev/null > $O/mbui/$n.png; ok=1; break ;;
-          *"FATAL EXCEPTION"*) break ;;
-        esac
-      done
-      exec 3<&-
-      # (what had the screen then, when no picture came)
-      [ $ok = 1 ] || $ADB exec-out screencap -p < /dev/null > $O/mbui/$n.failed.png
-      [ $ok = 1 ] || $ADB shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' >> $log
-      [ $ok = 1 ] || $ADB logcat -d -b crash,main,system | grep -E 'JNI DETECTED|Abort message|    in call|    from |FATAL|#0[0-9] pc' | head -40 >> $log
-      kill $LCAT 2>/dev/null; wait $LCAT 2>/dev/null; rm -f $FIFO
-      $ADB shell am force-stop $PKG
-      if [ $ok = 1 ] && [ -s $O/mbui/$n.png ]; then echo "$n: drawn"; else echo "$n: not drawn ($log)"; tail -5 $log; fail=1; fi
+      $ADB shell am start -n $RID/dev.mbui.MainActivity --es env "'MBUI_DL=$F/$n.dl;MBUI_DL_PNG=$F/$n.png'" > /dev/null
+      # the renderer's own line once the picture is written (or the app's end)
+      said=$($ADB logcat -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
+      case "$said" in
+        *"mbui-render: "*"instances"*) ;;
+        *) echo "$said"; $ADB logcat -d -t 200 | tail -40; die "$n: not drawn" ;;
+      esac
+      $ADB exec-out run-as $RID cat files/$n.png > $O/mbui/$n.window.png
+      python3 "$D/android_ref.py" place $O/mbui/$n.window.png $O/mbui/$n.png ${size%x*} ${size#*x} $top || exit 1
+      cp $O/mbui/$n.png "$PICS/$(cat $O/dl/$n.key)-$n.png"
+      echo "$n: drawn ($said)"
     done
-    exit $fail
+    $ADB shell am force-stop $RID
     ;;
   compare)
     python3 "$D/android_ref.py" "$R" "$O/mbui" "$O" "$S/allowed.json" $names
@@ -156,12 +230,15 @@ case "$cmd" in
         fail=1
       fi
     fi
+    # the Android host's text the Tester lacks, recorded (TEXT=1: the job found it lacking), then kept in the PR
+    if [ "${TEXT:-}" = 1 ]; then
+      bash "$0" text || exit 1
+      echo "android-ref: the Android text recorded anew: commit this run's screens/text-android.textrec (its artifact) in the PR"
+      fail=1
+    fi
+    # (the draw lists again where the text was recorded anew or Android's system changed with its pictures)
+    { [ "${TEXT:-}" = 1 ] || [ "${REFS:-}" = 1 ] || [ ! -f $O/dl/print.txt ]; } && { bash "$0" lists || exit 1; }
     bash "$0" mbui || exit 1
-    rm -rf $O/mbui-again && cp -r $O/mbui $O/mbui-again && cp $R/android.json $O/mbui-again/
-    bash "$0" mbui > /dev/null || exit 1
-    python3 "$D/android_ref.py" "$O/mbui-again" "$O/mbui" "$O/mbui-again-diff" /nonexistent $names | grep '^| [a-z]' \
-      | sed 's/^/android-ref: the mbui app twice: /'
-    python3 "$D/android_ref.py" "$O/mbui-again" "$O/mbui" "$O/mbui-again-diff" /nonexistent $names > /dev/null || fail=1
     bash "$0" compare || fail=1
     exit $fail
     ;;

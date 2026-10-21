@@ -5,9 +5,10 @@
 set -euo pipefail
 SDK=${ANDROID_HOME:-/usr/local/lib/android/sdk}
 EMU=$HOME/android-emu/emulator/emulator
-IMAGE="system-images;android-34;$TARGET;x86_64"
+API=${API:-34}
+IMAGE="system-images;android-$API;$TARGET;x86_64"
 [ -x "$EMU" ] || { echo "::error::no emulator build 16428233 in the Actions cache: run the android-sdk workflow"; exit 1; }
-[ -f "$SDK/system-images/android-34/$TARGET/x86_64/system.img" ] ||
+[ -f "$SDK/system-images/android-$API/$TARGET/x86_64/system.img" ] ||
   { echo "::error::no $IMAGE in the Actions cache: run the android-sdk workflow"; exit 1; }
 echo "emulator: $(grep -a '^Pkg.Revision' "$HOME/android-emu/emulator/source.properties"); image: $IMAGE ($IMG)"
 echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
@@ -21,7 +22,8 @@ fi
 # the AVD the android-sdk workflow made over the image (avdmanager is never run here: it asks for the SDK's emulator
 # package installed, which a job has not)
 export ANDROID_AVD_HOME=$HOME/.android/avd
-AVD=ci-$TARGET-$PROFILE
+# (API 34's named without its level, as they were first made)
+AVD=ci-$TARGET-$PROFILE; [ "$API" = 34 ] || AVD=ci-$API-$TARGET-$PROFILE
 [ -f "$ANDROID_AVD_HOME/$AVD.ini" ] || { echo "::error::no AVD $AVD in the Actions cache: run the android-sdk workflow"; exit 1; }
 ADB=$SDK/platform-tools/adb
 # adb's server up before the emulator: the emulator starts one itself as its boot completes, and an adb command of ours

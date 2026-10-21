@@ -35,6 +35,11 @@ pub fn fixture_json(json : String) -> Source {
       }
     },
     call: fn(name, params, done) {
+      // answered as the core's answer comes: an event from outside (its ticket ended: a frame for what it changed),
+      // here at once
+      let rt = @ui.runtime()
+      let ticket = rt.outside_start("core: " + name)
+      defer rt.outside_end(ticket)
       let said = match
         calls.iter().find_first(fn(c) { text(Some(c), "call") == name && field(Some(c), "params") == Some(params) }) {
         Some(c) => Some(c)
@@ -59,4 +64,13 @@ pub fn fixture_json(json : String) -> Source {
     }
   }
   src
+}
+
+///|
+/// The app as src/sffix starts it over a screen's JSON (MBUI_FIXTURE=json), for a Tester made next
+/// (src/sfscreens/android_ref_wbtest.mbt): the app as at the start (whatever ran before in the process reset), then the
+/// screen's source and its pages.
+pub fn fixture_json_app(json : String) -> Source {
+  reset()
+  fixture_json(json)
 }

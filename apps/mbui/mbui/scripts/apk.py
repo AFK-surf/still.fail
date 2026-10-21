@@ -315,6 +315,25 @@ def stripped(path):
     return out
 
 
+def dex_order(n):
+    """classes.dex, then classes2.dex, classes3.dex… in their number's order."""
+    m = re.match(r'classes(\d*)\.dex$', n)
+    return (int(m.group(1) or 1) if m else 0, n)
+
+
+def lib_dex(r8, android_jar, min_api, jar, others):
+    """A dependency's jar dexed (D8, debug) once, kept by its bytes, R8's version and the API level."""
+    key = hashlib.sha256(f'{sha256_file(jar)} {R8_VERSION} {min_api}'.encode()).hexdigest()[:32]
+    d = os.path.join(cache_dir(), 'dexlib', key)
+    if not os.path.exists(os.path.join(d, '.done')):
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d)
+        run(['java', '-cp', r8, 'com.android.tools.r8.D8', '--debug', '--min-api', str(min_api), '--lib', android_jar,
+             '--output', d, jar] + [x for o in others for x in ('--classpath', o)])
+        open(os.path.join(d, '.done'), 'w').close()
+    return d
+
+
 def prune():
     """The cache kept small: the newest 6 dex outputs, the newest 24 stripped libraries."""
     for sub, keep in (('dex', 6), ('strip', 24)):
@@ -451,21 +470,29 @@ def cmd_build(a):
                 cmd += ['--pg-conf', r]
             cmd += [jar_in] + jars
         else:
+            # (debug: the app's own classes alone, the dependencies on their classpath: they are dexed apart, below)
             cmd = ['java', '-cp', r8, 'com.android.tools.r8.D8', '--debug', '--min-api', str(cfg['minSdk']),
-                   '--lib', android_jar, '--output', dex_dir, jar_in] + jars
+                   '--lib', android_jar, '--output', dex_dir, jar_in] + [x for j in jars for x in ('--classpath', j)]
         run(cmd)
         open(os.path.join(dex_dir, '.done'), 'w').close()
         t = lap('r8' if minify else 'd8', t)
     else:
         os.utime(dex_dir)
         t = lap('dex (kept)', t)
+    # a debug build's dependencies: each dexed once, by its own bytes (the lock's), side by side with the app's
+    # (classes2.dex on: minSdk 29 loads them all), as Gradle's debug builds dex each library apart
+    dexes = [os.path.join(dex_dir, n) for n in sorted(os.listdir(dex_dir), key=dex_order) if n.endswith('.dex')]
+    if not minify:
+        for j in jars:
+            d = lib_dex(r8, android_jar, cfg['minSdk'], j, [x for x in jars if x != j])
+            dexes += [os.path.join(d, n) for n in sorted(os.listdir(d), key=dex_order) if n.endswith('.dex')]
+        t = lap('dependencies dexed', t)
     # the APK: what aapt2 linked, the dex, the native libraries (compressed), the assets, the jars' resources
     unsigned = os.path.join(work, 'unsigned.apk')
     shutil.copy(ap, unsigned)
     with zipfile.ZipFile(unsigned, 'a', zipfile.ZIP_DEFLATED) as z:
-        for n in sorted(os.listdir(dex_dir)):
-            if n.endswith('.dex'):
-                z.write(os.path.join(dex_dir, n), n, compress_type=zipfile.ZIP_STORED)
+        for i, p in enumerate(dexes):
+            z.write(p, 'classes.dex' if i == 0 else f'classes{i + 1}.dex', compress_type=zipfile.ZIP_STORED)
         for d in [os.path.join(base, x) for x in cfg.get('jniLibs', [])]:
             for abi in ([a.abi] if a.abi else sorted(os.listdir(d)) if os.path.isdir(d) else []):
                 ad = os.path.join(d, abi)

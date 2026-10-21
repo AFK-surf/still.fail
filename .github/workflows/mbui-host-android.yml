@@ -78,7 +78,9 @@ jobs:
               - "scripts/done_runner.py"
               - "android/app/src/main/java/dev/mbui/Marks.java"
               - "android/app/src/main/java/dev/mbui/Host.java"
-              - "android/app/build.gradle.kts"
+              - "android/apk.json"
+              - "android/apk.lock"
+              - "scripts/apk.py"
               - "src/host/marks.mbt"
               - "src/host/host_native.mbt"
               - "src/kitdemo/markscheck.mbt"
@@ -92,10 +94,8 @@ jobs:
         run: python3 scripts/ci_paths.py
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      # (read only: the Gradle cache is the releases' (mbui.yml) and check-android's to write, one copy of it, the cache
-      # held to its 10 GB)
-      - uses: gradle/actions/setup-gradle@v4
-        with: { cache-read-only: true }
+      # (the APK without Gradle: mbui/scripts/apk.py; its dependencies and their dex kept by the lock)
+      - uses: ./.github/actions/mbui-apk
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo's APK for an x86_64 emulator
         run: ABI=x86_64 scripts/host_contract.sh android build
