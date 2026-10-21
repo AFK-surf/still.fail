@@ -367,6 +367,7 @@ export class Links {
       /// How the stream before this one ended: why, how long it lasted, what came on it (over the link, and as read).
       let previous: { why: string; lasted: number; bytes: number; read: number; events: number } | null = null;
       let misses = 0;
+      let shortStreams = 0;
       let reached = false;
       for (;;) {
         // Replaced before it opened: its successor asks instead.
@@ -498,13 +499,15 @@ export class Links {
             link.heard = null;
             const woke = why === GONE || why === NETWORK || why === t("station.core.replaced");
             const lasted = core.host.nowMs() - openedAt;
+            // A successful handshake is not a stable connection. Back off streams that keep ending early.
+            if (!woke) shortStreams = lasted >= RECONNECT_MAX_MS ? 0 : Math.min(shortStreams + 1, 6);
             // Another way to the station is up (the requests moved to it, or one beside the way gone answers): the station
             // is reached, and the stream opens again there, going on from its last event, the station still shown as
             // reached. Shown as coming back each time, a phone on its station's LAN showed 正在重连 every minute or so as
-            // its requests moved between the LAN and a relay (2026-10-18). One that ended at once waits its RECONNECT_MS.
+            // its requests moved between the LAN and a relay (2026-10-18). Repeated short streams still back off.
             const standing = why !== GONE && why !== NETWORK && (self.#requests.wire.standing?.(link.addr) ?? false);
             if (!standing) self.setLink(address, { state: "reconnecting", message: why === "ended" ? t("station.core.disconnected") : why });
-            return { again: woke || (standing && lasted >= RECONNECT_MS), why, lasted, bytes: opened.success.came?.bytes ?? read, read, events } as const;
+            return { again: woke || (standing && shortStreams <= 1 && lasted >= RECONNECT_MS), why, lasted, bytes: opened.success.came?.bytes ?? read, read, events } as const;
           }),
         );
         if ("done" in ended) return;
@@ -522,7 +525,10 @@ export class Links {
         const answered = link.answered !== null && link.answered >= tried;
         const comingBack = reached && misses < MISSES;
         const offline = !answered && (misses >= LONG_MISSES || (!comingBack && self.#cloudSaysOffline(address)));
-        const wait = offline ? OFFLINE_RETRY_MS : answered ? RECONNECT_MS : Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS);
+        const wait = offline ? OFFLINE_RETRY_MS : Math.max(
+          answered ? RECONNECT_MS : Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(misses - 1, 0), 8), RECONNECT_MAX_MS),
+          Math.min(RECONNECT_MS * 2 ** Math.max(shortStreams - 1, 0), RECONNECT_MAX_MS),
+        );
         const back = self.#backOf(address);
         const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(false)), Effect.raceFirst(core.wakes.next.pipe(Effect.as(true)), Deferred.await(back).pipe(Effect.as(true))));
         if (woken) self.#retrying(address);

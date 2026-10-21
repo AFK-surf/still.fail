@@ -1173,7 +1173,7 @@ test("a_stream_coming_back_after_its_link_went_is_told_what_it_missed_and_reads_
   // it says `missed` too.
   gate.resumes = false;
   end();
-  await host.time.pass(RECONNECT_MS + 50, 50);
+  await host.time.pass(2 * RECONNECT_MS + 50, 50);
   assert.equal(streams.at(-1)!.path, `/events?since=${encodeURIComponent("1f2e3d4c.10")}`);
   push("missed", {});
   await host.settle();
@@ -1803,12 +1803,12 @@ test("a_stream_gone_while_another_way_is_up_opens_again_with_the_station_still_r
   assert.equal(streams.length, opened + 1);
   assert.equal(streams.filter((x) => !x.closed).length, 1);
   assert.deepEqual([...new Set(seen)], ["online"]);
-  // One that ends as soon as it opens is opened again after RECONNECT_MS, the station still reached.
+  // Repeated short streams back off even while another way is up.
   end();
   await read();
   assert.equal(streams.length, opened + 1);
   assert.equal(linkOf(values, 1), "online");
-  await host.time.pass(RECONNECT_MS + 50, 50);
+  await host.time.pass(2 * RECONNECT_MS + 50, 50);
   await read();
   assert.equal(streams.length, opened + 2);
   assert.deepEqual([...new Set(seen)], ["online"]);
@@ -1818,7 +1818,7 @@ test("a_stream_gone_while_another_way_is_up_opens_again_with_the_station_still_r
   end();
   await read();
   assert.equal(linkOf(values, 1), "reconnecting");
-  await host.time.pass(RECONNECT_MS + 50, 50);
+  await host.time.pass(4 * RECONNECT_MS + 50, 50);
   await read();
   assert.equal(linkOf(values, 1), "online");
   core.close();
@@ -2251,7 +2251,7 @@ test("an_agent_ending_its_turn_keeps_the_stream_one_starting_opens_it_anew", asy
   core.close();
 });
 
-test("a_core_started_again_takes_its_stations_up_from_the_last_event_kept_and_reads_nothing_again_when_told", async () => {
+test("a_core_started_again_resumes_events_and_checks_its_saved_lists", async () => {
   for (const resumes of [true, false]) {
     const { host, core, streams, gate } = await started();
     gate.resumes = resumes;
@@ -2271,10 +2271,9 @@ test("a_core_started_again_takes_its_stations_up_from_the_last_event_kept_and_re
     const asked = host.requests.slice(before).map((r) => r.url.replace("https://stillfail.test/admin/api", "")).filter((u) => !u.startsWith("http"));
     assert.ok(asked.some((u) => u.startsWith("/events") && u.includes("since=1a.7")), JSON.stringify(asked));
     const lists = asked.filter((u) => ["/overview", "/chats", "/sessions", "/threads", "/jobs"].includes(u) || u.startsWith("/changed/"));
-    // Told what came after it: nothing read again. Not told so (more than an hour later, the station started again):
-    // everything is, as before.
-    if (resumes) assert.deepEqual(lists, [], JSON.stringify(asked));
-    else assert.ok(lists.includes("/overview"), JSON.stringify(asked));
+    // A saved cursor does not prove the previous core finished its snapshot.
+    assert.ok(lists.includes("/overview"), JSON.stringify(asked));
+    assert.ok(lists.includes("/changed/chats"), JSON.stringify(asked));
     again.close();
   }
 });

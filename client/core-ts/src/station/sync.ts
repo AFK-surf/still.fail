@@ -168,15 +168,16 @@ export class StationsSync {
 
   /// A stream opened going on from where the device was in its station's events: nothing is read again but the
   /// channels a UI shows where the stream was away, asked what came after what is held of them (what is shown does not
-  /// hang on all of it having been told). Taken up from where a core before this one was, the station's history is
-  /// swept as a reading of everything would.
+  /// hang on all of it having been told). After a core restart, check the lists too: its snapshot may not have finished.
   #goesOn(address: string, how: { away: boolean; restored: boolean }): void {
+    // A saved cursor may have advanced while the previous core's snapshot was still pending.
+    // Check the lists once on restart; subsequent reconnects still use event replay alone.
+    if (how.restored) return this.snapshot(address);
     if (how.away) this.#catchUpShown(address);
     // Its screens are held in memory only: read again whenever the stream was not there to hear them change.
-    if (how.away || how.restored || this.screens(address) === undefined) this.#enqueue(address, "screens", Priority.background, this.#screens(address));
+    if (how.away || this.screens(address) === undefined) this.#enqueue(address, "screens", Priority.background, this.#screens(address));
     // Its logins are held in memory only: read once where this run has not yet.
     if (logins.held(this.#links.get(address)).supported === null) this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address));
-    if (how.restored) this.#historyStart(address);
   }
 
   // ── reading what a station holds ──
