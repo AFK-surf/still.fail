@@ -23,6 +23,8 @@ priv enum SheetKind {
   ShareSheet
   /// what an invitation's link leads to, before it is accepted (Workspaces.kt InviteLinkSheet): half the screen
   InviteLink
+  /// a workspace of the viewer's own made (Workspaces.kt openNewWorkspace): 80%
+  NewWorkspace
 } derive(Eq)
 
 ///|
@@ -35,6 +37,7 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
     LoadOf(_, _) | PageSizes(_) => (0.62, false)
     ShareSheet => (0.72, true)
     InviteLink => (0.5, false)
+    NewWorkspace => (0.8, false)
     NoSheet => (0.5, false)
   }
 }

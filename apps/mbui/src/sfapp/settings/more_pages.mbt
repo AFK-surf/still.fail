@@ -195,31 +195,16 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
           let d = (core.topic)("decisionForm", { "station": str(station), "form": str(form) }).value
           sheet_head(c, tr("web-pages.automaticDecisions.model"))
           c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-            scroll_page(c, "auto-models/" + station, [
-              fn() {
-                for m in items(field(field(d, "pick"), "options"), "") {
-                  ignore(m)
-                }
-                for m in items(field(d, "pick"), "options") {
-                  let mv = Some(m)
-                  if pick_row(
-                      c,
-                      "auto-pick/" + text(mv, "model"),
-                      text(mv, "name"),
-                      checked=text(d, "model") == text(mv, "model"),
-                      mark=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), "codex", 18.0) |> ignore },
-                    ) {
-                    close_sheet()
-                    act(
-                      core,
-                      tr("web-pages.automaticDecisions.configAction"),
-                      "automaticDecisions.form.edit",
-                      obj([("station", str(station)), ("form", str(form)), ("input", obj([("model", str(text(mv, "model")))]))]),
-                    )
-                  }
-                }
-              },
-            ])
+            // every model it can move to (SettingParts.kt ModelList), codex's
+            model_list(c, "auto-models/" + station, items(field(d, "pick"), "options"), "codex", text(d, "model"), fn(m) {
+              close_sheet()
+              act(
+                core,
+                tr("web-pages.automaticDecisions.configAction"),
+                "automaticDecisions.form.edit",
+                obj([("station", str(station)), ("form", str(form)), ("input", obj([("model", str(m))]))]),
+              )
+            })
           })
           |> ignore
         })

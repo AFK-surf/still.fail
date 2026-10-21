@@ -197,6 +197,7 @@ fn reset() -> Unit {
   reset_row_menu()
   update_anchor_reset()
   landing_reset()
+  new_ws_reset()
   app.toast = ""
   read_views.clear()
   read_chats.clear()
@@ -535,6 +536,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           PageSizes(key) => page_sizes_sheet(c, key)
           ShareSheet => share_in_sheet(c, src, w)
           InviteLink => invite_sheet(c, src)
+          NewWorkspace => new_workspace_sheet(c, src)
           NoSheet => ()
         }
       })
