@@ -19,6 +19,8 @@ $exe = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Programs") -Recurse -Filter "
 if (-not $exe) { throw "the app is not where the installer puts it" }
 Write-Host "installed: $($exe.FullName)"
 $resources = Join-Path $exe.DirectoryName "resources"
+# The tray's icon (main.ts trayIcon), the app's own.
+if (-not (Test-Path (Join-Path $resources "tray.png"))) { throw "the tray's icon is not in the app" }
 
 # A script in the app's Electron as Node, waited for (the app is a GUI program: PowerShell neither waits for it nor
 # gets its exit code otherwise), its output shown.

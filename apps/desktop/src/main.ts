@@ -4,7 +4,7 @@
 // the page is served from app://ember, the core runs in Node (client/core-ts,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, safeStorage, shell, systemPreferences, Tray, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, net, Notification, powerMonitor, protocol, safeStorage, shell, systemPreferences, Tray, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
 import { autoUpdater, type NsisUpdater, type UpdateInfo } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -1692,10 +1692,9 @@ function bringUp(window: BrowserWindow): void {
 let tray: Tray | null = null;
 let quitting = false;
 
-async function setTray(): Promise<void> {
+function setTray(): void {
   if (process.platform !== "win32") return;
-  const icon = await app.getFileIcon(process.execPath, { size: "small" });
-  tray = new Tray(icon);
+  tray = new Tray(trayIcon());
   tray.setToolTip(app.name);
   const show = () => {
     // The app's own window (one opened by open, not titled), not a page of a service or one the app opens for itself.
@@ -1709,6 +1708,24 @@ async function setTray(): Promise<void> {
     { type: "separator" },
     { label: t("desktop.menu.quit", { app: app.name }), click: () => app.quit() },
   ]));
+}
+
+/**
+ * The app's icon (build.sh: the beta's for the beta) as the tray takes it: its square without the margin macOS icons
+ * keep (100 of 1024 px each side), at the small icon's sizes for 100–200 % scaling.
+ */
+function trayIcon(): Electron.NativeImage {
+  const source = nativeImage.createFromPath(app.isPackaged ? join(resources, "tray.png") : join(__dirname, "..", "..", "icon.png"));
+  if (source.isEmpty()) throw new Error("the tray's icon is missing");
+  const { width } = source.getSize();
+  const margin = Math.round((width * 100) / 1024);
+  const square = source.crop({ x: margin, y: margin, width: width - 2 * margin, height: width - 2 * margin });
+  const icon = nativeImage.createEmpty();
+  for (const scaleFactor of [1, 1.25, 1.5, 2]) {
+    const size = Math.round(16 * scaleFactor);
+    icon.addRepresentation({ scaleFactor, buffer: square.resize({ width: size, height: size, quality: "best" }).toPNG() });
+  }
+  return icon;
 }
 
 let stationStopped = false;
@@ -1778,7 +1795,7 @@ if (!app.requestSingleInstanceLock()) {
     if (dockSettings().on) setDock({});
     followSleep();
     followNetwork();
-    await setTray().catch((error: unknown) => diagnostics?.write("tray-error", { error }));
+    try { setTray(); } catch (error) { diagnostics?.write("tray-error", { error }); }
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
   app.on("before-quit", (event) => {

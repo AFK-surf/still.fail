@@ -126,6 +126,8 @@ node -e '
     // the signed one (docs/release-signing.md). The name itself is not checked (the installer is not code-signed).
     b.publish = { ...b.publish, publisherName: ["still.fail"] };
     b.extraResources.push({ from: "build/window-controls.node", to: "window-controls.node" });
+    // The tray's icon (main.ts trayIcon): the app's own.
+    b.extraResources.push({ from: b.win.icon, to: "tray.png" });
     b.extraMetadata.name = beta ? "stillfail-beta" : "stillfail";
   }
   require("fs").writeFileSync(out, JSON.stringify(b, null, 2));
