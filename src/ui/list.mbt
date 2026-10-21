@@ -140,7 +140,7 @@ fn ease_come(total : Double, t : Double) -> Double {
   if t >= ease_end(total) {
     total
   } else {
-    (total * (1.0 - @math.exp(-t / wheel_ease_ms)) * 64.0).round() / 64.0
+    (total * (1.0 - @dmath.exp(-t / wheel_ease_ms)) * 64.0).round() / 64.0
   }
 }
 
@@ -150,7 +150,7 @@ fn ease_end(total : Double) -> Double {
   if total.abs() * 128.0 <= 1.0 {
     0.0
   } else {
-    wheel_ease_ms * @math.ln(total.abs() * 128.0)
+    wheel_ease_ms * @dmath.ln(total.abs() * 128.0)
   }
 }
 
@@ -625,7 +625,7 @@ fn Ctx::place_list(
       // under a pixel)
       st.glide_t0 = self.now
       st.glide_l0 = left
-      st.glide_rest = if left < 1.0 { self.now } else { self.now + (list_glide_ms * @math.ln(left)).ceil() }
+      st.glide_rest = if left < 1.0 { self.now } else { self.now + (list_glide_ms * @dmath.ln(left)).ceil() }
     }
     if left < 1.0 {
       st.glide = false
@@ -765,7 +765,7 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
     st.glide = false
     return
   }
-  let want = st.glide_l0 * @math.exp(-(self.now - st.glide_t0) / list_glide_ms)
+  let want = st.glide_l0 * @dmath.exp(-(self.now - st.glide_t0) / list_glide_ms)
   if st.glide_left > want {
     st.pending = st.pending + (st.glide_left - want)
   }

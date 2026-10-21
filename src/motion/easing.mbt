@@ -81,7 +81,7 @@ pub let ease_in_out : (Double) -> Double = cubic_bezier(0.42, 0.0, 0.58, 1.0)
 ///|
 /// Circular (Motion's circIn, circOut, circInOut).
 pub fn circ_in(p : Double) -> Double {
-  1.0 - @math.sin(@math.acos(p))
+  1.0 - @dmath.sin(@dmath.acos(p))
 }
 
 ///|
@@ -110,7 +110,7 @@ pub fn anticipate(p : Double) -> Double {
   if q < 1.0 {
     0.5 * back_in(q)
   } else {
-    0.5 * (2.0 - @math.pow(2.0, -10.0 * (q - 1.0)))
+    0.5 * (2.0 - @dmath.pow(2.0, -10.0 * (q - 1.0)))
   }
 }
 

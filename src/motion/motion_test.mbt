@@ -34,7 +34,7 @@ test "springs are Compose's SpringSimulation, in closed form" {
   let w = 1500.0.sqrt()
   for t in [0.0, 0.01, 0.05, 0.1, 0.3] {
     let (x, _) = @motion.spring_at(1.0, 1500.0, 1.0, 0.0, t)
-    let want = (1.0 + w * t) * 2.718281828459045.pow(-w * t)
+    let want = (1.0 + w * t) * @dmath.pow(2.718281828459045, -w * t)
     assert_true(near(x, want, 1.0e-12))
   }
   // under-damped: Sheet.kt's menu spring, motionSpring(.24, bounce .08)

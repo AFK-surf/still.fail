@@ -41,6 +41,9 @@ The rules (see RULES below for each one's words):
                    wake_at(c.now() + 500.0)): a time names what it is (an animation's, a timer's declared length)
     app-clock      the app reads the clock (c.now(), @ui.now(), @host.now()) to work out where an animation is or
                    whether a time has passed: motion / wake_at do that from what they declared
+    engine-math    a sine, an exponential, a power… from @math (sin, cos, tan, asin, acos, atan, atan2, exp, expm1, ln,
+                   ln_1p, log2, log10, pow, Double's pow): on js the engine's Math.*, its last bits the machine's (an
+                   arm64 Mac's V8 and an x86 Linux's differ); @dmath's are worked out in MoonBit, the same everywhere
     wall-clock     the machine's own clock or randomness (Date.now, performance.now, Math.random, an unseeded
                    @random, a random id: uuid() / random_id() called with nothing, the system's uuid or random
                    bytes) outside the host that provides them; the time of day through @ui.wall_ms, for what is
@@ -569,6 +572,8 @@ RULES = {
     "app-clock": "the app reads the clock to work out an animation or a time passed: motion / wake_at do it from what "
                  "they declared",
     "wall-clock": "the machine's own clock or randomness, outside the host that provides them",
+    "engine-math": "a sine, an exponential, a power from @math: on js the engine's Math.*, whose last bits are the "
+                   "machine's; @dmath's (mbui/dmath) are the same on every machine",
     "poll": "a frame or a wake asked for under a condition that reads the host or the layout: that answer is an event",
     "host-read": "the app reads where it runs from @host: through @ui, which a Tester answers",
     "builtin-hash": "a value made from MoonBit's own hash (seeded anew in each process, not the same on js and "
@@ -586,6 +591,9 @@ RULES = {
                     "its end): counted so the ones left only go",
 }
 
+# what @math works out by the engine on js (implementation-approximated in ECMAScript): @dmath's in their place
+ENGINE_MATH = {"sin", "cos", "tan", "asin", "acos", "atan", "atan2", "exp", "expm1", "ln", "ln_1p", "log2", "log10",
+               "pow", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh", "cbrt", "hypot"}
 FRAME_ASK = {"request_frame", "wake_in", "wake_after", "wake_at", "wake_at_time", "frames_until"}
 RETIRED = {"frames_until", "animating", "animating_until", "run_animations"}
 # kept inside the framework, given up for tests and apps: run_for(motion_end() - time()) is run_animations again
@@ -734,6 +742,10 @@ def lint_mbt(f, cfg, out, returns, readers):
         if c.name == "at_rest" and c.kind in ("method", "pkg", "bare") and not under(f.rel, cfg.frame_core):
             if not any(c.at in held for held in f.assert_args()):
                 add("at-rest-wait", c.at, line_text)
+        # the engine's own sine, exponential, power (and a Double's pow, which is @math's)
+        if (c.kind == "pkg" and c.qual == "@math" and c.name in ENGINE_MATH) or (
+                c.kind == "method" and c.name == "pow" and f.recv_type(c.at, returns) in ("Double", None)):
+            add("engine-math", c.at, line_text)
         # a target waited on until it holds still
         if c.name in HOLD_STILL and c.kind in ("method", "bare"):
             add("at-rest-wait", c.at, line_text)

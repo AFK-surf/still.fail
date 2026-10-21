@@ -61,7 +61,7 @@ pub fn progress_look_of(
             0.3
           } else {
             // a cycle of `period` (Ctx::cycle: drawn a frame each frame while shown)
-            0.5 - 0.5 * @math.cos(3.141592653589793 * c.cycle(period))
+            0.5 - 0.5 * @dmath.cos(3.141592653589793 * c.cycle(period))
           }
           let start = -0.4 + 1.4 * f
           if start > 0.0 {

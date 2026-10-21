@@ -141,6 +141,17 @@ class Rules(unittest.TestCase):
         }
         found(self, good, "frame-request", 0)
 
+    def test_engine_math(self):
+        bad = {
+            "src/ui/line.mbt": "fn arc(a : Double) -> Double {\n  @math.cos(a) + @math.sin(a) + @math.pow(2.0, a) + @math.exp(a)\n}\n",
+            "src/app/spring.mbt": "fn decay(t : Double) -> Double {\n  2.718281828459045.pow(-t)\n}\n",
+        }
+        found(self, bad, "engine-math", 5)
+        good = {
+            "src/ui/line.mbt": "fn arc(a : Double) -> Double {\n  @dmath.cos(a) + @dmath.sin(a) + @math.floor(a) + a.sqrt()\n}\n",
+        }
+        found(self, good, "engine-math", 0)
+
     def test_frame_wait(self):
         bad = {
             "src/motion/fx.mbt": """

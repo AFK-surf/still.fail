@@ -48,7 +48,7 @@ fn boxes(c : @ui.Ctx) -> Unit {
             shadow=4.0,
             shadow_color=0x00000033L,
             shadow_y=2.0,
-            ty=6.0 * @math.sin(t * 3.0 + i * 0.1),
+            ty=6.0 * @dmath.sin(t * 3.0 + i * 0.1),
             fn() {  },
           )
           |> ignore
@@ -124,7 +124,7 @@ fn dashboard(c : @ui.Ctx) -> Unit {
       c.row(gap=12.0, fn() {
         for col in 0..<4 {
           let i = r * 4 + col
-          let v = 0.5 + 0.5 * @math.sin(t * 2.0 + i.to_double())
+          let v = 0.5 + 0.5 * @dmath.sin(t * 2.0 + i.to_double())
           c.box(
             w=Px(200.0),
             pad=14.0,

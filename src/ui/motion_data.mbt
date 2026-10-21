@@ -319,9 +319,9 @@ fn spring_at(x0 : Double, v0 : Double, k : Double, c : Double, t : Double) -> (D
     let wd = w0 * (1.0 - z * z).sqrt()
     let a = x0
     let b = (v0 + z * w0 * x0) / wd
-    let e = @math.exp(-z * w0 * t)
-    let cs = @math.cos(wd * t)
-    let sn = @math.sin(wd * t)
+    let e = @dmath.exp(-z * w0 * t)
+    let cs = @dmath.cos(wd * t)
+    let sn = @dmath.sin(wd * t)
     let x = e * (a * cs + b * sn)
     let v = e * ((b * wd - z * w0 * a) * cs - (a * wd + z * w0 * b) * sn)
     (x, v)
@@ -331,12 +331,12 @@ fn spring_at(x0 : Double, v0 : Double, k : Double, c : Double, t : Double) -> (D
     let r2 = -z * w0 - r
     let c2 = (v0 - r1 * x0) / (r2 - r1)
     let c1 = x0 - c2
-    let e1 = @math.exp(r1 * t)
-    let e2 = @math.exp(r2 * t)
+    let e1 = @dmath.exp(r1 * t)
+    let e2 = @dmath.exp(r2 * t)
     (c1 * e1 + c2 * e2, c1 * r1 * e1 + c2 * r2 * e2)
   } else {
     let b = v0 + w0 * x0
-    let e = @math.exp(-w0 * t)
+    let e = @dmath.exp(-w0 * t)
     ((x0 + b * t) * e, (b - w0 * (x0 + b * t)) * e)
   }
 }
@@ -354,5 +354,5 @@ fn spring_end(x0 : Double, v0 : Double, k : Double, c : Double, eps : Double) ->
   let rate = if z < 1.0 { z * w0 } else { w0 * (z - (z * z - 1.0).sqrt()) }
   let amp = x0.abs() + (v0.abs() + z * w0 * x0.abs()) / (w0 * dmax(1.0e-6, (1.0 - z * z).abs().sqrt())) + 1.0
   let bound = dmax(amp, amp * w0)
-  dmax(0.0, @math.ln(bound / eps) / rate)
+  dmax(0.0, @dmath.ln(bound / eps) / rate)
 }

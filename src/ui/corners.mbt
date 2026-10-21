@@ -307,8 +307,8 @@ fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
         let mut outside = true
         for j in 0..<cut_arc_steps {
           let a = half_pi * j.to_double() / (cut_arc_steps - 1).to_double()
-          let c = @math.cos(a)
-          let s = @math.sin(a)
+          let c = @dmath.cos(a)
+          let s = @dmath.sin(a)
           let rho = 1.0 / det_pow(det_pow(c, nb) + det_pow(s, nb), 1.0 / nb)
           let px = dx + big - big * rho * c
           let py = dy + big - big * rho * s

@@ -228,7 +228,7 @@ fn compute_spline() -> FixedArray[Double] {
 
 ///|
 /// ln(0.78) / ln(0.9)
-let deceleration_rate : Double = @math.ln(0.78) / @math.ln(0.9)
+let deceleration_rate : Double = @dmath.ln(0.78) / @dmath.ln(0.9)
 
 ///|
 /// A fling at `v` pixels per second (physical pixels, on a screen of
@@ -242,10 +242,10 @@ fn spline_fling(v : Double, density : Double) -> (Double, Double) {
   // gravity × inches per meter × 160 dpi × density × 0.84, by the friction
   let physical = 386.0878 * 160.0 * density * 0.84
   let friction = 0.015 * physical
-  let l = @math.ln(0.35 * speed / friction)
-  let dur = (1000.0 * @math.exp(l / (deceleration_rate - 1.0))).floor()
+  let l = @dmath.ln(0.35 * speed / friction)
+  let dur = (1000.0 * @dmath.exp(l / (deceleration_rate - 1.0))).floor()
   let dist = friction *
-    @math.exp(deceleration_rate / (deceleration_rate - 1.0) * l)
+    @dmath.exp(deceleration_rate / (deceleration_rate - 1.0) * l)
   (dist, dmax(dur, 0.0))
 }
 
@@ -282,7 +282,7 @@ fn fling_distance(v : Double, density : Double) -> Double {
 fn stretch_amount(d : Double) -> Double {
   let o = d.abs()
   let linear = 0.016 * o
-  let exp_part = 0.016 * (1.0 - @math.exp(-o * (2.718281828459045 / 0.33)))
+  let exp_part = 0.016 * (1.0 - @dmath.exp(-o * (2.718281828459045 / 0.33)))
   linear + exp_part
 }
 
@@ -505,8 +505,8 @@ fn ListState::fling_rest(self : ListState) -> Double {
 fn ListState::fling_length(self : ListState) -> Double {
   match self.fling {
     1 => self.fling_dur.ceil()
-    2 => dmax(0.0, @math.ln(0.02 / self.fling_v.abs()) / @math.ln(ios_decel))
-    _ => dmax(0.0, @math.ln(0.02 / self.fling_v.abs()) / @math.ln(coast_decel))
+    2 => dmax(0.0, @dmath.ln(0.02 / self.fling_v.abs()) / @dmath.ln(ios_decel))
+    _ => dmax(0.0, @dmath.ln(0.02 / self.fling_v.abs()) / @dmath.ln(coast_decel))
   }
 }
 
@@ -609,12 +609,12 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
       2 => {
         // UIScrollView's normal deceleration
         let k = ios_decel
-        (st.fling_v * (@math.pow(k, t) - 1.0) / @math.ln(k), st.fling_v * @math.pow(k, t))
+        (st.fling_v * (@dmath.pow(k, t) - 1.0) / @dmath.ln(k), st.fling_v * @dmath.pow(k, t))
       }
       _ => {
         // the desktop's coast
         let k = coast_decel
-        (st.fling_v * (@math.pow(k, t) - 1.0) / @math.ln(k), st.fling_v * @math.pow(k, t))
+        (st.fling_v * (@dmath.pow(k, t) - 1.0) / @dmath.ln(k), st.fling_v * @dmath.pow(k, t))
       }
     }
     let d = pos - st.fling_done

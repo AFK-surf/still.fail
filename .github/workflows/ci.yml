@@ -53,6 +53,11 @@ jobs:
           moon test --target native -p mbui/text 2>&1 | tail -4
       - name: flexbox (Yoga's tests)
         run: moon test --target native -p mbui/flex 2>&1 | tail -3
+      - name: "sin, exp, pow… worked out in MoonBit (mbui/dmath): the same digits on js and on native"
+        run: |
+          set -o pipefail
+          moon test --target js -p mbui/dmath 2>&1 | tail -3
+          moon test --target native -p mbui/dmath 2>&1 | tail -3
       - name: "The C step: the splitter on made-up C, and a MoonBit program built whole and split (scripts/mbc_test.py)"
         run: python3 scripts/mbc_test.py
 

@@ -207,22 +207,22 @@ pub fn spring_at(
     let gm = r - s
     let b = (gm * d - v) / (gm - gp)
     let a = d - b
-    let ea = @math.exp(gm * t)
-    let eb = @math.exp(gp * t)
+    let ea = @dmath.exp(gm * t)
+    let eb = @dmath.exp(gp * t)
     (a * ea + b * eb, a * gm * ea + b * gp * eb)
   } else if ratio == 1.0 {
     let a = d
     let b = v + w * d
-    let e = @math.exp(-w * t)
+    let e = @dmath.exp(-w * t)
     let x = (a + b * t) * e
     (x, x * -w + b * e)
   } else {
     let wd = w * (1.0 - ratio * ratio).sqrt()
     let cs = d
     let sn = 1.0 / wd * (-r * d + v)
-    let e = @math.exp(r * t)
-    let x = e * (cs * @math.cos(wd * t) + sn * @math.sin(wd * t))
-    (x, x * r + e * (-wd * cs * @math.sin(wd * t) + wd * sn * @math.cos(wd * t)))
+    let e = @dmath.exp(r * t)
+    let x = e * (cs * @dmath.cos(wd * t) + sn * @dmath.sin(wd * t))
+    (x, x * r + e * (-wd * cs * @dmath.sin(wd * t) + wd * sn * @dmath.cos(wd * t)))
   }
 }
 
@@ -250,7 +250,7 @@ pub fn spring_duration(
     let wd = w * (1.0 - ratio * ratio).sqrt()
     let c2 = (v0 - r * p0) / wd
     let c = (p0 * p0 + c2 * c2).sqrt()
-    let t = @math.ln(1.0 / c) / r
+    let t = @dmath.ln(1.0 / c) / r
     return if t > 0.0 { (t * 1000.0).floor() } else { 0.0 }
   }
   // the last time |x| is 1: stepped a millisecond at a time until it has

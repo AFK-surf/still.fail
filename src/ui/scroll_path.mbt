@@ -40,10 +40,10 @@ fn edge_spring_at(dist : Double, vel : Double, h : Double, dt : Double) -> (Doub
   let wd = w * (1.0 - z * z).sqrt()
   let cos_c = dist * h
   let sin_c = 1.0 / wd * (z * w * dist * h + vel)
-  let e = @math.exp(-z * w * dt)
-  let x = e * (cos_c * @math.cos(wd * dt) + sin_c * @math.sin(wd * dt))
+  let e = @dmath.exp(-z * w * dt)
+  let x = e * (cos_c * @dmath.cos(wd * dt) + sin_c * @dmath.sin(wd * dt))
   let v = x * -w * z +
-    e * (-wd * cos_c * @math.sin(wd * dt) + wd * sin_c * @math.cos(wd * dt))
+    e * (-wd * cos_c * @dmath.sin(wd * dt) + wd * sin_c * @dmath.cos(wd * dt))
   (x, v)
 }
 
@@ -51,7 +51,7 @@ fn edge_spring_at(dist : Double, vel : Double, h : Double, dt : Double) -> (Doub
 /// The rubber band (critically damped) `t` ms after it was at `x0` points moving at `v0` outward: where and how fast.
 fn rubber_at(x0 : Double, v0 : Double, t : Double) -> (Double, Double) {
   let w = rubber_omega
-  let e = @math.exp(-w * t)
+  let e = @dmath.exp(-w * t)
   ((x0 + (v0 + w * x0) * t) * e, (v0 - w * (v0 + w * x0) * t) * e)
 }
 

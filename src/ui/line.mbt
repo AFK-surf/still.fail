@@ -36,7 +36,7 @@ pub fn arc(cx : Double, cy : Double, r : Double, from~ : Double, sweep~ : Double
   let out = []
   for k in 0..=n {
     let a = from + sweep * k.to_double() / n.to_double()
-    out.push((cx + r * @math.cos(a), cy + r * @math.sin(a)))
+    out.push((cx + r * @dmath.cos(a), cy + r * @dmath.sin(a)))
   }
   out
 }

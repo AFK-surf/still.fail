@@ -134,10 +134,10 @@ fn overdamped_freq_scale(ratio : Double, critical_freq_time : Double) -> Double 
   let root = (ratio * ratio - 1.0).sqrt()
   let slow = ratio - root
   let fast = ratio + root
-  let target = 2.0 * root * @math.exp(-critical_freq_time) * (1.0 + critical_freq_time)
+  let target = 2.0 * root * @dmath.exp(-critical_freq_time) * (1.0 + critical_freq_time)
   approximate_root(
-    fn(ft) { fast * @math.exp(-slow * ft) - slow * @math.exp(-fast * ft) - target },
-    fn(ft) { @math.exp(-fast * ft) - @math.exp(-slow * ft) },
+    fn(ft) { fast * @dmath.exp(-slow * ft) - slow * @dmath.exp(-fast * ft) - target },
+    fn(ft) { @dmath.exp(-fast * ft) - @dmath.exp(-slow * ft) },
     critical_freq_time,
   ) /
   critical_freq_time
@@ -159,14 +159,14 @@ pub fn find_spring(duration : Double, bounce : Double) -> (Double, Double, Doubl
       let decay = u * ratio
       let delta = decay * dur
       let b = calc_angular_freq(u, ratio)
-      let c = @math.exp(-delta)
+      let c = @dmath.exp(-delta)
       safe_min - decay / b * c
     }
     let derivative = fn(u : Double) {
       let decay = u * ratio
       let delta = decay * dur
       let e = ratio * ratio * u * u * dur
-      let f = @math.exp(-delta)
+      let f = @dmath.exp(-delta)
       let g = calc_angular_freq(u * u, ratio)
       let factor = if -envelope(u) + safe_min > 0.0 { -1.0 } else { 1.0 }
       factor * -e * f / g
@@ -176,12 +176,12 @@ pub fn find_spring(duration : Double, bounce : Double) -> (Double, Double, Doubl
     // critically damped (overdamped springs scale this root, below)
     (
       fn(u : Double) {
-        let a = @math.exp(-u * dur)
+        let a = @dmath.exp(-u * dur)
         let b = u * dur + 1.0
         -safe_min + a * b
       },
       fn(u : Double) {
-        let a = @math.exp(-u * dur)
+        let a = @dmath.exp(-u * dur)
         let b = -u * (dur * dur)
         a * b
       },
@@ -346,12 +346,12 @@ pub fn spring_generator(
         s.c = decay * s.delta - s.a * w
       },
       fn(t : Double) {
-        let env = @math.exp(-decay * t)
-        s.target - env * (s.a * @math.sin(w * t) + s.delta * @math.cos(w * t))
+        let env = @dmath.exp(-decay * t)
+        s.target - env * (s.a * @dmath.sin(w * t) + s.delta * @dmath.cos(w * t))
       },
       fn(t : Double) {
-        let env = @math.exp(-decay * t)
-        env * (s.b * @math.sin(w * t) + s.c * @math.cos(w * t))
+        let env = @dmath.exp(-decay * t)
+        env * (s.b * @dmath.sin(w * t) + s.c * @dmath.cos(w * t))
       },
     )
   } else if ratio == 1.0 {
@@ -359,9 +359,9 @@ pub fn spring_generator(
     (
       fn() { s.a = s.velocity + undamped * s.delta },
       fn(t : Double) {
-        s.target - @math.exp(-undamped * t) * (s.delta + (s.velocity + undamped * s.delta) * t)
+        s.target - @dmath.exp(-undamped * t) * (s.delta + (s.velocity + undamped * s.delta) * t)
       },
-      fn(t : Double) { @math.exp(-undamped * t) * (undamped * s.a * t - s.velocity) },
+      fn(t : Double) { @dmath.exp(-undamped * t) * (undamped * s.a * t - s.velocity) },
     )
   } else {
     // overdamped: a slow and a fast decaying exponential, so no term overflows however heavily it is damped. Springs
@@ -372,7 +372,7 @@ pub fn spring_generator(
     let fast = decay + damped
     let limit = if o.time_defined { @double.infinity } else { 300.0 / damped }
     let decay_at = fn(rate : Double, t : Double) {
-      @math.exp(if t > limit { -rate * limit - decay * (t - limit) } else { -rate * t })
+      @dmath.exp(if t > limit { -rate * limit - decay * (t - limit) } else { -rate * t })
     }
     (
       fn() {
@@ -483,7 +483,7 @@ pub fn inertia_generator(
     amplitude = target - from
   }
   let amp = amplitude
-  let calc_delta = fn(t : Double) { -amp * @math.exp(-t / time_constant) }
+  let calc_delta = fn(t : Double) { -amp * @dmath.exp(-t / time_constant) }
   let apply_friction = fn(t : Double) {
     let delta = calc_delta(t)
     state.done = delta.abs() <= rest_delta

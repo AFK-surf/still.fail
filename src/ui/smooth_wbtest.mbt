@@ -9,14 +9,14 @@
 fn on_curve(r : Double, s : Double, a : Double) -> (Double, Double, Double, Double) {
   let n = 2.0 + (smooth_exponent - 2.0) * s
   let big = r * (1.0 + (smooth_scale - 1.0) * s)
-  let c = @math.cos(a)
-  let sn = @math.sin(a)
-  let rho = @math.pow(@math.pow(c, n) + @math.pow(sn, n), -1.0 / n)
+  let c = @dmath.cos(a)
+  let sn = @dmath.sin(a)
+  let rho = @dmath.pow(@dmath.pow(c, n) + @dmath.pow(sn, n), -1.0 / n)
   let x = big * rho * c
   let y = big * rho * sn
   // the gradient of |x|^n + |y|^n
-  let gx = @math.pow(x, n - 1.0)
-  let gy = @math.pow(y, n - 1.0)
+  let gx = @dmath.pow(x, n - 1.0)
+  let gy = @dmath.pow(y, n - 1.0)
   let gl = (gx * gx + gy * gy).sqrt()
   (300.0 - big + x, 200.0 - big + y, gx / gl, gy / gl)
 }
@@ -41,8 +41,8 @@ test "with no smoothing it is a circle's arc: a round corner's distance, to the 
   for j in 0..=40 {
     let a = 1.5707963267948966 * j.to_double() / 40.0
     for off in [-3.0, -0.5, 0.0, 0.25, 2.0] {
-      let x = 300.0 - 20.0 + (20.0 + off) * @math.cos(a)
-      let y = 200.0 - 20.0 + (20.0 + off) * @math.sin(a)
+      let x = 300.0 - 20.0 + (20.0 + off) * @dmath.cos(a)
+      let y = 200.0 - 20.0 + (20.0 + off) * @dmath.sin(a)
       let qx = x - 300.0 + 20.0
       let qy = y - 200.0 + 20.0
       let round = (dmax(qx, 0.0) * dmax(qx, 0.0) + dmax(qy, 0.0) * dmax(qy, 0.0)).sqrt() +
@@ -125,10 +125,10 @@ test "concentric: a curve moved in is drawn as much smaller, a corner drawn a qu
 }
 
 ///|
-test "det_pow: the power by + - × ÷ alone, as @math.pow's within a few units in the last place" {
+test "det_pow: the power by + - × ÷ alone, as @dmath.pow's within a few units in the last place" {
   for x in [1.0e-30, 1.0e-6, 0.001, 0.1, 0.25, 0.5, 0.7071, 0.9, 0.999999, 1.0, 1.3, 1.9999, 2.0] {
     for e in [0.353553, 0.5, 1.0, 1.4, 1.8284271247461903, 2.0, 2.8284271247461903] {
-      let want = @math.pow(x, e)
+      let want = @dmath.pow(x, e)
       let got = det_pow(x, e)
       assert_true((got - want).abs() <= want * 4.0e-14, msg="\{x}^\{e}: \{got}, not \{want}")
     }
@@ -162,9 +162,9 @@ test "the wholly smooth corner's polynomials are its factors within 2e-5" {
   let n = smooth_exponent
   for i in 0..=1000 {
     let t = i.to_double() / 1000.0
-    let tn1 = if t == 0.0 { 0.0 } else { @math.pow(t, n - 1.0) }
+    let tn1 = if t == 0.0 { 0.0 } else { @dmath.pow(t, n - 1.0) }
     let tn = tn1 * t
-    let u = @math.pow(1.0 + tn, 1.0 / n)
+    let u = @dmath.pow(1.0 + tn, 1.0 / n)
     let g = (1.0 + tn1 * tn1).sqrt()
     assert_true((smooth_a(t) - (1.0 + tn) / g).abs() < 2.0e-5, msg="a at \{t}")
     assert_true((smooth_b(t) - (1.0 + tn) / (u * g)).abs() < 2.0e-5, msg="b at \{t}")

@@ -112,7 +112,7 @@ test "Android's stretch: EdgeEffect's intensity and HWUI's mapping" {
   // 0.016 x + 0.016 (1 - e^(-x e / 0.33))
   approx(
     stretch_amount(0.25),
-    0.004 + 0.016 * (1.0 - @math.exp(-0.25 * 2.718281828459045 / 0.33)),
+    0.004 + 0.016 * (1.0 - @dmath.exp(-0.25 * 2.718281828459045 / 0.33)),
     1.0e-12,
   )
   // the pulled edge stays, the far one goes out of view; the content near the
@@ -342,8 +342,8 @@ test "iOS: decelerates as UIScrollView" {
   run_to_rest(t)
   // v (0.998^t - 1) / ln 0.998 until under 0.02 px/ms: there, at its end, at whatever rate it was drawn
   let k = 0.998
-  let t_end = @math.ln(0.02 / 3.0) / @math.ln(k)
-  let want = 3.0 * (@math.pow(k, t_end) - 1.0) / @math.ln(k)
+  let t_end = @dmath.ln(0.02 / 3.0) / @dmath.ln(k)
+  let want = 3.0 * (@dmath.pow(k, t_end) - 1.0) / @dmath.ln(k)
   approx(t.list_offset() - start, want, 3.0 * 1.0e-6)
 }
 

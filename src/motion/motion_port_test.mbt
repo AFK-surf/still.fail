@@ -19,7 +19,7 @@
 ///|
 /// jest's toBeCloseTo(b, digits): within half of 10^−digits.
 fn close(a : Double, b : Double, digits? : Int = 2) -> Bool {
-  (a - b).abs() < @math.pow(10.0, -digits.to_double()) / 2.0
+  (a - b).abs() < @dmath.pow(10.0, -digits.to_double()) / 2.0
 }
 
 ///|

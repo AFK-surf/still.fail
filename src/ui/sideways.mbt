@@ -113,8 +113,8 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
 /// How far a fling at `v0` (px per ms) has gone `t` ms on, slowing by sideways_friction a ms: solved for the time, the
 /// same at any frame rate.
 fn fling_at(x0 : Double, v0 : Double, t : Double) -> Double {
-  let lf = @math.ln(sideways_friction)
-  x0 + v0 * (@math.pow(sideways_friction, t) - 1.0) / lf
+  let lf = @dmath.ln(sideways_friction)
+  x0 + v0 * (@dmath.pow(sideways_friction, t) - 1.0) / lf
 }
 
 ///|
@@ -134,12 +134,12 @@ fn Sideways::fling_from(self : Sideways, now : Double) -> Unit {
     self.vel = 0.0
     return
   }
-  let lf = @math.ln(sideways_friction)
-  let t_stop = @math.ln(sideways_stop_v / v) / lf
+  let lf = @dmath.ln(sideways_friction)
+  let t_stop = @dmath.ln(sideways_stop_v / v) / lf
   // the end it goes to, if it gets there first: f^t = 1 + d ln f / v0
   let bound = if self.v0 > 0.0 { dmax(self.max, 0.0) } else { 0.0 }
   let arg = 1.0 + (bound - self.x0) * lf / self.v0
-  let t_hit = if arg > 0.0 { @math.ln(arg) / lf } else { @double.infinity }
+  let t_hit = if arg > 0.0 { @dmath.ln(arg) / lf } else { @double.infinity }
   let t_end = if t_hit < t_stop { t_hit } else { t_stop }
   self.rest = now + t_end.ceil()
   self.x_end = if t_hit < t_stop { bound } else { dclamp(fling_at(self.x0, self.v0, t_stop), 0.0, dmax(self.max, 0.0)) }

@@ -2,6 +2,7 @@ import {
   "mbui/host",
   "mbui/ui",
   "moonbitlang/core/math",
+  "mbui/dmath",
 }
 
 options(
