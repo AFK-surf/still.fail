@@ -1548,7 +1548,7 @@
   "web-pages.vault.lib.plain": "未加锁",
   "web-pages.vault.lib.plainWhy": "以明文保存在 station 上",
   "web-pages.vault.lib.plainLong": "条目以明文保存在 station 上，agent 可绕过批准直接读取。订阅和模型 API Key 本就需要 station 直接使用，其它密钥建议开启安全模式后再保存。",
-  "web-pages.vault.lib.sealed": "已加锁",
+  "web-pages.vault.lib.sealed": "已加密",
   "web-pages.vault.lib.sealedWhy": "仅你的设备可解密",
   "web-pages.vault.lib.turnOn": "开启安全模式",
   "web-pages.vault.risk.row": "未加密",

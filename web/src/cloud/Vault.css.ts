@@ -4,7 +4,8 @@ import { cardFoot } from "../styles/pages.css.ts";
 
 // 设置 › 密钥 (Vault.tsx): the settings pages' cards and lists (pages.css.ts), what is the vault's own here.
 export const sub = style({ display: "block", margin: "0", color: vars.muted });
-export const note = style({ margin: "0", fontSize: vars.textMeta, color: vars.muted });
+// Only its block margins: a page's own line keeps the page's column (brand.css.ts `pageNarrow > *`).
+export const note = style({ marginBlock: "0", fontSize: vars.textMeta, color: vars.muted });
 export const grow = style({ flex: "1" });
 /** The state, first in its card: its words alone, on the card's line (no dot before them: docs/ui-panels.md 页面卡片). */
 export const state = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textBody, fontWeight: "500" });

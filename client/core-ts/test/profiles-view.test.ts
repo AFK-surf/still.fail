@@ -90,3 +90,13 @@ test("the list is grouped by kind of account: Claude's subscriptions, ChatGPT's,
     ["key", "API Key", "key"],
   ]);
 });
+
+test("two profiles of one station signed in to the same account: the station said once where it is signed in", () => {
+  const view = workspaceProfiles([
+    station(A, "studio", true, [profile("codex", { email: "z@x.test", runtime: "codex" }), profile("codex-2", { email: "z@x.test", runtime: "codex" })]),
+    station(B, "mini", true, [profile("codex-3", { email: "z@x.test", runtime: "codex" })]),
+  ]);
+  assert.equal(view.items.length, 1);
+  assert.equal(view.items[0].members.length, 3, "each profile still a member");
+  assert.equal(view.items[0].where, "已在 studio、mini 登录");
+});
