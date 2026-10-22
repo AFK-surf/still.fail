@@ -110,7 +110,11 @@ test("a_core_on_the_bridge_signs_in_and_hears_the_cloud", async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("a_file_picked_in_the_app_is_read_from_there_as_it_goes_up", async () => {
+test("a_file_picked_in_the_app_is_read_from_there_as_it_goes_up", async (t) => {
+  // Hermes has no Blob (2026-10-22: every file picked on the phone failed at composer.add).
+  const blob = Object.getOwnPropertyDescriptor(globalThis, "Blob")!;
+  delete (globalThis as { Blob?: unknown }).Blob;
+  t.after(() => Object.defineProperty(globalThis, "Blob", blob));
   const dir = mkdtempSync(join(tmpdir(), "bridge-picked-"));
   const native = new NodeShell(dir);
   const core = startBridged(native, "http://127.0.0.1:1", false, "android", () => {});
@@ -123,17 +127,21 @@ test("a_file_picked_in_the_app_is_read_from_there_as_it_goes_up", async () => {
       const m = JSON.parse(json);
       if ("value" in m) states.set(m.id, m.value);
       else if ("delta" in m) states.set(m.id, apply(states.get(m.id), m.delta));
+      else if ("error" in m) errors.set(m.id, m.error);
     }
   };
+  const errors = new Map<number, J>();
   const until = async (done: () => boolean) => {
     for (read(); !done(); read()) await native.heard();
   };
   core.receive(client, JSON.stringify({ id: 1, subscribe: { topic: "composer", key: "phone-1" } }));
-  core.receive(client, JSON.stringify({ id: 2, call: "composer.add", params: { key: "phone-1", station: "ws/st", files: [{ id: "f1", name: "a.txt", size: 3, blob: { hostFile: 7, size: 3, type: "text/plain" } }] } }));
+  // A picture: its size is read from its head too.
+  core.receive(client, JSON.stringify({ id: 2, call: "composer.add", params: { key: "phone-1", station: "ws/st", files: [{ id: "f1", name: "a.png", size: 3, blob: { hostFile: 7, size: 3, type: "image/png" } }] } }));
   // No such station here: it fails once its first part is read from the app.
-  await until(() => states.get(1)?.files?.[0]?.error !== undefined);
-  // Named first (the station may have it already), read from the app as it goes.
-  assert.ok(native.calls.indexOf("picked.hash") >= 0 && native.calls.indexOf("picked.hash") < native.calls.indexOf("picked.read"));
+  await until(() => errors.has(2) || states.get(1)?.files?.[0]?.error != null);
+  assert.equal(errors.get(2), undefined);
+  // Named first (the station may have it already), read from the app as it goes (a picture's head before, for its size).
+  assert.ok(native.calls.indexOf("picked.hash") >= 0 && native.calls.indexOf("picked.hash") < native.calls.lastIndexOf("picked.read"));
   assert.ok(native.picked.has(7), "a failed upload keeps its file, to go again");
   core.receive(client, JSON.stringify({ id: 3, call: "composer.remove", params: { key: "phone-1", id: "f1" } }));
   await until(() => !native.picked.has(7));

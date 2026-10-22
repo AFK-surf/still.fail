@@ -18,7 +18,7 @@ import type { Topic } from "./protocol.ts";
 import { draftAt } from "./refs.ts";
 import { StationAddr } from "./station/addr.ts";
 import { isObject } from "./util.ts";
-import { FileSource } from "./file-source.ts";
+import { FileSource, isBlob } from "./file-source.ts";
 import { headerSize } from "./imageSize.ts";
 import { localId } from "./ids.ts";
 
@@ -469,11 +469,11 @@ export class Composers {
     // file as a FileSource (file-port.ts), read a part at a time: its header is read the same way, and it is decoded
     // whole, here, only where this can.
     const decoded = (b: Blob | FileSource) => typeof createImageBitmap === "function"
-      ? (b instanceof Blob ? Promise.resolve(b) : Promise.all(Array.from({ length: Math.ceil(b.size / PART) }, (_, i) => b.slice(i * PART, (i + 1) * PART).arrayBuffer()))
+      ? (isBlob(b) ? Promise.resolve(b) : Promise.all(Array.from({ length: Math.ceil(b.size / PART) }, (_, i) => b.slice(i * PART, (i + 1) * PART).arrayBuffer()))
         .then((parts) => new Blob(parts, { type: b.type })))
         .then((whole) => createImageBitmap(whole)).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
       : null;
-    const sizing: Promise<{ width: number; height: number } | null> = (blob instanceof Blob || blob instanceof FileSource) && blob.type.startsWith("image/")
+    const sizing: Promise<{ width: number; height: number } | null> = (isBlob(blob) || blob instanceof FileSource) && blob.type.startsWith("image/")
       ? blob.slice(0, 64).arrayBuffer().then((head) => headerSize(new Uint8Array(head)) ?? decoded(blob)).then((s) => {
         if (s) {
           if (this.#uploads.get(f.id) === upload) this.#sizes.set(f.id, s);
@@ -711,12 +711,12 @@ export function parseComposer(name: string, params: unknown): Call | null {
         if (isObject(x.drive) && typeof x.drive.root === "string" && typeof x.drive.path === "string") {
           const drive = { ...(typeof x.drive.station === "string" ? { station: x.drive.station } : {}), root: x.drive.root, path: x.drive.path };
           // The file itself too, when the page has it (one from Finder): sent up from there to another station.
-          const blob = x.blob instanceof Blob || x.blob instanceof FileSource ? { blob: x.blob } : {};
+          const blob = isBlob(x.blob) || x.blob instanceof FileSource ? { blob: x.blob } : {};
           return { id: x.id, name: typeof x.name === "string" ? x.name : x.drive.path.split("/").at(-1) ?? "", size: typeof x.size === "number" ? x.size : 0, drive, ...blob, ...ref } as FileIn;
         }
         // A folder named by its path, with no drive to zip it from: nothing to send.
         if (ref.ref?.dir) return { id: x.id, name: typeof x.name === "string" ? x.name : "", size: 0, ...ref } as FileIn;
-        if (!(x.blob instanceof Blob || x.blob instanceof FileSource)) throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
+        if (!(isBlob(x.blob) || x.blob instanceof FileSource)) throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
         return { id: x.id, name: typeof x.name === "string" ? x.name : x.blob.name ?? "", size: typeof x.size === "number" ? x.size : x.blob.size, blob: x.blob, ...(isObject(x.pasted) ? { pasted: x.pasted } : {}), ...ref } as FileIn;
       });
       return { kind: "composer", key, act: { add: list, station: str(p, "station") } };

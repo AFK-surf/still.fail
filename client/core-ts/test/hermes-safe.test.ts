@@ -25,6 +25,15 @@ test("the core calls nothing Hermes on Android needs Java for (Intl, locale comp
   assert.deepEqual(found, []);
 });
 
+// Nor a Blob, which Hermes has not either: a picked file is a FileSource there, told from a page's with isBlob
+// (2026-10-22: `instanceof Blob` in composer.add, every file picked on the phone failed). The page's own (file-port.ts) aside.
+test("the core asks whether a value is a Blob only where there may be none (isBlob)", () => {
+  const found = files(SRC).flatMap((path) =>
+    path.endsWith("file-port.ts") ? [] : readFileSync(path, "utf8").split("\n").flatMap((line, i) => (/\binstanceof Blob\b/.test(line) && !line.trim().startsWith("//") ? [`${path.slice(SRC.length)}:${i + 1}: ${line.trim()}`] : [])),
+  );
+  assert.deepEqual(found, []);
+});
+
 test("case is converted without Java: ASCII and Latin-1 letters, the rest as it is, the length kept", () => {
   const java = (s: string) => {
     if (!/^[\x00-\x7f]*$/.test(s)) throw new Error("Java");
