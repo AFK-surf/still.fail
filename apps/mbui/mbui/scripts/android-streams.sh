@@ -42,7 +42,7 @@ log_from_now() {
 
 # until a line matching $2 (or the app's end) is on $1's log, 120 s at most for a run that hangs
 wait_line() {
-  python3 "$D/logwait.py" --log $O/$1.log --line "$2|$END" --deadline 120 >/dev/null
+  "$D/chk" logwait --log $O/$1.log --line "$2|$END" --deadline 120 >/dev/null
 }
 
 # $1's log: STREAM done, $2 brokens at least, nothing bad; with $3 (a line the case brings about: a Java exception the

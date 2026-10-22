@@ -291,8 +291,8 @@ console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&
   local page=$(curl -s "http://127.0.0.1:$port/oauth/callback?code=x&state=not-this-one")
   ok "the browser coming back gets the host's page" 'echo "$page" | grep -q "已回到 app"'
   local exit_code=0
-  # (its end, as the system tells it: mbui's scripts/logwait.py --pid, kqueue's; not waited for forever, then killed)
-  python3 "$MBUI_DIR/scripts/logwait.py" --pid $pid --deadline 60 > /dev/null || kill $pid 2> /dev/null
+  # (its end, as the system tells it: mbui's scripts/chk logwait --pid, kqueue's; not waited for forever, then killed)
+  "$MBUI_DIR/scripts/chk" logwait --pid $pid --deadline 60 > /dev/null || kill $pid 2> /dev/null
   wait $pid || exit_code=$?
   ok "the app exits 1 (the state was not the sign-in's: $(grep -a 'Sign-in failed' $dir/out.log | head -1))" '[ $exit_code = 1 ] && grep -q "Sign-in failed" $dir/out.log'
   ok "it no longer listens" '! lsof -iTCP:$port -sTCP:LISTEN -n -P > /dev/null'

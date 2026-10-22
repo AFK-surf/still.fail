@@ -9,6 +9,7 @@
 //     chk outside-kinds [HOST…]   the outsides' kinds as src/ui/hostcall.mbt numbers them and as each host does
 //                                 (outside.mbt says how)
 //     chk textrec …               a host's run kept as a Tester's test, the kept runs' list checked (textrec.mbt)
+//     chk logwait …               waits for a log's line, a process's end, a path's going (logwait.mbt)
 
 ///|
 fn root() -> String {
@@ -84,6 +85,7 @@ fn main {
     ["corner-sl", .. rest] => corner_sl(rest.to_array())
     ["outside-kinds", .. rest] => outside_kinds(rest.to_array())
     ["textrec", .. rest] => textrec(rest.to_array())
+    ["logwait", .. rest] => logwait(rest.to_array())
     _ => {
       @sys.eprintln("chk: errs | corner-sl [--check] | outside-kinds [HOST…]")
       2

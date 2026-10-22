@@ -89,11 +89,11 @@ busy() {
 }
 # takes the simulator's lock, waiting while another holds it (mbui's scripts/host_contract.sh ios free does the same):
 # its owner says who and `pid N`, the process that holds it as long as it is used (on CI the job's runner worker,
-# which ends with the run). Held, this waits for that process's end (mbui's scripts/logwait.py: kqueue's, no time; a
+# which ends with the run). Held, this waits for that process's end (mbui's scripts/chk logwait: kqueue's, no time; a
 # line every five minutes saying whose it is, the job's timeout the limit), or, an owner that says no pid, for the
 # lock's going. An owner whose process is gone is left over and taken over; one that says no pid, after an hour.
 take_lock() {
-  local who opid lw="python3 $MBUI_DIR/scripts/logwait.py"
+  local who opid lw="$MBUI_DIR/scripts/chk logwait"
   while ! mkdir "$LOCK" 2>/dev/null; do
     who=$(head -1 "$LOCK/owner" 2>/dev/null)
     opid=$(sed -n 's/^pid \([0-9][0-9]*\)$/\1/p' "$LOCK/owner" 2>/dev/null | head -1)
@@ -106,12 +106,9 @@ take_lock() {
     elif [ -n "$opid" ]; then
       echo "ios-smoke: $MBUI_IOS_DEVICE is ${who:-another run}'s (pid $opid): waiting for its end"
       $lw --pid "$opid" --deadline 300 >/dev/null || true
-    elif grep -q -- --gone "$MBUI_DIR/scripts/logwait.py"; then
+    else
       echo "ios-smoke: $MBUI_IOS_DEVICE is ${who:-another run}'s ($LOCK, its process not said): waiting for it to go"
       $lw --gone "$LOCK" --deadline 300 >/dev/null || true
-    else
-      echo "ios-smoke: $MBUI_IOS_DEVICE is ${who:-another run}'s ($LOCK, its process not said), and this mbui's logwait.py cannot wait for a lock's going: not run"
-      exit 1
     fi
   done
   # the process that holds it: on CI the job's runner worker (ends with the run), by hand the shell that runs this
@@ -183,14 +180,14 @@ case "${1:-}" in
     e2e_env
     up=1
     if [ -f "$STATE/prepare.pid" ]; then
-      python3 "$A/mbui/scripts/logwait.py" --pid "$(cat "$STATE/prepare.pid")" --deadline 600 >/dev/null || true
+      "$A/mbui/scripts/chk" logwait --pid "$(cat "$STATE/prepare.pid")" --deadline 600 >/dev/null || true
       rm -f "$STATE/prepare.pid"
       cat "$STATE/prepare.log"
       [ -f "$STATE/prepare.ok" ] || { tail -30 "$E2E_WORK/run/"*.log 2>/dev/null; bash "$D/e2e-local.sh" down; echo "ios-smoke: the local still.fail did not start"; exit 1; }
       up=
     fi
     if [ -f "$STATE/boot.pid" ]; then
-      python3 "$A/mbui/scripts/logwait.py" --pid "$(cat "$STATE/boot.pid")" --deadline 600 >/dev/null || true
+      "$A/mbui/scripts/chk" logwait --pid "$(cat "$STATE/boot.pid")" --deadline 600 >/dev/null || true
       rm -f "$STATE/boot.pid"
       cat "$STATE/boot.log"
     fi

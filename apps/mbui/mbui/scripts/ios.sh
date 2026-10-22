@@ -64,8 +64,8 @@ for rt,ds in d.items():
   local st=$(mktemp -t mbui-bootstatus)
   xcrun simctl bootstatus "$id" >"$st" 2>&1 &
   local pid=$! t0=$(date +%s)
-  # (bootstatus' own end: scripts/logwait.py, kqueue's)
-  if ! python3 "$D/logwait.py" --pid $pid --deadline ${MBUI_IOS_BOOT_WAIT:-2400}; then
+  # (bootstatus' own end: scripts/chk logwait, kqueue's)
+  if ! "$D/chk" logwait --pid $pid --deadline ${MBUI_IOS_BOOT_WAIT:-2400}; then
     kill $pid 2>/dev/null
     echo "ios.sh: $DEV_NAME did not boot: $(tail -2 "$st")" >&2
     rm -f "$st"
@@ -146,7 +146,7 @@ case "${1:-build}" in
     # checks)" (39467833461)
     old=$(app_pid "$ID")
     xcrun simctl terminate "$ID" $BID 2>/dev/null || true
-    [ -z "$old" ] || python3 "$D/logwait.py" --pid "$old" --deadline 60 >/dev/null ||
+    [ -z "$old" ] || "$D/chk" logwait --pid "$old" --deadline 60 >/dev/null ||
       { echo "ios.sh: $BID's last run ($old) did not end" >&2; exit 1; }
     xcrun simctl install "$ID" $APPDIR
     mkdir -p $PWD/$OUT/shots "$(dirname "$LOG")"
@@ -159,16 +159,16 @@ case "${1:-build}" in
       SIMCTL_CHILD_MBUI_SHOT_DIR=${SIMCTL_CHILD_MBUI_SHOT_DIR:-$PWD/$OUT/shots} \
       xcrun simctl launch --terminate-running-process --stdout="$LOG.stdout" --stderr="$LOG" "$ID" $BID \
       >"$LOG.launch" 2>&1 &
-    # the app up as it says on its log (ios_app.m's "ios: launched", scripts/logwait.py), then its pid: as the
+    # the app up as it says on its log (ios_app.m's "ios: launched", scripts/chk logwait), then its pid: as the
     # simulator's launchd has it, or as `simctl launch` said it (launchd may not list it yet, or no more: an app that
     # ends at once). `simctl launch` itself can sit on for minutes after the app is up (seen on a loaded Mac), so its
     # end is not waited for, only its line once the app is up
     pid=
     # (or `simctl launch` saying it refused it: said at once, not after the deadline)
-    if python3 "$D/logwait.py" --log "$LOG" --line '^ios: launched' --fail-log "$LOG.launch" \
+    if "$D/chk" logwait --log "$LOG" --line '^ios: launched' --fail-log "$LOG.launch" \
       --fail-line 'An error was encountered|failed to launch' --deadline 120 >/dev/null; then
       pid=$(app_pid "$ID")
-      [ -n "$pid" ] || pid=$(python3 "$D/logwait.py" --log "$LOG.launch" --line "^$BID: [0-9]+" --deadline 120 | sed "s/^$BID: //")
+      [ -n "$pid" ] || pid=$("$D/chk" logwait --log "$LOG.launch" --line "^$BID: [0-9]+" --deadline 120 | sed "s/^$BID: //")
     fi
     [ -n "$pid" ] || { cat "$LOG.launch" >&2; echo "ios.sh: $BID did not start" >&2; exit 1; }
     echo "$BID: $pid"

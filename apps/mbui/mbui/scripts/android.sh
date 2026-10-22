@@ -232,7 +232,7 @@ case "${1:-build}" in
     $ADB -s $SERIAL shell screenrecord --verbose --time-limit $SECS /data/local/tmp/$NAME.mp4 > $R/$NAME.rec.txt 2>&1 &
     REC=$!
     # the app started once the recorder is (its words as it begins: the display it records set up), or it ended
-    python3 "$D/logwait.py" --log $R/$NAME.rec.txt --line '^Content area is' --pid $REC --deadline 60 >/dev/null \
+    "$D/chk" logwait --log $R/$NAME.rec.txt --line '^Content area is' --pid $REC --deadline 60 >/dev/null \
       || { cat $R/$NAME.rec.txt; echo "android.sh: the recorder did not start" >&2; exit 1; }
     ENV="${DRV}MBUI_MOTION_LOG=1${ENV:+;$ENV}" "$0" run
     # (the file whole once screenrecord has ended: the shell's end is its)
@@ -275,10 +275,10 @@ case "${1:-build}" in
     if [ -f $OUT/http.pid ]; then kill $(cat $OUT/http.pid) 2>/dev/null || true; rm -f $OUT/http.pid; fi
     ;;
   delete)
-    # the emulator's processes (its qemu) ended before its files go: their end, not a time (scripts/logwait.py)
+    # the emulator's processes (its qemu) ended before its files go: their end, not a time (scripts/chk logwait)
     EPIDS=$(pgrep -f -- "-avd $AVD( |$)" || true)
     $ADB -s $SERIAL emu kill 2>/dev/null || true
-    for p in $EPIDS; do python3 "$D/logwait.py" --pid $p --deadline 120; done
+    for p in $EPIDS; do "$D/chk" logwait --pid $p --deadline 120; done
     $(ls -d $SDK/cmdline-tools/*/bin | tail -1)/avdmanager delete avd -n $AVD
     ;;
   *)

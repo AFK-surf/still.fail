@@ -47,7 +47,7 @@ for p in $PLATFORMS; do
       rm -rf out/ios/shots
       BENCH=-1 bash scripts/ios.sh run shot >/dev/null
       # its picture written, as the app says on its log once it is (ios_app.m's "SHOT <path> ok"; scripts/ios.sh's log)
-      python3 scripts/logwait.py --log "${MBUI_IOS_LOG:-$PWD/out/ios/app.log}" --line '^SHOT .*/main\.png (ok|failed)$' --deadline 120 \
+      scripts/chk logwait --log "${MBUI_IOS_LOG:-$PWD/out/ios/app.log}" --line '^SHOT .*/main\.png (ok|failed)$' --deadline 120 \
         | grep -q ' ok$' || { echo "ios: no picture"; fail=1; continue; }
       cp out/ios/shots/main.png out/shots/ios.png ;;
     android)
