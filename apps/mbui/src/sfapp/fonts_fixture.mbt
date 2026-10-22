@@ -31,7 +31,8 @@ let fixture_face_sha : String = "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7f
 fn fixture_face(e : (String, String, Bool, Array[Int], Double)) -> Json {
   let (id, name, mono, weights, bytes) = e
   let base = "https://app.still.fail/releases/fonts/" + id + "/1"
-  let each = bytes / weights.length().to_double()
+  // (a whole number of bytes, as the core says a file's size)
+  let each = (bytes / weights.length().to_double()).floor()
   {
     "id": id.to_json(),
     "name": name.to_json(),

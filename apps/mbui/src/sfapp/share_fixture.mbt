@@ -24,7 +24,7 @@ fn fixture_share_topic(params : Map[String, Json]) -> Json? {
       "title": Json::string(title),
       "stationName": "Studio",
       "last": { "preview": Json::string(preview) },
-      "agents": [{ "maker": Json::string(maker), "runtime": Json::string(runtime) }],
+      "agents": [{ "maker": { "id": Json::string(maker), "name": Json::string(maker) }, "runtime": Json::string(runtime) }],
     }
   }
   // the one a thing from the same site went to last first, as the core lists them
