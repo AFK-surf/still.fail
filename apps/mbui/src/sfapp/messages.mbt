@@ -150,6 +150,9 @@ let web_bubble_line : Double = 22.0
 let web_bubble_w : Double = 640.0
 
 ///|
+let web_bubble_share : Double = 0.78
+
+///|
 let web_bubble_px : Double = 16.0
 
 ///|
@@ -707,7 +710,7 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   // (the web's on a desktop's width: conversation.css.ts msgBubble, 78% of the column and 640 at most, 10 by 16 in, 20
   // round)
   let b = c.box(
-    max_w=if wide_on.val { dmin(c.width * 0.78, web_bubble_w) } else { c.width - 36.0 },
+    max_w=if wide_on.val { dmin(c.width * web_bubble_share, web_bubble_w) } else { c.width - 36.0 },
     padx=if wide_on.val { web_bubble_px } else { 14.0 },
     pady=if wide_on.val { web_bubble_py } else { 8.0 },
     radius=if wide_on.val { web_bubble_r } else { 18.0 },

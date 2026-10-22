@@ -279,16 +279,17 @@ fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
         enter_sends=true,
         field=wide.find_field,
       )
-      let typed = res.text.replace_all(old="\n", new="")
+      // (Enter sent the words: they are what was typed, not what is left in the field)
+      let typed = match res.submitted {
+        Some(words) => words
+        None => res.text
+      }.replace_all(old="\n", new="")
       if typed != wide.find_query {
         find_ask(src, r, v, typed)
       }
-      if back {
+      if back || res.submitted is Some(_) {
         wide.find_field.set(typed)
-        find_step(r, -1)
-      } else if res.submitted is Some(_) {
-        wide.find_field.set(typed)
-        find_step(r, 1)
+        find_step(r, if back { -1 } else { 1 })
       }
       let (at, total) = find_position()
       match wide.found {
