@@ -784,7 +784,7 @@ const relayable = (view: ChatView) => !view.archived && !view.offline && view.ag
 
 /**
  * Relays the chat to a channel (the phone's; the wide screen's is Relay.tsx RelayDialog, picking the same way): the
- * search (or a Slack link), the places by connect, the note, 「接力」; done, the sheet goes and a toast says where.
+ * search (or a Slack link), the places, the note, 「接力」; done, the sheet goes and a toast says where.
  */
 function RelaySheet({ station, thread }: { station: string; thread: number }) {
   const app = useApp();
@@ -796,7 +796,7 @@ function RelaySheet({ station, thread }: { station: string; thread: number }) {
       <div className={`${sheetsCss.mSheetScroll} ${css.mPublishBody}`}>
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-main.relay.lead")}</p>
         {relay.body}
-        <Button primary label={t("web-main.relay.go")} busy={relay.busy} enabled={relay.ready} onClick={relay.go} />
+        <Button primary label={relay.label} busy={relay.busy} enabled={relay.ready} onClick={relay.go} />
       </div>
     </>
   );

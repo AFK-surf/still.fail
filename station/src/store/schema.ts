@@ -319,6 +319,14 @@ CREATE TABLE IF NOT EXISTS published (
   size INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS published_by_thread ON published (thread);
+-- Where chats were relayed (docs/relay.md, sessions/relay.ts): each connect's channel or group, by when a chat was last
+-- relayed there, so the picker offers the places used before first.
+CREATE TABLE IF NOT EXISTS relayed_to (
+  connect TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (connect, channel)
+);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.

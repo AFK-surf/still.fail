@@ -12,6 +12,9 @@ import { SlackSurface } from "../slack/surface.ts";
 import type { ChatSurface, Place, ThreadRef } from "./chat.ts";
 import type { Hub } from "./hub.ts";
 
+/// A place a chat can be relayed to, with when one was last relayed there (absent if never).
+export type RelayPlace = Place & { used?: number };
+
 /// A connect a chat can be relayed through, with where its bot can start a conversation (or why that was not read).
 export type RelayConnect = {
   id: string;
@@ -19,7 +22,7 @@ export type RelayConnect = {
   kind: "slack" | "feishu" | "lark";
   name: string;
   team: string | null;
-  places: Place[];
+  places: RelayPlace[];
   error?: string;
 };
 
@@ -54,15 +57,17 @@ function teamOf(chat: ChatSurface): string | null {
   return team === "" ? null : team;
 }
 
-/// Where a chat can be relayed to: each connect's places, read now (one that cannot be read says why).
+/// Where a chat can be relayed to: each connect's places, read now (one that cannot be read says why), those relayed to
+/// before first (the latest first), then by name.
 export async function relayPlaces(hub: Hub, thread: ThreadRow): Promise<RelayConnect[]> {
   const session = agentOf(hub, thread);
   const out: RelayConnect[] = [];
   for (const c of connectsFor(hub, session)) {
     const shown = { id: c.id, kind: c.kind, name: c.chat.botName?.() || c.id, team: teamOf(c.chat) };
     try {
-      const places = await c.chat.places!();
-      places.sort((a, b) => a.name.localeCompare(b.name));
+      const used = hub.store.relayedTo(c.id);
+      const places: RelayPlace[] = (await c.chat.places!()).map((p) => (used.has(p.id) ? { ...p, used: used.get(p.id)! } : p));
+      places.sort((a, b) => (b.used ?? -1) - (a.used ?? -1) || a.name.localeCompare(b.name));
       out.push({ ...shown, places });
     } catch (error) {
       log.warn("hub", "a connect's places were not read for relaying", { connect: c.id, error: (error as Error).message });
@@ -117,6 +122,7 @@ export async function relay(hub: Hub, thread: ThreadRow, by: string, target: Rel
   const opening = tr(lang, "station.relay.opening", { who: by, chat: from }) + (said === "" ? "" : `\n\n${said}`);
   const begun = existing !== null ? { thread: existing, ts: await c.chat.post(existing, opening, []) } : await c.chat.begin!(channel, opening);
   const there = hub.store.openThread(surface, begun.thread.channel, begun.thread.threadTs, null, by);
+  hub.store.noteRelayed(c.id, channel);
   hub.store.joinThread(there.id, session, c.id);
   // Kept as the station's words there; the agent hears of it in its notice below, not as a message.
   hub.store.insertMessage({ thread: there.id, ts: begun.ts, authorKind: "ember", author: "ember", text: opening, attachments: [] });

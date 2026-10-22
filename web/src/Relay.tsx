@@ -1,9 +1,9 @@
-// A chat relayed to a channel (docs/relay.md): from its title bar, ⌘K or its row's menu, a dialog lists the channels
-// and groups the station's connects' bots are in, by connect (Slack, Feishu, Lark), found by typing; one picked, with
-// a note if wanted, 接力 has the station start the conversation there and the chat's agent go on in it too. A Slack
+// A chat relayed to a channel (docs/relay.md): from its title bar, ⌘K or its row's menu, a dialog offers the channels
+// and groups the station's connects' bots are in (Slack, Feishu, Lark), those relayed to before first, found by typing;
+// one picked, with a note if wanted, 接力 has the station start the conversation there and the chat's agent go on in it too. A Slack
 // message's link typed (pasted) into the search offers that message's thread instead. The phone's sheet
 // (mobile/Chat.tsx RelaySheet) picks the same way (useRelay).
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { stationApi, useStationCall, type RelayConnect, type RelayPlace } from "./api.ts";
 import { Button, Dialog, ElsewhereLogo, WaitLine } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
@@ -33,25 +33,56 @@ export function RelayHost() {
 /** Read as the dialog opens: being read, read, or why not. */
 type Read = { reading: true } | { ok: RelayConnect[] } | { error: string };
 
+/** A place with the connect it is through. */
+type Row = { connect: RelayConnect; place: RelayPlace };
+
+/** How many places relayed to before are offered as the dialog opens, before 「显示全部」; with no more than FEW places in
+ * all, all of them are. */
+const RECENT = 5;
+const FEW = 8;
+
 /** How a place says what relaying there does: a new thread, a new topic, or the group's conversation taken over. */
 const kindNote = (p: RelayPlace) => t(p.kind === "channel" ? "web-main.relay.kind.channel" : p.kind === "topics" ? "web-main.relay.kind.topics" : "web-main.relay.kind.group");
 
 /** Whether what was typed is a link to a Slack message (the station finds its workspace among its connects'). */
 const slackLink = (typed: string) => /^https?:\/\/[^/\s]+\/archives\/[A-Z0-9]+\/p\d{16}/.test(typed.trim());
 
-const platform = (c: RelayConnect) => (c.kind === "slack" ? "Slack" : c.kind === "lark" ? "Lark" : t("web-pages.connect.feishu.name"));
+/** A connect as people know it: its workspace (Slack) or tenant (Feishu), else its bot's name. */
+const workspace = (c: RelayConnect) => c.team ?? c.name;
+
+const placeName = (p: RelayPlace) => (p.kind === "channel" ? `${p.private ? "🔒 " : ""}#${p.name}` : p.name);
+
+/**
+ * The places offered, of every connect picked by the filter as one list: those whose name has what was typed (those
+ * starting with it first), else all of them; then those relayed to before (the latest first), then by name. Nothing
+ * typed, more than FEW and some relayed to before, only the first RECENT of those (`recent`) unless all were asked for.
+ */
+export function arrange(connects: RelayConnect[], query: string, all: boolean): { rows: Row[]; recent: boolean; total: number } {
+  const q = query.trim().toLowerCase();
+  const rows = connects.flatMap((connect) => connect.places.map((place) => ({ connect, place })));
+  const total = rows.length;
+  const shown = q === "" ? rows : rows.filter((r) => r.place.name.toLowerCase().includes(q));
+  const first = (r: Row) => (q !== "" && r.place.name.toLowerCase().startsWith(q) ? 0 : 1);
+  shown.sort((a, b) => first(a) - first(b) || (b.place.used ?? -1) - (a.place.used ?? -1) || a.place.name.localeCompare(b.place.name));
+  const used = shown.filter((r) => r.place.used !== undefined);
+  if (q === "" && !all && total > FEW && used.length > 0) return { rows: used.slice(0, RECENT), recent: true, total };
+  return { rows: shown, recent: false, total };
+}
 
 /**
  * The picking itself, the same on the wide screen's dialog and the phone's sheet: the search (or a Slack link), the
- * places by connect, the note; `go` relays to what was picked, said by `say`, then `onDone`. `focus`: the search is
- * focused as it opens (not on a phone, where that brings up the keyboard over the list).
+ * workspaces to look in when there are several, the places relayed to before as it opens (all of them asked for or
+ * searched), the one picked with the note; `go` relays to what was picked, said by `say`, then `onDone`. `focus`: the
+ * search is focused as it opens (not on a phone, where that brings up the keyboard over the list).
  */
 export function useRelay(station: string, thread: number, say: (text: string) => void, onDone: () => void, focus = true) {
   const call = useStationCall(station);
   const api = stationApi(call);
   const [read, setRead] = useState<Read>({ reading: true });
   const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<{ connect: string; place: RelayPlace } | null>(null);
+  const [scope, setScope] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+  const [picked, setPicked] = useState<Row | null>(null);
   const link = slackLink(query) ? query.trim() : null;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -61,10 +92,11 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
     return () => { gone = true; };
   }, [call, thread]);
   const connects = "ok" in read ? read.ok : [];
-  const q = query.trim().toLowerCase();
-  const shown = useMemo(() => connects.map((c) => ({ ...c, places: q === "" ? c.places : c.places.filter((p) => p.name.toLowerCase().includes(q)) })), [connects, q]);
+  const several = connects.length > 1;
+  const looked = useMemo(() => connects.filter((c) => scope === null || c.id === scope), [connects, scope]);
+  const { rows, recent, total } = useMemo(() => arrange(looked, query, all), [looked, query, all]);
   const go = () => {
-    const to = link !== null ? { link } : picked !== null ? { connect: picked.connect, channel: picked.place.id } : null;
+    const to = link !== null ? { link } : picked !== null ? { connect: picked.connect.id, channel: picked.place.id } : null;
     if (to === null) return;
     setBusy(true);
     api.relay(thread, to, note).then(
@@ -72,14 +104,29 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
       (e: unknown) => { setBusy(false); say(t("web-main.act.failed", { what: t("web-main.relay.verb"), error: failure(e) })); },
     );
   };
+  const row = (r: Row, on: boolean, end: ReactNode, onClick: () => void) => (
+    <button key={`${r.connect.id}/${r.place.id}`} type="button" role="option" aria-selected={on} className={css.place} data-on={on || undefined} onClick={onClick}>
+      <ElsewhereLogo kind={r.connect.kind === "slack" ? "slack" : "feishu"} size={16} />
+      <span className={css.placeName}>{placeName(r.place)}</span>
+      {several && scope === null && <span className={css.placeWhere}>{workspace(r.connect)}</span>}
+      <span className={css.placeNote} title={r.place.kind === "group" ? t("web-main.relay.kind.groupNote") : undefined}>{end}</span>
+    </button>
+  );
   let list;
   if (link !== null) {
     list = (
       <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
         <button type="button" role="option" aria-selected className={css.place} data-on>
+          <ElsewhereLogo kind="slack" size={16} />
           <span className={css.placeName}>{t("web-main.relay.thread")}</span>
           <span className={css.placeNote}>{t("web-main.relay.kind.thread")}</span>
         </button>
+      </div>
+    );
+  } else if (picked !== null) {
+    list = (
+      <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
+        {row(picked, true, <>{kindNote(picked.place)} · <span className={css.change}>{t("web-main.relay.change")}</span></>, () => setPicked(null))}
       </div>
     );
   } else if ("reading" in read) list = <WaitLine text={t("web-main.relay.reading")} />;
@@ -87,37 +134,41 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
   else if (connects.length === 0) list = <p className={css.empty}>{t("web-main.relay.noConnects")}</p>;
   else {
     list = (
-      <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
-        {shown.map((c) => (
-          <div key={c.id} className={css.group}>
-            <div className={css.groupHead}><ElsewhereLogo kind={c.kind === "slack" ? "slack" : "feishu"} size={13} />{platform(c)} · {c.team ?? c.name}</div>
-            {c.error && <p className={css.unread}>{t("web-main.relay.unread", { error: c.error })}</p>}
-            {!c.error && c.places.length === 0 && <p className={css.empty}>{q === "" ? t("web-main.relay.noPlaces") : t("web-main.relay.noMatch")}</p>}
-            {c.places.map((p) => {
-              const on = picked?.connect === c.id && picked.place.id === p.id;
-              return (
-                <button key={p.id} type="button" role="option" aria-selected={on} className={css.place} data-on={on || undefined} onClick={() => setPicked({ connect: c.id, place: p })}>
-                  <span className={css.placeName}>{p.kind === "channel" ? `${p.private ? "🔒 " : ""}#${p.name}` : p.name}</span>
-                  <span className={css.placeNote} title={p.kind === "group" ? t("web-main.relay.kind.groupNote") : undefined}>{kindNote(p)}</span>
-                </button>
-              );
-            })}
+      <>
+        {several && (
+          <div className={css.scopes} role="group" aria-label={t("web-main.relay.workspaces")}>
+            <button type="button" className={css.scope} data-on={scope === null || undefined} aria-pressed={scope === null} onClick={() => setScope(null)}>{t("web-main.relay.allWorkspaces")}</button>
+            {connects.map((c) => (
+              <button key={c.id} type="button" className={css.scope} data-on={scope === c.id || undefined} aria-pressed={scope === c.id} onClick={() => setScope(c.id)}>
+                <ElsewhereLogo kind={c.kind === "slack" ? "slack" : "feishu"} size={13} />{workspace(c)}
+              </button>
+            ))}
           </div>
-        ))}
-      </div>
+        )}
+        <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
+          {recent && <div className={css.groupHead}>{t("web-main.relay.recent")}</div>}
+          {rows.map((r) => row(r, false, r.place.kind === "channel" ? null : kindNote(r.place), () => setPicked(r)))}
+          {rows.length === 0 && <p className={css.empty}>{query.trim() === "" ? t("web-main.relay.noPlaces") : t("web-main.relay.noMatch")}</p>}
+          {recent && total > rows.length && <button type="button" className={css.more} onClick={() => setAll(true)}>{t("web-main.relay.showAll", { count: total })}</button>}
+          {looked.filter((c) => c.error).map((c) => <p key={c.id} className={css.unread}>{several ? `${workspace(c)} · ` : ""}{t("web-main.relay.unread", { error: c.error! })}</p>)}
+        </div>
+      </>
     );
   }
   const body = (
     <div className={css.body}>
-      <input className={controlsCss.input} type="search" autoFocus={focus} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("web-main.relay.searchOrLink")} aria-label={t("web-main.relay.search")} />
+      {picked === null && <input className={controlsCss.input} type="search" autoFocus={focus} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("web-main.relay.searchOrLink")} aria-label={t("web-main.relay.search")} />}
       {list}
-      <label className={css.noteField}>
-        <span className={css.noteLabel}>{t("web-main.relay.note")}</span>
-        <input className={controlsCss.input} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} placeholder={t("web-main.relay.notePlaceholder")} />
-      </label>
+      {(picked !== null || link !== null) && (
+        <label className={css.noteField}>
+          <span className={css.noteLabel}>{t("web-main.relay.note")}</span>
+          <input className={controlsCss.input} value={note} maxLength={2000} autoFocus={focus} onChange={(e) => setNote(e.target.value)} placeholder={t("web-main.relay.notePlaceholder")} />
+        </label>
+      )}
     </div>
   );
-  return { body, ready: picked !== null || link !== null, busy, go };
+  const label = picked !== null ? t("web-main.relay.goTo", { place: placeName(picked.place) }) : t("web-main.relay.go");
+  return { body, ready: picked !== null || link !== null, busy, go, label };
 }
 
 function RelayDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
@@ -126,7 +177,7 @@ function RelayDialog({ station, thread, onClose }: { station: string; thread: nu
     <Dialog open onClose={onClose} title={t("web-main.relay.title")} description={t("web-main.relay.lead")}
       footer={<>
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
-        <Button variant="primary" busy={relay.busy} disabled={!relay.ready} onClick={relay.go}>{t("web-main.relay.go")}</Button>
+        <Button variant="primary" busy={relay.busy} disabled={!relay.ready} onClick={relay.go}>{relay.label}</Button>
       </>}>
       {relay.body}
     </Dialog>

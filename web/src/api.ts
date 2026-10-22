@@ -387,8 +387,9 @@ export interface MachineSession {
 /** Something said in one of the machine's sessions: by the person, else by its agent; when, in ms. */
 export interface MachineSaid { person: boolean; text: string; at: number | null }
 
-/** A channel or group a connect's bot is in (docs/relay.md): a Slack channel, a Feishu topic group, a Feishu group. */
-export interface RelayPlace { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean }
+/** A channel or group a connect's bot is in (docs/relay.md): a Slack channel, a Feishu topic group, a Feishu group; `used`
+ * when a chat was last relayed there (ms), if ever. */
+export interface RelayPlace { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean; used?: number }
 
 /** A connect a chat can be relayed through, with its places (none, and why, when they could not be read). */
 export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; places: RelayPlace[]; error?: string }

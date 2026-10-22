@@ -827,5 +827,11 @@
   "web-main.relay.done": "Relayed to {place}",
   "web-main.relay.searchOrLink": "Search channels and groups, or paste a Slack message link",
   "web-main.relay.thread": "Relay to this Slack thread",
-  "web-main.relay.kind.thread": "Existing thread · the agent reads it first"
+  "web-main.relay.kind.thread": "Existing thread · the agent reads it first",
+  "web-main.relay.recent": "Relayed to before",
+  "web-main.relay.showAll": "Show all {count}",
+  "web-main.relay.workspaces": "Workspaces to look in",
+  "web-main.relay.allWorkspaces": "All",
+  "web-main.relay.change": "Change",
+  "web-main.relay.goTo": "Relay to {place}"
 }

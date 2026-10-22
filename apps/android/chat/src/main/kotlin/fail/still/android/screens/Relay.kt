@@ -4,9 +4,11 @@ package fail.still.android.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -53,60 +55,99 @@ private val SLACK_LINK = Regex("""^https?://[^/\s]+/archives/[A-Z0-9]+/p\d{16}""
 /** How a place says what relaying there does: a new thread, a new topic, or the group's conversation taken over. */
 private fun kindNote(p: RelayPlace) = t(when (p.kind) { "channel" -> "web-main.relay.kind.channel"; "topics" -> "web-main.relay.kind.topics"; else -> "web-main.relay.kind.group" })
 
-private fun platform(c: RelayConnect) = when (c.kind) { "slack" -> "Slack"; "lark" -> "Lark"; else -> t("web-pages.connect.feishu.name") }
+/** A connect as people know it: its workspace (Slack) or tenant (Feishu), else its bot's name. */
+private fun workspace(c: RelayConnect) = c.team ?: c.name
+
+private fun placeName(p: RelayPlace) = if (p.kind == "channel") "${if (p.private) "🔒 " else ""}#${p.name}" else p.name
+
+private fun markOf(c: RelayConnect) = if (c.kind == "slack") null else "feishu"
+
+/** A place with the connect it is through. */
+private data class Spot(val connect: RelayConnect, val place: RelayPlace)
+
+/** How many places relayed to before are offered as the sheet opens, before 「显示全部」; with no more than FEW places in all, all of them are. */
+private const val RECENT = 5
+private const val FEW = 8
+
+/** The places offered, as the web's (Relay.tsx arrange): those matching what was typed (starting with it first), relayed to before (latest first), by name; nothing typed, only the recent ones of many unless all were asked for. */
+private data class Arranged(val rows: List<Spot>, val recent: Boolean, val total: Int)
+
+private fun arrange(connects: List<RelayConnect>, query: String, all: Boolean): Arranged {
+    val q = query.trim().lowercase()
+    val rows = connects.flatMap { c -> c.places.map { Spot(c, it) } }
+    val shown = (if (q.isEmpty()) rows else rows.filter { it.place.name.lowercase().contains(q) }).sortedWith(
+        compareBy<Spot> { if (q.isNotEmpty() && it.place.name.lowercase().startsWith(q)) 0 else 1 }
+            .thenByDescending { it.place.used ?: -1L }
+            .thenBy { it.place.name },
+    )
+    val used = shown.filter { it.place.used != null }
+    if (q.isEmpty() && !all && rows.size > FEW && used.isNotEmpty()) return Arranged(used.take(RECENT), true, rows.size)
+    return Arranged(shown, false, rows.size)
+}
 
 /**
  * Relays the chat to a channel: the search (or a pasted Slack message link, which offers that message's thread), the
- * places by connect as the station reads them as the sheet opens, the note, 「接力」. Done, the sheet goes at once and a
- * toast says where it went (or why not).
+ * workspaces to look in when there are several, the places relayed to before as it opens (all of them asked for or
+ * searched), the one picked with the note, 「接力到 …」. Done, the sheet goes at once and a toast says where it went (or why not).
  */
 internal fun openRelay(app: AppState, station: String, thread: Long) {
     app.sheet = SheetSpec(0.9f) {
         var read by remember { mutableStateOf<Places>(Places.Reading) }
         var query by remember { mutableStateOf("") }
-        var picked by remember { mutableStateOf<Pair<String, RelayPlace>?>(null) }
+        var scope by remember { mutableStateOf<String?>(null) }
+        var all by remember { mutableStateOf(false) }
+        var picked by remember { mutableStateOf<Spot?>(null) }
         var note by remember { mutableStateOf("") }
         LaunchedEffect(thread) {
             read = try { Places.Ok(app.api(station).relayPlaces(thread)) } catch (e: CoreException) { Places.Failed(errorText(e)) }
         }
         val link = query.trim().takeIf { SLACK_LINK.containsMatchIn(it) }
-        val q = query.trim().lowercase()
         SheetGrab()
         SheetHead(t("web-main.relay.title"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(t("web-main.relay.lead"), fontSize = 13.sp, color = C.muted)
-            Field(query, { query = it }, t("web-main.relay.searchOrLink"), max = 400)
+            val chosen = picked
+            if (chosen == null) Field(query, { query = it }, t("web-main.relay.searchOrLink"), max = 400)
             val shown = read
             when {
-                link != null -> PlaceRow(t("web-main.relay.thread"), t("web-main.relay.kind.thread"), on = true) {}
+                link != null -> PlaceRow(null, t("web-main.relay.thread"), null, t("web-main.relay.kind.thread"), on = true) {}
+                chosen != null -> PlaceRow(markOf(chosen.connect), placeName(chosen.place), workspace(chosen.connect), "${kindNote(chosen.place)} · ${t("web-main.relay.change")}", on = true) { picked = null }
                 shown is Places.Reading -> WaitLine(t("web-main.relay.reading"))
                 shown is Places.Failed -> Text(shown.error, fontSize = 13.sp, color = C.red)
                 shown is Places.Ok && shown.connects.isEmpty() -> Text(t("web-main.relay.noConnects"), fontSize = 13.sp, color = C.muted)
                 shown is Places.Ok -> Column {
-                    shown.connects.forEach { c ->
-                        val places = if (q.isEmpty()) c.places else c.places.filter { it.name.lowercase().contains(q) }
-                        Row(Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            SlackMark(13.dp, if (c.kind == "slack") null else "feishu")
-                            Text("${platform(c)} · ${c.team ?: c.name}", fontSize = 12.sp, color = C.muted)
+                    val several = shown.connects.size > 1
+                    if (several) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ScopeChip(false, null, t("web-main.relay.allWorkspaces"), scope == null) { scope = null }
+                            shown.connects.forEach { c -> ScopeChip(true, markOf(c), workspace(c), scope == c.id) { scope = c.id } }
                         }
-                        when {
-                            c.error != null -> Text(t("web-main.relay.unread", "error" to c.error!!), fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                            places.isEmpty() -> Text(if (q.isEmpty()) t("web-main.relay.noPlaces") else t("web-main.relay.noMatch"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                        }
-                        places.forEach { p ->
-                            val name = if (p.kind == "channel") "${if (p.private) "🔒 " else ""}#${p.name}" else p.name
-                            PlaceRow(name, kindNote(p), on = picked?.first == c.id && picked?.second?.id == p.id) { picked = c.id to p }
-                        }
+                    }
+                    val looked = shown.connects.filter { scope == null || it.id == scope }
+                    val (rows, recent, total) = arrange(looked, query, all)
+                    if (recent) Text(t("web-main.relay.recent"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                    rows.forEach { r ->
+                        PlaceRow(markOf(r.connect), placeName(r.place), if (several && scope == null) workspace(r.connect) else null, if (r.place.kind == "channel") null else kindNote(r.place), on = false) { picked = r }
+                    }
+                    if (rows.isEmpty()) Text(if (query.isBlank()) t("web-main.relay.noPlaces") else t("web-main.relay.noMatch"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                    if (recent && total > rows.size) {
+                        Text(t("web-main.relay.showAll", "count" to total), fontSize = 13.sp, color = C.link, modifier = Modifier.clip(Smooth(8.dp)).clickable { all = true }.padding(horizontal = 8.dp, vertical = 6.dp))
+                    }
+                    looked.forEach { c ->
+                        c.error?.let { Text((if (several) "${workspace(c)} · " else "") + t("web-main.relay.unread", "error" to it), fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) }
                     }
                 }
             }
-            Text(t("web-main.relay.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
-            Field(note, { note = it }, t("web-main.relay.notePlaceholder"), max = 2000)
-            Button(t("web-main.relay.go"), primary = true, enabled = link != null || picked != null, modifier = Modifier.fillMaxWidth()) {
+            if (chosen != null || link != null) {
+                Text(t("web-main.relay.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
+                Field(note, { note = it }, t("web-main.relay.notePlaceholder"), max = 2000)
+            }
+            val label = if (chosen != null) t("web-main.relay.goTo", "place" to placeName(chosen.place)) else t("web-main.relay.go")
+            Button(label, primary = true, enabled = link != null || chosen != null, modifier = Modifier.fillMaxWidth()) {
                 val to = picked
                 app.sheet = null
                 app.act(t("web-main.relay.verb")) {
-                    val place = app.api(station).relay(thread, to?.first, to?.second?.id, link, note)
+                    val place = app.api(station).relay(thread, to?.connect?.id, to?.place?.id, link, note)
                     app.toast = t("web-main.relay.done", "place" to place)
                 }
             }
@@ -114,15 +155,30 @@ internal fun openRelay(app: AppState, station: String, thread: Long) {
     }
 }
 
-/** A place to pick: its name, and what relaying there does at the row's end; picked, on the accent's ground. */
+/** A workspace to look in (or all of them): its platform's mark and name; chosen, filled. */
 @androidx.compose.runtime.Composable
-private fun PlaceRow(name: String, note: String, on: Boolean, onClick: () -> Unit) {
+private fun ScopeChip(logo: Boolean, mark: String?, label: String, on: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.clip(Smooth(13.dp)).background(if (on) C.ink else C.chip).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        if (logo) SlackMark(13.dp, mark)
+        Text(label, fontSize = 12.sp, color = if (on) C.bg else C.muted, maxLines = 1)
+    }
+}
+
+/** A place to pick: its platform's mark, its name, its workspace (among several), and what relaying there does at the row's end; picked, on the accent's ground. */
+@androidx.compose.runtime.Composable
+private fun PlaceRow(mark: String?, name: String, where: String?, note: String?, on: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(Smooth(10.dp)).let { if (on) it.background(C.accentBg) else it }
             .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(name, fontSize = 15.sp, color = if (on) C.accentInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text(note, fontSize = 12.sp, color = if (on) C.accentInk else C.muted, maxLines = 1)
+        SlackMark(16.dp, mark)
+        Text(name, fontSize = 15.sp, color = if (on) C.accentInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        if (where != null) Text(where, fontSize = 12.sp, color = if (on) C.accentInk else C.muted, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        if (note != null) Text(note, fontSize = 12.sp, color = if (on) C.accentInk else C.muted, maxLines = 1)
     }
 }
