@@ -42,6 +42,9 @@ priv struct Md {
   mut n : Int
   /// a placed file's drawing, by the file's name
   files : (String) -> (() -> Unit)?
+  /// a placed image as a table's cell has it (Markdown.kt CellImageRow), by the file's name: its width over its height,
+  /// and its drawing in a box that wide (as tall as its proportion makes it)
+  cell_files : (String) -> (Double, (Double) -> Unit)?
   /// a search's words, bold wherever they are in it (TextMark.kt markWeight)
   found : Array[String]
   /// a fenced block drawn another way than as code, by its language and its code (Markdown.kt: a ```mermaid one as a
@@ -415,6 +418,7 @@ pub fn markdown(
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   files? : (String) -> (() -> Unit)? = fn(_) { None },
+  cell_files? : (String) -> (Double, (Double) -> Unit)? = fn(_) { None },
   found? : Array[String] = [],
   code? : (String, String) -> (() -> Unit)? = fn(_, _) { None },
   screens? : Screens? = None,
@@ -428,6 +432,7 @@ pub fn markdown(
     on_link_hold,
     n: 0,
     files,
+    cell_files,
     found,
     code,
     screens,
@@ -862,16 +867,8 @@ fn runs_of(
       }
       Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles)
       Image(src, alt) => {
-        let words = if alt != "" {
-          alt
-        } else {
-          // its file's name
-          let mut i = src.length()
-          while i > 0 && src.at(i - 1).to_int() != 47 {
-            i = i - 1
-          }
-          src.view(start_offset=i).to_string()
-        }
+        // its file's name, as read (`web%2Dfolded.png` is web-folded.png: Markdown.kt fileNameOf)
+        let words = if alt != "" { alt } else { file_name_of(src) }
         out.push(@ui.span(words, bold~, italic~, strike~, link=src))
       }
       SoftBreak => out.push(@ui.span(" ", bold~, italic~, strike~, link~))
@@ -1053,7 +1050,14 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
   for r, row in rows {
     for k in 0..<cols {
       let (size, weight) = if r == 0 { (12.0, 500) } else { (13.0, 400) }
-      let (lo, hi) = cell_widths(@md.plain(row[k]), size, weight)
+      let (lo, hi) = match self.cell_images(row[k]) {
+        // a cell of only images: as wide as their row
+        Some(images) => {
+          let w = cell_images_width(images)
+          (w, w)
+        }
+        None => cell_widths(@md.plain(row[k]), size, weight)
+      }
       if lo + 24.0 > mins[k] {
         mins[k] = lo + 24.0
       }
@@ -1114,6 +1118,20 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
               let row_box = c.box(dir=Row, align=AStretch, fn() {
                 for k in 0..<cols {
                   c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
+                    match self.cell_images(row[k]) {
+                      Some(images) => {
+                        // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
+                        c.box(style=cell_image_row, fn() {
+                          for im in images {
+                            let (r, draw) = im
+                            draw(cell_image_width(r))
+                          }
+                        })
+                        |> ignore
+                        return
+                      }
+                      None => ()
+                    }
                     if head {
                       self.words(row[k], 12.0, 500, w.muted, None)
                     } else {
@@ -1140,6 +1158,52 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// A cell of only the message's images (`| ![](before.png) | ![](after.png) |`, Markdown.kt cellImages): each one's
+/// proportion and drawing; None for any other cell, drawn as words.
+fn Md::cell_images(self : Md, cell : Array[@md.Inline]) -> Array[(Double, (Double) -> Unit)]? {
+  let out = []
+  for x in cell {
+    match x {
+      Text(t) if t.trim(chars=" \n\t").to_string() == "" => ()
+      SoftBreak | HardBreak => ()
+      Image(src, _) =>
+        match (self.cell_files)(file_name_of(src)) {
+          Some((r, draw)) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
+          None => return None
+        }
+      _ => return None
+    }
+  }
+  if out.length() == 0 {
+    None
+  } else {
+    Some(out)
+  }
+}
+
+///|
+/// A table cell's images in a row (Markdown.kt CellImageRow: spacedBy(6), 4 over and under).
+// kept across runs: a value (no field of it changes)
+let cell_image_row : @ui.Style = @ui.style(row=true, gap=S1_5, py=S1)
+
+///|
+/// An image's width in a table's cell: as wide as 160 for a wide image, as tall as 240 for a tall one (Markdown.kt
+/// CellImageRow), by its width over its height.
+fn cell_image_width(r : Double) -> Double {
+  dmin(160.0, 240.0 * r)
+}
+
+///|
+/// A cell's images' row: their widths and the gaps between them.
+fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
+  let mut w = 0.0
+  for i, im in images {
+    w = w + cell_image_width(im.0) + (if i > 0 { 6.0 } else { 0.0 })
+  }
+  w
 }
 
 ///|

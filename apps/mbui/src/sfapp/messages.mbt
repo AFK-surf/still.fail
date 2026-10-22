@@ -738,6 +738,16 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
             None => None
           }
         },
+        // an image of its own in a table's cell, by its proportion (Prose.kt Placing.row: StationImage at a size)
+        cell_files=fn(name) {
+          match placed.get(name) {
+            Some(a) if kind_of(a.name) == "image" => {
+              let r = if a.width > 0.0 && a.height > 0.0 { a.width / a.height } else { cell_image_ratio }
+              Some((r, fn(w) { file_item(c, src, here, a, w) }))
+            }
+            _ => None
+          }
+        },
         code=fn(lang, code) {
           let first = match lang.find(" ") {
             Some(i) => lang.view(end_offset=i).to_owned()
@@ -1838,3 +1848,7 @@ fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
 fn ref_of(here : Here) -> ChatRef {
   { station: here.station, session: here.session, title: here.view.title, station_name: "" }
 }
+
+///|
+/// An image's proportion in a table's cell when its size is not known (Markdown.kt CellImageRow: 1.5).
+let cell_image_ratio : Double = 1.5
