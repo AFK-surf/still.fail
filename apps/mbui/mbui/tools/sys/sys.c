@@ -182,3 +182,29 @@ moonbit_bytes_t tsys_read_stdin(void) {
   free(buf);
   return out;
 }
+
+// a shell command's stdout, whole; ok 0 when it could not be run or did not exit 0
+#if defined(_WIN32)
+#define popen _popen
+#define pclose _pclose
+#endif
+moonbit_bytes_t tsys_run_out(moonbit_bytes_t cmd) {
+  char *c = cstr(cmd);
+  FILE *p = popen(c, "r");
+  free(c);
+  ok = 0;
+  if (!p) return moonbit_make_bytes(0, 0);
+  size_t cap = 1 << 12, n = 0, got;
+  char *buf = malloc(cap);
+  while ((got = fread(buf + n, 1, cap - n, p)) > 0) {
+    n += got;
+    if (n == cap) {
+      cap *= 2;
+      buf = realloc(buf, cap);
+    }
+  }
+  ok = pclose(p) == 0;
+  moonbit_bytes_t out = bytes_of(buf, n);
+  free(buf);
+  return out;
+}

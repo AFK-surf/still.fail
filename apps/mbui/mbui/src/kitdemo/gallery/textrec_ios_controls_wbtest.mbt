@@ -1,4 +1,4 @@
-// A Tester over ios_controls's kept text and frames (textrec_ios_controls.mbt), made by scripts/textrec_test.py.
+// A Tester over ios_controls's kept text and frames (textrec_ios_controls.mbt), made by scripts/chk textrec.
 
 ///|
 test "the controls page under a Tester over ios_controls's kept text draws, frame for frame, what it drew" {

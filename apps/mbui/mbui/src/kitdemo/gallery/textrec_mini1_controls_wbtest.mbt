@@ -1,4 +1,4 @@
-// A Tester over mini1_controls's kept text and frames (textrec_mini1_controls.mbt), made by scripts/textrec_test.py.
+// A Tester over mini1_controls's kept text and frames (textrec_mini1_controls.mbt), made by scripts/chk textrec.
 
 ///|
 test "the controls page under a Tester over mini1_controls's kept text draws, frame for frame, what it drew" {

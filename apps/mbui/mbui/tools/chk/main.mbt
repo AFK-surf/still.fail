@@ -8,6 +8,7 @@
 //                                 marks written; --check says which of them is not what corner.sl makes, and fails
 //     chk outside-kinds [HOST…]   the outsides' kinds as src/ui/hostcall.mbt numbers them and as each host does
 //                                 (outside.mbt says how)
+//     chk textrec …               a host's run kept as a Tester's test, the kept runs' list checked (textrec.mbt)
 
 ///|
 fn root() -> String {
@@ -23,7 +24,7 @@ fn say(s : String) -> Unit {
 }
 
 ///|
-fn trim(s : StringView) -> String {
+fn trim(s : String) -> String {
   s.trim(chars=" \t\r\n\u{b}\u{c}").to_string()
 }
 
@@ -31,7 +32,7 @@ fn trim(s : StringView) -> String {
 fn errs() -> Int {
   let mut n = 0
   for line in @sys.read_stdin().split("\n") {
-    let line = trim(line)
+    let line = trim(line.to_string())
     if !line.has_prefix("{") {
       if line.contains("rror") {
         say(line)
@@ -82,6 +83,7 @@ fn main {
     ["errs", ..] => errs()
     ["corner-sl", .. rest] => corner_sl(rest.to_array())
     ["outside-kinds", .. rest] => outside_kinds(rest.to_array())
+    ["textrec", .. rest] => textrec(rest.to_array())
     _ => {
       @sys.eprintln("chk: errs | corner-sl [--check] | outside-kinds [HOST…]")
       2

@@ -1,4 +1,4 @@
-// A Tester over web_controls's kept text and frames (textrec_web_controls.mbt), made by scripts/textrec_test.py.
+// A Tester over web_controls's kept text and frames (textrec_web_controls.mbt), made by scripts/chk textrec.
 
 ///|
 test "the controls page under a Tester over web_controls's kept text draws, frame for frame, what it drew" {

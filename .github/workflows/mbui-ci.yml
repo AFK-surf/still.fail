@@ -33,8 +33,6 @@ jobs:
         run: if curl -fsS --max-time 5 -o /dev/null https://github.com; then echo "reached github.com"; exit 1; fi
       - name: "What the scripts wait with, on Linux's events (scripts/logwait_test.py: inotify, a pidfd)"
         run: python3 scripts/logwait_test.py
-      - name: "The kept runs: textrec_runs.mbt is what textrec_runs.txt makes, and lists every run git keeps (scripts/textrec_test.py --check)"
-        run: python3 scripts/textrec_test.py --check
       - uses: ./.github/actions/mbui-moonbit
       - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (tools/detlint, docs/detlint.md)"
         run: scripts/detlint
@@ -42,6 +40,8 @@ jobs:
         run: scripts/chk outside-kinds
       - name: "The renderers' corners are src/host/corner.sl's (scripts/chk corner-sl)"
         run: scripts/chk corner-sl --check
+      - name: "The kept runs: textrec_runs.mbt is what textrec_runs.txt makes, and lists every run git keeps (scripts/chk textrec --check)"
+        run: scripts/chk textrec --check
       - name: Check
         run: moon version --all && moon check --target native --output-json 2>&1 | scripts/chk errs
       - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"

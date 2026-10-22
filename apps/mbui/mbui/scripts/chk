@@ -1,6 +1,7 @@
 #!/bin/sh
 # mbui's small checks and filters (tools/chk, in MoonBit; its main.mbt says each): chk errs, chk corner-sl [--check],
-# chk outside-kinds [HOST…]. Built here only when there is none built from these very sources (by content).
+# chk outside-kinds [HOST…], chk textrec …. Built here only when there is none built from these very sources (by
+# content).
 D=$(cd "$(dirname "$0")" && pwd)
 T=$D/../tools
 B=$T/_build/native/release/build/chk/chk.exe

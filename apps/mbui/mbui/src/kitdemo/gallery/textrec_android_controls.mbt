@@ -1,5 +1,5 @@
 // Kept from a real host's run (android_controls: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=controls MBUI_WIN=411.4285583496094x866.2857055664062, platform 2),
-// made by scripts/textrec_test.py: not edited by hand.
+// made by scripts/chk textrec: not edited by hand.
 
 ///|
 let run_android_controls : String =
