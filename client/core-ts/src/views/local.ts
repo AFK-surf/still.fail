@@ -470,6 +470,14 @@ export class Local {
     return this.outbox(station, thread).find((m) => m.id === id);
   }
 
+  /// The first message sent here into a chat that did not go (failed: waiting to be sent again or dropped), for its
+  /// row to say so: by its thread, or, a chat asked for here and not made yet, by its key.
+  unsent(station: string, thread: number | null, key: string | null): J | undefined {
+    const pending = key !== null ? this.#pending.get(key) : undefined;
+    const queue = thread !== null ? this.outbox(station, thread) : pending?.station === station ? pending.queue : [];
+    return queue.find((m) => m.state === "failed");
+  }
+
   /// Marks an outgoing message `sending` again, or `failed` with the error's message (`final`: refused as it is, not to
   /// be sent again).
   outboxState(station: string, thread: number, id: string, failed: string | null, final = false): void {

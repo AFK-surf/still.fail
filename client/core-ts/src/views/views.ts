@@ -503,8 +503,8 @@ export class Views implements Owner {
     switch (change.kind) {
       case "outbox":
         for (const view of this.chatViews(change.station, change.thread)) this.#core.store.invalidate(view);
-        // A card answered from here waits no more.
-        this.#invalidate((v) => v.topic === "decisions" || v.topic === "workspaceMarks");
+        // A card answered from here waits no more; a message that did not go marks its chat's row.
+        this.#invalidate((v) => v.topic === "decisions" || v.topic === "workspaceMarks" || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
       case "pending":
         this.#invalidate((v) => (v.topic === "chat" && v.thread === null && v.session === change.key) || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
@@ -1067,7 +1067,7 @@ export class Views implements Owner {
             if (row !== null) deepFreeze(row);
             if (keepable) this.#rowsMade.set(shown, { sig, row });
           }
-          if (row !== null) rows.push(row);
+          if (row !== null) rows.push(this.#unsentRow(s.address, row));
         }
       }
       let state: string;
@@ -1233,6 +1233,21 @@ export class Views implements Owner {
     }
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
+  }
+
+  /// A row whose chat has a message sent here that did not go: marked red, its second line saying which, before
+  /// anything its agents do (the message waits in the chat to be sent again or dropped).
+  #unsentRow(station: string, row: J): J {
+    const thread = typeof row.thread === "number" ? row.thread : null;
+    const unsent = this.local.unsent(station, thread, row.pending === true && typeof row.clientKey === "string" ? row.clientKey : null);
+    if (unsent === undefined) return row;
+    const text = format.cleanText(format.plainText(str(unsent.text) ?? ""));
+    const { stateAbout: _stateAbout, ...rest } = row;
+    const marked: J = { ...rest, tone: "alert", stateText: t("core-views.unsent", { text: text === "" ? t("core-views.file") : text }) };
+    deepFreeze(marked);
+    const pinned = pinnedAt.get(row);
+    if (pinned !== undefined) pinnedAt.set(marked, pinned);
+    return marked;
   }
 
   /// Rows newest first, grouped by the viewer's local calendar day; the pinned above them all.
