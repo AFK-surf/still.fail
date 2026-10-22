@@ -593,7 +593,7 @@ fn viz_frame(
       None => c.width
     }
     let h = dmin((w * viz_page_ratio).floor(), (c.height * viz_page_most).floor())
-    c.box(style=viz_page_frame.then(@ui.style(h=Fixed(h))), id=box, fn() {
+    c.box(style=viz_page_frame.then(@ui.style(h=Fixed(h))), id=box, taps=false, fn() {
       c.native(f.view) |> ignore
       cover(viz_paper_cover)
     })

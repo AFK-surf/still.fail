@@ -1147,7 +1147,8 @@ fn Md::table(self : Md, t : MdTable) -> Unit {
     total = total + x
   }
   // the row as wide as the message (what is measured: the room the table has), the table as wide as its columns
-  c.box(dir=Row, w=Fill(1.0), id~, fn() {
+  // (named to be measured, not pressed: what holds the message takes the presses on its room)
+  c.box(dir=Row, w=Fill(1.0), id~, taps=false, fn() {
     c.box(
       w=Px(dmin(total + 2.0, dmax(avail + 2.0, 0.0))),
       radius=20.0,

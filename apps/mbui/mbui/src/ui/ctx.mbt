@@ -624,7 +624,9 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// `style` (style.mbt) says how it looks, its state blocks picked by its own state: pressed, hovered, focused by `id`
 /// (as Ctx::pressed, hovered, focus_shown read them), `selected` and `disabled` as said, dark and narrow by the theme
 /// (Ctx::set_theme). What is said here besides (`pad=`, `bg=`…) wins over the style's same property; what neither
-/// says is as without either (no padding, no ground). A padding below 0 is not said (Ctx::row passes -1).
+/// says is as without either (no padding, no ground). A padding below 0 is not said (Ctx::row passes -1). With an
+/// `id` it takes the presses on its room (the innermost box with an id under the finger does); `taps` false: the id
+/// only names it (to measure it, Ctx::laid_size; to move it by a look), what holds it taking the presses there.
 pub fn Ctx::box(
   self : Ctx,
   style? : Style,
@@ -670,6 +672,7 @@ pub fn Ctx::box(
   line_gap? : Double = -1.0,
   label? : String = "",
   id? : Int = 0,
+  taps? : Bool = true,
   body : () -> Unit,
 ) -> Int {
   let i = self.alloc_part(kind_box, false, false)
@@ -802,7 +805,9 @@ pub fn Ctx::box(
   n.notch_f = notch_fillet
   if id != 0 {
     n.id = id
-    n.hit = true
+    // (`taps` false: an id only to be measured or moved by (laid_size, a look): what is pressed in it is what holds
+    // it, not it, which would take every press on its room that nothing in it takes)
+    n.hit = taps
   }
   self.with_parent(i, body)
   i
