@@ -671,6 +671,7 @@
   "web-main.composer.pasteUploading": "正在上传",
   "web-main.composer.pasteAttachment": "{count} 字符",
   "web-main.composer.retryPaste": "重试上传",
+  "web-main.composer.retryUpload": "重试上传",
   "web-main.rail.label": "主导航",
   "web-main.rail.chats": "对话",
   "web-main.rail.decisions": "奏",

@@ -542,6 +542,11 @@ export const composerThumbBusy = style({
   position: "absolute", inset: "0", display: "grid", placeItems: "center", pointerEvents: "none",
   background: `color-mix(in srgb, ${vars.canvas} 55%, transparent)`,
 });
+/** Over a picture that failed to go up: tapped, it goes up again. */
+export const composerThumbRetry = style({
+  position: "absolute", inset: "0", display: "grid", placeItems: "center", padding: "0", border: "0", cursor: "pointer",
+  background: "color-mix(in srgb, #000 45%, transparent)", color: "#fff",
+});
 export const composerThumbRemove = style({
   position: "absolute", top: "4px", right: "4px", display: "grid", placeItems: "center", width: "20px", height: "20px",
   padding: "0", border: "0", borderRadius: "50%", background: "color-mix(in srgb, #000 55%, transparent)",

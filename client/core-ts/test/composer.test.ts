@@ -46,6 +46,32 @@ test("desktop_upload_retry_keeps_its_source_after_a_station_failure", async () =
   bridge.close(); t.core.close();
 });
 
+test("a_failed_upload_goes_up_again_from_the_composer", async () => {
+  const t = await setup();
+  const received: number[][] = [];
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) => {
+    received.push([...bytes]);
+    return received.length === 1
+      ? Effect.fail(new CoreError("upload", "connection closed"))
+      : Effect.succeed({ have: bytes.length, file: { name: q.name, path: "/u/again.png", size: bytes.length } });
+  };
+  await t.watch(1, "ws/st:k");
+  call(t.core, t.ui, 101, "composer.add", { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "image.png", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])]) }] });
+  await t.settle();
+  assert.equal(v(t.values, 1).files[0].error, "connection closed");
+  call(t.core, t.ui, 102, "composer.retry", { key: "ws/st:k", id: "f1" });
+  await t.settle();
+  const f = v(t.values, 1).files[0];
+  assert.equal(f.error, undefined);
+  assert.equal(f.done.path, "/u/again.png");
+  assert.deepEqual(received, [[1, 2, 3], [1, 2, 3]]);
+  // Retried once it is up: nothing goes again.
+  call(t.core, t.ui, 103, "composer.retry", { key: "ws/st:k", id: "f1" });
+  await t.settle();
+  assert.equal(received.length, 2);
+  t.core.close();
+});
+
 test("desktop_files_reach_upload_and_release_on_success_or_removal_after_failure", async () => {
   const t = await setup();
   const received: number[][] = [];

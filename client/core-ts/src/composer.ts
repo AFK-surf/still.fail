@@ -399,6 +399,21 @@ export class Composers {
     return this.#changed(key, s);
   }
 
+  /// A file that failed to go up, sent up again from what was kept of it (a failed upload keeps its source). One that
+  /// never went (too big, its source gone) stays as it is.
+  retry(key: string, id: string): number {
+    const s = this.#state(key);
+    const upload = this.#uploads.get(id);
+    if (!upload?.error || !upload.file || !s.files.some((x) => x.id === id && x.error !== null)) return s.version;
+    s.files = s.files.map((x) => {
+      if (x.id !== id) return x;
+      const { sent: _, ...rest } = x;
+      return { ...rest, error: null };
+    });
+    this.#upload(key, upload.station, upload.file);
+    return this.#changed(key, s);
+  }
+
   remove(key: string, id: string): number {
     const s = this.#state(key);
     s.files = s.files.filter((f) => f.id !== id);
@@ -700,6 +715,8 @@ export function parseComposer(name: string, params: unknown): Call | null {
     }
     case "remove":
       return { kind: "composer", key, act: { remove: str(p, "id") } };
+    case "retry":
+      return { kind: "composer", key, act: { retry: str(p, "id") } };
     case "mode":
       return { kind: "composer", key, act: { mode: str(p, "mode") === "file" ? "file" : "path", file: str(p, "id") } };
     case "take":
@@ -718,7 +735,7 @@ export function parseComposer(name: string, params: unknown): Call | null {
 export type ComposerAct =
   | { text: string } | { append: string } | { quote: ComposerQuote; focus: boolean } | { comment: string; words: string }
   | { unquote: string } | { focused: true } | { error: string | null } | { starting: boolean } | { add: FileIn[]; station: string }
-  | { remove: string } | { mode: "path" | "file"; file: string } | { take: true } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string } | { move: string };
+  | { remove: string } | { retry: string } | { mode: "path" | "file"; file: string } | { take: true } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string } | { move: string };
 
 export function install(): void {
   handlers.composer = (inner, call) => {
@@ -736,6 +753,7 @@ export function install(): void {
       if ("starting" in a) return { version: all.starting(c.key, a.starting) };
       if ("add" in a) return { version: all.add(c.key, a.station, a.add) };
       if ("remove" in a) return { version: all.remove(c.key, a.remove) };
+      if ("retry" in a) return { version: all.retry(c.key, a.retry) };
       if ("mode" in a) return { version: all.mode(c.key, a.file, a.mode) };
       if ("take" in a) return all.take(c.key);
       if ("restore" in a) return { version: all.restore(c.key, a.error, a.unlessWritten) };

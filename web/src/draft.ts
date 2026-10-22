@@ -48,6 +48,8 @@ export interface Draft {
   /** Whether this chat takes files dragged in as files (folders are named by their path all the same), and setting it. */
   asFiles: boolean; setAsFiles(on: boolean): void;
   remove(id: string): void;
+  /** A file that failed to go up, sent up again. */
+  retry(id: string): void;
   quotes: DraftQuote[];
   /** Quotes added (a preview's marks), as they are. */
   addQuotes(quotes: DraftQuote[]): void;
@@ -287,6 +289,16 @@ export function useDraft({ key: given, station, carry }: {
     fileStations.delete(id);
     void act("remove", { id }, (s) => ({ ...s, files: s.files.filter((f) => f.id !== id) }));
   };
+  const retry = (id: string) => {
+    void act("retry", { id }, (s) => ({
+      ...s,
+      files: s.files.map((f) => {
+        if (f.id !== id) return f;
+        const { error: _, sent: __, ...going } = f;
+        return going;
+      }),
+    }));
+  };
   const addQuotes = (quotes: DraftQuote[]) => {
     for (const q of quotes) void act("quote", { id: q.id, quote: q }, (s) => ({ ...s, quotes: [...s.quotes, q] }));
   };
@@ -400,7 +412,7 @@ export function useDraft({ key: given, station, carry }: {
   };
 
   return {
-    text, setText, files, add, addDropped, setMode, asFiles, setAsFiles: (on: boolean) => setPrefs({ dropFiles: { [key]: on === byDefault ? null : on } }), remove, quotes, addQuotes, comment, unquote, quote, focusQuote: shown.focus, quoteFocused,
+    text, setText, files, add, addDropped, setMode, asFiles, setAsFiles: (on: boolean) => setPrefs({ dropFiles: { [key]: on === byDefault ? null : on } }), remove, retry, quotes, addQuotes, comment, unquote, quote, focusQuote: shown.focus, quoteFocused,
     uploading, ready, starting: shown.starting, error: shown.error, setError, take, restore: () => restore(), send,
   };
 }

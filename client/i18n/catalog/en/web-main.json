@@ -746,6 +746,7 @@
   "web-main.composer.pasteUploading": "Uploading",
   "web-main.composer.pasteAttachment": "{count} characters",
   "web-main.composer.retryPaste": "Retry upload",
+  "web-main.composer.retryUpload": "Retry upload",
   "web-main.rail.label": "Main",
   "web-main.rail.chats": "Chats",
   "web-main.rail.decisions": "Decisions",

@@ -29,7 +29,7 @@ import type { Align, Item } from "./virtual/model.ts";
 import { animate, arrive, EASE_OUT, ENTER, follower, glider, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
-import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
+import { DraftKey, MAX_FILE, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
 import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf, useDropOver } from "./drive/drag.ts";
 import { useLanding } from "./drive/flight.ts";
 import { useThisMachine } from "./thisMachine.ts";
@@ -1617,7 +1617,7 @@ export function FileTile({ name, dir = false, progress, error = false, land = fa
   );
 }
 
-export function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
+export function FileCard({ file, onRemove, onRetry, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; onRetry?: (() => void) | undefined; pending?: boolean; sent?: number | undefined; error?: string | null }) {
   // How far it has gone, once that is known.
   const going = pending && sent !== undefined && file.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
@@ -1629,6 +1629,7 @@ export function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<
         <FileName name={file.name} />
         <span className={css.fileCardMeta}>{error ?? (pending ? going : fileSize(file.size))}</span>
       </span>
+      {onRetry && <Tip label={t("web-main.composer.retryUpload")}><button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.retryUpload")} onClick={(e) => { e.stopPropagation(); onRetry(); }}><Retry size={13} /></button></Tip>}
       {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: file.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
   );
@@ -2095,7 +2096,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: 
       {rest.length > 0 && (
         <div className={css.composerFiles}>
           {rest.map((f) => f.link ? <LinkCard key={f.id} file={f} onRemove={() => draft.remove(f.id)} /> : f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} onTap={onRef && (() => onRef(f))} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
-            onRetry={f.pastedFile && f.error ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : undefined}
+            onRetry={!f.error ? undefined : f.pastedFile ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : f.pasted || f.size > MAX_FILE ? undefined : () => draft.retry(f.id)}
             onRestore={f.pasted?.text === undefined || draft.starting ? undefined : () => {
               draft.setText(draft.text ? `${draft.text}\n${f.pasted!.text}` : f.pasted!.text!);
               draft.remove(f.id);
@@ -2227,9 +2228,10 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
       </button>
       {f.image && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.image, url: f.preview }} />}
       {!f.done && !f.error && <span className={css.composerThumbBusy}><Spinner /></span>}
+      {f.error && onRetry && <button type="button" className={css.composerThumbRetry} aria-label={t("web-main.composer.retryUpload")} onClick={(e) => { e.stopPropagation(); onRetry(); }}><Retry size={18} /></button>}
       {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
-  ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} sent={f.sent} error={f.error} {...(onRemove ? { onRemove } : {})} />;
+  ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} sent={f.sent} error={f.error} onRetry={onRetry} {...(onRemove ? { onRemove } : {})} />;
 }
 
 /** An agent in this chat that is at work: who it is, and what it does now. */
