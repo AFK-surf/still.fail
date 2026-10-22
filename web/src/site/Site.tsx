@@ -64,8 +64,8 @@ export interface DemoProps { mountDemo?: (root: HTMLElement) => void; demo?: { w
 
 /** What it promises about where things are. */
 const PROMISES = [
-  { title: "数据在你的机器上", text: "对话、文件和记录存在你自己的机器上，云端只管账号和中继" },
-  { title: "设备之间直连", text: "手机、电脑和机器之间点对点连接，连不上时经加密的中继转发" },
+  { title: "数据保存在你的电脑上", text: "对话、文件和记录保存在你的电脑上，云端只负责账号和中继" },
+  { title: "点对点连接", text: "设备之间直接连接，无法直连时经加密中继转发" },
 ];
 
 export function Promises() {
@@ -120,8 +120,8 @@ export function Site({ mountDemo, demo }: DemoProps) {
       <section id="start" className={css.section}>
         <div className={`${css.wrap} ${css.install}`}>
           <div>
-            <h2 className={css.headingTitle}><span className={css.phrase}>一条命令</span><span className={css.phrase}>接上一台机器</span></h2>
-            <p className={css.headingLede}>在要连的机器上运行，用的是它上面已经登录的账号和订阅</p>
+            <h2 className={css.headingTitle}><span className={css.phrase}>一条命令</span><span className={css.phrase}>接入一台电脑</span></h2>
+            <p className={css.headingLede}>在要接入的电脑上运行，使用它已登录的账号和订阅</p>
           </div>
           <div className={css.terminal}>
             <div className={css.terminalBody}>

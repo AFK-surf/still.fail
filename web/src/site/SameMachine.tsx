@@ -8,10 +8,10 @@ import { APP, Button, Demo, Promises, type DemoProps } from "./Site.tsx";
 
 /** Where it is opened, in the order the page goes through them. */
 const PLACES = [
-  { key: "desktop", label: "在电脑上", note: "桌面 app 或网页" },
-  { key: "phone", label: "在手机上", note: "Android app，出门接着看" },
-  { key: "slack", label: "在 Slack 里", note: "在 thread 里 @ 它" },
-  { key: "feishu", label: "在飞书里", note: "在群里直接说" },
+  { key: "desktop", label: "电脑", note: "桌面 app 和网页" },
+  { key: "phone", label: "手机", note: "Android app" },
+  { key: "slack", label: "Slack", note: "在 thread 中 @still.fail" },
+  { key: "feishu", label: "飞书", note: "在群聊中 @still.fail" },
 ] as const;
 type Place = (typeof PLACES)[number]["key"];
 
@@ -86,8 +86,8 @@ export function SameMachine(props: DemoProps) {
     <>
       <header className={css.sameHero}>
         <div className={css.wrap}>
-          <h1 className={css.sameTitle}><span className={css.phrase}>在哪打开，</span><span className={css.phrase}>都是同一台机器</span></h1>
-          <p className={css.sameLede}>电脑、手机、Slack、飞书，打开哪个都是你自己的那台机器，接着做手上的事</p>
+          <h1 className={css.sameTitle}><span className={css.phrase}>在任何设备上</span><span className={css.phrase}>使用你的电脑</span></h1>
+          <p className={css.sameLede}>把 Mac、Linux 或 Windows 电脑接入 still.fail，在桌面 app、网页、Android、Slack 和飞书中使用它。文件和数据保存在这台电脑上。</p>
           <div className={css.sameActions}><Button href={APP} kind="primary" large>开始使用</Button></div>
         </div>
       </header>
@@ -102,7 +102,7 @@ export function SameMachine(props: DemoProps) {
                 </li>
               ))}
             </ol>
-            <span className={css.sameMachine}><i className={css.onlineDot} />始终是 Studio · 你的 Mac</span>
+            <span className={css.sameMachine}><i className={css.onlineDot} />均运行在 Studio（Mac）</span>
           </div>
           <div className={css.sceneRoom} ref={stage}>
             <div className={css.sceneFrame} ref={frame}>

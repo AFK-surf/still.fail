@@ -28,7 +28,7 @@ function MapPicture() {
   const lons = Array.from({ length: 14 }, (_, i) => 113 + i);
   const lats = Array.from({ length: 12 }, (_, i) => 30 + i);
   return (
-    <svg className={css.map} viewBox="0 0 560 640" role="img" aria-label="你在上海，你的 Mac 在北京的办公室，两者直接连着，相距约 1,068 公里">
+    <svg className={css.map} viewBox="0 0 560 640" role="img" aria-label="上海的手机与北京的电脑 Studio 点对点连接，直线距离约 1,068 公里">
       {lons.map((lon) => <line key={lon} className={css.mapGrid} x1={at(lon, 0).x} x2={at(lon, 0).x} y1={0} y2={640} />)}
       {lats.map((lat) => <line key={lat} className={css.mapGrid} x1={0} x2={560} y1={at(0, lat).y} y2={at(0, lat).y} />)}
       {lons.filter((lon) => lon % 2 === 0).map((lon) => <text key={lon} className={css.mapDegree} x={at(lon, 0).x + 4} y={632}>{lon}°E</text>)}
@@ -46,25 +46,25 @@ function MapPicture() {
       <circle className={css.pulse} r={4}><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite" path={BACK} /></circle>
       <g className={css.mapLink}>
         <rect x={MID.x - 66} y={MID.y - 24} width={132} height={48} rx={24} />
-        <text className={css.mapLinkMain} x={MID.x} y={MID.y - 7} textAnchor="middle" dominantBaseline="central">直连 · 38 ms</text>
+        <text className={css.mapLinkMain} x={MID.x} y={MID.y - 7} textAnchor="middle" dominantBaseline="central">点对点 · 38 ms</text>
         <text className={css.mapLinkSub} x={MID.x} y={MID.y + 11} textAnchor="middle" dominantBaseline="central">1,068 km</text>
       </g>
 
       <circle className={css.mapHalo} cx={MACHINE.x} cy={MACHINE.y} r={14} />
       <circle className={css.mapSpot} cx={MACHINE.x} cy={MACHINE.y} r={6} />
       <g className={css.mapCard}>
-        <rect x={MACHINE.x + 22} y={MACHINE.y - 64} width={236} height={74} rx={14} />
+        <rect x={MACHINE.x + 22} y={MACHINE.y - 64} width={176} height={74} rx={14} />
         <circle className={css.onlineSpot} cx={MACHINE.x + 44} cy={MACHINE.y - 38} r={4} />
-        <text className={css.mapCardMain} x={MACHINE.x + 56} y={MACHINE.y - 38} dominantBaseline="central">你的 Mac · 在线</text>
-        <text className={css.mapCardSub} x={MACHINE.x + 40} y={MACHINE.y - 14} dominantBaseline="central">北京 · 办公室</text>
+        <text className={css.mapCardMain} x={MACHINE.x + 56} y={MACHINE.y - 38} dominantBaseline="central">Studio · 在线</text>
+        <text className={css.mapCardSub} x={MACHINE.x + 40} y={MACHINE.y - 14} dominantBaseline="central">北京</text>
       </g>
 
       <circle className={css.mapHalo} cx={YOU.x} cy={YOU.y} r={14} />
       <circle className={css.mapSpot} cx={YOU.x} cy={YOU.y} r={6} />
       <g className={css.mapCard}>
-        <rect x={YOU.x - 180} y={YOU.y + 18} width={200} height={74} rx={14} />
-        <text className={css.mapCardMain} x={YOU.x - 162} y={YOU.y + 44} dominantBaseline="central">你 · 用手机</text>
-        <text className={css.mapCardSub} x={YOU.x - 162} y={YOU.y + 68} dominantBaseline="central">上海 · 在路上</text>
+        <rect x={YOU.x - 140} y={YOU.y + 18} width={160} height={74} rx={14} />
+        <text className={css.mapCardMain} x={YOU.x - 122} y={YOU.y + 44} dominantBaseline="central">你的手机</text>
+        <text className={css.mapCardSub} x={YOU.x - 122} y={YOU.y + 68} dominantBaseline="central">上海</text>
       </g>
     </svg>
   );
@@ -72,9 +72,9 @@ function MapPicture() {
 
 /** What makes the distance not matter. */
 const POINTS = [
-  { title: "直接连上", text: "手机、电脑和你的机器点对点直连，连不上时经加密的中继转发" },
-  { title: "数据不出你的机器", text: "对话、文件和记录都存在它自己身上，云端只管账号" },
-  { title: "到哪都一样", text: "电脑、手机、Slack、飞书，打开就是那台机器，接着做手上的事" },
+  { title: "点对点连接", text: "设备之间直接连接，无法直连时经加密中继转发" },
+  { title: "数据保存在你的电脑上", text: "对话、文件和记录保存在你的电脑上，云端只负责账号" },
+  { title: "多端使用", text: "桌面 app、网页、Android、Slack 和飞书" },
 ];
 
 export function Distance(props: DemoProps) {
@@ -83,11 +83,11 @@ export function Distance(props: DemoProps) {
       <header className={css.hero}>
         <div className={`${css.wrap} ${css.heroRow}`}>
           <div className={css.heroWords}>
-            <h1 className={css.title}><span className={css.phrase}>一千公里外，</span><span className={css.phrase}>像坐在它面前</span></h1>
-            <p className={css.lede}>你在上海的路上，它在北京的办公室。打开手机直接连上它：看文件、跑命令、让它干活，数据留在它自己身上</p>
+            <h1 className={css.title}><span className={css.phrase}>设备与电脑</span><span className={css.phrase}>点对点连接</span></h1>
+            <p className={css.lede}>手机和电脑通过点对点连接访问你的电脑，无法直连时经加密中继转发。对话和文件保存在你的电脑上，不存储在云端。</p>
             <div className={css.heroActions}>
               <Button href={APP} kind="primary" large>开始使用</Button>
-              <span className={css.heroNote}>示意：北京到上海直线约 1,068 km</span>
+              <span className={css.heroNote}>示意：北京—上海直线距离约 1,068 km</span>
             </div>
           </div>
           <div className={css.pictureBox}><MapPicture /></div>
@@ -110,8 +110,8 @@ export function Distance(props: DemoProps) {
 
       <section className={css.section}>
         <div className={css.wrap}>
-          <h2 className={css.headingTitle}>就像坐在它面前</h2>
-          <p className={css.headingLede}>下面是真的 still.fail，跑在示例数据上，可以直接点</p>
+          <h2 className={css.headingTitle}>试用 still.fail</h2>
+          <p className={css.headingLede}>以下为使用示例数据的 still.fail</p>
           <div className={`${css.edge} ${css.demoAfterHeading}`}>
             <Demo v="2" {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
           </div>
