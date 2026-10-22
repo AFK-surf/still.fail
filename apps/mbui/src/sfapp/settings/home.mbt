@@ -5,10 +5,19 @@
 
 ///|
 /// A page of the settings, by its route: call for the page the app's stack shows. `root`: a place of the bottom
-/// bar's at the stack's root (PlacePage.kt), under the app's own top bar, so without its compact one.
-pub fn page(c : @ui.Ctx, core : Core, here : Here, route : Route, root? : Bool = false) -> Unit {
+/// bar's at the stack's root (PlacePage.kt), under the app's own top bar, so without its compact one. `top`: where
+/// that bar is over the page rather than above it, how far down what it shows starts (it scrolls under the bar).
+pub fn page(
+  c : @ui.Ctx,
+  core : Core,
+  here : Here,
+  route : Route,
+  root? : Bool = false,
+  top? : Double = 0.0,
+) -> Unit {
   frame_core.val = Some(core)
   at_root.val = root
+  root_top.val = if root { top } else { 0.0 }
   left_core.val = Some(core)
   fixture_sheet(core, here)
   route_page(c, core, here, route)

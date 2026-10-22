@@ -39,14 +39,19 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
     return
   }
   // what it shows ends over the navigation bar (SettingParts.kt pages: windowInsetsPadding(navigationBars)), and at a
-  // place's top, over the bottom bar too (Stations.kt BarRoom)
+  // place's top, over the bottom bar too (Stations.kt BarRoom); there it starts under the app's top bar, scrolling
+  // under it (PlacePage.kt: `padding(top = top)` inside what scrolls)
   let foot = nav_foot.val + (if at_root.val { bar_room.val } else { 0.0 })
-  let n = blocks.length() + (if foot > 0.0 { 1 } else { 0 })
+  let top = top_room()
+  let head = if top > 0.0 { 1 } else { 0 }
+  let n = head + blocks.length() + (if foot > 0.0 { 1 } else { 0 })
   c.list("settings/" + key, n, 80.0, fn(i) {
-    if i == blocks.length() {
+    if i < head {
+      gap(c, top)
+    } else if i - head == blocks.length() {
       gap(c, foot)
     } else {
-      (blocks[i])()
+      (blocks[i - head])()
     }
   })
   |> ignore
@@ -240,6 +245,26 @@ pub let no_bar : Ref[Bool] = Ref(false)
 let at_root : Ref[Bool] = Ref(false)
 
 ///|
+/// Under the app's top bar (`page`'s `top`: a place's top page on a phone, PlacePage.kt), how far down what the page
+/// shows starts, scrolling under the bar; 0 where the page has a bar of its own over it.
+let root_top : Ref[Double] = Ref(0.0)
+
+///|
+/// The room what a page shows keeps at its top for the app's top bar over it (`root_top`), none elsewhere.
+fn top_room() -> Double {
+  if at_root.val {
+    root_top.val
+  } else {
+    0.0
+  }
+}
+
+///|
+/// The actions of the place's top page just drawn under the app's top bar, which that bar holds at its end
+/// (PlacePage.kt: TopGlassBar's `actions`, 用量's days, 连接's filter) and takes from here once drawn.
+pub let root_bar_actions : Ref[(() -> Unit)?] = Ref(None)
+
+///|
 /// What the back of a pushed place's page says (PlacePage.kt underLabel): the chats or settings, else `or_else`.
 fn under_label(core : Core, or_else : String) -> String {
   match (core.under)() {
@@ -252,7 +277,7 @@ fn under_label(core : Core, or_else : String) -> String {
 ///|
 /// A place's page pushed (PlacePage.kt, not a bar's top): the compact bar, back to the page under it, its title; its
 /// actions at the bar's end; what it shows under it, 4 down. At the bar's top (`page`'s root) the app's top bar is
-/// over it instead, and only what it shows is drawn here.
+/// over it instead, holding its actions, and only what it shows is drawn here, from the top of the page.
 fn place_page(
   c : @ui.Ctx,
   core : Core,
@@ -263,9 +288,11 @@ fn place_page(
   primary? : (String, () -> Unit),
 ) -> Unit {
   c.box(style=page_fill, fn() {
+    let under_bar = top_room() > 0.0
     match (actions, primary) {
-      // (at the root its actions at the end of a row of their own, over what it shows; its primary one is the bar's
-      // notch's)
+      // (at the root its actions in the app's top bar over it; in the wide frame, which has no such bar, at the end of
+      // a row of their own over what it shows; its primary one is the bar's notch's)
+      (Some(a), _) if under_bar => root_bar_actions.val = Some(a)
       (Some(a), _) if at_root.val => c.box(style=root_actions, fn() { a() }) |> ignore
       (None, _) if at_root.val => ()
       (None, None) => nav_bar(c, core, under_label(core, back), title)
@@ -285,7 +312,17 @@ fn place_page(
           |> ignore
         })
     }
-    c.box(style=if at_root.val { root_body } else { place_body }, fn() { body() }) |> ignore
+    c.box(
+      style=if under_bar {
+        page_fill
+      } else if at_root.val {
+        root_body
+      } else {
+        place_body
+      },
+      fn() { body() },
+    )
+    |> ignore
   })
   |> ignore
 }
@@ -310,7 +347,7 @@ let root_actions : @ui.Style = bar_actions.then(@ui.style(w=Full, px=S4, pt=S2, 
 let place_body : @ui.Style = page_fill.then(@ui.style(pt=S1))
 
 ///|
-/// What a place's page shows at the bar's top, 8 under the app's top bar (PlacePage.kt: `bar + 8.dp`).
+/// What a place's page shows at the bar's top in the wide frame, 8 under its page bar (PlacePage.kt: `bar + 8.dp`).
 // kept across runs: a value (no field of it changes)
 let root_body : @ui.Style = page_fill.then(@ui.style(pt=S2))
 

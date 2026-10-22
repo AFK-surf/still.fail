@@ -1849,25 +1849,35 @@ fn bar_gesture(
 /// A place's top page other than the chats (PlacePage.kt, with the bar under it): Home's top bar over it (settings,
 /// the place's name), what it shows the settings' page of it (src/sfapp/settings).
 fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
+  // on a phone what it shows runs under the top bar, frosted over it (PlacePage.kt: `bar + 8.dp` down, scrolling
+  // under it); the wide frame's page bar stands above it
+  let over = !wide_on.val
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    place_top_bar(c, place)
-    // what it shows: the settings' page of the same place (src/sfapp/settings), under this bar in place of its own
+    if !over {
+      place_top_bar(c, place)
+    }
+    // what it shows: the settings' page of the same place (src/sfapp/settings), in place of its own bar
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       match @settings.route_of(place) {
         Some(r) => {
           let core = settings_core(src, w)
-          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
+          let top = if over { status_top() + bar_h + 8.0 } else { 0.0 }
+          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true, top~)
         }
         None => ()
       }
     })
     |> ignore
+    if over {
+      c.layer(fn() { place_top_bar(c, place) }) |> ignore
+    }
   })
   |> ignore
 }
 
 ///|
-/// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, a hairline under.
+/// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, the page's actions
+/// (`@settings.root_bar_actions`), a hairline under; frosted over what runs under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
   // the wide frame's page bar (wide_chat.mbt): the rail is the way to the others
@@ -1875,7 +1885,9 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
     page_bar_wide(c, place_label(place), false, fn() {  }) |> ignore
     return
   }
-  c.box(w=Fill(1.0), bg=@sf.alpha(t.p.bg, 0.94), fn() {
+  let actions = @settings.root_bar_actions.val
+  @settings.root_bar_actions.val = None
+  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then 8)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top() + 8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="place-settings") {
@@ -1886,6 +1898,10 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
         |> ignore
       })
       |> ignore
+      match actions {
+        Some(a) => a()
+        None => ()
+      }
     })
     |> ignore
     c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
