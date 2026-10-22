@@ -305,7 +305,8 @@ fn bar_popovers(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     look=fn(c, _, body) { wide_panel(c, 320.0, body) },
     fn() { chat_info_rows(c, src, r, v) },
   )
-  wide.info_open = info.value
+  // (closed by what was pressed in it, or as a popover closes: Escape, a press outside)
+  wide.info_open = wide.info_open && info.value
   let jobs = @kit.popover(
     c,
     "chat-jobs-pop",
@@ -316,7 +317,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     look=fn(c, _, body) { wide_panel(c, 360.0, body) },
     fn() { jobs_rows(c, src, r) },
   )
-  wide.jobs_open = jobs.value
+  wide.jobs_open = wide.jobs_open && jobs.value
 }
 
 ///|
