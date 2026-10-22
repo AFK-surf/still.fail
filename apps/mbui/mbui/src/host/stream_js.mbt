@@ -31,3 +31,11 @@ extern "js" fn st_close(id : Int) -> Unit =
 ///|
 extern "js" fn st_h264_here() -> Int =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.h264Here) ? globalThis.__mbhost.h264Here() : 0
+
+///|
+extern "js" fn st_feeds() -> Int =
+  #|() => (globalThis.__mbhost && globalThis.__mbhost.streamFeeds) ? globalThis.__mbhost.streamFeeds() : 0
+
+///|
+extern "js" fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit =
+  #|(i, c, d) => { if (globalThis.__mbhost && globalThis.__mbhost.streamCodec) globalThis.__mbhost.streamCodec(i, c, d) }

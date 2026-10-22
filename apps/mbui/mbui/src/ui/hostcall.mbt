@@ -136,6 +136,8 @@ struct FakeHost {
   /// each was handed (Tester::stream_fed), and each one's events to come (Tester::stream_shows, stream_drops,
   /// stream_broken; a run's, Tester::view_said), taken as the next frame begins
   mut h264 : Bool
+  /// whether its H.264 decoder is driven from here (stream_feed.mbt: Tester::set_stream_feeds; a run's ENV line)
+  mut stream_feeds : Bool
   mut stream_ids : Int
   streams_fed : Map[Int, Array[String]]
   stream_said : Map[Int, Array[String]]

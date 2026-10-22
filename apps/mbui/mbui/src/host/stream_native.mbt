@@ -26,3 +26,10 @@ extern "C" fn st_close(id : Int) -> Unit = "mb_host_stream_close"
 
 ///|
 extern "C" fn st_h264_here() -> Int = "mb_host_h264_here"
+
+///|
+extern "C" fn st_feeds() -> Int = "mb_host_stream_feeds"
+
+///|
+#borrow(cmd, data)
+extern "C" fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit = "mb_host_stream_codec"

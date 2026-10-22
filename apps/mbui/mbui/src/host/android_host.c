@@ -2050,7 +2050,7 @@ void mb_host_set_cursor(int32_t kind) { (void)kind; }
 #include "avc.h"
 
 static jclass streams_cls;
-static jmethodID m_st_open, m_st_h264, m_st_frame, m_st_jpeg, m_st_next, m_st_show, m_st_close, m_st_here, m_st_lost;
+static jmethodID m_st_open, m_st_h264, m_st_frame, m_st_jpeg, m_st_next, m_st_show, m_st_close, m_st_here, m_st_lost, m_st_codec;
 static GLuint *stream_texs;  // by id
 static int stream_cap;
 
@@ -2068,6 +2068,7 @@ static JNIEnv *streams_env(void) {
     m_st_close = (*env)->GetStaticMethodID(env, streams_cls, "close", "(I)V");
     m_st_here = (*env)->GetStaticMethodID(env, streams_cls, "h264Here", "()Z");
     m_st_lost = (*env)->GetStaticMethodID(env, streams_cls, "lost", "()V");
+    m_st_codec = (*env)->GetStaticMethodID(env, streams_cls, "codec", "(ILjava/lang/String;[B)V");
   }
   return env;
 }
@@ -2192,6 +2193,20 @@ void mb_host_stream_close(int32_t id) {
   JNIEnv *env = streams_env();
   (*env)->CallStaticVoidMethod(env, streams_cls, m_st_close, id);
   streams_threw(env);
+}
+
+// (its H.264 decoder driven by the framework: what MediaCodec and the SurfaceTexture say goes up as events, what to do
+// comes down here; @ui's stream_feed.mbt)
+int32_t mb_host_stream_feeds(void) { return 1; }
+
+void mb_host_stream_codec(int32_t id, moonbit_string_t cmd, moonbit_bytes_t data) {
+  JNIEnv *env = streams_env();
+  jstring c = jstr(env, cmd);
+  jbyteArray b = jbytes(env, data);
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_codec, id, c, b);
+  streams_threw(env);
+  (*env)->DeleteLocalRef(env, b);
+  (*env)->DeleteLocalRef(env, c);
 }
 
 int32_t mb_host_h264_here(void) {

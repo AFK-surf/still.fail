@@ -666,6 +666,16 @@ impl @hostapi.Host for Native with st_h264_here(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with st_feeds(_) {
+  st_feeds()
+}
+
+///|
+impl @hostapi.Host for Native with st_codec(_, id, cmd, data) {
+  st_codec(id, cmd, data)
+}
+
+///|
 impl @hostapi.Host for Native with cl_read(_) {
   cl_read()
 }

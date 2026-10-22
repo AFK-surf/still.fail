@@ -405,6 +405,10 @@ void mb_host_stream_close(int32_t sid) {
 // VideoToolbox decodes H.264 on every Mac and iPhone (in hardware, else in software).
 int32_t mb_host_h264_here(void) { return 1; }
 
+// (VideoToolbox decodes here by itself, frame for frame: nothing for the framework to drive, @hostapi.stream_feeds)
+int32_t mb_host_stream_feeds(void) { return 0; }
+void mb_host_stream_codec(int32_t sid, moonbit_string_t cmd, moonbit_bytes_t data) {}
+
 id<MTLTexture> mb_stream_texture(int sid) {
   MBStream *s = stream_of(sid);
   return s ? s.tex : nil;

@@ -29,18 +29,16 @@ import java.util.concurrent.Executors;
  * still.fail's Android app decodes a remote screen (its remote/Decoders.kt), with what is shown said by the app:
  *
  * <p>H.264 by MediaCodec (asynchronous, its callbacks on a thread of the stream's own) onto a SurfaceTexture of the
- * app's GL context. A decoded frame waits in its output buffer; one at a time is released onto the SurfaceTexture, and
- * once it is there ("frame available") the app is told ("f TS W H"). The app shows it (`show`, on the GL thread, as its
- * frame takes the event): latched (updateTexImage) and drawn into a plain texture of the frame's size, what the
- * renderer draws the stream with (android_host.c), then the next decoded frame released. So the picture drawn is the
- * one the app took, never one that came after.
+ * app's GL context, driven by the framework (@ui's stream_feed.mbt, @hostapi.stream_feeds): what the decoder and the
+ * SurfaceTexture say goes up as the stream's events ("c ..."), what to do with them comes down (`codec`): which frame
+ * into which input buffer, which decoded frame onto the SurfaceTexture, when a frame there is latched (updateTexImage)
+ * and drawn into a plain texture of the frame's size, what the renderer draws the stream with (android_host.c), and
+ * when the decoder starts anew. Nothing here decides; every order those callbacks come in is the framework's tests'.
  *
  * <p>JPEG by BitmapFactory on a thread of its own, each bitmap kept until the app shows it (uploaded into the same
  * texture) or a later one is shown.
  *
- * <p>Frames let go ("d TS": the decoder not there or not past a key frame, one it cannot take, the older of two it
- * holds back, those inside it as it starts anew, a JPEG that does not decode) and the decoder broken ("b": an error, a
- * new SurfaceTexture after the GL context was lost) are told the same way. Each event asks for a frame.
+ * <p>A JPEG decoded is told ("f TS W H"), one that does not decode let go ("d TS"). Each event asks for a frame.
  *
  * <p>Called from the C host (android_host.c mb_host_stream_*) on the GL thread, but for the decoders' own threads.
  */
@@ -107,10 +105,17 @@ final class Streams {
     }
 
     static void frame(int id, byte[] data, boolean key, double ts) {
+        // (the framework's feed hands H.264 frames over as "queue" commands: `codec`)
         Stream s = streams.get(id);
-        if (s == null) return;
-        if (s.video == null) s.say("d " + num(ts));
-        else s.video.frame(data, key, ts);
+        if (s != null) s.say("d " + num(ts));
+    }
+
+    /** A command for stream `id`'s decoder or SurfaceTexture (@ui's stream_feed.mbt); "latch" is a frame shown. */
+    static void codec(int id, String cmd, byte[] data) {
+        dropSurfaces();
+        Stream s = streams.get(id);
+        if (s != null && s.video != null) s.video.command(cmd, data);
+        if (cmd.startsWith("latch ") && throwShow != null && throwShow.equals(String.valueOf(++shows))) throw new RuntimeException("MBUI_STREAM_THROW_SHOW: show " + shows);
     }
 
     static void jpeg(int id, byte[] data, double ts) {
@@ -122,7 +127,6 @@ final class Streams {
         dropSurfaces();
         Stream s = streams.get(id);
         if (s == null) return "";
-        if (s.video != null && s.st != null) s.video.dropStrays();
         synchronized (s.events) {
             String e = s.events.poll();
             return e == null ? "" : e;
@@ -316,7 +320,6 @@ final class Streams {
                     return;
                 }
             }
-            if (video != null && st != null) video.latch(ts);
         }
 
         void upload(Bitmap b) {
@@ -380,61 +383,29 @@ final class Streams {
 
     // ---- H.264 ----
 
-    /** Decoders.kt's H264Decoder, its frames told to the app as they reach the SurfaceTexture (one at a time). */
+    /**
+     * MediaCodec onto the stream's SurfaceTexture, driven by the framework (@ui's stream_feed.mbt): it does what it is
+     * told (`run`: start, stop, queue, empty, release, discard on its thread; `latch`, `drop` on the GL thread) and says
+     * what the decoder and the surface said, as they said it ("c ..." events, in the order they came), deciding
+     * nothing: which frame goes where and what the app is told are the feed's, where a test gives every order.
+     */
     static final class H264 {
-        private static final class Frame {
-            final byte[] data;
-            final boolean key;
-            final double ts;
-
-            Frame(byte[] data, boolean key, double ts) {
-                this.data = data;
-                this.key = key;
-                this.ts = ts;
-            }
-        }
-
-        private static final class Out {
-            final int index;
-            final double ts;
-
-            Out(int index, double ts) {
-                this.index = index;
-                this.ts = ts;
-            }
-        }
-
         private final Stream stream;
         private final HandlerThread thread;
         private final Handler handler;
+        /** The decoder there is and its number (the feed's), null and 0 when none. */
         private MediaCodec codec;
+        private int gen;
         private Surface surface;
+        /** Surfaces done with, let go once no decoder draws on them (the next stop, or now when none does). */
+        private final ArrayDeque<Object[]> old = new ArrayDeque<>();
         private byte[] avcc;
         private int lengthSize;
         private int width, height;
-        /** The decoded picture's size, as its output format says (its crop). */
-        private int outW, outH;
-        /** Frames waiting for an input buffer, and the free input buffers. */
-        private final ArrayDeque<Frame> waiting = new ArrayDeque<>();
-        private final ArrayDeque<Integer> inputs = new ArrayDeque<>();
-        /** Frames in the decoder, not out yet (their times, in order). */
-        private final ArrayDeque<Double> inside = new ArrayDeque<>();
-        /** Frames decoded, in their output buffers, not released onto the SurfaceTexture yet. */
-        private final ArrayDeque<Out> held = new ArrayDeque<>();
-        /** Until a key frame comes, frames are let go (a decoder started anew, or broken). */
-        private boolean needKey = true;
         private boolean released;
-
-        // The frame on the SurfaceTexture (one at a time), under `slot`: released onto it (busy, its time), arrived
-        // (ready: the app told), how many frames arrived that were not latched yet.
-        private final Object slot = new Object();
-        private boolean slotBusy, slotReady;
-        private double slotTs;
-        private int available;
-        /** Frames are on it that no one is told of, the next one held until they are latched away (dropStrays). */
-        private boolean straysOwed;
-        /** Set on the GL thread (which latches from it), read on the decoder's (whose frames arrive on it). */
+        /** The SurfaceTexture it draws on and its number (GL thread sets them; its frames arrive on this thread). */
         private volatile SurfaceTexture st;
+        private int surfaceNo;
 
         H264(Stream stream) {
             this.stream = stream;
@@ -443,80 +414,132 @@ final class Streams {
             handler = new Handler(thread.getLooper());
         }
 
-        /** The SurfaceTexture it draws on (made on the GL thread), new: a decoder on it starts anew, from a key frame. */
+        /** A new SurfaceTexture to draw on (GL thread): said ("c surf N"); the old one let go once no decoder draws on it. */
         void surface(SurfaceTexture t, Surface s, SurfaceTexture oldT, Surface oldS) {
-            t.setOnFrameAvailableListener(this::arrived, handler);
-            // the GL thread latches from it from now on (the old one's frames arriving after are not counted)
-            synchronized (slot) {
-                st = t;
-                available = 0;
-                straysOwed = false;
-                // a frame told and not shown yet was on the old one: let go with it (its "f" still comes)
-                if (slotReady) slotBusy = slotReady = false;
-            }
+            final int no = ++surfaceNo;
+            t.setOnFrameAvailableListener(x -> stream.say("c arr " + no), handler);
+            st = t;
             handler.post(() -> {
                 surface = s;
-                boolean hadConfig = avcc != null;
-                start();
-                // The old surface lost the decoder's state even if its replacement could not start.
-                if (hadConfig) stream.say("b");
-                letGo(oldT, oldS);
+                if (oldT != null) old.add(new Object[] {oldT, oldS});
+                if (codec == null) letGoOld();
+                stream.say("c surf " + no);
             });
+        }
+
+        private void letGoOld() {
+            for (Object[] o; (o = old.poll()) != null; ) letGo((SurfaceTexture) o[0], (Surface) o[1]);
         }
 
         /** Its thread held `ms` from now (a test's: MBUI_STREAM_HOLD_DECODER). */
         void hold(int ms) {
-            synchronized (slot) {
-                Host.log("stream " + stream.id + ": decoder held " + ms + " ms, a frame told and not shown: " + slotReady);
-            }
+            Host.log("stream " + stream.id + ": decoder held " + ms + " ms");
             handler.post(() -> android.os.SystemClock.sleep(ms));
         }
 
         void configure(byte[] avcc, int w, int h) {
             handler.post(() -> {
-                int n = avcLengthSize(avcc);
-                if (n < 0) {
-                    Host.log("stream " + stream.id + ": an avcC that is not one (" + avcc.length + " bytes)");
-                    this.avcc = null;
-                    stop();
-                    return;
-                }
                 this.avcc = avcc;
-                lengthSize = n;
+                lengthSize = avcLengthSize(avcc);
                 width = w;
                 height = h;
-                outW = w;
-                outH = h;
-                // the sender's next frame after a config is a key frame
-                if (!start()) stream.say("b");
-            });
-        }
-
-        void frame(byte[] data, boolean key, double ts) {
-            handler.post(() -> {
-                if (codec == null || (needKey && !key)) {
-                    stream.say("d " + num(ts));
-                    return;
-                }
-                needKey = false;
-                waiting.add(new Frame(data, key, ts));
-                feed();
             });
         }
 
         void release(SurfaceTexture t, Surface s) {
             handler.post(() -> {
                 released = true;
-                stop();
-                letGo(t, s);
+                stopCodec();
+                if (t != null) old.add(new Object[] {t, s});
+                letGoOld();
                 thread.quitSafely();
             });
         }
 
-        /** A decoder for the config and surface there are (none without either): whether there is one now. */
-        private boolean start() {
-            stop();
-            if (avcc == null || surface == null || released) return false;
+        /** A command of the feed's: on the GL thread those of the SurfaceTexture, the decoder's on its own thread. */
+        void command(String cmd, byte[] data) {
+            String[] w = cmd.split(" ");
+            switch (w[0]) {
+                case "latch":
+                    latch(Double.parseDouble(w[1]), Integer.parseInt(w[2]), Integer.parseInt(w[3]), Integer.parseInt(w[4]));
+                    return;
+                case "drop":
+                    drop(Integer.parseInt(w[1]));
+                    return;
+                default:
+                    handler.post(() -> run(w, data));
+            }
+        }
+
+        private void run(String[] w, byte[] data) {
+            if (released) return;
+            int g = Integer.parseInt(w[1]);
+            if (w[0].equals("start")) {
+                start(g);
+                return;
+            }
+            if (g != gen || codec == null) return;
+            MediaCodec c = codec;
+            switch (w[0]) {
+                case "stop":
+                    stopCodec();
+                    letGoOld();
+                    break;
+                case "queue": {
+                    int index = Integer.parseInt(w[2]);
+                    double ts = Double.parseDouble(w[3]);
+                    try {
+                        ByteBuffer buffer = c.getInputBuffer(index);
+                        byte[] b = annexB(data, lengthSize);
+                        if (buffer == null || b == null || buffer.capacity() < b.length) {
+                            stream.say("c rej " + g + " " + index + " " + num(ts));
+                            return;
+                        }
+                        buffer.clear();
+                        buffer.put(b);
+                        if (failInput != null && failInput.equals(String.valueOf(++inputCalls))) throw new IllegalStateException("MBUI_STREAM_FAIL_INPUT: input " + inputCalls);
+                        c.queueInputBuffer(index, 0, b.length, (long) ts, w[4].equals("1") ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0);
+                    } catch (Exception e) {
+                        Host.log("stream " + stream.id + ": the H.264 decoder failed: " + e);
+                        stream.say("c err " + g);
+                    }
+                    break;
+                }
+                case "empty":
+                    try {
+                        c.queueInputBuffer(Integer.parseInt(w[2]), 0, 0, (long) Double.parseDouble(w[3]), 0);
+                    } catch (Exception e) {
+                        Host.log("stream " + stream.id + ": the H.264 decoder failed: " + e);
+                        stream.say("c err " + g);
+                    }
+                    break;
+                case "release":
+                    try {
+                        c.releaseOutputBuffer(Integer.parseInt(w[2]), true);
+                    } catch (Exception e) {
+                        stream.say("c lost " + g + " " + w[3]);
+                    }
+                    break;
+                case "discard":
+                    try {
+                        c.releaseOutputBuffer(Integer.parseInt(w[2]), false);
+                    } catch (Exception ignored) {
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        /** Decoder `g` for the config and surface there are: "c up G", or "c nostart G" with nothing of it kept. */
+        private void start(int g) {
+            stopCodec();
+            gen = g;
+            if (avcc == null || surface == null || lengthSize < 0) {
+                stream.say("c nostart " + g);
+                return;
+            }
+            MediaCodec made = null;
             try {
                 MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, Math.max(width, 16), Math.max(height, 16));
                 format.setByteBuffer("csd-0", ByteBuffer.wrap(avcCsd(avcc, 0)));
@@ -525,23 +548,26 @@ final class Streams {
                 format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, Math.max(width * height, 1 << 20));
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
                 format.setInteger(MediaFormat.KEY_PRIORITY, 0);
-                MediaCodec made = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
-                // Own it before configure/start: either may throw, and stop must release the partial decoder too.
-                codec = made;
+                made = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
                 if (failStart != null && failStart.equals(String.valueOf(++startCalls))) throw new IllegalStateException("MBUI_STREAM_FAIL_START: start " + startCalls);
-                made.setCallback(callback, handler);
+                made.setCallback(callback(g), handler);
                 made.configure(format, surface, null, 0);
                 made.start();
-                needKey = true;
-                return true;
+                codec = made;
+                stream.say("c up " + g);
             } catch (Exception e) {
                 Host.log("stream " + stream.id + ": no H.264 decoder: " + e);
-                stop();
-                return false;
+                if (made != null) {
+                    try {
+                        made.release();
+                    } catch (Exception ignored) {
+                    }
+                }
+                stream.say("c nostart " + g);
             }
         }
 
-        private void stop() {
+        private void stopCodec() {
             if (codec != null) {
                 try {
                     codec.stop();
@@ -553,209 +579,73 @@ final class Streams {
                 }
             }
             codec = null;
-            inputs.clear();
-            // what was waiting, inside, decoded and not on the SurfaceTexture, or released onto it and not arrived, is let
-            // go: taken, as far as the sender is concerned
-            double max = Double.NEGATIVE_INFINITY;
-            for (Frame f : waiting) max = Math.max(max, f.ts);
-            for (double t : inside) max = Math.max(max, t);
-            for (Out o : held) max = Math.max(max, o.ts);
-            synchronized (slot) {
-                if (slotBusy && !slotReady) {
-                    max = Math.max(max, slotTs);
-                    slotBusy = false;
-                }
-            }
-            if (max != Double.NEGATIVE_INFINITY) stream.say("d " + num(max));
-            waiting.clear();
-            inside.clear();
-            held.clear();
-            needKey = true;
         }
 
-        private void feed() {
-            MediaCodec c = codec;
-            if (c == null) return;
-            while (!inputs.isEmpty() && !waiting.isEmpty()) {
-                int index = inputs.poll();
-                Frame f = waiting.poll();
-                // Include the frame being submitted in stop's acknowledgements if get/queueInputBuffer throws.
-                inside.add(f.ts);
-                try {
-                    ByteBuffer buffer = c.getInputBuffer(index);
-                    if (buffer == null) {
-                        inside.remove(f.ts);
-                        stream.say("d " + num(f.ts));
-                        continue;
-                    }
-                    buffer.clear();
-                    byte[] b = annexB(f.data, lengthSize);
-                    if (b == null || buffer.remaining() < b.length) {
-                        // not a frame it can take: given back empty, the next key frame asked for
-                        c.queueInputBuffer(index, 0, 0, (long) f.ts, 0);
-                        inside.remove(f.ts);
-                        stream.say("d " + num(f.ts));
-                        needKey = true;
-                        stream.say("b");
-                        continue;
-                    }
-                    buffer.put(b);
-                    if (failInput != null && failInput.equals(String.valueOf(++inputCalls))) throw new IllegalStateException("MBUI_STREAM_FAIL_INPUT: input " + inputCalls);
-                    c.queueInputBuffer(index, 0, b.length, (long) f.ts, f.key ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0);
-                } catch (Exception e) {
-                    failed(c, e);
-                    return;
+        /** Decoder `g`'s callbacks: what it said, said on. */
+        private MediaCodec.Callback callback(int g) {
+            return new MediaCodec.Callback() {
+                @Override
+                public void onInputBufferAvailable(MediaCodec c, int index) {
+                    stream.say("c in " + g + " " + index);
                 }
-                // a decoder that holds frames back (some keep one or two before the first comes out) would wait for more
-                // while the sender waits for an acknowledgement: with two inside, the older one counts as taken
-                if (inside.size() >= 2) stream.say("d " + num(inside.poll()));
-            }
+
+                @Override
+                public void onOutputBufferAvailable(MediaCodec c, int index, MediaCodec.BufferInfo info) {
+                    boolean shows = (info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0 && info.size > 0;
+                    stream.say("c out " + g + " " + index + " " + info.presentationTimeUs + " " + (shows ? 1 : 0));
+                }
+
+                @Override
+                public void onError(MediaCodec c, MediaCodec.CodecException e) {
+                    Host.log("stream " + stream.id + ": the H.264 decoder failed: " + e);
+                    stream.say("c err " + g);
+                }
+
+                @Override
+                public void onOutputFormatChanged(MediaCodec c, MediaFormat f) {
+                    int w = f.getInteger(MediaFormat.KEY_WIDTH), h = f.getInteger(MediaFormat.KEY_HEIGHT);
+                    if (f.containsKey("crop-right") && f.containsKey("crop-left")) w = f.getInteger("crop-right") - f.getInteger("crop-left") + 1;
+                    if (f.containsKey("crop-bottom") && f.containsKey("crop-top")) h = f.getInteger("crop-bottom") - f.getInteger("crop-top") + 1;
+                    stream.say("c fmt " + g + " " + w + " " + h);
+                }
+            };
         }
 
-        /** Both a synchronous codec exception and its asynchronous onError lose the same decoder state. */
-        private void failed(MediaCodec c, Exception e) {
-            if (c != codec) return;
-            Host.log("stream " + stream.id + ": the H.264 decoder failed: " + e);
-            start();
-            stream.say("b");
-        }
-
-        /** The next decoded frame onto the SurfaceTexture, when none is there. */
-        private void pump() {
-            MediaCodec c = codec;
-            if (c == null) return;
-            synchronized (slot) {
-                if (slotBusy || held.isEmpty()) return;
-                // Frames on it that no one is told of (a decoder stopped after it released one: its frame arrives after
-                // it): queued there, unlatched, they would have the next one released take a stray's place in the queue,
-                // replaced, and its arrival never said (the slot busy for good, every frame after held). Latched away
-                // first, on the GL thread (dropStrays), which then releases this one.
-                if (available > 0) {
-                    straysOwed = true;
-                    Host.requestFrame();
-                    return;
-                }
-                Out o = held.poll();
-                try {
-                    c.releaseOutputBuffer(o.index, true);
-                } catch (Exception e) {
-                    stream.say("d " + num(o.ts));
-                    return;
-                }
-                slotBusy = true;
-                slotReady = false;
-                slotTs = o.ts;
-            }
-        }
-
-        /** Frames on the SurfaceTexture no one is told of latched away, before the next is released (GL thread, as the
-         * frame begins). */
-        void dropStrays() {
+        /** The SurfaceTexture's frame latched, at most `n` updates up to the one of time `ts`, and drawn into the
+         * stream's texture, `w` × `h` (GL thread). */
+        void latch(double ts, int n, int w, int h) {
             SurfaceTexture t = st;
-            synchronized (slot) {
-                if (!straysOwed || slotBusy || t == null) return;
-                straysOwed = false;
-                while (available > 0) {
-                    try {
-                        t.updateTexImage();
-                    } catch (RuntimeException e) {
-                        Host.log("stream " + stream.id + ": updateTexImage: " + e);
-                        available = 0;
-                        break;
-                    }
-                    available--;
-                }
-            }
-            handler.post(this::pump);
-        }
-
-        /** A frame reached the SurfaceTexture (the decoder's thread): the app told, if it is the one released. */
-        private void arrived(SurfaceTexture t) {
-            String said = null;
-            synchronized (slot) {
-                if (t != st) return;
-                available++;
-                if (slotBusy && !slotReady) {
-                    slotReady = true;
-                    said = "f " + num(slotTs) + " " + outW + " " + outH;
-                }
-            }
-            if (said != null) stream.say(said);
-        }
-
-        /** Frame `ts` (its "f" taken) latched and copied (GL thread); then the next one released. */
-        void latch(double ts) {
-            SurfaceTexture t = st;
-            int w = outW, h = outH;
+            if (t == null) return;
+            long want = (long) ts * 1000L;
             boolean got = false;
-            synchronized (slot) {
-                if (!slotReady || slotTs != ts || t == null) return;
-                // the one released: past any that arrived from a decoder before (its timestamp, ns, the frame's time)
-                long want = (long) ts * 1000L;
-                while (available > 0) {
-                    try {
-                        t.updateTexImage();
-                    } catch (RuntimeException e) {
-                        // (let go since it was told: the picture stays as it was)
-                        Host.log("stream " + stream.id + ": updateTexImage: " + e);
-                        available = 0;
-                        got = false;
-                        break;
-                    }
-                    available--;
-                    got = true;
-                    if (t.getTimestamp() == want) break;
+            for (int i = 0; i < n; i++) {
+                try {
+                    t.updateTexImage();
+                } catch (RuntimeException e) {
+                    // (the picture stays as it was)
+                    Host.log("stream " + stream.id + ": updateTexImage: " + e);
+                    got = false;
+                    break;
                 }
-                slotBusy = false;
-                slotReady = false;
+                got = true;
+                if (t.getTimestamp() == want) break;
             }
-            // (none there: the SurfaceTexture made anew since, its frame gone with the old; the picture stays as it was)
             if (got) stream.copy(w > 0 ? w : 16, h > 0 ? h : 16);
-            handler.post(this::pump);
         }
 
-        private final MediaCodec.Callback callback = new MediaCodec.Callback() {
-            @Override
-            public void onInputBufferAvailable(MediaCodec c, int index) {
-                if (c != codec) return;
-                inputs.add(index);
-                feed();
-            }
-
-            @Override
-            public void onOutputBufferAvailable(MediaCodec c, int index, MediaCodec.BufferInfo info) {
-                if (c != codec) return;
-                boolean config = (info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0;
-                if (config || info.size <= 0) {
-                    try {
-                        c.releaseOutputBuffer(index, false);
-                    } catch (Exception ignored) {
-                    }
+        /** The SurfaceTexture's `n` frames no one was told of latched away (GL thread). */
+        void drop(int n) {
+            SurfaceTexture t = st;
+            if (t == null) return;
+            for (int i = 0; i < n; i++) {
+                try {
+                    t.updateTexImage();
+                } catch (RuntimeException e) {
+                    Host.log("stream " + stream.id + ": updateTexImage: " + e);
                     return;
                 }
-                double ts = info.presentationTimeUs;
-                while (!inside.isEmpty() && inside.peek() <= ts) inside.poll();
-                held.add(new Out(index, ts));
-                pump();
             }
-
-            @Override
-            public void onError(MediaCodec c, MediaCodec.CodecException e) {
-                failed(c, e);
-            }
-
-            @Override
-            public void onOutputFormatChanged(MediaCodec c, MediaFormat f) {
-                if (c != codec) return;
-                int w = f.getInteger(MediaFormat.KEY_WIDTH), h = f.getInteger(MediaFormat.KEY_HEIGHT);
-                if (f.containsKey("crop-right") && f.containsKey("crop-left")) w = f.getInteger("crop-right") - f.getInteger("crop-left") + 1;
-                if (f.containsKey("crop-bottom") && f.containsKey("crop-top")) h = f.getInteger("crop-bottom") - f.getInteger("crop-top") + 1;
-                if (w > 0 && h > 0) {
-                    outW = w;
-                    outH = h;
-                }
-            }
-        };
+        }
     }
 
     // ---- JPEG ----
