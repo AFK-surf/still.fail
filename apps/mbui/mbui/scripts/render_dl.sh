@@ -13,6 +13,10 @@ render_dl() {
   MBUI_DL_PRINT=lines moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/lines.dl"
   [ -s "$(dirname "$out")/lines.dl" ] || { echo "render_dl: no lines draw list"; return 1; }
+  # and shapes' (src/kitdemo/gallery/dl_print_wbtest.mbt shapes_shown), shapes.dl, checked by scripts/chk shapes
+  MBUI_DL_PRINT=shapes moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+    awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/shapes.dl"
+  [ -s "$(dirname "$out")/shapes.dl" ] || { echo "render_dl: no shapes draw list"; return 1; }
 }
 
 # The picture against its reference, on the machine the references were made on: goldens/render/$1.txt's lines

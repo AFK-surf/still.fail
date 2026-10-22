@@ -72,3 +72,39 @@ float mb_shadow(float2 p, float2 hs, float r, float sigma) {
   }
   return v;
 }
+// A shape (src/ui/shape.mbt, scene.mbt's kind 11): its pieces s (x0 y0 x1 y1 as shares of its band's rect r) worked
+// into the pixel about p, scale its pixels a point. A fill's: each piece's crossings of 4 rows across the pixel, each
+// counted by how much of the row lies left of it (+ going down, - going up); their sums over every piece, the rows'
+// winding numbers across the pixel, make its cover (even_odd 1: by the even-odd rule, else the nonzero one).
+// (mb4: v in all four; Direct3D's float4 takes no single number)
+float4 mb4(float v) {
+  return float4(v, v, v, v);
+}
+float4 mb_path_rows(float4 s, float4 r, float2 p, float scale) {
+  float2 a = r.xy + s.xy * r.zw;
+  float2 b = r.xy + s.zw * r.zw;
+  if (a.y == b.y) return mb4(0.0);
+  float dir = b.y > a.y ? 1.0 : -1.0;
+  float4 ys = mb4(p.y) + float4(-0.375, -0.125, 0.125, 0.375) / scale;
+  float4 in_ = step(mb4(min(a.y, b.y)), ys) * (mb4(1.0) - step(mb4(max(a.y, b.y)), ys));
+  float4 xs = mb4(a.x) + (ys - mb4(a.y)) * ((b.x - a.x) / (b.y - a.y));
+  return in_ * dir * clamp((xs - mb4(p.x)) * scale + mb4(0.5), mb4(0.0), mb4(1.0));
+}
+float mb_path_cover(float4 w, float even_odd) {
+  float4 a = abs(w);
+  float4 f = a - floor(a * 0.5) * 2.0;
+  float4 c = even_odd > 0.5 ? mb4(1.0) - abs(mb4(1.0) - f) : min(a, mb4(1.0));
+  return dot(c, mb4(0.25));
+}
+// A stroke's: how far p is from a piece (its ends round).
+float mb_seg_dist(float4 s, float4 r, float2 p) {
+  float2 a = r.xy + s.xy * r.zw;
+  float2 ab = r.xy + s.zw * r.zw - a;
+  float h = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0);
+  return length(p - a - ab * h);
+}
+// Which of a data instance's (kind 12) fours piece i is in: 0, 2, 3, 4, 6, 7 (shape.mbt seg_slots), six to an instance.
+int mb_seg_slot(int i) {
+  int s = i - (i / 6) * 6;
+  return s + (s >= 1 ? 1 : 0) + (s >= 4 ? 1 : 0);
+}

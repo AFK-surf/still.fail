@@ -22,6 +22,12 @@ MBUI_DL_PRINT=lines moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/
 [ -s $O/lines.dl ] || { echo "render_offscreen: no lines draw list"; exit 1; }
 MBUI_DL=$PWD/$O/lines.dl MBUI_DL_PNG=$PWD/$O/lines.png ./_build/native/release/build/render/render.exe
 "$D/chk" lines $O/lines.png
+# shapes (src/kitdemo/gallery/dl_print_wbtest.mbt shapes_shown) drawn as they are: checked (scripts/chk shapes)
+MBUI_DL_PRINT=shapes moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+  awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/shapes.dl
+[ -s $O/shapes.dl ] || { echo "render_offscreen: no shapes draw list"; exit 1; }
+MBUI_DL=$PWD/$O/shapes.dl MBUI_DL_PNG=$PWD/$O/shapes.png ./_build/native/release/build/render/render.exe
+"$D/chk" shapes $O/shapes.png
 for k in clip-cut clip-box; do
   MBUI_DL_PRINT=$k moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/$k.dl

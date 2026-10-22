@@ -152,6 +152,8 @@
     float grow = kind == 2 ? a_p.w * 3.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);
     vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);
     if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);
+    // the pieces of shapes (kind 12): nothing drawn
+    if (kind == 12) pos = vec2(0.0);
     // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (v_pos), its clip there
     // too or (35: one from outside what turned) where it is drawn (v_cpos)
     vec2 at = pos;
@@ -175,9 +177,13 @@
   uniform vec4 u_shape[8];
   uniform vec4 u_rad[2];
   uniform int u_n;
+  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2043 fours
+  // (227 instances) a row
+  uniform highp sampler2D u_segs;
   out vec4 o;
   // corner.sl begin (scripts/chk corner-sl: not edited here)
   #define float2 vec2
+  #define float4 vec4
   // mbui's corners (src/ui/smooth.mbt: these are its smoothness, sd_corner and sd_box, number for number), the one copy
   // every renderer draws by: Metal's, Direct3D's and both GLs' shaders take it in as it is (corner_sl.h; web/host.js
   // between its "corner.sl" lines), written in what the four have in common (float2: GLSL's vec2, defined so before it).
@@ -252,6 +258,42 @@
     }
     return v;
   }
+  // A shape (src/ui/shape.mbt, scene.mbt's kind 11): its pieces s (x0 y0 x1 y1 as shares of its band's rect r) worked
+  // into the pixel about p, scale its pixels a point. A fill's: each piece's crossings of 4 rows across the pixel, each
+  // counted by how much of the row lies left of it (+ going down, - going up); their sums over every piece, the rows'
+  // winding numbers across the pixel, make its cover (even_odd 1: by the even-odd rule, else the nonzero one).
+  // (mb4: v in all four; Direct3D's float4 takes no single number)
+  float4 mb4(float v) {
+    return float4(v, v, v, v);
+  }
+  float4 mb_path_rows(float4 s, float4 r, float2 p, float scale) {
+    float2 a = r.xy + s.xy * r.zw;
+    float2 b = r.xy + s.zw * r.zw;
+    if (a.y == b.y) return mb4(0.0);
+    float dir = b.y > a.y ? 1.0 : -1.0;
+    float4 ys = mb4(p.y) + float4(-0.375, -0.125, 0.125, 0.375) / scale;
+    float4 in_ = step(mb4(min(a.y, b.y)), ys) * (mb4(1.0) - step(mb4(max(a.y, b.y)), ys));
+    float4 xs = mb4(a.x) + (ys - mb4(a.y)) * ((b.x - a.x) / (b.y - a.y));
+    return in_ * dir * clamp((xs - mb4(p.x)) * scale + mb4(0.5), mb4(0.0), mb4(1.0));
+  }
+  float mb_path_cover(float4 w, float even_odd) {
+    float4 a = abs(w);
+    float4 f = a - floor(a * 0.5) * 2.0;
+    float4 c = even_odd > 0.5 ? mb4(1.0) - abs(mb4(1.0) - f) : min(a, mb4(1.0));
+    return dot(c, mb4(0.25));
+  }
+  // A stroke's: how far p is from a piece (its ends round).
+  float mb_seg_dist(float4 s, float4 r, float2 p) {
+    float2 a = r.xy + s.xy * r.zw;
+    float2 ab = r.xy + s.zw * r.zw - a;
+    float h = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0);
+    return length(p - a - ab * h);
+  }
+  // Which of a data instance's (kind 12) fours piece i is in: 0, 2, 3, 4, 6, 7 (shape.mbt seg_slots), six to an instance.
+  int mb_seg_slot(int i) {
+    int s = i - (i / 6) * 6;
+    return s + (s >= 1 ? 1 : 0) + (s >= 4 ? 1 : 0);
+  }
   // corner.sl end
   float sd_rr(vec2 p, vec4 r, float rad) {
     vec2 hs = r.zw * 0.5;
@@ -298,6 +340,23 @@
     int kind = int(v_p.y + 0.5);
     if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(v_p.x, min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }
     vec4 col = v_color;
+    if (kind == 11) {
+      // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; p.x half its stroke's width (0: a fill,
+      // c2.z 1 by the even-odd rule)
+      int first = int(v_c2.x + 0.5), n = int(v_c2.y + 0.5);
+      float a;
+      if (v_p.x > 0.0) {
+        float d = 1e9;
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p)); }
+        a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);
+      } else {
+        vec4 w = vec4(0.0);
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p, u_scale); }
+        a = mb_path_cover(w, v_c2.z);
+      }
+      o = vec4(col.rgb, 1.0) * col.a * a;
+      return;
+    }
     if (kind == 10) {
       // a piece of a line (scene.mbt): from c2.xy to c2.zw (shares of its rect), p.x half its width, its ends round
       vec2 a = v_rect.xy + v_c2.xy * v_rect.zw, ab = v_rect.xy + v_c2.zw * v_rect.zw - a;
@@ -474,7 +533,7 @@
     gl.attachShader(post, compile(gl.FRAGMENT_SHADER, PFS));
     gl.linkProgram(post);
     if (!gl.getProgramParameter(post, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(post));
-    for (const n of ['u_vp', 'u_scale', 'u_atlas', 'u_img', 'u_bd', 'u_map', 'u_uvc', 'u_gb', 'u_shape', 'u_rad', 'u_n']) U[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['u_vp', 'u_scale', 'u_atlas', 'u_img', 'u_bd', 'u_map', 'u_uvc', 'u_gb', 'u_shape', 'u_rad', 'u_n', 'u_segs']) U[n] = gl.getUniformLocation(prog, n);
     for (const n of ['u_src', 'u_a', 'u_b']) PU[n] = gl.getUniformLocation(post, n);
     vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -629,6 +688,38 @@
     gl.uniform4fv(U.u_shape, gshape);
     gl.uniform4fv(U.u_rad, grad);
     gl.uniform1i(U.u_n, gn);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, segsTex || atlasTex);
+    gl.uniform1i(U.u_segs, 3);
+  }
+
+  // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the
+  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (227 instances' 9), as many rows as they take.
+  const SEGS_ROW = 2043;
+  let segsTex = null, segsRows = 0;
+  function segsUpload(n) {
+    let d = n;
+    while (d > 0 && Math.round(f32[(d - 1) * INST + 5]) === 12) d--;
+    if (d === n) return;
+    const rows = Math.ceil((n - d) * 9 / SEGS_ROW);
+    gl.activeTexture(gl.TEXTURE3);
+    if (!segsTex || rows > segsRows) {
+      if (segsTex) gl.deleteTexture(segsTex);
+      segsTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, segsTex);
+      segsRows = rows * 2;
+      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, SEGS_ROW, segsRows);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, segsTex);
+    const from = d * INST, need = rows * SEGS_ROW * 4;
+    let data = f32.subarray(from, from + need);
+    if (data.length < need) {
+      data = new Float32Array(need);
+      data.set(f32.subarray(from, n * INST));
+    }
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SEGS_ROW, rows, gl.RGBA, gl.FLOAT, data);
   }
 
   H.present = (buf, n, r, g, b) => {
@@ -645,6 +736,7 @@
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
     gl.bufferData(gl.ARRAY_BUFFER, f32.subarray(0, len), gl.STREAM_DRAW);
+    segsUpload(n);
     mainState();
     // one draw per run of instances showing the same image (slot 20), or sharing one capture of glass (negative);
     // WebGL has no base instance, so the attributes start at the run instead

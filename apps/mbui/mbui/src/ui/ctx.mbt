@@ -342,6 +342,8 @@ pub struct Ctx {
   // output
   mut inst : FixedArray[Double]
   mut ninst : Int
+  // the pieces of the shapes painted this frame (shape.mbt): x0 y0 x1 y1 each, as shares of their instance's rect
+  segs : Array[Double]
   mut ime_sig : String
   // stats
   mut t_build : Double
@@ -483,6 +485,7 @@ fn Ctx::new() -> Ctx {
     press_down: None,
     inst: FixedArray::make(inst_size * 4096, 0.0),
     ninst: 0,
+    segs: [],
     ime_sig: "",
     t_build: 0.0,
     t_layout: 0.0,

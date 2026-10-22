@@ -288,6 +288,8 @@ static const char *VS =
     "  float grow = kind == 2 ? a_p.w * 3.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);\n"
     "  vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);\n"
     "  if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);\n"
+    "  // the pieces of shapes (kind 12): nothing drawn\n"
+    "  if (kind == 12) pos = vec2(0.0);\n"
     "  // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (v_pos), its clip\n"
     "  // there too or (35: one from outside what turned) where it is drawn (v_cpos)\n"
     "  vec2 at = pos;\n"
@@ -313,8 +315,12 @@ static const char *FS =
     "uniform vec4 u_shape[8];\n"
     "uniform vec4 u_rad[2];\n"
     "uniform int u_n;\n"
+    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2043 fours\n"
+    "// (227 instances) a row\n"
+    "uniform highp sampler2D u_segs;\n"
     "out vec4 o;\n"
     "#define float2 vec2\n"
+    "#define float4 vec4\n"
     MB_CORNER_SL
     "float sd_rr(vec2 p, vec4 r, float rad) {\n"
     "  vec2 hs = r.zw * 0.5;\n"
@@ -361,6 +367,23 @@ static const char *FS =
     "  int kind = int(v_p.y + 0.5);\n"
     "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(v_p.x, min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }\n"
     "  vec4 col = v_color;\n"
+    "  if (kind == 11) {\n"
+    "    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; p.x half its stroke's width (0: a fill,\n"
+    "    // c2.z 1 by the even-odd rule)\n"
+    "    int first = int(v_c2.x + 0.5), n = int(v_c2.y + 0.5);\n"
+    "    float a;\n"
+    "    if (v_p.x > 0.0) {\n"
+    "      float d = 1e9;\n"
+    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p)); }\n"
+    "      a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);\n"
+    "    } else {\n"
+    "      vec4 w = vec4(0.0);\n"
+    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p, u_scale); }\n"
+    "      a = mb_path_cover(w, v_c2.z);\n"
+    "    }\n"
+    "    o = vec4(col.rgb, 1.0) * col.a * a;\n"
+    "    return;\n"
+    "  }\n"
     "  if (kind == 10) {\n"
     "    // a piece of a line (scene.mbt): from c2.xy to c2.zw (shares of its rect), p.x half its width, its ends round\n"
     "    vec2 a = v_rect.xy + v_c2.xy * v_rect.zw, ab = v_rect.xy + v_c2.zw * v_rect.zw - a;\n"
@@ -523,6 +546,12 @@ static const char *PFS =
 static GLuint prog, vao, vbo, atlas, post;
 static GLint u_vp, u_scale, u_atlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
 static float *fbuf;
+// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the shader
+// to read (u_segs): a float texture of SEGS_ROW fours a row (227 instances' 9), as many rows as they take
+#define SEGS_ROW 2043
+static GLint u_segs;
+static GLuint segs_tex;
+static int segs_rows;
 static size_t fcap;
 static int fb_w, fb_h;
 static double cur_w, cur_h, cur_scale;
@@ -561,6 +590,9 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   u_shape = glGetUniformLocation(prog, "u_shape");
   u_rad = glGetUniformLocation(prog, "u_rad");
   u_n = glGetUniformLocation(prog, "u_n");
+  u_segs = glGetUniformLocation(prog, "u_segs");
+  segs_tex = 0;
+  segs_rows = 0;
   post = glCreateProgram();
   glAttachShader(post, compile(GL_VERTEX_SHADER, PVS));
   glAttachShader(post, compile(GL_FRAGMENT_SHADER, PFS));
@@ -752,6 +784,11 @@ static void main_state(void) {
   glBindTexture(GL_TEXTURE_2D, atlas);
   glUniform1i(u_atlas, 0);
   glUniform1i(u_img, 1);
+  // (the shapes' pieces before the backdrop: the unit left active as it was, 2, which a stream's SurfaceTexture is
+  // latched on as its picture is asked for: Streams.show)
+  glActiveTexture(GL_TEXTURE3);
+  glBindTexture(GL_TEXTURE_2D, segs_tex ? segs_tex : atlas);
+  glUniform1i(u_segs, 3);
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_2D, bd_tex ? bd_tex : atlas);
   glUniform1i(u_bd, 2);
@@ -767,6 +804,27 @@ static void main_state(void) {
 static volatile int over_other;
 
 JNIEXPORT void JNICALL Java_dev_mbui_Native_overOther(JNIEnv *env, jclass c, jboolean on) { over_other = on ? 1 : 0; }
+
+// The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn) into segs_tex.
+
+static void segs_upload(int32_t count) {
+  int32_t d = count;
+  while (d > 0 && (int)(fbuf[(d - 1) * MB_INST + 5] + 0.5f) == 12) d--;
+  if (d == count) return;
+  int rows = (int)(((size_t)(count - d) * 9 + SEGS_ROW - 1) / SEGS_ROW);
+  glActiveTexture(GL_TEXTURE3);
+  if (!segs_tex || rows > segs_rows) {
+    if (segs_tex) glDeleteTextures(1, &segs_tex);
+    glGenTextures(1, &segs_tex);
+    glBindTexture(GL_TEXTURE_2D, segs_tex);
+    segs_rows = rows * 2;
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, SEGS_ROW, segs_rows);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  }
+  glBindTexture(GL_TEXTURE_2D, segs_tex);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SEGS_ROW, rows, GL_RGBA, GL_FLOAT, fbuf + (size_t)d * MB_INST);
+}
 
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
@@ -785,11 +843,13 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glViewport(0, vy0, fb_w, vhp);
   if (count <= 0) return;
   size_t n = (size_t)count * MB_INST;
-  if (fcap < n) {
-    fcap = n * 2;
+  // (and a row of the shapes' pieces more: segs_upload reads whole rows)
+  if (fcap < n + SEGS_ROW * 4) {
+    fcap = n * 2 + SEGS_ROW * 4;
     fbuf = realloc(fbuf, fcap * sizeof(float));
   }
   for (size_t i = 0; i < n; i++) fbuf[i] = (float)buf[i];
+  segs_upload(count);
   bd_tex = 0;
   memset(gmap, 0, sizeof gmap);
   memset(guvc, 0, sizeof guvc);

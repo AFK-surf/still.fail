@@ -174,6 +174,8 @@ struct Node {
   mut rich : Rich?
   // lines drawn over its ground (Ctx::lines: line.mbt)
   mut lines : Array[Line]
+  // shapes drawn over its ground (Ctx::shapes: shape.mbt)
+  mut shapes : Array[Shape]
   // its runs as laid out when cut after its max_lines (the ellipsis a run of its own), else None: what is drawn
   mut rcut : Rich?
   mut rl : RichLayout?
@@ -291,6 +293,7 @@ fn Node::new() -> Node {
     full_max: 0.0,
     rich: None,
     lines: [],
+    shapes: [],
     rcut: None,
     rl: None,
     rl_max: 0.0,
@@ -348,6 +351,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.label = ""
   self.rich = None
   self.lines = []
+  self.shapes = []
   // (its cut runs go with its layout, kept with it: rl, rl_for)
   self.item = -1
 }

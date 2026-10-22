@@ -1,13 +1,14 @@
 // Icons, as still.fail draws them (web/ui icons.tsx from design/icons): 24
-// grid line art, 1.75 strokes, in one colour. Each name, size and colour is
-// rasterised once at the screen's pixels.
+// grid line art, 1.75 strokes, in one colour. Drawn by the GPU as shapes
+// (mbui's Ctx::shapes), at whatever size and colour, nothing made first.
 
 ///|
 let made : Map[String, Bool] = {}
 
 ///|
-/// What a picture that changes as it moves (draw_drawable's `held`) last showed ready, by what it is.
-let held_shown : Map[String, String] = {}
+/// The shapes of each icon, picture and ring drawn, by what it is, its size and its colour: what is drawn is the same
+/// shapes again, not worked out each frame.
+let shapes_made : Map[String, Array[@ui.Shape]] = {}
 
 ///|
 /// Every Tester starts as the app does (mbui's on_reset): the images made here gone with its own, nothing waited on or
@@ -15,7 +16,7 @@ let held_shown : Map[String, String] = {}
 fn init {
   @ui.on_reset(fn() {
     made.clear()
-    held_shown.clear()
+    shapes_made.clear()
     copied_at.clear()
     dark_set.val = None
     current.val = { dark: false, narrow: false, p: wide_light, t: wide_type }
@@ -43,18 +44,56 @@ pub fn has_icon(name : String) -> Bool {
 /// square in `color`.
 pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -> Int {
   let color = color.unwrap_or(theme().p.text)
-  let px = px_of(c, size)
-  let key = "mem:sf/icon/\{name}/\{px}/\{color}"
-  if !made.contains(key) {
-    made[key] = true
-    let art = Art::new(24.0)
-    match icon_data.get(name) {
-      Some(d) => art.parts(d)
-      None => ()
+  let key = "icon/\{name}/\{size}/\{color}"
+  let shapes = match shapes_made.get(key) {
+    Some(s) => s
+    None => {
+      let s = match icon_data.get(name) {
+        Some(d) => icon_shapes(d, size / 24.0, color)
+        None => []
+      }
+      shapes_made[key] = s
+      s
     }
-    @ui.add_image(key, tinted_png(art.cover(px), px, color))
   }
-  c.image(key, w=Px(size), h=Px(size), fit=FitFill, bg=0L, fade=false)
+  c.shapes(shapes, w=Px(size), h=Px(size), name="sf/" + key)
+}
+
+///|
+/// An icon's parts as icon_data.mbt has them (0 a line, 1 a closed one, 2 a fill's outline: one with a width the
+/// first of a fill), `k` points a unit, in `color`: its strokes of a width one shape (their pieces' nearest the one
+/// that covers a pixel, as one stroke), each fill one.
+fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Shape] {
+  let strokes : Array[(Double, Array[(Array[Double], Bool)])] = []
+  let fills : Array[Array[(Array[Double], Bool)]] = []
+  let mut i = 0
+  while i + 2 < data.length() {
+    let kind = data[i].to_int()
+    let w = data[i + 1]
+    let n = data[i + 2].to_int()
+    let pts = data[i + 3:i + 3 + 2 * n].to_array().map(fn(v) { v * k })
+    i = i + 3 + 2 * n
+    if kind == 2 {
+      if w > 0.0 || fills.length() == 0 {
+        fills.push([(pts, true)])
+      } else {
+        fills[fills.length() - 1].push((pts, true))
+      }
+    } else {
+      match strokes.search_by(fn(s) { s.0 == w }) {
+        Some(j) => strokes[j].1.push((pts, kind == 1))
+        None => strokes.push((w, [(pts, kind == 1)]))
+      }
+    }
+  }
+  let out : Array[@ui.Shape] = []
+  for f in fills {
+    out.push(@ui.shape_of(f, fill=color))
+  }
+  for s in strokes {
+    out.push(@ui.shape_of(s.1, stroke=color, width=s.0 * k))
+  }
+  out
 }
 
 ///|
@@ -171,47 +210,26 @@ pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64, grou
 /// A ring that says how far (PreviewLoad.kt's): `size` square, a track of `color` at 18% and `part` of a turn of it
 /// from the top, clockwise, 2 wide, still.
 pub fn progress_ring(c : @ui.Ctx, size : Double, part : Double, color : Int64) -> Int {
-  let px = px_of(c, size)
   let share = if part < 0.0 { 0.0 } else if part > 1.0 { 1.0 } else { part }
-  let k = (share * 100.0).round().to_int()
-  let key = "mem:sf/ring/\{px}/\{color}/\{k}"
-  if !made.contains(key) {
-    made[key] = true
-    let r = size / 2.0 - 2.0
-    let mid = size / 2.0
-    let pi = 3.141592653589793
-    let circle = fn(from : Double, to : Double, n : Int) -> Array[Double] {
-      let pts = []
-      for i in 0..=n {
-        let a = from + (to - from) * i.to_double() / n.to_double()
-        pts.push(mid + r * @dmath.cos(a))
-        pts.push(mid + r * @dmath.sin(a))
-      }
-      pts
+  let r = size / 2.0 - 2.0
+  let mid = size / 2.0
+  let pi = 3.141592653589793
+  let circle = fn(from : Double, to : Double, n : Int) -> Array[Double] {
+    let pts = []
+    for i in 0..=n {
+      let a = from + (to - from) * i.to_double() / n.to_double()
+      pts.push(mid + r * @dmath.cos(a))
+      pts.push(mid + r * @dmath.sin(a))
     }
-    let whole = Art::new(size)
-    whole.stroke(circle(0.0, 2.0 * pi, 48), 2.0, true)
-    let a = whole.cover(px)
-    let b = if k > 0 {
-      let arc = Art::new(size)
-      let from = -0.5 * pi
-      arc.stroke(circle(from, from + k.to_double() / 100.0 * 2.0 * pi, (48.0 * k.to_double() / 100.0).ceil().to_int()), 2.0, false)
-      arc.cover(px)
-    } else {
-      FixedArray::make(px * px, 0.0)
-    }
-    let rgba = FixedArray::make(px * px * 4, b'\x00')
-    let alpha = (color & 0xFFL).to_double() / 255.0
-    for i in 0..<(px * px) {
-      let cover = b[i] + a[i] * 0.18 * (1.0 - b[i])
-      if cover > 0.0 {
-        rgba[i * 4] = ((color >> 24) & 0xFFL).to_int().to_byte()
-        rgba[i * 4 + 1] = ((color >> 16) & 0xFFL).to_int().to_byte()
-        rgba[i * 4 + 2] = ((color >> 8) & 0xFFL).to_int().to_byte()
-        rgba[i * 4 + 3] = (cover * alpha * 255.0).round().to_int().to_byte()
-      }
-    }
-    @ui.add_image(key, png(px, px, rgba))
+    pts
   }
-  c.image(key, w=Px(size), h=Px(size), fit=FitFill, bg=0L, fade=false)
+  let track = (color & 0xFFFFFF00L) | ((color & 0xFFL).to_double() * 0.18).round().to_int64()
+  let shapes = [@ui.shape_of([(circle(0.0, 2.0 * pi, 48), true)], stroke=track, width=2.0)]
+  if share > 0.0 {
+    let from = -0.5 * pi
+    shapes.push(
+      @ui.shape_of([(circle(from, from + share * 2.0 * pi, (48.0 * share).ceil().to_int()), false)], stroke=color, width=2.0),
+    )
+  }
+  c.shapes(shapes, w=Px(size), h=Px(size))
 }

@@ -21,7 +21,10 @@
 // (written transparent, without blending: native.mbt), 10 a piece of a line
 // (line.mbt: 4 half its width; 12-15 its ends, x0 y0 x1 y1 as shares of its
 // rect, so that what moves or scales the rect takes its ends along; its ends
-// round).
+// round), 11 a band of a shape (shape.mbt: 4 half its stroke's width, 0 a
+// fill; 6 1 a fill by the even-odd rule; 12 its first piece, 13 how many), 12
+// the pieces of the frame's shapes, after every instance drawn (shape.mbt:
+// six to an instance, none drawn).
 
 ///|
 let inst_size = 36
@@ -486,6 +489,9 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     self.next_scroll_rects.push(dmax(n.y, cy0))
     self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
     self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
+  }
+  if n.shapes.length() > 0 {
+    self.paint_shapes(n, alpha)
   }
   if n.lines.length() > 0 {
     self.paint_lines(n, alpha)
