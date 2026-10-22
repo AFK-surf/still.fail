@@ -22,7 +22,7 @@ jobs:
   # tested), against mbui's fake host: no window, no station. On GitHub's Linux: a test's program links no host's
   # code (its host the Tester's fake, mbui/hostapi; the platforms' hosts are an app's main's alone), built with clang
   # (gcc took the 16 GB runner's memory on the largest units and the job was killed). The units each test is split
-  # into kept in the Actions cache by content (MBC_STORE: main's written, a branch reads them): 667 tests, ~170 s a
+  # into kept in the Actions cache by content (MBC_STORE: a branch's own, else main's): 667 tests, ~170 s a
   # part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the app's beta (mbui.yml),
   # which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in
   # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's. On main
@@ -69,15 +69,17 @@ jobs:
           set -o pipefail
           touch "$RUNNER_TEMP/start"
           MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
-      # (main's: the units this run used, older ones gone, kept under a key by what they are)
+      # (the units this run used, older ones gone, kept under a key by what they are: main's, and a branch's for its next
+      # push, which restores its own before main's: without, each push compiled all the branch had changed again, 125 of
+      # 282 units of sfapp's tests for a branch on it, 108 s of the app part's 151, 2026-10-23)
       - name: The units kept
-        if: always() && github.ref == 'refs/heads/main'
+        if: always()
         run: |
           S=$MBC_STORE
           [ ! -d $S ] || { find $S -name '*.lock' -delete; find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +; }
           c=$( { (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort); ls .ci/lto 2>/dev/null; } | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$c" >> "$GITHUB_ENV"
-      - if: always() && github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.store.outputs.cache-matched-key
+      - if: always() && env.BUILD_KEY != steps.store.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
           path: |
