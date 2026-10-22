@@ -251,9 +251,17 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     ch = true
   }
   let gap = len(n.gap)
-  if pt_differs(s.gap_row_kind(), s.gap_row_value(), gap) {
-    s.set_gap_row(Pt(gap))
+  // (a row in lines: `line_gap` between its lines where said)
+  let lines = if n.flow && n.line_gap >= 0.0 { len(n.line_gap) } else { gap }
+  if pt_differs(s.gap_col_kind(), s.gap_col_value(), gap) || pt_differs(s.gap_row_kind(), s.gap_row_value(), lines) {
+    s.set_gap_row(Pt(lines))
     s.set_gap_col(Pt(gap))
+    ch = true
+  }
+  // a row in lines (Ctx::box `flow`)
+  let fw : @flex.FlexWrap = if n.flow { Wrap } else { NoWrap }
+  if s.wrap != fw {
+    s.wrap = fw
     ch = true
   }
   if s.aspect != n.aspect {
@@ -365,6 +373,10 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     shrink = 0.0
   }
   if in_row && n.in_sideways && n.w is Auto {
+    shrink = 0.0
+  }
+  // in a row of lines, as wide as it is: what does not fit goes on the next line
+  if in_row && n.parent >= 0 && self.nodes[n.parent].flow {
     shrink = 0.0
   }
   if s.shrink != shrink {

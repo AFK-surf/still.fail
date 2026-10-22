@@ -681,7 +681,8 @@ fn connect_run_page(c : @ui.Ctx, core : Core, station : String, id : String) -> 
         run_list[of] = "model"
       }
       group(tr("android-settings.run.effort"))
-      c.box(dir=Row, w=Fill(1.0), gap=8.0, fn() {
+      // (SettingParts.kt EffortChips: in lines when they do not fit one)
+      c.box(style=run_chips, flow=true, fn() {
         let efforts : Array[String] = [""] + strings(v, "efforts")
         for e in efforts {
           let on = text(draft, "effort") == e
@@ -689,8 +690,8 @@ fn connect_run_page(c : @ui.Ctx, core : Core, station : String, id : String) -> 
           if hit(c, id2) {
             pick([("effort", if e == "" { Json::null() } else { str(e) })])
           }
-          c.box(padx=14.0, pady=8.0, radius=16.0, bg=if on { t.p.text } else { t.p.chip }, id=id2, fn() {
-            c.text(if e == "" { tr("android-settings.connect.defaultEffort") } else { e }, size=14.0, color=if on { t.p.bg } else { t.p.text }, wrap=false)
+          c.box(padx=chip_px, pady=chip_py, radius=chip_corner, bg=if on { t.p.text } else { t.p.chip }, id=id2, fn() {
+            c.text(if e == "" { tr("android-chat.pick.default") } else { e }, size=14.0, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
             |> ignore
           })
           |> ignore

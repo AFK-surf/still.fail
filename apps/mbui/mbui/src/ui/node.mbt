@@ -148,6 +148,11 @@ struct Node {
   mut in_sideways : Bool
   // as wide as its content in a row, not squeezed where the row is short (Ctx::box `keep`): only its siblings shrink
   mut keep : Bool
+  // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
+  // as wide as it is
+  mut flow : Bool
+  // between a flow's lines (-1: its gap)
+  mut line_gap : Double
   // what it is called where it shows no words of its own (an icon's button: Compose's contentDescription), found by
   // them as words are (Ctx::box `label`; a drive's or a test's `=WORDS`)
   mut label : String
@@ -271,6 +276,8 @@ fn Node::new() -> Node {
     sideways: false,
     in_sideways: false,
     keep: false,
+    flow: false,
+    line_gap: -1.0,
     label: "",
     x: 0.0,
     y: 0.0,
@@ -333,6 +340,8 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sideways = false
   self.in_sideways = false
   self.keep = false
+  self.flow = false
+  self.line_gap = -1.0
   self.label = ""
   self.rich = None
   self.lines = []

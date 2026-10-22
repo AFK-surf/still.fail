@@ -96,16 +96,19 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       })
       |> ignore
     }
+    // as wide as their words, in lines when they do not fit one (History.kt EffortChips: a FlowRow, 8 apart each way;
+    // 16 and 9 in, Smooth(18), the one picked on the ink in semibold)
     let chips = fn(k : String, options : Array[String], chosen : String, run : (String) -> Unit) {
-      c.box(dir=Row, w=Fill(1.0), gap=8.0, fn() {
+      c.box(style=run_chips, flow=true, fn() {
         for o in options {
           let on = o == chosen
           let id = c.id(k + "/" + o)
           if hit(c, id) {
             run(o)
           }
-          c.box(padx=14.0, pady=8.0, radius=16.0, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
-            c.text(o, size=14.0, color=if on { t.p.bg } else { t.p.text }, wrap=false) |> ignore
+          c.box(padx=chip_px, pady=chip_py, radius=chip_corner, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
+            c.text(o, size=14.0, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
+            |> ignore
           })
           |> ignore
         }
@@ -174,7 +177,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
             c.text(tr("android-chat.run.effort.note"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
           })
           |> ignore
-          let default = tr("android-chat.pick.effort.default")
+          let default = tr("android-chat.pick.default")
           chips("session-effort", [default] + strings(v, "efforts"), match text(draft, "effort") {
             "" => default
             e => e
@@ -750,3 +753,18 @@ fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
     |> ignore
   })
 }
+
+///|
+/// The run's chips in lines (History.kt EffortChips), and a chip.
+// kept across runs: a value (no field of it changes)
+let run_chips : @ui.Style = @ui.style(row=true, w=Full, gap=S2)
+
+///|
+/// A chip of a choice (History.kt EffortChips): 16 either side of its words, 9 over and under, round by 18.
+let chip_px : Double = 16.0
+
+///|
+let chip_py : Double = 9.0
+
+///|
+let chip_corner : Double = 18.0

@@ -1005,6 +1005,7 @@ let zh : Map[String, String] = {
   "android-chat.new.machine.text": "本机 Claude Code 和 Codex 在终端中运行过的会话。点击可先查看内容，再决定是否在原目录中继续；终端中的原会话不受影响。",
   "android-chat.new.machine.title": "继续 {station} 上的会话",
   "android-chat.pick.effort.default": "默认深度",
+  "android-chat.pick.default": "默认",
   "android-chat.pick.failed": "无法选择：{error}",
   "android-chat.pick.model": "选择模型",
   "android-chat.pick.speed.follow": "跟随订阅",
