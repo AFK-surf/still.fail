@@ -604,7 +604,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
 
 ///|
 /// Whose service a profile runs on (Parts.kt ProviderMark): OpenCode's square, a listed provider's maker (the plug where
-/// there is none), Anthropic or OpenAI.
+/// there is none), Anthropic, xAI, Cursor, Devin or OpenAI by its runtime.
 fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
   let t = @sf.theme()
   if kind == "opencode-go" || mark == "opencode" {
@@ -619,7 +619,12 @@ fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, ma
   } else if runtime == "claude" || kind == "anthropic-api" {
     "anthropic"
   } else {
-    "openai"
+    match runtime {
+      "grok" => "xai"
+      "cursor" => "cursor"
+      "devin" => "devin"
+      _ => "openai"
+    }
   }
   if maker == "" || !@sf.has_drawable("maker_" + maker.replace_all(old="-", new="_")) {
     @sf.icon(c, "plug", size~, color=t.p.text) |> ignore

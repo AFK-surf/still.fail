@@ -45,6 +45,8 @@ pub(all) struct Palette {
   on_primary : Int64
   /// a card's ground on the page
   card : Int64
+  /// what sits a step apart on a card: a command's box (Theme.kt surface2, root.css.ts --m-surface2)
+  card2 : Int64
   /// the narrow screen's quiet button
   chip : Int64
   /// links (--blue)
@@ -104,6 +106,10 @@ pub let panel_pill : Double = 24.0
 ///|
 /// A page card of words: this in from every side.
 pub let card_pad : Double = 20.0
+
+///|
+/// A command's box's corner: its copy button's (8), 10 in from its edges, concentric (Settings.kt COMMAND_BOX_CORNER).
+pub let command_box_corner : Double = concentric_out(8.0, 10.0)
 
 ///|
 /// A card's corner with nothing in its corners.
@@ -180,6 +186,7 @@ let wide_light : Palette = {
   on_primary: 0xFFFFFFFFL,
   // the text at 4% over the canvas (pages.css.ts cardGround)
   card: 0xF6F6F7FFL,
+  card2: 0xFBFAF7FFL,
   chip: 0xEFECE6FFL,
   blue: 0x1559C4FFL,
   code_ink: 0x7C3FA0FFL,
@@ -216,6 +223,7 @@ let wide_dark : Palette = {
   primary_hover: 0xD3D4D6FFL,
   on_primary: 0x1F2023FFL,
   card: 0x28292CFFL,
+  card2: 0x2C2D31FFL,
   chip: 0x313237FFL,
   blue: 0x81AEFAFFL,
   code_ink: 0xC9A2E6FFL,

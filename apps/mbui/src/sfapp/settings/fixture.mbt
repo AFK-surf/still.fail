@@ -153,12 +153,12 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
     "settings-profile-menu" => up("profile-menu", "", 0)
-    "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 4)
+    "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
     // ChatGPT 团队's quota with its resets, its models (many, a filter, one to name by hand)
-    "settings-profile-models" => up("", "settings/profile/ws1/st1/cx", 9)
+    "settings-profile-models" => up("", "settings/profile/ws1/st1/cx", 7)
     "settings-profile-login" => {
       fx.login = true
-      up("", "settings/profile/ws1/st1/cc", 2)
+      up("", "settings/profile/ws1/st1/cc", 0)
     }
     "settings-connect-menu" => up("connect-menu", "", 0)
     "settings-connect-mode" => up("connect-mode", "", 0)

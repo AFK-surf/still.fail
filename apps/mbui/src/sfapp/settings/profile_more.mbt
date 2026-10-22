@@ -136,7 +136,8 @@ fn profile_recovery(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Array[() 
   [
     fn() { section_header(c, text(issue, "title"), start=S6) },
     fn() {
-      card(c, fn() {
+      // its button at the bottom, in the corner (Card(foot = action != "login"))
+      card(c, foot=action != "login", fn() {
         c.box(w=Fill(1.0), gap=10.0, fn() {
           c.text(text(issue, "detail"), size=13.0, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
           c.text(text(issue, "next"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
@@ -149,8 +150,8 @@ fn profile_recovery(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Array[() 
           }
           let checking = is_doing(core, ["profile.check"], on)
           let refreshing = is_doing(core, ["profile.quota"], on)
-          c.box(dir=Row, gap=8.0, fn() {
-            if action != "login" &&
+          // (one under the other, as the card's column has them)
+          if action != "login" &&
               button(c, "recover-go", text(issue, "label"), false, enabled=online, busy=checking || refreshing) {
               match action {
                 "key" => ask_key(core, station, p, tr("android-settings.profile.newKey"), tr("android-settings.profile.keyHintShort"))
@@ -161,12 +162,10 @@ fn profile_recovery(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Array[() 
                   act(core, tr("android-settings.profile.checkWhat"), "profile.check", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.profile.checked"))
               }
             }
-            if (action == "key" || action == "env") &&
+          if (action == "key" || action == "env") &&
               button(c, "recover-check", tr("android-settings.profile.recheck"), false, enabled=online, busy=checking) {
               act(core, tr("android-settings.profile.checkWhat"), "profile.check", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.profile.checked"))
-            }
-          })
-          |> ignore
+          }
           doing_mark(c, false, failed_of(core, ["profile.check", "profile.quota"], on))
         })
         |> ignore
@@ -194,17 +193,17 @@ fn ask_key(core : Core, station : String, p : Json?, title : String, hint : Stri
 }
 
 ///|
-/// The key a profile runs with (masked as the station shows it) and where its provider is, each changed from here
-/// (Profiles.kt's run.account section).
-fn profile_key(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[() -> Unit] {
+/// The key a profile runs with (masked as the station shows it) and where its provider is, each changed from here,
+/// under `head` (where it stands) on the one card of the account (Profiles.kt: ListCard, the head CARD_PAD in).
+fn profile_key(c : @ui.Ctx, core : Core, station : String, p : Json?, head : () -> Unit) -> Array[() -> Unit] {
   let t = @sf.theme()
   let id = text(p, "id")
   let kind = text(field(p, "access"), "kind")
   let on = [("station", station), ("id", id)]
   [
-    fn() { section_header(c, tr("android-settings.run.account"), start=S6) },
     fn() {
       list_card(c, fn() {
+        c.box(style=key_card_head, fn() { head() }) |> ignore
         if list_row(c, key="profile-key", fn() {
             c.box(w=Fill(1.0), fn() {
               c.text(
@@ -271,6 +270,31 @@ fn profile_key(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[(
     },
   ]
 }
+
+///|
+/// A sign-in's card: what it holds 12 apart (SignIn: spacedBy(12)).
+// kept across runs: a value (no field of it changes)
+let sign_in_rows : @ui.Style = @ui.style(w=Full, gap=S3)
+
+///|
+/// 取消登录 at the end of its head while signing in: 2 down, its mark 6 before it.
+// kept across runs: a value (no field of it changes)
+let sign_in_cancel : @ui.Style = @ui.style(row=true, pt=S0_5, gap=S1_5, align=ACenter)
+
+///|
+/// 登录 and 在机器上手动登录 beside it, 16 apart.
+// kept across runs: a value (no field of it changes)
+let sign_in_buttons : @ui.Style = @ui.style(row=true, gap=S4, align=ACenter)
+
+///|
+/// Why a sign-in failed (13, red).
+// kept across runs: a value (no field of it changes)
+let sign_in_failed_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Danger, w=Full)
+
+///|
+/// Where a key's account stands, at the top of its card: its words CARD_PAD from the card's edge, 12 above and below.
+// kept across runs: a value (no field of it changes)
+let key_card_head : @ui.Style = @ui.style(w=Full, px=S3, py=S3)
 
 ///|
 /// A variable being edited (EnvRow): its row, the name and value typed, what a secret saved before shows masked, and
@@ -828,16 +852,18 @@ priv struct LoginState {
 let login_state : LoginState = { copied: {}, manual: {}, error: {}, seen: {} }
 
 ///|
-/// A subscription's sign-in (SignIn): run on the station's machine, the browser's steps relayed here (LoginSteps); not
-/// under way, how it stands and 登录 (`profile.login`), the command to sign in on the machine by hand.
-fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[() -> Unit] {
+/// A subscription's sign-in (SignIn): one card, `head` (where it stands: its pill says it once, no title over the
+/// card saying it again) at its top, while signing in a way out of it at the head's end (取消登录) and the browser's
+/// steps relayed here (LoginSteps); not under way, what was off or how it is done in words, then 登录 / 重新登录
+/// (`profile.login`) with 在机器上手动登录 beside it and the command to sign in on the machine by hand under them. Its
+/// buttons at its foot, in its corners; the command last instead, its corner taken from the command's box.
+fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, needed : Bool, head : () -> Unit) -> Array[() -> Unit] {
   let t = @sf.theme()
   let id = text(p, "id")
   let on = [("station", station), ("id", id)]
   let job = field(p, "login")
   let state = text(job, "state")
   let active = job is Some(Object(_)) && signing_in.contains(state)
-  let needed = text(field(p, "check"), "state") == "login" || active
   let provider = provider_of(p)
   let k = station + "/" + id
   // signed in a moment ago (seen under way before): said so
@@ -846,80 +872,63 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Arr
     _ => ()
   }
   login_state.seen[k] = state
+  let command = text(p, "loginCommand")
+  let manual = login_state.manual.get(k).unwrap_or(false)
+  let command_last = !active && command != "" && manual
+  let waits = active && (state == "starting" || state == "verifying" || state == "done")
   [
     fn() {
-      section_header(
-        c,
-        fill(
-          if active {
-            "android-settings.login.active"
-          } else if needed {
-            "android-settings.login.needed"
-          } else {
-            "android-settings.login.subscription"
-          },
-          [("provider", provider)],
-        ),
-        start=S6,
-      )
-    },
-    fn() {
-      card(c, fn() {
-        c.box(w=Fill(1.0), gap=10.0, fn() {
+      // (the command last: the card's corner taken from its box's, CARD_PAD in: concentricOut(COMMAND_BOX_CORNER, CARD_PAD))
+      card(c, foot=!command_last && !waits, corner?=if command_last { Some(Around) } else { None }, fn() {
+        c.box(style=sign_in_rows, fn() {
+          c.box(dir=Row, w=Fill(1.0), fn() {
+            c.box(w=Fill(1.0), fn() { head() }) |> ignore
+            if active {
+              let cancelling = is_doing(core, ["profile.cancelLogin"], on)
+              c.box(style=sign_in_cancel, fn() {
+                doing_mark(c, cancelling, failed_of(core, ["profile.cancelLogin"], on), inline=true)
+                if tap_text(c, "login-cancel", tr("android-settings.login.cancel"), color=t.p.muted, size=14.0) && !cancelling {
+                  act(core, tr("android-settings.login.cancelWhat"), "profile.cancelLogin", obj([("station", str(station)), ("id", str(id))]))
+                }
+              })
+              |> ignore
+            }
+          })
+          |> ignore
           if active {
             login_steps(c, core, k, job, provider, fn(code) {
               act(core, tr("android-settings.login.finish"), "profile.loginCode", obj([("station", str(station)), ("id", str(id)), ("code", str(code))]))
             })
-            let cancelling = is_doing(core, ["profile.cancelLogin"], on)
-            c.box(w=Fill(1.0), align=ACenter, fn() {
-              let cid = c.id("login-cancel")
-              if hit(c, cid) && !cancelling {
-                act(core, tr("android-settings.login.cancelWhat"), "profile.cancelLogin", obj([("station", str(station)), ("id", str(id))]))
+          } else {
+            // signed in: the pill above says so; only what was off, or how it is done, in words
+            if state == "failed" {
+              c.text(fill("android-settings.login.failed", [("error", text(job, "error"))]), style=sign_in_failed_words) |> ignore
+            } else if needed {
+              c.text(fill("android-settings.login.note", [("app", "still.fail")]), style=@sf.meta.then(@sf.full_words)) |> ignore
+            }
+            c.box(style=sign_in_buttons, fn() {
+              if button(
+                  c,
+                  "login-start",
+                  tr(if needed && state != "done" { "android-settings.login.signIn" } else { "android-settings.login.again" }),
+                  needed,
+                  busy=is_doing(core, ["profile.login"], on),
+                ) {
+                (core.call)("profile.login", obj([("station", str(station)), ("id", str(id))]), fn(r) {
+                  match r {
+                    Ok(_) => ()
+                    Err(e) => (core.say)(fill("android-settings.signIn.beginFailed", [("error", error_text(e))]))
+                  }
+                })
               }
-              c.box(dir=Row, h=Px(38.0), padx=16.0, gap=6.0, align=ACenter, radius=19.0, id=cid, fn() {
-                doing_mark(c, cancelling, failed_of(core, ["profile.cancelLogin"], on), inline=true)
-                c.text(tr("android-settings.login.cancel"), size=14.0, color=t.p.muted, wrap=false) |> ignore
-              })
-              |> ignore
+              // (OpenCode's has no command to run by hand)
+              if command != "" && tap_text(c, "login-manual", tr("android-settings.login.manualShort"), size=14.0) {
+                login_state.manual[k] = !manual
+              }
             })
             |> ignore
-          } else {
-            c.text(
-              match state {
-                "failed" => fill("android-settings.login.failed", [("error", text(job, "error"))])
-                "done" => tr("android-settings.login.signedIn")
-                _ => fill("android-settings.login.note", [("app", "still.fail")])
-              },
-              size=13.0,
-              color=t.p.muted,
-              w=Fill(1.0),
-              line=18.0,
-            )
-            |> ignore
-            if wide_button(
-                c,
-                "login-start",
-                tr(if state == "done" || !needed { "android-settings.login.again" } else { "android-settings.login.signIn" }),
-                true,
-                busy=is_doing(core, ["profile.login"], on),
-              ) {
-              (core.call)("profile.login", obj([("station", str(station)), ("id", str(id))]), fn(r) {
-                match r {
-                  Ok(_) => ()
-                  Err(e) => (core.say)(fill("android-settings.signIn.beginFailed", [("error", error_text(e))]))
-                }
-              })
-            }
-            // (OpenCode's has no command to run by hand)
-            let command = text(p, "loginCommand")
-            if command != "" {
-              // (Profiles.kt: 在机器上手动登录, a link of 14 beside the button)
-              if tap_text(c, "login-manual", tr("android-settings.login.manualShort"), size=14.0) {
-                login_state.manual[k] = !login_state.manual.get(k).unwrap_or(false)
-              }
-              if login_state.manual.get(k).unwrap_or(false) {
-                command_box(c, core, command)
-              }
+            if manual && command != "" {
+              command_box(c, core, command)
             }
           }
         })
