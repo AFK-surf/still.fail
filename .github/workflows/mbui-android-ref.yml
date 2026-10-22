@@ -217,7 +217,7 @@ jobs:
         with: { api: "36", target: google_apis, profile: pixel_7, phase: start }
       - uses: ./.github/actions/mbui-moonbit
       - uses: actions/download-artifact@v4
-        with: { pattern: mbui-android-ref-*-apks, path: .ci/apks }
+        with: { pattern: "mbui-android-ref-*-apks", path: .ci/apks }
       - uses: actions/cache/restore@v4
         with:
           path: apps/mbui/out/android-ref-pics
@@ -270,7 +270,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/download-artifact@v4
-        with: { pattern: mbui-android-ref-[0-9]*, path: shards }
+        with: { pattern: "mbui-android-ref-[0-9]*", path: shards }
       - id: same
         run: |
           n=$(ls -d shards/*/ 2>/dev/null | wc -l)
