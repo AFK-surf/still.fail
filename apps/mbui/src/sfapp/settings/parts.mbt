@@ -1496,10 +1496,23 @@ let status_icon : Double = 14.0
 /// A choice on a card (Parts.kt PickLine): its label (15) over its line (12, muted), a check (16, the accent) at its
 /// end where it is the one chosen; 4 and 11 in, rounded 10, rippled where it is pressed. True on the frame after a
 /// tap.
-fn pick_line_row(c : @ui.Ctx, key : String, label : String, sub : String, checked : Bool) -> Bool {
+fn pick_line_row(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  sub : String,
+  checked : Bool,
+  leading? : () -> Unit,
+  trailing? : () -> Unit,
+) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   c.box(style=pick_line_ground, id~, fn() {
+    // what it is before its words, what it says after them (PickLine's leading, trailing)
+    match leading {
+      Some(f) => f()
+      None => ()
+    }
     c.box(style=@sf.full_width, fn() {
       c.text(label, style=row_title_words) |> ignore
       if sub != "" {
@@ -1507,6 +1520,10 @@ fn pick_line_row(c : @ui.Ctx, key : String, label : String, sub : String, checke
       }
     })
     |> ignore
+    match trailing {
+      Some(f) => f()
+      None => ()
+    }
     c.box(style=check_room, fn() {
       if checked {
         @sf.icon(c, "check", size=16.0, color=t.p.accent) |> ignore

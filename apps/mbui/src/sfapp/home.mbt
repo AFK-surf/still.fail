@@ -381,10 +381,11 @@ fn nav_button(
   size : Double,
   key~ : String,
   color? : Int64,
+  said? : String,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(
+  let b = c.box(
     w=Px(34.0),
     h=Px(34.0),
     radius=17.0,
@@ -397,7 +398,11 @@ fn nav_button(
       @motion.ripple(c, id, 17.0)
     },
   )
-  |> ignore
+  // what it is to a screen reader, where the page says (a Box's contentDescription round it)
+  match said {
+    Some(s) => c.semantics(b, Button, id~, label=s)
+    None => ()
+  }
   c.clicked(id)
 }
 

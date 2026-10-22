@@ -488,3 +488,14 @@ test "a secret's longest grant: on its page its own or its vault's, in its edito
   assert_true(e.find("仅一次") is Some(_))
   assert_true(e.find("批准这个密钥的申请时") is Some(_))
 }
+
+///|
+test "the run's 账号: what 自动分配 means, then 自动分配 and each account with its provider's mark and its allowance" {
+  let t = settings_tester("run:ws1/st1#s-c1", mode="settings-run-accounts", shows="settings-run-accounts")
+  t.draw()
+  // (AccountList: the note, 自动分配, each account without a line under it, its windows as the allowance's boxes)
+  assert_true(t.find("自动分配时，额度用完或登录失效会切换账号") is Some(_))
+  assert_true(t.find("Claude 主账号") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("38%") is Some(_))
+  assert_true(t.find("70%") is Some(_))
+}

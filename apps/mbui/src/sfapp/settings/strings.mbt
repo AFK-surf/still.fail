@@ -1040,6 +1040,8 @@ let zh : Map[String, String] = {
   "android-chat.pick.model": "选择模型",
   "android-chat.pick.speed.follow": "跟随订阅",
   "android-chat.pick.speed.standard": "标准",
+  "android-chat.run.account.auto": "自动分配",
+  "android-chat.run.account.note": "自动分配时，额度用完或登录失效会切换账号；指定账号后将始终使用该账号。",
   "android-chat.run.account.choose": "选择账号",
   "android-chat.run.account.warn": "此模型需要更换账号",
   "android-chat.run.borrowed": "已借用，同步到此 station 后即可使用",
