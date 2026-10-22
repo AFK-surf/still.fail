@@ -8,7 +8,7 @@ import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { base64, fromBase64 } from "../util.ts";
 import { Beside } from "../protocol.ts";
-import { keptId } from "../drive-kept.ts";
+import { chatKeptId, keptId } from "../drive-kept.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
@@ -130,25 +130,55 @@ export function install(): void {
     // Its bytes beside its answer `{ type }` (kept as base64, small).
     const kept = c.thumb ? inner.data.keptFile(c.station, c.key, c.name, "thumb") : null;
     if (kept !== null) return Effect.succeed(keptBeside(kept));
-    return Effect.flatMap(parse(c.station), (addr) =>
+    const read = Effect.flatMap(parse(c.station), (addr) =>
       Effect.map(
         inner.stations.requests.file(addr, c.key, c.name, c.thumb, (loaded, total) => c.progress && progress({ loaded, total }), ctx),
         ([type, bytes]) => {
           if (c.thumb) inner.data.keepFile(c.station, c.key, c.name, "thumb", type, base64(bytes));
-          return new Beside({ type }, bytes);
+          return [type, bytes] as const;
         },
       ),
     );
+    if (c.keep === null) return Effect.map(read, ([type, bytes]) => new Beside({ type }, bytes));
+    // With `keep`: what is kept of it answered whole without asking the station; read whole, kept with its chat once
+    // answered (drive-kept.ts `chat`).
+    const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
+    return Effect.gen(function* () {
+      const held = yield* inner.driveKept.read(id, 0, size, 0, size);
+      if (held !== null) {
+        if (c.progress) progress({ loaded: size, total: size });
+        return new Beside({ type: held.type }, held.bytes);
+      }
+      const [type, bytes] = yield* read;
+      if (bytes.length === size) inner.runner.fork(inner.driveKept.keep(id, "chat", 0, size, type, 0, bytes));
+      return new Beside({ type }, bytes);
+    });
   };
   // `progress`: the bytes of the part so far, as they come (a part is megabytes: its end alone is too seldom to show).
   // Its bytes beside its answer `{ type, total }`; with `stream`, beside values `{ loaded }` as they come instead (what
   // takes them writes each where it goes, and nothing waits for the whole part).
+  // With `keep`: as `drive.read`'s, a chat's file kept by its size alone (a file sent never changes).
   handlers.stationFilePart = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFilePart" }>;
     const [heard, sink] = partProgress(c, progress);
-    return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, heard, sink), (got) => partAnswer(c, { type: got.type, total: got.total }, got.bytes)),
-    );
+    const read = (pieces: Uint8Array[] | null) =>
+      Effect.flatMap(parse(c.station), (addr) =>
+        inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, heard, sink && pieces ? (piece) => (pieces.push(piece), sink(piece)) : sink),
+      );
+    if (c.keep === null) return Effect.map(read(null), (got) => partAnswer(c, { type: got.type, total: got.total }, got.bytes));
+    const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
+    return Effect.gen(function* () {
+      const held = yield* inner.driveKept.read(id, 0, size, c.offset, c.length);
+      if (held !== null) {
+        if (sink) sink(held.bytes);
+        else heard?.(held.bytes.length);
+        return partAnswer(c, { type: held.type, total: size }, held.bytes);
+      }
+      const pieces: Uint8Array[] = [];
+      const got = yield* read(pieces);
+      if (got.total === size) inner.runner.fork(inner.driveKept.keep(id, "chat", 0, size, got.type, c.offset, sink ? joined(pieces) : got.bytes));
+      return partAnswer(c, { type: got.type, total: got.total }, got.bytes);
+    });
   };
   handlers.stationPoster = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPoster" }>;
@@ -198,6 +228,10 @@ export function install(): void {
     });
   };
   handlers.driveKeptClear = (inner) => Effect.as(inner.driveKept.clear(), null);
+  handlers.cacheFileClear = (inner, call) => {
+    const c = call as Extract<Call, { kind: "cacheFileClear" }>;
+    return Effect.as(inner.driveKept.forget(chatKeptId(c.station, c.key, c.name)), null);
+  };
   handlers.driveUploadPart = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "driveUploadPart" }>;
     return Effect.flatMap(parse(c.station), (addr) =>
@@ -236,11 +270,29 @@ export function install(): void {
       return null;
     });
   };
-  handlers.cacheUsage = (inner) => Effect.map(inner.driveKept.usage(), (drive) => ({ chats: inner.data.cacheUsage(), drive }));
+  // Each chat with the files of its sessions kept (`files`, the most lately read first); those of no chat known apart
+  // (`loose`: its sessions' chats let go, or never held here).
+  handlers.cacheUsage = (inner) =>
+    Effect.gen(function* () {
+      const drive = yield* inner.driveKept.usage();
+      const kept = yield* inner.driveKept.chatFiles();
+      const chats = inner.data.cacheUsage().map((chat) => ({ ...chat, files: [] as unknown[] }));
+      const loose: unknown[] = [];
+      for (const f of kept) {
+        const shown = { key: f.key, name: f.name, size: f.size, bytes: f.bytes, opened: f.used };
+        const chat = chats.find((x) => x.station === f.station && x.sessions.includes(f.key));
+        if (chat !== undefined) chat.files.push(shown);
+        else loose.push({ station: f.station, ...shown });
+      }
+      return { chats, drive, loose };
+    });
+  // A chat's files kept go with what is kept of its messages.
   handlers.cacheClear = (inner, call) => {
     const c = call as Extract<Call, { kind: "cacheClear" }>;
-    return Effect.sync(() => {
+    return Effect.gen(function* () {
+      const sessions = inner.data.cacheUsage().find((x) => x.station === c.station && x.thread === c.thread)?.sessions ?? [];
       inner.data.forgetChat(c.station, c.thread);
+      yield* inner.driveKept.forgetChat(c.station, sessions);
       return null;
     });
   };

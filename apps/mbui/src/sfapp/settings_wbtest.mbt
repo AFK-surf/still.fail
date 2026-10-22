@@ -422,11 +422,12 @@ test "本机缓存: the drives' files kept, counted with the chats', let go when
   let t = settings_tester("kept")
   // (what is kept asked of the core as the page is first built: drawn with its answer)
   t.draw()
-  // under 其他: 文件浏览, 38.5 MB of them; with the chats' 3.1 MB, 41.6 MB in all (KeptFiles.kt)
+  // under 其他: 文件浏览, 38.5 MB of them; with the chats' 18.3 MB and the 900 KB of no chat known, 57.7 MB in all
+  // (KeptFiles.kt)
   assert_true(t.find("其他") is Some(_))
   assert_true(t.find("文件浏览") is Some(_))
   assert_true(t.find("38.5 MB") is Some(_))
-  assert_true(t.find("共 41.6 MB") is Some(_))
+  assert_true(t.find("共 57.7 MB") is Some(_))
   // tapped, asked first; 删除: let go, read again
   t.tap_text("文件浏览")
   sheet_rested(t, "settings-sheet")
@@ -440,5 +441,32 @@ test "本机缓存: the drives' files kept, counted with the chats', let go when
   t.draw()
   assert_true(t.find("38.5 MB") is None)
   assert_true(t.find("0 B") is Some(_))
-  assert_true(t.find("共 3.1 MB") is Some(_))
+  assert_true(t.find("共 19.2 MB") is Some(_))
+}
+
+///|
+test "本机缓存: a chat's files opened, each let go by its bin; those of no chat known apart" {
+  let t = settings_tester("kept")
+  t.draw()
+  // the chat: its messages and its 2 files (KeptFiles.kt chat.both), what is kept of it all
+  assert_true(t.find("消息 2.3 MB · 2 个文件 15.2 MB") is Some(_))
+  assert_true(t.find("17.5 MB") is Some(_))
+  // of no chat known: a row of its own under 其他
+  assert_true(t.find("无法确定所属 chat 的文件") is Some(_))
+  assert_true(t.find("1 个文件") is Some(_))
+  t.tap_text("整理发布清单")
+  t.run_for(@ui.nav_push_ms)
+  // its files: how much, when opened, or only a part of it come
+  assert_true(t.find("已打开的文件") is Some(_))
+  assert_true(t.find("2 个 · 15.2 MB") is Some(_))
+  assert_true(t.find("季度报告.pdf") is Some(_))
+  assert_true(t.find("3.2 MB · 5 分钟前打开") is Some(_))
+  assert_true(t.find("12 MB · 未下载完成") is Some(_))
+  // its bin: let go, read again
+  let (x, y, w, h) = t.query(Button, label="删除「季度报告.pdf」").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  t.draw()
+  assert_true(t.find("季度报告.pdf") is None)
+  assert_true(t.find("1 个 · 12 MB") is Some(_))
 }

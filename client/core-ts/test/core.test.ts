@@ -89,10 +89,15 @@ test("parses_each_call", () => {
   assert.equal((parseCall("station.upload.part", { station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4, progress: true }, hello) as { progress: boolean }).progress, true);
   const upload = parseCall("station.upload", { station: "w/s", name: "a.png" }, hello);
   assert.deepEqual({ ...upload, bytes: [...(upload as { bytes: Uint8Array }).bytes] }, { kind: "stationUpload", station: "w/s", name: "a.png", bytes: [...new TextEncoder().encode("hello")] });
-  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png" }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: false });
-  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", thumb: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: true, progress: false });
-  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", progress: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: true });
-  assert.deepEqual(parseCall("station.file.part", { station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4 }), { kind: "stationFilePart", station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4, progress: false, stream: false });
+  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png" }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: false, keep: null });
+  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", thumb: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: true, progress: false, keep: null });
+  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", progress: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: true, keep: null });
+  assert.deepEqual(parseCall("station.file.part", { station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4 }), { kind: "stationFilePart", station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4, progress: false, stream: false, keep: null });
+  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.pdf", keep: true, size: 9 }), { kind: "stationFile", station: "w/s", key: "k", name: "a.pdf", thumb: false, progress: false, keep: 9 });
+  assert.deepEqual(parseCall("station.file.part", { station: "w/s", key: "k", name: "a.mp4", offset: 0, length: 4, keep: true, size: 9 }), { kind: "stationFilePart", station: "w/s", key: "k", name: "a.mp4", offset: 0, length: 4, progress: false, stream: false, keep: 9 });
+  // (kept only with its size, and never a thumbnail: kept as it is)
+  assert.equal((parseCall("station.file", { station: "w/s", key: "k", name: "a.pdf", keep: true }) as { keep: unknown }).keep, null);
+  assert.equal((parseCall("station.file", { station: "w/s", key: "k", name: "a.png", thumb: true, keep: true, size: 9 }) as { keep: unknown }).keep, null);
   assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: true }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: true, stream: false, keep: null, mtime: null, size: null });
   assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, stream: true }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: false, stream: true, keep: null, mtime: null, size: null });
   assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 0, length: 4, keep: "played", mtime: 9, size: 40 }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 0, length: 4, progress: false, stream: false, keep: "played", mtime: 9, size: 40 });

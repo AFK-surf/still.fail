@@ -129,7 +129,7 @@ test("a video's parts are kept as played, a stream's too; the page of what the d
 
 test("past their bound the least lately read go, never the one just read nor one being written", async () => {
   const host = new FakeHost();
-  const kept = new DriveKept(host, { file: 10, played: 100 });
+  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY });
   const run = <A>(e: Effect.Effect<A>) => Effect.runPromise(e);
   const ids = ["one", "two", "three"].map((n) => keptId(ST, ROOT, n));
   for (const id of ids) {
@@ -151,4 +151,64 @@ test("past their bound the least lately read go, never the one just read nor one
   await run(kept.keep(keptId(ST, ROOT, "film"), "played", 1, 400, "video/mp4", 0, bytesOf(50)));
   assert.notEqual(await run(kept.read(keptId(ST, ROOT, "film"), 1, 400, 0, 50)), null);
   assert.equal([...host.storage.keys()].filter((k) => k.startsWith("drive-kept-")).length, 2, "the bytes of those let go, gone");
+});
+
+test("a chat's file opened is kept with its chat: read again from the device, listed with it, let go one at a time or with it", async () => {
+  const t = await started();
+  const pdf = bytesOf(40, 7);
+  const film = bytesOf(64, 30);
+  stationReplies(t.host, (req) => {
+    const u = new URL(req.url);
+    const name = u.searchParams.get("name");
+    if (u.pathname.endsWith("/sessions/k1/files") && name === "plan.pdf") return new Raw({ status: 200, headers: [["content-type", "application/pdf"]], body: pdf });
+    if (u.pathname.endsWith("/sessions/k1/parts") && name === "film.mp4") {
+      const offset = Number(u.searchParams.get("offset"));
+      const body = film.slice(offset, offset + Number(u.searchParams.get("length")));
+      return new Raw({ status: 200, headers: [["content-type", "video/mp4"], ["stillfail-total", String(film.length)]], body });
+    }
+    return undefined;
+  });
+  const asked = () => t.host.requests.filter((r) => r.url.includes("/sessions/k1/")).length;
+  // the chat its session is in, with what is kept of its messages
+  t.core.inner.data.putThread(ST, { id: 7, title: "季度计划", sessions: [{ session: "k1" }] });
+  t.core.inner.data.putItems("entry", ST, "7", [[1, { text: "看一下附件" }]]);
+  const ui = t.core.connect();
+  const whole = async (id: number) => {
+    call(t.core, ui, id, "station.file", { station: ST, key: "k1", name: "plan.pdf", keep: true, size: 40 });
+    await t.host.settle();
+    return answers(t.host.takeEmitted(), id) as { ok: { type: string }; bytes: Uint8Array };
+  };
+  assert.deepEqual([...(await whole(1)).bytes], [...pdf]);
+  const again = await whole(2);
+  assert.equal(asked(), 1, "read again from the device");
+  assert.deepEqual([again.ok, [...again.bytes]], [{ type: "application/pdf" }, [...pdf]]);
+  // a video's parts, as played
+  const part = async (id: number, offset: number, length: number) => {
+    call(t.core, ui, id, "station.file.part", { station: ST, key: "k1", name: "film.mp4", offset, length, keep: true, size: 64 });
+    await t.host.settle();
+    return answers(t.host.takeEmitted(), id) as { ok: { type: string; total: number }; bytes: Uint8Array };
+  };
+  await part(3, 0, 32);
+  const played = await part(4, 8, 16);
+  assert.equal(asked(), 2);
+  assert.deepEqual([played.ok, [...played.bytes]], [{ type: "video/mp4", total: 64 }, [...bytesOf(16, 38)]]);
+  // listed with its chat (the film a part of it), not counted with the drives'
+  call(t.core, ui, 5, "cache.usage", {});
+  await t.host.settle();
+  const usage = answers(t.host.takeEmitted(), 5)?.ok as { chats: { thread: number; files: { name: string; size: number; bytes: number }[] }[]; drive: number; loose: unknown[] };
+  const chat = usage.chats.find((c) => c.thread === 7)!;
+  assert.deepEqual(chat.files.map((f) => [f.name, f.size, f.bytes]).sort(), [["film.mp4", 64, 32], ["plan.pdf", 40, 40]]);
+  assert.deepEqual([usage.drive, usage.loose], [0, []]);
+  // one let go: read from the station again
+  call(t.core, ui, 6, "cache.file.clear", { station: ST, key: "k1", name: "plan.pdf" });
+  await t.host.settle();
+  await whole(7);
+  assert.equal(asked(), 3);
+  // the chat's let go: its files with it
+  call(t.core, ui, 8, "cache.clear", { station: ST, thread: 7 });
+  await t.host.settle();
+  await part(9, 0, 32);
+  await whole(10);
+  assert.equal(asked(), 5);
+  t.core.close();
 });

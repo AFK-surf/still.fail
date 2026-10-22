@@ -743,7 +743,7 @@ fn Viewer::part_call(self : Viewer) -> String {
 ///|
 /// `length` bytes of it from `offset` (fewer at its end), and its whole size as the station says (in the answer's
 /// `total`). A drive's kept on the device as `keep` (drive_keep: `file` read from its start, `played` a video's or
-/// song's ranges), as its folder lists it.
+/// song's ranges), as its folder lists it; a chat's video or song as played, with its chat (chat_keep).
 fn Viewer::read_part(
   self : Viewer,
   src : Source,
@@ -762,11 +762,38 @@ fn Viewer::read_part(
       drive_keep(p, keep, d.mtime, d.size)
       p
     }
-    None => file_params(self)
+    None => {
+      let p = file_params(self)
+      if keep == "played" {
+        chat_keep(p, self.file.size)
+      }
+      p
+    }
   }
   p["offset"] = Json::number(offset)
   p["length"] = Json::number(length.to_double())
   (src.read_bytes)(self.part_call(), Json::object(p), done)
+}
+
+///|
+/// A chat's file read through the core kept on the device with its chat, and answered from there when it is kept (the
+/// core's drive-kept.ts `chat`), as Android keeps those its viewers open on the phone's disk (ChatFiles.kt toDisk,
+/// onDisk), by its size as its message says (none known: not kept).
+fn chat_keep(p : Map[String, Json], size : Double) -> Unit {
+  if size > 0.0 {
+    p["keep"] = Json::boolean(true)
+    p["size"] = Json::number(size)
+  }
+}
+
+///|
+/// Whether a chat's file read whole is kept with its chat: what Android's viewers read off the disk (a PDF, a video,
+/// a song) and a big one (FilePreview.kt: OnDisk, toDisk past BIG_FILE); others are held in memory only.
+fn Viewer::kept_whole(self : Viewer) -> Bool {
+  match self.shown_kind() {
+    Some(KPdf) | Some(KVideo) | Some(KAudio) => true
+    _ => self.file.size > big_file
+  }
 }
 
 ///|
@@ -789,6 +816,9 @@ fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Json]) 
     None => {
       let p = file_params(self)
       p["progress"] = Json::boolean(true)
+      if self.kept_whole() {
+        chat_keep(p, self.file.size)
+      }
       (src.read_going)(
         "station.file",
         Json::object(p),

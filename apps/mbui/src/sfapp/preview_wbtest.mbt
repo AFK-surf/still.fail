@@ -30,6 +30,8 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   assert_true(t.find("界面草图.png") is Some(_))
   assert_true(t.find("100%") is None)
   let v = viewer.val.unwrap()
+  // a picture read whole, held in memory only (FilePreview.kt: FileData.fetch), not kept on the device
+  assert_true(fix_fetches.iter().all(fn(f) { !flag(Some(f.1), "keep") }))
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
   assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
   t.tap(195.0, 422.0)
@@ -327,6 +329,11 @@ test "a PDF's pages, drawn by the host" {
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("pdf ") }))
   let v = viewer.val.unwrap()
   assert_eq(v.pdf.unwrap().pages, 3)
+  // kept on the device with its chat, by its size, as Android keeps a PDF it opens (FilePreview.kt OnDisk)
+  let asked = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "设计说明.pdf" })
+  assert_true(asked.length() > 0)
+  assert_true(flag(Some(asked[0].1), "keep"))
+  assert_eq(number(Some(asked[0].1), "size"), 2400.0)
 }
 
 ///|
