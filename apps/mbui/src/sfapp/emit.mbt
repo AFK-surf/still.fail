@@ -267,8 +267,8 @@ fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 /// once none plays. They take one turn among what changes the list's height (`turns`, ChatMotion.start): the first
 /// waiting starts as it comes, from then, and it is over once none is left. Not watched, all of it at once.
 /// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
-/// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, the avatar
-/// waiting where it landed meanwhile, as the list does not follow its end while they fly.
+/// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, as the list
+/// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
 fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
@@ -294,6 +294,23 @@ fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
     let t = match e.current {
       Some(t) => t
       None => break
+    }
+    // the avatar on its way while words sent from here land after it would: its way the rest of it until they land,
+    // so it comes down as they do (not there before them, waiting)
+    let t = match t.pose {
+      Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && t.clock.moving() => {
+        let u = t.clock.get()
+        // (its way is linear: where it is says when now is on it)
+        let now = t.clock.ends() - (1.0 - u) * pose_ms(Float, t.from)
+        let way = @motion.Anim::new(u)
+        way.animate(1.0, @motion.tween(sending - now, ease=Linear), start_at=now)
+        e.held_until = sending
+        let t = { ..t, clock: way }
+        e.current = Some(t)
+        c.moving(e.mover, e as &@ui.Moving)
+        t
+      }
+      _ => t
     }
     if t.clock.moving() {
       break
