@@ -161,6 +161,7 @@ fn reset() -> Unit {
   felt_past.clear()
   felt_holds.clear()
   attention.told = false
+  focus_said.val = ""
   picture_pick.val = None
   bar_glyph.val = None
   bar_stations_said.val = ""

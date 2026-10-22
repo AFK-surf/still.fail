@@ -329,3 +329,31 @@ test "left short of its end, a chat opens again where it was left, though the co
   assert_true((readings.get(k).unwrap().top_off - left_off).abs() < 0.5)
   assert_true(!readings.get(k).unwrap().at_end)
 }
+
+///|
+/// The chat the last `client.focus {chat}` of `calls` named, its session and whether its end shows ("" none told).
+fn focus_told(calls : Array[Made]) -> (String, Bool) {
+  let told = named(calls, "client.focus").filter(fn(m) { field(Some(m.params), "chat") is Some(Object(_)) })
+  match told.last() {
+    Some(m) => {
+      let chat = field(Some(m.params), "chat")
+      (text(chat, "session"), field(chat, "end") == Some(Json::boolean(true)))
+    }
+    None => ("", false)
+  }
+}
+
+///|
+test "a chat on top again after another opened over it was left: the core told again it shows, its end seen (Chat.kt's page composed again)" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  assert_eq(focus_told(calls), ("s-c1", true))
+  // another chat opened over it (a link in it), then left
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(focus_told(calls).0, "s-c2")
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  // (the core heard s-c2 left: else it would take no chat for shown, and nothing more in this one for read)
+  assert_eq(focus_told(calls), ("s-c1", true))
+}

@@ -237,7 +237,7 @@ pub fn Client::call(
   on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
 ) -> Int {
   if name == "client.focus" {
-    self.focus = Some(params)
+    self.focus = Some(focus_merged(self.focus, params))
   }
   let id = self.next_id
   self.next_id += 1
@@ -451,6 +451,53 @@ fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// Where the app's attention is after a `client.focus` (StillFailCore.kt `focus`): each field given replaces what was
+/// told before, the others kept (`{visible, focused}` and `{chat}` come in calls of their own); `left` is not kept, it
+/// takes the chat away where it names the one told.
+fn focus_merged(was : Json?, part : Json) -> Json {
+  let next : Map[String, Json] = match was {
+    Some(Object(o)) => o.iter().fold(init={}, fn(m, kv) { m[kv.0] = kv.1; m })
+    _ => {}
+  }
+  match part {
+    Object(p) => {
+      for k, v in p {
+        if k != "left" {
+          next[k] = v
+        }
+      }
+      match (p.get("left"), next.get("chat")) {
+        (Some(left), Some(chat)) if same_chat(chat, left) => next["chat"] = Json::null()
+        _ => ()
+      }
+    }
+    _ => ()
+  }
+  Json::object(next)
+}
+
+///|
+/// Whether two of `client.focus`'s chats are the same one (StillFailCore.kt sameChat): one station, and one thread or
+/// one session.
+fn same_chat(a : Json, b : Json) -> Bool {
+  fn at(o : Json, k : String) -> Json? {
+    match o {
+      Object(m) =>
+        match m.get(k) {
+          Some(Null) | None => None
+          v => v
+        }
+      _ => None
+    }
+  }
+  at(a, "station") == at(b, "station") &&
+  (
+    (at(a, "thread") is Some(_) && at(a, "thread") == at(b, "thread")) ||
+    (at(a, "session") is Some(_) && at(a, "session") == at(b, "session"))
+  )
 }
 
 ///|

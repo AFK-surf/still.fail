@@ -1239,18 +1239,26 @@ fn at_end_asked() -> Bool {
 }
 
 ///|
-/// Tells the core the chat shows, its end seen or not (Chat.kt: `client.focus` with `chat`), as that changes; it
-/// marks what is read and where the unread line goes. Never with Source.readonly.
+/// The chat the core was last told shows (`client.focus {chat}` as said, "" none: left).
+let focus_said : Ref[String] = Ref::new("")
+
+///|
+/// Tells the core the chat shows, its end seen or not (Chat.kt: `client.focus` with `chat`), as that changes (the end,
+/// the thread once known: Chat.kt's LaunchedEffect keys), and again as its page is on top while the core was told of
+/// another chat or of none since (a chat opened over it, then left: Chat.kt's page composed again); it marks what is
+/// read and where the unread line goes. Never with Source.readonly.
 fn tell_focus(src : Source, r : ChatRef, v : ChatView, rd : Reading, seen : Bool) -> Unit {
   if src.read_only {
     return
   }
-  let said = "\{seen}"
-  if rd.told == said {
+  let chat = focus_chat(r, v, Some(seen))
+  let said = chat.stringify()
+  if rd.told == said && (focus_said.val == said || app.nav.top() != Chat(r)) {
     return
   }
   rd.told = said
-  (src.call)("client.focus", { "chat": focus_chat(r, v, Some(seen)) }, fn(_) {  })
+  focus_said.val = said
+  (src.call)("client.focus", { "chat": chat }, fn(_) {  })
 }
 
 ///|
@@ -1312,6 +1320,9 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   match (read_chats.get(k), readings.get(k)) {
     (Some((_, v, _)), Some(rd)) if !src.read_only => {
       (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
+      if focus_said.val == rd.told {
+        focus_said.val = ""
+      }
       match v.thread {
         Some(_) if rd.placed => tell_place(src, r, v, rd)
         _ => ()

@@ -297,3 +297,25 @@ test "a core started anew is told again where the app's attention is (client.foc
   assert_true(sent[0].contains("client.focus"))
   assert_true(sent[0].contains("\"visible\":true"))
 }
+
+///|
+test "a core started anew is told the whole of the app's attention, not only the last call's part" {
+  let sent : Array[String] = []
+  let c = Client::new(fn(m) { sent.push(m) })
+  c.call("client.focus", params={ "visible": true, "focused": true, "workspace": "ws1" }) |> ignore
+  c.call("client.focus", params={ "chat": { "station": "ws1/st", "session": "s1", "thread": 7, "end": true } })
+  |> ignore
+  sent.clear()
+  c.restarted()
+  assert_eq(sent.length(), 1)
+  assert_true(sent[0].contains("\"visible\":true"))
+  assert_true(sent[0].contains("\"focused\":true"))
+  assert_true(sent[0].contains("\"end\":true"))
+  // the chat left: none shown, the rest kept
+  c.call("client.focus", params={ "left": { "station": "ws1/st", "session": "s1", "thread": 7 } }) |> ignore
+  sent.clear()
+  c.restarted()
+  assert_true(sent[0].contains("\"chat\":null"))
+  assert_true(sent[0].contains("\"visible\":true"))
+  assert_true(!sent[0].contains("left"))
+}
