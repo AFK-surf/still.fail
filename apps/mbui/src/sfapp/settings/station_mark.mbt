@@ -117,7 +117,8 @@ fn first_emoji(words : String) -> String? {
 
 ///|
 /// A picture picked as a mark: put up as it is, as a data URL, where it is a PNG, JPEG or WebP small enough to go with
-/// the workspace (46 000 characters); None otherwise (made small first: picture_mark_small).
+/// the workspace (46 000 characters), or a GIF (156 000: it may move); None otherwise (made small first:
+/// picture_mark_small).
 fn picture_mark(bytes : Bytes) -> String? {
   let n = bytes.length()
   let kind = if n > 8 && bytes[0] == b'\x89' && bytes[1] == b'P' && bytes[2] == b'N' && bytes[3] == b'G' {
@@ -126,11 +127,14 @@ fn picture_mark(bytes : Bytes) -> String? {
     "jpeg"
   } else if n > 12 && bytes[8] == b'W' && bytes[9] == b'E' && bytes[10] == b'B' && bytes[11] == b'P' {
     "webp"
+  } else if n > 6 && bytes[0] == b'G' && bytes[1] == b'I' && bytes[2] == b'F' && bytes[3] == b'8' {
+    "gif"
   } else {
     return None
   }
   let url = "data:image/" + kind + ";base64," + base64_of(bytes)
-  if url.length() <= 46000 {
+  // a GIF may move, and may be larger (cloud/src/directory.ts GIF_BYTES)
+  if url.length() <= (if kind == "gif" { 156000 } else { 46000 }) {
     Some(url)
   } else {
     None

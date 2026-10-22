@@ -181,7 +181,13 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     await expect(on, { alice: [ws], bob: [ws] }, "station picture");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.icon, picture);
-    for (const bad of ["rocket", "glyph:Rocket!", "glyph:rocket:", "glyph:rocket:blue:red", "data:image/svg+xml;base64,PHN2Zz4=", `data:image/png;base64,${"A".repeat(60_000)}`]) {
+    // A GIF, which may move, may be larger.
+    const gif = `data:image/gif;base64,R0lGODlh${"A".repeat(100_000)}`;
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: gif })).status, 200);
+    await expect(on, { alice: [ws], bob: [ws] }, "station gif");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.equal(seen.icon, gif);
+    for (const bad of [`data:image/gif;base64,${"A".repeat(170_000)}`, "rocket", "glyph:Rocket!", "glyph:rocket:", "glyph:rocket:blue:red", "data:image/svg+xml;base64,PHN2Zz4=", `data:image/png;base64,${"A".repeat(60_000)}`]) {
       assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: bad })).status, 400, bad.slice(0, 30));
     }
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: "", emoji: "" });

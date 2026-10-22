@@ -110,9 +110,9 @@ export async function readText(request: Request, maximum = 8192): Promise<string
   }
 }
 
-export async function readJson(request: Request): Promise<Record<string, unknown>> {
+export async function readJson(request: Request, maximum?: number): Promise<Record<string, unknown>> {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") throw new Error("content_type");
-  const body = JSON.parse(await readText(request));
+  const body = JSON.parse(await readText(request, maximum));
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("invalid_body");
   return body;
 }

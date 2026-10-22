@@ -86,11 +86,14 @@ export function socketToken(request: Request): { token: string; protocol: string
   return match?.[1] ? { token: match[1], protocol } : null;
 }
 
-async function body(request: Request): Promise<Record<string, unknown>> {
+async function body(request: Request, maximum?: number): Promise<Record<string, unknown>> {
   // Bodiless calls (GET, DELETE, a bare accept or decline) carry no JSON.
   if (request.method === "GET" || request.method === "DELETE" || !request.headers.get("content-type")) return {};
-  return readJson(request);
+  return readJson(request, maximum);
 }
+
+/** How large a change to a workspace or a station may be: it can carry an icon put up (directory.ts GIF_BYTES). */
+const MARK_BODY = 192 * 1024;
 
 export async function api(request: Request, env: Env, url: URL): Promise<Response | null> {
   const path = url.pathname;
@@ -187,7 +190,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (claims instanceof Response) return claims;
   let input: Record<string, unknown>;
   try {
-    input = await body(request);
+    input = await body(request, method === "PATCH" && path.startsWith("/v1/workspaces/") ? MARK_BODY : undefined);
   } catch {
     return reply({ error: "invalid_request" }, 400);
   }

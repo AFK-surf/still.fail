@@ -25,4 +25,6 @@ test "a picture too large as it is: its middle square at 96, a JPEG small enough
   }
   // what is put up as it is: a small PNG, as it is
   assert_eq(picture_mark(b"\x89PNG\r\n\x1a\nxyz"), Some("data:image/png;base64,iVBORw0KGgp4eXo="))
+  // and a GIF, which may move
+  assert_eq(picture_mark(b"GIF89axyz"), Some("data:image/gif;base64,R0lGODlheHl6"))
 }
