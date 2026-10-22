@@ -130,7 +130,7 @@ test("Slack: the channels the bot is in, page by page; a conversation begins wit
   const fake = await FakeSlack.start();
   try {
     const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base) });
-    fake.answer("users.conversations", (seen) =>
+    fake.answer("users.conversations", (seen: { params: Record<string, string> }) =>
       seen.params.cursor === "n2"
         ? { ok: true, channels: [{ id: "C3", name: "ops", is_private: true }], response_metadata: { next_cursor: "" } }
         : { ok: true, channels: [{ id: "C1", name: "cue-dev" }, { id: "" }], response_metadata: { next_cursor: "n2" } },

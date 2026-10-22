@@ -86,7 +86,7 @@ function RelayDialog({ station, thread, onClose }: { station: string; thread: nu
         {shown.map((c) => (
           <div key={c.id} className={css.group}>
             <div className={css.groupHead}><ElsewhereLogo kind={c.kind === "slack" ? "slack" : "feishu"} size={13} />{platform(c)} · {c.team ?? c.name}</div>
-            {c.error && <p className={controlsCss.fieldError}>{t("web-main.relay.unread", { error: c.error })}</p>}
+            {c.error && <p className={css.unread}>{t("web-main.relay.unread", { error: c.error })}</p>}
             {!c.error && c.places.length === 0 && <p className={css.empty}>{q === "" ? t("web-main.relay.noPlaces") : t("web-main.relay.noMatch")}</p>}
             {c.places.map((p) => {
               const on = picked?.connect === c.id && picked.place.id === p.id;

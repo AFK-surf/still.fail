@@ -24,6 +24,8 @@ export const placeNote = style({
   flex: "none", fontSize: vars.textMeta, color: vars.muted,
   selectors: { [`${place}[data-on] &`]: { color: vars.accentText } },
 });
+/** Why a connect's places could not be read, in line with its rows. */
+export const unread = style({ margin: "0", padding: "4px 8px", fontSize: vars.textMeta, color: vars.red });
 export const empty = style({ margin: "0", padding: "4px 8px", fontSize: vars.textMeta, color: vars.muted });
 export const noteField = style({ display: "grid", gap: "6px" });
 export const noteLabel = style({ fontSize: vars.textMeta, color: vars.muted });

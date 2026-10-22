@@ -222,7 +222,7 @@ test("surface: relaying lists the groups the bot is in, topic group or not; begi
     r.fake.answer("GET /open-apis/im/v1/chats", { code: 0, data: { items: [{ chat_id: "oc_t", name: "话题群" }, { chat_id: "oc_g", name: "项目群" }], has_more: false } });
     assert.deepEqual(await r.surface.places(), [{ id: "oc_t", name: "话题群", kind: "topics" }, { id: "oc_g", name: "项目群", kind: "group" }]);
     let n = 0;
-    r.fake.answer("POST /open-apis/im/v1/messages", (seen) => ({ code: 0, data: { message_id: `om_r${++n}`, ...(seen.body.receive_id === "oc_t" && n === 1 ? { thread_id: "omt_9" } : {}) } }));
+    r.fake.answer("POST /open-apis/im/v1/messages", (seen: Json) => ({ code: 0, data: { message_id: `om_r${++n}`, ...(seen.body.receive_id === "oc_t" && n === 1 ? { thread_id: "omt_9" } : {}) } }));
     // A topic group: the message is a topic, answered in it from now on.
     assert.deepEqual(await r.surface.begin("oc_t", "接力到这里"), { thread: { channel: "oc_t", threadTs: "omt_9" }, ts: "om_r1" });
     assert.equal(r.threads.topicRoot("fs", "omt_9"), "om_r1");
