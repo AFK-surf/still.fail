@@ -403,6 +403,11 @@ fn messages(
   follow_newest(c, rd, list, keys, key)
   flight_frame(c, dkey)
   let flight = flight_of(dkey)
+  // (the first of what was sent from here not in the chat yet: a message out of an avatar comes in over it, emit.mbt)
+  em.out_key = match list.search_by(fn(e) { e is Out(_) }) {
+    Some(i) => keys[i]
+    None => ""
+  }
   // half a second after it was put in place (shown), what comes at its end may glide: asked each frame it is drawn
   // (later: nothing shown waits for it)
   let glides = @kit.after(c, "glide/" + key, rd.placed, glide_after_place_ms, later=true)
@@ -509,6 +514,10 @@ fn messages(
               _ => ()
             }
             let ri = c.box(w=Fill(1.0), pl=row_side(c), pr=row_side(c), pt=top, fn() {
+              // (where a message out of an avatar comes in over it: emit.mbt)
+              if keys[i] == em.out_key {
+                @motion.measure(c, c.box(fn() {  }), "emit-out/" + ek + "/" + keys[i])
+              }
               entry_view(c, src, here, e, list)
             })
             flying.val = None
@@ -533,6 +542,10 @@ fn messages(
                   screen=true,
                   drive=flight_up(flight_p(c, f)),
                 )
+              // what was sent from here not in the chat yet, pushed down by a message coming in over it out of an
+              // avatar (where the avatar landed): it glides there, as an agent's activity does
+              None if e is Out(_) && em.current is Some(_) =>
+                @motion.layout(c, ri, key + "\u{1}" + keys[i], spec=@motion.spring(stiffness=300.0, threshold=1.0), listed=false)
               _ => ()
             }
             // what is new to the list while it is followed rises in (Chat.kt rise: 14 up and from nothing, 320 ms

@@ -76,6 +76,9 @@ priv struct Emits {
   /// a message's coming in held for words sent from here on their way (emit_step): till their declared landing (-1:
   /// none)
   mut held_until : Double
+  /// the first row of what was sent from here not in the chat yet (the outbox's, under the messages), as last built
+  /// ("" none): a message coming in comes in over it
+  mut out_key : String
 }
 
 ///|
@@ -99,6 +102,7 @@ fn emits_of(key : String) -> Emits {
         trace: (0.0, 0.0, 0.0),
         mover: @ui.Mover::new(),
         held_until: -1.0,
+        out_key: "",
       }
       emits[key] = e
       e
@@ -381,7 +385,9 @@ fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> 
     None => return None
   }
   // before the message is in the list: where its avatar will be, the first activity's place (the message comes in
-  // there, the activities move down), 3 down its row as a message's avatar sits; as it comes in, where it was aimed
+  // there, the activities move down), or over what was sent from here not in the chat yet (the outbox's rows, under
+  // the messages: it comes in over them), 3 down its row as a message's avatar sits; as it comes in, where it was
+  // aimed
   let known = match @motion.measured_rect(c, "emit-landing/" + key + "/" + seq_s(t.seq)) {
     Some(r) => Some((r.0, r.1 + 3.0))
     None => None
@@ -399,6 +405,18 @@ fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> 
           Some(f) if f.1 <= r.1 => ()
           _ => first = Some((r.0, r.1))
         }
+      None => ()
+    }
+  }
+  if e.out_key != "" {
+    match @motion.measured_rect(c, "emit-out/" + key + "/" + e.out_key) {
+      Some(r) => {
+        let y = r.1 + 3.0
+        match first {
+          Some(f) if f.1 <= y => ()
+          _ => first = Some((avatar.0, y))
+        }
+      }
       None => ()
     }
   }

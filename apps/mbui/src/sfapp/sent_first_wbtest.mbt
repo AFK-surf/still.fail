@@ -99,16 +99,36 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   let sent_at = t.time()
   tap_send(t)
   t.draw()
-  match send_flight.val {
-    Some(f) => assert_true(f.placed)
+  let landing = match send_flight.val {
+    Some(f) => {
+      assert_true(f.placed)
+      f.way.ends()
+    }
     None => fail("nothing flies")
   }
-  // the avatar there before the words have landed: the answer waits for them, the list not moved under them
+  // the avatar there before the words have landed: the answer waits for them, the list not moved under them; the
+  // avatar where the answer will come in, over the words sent (not yet the chat's: under the messages)
   t.run_for(sent_at + Float.ms() - 200.0 + 60.0 - t.time())
   assert_true(t.find("收到：「看一下列表」") is None)
-  t.run_for(sent_at + flight_ms + 100.0 - t.time())
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  let agents = match em.current {
+    Some(turn) => [turn.agent]
+    None => fail("no answer comes out")
+  }
+  match (emit_flight(t.ctx(), "ws1/st1\u{1}s-c1", em, agents), t.drawn_of("再看一下按钮")) {
+    (Some((_, ay, _, _)), Some((_, by))) => assert_true(ay < by)
+    _ => fail("the avatar or the words not drawn")
+  }
+  // the answer comes in as they land, over them: they are pushed down from where they were, not moved at once
+  t.run_for(landing - 20.0 - t.time())
+  assert_true(t.find("收到：「看一下列表」") is None)
+  let was = t.drawn_of("再看一下按钮")
+  t.run_for(landing - t.time())
   assert_true(send_flight.val is None)
-  t.run_for(Spit.ms())
   assert_true(t.find("收到：「看一下列表」") is Some(_))
+  match (was, t.drawn_of("再看一下按钮")) {
+    (Some((_, y0)), Some((_, y1))) => assert_true((y1 - y0).abs() < 1.0)
+    _ => fail("the words not drawn")
+  }
   emit_restore()
 }
