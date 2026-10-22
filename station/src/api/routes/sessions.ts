@@ -246,9 +246,10 @@ export const routes = (tools: Tools): Route[] => {
     },
     { method: "GET", pattern: /^\/threads$/, handle: (r) => read(r, "threads", threadsOf(r)) },
     {
-      // GET /threads/:id/entries is the chats' (routes/chats.ts); any other action is none, once the thread is there.
+      // GET /threads/:id/entries is the chats' (routes/chats.ts), …/relay the hub's (routes/hub.ts: where it can be
+      // relayed); any other action is none, once the thread is there.
       method: "GET",
-      pattern: /^\/*threads\/+([^/]+)(?:\/+(?!entries(?:\/|$))([^/]+)(?:\/.*)?|\/*)$/,
+      pattern: /^\/*threads\/+([^/]+)(?:\/+(?!(?:entries|relay)(?:\/|$))([^/]+)(?:\/.*)?|\/*)$/,
       handle: async (r, [rawId, rawAction]) => {
         const id = segment(rawId!);
         const answer = await read(r, "thread", { id, viewer: r.viewer, lang: r.lang });
