@@ -212,11 +212,18 @@ of a folder within one station by the disk's own clone.
   `drive.mkdir {root, path}`, `drive.rename {root, from, to}`,
   `drive.remove {root, path}`; each change reads its folders again before it
   answers.
-- Calls: `drive.read {station, root, path, offset, length, progress?, stream?}` →
-  `{type, total, mtime}`, the part as the answer's bytes (docs/client-core.md
-  Protocol; with `progress`, values `{loaded}`, the part's bytes so far, as it
-  comes; with `stream`, its bytes beside those values instead, as
-  `station.file.part`'s); `drive.upload.part {station, root,
+- Calls: `drive.read {station, root, path, offset, length, progress?, stream?,
+  keep?, mtime?, size?}` → `{type, total, mtime}`, the part as the answer's bytes
+  (docs/client-core.md Protocol; with `progress`, values `{loaded}`, the part's
+  bytes so far, as it comes; with `stream`, its bytes beside those values
+  instead, as `station.file.part`'s). With `keep` (`file`: a file read whole or
+  from its start; `played`: a video or song by its ranges) and the file's
+  `mtime` and `size` as its folder says them, what is read is kept on the device
+  and what is kept is answered without asking the station (client/core-ts
+  src/drive-kept.ts, as Android's DriveCache.kt): a file changed since is read
+  anew; past 512 MB of files or 1.5 GB of what was played, the least lately
+  read go. `drive.kept.clear {}` lets all of it go; `cache.usage` counts it
+  (`drive`). `drive.upload.part {station, root,
   path, id, offset, total, replace?}` with the part as its bytes → `{have, entry}` (a gap answers
   with `have`, the next part starts there; the last reads its folder again);
   `drive.refresh {station, root, path}`; `drive.place {station, root, path, at,

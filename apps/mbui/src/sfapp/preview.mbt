@@ -742,21 +742,26 @@ fn Viewer::part_call(self : Viewer) -> String {
 
 ///|
 /// `length` bytes of it from `offset` (fewer at its end), and its whole size as the station says (in the answer's
-/// `total`).
+/// `total`). A drive's kept on the device as `keep` (drive_keep: `file` read from its start, `played` a video's or
+/// song's ranges), as its folder lists it.
 fn Viewer::read_part(
   self : Viewer,
   src : Source,
   offset : Double,
   length : Int,
+  keep : String,
   done : (Result[(Json, Bytes), Json]) -> Unit,
 ) -> Unit {
   let p = match self.drive {
-    Some(d) =>
-      {
+    Some(d) => {
+      let p : Map[String, Json] = {
         "station": Json::string(d.station),
         "root": Json::string(d.root),
         "path": Json::string(d.path),
       }
+      drive_keep(p, keep, d.mtime, d.size)
+      p
+    }
     None => file_params(self)
   }
   p["offset"] = Json::number(offset)
@@ -814,7 +819,7 @@ fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Json]) 
       let parts : Array[Bytes] = []
       let got : Ref[Int] = { val: 0 }
       fn next() {
-        self.read_part(src, got.val.to_double(), drive_part, fn(r) {
+        self.read_part(src, got.val.to_double(), drive_part, "file", fn(r) {
           match r {
             Ok((answer, bytes)) => {
               let total = match field(Some(answer), "total") {
@@ -851,7 +856,7 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   // (each asked once a viewer, by its file: nothing a build changes)
   if v.kind is None && v.sniffed is None && !v.sniffing {
     v.sniffing = true
-    v.read_part(src, 0.0, 8192, fn(r) {
+    v.read_part(src, 0.0, 8192, "file", fn(r) {
       v.sniffing = false
       v.sniffed = Some(
         match r {
@@ -867,7 +872,7 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     Some(KVideo) | Some(KAudio) => {
       if v.video is None {
         let n = @ui.NativeView::video(v.mime, fn(offset, length, answer) {
-          v.read_part(src, offset, length, fn(r) {
+          v.read_part(src, offset, length, "played", fn(r) {
             match r {
               Ok((answer_json, bytes)) => {
                 let total = match field(Some(answer_json), "total") {
