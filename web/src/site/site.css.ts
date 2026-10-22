@@ -258,63 +258,56 @@ export const scene = style({ position: "relative" });
 export const sceneStick = style({
   position: "sticky", top: "64px", height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", padding: "16px 0 28px",
 });
-export const sceneBar = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" });
-export const places = style({ display: "flex", gap: "6px", margin: "0", padding: "0", listStyle: "none" });
-export const place = style({
-  display: "grid", padding: "8px 14px", borderRadius: vars.rField, color: DIM, fontSize: vars.textUi, transition: "background .25s, color .25s",
-  selectors: { "&[data-at]": { background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}`, color: "var(--s-muted)" } },
-  "@media": { [NARROW]: { selectors: { '&[data-place="desktop"]': { display: "none" } } } },
+/** What the step in view says, above the room: one at a time, the others faded out in its place. */
+export const stepWords = style({ display: "grid", justifyItems: "center", textAlign: "center", padding: "8px 24px 0" });
+export const stepSay = style({
+  gridArea: "1 / 1", display: "grid", gap: "4px", opacity: 0, transform: "translateY(6px)", transition: `opacity .3s, transform .3s ${vars.easeOut}`,
+  selectors: { "&[data-at]": { opacity: 1, transform: "none" } },
 });
-globalStyle(`${place} > b`, { fontSize: vars.textTitle, fontWeight: 600, color: "var(--s-muted)" });
-globalStyle(`${place}[data-at] > b`, { color: FG });
-globalStyle(`${place} > span`, { "@media": { [NARROW]: { display: "none" } } });
-export const sameMachine = style({ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: vars.textUi, color: "var(--s-muted)" });
-export const onlineDot = style({ width: "8px", height: "8px", borderRadius: "50%", background: vars.online });
-/** Where the frame stands, centred in what is left of the stage. */
-export const sceneRoom = style({ flex: "1", minHeight: "0", display: "grid", placeItems: "center", marginTop: "20px" });
-/** The frame: its size and corners set as the scene is scrolled (SameMachine.tsx); its shadow outside, its clip inside. */
-export const sceneFrame = style({ position: "relative", boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), 0 0 0 1px ${ink(12)}` });
-export const sceneClip = style({ position: "absolute", inset: "0", background: vars.canvas });
-export const sceneLayer = style({ position: "absolute", inset: "0" });
-export const sceneDemo = style({});
-globalStyle(`${sceneLayer} > ${sceneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
-
-// Slack and Feishu as they look, in their own colours in either theme.
-export const slack = style({
-  display: "grid", gridTemplateColumns: "210px minmax(0, 1fr)", height: "100%", background: "#FFFFFF", color: "#1D1C1D", fontSize: vars.textBody, textAlign: "left",
-  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)" } },
+globalStyle(`${stepSay} > b`, { fontSize: vars.textHeading, fontWeight: 700, color: FG });
+globalStyle(`${stepSay} > span`, { fontSize: vars.textTitle, color: "var(--s-muted)" });
+/** Where the devices and the window are placed (OneComputer.tsx). */
+export const oneRoom = style({ position: "relative", flex: "1", minHeight: "0", marginTop: "12px" });
+export const oneWires = style({ position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" });
+const flowing = keyframes({ to: { strokeDashoffset: -26 } });
+globalStyle(`${oneWires} path`, {
+  fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 60%, transparent)`, strokeWidth: 1.5, strokeDasharray: "5 8",
+  animation: `${flowing} 1.4s linear infinite`, "@media": { [STILL]: { animation: "none" } },
 });
-export const slackSide = style({ display: "flex", flexDirection: "column", gap: "2px", padding: "16px 10px", background: "#3F0E40", color: "#CFC3CF", "@media": { [NARROW]: { display: "none" } } });
-globalStyle(`${slackSide} > span`, { padding: "4px 10px", borderRadius: "6px" }); // own corner: Slack's channel rows
-globalStyle(`${slackSide} > span[data-on]`, { background: "#1164A3", color: "#FFFFFF" });
-export const slackTeam = style({ padding: "4px 10px 14px", color: "#FFFFFF", fontSize: vars.textTitle });
-export const slackMain = style({ display: "flex", flexDirection: "column", minHeight: "0" });
-export const slackHead = style({ display: "flex", alignItems: "baseline", gap: "8px", padding: "14px 20px", borderBottom: "1px solid #E8E8E8" });
-globalStyle(`${slackHead} > b`, { fontSize: vars.textTitle });
-globalStyle(`${slackHead} > span`, { color: "#616061", fontSize: vars.textUi });
-export const slackList = style({ flex: "1", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column", gap: "18px", padding: "18px 20px" });
-export const slackMessage = style({ display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", gap: "10px" });
-globalStyle(`${slackMessage} img`, { width: "36px", height: "36px", borderRadius: "8px", background: "#F4EDE4" }); // own corner: Slack's square faces
-globalStyle(`${slackMessage} p`, { margin: "2px 0 0", lineHeight: "1.5" });
-globalStyle(`${slackMessage} code`, { padding: "0 3px", border: "1px solid #DDDDDD", borderRadius: "3px", background: "#F6F6F6", color: "#C01343", fontFamily: vars.fontMono, fontSize: vars.textMeta });
-export const slackWho = style({ display: "flex", alignItems: "baseline", gap: "6px" });
-globalStyle(`${slackWho} > time`, { color: "#616061", fontSize: vars.textMeta });
-export const slackApp = style({ padding: "0 4px", borderRadius: "3px", background: "#E8E8E8", color: "#616061", fontSize: vars.textCaption, fontWeight: 700 });
-export const slackMention = style({ padding: "0 2px", borderRadius: "3px", background: "#E8F5FA", color: "#1264A3" });
-export const slackCompose = style({ margin: "0 20px 20px", padding: "12px 14px", border: "1px solid #BBBBBB", borderRadius: "8px", color: "#868686" }); // own corner: Slack's composer
-
-export const feishu = style({ display: "flex", flexDirection: "column", height: "100%", background: "#F5F6F7", color: "#1F2329", fontSize: vars.textBody, textAlign: "left" });
-export const feishuHead = style({ display: "flex", alignItems: "baseline", gap: "8px", padding: "14px 20px", background: "#FFFFFF", borderBottom: "1px solid #E5E6EB" });
-globalStyle(`${feishuHead} > b`, { fontSize: vars.textTitle });
-globalStyle(`${feishuHead} > span`, { color: "#8F959E", fontSize: vars.textUi });
-export const feishuList = style({ flex: "1", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column", gap: "16px", padding: "18px 20px" });
-export const feishuMessage = style({ display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", gap: "10px" });
-globalStyle(`${feishuMessage} img`, { width: "36px", height: "36px", borderRadius: "50%", background: "#FFFFFF" });
-globalStyle(`${feishuMessage} code`, { fontFamily: vars.fontMono, fontSize: vars.textMeta });
-export const feishuWho = style({ display: "flex", alignItems: "center", gap: "6px", color: "#646A73", fontSize: vars.textMeta });
-export const feishuBot = style({ padding: "0 4px", borderRadius: "4px", background: "#E1EAFF", color: "#3370FF", fontSize: vars.textCaption });
-export const feishuBubble = style({ display: "inline-block", maxWidth: "36em", margin: "4px 0 0", padding: "9px 12px", borderRadius: "8px", background: "#FFFFFF", lineHeight: "1.55" }); // own corner: Feishu's bubbles
-export const feishuCompose = style({ margin: "0 20px 20px", padding: "12px 14px", borderRadius: "8px", background: "#FFFFFF", color: "#8F959E", boxShadow: "inset 0 0 0 1px #E5E6EB" }); // own corner: Feishu's composer
+/** A device: its mark in its colour, its name and what it is; its words fade where it is too small for them. */
+export const oneChip = style({
+  position: "absolute", zIndex: 2, display: "flex", alignItems: "center", gap: "10px", padding: "0 10px", overflow: "hidden",
+  borderRadius: vars.rField, background: "var(--s-node)", boxShadow: `0 8px 24px -12px rgba(0, 0, 0, .25), inset 0 0 0 1px ${ink(12)}`,
+});
+globalStyle(`${oneChip} > i`, { flex: "none", display: "grid", placeItems: "center", width: "30px", height: "30px", borderRadius: "8px", color: "#FFFFFF" }); // own corner: a device's mark
+globalStyle(`${oneChip} > span`, { display: "grid", minWidth: "0", opacity: "var(--words, 1)", whiteSpace: "nowrap" });
+globalStyle(`${oneChip} b`, { fontSize: vars.textBody, fontWeight: 600, color: FG });
+globalStyle(`${oneChip} small`, { fontSize: vars.textMeta, color: DIM });
+export const oneWindow = style({
+  position: "absolute", zIndex: 1, overflow: "hidden", borderRadius: vars.rCard, background: "var(--s-node)", transformOrigin: "center", containerType: "size",
+  boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), inset 0 0 0 1px ${ink(12)}`,
+});
+/** What is on all the devices (the window is its container): a sidebar the devices land in, and a panel each for conversations, files, subscriptions and
+ *  tasks; as wide as a phone, the devices along the top and the panels one under another. */
+export const all = style({
+  display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gridTemplateRows: "48px minmax(0, 1fr)", height: "100%",
+  "@container": { "(max-width: 600px)": { gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: "48px 52px minmax(0, 1fr)" } },
+});
+export const allHead = style({ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: "8px", padding: "14px 18px", borderBottom: `1px solid ${LINE}` });
+globalStyle(`${allHead} > b`, { fontSize: vars.textTitle, color: FG });
+globalStyle(`${allHead} > span`, { fontSize: vars.textUi, color: DIM });
+export const allSide = style({ borderRight: `1px solid ${LINE}`, background: CARD, "@container": { "(max-width: 600px)": { borderRight: "0", borderBottom: `1px solid ${LINE}` } } });
+export const allMain = style({
+  display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", alignContent: "start", gap: "14px", padding: "18px", overflow: "hidden",
+  "@container": { "(max-width: 600px)": { gridTemplateColumns: "minmax(0, 1fr)", padding: "14px" } },
+});
+export const allPanel = style({ display: "grid", alignContent: "start", gap: "2px", padding: "12px", borderRadius: vars.rField, boxShadow: `inset 0 0 0 1px ${LINE}` });
+export const allTitle = style({ marginBottom: "6px", fontSize: vars.textUi, fontWeight: 600, color: DIM });
+export const allRow = style({ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: vars.textBody, color: FG });
+export const allText = style({ flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const allNote = style({ fontSize: vars.textMeta, color: DIM, whiteSpace: "nowrap" });
+export const allOn = style({ display: "inline-flex", alignItems: "center", gap: "6px", padding: "2px 8px", borderRadius: "999px", background: ink(5), fontSize: vars.textMeta, color: "var(--s-muted)", whiteSpace: "nowrap" });
+globalStyle(`${allOn} > i`, { width: "7px", height: "7px", borderRadius: "50%" });
 
 // ---- The second idea: the distance (Distance.tsx) ----
 

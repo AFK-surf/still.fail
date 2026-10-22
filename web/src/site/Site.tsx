@@ -2,12 +2,12 @@
 // (main.tsx), where the real app runs in its demo box (demo/). Nothing here reads the window while it renders.
 //
 // Two ideas of it are built side by side for now, the page showing one (?v=1 or ?v=2: data-v on the root, set before
-// the first paint by site/index.html): the same machine wherever it is opened (SameMachine.tsx), and the distance it
+// the first paint by site/index.html): your devices joined into one computer (OneComputer.tsx), and the distance it
 // is used across (Distance.tsx). The one chosen stays.
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
-import { SameMachine } from "./SameMachine.tsx";
+import { OneComputer } from "./OneComputer.tsx";
 import { Distance } from "./Distance.tsx";
 
 declare const __SITE_BETA__: boolean;
@@ -114,7 +114,7 @@ export function Site({ mountDemo, demo }: DemoProps) {
         </div>
       </nav>
 
-      <div className={css.idea} data-idea="1"><SameMachine {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
+      <div className={css.idea} data-idea="1"><OneComputer {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
       <div className={css.idea} data-idea="2"><Distance {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
 
       <section id="start" className={css.section}>
