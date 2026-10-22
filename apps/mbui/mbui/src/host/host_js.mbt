@@ -68,6 +68,11 @@ extern "js" fn js_present(
 ) -> Unit =
   #|(buf, n, r, g, b) => globalThis.__mbhost.present(buf, n, r, g, b)
 
+///|
+extern "js" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit =
+  #|(s, x, y, w, h, c) => { if (globalThis.__mbhost && globalThis.__mbhost.textMenu) globalThis.__mbhost.textMenu(s, x, y, w, h, c) }
+
+///|
 extern "js" fn js_set_ime(
   active : Bool,
   x : Double,

@@ -641,6 +641,11 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
   if (!v.imeActive && was) [v resignFirstResponder];
 }
 
+// no floating text menu of the system's here (the field's own keys and shortcuts do what it would)
+void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
+  (void)shown, (void)x, (void)y, (void)w, (void)h, (void)can;
+}
+
 void mb_host_clipboard_set(moonbit_string_t s) {
   UIPasteboard.generalPasteboard.string = mb_ns_from_string(s);
 }

@@ -121,6 +121,11 @@ impl @hostapi.Host for Native with set_ime(_, active, x, y, w, h, text, sel_star
 }
 
 ///|
+impl @hostapi.Host for Native with text_menu(_, shown, x, y, w, h, can) {
+  ffi_text_menu(if shown { 1 } else { 0 }, x, y, w, h, can)
+}
+
+///|
 impl @hostapi.Host for Native with clipboard_set(_, s) {
   clipboard_set(s)
 }

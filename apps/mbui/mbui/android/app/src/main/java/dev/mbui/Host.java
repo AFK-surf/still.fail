@@ -204,6 +204,16 @@ final class Host {
         });
     }
 
+    /**
+     * The system's floating text menu over a field's words (@hostapi.text_menu: ActionMode.TYPE_FLOATING), at the
+     * rectangle given in dp, offering what {@code can} says (1 cut, 2 copy, 4 paste, 8 select all); or put away.
+     */
+    static void textMenu(boolean shown, double x, double y, double w, double h, int can) {
+        main.post(() -> {
+            if (view != null) view.textMenu(shown, x, y, w, h, can);
+        });
+    }
+
     static void clipboardSet(String s) {
         main.post(() -> {
             ClipboardManager cm = (ClipboardManager)
