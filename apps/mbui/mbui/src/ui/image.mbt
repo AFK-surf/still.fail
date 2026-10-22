@@ -259,6 +259,16 @@ pub fn Ctx::image(
 }
 
 ///|
+/// Whether `src` is decoded, ready to show `px` pixels on its long side (its decode started here where it is not): a
+/// picture put in another's place keeps that one until this is, with no frame of nothing between.
+pub fn Ctx::image_ready(self : Ctx, src : String, px : Double) -> Bool {
+  match self.image_for(src, px) {
+    Some(e) => e.state == 1
+    None => false
+  }
+}
+
+///|
 /// Its size in the layout: proportional when one side is free.
 fn image_leaf_size(
   n : Node,

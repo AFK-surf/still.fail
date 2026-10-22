@@ -92,7 +92,12 @@ priv struct Reading {
   mut told : String
   /// where the reader is: the message at the top of what shows (-1 none), and whether at the chat's end
   mut top_seq : Double
+  /// how far that message's top is below the list's (points: above it, less than 0)
+  mut top_off : Double
   mut at_end : Bool
+  /// where the core was last told the chat is (chat.place: "" not yet), and the screen's scale it was laid out at
+  mut told_place : String
+  mut scale : Double
   /// the jump button: shown since when (or hidden since when), and which
   mut jump : Bool
   mut jump_at : Double
@@ -163,7 +168,10 @@ fn reading_of(key : String) -> Reading {
         around_asked: -1.0,
         told: "",
         top_seq: -1.0,
+        top_off: 0.0,
         at_end: true,
+        told_place: "",
+        scale: 1.0,
         jump: false,
         ask: false,
         jump_at: -1.0e9,
@@ -582,11 +590,12 @@ fn messages(
       if line >= 0 {
         c.list_scroll_to(key, line, offset=-(status_top() + chat_bar_h + 14.0 + 85.0))
       } else if at >= 0 {
-        c.list_scroll_to(
-          key,
-          at,
-          offset=-(status_top() + chat_bar_h + 14.0 + v.at_offset.unwrap_or(0.0)),
-        )
+        // where it was left: that message's top as far below the list's as it was (atOffset, the screen's pixels);
+        // else its top under the bar
+        c.list_scroll_to(key, at, offset=match v.at_offset {
+          Some(px) => -(px / c.scale)
+          None => -(status_top() + chat_bar_h + 14.0)
+        })
       }
     }
     // opened at a message (a notification's), once the list is in place (the build after it was put there, in the same
@@ -741,6 +750,25 @@ fn messages(
         }
       }
       _ => -1.0
+    }
+    // that message's top, below the list's (the first row in view scrolled past its top, the rows over it)
+    rd.top_off = match (info, c.list_place(key)) {
+      (Some(i), Some((first, past, _))) if i.first >= 0 => {
+        let mut y = -past
+        let mut k = first
+        while k < n && !(list[k] is Said(_)) {
+          y = y + c.list_row_height(key, k).unwrap_or(0.0)
+          k = k + 1
+        }
+        y
+      }
+      _ => 0.0
+    }
+    // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
+    // from memory never leaves the page)
+    rd.scale = c.scale
+    if rd.placed && !c.list_moving(key) {
+      c.after_build("place", fn() { tell_place(src, r, v, rd) })
     }
     // (told once the frame's builds are over, as the last says it: a build let go of, the frame built again, read the
     // list from before its layout)
@@ -1210,6 +1238,25 @@ fn focus_chat(r : ChatRef, v : ChatView, end : Bool?) -> Json {
 }
 
 ///|
+/// Where the chat is, told the core (`chat.place`, Chat.kt leave): the message at the top and how far its top is below
+/// the list's (in the screen's pixels, as Android's app tells it), none at its end; told again only where that moved.
+fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit {
+  guard v.thread is Some(th) && !src.read_only else { return }
+  let scale = rd.scale
+  let place : Map[String, Json] = { "station": Json::string(r.station), "thread": Json::number(th) }
+  if !rd.at_end && rd.top_seq >= 0.0 {
+    place["seq"] = Json::number(rd.top_seq)
+    place["offset"] = Json::number((rd.top_off * scale).round())
+  }
+  let said = Json::object(place).stringify()
+  if said == rd.told_place {
+    return
+  }
+  rd.told_place = said
+  (src.call)("chat.place", Json::object(place), fn(_) {  })
+}
+
+///|
 /// The chat left (its page gone): the core told it shows no more, and where it was left (`chat.place`: the message
 /// at the top, none at its end). Never with Source.readonly.
 fn chat_left(src : Source, r : ChatRef) -> Unit {
@@ -1218,16 +1265,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
     (Some((_, v, _)), Some(rd)) if !src.read_only => {
       (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
       match v.thread {
-        Some(th) if rd.placed => {
-          let place : Map[String, Json] = {
-            "station": Json::string(r.station),
-            "thread": Json::number(th),
-          }
-          if !rd.at_end && rd.top_seq >= 0.0 {
-            place["seq"] = Json::number(rd.top_seq)
-          }
-          (src.call)("chat.place", Json::object(place), fn(_) {  })
-        }
+        Some(_) if rd.placed => tell_place(src, r, v, rd)
         _ => ()
       }
     }

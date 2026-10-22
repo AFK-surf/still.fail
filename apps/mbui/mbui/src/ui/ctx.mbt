@@ -632,6 +632,7 @@ pub fn Ctx::box(
   notch_fillet? : Double = 0.0,
   aspect? : Double = 0.0,
   keep? : Bool = false,
+  shadow_out? : Bool = false,
   flow? : Bool = false,
   line_gap? : Double = -1.0,
   label? : String = "",
@@ -666,6 +667,7 @@ pub fn Ctx::box(
   n.rtl = self.direction == Rtl
   n.aspect = aspect
   n.keep = keep
+  n.shadow_out = shadow_out
   n.flow = flow
   n.line_gap = line_gap
   n.label = label

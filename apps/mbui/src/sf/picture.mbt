@@ -310,6 +310,7 @@ fn draw_drawable(
   d : Drawable,
   w : Double,
   tint : Int64?,
+  held? : String,
 ) -> Int {
   let h = w * d.h / d.w
   let pw = px_of(c, w)
@@ -323,7 +324,21 @@ fn draw_drawable(
     made[k] = true
     @ui.add_image(k, png(pw, ph, raster(d, pw, ph, tint)))
   }
-  c.image(k, w=Px(w), h=Px(h), fit=FitFill, bg=0L, fade=false)
+  // a picture of one state after another (`held`: what it is, the stations' glyph breathing): the last one ready
+  // shown while the next is decoded, never a frame of nothing between them
+  let shown = match held {
+    Some(what) => {
+      let px = imax(pw, ph).to_double()
+      if c.image_ready(k, px) {
+        held_shown[what] = k
+        k
+      } else {
+        held_shown.get(what).unwrap_or(k)
+      }
+    }
+    None => k
+  }
+  c.image(shown, w=Px(w), h=Px(h), fit=FitFill, bg=0L, fade=false)
 }
 
 ///|

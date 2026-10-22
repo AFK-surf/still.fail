@@ -228,9 +228,12 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
       }
       None => ()
     }
-    // what came from outside, posted again at its place: the frame after it takes it (messages.mbt)
+    // what came from outside, posted again at its place: the frame after it takes it (messages.mbt); before its first
+    // frame, posted already (Tester::new's `run`)
     if is_message_line(line) {
-      replay_message(self.fake, line)
+      if framed {
+        replay_message(self.fake, line)
+      }
       continue
     }
     guard line.find("DRAWHASH ") is Some(i) else { continue }

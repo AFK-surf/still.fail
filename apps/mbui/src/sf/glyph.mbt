@@ -196,7 +196,7 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
   }
   layers.push(glyph_layer(body.to_string(), faded(tint, whole), 0L, 0.0, even_odd=true))
   let key = "glyph-state/\{g.online}/\{g.dim}/\{g.failing}/\{g.connecting}/\{g.asleep}/\{blinking > 0}/\{eye}/\{pulse}/\{red}/\{tint}"
-  draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None)
+  draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None, held="glyph/\{size}/\{tint}")
 }
 
 ///|

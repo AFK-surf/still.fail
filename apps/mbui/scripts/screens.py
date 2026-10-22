@@ -5,6 +5,7 @@ frames it drew (MBUI_DRAW_LOG=1: their DRAWHASH lines), kept in screens/text-mac
   # MODE FRAME TIME WIDTH HEIGHT SCALE HASH STABLE      (the DRAWHASH line of the frame its picture is of)
   {"m":…}                                              (its TEXTREC lines, as the run said them)
   VIEWSAID {…}                                         (what the host said of its views, where it said it)
+  MSG {…}                                              (what came from outside: the system's bars, where it came)
   DRAWHASH FRAME TIME …                                (each frame it drew, in its place among them: when it drew
                                                        them, what a screen's Tester draws its frames at)
 
@@ -47,6 +48,11 @@ def keep_log(mode, log):
         # what the host said of its views (a player's state, a video's frames), in its place among the frames
         i = line.find("VIEWSAID ")
         if i >= 0:
+            rec.append(line[i:].rstrip("\n"))
+            continue
+        # what came from outside (the system's bars round an edge-to-edge window), in its place among the frames
+        i = line.find("MSG {")
+        if i >= 0 and "DRAWDUMP " not in line:
             rec.append(line[i:].rstrip("\n"))
     if not rec:
         sys.exit(f"screens.py: no TEXTREC lines in {log} (MBUI_TEXT_RECORD=1?)")

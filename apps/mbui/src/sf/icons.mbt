@@ -6,11 +6,16 @@
 let made : Map[String, Bool] = {}
 
 ///|
+/// What a picture that changes as it moves (draw_drawable's `held`) last showed ready, by what it is.
+let held_shown : Map[String, String] = {}
+
+///|
 /// Every Tester starts as the app does (mbui's on_reset): the images made here gone with its own, nothing waited on or
 /// copied, the theme the first frame's. (markdown.mbt's `parsed` stays: what a text parses to is the text's alone.)
 fn init {
   @ui.on_reset(fn() {
     made.clear()
+    held_shown.clear()
     copied_at.clear()
     dark_set.val = None
     current.val = { dark: false, narrow: false, p: wide_light, t: wide_type }
