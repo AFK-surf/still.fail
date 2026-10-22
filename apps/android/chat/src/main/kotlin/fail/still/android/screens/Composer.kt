@@ -182,6 +182,8 @@ class Pending(val id: Long, val name: String, val size: Long, val preview: Image
     /** How much of it the station has, as it goes up in parts. */
     var sent by mutableStateOf<Long?>(null)
     var error by mutableStateOf<String?>(null)
+    /** Failed going up: sends it up again, from what was picked (null: it cannot be, as one too big). */
+    var retry by mutableStateOf<(() -> Unit)?>(null)
     /** A file of a station's named by its path (StationFiles.kt), or a link shared in (share/): it goes as words, nothing goes up. */
     val named get() = ref?.mode == "path" || link != null
 }
@@ -222,7 +224,9 @@ class Draft {
     val uploading get() = files.any { it.done == null && it.error == null && !it.named }
     /** Nothing can be sent (its station is offline, or the chat archived). */
     var locked by mutableStateOf(false)
-    val ready get() = (text.isNotBlank() || files.any { it.done != null || it.named } || quotes.isNotEmpty()) && !uploading && !starting && !locked
+    /** A file that did not go up: it is sent again or taken out first, never left out of the message unsaid. */
+    val failed get() = files.any { it.error != null && !it.named }
+    val ready get() = (text.isNotBlank() || files.any { it.done != null || it.named } || quotes.isNotEmpty()) && !uploading && !failed && !starting && !locked
     /** The text box has the focus (the menu of chats shows only then). */
     var focused by mutableStateOf(false)
     /** Where an `@` was put away (its menu closed by picking a chat): not offered again. */
@@ -664,6 +668,12 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
     val p = Pending(System.nanoTime(), picked.name, picked.size, picked.preview, picked.bytes.takeIf { picked.preview != null && it.isNotEmpty() }, picked.width, picked.height, pasted)
     draft.files += p
     if (picked.size > MAX_FILE || (picked.bytes.isEmpty() && picked.open == null && picked.size > 0)) { p.error = t("android-chat.file.tooBig"); return }
+    sendUp(draft, station, picked, scope, p)
+}
+
+/** `p` going up, from what was picked; failed, it can go again from there (`Pending.retry`). */
+private fun AppState.sendUp(draft: Draft, station: String, picked: Picked, scope: CoroutineScope, p: Pending) {
+    p.error = null; p.sent = null; p.retry = null
     scope.launch {
         try {
             p.done = api(station).upload(picked.name, picked.size, picked.source(), picked.width?.toLong(), picked.height?.toLong()) { p.sent = it }
@@ -674,6 +684,7 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
         } catch (_: java.io.IOException) {
             p.error = t("android-chat.file.uploadFailed")
         }
+        if (p.error != null) p.retry = { sendUp(draft, station, picked, scope, p) }
     }
 }
 
@@ -732,7 +743,16 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                 Box(Modifier.draftPicture(f, station).sendTile(host, f.id).size(56.dp).clip(InComposerFiles).background(C.chip)) {
                     Image(picture, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
-                        if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else Spinner(color = Color.White)
+                        val again = f.retry
+                        // Failed: tapped, it goes up again.
+                        if (f.error != null && again != null) Column(
+                            Modifier.fillMaxSize().clickable(onClick = again).semantics { contentDescription = t("web-main.composer.retryUpload") },
+                            verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            IconIn(Icons.Retry, 16.dp, Color.White)
+                            Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp)
+                        }
+                        else if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else Spinner(color = Color.White)
                     }
                 }
                 // Only where it is drawn: Compose would take a touch target this small out to 48dp, most of the tile,
@@ -754,7 +774,7 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
             } else if (f.ref != null && station != null) Box(Modifier.sendTile(host, f.id)) {
                 RefCard(f, onRemove = remove, shape = InComposerFiles) { openRefSheet(app, draft, f, station) }
             } else Box(Modifier.sendTile(host, f.id)) {
-                FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposerFiles)
+                FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, onRetry = f.retry.takeIf { f.error != null }, shape = InComposerFiles)
             }
         }
     }

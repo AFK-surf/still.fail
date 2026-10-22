@@ -6,6 +6,8 @@ package fail.still.android.screens
 import fail.still.android.ui.Spinner
 import fail.still.android.data.DriveCache
 import fail.still.android.data.t
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
@@ -556,7 +558,7 @@ private fun ChatVideo(station: String, key: String, file: Attachment, onOpen: ()
 @Composable
 internal fun FileCard(
     name: String, size: Long, note: String? = null, busy: Boolean = false, onRemove: (() -> Unit)? = null,
-    shape: Shape = Smooth(8.dp), onClick: (() -> Unit)? = null,
+    shape: Shape = Smooth(8.dp), onClick: (() -> Unit)? = null, onRetry: (() -> Unit)? = null,
 ) {
     Row(
         // The wide screen's neutral ground (web toast.css.ts → fileCard: --neutral-bg), a cool grey, not the page's warm chip.
@@ -569,6 +571,11 @@ internal fun FileCard(
             // Digits all one width: a percentage counting up keeps its place (uploadingText).
             Text(note ?: fileSize(size), fontSize = 11.sp, lineHeight = 16.sp, color = if (note != null && !busy) C.red else C.muted, style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"))
         }
+        if (onRetry != null) Box(
+            Modifier.size(22.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.06f)).clickable(onClick = onRetry)
+                .semantics { contentDescription = t("web-main.composer.retryUpload") },
+            contentAlignment = Alignment.Center,
+        ) { IconIn(Icons.Retry, 12.dp, C.muted) }
         if (onRemove != null) Box(Modifier.size(22.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.06f)).clickable(onClick = onRemove), contentAlignment = Alignment.Center) {
             IconIn(Icons.Close, 12.dp, C.muted)
         }
