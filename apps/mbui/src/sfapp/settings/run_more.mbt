@@ -39,17 +39,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       _ => tr("android-chat.run.title")
     }
     if list != "" {
-      c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-        if nav_back(c, tr("android-chat.run.title")) {
-          run_list.remove(of)
-        }
-        c.box(w=Fill(1.0), align=ACenter, fn() {
-          c.text(title, size=17.0, weight=600, color=t.p.text, wrap=false, line=22.0) |> ignore
-        })
-        |> ignore
-        c.box(w=Px(60.0), fn() {  }) |> ignore
-      })
-      |> ignore
+      nav_bar(c, core, tr("android-chat.run.title"), title, on_back=fn() { run_list.remove(of) })
       c.on_back(fn() { run_list.remove(of) })
     } else {
       nav_bar(c, core, tr("common.back"), title)
