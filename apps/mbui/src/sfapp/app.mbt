@@ -211,6 +211,7 @@ fn reset() -> Unit {
   readings.clear()
   kept_places.clear()
   left_pages.clear()
+  page_topics_reset()
   playing.clear()
   play_srcs.clear()
   screens_open.clear()
@@ -397,6 +398,8 @@ fn pages_left(src : Source) -> Unit {
       Screen(at) => screen_left(src, at.station, at.screen)
       _ => ()
     }
+    // then what else it read, as no page still there reads it
+    page_topics_left(src, p)
   }
   left_pages.clear()
 }
@@ -404,6 +407,9 @@ fn pages_left(src : Source) -> Unit {
 ///|
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
+  // (what each page reads kept by it, let go of with it: page_topics.mbt)
+  page_raw.val = Some(src)
+  let src = page_tracked(src)
   fix_ctx.val = Some(c)
   appearance(src)
   faces(src)
@@ -611,6 +617,8 @@ fn page_view(
   invited : Bool,
   page : Page,
 ) -> Unit {
+  // what it reads its own (rows built later as the list is laid out too: they read through this)
+  let src = page_src(src, page)
   // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side)
   let root = app.nav.depth() == 1
   let e = if root { place_switch(c).get() } else { 1.0 }
