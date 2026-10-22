@@ -971,7 +971,8 @@ fn new_connect_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     }
     let step = text(view, "step")
     let back = fn() { go("back") }
-    if step != "team" {
+    // the step before, unless the core says back closes the flow (Connects.kt: BackHandler(view.back != "close"))
+    if text(view, "back") != "close" {
       c.on_back(back)
     }
     // back: the step before, or (on the first) the page closed

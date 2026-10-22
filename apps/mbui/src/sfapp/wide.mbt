@@ -126,33 +126,36 @@ fn wide_frame(
   let main_w = dmax(0.0, c.width - rail_w - side)
   // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
   land(src, w)
-  c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    c.box(dir=Row, w=Px(rail_w + side), h=Fill(1.0), bg=t.p.sidebar, clip=true, fn() {
-      rail(c, src, w, all)
-      if side > 0.0 {
-        c.box(w=Px(side + 8.0), h=Fill(1.0), fn() { sidebar(c, src, w, side + 8.0) }) |> ignore
-      }
-    })
-    |> ignore
-    c.box(w=Px(main_w), h=Fill(1.0), clip=true, fn() {
-      c.sized(main_w, c.height, fn() {
-        // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not)
-        c.selectable(color=@sf.alpha(t.p.blue, 0.28), fn() {
-          if gated {
-            c.box(w=Px(main_w), h=Px(c.height), bg=t.p.bg, fn() { lock_gate(c, src, w) |> ignore }) |> ignore
-          } else {
-            c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
-            |> ignore
-          }
+  // what the page or the sidebar takes back for (a sheet, a menu, a step of a page's) goes back before the stack does
+  let took = c.took_back(fn() {
+    c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+      c.box(dir=Row, w=Px(rail_w + side), h=Fill(1.0), bg=t.p.sidebar, clip=true, fn() {
+        rail(c, src, w, all)
+        if side > 0.0 {
+          c.box(w=Px(side + 8.0), h=Fill(1.0), fn() { sidebar(c, src, w, side + 8.0) }) |> ignore
+        }
+      })
+      |> ignore
+      c.box(w=Px(main_w), h=Fill(1.0), clip=true, fn() {
+        c.sized(main_w, c.height, fn() {
+          // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not)
+          c.selectable(color=@sf.alpha(t.p.blue, 0.28), fn() {
+            if gated {
+              c.box(w=Px(main_w), h=Px(c.height), bg=t.p.bg, fn() { lock_gate(c, src, w) |> ignore }) |> ignore
+            } else {
+              c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
+              |> ignore
+            }
+          })
         })
       })
-    })
-    |> ignore
+      |> ignore
   })
   |> ignore
+  })
   sidebar_edge(c, side)
   // back (⌘[, a mouse's back button) a page of the stack, where there is one
-  if app.nav.depth() > 1 && !app.menu && !sheet_open() {
+  if app.nav.depth() > 1 && !took && !app.menu && !sheet_open() {
     c.take_back(fn() { app.nav.pop() |> ignore })
   }
 }

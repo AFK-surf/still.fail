@@ -706,3 +706,56 @@ test "at its end, rows that come: the core told the end is not in view while the
   }
   fix_clock.val = None
 }
+
+///|
+/// ＋ tapped: its sheet up over the chat (the chat a page pushed over Home).
+fn plus_opened() -> @ui.Tester raise {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  assert_eq(app.nav.depth(), 2)
+  t.tap(10.0 + 8.0 + 18.0, 844.0 - 10.0 - 8.0 - 18.0)
+  assert_true(cui.attach)
+  t.run_for(@kit.sheet_rest("attach-sheet") - t.time())
+  t
+}
+
+///|
+test "back with ＋'s sheet up puts the sheet away, the chat stays; back again leaves the chat" {
+  // what was reported: the sheet's back taken by the pages' stack, the chat left under it (Sheet.kt SheetHost's
+  // BackHandler is asked before the pages')
+  let t = plus_opened()
+  t.back()
+  assert_true(!cui.attach)
+  assert_eq(app.nav.depth(), 2)
+  t.run_for(@kit.sheet_rest("attach-sheet") - t.time())
+  assert_true(t.find("整理发布清单") is Some(_))
+  t.back()
+  t.run_for(@ui.nav_rest() - t.time())
+  assert_eq(app.nav.depth(), 1)
+}
+
+///|
+test "the system's back gesture with ＋'s sheet up puts the sheet away, the chat not moved by it" {
+  let t = plus_opened()
+  t.back_gesture(200.0, false)
+  // called off: the sheet still up, the chat where it was
+  assert_true(cui.attach)
+  assert_eq(app.nav.depth(), 2)
+  t.back_gesture(200.0, true)
+  assert_true(!cui.attach)
+  assert_eq(app.nav.depth(), 2)
+  t.run_for(@kit.sheet_rest("attach-sheet") - t.time())
+  assert_true(t.find("整理发布清单") is Some(_))
+}
+
+///|
+test "a swipe from the left edge with ＋'s sheet up does not take the chat away" {
+  let t = plus_opened()
+  t.touch(0, 2.0, 300.0)
+  for i in 1..=10 {
+    t.touch(1, 2.0 + 30.0 * i.to_double(), 300.0)
+  }
+  t.touch(2, 302.0, 300.0)
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(app.nav.depth(), 2)
+}
