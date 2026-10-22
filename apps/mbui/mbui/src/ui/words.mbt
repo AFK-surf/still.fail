@@ -327,6 +327,7 @@ pub fn Ctx::take_press(self : Ctx) -> Unit {
   self.drag_scroll = 0
   self.dragging = false
   self.editor_drag = false
+  self.editor_tap = 0
   if self.edge != 2 {
     self.edge = 0
   }
