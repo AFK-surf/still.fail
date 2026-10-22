@@ -15,6 +15,8 @@ let timed : Map[Int, Bool] = {}
 ///|
 /// The host's reports set going, before the app's first frame.
 fn reports_start() -> Unit {
+  // what a call in flight as the core failed says (StillFailCore.restartedText)
+  @core.restarted_text.val = @sfapp.tr("android-misc.core.restarted")
   if host_tell("hello", "", "", 0, 0) == 0 {
     return
   }

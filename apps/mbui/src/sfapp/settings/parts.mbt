@@ -1431,3 +1431,78 @@ fn mono(
 /// What it holds in the middle of where it is, across.
 // kept across runs: a value (no field of it changes)
 let centre_column : @ui.Style = @ui.style(w=Full, align=ACenter)
+
+///|
+/// The core's done or waiting lead at the start of `s` (ui/StatusText.kt doneLead, waitLead; present.ts: 做完了,
+/// 做完了：…; 在等：…, 等待中; Done, Done: …; Waiting, Waiting: …): whether it is done, and how long the lead is.
+fn status_lead(s : String) -> (Bool, Int)? {
+  for w in ["做完了", "已完成"] {
+    if s == w {
+      return Some((true, w.length()))
+    }
+    if s.has_prefix(w + "：") {
+      return Some((true, w.length() + 1))
+    }
+  }
+  if s == "Done" {
+    return Some((true, 4))
+  }
+  if s.has_prefix("Done: ") {
+    return Some((true, 6))
+  }
+  for w in ["在等：", "等待："] {
+    if s.has_prefix(w) {
+      return Some((false, w.length()))
+    }
+  }
+  if s == "等待中" {
+    return Some((false, s.length()))
+  }
+  if s == "Waiting" {
+    return Some((false, 7))
+  }
+  if s.has_prefix("Waiting: ") {
+    return Some((false, 9))
+  }
+  None
+}
+
+///|
+/// A state in words, its done or waiting lead as a check or the wait mark before what follows it (ui/StatusText.kt).
+fn status_text(c : @ui.Ctx, s : String, style~ : @ui.TextStyle) -> Unit {
+  let t = @sf.theme()
+  match status_lead(s) {
+    Some((done, n)) => {
+      let reason = s.view(start_offset=n).to_owned()
+      c.box(style=status_line, fn() {
+        @sf.icon(c, if done { "check" } else { "wait" }, size=status_icon, color=t.p.muted) |> ignore
+        if reason != "" {
+          c.text(" " + reason, style~) |> ignore
+        }
+      })
+      |> ignore
+    }
+    None => c.text(s, style~) |> ignore
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let status_line : @ui.Style = @ui.style(row=true, align=ACenter)
+
+///|
+/// A state's words, as small as where they stand has them: 11, 12, 13 (Connects.kt), muted, on one line.
+// kept across runs: a value (no field of it changes)
+let status_xs2 : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let status_xs : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let status_sm : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+
+///|
+/// A state's lead as an icon, as tall as the words (StatusText.kt: 14).
+let status_icon : Double = 14.0

@@ -46,6 +46,9 @@ pub struct Client {
   /// Told of each subscription made (its id, its topic's name, None) and of its first message (its value, or None
   /// when it could not be read): Client::time_topics
   priv mut timing : ((Int, String, Json?, Bool) -> Unit)?
+  /// where the app's attention is, as told last (`client.focus`): told again to a core started anew
+  /// (StillFailCore.kt `focus`), which would else take the app for out of view
+  priv mut focus : Json?
 }
 
 ///|
@@ -68,6 +71,7 @@ pub fn Client::new(
     fatal: None,
     start_wait: fn(_) { 0 },
     end_wait: fn(_) {  },
+    focus: None,
     call_waits: {},
     sub_waits: {},
     echo_waits: {},
@@ -232,6 +236,9 @@ pub fn Client::call(
   bytes? : Bytes? = None,
   on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
 ) -> Int {
+  if name == "client.focus" {
+    self.focus = Some(params)
+  }
   let id = self.next_id
   self.next_id += 1
   self.calls[id] = on_done
@@ -362,9 +369,10 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       for id in subs {
         self.end_sub_wait(id)
       }
+      // (as StillFailCore.kt fails them: `core_restarted`, in the app's words; the reason is the core's own, on_failed)
       let err = Json::object({
-        "code": Json::string("fatal"),
-        "message": Json::string(self.fatal.unwrap()),
+        "code": Json::string("core_restarted"),
+        "message": Json::string(restarted_text.val),
       })
       for c in calls {
         (c.1)(Err(err))
@@ -455,6 +463,10 @@ pub fn Client::restarted(self : Client) -> Unit {
   for s in subs {
     self.ask(s)
   }
+  match self.focus {
+    Some(p) => self.call("client.focus", params=p) |> ignore
+    None => ()
+  }
 }
 
 ///|
@@ -466,6 +478,7 @@ pub fn Client::reset(self : Client) -> Unit {
   self.calls.clear()
   self.progress.clear()
   self.echo_waits.clear()
+  self.focus = None
   self.next_id = 1
   self.beside = None
   self.version = 0
@@ -496,3 +509,9 @@ fn Client::draft_came(self : Client, sub : Int) -> Unit {
     self.end_call_wait(id)
   }
 }
+
+///|
+/// What a call in flight as the core failed says (StillFailCore.restartedText: the app's 核心已重启，请重试), set by the
+/// app as it starts.
+// kept across runs: the app's words, set once as it starts
+pub let restarted_text : Ref[String] = { val: "The core restarted; try again" }

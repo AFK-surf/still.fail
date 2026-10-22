@@ -78,7 +78,7 @@ fn connect_row(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Unit {
       )
       c.box(dir=Row, gap=5.0, align=ACenter, fn() {
         presence_dot(c, text(cv, "presence"))
-        c.text(text(cv, "statusText"), size=12.0, color=t.p.muted, wrap=false) |> ignore
+        status_text(c, text(cv, "statusText"), style=status_xs)
       })
       |> ignore
     }) {
@@ -240,7 +240,7 @@ fn connect_page(c : @ui.Ctx, core : Core, here : Here, station : String, id : St
           }
         }, sub=fn() {
           presence_dot(c, text(cv, "presence"))
-          c.text(text(cv, "statusText"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
+          status_text(c, text(cv, "statusText"), style=status_xs2)
         })
         let state = text(link, "state")
         let blocks : Array[() -> Unit] = [
@@ -427,7 +427,7 @@ fn connect_page(c : @ui.Ctx, core : Core, here : Here, station : String, id : St
                 let xv = Some(x)
                 if list_row(c, key="connect-session/" + text(xv, "key"), fn() {
                     row_title(c, text(xv, "titleText"))
-                    c.text(text(xv, "statusText"), size=13.0, color=t.p.muted, wrap=false) |> ignore
+                    status_text(c, text(xv, "statusText"), style=status_sm)
                   }) {
                   (core.open_chat)(station, text(xv, "key"), text(xv, "titleText"))
                 }
