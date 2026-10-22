@@ -129,13 +129,10 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
 interface Bar {
   title: string; thread: ChatThread | null; archivable: boolean; people: ChatView["people"]; stationUpdate: ChatView["stationUpdate"];
   agents: { key: string; maker: ChatAgent["session"]["maker"]; runtime: ChatAgent["session"]["runtime"]; badge: ChatAgent["badge"]; badgeText: ChatAgent["session"]["badgeText"]; agentText: string }[];
-  /** How many letters its agents and other chats' wrote each other (not in the chat: their own sheet). */
-  letters: number;
 }
 const barOf = (view: ChatView): Bar => ({
   title: view.title, thread: view.thread ?? null, archivable: !!view.archivable, people: view.people, stationUpdate: view.stationUpdate,
   agents: view.agents.map((a) => ({ key: a.session.key, maker: a.session.maker, runtime: a.session.runtime, badge: a.badge, badgeText: a.session.badgeText, agentText: a.session.agentText })),
-  letters: view.letters ?? 0,
 });
 // Its thread compared by what the bar does with it (its id): the thread's own times change with every message.
 const sameBar = (a: Bar | undefined, b: Bar | undefined) => a === b || (!!a && !!b && a.thread?.id === b.thread?.id
@@ -165,12 +162,6 @@ const ChatBar = memo(function ChatBar({ station: address, session }: { station: 
         {/* Nothing left in it (the core's `archivable`): archived with one tap. */}
         {bar.archivable && thread && <ArchiveButton station={address} session={session} />}
         {jobs && jobs.jobs.length > 0 && <JobsButton station={address} session={session} alarm={jobs.alarm} />}
-        {bar.letters > 0 && thread && bar.agents[0] && (
-          <button type="button" className={barsCss.mNavButton} aria-label={t("web-main.letters.open", { n: bar.letters })}
-            onClick={() => openLetters(app, address, thread.id, bar.agents[0]!.key)}>
-            <Chats size={18} />
-          </button>
-        )}
       </>}>
       {bar.agents.length === 0 && <StationChip station={address} />}
       <StationUpdate station={address} notice={bar.stationUpdate} />
@@ -537,6 +528,14 @@ function JobsButton({ station, session, alarm }: { station: string; session: str
   );
 }
 
+/** How many letters the chat's agents and other chats' wrote each other, and opening them; none when there are none. */
+function lettersOf(app: MobileApp, here: Here): { n: number; open(): void } | undefined {
+  const n = here.view.letters ?? 0;
+  const thread = here.view.thread?.id;
+  const keeper = here.view.agents[0]?.session.key;
+  return n > 0 && thread != null && keeper ? { n, open: () => openLetters(app, here.station, thread, keeper) } : undefined;
+}
+
 /** What the chat's agents and other chats' wrote each other, not in the chat (Letters.tsx), in a sheet. */
 function openLetters(app: MobileApp, station: string, thread: number, keeper: string) {
   app.sheet({ height: 0.8, draggable: true, content: () => (
@@ -556,6 +555,7 @@ function agentCard(app: MobileApp, here: Here, key: string) {
     history: () => openHistory(app, here.station, here.key, key),
     jobs: () => openJobs(app, here),
     station: () => openStationSheet(app, here.station),
+    letters: lettersOf(app, here),
   });
 }
 
@@ -713,7 +713,7 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
  */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
   const publish = shownPublish(here.view);
-  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.feishuUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + (relayable(here.view) ? 1 : 0) + 2) * 41
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.letters ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.feishuUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + (relayable(here.view) ? 1 : 0) + 2) * 41
     + (publish ? ((publish.may ? 1 : 0) + publish.links.length) * 41 + 10 : 0);
   // As tall as what it shows: its name and line, its agents, its rows.
   app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
@@ -728,6 +728,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const pinFailed = useDoingFailed("chat.pin", { station: here.station, session: here.key });
   const open = !view.archived && !view.offline;
   const publish = shownPublish(view);
+  const letters = lettersOf(app, { ...here, view });
   const rename = () => ask(app, {
     title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
     run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
@@ -777,6 +778,12 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
               <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
                 .catch((error) => app.toast(t(view.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
+              </InfoRow>
+            )}
+            {letters && (
+              <InfoRow onClick={letters.open}>
+                <Chats size={16} /><span className={partsCss.mGrow}>{t("web-main.letters.title")}</span>
+                <span className={partsCss.mMuted}>{t("web-main.letters.count", { n: letters.n })}</span><ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}
             <InfoRow onClick={() => { app.sheet(null); chatPage.find(draftKeyOf(here.station, here.key)); }}>

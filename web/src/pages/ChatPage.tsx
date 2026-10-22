@@ -346,11 +346,9 @@ function ChatScreen({ session: chatSession }: { session: string }) {
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
-          {/* What its agents and other chats' wrote each other, not in the chat: in a tab beside it (Letters.tsx). */}
-          {chat.letters && thread !== null && <IconButton label={t("web-main.letters.open", { n: chat.letters })} icon={Chats} onMouseDown={keepFocus} onClick={toggleLetters} />}
           {relayable && <IconButton label={t("web-main.relay.action")} icon={ArrowUpRight} onClick={relay} />}
           {drive && <IconButton label={t("web-pages.chat.files")} icon={Folder} onMouseDown={keepFocus} onClick={toggleFiles} />}
-          {chat.thread && <ChatInfo station={station.address} session={chatSession} />}
+          {chat.thread && <ChatInfo station={station.address} session={chatSession} onLetters={toggleLetters} />}
           {slackUrl && (
             <Tip label={t("web-pages.chat.openInSlack")}>
               <a className={pageCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
@@ -619,7 +617,9 @@ function slackConnect(chat: ChatView) {
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
-function ChatInfo({ station, session }: { station: string; session: string }) {
+function ChatInfo({ station, session, onLetters }: { station: string; session: string;
+  /** What its agents and other chats' wrote each other: their tab beside the chat (Letters.tsx). */
+  onLetters(): void }) {
   const [open, setOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   // Its thread, while publishing it or asking before one of its links is revoked (the info closes meanwhile).
@@ -636,7 +636,8 @@ function ChatInfo({ station, session }: { station: string; session: string }) {
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${controlsCss.panelCard} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
           <ChatInfoBody station={station} session={session} onShare={() => { setOpen(false); setSharing(true); }}
-            onPublish={(thread) => { setOpen(false); setPublishing(thread); }} onRevoke={(thread, id) => { setOpen(false); setRevoking({ thread, id }); }} />
+            onPublish={(thread) => { setOpen(false); setPublishing(thread); }} onRevoke={(thread, id) => { setOpen(false); setRevoking({ thread, id }); }}
+            onLetters={() => { setOpen(false); onLetters(); }} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -654,7 +655,7 @@ function ShareOf({ station, session, onClose }: { station: string; session: stri
 }
 
 /** What the chat's info says, as the chat is now: read only while it shows. */
-function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void }) {
+function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetters }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void; onLetters(): void }) {
   const chat = useChat(station, { session }).value;
   const link = useLink();
   if (!chat?.thread) return null;
@@ -682,8 +683,10 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { stat
           {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
         </ul>
       )}
-      {(share || publish) && (
+      {(share || publish || chat.letters) && (
         <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>
+          {/* What its agents and other chats' wrote each other, not in the chat: their tab beside it. */}
+          {chat.letters && <PanelRow icon={<Chats size={14} />} label={t("web-main.letters.title")} end={t("web-main.letters.count", { n: chat.letters })} onClick={onLetters} />}
           {share && <ShareRow share={share} onOpen={onShare} />}
           {publish && <PublishRow publish={publish} onOpen={() => onPublish(thread.id)} />}
           {publish && <PublishedLinks links={publish.links} onRevoke={(id) => onRevoke(thread.id, id)} />}

@@ -23,13 +23,15 @@ import * as css from "./AgentSheet.css.ts";
 /** Whose card: the chat's page (its address) and the agent's session. */
 export interface AgentAt { station: string; chat: string; key: string }
 /** Where its rows lead from the page that opened it; `station`, the card of the station it runs on, in its place. */
-export interface AgentGo { history(): void; jobs(): void; station?: () => void }
+export interface AgentGo { history(): void; jobs(): void; station?: () => void;
+  /** What its chat's agents and other chats' wrote each other (Letters.tsx), when there is any: how many, and opening them. */
+  letters?: { n: number; open(): void } | undefined }
 
 const working = (agent: ChatAgent) => agent.status === "running" || agent.status === "queued";
 
 /** As tall as what it shows: its head, its lines, its figures and its rows (their room kept while they are read). */
 function tall(agent: ChatAgent, go: AgentGo): number {
-  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0);
+  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0) + (go.letters ? 1 : 0);
   // What is wrong, a line each but a quota's (its account's windows say that).
   const notes = agent.attention.filter((a) => a.kind !== "quota").length;
   const px = 25 + 44 + (agent.turns.length > 0 ? 75 + 76 : 0) + (notes > 0 ? 10 + notes * 20 : 0) + 12 + rows * 41 + 28;
@@ -102,6 +104,13 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
               <InfoRow onClick={leave(go.jobs)}>
                 <span className={css.mAgentRowLabel}>{t("web-mobile.agent.jobs")}</span>
                 <span className={css.mAgentRowValue}>{card?.jobs ?? t("web-mobile.agent.jobsIdle")}</span>
+                <ChevronRight size={14} className={partsCss.mSubtle} />
+              </InfoRow>
+            )}
+            {go.letters && (
+              <InfoRow onClick={leave(go.letters.open)}>
+                <span className={css.mAgentRowLabel}>{t("web-main.letters.title")}</span>
+                <span className={css.mAgentRowValue}>{t("web-main.letters.count", { n: go.letters.n })}</span>
                 <ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}
