@@ -90,7 +90,6 @@ fn entry_view(c : @ui.Ctx, src : Source, here : Here, e : Entry, list : Array[En
       |> ignore
     Line => unread_line(c)
     Said(m) => said(c, src, here, m, list)
-    Letters(m) => letters_line(c, src, here, m)
     Sent(s) => sent_elsewhere(c, src, here, s)
     Out(o) => outgoing(c, src, here, o)
     Working(a) => activity(c, src, here, a)
@@ -475,7 +474,7 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
 }
 
 ///|
-/// A notice's pill (Chat.kt SystemNotice, LettersLine): as wide as its words, 14 and 6 in, round at its ends.
+/// A notice's pill (Chat.kt SystemNotice): as wide as its words, 14 and 6 in, round at its ends.
 fn notice_pill(c : @ui.Ctx, id : Int, ground : Int64, open : Bool, body : () -> Unit) -> Unit {
   c.box(max_w=c.width - 28.0, padx=14.0, pady=6.0, radius=if open { 16.0 } else { 18.0 }, bg=ground, id~, body)
   |> ignore
@@ -488,7 +487,7 @@ fn pill_words(c : @ui.Ctx, words : String, color : Int64) -> Unit {
 }
 
 ///|
-/// A notice's ground, what it says not a failure: the words' colour faint (Chat.kt SystemNotice, LettersLine).
+/// A notice's ground, what it says not a failure: the words' colour faint (Chat.kt SystemNotice).
 fn notice_ground(dark : Bool) -> Int64 {
   if dark {
     0xFFFFFF0DL
@@ -501,34 +500,6 @@ fn notice_ground(dark : Bool) -> Int64 {
 /// A notice across the chat, in its middle, its time 4 under it once opened.
 // kept across runs: a value (no field of it changes)
 let notice_across : @ui.Style = @ui.style(w=Full, gap=S1, align=ACenter)
-
-///|
-/// What other chats' agents wrote to this one, a run of it with nothing else said between (Chat.kt LettersLine, the
-/// core's `letters` on its first message): a pill across the chat as still.fail's notices are, saying which chat's
-/// agent wrote to which and how many, cut short where it does not fit. A tap shows the run whole under it, or folds it
-/// again (`chat.letters`).
-fn letters_line(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
-  guard m.letters is Some(letters) else { return }
-  let id = c.id("letters/" + m.ts)
-  if c.clicked(id) {
-    act(
-      src,
-      tr(if letters.open { "web-main.chat.letters.close" } else { "web-main.chat.letters.open" }),
-      "",
-      "chat.letters",
-      {
-        "station": Json::string(here.station),
-        "thread": Json::number(m.thread),
-        "seq": Json::number(m.seq),
-        "open": Json::boolean(!letters.open),
-      },
-    )
-  }
-  c.box(style=notice_across, fn() {
-    notice_pill(c, id, notice_ground(@sf.theme().dark), false, fn() { pill_words(c, letters.line, ink().text) })
-  })
-  |> ignore
-}
 
 ///|
 /// A word at a notice's end that acts on it (Chat.kt InstallAction, ReportAction): " · " fainter, then the word, semibold

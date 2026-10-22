@@ -417,6 +417,7 @@ fn chat_info_fit(chat : Json?, view : ChatView?) -> Double {
   }
   let one = fn(b : Bool) { if b { 1 } else { 0 } }
   let acts = one(field(chat, "pinned") is Some(True | False)) +
+    one(number(chat, "letters") > 0.0) +
     one(text(chat, "slackUrl") != "") +
     one(text(chat, "feishuUrl") != "") +
     one(field(chat, "xshare") is Some(Object(_))) +
@@ -432,7 +433,8 @@ fn chat_info_fit(chat : Json?, view : ChatView?) -> Double {
 ///|
 /// The chat itself, from "…" (ChatInfo.kt openChatInfo): its name (with a way to change it) over who started it, how
 /// many take part and when it was last written in; its agents, each where it stands (a tap opens its card); then what
-/// can be done with it: pin it, copy its link, its sharing, archive it. As tall as what it shows.
+/// can be done with it: what its agents and other chats' wrote each other, pin it, copy its link, its sharing, archive
+/// it. As tall as what it shows.
 fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   ignore(w)
   let t = @sf.theme()
@@ -567,8 +569,25 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
         })
         c.box(h=Px(10.0), fn() {  }) |> ignore
       }
-      if open || link != "" || slack != "" || xshare is Some(_) {
+      let letters = number(chat, "letters")
+      if open || link != "" || letters > 0.0 || slack != "" || xshare is Some(_) {
         info_list(c, fn() {
+          // what its agents and other chats' wrote each other, not in the chat: their own sheet (Letters.kt)
+          match opt_number(thread, "id") {
+            Some(th) if letters > 0.0 =>
+              if info_row(c, "info/letters", fn() {
+                  @sf.icon(c, "chats", size=16.0, color=t.p.text) |> ignore
+                  c.box(style=@sf.full_width, fn() { c.text(tr("web-main.letters.title"), style=info_words) |> ignore })
+                  |> ignore
+                  c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), size=13.0, color=t.p.muted, wrap=false)
+                  |> ignore
+                  chevron(c)
+                }) {
+                dui.letters_open = ""
+                open_sheet(c, LettersOf(r, th))
+              }
+            _ => ()
+          }
           // a station from before pins says nothing of them: its chats are not pinned from here
           match pinned {
             Some(p) if open => {
@@ -1765,4 +1784,138 @@ fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@ui.R
   }
   // (an empty line still one: a run to stand in for its words)
   out.map(fn(l) { if l.length() == 0 { [@ui.span(" ", mono=true)] } else { l } })
+}
+
+///|
+/// The params of a chat's letters (the core's `chatLetters` view).
+fn letters_params(r : ChatRef, thread : Double) -> Json {
+  { "station": Json::string(r.station), "thread": Json::number(thread) }
+}
+
+///|
+/// What the chat's agents and other chats' wrote each other, not said in it (Letters.kt openLetters): the chats it
+/// wrote with, a row each, the last written with first (its title, how many and when, the last letter in brief under
+/// them); one opened, back to the list and its title (which opens that chat), then its letters both ways in the order
+/// written, each drawn as the chat draws a message (Chat.kt SaidAlone).
+fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
+  let t = @sf.theme()
+  let topic = (src.topic)("chatLetters", letters_params(r, thread))
+  let (chat, _, _) = view_of_chat(src, r)
+  sheet_frame(c, "letters", c.height * 0.8, draggable=true, fn() {
+    sheet_head(c, tr("web-main.letters.title"))
+    let view = match topic.value {
+      Some(Object(_)) as v => v
+      _ => {
+        waiting_rows(c, 3, topic.error)
+        return
+      }
+    }
+    let chats = items(view, "chats")
+    let whole = flag(view, "whole")
+    // not here yet: its rows to come
+    if chats.length() == 0 && !whole {
+      waiting_rows(c, 3, topic.error)
+      return
+    }
+    let rows : Array[() -> Unit] = []
+    if chats.length() == 0 {
+      rows.push(fn() {
+        c.box(padx=18.0, pady=12.0, fn() { c.text(tr("web-main.letters.none"), size=15.0, color=t.p.muted) |> ignore })
+        |> ignore
+      })
+    }
+    let opened = chats.iter().find_first(fn(ch) { text(Some(ch), "key") == dui.letters_open })
+    match (opened, chat) {
+      (Some(ch), Some(v)) => {
+        let ch = Some(ch)
+        let link = text(ch, "link")
+        rows.push(fn() {
+          // back to the list, and its title (which opens that chat)
+          c.box(dir=Row, w=Fill(1.0), pl=6.0, pr=18.0, pb=6.0, gap=4.0, align=ACenter, fn() {
+            let back = c.id("letters/back")
+            if c.clicked(back) {
+              dui.letters_open = ""
+            }
+            c.box(
+              w=Px(36.0),
+              h=Px(36.0),
+              radius=18.0,
+              bg=if c.pressed(back) { @sf.alpha(t.p.text, 0.06) } else { 0L },
+              align=ACenter,
+              justify=JCenter,
+              id=back,
+              fn() { @sf.icon(c, "chevron-left", size=20.0, color=t.p.accent) |> ignore },
+            )
+            |> ignore
+            let name = c.id("letters/chat")
+            if link != "" && c.clicked(name) {
+              open_link(link)
+            }
+            c.box(id=name, fn() { c.text(text(ch, "title"), size=15.0, weight=500, color=t.p.text, wrap=false) |> ignore })
+            |> ignore
+          })
+          |> ignore
+        })
+        let here = { station: r.station, session: r.session, view: v }
+        for m in items(ch, "letters") {
+          let message = message_of(m)
+          rows.push(fn() {
+            c.box(w=Fill(1.0), pl=14.0, pr=14.0, pt=4.0, pb=16.0, fn() { said(c, src, here, message, [], decide=false) })
+            |> ignore
+          })
+        }
+      }
+      _ =>
+        for ch in chats {
+          let ch = Some(ch)
+          let key = text(ch, "key")
+          rows.push(fn() {
+            // a chat it wrote with: its title, how many and when, the last letter in brief under them
+            let id = c.id("letters/row/" + key)
+            if c.clicked(id) {
+              dui.letters_open = key
+            }
+            c.box(
+              w=Fill(1.0),
+              padx=18.0,
+              pady=10.0,
+              gap=2.0,
+              bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
+              id~,
+              fn() {
+                c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
+                  c.box(w=Fill(1.0), fn() { c.text(text(ch, "title"), size=15.0, weight=500, color=t.p.text, wrap=false) |> ignore })
+                  |> ignore
+                  let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
+                  let ago = text(field(field(ch, "time"), "lastActiveAt"), "ago")
+                  c.text(if ago == "" { n } else { n + " · " + ago }, size=13.0, color=t.p.muted, wrap=false) |> ignore
+                })
+                |> ignore
+                c.text(text(ch, "last"), size=13.0, color=t.p.muted, wrap=false) |> ignore
+              },
+            )
+            |> ignore
+          })
+        }
+    }
+    // not all of the chat is here yet: older ones may come
+    if !whole {
+      rows.push(fn() {
+        c.box(w=Fill(1.0), pt=8.0, align=ACenter, fn() { @sf.spinner(c, size=16.0) |> ignore }) |> ignore
+      })
+    }
+    c.list(
+      "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open,
+      rows.length() + 1,
+      60.0,
+      fn(i) {
+        if i < rows.length() {
+          (rows[i])()
+        } else {
+          c.box(h=Px(30.0), fn() {  }) |> ignore
+        }
+      },
+    )
+    |> ignore
+  })
 }

@@ -27,6 +27,8 @@ priv enum Sheet {
   ClearContext(ChatRef, String)
   /// relaying the chat to a channel (Relay.kt openRelay): its thread
   Relay(ChatRef, Double)
+  /// what its agents and other chats' wrote each other (Letters.kt openLetters): its thread
+  LettersOf(ChatRef, Double)
 }
 
 ///|
@@ -45,6 +47,8 @@ priv struct Decide {
   mut leaving : Sheet?
   /// the jobs' sheet shows all of them, not only those that matter now
   mut jobs_all : Bool
+  /// the letters' sheet: the chat opened in it, by its key ("" the list of them)
+  mut letters_open : String
   /// a job's sheet: what it said (0) or its output (1)
   mut job_tab : Int
   /// the history's tab: its steps (0) or its details (1)
@@ -85,6 +89,7 @@ let dui : Decide = {
   sheet: None,
   leaving: None,
   jobs_all: false,
+  letters_open: "",
   job_tab: 0,
   history_tab: 0,
   opened: {},
@@ -114,6 +119,7 @@ fn decide_reset() -> Unit {
   dui.sheet = None
   dui.leaving = None
   dui.jobs_all = false
+  dui.letters_open = ""
   dui.job_tab = 0
   dui.history_tab = 0
   dui.opened.clear()
@@ -614,5 +620,6 @@ fn sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     ContextOf(r, key) => context_sheet(c, src, r, key)
     ClearContext(r, key) => clear_context_sheet(c, src, r, key)
     Relay(r, thread) => relay_sheet(c, src, r, thread)
+    LettersOf(r, thread) => letters_sheet(c, src, r, thread)
   }
 }

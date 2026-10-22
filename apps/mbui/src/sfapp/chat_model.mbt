@@ -250,18 +250,6 @@ pub(all) struct Message {
   outgoing : String
   /// a failure still.fail says that the viewer may send to the still.fail team (`chat.report`)
   reportable : Bool
-  /// the first of a run of what other chats' agents wrote to the chat: the run's line (the core's `letters`)
-  letters : Letters?
-}
-
-///|
-/// A run of messages other chats' agents wrote to a chat, folded into a line (core views.ts `lettersFolded`), so they
-/// do not bury what people and the chat's own agents say: who wrote them to whom and how many, in words (「X」发给
-/// Opus 5.5 · 3 条), and whether it is shown whole (`chat.letters` opens it or folds it again).
-pub(all) struct Letters {
-  count : Int
-  line : String
-  open : Bool
 }
 
 ///|
@@ -324,10 +312,6 @@ fn message_of(m : Json) -> Message {
     said: flag(s, "said"),
     outgoing: text(s, "outgoing"),
     reportable: flag(s, "reportable"),
-    letters: match field(s, "letters") {
-      Some(Object(_)) as l => Some({ count: number(l, "count").to_int(), line: text(l, "line"), open: flag(l, "open") })
-      _ => None
-    },
   }
 }
 
@@ -402,6 +386,11 @@ pub(all) struct ChatView {
   elsewhere : Array[Elsewhere]
   more : Bool
   newer : Bool
+  /// the first and last entries loaded (letters and edits are not messages): the cursors for loading pages
+  first_entry : Double?
+  last_entry : Double?
+  /// how many letters its agents and other chats' wrote each other (not in `messages`: their own sheet)
+  letters : Int
   at : Double?
   at_offset : Double?
   unread_line : Double?
@@ -434,6 +423,9 @@ pub fn chat_view(v : Json) -> ChatView {
     elsewhere: items(s, "elsewhere").map(elsewhere_of),
     more: flag(s, "more"),
     newer: flag(s, "newer"),
+    first_entry: opt_number(s, "firstEntry"),
+    last_entry: opt_number(s, "lastEntry"),
+    letters: number(s, "letters").to_int(),
     at: opt_number(s, "at"),
     at_offset: opt_number(s, "atOffset"),
     unread_line: opt_number(s, "unreadLine"),
