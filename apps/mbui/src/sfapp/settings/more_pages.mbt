@@ -631,9 +631,8 @@ let bar_adding : Ref[Bool] = Ref(false)
 
 ///|
 /// 下方栏 (BarSettingsScreen): this device's bottom bars, each a card of its places (a place taken out with the "−" at its
-/// corner, one added from a sheet of them all, moved by the arrows of its sheet); a bar made the one in view, deleted,
-/// or a new one made. (The Android app moves a place by holding it and sliding it sideways; here its slot's sheet moves
-/// it left or right.)
+/// corner, one added from a sheet of them all, one held and moved sideways to change its order); a bar made the one in
+/// view, deleted, or a new one made.
 fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
   let t = @sf.theme()
   let (made, cur) = (core.bars)()
@@ -726,47 +725,119 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
 }
 
 ///|
+/// How far a place held is moved along its bar (BarCard's `dx`: the finger's way past the slop), by its bar and its
+/// name, while a finger has it.
+let bar_moves : Map[String, Double] = {}
+
+///|
+/// A place held and moved sideways (BarCard): lifted 8% over the card's ground, 14 round, raised (shadow(6), black at
+/// 14% both).
+// kept across runs: a value (no field of it changes)
+let place_lifted : @sf.Raised = @sf.raised(6.0, ambient=0.14, spot=0.14)
+
+///|
+/// A place on its bar as it lies.
+// kept across runs: a value (no field of it changes)
+let place_slot : @ui.Style = @ui.style()
+
+///|
+/// A place held: on the card's ground, raised (place_lifted).
+// kept across runs: a value (no field of it changes)
+let place_held : @ui.Style = @ui.style(bg=Card, shadow=place_lifted.cast())
+
+///|
 /// A bar's card (BarCard): its places in four slots, each its icon over its name with a "−" at its corner (none on the
-/// last place of the only bar), a tap on it its sheet (moved left or right); with room left, a slot that adds one.
+/// last place of the only bar), one held and moved sideways put where it is let go (by how many slots it went), a
+/// screen reader's step moving it one along; with room left, a slot that adds one.
 fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool, add : () -> Unit) -> Unit {
   let t = @sf.theme()
+  // BarSettingsScreen's onMove: the place at `j` put at `to`
+  let move = fn(j : Int, to : Int) {
+    let (now, ncur) = (core.bars)()
+    if to != j && i < now.length() && j < now[i].length() && to >= 0 && to < now[i].length() {
+      let moved = now[i].copy()
+      let p = moved.remove(j)
+      moved.insert(to, p)
+      save_bars(core, now.mapi(fn(n, s) { if n == i { moved } else { s } }), ncur)
+    }
+  }
   c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, fn() {
     // 6 in (BarCard: padding(6))
     c.box(dir=Row, w=Fill(1.0), pad=6.0, radius=20.0, bg=t.p.card, fn() {
       for j, key in set {
         let id = c.id("bar-slot/" + i.to_string() + "/" + key)
-        if hit(c, id) {
-          open_bar_place(core, i, j, set)
-        }
-        // the slot, and its "−" over it beside (not inside) what a tap on the slot opens: the slot's press does not
-        // take the "−"'s
-        c.box(w=Fill(1.0), fn() {
-          c.box(w=Fill(1.0), pt=12.0, pb=10.0, align=ACenter, id~, fn() {
-            c.box(gap=6.0, align=ACenter, fn() {
-              c.box(h=Px(30.0), justify=JCenter, fn() { (core.place_icon)(c, key, t.p.text) }) |> ignore
-              c.text(tr("android-misc.bar.place." + key), size=12.0, color=t.p.muted, wrap=false) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-          if !only {
-            c.layer(align=ACenter, fn() {
-              let rid = c.id("bar-remove/" + i.to_string() + "/" + key)
-              if hit(c, rid) {
-                let (now, ncur) = (core.bars)()
-                save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
+        let held = i.to_string() + "/" + key
+        // the finger's (detectHorizontalDragGestures): lifted once it goes sideways past the slop, following it; let go,
+        // put by how many slots it went (a slot's width, Row's quarter)
+        c.drag_on(id, axis=Horizontal)
+        let lifted = match c.drag_of(id) {
+          Some(d) => {
+            let (dx, _) = d.take_move()
+            if d.down && d.moving {
+              bar_moves[held] = bar_moves.get(held).unwrap_or(0.0) + dx
+            }
+            if d.take_end() {
+              let went = bar_moves.get(held).unwrap_or(0.0)
+              bar_moves.remove(held)
+              match c.rect_of(id) {
+                Some((_, _, w, _)) if w > 0.0 => {
+                  let to = j + (went / w).round().to_int()
+                  move(j, if to < 0 { 0 } else if to >= set.length() { set.length() - 1 } else { to })
+                }
+                _ => ()
               }
-              // at the icon's top right: 8 over the top of what the slot holds, 12 under the slot's own top
-              // (BarSettings.kt: TopCenter of the slot's padded content, offset 16, -8)
-              let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=4.0, align=ACenter, justify=JCenter, id=rid, fn() {
-                @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
-              })
-              c.semantics(minus, Button, id=rid, label=fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))]))
-            })
-            |> ignore
+            } else if !d.down {
+              bar_moves.remove(held)
+            }
+            d.down && d.moving
           }
-        })
-        |> ignore
+          None => false
+        }
+        // a screen reader's (BarSettings.kt's actions 左移, 右移): one slot along
+        if c.action_asked(id, Decrement) && j > 0 {
+          move(j, j - 1)
+        }
+        if c.action_asked(id, Increment) && j < set.length() - 1 {
+          move(j, j + 1)
+        }
+        // the slot, and its "−" over it beside (not inside) what the finger holds: a press on the "−" is its own
+        // (14 round: Smooth(concentric(20, 6)), the card's corner 6 in)
+        let slot = c.box(
+          style=if lifted { place_held } else { place_slot },
+          w=Fill(1.0),
+          radius=14.0,
+          fn() {
+            let face = c.box(w=Fill(1.0), pt=12.0, pb=10.0, align=ACenter, id~, fn() {
+              c.box(gap=6.0, align=ACenter, fn() {
+                c.box(h=Px(30.0), justify=JCenter, fn() { (core.place_icon)(c, key, t.p.text) }) |> ignore
+                c.text(tr("android-misc.bar.place." + key), size=12.0, color=t.p.muted, wrap=false) |> ignore
+              })
+              |> ignore
+            })
+            c.semantics(face, Group, id~, label=tr("android-misc.bar.place." + key), actions=[Decrement, Increment])
+            if !only {
+              c.layer(align=ACenter, fn() {
+                let rid = c.id("bar-remove/" + i.to_string() + "/" + key)
+                if hit(c, rid) {
+                  let (now, ncur) = (core.bars)()
+                  save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
+                }
+                // at the icon's top right: 8 over the top of what the slot holds, 12 under the slot's own top
+                // (BarSettings.kt: TopCenter of the slot's padded content, offset 16, -8)
+                let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=4.0, align=ACenter, justify=JCenter, id=rid, fn() {
+                  @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
+                })
+                c.semantics(minus, Button, id=rid, label=fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))]))
+              })
+              |> ignore
+            }
+          },
+        )
+        // held: where the finger has it, 8% bigger, over the other places (graphicsLayer, zIndex(2f))
+        if lifted {
+          c.look(slot, @ui.look(dx=bar_moves.get(held).unwrap_or(0.0), scale=1.08))
+          c.put_over(slot)
+        }
       }
       if set.length() < bar_size {
         let aid = c.id("bar-add/" + i.to_string())
@@ -775,11 +846,10 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
         }
         c.box(w=Fill(1.0), pt=12.0, pb=10.0, radius=16.0, align=ACenter, id=aid, fn() {
           c.box(gap=6.0, align=ACenter, fn() {
-            c.box(w=Px(30.0), h=Px(30.0), align=ACenter, justify=JCenter, fn() {
-              c.box(w=Px(44.0), h=Px(44.0), radius=22.0, border=1.5, border_color=t.p.line, align=ACenter, justify=JCenter, fn() {
-                @sf.icon(c, "plus", size=22.0, color=t.p.subtle) |> ignore
-              })
-              |> ignore
+            // its ring held to the 30 it is in (BarSettings.kt asks 44 of a Box(size(30)): Compose's `size` takes the
+            // constraints it is given)
+            c.box(w=Px(30.0), h=Px(30.0), radius=15.0, border=1.5, border_color=t.p.line, align=ACenter, justify=JCenter, fn() {
+              @sf.icon(c, "plus", size=22.0, color=t.p.subtle) |> ignore
             })
             |> ignore
             c.text(tr("android-misc.bar.add"), size=12.0, color=t.p.subtle, wrap=false) |> ignore
@@ -797,37 +867,6 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
   |> ignore
 }
 
-///|
-/// A place on a bar moved left or right (BarSettings' drag and its screen readers' actions).
-fn open_bar_place(core : Core, i : Int, j : Int, set : Array[String]) -> Unit {
-  let shift = fn(to : Int) {
-    close_sheet()
-    let (now, ncur) = (core.bars)()
-    save_bars(
-      core,
-      now.mapi(fn(n, s) {
-        if n == i && j < s.length() && to >= 0 && to < s.length() {
-          let moved = s.copy()
-          let p = moved.remove(j)
-          moved.insert(to, p)
-          moved
-        } else {
-          s
-        }
-      }),
-      ncur,
-    )
-  }
-  open_sheet(0.3, fn(c, _core) {
-    sheet_head(c, tr("android-misc.bar.place." + set[j]))
-    if j > 0 && pick_row(c, "bar-left", tr("android-misc.bar.moveLeft")) {
-      shift(j - 1)
-    }
-    if j < set.length() - 1 && pick_row(c, "bar-right", tr("android-misc.bar.moveRight")) {
-      shift(j + 1)
-    }
-  })
-}
 
 ///|
 /// The places to add to bar `i` (openPick): all of them, those in it already greyed (已在这一栏), none when it is full.

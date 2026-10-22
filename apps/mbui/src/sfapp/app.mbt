@@ -804,6 +804,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       app.toast_n += 1
     },
     picture: fn(url) { (src.picture)(url) },
+    now: src.now,
     notify_ask: fn() { ask_from_switch() },
     push_sync: fn(wanted) { if !src.read_only { push_sync(src, wanted) } },
     under: fn() {

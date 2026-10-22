@@ -74,6 +74,8 @@ pub(all) struct Core {
   face_failed : (String) -> String
   /// the host face the app's own code face is in, for the fonts page's 默认
   own_code_face : () -> Int
+  /// the time of day (ms), for what is shown of it (剩余 N 分钟): the source's `now`
+  now : () -> Double
 }
 
 ///|
@@ -605,6 +607,7 @@ pub fn reset() -> Unit {
   app_looks_reset()
   new_profiles.clear()
   bar_adding.val = false
+  bar_moves.clear()
   changelog_state.part = ""
   changelog_state.seen = false
   opened.plain.clear()

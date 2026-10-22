@@ -875,7 +875,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                 c.text(tr("android-misc.adb.title"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
                 let stopped = if !sharing { text(view, "message") } else { "" }
                 let sub = if there {
-                  adb_state(view)
+                  adb_state(c, view, (core.now)())
                 } else if elsewhere {
                   tr("android-misc.adb.elsewhere")
                 } else if stopped != "" {
@@ -923,7 +923,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             }
             // what the station said, when it says more than the line above
             let said = text(view, "message")
-            let line = adb_state(view)
+            let line = adb_state(c, view, (core.now)())
             if text(view, "adb") != "connected" && said != "" && said != line && !line.has_suffix(said) {
               list_row(c, fn() {
                 c.text(said, size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
@@ -1102,8 +1102,9 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
 }
 
 ///|
-/// How the lending stands, in a line (AdbShare.kt state).
-fn adb_state(view : Json?) -> String {
+/// How the lending stands, in a line (AdbShare.kt state): lent, the minutes left of it as the time of day `now` has
+/// them, said again as they change (AdbShare.kt: its `now` every 20 s).
+fn adb_state(c : @ui.Ctx, view : Json?, now : Double) -> String {
   let adb = text(view, "adb")
   if text(view, "phase") != "offered" {
     return match opt_text(view, "message") {
@@ -1113,8 +1114,18 @@ fn adb_state(view : Json?) -> String {
   }
   match adb {
     "connected" =>
-      // (还剩 N 分钟 left out: the app has no clock of the day's time yet)
-      tr("android-misc.adb.connected")
+      match field(view, "until") {
+        Some(Number(until, ..)) => {
+          let left = until - now
+          let n = if left > 0.0 { (left / 60000.0).floor() } else { 0.0 }
+          // the next minute's change
+          if left > 0.0 {
+            c.wake_in(left - n * 60000.0 + 1.0, later=true)
+          }
+          fill("android-misc.adb.connected.left", [("n", n.to_int().to_string())])
+        }
+        _ => tr("android-misc.adb.connected")
+      }
     "unpaired" => tr("android-misc.adb.unpaired")
     "unauthorized" => tr("android-misc.adb.unauthorized")
     "off" => tr("android-misc.adb.off")
