@@ -1751,10 +1751,8 @@ export interface ChatSentElsewhere {
  */
 export interface Letters {
 	count: number;
-	/** Who wrote them and how many, in words: 「X」发来 3 条消息. */
+	/** Who wrote them to whom and how many, in words: 「X」发给 Opus 5.5 · 3 条. */
 	line: string;
-	/** The first line of the latest of them, without its Markdown's marks (the UI cuts it short). */
-	last: string;
 	/** Shown whole: `chat.letters` {station, thread, seq, open} opens it or folds it again. */
 	open: boolean;
 }

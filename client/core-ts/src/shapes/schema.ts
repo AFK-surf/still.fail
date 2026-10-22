@@ -212,8 +212,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said\nit, and whether its agents have yet to take it." }),
   Letters: struct([
     ["count", "i64", { client: "I54" }],
-    ["line", "String", { doc: "Who wrote them and how many, in words: 「X」发来 3 条消息." }],
-    ["last", "String", { doc: "The first line of the latest of them, without its Markdown's marks (the UI cuts it short)." }],
+    ["line", "String", { doc: "Who wrote them to whom and how many, in words: 「X」发给 Opus 5.5 · 3 条." }],
     ["open", "bool", { doc: "Shown whole: `chat.letters` {station, thread, seq, open} opens it or folds it again." }],
   ], { doc: "A run of messages other chats' agents wrote to a chat, folded into a line (core views.ts `lettersFolded`), so they\ndo not bury what people and the chat's own agents say." }),
   RuntimeInstall: struct([

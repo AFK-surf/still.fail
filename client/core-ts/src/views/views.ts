@@ -25,7 +25,7 @@ import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
-import { markdown, plainOf } from "../markdown.ts";
+import { markdown } from "../markdown.ts";
 import { near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
@@ -189,9 +189,11 @@ export function isLetter(message: J, keys: ReadonlySet<string>): boolean {
 
 /// A chat's letters (isLetter) folded, so that what agents write to each other does not bury what people and the
 /// chat's own agents say: each run of them, with nothing else said between, is one line on its first (`letters`: who
-/// wrote, how many, the start of the latest), the rest of it out of the list; a run with one of its messages in `open`
-/// shows whole, under that line. Messages as shownMessage made them (a letter's words without their heading).
-export function lettersFolded(messages: J[], letter: (m: J) => boolean, open: ReadonlySet<number>): { messages: J[]; runs: number[][] } {
+/// wrote to whom (`to`: the chat's agent, by its label; null when it has more than one), how many), the rest of it out
+/// of the list, so that it reads as agents talking, not as words for the reader; a run with
+/// one of its messages in `open` shows whole, under that line. Messages as shownMessage made them (a letter's words
+/// without their heading).
+export function lettersFolded(messages: J[], letter: (m: J) => boolean, open: ReadonlySet<number>, to: string | null = null): { messages: J[]; runs: number[][] } {
   const runs: number[][] = [];
   const out: J[] = [];
   for (let i = 0; i < messages.length; ) {
@@ -212,10 +214,8 @@ export function lettersFolded(messages: J[], letter: (m: J) => boolean, open: Re
       if (name !== null && !from.includes(name)) from.push(name);
     }
     const names = from.map((name) => t("core-views.letters.name", { name })).join(t("core-views.list_separator"));
-    const line = t("core-views.letters.line", { from: names, n: run.length });
-    const latest = str(run.at(-1)!.text) ?? "";
-    const last = plainOf(markdown(latest), latest).split("\n").map((l) => format.splitWhitespace(l).join(" ")).find((l) => l !== "") ?? "";
-    out.push({ ...run[0]!, letters: { count: run.length, line, last, open: shown } });
+    const line = t("core-views.letters.line", { from: names, to: to ?? t("core-views.letters.chatAgent"), n: run.length });
+    out.push({ ...run[0]!, letters: { count: run.length, line, open: shown } });
     if (shown) out.push(...run.slice(1));
     i = j;
   }
@@ -1467,7 +1467,8 @@ export class Views implements Owner {
     messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed")));
     if (letters.size > 0) {
       const key = `${station}\u0001${id}`;
-      const folded = lettersFolded(messages, (m) => letters.has(m.seq), this.#lettersOpen.get(key) ?? new Set());
+      const to = agents.length === 1 ? str(get(agents[0]!.session, "agentText")) : null;
+      const folded = lettersFolded(messages, (m) => letters.has(m.seq), this.#lettersOpen.get(key) ?? new Set(), to);
       messages.splice(0, messages.length, ...folded.messages);
       this.#letterRuns.set(key, folded.runs);
     }

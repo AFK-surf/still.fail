@@ -201,9 +201,10 @@
   "core-views.joinable.offline": "offline",
   "core-views.joinable.needsLock": "{workspace} is in security mode. Turn on security mode in this workspace to add it.",
   "core-views.joinable.online": "online",
+  "core-views.letters.chatAgent": "this chat's agent",
   "core-views.letters.line": {
-    "one": "Message from {from}",
-    "other": "{n} messages from {from}"
+    "one": "{from} to {to}",
+    "other": "{from} to {to} · {n} messages"
   },
   "core-views.letters.name": "“{name}”",
   "core-views.list_separator": ", ",

@@ -1737,10 +1737,8 @@ data class ChatSentElsewhere (
 @Serializable
 data class Letters (
 	val count: Long,
-	/// Who wrote them and how many, in words: 「X」发来 3 条消息.
+	/// Who wrote them to whom and how many, in words: 「X」发给 Opus 5.5 · 3 条.
 	val line: String,
-	/// The first line of the latest of them, without its Markdown's marks (the UI cuts it short).
-	val last: String,
 	/// Shown whole: `chat.letters` {station, thread, seq, open} opens it or folds it again.
 	val open: Boolean
 )

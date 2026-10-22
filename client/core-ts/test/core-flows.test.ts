@@ -859,13 +859,16 @@ test("what_other_chats_agents_wrote_is_a_line_the_page_opens_and_folds_and_a_mes
   subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
   await host.settle();
   apply(host, values);
-  const shown = () => v(values, 1).messages.map((m: J) => [m.seq, m.letters ? [m.letters.line, m.letters.last, m.letters.open] : null]);
+  const shown = () => v(values, 1).messages.map((m: J) => [m.seq, m.letters ? [m.letters.line, m.letters.open] : null]);
+  // Who wrote to whom: the chat's one agent by its label.
+  const to = v(values, 1).agents[0].session.agentText;
+  assert.ok(typeof to === "string" && to !== "");
   // Each run of them is a line on its first, the rest out of the list; the chat's own agent quoting one is its own.
-  assert.deepEqual(shown(), [[1, null], [2, ["「备份」发来 2 条消息", "补充一点", false]], [4, null], [5, ["「备份」发来消息", "已替换", false]], [6, null]]);
+  assert.deepEqual(shown(), [[1, null], [2, [`「备份」发给 ${to} · 2 条`, false]], [4, null], [5, [`「备份」发给 ${to}`, false]], [6, null]]);
   call(core, ui, 2, "chat.letters", { station: "ws/st", thread: 7, seq: 2, open: true });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(shown().map(([seq, l]: J) => [seq, l?.[2] ?? null]), [[1, null], [2, true], [3, null], [4, null], [5, false], [6, null]]);
+  assert.deepEqual(shown().map(([seq, l]: J) => [seq, l?.[1] ?? null]), [[1, null], [2, true], [3, null], [4, null], [5, false], [6, null]]);
   // Folded again by any of its messages.
   call(core, ui, 3, "chat.letters", { station: "ws/st", thread: 7, seq: 3, open: false });
   await host.settle();

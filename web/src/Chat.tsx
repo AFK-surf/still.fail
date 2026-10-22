@@ -1170,8 +1170,8 @@ function SystemNotice({ text, profile, install, report, time, ts, enter, caught,
 
 /**
  * What other chats' agents wrote to this one, a run of it with nothing else said between (the core's `letters`, on its
- * first message): a pill across the chat as still.fail's notices are, saying who wrote and how many, and folded the
- * start of the latest. Pressed, the run shows whole under it, or folds again (`chat.letters`).
+ * first message): a pill across the chat as still.fail's notices are, saying which chat's agent wrote to which and how
+ * many. Pressed, the run shows whole under it, or folds again (`chat.letters`).
  */
 function LettersLine({ message: m, enter, caught }: { message: ChatMessage; enter: true | undefined; caught: true | undefined }) {
   const sending = useChatSend();
@@ -1184,7 +1184,6 @@ function LettersLine({ message: m, enter, caught }: { message: ChatMessage; ente
         onClick={toggle} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
         <div className={css.msgSystemLine}>
           <span className={css.lettersWho}>{letters.line}</span>
-          {!letters.open && letters.last && <><span className={css.blockedDot} aria-hidden>·</span><span className={css.lettersLast}>{letters.last}</span></>}
         </div>
       </div>
     </div>

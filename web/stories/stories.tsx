@@ -431,8 +431,8 @@ const letters = (open: boolean): DemoExtension => ({
     const asked: ChatMessage = { ...base(0), authorKind: "person", author: "local", authorName: "你", text: "备份改成 zstd，顺便看看每份为什么这么大", mine: true, system: false, by: { name: "你" } };
     const words = ["用户让精简备份并改用 zstd。我没有 host2 的权限，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下", "补充一点：macOS 自带的 `/usr/bin/tar` 能直接解 zstd，guest 里不用另装", "已替换，**今晚 02:00** 那份会按新脚本出"];
     const said: ChatMessage[] = words.map((text, i) => ({ ...base(1 + i), authorKind: "agent", author: `peer/ember:c-${i}`, text, mine: false, system: false, by: from }));
-    const line = { count: said.length, line: `「${from.name}」发来 ${said.length} 条消息`, last: "已替换，今晚 02:00 那份会按新脚本出", open };
     const own = chat.messages.findLast((m) => m.authorKind === "agent") ?? last;
+    const line = { count: said.length, line: `「${from.name}」发给 ${own.by.name} · ${said.length} 条`, open };
     const answer: ChatMessage = { ...base(4), authorKind: "agent", author: own.author, text: "备份改好了：每份从 650 MiB 降到 180 MiB，今晚 02:00 起按新脚本出", mine: false, system: false, by: own.by };
     const run = open ? [{ ...said[0]!, letters: line }, ...said.slice(1)] : [{ ...said[0]!, letters: line }];
     return { ...chat, messages: [...chat.messages, asked, ...run, answer] };

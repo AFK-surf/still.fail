@@ -1355,9 +1355,9 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
 
 /**
  * What other chats' agents wrote to this one, a run of it with nothing else said between (web Chat.tsx LettersLine, the
- * core's `letters` on its first message): a pill across the chat as still.fail's notices are, saying who wrote and how
- * many, and folded the start of the latest, cut short where it does not fit. A tap shows the run whole under it, or
- * folds it again (`chat.letters`).
+ * core's `letters` on its first message): a pill across the chat as still.fail's notices are, saying which chat's agent
+ * wrote to which and how many, cut short where it does not fit. A tap shows the run whole under it, or folds it again
+ * (`chat.letters`).
  */
 @Composable
 private fun LettersLine(ctx: Here, m: ChatMessage) {
@@ -1374,12 +1374,7 @@ private fun LettersLine(ctx: Here, m: ChatMessage) {
                 .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Who wrote and how many whole; the start of the latest cut short first.
             Text(letters.line, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (!letters.open && letters.last.isNotEmpty()) {
-                Text("·", fontSize = 15.sp, lineHeight = 24.75.sp, color = ink.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 6.dp))
-                Text(letters.last, fontSize = 15.sp, lineHeight = 24.75.sp, color = chatMuted(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            }
         }
     }
 }

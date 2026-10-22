@@ -33,7 +33,7 @@ class ChatLettersTest {
         letter(4, "已替换，今晚 02:00 那份会按新脚本出"),
     )
     private fun messages(open: Boolean): List<ChatMessage> {
-        val line = Letters(count = 3, line = "「BFT 备份尺寸分析」发来 3 条消息", last = "已替换，今晚 02:00 那份会按新脚本出", open = open)
+        val line = Letters(count = 3, line = "「BFT 备份尺寸分析」发给 Claude · 3 条", open = open)
         val shown = listOf(run[0].copy(letters = line)) + if (open) run.drop(1) else emptyList()
         return listOf(Fixtures.mine(1, "备份改成 zstd，顺便看看每份为什么这么大")) + shown + Fixtures.agent(5, "备份改好了：每份从 650 MiB 降到 180 MiB")
     }
@@ -47,7 +47,7 @@ class ChatLettersTest {
         }
         h.fake.put(topic, Fixtures.chat(messages(false)))
         h.launch(listOf(Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
-        val pill = rule.onNodeWithText("「BFT 备份尺寸分析」发来 3 条消息").assertIsDisplayed()
+        val pill = rule.onNodeWithText("「BFT 备份尺寸分析」发给 Claude · 3 条").assertIsDisplayed()
         rule.onNodeWithText("补充一点", substring = true).assertDoesNotExist()
         val opening = h.record("letters-open")
         opening.frame { pill.performClick() }
@@ -55,7 +55,7 @@ class ChatLettersTest {
         opening.end()
         assertTrue(h.fake.calls.any { it.first == "chat.letters" })
         rule.onNodeWithText("补充一点", substring = true).assertIsDisplayed()
-        rule.onNodeWithText("「BFT 备份尺寸分析」发来 3 条消息").performClick()
+        rule.onNodeWithText("「BFT 备份尺寸分析」发给 Claude · 3 条").performClick()
         h.settle()
         rule.onNodeWithText("补充一点", substring = true).assertDoesNotExist()
         val folded = h.record("letters-folded")
