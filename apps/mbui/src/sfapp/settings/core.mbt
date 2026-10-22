@@ -547,6 +547,7 @@ pub fn reset() -> Unit {
   no_bar.val = false
   wide_deep.val = false
   top_trailing.val = None
+  top_on_back.val = None
   top_label.val = ""
   on_card.val = false
   // the pages' own state (settings complete): drafts, fields filled once, what was being done, as a run starts

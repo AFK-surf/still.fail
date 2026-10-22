@@ -54,8 +54,8 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
 }
 
 ///|
-/// A page's head in the wide frame (pages.css.ts pageHead): back above it only on a page under another, the title,
-/// what it does at its end.
+/// A page's head in the wide frame (pages.css.ts pageHead): back above it only on a page under another (`on_back` when
+/// it is said, else the page popped), the title, what it does at its end.
 fn wide_head(
   c : @ui.Ctx,
   core : Core,
@@ -63,6 +63,7 @@ fn wide_head(
   title : String,
   trailing? : () -> Unit,
   inside? : Bool = false,
+  on_back? : () -> Unit,
 ) -> Unit {
   let t = @sf.theme()
   // (inside a block of the page, which stands in already)
@@ -77,7 +78,10 @@ fn wide_head(
       })
       |> ignore
       if hit(c, id) {
-        (core.pop)()
+        match on_back {
+          Some(f) => f()
+          None => (core.pop)()
+        }
       }
     }
     c.box(style=title_line, fn() {
@@ -127,11 +131,13 @@ fn nav_back(c : @ui.Ctx, label : String) -> Bool {
 }
 
 ///|
-/// Back at the top of a large-title page (Stations.kt TopBack); `trailing` at its other end (a ＋).
-fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) -> Unit {
+/// Back at the top of a large-title page (Stations.kt TopBack): `on_back` when it is said, else the page popped;
+/// `trailing` at its other end (a ＋).
+fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on_back? : () -> Unit) -> Unit {
   if wide.val {
     // (the large title under it is the head's: large_title)
     top_trailing.val = trailing
+    top_on_back.val = on_back
     top_label.val = label
     return
   }
@@ -141,7 +147,10 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) ->
   }
   c.box(style=top_back_line, fn() {
     if nav_back(c, label) {
-      (core.pop)()
+      match on_back {
+        Some(f) => f()
+        None => (core.pop)()
+      }
     }
     match trailing {
       Some(f) => f()
@@ -169,6 +178,9 @@ let top_back_line : @ui.Style = @ui.style(
 let top_trailing : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
+let top_on_back : Ref[(() -> Unit)?] = Ref(None)
+
+///|
 let top_label : Ref[String] = Ref("")
 
 ///|
@@ -188,10 +200,7 @@ fn nav_bar(
 ) -> Unit {
   if wide.val {
     ignore(sub)
-    match trailing {
-      Some(f) => wide_head(c, core, back, title, trailing=f)
-      None => wide_head(c, core, back, title)
-    }
+    wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back)
     return
   }
   if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val) {
@@ -313,13 +322,11 @@ fn large_title(c : @ui.Ctx, big : String, small? : String = "", lead? : () -> Un
     ignore(lead)
     match frame_core.val {
       Some(core) =>
-        match top_trailing.val {
-          Some(f) => wide_head(c, core, top_label.val, big, trailing=f, inside=true)
-          None => wide_head(c, core, top_label.val, big, inside=true)
-        }
+        wide_head(c, core, top_label.val, big, trailing?=top_trailing.val, inside=true, on_back?=top_on_back.val)
       None => ()
     }
     top_trailing.val = None
+    top_on_back.val = None
     return
   }
   c.box(style=large_title_box, fn() {
