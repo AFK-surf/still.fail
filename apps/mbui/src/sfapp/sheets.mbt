@@ -163,63 +163,9 @@ fn tone_color(tone : String) -> Int64 {
 }
 
 ///|
-/// An allowance's windows, compact (Parts.kt QuotaChips, FillChip): a box per window with what is left in it (its mark
-/// before it when there are several), its ground filled from the left as far as is left; a low one in its colour.
+/// An allowance's windows, compact (Parts.kt QuotaChips): the settings' boxes (one FillChip, as Android's app has).
 fn quota_chips(c : @ui.Ctx, quota : Json?, small? : Bool = false) -> Unit {
-  if text(quota, "state") != "ok" {
-    return
-  }
-  let windows = items(quota, "windows")
-  if windows.length() == 0 {
-    return
-  }
-  let t = @sf.theme()
-  let lone = windows.length() == 1
-  c.box(dir=Row, gap=8.0, align=ACenter, fn() {
-    for w in windows {
-      let wv = Some(w)
-      let left = dmax(0.0, dmin(100.0, number(wv, "left")))
-      let level = text(wv, "level")
-      let low = level == "amber" || level == "red"
-      let tone = match level {
-        "red" => t.p.red
-        "amber" => 0xD9962BFFL
-        _ => t.p.green
-      }
-      let ground = if low { @sf.alpha(tone, 0.2) } else { @sf.alpha(t.p.muted, 0.22) }
-      let fs = if small { 10.0 } else { 11.0 }
-      c.box(h=Px(if small { 16.0 } else { 20.0 }), radius=fill_chip_radius, bg=t.p.chip, clip=true, fn() {
-        c.layer(fn() {
-          c.box(w=Fill(left / 100.0), h=Fill(1.0), radius=@ui.concentric(fill_chip_radius, 0.0), bg=ground, fn() {  }) |> ignore
-        })
-        |> ignore
-        c.box(
-          dir=Row,
-          h=Fill(1.0),
-          padx=if small { 5.0 } else { 8.0 },
-          gap=5.0,
-          align=ACenter,
-          fn() {
-            if !lone {
-              c.text(text(wv, "mark"), size=fs, weight=600, color=@sf.mix(t.p.text, 0.5, t.p.muted), wrap=false)
-              |> ignore
-            }
-            c.text(
-              "\{left.to_int()}%",
-              size=fs,
-              weight=600,
-              color=if low { tone } else { t.p.text },
-              wrap=false,
-            )
-            |> ignore
-          },
-        )
-        |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
+  @settings.quota_chips(c, quota, small~)
 }
 
 ///|

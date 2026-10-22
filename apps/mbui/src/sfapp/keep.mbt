@@ -220,8 +220,8 @@ fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : String
 
 
 ///|
-/// The corner of a chip whose ground fills from the left (how far a download or a use has come): its fill, flush with
-/// the chip's edges, is concentric with it (the chip's clip does not round what is in it until mbui#42).
+/// The corner of a chip whose ground fills from the left (how far a download or a use has come): its fill a plain
+/// rectangle the chip's clip cuts along its corners (FillChip's drawRect in its clip), its end square where it stops.
 let fill_chip_radius : Double = 6.0
 
 ///|
@@ -243,7 +243,7 @@ fn download_chip(c : @ui.Ctx, key : String, percent : Int) -> Unit {
     if drawn > 0.0 {
       c.layer(fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-          c.box(w=Fill(drawn), h=Fill(1.0), radius=@ui.concentric(fill_chip_radius, 0.0), bg=@sf.alpha(t.p.accent, 0.2), fn() {  }) |> ignore
+          c.box(w=Fill(drawn), h=Fill(1.0), bg=@sf.alpha(t.p.accent, 0.2), fn() {  }) |> ignore
           if drawn < 100.0 {
             c.box(w=Fill(100.0 - drawn), h=Fill(1.0), fn() {  }) |> ignore
           }

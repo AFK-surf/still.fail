@@ -298,7 +298,9 @@ test "settings: the account's page has the accounts on this device on its one ca
 let row_h : Double = 64.0
 
 ///|
-test "settings: a station's network not open yet (stationNet's null) waits as grey bars, no arrows over nothing" {
+/// The stations' list over the settings' made-up data, no station's network open yet (stationNet's null): Studio online,
+/// its memory low, MBA offline.
+fn stations_unread_net() -> @ui.Tester {
   reset()
   let base = fixture("settings")
   let src : Source = {
@@ -315,11 +317,91 @@ test "settings: a station's network not open yet (stationNet's null) waits as gr
   open_setting("stations")
   t.draw()
   t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+/// The tops of the list's network lines laid out unseen (their 直连 keeping the room), down the list.
+fn unseen_lines(t : @ui.Tester) -> Array[Double] {
+  let tops = t.words().filter(fn(w) { w.0 == "直连" && w.5 == 0.0 }).map(fn(w) { w.2 })
+  tops.sort()
+  tops
+}
+
+///|
+/// The chip whose words are `words` and its ground's fill as drawn (Parts.kt FillChip): the fill's width (0: none) and
+/// the chip's, the fill from the chip's left, as tall as it.
+fn chip_fill(t : @ui.Tester, words : String) -> (Double, Double) {
+  let (x, y) = t.find(words).unwrap()
+  let rects = t.drawn_rects()
+  let mut chip = (0.0, 0.0, 0.0, 0.0)
+  for r in rects {
+    if (r.3 == 20.0 || r.3 == 16.0) && r.0 <= x && x <= r.0 + r.2 && r.1 <= y && y <= r.1 + r.3 && r.2 > chip.2 {
+      chip = (r.0, r.1, r.2, r.3)
+    }
+  }
+  let mut fill = 0.0
+  for r in rects {
+    if (r.0 - chip.0).abs() < 0.01 && (r.1 - chip.1).abs() < 0.01 && (r.3 - chip.3).abs() < 0.01 && r.2 < chip.2 - 0.01 {
+      fill = r.2
+    }
+  }
+  (fill, chip.2)
+}
+
+///|
+test "settings: a station's network not open yet (stationNet's null) waits as grey bars, no arrows over nothing" {
+  let t = stations_unread_net()
   assert_true(t.find("Studio") is Some(_))
   // (the line it would be is there, unseen, keeping its room)
   let shown = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }).length() > 0 }
   assert_false(shown("↑"))
   assert_false(shown("↓"))
+}
+
+///|
+test "settings: a station's network not open yet waits where its line goes (StationBody): its bars centred across the line's room, 10 under the load's boxes" {
+  let t = stations_unread_net()
+  // Studio's: its low box (20 high round its words), the line's room 10 under it, two lines of 18 2 apart
+  let (_, box_mid) = t.find("剩 11.5 G").unwrap()
+  let room = unseen_lines(t)[0]
+  assert_true((room - (box_mid + 10.0 + 10.0)).abs() < 0.5, msg="the line's room from \{room}, the box's middle \{box_mid}")
+  // its four bars (34 and 96, 132 and 132), two rows 9 apart, as much room over them as under
+  let bars = t.drawn_rects().filter(fn(r) { r.3 == 10.0 && r.1 > box_mid && r.1 < room + 38.0 })
+  assert_eq(bars.length(), 4)
+  let top = bars.fold(init=1.0e9, fn(m, r) { if r.1 < m { r.1 } else { m } })
+  let bottom = bars.fold(init=-1.0e9, fn(m, r) { if r.1 + r.3 > m { r.1 + r.3 } else { m } })
+  assert_true((top - room - 4.5).abs() < 0.5, msg="the bars from \{top}, the line's room from \{room}")
+  assert_true((room + 38.0 - bottom - 4.5).abs() < 0.5, msg="the bars to \{bottom}, the line's room to \{room + 38.0}")
+}
+
+///|
+test "settings: an offline station's picture and line centred across its card's room (StationBody), not over the 10 above it" {
+  let t = stations_unread_net()
+  // MBA's room: its load's 20 and 10 over its unseen line, the line's 38
+  let room = unseen_lines(t)[1] - 30.0
+  let (_, said) = t.find("此机器已长时间未连接 still.fail").unwrap()
+  assert_true((said - (room + 34.0)).abs() < 0.5, msg="the line's middle \{said}, the room's \{room + 34.0}")
+}
+
+///|
+test "settings: a station's low box filled as far as is used (FillChip): 内存 18% left, 82% of it" {
+  let t = stations_unread_net()
+  let (fill, chip) = chip_fill(t, "剩 11.5 G")
+  assert_true(chip > 0.0)
+  assert_true((fill - chip * 0.82).abs() < 0.5, msg="the fill \{fill} of \{chip}")
+}
+
+///|
+test "an agent's allowance in its sheet filled as far as is left (QuotaChips): 5H 62%, W 18%" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-agent")
+  for each in [("62%", 0.62), ("18%", 0.18)] {
+    let (words, part) = each
+    let (fill, chip) = chip_fill(t, words)
+    assert_true(chip > 0.0, msg=words)
+    assert_true((fill - chip * part).abs() < 0.5, msg="\{words}: the fill \{fill} of \{chip}")
+  }
 }
 
 ///|

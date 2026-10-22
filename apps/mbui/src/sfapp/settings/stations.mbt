@@ -127,73 +127,119 @@ fn reconnecting(c : @ui.Ctx) -> Unit {
 fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let t = @sf.theme()
   let online = flag(s, "online")
-  let host = if online { field(s, "host") } else { None }
+  // (a host the core says is null as none: not read yet)
+  let host = match field(s, "host") {
+    Some(Object(_)) as h if online => h
+    _ => None
+  }
   let net = if online { station_net(core, s) } else { None }
-  let faded = if flag(s, "reconnecting") { 0.45 } else { 1.0 }
-  c.box(w=Fill(1.0), pt=10.0, fn() {
-    c.box(w=Fill(1.0), opacity=faded, fn() {
-      c.box(dir=Row, h=Px(20.0), gap=8.0, align=ACenter, opacity=if host is Some(_) { 1.0 } else { 0.0 }, fn() {
-        for m in items(host, "meters") {
-          if text(Some(m), "level") != "ok" {
-            fill_chip(c, 100 - clamp(count(Some(m), "left")), text(Some(m), "level"), text(Some(m), "short"), text(Some(m), "remaining"))
+  let faded = flag(s, "reconnecting")
+  c.box(style=station_body_box, fn() {
+    // the room under the 10: what is laid over it covers that alone (StationBody's matchParentSize inside the Box's
+    // padding; a layer covers its parent's padding too)
+    c.box(style=@sf.full_width, fn() {
+      // the boxes of what runs low; not read yet, grey bars over their room
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=seen(peek_meters, host is Some(_), faded), fn() {
+          for m in items(host, "meters") {
+            if text(Some(m), "level") != "ok" {
+              fill_chip(c, 100 - clamp(count(Some(m), "left")), text(Some(m), "level"), text(Some(m), "short"), text(Some(m), "remaining"))
+            }
           }
+        })
+        |> ignore
+        if online && host is None {
+          c.layer(fn() {
+            c.box(style=peek_meters_unread, fn() {
+              for w in unread_meters {
+                @sf.bar(c, Px(w), unread_meter_h, radius=unread_meter_r, breathing=true)
+              }
+            })
+            |> ignore
+          })
+          |> ignore
         }
       })
       |> ignore
-      c.box(w=Fill(1.0), pt=10.0, opacity=if net is Some(_) { 1.0 } else { 0.0 }, fn() { net_line(c, net) }) |> ignore
-    })
-    |> ignore
-    if !online {
-      c.layer(fn() {
-        c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), gap=12.0, align=ACenter, fn() {
-          let pic = if t.dark { "illus_station_offline_dark" } else { "illus_station_offline" }
-          if @sf.has_drawable(pic) {
-            @sf.drawable(c, pic, 72.0) |> ignore
+      // its network 10 under them; not read yet, grey bars centred across its line's room
+      c.box(style=station_body_net, fn() {
+        c.box(style=@sf.full_width, fn() {
+          c.box(style=seen(@sf.full_width, net is Some(_), faded), fn() { net_line(c, net) }) |> ignore
+          if online && net is None {
+            c.layer(fn() { net_bars(c) }) |> ignore
           }
-          c.text(
-            fill("android-settings.stations.silent", [("app", "still.fail")]),
-            size=13.0,
-            color=t.p.muted,
-            w=Fill(1.0),
-            line=18.0,
-          )
-          |> ignore
         })
         |> ignore
       })
       |> ignore
-    } else {
-      let breath = @sf.breath(c)
-      c.layer(fn() {
-        if host is None {
-          c.box(dir=Row, h=Px(20.0), gap=4.0, opacity=breath, fn() {
-            for w in [46.0, 52.0, 50.0] {
-              @sf.bar(c, Px(w), 20.0, radius=6.0)
+      if !online {
+        c.layer(fn() {
+          c.box(style=offline_row, fn() {
+            let pic = if t.dark { "illus_station_offline_dark" } else { "illus_station_offline" }
+            if @sf.has_drawable(pic) {
+              // as tall as the room (fillMaxHeight), as wide as that keeps it
+              @sf.drawable(c, pic, offline_picture_w) |> ignore
             }
-          })
-          |> ignore
-        }
-        if net is None {
-          c.box(dir=Row, w=Fill(1.0), pt=30.0, align=ACenter, opacity=breath, fn() {
-            c.box(w=Fill(1.0), gap=9.0, fn() {
-              @sf.bar(c, Px(34.0), 10.0)
-              @sf.bar(c, Px(96.0), 10.0)
-            })
-            |> ignore
-            c.box(gap=9.0, fn() {
-              @sf.bar(c, Px(132.0), 10.0)
-              @sf.bar(c, Px(132.0), 10.0)
-            })
+            c.text(
+              fill("android-settings.stations.silent", [("app", "still.fail")]),
+              size=13.0,
+              color=t.p.muted,
+              w=Fill(1.0),
+              line=18.0,
+              max_lines=3,
+            )
             |> ignore
           })
           |> ignore
-        }
-      })
-      |> ignore
-    }
+        })
+        |> ignore
+      }
+    })
+    |> ignore
   })
   |> ignore
 }
+
+///|
+/// `style` as shown: unseen while what it shows is not known yet (laid out keeping its room), faded while the station
+/// is reconnecting (as last heard).
+fn seen(style : @ui.Style, known : Bool, faded : Bool) -> @ui.Style {
+  if !known {
+    style.then(unseen)
+  } else if faded {
+    style.then(faded_look)
+  } else {
+    style
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let unseen : @ui.Style = @ui.style(opacity=O0)
+
+///|
+// kept across runs: a value (no field of it changes)
+let faded_look : @ui.Style = @ui.style(opacity=O45)
+
+///|
+/// Under a station's name, 10 down (StationBody's padding).
+// kept across runs: a value (no field of it changes)
+let station_body_box : @ui.Style = @ui.style(w=Full, pt=S2_5)
+
+///|
+/// Its network, 10 under the boxes of what runs low.
+// kept across runs: a value (no field of it changes)
+let station_body_net : @ui.Style = @ui.style(w=Full, pt=S2_5)
+
+///|
+/// Offline: its picture and a line saying so, centred across the room, 12 apart.
+// kept across runs: a value (no field of it changes)
+let offline_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, gap=S3, align=ACenter)
+
+///|
+/// The offline picture's width in a station's card: the room's height (the load's 20, 10, the network's two lines of 18
+/// 2 apart: 68) times the picture's 2:1.
+let offline_picture_w : Double = 136.0
 
 ///|
 fn clamp(n : Int) -> Int {
@@ -219,8 +265,8 @@ fn level_color(level : String) -> Int64 {
 }
 
 ///|
-/// The corner of a chip whose ground fills from the left (how far a download or a use has come): its fill, flush with
-/// the chip's edges, is concentric with it (the chip's clip does not round what is in it until mbui#42).
+/// The corner of a chip whose ground fills from the left (how far a download or a use has come): its fill a plain
+/// rectangle the chip's clip cuts along its corners (FillChip's drawRect in its clip), its end square where it stops.
 let fill_chip_radius : Double = 6.0
 
 ///|
@@ -244,7 +290,7 @@ fn fill_chip(
     if fill > 0 {
       c.layer(fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-          c.box(w=Fill(fill.to_double()), h=Fill(1.0), radius=@ui.concentric(corner, 0.0), bg=ground, fn() {  }) |> ignore
+          c.box(w=Fill(fill.to_double()), h=Fill(1.0), bg=ground, fn() {  }) |> ignore
           if fill < 100 {
             c.box(w=Fill((100 - fill).to_double()), h=Fill(1.0), fn() {  }) |> ignore
           }
@@ -381,48 +427,164 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
 
 ///|
 /// An online station's machine on its page (Stations.kt StationFigures): what is left of it large, its network, the
-/// rest a row each, its agents' processes; reconnecting, as last heard, faded.
+/// rest a row each, its agents' processes; in its room whether known yet or not (grey bars over it until it is: laid
+/// out unseen as when it is, so nothing below moves as it comes); reconnecting, as last heard, faded.
 fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let t = @sf.theme()
-  let host = field(s, "host")
+  let host = match field(s, "host") {
+    Some(Object(_)) as h => h
+    _ => None
+  }
+  let read = host is Some(_)
   let net = station_net(core, s)
-  c.box(w=Fill(1.0), opacity=if flag(s, "reconnecting") { 0.45 } else { 1.0 }, fn() {
-    c.box(w=Fill(1.0), pt=4.0, fn() {
-      match host {
-        Some(Object(_)) => meter_dials(c, items(host, "meters"))
-        _ =>
-          c.box(dir=Row, w=Fill(1.0), gap=16.0, opacity=@sf.breath(c), fn() {
-            for _ in 0..<3 {
-              @sf.bar(c, Px(90.0), 76.0, radius=6.0)
-            }
-          })
-          |> ignore
-      }
-    })
-    |> ignore
-    c.box(w=Fill(1.0), pt=14.0, opacity=if net is Some(_) { 1.0 } else { 0.0 }, fn() { net_line(c, net) }) |> ignore
-    c.box(w=Fill(1.0), pt=16.0, gap=8.0, fn() {
-      for d in items(host, "details") {
-        c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
-          c.box(min_w=52.0, fn() {
-            c.text(text(Some(d), "label"), size=13.0, color=t.p.subtle, wrap=false, line=20.0) |> ignore
-          })
-          |> ignore
-          c.text(text(Some(d), "value"), size=13.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
+  let running = text(field(s, "overview"), "processesText")
+  let details = if read { items(host, "details") } else { unread_details() }
+  // (each part's room a box of its own under its padding: what is laid over it covers that alone, as matchParentSize
+  // in a padded Box)
+  c.box(style=if flag(s, "reconnecting") { peek_figures_faded } else { peek_figures_box }, fn() {
+    c.box(style=figures_dials, fn() {
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=seen(@sf.full_width, read, false), fn() {
+          meter_dials(c, if read { items(host, "meters") } else { unread_dials() })
         })
         |> ignore
-      }
-    })
-    |> ignore
-    let running = text(field(s, "overview"), "processesText")
-    if running != "" {
-      c.box(w=Fill(1.0), pt=8.0, fn() {
-        c.text(running, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+        if !read {
+          c.layer(fn() {
+            c.box(style=figures_dials_unread, fn() {
+              for _ in 0..<3 {
+                @sf.bar(c, Px(unread_dial_w), unread_dial_h, radius=unread_meter_r, breathing=true)
+              }
+            })
+            |> ignore
+          })
+          |> ignore
+        }
       })
       |> ignore
-    }
+    })
+    |> ignore
+    c.box(style=figures_net, fn() {
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=seen(@sf.full_width, net is Some(_), false), fn() { net_line(c, net) }) |> ignore
+        if net is None {
+          c.layer(fn() { net_bars(c) }) |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+    c.box(style=figures_details, fn() {
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=seen(figures_rows, read, false), fn() {
+          for d in details {
+            c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
+              c.box(min_w=52.0, fn() {
+                c.text(text(Some(d), "label"), size=13.0, color=t.p.subtle, wrap=false, line=20.0) |> ignore
+              })
+              |> ignore
+              c.text(text(Some(d), "value"), size=13.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+        // four bars evenly down its room (Arrangement.SpaceEvenly: as much room over each as under the last)
+        if !read {
+          c.layer(fn() {
+            c.box(style=figures_spread, fn() {
+              c.spacer()
+              for _ in 0..<4 {
+                @sf.bar(c, Px(unread_detail_w), net_bar_h, breathing=true)
+                c.spacer()
+              }
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+    // its agents' processes, a line (Line): a grey bar in its room until they are known
+    c.box(style=figures_running, fn() {
+      c.box(style=figures_line, fn() {
+        if running != "" {
+          c.text(running, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+        } else {
+          @sf.bar(c, Px(unread_running_w), net_bar_h, breathing=true)
+        }
+      })
+      |> ignore
+    })
+    |> ignore
   })
   |> ignore
+}
+
+///|
+/// What is left of it large, 4 down.
+// kept across runs: a value (no field of it changes)
+let figures_dials : @ui.Style = @ui.style(w=Full, pt=S1)
+
+///|
+/// The dials' places before it is read, 16 apart (Bar 90 by 76, 6 round).
+// kept across runs: a value (no field of it changes)
+let figures_dials_unread : @ui.Style = @ui.style(row=true, w=Full, h=Full, gap=S4)
+
+///|
+let unread_dial_w : Double = 90.0
+
+///|
+let unread_dial_h : Double = 76.0
+
+///|
+/// Its network 14 under the dials.
+// kept across runs: a value (no field of it changes)
+let figures_net : @ui.Style = @ui.style(w=Full, pt=S3_5)
+
+///|
+/// The rest a row each, 16 under its network.
+// kept across runs: a value (no field of it changes)
+let figures_details : @ui.Style = @ui.style(w=Full, pt=S4)
+
+///|
+/// Its rows, 8 apart (HostDetails).
+// kept across runs: a value (no field of it changes)
+let figures_rows : @ui.Style = @ui.style(w=Full, gap=S2)
+
+///|
+/// What lies evenly down a room (its spacers share what is left).
+// kept across runs: a value (no field of it changes)
+let figures_spread : @ui.Style = @ui.style(w=Full, h=Full)
+
+///|
+let unread_detail_w : Double = 180.0
+
+///|
+/// Its agents' processes, 8 under the rows.
+// kept across runs: a value (no field of it changes)
+let figures_running : @ui.Style = @ui.style(w=Full, pt=S2)
+
+///|
+/// A line's room, as tall as a line in Chinese (18), what it says centred across it (Line).
+// kept across runs: a value (no field of it changes)
+let figures_line : @ui.Style = @ui.style(w=Full, h=S4_5, justify=JCenter)
+
+///|
+let unread_running_w : Double = 120.0
+
+///|
+/// What a machine not read yet is laid out as, unseen (Stations.kt unreadHost): its dials as tall as a real one's
+/// (their words in Chinese).
+fn unread_dials() -> Array[Json] {
+  Array::make(3, obj([("big", str("0")), ("unit", str("%")), ("title", str("内存剩")), ("total", str("共 0 GB")), ("left", Json::number(0.0)), ("level", str("ok"))]))
+}
+
+///|
+/// Its rows as tall as a real one's, unseen (unreadHost's details).
+fn unread_details() -> Array[Json] {
+  Array::make(4, obj([("label", str("主机名")), ("value", str("直连"))]))
 }
 
 ///|
