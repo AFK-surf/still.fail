@@ -127,6 +127,8 @@ priv struct Reading {
   rises : Map[String, @motion.Anim]
   /// when the list's own motion is at rest, as last laid out (ListInfo's `rest`): a turn waits for it
   mut list_rest : Double
+  /// what was sent from here and is not in the core's view yet: in the list from the frame it was sent (sent_local)
+  sending : Array[LocalSent]
   /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
   /// anchor: a message arriving while it is followed is read from its start)
   mut newest : String
@@ -192,6 +194,7 @@ fn reading_of(key : String) -> Reading {
         admitted: {},
         rises: {},
         list_rest: -1.0,
+        sending: [],
         newest: "",
         following_row: false,
         follow_key: "",
@@ -400,6 +403,11 @@ fn messages(
   follow_newest(c, rd, list, keys, key)
   flight_frame(c, dkey)
   let flight = flight_of(dkey)
+  // (the first of what was sent from here not in the chat yet: a message out of an avatar comes in over it, emit.mbt)
+  em.out_key = match list.search_by(fn(e) { e is Out(_) }) {
+    Some(i) => keys[i]
+    None => ""
+  }
   // half a second after it was put in place (shown), what comes at its end may glide: asked each frame it is drawn
   // (later: nothing shown waits for it)
   let glides = @kit.after(c, "glide/" + key, rd.placed, glide_after_place_ms, later=true)
@@ -499,18 +507,17 @@ fn messages(
           }
           _ => {
             // the row words sent go to: its bubble flies there from the composer (flight.mbt)
-            let mine = match e {
-              Out(_) => true
-              Said(m) => m.mine && !m.system
-              _ => false
-            }
-            let flies = flight_takes(dkey, keys[i], mine)
+            let flies = flight_takes(dkey, keys[i])
             flying.val = if flies { flight } else { None }
             match flight {
               Some(f) if flies => flight_placed(c, f)
               _ => ()
             }
             let ri = c.box(w=Fill(1.0), pl=row_side(c), pr=row_side(c), pt=top, fn() {
+              // (where a message out of an avatar comes in over it: emit.mbt)
+              if keys[i] == em.out_key {
+                @motion.measure(c, c.box(fn() {  }), "emit-out/" + ek + "/" + keys[i])
+              }
               entry_view(c, src, here, e, list)
             })
             flying.val = None
@@ -535,15 +542,20 @@ fn messages(
                   screen=true,
                   drive=flight_up(flight_p(c, f)),
                 )
+              // what was sent from here not in the chat yet, pushed down by a message coming in over it out of an
+              // avatar (where the avatar landed): it glides there, as an agent's activity does
+              None if e is Out(_) && em.current is Some(_) =>
+                @motion.layout(c, ri, key + "\u{1}" + keys[i], spec=@motion.spring(stiffness=300.0, threshold=1.0), listed=false)
               _ => ()
             }
             // what is new to the list while it is followed rises in (Chat.kt rise: 14 up and from nothing, 320 ms
-            // on the standard curve); what leaves the chat from the outbox fades (200 ms)
+            // on the standard curve); what leaves the chat from the outbox fades (200 ms), not what was sent from here
+            // and is now the core's (LocalSent: its row goes on as the core's)
             let mk = key + "\u{1}" + keys[i]
-            if e is Out(_) {
-              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(out_leave_ms)))
-            } else {
-              @motion.keyed(c, ri, mk)
+            match e {
+              Out(o) if !local_sent(o) =>
+                @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(out_leave_ms)))
+              _ => @motion.keyed(c, ri, mk)
             }
             // (one out of an avatar does not rise in as well)
             let emitted = match e {
@@ -939,7 +951,14 @@ fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool
       showing[k] = true
     }
     emit_take(c, em, v, showing)
-    emit_step(c, em, turns)
+    // words sent from here on their way: their landing as declared (-2: not laid out yet), -1 none or landed
+    // (emit_step)
+    let sending = match send_flight.val {
+      Some(f) if f.turns == rk && !f.placed => -2.0
+      Some(f) if f.turns == rk && f.way.moving() => f.way.ends()
+      _ => -1.0
+    }
+    emit_step(c, em, turns, sending)
   }
   if lingered {
     return
@@ -1005,11 +1024,81 @@ fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
 }
 
 ///|
+/// What was sent from here, in the list from the frame it was sent until the core's view has it (Chat.kt shows the
+/// core's outbox; here the core's row comes a round trip later, and what is sent is on screen first): drawn as an
+/// outbox entry of its words, by a key of its own ("local:n"); the first of this device's own rows not there when it
+/// was sent (an outbox entry, or the message it became) is it, from then on by that row's key.
+priv struct LocalSent {
+  row : Outgoing
+  before : Map[String, Bool]
+}
+
+///|
+let local_sent_n : Ref[Int] = { val: 0 }
+
+///|
+fn local_sent(o : Outgoing) -> Bool {
+  o.id.has_prefix("local:")
+}
+
+///|
+/// The rows of the view `v` there when words were sent: an outbox entry's, a message's, and the outbox entry it was
+/// (rows are keyed by it: row_keys).
+fn sent_before(v : ChatView) -> Map[String, Bool] {
+  let before : Map[String, Bool] = {}
+  for o in v.outbox {
+    before["o:" + o.id] = true
+  }
+  for m in v.messages {
+    if m.outgoing != "" {
+      before["o:" + m.outgoing] = true
+    }
+    before["m:" + m.ts] = true
+  }
+  before
+}
+
+///|
+/// Words sent from chat `rk` (its station and session) are in its list now, before the core has them (LocalSent).
+/// Its key, for what flies there (flight.mbt).
+fn sent_local(rk : String, v : ChatView, words : String, files : Array[Json]) -> String {
+  local_sent_n.val += 1
+  let id = "local:\{local_sent_n.val}"
+  reading_of(rk).sending.push({
+    row: {
+      id,
+      text: words,
+      attachments: files.map(attachment_of),
+      quotes: [],
+      state: "sending",
+      error: "",
+      joined: false,
+      followed: false,
+      seq: -1.0,
+      waits: "",
+      uploads: [],
+    },
+    before: sent_before(v),
+  })
+  "o:" + id
+}
+
+///|
+/// What was sent from chat `rk` (key: sent_local's) did not go: it leaves the list.
+fn sent_local_gone(rk : String, key : String) -> Unit {
+  let rd = reading_of(rk)
+  match rd.sending.search_by(fn(l) { "o:" + l.row.id == key }) {
+    Some(i) => rd.sending.remove(i) |> ignore
+    None => ()
+  }
+}
+
+///|
 /// The rows in the list and their keys, as they move (a message sent from here keeps its outbox row's: Chat.kt
 /// sentAs), and which are new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt
 /// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) comes in its turn
-/// among what changes the list's height (turns.mbt, Chat.kt newcomers), kept out of the list till then; so are the
-/// words sent from here (`flight`) till theirs.
+/// among what changes the list's height (turns.mbt, Chat.kt newcomers), kept out of the list till then. What was sent
+/// from here never waits: in the list the frame it is sent, before the core has it (LocalSent).
 fn row_keys(
   c : @ui.Ctx,
   rd : Reading,
@@ -1040,6 +1129,56 @@ fn row_keys(
       _ => e.id()
     }
   })
+  // what was sent from here: the core's row once it has it (the first of this device's own not there when it was
+  // sent, each taken once), going on as that row (drawn already: it does not rise in, nor wait a turn; words flying
+  // there go on to it)
+  let taken : Map[String, Bool] = {}
+  let still : Array[LocalSent] = []
+  for l in rd.sending {
+    let mut came = ""
+    for i, e in all {
+      let k = all_keys[i]
+      let mine = match e {
+        Out(_) => true
+        Said(m) => m.mine && !m.system
+        _ => false
+      }
+      if mine && !l.before.contains(k) && !taken.contains(k) {
+        came = k
+        break
+      }
+    }
+    if came == "" {
+      still.push(l)
+      continue
+    }
+    taken[came] = true
+    rd.known[came] = true
+    match flight {
+      Some(f) if f.key == "o:" + l.row.id => f.key = came
+      _ => ()
+    }
+  }
+  rd.sending.clear()
+  for l in still {
+    rd.sending.push(l)
+  }
+  // (after the outbox, before the agents' lines and the room under them)
+  let all = all.copy()
+  let all_keys = all_keys.copy()
+  if still.length() > 0 {
+    let mut at = all.length()
+    for i, e in all {
+      if e is (Working(_) | Foot) {
+        at = i
+        break
+      }
+    }
+    for j, l in still {
+      all.insert(at + j, Out(l.row))
+      all_keys.insert(at + j, "o:" + l.row.id)
+    }
+  }
   let info = c.list_info(key)
   let following = match info {
     Some(i) => i.at_end || i.gliding || i.following_row
@@ -1053,28 +1192,16 @@ fn row_keys(
     Some(i) => i.rest
     None => -1.0
   }
-  // words sent from here (a flight's): their row, the first of this device's own not there when they were sent
-  let sent_row = fn(e : Entry, k : String) {
-    match flight {
-      Some(f) =>
-        !f.before.contains(k) &&
-        (match e {
-          Out(_) => true
-          Said(m) => m.mine && !m.system
-          _ => false
-        })
-      None => false
-    }
-  }
   if rd.drawn && following {
     for i, e in all {
       let k = all_keys[i]
-      if rd.known.contains(k) || rd.admitted.contains(k) || sent_row(e, k) {
+      if rd.known.contains(k) || rd.admitted.contains(k) {
         continue
       }
       let comes = match e {
         Working(a) => a.started
-        Out(_) => true
+        // (what was sent from here is in the list at once)
+        Out(o) => !local_sent(o)
         // (one out of an avatar comes out of it instead)
         Said(m) => m.said && !emit_goes(em, m.seq)
         Letters(m) => m.said
@@ -1094,7 +1221,7 @@ fn row_keys(
   let keys : Array[String] = []
   for i, e in all {
     let k = all_keys[i]
-    if turns.waiting.contains(k) || (turns.send_waiting && sent_row(e, k)) {
+    if turns.waiting.contains(k) {
       continue
     }
     list.push(e)

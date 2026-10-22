@@ -1,14 +1,16 @@
 // What changes the height of a chat's list plays one at a time (ListTurns.kt, web/src/listQueue.ts, docs/list-motion.md):
 // words sent flying in from the composer, a message simply coming in, the agent's line coming, messages coming out of
 // its avatar, a decision's options closing, what goes from under a post. Each waits its turn here, in the order they
-// came; a turn is over once its own motion is and the list is where it moved it to (the list's own motion, its glide
-// after what came, at rest: Ctx::list_info's `rest`). What only fades, turns or changes its words is not in it. A row
-// waiting its turn is not in the list yet: its room comes when its turn does.
+// came, but words sent: they fly at once, in the list the frame they are sent (flight.mbt), and what is asked after
+// them waits till they have landed (the list does not follow its end while they fly: a row come in then would move it
+// at once; an answer out of its avatar under way as they were sent waits for them too: emit_step). A turn is over once its own motion is and the list is where it moved it to (the
+// list's own motion, its glide after what came, at rest: Ctx::list_info's `rest`). What only fades, turns or changes
+// its words is not in it. A row waiting its turn is not in the list yet: its room comes when its turn does.
 //
 // Motion as data: each turn's start is declared (where the one before was declared to end, or the list's rest, or when
 // it was asked, whichever is last) and what plays in it starts from there (`started`), whichever frame sees it; a turn
-// of a known length ends at its start and that, one that lasts till something is over (words sent, till they have
-// landed; messages out of avatars, till none is left) when that says it is (Turns::over).
+// of a known length ends at its start and that, one that lasts till something is over (messages out of avatars, till
+// none is left) when that says it is (Turns::over), as words sent say they have landed.
 
 ///|
 /// What a turn is for: a row coming in (by its key), something under a post shown or not (by its key), words sent,
@@ -48,8 +50,10 @@ priv struct Turns {
   wants : Map[String, Bool]
   /// when each row came in or each change was made, by key (what plays in it starts from there)
   started : Map[String, Double]
-  /// words sent waiting their turn: their row kept out of the list, the words over the composer
-  mut send_waiting : Bool
+  /// words last sent: when (-1: none), and till when what is asked after them waits (their landing, as they say it:
+  /// Turns::over; till then the most their way can take: their wait for their row and their flight)
+  mut sent_at : Double
+  mut sent_until : Double
   /// the list's own motion, as last seen: at rest from then (inf: under way, its end not known yet)
   mut list_rest : Double
   /// the frame they were last played on in (Turns::step): their chat's page shown then; that frame's time, as handed
@@ -78,7 +82,8 @@ fn turns_of(key : String) -> Turns {
         shown: {},
         wants: {},
         started: {},
-        send_waiting: false,
+        sent_at: -1.0,
+        sent_until: -1.0,
         list_rest: -1.0,
         stepped: -1,
         now: 0.0,
@@ -137,10 +142,10 @@ fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after? : B
 }
 
 ///|
-/// Words sent: their row comes in its turn, which lasts till they have landed (Turns::over).
+/// Words sent: on their way at once, whatever plays; what is asked after them waits for them to land (Turns::over).
 fn Turns::send(self : Turns, c : @ui.Ctx) -> Unit {
-  self.send_waiting = true
-  self.ask(c, Send, @double.infinity)
+  self.sent_at = self.moment(c)
+  self.sent_until = self.sent_at + flight_wait_ms + flight_ms + turn_calm_ms
 }
 
 ///|
@@ -189,6 +194,12 @@ fn Turns::started_at(self : Turns, key : String) -> Double {
 ///|
 /// The turn under way, of words sent or messages out of avatars, is over (`at`: when it was declared to end).
 fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Unit {
+  // (words sent landed: what waits for them goes from here)
+  if what == Send && self.sent_at >= 0.0 {
+    self.sent_until = dmin(self.sent_until, at + turn_calm_ms)
+    c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
+    return
+  }
   if self.on == Some(what) && self.open {
     self.open = false
     self.until = dmin(self.until, at + turn_calm_ms)
@@ -227,7 +238,17 @@ fn Turns::next_ask(self : Turns) -> Int? {
 /// When the next turn may start (inf: not known yet): the one under way over (at most turn_most_ms after it began), the
 /// list at rest, and it asked.
 fn Turns::free_at(self : Turns, a : TurnAsk) -> Double {
-  dmax(dmax(self.until, self.list_rest), a.at)
+  dmax(dmax(dmax(self.until, self.list_rest), a.at), self.after_sent(a))
+}
+
+///|
+/// What ask `a` waits for of words sent: their landing, asked after they were sent (-1: nothing).
+fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
+  if self.sent_at >= 0.0 && a.at >= self.sent_at {
+    self.sent_until
+  } else {
+    -1.0
+  }
 }
 
 ///|
@@ -263,7 +284,7 @@ fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
         self.shown[k] = self.wants.get(k).unwrap_or(!self.shown.get(k).unwrap_or(false))
         self.started[k] = at
       }
-      Send => self.send_waiting = false
+      Send => ()
       Emits => self.started[emits_turn] = at
     }
   }
@@ -329,7 +350,7 @@ fn Turns::start_of(self : Turns, key : String) -> Double {
   })
   let mut end = if self.open { @double.infinity } else { self.until }
   for a in order {
-    let start = dmax(dmax(end, self.list_rest), a.at)
+    let start = dmax(dmax(dmax(end, self.list_rest), a.at), self.after_sent(a))
     if a.what == Admit(key) || a.what == Change(key) {
       return start
     }

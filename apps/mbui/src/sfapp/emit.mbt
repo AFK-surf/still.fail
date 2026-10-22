@@ -73,6 +73,12 @@ priv struct Emits {
   mut trace : (Double, Double, Double)
   /// what it is said to move by (Ctx::moving): its turns, each pose's end known as it starts
   mover : @ui.Mover
+  /// a message's coming in held for words sent from here on their way (emit_step): till their declared landing (-1:
+  /// none)
+  mut held_until : Double
+  /// the first row of what was sent from here not in the chat yet (the outbox's, under the messages), as last built
+  /// ("" none): a message coming in comes in over it
+  mut out_key : String
 }
 
 ///|
@@ -95,6 +101,8 @@ fn emits_of(key : String) -> Emits {
         copied: "",
         trace: (0.0, 0.0, 0.0),
         mover: @ui.Mover::new(),
+        held_until: -1.0,
+        out_key: "",
       }
       emits[key] = e
       e
@@ -231,7 +239,7 @@ impl @ui.Moving for Emits with rest_at(self, now, frame) {
   ignore(now)
   ignore(frame)
   match self.current {
-    Some(t) => t.clock.ends()
+    Some(t) => dmax(t.clock.ends(), self.held_until)
     None => -1.0
   }
 }
@@ -258,7 +266,10 @@ fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 /// The poses played on, a frame at a time (ChatMotion.play): each to its end, then the next; the next waiting starts
 /// once none plays. They take one turn among what changes the list's height (`turns`, ChatMotion.start): the first
 /// waiting starts as it comes, from then, and it is over once none is left. Not watched, all of it at once.
-fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns) -> Unit {
+/// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
+/// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, the avatar
+/// waiting where it landed meanwhile, as the list does not follow its end while they fly.
+fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
     turns.over(c, Emits, turns.moment(c))
@@ -291,7 +302,18 @@ fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns) -> Unit {
     let at = t.clock.ends()
     match t.pose {
       Fold => e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)) })
-      Float => e.current = Some({ ..t, pose: Spit, from: None, clock: pose_clock(Spit.ms(), Some(at)) })
+      Float => {
+        if sending != -1.0 {
+          if sending > e.held_until {
+            e.held_until = sending
+            c.moving(e.mover, e as &@ui.Moving)
+          }
+          break
+        }
+        let at = dmax(at, e.held_until)
+        e.held_until = -1.0
+        e.current = Some({ ..t, pose: Spit, from: None, clock: pose_clock(Spit.ms(), Some(at)) })
+      }
       Spit =>
         match (e.queue.get(0), e.landed) {
           // the same agent's next message is waiting: the avatar drops on to it from here, not going home to hop
@@ -363,7 +385,9 @@ fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> 
     None => return None
   }
   // before the message is in the list: where its avatar will be, the first activity's place (the message comes in
-  // there, the activities move down), 3 down its row as a message's avatar sits; as it comes in, where it was aimed
+  // there, the activities move down), or over what was sent from here not in the chat yet (the outbox's rows, under
+  // the messages: it comes in over them), 3 down its row as a message's avatar sits; as it comes in, where it was
+  // aimed
   let known = match @motion.measured_rect(c, "emit-landing/" + key + "/" + seq_s(t.seq)) {
     Some(r) => Some((r.0, r.1 + 3.0))
     None => None
@@ -381,6 +405,18 @@ fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> 
           Some(f) if f.1 <= r.1 => ()
           _ => first = Some((r.0, r.1))
         }
+      None => ()
+    }
+  }
+  if e.out_key != "" {
+    match @motion.measured_rect(c, "emit-out/" + key + "/" + e.out_key) {
+      Some(r) => {
+        let y = r.1 + 3.0
+        match first {
+          Some(f) if f.1 <= y => ()
+          _ => first = Some((avatar.0, y))
+        }
+      }
       None => ()
     }
   }

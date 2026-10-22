@@ -1,12 +1,12 @@
-// Words sent flying (ChatHost.kt Flight, FlightLayer; web madeChat.ts): what is sent stays where it was typed until
-// its row is in the list (the first of this device's own not there when it was sent: an outbox entry, or the message
-// it became), then its bubble goes from the words' place in the field to its own, over the composer: across first and
-// up a little after, so the words rise on a curve (Ease.Flight over 80% of its 600 ms, up 12% late), its ground coming
+// Words sent flying (ChatHost.kt Flight, FlightLayer; web madeChat.ts): what is sent is in the list the frame it is
+// sent, waiting for nothing (chat.mbt LocalSent: the core's row goes on from it once it comes), the words drawn where
+// they were typed until its row is laid out; then its bubble goes from the words' place in the field to its own, over
+// the composer: across first and up a little after, so the words rise on a curve (Ease.Flight over 80% of its 600 ms, up 12% late), its ground coming
 // in round them from a quarter of the way, its time and the rest of its row coming in as they settle (Ease.Arrive from
 // 24%). Meanwhile the rows above, put up by the new one at once, go there with the words (sendReflow: on the same
 // way up); the composer's room stays as tall as when they were sent until they are a quarter of the way, and its
-// hint comes back once they are out of it (200 ms, Ease.Arrive). A row that never comes (2 s): the composer as it
-// was. With motion reduced (or in screenshots) none of it: the row is where it is.
+// hint comes back once they are out of it (200 ms, Ease.Arrive). Their row never laid out (its page not shown, 2 s):
+// the composer as it was. With motion reduced (or in screenshots) none of it: the row is where it is.
 //
 // The files sent with them go from their tiles in the composer (ChatHost.kt FlyingFile, landingFile, files): drawn as
 // their tiles were where they were until the row is in the list, then each to its place in the message, across and up
@@ -28,13 +28,12 @@ priv struct SendFlight {
   field_y : Double
   field_w : Double
   field_h : Double
-  /// the outbox's entries (and the rows they became) when it was sent: not where it goes
-  before : Map[String, Bool]
   /// the composer's room when sent (held a quarter of the way)
   room : Double
   /// the files sent with them, from their tiles
   files : Array[FlyingFile]
-  /// its row's key once it is in the list, whether it is and from which frame; how far it has come (0 … 1, linear,
+  /// its row's key (what was sent from here, then the core's row it became: chat.mbt row_keys), whether it is laid
+  /// out and from which frame; how far it has come (0 … 1, linear,
   /// told to go as its row is first laid out: as Compose's animation, it sets off the frame after)
   mut key : String
   mut placed : Bool
@@ -79,14 +78,15 @@ let flight_fly : Double = 0.8
 let flight_settle : Double = 0.24
 
 ///|
-/// What is sent from the composer of chat `chat` takes off from the field (before it is emptied). The composer's room
-/// is held as tall as it was until the words let go of it (composer_hold), said now: at most their wait for the row.
+/// What is sent from the composer of chat `chat` takes off from the field (before it is emptied), to row `key` (in
+/// the list from now: sent_local). The composer's room is held as tall as it was until the words let go of it
+/// (composer_hold), said now: at most their wait for the row.
 fn flight_start(
   c : @ui.Ctx,
   chat : String,
   turns : String,
+  key : String,
   words : String,
-  v : ChatView,
   room : Double,
   files : Array[FlyingFile],
 ) -> Unit {
@@ -96,16 +96,6 @@ fn flight_start(
   }
   match c.field_words(field_key) {
     Some(((x, y), (rx, ry, w, h))) => {
-      let before : Map[String, Bool] = {}
-      for o in v.outbox {
-        before["o:" + o.id] = true
-      }
-      for m in v.messages {
-        if m.outgoing != "" {
-          before["o:" + m.outgoing] = true
-        }
-        before["m:" + m.ts] = true
-      }
       // the field's words as laid out (scrolled to its last lines when there were more than it holds), its room
       send_flight.val = Some({
         chat,
@@ -117,16 +107,16 @@ fn flight_start(
         field_y: ry,
         field_w: w,
         field_h: h,
-        before,
         room,
         files,
-        key: "",
+        key,
         placed: false,
         placed_frame: -1,
         way: @motion.Anim::new(0.0),
       })
       composer_hold(chat, room, flight_wait_ms)
-      // their turn among what changes the list's height, till they have landed (turns.mbt: their row kept out till it)
+      // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
+      // wait for nothing (turns.mbt)
       turns_of(turns).send(c)
     }
     None => ()
@@ -178,8 +168,7 @@ fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
   match flight_of(chat) {
     Some(f) => {
       let turns = turns_of(f.turns)
-      // (its wait counted from its turn: till then its row is kept out of the list)
-      let waited = @kit.after(c, "flight/wait", !f.placed && !turns.send_waiting, flight_wait_ms)
+      let waited = @kit.after(c, "flight/wait", !f.placed, flight_wait_ms)
       let landed = f.placed && !f.way.moving()
       if (!f.placed && waited) || landed {
         send_flight.val = None
@@ -193,16 +182,10 @@ fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
 }
 
 ///|
-/// Whether row `key` (new to the list or not) is where the words go: the first of this device's own not there
-/// when they were sent.
-fn flight_takes(chat : String, key : String, mine : Bool) -> Bool {
+/// Whether row `key` is where the words go.
+fn flight_takes(chat : String, key : String) -> Bool {
   match flight_of(chat) {
-    Some(f) => {
-      if f.key == "" && mine && !f.before.contains(key) {
-        f.key = key
-      }
-      f.key == key
-    }
+    Some(f) => f.key == key
     None => false
   }
 }

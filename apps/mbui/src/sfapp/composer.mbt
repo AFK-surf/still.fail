@@ -1093,7 +1093,10 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
       _ => ()
     }
   }
-  flight_start(c, d.key, r.station + "\u{1}" + r.session, words, v, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
+  // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
+  let rk = r.station + "\u{1}" + r.session
+  let row = sent_local(rk, v, words, files)
+  flight_start(c, d.key, rk, row, words, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
@@ -1117,6 +1120,11 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     None => params["session"] = Json::string(r.session)
   }
   (src.call)("chat.send", Json::object(params), fn(res) {
+    // not gone: it leaves the list (the core's outbox has what failed on its way)
+    match res {
+      Err(_) => sent_local_gone(rk, row)
+      _ => ()
+    }
     match res {
       Err(e) if text(Some(e), "code") == "invalid_params" =>
         if draft_empty(d) {

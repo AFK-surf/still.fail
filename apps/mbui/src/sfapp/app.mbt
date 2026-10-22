@@ -309,6 +309,7 @@ fn reset() -> Unit {
   told_bars.val = None
   told_dark.val = None
   send_flight.val = None
+  local_sent_n.val = 0
   flying.val = None
   absolute_times.val = false
   opened_notices.clear()
