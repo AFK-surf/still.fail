@@ -42,6 +42,7 @@ fn wait_slot(slot : Int) -> Int {
   match finished.get(slot) {
     Some(code) => {
       finished.remove(slot)
+      c_release(slot)
       return code
     }
     None => ()
@@ -53,8 +54,10 @@ fn wait_slot(slot : Int) -> Int {
     }
     let code = c_status()
     if s == slot {
+      c_release(s)
       return code
     }
+    // (another's end: its slot kept until that is taken, wait_any)
     finished[s] = code
   }
   127
@@ -65,10 +68,16 @@ fn wait_slot(slot : Int) -> Int {
 fn wait_any() -> (Int, Int) {
   for s, code in finished {
     finished.remove(s)
+    c_release(s)
     return (s, code)
   }
   let s = c_wait_any()
-  (s, if s < 0 { 127 } else { c_status() })
+  if s < 0 {
+    return (s, 127)
+  }
+  let code = c_status()
+  c_release(s)
+  (s, code)
 }
 
 ///|

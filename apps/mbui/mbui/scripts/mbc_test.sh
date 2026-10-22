@@ -11,7 +11,7 @@ CC=${CC:-$(command -v cc || command -v clang || command -v gcc)}
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 n=0
-fail() { echo "mbc_test: FAIL: $*" >&2; exit 1; }
+fail() { echo "mbc_test: FAIL: $*" >&2; [ ! -f "$T/last.log" ] || cat "$T/last.log" >&2; exit 1; }
 ok() { n=$((n + 1)); echo "ok $n - $*"; }
 # (a fixture of tools/mbc/csplit_wbtest.mbt: its #| lines)
 block() { awk -v name="$1" '$0 ~ "^let " name " " { on = 1; next } on && /^  #\|/ { sub(/^  #\|/, ""); print; next } on { exit }' "$D/../tools/mbc/csplit_wbtest.mbt"; }
@@ -35,8 +35,9 @@ echo '#define H 1' > "$T/h.h"
 printf '#include "h.h"\nint x_value(void) { return H; }\n' > "$T/x.c"
 wrapper() { printf '#!/bin/sh\n# %s\nexec %s "$@"\n' "$1" "$CC" > "$T/cc.sh"; chmod +x "$T/cc.sh"; }
 compiled() {
-  "$MBC" compile --cc "$T/cc.sh" "--cflags=$1 -I$T" --extra "$T/x.c" --obj "$T/k" "$T/p.c" 2>&1 >/dev/null \
-    | sed -n 's/.*: \([0-9]*\) of \([0-9]*\) compiled.*/\1 \2/p' | tail -1
+  # (two at a time: one ends while another is waited for, its end kept for its job)
+  "$MBC" compile -j 2 --cc "$T/cc.sh" "--cflags=$1 -I$T" --extra "$T/x.c" --obj "$T/k" "$T/p.c" 2>&1 >/dev/null \
+    | tee "$T/last.log" | sed -n 's/.*: \([0-9]*\) of \([0-9]*\) compiled.*/\1 \2/p' | tail -1
 }
 wrapper one
 set -- $(compiled -O1); total=$2; [ "$1" = "$total" ] || fail "the first compile: $1 of $total"

@@ -408,14 +408,16 @@ void mbc_unlock(int32_t fd) {
 }
 
 // processes: started with mbc_spawn (argv as NUL-ended words; on Windows the command line), their output into a
-// file (or this one's when out is empty); mbc_wait_any answers the slot of one that ended, mbc_status its exit code
+// file (or this one's when out is empty); mbc_wait_any answers the slot of one that ended, mbc_status its exit code.
+// A slot is free again only when mbc_release says its end was taken: one that ended while another was waited for is
+// not given to the next process (its end was a job's still)
 #define MBC_SLOTS 256
 #if defined(_WIN32)
 static HANDLE slots[MBC_SLOTS];
 #else
 static pid_t slots[MBC_SLOTS];
 #endif
-static int32_t slot_used[MBC_SLOTS];
+static int32_t slot_used[MBC_SLOTS]; // 0 free, 1 running, 2 ended (its end not yet taken)
 static int32_t last_status;
 
 int32_t mbc_spawn(moonbit_bytes_t words, moonbit_bytes_t cmdline, moonbit_bytes_t out) {
@@ -492,7 +494,7 @@ int32_t mbc_wait_any(void) {
   int32_t ids[MAXIMUM_WAIT_OBJECTS];
   int n = 0;
   for (int32_t i = 0; i < MBC_SLOTS && n < MAXIMUM_WAIT_OBJECTS; i++)
-    if (slot_used[i]) {
+    if (slot_used[i] == 1) {
       hs[n] = slots[i];
       ids[n++] = i;
     }
@@ -504,7 +506,7 @@ int32_t mbc_wait_any(void) {
   GetExitCodeProcess(slots[s], &code);
   CloseHandle(slots[s]);
   last_status = (int32_t)code;
-  slot_used[s] = 0;
+  slot_used[s] = 2;
   return s;
 #else
   for (;;) {
@@ -512,8 +514,8 @@ int32_t mbc_wait_any(void) {
     pid_t p = wait(&st);
     if (p < 0) return -1;
     for (int32_t i = 0; i < MBC_SLOTS; i++)
-      if (slot_used[i] && slots[i] == p) {
-        slot_used[i] = 0;
+      if (slot_used[i] == 1 && slots[i] == p) {
+        slot_used[i] = 2;
         last_status = WIFEXITED(st) ? WEXITSTATUS(st) : 128 + (WIFSIGNALED(st) ? WTERMSIG(st) : 0);
         return i;
       }
@@ -522,6 +524,10 @@ int32_t mbc_wait_any(void) {
 }
 
 int32_t mbc_status(void) { return last_status; }
+
+void mbc_release(int32_t s) {
+  if (s >= 0 && s < MBC_SLOTS) slot_used[s] = 0;
+}
 
 int32_t mbc_append(moonbit_bytes_t path, moonbit_bytes_t data) {
   char *p = cpath(path);
