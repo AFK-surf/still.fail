@@ -112,7 +112,13 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   assert_true(t.find("收到：「看一下列表」") is None)
   let em = emits_of("ws1/st1\u{1}s-c1")
   let agents = match em.current {
-    Some(turn) => [turn.agent]
+    Some(turn) => {
+      // not there before them, waiting: still on its way down, to come down as they land
+      assert_true(turn.pose == Float)
+      assert_true(turn.clock.moving())
+      assert_true((turn.clock.ends() - landing).abs() < 0.001)
+      [turn.agent]
+    }
     None => fail("no answer comes out")
   }
   match (emit_flight(t.ctx(), "ws1/st1\u{1}s-c1", em, agents), t.drawn_of("再看一下按钮")) {
