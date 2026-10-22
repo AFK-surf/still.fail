@@ -588,17 +588,25 @@ void mb_render_set_bands(double top, double bottom, uint32_t ground) {
   band_ground = ground;
 }
 
-int mb_render_snapshot(const char *path) {
+// the texture the last frame is drawn again into for the CPU to read (read_last), kept while its size is
+static id<MTLTexture> read_tex;
+
+// The last frame's instances (upload's copy) drawn again into a texture the CPU reads, and its pixels: BGRA,
+// premultiplied, rows from the top, the size set (mb_render_set_size), *pw × *ph; the caller frees them.
+static uint8_t *read_last(int *pw, int *ph) {
   int w = (int)round(vw * vscale), h = (int)round(vh * vscale);
-  MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
-  td.usage = MTLTextureUsageRenderTarget;
+  if (!read_tex || (int)read_tex.width != w || (int)read_tex.height != h) {
+    MTLTextureDescriptor *td = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+    td.usage = MTLTextureUsageRenderTarget;
 #if TARGET_OS_OSX
-  td.storageMode = MTLStorageModeManaged;
+    td.storageMode = MTLStorageModeManaged;
 #else
-  td.storageMode = MTLStorageModeShared;
+    td.storageMode = MTLStorageModeShared;
 #endif
-  id<MTLTexture> tex = [dev newTextureWithDescriptor:td];
+    read_tex = [dev newTextureWithDescriptor:td];
+  }
+  id<MTLTexture> tex = read_tex;
   id<MTLBuffer> buf = [dev newBufferWithBytes:last_inst length:(last_count > 0 ? last_count : 1) * MB_INST * sizeof(float) options:MTLResourceStorageModeShared];
   id<MTLCommandBuffer> cb = [queue commandBuffer];
   encode(cb, tex, rpipe_off, buf, last_count, last_bg[0], last_bg[1], last_bg[2]);
@@ -612,6 +620,24 @@ int mb_render_snapshot(const char *path) {
   size_t bpr = (size_t)w * 4;
   uint8_t *px = malloc(bpr * h);
   [tex getBytes:px bytesPerRow:bpr fromRegion:MTLRegionMake2D(0, 0, w, h) mipmapLevel:0];
+  *pw = w;
+  *ph = h;
+  return px;
+}
+
+// A frame drawn offscreen and read back (a film's, mbui/src/film): `inst` as mb_render_present takes them, kept as
+// the last frame, and its pixels as read_last gives them.
+uint8_t *mb_render_read(const double *inst, int32_t count, double r, double g, double b, int *pw, int *ph) {
+  @autoreleasepool {
+    upload(inst, count, r, g, b);
+    return read_last(pw, ph);
+  }
+}
+
+int mb_render_snapshot(const char *path) {
+  int w, h;
+  uint8_t *px = read_last(&w, &h);
+  size_t bpr = (size_t)w * 4;
   CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
   CGContextRef ctx = CGBitmapContextCreate(px, w, h, 8, bpr, cs,
       kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);

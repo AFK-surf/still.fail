@@ -158,6 +158,8 @@ fn leaked_state() -> Array[String] {
 /// decides when and in what order it comes in.
 /// `h264`: whether its host decodes H.264 (@ui.h264_here: a stream's frames, stream.mbt).
 /// `copy_shown`: the system says itself that something was put on the clipboard (Android 13 and later: @ui.copy_shown).
+/// `live`: a real host asked in place of the fake for what is drawn by, its text and its pictures (Live: a film's,
+/// mbui/src/film; never a test's), recorded as a host's are (MBUI_TEXT_RECORD=1 in `env`); `text` is then not read.
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -177,6 +179,7 @@ pub fn Tester::new(
   run? : String,
   h264? : Bool = false,
   copy_shown? : Bool = false,
+  live? : Live,
 ) -> Tester {
   let f = {
     time,
@@ -263,6 +266,8 @@ pub fn Tester::new(
     dev: FakeDevice::new(copy_shown),
     pixels_of_src: {},
     pixels_of: {},
+    live,
+    live_images: {},
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)

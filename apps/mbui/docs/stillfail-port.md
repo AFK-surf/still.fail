@@ -1230,7 +1230,9 @@ pushed, words sent flying from the field into their bubble with the rows above g
 change of shape, the way to the newest, toasts, ＋'s sheet on the sheet's spring, the filter's menu, pressed grounds on
 the ripple's timing. MBUI_MOTION_LOG=1 logs every moving frame; scripts/record.sh records a motion on macOS frame by
 frame (MBUI_RECORD), `scripts/android.sh record` on the emulator, scripts/motionplot.py compares the frames with the
-Android app's curves. At rest nothing of it is drawn: every picture is unchanged.
+Android app's curves. scripts/film.sh films one with no window (src/sffilm, mbui's film): the same script run in a
+Tester of the Mac's text and pictures, each frame drawn by the Mac's renderer offscreen and written into an MP4 at its
+moment, so a change's old and new are the same run frame for frame (`scripts/film.sh side` puts two side by side). At rest nothing of it is drawn: every picture is unchanged.
 
 ## A chat's messages in motion (branch mbui-chat-complete)
 

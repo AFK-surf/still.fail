@@ -1,0 +1,9 @@
+import {
+  "mbui/hostapi",
+  "mbui/ui",
+  "moonbitlang/core/json",
+}
+
+options(
+  targets: { "film_native.mbt": [ "native" ], "film_js.mbt": [ "js" ] },
+)

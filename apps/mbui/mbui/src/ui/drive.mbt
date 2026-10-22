@@ -1148,14 +1148,22 @@ fn drive_steps(c : Ctx) -> Unit {
 }
 
 ///|
-/// Runs `script` (as MBUI_DRIVE would) over the tester's view, a frame each 16 ms, until it ends (or `max` frames):
-/// what it logged.
-pub fn Tester::drive(self : Tester, script : String, max? : Int = 3000) -> Array[String] {
+/// Runs `script` (as MBUI_DRIVE would) over the tester's view, a frame at each of the display's frames, until it ends
+/// (or `max` frames), `each` told after each: what it logged.
+pub fn Tester::drive(
+  self : Tester,
+  script : String,
+  max? : Int = 3000,
+  each? : (Tester) -> Unit,
+) -> Array[String] {
   self.fake.logs.clear()
   drive_start(script, "")
   let mut n = 0
   while driver.val is Some(_) && n < max {
     self.frame()
+    if each is Some(f) {
+      f(self)
+    }
     n = n + 1
   }
   self.fake.logs.copy()
