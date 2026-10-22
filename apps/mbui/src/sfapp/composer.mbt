@@ -1327,7 +1327,9 @@ fn composer(
         |> ignore
       })
       c.draw_only(ground)
-      content = c.box(w=Fill(1.0), gap=8.0, id=composer_content_id(c), fn() {
+      // (named to be measured, not to be pressed: a tap anywhere in the capsule that nothing in it takes is the capsule's,
+      // which puts the caret in the field, ChatHost.kt's clickable { draft.focus++ })
+      content = c.box(w=Fill(1.0), gap=8.0, id=composer_content_id(c), taps=false, fn() {
         match v {
           Some(v) => composer_notices(c, src, r, v, d.key)
           None => ()
