@@ -4,7 +4,9 @@ import { markdown, parse, plainOf } from "../src/markdown.ts";
 import { wordsIn } from "./md-words.ts";
 
 /// The tree of `text` with its runs read out of it, as a client draws it.
-const read = (text: string) => wordsIn(parse(text), text);
+// Syntax/source contracts are independent of the derived drawing, checked below and in math.test.ts.
+const withoutDrawing = <T,>(value: T): T => JSON.parse(JSON.stringify(value, (key, v: unknown) => key === "drawing" ? undefined : v)) as T;
+const read = (text: string) => withoutDrawing(wordsIn(parse(text), text));
 
 test("markdown_reads_blocks_as_html_names_them", () => {
   assert.deepEqual(read("# 标题\n\n一段 **粗** *斜* ~~删~~ `code`\n\n---\n\n> 引用"), [
@@ -64,7 +66,7 @@ test("math_is_code_with_a_rendering_hint_and_keeps_its_source_runs", () => {
     ["pre", { code: "\\frac{y_7-y_1}{y_1}", math: true }],
   ]);
   assert.equal(plainOf(parse(text), text), "预测 p_7 = p_1 + r。\n\n\\frac{y_7-y_1}{y_1}");
-  assert.deepEqual(parse("中 $x$"), [["p", [[0, 2], ["code", { content: [3, 4], math: true }]]]]);
+  assert.deepEqual(withoutDrawing(parse("中 $x$")), [["p", [[0, 2], ["code", { content: [3, 4], math: true }]]]]);
   // A dollar inside TeX must not be mistaken for the opening delimiter.
   assert.deepEqual(read("值 $$ $ $$"), [["p", ["值 ", ["code", { content: "$", math: true }]]]]);
   assert.deepEqual(read("$$\n\\sum_{i=1}^n x_i\n$$"), [["pre", { code: "\\sum_{i=1}^n x_i", math: true }]]);
@@ -101,4 +103,27 @@ test("markdown_words_are_runs_of_the_text_so_they_go_once", () => {
   const tree = Buffer.byteLength(JSON.stringify(parse(words)));
   const read = Buffer.byteLength(JSON.stringify(wordsIn(parse(words), words)));
   assert.ok(tree < Buffer.byteLength(words) && tree < read, `${tree} bytes beside ${Buffer.byteLength(words)} of words; ${read} with them`);
+});
+
+
+test("core markdown includes the formula layout while copying keeps the TeX source", () => {
+  const text = "中 $x^2$\n\n$$\n\\frac{1}{2}\n$$";
+  const trees = markdown(text);
+  const seen: Record<string, unknown>[] = [];
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === "object") {
+      const attrs = value as Record<string, unknown>;
+      if (attrs.math === true) seen.push(attrs);
+    }
+  };
+  walk(trees);
+  assert.equal(seen.length, 2);
+  for (const attrs of seen) {
+    const d = attrs.drawing as { font: string; draw: unknown[]; width: number };
+    assert.equal(d.font, "tex-4.1.3");
+    assert(d.draw.length > 0 && d.width > 0);
+    assert(!("paths" in d));
+  }
+  assert.equal(plainOf(trees, text), "中 x^2\n\n\\frac{1}{2}");
 });

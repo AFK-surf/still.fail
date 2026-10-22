@@ -46,3 +46,17 @@ pub(all) struct Source {
   /// draft kept, no file put up
   read_only : Bool
 }
+
+///|
+/// Bind the client's core once when it starts. Static fixtures have no core; a recorded client binds its replay
+/// of the same operation. The live renderer never interprets Markdown or TeX while an answer is coming.
+pub fn use_core_markdown(src : Source) -> Unit {
+  @sf.markdown_read.val = Some(fn(words, done) {
+    (src.call)("markdown", { "text": Json::string(words) }, fn(answer) {
+      match answer {
+        Ok(v) => done(field(Some(v), "md"))
+        Err(_) => done(None)
+      }
+    })
+  })
+}

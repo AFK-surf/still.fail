@@ -223,6 +223,7 @@ pub(all) struct Message {
   author_kind : String
   author : String
   text : String
+  md : Json?
   attachments : Array[Attachment]
   quotes : Array[Quote]
   created_at : Double
@@ -273,6 +274,7 @@ fn message_of(m : Json) -> Message {
     author_kind: text(s, "authorKind"),
     author: text(s, "author"),
     text: text(s, "text"),
+    md: field(s, "md"),
     attachments: items(s, "attachments").map(attachment_of),
     quotes: items(s, "quotes").map(quote_of),
     created_at: number(s, "createdAt"),

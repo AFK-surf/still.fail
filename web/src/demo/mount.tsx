@@ -24,6 +24,8 @@ import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
 import { followFonts } from "../fonts.ts";
+import { markdown } from "../../../client/core-ts/src/markdown.ts";
+import { inkKept } from "../../../client/core-ts/src/highlight.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
 let root: HTMLElement;
@@ -266,6 +268,8 @@ const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
 function answer(name: string, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void = () => undefined, signal: AbortSignal = new AbortController().signal): unknown {
   for (const e of extensions) { const v = e.stream?.(name, params, emit, signal); if (v !== undefined) return v; }
   for (const e of extensions) { const v = e.call?.(name, params); if (v !== undefined) return v; }
+  if (name === "markdown") return { md: markdown(String(params.text ?? "")) };
+  if (name === "code.ink") return { ink: inkKept(String(params.code ?? ""), String(params.lang ?? "")) };
   if (name === "prefs.set") {
     for (const [field, value] of Object.entries(params)) {
       const before = prefs[field];

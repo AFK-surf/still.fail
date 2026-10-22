@@ -712,7 +712,7 @@ fn Hl::program(self : Hl, l : Lang, shell : Bool) -> Unit {
   let mut command = true
   let mut after_colon = false
   let operators = "+-*/%!&|^~?<>="
-  let bracket_tone = if l.plain_punct { Text } else { Punct }
+  let bracket_tone : Scope = if l.plain_punct { Text } else { Punct }
   while i < n {
     let c = hl_cu(code, i)
     if c == 10 {

@@ -4,7 +4,7 @@
 // says (`ink`, client/core-ts/src/highlight.ts: vitesse light and dark, as every client paints them), with their
 // language named and a copy button.
 import { Check, Copy } from "@stillfail/ui/icons.tsx";
-import { Fragment, isValidElement, lazy, memo, Suspense, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
+import { Fragment, isValidElement, lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import type { Attachment } from "./core/shapes.ts";
 import type { Md, MdNode } from "./core/md.ts";
 import { inlineFile, inlineFiles } from "./Prose.css.ts";
@@ -15,8 +15,9 @@ import { ScreenCard, ScreenName } from "./screen/ScreenLink.tsx";
 import { AdbCard, AdbName } from "./AdbLink.tsx";
 import { bareLinks } from "./bareLinks.ts";
 import { nameOf } from "../../client/core-ts/src/placed.ts";
-import { inkKept, runsOf } from "../../client/core-ts/src/highlight.ts";
-import { markdown } from "../../client/core-ts/src/markdown.ts";
+import { runsOf } from "../../client/core-ts/src/highlight.ts";
+import type { MathDrawing } from "../../client/core-ts/src/mathDrawing.ts";
+import { core } from "./core/react.ts";
 import { isWords, wordsOf } from "../../client/core-ts/src/mdWords.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
@@ -24,15 +25,28 @@ import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
 
-// KaTeX and its CSS/fonts are fetched only when a formula is drawn. A failed load leaves the TeX readable.
-const Formula = lazy(() => import("./Math.tsx").catch(() => ({ default: memo(({ text }: { text: string; display?: boolean }) => <>{text}</>) })));
+// Only a math-containing view loads the shared alphabet. This chunk draws the core's layout; it has no TeX parser.
+const MathView = lazy<ComponentType<{ text: string; drawing?: MathDrawing | null | undefined }>>(() => import("./Math.tsx").then((m) => ({ default: m.Formula })).catch(() => ({ default: ({ text }: { text: string }) => <code>{text}</code> })));
+function Formula(props: { text: string; drawing?: MathDrawing | null | undefined }) {
+  if (!props.drawing) return <code>{props.text}</code>;
+  return <Suspense fallback={<code>{props.text}</code>}><MathView {...props} /></Suspense>;
+}
 
 /** A block of code as markdown shows one: in the colours the core says of its language (`ink`: the core's tree's own, or
  * read by the core's highlighter here), with a copy button. */
 export function Code({ text, language, ink }: { text: string; language?: string | undefined; ink?: string | null | undefined }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
-  const colours = useMemo(() => (ink !== undefined ? ink : language ? inkKept(text, language.toLowerCase()) : null), [ink, text, language]);
+  const [read, setRead] = useState<{ text: string; language: string; ink: string | null }>();
+  useEffect(() => {
+    if (ink !== undefined || !language) return;
+    let active = true;
+    void core().call("code.ink", { code: text, lang: language.toLowerCase() }).then((value) => {
+      if (active) setRead({ text, language, ink: (value as { ink: string | null }).ink });
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [ink, text, language]);
+  const colours = ink !== undefined ? ink : read?.text === text && read.language === language ? read.ink : null;
   const copy = () => {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -139,8 +153,17 @@ type Cx = {
  * words), opening the file.
  */
 export const Prose = memo(function Prose({ children, md, files, file }: { children: string; md?: Md | undefined; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
-  const tree = useMemo(() => md ?? (markdown(children) as Md), [md, children]);
-  return <MdView md={tree} source={children} files={files} file={file} />;
+  const [read, setRead] = useState<{ text: string; md: Md }>();
+  useEffect(() => {
+    if (md) return;
+    let active = true;
+    void core().call("markdown", { text: children }).then((value) => {
+      if (active) setRead({ text: children, md: (value as { md: Md }).md });
+    }).catch(() => { if (active) setRead({ text: children, md: [["p", [children]]] }); });
+    return () => { active = false; };
+  }, [md, children]);
+  const tree = md ?? (read?.text === children ? read.md : undefined);
+  return tree ? <MdView md={tree} source={children} files={files} file={file} /> : null;
 });
 
 /**
@@ -202,7 +225,7 @@ function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
     }
     case "pre": {
       const code = wordsOf(a.code, cx.source);
-      if (a.math === true) return <div key={key} className={css.mathBlock}><Suspense fallback={code}><Formula text={code} display /></Suspense></div>;
+      if (a.math === true) return <div key={key} className={css.mathBlock}><Formula text={code} drawing={a.drawing as MathDrawing | null | undefined} /></div>;
       const language = str(a.lang);
       // A mermaid block is a chart, drawn (Viz.tsx); anything else is code.
       return language?.toLowerCase() === "mermaid" && code.trim() ? <Mermaid key={key} code={code} /> : <Code key={key} text={code} language={language} ink={str(a.ink) ?? null} />;
@@ -238,7 +261,7 @@ function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
     case "br": return <br key={key} />;
     case "code": {
       const content = wordsOf(a.content, cx.source);
-      if (a.math === true) return <Suspense key={key} fallback={content}><Formula text={content} /></Suspense>;
+      if (a.math === true) return <Formula key={key} text={content} drawing={a.drawing as MathDrawing | null | undefined} />;
       return <Fragment key={key}>{inlineCode(content, <code>{content}</code>, content)}</Fragment>;
     }
     case "a": {

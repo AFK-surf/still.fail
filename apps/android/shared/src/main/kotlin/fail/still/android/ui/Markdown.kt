@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -56,6 +57,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.Placeholder
@@ -98,6 +101,7 @@ internal class MdW(val words: String) : MdN
 
 /** A node of a kind (`p`, `list`, `a`…): its children and what tells it apart (code's words read out). */
 internal class MdK(val kind: String, val kids: List<MdN>, val attrs: JsonObject) : MdN {
+    val drawing = if (bool("math") == true) mathDrawing(attrs["drawing"]) else null
     fun str(name: String): String? = (attrs[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
     fun bool(name: String): Boolean? = (attrs[name] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
     fun int(name: String): Int? = (attrs[name] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
@@ -130,7 +134,13 @@ internal fun mdOf(md: JsonElement?, source: String): List<MdN> = (md as? JsonArr
 
 /** The trees drawn lately, by their text. */
 private val trees = object : android.util.LruCache<String, List<MdN>>(256 * 1024) {
-    override fun sizeOf(key: String, value: List<MdN>) = key.length.coerceAtLeast(1)
+    override fun sizeOf(key: String, value: List<MdN>): Int {
+        fun cost(n: MdN): Int = when(n) {
+            is MdW -> n.words.length
+            is MdK -> n.attrs.toString().length + n.kids.sumOf(::cost)
+        }
+        return (key.length + value.sumOf(::cost)).coerceAtLeast(1)
+    }
 }
 
 /**
@@ -383,7 +393,8 @@ private fun piecesOf(node: MdK, ctx: Ctx, depth: Int, task: Boolean?): List<Piec
         "pre" -> {
             val language = node.str("lang")
             val code = node.str("code").orEmpty()
-            if (language?.lowercase() == "mermaid" && code.isNotBlank()) listOf(Piece(0f, 4f) { Mermaid(code) })
+            if (node.drawing != null) listOf(Piece(0f, 8f) { MathBlock(code, node.drawing, s) })
+            else if (language?.lowercase() == "mermaid" && code.isNotBlank()) listOf(Piece(0f, 4f) { Mermaid(code) })
             // Its colours the core's, with the tree (none for code it does not colour).
             else listOf(Piece(0f, 8f) { CodeBlock(code, language, known = KnownInk(node.str("ink"))) })
         }
@@ -657,9 +668,36 @@ private const val TASK = "task"
 /** A block's words: its inline parts drawn (and, for a task item's first paragraph, its box ahead of them). */
 @Composable
 private fun Words(nodes: List<MdN>, ctx: Ctx, size: Float, weight: FontWeight?, task: Boolean? = null) {
-    val text = inline(nodes, ctx, task)
-    val inline = if (task == null) emptyMap() else mapOf(TASK to InlineTextContent(Placeholder(25.sp, 13.sp, PlaceholderVerticalAlign.TextCenter)) { TaskBox(task) })
-    MdText(text, size.sp, lh(size), weight, inline = inline)
+    val context = LocalContext.current
+    val formulas = remember(nodes, context) {
+        val out = linkedMapOf<MdK, String>()
+        fun walk(n: MdN) { if (n is MdK) { if (n.drawing != null && n.kind == "code" && mathAvailable(context, n.drawing)) out[n] = "math:${out.size}"; n.kids.forEach(::walk) } }
+        nodes.forEach(::walk); out
+    }
+    val text = inline(nodes, ctx, task, formulas)
+    val content = mutableMapOf<String, InlineTextContent>()
+    if (task != null) content[TASK] = InlineTextContent(Placeholder(25.sp, 13.sp, PlaceholderVerticalAlign.TextCenter)) { TaskBox(task) }
+    if (formulas.isNotEmpty()) {
+        val density = LocalDensity.current
+        val style = LocalTextStyle.current
+        val face = LocalFontFamilyResolver.current.resolve(style.fontFamily, weight ?: style.fontWeight ?: FontWeight.Normal, style.fontStyle ?: FontStyle.Normal).value as android.graphics.Typeface
+        val sizePx = with(density) { size.sp.toPx() }
+        val metrics = remember(face, sizePx) { android.graphics.Paint().apply { typeface = face; textSize = sizePx }.fontMetrics }
+        // TextCenter uses this font's centre. Reserve enough above and below that centre, then place the drawing's
+        // own baseline on the text's. Deep fractions neither float above the words nor overlap the next line.
+        val centre = (metrics.ascent + metrics.descent) / 2f
+        val ink = LocalMdInk.current ?: C.ink
+        for ((node, id) in formulas) {
+            val d = node.drawing!!
+            val em = sizePx / 1000f
+            val room = 2f * max(centre + d.baseline * em, (d.height - d.baseline) * em - centre)
+            val offset = room / 2f - centre - d.baseline * em
+            content[id] = InlineTextContent(Placeholder((size * d.width / 1000f).sp, with(density) { room.toSp() }, PlaceholderVerticalAlign.TextCenter)) {
+                MathCanvas(d, ink, Modifier.fillMaxSize(), offset)
+            }
+        }
+    }
+    MdText(text, size.sp, lh(size), weight, inline = content)
 }
 
 /**
@@ -679,7 +717,7 @@ private fun TaskBox(checked: Boolean) {
 }
 
 @Composable
-private fun inline(nodes: List<MdN>, ctx: Ctx, task: Boolean?): AnnotatedString {
+private fun inline(nodes: List<MdN>, ctx: Ctx, task: Boolean?, formulas: Map<MdK, String> = emptyMap()): AnnotatedString {
     // Inline code as the web has it: no box, the code face in its own colour, a little smaller.
     val code = SpanStyle(fontFamily = CodeFont, fontSize = TextUnit(0.9f, TextUnitType.Em), color = codeInline)
     // A web address alone in code: the code's face, the link's colour (the web's `a > code`).
@@ -699,7 +737,9 @@ private fun inline(nodes: List<MdN>, ctx: Ctx, task: Boolean?): AnnotatedString 
             when (n.kind) {
                 "code" -> {
                     val content = n.str("content").orEmpty()
-                    if (!inLink && isWebAddress(content)) withLink(LinkAnnotation.Url(content.trim(), link)) { withStyle(codeLink) { append(content) } }
+                    val formula = formulas[n]
+                    if (formula != null) appendInlineContent(formula, content.ifEmpty { " " })
+                    else if (!inLink && isWebAddress(content)) withLink(LinkAnnotation.Url(content.trim(), link)) { withStyle(codeLink) { append(content) } }
                     else withStyle(code) { append(content) }
                 }
                 "i" -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.kids.forEach { walk(it, inLink) } }
@@ -744,7 +784,7 @@ private fun inlineText(n: MdN): String = when {
 }
 
 @Composable
-private fun MdText(raw: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
+internal fun MdText(raw: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
     // A search's words in bold where it led (TextMark.kt); while a passage of them is picked, its links drawn but not to tap (Pick.kt).
     val text = markWeight(pickedText(raw))
     // A passage a quote led to, marked in these words (TextMark.kt).

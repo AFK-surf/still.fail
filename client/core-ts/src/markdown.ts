@@ -28,6 +28,7 @@ import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
 import { bareLinks } from "./bareLinks.ts";
 import { ink } from "./highlight.ts";
+import { mathDrawing } from "./math.ts";
 import { type MdWords, wordsOf } from "./mdWords.ts";
 
 export type MdNode = MdWords | [kind: string] | [kind: string, children: MdNode[]] | [kind: string, attributes: Record<string, unknown>] | [kind: string, children: MdNode[], attributes: Record<string, unknown>];
@@ -42,22 +43,23 @@ export function markdown(text: string): Md {
   if (hit) {
     kept.delete(text);
     kept.set(text, hit);
-    return hit;
+    return hit.md;
   }
   const md = parse(text);
-  kept.set(text, md);
-  keptChars += text.length;
-  for (const [old] of kept) {
+  const cost = text.length + JSON.stringify(md).length;
+  kept.set(text, { md, cost });
+  keptChars += cost;
+  for (const [old, entry] of kept) {
     if (keptChars <= KEPT_CHARS || kept.size <= 1) break;
     kept.delete(old);
-    keptChars -= old.length;
+    keptChars -= entry.cost;
   }
   return md;
 }
 
-/// How much text the cache holds its trees for (a tree is about as long as its text): a few long histories' worth.
+/// Bound the trees as well as their source: a short formula may have many placed glyphs.
 const KEPT_CHARS = 4_000_000;
-const kept = new Map<string, Md>();
+const kept = new Map<string, { md: Md; cost: number }>();
 let keptChars = 0;
 
 /// Parsed afresh (`markdown` keeps it).
@@ -113,7 +115,7 @@ function block(n: Node, cx: Cx): MdNode[] {
       const value = n.value ?? "";
       const code = run(value, n, cx);
       // Existing code nodes keep TeX readable on clients without a formula renderer.
-      if (n.type === "math") return [["pre", { code, math: true }]];
+      if (n.type === "math") return [["pre", { code, math: true, drawing: mathDrawing(value, true) }]];
       if (!n.lang) return [["pre", { code }]];
       const colours = ink(value, n.lang);
       return [["pre", colours === null ? { code, lang: n.lang } : { code, lang: n.lang, ink: colours }]];
@@ -186,7 +188,7 @@ function inline(n: Node, cx: Cx): MdNode[] {
     case "inlineCode":
       return [["code", { content: run(n.value ?? "", n, cx) }]];
     case "inlineMath":
-      return [["code", { content: run(n.value ?? "", n, cx), math: true }]];
+      return [["code", { content: run(n.value ?? "", n, cx), math: true, drawing: mathDrawing(n.value ?? "", false) }]];
     case "break":
       return [["br"]];
     case "link":
