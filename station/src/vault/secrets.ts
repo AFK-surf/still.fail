@@ -40,8 +40,10 @@ CREATE TABLE IF NOT EXISTS vault_audit (
 );
 `;
 
-/// How long secret_use waits for the decision before it says the request is waiting.
-const WAIT_MS = 120_000;
+/// How long secret_use waits for the decision before it says the request is waiting: within the minute the agents'
+/// MCP clients give a tool call (Claude Code's, Codex's), or the call times out unanswered, and a decision after that
+/// but within the wait is told to nobody (#settle takes the waiting call for the one that tells).
+const WAIT_MS = 45_000;
 /// A request no one decided is let go after a day.
 const PENDING_SECS = 86400;
 /// A command run with a grant is stopped after this long, unless it asks for less (at most an hour).
@@ -188,7 +190,8 @@ export class Secrets {
     return rows
       .map((r) => JSON.parse(r.body) as Request)
       .filter((r) => {
-        if (r.at + PENDING_SECS > now) return true;
+        // A vault's request whose box this station no longer holds (it restarted) can never be granted: let go.
+        if (r.at + PENDING_SECS > now && (r.vault === PLAIN || this.keeper.waiting(r.id))) return true;
         this.#settle(r, "expired");
         return false;
       })
