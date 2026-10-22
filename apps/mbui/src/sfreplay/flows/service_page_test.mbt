@@ -39,7 +39,10 @@ test "47-service-page" {
     f.answered("station.preview", 4)
     f.tap("icon:arrow-left")
     f.gone("/b.html")
+    // the first page again, as the view says once it is there: no page of its own to go back to
+    f.see("端到端测试服务")
     f.tap("手机")
+    // back with no page of its own behind it: the page left (Preview.kt BackHandler(canBack) let be)
     f.back()
     f.run_to(@ui.nav_rest())
     f.see("网页开好了 201409")
