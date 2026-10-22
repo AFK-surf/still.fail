@@ -30,7 +30,7 @@ SHOT_MS=1000
 export SHOT_MS
 PLATFORMS=${*:-kit home chat cards composer drive decide glass newchat preview settings wide web-kit web-home web-chat web-cards web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
 DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-download drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref chat-station-file chat-station-sheet"
-DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs"
+DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs chat-letters-info chat-letters chat-letters-open"
 PLAYER_MODES="video audio ended opening"
 SERVICE_MODES="service service-sized service-restart service-stopped"
 SHARE_MODES="share-in share-in-stations share-in-files"

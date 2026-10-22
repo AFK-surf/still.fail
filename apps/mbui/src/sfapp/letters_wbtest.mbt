@@ -3,42 +3,6 @@
 // own: the chats it wrote with, a row each; one opened, its letters both ways, drawn as the chat draws messages.
 
 ///|
-/// The letters' page as the core gives it: one chat written with, three letters, two in and one out.
-fn letters_page() -> Json {
-  let link = "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e"
-  let theirs : Json = {
-    "name": "「BFT 备份尺寸分析」的 agent",
-    "from": link,
-    "maker": { "id": "anthropic", "name": "anthropic" },
-  }
-  let coming = fn(seq : Int, words : String) {
-    with_fields(msg(seq, "agent", theirs, words, "刚刚", { "author": "peer/ember:c-9" }), [("way", Json::string("in"))])
-  }
-  let going = fn(seq : Int, words : String) {
-    with_fields(msg(seq, "agent", by_agent("anthropic", "claude", "s-c1"), words, "刚刚", {}), [("way", Json::string("out"))])
-  }
-  {
-    "title": "整理发布清单",
-    "whole": true,
-    "chats": [
-      {
-        "key": link,
-        "title": "BFT 备份尺寸分析",
-        "link": link,
-        "last": "补充一点：系统自带的 tar 能直接解 zstd",
-        "lastActiveAt": 1790000000000,
-        "time": { "lastActiveAt": { "ago": "刚刚" } },
-        "letters": [
-          coming(200, "用户让精简备份并改用 zstd，改好的两个脚本放好了，麻烦替换一下"),
-          going(201, "已替换，今晚那份会按新脚本出"),
-          coming(202, "补充一点：系统自带的 tar 能直接解 zstd"),
-        ],
-      },
-    ],
-  }
-}
-
-///|
 test "letters are not in the chat: from its sheet, the chats written with, one opened shows its letters both ways" {
   reset()
   let base = fixture("chat-info")
@@ -48,10 +12,10 @@ test "letters are not in the chat: from its sheet, the chats written with, one o
     topic: fn(name, params) {
       let t = (base.topic)(name, params)
       match (name, t.value) {
-        ("chat", Some(v)) => { ..t, value: Some(with_fields(v, [("letters", Json::number(3))])) }
+        ("chat", Some(v)) => { ..t, value: Some(fix_with_letters(v)) }
         ("chatLetters", _) => {
           asked.push(params)
-          { ..t, value: Some(letters_page()) }
+          { ..t, value: Some(fix_letters()) }
         }
         _ => t
       }
@@ -63,7 +27,7 @@ test "letters are not in the chat: from its sheet, the chats written with, one o
   t.run_for(@ui.nav_push_ms)
   // the chat's sheet open over it: a row for them, saying how many; none of them in the chat
   assert_true(t.find("agent 往来") is Some(_), msg="its row in the chat's sheet")
-  assert_true(t.find("3 条") is Some(_))
+  assert_true(t.find("4 条") is Some(_))
   assert_true(t.find("补充一点") is None, msg="not in the chat")
   t.tap_text("agent 往来")
   // (the chat's sheet goes, theirs comes up, to where it rests)
@@ -72,7 +36,8 @@ test "letters are not in the chat: from its sheet, the chats written with, one o
   assert_eq(asked[0], { "station": "ws1/st1", "thread": 7 })
   // the chats written with, a row each: how many and when, the last letter in brief; none of the letters yet
   assert_true(t.find("BFT 备份尺寸分析") is Some(_))
-  assert_true(t.find("3 条 · 刚刚") is Some(_))
+  assert_true(t.find("3 条 · 5 分钟前") is Some(_))
+  assert_true(t.find("1 条 · 4 分钟前") is Some(_), msg="the one written with last, first")
   assert_true(t.find("补充一点：系统自带的") is Some(_))
   assert_true(t.find("用户让精简备份") is None, msg="its letters once opened")
   t.tap_text("BFT 备份尺寸分析")
