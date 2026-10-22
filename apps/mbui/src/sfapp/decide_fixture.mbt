@@ -3,7 +3,9 @@
 // "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-peek" (its station's card), "chat-jobs",
 // "chat-job"; "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
-// other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); "home-jobs"
+// other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); the wide
+// frame's "chat-letters-pop" (the chat's "…" open), "chat-jobs-pop" (its services' popover), "chat-letters-side",
+// "chat-jobs-side", "chat-history-side" (what is opened beside it); "home-jobs"
 // (Home with the jobs left up a long while at its top); "history-link" (Home, the history there for a link to open at
 // an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
 
@@ -13,7 +15,8 @@ fn decide_mode(mode : String) -> Bool {
   [
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
-    "chat-letters-info", "chat-letters", "chat-letters-open",
+    "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
+    "chat-jobs-side", "chat-history-side",
   ].contains(mode)
 }
 
@@ -444,7 +447,7 @@ fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) 
       )
     "host" => Some(Some({ "identity": "Mac Studio · macOS 26 · M2 Max" }))
     "chatJobs" =>
-      if f.mode == "chat-jobs" || f.mode == "chat-job" || f.mode == "chat-agent" {
+      if f.mode.has_prefix("chat-jobs") || f.mode == "chat-job" || f.mode == "chat-agent" {
         Some(Some(fix_chat_jobs()))
       } else {
         None
@@ -589,6 +592,16 @@ pub fn open_fixture(mode : String) -> Unit {
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
       dui.sheet = Some(LettersOf(r, 7.0))
     }
+    // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
+    "chat-letters-pop" => wide.info_open = true
+    "chat-jobs-pop" => wide.jobs_open = true
+    "chat-letters-side" => {
+      dui.letters_open = ""
+      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
+      side_open(r, "letters")
+    }
+    "chat-jobs-side" => side_open(r, "jobs")
+    "chat-history-side" => side_open(r, "history/s-c1")
     "chat-letters-open" => {
       dui.letters_open = fix_letters_link
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
