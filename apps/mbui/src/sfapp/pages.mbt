@@ -49,6 +49,12 @@ fn scrim(
 }
 
 ///|
+/// A list card on a sheet (Parts.kt RowsCard): its rows list_pad in, its corner concentric round theirs; its ground the
+/// caller's (the workspace in use: the chips' grey).
+// kept across runs: a value (no field of it changes)
+let chip_list_card : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, clip=true)
+
+///|
 /// The filter's menu (Home.kt, in Sheet.kt MenuHost's look), mbui's dropdown menu (@kit.dropdown_menu): 180 wide under
 /// the filter's button, its right edge under the button's: 全部, 我参与的, 监控中 (the one in use checked), 已归档. In: its
 /// opacity 160 ms (Ease.Out), its scale from 90% on the menu's spring, from its top left; out: 120 ms (CSS's ease-out),
@@ -67,7 +73,8 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     app.menu,
     c.id("home-filter"),
     entries,
-    at=(x, 0.0, 180.0, bar_h),
+    // under the button (34 round, 8 under the status bar: top_bar), 6 below it (Sheet.kt MenuHost)
+    at=(x, status_top() + 8.0, 180.0, 34.0),
     along=Start,
     offset=6.0,
     scrim=0x00000047L,
@@ -88,7 +95,7 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         pady=12.0,
         align=ACenter,
         justify=JBetween,
-        bg=if s.lit { @sf.alpha(t.p.text, 0.06) } else { 0L },
+        bg=if s.hot { @sf.alpha(t.p.text, 0.06) } else { 0L },
         fn() {
           c.text(s.entry.label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
           if icon != "" {
@@ -129,12 +136,13 @@ fn workspaces_sheet(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Worksp
     sheet_label(c, tr("android-misc.workspace.current"))
     c.box(w=Fill(1.0), pl=12.0, pr=12.0, pt=4.0, pb=16.0, fn() {
       let t = @sf.theme()
-      c.box(w=Fill(1.0), radius=16.0, bg=t.p.bg, clip=true, fn() {
+      // a list card in the chips' grey (Workspaces.kt RowsCard ground = C.chip): its row list_pad in
+      c.box(style=chip_list_card, bg=t.p.chip, fn() {
         if pick_row(c, "ws/" + w.id, w.name, w.email, true, if any_marked {
             Some(w)
           } else {
             None
-          }, "", Json::null()) {
+          }, "", Json::null(), on_card=true) {
           lower_sheet()
         }
       })
@@ -208,14 +216,17 @@ fn pick_row(
   lead : Workspace?,
   icon : String,
   mark : Json,
+  on_card? : Bool = false,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(w=Fill(1.0), pl=12.0, pr=12.0, fn() {
+  // on a list card (Parts.kt PickRow, LocalOnCard): its words card_pad from the card's edge, the card's list_pad in
+  // already; on a sheet, 12 in and 8 more
+  c.box(w=Fill(1.0), pl=if on_card { 0.0 } else { 12.0 }, pr=if on_card { 0.0 } else { 12.0 }, fn() {
     c.box(
       dir=Row,
       w=Fill(1.0),
-      padx=8.0,
+      padx=if on_card { @sf.card_pad - @sf.list_pad } else { 8.0 },
       pady=12.0,
       gap=12.0,
       align=ACenter,

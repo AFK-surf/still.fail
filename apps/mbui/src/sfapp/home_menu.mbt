@@ -69,7 +69,23 @@ fn row_held(c : @ui.Ctx, id : Int, item : ChatItem) -> Unit {
   row_menu_at.h = h
   row_menu_at.open = true
   row_menu_at.at = cui.down_frame
+  // felt as it opens, once (Home.kt: HapticFeedbackType.LongPress)
+  let at = row_menu_at.at
+  c.after_build("haptic/row-held", fn() {
+    if felt_menu.val != at {
+      felt_menu.val = at
+      @ui.haptic(LongPress)
+    }
+  })
 }
+
+///|
+/// The press whose row's menu was last felt opening (row_held), and each swiped row's being past its line as last felt
+/// (swipe_to_archive): felt once as it comes, whichever of a frame's builds saw it.
+let felt_menu : Ref[Int] = Ref(-1)
+
+///|
+let felt_past : Map[String, Bool] = {}
 
 ///|
 /// Whether `item`'s row has its menu open (its ground stays lit meanwhile).
@@ -107,7 +123,8 @@ fn home_row_menu(c : @ui.Ctx, src : Source) -> Unit {
     entries,
     at=(x, row_menu_at.top, 180.0, row_menu_at.h),
     along=Start,
-    offset=0.0,
+    // 6 under the row (Sheet.kt MenuHost: the anchor's bottom + 6)
+    offset=6.0,
     scrim=0x00000047L,
     enter=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
     exit=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
@@ -128,7 +145,7 @@ fn home_row_menu(c : @ui.Ctx, src : Source) -> Unit {
         pady=12.0,
         align=ACenter,
         justify=JBetween,
-        bg=if s.lit { @sf.alpha(t.p.text, 0.06) } else { 0L },
+        bg=if s.hot { @sf.alpha(t.p.text, 0.06) } else { 0L },
         fn() {
           c.text(s.entry.label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
           @sf.icon(c, icon, size=16.0, color=t.p.text) |> ignore
@@ -266,6 +283,14 @@ fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row
     None => ()
   }
   let at = off.get()
+  // past the line letting go archives at: felt as it is passed (Home.kt SwipeToArchive: TextHandleMove)
+  let past = at < -width * archive_at
+  c.after_build("haptic/" + key, fn() {
+    if past && felt_past.get(key) != Some(true) {
+      @ui.haptic(TextHandleMove)
+    }
+    felt_past[key] = past
+  })
   let fill = @motion.animate(c, key + "/fill", if at < -width * archive_at { 1.0 } else { 0.0 }, spec=@motion.tween(swipe_fill_ms))
   let mut out = 0
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), h=Px(66.0), fn() {

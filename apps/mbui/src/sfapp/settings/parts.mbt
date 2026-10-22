@@ -272,7 +272,7 @@ fn place_page(
           |> ignore
         })
     }
-    c.box(style=place_body, fn() { body() }) |> ignore
+    c.box(style=if at_root.val { root_body } else { place_body }, fn() { body() }) |> ignore
   })
   |> ignore
 }
@@ -295,6 +295,11 @@ let root_actions : @ui.Style = bar_actions.then(@ui.style(w=Full, px=S4, pt=S2, 
 /// What a place's page shows, 4 under its bar.
 // kept across runs: a value (no field of it changes)
 let place_body : @ui.Style = page_fill.then(@ui.style(pt=S1))
+
+///|
+/// What a place's page shows at the bar's top, 8 under the app's top bar (PlacePage.kt: `bar + 8.dp`).
+// kept across runs: a value (no field of it changes)
+let root_body : @ui.Style = page_fill.then(@ui.style(pt=S2))
 
 ///|
 /// A page's large title (Parts.kt LargeTitle): `small`'s line over the big word when it is said, the word after `lead`

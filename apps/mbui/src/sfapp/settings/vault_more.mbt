@@ -210,7 +210,7 @@ fn open_vault_add(_core : Core, here : Here) -> Unit {
     })
     if plain && mine is Some(_) {
       c.box(w=Fill(1.0), padx=24.0, fn() {
-        c.text(tr("web-pages.vault.risk.editor"), size=13.0, color=warn, w=Fill(1.0), line=19.0) |> ignore
+        c.text(tr("web-pages.vault.risk.editor"), size=13.0, color=t.p.warn_ink, w=Fill(1.0), line=19.0) |> ignore
       })
       |> ignore
     }
@@ -712,7 +712,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
     }
     if plain {
       blocks.push(fn() {
-        c.text(tr("web-pages.vault.risk.editor"), size=13.0, color=warn, w=Fill(1.0), line=19.0) |> ignore
+        c.text(tr("web-pages.vault.risk.editor"), size=13.0, color=t.p.warn_ink, w=Fill(1.0), line=19.0) |> ignore
       })
     }
     if was is None && kind == "" {
@@ -943,7 +943,7 @@ fn open_vault_recover(_core : Core, ws : String) -> Unit {
       })
       |> ignore
       let n = words.replace_all(old="\n", new=" ").split(" ").filter(fn(w) { w != "" }).count()
-      c.text(fill("android-settings.vault.recoverCount", [("n", n.to_string())]), size=12.0, color=if n == 24 { t.p.green } else { t.p.subtle }, w=Fill(1.0), line=17.0)
+      c.text(fill("android-settings.vault.recoverCount", [("n", n.to_string())]), size=12.0, color=if n == 24 { t.p.green_ink } else { t.p.subtle }, w=Fill(1.0), line=17.0)
       |> ignore
       let (busy, error) = state.val
       if error != "" {

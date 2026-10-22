@@ -235,7 +235,7 @@ fn profile_key(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[(
             |> ignore
             // a key saved (the sheet that asked gone): a spinner until the station has it
             doing_mark(c, is_doing(core, ["profile.put"], on), failed_of(core, ["profile.put"], on))
-            c.text(tr("android-settings.profile.change"), size=14.0, color=t.p.accent, wrap=false) |> ignore
+            c.text(tr("android-settings.profile.change"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
           }) {
           ask_key(
             core,
@@ -253,7 +253,7 @@ fn profile_key(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[(
                   mono(c, endpoint, size=13.0, color=t.p.muted, line=18.0)
                 })
                 |> ignore
-                c.text(tr("android-settings.profile.change"), size=14.0, color=t.p.accent, wrap=false) |> ignore
+                c.text(tr("android-settings.profile.change"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
               }) {
               ask(tr("common.provider.endpoint"), endpoint, "https://", tr("common.save"), fn(value) {
                 act(
@@ -441,7 +441,7 @@ fn profile_env(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[(
           |> ignore
         }
         if list_row(c, key="profile-env-edit", fn() {
-            row_title(c, tr("android-settings.env.edit"), color=t.p.accent)
+            row_title(c, tr("android-settings.env.edit"), color=@sf.link_ink())
             doing_mark(c, is_doing(core, ["profile.put"], on), failed_of(core, ["profile.put"], on))
           }) {
           open_env_sheet(core, station, p)
@@ -453,8 +453,8 @@ fn profile_env(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[(
 
 ///|
 /// How the profile runs (Profiles.kt): its subscription's default Fast, and commands put to the background as a new
-/// message comes (Claude Code's), each a switch (`profile.put`).
-fn profile_run(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[() -> Unit] {
+/// message comes (Claude Code's), each a switch (`profile.put`): the first (`fast_part`) or the second.
+fn profile_run(c : @ui.Ctx, core : Core, station : String, p : Json?, fast_part : Bool) -> Array[() -> Unit] {
   let t = @sf.theme()
   let id = text(p, "id")
   let on = [("station", station), ("id", id)]
@@ -476,7 +476,7 @@ fn profile_run(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[(
     }
   }
   match field(p, "fast") {
-    Some(True) | Some(False) as f => {
+    Some(True) | Some(False) as f if fast_part => {
       let fast = f is Some(True)
       out.push(fn() { section_header(c, tr("android-settings.profile.run"), start=S6) })
       out.push(fn() {
@@ -496,7 +496,7 @@ fn profile_run(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[(
     _ => ()
   }
   match field(p, "backgroundOnMessage") {
-    Some(True) | Some(False) as b if strings(p, "runtimes").contains("claude") => {
+    Some(True) | Some(False) as b if !fast_part && strings(p, "runtimes").contains("claude") => {
       let bg = b is Some(True)
       out.push(fn() { section_header(c, tr("android-settings.profile.run"), start=S6) })
       out.push(fn() {
@@ -786,7 +786,7 @@ fn open_pick_share(_core : Core, s : Json?, p : Json?, stations : Array[Json], a
         }
       }
     }
-    if pick_row(c, "share-pick-done", tr("web-pages.profiles.share.done"), color=t.p.accent) {
+    if pick_row(c, "share-pick-done", tr("web-pages.profiles.share.done"), color=@sf.link_ink()) {
       close_sheet()
       let params = [("station", str(station)), ("id", str(id)), ("on", Json::boolean(true))]
       if !all {
@@ -810,11 +810,7 @@ fn provider_of(p : Json?) -> String {
   if text(field(p, "access"), "provider") == "kimi-code" {
     return "Kimi"
   }
-  match text(p, "runtime") {
-    "claude" => "Claude"
-    "grok" => "Grok"
-    _ => "ChatGPT"
-  }
+  provider_named(text(p, "runtime"))
 }
 
 ///|
@@ -1115,4 +1111,16 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
       |> ignore
     },
   ]
+}
+
+///|
+/// The provider a runtime's subscription is with (Profiles.kt SignIn's provider; Cursor's and Devin's their own).
+fn provider_named(runtime : String) -> String {
+  match runtime {
+    "claude" => "Claude"
+    "grok" => "Grok"
+    "cursor" => "Cursor"
+    "devin" => "Devin"
+    _ => "ChatGPT"
+  }
 }

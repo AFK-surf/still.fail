@@ -640,7 +640,7 @@ fn empty(c : @ui.Ctx, v : ChatsView, filter : String) -> Unit {
         w=Fill(1.0),
       )
       |> ignore
-      c.text(tr("android-chat.newChat"), size=14.0, color=t.p.accent) |> ignore
+      c.text(tr("android-chat.newChat"), size=14.0, color=@sf.link_ink()) |> ignore
     }
   })
   |> ignore
@@ -765,7 +765,41 @@ fn mark_pop_of(c : @ui.Ctx, chat : String, tone : String) -> @motion.Anim {
 let hold_ms : Double = 450.0
 
 ///|
-/// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; tapped, its chat is pushed.
+/// A row's height (ChatRowBody), its title's line and its second line's (the state line's), the two in its middle.
+let chat_row_h : Double = 66.0
+
+///|
+let chat_title_h : Double = 22.0
+
+///|
+let chat_line_h : Double = 20.0
+
+///|
+/// How far down a row its second line starts.
+let chat_line_top : Double = (chat_row_h - chat_title_h - chat_line_h) / 2.0 + chat_title_h
+
+///|
+/// A row let go without opening its chat (a scroll, a hold): what it read ahead let go too, unless its page is open.
+fn unprime(src : Source, r : ChatRef) -> Unit {
+  if !src.read_only && !readings.contains(r.station + "\u{1}" + r.session) {
+    (src.leave)("chat", chat_params(r))
+  }
+}
+
+///|
+/// The message a tap `ty` down the window opens a row's chat at, the row's top at `ry`: on its state line while the line
+/// names one (Home.kt ChatRow onTap: `stateAbout`) and nothing in the chat is unread (then at the unread line, as any
+/// tap); else None, where it opens.
+fn row_opens_at(item : ChatItem, ry : Double, ty : Double) -> Double? {
+  match item.state_about {
+    Some(seq) if !item.unread && ty >= ry + chat_line_top && ty < ry + chat_line_top + chat_line_h => Some(seq)
+    _ => None
+  }
+}
+
+///|
+/// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; tapped, its chat is pushed (at the message its state line
+/// names, tapped there).
 fn chat_row(
   c : @ui.Ctx,
   src : Source,
@@ -778,9 +812,19 @@ fn chat_row(
   let id = c.id("row/" + item.station + "/" + item.id)
   // a chat the search found (Search.kt: ChatRowBody alone, a tap its chat): not held, archived nor swiped
   let pressed = c.pressed(id) && !found
+  let r : ChatRef = {
+    station: item.station,
+    session: item.session,
+    title: item.title,
+    station_name: item.station_name,
+  }
   if pressed && app.held != id {
     app.held = id
     app.held_long = false
+    // pressed, the chat is read ahead of its page (Home.kt ChatRow onPress: AppState.prime)
+    if !src.read_only {
+      (src.topic)("chat", chat_params(r)) |> ignore
+    }
   }
   // held hold_ms (a frame asked for when it will have been)
   let held = @kit.after(c, "row-hold/" + item.station + "/" + item.id, pressed && app.held == id, hold_ms)
@@ -794,17 +838,22 @@ fn chat_row(
     let long = app.held == id && app.held_long
     app.held = 0
     if !long {
-      app.nav.push(
-        Chat({
-          station: item.station,
-          session: item.session,
-          title: item.title,
-          station_name: item.station_name,
-        }),
-      )
+      // on its state line while it names a message (and nothing in it is unread: then at the unread line, as any
+      // tap), at that message
+      let at = match (c.rect_of(id), c.tapped_anywhere()) {
+        (Some((_, ry, _, _)), Some((_, ty))) => row_opens_at(item, ry, ty)
+        _ => None
+      }
+      match at {
+        Some(seq) => open_chat_at(r, seq)
+        None => app.nav.push(Chat(r))
+      }
+    } else {
+      unprime(src, r)
     }
   } else if !pressed && app.held == id {
     app.held = 0
+    unprime(src, r)
   }
   let dim = if item.offline is Some(_) { 0.45 } else { 1.0 }
   let archivable = item.archivable && item.offline is None && !item.pending && !found
@@ -814,7 +863,7 @@ fn chat_row(
     c.box(
       dir=Row,
       w=Fill(1.0),
-      h=Px(66.0),
+      h=Px(chat_row_h),
       tx~,
       pl=22.0,
       pr=16.0,
@@ -838,7 +887,7 @@ fn chat_row(
           archive_chip(c, src, item, busy)
         }
         c.box(w=Fill(1.0), justify=JCenter, opacity=if item.settled { 0.45 } else { 1.0 }, fn() {
-          c.box(dir=Row, w=Fill(1.0), h=Px(22.0), gap=8.0, align=ACenter, fn() {
+          c.box(dir=Row, w=Fill(1.0), h=Px(chat_title_h), gap=8.0, align=ACenter, fn() {
             let tone = row_tone(item)
             if tone != "" {
               chat_mark(c, tone, pop=item.station + "/" + item.id)
@@ -882,14 +931,14 @@ fn chat_row(
             }
           })
           |> ignore
-          c.box(dir=Row, w=Fill(1.0), h=Px(20.0), gap=8.0, align=ACenter, fn() {
+          c.box(dir=Row, w=Fill(1.0), h=Px(chat_line_h), gap=8.0, align=ACenter, fn() {
             c.box(w=Fill(1.0), opacity=dim, fn() {
               let state = match item.state_text {
                 Some(s) => Some(s)
                 None => item.decision_text
               }
               match state {
-                Some(s) => state_line(c, s)
+                Some(s) => state_line(c, s, alert=item.unsent)
                 None =>
                   match item.last {
                     Some(l) =>
@@ -900,7 +949,8 @@ fn chat_row(
               }
             })
             |> ignore
-            if held {
+            // held, or its menu open: when it was last active (Home.kt ChatRowBody `held || menuOpen`)
+            if held || row_menu_open(item) {
               c.text(item.ago, size=12.0, color=t.p.subtle, wrap=false) |> ignore
             } else {
               c.box(opacity=dim, fn() { row_aside(c, src, item, lead) }) |> ignore
@@ -982,7 +1032,7 @@ fn lead_of(s : String, words : Array[String], after : Array[String], end : Bool)
 /// Where the chat stands, in its last message's place (Home.kt StateLine): a lead said as an icon (要你帮忙 a bell,
 /// in ink; 在等 the wait mark, 监控中 the watch before its words, 做完了 a check) where the title's mark is; 奏 · …
 /// (a card waiting for the viewer) in ink with its 奏 bold; anything else in the secondary colour.
-fn state_line(c : @ui.Ctx, state : String, size? : Double = 14.0, line? : Double = 20.0) -> Unit {
+fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double = 14.0, line? : Double = 20.0) -> Unit {
   let t = @sf.theme()
   let need = lead_of(state, ["要你帮忙", "需要你处理", "Needs you"], ["：", ":"], true)
   let done = if need is None {
@@ -1047,15 +1097,17 @@ fn state_line(c : @ui.Ctx, state : String, size? : Double = 14.0, line? : Double
   } else {
     ""
   }
+  // (a message that did not go: in red)
   if lead != "" {
+    let ink = if alert { t.p.red } else { t.p.text }
     c.box(dir=Row, w=Fill(1.0), align=ACenter, fn() {
-      c.text(lead, size~, weight=700, color=t.p.text, wrap=false, line~)
+      c.text(lead, size~, weight=700, color=ink, wrap=false, line~)
       |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(
           state.view(start_offset=lead.length()).to_owned(),
           size~,
-          color=t.p.text,
+          color=ink,
           wrap=false,
           line~,
         )
@@ -1066,7 +1118,7 @@ fn state_line(c : @ui.Ctx, state : String, size? : Double = 14.0, line? : Double
     |> ignore
     return
   }
-  c.text(state, size~, color=t.p.muted, wrap=false, line~) |> ignore
+  c.text(state, size~, color=if alert { t.p.red } else { t.p.muted }, wrap=false, line~) |> ignore
 }
 
 ///|

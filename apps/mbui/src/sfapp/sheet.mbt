@@ -118,11 +118,7 @@ fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
     look=if share_over.val { @sf.sheet_look(ground=@sf.theme().p.bg) } else { @sf.sheet_look() },
     fn() {
       content(kind)
-      // the view reaches under the navigation bar: what the sheet shows kept above it, the sheet's ground going on down
-      // to the screen's foot (Sheet.kt: windowInsetsPadding(keyboard.union(navigationBars)) inside the sheet)
-      if nav_foot() > 0.0 {
-        c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
-      }
+      sheet_foot(c)
     },
   )
   // what it comes to, for scripted runs (e2e: a sheet opened and closed by dragging)

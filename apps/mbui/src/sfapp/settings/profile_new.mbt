@@ -139,18 +139,13 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     Some(r) => r
     None =>
       match text(tile, "runtime") {
-        "codex" | "grok" as r => r
+        "codex" | "grok" | "cursor" | "devin" as r => r
         _ => "claude"
       }
   }
   let provider = match opt_text(sign, "provider") {
     Some(p) => p
-    None =>
-      match runtime {
-        "claude" => "Claude"
-        "grok" => "Grok"
-        _ => "ChatGPT"
-      }
+    None => provider_named(runtime)
   }
   // a station without the runtime the plan signs in with installs it first (`install`): the sign-in starts after
   let install = field(d, "install")

@@ -309,7 +309,8 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
       for way in [("↑", "up", "upTotal"), ("↓", "down", "downTotal")] {
         c.box(dir=Row, align=ACenter, fn() {
           c.text(way.0, size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
-          c.box(w=Px(68.0), pl=5.0, fn() {
+          // (5 before it, then 68 for it: Stations.kt padding(start = 5.dp).width(68.dp))
+          c.box(w=Px(73.0), pl=5.0, fn() {
             c.text(text(n, way.1), size=13.0, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
           })
           |> ignore

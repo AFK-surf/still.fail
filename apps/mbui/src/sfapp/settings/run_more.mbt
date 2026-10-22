@@ -147,13 +147,13 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
                   c.text(w, size=14.0, color=if moved { t.p.muted } else { t.p.text }, wrap=false) |> ignore
                   if moved {
                     @sf.icon(c, "arrow-right", size=14.0, color=t.p.accent) |> ignore
-                    c.text(b, size=14.0, weight=600, color=t.p.accent, wrap=false, w=Fill(1.0)) |> ignore
+                    c.text(b, size=14.0, weight=600, color=@sf.link_ink(), wrap=false, w=Fill(1.0)) |> ignore
                   }
                 })
                 |> ignore
               }
               match opt_text(v, "force") {
-                Some(f) => c.text(f, size=12.0, color=warn, w=Fill(1.0), line=17.0) |> ignore
+                Some(f) => c.text(f, size=12.0, color=t.p.warn_ink, w=Fill(1.0), line=17.0) |> ignore
                 None => ()
               }
               c.text(tr("android-chat.run.next"), size=12.0, color=t.p.subtle, w=Fill(1.0), line=17.0) |> ignore
@@ -208,7 +208,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
                 c.text(text(v, "accountText"), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
                 c.text(text(v, "accountNote"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
                 if flag(v, "accountWarn") {
-                  c.text(tr("android-chat.run.account.warn"), size=12.0, color=warn, w=Fill(1.0), line=17.0) |> ignore
+                  c.text(tr("android-chat.run.account.warn"), size=12.0, color=t.p.warn_ink, w=Fill(1.0), line=17.0) |> ignore
                 }
               })
               |> ignore

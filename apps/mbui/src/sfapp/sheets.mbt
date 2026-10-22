@@ -1231,9 +1231,9 @@ fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       rows.push(fn() {
         if sheet_link(c, "jobs/all", fn() {
             if dui.jobs_all {
-              c.text(tr("android-misc.jobs.onlyNow"), size=14.0, color=t.p.accent, wrap=false) |> ignore
+              c.text(tr("android-misc.jobs.onlyNow"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
             } else {
-              c.text(text(view, "allText"), size=14.0, color=t.p.accent, wrap=false) |> ignore
+              c.text(text(view, "allText"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
               c.text(text(view, "hiddenText"), size=12.0, color=t.p.muted) |> ignore
             }
           }) {
@@ -1245,7 +1245,7 @@ fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       rows.push(fn() {
         if sheet_link(c, "jobs/clear", fn() {
             c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-              c.text(text(view, "clearText"), size=14.0, color=t.p.accent, wrap=false) |> ignore
+              c.text(text(view, "clearText"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
               if doing(clear_key) {
                 @sf.spinner(c, size=12.0) |> ignore
               }

@@ -133,6 +133,7 @@ fn fixture_days(f : Fixture) -> Array[Json] {
     }),
     row("c5", "盯着 CI，绿了告诉我", "ws1/st2", "1 小时前", {
       "stateText": "监控中：每 5 分钟看一次主干的构建",
+      "stateAbout": 12,
       "watch": { "text": "监控中：主干构建", "ask": "它会在归档里继续盯着。" },
     }),
   ]

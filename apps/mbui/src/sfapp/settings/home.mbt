@@ -374,7 +374,7 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         if list_row(c, key="version", fn() {
             c.text("still.fail " + build_version, size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0)
             |> ignore
-            c.text(words, size=15.0, color=if newer { t.p.accent } else { t.p.muted }, wrap=false, line=21.0)
+            c.text(words, size=15.0, color=if newer { @sf.link_ink() } else { t.p.muted }, wrap=false, line=21.0)
             |> ignore
           }) {
           (core.version_tap)()
@@ -612,7 +612,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           }
         }
         if list_row(c, key="add-account", fn() {
-            c.text(tr("android-settings.me.addAccount"), size=15.0, color=t.p.accent, wrap=false, w=Fill(1.0), line=21.0)
+            c.text(tr("android-settings.me.addAccount"), size=15.0, color=@sf.link_ink(), wrap=false, w=Fill(1.0), line=21.0)
             |> ignore
           }) {
           (core.sign_in)()

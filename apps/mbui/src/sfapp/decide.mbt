@@ -474,6 +474,15 @@ fn close_sheet(c : @ui.Ctx) -> Unit {
 let sheet_fitted : @ui.Style = @ui.style(w=Full)
 
 ///|
+/// Under what a sheet shows, the navigation bar's room: what it shows kept above the bar, its ground going on down to
+/// the screen's foot (Sheet.kt: windowInsetsPadding(keyboard.union(navigationBars)) inside the sheet).
+fn sheet_foot(c : @ui.Ctx) -> Unit {
+  if nav_foot() > 0.0 {
+    c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
+  }
+}
+
+///|
 /// A sheet from the bottom (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%) closing it when tapped;
 /// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows (SheetSpec fit), at most
 /// 90%; its top corners 26 round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the
@@ -509,12 +518,14 @@ fn sheet_frame(
         let shown = c.box(style=sheet_fitted, fn() {
           sheet_grab(c)
           body()
+          sheet_foot(c)
         })
         @motion.measure(c, shown, fit_key)
       } else {
         // its share: what it shows may fill it (a list scrolling in it)
         sheet_grab(c)
         body()
+        sheet_foot(c)
       }
     },
   )

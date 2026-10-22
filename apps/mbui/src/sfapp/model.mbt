@@ -86,6 +86,11 @@ pub(all) struct ChatItem {
   /// alert | wait | busy | done | other, or ""
   tone : String
   state_text : String?
+  /// the message `state_text` is about (a seq in the chat), not one that asks for a decision: opened from the line,
+  /// the chat goes to it
+  state_about : Double?
+  /// a message of the viewer's in it did not go: its state line in red
+  unsent : Bool
   decision_text : String?
   last : String?
   offline : String?
@@ -164,6 +169,11 @@ pub fn chat_item(v : Json) -> ChatItem {
     state: text(s, "state"),
     tone: text(s, "tone"),
     state_text: opt_text(s, "stateText"),
+    state_about: match field(s, "stateAbout") {
+      Some(Number(n, ..)) => Some(n)
+      _ => None
+    },
+    unsent: flag(s, "unsent"),
     decision_text: opt_text(field(s, "decision"), "text"),
     last: opt_text(field(s, "last"), "preview"),
     offline: opt_text(s, "offline"),
