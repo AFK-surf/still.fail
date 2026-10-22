@@ -83,6 +83,8 @@ let login_marked : Ref[(String, String, Bool)?] = Ref(None)
 /// A link's login: the station's page about to open shows it marked, brought into view.
 pub fn mark_login(address : String, login : String) -> Unit {
   login_marked.val = Some((address, login, false))
+  // its card is in the page's 设置
+  station_parts[address] = 1
 }
 
 ///|

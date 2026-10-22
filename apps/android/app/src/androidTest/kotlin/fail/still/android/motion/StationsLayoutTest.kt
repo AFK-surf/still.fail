@@ -4,19 +4,28 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import fail.still.android.Screen
+import fail.still.android.data.Counts
 import fail.still.android.data.Disk
+import fail.still.android.data.EnvVar
+import fail.still.android.data.FootprintBrief
 import fail.still.android.data.Host
 import fail.still.android.data.Link
 import fail.still.android.data.Memory
 import fail.still.android.data.Meter
 import fail.still.android.data.HostDetail
 import fail.still.android.data.NetFigure
+import fail.still.android.data.Overview
+import fail.still.android.data.SoftwareVersion
 import fail.still.android.data.StationNet
 import fail.still.android.data.StationView
 import fail.still.android.data.StationWay
 import fail.still.android.data.Topics
+import fail.still.android.data.Viewer
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -38,6 +47,18 @@ class StationsLayoutTest {
         station = "${Fixtures.WS}/$name", id = name, name = name, summary = if (online) "10 核 · 32 GB" else "3 小时前离线",
         face = if (online) "idle" else "offline", online = online, link = Link(if (online) "online" else "offline"),
         runtimes = emptyList(), models = emptyList(), host = if (online && read) host else null, way = if (online && read) StationWay(path = net.path) else null, reconnecting = reconnecting,
+    )
+
+    /** What runs on it, its variables, its software and what it keeps on the disk: something in each of its page's parts. */
+    private val overview = Overview(
+        viewer = Viewer("direct"), connects = emptyList(), profiles = emptyList(), processes = emptyList(), counts = Counts(0, 0, 0),
+        slackUsers = emptyList(), slackTeams = emptyList(), logins = emptyList(), processesText = "3 个 agent 进程 266 MB",
+        updates = listOf(
+            SoftwareVersion(id = "station", name = "still.fail station", installed = true, version = "0.1.4550", latest = "0.1.4550", newer = false, channel = "beta", auto = true, updatable = true, state = "idle", checkedAt = Fixtures.NOW),
+            SoftwareVersion(id = "claude", name = "Claude Code", installed = true, version = "2.3.1", latest = "2.3.4", newer = true, updatable = true, state = "idle", checkedAt = Fixtures.NOW),
+        ),
+        footprint = FootprintBrief(bytes = 12L shl 30, text = "12.3 GB"),
+        agentEnv = listOf(EnvVar("HTTPS_PROXY", false, "http://127.0.0.1:7890")),
     )
 
     /** The stations' list, and each station's connection with its figures as its card follows it (`stationNet`). */
@@ -81,6 +102,35 @@ class StationsLayoutTest {
         rule.runOnUiThread { h.app.push(Screen.Station("${Fixtures.WS}/studio")) }
         h.settle()
         h.record("page-reconnecting-${if (dark) "dark" else "light"}").end()
+    }
+
+    /** A station's page in three parts (概览 · 设置 · 软件与设备, as the web's): each with only what is its own. */
+    @Test fun partsLight() = parts(false)
+    @Test fun partsDark() = parts(true)
+
+    private fun parts(dark: Boolean) {
+        val h = Harness(rule)
+        val tone = if (dark) "dark" else "light"
+        h.launch(listOf(Screen.Stations, Screen.Station("${Fixtures.WS}/studio")), dark)
+        rule.runOnUiThread { show(h, listOf(station("studio", true).copy(overview = overview))) }
+        h.settle()
+        h.record("part-overview-$tone").end()
+        rule.onNodeWithText("在此 station 上").assertExists()
+        rule.onNodeWithText("3 个 agent 进程 266 MB").assertExists()
+        rule.onAllNodesWithText("HTTPS_PROXY").assertCountEquals(0)
+        rule.onAllNodesWithText("主机名").assertCountEquals(0)
+        rule.onNodeWithText("设置").performClick()
+        h.settle()
+        h.record("part-settings-$tone").end()
+        rule.onNodeWithText("HTTPS_PROXY").assertExists()
+        rule.onAllNodesWithText("在此 station 上").assertCountEquals(0)
+        rule.onNodeWithText("软件与设备").performClick()
+        h.settle()
+        h.record("part-machine-$tone").end()
+        rule.onNodeWithText("Claude Code").assertExists()
+        rule.onNodeWithText("主机名").assertExists()
+        rule.onNodeWithText("12.3 GB").assertExists()
+        rule.onAllNodesWithText("HTTPS_PROXY").assertCountEquals(0)
     }
 
     /** A station's page keeps its parts where they are as its figures come, go and fade. */

@@ -67,6 +67,9 @@ class StationPermissionsTest {
         // Harness.launch puts the station without its overview: with it again, once the app is up.
         rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(station(p))) }
         h.settle()
+        // What macOS lets it do is in the page's 设置.
+        rule.onNodeWithText("设置").performClick()
+        h.settle()
         return h
     }
 
@@ -139,7 +142,7 @@ class StationPermissionsTest {
 
     @Test fun aStationWithoutGrantsShowsNone() {
         launch(null)
-        rule.onNodeWithText("Profile").assertExists()
+        rule.onNodeWithText("设置").assertExists()
         rule.onAllNodesWithText("权限").assertCountEquals(0)
     }
 

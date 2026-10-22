@@ -146,9 +146,19 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings-station-mark" => up("mark", "", 0)
-    "settings-station-env" => up("env", "", 0)
-    "settings-station-lower" => up("", "settings/station/ws1/st1", 6)
-    "settings-station-versions" => up("", "settings/station/ws1/st1", 10)
+    // the page's 设置 (its variables' sheet up over it), its 软件与设备
+    "settings-station-env" => {
+      station_parts["ws1/st1"] = 1
+      up("env", "", 0)
+    }
+    "settings-station-lower" => {
+      station_parts["ws1/st1"] = 1
+      up("", "settings/station/ws1/st1", 0)
+    }
+    "settings-station-versions" => {
+      station_parts["ws1/st1"] = 2
+      up("", "settings/station/ws1/st1", 0)
+    }
     "settings-stations-add" => up("add", "", 0)
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)

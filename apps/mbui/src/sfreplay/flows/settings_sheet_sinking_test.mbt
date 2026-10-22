@@ -5,13 +5,18 @@
 ///|
 test "53-settings-sheet-sinking" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-sheet-sinking"), seed~)
+    // (the station's page asked for its logins and its workspaces as the run had it, all in one page; they are its
+    // 设置's now, which this flow does not open: those asks dropped, with what came for them)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-sheet-sinking"), seed~, drop=["machineLogins", "memberships"])
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
     f.tap("=Station")
     f.run_for(@ui.nav_push_ms)
     f.tap("=studio")
     f.run_for(@ui.nav_push_ms)
+    // (the page under it at its 软件与设备: a sinking sheet is only drawn, a tap where its 保存 is drawn goes to what is
+    // under it, here its versions' words, which take none; the overview has its rows to go to there)
+    f.tap("=软件与设备")
     f.tap("icon:more")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.tap("重命名")
