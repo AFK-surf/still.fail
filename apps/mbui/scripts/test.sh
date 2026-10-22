@@ -33,6 +33,12 @@ for t in ${TARGETS:-native}; do
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
     pkgs="$pkgs -p stillfail/sfreplay/flows"
+    # (a test under a directory of its own there is in no package this runs: a branch from before brought one back)
+    for g in src/sfreplay/flows/*/; do
+      [ -d "$g" ] || continue
+      echo "test.sh: $g: the flows' tests are in src/sfreplay/flows itself, one package (its tests here are never run)" >&2
+      code=1
+    done
   fi
   moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
