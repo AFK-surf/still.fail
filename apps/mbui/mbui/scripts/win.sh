@@ -29,7 +29,7 @@ if [ -n "$APPMOD" ]; then
   EXE=$AM/_build/native/$MODE/build/$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$APPMOD/moon.mod")/$PKG/$PKG.exe
 fi
 
-# Each build's copies made afresh in out/win/stage, then mirrored into out/win/mod and out/win/app (scripts/mbc.py
+# Each build's copies made afresh in out/win/stage, then mirrored into out/win/mod and out/win/app (scripts/mbc
 # mirror: a file only written when its content changed), so that moon, which goes by mtimes, builds anew only what
 # changed: a build of the same sources (a cache of out/win, as still.fail's CI has) compiles nothing.
 sync() {
@@ -50,7 +50,7 @@ sync() {
     echo "win.sh: src/host/moon.pkg or an app's moon.pkg no longer has the expected shape" >&2
     exit 1
   fi
-  "$PY" "$D/mbc.py" mirror $SM $M
+  "$D/mbc" mirror $SM $M
   [ -z "$APPMOD" ] || sync_app
 }
 
@@ -71,7 +71,7 @@ sync_app() {
   for p in $SA/src/*/moon.pkg; do
     grep -q '"is-main"' $p && sed -i -e '/"cc-link-flags"/d' $p
   done
-  "$PY" "$D/mbc.py" mirror $SA $AM
+  "$D/mbc" mirror $SA $AM
 }
 
 # WebView2's SDK, from NuGet (the header and the loader linked in statically; the browser is the system's own runtime)
@@ -97,12 +97,11 @@ case "${1:-build}" in
     export LIB="$(cygpath -w "$PWD/$WV2/build/native/x64");$LIB"
     sync
     # moon's build, with the C that moonc generates split and compiled by cl in parallel, moonbit_init at /O1
-    # (scripts/mbc.py: a cl.exe first on PATH, every other command passed to the real one; MBC_SPLIT=0 compiles it
-    # whole). Windows' python is `python`.
-    PY=$(command -v python || command -v python3)
-    SHIM=$(cygpath -u "$("$PY" "$D/mbc.py" shim "$(cygpath -w "$PWD/out/mbc/win")" | tr -d '\r')")
-    # cl's and link's outputs reproducible (-Brepro: no time stamps in them; lib's is mbc.py shim's), so that the same C
-    # makes the same objects and mbc.py's link, finding its inputs as they were, is not run again. (-, not /: Git Bash
+    # (scripts/mbc: a cl.exe first on PATH, every other command passed to the real one; MBC_SPLIT=0 compiles it
+    # whole)
+    SHIM=$(cygpath -u "$("$D/mbc" shim "$(cygpath -w "$PWD/out/mbc/win")" | tr -d '\r')")
+    # cl's and link's outputs reproducible (-Brepro: no time stamps in them; lib's is mbc shim's), so that the same C
+    # makes the same objects and mbc's link, finding its inputs as they were, is not run again. (-, not /: Git Bash
     # hands a variable's /Brepro to Windows programs as a path, C:/Program Files/Git/Brepro)
     export CL="-Brepro ${CL:-}" LINK="-Brepro ${LINK:-}"
     rm -f out/mbc.log
@@ -110,7 +109,7 @@ case "${1:-build}" in
     code=0
     B=$M; [ -z "$APPMOD" ] || B=$AM
     (cd $B && export PATH="$SHIM:$PATH" MBC_LOG="$LOG" MBC_VERBOSE=1 && time moon build --target native $FLAG src/$PKG) || code=$?
-    cat out/mbc.log 2>/dev/null || echo "win.sh: moon ran no command through scripts/mbc.py (out/mbc/win)"
+    cat out/mbc.log 2>/dev/null || echo "win.sh: moon ran no command through scripts/mbc (out/mbc/win)"
     [ $code = 0 ] || exit $code
     ls -la $EXE ;;
   run)

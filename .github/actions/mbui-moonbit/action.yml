@@ -29,3 +29,9 @@ runs:
         echo "MOON_HOME=$m" >> "$GITHUB_ENV"
     - shell: bash
       run: moon version --all
+    # mbui's C tool (scripts/mbc builds tools/mbc when there is none built from its sources): built once for each change
+    # of them and kept here, not built again in every job
+    - uses: actions/cache@v4
+      with:
+        path: apps/mbui/mbui/tools/_build
+        key: mbc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/mbui/mbui/tools/**') }}

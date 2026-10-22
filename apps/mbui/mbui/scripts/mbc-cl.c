@@ -1,7 +1,7 @@
-// cl.exe (and lib.exe, link.exe) for moon on Windows: scripts/mbc.py shim compiles it and copies it under those names
+// cl.exe (and lib.exe, link.exe) for moon on Windows: scripts/mbc shim compiles it and copies it under those names
 // into a directory that scripts/win.sh puts first on PATH. Each runs the command line in its .txt next to it (cl.txt:
-// python scripts/mbc.py wrap --real <the real cl.exe> --; lib.txt and link.txt: the real ones) with its own
-// arguments after it, and exits with its exit code. mbc.py wrap hands every command to the real cl as it is, except
+// mbc wrap --real <the real cl.exe> --; lib.txt and link.txt: the real ones) with its own
+// arguments after it, and exits with its exit code. mbc wrap hands every command to the real cl as it is, except
 // the one compiling moonc's C into the program, which it splits and compiles in parallel.
 #include <windows.h>
 #include <stdio.h>

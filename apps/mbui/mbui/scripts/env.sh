@@ -29,7 +29,7 @@ gallery_pictures() {
   [ -f out/pictures/big4.heic ] || swift "$(dirname "${BASH_SOURCE[0]}")/test_images.swift" --gallery out/pictures
 }
 
-# The native tests built as the apps are: --release, moonc's C split and compiled in parallel by scripts/mbc.py (its
+# The native tests built as the apps are: --release, moonc's C split and compiled in parallel by scripts/mbc (its
 # shim moon's cc on PATH), the units made of the same inputs (by content) kept in MBC_STORE and compiled once for every
 # test that has them. `native_tests [DIR]` (the module's directory, the current one by default) sets that up; then
 # `moon test $NATIVE …`. clang where there is one (MBC_REAL_CC says otherwise; Windows: the cl on PATH); without ThinLTO
@@ -42,7 +42,7 @@ native_tests() {
   fi
   export MBC_LTO=${MBC_LTO:-0}
   export MBC_STORE=${MBC_STORE:-$root/_build/native/release/mbc-store}
-  PATH="$(python3 "$(dirname "${BASH_SOURCE[0]}")/mbc.py" shim "$root/_build/mbc-bin"):$PATH"
+  PATH="$("$(dirname "${BASH_SOURCE[0]}")/mbc" shim "$root/_build/mbc-bin"):$PATH"
   NATIVE="--target native --release"
 }
 

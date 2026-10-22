@@ -1,0 +1,14 @@
+#!/bin/sh
+# mbui's C tool (tools/mbc, in MoonBit: the split, the parallel compile, the shim moon's builds go through), run with
+# these arguments (tools/mbc/mbc.mbt says which). Built here only when there is none built from these very sources (by
+# content: a checkout's mtimes are all new): CI keeps it built for each change of them (.github/actions/mbui-moonbit).
+D=$(cd "$(dirname "$0")" && pwd)
+T=$D/../tools
+B=$T/_build/native/release/build/mbc/mbc.exe
+src=$(cd "$T" && find mbc moon.mod moon.work -type f | LC_ALL=C sort | xargs cat | cksum)
+if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  # (moon's own C compiler for it, never a shim of this tool's)
+  (cd "$T" && env -u MOON_CC moon build --target native --release >&2) || { echo "mbc: tools/mbc did not build" >&2; exit 1; }
+  echo "$src" > "$B.src"
+fi
+MBC_HOME=$D exec "$B" "$@"

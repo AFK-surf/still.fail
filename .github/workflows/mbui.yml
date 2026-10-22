@@ -277,7 +277,7 @@ jobs:
           node scripts/native.ts fetch engine win32-x64
       # The app's build as the last run on main left it (mbui's in apps/mbui/mbui: moon's _build, the split C and its objects, the .exe): of main's pushes that run this job, three in four leave the app's C
       # as it was (tests, docs, client/, media/; 96 of 129, 2026-10-18 to 20), and then moonc writes the same C again,
-      # scripts/mbc.py finds every unit's object made of the same inputs (by content) and the same link made already:
+      # scripts/mbc finds every unit's object made of the same inputs (by content) and the same link made already:
       # nothing is compiled (with an mbui whose win.sh mirrors its copies and makes cl, link and lib reproducible, mbui#49:
       # the build's step ~19 s and the job ~2 min, against ~3.2, 2026-10-20). A C that changed compiles as before; nothing
       # here is taken for this commit's but by content.

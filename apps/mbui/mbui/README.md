@@ -84,19 +84,21 @@ scripts/textdiff.sh mac web android             # mbui's text against the platfo
 ```
 
 Every native build compiles the one C file moonc generates for an app split into
-units, in parallel (`scripts/mbc.py`, the splitter `scripts/csplit.py`): the
-Android and iOS builds take only moonc's C from moon (`mbc.py gen`, its compile
-for macOS left out) and compile it with their own compiler (`mbc.py compile`);
+units, in parallel (`scripts/mbc`, a MoonBit program in `tools/mbc` that the
+script builds when it is not; its splitter `tools/mbc/csplit.mbt`): the
+Android and iOS builds take only moonc's C from moon (`mbc gen`, its compile
+for macOS left out) and compile it with their own compiler (`mbc compile`);
 the macOS and Windows builds give moon a `cc`/`cl.exe` of ours that passes every
-command through but that one (`mbc.py shim`/`wrap`). `moonbit_init` (every
+command through but that one (`mbc shim`/`wrap`). `moonbit_init` (every
 global's initial value, run once) is a unit of its own at `-O0` (`/Od`).
-The split is stable (`MBC_GROUP=stable`): moonc's made-up names (locals,
+The split is stable: moonc's made-up names (locals,
 anonymous functions, layouts' offsets) are named by what they are, a package's
 functions are a unit (a big package's in pieces by source file), and each unit
 has only the declarations it uses, so an object made of the same text is kept
 and a change compiles only the units whose functions it changed.
-`MBC_SPLIT=0` compiles the file whole; `mbc.py check` compares the global
-symbols of the whole and the split build, `scripts/mbc_test.py` tests both.
+`MBC_SPLIT=0` compiles the file whole; `mbc check` compares the global
+symbols of the whole and the split build; `moon test` in `tools` tests the
+splitter, `scripts/mbc_test.sh` programs built with it.
 
 On Windows (Git Bash, MoonBit, MSVC from a Developer Command Prompt):
 

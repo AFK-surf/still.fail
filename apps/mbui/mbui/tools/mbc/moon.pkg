@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/env",
+}
+
+options(
+  "is-main": true,
+  "native-stub": [ "io.c" ],
+  link: { "native": { "stub-cc-flags": "-O2" } },
+)
