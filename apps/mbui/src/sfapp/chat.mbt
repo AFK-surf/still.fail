@@ -268,6 +268,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         c.layer(fn() {
           c.spacer()
           composer(c, src, r, None)
+          // over the navigation bar (a layer goes on under the page's padding)
+          bar_room_box(c, nav_foot())
         })
         |> ignore
       }
@@ -277,6 +279,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         c.layer(fn() {
           c.spacer()
           composer(c, src, r, Some(v))
+          // over the navigation bar (a layer goes on under the page's padding)
+          bar_room_box(c, nav_foot())
         })
         |> ignore
         // words sent, as typed, until their row is in the list (flight.mbt)

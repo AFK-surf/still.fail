@@ -258,7 +258,11 @@ public class MainActivity extends Activity {
         int over = Math.max(0, ime - bars);
         if (over != Host.imeBottom) {
             Host.imeBottom = over;
-            if (Host.view != null) Host.view.wantFrame();
+            // as it moves (onProgress, within the system's frame for it): drawn in this frame, as the keyboard is
+            if (Host.view != null) {
+                if (imeMoving) Host.view.frameNow();
+                else Host.view.wantFrame();
+            }
         }
     }
 

@@ -170,6 +170,19 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     };
     private final Runnable postVsync = () -> Choreographer.getInstance().postFrameCallback(vsync);
 
+    /**
+     * A frame now, at the vsync being drawn (main thread, within a Choreographer frame: the keyboard's motion said by
+     * WindowInsetsAnimation's onProgress), not the next: what rides on the keyboard drawn in the frame the system
+     * moves the keyboard in, not a vsync behind it.
+     */
+    void frameNow() {
+        if (shotTaken) return;
+        // (the frame's own vsync time is not public: now, a moment after it, never before a frame drawn)
+        vsyncNanos = System.nanoTime();
+        wanted.set(false);
+        requestRender();
+    }
+
     /** A frame at the next vsync (from any thread). */
     void wantFrame() {
         if (shotTaken) return;
