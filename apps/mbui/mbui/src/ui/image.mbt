@@ -57,14 +57,19 @@ let image_info_out : FixedArray[Double] = FixedArray::make(4, 0.0)
 /// Hands over an encoded image (JPEG, PNG, HEIC, WebP…) to show as `key`.
 pub fn Ctx::image_bytes(self : Ctx, key : String, data : Bytes) -> Unit {
   ignore(self)
-  image_data[key] = data
+  if !add_gif(key, data) {
+    image_data[key] = data
+  }
 }
 
 ///|
 /// Hands over an encoded image to show as `key`, from outside a frame (a
 /// core call's answer). Keys starting `mem:` show nothing until given.
 pub fn add_image(key : String, data : Bytes) -> Unit {
-  image_data[key] = data
+  // a GIF that moves: its frames each a picture (gif.mbt)
+  if !add_gif(key, data) {
+    image_data[key] = data
+  }
 }
 
 ///|
@@ -245,10 +250,13 @@ pub fn Ctx::image(
   radius? : Double = 0.0,
   bg? : Int64 = 0xE5E5EAFFL,
   fade? : Bool = true,
+  still? : Bool = false,
 ) -> Int {
   let i = self.alloc_part(kind_image, true, false)
   let n = self.nodes[i]
   n.fade = fade
+  // a GIF that moves held at its first frame (gif.mbt)
+  n.still = still
   n.text = src
   n.w = w
   n.h = h
@@ -327,7 +335,7 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
       )
     None =>
       self.draw_image(
-        n.text,
+        self.moving_src(n),
         n.x,
         n.y,
         n.fw,
@@ -337,6 +345,32 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         alpha,
         fade=n.fade,
       )
+  }
+}
+
+///|
+/// What a picture node shows now: a GIF that moves the frame of its cycle at this frame's time (Ctx::cycle: as long as
+/// its frames' lengths summed), unless held still; any other its source. Every frame of it is asked for at the size
+/// it is shown, so each is decoded before its turn; one not yet is stood in for by the last one before it that is
+/// (never a frame of nothing between them).
+fn Ctx::moving_src(self : Ctx, n : Node) -> String {
+  match moving_images.get(n.text) {
+    Some(m) if !n.still => {
+      let px = dmax(n.fw, n.fh) * self.scale
+      let px = if px <= 0.0 { 256.0 } else { px }
+      let ready = m.keys.map(fn(k) { self.image_ready(k, px) })
+      let want = moving_frame(m, self.cycle(m.ends[m.ends.length() - 1]))
+      let mut k = m.keys.search(want).unwrap_or(0)
+      while k > 0 && !ready[k] {
+        k = k - 1
+      }
+      if ready[k] {
+        m.keys[k]
+      } else {
+        n.text
+      }
+    }
+    _ => n.text
   }
 }
 

@@ -129,6 +129,8 @@ struct Node {
   mut fit : Fit
   // an image fades in as it arrives
   mut fade : Bool
+  // a GIF that moves, held at its first frame (Ctx::image `still`)
+  mut still : Bool
   // a page of a book, and which
   mut pages : Pages?
   mut page_no : Int
@@ -270,6 +272,7 @@ fn Node::new() -> Node {
     max_lines: 0,
     fit: FitCover,
     fade: true,
+    still: false,
     pages: None,
     page_no: -1,
     pager: 0,
@@ -337,6 +340,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.slide = 0.0
   self.fit = FitCover
   self.fade = true
+  self.still = false
   self.pages = None
   self.page_no = -1
   self.pager = 0

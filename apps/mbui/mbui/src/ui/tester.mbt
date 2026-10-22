@@ -65,6 +65,7 @@ fn reset_globals() -> Unit {
   code_fields.clear()
   code_clears.clear()
   image_data.clear()
+  moving_images.clear()
   pixels_read.clear()
   open_views.clear()
   streams_reset()
