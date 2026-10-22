@@ -441,7 +441,10 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
       <div ref={list} className={css.list} data-dragging={dragging || undefined} data-view={view} tabIndex={-1}
         onKeyUp={(e) => { if (e.key === " ") e.preventDefault(); }}
         onClick={(e) => { if (e.target === e.currentTarget) browse.clear(); }}
-        // Dropped where no folder takes it (not on a folder's row or a column): into the folder shown.
+        // Dropped where no folder takes it (not on a folder's row or a column): into the folder shown. Unsaid on the way
+        // down, said again on the way up: a row or a column that takes the drag stops it on its way up.
+        onDragOverCapture={() => setDragging(false)}
+        onDropCapture={() => setDragging(false)}
         onDragOver={(e) => {
           const here = into(at);
           if (!here?.takes(e.dataTransfer)) return;
@@ -451,7 +454,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
           setDragging((e.target as Element).closest("[data-drop-into]") ? false : carriesDrive(e.dataTransfer) ? effect : "upload");
         }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
-        onDrop={(e) => { setDragging(false); const here = into(at); if (!here?.takes(e.dataTransfer)) return; e.preventDefault(); here.drop(e.dataTransfer, modsOf(e)); }}>
+        onDrop={(e) => { const here = into(at); if (!here?.takes(e.dataTransfer)) return; e.preventDefault(); here.drop(e.dataTransfer, modsOf(e)); }}>
         {/* Columns stay while the folder opened is read (each column says its own reading or trouble), not redrawn whole. */}
         {view === "columns" ? (
           <>
