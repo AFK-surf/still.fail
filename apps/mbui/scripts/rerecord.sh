@@ -1,5 +1,5 @@
 #!/bin/bash
-# Records a flow's trace again from its test (src/sfreplay/flows/*/NAME_test.mbt), one command, nothing kept by hand:
+# Records a flow's trace again from its test (src/sfreplay/flows/NAME_test.mbt), one command, nothing kept by hand:
 # the test's steps, as its first order takes them, written as a scripted run (src/sfreplay/emit.mbt: FLOW_EMIT), run
 # in the app against a local still.fail of its own (scripts/e2e-local.sh up, e2e/run.sh with MBUI_CORE_TRACE=1), its
 # conversation made the test's trace again (scripts/trace make) and what changed of its asks said (scripts/trace diff),
@@ -27,7 +27,7 @@ tag=""; station=""; tests=""; i=0
 first_start=""
 for n in "$@"; do
   [ -f "e2e/flows/$n.drive" ] && break
-  tn=$(grep -o '@sfreplay\.trace("[^"]*")' $(ls src/sfreplay/flows/*/"${n}_test.mbt" 2> /dev/null | head -1) 2> /dev/null | head -1 | sed 's/.*trace("//; s/")//')
+  tn=$(grep -o '@sfreplay\.trace("[^"]*")' $(ls src/sfreplay/flows/"${n}_test.mbt" 2> /dev/null | head -1) 2> /dev/null | head -1 | sed 's/.*trace("//; s/")//')
   [ -n "$tn" ] && grep -q '"call":"migrate"' "e2e/traces/$tn.trace" 2> /dev/null && first_start=1
   break
 done
@@ -39,8 +39,8 @@ for n in "$@"; do
     [ -f "e2e/flows/$n.check" ] && cp "e2e/flows/$n.check" "$TMP/$idx-$n.check"
     continue
   fi
-  test=$(ls src/sfreplay/flows/*/"${n}_test.mbt" 2> /dev/null | head -1)
-  [ -n "$test" ] || die "no test src/sfreplay/flows/*/${n}_test.mbt, nor flow e2e/flows/$n.drive"
+  test=$(ls src/sfreplay/flows/"${n}_test.mbt" 2> /dev/null | head -1)
+  [ -n "$test" ] || die "no test src/sfreplay/flows/${n}_test.mbt, nor flow e2e/flows/$n.drive"
   tn=$(grep -o '@sfreplay\.trace("[^"]*")' "$test" | head -1 | sed 's/.*trace("//; s/")//')
   [ -n "$tn" ] || die "$test names no @sfreplay.trace(…)"
   trace=e2e/traces/$tn.trace
