@@ -296,3 +296,31 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   assert_eq(xs.length(), 1)
   assert_true(xs[0] > 0.0 && xs[0] < 195.0)
 }
+
+///|
+test "under it all the page's own ground, dark too (the host cleared to blue there: a colour read the other way)" {
+  for dark in [false, true] {
+    let t = tester("home")
+    @sf.set_dark(Some(dark))
+    t.draw()
+    let bg = @sf.theme().p.bg
+    let want = [(bg >> 24) & 0xFFL, (bg >> 16) & 0xFFL, (bg >> 8) & 0xFFL].map(fn(v) { v.to_double() })
+    let line = t.drawlist().split("\n").find_first(fn(l) { l.has_prefix("clear ") }).unwrap().to_owned()
+    let nums = line.split(" ").drop(1).map(fn(v) { v.to_owned() }).to_array()
+    let parsed = @json.parse("[" + nums.join(",") + "]") catch { _ => Json::null() }
+    let got : Array[Double] = []
+    match parsed {
+      Array(a) =>
+        for j in a {
+          if j is Number(n, ..) {
+            got.push(n)
+          }
+        }
+      _ => ()
+    }
+    assert_eq(got.length(), 3)
+    for k in 0..<3 {
+      assert_true((got[k] * 255.0 - want[k]).abs() < 0.5)
+    }
+  }
+}
