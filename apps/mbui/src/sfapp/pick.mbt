@@ -73,12 +73,13 @@ fn pickable(
   let key = "pick/" + ts
   let id = c.id(key)
   // a tap on it: the keyboard goes (not a long press: Keyboard.kt letsGoOfKeyboard)
-  if c.clicked(id) && !cui.long {
+  let press = c.press()
+  if c.clicked(id) && !press.long {
     c.blur()
   }
-  let (px, py, down) = c.pointer()
+  let down = press.down
   let pressed_in = match c.rect_of(id) {
-    Some((x, y, w, h)) => cui.down_x >= x && cui.down_x < x + w && cui.down_y >= y && cui.down_y < y + h
+    Some((x, y, w, h)) => press.x >= x && press.x < x + w && press.y >= y && press.y < y + h
     None => false
   }
   // a search's words in it (search_marks.mbt): their strokes behind its words
@@ -109,12 +110,12 @@ fn pickable(
   // the press went down in it and holds still: a long press's time on, the word under the finger picked
   let holding = down &&
     pressed_in &&
-    !cui.moved &&
+    !press.moved &&
     pk.sel.handle == 0 &&
     !(mine && pk.sel.widening) &&
-    link_menu.at != cui.down_frame &&
+    link_menu.at != press.frame &&
     words.trim(chars=" \n\t") != ""
-  if pk.sel.hold(c, key, holding, cui.down_x, cui.down_y, cui.down_frame) {
+  if pk.sel.hold(c, key, holding) {
     pk.ts = ts
     pk.author = author
     pk.role = role
@@ -124,7 +125,7 @@ fn pickable(
   }
   // sliding on: widened by words from the word first held
   if pk.ts == ts {
-    pk.sel.slide(c, px, py, down)
+    pk.sel.slide(c)
   }
 }
 
@@ -151,7 +152,6 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     return
   }
   let t = @sf.theme()
-  let (px, py, down) = c.pointer()
   let bar = c.id("pick/bar")
   let quote = c.id("pick/quote")
   let copy = c.id("pick/copy")
@@ -179,7 +179,7 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   let last = lines[lines.length() - 1]
   // a handle taken and moved (its end following the finger from where it was taken); a tap anywhere but on the pick's
   // bar and handles lets go of it (not the lifting of the press that picked it: that press was taken)
-  pk.sel.handles(c, words, ends, cui.press_new, cui.down_x, cui.down_y, px, py, down)
+  pk.sel.handles(c, words, ends)
   if pk.sel.tapped_away(c, [bar, ends[0], ends[1]]) {
     pick_clear()
     return

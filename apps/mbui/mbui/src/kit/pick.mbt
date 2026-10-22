@@ -57,26 +57,19 @@ pub fn Pick::of(self : Pick, key : String) -> Bool {
 
 ///|
 /// A finger held on `key`'s words (`holding`: down in them and still, as the view tells), a long press's time from
-/// when it went down, picks the word under (x, y) there, widened from it as the finger slides on; `press` names that
-/// press (it picks once). True on the frame it picks: the press is the pick's from then (the view takes it,
+/// when it went down, picks the word under where it went down (Ctx::press), widened from it as the finger slides on;
+/// it picks once a press. True on the frame it picks: the press is the pick's from then (the view takes it,
 /// Ctx::take_press, and says so to the hand).
-pub fn Pick::hold(
-  self : Pick,
-  c : @ui.Ctx,
-  key : String,
-  holding : Bool,
-  x : Double,
-  y : Double,
-  press : Int,
-) -> Bool {
+pub fn Pick::hold(self : Pick, c : @ui.Ctx, key : String, holding : Bool) -> Bool {
+  let press = c.press()
   // (asked each frame, so that a press let go starts again from nothing; a frame asked for when it will have)
-  let held = after(c, key + "/hold", holding && self.press != press, @ui.long_press_ms)
+  let held = after(c, key + "/hold", holding && self.press != press.frame, @ui.long_press_ms)
   if !held {
     return false
   }
   match c.words_of(key) {
     Some(w) if w.text != "" => {
-      let (s, e) = w.word_at(w.offset_at(x, y))
+      let (s, e) = w.word_at(w.offset_at(press.x, press.y))
       self.key = key
       self.a = s
       self.b = e
@@ -84,7 +77,7 @@ pub fn Pick::hold(
       self.from_b = e
       self.widening = true
       self.handle = 0
-      self.press = press
+      self.press = press.frame
       true
     }
     _ => false
@@ -92,12 +85,13 @@ pub fn Pick::hold(
 }
 
 ///|
-/// The finger that picked it at (x, y): still down, the passage from the word first held to the word under it, by
-/// words; lifted, no longer widened.
-pub fn Pick::slide(self : Pick, c : @ui.Ctx, x : Double, y : Double, down : Bool) -> Unit {
+/// The finger that picked it: still down, the passage from the word first held to the word under it, by words;
+/// lifted, no longer widened.
+pub fn Pick::slide(self : Pick, c : @ui.Ctx) -> Unit {
   if self.key == "" || !self.widening {
     return
   }
+  let (x, y, down) = c.pointer()
   if !down {
     self.widening = false
     return
@@ -127,21 +121,13 @@ fn pick_in(c : @ui.Ctx, id : Int, x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// The handles, `ends` (the start's and the end's: what takes a finger round each): a press new (`pressed_now`) at
-/// (`down_x`, `down_y`) on one takes it, the end's place off the finger kept; while the finger is down at (x, y) the
-/// end follows it, never past the other end; lifted, let go. `words` as laid out.
-pub fn Pick::handles(
-  self : Pick,
-  c : @ui.Ctx,
-  words : @ui.Words,
-  ends : Array[Int],
-  pressed_now : Bool,
-  down_x : Double,
-  down_y : Double,
-  x : Double,
-  y : Double,
-  down : Bool,
-) -> Unit {
+/// The handles, `ends` (the start's and the end's: what takes a finger round each): a press that went down this frame
+/// (Ctx::press) on one takes it, the end's place off the finger kept; while the finger is down the end follows it,
+/// never past the other end; lifted, let go. `words` as laid out.
+pub fn Pick::handles(self : Pick, c : @ui.Ctx, words : @ui.Words, ends : Array[Int]) -> Unit {
+  let press = c.press()
+  let (x, y, down) = c.pointer()
+  let (pressed_now, down_x, down_y) = (press.fresh, press.x, press.y)
   let lines = words.rects(self.a, self.b)
   if lines.length() == 0 {
     return

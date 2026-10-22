@@ -252,15 +252,7 @@ fn reset() -> Unit {
   cui.attach = false
   cui.picking = None
   cui.picking_for = ""
-  cui.was_down = false
-  cui.press_new = false
-  cui.released = false
-  cui.down_x = 0.0
-  cui.down_y = 0.0
-  cui.down_frame = 0
-  cui.moved = false
   cui.outside = false
-  cui.long = false
   cui.restore_error.clear()
   sharing.val = None
   cui.room_for = ("", None)
@@ -426,7 +418,6 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @settings.status_top.val = status_top()
   @settings.nav_foot.val = nav_foot()
   @settings.bar_room.val = if has_bar() { bar_room } else { 0.0 }
-  track_press(c)
   linger_tick(c, src)
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)

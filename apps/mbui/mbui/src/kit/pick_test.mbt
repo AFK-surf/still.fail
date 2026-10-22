@@ -9,11 +9,10 @@ test "held still on words: the word under the finger is picked; sliding on widen
       // (words a box's rich paragraphs hold: Ctx::words)
       let box = c.box(fn() { c.rich([@ui.plain("alpha beta gamma delta")], wrap=false) |> ignore })
       c.words(box, "w", a=p.a, b=p.b, color=0x3B82F640L)
-      let (x, y, down) = c.pointer()
-      if p.hold(c, "w", down, c.press_x, c.press_y, c.press_at.to_int()) {
+      if p.hold(c, "w", c.press().down) {
         c.take_press()
       }
-      p.slide(c, x, y, down)
+      p.slide(c)
       p.tapped_away(c, []) |> ignore
     },
     w=400.0,

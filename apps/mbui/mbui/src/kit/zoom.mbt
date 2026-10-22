@@ -1,7 +1,8 @@
 // Zooming and panning a picture in a stage (an image, a video's frames, a remote screen: still.fail's Android app's
 // shared ui/Zoom.kt ZoomState, the web's FilePreview.tsx useZoom): fitted to the stage (a margin round it, enlarged
 // or not), zoomed around a point (two fingers' pinch, a double tap, the wheel, a button), panned, and kept within the
-// stage: smaller than it, centred; larger, no gap at its edges. A zoom said with a glide goes there over `glide_ms`
+// stage: smaller than it, centred; larger, no gap at its edges (or, free, anywhere: a page on a canvas, dragged about
+// it). A zoom said with a glide goes there over `glide_ms`
 // on (0.16, 1, 0.3, 1), a motion said once as it sets out (Zoom::step reads where it has got to). What the fingers do
 // is the view's: it says what they came to (transform, pan, zoom_to, double_tap).
 
@@ -24,6 +25,10 @@ pub struct Zoom {
   /// the least and the most it zooms to, for the fitted scale
   min_of : (Double) -> Double
   max_of : (Double) -> Double
+  /// moved anywhere on the stage, not kept within it (its scale still within its bounds)
+  free : Bool
+  /// the fitted scale a whole number of these (0: as it comes)
+  fit_step : Double
   glide_ms : Double
   // a glide: whether one goes on, how far (0 … 1, a motion), from, to (scale, x, y)
   mut gliding : Bool
@@ -36,13 +41,16 @@ pub struct Zoom {
 /// A picture's zoom, as Zoom.kt's: fitted within a margin (12, or 32 on a stage 640 wide or more), never enlarged;
 /// down to half the fitted size (of 100% at most) and up to 16 times its own; its glides 260 ms. A stage's own (a
 /// remote screen, fitted edge to edge, as far as 5 times the fitted size): `margin`, `enlarge`, `min_scale` and
-/// `max_scale` (each of the fitted scale) say so.
+/// `max_scale` (each of the fitted scale) say so. `free`: moved anywhere on the stage (a page on a canvas); `fit_step`:
+/// the fitted scale a whole number of these, rounded down.
 pub fn Zoom::new(
   margin? : (Double) -> Double = fn(bw) { if bw < 640.0 { 12.0 } else { 32.0 } },
   enlarge? : Bool = false,
   min_scale? : (Double) -> Double = fn(fit) { zmin(fit, 1.0) / 2.0 },
   max_scale? : (Double) -> Double = fn(_) { 16.0 },
   glide_ms? : Double = 260.0,
+  free? : Bool = false,
+  fit_step? : Double = 0.0,
 ) -> Zoom {
   {
     nw: 0.0,
@@ -57,6 +65,8 @@ pub fn Zoom::new(
     enlarge,
     min_of: min_scale,
     max_of: max_scale,
+    free,
+    fit_step,
     glide_ms,
     gliding: false,
     glide: @motion.Value::new(1.0),
@@ -91,10 +101,11 @@ pub fn Zoom::fit(self : Zoom) -> Double {
   }
   let m = (self.margin_of)(self.bw)
   let k = zmin((self.bw - 2.0 * m) / self.nw, (self.bh - 2.0 * m) / self.nh)
-  if self.enlarge {
-    k
+  let k = if self.enlarge { k } else { zmin(1.0, k) }
+  if self.fit_step > 0.0 {
+    (k / self.fit_step).floor() * self.fit_step
   } else {
-    zmin(1.0, k)
+    k
   }
 }
 
@@ -157,6 +168,9 @@ fn Zoom::clamp(self : Zoom) -> Unit {
     return
   }
   self.scale = zmax(self.min_scale(), zmin(self.max_scale(), self.scale))
+  if self.free {
+    return
+  }
   let sx = zmax(0.0, (self.nw * self.scale - self.bw) / 2.0)
   let sy = zmax(0.0, (self.nh * self.scale - self.bh) / 2.0)
   self.x = zmax(-sx, zmin(sx, self.x))
@@ -209,10 +223,12 @@ pub fn Zoom::zoom_to(self : Zoom, target : Double, ax : Double, ay : Double, gli
   let f = next / self.scale
   let mut tx = px - (px - self.x) * f
   let mut ty = py - (py - self.y) * f
-  let sx = zmax(0.0, (self.nw * next - self.bw) / 2.0)
-  let sy = zmax(0.0, (self.nh * next - self.bh) / 2.0)
-  tx = zmax(-sx, zmin(sx, tx))
-  ty = zmax(-sy, zmin(sy, ty))
+  if !self.free {
+    let sx = zmax(0.0, (self.nw * next - self.bw) / 2.0)
+    let sy = zmax(0.0, (self.nh * next - self.bh) / 2.0)
+    tx = zmax(-sx, zmin(sx, tx))
+    ty = zmax(-sy, zmin(sy, ty))
+  }
   self.fitted = false
   self.glide_to(next, tx, ty, glide)
 }

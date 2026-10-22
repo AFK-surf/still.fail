@@ -6,7 +6,7 @@
 
 ///|
 /// The menu that is open: its items (its words and its icon), what a tap on one does, where it is put (x, the top and
-/// bottom of what it is under), the link it is for when it is a link's; the press it opened on (cui.down_frame), so the
+/// bottom of what it is under), the link it is for when it is a link's; the press it opened on (Ctx::press frame), so the
 /// same press picks no words.
 priv struct LinkMenu {
   mut href : String
@@ -33,9 +33,10 @@ let link_menu : LinkMenu = {
 
 ///|
 /// What a message's words give their rich text for a link held: its menu opened there.
-fn link_held(href : String, line : (Double, Double, Double, Double)) -> Unit {
-  link_menu_at(href, cui.down_x, line.1, line.1 + line.3)
-  link_menu.at = cui.down_frame
+fn link_held(c : @ui.Ctx, href : String, line : (Double, Double, Double, Double)) -> Unit {
+  let press = c.press()
+  link_menu_at(href, press.x, line.1, line.1 + line.3)
+  link_menu.at = press.frame
 }
 
 ///|
@@ -77,7 +78,7 @@ fn menu_under(
 /// beside it, Esc or back close it) at the line held, in MenuHost's look.
 fn link_menu_layer(c : @ui.Ctx) -> Unit {
   // opened by a link held: felt as it opens (Links.kt)
-  if link_menu.open && link_menu.at == cui.down_frame {
+  if link_menu.open && link_menu.at == c.press().frame {
     feel_hold(c, "link")
   }
   // 180 wide centred on the finger, 6 under the line held (over it when there is no room below), kept 12 in

@@ -916,19 +916,8 @@ priv struct ComposerUi {
   mut attach : Bool
   mut picking : @ui.Pick?
   mut picking_for : String
-  /// the finger: down last frame, down first this frame, lifted this frame, where it went down and the frame it did (the
-  /// press's name: what it opened is not opened again by it), moved past the slop since (track_press)
-  mut was_down : Bool
-  mut press_new : Bool
-  mut released : Bool
-  mut down_x : Double
-  mut down_y : Double
-  mut down_frame : Int
-  mut moved : Bool
+  /// a finger went down outside the composer (it lets go of the keyboard once lifted or moved: Ctx::press)
   mut outside : Bool
-  /// the press under way (or just lifted) has been held still for a long press's time: lifted, it is not a tap
-  /// (ui/Keyboard.kt letsGoOfKeyboard: a long press lets the keyboard be)
-  mut long : Bool
   /// why restoring the chat failed (Composer.kt ArchiveNotice: said under it until it is tried again), by its draft
   restore_error : Map[String, String]
   /// the draft the page's composer was last built for and the chat it was in (whose room the page's other parts ask:
@@ -947,15 +936,7 @@ let cui : ComposerUi = {
   attach: false,
   picking: None,
   picking_for: "",
-  was_down: false,
-  press_new: false,
-  released: false,
-  down_x: 0.0,
-  down_y: 0.0,
-  down_frame: 0,
-  moved: false,
   outside: false,
-  long: false,
   restore_error: {},
   room_for: ("", None),
   cap_id: 0,
@@ -1318,20 +1299,20 @@ fn composer(
   }
   keep_draft_soon(c, src, d)
   // a finger down outside the composer lets go of the keyboard once lifted or moved on (reading on)
-  if cui.press_new {
+  let press = c.press()
+  if press.fresh {
     let off_capsule = match c.rect_of(cap) {
-      Some((x, y, w, h)) =>
-        !(cui.down_x >= x && cui.down_x < x + w && cui.down_y >= y && cui.down_y < y + h)
+      Some((x, y, w, h)) => !(press.x >= x && press.x < x + w && press.y >= y && press.y < y + h)
       None => true
     }
     cui.outside = off_capsule && !cui.attach
   }
   // (lifted after a long press: not a tap, the keyboard stays: Keyboard.kt letsGoOfKeyboard)
-  if cui.outside && c.editor_focused(field_key) && (cui.moved || (cui.released && !cui.long)) {
+  if cui.outside && c.editor_focused(field_key) && (press.moved || (press.lifted && !press.long)) {
     cui.outside = false
     c.blur()
   }
-  if cui.released {
+  if press.lifted {
     cui.outside = false
   }
   // its station files switched to go as files: up (station_files.mbt)
@@ -2337,31 +2318,3 @@ fn composer_left(src : Source, r : ChatRef) -> Unit {
   pick_clear()
 }
 
-///|
-/// The finger, once a frame before the chat's page is built: whether it went down or was lifted since the last frame,
-/// where and when it went down, whether it has moved past the slop (8) since.
-fn track_press(c : @ui.Ctx) -> Unit {
-  let (px, py, down) = c.pointer()
-  cui.press_new = down && !cui.was_down
-  cui.released = !down && cui.was_down
-  if cui.press_new {
-    cui.down_x = px
-    cui.down_y = py
-    cui.down_frame = c.frame_number()
-    cui.moved = false
-    cui.long = false
-  }
-  // a tap down and up between two frames (no frame saw it down): a press of its own, not the long one before it
-  if !down && !cui.was_down && c.tapped_anywhere() is Some(_) {
-    cui.moved = false
-    cui.long = false
-  }
-  if down && ((px - cui.down_x).abs() > 8.0 || (py - cui.down_y).abs() > 8.0) {
-    cui.moved = true
-  }
-  // (asked each frame: a press let go, or moved, starts it again from nothing; what it says kept till the next press)
-  if @kit.after(c, "press/long", down && !cui.moved, long_press_ms) {
-    cui.long = true
-  }
-  cui.was_down = down
-}

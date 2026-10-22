@@ -169,7 +169,7 @@ fn workspaces_sheet(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Worksp
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let by_ws = field(marks.value, "workspaces")
   let any_marked = all.iter().any(fn(x) { @sf.has_station_mark(x.emoji, x.icon) })
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   sheet_head(c, tr("android-misc.workspace.sheet.title"))
   c.box(w=Fill(1.0), h=Fill(1.0), pb=24.0, clip=true, fn() {
     sheet_label(c, tr("android-misc.workspace.current"))

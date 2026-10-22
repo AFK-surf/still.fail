@@ -53,3 +53,20 @@ test "a stage's own: fitted edge to edge, the keyboard up keeping the frame as l
   z.fit_now()
   assert_true(near_rect(z.rect(), 80.0, 0.0, 640.0, 360.0))
 }
+
+///|
+test "a page on a canvas: free, dragged anywhere; its fitted scale by thousandths; its own bounds of scale" {
+  let z = @kit.Zoom::new(margin=fn(_) { 16.0 }, min_scale=fn(_) { 0.05 }, max_scale=fn(_) { 4.0 }, free=true, fit_step=0.001)
+  z.boxed(390.0, 600.0)
+  z.natural(1280.0, 800.0)
+  // (390 - 32) / 1280 = 0.2796875, down to 0.279
+  assert_true((z.scale - 0.279).abs() < 0.0000001)
+  // dragged far off: it goes there
+  z.pan(-1000.0, 0.0)
+  assert_true(z.rect().unwrap().0 < -800.0)
+  // pinched down past its least: 0.05
+  z.transform(195.0, 300.0, 0.01, 0.0, 0.0)
+  assert_true((z.scale - 0.05).abs() < 0.0000001)
+  z.fit_now()
+  assert_true(z.fitted && (z.scale - 0.279).abs() < 0.0000001)
+}

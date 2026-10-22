@@ -9,7 +9,7 @@
 ///|
 /// A file played, kept while its page is in the stack.
 priv struct Playing {
-  player : @player.Player
+  player : @kit.Media
   mut opened : Bool
   mut subtitle_asked : Bool
   /// the places kept (each next one play_keep_ms after it)
@@ -34,7 +34,7 @@ fn playing_for(key : String) -> Playing {
     Some(p) => p
     None => {
       let p : Playing = {
-        player: @player.Player::new(key="drive-play"),
+        player: @player.player(key="drive-play"),
         opened: false,
         subtitle_asked: false,
         keeps: 0,
@@ -183,7 +183,7 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     .map(fn(e) { e.name }),
     fn(_) { true },
   )
-  pl.player.view(c, list~, top=status_top(), foot=nav_foot(), fn() { app.nav.pop() |> ignore }, fn(other) {
+  @player.view(pl.player, c, list~, top=status_top(), foot=nav_foot(), fn() { app.nav.pop() |> ignore }, fn(other) {
     app.nav.replace(DrivePlay({ station: at.station, root: at.root, path: dv_join(dir, other) }))
   })
 }

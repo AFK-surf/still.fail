@@ -661,7 +661,7 @@ fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
     link_color=t.p.blue,
     pressed_bg=@sf.alpha(t.p.blue, 0.14),
     on_link=fn(h) { open_link(h) },
-    on_link_hold=Some(link_held),
+    on_link_hold=Some(fn(href, line) { link_held(c, href, line) }),
   )
   |> ignore
 }
@@ -692,7 +692,7 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
       link_color=t.p.blue,
       pressed_bg=@sf.alpha(t.p.blue, 0.14),
       on_link=fn(h) { open_link(h) },
-      on_link_hold=Some(link_held),
+      on_link_hold=Some(fn(href, line) { link_held(c, href, line) }),
       // what people wrote: in the face chosen for it (Chat.kt SendTextFaced)
       words=true,
     )
@@ -744,7 +744,7 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
             _ => open_link(h)
           }
         },
-        on_link_hold=Some(link_held),
+        on_link_hold=Some(fn(href, line) { link_held(c, href, line) }),
         found=found_words_of(m.ts),
         files=fn(name) {
           match placed.get(name) {

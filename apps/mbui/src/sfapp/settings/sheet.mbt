@@ -88,7 +88,7 @@ pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
     look=@sf.sheet_look(),
     fn() {
       c.scope(sheet.serial, fn() {
-        sheet_grab(c)
+        @sf.sheet_grab(c)
         c.box(w=Fill(1.0), h=Fill(1.0), fn() { draw(c, core) }) |> ignore
       })
     },
@@ -99,30 +99,6 @@ pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
   if !up && !r.shown {
     sheet.last = None
   }
-}
-
-///|
-/// The grabber's two paddings (Sheet.kt SheetGrab's padding(top 8, bottom 4), then padding(vertical 4)).
-// kept across runs: a value (no field of it changes)
-let grab_outer : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
-
-///|
-// kept across runs: a value (no field of it changes)
-let grab_inner : @ui.Style = @ui.style(w=Full, py=S1, align=ACenter)
-
-///|
-/// The grabber at a sheet's top (Sheet.kt SheetGrab).
-fn sheet_grab(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  // (two paddings, as Sheet.kt's two: each a length of its own, on Android's whole pixels 21 + 11 above the grabber and
-  // 11 + 11 under it, not one 12 and one 8)
-  c.box(style=grab_outer, fn() {
-    c.box(style=grab_inner, fn() {
-      c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|

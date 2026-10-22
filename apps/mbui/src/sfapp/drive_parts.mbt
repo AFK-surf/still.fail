@@ -499,7 +499,7 @@ fn dv_held(c : @ui.Ctx, id : Int) -> Bool {
     dv.held_done = false
   }
   // (`after` asks for the frame it acts on)
-  if @kit.after(c, "dv-held/\{id}", pressed && dv.held == id && !dv.held_done && !cui.moved, dv_hold_ms) {
+  if @kit.after(c, "dv-held/\{id}", pressed && dv.held == id && !dv.held_done && !c.press().moved, dv_hold_ms) {
     dv.held_done = true
     return true
   }

@@ -126,7 +126,7 @@ fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
     None => return
   }
   let head = fn() {
-    sheet_grab(c)
+    @sf.sheet_grab(c)
     if share_in.files.length() > 0 {
       shared_files_head(c, share_in.files, source, title)
     } else {
@@ -262,7 +262,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Some(s) => s
     None => return
   }
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   if share_in.files.length() > 0 {
     shared_files_head(c, share_in.files, source, title)
   } else {

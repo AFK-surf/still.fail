@@ -168,7 +168,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
     Some(tok) => invite.read.get(tok + "\u{1}" + sub)
     None => None
   }
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   let buttons = fn(body : () -> Unit) {
     c.box(style=invite_buttons, body) |> ignore
   }

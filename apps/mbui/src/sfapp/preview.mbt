@@ -300,7 +300,7 @@ priv struct Viewer {
   /// a read of the video's file, logged the first times
   mut reads : Int
   /// how a song's player stands, pinned for a fixture's shot
-  mut pinned : @player.Status?
+  mut pinned : @kit.MediaStatus?
   /// what it steps through (an image): its chat's images, a folder's
   steps : Stepping
   // a finger's speed sideways (px/ms) and when it was last measured, for a swipe let go
