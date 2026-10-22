@@ -257,11 +257,6 @@ fn said(
       // letting go what it asks (Chat.kt AskDismiss)
       ask_dismiss(c, src, here, m, asking, asked_at, turns)
     })
-    // coming out of its agent's avatar (emit.mbt): from 35% at its corner, unrolling from its top
-    if emit_goes(em, m.seq) {
-      @motion.measure(c, col, "emit-col/" + seq_s(m.seq))
-      emit_out(c, col, em, m.seq)
-    }
     // the picture over the name's start (where a message out of an avatar lands: hidden while the flying one is
     // over it)
     c.layer(fn() {

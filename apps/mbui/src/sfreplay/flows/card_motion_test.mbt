@@ -18,21 +18,17 @@ test "70-card-motion" {
     f.see("=灰色 083209")
     f.tap_now("=橙色 083209") |> ignore
     // answered (decision.answer): the options fade and shrink to 90% on their 200 ms from when their turn to close
-    // comes (turns.mbt, ListTurns.kt: after what came with the answer, the list at rest after it), their room closing
-    // on the rows' spring after them; how it went comes in their place, its room opening
+    // comes (turns.mbt: the answer in the list at once, nothing before them), their room closing on the rows' spring
+    // after them; how it went comes in their place, its room opening
     f.until(fn() { @sfapp.under_turn("ask/") >= 0.0 && @sfapp.under_turn("ask/") < @double.infinity })
-    // (its start as declared then: the list's glide after what came, once set out, can put it later; run to it again
-    // until it has come)
-    let mut from = @sfapp.under_turn("ask/")
-    while from > f.t.time() {
-      f.run_to(from)
-      from = @sfapp.under_turn("ask/")
-    }
+    // (their fade said as their turn starts, from its declared start)
+    let end = f.until_moving("under-look/options/")
+    let from = @sfapp.under_turn("ask/")
     // (checks: while a script is written over a trace the app has outgrown, said and the steps after written all the
     // same)
     f.check(
-      f.t.rest_of("under-look/options/") == from + @sfapp.options_out_ms,
-      "the options at rest at \{f.t.rest_of("under-look/options/")}, not \{from + @sfapp.options_out_ms}",
+      end == from + @sfapp.options_out_ms,
+      "the options at rest at \{end}, not \{from + @sfapp.options_out_ms}",
     )
     f.check(f.t.rest_of("under/options/") > from + @sfapp.options_out_ms, "their room closes after them")
     f.check(f.t.rest_of("under/outcome/") > from, "how it went comes in their place")

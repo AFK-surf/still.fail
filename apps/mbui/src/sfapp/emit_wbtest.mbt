@@ -35,7 +35,7 @@ fn emit_restore() -> Unit {
 }
 
 ///|
-test "an answer said while its agent's activity shows waits, then comes out of its avatar: fold, float, spit, return" {
+test "an answer said while its agent's activity shows is in the list at once, its avatar flying to it: fold, float, spit, return" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   // at work: its activity
@@ -43,10 +43,9 @@ test "an answer said while its agent's activity shows waits, then comes out of i
   let em = emits_of("ws1/st1\u{1}s-c1")
   clock.val = clock.val + fix_answer_ms
   t.draw()
-  // the answer is taken: it waits (folding, then the avatar on its way), not in the list yet
+  // the answer is taken: its avatar on its way (folding, then flying), the answer in the list already
   assert_eq(em.queue.length() + (if em.current is Some(_) { 1 } else { 0 }), 1)
-  assert_true(t.find("收到：「看一下列表」") is None)
-  // fold and float: it comes into the list as the avatar lands
+  assert_true(t.find("收到：「看一下列表」") is Some(_))
   t.run_for(Fold.ms() + Float.ms())
   assert_true(t.find("收到：「看一下列表」") is Some(_))
   t.run_for(Spit.ms() + Return.ms())
@@ -65,7 +64,6 @@ test "with the reader scrolled up (not watched), an answer just appears" {
   t.draw()
   assert_true(em.current is None)
   assert_eq(em.queue.length(), 0)
-  assert_false(emit_held(em, 102.0))
   emit_restore()
 }
 

@@ -1,28 +1,26 @@
-// What changes the height of a chat's list plays one at a time (ListTurns.kt, web/src/listQueue.ts, docs/list-motion.md):
-// words sent flying in from the composer, a message simply coming in, the agent's line coming, messages coming out of
-// its avatar, a decision's options closing, what goes from under a post. Each waits its turn here, in the order they
-// came; a turn is over once its own motion is and the list is where it moved it to (the list's own motion, its glide
-// after what came, at rest: Ctx::list_info's `rest`). What only fades, turns or changes its words is not in it. A row
-// waiting its turn is not in the list yet: its room comes when its turn does.
+// What changes the height of a chat's list under a post plays one at a time (ListTurns.kt, web/src/listQueue.ts,
+// docs/list-motion.md): avatars flying to messages, a decision's options closing, what goes from under a post. Each
+// waits its turn here, in the order they came; a turn is over once its own motion is, as declared, never once the list
+// is still (its glide to its end goes on again with each part of an answer streaming in).
 //
-// Motion as data: each turn's start is declared (where the one before was declared to end, or the list's rest, or when
-// it was asked, whichever is last) and what plays in it starts from there (`started`), whichever frame sees it; a turn
+// Messages are on screen first: no row waits here. A message (sent from here or come in), an outbox entry, an agent's
+// line is in the list the frame it comes, its motion (rising in, words flying from the composer) starting there.
+//
+// Motion as data: each turn's start is declared (where the one before was declared to end, or when it was asked,
+// whichever is last) and what plays in it starts from there (`started`), whichever frame sees it; a turn
 // of a known length ends at its start and that, one that lasts till something is over (words sent, till they have
 // landed; messages out of avatars, till none is left) when that says it is (Turns::over).
 
 ///|
-/// What a turn is for: a row coming in (by its key), something under a post shown or not (by its key), words sent,
-/// messages coming out of avatars.
+/// What a turn is for: something under a post shown or not (by its key), avatars flying to messages.
 priv enum TurnFor {
-  Admit(String)
   Change(String)
-  Send
   Emits
 } derive(Eq, Show)
 
 ///|
 /// A turn asked for: what for, how long its motion takes (inf: till said over), and whether it goes after the others
-/// asked with it (an agent's line, after what closes under a post as it starts: Chat.kt `after`).
+/// asked with it.
 priv struct TurnAsk {
   what : TurnFor
   ms : Double
@@ -41,17 +39,11 @@ priv struct Turns {
   mut until : Double
   mut open : Bool
   mut asked_n : Int
-  /// rows waiting their turn, by key: kept out of the list till then
-  waiting : Map[String, Bool]
   /// what is under a post as shown (Turns::in_turn), by key, and what it is to become in its turn
   shown : Map[String, Bool]
   wants : Map[String, Bool]
-  /// when each row came in or each change was made, by key (what plays in it starts from there)
+  /// when each change was made, by key (what plays in it starts from there)
   started : Map[String, Double]
-  /// words sent waiting their turn: their row kept out of the list, the words over the composer
-  mut send_waiting : Bool
-  /// the list's own motion, as last seen: at rest from then (inf: under way, its end not known yet)
-  mut list_rest : Double
   /// the frame they were last played on in (Turns::step): their chat's page shown then; that frame's time, as handed
   /// to what moves (Moving::sample)
   mut stepped : Int
@@ -74,12 +66,9 @@ fn turns_of(key : String) -> Turns {
         until: -1.0,
         open: false,
         asked_n: 0,
-        waiting: {},
         shown: {},
         wants: {},
         started: {},
-        send_waiting: false,
-        list_rest: -1.0,
         stepped: -1,
         now: 0.0,
         mover: @ui.Mover::new(),
@@ -127,23 +116,6 @@ fn Turns::moment(self : Turns, c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// The row `key` comes into the list in its turn, its own motion taking `ms` (`after`: see TurnAsk).
-fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after? : Bool = false) -> Unit {
-  if self.waiting.contains(key) {
-    return
-  }
-  self.waiting[key] = true
-  self.ask(c, Admit(key), ms, after~)
-}
-
-///|
-/// Words sent: their row comes in its turn, which lasts till they have landed (Turns::over).
-fn Turns::send(self : Turns, c : @ui.Ctx) -> Unit {
-  self.send_waiting = true
-  self.ask(c, Send, @double.infinity)
-}
-
-///|
 /// Messages out of avatars: one turn from the first setting out till none is left (Turns::over).
 fn Turns::emits(self : Turns, c : @ui.Ctx) -> Unit {
   // (one under way, or asked: none more; one over, a new one for what came since)
@@ -181,13 +153,13 @@ fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : D
 }
 
 ///|
-/// When what is under a post `key` last changed in its turn, or a row came in (-1: not in one).
+/// When what is under a post `key` last changed in its turn (-1: not in one).
 fn Turns::started_at(self : Turns, key : String) -> Double {
   self.started.get(key).unwrap_or(-1.0)
 }
 
 ///|
-/// The turn under way, of words sent or messages out of avatars, is over (`at`: when it was declared to end).
+/// The turn under way, of avatars flying to messages, is over (`at`: when it was declared to end).
 fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Unit {
   if self.on == Some(what) && self.open {
     self.open = false
@@ -224,17 +196,15 @@ fn Turns::next_ask(self : Turns) -> Int? {
 }
 
 ///|
-/// When the next turn may start (inf: not known yet): the one under way over (at most turn_most_ms after it began), the
-/// list at rest, and it asked.
+/// When the next turn may start (inf: not known yet): the one under way over (at most turn_most_ms after it began), and
+/// it asked.
 fn Turns::free_at(self : Turns, a : TurnAsk) -> Double {
-  dmax(dmax(self.until, self.list_rest), a.at)
+  dmax(self.until, a.at)
 }
 
 ///|
 /// Plays the turns on, before the page is built (chat_tick): each one whose turn has come starts, from when it came.
-/// `list_rest`: when the list's own motion is at rest (Ctx::list_info's `rest`; inf: under way, its end not known).
-fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
-  self.list_rest = list_rest
+fn Turns::step(self : Turns, c : @ui.Ctx) -> Unit {
   self.stepped = c.frame_number()
   let mut steps = 0
   while steps < 16 {
@@ -255,22 +225,17 @@ fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
     self.open = a.ms == @double.infinity
     self.until = at + (if self.open { turn_most_ms } else { a.ms }) + turn_calm_ms
     match a.what {
-      Admit(k) => {
-        self.waiting.remove(k) |> ignore
-        self.started[k] = at
-      }
       Change(k) => {
         self.shown[k] = self.wants.get(k).unwrap_or(!self.shown.get(k).unwrap_or(false))
         self.started[k] = at
       }
-      Send => self.send_waiting = false
       Emits => self.started[emits_turn] = at
     }
   }
 }
 
 ///|
-/// Frames while a turn waits to come (its start known: the one before declared to end, the list at rest), none once
+/// Frames while a turn waits to come (its start known: the one before declared to end), none once
 /// all have come; one under way that lasts till said over is said by what it waits on (its own motion).
 impl @ui.Moving for Turns with sample(self, now) {
   self.now = now
@@ -298,24 +263,25 @@ impl @ui.Moving for Turns with rest_at(self, now, frame) {
 }
 
 ///|
-/// How long a turn holds the next: a row coming in (its rise: Chat.kt admit, 320), an agent's line (its room opening,
-/// 220), a decision's options closing (their leave and the delayed close: ListMotion.kt CLOSE_TURN_MS), 忽略 going
-/// (Chat.kt AskDismiss, 280).
+/// How a row comes in, from the frame it is in the list: rising (Chat.kt rise, 320), an agent's line its room opening
+/// (220).
 let row_turn_ms : Double = 320.0
 
 ///|
 let working_turn_ms : Double = 220.0
 
 ///|
+/// How long a turn holds the next: a decision's options closing (their leave and the delayed close: ListMotion.kt
+/// CLOSE_TURN_MS), 忽略 going (Chat.kt AskDismiss, 280).
 let close_turn_ms : Double = 520.0
 
 ///|
 let dismiss_turn_ms : Double = 280.0
 
 ///|
-/// When what is under a post `key` changes, or row `key` comes in: when it did, or, still to come, when its turn is
-/// declared to start (the turns before it in order each from where the one before them ends, the list at rest); inf
-/// while that is not known (a turn before it lasts till said over, the list's glide not set out).
+/// When what is under a post `key` changes: when it did, or, still to come, when its turn is
+/// declared to start (the turns before it in order each from where the one before them ends); inf while that is not
+/// known (a turn before it lasts till said over).
 fn Turns::start_of(self : Turns, key : String) -> Double {
   let order = self.asks.copy()
   order.sort_by(fn(a, b) {
@@ -329,8 +295,8 @@ fn Turns::start_of(self : Turns, key : String) -> Double {
   })
   let mut end = if self.open { @double.infinity } else { self.until }
   for a in order {
-    let start = dmax(dmax(end, self.list_rest), a.at)
-    if a.what == Admit(key) || a.what == Change(key) {
+    let start = dmax(end, a.at)
+    if a.what == Change(key) {
       return start
     }
     end = start + a.ms
