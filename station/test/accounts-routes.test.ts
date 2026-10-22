@@ -4,7 +4,7 @@
 import type { Clock } from "effect";
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
@@ -17,7 +17,8 @@ import { profileEnv } from "../src/agents/profiles.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Store } from "../src/store/store.ts";
-import { approval, exe, fakeLogin, machine as fakeMachine, script, temp, until, upon } from "./accounts-fakes.ts";
+import { approval, exe, fakeLogin, machine as fakeMachine, provider, script, temp, until, upon } from "./accounts-fakes.ts";
+import { URLS } from "../src/accounts/profiles.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
 const viewer = (email: string, role: string) => ({ sub: `sub-${email}`, email, name: "", role, workspace: "ws", device: "d" });
@@ -26,7 +27,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -65,6 +66,8 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
     clock: o.clock,
     workspaces: () => o.workspaces ?? [],
+    shared: o.shared,
+    urls: o.urls,
   });
   accounts.start();
   const table = routes({
@@ -411,6 +414,60 @@ describe("the accounts routes", { concurrency: true }, () => {
     await settle();
     assert.equal(quota.n, 1);
     assert.equal(t.view("linked")!.quota.windows[0].usedPercent, 12);
+    await t.close();
+  });
+
+  test("a station borrowing a profile is told its allowance asked again when older than a round, though no one follows it", async () => {
+    const quota = { n: 0 };
+    const time = testClock();
+    const t = await rig({ quota, clock: time.clock });
+    assert.equal((await t.accounts.lentHealth("cx")).quota!.windows[0]!.usedPercent, 12);
+    assert.equal(quota.n, 1);
+    await t.accounts.lentHealth("cx");
+    assert.equal(quota.n, 1, "a fresh one is told as it is");
+    await time.adjust(5 * 60_000);
+    await t.accounts.lentHealth("cx");
+    assert.equal(quota.n, 2);
+    await t.close();
+  });
+
+  test("a borrowed Codex subscription's allowance is read with the login its host lent while that is good, else its host's", async () => {
+    const data = temp("borrowed-quota");
+    const home = join(data, "homes", "bx");
+    mkdirSync(home, { recursive: true });
+    writeFileSync(
+      join(data, "config.json"),
+      JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }),
+    );
+    const jwt = (exp: number) => ["{}", JSON.stringify({ exp: Math.floor(exp / 1000) }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
+    const lend = (exp: number) => writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: jwt(exp), account_id: "acct", refresh_token: "lent-by-another-station" } }));
+    const chatgpt = await provider(() => ({ status: 200, body: { rate_limit: { primary_window: { used_percent: 40, limit_window_seconds: 604_800, reset_at: 1_900_000_000 } } } }));
+    // The host's, as old as the last time anyone followed it.
+    const hosts = { n: 0, at: 1 };
+    const shared = {
+      status: async () => {
+        hosts.n++;
+        return { check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: { state: "ok", windows: [{ label: "每周", usedPercent: 96, resetsAt: null }], detail: null, checkedAt: hosts.at } };
+      },
+      view: () => null,
+    };
+    const t = await rig({ data, shared, urls: { ...URLS, chatgpt: chatgpt.base } });
+    lend(Date.now() + 86_400_000);
+    assert.equal((await t.call("POST", "/profiles/bx/quota"))[1].windows[0].usedPercent, 40);
+    assert.equal(hosts.n, 0);
+    assert.equal(chatgpt.asked[0]!.headers["chatgpt-account-id"], "acct");
+    // The host's check does not put its older allowance back.
+    assert.equal((await t.call("POST", "/profiles/bx/check"))[0], 200);
+    assert.equal(hosts.n, 1);
+    assert.equal(t.view("bx")!.quota.windows[0].usedPercent, 40);
+    // Run out: the host's, once it is newer than the one read here.
+    lend(Date.now() - 1000);
+    assert.equal((await t.call("POST", "/profiles/bx/quota"))[1].windows[0].usedPercent, 40);
+    hosts.at = Date.now() + 1000;
+    assert.equal((await t.call("POST", "/profiles/bx/quota"))[1].windows[0].usedPercent, 96);
+    assert.equal(hosts.n, 3);
+    assert.equal(chatgpt.asked.length, 1);
+    await chatgpt.close();
     await t.close();
   });
 

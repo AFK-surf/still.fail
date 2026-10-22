@@ -57,7 +57,7 @@ function station(cloud: FakeCloud, id: string, others: () => Map<string, Station
     env: {},
     claudeToken: async (p) => (lent.push(p.id), { token: `token-of-${p.id}`, expiresAt: Date.now() + 2 * 3600_000 }),
     codexRunning: () => false,
-    status: (pid) => ({ check: { state: "ok", detail: `checked ${pid}`, models: null, checkedAt: 1 }, quota: null }),
+    status: async (pid) => ({ check: { state: "ok", detail: `checked ${pid}`, models: null, checkedAt: 1 }, quota: null }),
     changed: () => {},
   });
   return { data, config, sharing, lent };

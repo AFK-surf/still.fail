@@ -357,6 +357,21 @@ export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang
   return withCodexCredits(okOrUnavailable(windows, tr(lang, "station.quota.chatgptNoWindows")), body, body?.rate_limit_reset_credits);
 }
 
+/// A borrowed Codex subscription's allowance, read with the login its host lent (kept in its home's auth.json) while that
+/// has not run out: the same account's as the host reads, asked now. Null when there is no such login to read it with.
+export async function lentCodexUsage(home: string, now: number, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota | null> {
+  const file = join(home, "auth.json");
+  let expires = 0;
+  try {
+    const token = JSON.parse(readFileSync(file, "utf8"))?.tokens?.access_token;
+    const claims = JSON.parse(Buffer.from(String(token).split(".")[1] ?? "", "base64url").toString("utf8"));
+    if (typeof claims?.exp === "number") expires = claims.exp * 1000;
+  } catch {
+    return null;
+  }
+  return expires > now ? codexUsage(file, urls, lang) : null;
+}
+
 /// The allowance of the machine's own login of a runtime, read without starting anything of the station's. Null when
 /// there is nothing to read it with.
 export async function machineUsage(runtime: "claude" | "codex", env: Env, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota | null> {
