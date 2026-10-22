@@ -104,6 +104,11 @@ fn start() -> Unit {
   let s = @ui.Stream::new(
     shown=fn(ts) {
       @ui.log("STREAM shown \{ts}")
+      // (and drawn, when it is the frame the stream shows: decoded, not let go; android-streams.sh's judge)
+      match stream.val {
+        Some(s) if s.shown_at() == Some(ts) => @ui.log("STREAM drawn \{ts}")
+        _ => ()
+      }
       let n = (ts / 100.0).to_int()
       if n > acked.val {
         acked.val = n
