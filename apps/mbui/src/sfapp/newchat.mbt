@@ -375,8 +375,9 @@ fn new_chat_on(
             }
           } else {
             let on = field(p, "valueOption")
-            let maker = match text(on, "maker") {
-              "" => text(field(v, "model"), "maker")
+            // (a model's maker: the core's Maker, its id the mark's)
+            let maker = match text(field(on, "maker"), "id") {
+              "" => text(field(field(v, "model"), "maker"), "id")
               m => m
             }
             if chooser(
@@ -985,7 +986,7 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
               text(opt, "name"),
               text(field(opt, "spent"), "text"),
               picked,
-              Some(fn() { @sf.maker_mark(c, text(opt, "maker"), runtime, 16.0) |> ignore }),
+              Some(fn() { @sf.maker_mark(c, text(field(opt, "maker"), "id"), runtime, 16.0) |> ignore }),
               faint~,
             ) {
             set({ "model": Json::string(text(opt, "model")) })

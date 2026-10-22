@@ -366,7 +366,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               opening is None,
               fn() {
                 match agent {
-                  Some(a) => @sf.maker_mark(c, text(Some(a), "maker"), text(Some(a), "runtime"), 14.0) |> ignore
+                  Some(a) => @sf.maker_mark(c, text(field(Some(a), "maker"), "id"), text(Some(a), "runtime"), 14.0) |> ignore
                   None => ()
                 }
               },

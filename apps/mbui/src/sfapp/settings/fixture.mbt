@@ -431,7 +431,7 @@ fn fx_station(address : String) -> Json {
           ("profiles", Json::array(fx_profiles())),
           ("processesText", str("2 个 agent 进程 · claude 1.2 GB")),
           ("slackApps", []),
-          ("drive", obj([("roots", ["~/项目", "~/文档"]), ("all", Json::boolean(false))])),
+          ("drive", obj([("roots", [{ "path": "~/项目", "name": "项目", "state": "ok" }, { "path": "~/文档", "name": "文档", "state": "ok" }]), ("all", Json::boolean(false))])),
           (
             "updates",
             [
