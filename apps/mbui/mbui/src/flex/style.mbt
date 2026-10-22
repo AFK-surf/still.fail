@@ -947,6 +947,10 @@ pub(all) struct Node {
   mut height : Double
   // which flex line it was placed on, for baselines
   mut line : Int
+  // (pre's compute, see below: here, and pre just before laid_gen, where
+  // the C struct has room for them, so that a Node keeps within the
+  // allocator's size class of 192 bytes)
+  mut pre_gen : Int
   // sizes found during the current compute(), 8 numbers each
   mut cache : FixedArray[Double]
   // how many of them hold sizes
@@ -972,11 +976,22 @@ pub(all) struct Node {
   mut p_cbh : Double
   mut p_w : Double
   mut p_h : Double
+  // A row container measured before its height was known, when nothing in
+  // it depends on that height (layout_flex): in compute pre_gen (-1: none),
+  // the width it was measured at, the size it came to and, for each of its
+  // items, where that measure put it (main and cross size, main and cross
+  // position)
+  mut pre : Array[Double]
   // the compute() that last laid it out, and the last whose layout of it
   // was the one before, reused
   mut laid_gen : Int
   mut skip_gen : Int
 }
+
+///|
+/// What a node keeps of a measure when it keeps nothing (never written: one
+/// that keeps something gets its own).
+let no_pre : Array[Double] = []
 
 ///|
 pub fn Node::new() -> Node {
@@ -1005,6 +1020,8 @@ pub fn Node::new() -> Node {
     p_w: 0.0,
     p_h: 0.0,
     laid_gen: -1,
+    pre_gen: -1,
+    pre: no_pre,
     skip_gen: -1,
   }
 }
