@@ -132,6 +132,11 @@ final class Streams {
     private static final String throwShow = System.getenv("MBUI_STREAM_THROW_SHOW");
     private static int shows;
 
+    // A host contract injects a synchronous codec failure, which MediaCodec can throw instead of calling onError.
+    private static final String failInput = System.getenv("MBUI_STREAM_FAIL_INPUT");
+    private static final String failStart = System.getenv("MBUI_STREAM_FAIL_START");
+    private static int inputCalls, startCalls;
+
     static void show(int id, double ts) {
         dropSurfaces();
         Stream s = streams.get(id);
@@ -447,7 +452,10 @@ final class Streams {
             }
             handler.post(() -> {
                 surface = s;
-                if (start()) stream.say("b");
+                boolean hadConfig = avcc != null;
+                start();
+                // The old surface lost the decoder's state even if its replacement could not start.
+                if (hadConfig) stream.say("b");
                 letGo(oldT, oldS);
             });
         }
@@ -476,7 +484,7 @@ final class Streams {
                 outW = w;
                 outH = h;
                 // the sender's next frame after a config is a key frame
-                start();
+                if (!start()) stream.say("b");
             });
         }
 
@@ -514,10 +522,12 @@ final class Streams {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
                 format.setInteger(MediaFormat.KEY_PRIORITY, 0);
                 MediaCodec made = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+                // Own it before configure/start: either may throw, and stop must release the partial decoder too.
+                codec = made;
+                if (failStart != null && failStart.equals(String.valueOf(++startCalls))) throw new IllegalStateException("MBUI_STREAM_FAIL_START: start " + startCalls);
                 made.setCallback(callback, handler);
                 made.configure(format, surface, null, 0);
                 made.start();
-                codec = made;
                 needKey = true;
                 return true;
             } catch (Exception e) {
@@ -565,25 +575,45 @@ final class Streams {
             while (!inputs.isEmpty() && !waiting.isEmpty()) {
                 int index = inputs.poll();
                 Frame f = waiting.poll();
-                ByteBuffer buffer = c.getInputBuffer(index);
-                if (buffer == null) continue;
-                buffer.clear();
-                byte[] b = annexB(f.data, lengthSize);
-                if (b == null || buffer.remaining() < b.length) {
-                    // not a frame it can take: given back empty, the next key frame asked for
-                    c.queueInputBuffer(index, 0, 0, (long) f.ts, 0);
-                    stream.say("d " + num(f.ts));
-                    needKey = true;
-                    stream.say("b");
-                    continue;
-                }
-                buffer.put(b);
-                c.queueInputBuffer(index, 0, b.length, (long) f.ts, f.key ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0);
+                // Include the frame being submitted in stop's acknowledgements if get/queueInputBuffer throws.
                 inside.add(f.ts);
+                try {
+                    ByteBuffer buffer = c.getInputBuffer(index);
+                    if (buffer == null) {
+                        inside.remove(f.ts);
+                        stream.say("d " + num(f.ts));
+                        continue;
+                    }
+                    buffer.clear();
+                    byte[] b = annexB(f.data, lengthSize);
+                    if (b == null || buffer.remaining() < b.length) {
+                        // not a frame it can take: given back empty, the next key frame asked for
+                        c.queueInputBuffer(index, 0, 0, (long) f.ts, 0);
+                        inside.remove(f.ts);
+                        stream.say("d " + num(f.ts));
+                        needKey = true;
+                        stream.say("b");
+                        continue;
+                    }
+                    buffer.put(b);
+                    if (failInput != null && failInput.equals(String.valueOf(++inputCalls))) throw new IllegalStateException("MBUI_STREAM_FAIL_INPUT: input " + inputCalls);
+                    c.queueInputBuffer(index, 0, b.length, (long) f.ts, f.key ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0);
+                } catch (Exception e) {
+                    failed(c, e);
+                    return;
+                }
                 // a decoder that holds frames back (some keep one or two before the first comes out) would wait for more
                 // while the sender waits for an acknowledgement: with two inside, the older one counts as taken
                 if (inside.size() >= 2) stream.say("d " + num(inside.poll()));
             }
+        }
+
+        /** Both a synchronous codec exception and its asynchronous onError lose the same decoder state. */
+        private void failed(MediaCodec c, Exception e) {
+            if (c != codec) return;
+            Host.log("stream " + stream.id + ": the H.264 decoder failed: " + e);
+            start();
+            stream.say("b");
         }
 
         /** The next decoded frame onto the SurfaceTexture, when none is there. */
@@ -677,10 +707,7 @@ final class Streams {
 
             @Override
             public void onError(MediaCodec c, MediaCodec.CodecException e) {
-                if (c != codec) return;
-                Host.log("stream " + stream.id + ": the H.264 decoder failed: " + e);
-                // anew, from the next key frame
-                if (start()) stream.say("b");
+                failed(c, e);
             }
 
             @Override

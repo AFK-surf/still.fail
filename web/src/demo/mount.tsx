@@ -16,7 +16,7 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, CoreError, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
-import type { ChatItem, ChatMessage, ComposerLink, SearchView, ShareInView } from "../core/shapes.ts";
+import type { ChatItem, ChatMessage, ChatView, ComposerLink, SearchView, ShareInView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY, STATION } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
@@ -62,6 +62,15 @@ const extensions: DemoExtension[] = [];
 export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
 
 function valueOf(topic: Topic): unknown {
+  const value = extendedValueOf(topic);
+  if (topic.topic !== "chat" || !value || value instanceof CoreError) return value;
+  const chat = value as ChatView;
+  // Like the real core, send prose with the message, before the row's first layout. Stories may change its words
+  // in an extension: read the final text, so the source offsets and the tree always describe those same words.
+  return { ...chat, messages: chat.messages.map((m) => m.authorKind === "agent" ? { ...m, md: markdown(m.text) } : m) };
+}
+
+function extendedValueOf(topic: Topic): unknown {
   for (const e of extensions) { const v = e.topic?.(topic); if (v !== undefined) return v; }
   let value = demoValueOf(topic);
   for (const e of extensions) { const v = e.then?.(topic, value); if (v !== undefined) value = v; }

@@ -5,7 +5,6 @@ import type {
   AgentCardView, ChatAgent, ChatItem, ChatMessage, ChatView, ChatsView, ModelOption, Outgoing, Profile, HistoryGroup, HistoryItem, HistoryStep, HistoryView, Live,
   Maker, Person, RowAgent, RuntimeKind, Session, Stamp,
 } from "../core/shapes.ts";
-// The demo has no core: its agent's words read as the core reads them.
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
 
 const MINUTE = 60_000;
@@ -281,8 +280,7 @@ export function chatView(chat: DemoChat, runs?: Runs): ChatView {
   const creator = chat.people[0] ?? { id: "local", name: "你", via: "local", shown: { name: "你", display: "你", mine: true } };
   return {
     me: { id: "local" }, title: chat.title, people: chat.people, agents: [agent],
-    // The real core supplies parsed prose with the chat. The demo must do the same before a row is laid out.
-    messages: chat.messages.map((m) => m.authorKind === "agent" ? { ...m, md: markdown(m.text) } : m),
+    messages: chat.messages,
     more: false, outbox: chat.outbox, link: { state: "online" }, offline: false,
     thread: {
       id: chat.thread, surface: "ember", channel: "EMBER", threadTs: `${created / 1000}`, createdAt: created, createdBy: creator.id,
