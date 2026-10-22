@@ -50,20 +50,6 @@ fn update_trouble(notice : Json?) -> Bool {
 }
 
 ///|
-/// The control's width in the bar (what follows a chat's title is laid out by its width): its dot, its gap, its word.
-fn update_control_w(notice : Json?) -> Double {
-  let words = match text(notice, "label") {
-    "" => text(notice, "text")
-    l => l
-  }
-  let mut w = 0.0
-  for ch in words {
-    w = w + (if ch.to_int() > 0x2E80 { 12.0 } else { 7.0 })
-  }
-  6.0 + 5.0 + w
-}
-
-///|
 /// Tells the core how the notice of `station`'s update now is: `open`, `close` or `dismiss` (for this version).
 fn update_notice(src : Source, station : String, notice : Json?, action : String) -> Unit {
   act(src, tr("android-misc.stationUpdate.noticeWhat"), "station.updateNotice/" + station, "station.updateNotice", {

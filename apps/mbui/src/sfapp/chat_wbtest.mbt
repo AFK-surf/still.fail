@@ -13,6 +13,9 @@ fn chat_tester(mode : String) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
+  // its people in the bar lettered as it calls them: the viewer 「你」, not their name (Parts.kt PeopleStack)
+  assert_true(t.find("你") is Some((_, y)) && y < 100.0)
+  assert_true(t.find("林") is None)
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   assert_true(y < 844.0 - 110.0 && y > 500.0)
@@ -235,3 +238,29 @@ test "a chat's place: told the core as the list comes to rest (the message at th
 ///|
 /// How far the list is dragged down from its end.
 let place_drag : Double = 300.0
+
+///|
+test "a long title has what is left beside what follows it, which keeps its own width (Chat.kt BarFrame)" {
+  reset()
+  let t = @ui.Tester::new(
+    fn(c) {
+      bar_frame(
+        c,
+        "端到端测试的对话 post:你好，我是测试用的 agent",
+        fn() { c.box(w=Px(60.0), fn() { c.text("尾", size=12.0, wrap=false) |> ignore }) |> ignore },
+        fn() {  },
+        true,
+      )
+    },
+    w=390.0,
+    h=200.0,
+  )
+  t.draw()
+  let (tx, _, tw, _) = t.rect_of("端到端").unwrap()
+  let (ax, _, _, _) = t.rect_of("尾").unwrap()
+  // 390 - 16 (its end) - 34 (…) - 8, the box of 60: what follows starts where it would with a short title
+  assert_eq(ax, 390.0 - 16.0 - 34.0 - 8.0 - 60.0)
+  // the title cut to what is left, 8 before it
+  assert_true(tx + tw <= ax - 8.0 + 0.5)
+  assert_true(t.drawlist().contains("…"))
+}

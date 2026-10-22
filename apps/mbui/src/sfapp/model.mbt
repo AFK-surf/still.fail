@@ -65,6 +65,8 @@ pub(all) struct Person {
   id : String
   email : String
   name : String
+  /// what the chat's bar calls them (「你」 for the viewer)
+  display : String
   picture : String
   mine : Bool
 }
@@ -144,6 +146,7 @@ fn person_of(p : Json) -> Person {
     id: text(Some(p), "id"),
     email: text(Some(p), "email"),
     name: text(shown, "name"),
+    display: text(shown, "display"),
     picture: text(shown, "picture"),
     mine: flag(shown, "mine"),
   }
