@@ -144,8 +144,11 @@ fn lto_for(cc : Array[Bytes], j : Int) -> Array[Bytes]? {
   }
   let (kind, apple) = compiler_kind(cc)
   if kind == 0 {
-    // MSVC's counterpart: whole-program optimisation (/GL) and link-time code generation, on up to 8 threads
-    return Some([b"/link", b"/LTCG", utf8("/CGTHREADS:\{imin(8, j)}")])
+    // MSVC's counterpart: whole-program optimisation (/GL) and link-time code generation, on up to 8 threads.
+    // Incremental: the code of the functions whose objects are as the last link's were is taken from its .iobj beside
+    // the program, the rest generated again (the same code as a whole /LTCG, which a link with no .iobj is). The
+    // Windows app's link was 64 s of its CI job's 225 s on a change to a few units (2026-10-22, 39723898515).
+    return Some([b"/link", b"/LTCG:INCREMENTAL", utf8("/CGTHREADS:\{imin(8, j)}")])
   }
   if kind != 1 {
     return None
@@ -1670,6 +1673,9 @@ fn cmd_wrap(args : Array[String]) -> Unit {
   for x in with_link_flags(largs, lto.unwrap_or([])) {
     cmd.push(x)
   }
+  if msvc && lto is Some(_) {
+    drop_brepro()
+  }
   c_exit(link(cmd, out, [], None))
 }
 
@@ -1945,4 +1951,24 @@ fn cmd_check(args : Array[String]) -> Unit {
     needs_diff.length() == 0
   out_line(if ok { b"ok" } else { b"FAIL" })
   c_exit(if ok { 0 } else { 1 })
+}
+
+///|
+/// The link's CL and LINK (cl hands CL's to the link it runs) without /Brepro: with it, the .iobj and .ipdb a link
+/// writes never match again and /LTCG:INCREMENTAL generates every function anew (the objects compiled with it are
+/// taken; 2026-10-22, the mbui-probe-ltcg runs 39730817781, 39730895939)
+fn drop_brepro() -> Unit {
+  for name in ["CL", "LINK"] {
+    match getenv(name) {
+      Some(v) => {
+        let ws = split_words(v).filter(fn(w) {
+          let l = lower(w)
+          l != b"/brepro" && l != b"-brepro"
+        })
+        let _ = c_setenv(utf8(name), join_words(ws, b" "))
+
+      }
+      None => ()
+    }
+  }
 }

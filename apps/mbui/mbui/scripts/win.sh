@@ -101,7 +101,8 @@ case "${1:-build}" in
     # whole)
     SHIM=$(cygpath -u "$("$D/mbc" shim "$(cygpath -w "$PWD/out/mbc/win")" | tr -d '\r')")
     # cl's and link's outputs reproducible (-Brepro: no time stamps in them; lib's is mbc shim's), so that the same C
-    # makes the same objects and mbc's link, finding its inputs as they were, is not run again. (-, not /: Git Bash
+    # makes the same objects and mbc's link, finding its inputs as they were, is not run again (an LTCG link is run
+    # without it, by scripts/mbc: /LTCG:INCREMENTAL takes nothing of the last link's otherwise). (-, not /: Git Bash
     # hands a variable's /Brepro to Windows programs as a path, C:/Program Files/Git/Brepro)
     export CL="-Brepro ${CL:-}" LINK="-Brepro ${LINK:-}"
     rm -f out/mbc.log
