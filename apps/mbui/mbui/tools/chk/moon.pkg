@@ -2,6 +2,8 @@ import {
   "mbctools/re",
   "mbctools/rjson",
   "mbctools/sys",
+  "mbctools/png",
+  "moonbitlang/core/math",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
 }

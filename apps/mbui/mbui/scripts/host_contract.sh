@@ -279,7 +279,7 @@ case $CMD in
     run "MBUI_TEXTCHECK=$NAME" $O/text.log || code=$?
     tr -d '\r' < $O/text.log | grep -a "TEXTCHECK" | head -40
     if [ $code != 0 ] || ! grep -aq "TEXTCHECK done $NAME: [1-9][0-9]* answers, 0 differ" $O/text.log; then
-      echo "text contract ($H): the host's text is not what $NAME kept. 重录：scripts/host_contract.sh $H build && NAME=$NAME scripts/host_contract.sh $H record（或从 CI 的 host-$H 产物：python3 scripts/chk textrec --keep run.log $NAME $PAGE - - $PLATFORM），提交 src/kitdemo/gallery/textrec_${NAME}*.mbt、textrec_runs.txt 与 textrec_runs.mbt"
+      echo "text contract ($H): the host's text is not what $NAME kept. 重录：scripts/host_contract.sh $H build && NAME=$NAME scripts/host_contract.sh $H record（或从 CI 的 host-$H 产物：scripts/chk textrec --keep run.log $NAME $PAGE - - $PLATFORM），提交 src/kitdemo/gallery/textrec_${NAME}*.mbt、textrec_runs.txt 与 textrec_runs.mbt"
       exit 1
     fi
     echo "text contract ($H): every answer $NAME kept is the host's" ;;
@@ -328,35 +328,7 @@ case $CMD in
     # none half covered (else that row shows what is under the canvas, a line along a video's picture)
     run "MBUI_DRAW_LOG=1 MBUI_VIEWCHECK=1" $O/views.log || true
     grep -aq "VIEWCHECK done" $O/views.log || { echo "views contract ($H): the run did not end its check"; tail -20 $O/views.log; exit 1; }
-    "$PY" - "$O/views.log" "$H" <<'PYEOF'
-import re, sys
-told, at = {}, {}
-for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
-    for key, out in (("VIEWTOLD ", told), ("VIEWAT ", at)):
-        i = line.find(key)
-        if i >= 0:
-            p = line[i + len(key):].split()
-            out[p[0]] = [float(x) for x in p[1:10]]
-names = ["x", "y", "w", "h", "clip x0", "clip y0", "clip x1", "clip y1", "corners' radius"]
-bad = []
-if not told or not at:
-    bad.append(f"told {len(told)}, placed {len(at)}: the app or the host said nothing")
-for v, t in told.items():
-    a = at.get(v)
-    if a is None:
-        bad.append(f"view {v}: told {t}, the host said not where it put it")
-        continue
-    for k, (n, tv, av) in enumerate(zip(names, t, a)):
-        if k < 8 and abs(tv - round(tv)) > 1e-3:
-            bad.append(f"view {v}: told {n} {tv}, not on a device pixel")
-        if abs(tv - av) > 1e-3:
-            bad.append(f"view {v}: {n} told {tv}, put at {av}")
-if bad:
-    print(f"views contract ({sys.argv[2]}): " + "; ".join(bad))
-    sys.exit(1)
-print(f"views contract ({sys.argv[2]}): {len(told)} native view put where it was told, on whole device pixels: " +
-      " ".join(f"{x:g}" for x in next(iter(at.values()))))
-PYEOF
+    scripts/chk views "$O/views.log" "$H"
     # (Android) the round page pictured (MBUI_VIEWCHECK=hold: left on the screen once placed): at each of its four
     # corners, just inside its rect but outside its round, the canvas's ground (the view cut there, and its hole as
     # round: no square corner of the page, nothing of what is under the canvas); a little further in, the page
@@ -376,51 +348,7 @@ PYEOF
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh shown && $ADB exec-out screencap -p > $O/views-round.png
       $ADB exec-out run-as dev.mbui.demo cat files/round.log > $O/views-round.log
       $ADB shell am force-stop dev.mbui.demo
-      "$PY" - "$O/views-round.log" "$O/views-round.png" <<'PYEOF'
-import sys
-sys.path.insert(0, "scripts")
-from gallery_shot import pixels
-page = None
-for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
-    i = line.find("VIEWTOLD ")
-    if i >= 0:
-        p = [float(x) for x in line[i + 9:].split()[1:10]]
-        if len(p) == 9 and p[8] > 0:
-            page = p
-if page is None:
-    sys.exit("views contract (android): no round view told (VIEWTOLD with a radius)")
-w, h, bpp, rows = pixels(sys.argv[2])
-px = lambda x, y: tuple(rows[int(y)][int(x) * bpp:int(x) * bpp + 3])
-near = lambda a, b: sum(abs(u - v) for u, v in zip(a, b)) <= 24
-x, y, vw, vh, r = page[0], page[1], page[2], page[3], page[8]
-grey = (0x88, 0x88, 0x88)
-# (the picture is the screen's, the app's place its window's: moved by where the window is, found by the page's own
-# straight edges, the middle of its top and of its left, which its round leaves as they are)
-def first(at, n):
-    for k in range(n):
-        if near(at(k), grey):
-            return k
-    sys.exit("views contract (android): the page not found in the picture")
-dy = first(lambda j: px(x + vw / 2, j), h) - y
-dx = first(lambda k: px(k, y + dy + vh / 2), w) - x
-x, y = x + dx, y + dy
-ground = px(x - 4, y + vh / 2)
-bad = []
-if not near(px(x + vw / 2, y + vh / 2), grey):
-    bad.append(f"the page not shown (its middle {px(x + vw / 2, y + vh / 2)})")
-for name, cx, cy, sx, sy in (("top left", x, y, 1, 1), ("top right", x + vw - 1, y, -1, 1),
-                             ("bottom left", x, y + vh - 1, 1, -1), ("bottom right", x + vw - 1, y + vh - 1, -1, -1)):
-    out = px(cx + sx * 2, cy + sy * 2)
-    inside = px(cx + sx * r, cy + sy * r)
-    if not near(out, ground):
-        bad.append(f"{name}: {out} just inside the rect, outside the round, not the ground {ground}")
-    if not near(inside, grey):
-        bad.append(f"{name}: {inside} inside the round, not the page")
-if bad:
-    print("views contract (android): its round corners: " + "; ".join(bad))
-    sys.exit(1)
-print(f"views contract (android): the page's four corners round ({r:g} px), the ground outside them, the page inside")
-PYEOF
+      scripts/chk views-round "$O/views-round.log" "$O/views-round.png"
     fi
     ;;
   site)
@@ -430,32 +358,7 @@ PYEOF
     # page of HTML the same; the run ends itself (SITECHECK done)
     run "MBUI_SITECHECK=1" $O/site.log || true
     grep -aq "SITECHECK done" $O/site.log || { echo "site contract ($H): the run did not end its check"; grep -a "SITECHECK\|view " $O/site.log | tail -20; exit 1; }
-    "$PY" - "$O/site.log" "$H" <<'PYEOF'
-import re, sys
-steps = [l.split("SITECHECK ", 1)[1].strip() for l in open(sys.argv[1], encoding="utf-8", errors="replace") if "SITECHECK " in l]
-h = sys.argv[2]
-bad = []
-if "no site view here" in steps:
-    # (the browser has no site view: its page alone is checked, by the same steps)
-    need = ["page page-hello", "page page-pong two", "done"]
-else:
-    need = ["said hello", "said pong one", "said event 1", "said event 2", "page page-hello", "page page-pong two", "done"]
-    if "cookies kept" in steps:
-        # (a run's sites begin with no cookies, whatever the last run left)
-        need += ["said start cookie none", "said cookie k=v", "said fetched cookie-sent"]
-    elif not any(s.startswith("said fetched ") for s in steps):
-        bad.append("the page's own request was not answered")
-    grabs = [s for s in steps if s.startswith("grab ")]
-    if not grabs or int(grabs[0].split()[1]) <= 0:
-        bad.append("the page was not grabbed: " + (grabs[0] if grabs else "no grab"))
-for n in need:
-    if n not in steps:
-        bad.append("missing: " + n)
-if bad:
-    print(f"site contract ({h}): " + "; ".join(bad) + " (steps: " + " | ".join(steps) + ")")
-    sys.exit(1)
-print(f"site contract ({h}): " + " | ".join(steps))
-PYEOF
+    scripts/chk site "$O/site.log" "$H"
     ;;
   marks)
     # (Windows and the web draw no marks: @hostapi.draw_marks is None there)

@@ -9,7 +9,7 @@ render_dl() {
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$out"
   [ -s "$out" ] || { echo "render_dl: no draw list"; return 1; }
   # and lines' (src/kitdemo/gallery/dl_print_wbtest.mbt lines_shown) beside it, lines.dl: no reference, its picture checked by
-  # scripts/lines_check.py
+  # scripts/chk lines
   MBUI_DL_PRINT=lines moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/lines.dl"
   [ -s "$(dirname "$out")/lines.dl" ] || { echo "render_dl: no lines draw list"; return 1; }

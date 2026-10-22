@@ -19,7 +19,7 @@ on:
       - "apps/mbui/mbui/src/ui/drawlist.mbt"
       - "apps/mbui/mbui/src/ui/scene.mbt"
       - "apps/mbui/mbui/src/ui/line.mbt"
-      - "apps/mbui/mbui/scripts/lines_check.py"
+      - "apps/mbui/mbui/tools/chk/pictures.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
       - "apps/mbui/mbui/src/ui/smooth.mbt"
       - "apps/mbui/mbui/src/host/corner*"
