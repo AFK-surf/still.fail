@@ -33,7 +33,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       // under the top bar (and the status bar); at the foot 30 over the navigation bar, and the bottom bar's room at a
       // place's top (Files.kt foot)
-      let foot = nav_foot() + 30.0 + (if place && !wide_on.val { bar_room } else { 0.0 })
+      let foot = nav_foot() + 30.0 + (if place && has_bar() { bar_room } else { 0.0 })
       files_body(c, src, list, error, lenders, if place { status_top() + bar_h + 8.0 } else { 4.0 }, foot)
       if place {
         c.layer(fn() { files_top_bar(c) }) |> ignore

@@ -324,7 +324,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         waiting_messages(c, failed)
         c.layer(fn() {
           c.spacer()
-          composer(c, src, r, None)
+          composer(c, src, r, None, beside=corners_on.val)
           // over the navigation bar (a layer goes on under the page's padding)
           bar_room_box(c, nav_foot())
         })
@@ -335,7 +335,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         c.layer(fn() { chat_bar(c, src, w, r, v) }) |> ignore
         c.layer(fn() {
           c.spacer()
-          composer(c, src, r, Some(v))
+          composer(c, src, r, Some(v), beside=corners_on.val)
           // over the navigation bar (a layer goes on under the page's padding)
           bar_room_box(c, nav_foot())
         })

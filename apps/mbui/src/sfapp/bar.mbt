@@ -1185,26 +1185,10 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     Some(Object(_)) => dots["stations"] = t.p.red
     _ => ()
   }
-  // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), asleep while the core reaches
-  // nothing at all
-  let g = field(chats.value, "glyph")
-  let status = (src.topic)("status", { "workspace": Json::string(ws.id) }).value
-  let asleep = text(status, "state") == "trouble"
-  bar_glyph.val = Some({
-    online: count(g, "online"),
-    dim: count(g, "dim"),
-    failing: count(g, "failing"),
-    working: count(g, "working"),
-    connecting: count(g, "connecting"),
-    asleep,
-  })
-  // in words: asleep, what the core cannot reach says it; else the stations (the core's), and what is wrong with them
-  let said = if asleep { text(status, "text") } else { text(g, "label") }
-  bar_stations_said.val = match field(chats.value, "trouble") {
-    _ if said == "" => ""
-    Some(Object(_)) as trouble => fill("android-chat.home.stations.trouble", [("said", said), ("trouble", text(trouble, "text"))])
-    _ => fill("android-chat.home.stations", [("said", said)])
-  }
+  // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), and in words
+  let (glyph, said) = stations_at_glance(src, ws.id)
+  bar_glyph.val = Some(glyph)
+  bar_stations_said.val = said
   let m = bar
   // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, it moves from
   // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)

@@ -68,9 +68,10 @@ let wide : Wide = {
 let wide_on : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether a window this wide is drawn wide.
+/// Whether a window this wide is drawn wide: a desktop's (the phone's and the tablet's are drawn as Android's at any
+/// width: corners.mbt).
 pub fn is_wide(c : @ui.Ctx) -> Bool {
-  c.width >= wide_from
+  c.width >= wide_from && !@sf.touch_system()
 }
 
 ///|
@@ -89,6 +90,9 @@ fn wide_reset() -> Unit {
   wide.keys_open = false
   wide.landed = ""
   wide_on.val = false
+  corners_on.val = false
+  recent_open.val = false
+  recent_over.val = None
 }
 
 ///|

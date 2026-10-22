@@ -544,6 +544,7 @@ pub fn reset() -> Unit {
   status_top.val = 0.0
   nav_foot.val = 0.0
   bar_room.val = 0.0
+  no_bar.val = false
   wide_deep.val = false
   top_trailing.val = None
   top_label.val = ""

@@ -223,6 +223,10 @@ fn bar_room_gap(c : @ui.Ctx, h : Double) -> Unit {
 pub let bar_room : Ref[Double] = Ref(0.0)
 
 ///|
+/// A phone's or a tablet's wide screen (Android's LocalWide), which has no bottom bar: nothing to set of it.
+pub let no_bar : Ref[Bool] = Ref(false)
+
+///|
 /// Whether the page being drawn is a place of the bottom bar's at the stack's root (`page`'s `root`).
 let at_root : Ref[Bool] = Ref(false)
 

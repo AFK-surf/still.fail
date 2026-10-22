@@ -44,6 +44,10 @@ let fall_per_elevation : Double = 0.6
 pub let floating : Raised = raised(1.0, ambient=0.3, spot=0.3)
 
 ///|
+/// The latest chats raised on a wide screen (Wide.kt Recent: shadow(14), black at 20% both).
+pub let recent_raised : Raised = raised(14.0, ambient=0.2, spot=0.2)
+
+///|
 /// A sheet's (Sheet.kt: shadow(24)), a menu's (Sheet.kt: shadow(18)).
 pub let sheet_raised : Raised = raised(24.0)
 

@@ -12,8 +12,8 @@ fn reads_tester(platform? : Int = 0, window_inset? : Bool = false) -> @ui.Tester
 }
 
 ///|
-test "host reads: the shortcuts as the Tester's system writes them (⌘ on macOS, Ctrl+ on Android)" {
-  for p in [(0, "⌘K", "Ctrl+K"), (2, "Ctrl+K", "⌘K")] {
+test "host reads: the shortcuts as the Tester's system writes them (⌘ on macOS, Ctrl+ on Windows)" {
+  for p in [(0, "⌘K", "Ctrl+K"), (3, "Ctrl+K", "⌘K")] {
     let (platform, shown, not_shown) = p
     let t = reads_tester(platform~)
     wide.keys_open = true
