@@ -742,6 +742,8 @@ fn fix_deliver(session : String, id : String) -> Unit {
       "mine": true,
       "author": "lin@example.com",
       "ts": Json::string("sent\{fix_serial.val}"),
+      // the outbox entry it was, as the core says it (views.ts: a message sent from here keeps its outbox row)
+      "outgoing": Json::string(id),
       "attachments": Json::array(items(Some(params), "attachments")),
       "quotes": Json::array(items(Some(params), "quotes")),
     }),
