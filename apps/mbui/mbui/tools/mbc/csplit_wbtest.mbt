@@ -128,7 +128,7 @@ fn stat_of(s : Split, name : String) -> Int {
 fn fn_units(files : Map[String, String]) -> Array[String] {
   let out = []
   for n, _ in files {
-    if n.has_suffix(".c") && n != "data.c" && !n.has_prefix("init.") {
+    if n.has_suffix(".c") && !n.has_prefix("data") && !n.has_prefix("init.") {
       out.push(n)
     }
   }
@@ -153,10 +153,13 @@ test "kinds" {
   )
   assert_true(has(decls, "#else\nextern const int32_t pre_tab[2];\n#endif"))
   let data = files["data.c"]
-  assert_true(
-    data.find("#define CSPLIT_DEFS").unwrap() <
-    data.find("#include \"decls.h\"").unwrap(),
-  )
+  assert_true(has(data, "#define CSPLIT_DEFS"))
+  // (each global in a data unit of its own kind: none in data.c, none twice)
+  assert_false(has(data, "_M0G1"))
+  let globals = one_data(files)
+  for g in ["_M0G1 =", "_M0G2;", "_M0G3[] =", "const _M0S1 ="] {
+    assert_eq(occurs(globals, g), 1)
+  }
   assert_true(m.made_global.contains(b"_M0FP1a6hidden"))
   assert_true(has(decls, "#define _M0FP1a3ffi puts"))
   assert_true(has(decls, "static inline int32_t helper"))
@@ -339,7 +342,7 @@ fn layout_names_in(files : Map[String, String]) -> (Array[String], Array[String]
     }
     p = e
   }
-  (lay, lit.sorted().map(fn(b) { str(b) }), files["data.c"])
+  (lay, lit.sorted().map(fn(b) { str(b) }), files["data_layout.c"])
 }
 
 ///|
@@ -622,4 +625,17 @@ test "refusals" {
   )
   refused(p + i + "int32_t _M0G1 = 2;\n", "defined twice")
   refused(p + i + "int32_t f() {\n", "ends inside an item")
+}
+
+///|
+/// The data units' texts together (data_*.c)
+fn one_data(files : Map[String, String]) -> String {
+  let names = []
+  for n, _ in files {
+    if n.has_prefix("data_") {
+      names.push(n)
+    }
+  }
+  names.sort()
+  names.map(fn(n) { files[n] }).fold(init="", fn(a, b) { a + b })
 }

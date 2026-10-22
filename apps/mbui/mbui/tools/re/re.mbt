@@ -796,3 +796,15 @@ fn width(node : Node) -> Int? {
       }
   }
 }
+
+///|
+/// re.match at `pos` of a text already split into characters (a lexer's: no copy of the text each time)
+pub fn Regex::match_chars(self : Regex, t : Array[Char], pos : Int) -> Match? {
+  self.try_at(t, pos)
+}
+
+///|
+/// re.search from `pos` of a text already split into characters
+pub fn Regex::search_chars_from(self : Regex, t : Array[Char], pos : Int) -> Match? {
+  self.search_chars(t, pos)
+}
