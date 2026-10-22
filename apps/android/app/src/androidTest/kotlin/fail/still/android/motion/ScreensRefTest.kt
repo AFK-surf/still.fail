@@ -132,7 +132,10 @@ class ScreensRefTest {
         val shown = { shows.all { rule.onAllNodesWithText(it, substring = true).fetchSemanticsNodes().isNotEmpty() } }
         try { rule.waitUntil(20_000) { shown() } } catch (_: androidx.compose.ui.test.ComposeTimeoutException) {}
         rule.mainClock.autoAdvance = false
-        rule.mainClock.advanceTimeBy(screen["at"]?.jsonPrimitive?.long ?: 3000L)
+        // (on the main thread: the clock's frames are composed on the thread that moves it, and an effect that comes in
+        // then registers with the activity's lifecycle, which only the main thread may do: "Method addObserver must be
+        // called on the main thread", settings, a LifecycleStartEffect coming in on this one: run 39747017554)
+        rule.runOnUiThread { rule.mainClock.advanceTimeBy(screen["at"]?.jsonPrimitive?.long ?: 3000L) }
         // the window as composed at that moment (PixelCopy of the composition just drawn: not the display's last
         // frame, which may be one behind a paused clock), the whole of it, under the system's bars too; where those
         // bars are (their icons the system's, not the app's: left out of the comparison) beside it
