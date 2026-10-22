@@ -7,7 +7,7 @@
 // those rows (its clip, the rows' boxes widening to its own). The phone is a device from the start, the phone's app
 // running in it, small; it comes to the front at the end while the computer's window steps back, both seen all along.
 // On a narrow screen the window is the phone's app itself, and the devices its station cards.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
 
@@ -120,7 +120,7 @@ export function OneComputer(props: DemoProps) {
   const phoneScreen = useRef<HTMLDivElement>(null);
   const copies = useRef<HTMLDivElement>(null);
   const lines = useRef<SVGGElement>(null);
-  const [step, setStep] = useState(0);
+  const words = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = scene.current, space = room.current, outer = win.current, inner = screen.current, hand = phone.current, wires = lines.current, layer = copies.current;
@@ -162,10 +162,11 @@ export function OneComputer(props: DemoProps) {
       const x = clamp(-el.getBoundingClientRect().top / Math.max(1, span)) * (steps.length - 1);
       const i = Math.min(Math.floor(x), steps.length - 2);
       const t = ease(clamp((x - i - 0.25) / 0.5));
-      // 0 → 1: the devices fly to their rows (fly), then the window grows out of the rows (grow). 1 → 2: the
+      // 0 → 1: the devices fly to their rows (fly), then the window grows out of the rows (grow): one motion, the
+      // growing taking over from the flying at the speed it had, never coming to rest between the two. 1 → 2: the
       // computer's window steps back as the phone comes to the front (front).
-      const fly = i === 0 ? ease(clamp(t / 0.55)) : 1;
-      const grow = i === 0 ? ease(clamp((t - 0.55) / 0.45)) : 1;
+      const fly = i === 0 ? clamp(t / 0.55) : 1;
+      const grow = i === 0 ? clamp((t - 0.55) / 0.45) : 1;
       const front = i === 1 ? t : 0;
 
       // The window, drawn at its size, stepping back (about its centre) as the phone comes forward.
@@ -200,7 +201,7 @@ export function OneComputer(props: DemoProps) {
         const p0 = { ...parts.phone, s: small };
         const p1 = { x: w.x + w.w - 20, y: w.y + w.h * 0.58, s: beside };
         const p2 = { x: size.w / 2 + size.w * 0.16, y: size.h / 2, s: full };
-        const p = i === 0 ? { x: lerp(p0.x, p1.x, fly), y: lerp(p0.y, p1.y, fly), s: lerp(p0.s, p1.s, fly) } : { x: lerp(p1.x, p2.x, front), y: lerp(p1.y, p2.y, front), s: lerp(p1.s, p2.s, front) };
+        const p = i === 0 ? { x: lerp(p0.x, p1.x, t), y: lerp(p0.y, p1.y, t), s: lerp(p0.s, p1.s, t) } : { x: lerp(p1.x, p2.x, front), y: lerp(p1.y, p2.y, front), s: lerp(p1.s, p2.s, front) };
         hand.style.transform = `translate(${p.x - (PHONE.w * p.s) / 2}px, ${p.y - (PHONE.h * p.s) / 2}px) scale(${p.s})`;
         phoneAt = { x: p.x - (PHONE.w * p.s) / 2, y: p.y - (PHONE.h * p.s) / 2, w: PHONE.w * p.s, h: PHONE.h * p.s };
       }
@@ -213,7 +214,8 @@ export function OneComputer(props: DemoProps) {
       for (let p = 0; p < ends.length; p++) for (let q = p + 1; q < ends.length; q++) {
         paths[n++]?.setAttribute("d", `M${ends[p]!.x} ${ends[p]!.y} L${ends[q]!.x} ${ends[q]!.y}`);
       }
-      setStep(narrow ? (t < 0.5 ? 0 : 1) : t < 0.5 ? steps[i]! : steps[i + 1]!);
+      // What the steps say, one under another, moving up with the scene: the next one comes up as this one goes.
+      words.current?.style.setProperty("--at", `${i + t}`);
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
     const resized = () => { for (const r of rows) r.copy.remove(); rows = []; ask(); };
@@ -243,11 +245,13 @@ export function OneComputer(props: DemoProps) {
       <section className={css.scene} ref={scene} style={{ height: `${STEPS.length * 100}vh` }}>
         <div className={css.sceneStick}>
           <div className={css.stepWords}>
-            {STEPS.map((s, i) => (
-              <div key={s.title} className={css.stepSay} data-at={step === i ? "" : undefined}>
-                <b>{s.title}</b><span>{s.text}</span>
-              </div>
-            ))}
+            <div className={css.stepTrack} ref={words}>
+              {STEPS.map((s) => (
+                <div key={s.title} className={css.stepSay}>
+                  <b>{s.title}</b><span>{s.text}</span>
+                </div>
+              ))}
+            </div>
           </div>
           <div className={css.oneRoom} ref={room}>
             <svg className={css.oneWires} aria-hidden><g ref={lines}>{Array.from({ length: pairs }, (_, i) => <path key={i} />)}</g></svg>
