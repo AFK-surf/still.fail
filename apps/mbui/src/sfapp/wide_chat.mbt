@@ -151,6 +151,17 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
               }
             })
             |> ignore
+            // the pointer resting on it: its card (AgentCard.tsx), as the web's
+            @kit.hover_card(
+              c,
+              "agent-hover/" + a.key,
+              id,
+              side=Bottom,
+              along=Start,
+              look=fn(c, _, body) { wide_panel(c, 300.0, body) },
+              fn() { agent_hover(c, src, r, a.key) },
+            )
+            |> ignore
           }
         }
         None => ()

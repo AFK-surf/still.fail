@@ -577,3 +577,42 @@ fn jobs_rows(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 /// The services' popover's groups, at the panel's words' inset.
 // kept across runs: a value (no field of it changes)
 let side_jobs_pop : @ui.Style = @ui.style(w=Full, px=S1)
+
+///|
+/// An agent's card, the pointer resting on its mark in the chat's bar (AgentCard.tsx): its mark, label and a stop while it
+/// works, where it stands, its latest lines, the figures that say most, what is worth a look.
+fn agent_hover(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
+  let chat = (src.topic)("chat", chat_params(r)).value
+  let a = agent_json(chat, key)
+  let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
+  let s = field(a, "session")
+  let status = text(a, "status")
+  c.box(style=agent_hover_box, fn() {
+    c.box(style=agent_hover_head, fn() {
+      model_mark_big(c, text(field(s, "maker"), "id"), text(s, "runtime"), 28.0, state_of_badge(text(a, "badge")), panel_ground())
+      c.box(style=letters_grow, fn() { c.text(text(s, "agentText"), style=agent_hover_name) |> ignore }) |> ignore
+      if status == "running" || status == "queued" {
+        stop_button(c, src, r.station, key)
+      }
+    })
+    |> ignore
+    agent_status(c, src, a)
+    agent_lines(c, card)
+    agent_tiles(c, card, 10.0)
+    agent_notes(c, card, 8.0)
+  })
+  |> ignore
+}
+
+///|
+/// The card's inside (AgentCard.css.ts): 10 in, its parts 6 apart; its head's mark and name 10 apart.
+// kept across runs: a value (no field of it changes)
+let agent_hover_box : @ui.Style = @ui.style(w=Full, p=S2_5, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_hover_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_hover_name : @ui.TextStyle = @ui.text_style(size=Base, weight=Medium, color=Fg, wrap=false)
