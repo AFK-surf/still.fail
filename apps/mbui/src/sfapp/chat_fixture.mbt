@@ -880,6 +880,8 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       )
     }
     "session.warm" | "client.focus" | "chat.place" | "chat.around" => Some(Ok(Json::object({})))
+    // where its runtime keeps the session's transcript
+    "session.transcript" => Some(Ok({ "path": "/Users/lin/.claude/projects/release/7c1e5b2a-4f0d-4c8e-9a61-3b2f.jsonl" }))
     // the messages of the made-up chat that have every word (topics.ts find): all of it on the device
     "chat.find" => {
       let words = text(p, "query").to_lower().split(" ").filter(fn(w) { w != "" }).map(fn(w) { w.to_string() }).collect()

@@ -280,10 +280,11 @@ fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
         field=wide.find_field,
       )
       // (Enter sent the words: they are what was typed, not what is left in the field)
-      let typed = match res.submitted {
+      let sent = match res.submitted {
         Some(words) => words
         None => res.text
-      }.replace_all(old="\n", new="")
+      }
+      let typed = sent.replace_all(old="\n", new="")
       if typed != wide.find_query {
         find_ask(src, r, v, typed)
       }
