@@ -2010,24 +2010,39 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
 }
 
 ///|
-/// People overlapping a little, each ringed in the page's ground (Parts.kt PeopleStack: Avatar(p.id, p.shown.display)).
-fn people_stack(c : @ui.Ctx, src : Source, people : Array[Person], size : Double) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, align=ACenter, fn() {
-    for i, p in people {
-      c.box(
-        w=Px(size + 3.0),
-        h=Px(size + 3.0),
-        radius=(size + 3.0) / 2.0,
-        bg=t.p.bg,
-        tx=-5.0 * i.to_double(),
-        align=ACenter,
-        justify=JCenter,
-        fn() {
-          // coloured by their id, lettered by what the bar calls them (the viewer 「你」)
-          avatar(c, src, p.id, p.display, p.picture, size)
-        },
-      )
+/// People overlapping a little, each ringed in the ground they are on (Parts.kt PeopleStack: Avatar(p.id,
+/// p.shown.display), `ring` C.bg unless said): laid out side by side, each drawn 5 over the one before it, the first
+/// over them all (zIndex(-i)).
+fn people_stack(
+  c : @ui.Ctx,
+  src : Source,
+  people : Array[Person],
+  size : Double,
+  ring? : Int64 = @sf.theme().p.bg,
+) -> Unit {
+  let step = size + 3.0
+  let n = people.length()
+  c.box(w=Px(step * n.to_double()), h=Px(step), fn() {
+    // the last drawn first, each under the one before it
+    for j in 0..<n {
+      let i = n - 1 - j
+      let p = people[i]
+      c.layer(fn() {
+        c.box(
+          w=Px(step),
+          h=Px(step),
+          radius=step / 2.0,
+          bg=ring,
+          tx=(step - 5.0) * i.to_double(),
+          align=ACenter,
+          justify=JCenter,
+          fn() {
+            // coloured by their id, lettered by what the bar calls them (the viewer 「你」)
+            avatar(c, src, p.id, p.display, p.picture, size)
+          },
+        )
+        |> ignore
+      })
       |> ignore
     }
   })
@@ -2044,31 +2059,7 @@ fn avatar(
   picture : String,
   size : Double,
 ) -> Unit {
-  let pic = if picture != "" { (src.picture)(picture) } else { "" }
-  c.box(
-    w=Px(size),
-    h=Px(size),
-    radius=size / 2.0,
-    bg=avatar_color(id),
-    align=ACenter,
-    justify=JCenter,
-    fn() {
-      if pic != "" {
-        c.image(pic, w=Px(size), h=Px(size), radius=size / 2.0, bg=0L) |> ignore
-      } else {
-        c.text(
-          initial(name),
-          size=size * 0.5,
-          weight=600,
-          color=0xFFFFFFFFL,
-          wrap=false,
-          line=size * 0.5,
-        )
-        |> ignore
-      }
-    },
-  )
-  |> ignore
+  @sf.avatar(c, id, name, if picture != "" { (src.picture)(picture, c.frame_no) } else { "" }, size)
 }
 
 ///|

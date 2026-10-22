@@ -781,64 +781,7 @@ let seg_pill_line : @ui.Style = @ui.style(row=true, w=Full)
 ///|
 /// A person's picture (Parts.kt Avatar): theirs once it is here, else their initial on their colour.
 fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, picture? : String = "") -> Unit {
-  let key = if picture == "" { "" } else { (core.picture)(picture) }
-  c.box(
-    style=avatar_disc,
-    w=Px(size),
-    h=Px(size),
-    bg=avatar_color(id),
-    fn() {
-      if key != "" {
-        c.image(key, w=Px(size), h=Px(size), radius=size / 2.0, bg=0L) |> ignore
-      } else {
-        c.text(initial(name), size=size * 0.5, weight=600, color=0xFFFFFFFFL, wrap=false, line=size * 0.5)
-        |> ignore
-      }
-    },
-  )
-  |> ignore
-}
-
-///|
-/// A person's disc (its side and colour said where it is used): round, what it holds in its middle.
-// kept across runs: a value (no field of it changes)
-let avatar_disc : @ui.Style = @ui.style(radius=Full, align=ACenter, justify=JCenter, clip=true)
-
-///|
-/// The people's colours (Parts.kt AVATAR).
-// kept across runs: a table, never written
-let avatar_colors : Array[Int64] = [
-  0x5B7BB2FFL, 0x2F8F5BFFL, 0xB9471FFFL, 0x8A6BB0FFL, 0x3F8C99FFL, 0xB0842FFFL,
-]
-
-///|
-/// A person's colour, by their id lowered (Parts.kt avatarColor: Java's hashCode, floorMod).
-fn avatar_color(id : String) -> Int64 {
-  let n = avatar_colors.length()
-  let mut h = 0
-  for i in 0..<id.length() {
-    let k = id.at(i).to_int()
-    h = h * 31 + (if k >= 65 && k <= 90 { k + 32 } else { k })
-  }
-  let m = h % n
-  avatar_colors[if m < 0 { m + n } else { m }]
-}
-
-///|
-/// The first letter of a name, upper case (Parts.kt initial).
-fn initial(name : String) -> String {
-  for ch in name {
-    let k = ch.to_int()
-    if k == 32 || k == 9 || k == 10 {
-      continue
-    }
-    return if k >= 97 && k <= 122 {
-      (k - 32).unsafe_to_char().to_string()
-    } else {
-      ch.to_string()
-    }
-  }
-  "?"
+  @sf.avatar(c, id, name, if picture == "" { "" } else { (core.picture)(picture, c.frame_no) }, size)
 }
 
 ///|

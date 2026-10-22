@@ -630,7 +630,7 @@ pub fn fixture(mode : String) -> Source {
     },
     sign_in: fn() {  },
     signing_in: fn() { false },
-    picture: fn(_) { "" },
+    picture: fn(_, _) { "" },
     fatal: fn() { None },
     file: fn(_, _, name) { fixture_file(name) },
     // a video's still: its first frame as the station makes it (the made-up ones' each a picture of its own)

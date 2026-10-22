@@ -310,7 +310,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Uni
               @sf.station_mark(c, x.emoji, x.icon, 18.0, t.p.text)
             } else {
               c.text(
-                initial(x.name),
+                @sf.initial(x.name),
                 size=13.0,
                 weight=600,
                 color=if on || c.hovered(id) { t.p.text } else { t.p.muted },

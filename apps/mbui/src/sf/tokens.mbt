@@ -728,3 +728,7 @@ pub let pick_line_r : @ui.Radius = custom_field_r
 
 ///|
 pub let check_room_w : @ui.Len = Fixed(18.0)
+
+///|
+/// A person's initial on their colour (Parts.kt Avatar: Color.White), on every theme.
+pub let face_ink : Int64 = 0xFFFFFFFFL

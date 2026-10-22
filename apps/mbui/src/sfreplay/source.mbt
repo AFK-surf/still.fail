@@ -73,7 +73,7 @@ pub fn source() -> @sfapp.Source {
     cancel: fn(id) { @core.cancel(id) },
     sign_in: fn() { @sfcore.sign_in() },
     signing_in: fn() { @sfcore.state.busy },
-    picture: fn(url) {
+    picture: fn(url, _) {
       image("picture", Json::object({ "url": Json::string(url) }), "picture " + url, "mem:picture/\{@ui.stable_hash(url)}/\{url.length()}")
     },
     fatal: fn() { @core.fatal() },
