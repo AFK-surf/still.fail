@@ -94,7 +94,7 @@ fn pickable(
   // built first: a link held in it is the link's menu (its hold told while building), not a pick
   let box = c.box(w=if fill_w { Fill(1.0) } else { Auto }, id~, fn() {
     if !found.is_empty() {
-      found_strokes(c, key, found, found_marking.val.2, at.0, at.1)
+      found_strokes(c, key, found, found_marking.val.2, at.0, at.1, faint=found_marking.val.0 != ts)
     }
     body()
   })

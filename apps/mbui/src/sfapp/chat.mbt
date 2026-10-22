@@ -89,6 +89,8 @@ priv struct Reading {
   mut seen_whole : Double
   /// where the reader is: the message at the top of what shows (-1 none), and whether at the chat's end
   mut top_seq : Double
+  /// the message at the foot of what shows (-1 none): what ⌘F starts at lies between (wide_find.mbt)
+  mut bottom_seq : Double
   /// how far that message's top is below the list's (points: above it, less than 0)
   mut top_off : Double
   mut at_end : Bool
@@ -167,6 +169,7 @@ fn reading_of(key : String) -> Reading {
         told: "",
         seen_whole: -1.0,
         top_seq: -1.0,
+        bottom_seq: -1.0,
         top_off: 0.0,
         at_end: true,
         told_place: "",
@@ -428,6 +431,7 @@ fn messages(
   flashing.val = (rd.flash, flash_of(c, rd, rd.flash))
   // a search's words marked in the message it opened the chat at (search_marks.mbt)
   found_marking.val = (rd.found_at, rd.found_words, rd.found_drawn.get())
+  find_marking.val = find_words_in(r)
   found_centre(c, rd, key)
   flash_row.val = None
   // a new chat's list comes up out of the composer as it becomes this chat (newchat.mbt)
@@ -676,6 +680,22 @@ fn messages(
           @hostapi.log("chat: gone to message \{target.to_int()}")
         } else {
           match v.thread {
+            // what ⌘F found, not in the chat's window: the window moved about it (chat.around), once
+            Some(thread) if wide.find_chat == gk =>
+              if wide.find_around != target {
+                wide.find_around = target
+                c.tell("chat.around/" + gk, fn() {
+                  (src.call)(
+                    "chat.around",
+                    {
+                      "station": Json::string(r.station),
+                      "thread": Json::number(thread),
+                      "seq": Json::number(target),
+                    },
+                    fn(res) { if res is Err(_) { go_tos.remove(gk) } },
+                  )
+                })
+              }
             Some(thread) if v.more && first > target =>
               if rd.asked != first {
                 rd.asked = first
@@ -792,6 +812,19 @@ fn messages(
         let mut k = i.first
         while k < n && !(list[k] is Said(_)) {
           k = k + 1
+        }
+        match list.get(k) {
+          Some(Said(m)) => m.seq
+          _ => -1.0
+        }
+      }
+      _ => -1.0
+    }
+    rd.bottom_seq = match info {
+      Some(i) if i.first >= 0 => {
+        let mut k = if i.last < n { i.last } else { n - 1 }
+        while k >= 0 && !(list[k] is Said(_)) {
+          k = k - 1
         }
         match list.get(k) {
           Some(Said(m)) => m.seq

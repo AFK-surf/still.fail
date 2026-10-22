@@ -879,7 +879,42 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         }),
       )
     }
-    "session.warm" | "client.focus" | "chat.place" => Some(Ok(Json::object({})))
+    "session.warm" | "client.focus" | "chat.place" | "chat.around" => Some(Ok(Json::object({})))
+    // the messages of the made-up chat that have every word (topics.ts find): all of it on the device
+    "chat.find" => {
+      let words = text(p, "query").to_lower().split(" ").filter(fn(w) { w != "" }).map(fn(w) { w.to_string() }).collect()
+      let all = items(Some(rich_chat(f.older)), "messages")
+      let hits : Array[Json] = []
+      for m in all {
+        let said = text(Some(m), "text").to_lower()
+        let mut count = 0
+        for w in words {
+          let mut from = 0
+          while from <= said.length() {
+            match said.view(start_offset=from).find(w) {
+              Some(i) => {
+                count += 1
+                from = from + i + w.length()
+              }
+              None => break
+            }
+          }
+        }
+        if count > 0 && words.iter().all(fn(w) { said.contains(w) }) {
+          hits.push({ "seq": Json::number(number(Some(m), "seq")), "count": Json::number(count.to_double()) })
+        }
+      }
+      let n = Json::number(all.length().to_double())
+      Some(
+        Ok({
+          "words": Json::array(words.map(fn(w) { Json::string(w) })),
+          "hits": Json::array(hits),
+          "held": n,
+          "of": n,
+          "whole": true,
+        }),
+      )
+    }
     // a chat's mark (chat.ref): `@[its title]`, its link kept; links kept for marks (chat.refs)
     "chat.ref" => Some(Ok({ "mark": Json::string("@[" + text(p, "title") + "]") }))
     "chat.refs" => Some(Ok(Json::object({})))

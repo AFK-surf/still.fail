@@ -287,6 +287,7 @@ fn reset() -> Unit {
   ref_fields.clear()
   go_to_words.clear()
   found_marking.val = ("", [], 0.0)
+  find_marking.val = []
   search_reset()
   ask_turns.clear()
   flash_held.val = false

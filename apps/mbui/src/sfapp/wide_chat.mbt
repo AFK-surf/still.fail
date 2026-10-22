@@ -27,6 +27,13 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
     focus_composer.val = false
     c.focus_editor(field_key)
   }
+  // ⌘F: the chat's own find (wide_find.mbt); another chat, its own
+  if wide.find_chat != "" && wide.find_chat != side_key(r) {
+    find_forget()
+  }
+  if c.shortcut('f') && view is Some(v) && v.thread is Some(_) {
+    find_open(c, r)
+  }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     // what is opened beside it, at its right (wide_panel.mbt)
     with_side(c, src, r, view, fn() { wide_chat_pane(c, src, w, r, view, list, error) })
@@ -169,6 +176,8 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
     })
     |> ignore
     match v {
+      // ⌘F's bar, in place of the buttons while it is open
+      Some(view) if wide.find_chat == side_key(r) => find_bar(c, src, r, view)
       Some(view) =>
         c.box(dir=Row, gap=2.0, align=ACenter, fn() {
           let archive = view.archivable && !view.archived
