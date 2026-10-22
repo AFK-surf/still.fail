@@ -529,11 +529,13 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       } else {
         // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
         app.nav.comes_when(fn() { page_ready(src, app.nav.top()) }, page_local_ms)
-        c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
-        |> ignore
-        // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
+        let page_took = c.took_back(fn() {
+          c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg) |> ignore
+        })
+        // a place's top page other than the chats, with nothing over it or in it taking back: back goes to the chats,
+        // in place
         let root = app.nav.top()
-        if app.nav.depth() == 1 && root != Home && !app.menu && !sheet_open() {
+        if app.nav.depth() == 1 && root != Home && !page_took && !app.menu && !sheet_open() {
           c.on_back(fn() { go_place(c, "chats", [], -1) })
         }
         // the player sideways: back turns it upright first

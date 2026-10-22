@@ -382,7 +382,8 @@ fn[P] Nav::let_go(self : Nav[P]) -> Unit {
 /// The stack drawn, filling what it is given: the top page (and, while one
 /// moves, the page beside it), each built by `page` on a ground of `bg`.
 /// Back (Ctx::back, the left edge's swipe within `edge` of its side, the
-/// system's) comes here while it has a page to go back to.
+/// system's) comes here while it has a page to go back to, unless the top
+/// page takes it itself (what is open in it closed first).
 pub fn[P] Ctx::nav(
   self : Ctx,
   nav : Nav[P],
@@ -438,19 +439,55 @@ pub fn[P] Ctx::nav(
   let p = nav.p
   // a page that rose goes up and down over the one under it, which stays
   let rising = top.rise
+  // back as it was before the stack, for when neither its top page nor it takes it
+  let before = self.back_next
+  let before_node = self.back_node_next
+  let before_edge = self.back_edge_next
+  let leaving = nav.leaving is Some(_)
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
     match under {
       Some(e) => self.nav_layer(e, if rising { 0.0 } else { p - 1.0 }, 0.0, bg, page)
       None => ()
     }
+    // what the top page takes back for (a sheet, a menu, a step of its own, a stack in it) goes back before the stack
+    // does, as Android's BackHandler in a page is asked before the pages' own; the page under it, one leaving, take none
+    self.back_next = None
+    self.back_node_next = -1
     self.nav_layer(top, if rising { 0.0 } else { p }, if rising { p * self.height } else { 0.0 }, bg, page)
   })
-  if n > 1 || nav.mode != 0 {
+  if self.back_next is Some(_) && !leaving {
+    ()
+  } else if n > 1 || nav.mode != 0 {
     self.back_next = Some(fn(kind, x, w, t) { nav.gesture(kind, x, w, t) })
     self.back_node_next = i
     self.back_edge_next = edge
+  } else {
+    self.back_next = before
+    self.back_node_next = before_node
+    self.back_edge_next = before_edge
   }
   i
+}
+
+///|
+/// Builds `body`, back taken in it (Ctx::on_back, Ctx::take_back, an overlay, a stack: Ctx::nav) kept over what took
+/// it before: true when it took it; when not, back is as it was. For what goes back only when nothing within it does
+/// (a stack drawn flat, whose pop is taken after it: Ctx::nav_flat).
+pub fn Ctx::took_back(self : Ctx, body : () -> Unit) -> Bool {
+  let before = self.back_next
+  let before_node = self.back_node_next
+  let before_edge = self.back_edge_next
+  self.back_next = None
+  self.back_node_next = -1
+  body()
+  if self.back_next is Some(_) {
+    true
+  } else {
+    self.back_next = before
+    self.back_node_next = before_node
+    self.back_edge_next = before_edge
+    false
+  }
 }
 
 ///|
