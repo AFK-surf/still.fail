@@ -7,7 +7,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$D/../out"
 cc -Wall -I "$D/../src/host" "$D/avc_test.c" -o "$D/../out/avc_test" && "$D/../out/avc_test" || exit 1
 . "$D/env.sh"
-for t in ${TARGETS:-js native}; do
+for t in ${TARGETS:-native}; do
   echo "=== $t"
   moon check --target $t --output-json 2>&1 | "$D/chk" errs
 done

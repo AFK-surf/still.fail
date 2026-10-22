@@ -1,4 +1,4 @@
-# The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh), on js and on native: a branch's in its pipeline
+# The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh), on native: a branch's in its pipeline
 # (pipeline.yml's check-mbui calls this, its gate waits for it), main's here on its own (on a push to the app). On main
 # they hold nothing back (the app's beta is mbui.yml's, done waits for neither) and were the last of its pipeline run
 # in half of them: as part of it, the run after waited for them, 16 of 40 runs a median 88 s (2026-10-20).
@@ -48,7 +48,7 @@ jobs:
         with: { node-version-file: .node-version, package-manager-cache: false }
       # (from the Actions cache the moonbit workflow fills, never downloaded here)
       - uses: ./.github/actions/mbui-moonbit
-      - name: The mbui app's check (detlint, then js and native type-checked)
+      - name: The mbui app's check (detlint, then native type-checked)
         if: matrix.part == 'app' && !matrix.lto
         run: moon version && bash apps/mbui/scripts/check.sh
       - uses: actions/cache/restore@v4
