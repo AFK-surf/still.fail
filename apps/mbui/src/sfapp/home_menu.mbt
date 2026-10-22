@@ -250,6 +250,8 @@ let swipe_fill_ms : Double = 140.0
 /// it goes off to the left and is archived, else it springs back. Archiving refused, it comes back; one keeping watch
 /// springs back and asks first, as its menu's 归档. Across first it is the swipe (the row's tap and hold let go); up
 /// or down first it is the list's (mbui's claim by way: whichever's way the finger goes past the slop first). `row` draws the row moved across by so much.
+/// Its answer is the box holding it all, what moves as the list changes (Home.kt: the list's `animateItem` over the
+/// whole of SwipeToArchive): the row moved alone would be cut by its swipe's clip where it is laid out.
 fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row : (Double) -> Int) -> Int {
   let t = @sf.theme()
   let key = "swipe/" + item.station + "/" + item.id
@@ -294,7 +296,6 @@ fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row
     felt_past[key] = past
   })
   let fill = @motion.animate(c, key + "/fill", if at < -width * archive_at { 1.0 } else { 0.0 }, spec=@motion.tween(swipe_fill_ms))
-  let mut out = 0
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), h=Px(66.0), fn() {
     c.box(w=Fill(1.0), h=Px(66.0), clip=true, fn() {
       // under it, at the right edge it uncovers: 归档, quiet until letting go would archive it, then filled in ink
@@ -315,10 +316,8 @@ fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row
         },
       )
       |> ignore
-      c.box(w=Fill(1.0), h=Px(66.0), min_h=66.0, ty=-66.0, fn() { out = row(at) }) |> ignore
+      c.box(w=Fill(1.0), h=Px(66.0), min_h=66.0, ty=-66.0, fn() { row(at) |> ignore }) |> ignore
     })
     |> ignore
   })
-  |> ignore
-  out
 }
