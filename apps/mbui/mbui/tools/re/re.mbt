@@ -36,6 +36,8 @@ pub struct Regex {
   priv groups : Int
   priv names : Map[String, Int]
   priv flags : Flags
+  // the characters a match that is not empty can begin with (None: any), to pass the others by in a search
+  priv first : Array[(Char, Char)]?
 }
 
 ///|
@@ -388,7 +390,15 @@ pub fn Regex::new(pattern : String, flags? : Flags = no_flags) -> Regex raise Re
   if parser.i < p.length() {
     raise RegexError("unbalanced ) in \{pattern}")
   }
-  { node, groups: parser.groups, names: parser.names, flags: fl }
+  let first = if fl.ignore_case {
+    None
+  } else {
+    match firsts(node) {
+      (Some(r), false) => Some(r)
+      _ => None
+    }
+  }
+  { node, groups: parser.groups, names: parser.names, flags: fl, first }
 }
 
 ///|
@@ -664,6 +674,17 @@ pub fn Regex::fullmatch(self : Regex, text : String) -> Match? {
 fn Regex::search_chars(self : Regex, t : Array[Char], from : Int) -> Match? {
   let mut i = from
   while i <= t.length() {
+    match self.first {
+      Some(r) => {
+        while i < t.length() && !in_ranges(r, t[i]) {
+          i += 1
+        }
+        if i == t.length() {
+          return None
+        }
+      }
+      None => ()
+    }
     match self.try_at(t, i) {
       Some(m) => return Some(m)
       None => ()
@@ -793,6 +814,55 @@ fn width(node : Node) -> Int? {
         }
       } else {
         None
+      }
+  }
+}
+
+///|
+/// What a match of node can begin with: (the characters, None for any; whether it can match nothing, its next node's
+/// first then counting too)
+fn firsts(node : Node) -> (Array[(Char, Char)]?, Bool) {
+  match node {
+    Lit(c) => (Some([(c, c)]), false)
+    Any => (None, false)
+    Class(r, neg) => if neg { (None, false) } else { (Some(r), false) }
+    Begin | End | TextBegin | TextEnd | WordB(_) | Look(_, _, _) => (Some([]), true)
+    Group(n, _) => firsts(n)
+    Seq(ns) => {
+      let acc = []
+      for n in ns {
+        match firsts(n) {
+          (None, _) => return (None, false)
+          (Some(r), nullable) => {
+            acc.append(r)
+            if !nullable {
+              return (Some(acc), false)
+            }
+          }
+        }
+      }
+      (Some(acc), true)
+    }
+    Alt(ns) => {
+      let acc = []
+      let mut any_nullable = false
+      for n in ns {
+        match firsts(n) {
+          (None, _) => return (None, false)
+          (Some(r), nullable) => {
+            acc.append(r)
+            if nullable {
+              any_nullable = true
+            }
+          }
+        }
+      }
+      (Some(acc), any_nullable)
+    }
+    Repeat(n, min, _, _) =>
+      match firsts(n) {
+        (None, _) => (None, false)
+        (Some(r), nullable) => (Some(r), nullable || min == 0)
       }
   }
 }

@@ -41,7 +41,7 @@ particular to this app:
 - No flow, script or test waits for the app to settle or for a motion to end, under any name (`rest`, "until it
   stops moving", "until it landed"), nor a fixed `wait`/`sleep`, a retry or a longer timeout. An end-to-end step
   waits only for its own named event from outside the app (`answered`, `decoded`, `shown`, an outside wait done) or a
-  fact of state (a row by its id). `detlint.json` (run with `mbui/scripts/detlint.py`) counts what is
+  fact of state (a row by its id). `detlint.json` (run with `mbui/scripts/detlint`) counts what is
   left and only lets it fall.
 - A check that fails and then passes on the same commit is not "偶发": something uncontrolled got in (real time, the
   network, an emulator's or simulator's state, a host callback's order, another job's files). Do not rerun it green

@@ -23,7 +23,7 @@ ever asserted (`Tester::assert_idle`), never waited for.
 
 2. **Nothing else is read.** No wall clock, no real time in a Tester, no randomness but a seeded one, no state that
    outlives a Tester (every table outside the context is emptied by `reset_globals` and the packages' `on_reset`), no
-   order that depends on a hash table's internals. `scripts/detlint.py` keeps the count of what is still read
+   order that depends on a hash table's internals. `scripts/detlint` keeps the count of what is still read
    otherwise falling, file by file (docs/detlint.md).
 
 ## Motion is data
