@@ -387,6 +387,15 @@ export interface MachineSession {
 /** Something said in one of the machine's sessions: by the person, else by its agent; when, in ms. */
 export interface MachineSaid { person: boolean; text: string; at: number | null }
 
+/** A channel or group a connect's bot is in (docs/relay.md): a Slack channel, a Feishu topic group, a Feishu group. */
+export interface RelayPlace { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean }
+
+/** A connect a chat can be relayed through, with its places (none, and why, when they could not be read). */
+export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; places: RelayPlace[]; error?: string }
+
+/** Where a chat was relayed: the place's name, and its link where the platform has one. */
+export interface Relayed { thread: number; to: string; place: string; link: string | null }
+
 /** The admin API of one station, by what each call does. */
 
 export function stationApi(t: StationCall) {
@@ -414,6 +423,11 @@ export function stationApi(t: StationCall) {
     publish: (thread: number, upto: number, files: string[]) => t.op<ChatPublished>("chat.publish", { thread, upto, files }),
     /** Revokes one of the chat's public snapshots: its link opens nothing any more. */
     unpublish: (thread: number, id: string) => t.op<unknown>("chat.unpublish", { thread, id }),
+    /** Where the chat can be relayed: each connect's channels and groups its bot is in. */
+    relayPlaces: (thread: number) => ops.chatRelayPlaces<{ connects: RelayConnect[] }>({ thread }),
+    /** The chat relayed to a connect's channel or group, or the Slack thread of a message's link, with the person's note; its agent goes on there too. */
+    relay: (thread: number, to: { connect: string; channel: string } | { link: string }, note: string) =>
+      ops.chatRelay<Relayed>(note.trim() === "" ? { thread, ...to } : { thread, ...to, note }),
     deleteSession: (key: string) => ops.sessionDelete<{ ok: true }>({ key }),
     evict: (key: string) => ops.sessionEvict<{ ok: true }>({ key }),
     /** Its context compacted by hand, between turns (its chat is told when it is done). */

@@ -6,7 +6,7 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 /** A field is absent until assigned; assigning null sends JSON null (reset to default). */
-val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state")
+val UNTRACKED_OPERATIONS = setOf("admin.me", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state")
 
 open class OperationFields {
     internal val fields = mutableMapOf<String, JsonElement>()
@@ -126,6 +126,22 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = ChatPinFields().apply(fill).fields
         values["session"] = JsonPrimitive(session)
         return call("chat.pin", JsonObject(values))
+    }
+    suspend fun chatRelayPlaces(thread: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["thread"] = JsonPrimitive(thread)
+        return call("chat.relayPlaces", JsonObject(values))
+    }
+    class ChatRelayFields : OperationFields() {
+        var connect: String? by field<String>("connect") { JsonPrimitive(it) }
+        var channel: String? by field<String>("channel") { JsonPrimitive(it) }
+        var link: String? by field<String>("link") { JsonPrimitive(it) }
+        var note: String? by field<String>("note") { JsonPrimitive(it) }
+    }
+    suspend fun chatRelay(thread: Long, fill: ChatRelayFields.() -> Unit = {}): JsonElement {
+        val values = ChatRelayFields().apply(fill).fields
+        values["thread"] = JsonPrimitive(thread)
+        return call("chat.relay", JsonObject(values))
     }
     suspend fun decisionDismiss(thread: Long, seq: Long): JsonElement {
         val values = mutableMapOf<String, JsonElement>()

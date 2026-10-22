@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
@@ -31,6 +31,8 @@ import { ChatPanel, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
+import { useCommands } from "../commands.ts";
+import { openRelay } from "../Relay.tsx";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
@@ -291,6 +293,10 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   const [askArchive, setAskArchive] = useState(false);
   useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper
     ? () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); } : null);
+  // Relayed to a channel (docs/relay.md): a chat with an agent to go on there, from ⌘K and the title bar.
+  const relayable = thread !== null && agents.length > 0 && !chatView.value?.archived && !chatView.value?.offline;
+  const relay = () => { if (thread !== null) openRelay(station.address, thread); };
+  useCommands(relayable ? [{ id: "chat.relay", group: "chat", words: "relay slack feishu lark channel 接力 频道", label: t("web-main.relay.action"), icon: ArrowUpRight, run: relay }] : []);
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>{t("web-pages.chat.loadFailed", { error: chatView.error.message })}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
@@ -338,6 +344,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
+          {relayable && <IconButton label={t("web-main.relay.action")} icon={ArrowUpRight} onClick={relay} />}
           {drive && <IconButton label={t("web-pages.chat.files")} icon={Folder} onMouseDown={keepFocus} onClick={toggleFiles} />}
           {chat.thread && <ChatInfo station={station.address} session={chatSession} />}
           {slackUrl && (

@@ -15,6 +15,7 @@ import { webUpdates } from "./core/webUpdates.ts";
 import { Archive, ArrowLeft, Command as CommandIcon, Compose, Download, File, Folder, More, PanelOpen, Refresh, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import { ACTIONS, availableActions, labelOf, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
+import { RelayHost } from "./Relay.tsx";
 import { stationBase } from "./station.tsx";
 import { fileOpen } from "./searchOpen.ts";
 import { ModelLogo, Time } from "./ui.tsx";
@@ -40,6 +41,7 @@ export const GlobalShortcuts = memo(function GlobalShortcuts({ scope, newChat, s
     <>
       <ChatSwitcher scope={scope} settings={settings} open={switching} onClose={() => setSwitching(false)} />
       <ShortcutsDialog open={listing} onClose={() => setListing(false)} settings={`${settings}/shortcuts`} />
+      <RelayHost />
     </>
   );
 });
