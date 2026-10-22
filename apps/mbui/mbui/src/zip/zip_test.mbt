@@ -1,43 +1,20 @@
 // Unzipping (inflate.mbt) and hashing (sha256.mbt) against what Python's gzip, zlib and hashlib make of the same.
 
 ///|
-/// Bytes from base64.
-fn b64(s : String) -> Bytes {
-  let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-  let out : Array[Byte] = []
-  let mut acc = 0
-  let mut bits = 0
-  for c in s {
-    match alphabet.find(c.to_string()) {
-      Some(v) => {
-        acc = (acc << 6) | v
-        bits += 6
-        if bits >= 8 {
-          bits -= 8
-          out.push(((acc >> bits) & 255).to_byte())
-        }
-      }
-      None => ()
-    }
-  }
-  Bytes::from_array(out)
-}
-
-///|
 test "a short text, in deflate's fixed codes" {
-  let out = @zip.gunzip(b64("H4sIAAAAAAAC/8tIzcnJ11HIQKKsFAz8FQxzPAFXvYeJGwAAAA==")).unwrap()
+  let out = @zip.gunzip(@codec.from_base64("H4sIAAAAAAAC/8tIzcnJ11HIQKKsFAz8FQxzPAFXvYeJGwAAAA==")).unwrap()
   assert_eq(out, b"hello, hello, hello: 0O 1lI")
   assert_eq(@zip.crc32(out), 2307374423U)
 }
 
 ///|
 test "nothing gzipped" {
-  assert_eq(@zip.gunzip(b64("H4sIAAAAAAAC/wMAAAAAAAAAAAA=")).unwrap().length(), 0)
+  assert_eq(@zip.gunzip(@codec.from_base64("H4sIAAAAAAAC/wMAAAAAAAAAAAA=")).unwrap().length(), 0)
 }
 
 ///|
 test "a longer text, in a block's own codes: as long and with the hash Python's said" {
-  let gz = b64(
+  let gz = @codec.from_base64(
     (
   #|H4sIAAAAAAAC/23bzQ3kynUG0D2jqBBYvyTDMSQLECBBgOTF5OGFo3AIzkbKw2c00836W9bXwDzWTNW953bznecZ/vS3v/81hPN44hP+8V9//s
   #|tfwo8Qjzvf4U//8WeLHyEdV73Cv/73f/75f/9t/SPko10t/OFvf/zPn8sfoRz1qb/+oB//DupRY/n8ab+idpScP3/kr+g6ck3dn/srvY90xfcP

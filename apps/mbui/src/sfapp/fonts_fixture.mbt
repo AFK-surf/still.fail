@@ -129,7 +129,7 @@ fn fixture_fonts_call(f : Fixture, name : String, params : Json, done : (Result[
 ///|
 /// A face's file (gzipped once a face was fetched; not here before), or its preview.
 fn fixture_fonts_read(f : Fixture, name : String) -> Result[(Json, Bytes), Json]? {
-  let file = bytes_of_b64(fixture_face_gz).unwrap()
+  let file = @codec.from_base64_exact(fixture_face_gz).unwrap()
   match name {
     "fonts.file" =>
       Some(

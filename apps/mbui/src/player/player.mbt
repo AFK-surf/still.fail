@@ -135,7 +135,7 @@ pub struct Player {
   priv mut speed : Double
   priv mut subs_on : Bool
   priv mut subtitle : Bool
-  priv mut cues : Array[Cue]
+  priv mut cues : Array[@codec.Cue]
   priv mut fill : Bool
   priv mut sideways : Bool
   priv mut awake : Bool
@@ -231,7 +231,7 @@ pub fn Player::close(self : Player) -> Unit {
 
 ///|
 /// The subtitle beside it: there is one (its key shows), and its lines once read.
-pub fn Player::set_subtitle(self : Player, there : Bool, cues : Array[Cue]) -> Unit {
+pub fn Player::set_subtitle(self : Player, there : Bool, cues : Array[@codec.Cue]) -> Unit {
   self.subtitle = there
   self.cues = cues
 }
@@ -513,7 +513,7 @@ pub fn Player::view(
       |> ignore
     }
     // the subtitle's words, over the foot (higher while the controls show)
-    let said = if p.subs_on { cues_at(p.cues, s.position) } else { "" }
+    let said = if p.subs_on { @codec.cues_at(p.cues, s.position) } else { "" }
     if said != "" {
       c.layer(fn() {
         c.box(

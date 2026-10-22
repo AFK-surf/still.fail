@@ -41,7 +41,7 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
   let title = text(chat.value, "title")
   let link = match chat_link(r.station, key) {
     "" => ""
-    l => l + "?history=" + encode_component(key)
+    l => l + "?history=" + @codec.encode_uri_component(key)
   }
   // over the navigation bar (History.kt: windowInsetsPadding(navigationBars))
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
@@ -1392,41 +1392,6 @@ fn scalar_text(v : Json) -> String {
 }
 
 ///|
-/// JSON written out, two spaces a level (as the Android app's pretty printing).
-fn pretty_json(v : Json, depth : Int) -> String {
-  let pad = fn(d : Int) -> String {
-    let sb = StringBuilder()
-    for _ in 0..<d {
-      sb.write_string("  ")
-    }
-    sb.to_string()
-  }
-  match v {
-    Object(m) => {
-      if m.size() == 0 {
-        return "{}"
-      }
-      let parts = []
-      for k, x in m {
-        parts.push(pad(depth + 1) + Json::string(k).stringify() + ": " + pretty_json(x, depth + 1))
-      }
-      "{\n" + parts.join(",\n") + "\n" + pad(depth) + "}"
-    }
-    Array(a) => {
-      if a.length() == 0 {
-        return "[]"
-      }
-      "[\n" +
-      a.map(fn(x) { pad(depth + 1) + pretty_json(x, depth + 1) }).join(",\n") +
-      "\n" +
-      pad(depth) +
-      "]"
-    }
-    _ => v.stringify()
-  }
-}
-
-///|
 /// A command as it would be typed: `["bash", "-lc", "ls"]` is `ls`.
 fn command_of(a : Map[String, Json]) -> String? {
   let c = match a.get("command") {
@@ -1803,7 +1768,7 @@ fn fields(c : @ui.Ctx, a : Map[String, Json], skip : Array[String]) -> Unit {
 fn json_block(c : @ui.Ctx, v : Json) -> Unit {
   let t = @sf.theme()
   boxed(c, code_ground(), 240.0, 12.0, 8.0, fn() {
-    c.rich([@ui.span(pretty_json(v, 0), mono=true)], size=12.0, line=18.6, color=t.p.text, w=Fill(1.0))
+    c.rich([@ui.span(@codec.pretty_json(v), mono=true)], size=12.0, line=18.6, color=t.p.text, w=Fill(1.0))
     |> ignore
   })
 }

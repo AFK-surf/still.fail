@@ -59,7 +59,7 @@ fn math_inline(j : Json) -> @ui.InlineDrawing? {
     let x = math_number(a[3]) / 1000.0
     let y = math_number(a[4]) / 1000.0
     // Flatten the packaged curves once; a quarter pixel in 250 px/em gives small glyph curves their full detail.
-    paths.push(path_subpaths(path, 0.25).map(fn(p) {
+    paths.push(@pixels.svg_path(path, 0.25).map(fn(p) {
       let pts = p.0.copy()
       let mut i = 0
       while i + 1 < pts.length() {

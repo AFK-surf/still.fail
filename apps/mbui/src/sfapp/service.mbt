@@ -423,7 +423,7 @@ fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply : @
   }
   if bare == page_js_path {
     reply.head(200, [("Content-Type", "text/javascript; charset=utf-8"), ("Cache-Control", "no-store")])
-    reply.chunk(utf8_bytes(page_script_served(service_fetches(p))))
+    reply.chunk(@utf8.encode(page_script_served(service_fetches(p))))
     reply.end()
     return
   }
@@ -673,7 +673,7 @@ fn service_ask(
 /// A request that got no answer from the service: said to the page with `status`, in words (PreviewLink.text).
 fn service_unanswered(sink : Sink, path : String, status : Int, words : String) -> Unit {
   (sink.head)(status, [("Content-Type", "text/plain; charset=utf-8")], path, false)
-  (sink.chunk)(utf8_bytes(words))
+  (sink.chunk)(@utf8.encode(words))
   (sink.end)("")
 }
 
@@ -1977,13 +1977,13 @@ fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Uni
   let served = req.verb == "GET" && !last.contains(".")
   if !served {
     reply.head(404, [("Content-Type", "text/plain; charset=utf-8")])
-    reply.chunk(utf8_bytes("Not found"))
+    reply.chunk(@utf8.encode("Not found"))
     reply.end()
     return
   }
   let doc = viz_served(f.html, f.state, @sf.theme().dark, 0xFFFFFFFFL, page_script_served(false))
   reply.head(200, [("Content-Type", "text/html; charset=utf-8"), ("Cache-Control", "no-store")])
-  reply.chunk(utf8_bytes(doc))
+  reply.chunk(@utf8.encode(doc))
   reply.end()
 }
 

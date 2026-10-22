@@ -20,12 +20,12 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     (at("设计说明.pdf", 2400.0, 0.0, 0.0), fn() { fixture_pdf() }),
     (at("演示录屏.mp4", 5242880.0, 1280.0, 720.0), fn() { b"" }),
     (at("会议录音.m4a", 1489000.0, 0.0, 0.0), fn() { b"" }),
-    (at("报告.html", 900.0, 0.0, 0.0), fn() { utf8_bytes(fixture_html) }),
+    (at("报告.html", 900.0, 0.0, 0.0), fn() { @utf8.encode(fixture_html) }),
     // the chat's visualization (chat_fixture.mbt MBUI_FIXTURE=chat-viz)
-    (at("release.html", 1200.0, 0.0, 0.0), fn() { utf8_bytes(fixture_viz_html) }),
-    (at("list.ts", 600.0, 0.0, 0.0), fn() { utf8_bytes(fixture_code) }),
-    (at("说明.md", 500.0, 0.0, 0.0), fn() { utf8_bytes(fixture_md) }),
-    (at("数据.csv", 200.0, 0.0, 0.0), fn() { utf8_bytes(fixture_csv) }),
+    (at("release.html", 1200.0, 0.0, 0.0), fn() { @utf8.encode(fixture_viz_html) }),
+    (at("list.ts", 600.0, 0.0, 0.0), fn() { @utf8.encode(fixture_code) }),
+    (at("说明.md", 500.0, 0.0, 0.0), fn() { @utf8.encode(fixture_md) }),
+    (at("数据.csv", 200.0, 0.0, 0.0), fn() { @utf8.encode(fixture_csv) }),
     (at("备份.bin", 4096.0, 0.0, 0.0), fn() { Bytes::makei(4096, fn(i) { (i % 7).to_byte() }) }),
     (at("测试版.apk", 8192.0, 0.0, 0.0), fn() { Bytes::makei(8192, fn(i) { (i % 5).to_byte() }) }),
   ]
@@ -154,7 +154,7 @@ fn fixture_png(w : Int, h : Int) -> Bytes {
       rgba[i + 3] = b'\xFF'
     }
   }
-  @sf.png(w, h, rgba)
+  @pixels.png(w, h, rgba)
 }
 
 ///|
@@ -203,7 +203,7 @@ fn fixture_pdf() -> Bytes {
     sb.write_string("0000000000".view(end_offset=10 - d.length()).to_owned() + d + " 00000 n \n")
   }
   sb.write_string("trailer\n<< /Size \{objs.length() + 1} /Root 1 0 R >>\nstartxref\n\{at}\n%%EOF\n")
-  utf8_bytes(sb.to_string())
+  @utf8.encode(sb.to_string())
 }
 
 ///|

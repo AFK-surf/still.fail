@@ -28,7 +28,7 @@ test "held still on a message's words: the word under the finger is picked, the 
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
-  assert_eq(pk.b - pk.a, 1)
+  assert_eq(pk.sel.b - pk.sel.a, 1)
   // felt as it picked, once (MessagePick.kt: LongPress)
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   assert_true(t.find("引用") is Some(_))
@@ -49,11 +49,11 @@ test "a finger sliding on widens it by words, from the word first held; the list
   let before = t.list_offset()
   t.press_at(x, y)
   t.run_for(long_press_ms)
-  let first = (pk.a, pk.b)
+  let first = (pk.sel.a, pk.sel.b)
   slide(t, x, y, x + 60.0, y, 6)
   t.release(x + 60.0, y)
-  assert_eq(pk.a, first.0)
-  assert_true(pk.b > first.1 + 2)
+  assert_eq(pk.sel.a, first.0)
+  assert_true(pk.sel.b > first.1 + 2)
   assert_eq(t.list_offset(), before)
   // lifting it tapped nothing: still picked
   assert_true(pk.ts != "")
@@ -65,7 +65,7 @@ test "复制 puts the passage on the clipboard and lets go; 全选 takes all of 
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  let one = t.ctx().words_of(pk.key).unwrap().slice(pk.a, pk.b)
+  let one = t.ctx().words_of(pk.sel.key).unwrap().slice(pk.sel.a, pk.sel.b)
   t.tap_text("复制")
   assert_eq(t.clipboard(), one)
   assert_eq(pk.ts, "")
@@ -82,16 +82,16 @@ test "a handle moves its end: the passage's end follows the finger" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  let w = t.ctx().words_of(pk.key).unwrap()
-  let lines = w.rects(pk.a, pk.b)
+  let w = t.ctx().words_of(pk.sel.key).unwrap()
+  let lines = w.rects(pk.sel.a, pk.sel.b)
   let last = lines[lines.length() - 1]
   // the end's knob is under the line's end
   let (kx, ky) = (last.0 + last.2, last.1 + last.3 + 6.0)
-  let was = pk.b
+  let was = pk.sel.b
   t.press_at(kx, ky)
   slide(t, kx, ky, kx + 50.0, ky, 5)
   t.release(kx + 50.0, ky)
-  assert_true(pk.b > was + 2)
+  assert_true(pk.sel.b > was + 2)
   assert_true(pk.ts != "")
   t.assert_idle()
 }
@@ -117,7 +117,7 @@ test "its words no longer laid out: what was picked goes in that very frame, not
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
   // (as if its message scrolled far off: no box laid out holds its words now)
-  pk.key = "gone"
+  pk.sel.key = "gone"
   t.frame()
   assert_eq(pk.ts, "")
   t.assert_idle()

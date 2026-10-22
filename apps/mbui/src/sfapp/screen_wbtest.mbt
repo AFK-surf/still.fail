@@ -215,7 +215,7 @@ fn ScreenRig::frame(self : ScreenRig, ts : Double) -> Unit {
 /// A point of the frame (0..1 each way), in the window.
 fn ScreenRig::at(self : ScreenRig, x : Double, y : Double) -> (Double, Double) {
   let u = self.ui()
-  let s = u.zoom.shown(u.fit())
+  let s = u.shown()
   (u.stage_x + s.x + x * s.w, u.stage_y + s.y + y * s.h)
 }
 
@@ -445,17 +445,20 @@ test "全屏: the screen alone, sideways, its tools folded into one button; open
 
 ///|
 test "the keyboard up keeps the frame as large, the pointer in sight; down again, fitted as before" {
-  let zoom : ViewZoom = { scale: 1.0, x: 0.0, y: 0.0 }
+  let zoom = screen_zoom()
+  zoom.natural(1280.0, 720.0)
+  zoom.boxed(800.0, 360.0)
   let before = fit_in(800.0, 360.0, 1280.0, 720.0)
-  let after = fit_in(800.0, 150.0, 1280.0, 720.0)
-  zoom.refit(before, after, 800.0, 150.0, Some((0.5, 0.9)), 40.0)
-  let shown = zoom.shown(after)
-  assert_true((shown.w - before.w).abs() < 1.0)
-  let y = shown.y + 0.9 * shown.h
+  zoom.resize_keeping(800.0, 150.0, Some((0.5, 0.9)), 40.0)
+  let (_, sy, sw, sh) = zoom.rect().unwrap()
+  assert_true((sw - before.w).abs() < 1.0)
+  let y = sy + 0.9 * sh
   assert_true(y >= 0.0 && y <= 150.0)
-  zoom.refit(after, before, 800.0, 360.0, Some((0.5, 0.9)), 40.0)
+  zoom.resize_keeping(800.0, 360.0, Some((0.5, 0.9)), 40.0)
   assert_true(!zoom.zoomed())
-  assert_eq(zoom.shown(before), before)
+  let (x, y, w, h) = zoom.rect().unwrap()
+  assert_true((x - before.x).abs() < 0.001 && (y - before.y).abs() < 0.001)
+  assert_true((w - before.w).abs() < 0.001 && (h - before.h).abs() < 0.001)
 }
 
 ///|

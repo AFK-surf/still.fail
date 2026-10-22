@@ -191,7 +191,7 @@ fn icon_made(l : AppLook, icon : @pixels.Canvas, on_icon : (String?, String) -> 
   l.shown = "mem:slack-icon/\{icons_made.val}"
   @ui.add_image(l.shown, jpeg)
   l.error = ""
-  on_icon(Some("data:image/jpeg;base64," + base64_of(jpeg)), "")
+  on_icon(Some("data:image/jpeg;base64," + @codec.base64(jpeg)), "")
 }
 
 ///|

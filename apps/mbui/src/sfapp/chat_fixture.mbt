@@ -363,7 +363,7 @@ fn fixture_file_png(name : String) -> Bytes {
       rgba[i + 3] = b'\xFF'
     }
   }
-  @sf.png(w, h, rgba)
+  @pixels.png(w, h, rgba)
 }
 
 ///|
@@ -1068,11 +1068,11 @@ pub fn open_cards_fixture(mode : String) -> Unit {
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
       pk.ts = "ts11"
-      pk.key = "pick/ts11"
+      pk.sel.key = "pick/ts11"
       pk.author = "Claude"
       pk.role = "agent"
-      pk.a = 4
-      pk.b = 6
+      pk.sel.a = 4
+      pk.sel.b = 6
     }
     // the bare address in the long answer held: its menu (link_menu.mbt)
     "chat-link-menu" => {

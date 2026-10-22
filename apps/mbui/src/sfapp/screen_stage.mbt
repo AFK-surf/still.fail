@@ -52,27 +52,22 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     None => if over { Some((16, 10)) } else { None }
   }
   if over && !u.over_seen {
-    u.zoom.reset()
+    u.zoom.fit_now()
   }
   u.over_seen = over
   // another size of frame: fitted again
   if size != u.fit_for {
-    u.zoom.reset()
+    u.zoom.fit_now()
   }
   let stage = c.id("screen-stage/" + key)
   match c.laid_size(stage) {
     Some((bw, bh)) if bw != u.box_w || bh != u.box_h => {
       if u.box_w > 0.0 && u.box_h > 0.0 && size == u.fit_for && size is Some(_) {
-        let before = u.fit()
-        let after = match size {
-          Some((w, h)) => fit_in(bw, bh, w.to_double(), h.to_double())
-          None => srect_zero
-        }
         // turned: fitted again; else (the keyboard up or down) drawn as large as it was, the pointer in sight
         if (u.box_w > u.box_h) != (bw > bh) {
-          u.zoom.reset()
+          u.zoom.fit_now()
         } else {
-          u.zoom.refit(before, after, bw, bh, pointer_now(s, u), screen_keep_margin)
+          u.zoom.resize_keeping(bw, bh, pointer_now(s, u), screen_keep_margin)
         }
       }
       u.box_w = bw
@@ -81,13 +76,19 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     _ => ()
   }
   u.fit_for = size
+  // the zoom's frame and stage as they are now (fitted, fitted to them)
+  match size {
+    Some((w, h)) => u.zoom.natural(w.to_double(), h.to_double())
+    None => u.zoom.natural(0.0, 0.0)
+  }
+  u.zoom.boxed(u.box_w, u.box_h)
   let fit = u.fit()
   // (the pointer's way taken once a frame, whatever builds it)
   screen_gestures(c, s, u, stage, fit)
   c.drag_on(stage, axis=Free)
   c.box(style=stage_box, id=stage, fn() {
     if size is Some(_) && fit.w > 0.0 {
-      let shown = u.zoom.shown(fit)
+      let shown = u.shown()
       // on its way back, as it was, faded; over (ended, gone…), blurred under the dark it has gone to
       let still = phase != "live" && s.shown_any
       c.layer(fn() {
@@ -536,7 +537,7 @@ fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit :
             g.mode = 2
           } else {
             if g.drives {
-              match screen_frame_at(g.sx, g.sy, u.zoom.shown(fit), false) {
+              match screen_frame_at(g.sx, g.sy, u.shown(), false) {
                 Some(at) => {
                   sent.push(pointer_input("down", at, btn_secondary))
                   sent.push(pointer_input("up", at, btn_secondary))
@@ -555,7 +556,7 @@ fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit :
               sent.push(pointer_input("up", u.pad.at(), btn_primary))
             }
             if !g.pad && g.mode == 1 {
-              match screen_frame_at(g.lx, g.ly, u.zoom.shown(fit), true) {
+              match screen_frame_at(g.lx, g.ly, u.shown(), true) {
                 Some(at) => sent.push(pointer_input("up", at, btn_primary))
                 None => ()
               }
@@ -576,11 +577,11 @@ fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit :
                       g.mode = 1
                     }
                   } else if g.drives {
-                    match screen_frame_at(g.sx, g.sy, u.zoom.shown(fit), false) {
+                    match screen_frame_at(g.sx, g.sy, u.shown(), false) {
                       Some(at) => {
                         sent.push(pointer_input("down", at, btn_primary))
                         g.mode = 1
-                        match screen_frame_at(x, y, u.zoom.shown(fit), true) {
+                        match screen_frame_at(x, y, u.shown(), true) {
                           Some(at2) => sent.push(pointer_input("move", at2, btn_primary))
                           None => ()
                         }
@@ -597,7 +598,7 @@ fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit :
               1 | 2 if g.pad => {
                 let dx = x - g.lx
                 let dy = y - g.ly
-                let shown = u.zoom.shown(fit)
+                let shown = u.shown()
                 if shown.w > 0.0 && (dx != 0.0 || dy != 0.0) {
                   let dt = dmax(1.0, c.frame_dt())
                   let gain = pad_gain((dx * dx + dy * dy).sqrt() / dt)
@@ -614,16 +615,16 @@ fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit :
                     ),
                   )
                   if u.zoom.zoomed() {
-                    u.zoom.keep(u.pad.at(), screen_keep_margin, fit, bw, bh)
+                    u.zoom.keep(u.pad.at(), screen_keep_margin)
                   }
                 }
               }
               1 =>
-                match screen_frame_at(x, y, u.zoom.shown(fit), true) {
+                match screen_frame_at(x, y, u.shown(), true) {
                   Some(at) => sent.push(pointer_input("move", at, btn_primary))
                   None => ()
                 }
-              2 => u.zoom.pan(x - g.lx, y - g.ly, fit, bw, bh)
+              2 => if fit.w > 0.0 { u.zoom.pan(x - g.lx, y - g.ly) }
               3 =>
                 match (g.two, second) {
                   (Some(t), Some((bx, by))) => {
@@ -633,18 +634,22 @@ fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit :
                     }
                     if t.kind == 1 {
                       let k = if t.spread_was > 0.0 { sp / t.spread_was } else { 1.0 }
-                      u.zoom.by(k, cx, cy, cx - t.fx, cy - t.fy, fit, bw, bh)
+                      if fit.w > 0.0 {
+                        u.zoom.transform(cx, cy, k, cx - t.fx, cy - t.fy)
+                      }
                     } else if t.kind == 2 {
                       if g.pad {
-                        scroll_by(sent, cx - t.fx, cy - t.fy, u.pad.at(), u.zoom.shown(fit), frame_px)
+                        scroll_by(sent, cx - t.fx, cy - t.fy, u.pad.at(), u.shown(), frame_px)
                       } else if g.drives {
-                        match screen_frame_at(cx, cy, u.zoom.shown(fit), true) {
+                        match screen_frame_at(cx, cy, u.shown(), true) {
                           Some(at) =>
-                            scroll_by(sent, cx - t.fx, cy - t.fy, at, u.zoom.shown(fit), frame_px)
+                            scroll_by(sent, cx - t.fx, cy - t.fy, at, u.shown(), frame_px)
                           None => ()
                         }
                       } else if u.zoom.zoomed() {
-                        u.zoom.pan(cx - t.fx, cy - t.fy, fit, bw, bh)
+                        if fit.w > 0.0 {
+                          u.zoom.pan(cx - t.fx, cy - t.fy)
+                        }
                       }
                     }
                     t.went(cx, cy, sp)
@@ -669,7 +674,7 @@ fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit :
                 g.tx = g.sx
                 g.ty = g.sy
               } else if g.drives {
-                match screen_frame_at(g.sx, g.sy, u.zoom.shown(fit), false) {
+                match screen_frame_at(g.sx, g.sy, u.shown(), false) {
                   Some(at) => {
                     sent.push(pointer_input("down", at, btn_primary))
                     sent.push(pointer_input("up", at, btn_primary))
@@ -678,7 +683,7 @@ fn screen_gestures(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, fit :
                 }
               }
             1 if !g.pad =>
-              match screen_frame_at(g.lx, g.ly, u.zoom.shown(fit), true) {
+              match screen_frame_at(g.lx, g.ly, u.shown(), true) {
                 Some(at) => sent.push(pointer_input("up", at, btn_primary))
                 None => ()
               }

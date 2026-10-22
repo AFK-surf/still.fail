@@ -1,4 +1,6 @@
 import {
+  "mbui/pixels",
+  "mbui/codec",
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",

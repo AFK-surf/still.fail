@@ -1,6 +1,6 @@
-// A video's subtitle beside it (E01.srt for E01.mp4), read here and shown by the player over the picture: SubRip,
-// WebVTT and ASS/SSA's dialogue lines (Player.kt hands the file to media3 with the film; here the app reads it, so every
-// host shows it alike). Styling is left out (tags, ASS's overrides), the words and their lines kept.
+// Subtitles read as text: SubRip, WebVTT and ASS/SSA's dialogue lines, each a cue (from when to when, its words),
+// and what is said at a moment. Styling is left out (tags, ASS's overrides), the words and their lines kept: every
+// host shows them alike (still.fail's player reads a video's subtitle beside it, Player.kt hands it to media3).
 
 ///|
 /// A line of a subtitle: from when to when (ms), its words (lines apart by \n).
@@ -15,7 +15,11 @@ pub(all) struct Cue {
 pub fn parse_subtitles(name : String, bytes : Bytes) -> Array[Cue] {
   let text = @utf8.decode_lossy(bytes[:], ignore_bom=true)
   let text = text.replace_all(old="\r\n", new="\n").replace_all(old="\r", new="\n")
-  match extension_of(name) {
+  let ext = match name.rev_find(".") {
+    Some(i) => name.view(start_offset=i + 1).to_owned().to_lower()
+    None => ""
+  }
+  match ext {
     "ass" | "ssa" => parse_ass(text)
     _ => parse_timed(text)
   }
@@ -44,7 +48,7 @@ pub fn parse_timed(text : String) -> Array[Cue] {
           words.push(strip_tags(lines[i]))
           i += 1
         }
-        match (time_of(a), time_of(b)) {
+        match (subtitle_time(a), subtitle_time(b)) {
           (Some(f), Some(t)) if words.length() > 0 =>
             out.push({ from: f, to: t, text: words.join("\n") })
           _ => ()
@@ -104,7 +108,7 @@ pub fn parse_ass(text : String) -> Array[Cue] {
       }
     }
     let words = ass_words(get("text"))
-    match (time_of(get("start")), time_of(get("end"))) {
+    match (subtitle_time(get("start")), subtitle_time(get("end"))) {
       (Some(f), Some(t)) if words != "" => out.push({ from: f, to: t, text: words })
       _ => ()
     }
@@ -179,7 +183,7 @@ fn strip_tags(s : String) -> String {
 
 ///|
 /// `hh:mm:ss,mmm`, `mm:ss.mmm`, `h:mm:ss.cc` (ASS's hundredths) in ms; None when it is none of them.
-pub fn time_of(s : String) -> Double? {
+pub fn subtitle_time(s : String) -> Double? {
   let s = s.trim().to_owned().replace_all(old=",", new=".")
   if s == "" {
     return None

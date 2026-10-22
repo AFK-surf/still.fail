@@ -337,7 +337,7 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
     Object(m) if m.get("sitebody") is Some(Object(v)) =>
       match (num(v, "view"), num(v, "req"), m.get("b")) {
         (Some(id), Some(req), Some(String(hex))) => {
-          f.site_bodies[(id, req)] = bytes_of_hex(hex)
+          f.site_bodies[(id, req)] = @codec.from_hex(hex)
           true
         }
         _ => false
@@ -398,7 +398,7 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
                   q
                 }
               }
-              q.push(bytes_of_hex(hex))
+              q.push(@codec.from_hex(hex))
               f.view_texts[(id, 2)] = "2"
               f.wants = true
               true
@@ -411,20 +411,3 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
   }
 }
 
-///|
-fn bytes_of_hex(hex : String) -> Bytes {
-  let digit = fn(c : Char) {
-    let n = c.to_int()
-    if n >= '0'.to_int() && n <= '9'.to_int() {
-      n - '0'.to_int()
-    } else if n >= 'a'.to_int() && n <= 'f'.to_int() {
-      n - 'a'.to_int() + 10
-    } else if n >= 'A'.to_int() && n <= 'F'.to_int() {
-      n - 'A'.to_int() + 10
-    } else {
-      0
-    }
-  }
-  let cs = hex.to_array()
-  Bytes::makei(cs.length() / 2, fn(i) { (digit(cs[2 * i]) * 16 + digit(cs[2 * i + 1])).to_byte() })
-}

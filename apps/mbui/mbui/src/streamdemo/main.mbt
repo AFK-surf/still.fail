@@ -30,53 +30,16 @@ fn total() -> Int {
 }
 
 ///|
-/// Base64 (standard) decoded.
-fn b64(s : String) -> Bytes {
-  let v = fn(c : Char) -> Int {
-    let n = c.to_int()
-    if n >= 'A'.to_int() && n <= 'Z'.to_int() {
-      n - 'A'.to_int()
-    } else if n >= 'a'.to_int() && n <= 'z'.to_int() {
-      n - 'a'.to_int() + 26
-    } else if n >= '0'.to_int() && n <= '9'.to_int() {
-      n - '0'.to_int() + 52
-    } else if c == '+' {
-      62
-    } else if c == '/' {
-      63
-    } else {
-      -1
-    }
-  }
-  let out = []
-  let mut acc = 0
-  let mut bits = 0
-  for c in s {
-    let d = v(c)
-    if d < 0 {
-      continue
-    }
-    acc = (acc << 6) | d
-    bits += 6
-    if bits >= 8 {
-      bits -= 8
-      out.push(((acc >> bits) & 255).to_byte())
-    }
-  }
-  Bytes::from_array(out)
-}
-
-///|
 /// The next frames, as a station sends them: at most two ahead of the last one said shown.
 fn feed(s : @ui.Stream) -> Unit {
   while fed.val < total() && fed.val - acked.val < 2 {
     let i = fed.val
     let ts = ((i + 1) * 100).to_double()
     if jpeg_mode() {
-      s.jpeg(b64(sample_jpegs[i]), ts)
+      s.jpeg(@codec.from_base64(sample_jpegs[i]), ts)
     } else {
       let (key, data) = sample_frames[i]
-      s.frame(b64(data), key, ts)
+      s.frame(@codec.from_base64(data), key, ts)
     }
     fed.val = i + 1
   }
@@ -142,7 +105,7 @@ fn start() -> Unit {
   stream.val = Some(s)
   @ui.log("STREAM start \{if jpeg_mode() { "jpeg" } else { "h264" }} \{total()} frames")
   if !jpeg_mode() {
-    s.h264(b64(sample_avcc), sample_w, sample_h)
+    s.h264(@codec.from_base64(sample_avcc), sample_w, sample_h)
   }
   feed(s)
 }

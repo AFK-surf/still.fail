@@ -13,7 +13,7 @@
 /// What the viewer keeps of a view beside the session: the frame's zoom, the trackpad's pointer, the modifiers held,
 /// 全屏 and its folded tools, the rail's line said, the press under way.
 priv struct ScreenUi {
-  zoom : ViewZoom
+  zoom : @kit.Zoom
   pad : PadPointer
   held : HeldKeys
   mut full : Bool
@@ -53,7 +53,7 @@ fn screen_ui(key : String) -> ScreenUi {
     Some(u) => u
     None => {
       let u : ScreenUi = {
-        zoom: { scale: 1.0, x: 0.0, y: 0.0 },
+        zoom: screen_zoom(),
         pad: { x: 0.5, y: 0.5, moves: 0 },
         held: { mods: 0 },
         full: false,

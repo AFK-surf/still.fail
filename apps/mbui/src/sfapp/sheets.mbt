@@ -376,33 +376,10 @@ fn chat_link(station : String, session : String) -> String {
       "/" +
       station.view(start_offset=at + 1).to_owned() +
       "/" +
-      encode_component(session)
+      @codec.encode_uri_component(session)
     }
     _ => ""
   }
-}
-
-///|
-/// As JavaScript's encodeURIComponent.
-fn encode_component(s : String) -> String {
-  let sb = StringBuilder()
-  let bytes = utf8_bytes(s)
-  let hex = "0123456789ABCDEF"
-  for b in bytes {
-    let x = b.to_int()
-    let ch = Int::unsafe_to_char(x)
-    if (x >= 0x30 && x <= 0x39) ||
-      (x >= 0x41 && x <= 0x5A) ||
-      (x >= 0x61 && x <= 0x7A) ||
-      "-_.!~*'()".contains_char(ch) {
-      sb.write_char(ch)
-    } else {
-      sb.write_char('%')
-      sb.write_char(hex.get_char(x / 16).unwrap_or('0'))
-      sb.write_char(hex.get_char(x % 16).unwrap_or('0'))
-    }
-  }
-  sb.to_string()
 }
 
 ///|

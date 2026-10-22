@@ -1,10 +1,11 @@
 // A file of a chat opened over the whole screen (ember apps/android chat/screens/FilePreview.kt, VideoViewer.kt,
 // FileKinds.kt kindOf, ChatFiles.kt FileData; web/src/FilePreview.tsx): images to zoom (a double tap, the bar's − and
-// +, the wheel) and pan; videos played by the system's player (a native view over the canvas, src/ui/native.mbt), its
-// bytes read through the core a part at a time (`station.file.part`); PDFs drawn by the system page by page; HTML in a
-// page of its own (a native web view: its scripts on, nothing of the app's reachable); Markdown rendered; CSV as a
-// table; code and text as they are. Anything else says it cannot be shown and offers the download. One bar floats at
-// the top with its name and tools and fades when left alone; a tap brings it back. Back (or ×) closes it.
+// +, the wheel) and pan (mbui's @kit.Zoom, Zoom.kt's); videos played by the system's player (a native view over the
+// canvas, src/ui/native.mbt), its bytes read through the core a part at a time (`station.file.part`); PDFs drawn by the
+// system page by page; HTML in a page of its own (a native web view: its scripts on, nothing of the app's reachable);
+// Markdown rendered; CSV as a table; code and text as they are. Anything else says it cannot be shown and offers the
+// download. One bar floats at the top with its name and tools and fades when left alone; a tap brings it back. Back (or
+// ×) closes it.
 //
 // Not yet, against the Android app: the flight from the chat's thumbnail and back (it fades in and out, as the
 // Android app does when the thumbnail is not on the screen), stepping through the chat's images (`imageNear`),
@@ -226,233 +227,6 @@ let dark_text : Int64 = 0xF4F4F5FFL
 let dark_muted : Int64 = 0xFFFFFF99L
 
 ///|
-/// Where a picture shows in its stage (Zoom.kt ZoomState): `scale` is points per picture pixel (1 = 100%), x and y
-/// move its centre from the stage's.
-priv struct Zoom {
-  mut nw : Double
-  mut nh : Double
-  mut bw : Double
-  mut bh : Double
-  mut scale : Double
-  mut x : Double
-  mut y : Double
-  mut fitted : Bool
-  // a glide (zoom_glide_ms on (0.16, 1, 0.3, 1)): whether one goes on, how far (0 … 1, a motion), from, to
-  mut gliding : Bool
-  glide : @motion.Value
-  g_from : FixedArray[Double]
-  g_to : FixedArray[Double]
-}
-
-///|
-fn Zoom::new() -> Zoom {
-  {
-    nw: 0.0,
-    nh: 0.0,
-    bw: 0.0,
-    bh: 0.0,
-    scale: 1.0,
-    x: 0.0,
-    y: 0.0,
-    fitted: true,
-    gliding: false,
-    glide: @motion.Value::new(1.0),
-    g_from: FixedArray::make(3, 0.0),
-    g_to: FixedArray::make(3, 0.0),
-  }
-}
-
-///|
-let max_scale : Double = 16.0
-
-///|
-fn Zoom::margin(self : Zoom) -> Double {
-  if self.bw < 640.0 {
-    12.0
-  } else {
-    32.0
-  }
-}
-
-///|
-/// Fitted: the whole picture within the stage (a margin round it), never enlarged.
-fn Zoom::fit(self : Zoom) -> Double {
-  if self.nw <= 0.0 || self.nh <= 0.0 || self.bw <= 0.0 || self.bh <= 0.0 {
-    return 1.0
-  }
-  let m = self.margin()
-  dmin(1.0, dmin((self.bw - 2.0 * m) / self.nw, (self.bh - 2.0 * m) / self.nh))
-}
-
-///|
-fn Zoom::min_scale(self : Zoom) -> Double {
-  dmin(self.fit(), 1.0) / 2.0
-}
-
-///|
-fn Zoom::zoomed(self : Zoom) -> Bool {
-  self.scale > self.fit() * 1.01
-}
-
-///|
-fn Zoom::natural(self : Zoom, w : Double, h : Double) -> Unit {
-  if w == self.nw && h == self.nh {
-    return
-  }
-  self.nw = w
-  self.nh = h
-  if self.fitted {
-    self.scale = self.fit()
-    self.x = 0.0
-    self.y = 0.0
-  } else {
-    self.clamp()
-  }
-}
-
-///|
-fn Zoom::boxed(self : Zoom, w : Double, h : Double) -> Unit {
-  if w == self.bw && h == self.bh {
-    return
-  }
-  self.bw = w
-  self.bh = h
-  if self.fitted {
-    self.scale = self.fit()
-    self.x = 0.0
-    self.y = 0.0
-  } else {
-    self.clamp()
-  }
-}
-
-///|
-fn Zoom::clamp(self : Zoom) -> Unit {
-  if self.nw <= 0.0 {
-    return
-  }
-  self.scale = dmax(self.min_scale(), dmin(max_scale, self.scale))
-  let sx = dmax(0.0, (self.nw * self.scale - self.bw) / 2.0)
-  let sy = dmax(0.0, (self.nh * self.scale - self.bh) / 2.0)
-  self.x = dmax(-sx, dmin(sx, self.x))
-  self.y = dmax(-sy, dmin(sy, self.y))
-}
-
-///|
-/// The picture's place on the stage (x, y, w, h), once its size is known.
-fn Zoom::rect(self : Zoom) -> (Double, Double, Double, Double)? {
-  if self.nw <= 0.0 || self.nh <= 0.0 {
-    return None
-  }
-  let w = self.nw * self.scale
-  let h = self.nh * self.scale
-  Some((self.bw / 2.0 + self.x - w / 2.0, self.bh / 2.0 + self.y - h / 2.0, w, h))
-}
-
-///|
-/// Moved by a finger (dx, dy), a glide called off.
-fn Zoom::pan(self : Zoom, dx : Double, dy : Double) -> Unit {
-  self.stop_glide()
-  self.fitted = false
-  self.x = self.x + dx
-  self.y = self.y + dy
-  self.clamp()
-}
-
-///|
-/// By `zoom` around (ax, ay) on the stage, and moved by (dx, dy): two fingers pinching (Zoom.kt transform).
-fn Zoom::transform(self : Zoom, ax : Double, ay : Double, zoom : Double, dx : Double, dy : Double) -> Unit {
-  self.stop_glide()
-  let next = dmax(self.min_scale(), dmin(max_scale, self.scale * zoom))
-  let f = next / self.scale
-  let px = ax - self.bw / 2.0
-  let py = ay - self.bh / 2.0
-  self.fitted = false
-  self.scale = next
-  self.x = px - (px - self.x) * f + dx
-  self.y = py - (py - self.y) * f + dy
-  self.clamp()
-}
-
-///|
-/// To `target` (at once, or gliding from `now`), the picture's point under (ax, ay) on the stage staying put.
-fn Zoom::zoom_to(self : Zoom, target : Double, ax : Double, ay : Double, glide : Bool) -> Unit {
-  let next = dmax(self.min_scale(), dmin(max_scale, target))
-  let px = ax - self.bw / 2.0
-  let py = ay - self.bh / 2.0
-  let f = next / self.scale
-  let mut tx = px - (px - self.x) * f
-  let mut ty = py - (py - self.y) * f
-  let sx = dmax(0.0, (self.nw * next - self.bw) / 2.0)
-  let sy = dmax(0.0, (self.nh * next - self.bh) / 2.0)
-  tx = dmax(-sx, dmin(sx, tx))
-  ty = dmax(-sy, dmin(sy, ty))
-  self.fitted = false
-  self.glide_to(next, tx, ty, glide)
-}
-
-///|
-fn Zoom::reset(self : Zoom) -> Unit {
-  self.glide_to(self.fit(), 0.0, 0.0, true)
-  self.fitted = true
-}
-
-///|
-/// A glide called off where it is (a finger took it).
-fn Zoom::stop_glide(self : Zoom) -> Unit {
-  if self.gliding {
-    self.gliding = false
-    self.glide.set(1.0)
-  }
-}
-
-///|
-fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool) -> Unit {
-  if !glide {
-    self.stop_glide()
-    self.scale = s
-    self.x = x
-    self.y = y
-    return
-  }
-  self.g_from[0] = self.scale
-  self.g_from[1] = self.x
-  self.g_from[2] = self.y
-  self.g_to[0] = s
-  self.g_to[1] = x
-  self.g_to[2] = y
-  // said once as it sets out: the motion asks the frames until it is there
-  self.gliding = true
-  self.glide.set(0.0)
-  ignore(self.glide.start(1.0, @motion.tween(zoom_glide_ms, ease=Soft)))
-}
-
-///|
-/// Where a glide has got to this frame.
-fn Zoom::step(self : Zoom) -> Unit {
-  if !self.gliding {
-    return
-  }
-  let e = self.glide.get()
-  self.scale = self.g_from[0] + (self.g_to[0] - self.g_from[0]) * e
-  self.x = self.g_from[1] + (self.g_to[1] - self.g_from[1]) * e
-  self.y = self.g_from[2] + (self.g_to[2] - self.g_from[2]) * e
-  if !self.glide.is_animating() {
-    self.gliding = false
-  }
-}
-
-///|
-/// A double tap: fitted, in to 2.5× the fitted size (at least 100%) around it; zoomed, back to fitted.
-fn Zoom::double_tap(self : Zoom, ax : Double, ay : Double) -> Unit {
-  if self.zoomed() {
-    self.reset()
-  } else {
-    self.zoom_to(dmax(self.fit() * 2.5, 1.0), ax, ay, true)
-  }
-}
-
-///|
 /// The file open, and how far it has got.
 priv struct Viewer {
   station : String
@@ -484,8 +258,8 @@ priv struct Viewer {
   mut rest_n : Int
   /// whether they fade when left alone after it opens (not in the fixture's shots, which come when they come)
   mut rests : Bool
-  zoom : Zoom
-  vzoom : Zoom
+  zoom : @kit.Zoom
+  vzoom : @kit.Zoom
   /// 源码 rather than 预览
   mut source : Bool
   mut video : @ui.NativeView?
@@ -690,8 +464,8 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     rest_len: -1.0,
     rest_n: 0,
     rests: true,
-    zoom: Zoom::new(),
-    vzoom: Zoom::new(),
+    zoom: @kit.Zoom::new(glide_ms=zoom_glide_ms),
+    vzoom: @kit.Zoom::new(glide_ms=zoom_glide_ms),
     source: false,
     video: None,
     page: None,
@@ -1034,7 +808,7 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
       v.sniffing = false
       v.sniffed = Some(
         match r {
-          Ok((_, bytes)) => looks_like_text(bytes)
+          Ok((_, bytes)) => @codec.looks_like_text(bytes)
           // a station from before parts cannot say: told of, as anything else not shown
           Err(_) => false
         },
@@ -1101,87 +875,6 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     })
   }
   ignore(c)
-}
-
-///|
-/// Text, when its first bytes decode as UTF-8 with no NULs (the cut may split a character: its last bytes left out).
-fn looks_like_text(b : Bytes) -> Bool {
-  let n = if b.length() < 8192 { b.length() } else { 8192 }
-  for i in 0..<n {
-    if b[i] == b'\x00' {
-      return false
-    }
-  }
-  let end = if b.length() > 8192 { 8188 } else { n }
-  // UTF-8's shape: lead bytes and their continuations
-  let mut i = 0
-  while i < end {
-    let x = b[i].to_int()
-    let more = if x < 0x80 {
-      0
-    } else if x >= 0xC2 && x < 0xE0 {
-      1
-    } else if x >= 0xE0 && x < 0xF0 {
-      2
-    } else if x >= 0xF0 && x < 0xF5 {
-      3
-    } else {
-      return false
-    }
-    if i + more >= end && more > 0 {
-      return true
-    }
-    for k in 1..=more {
-      let y = b[i + k].to_int()
-      if y < 0x80 || y >= 0xC0 {
-        return false
-      }
-    }
-    i = i + 1 + more
-  }
-  true
-}
-
-///|
-/// The first `limit` bytes as UTF-8 text (what does not decode, and a character the cut splits, as U+FFFD).
-fn utf8_text(b : Bytes, limit : Int) -> String {
-  let n = if b.length() < limit { b.length() } else { limit }
-  let sb = StringBuilder()
-  let mut i = 0
-  while i < n {
-    let x = b[i].to_int()
-    let (more, start) = if x < 0x80 {
-      (0, x)
-    } else if x >= 0xC2 && x < 0xE0 {
-      (1, x & 0x1F)
-    } else if x >= 0xE0 && x < 0xF0 {
-      (2, x & 0x0F)
-    } else if x >= 0xF0 && x < 0xF5 {
-      (3, x & 0x07)
-    } else {
-      (-1, 0)
-    }
-    let mut cp = start
-    let mut ok = more >= 0 && i + more < n
-    if ok {
-      for k in 1..=more {
-        let y = b[i + k].to_int()
-        if y < 0x80 || y >= 0xC0 {
-          ok = false
-          break
-        }
-        cp = (cp << 6) | (y & 0x3F)
-      }
-    }
-    if ok && (cp < 0xD800 || cp > 0xDFFF) && cp <= 0x10FFFF {
-      sb.write_char(cp.unsafe_to_char())
-      i = i + 1 + more
-    } else {
-      sb.write_char('\u{FFFD}')
-      i = i + 1
-    }
-  }
-  sb.to_string()
 }
 
 ///|
@@ -2162,7 +1855,7 @@ fn Viewer::read_near(self : Viewer, src : Source, before : Viewer?, after : View
 /// Where a picture of (nw, nh) shows fitted on a stage of (bw, bh) (the viewer's fit: a margin round it, never
 /// enlarged).
 fn fitted_rect(nw : Double, nh : Double, bw : Double, bh : Double) -> (Double, Double, Double, Double)? {
-  let z = Zoom::new()
+  let z = @kit.Zoom::new(glide_ms=zoom_glide_ms)
   z.boxed(bw, bh)
   z.natural(nw, nh)
   z.rect()
@@ -2218,7 +1911,7 @@ fn Viewer::gestures(
   c : @ui.Ctx,
   src : Source,
   stage : Int,
-  z : Zoom,
+  z : @kit.Zoom,
   has_before : Bool,
   has_after : Bool,
 ) -> Unit {
@@ -2753,7 +2446,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
   let words = match v.text {
     Some(s) => s
     None => {
-      let s = utf8_text(b, show_limit)
+      let s = @codec.utf8_text(b, show_limit)
       v.text = Some(s)
       s
     }
@@ -2909,64 +2602,11 @@ fn cut_line(c : @ui.Ctx, words : String) -> Unit {
 }
 
 ///|
-/// Rows of a CSV (or TSV), quotes and all (FilePreview.kt parseCsv).
-fn parse_csv(s : String, sep : Char, limit : Int) -> Array[Array[String]] {
-  let rows : Array[Array[String]] = []
-  let mut row : Array[String] = []
-  let field = StringBuilder()
-  let mut empty = true
-  let mut quoted = false
-  let chars : Array[Char] = []
-  for ch in s {
-    chars.push(ch)
-  }
-  let mut i = 0
-  while i < chars.length() && rows.length() < limit {
-    let ch = chars[i]
-    if quoted {
-      if ch == '"' && i + 1 < chars.length() && chars[i + 1] == '"' {
-        field.write_char('"')
-        i += 1
-      } else if ch == '"' {
-        quoted = false
-      } else {
-        field.write_char(ch)
-      }
-    } else if ch == '"' && empty {
-      quoted = true
-      empty = false
-    } else if ch == sep {
-      row.push(field.to_string())
-      field.reset()
-      empty = true
-    } else if ch == '\n' || ch == '\r' {
-      if ch == '\r' && i + 1 < chars.length() && chars[i + 1] == '\n' {
-        i += 1
-      }
-      row.push(field.to_string())
-      rows.push(row)
-      row = []
-      field.reset()
-      empty = true
-    } else {
-      field.write_char(ch)
-      empty = false
-    }
-    i += 1
-  }
-  if (!empty || row.length() > 0) && rows.length() < limit {
-    row.push(field.to_string())
-    rows.push(row)
-  }
-  rows
-}
-
-///|
 /// A table (FilePreview.kt CsvTable): a row number, then its columns, each as wide as what it holds (by its
 /// characters here: 48 to 420), the head on the canvas with a hairline under it.
 fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool) -> Unit {
   let t = @sf.theme()
-  let rows = parse_csv(words, if tab { '\t' } else { ',' }, table_rows + 1)
+  let rows = @codec.parse_csv(words, if tab { '\t' } else { ',' }, table_rows + 1)
   if rows.length() == 0 {
     return
   }
@@ -3088,7 +2728,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
               c.text("\{(z.scale * 100.0).round().to_int()}%", size=13.0, color=tint, wrap=false) |> ignore
             })
             |> ignore
-            if picture_button(c, "preview/zoom-in", "plus", tint, on, enabled=z.scale < max_scale - 0.0001, said=pv("android-chat.file.zoomIn")) {
+            if picture_button(c, "preview/zoom-in", "plus", tint, on, enabled=z.scale < z.max_scale() - 0.0001, said=pv("android-chat.file.zoomIn")) {
               z.zoom_to(z.scale * 1.25, z.bw / 2.0, z.bh / 2.0, true)
               v.wake(tap_rest_ms)
             }

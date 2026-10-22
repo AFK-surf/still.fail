@@ -144,7 +144,7 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
         drive_read_all(src, at.station, at.root.unwrap_or(""), dv_join(dir, sub), subtitle_limit, fn(r) {
           match r {
             Ok(bytes) => {
-              let cues = @player.parse_subtitles(sub, bytes)
+              let cues = @codec.parse_subtitles(sub, bytes)
               @ui.log("player: subtitle \{sub}: \{cues.length()} lines")
               pl.player.set_subtitle(true, cues)
             }

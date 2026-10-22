@@ -1,4 +1,6 @@
 import {
+  "mbui/pixels",
+  "mbui/codec",
   "mbui/ui",
   "mbui/hostapi",
   "mbui/kit",
@@ -9,7 +11,8 @@ import {
   "mbui/dmath",
 }
 
-import { "moonbitlang/core/env" } for "wbtest"
+import {
+  "mbui/pixels", "moonbitlang/core/env" } for "wbtest"
 
 options(
   targets: { "math_env_js_wbtest.mbt": [ "js" ], "math_env_native_wbtest.mbt": [ "native" ] },

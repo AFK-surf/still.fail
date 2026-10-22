@@ -54,40 +54,6 @@ fn quoted(line : String) -> String {
 }
 
 ///|
-/// Bytes from base64 (standard, padded).
-fn from_base64(s : String) -> Bytes {
-  let out : Array[Byte] = []
-  let mut acc = 0
-  let mut bits = 0
-  for ch in s {
-    let c = ch.to_int()
-    let v = if c >= 65 && c <= 90 {
-      c - 65
-    } else if c >= 97 && c <= 122 {
-      c - 97 + 26
-    } else if c >= 48 && c <= 57 {
-      c - 48 + 52
-    } else if c == 43 {
-      62
-    } else if c == 47 {
-      63
-    } else {
-      -1
-    }
-    if v < 0 {
-      continue
-    }
-    acc = ((acc << 6) | v) & 0xFFFFFF
-    bits = bits + 6
-    if bits >= 8 {
-      bits = bits - 8
-      out.push(((acc >> bits) & 0xFF).to_byte())
-    }
-  }
-  Bytes::from_array(out)
-}
-
-///|
 fn parse(text : String) -> Dl {
   let dl = {
     w: 0.0,
@@ -195,7 +161,7 @@ fn main {
     let (px, src, bytes) = im
     let mine = if bytes >= 0 {
       let data = match dl.carried.get(no) {
-        Some(b64) => from_base64(b64)
+        Some(b64) => @codec.from_base64(b64)
         None => read_bytes(path + ".img\{no}")
       }
       @hostapi.image_load_bytes(data, px)

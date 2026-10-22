@@ -1,6 +1,6 @@
-// SVG path data (as the Android app's vector drawables and its station
-// glyphs have it) flattened to polylines: M L H V C S Q T A Z, absolute and
-// relative, curves cut finer the larger they are drawn.
+// SVG path data (an SVG's `d`, an Android vector drawable's pathData) flattened to the outlines a shape is drawn
+// with (@ui.Shape, fill_cover and stroke_cover here): M L H V C S Q T A Z, absolute and relative, curves cut finer the
+// larger they are drawn.
 
 ///|
 priv struct PathReader {
@@ -9,29 +9,29 @@ priv struct PathReader {
 }
 
 ///|
-fn unit_at(s : String, i : Int) -> Int {
+fn path_unit(s : String, i : Int) -> Int {
   s.at(i).to_int()
 }
 
 ///|
-fn is_sep(c : Int) -> Bool {
+fn path_sep(c : Int) -> Bool {
   c == 32 || c == 44 || c == 10 || c == 9 || c == 13
 }
 
 ///|
-fn is_digit(c : Int) -> Bool {
+fn path_digit(c : Int) -> Bool {
   c >= 48 && c <= 57
 }
 
 ///|
 /// A command's letter (not e, E: an exponent's).
-fn is_cmd(c : Int) -> Bool {
+fn path_cmd(c : Int) -> Bool {
   ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)) && c != 69 && c != 101
 }
 
 ///|
 fn PathReader::skip(self : PathReader) -> Unit {
-  while self.i < self.s.length() && is_sep(unit_at(self.s, self.i)) {
+  while self.i < self.s.length() && path_sep(path_unit(self.s, self.i)) {
     self.i += 1
   }
 }
@@ -43,8 +43,8 @@ fn PathReader::has_number(self : PathReader) -> Bool {
   if self.i >= self.s.length() {
     return false
   }
-  let c = unit_at(self.s, self.i)
-  c == 45 || c == 43 || c == 46 || is_digit(c)
+  let c = path_unit(self.s, self.i)
+  c == 45 || c == 43 || c == 46 || path_digit(c)
 }
 
 ///|
@@ -56,36 +56,36 @@ fn PathReader::number(self : PathReader) -> Double {
   let n = s.length()
   let mut neg = false
   if self.i < n {
-    let c = unit_at(s, self.i)
+    let c = path_unit(s, self.i)
     if c == 45 || c == 43 {
       neg = c == 45
       self.i += 1
     }
   }
   let mut v = 0.0
-  while self.i < n && is_digit(unit_at(s, self.i)) {
-    v = v * 10.0 + (unit_at(s, self.i) - 48).to_double()
+  while self.i < n && path_digit(path_unit(s, self.i)) {
+    v = v * 10.0 + (path_unit(s, self.i) - 48).to_double()
     self.i += 1
   }
-  if self.i < n && unit_at(s, self.i) == 46 {
+  if self.i < n && path_unit(s, self.i) == 46 {
     self.i += 1
     let mut f = 0.1
-    while self.i < n && is_digit(unit_at(s, self.i)) {
-      v = v + (unit_at(s, self.i) - 48).to_double() * f
+    while self.i < n && path_digit(path_unit(s, self.i)) {
+      v = v + (path_unit(s, self.i) - 48).to_double() * f
       f = f / 10.0
       self.i += 1
     }
   }
-  if self.i < n && (unit_at(s, self.i) == 101 || unit_at(s, self.i) == 69) {
+  if self.i < n && (path_unit(s, self.i) == 101 || path_unit(s, self.i) == 69) {
     self.i += 1
     let mut eneg = false
-    if self.i < n && (unit_at(s, self.i) == 45 || unit_at(s, self.i) == 43) {
-      eneg = unit_at(s, self.i) == 45
+    if self.i < n && (path_unit(s, self.i) == 45 || path_unit(s, self.i) == 43) {
+      eneg = path_unit(s, self.i) == 45
       self.i += 1
     }
     let mut e = 0
-    while self.i < n && is_digit(unit_at(s, self.i)) {
-      e = e * 10 + (unit_at(s, self.i) - 48)
+    while self.i < n && path_digit(path_unit(s, self.i)) {
+      e = e * 10 + (path_unit(s, self.i) - 48)
       self.i += 1
     }
     let mut k = 1.0
@@ -106,7 +106,7 @@ fn PathReader::number(self : PathReader) -> Double {
 fn PathReader::flag(self : PathReader) -> Bool {
   self.skip()
   if self.i < self.s.length() {
-    let c = unit_at(self.s, self.i)
+    let c = path_unit(self.s, self.i)
     self.i += 1
     return c == 49
   }
@@ -116,7 +116,7 @@ fn PathReader::flag(self : PathReader) -> Bool {
 ///|
 /// How many pieces a curve this long (in units) is cut into, drawn at
 /// `scale` pixels a unit.
-fn pieces(len : Double, scale : Double) -> Int {
+fn path_pieces(len : Double, scale : Double) -> Int {
   let n = (len * scale / 3.0).ceil().to_int()
   if n < 4 {
     4
@@ -128,7 +128,7 @@ fn pieces(len : Double, scale : Double) -> Int {
 }
 
 ///|
-fn dist(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Double {
+fn path_dist(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Double {
   let dx = x1 - x0
   let dy = y1 - y0
   (dx * dx + dy * dy).sqrt()
@@ -202,7 +202,7 @@ fn arc_points(
   } else if sweep && dt < 0.0 {
     dt = dt + 2.0 * pi
   }
-  let n = pieces(dt.abs() * (if rx > ry { rx } else { ry }), scale)
+  let n = path_pieces(dt.abs() * (if rx > ry { rx } else { ry }), scale)
   for k in 1..=n {
     let t = t1 + dt * k.to_double() / n.to_double()
     let x = rx * @dmath.cos(t)
@@ -213,9 +213,9 @@ fn arc_points(
 }
 
 ///|
-/// The subpaths of path data `d`: each its points (x y …) and whether it is
-/// closed; curves cut for drawing at `scale` pixels a unit.
-fn path_subpaths(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
+/// The subpaths of path data `d`: each its points (x y …) and whether it is closed (a shape's outlines); curves cut
+/// for drawing at `scale` pixels a unit.
+pub fn svg_path(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
   let r : PathReader = { s: d, i: 0 }
   let subs : Array[(Array[Double], Bool)] = []
   let mut cur : Array[Double] = []
@@ -234,8 +234,8 @@ fn path_subpaths(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
     if r.i >= d.length() {
       break
     }
-    let ch = unit_at(d, r.i)
-    if is_cmd(ch) {
+    let ch = path_unit(d, r.i)
+    if path_cmd(ch) {
       cmd = ch
       r.i += 1
       if cmd == 90 || cmd == 122 {
@@ -300,8 +300,8 @@ fn path_subpaths(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
         let c2y = r.number() + oy
         let ex = r.number() + ox
         let ey = r.number() + oy
-        let n = pieces(
-          dist(x, y, c1x, c1y) + dist(c1x, c1y, c2x, c2y) + dist(c2x, c2y, ex, ey),
+        let n = path_pieces(
+          path_dist(x, y, c1x, c1y) + path_dist(c1x, c1y, c2x, c2y) + path_dist(c2x, c2y, ex, ey),
           scale,
         )
         if cur.length() == 0 {
@@ -340,7 +340,7 @@ fn path_subpaths(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
         }
         let ex = r.number() + ox
         let ey = r.number() + oy
-        let n = pieces(dist(x, y, qx, qy) + dist(qx, qy, ex, ey), scale)
+        let n = path_pieces(path_dist(x, y, qx, qy) + path_dist(qx, qy, ex, ey), scale)
         if cur.length() == 0 {
           cur = [x, y]
         }

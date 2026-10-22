@@ -37,3 +37,70 @@
 ///|
 /// The channel the system's say is posted on.
 pub let system_channel : String = "system"
+
+///|
+/// One thing the system said (a message on `system_channel` says one or more: see above).
+pub(all) enum SystemSaid {
+  /// on screen again after `away` ms off it
+  Shown(away~ : Double)
+  /// opened with one of the app's links
+  Link(String)
+  /// shown over another app (true), or in its own window again (false)
+  Over(Bool)
+  /// how far the system bars reach in over the app's view from each edge, in points
+  Bars(top~ : Double, bottom~ : Double, left~ : Double, right~ : Double)
+  /// the device's default network became another one
+  Network
+  /// a package handed to the installer was not, the system's page for that leave opened instead
+  InstallAllow(name~ : String)
+  /// a package could not be installed
+  InstallFailed(name~ : String, error~ : String)
+} derive(Eq, Show)
+
+///|
+/// What a message on `system_channel` says, in this order: the link, over or not, the bars, shown, the installer,
+/// the network (what is not well formed left out).
+pub fn system_said(json : String) -> Array[SystemSaid] {
+  let out : Array[SystemSaid] = []
+  let v = @json.parse(json) catch { _ => return out }
+  guard v is Object(m) else { return out }
+  let number = fn(o : Map[String, Json], k : String) {
+    match o.get(k) {
+      Some(Number(n, ..)) => n
+      _ => 0.0
+    }
+  }
+  let text = fn(o : Map[String, Json], k : String) {
+    match o.get(k) {
+      Some(String(s)) => s
+      _ => ""
+    }
+  }
+  match m.get("link") {
+    Some(String(url)) => out.push(Link(url))
+    _ => ()
+  }
+  match m.get("over") {
+    Some(True) => out.push(Over(true))
+    Some(False) => out.push(Over(false))
+    _ => ()
+  }
+  match m.get("bars") {
+    Some(Object(b)) =>
+      out.push(Bars(top=number(b, "top"), bottom=number(b, "bottom"), left=number(b, "left"), right=number(b, "right")))
+    _ => ()
+  }
+  match m.get("shown") {
+    Some(Object(s)) => out.push(Shown(away=number(s, "away")))
+    _ => ()
+  }
+  match m.get("install") {
+    Some(Object(i)) if i.get("allow") is Some(True) => out.push(InstallAllow(name=text(i, "name")))
+    Some(Object(i)) => out.push(InstallFailed(name=text(i, "name"), error=text(i, "error")))
+    _ => ()
+  }
+  if m.get("network") is Some(True) {
+    out.push(Network)
+  }
+  out
+}

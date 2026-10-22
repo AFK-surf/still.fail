@@ -20,8 +20,8 @@ test "kinds by name, as the Android app's kindOf" {
   assert_eq(preview_kind("app.mts").2, "ts")
   assert_true(preview_kind("build.log").0 == Some(KText))
   assert_true(preview_kind("备份.bin").0 is None)
-  assert_true(looks_like_text(utf8_bytes("纯文本 plain")))
-  assert_true(!looks_like_text(b"\x00\x01\x02"))
+  assert_true(@codec.looks_like_text(@utf8.encode("纯文本 plain")))
+  assert_true(!@codec.looks_like_text(b"\x00\x01\x02"))
 }
 
 ///|
