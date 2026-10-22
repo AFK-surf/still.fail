@@ -110,7 +110,9 @@ own prompt is not used (it would fight the window).
 On Windows stillfail-screen (`stillfail-screen.exe`, beside `mesh.node` in the release; docs/station-ts-native.md §5)
 does it, with nothing to grant: the station runs in its person's session (the logon task), where the display can be
 captured and driven. A view is a process of its own (`stillfail-screen view`, the helper's messages on its standard
-input and output, ended as its input is). Windows.Graphics.Capture captures the main display (the cursor drawn in, no
+input and output, ended as its input is). One that ends by itself (the display went or another became the main one, the
+graphics driver started again, a crash) is started again and the view goes on from a key frame with its config; past
+three times a minute the view ends. Windows.Graphics.Capture captures the main display (the cursor drawn in, no
 yellow border on Windows 11; a picture where nothing changed, by its dirty regions on 11 24H2 on, is not a new one); the
 GPU's video processor scales it into `maxWidth`×`maxHeight` as NV12; Media Foundation encodes H.264 on the hardware
 encoder (its MFT given the D3D11 textures; Microsoft's software encoder where there is none) with low latency

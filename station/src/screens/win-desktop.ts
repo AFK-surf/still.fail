@@ -16,7 +16,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
-import type { ClipType, Codec, ScreenAccess, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
+import type { Clip, ClipType, Codec, Frame, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
 import { WinInput } from "./win-input.ts";
 
 export const SCREEN_BINARY = "stillfail-screen.exe";
@@ -56,7 +56,7 @@ export class WindowsDesktop implements ScreenSource {
   readonly kind = "desktop" as const;
   readonly reveal = true;
   readonly #o: WindowsDesktopOptions;
-  readonly #views = new Set<HelperView>();
+  readonly #views = new Set<LastingView>();
   #status: ScreenStatus | null = null;
   #looked = 0;
   #looking: Promise<void> | null = null;
@@ -128,17 +128,30 @@ export class WindowsDesktop implements ScreenSource {
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh();
     if (this.#status?.capture === false) throw new ScreenRefused(501, "station.screen.unsupported", {}, this.access());
-    const child = (this.#o.start ?? start)(binary, ["view"]);
-    const pipe = childPipe(child);
-    child.stdin!.write(`${JSON.stringify({ codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight })}\n`);
-    const view = new HelperView(codec, pipe, () => this.#views.delete(view), new WinInput());
+    const input = new WinInput();
+    const ask = { codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight };
+    let first: HelperView;
+    try {
+      first = await this.#start(binary, ask, input);
+    } catch (error) {
+      throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message });
+    }
+    const view: LastingView = new LastingView(first, () => this.#start(binary, ask, input), () => this.#views.delete(view));
     this.#views.add(view);
+    return view;
+  }
+
+  /// One process for a view, answering (its info had); fails with what it said.
+  async #start(binary: string, ask: { codec: Codec; maxWidth: number; maxHeight: number }, input: WinInput): Promise<HelperView> {
+    const child = (this.#o.start ?? start)(binary, ["view"]);
+    child.stdin!.write(`${JSON.stringify(ask)}\n`);
+    const view = new HelperView(ask.codec, childPipe(child), () => {}, input);
     try {
       await view.ready;
       return view;
     } catch (error) {
       view.close();
-      throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message });
+      throw error;
     }
   }
 
@@ -146,6 +159,102 @@ export class WindowsDesktop implements ScreenSource {
   close(): Promise<void> {
     for (const view of [...this.#views]) view.close();
     return Promise.resolve();
+  }
+}
+
+/// Started again this many times within RESTARTS_MS, a view ends instead (the display is not to be had).
+const RESTARTS = 3;
+const RESTARTS_MS = 60_000;
+
+/// A view that outlives its process: one that ended without being asked (the display went or another became the main
+/// one, the graphics driver started again, a crash) is started again, and the view goes on from a key frame with its
+/// config (a client takes a new config at any frame), the clipboard still watched. Closed, or started again too often,
+/// it ends as any view does.
+export class LastingView implements ScreenView {
+  #view: HelperView;
+  readonly #again: () => Promise<HelperView>;
+  readonly #gone: () => void;
+  #closed = false;
+  #restarts: number[] = [];
+  /// The process being started again: every pending `next` waits for the one.
+  #restarting: Promise<boolean> | null = null;
+  #heard: ((clip: Clip) => void) | null = null;
+  #unwatch: (() => void) | null = null;
+
+  constructor(view: HelperView, again: () => Promise<HelperView>, gone: () => void) {
+    this.#view = view;
+    this.#again = again;
+    this.#gone = gone;
+  }
+
+  async next(): Promise<Frame | null> {
+    for (;;) {
+      const view = this.#view;
+      const frame = await view.next();
+      if (frame !== null || this.#closed) return frame;
+      // Another `next` already started it again: this one asks the new process.
+      if (this.#view === view && !(await (this.#restarting ??= this.#restart().finally(() => (this.#restarting = null))))) return null;
+      if (this.#closed) return null;
+    }
+  }
+
+  async #restart(): Promise<boolean> {
+    const now = wall.now();
+    this.#restarts = [...this.#restarts.filter((t) => now - t < RESTARTS_MS), now];
+    if (this.#restarts.length > RESTARTS) {
+      log.warn("screens", "stillfail-screen keeps ending; the view ends");
+      this.close();
+      return false;
+    }
+    try {
+      const view = await this.#again();
+      if (this.#closed) {
+        view.close();
+        return false;
+      }
+      log.info("screens", "stillfail-screen ended by itself; started again");
+      this.#view = view;
+      if (this.#heard !== null) this.#unwatch = view.watchClipboard(this.#heard);
+      return true;
+    } catch (error) {
+      log.warn("screens", "stillfail-screen did not start again", { error: (error as Error).message });
+      this.close();
+      return false;
+    }
+  }
+
+  keyframe() {
+    this.#view.keyframe();
+  }
+
+  input(event: ScreenInput): Promise<void> {
+    return this.#view.input(event);
+  }
+
+  setClipboard(clip: Clip, paste: boolean): Promise<void> {
+    return this.#view.setClipboard(clip, paste);
+  }
+
+  watchClipboard(heard: (clip: Clip) => void): () => void {
+    this.#heard = heard;
+    this.#unwatch = this.#view.watchClipboard(heard);
+    return () => {
+      if (this.#heard !== heard) return;
+      this.#heard = null;
+      this.#unwatch?.();
+      this.#unwatch = null;
+    };
+  }
+
+  reveal(path: string): Promise<void> {
+    return this.#view.reveal(path);
+  }
+
+  close() {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.#view.close();
+    this.#gone();
   }
 }
 

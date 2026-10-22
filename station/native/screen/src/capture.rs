@@ -113,6 +113,10 @@ pub struct Capture {
     device: IDirect3DDevice,
     size: SizeInt32,
     token: i64,
+    item: GraphicsCaptureItem,
+    closed: i64,
+    /// The display it captures.
+    pub monitor: HMONITOR,
 }
 
 impl Capture {
@@ -123,8 +127,14 @@ impl Capture {
         let device: IDirect3DDevice = unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi)? }.cast()?;
         let size = item.Size()?;
         let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size)?;
+        let told = arrived.clone();
         let token = pool.FrameArrived(&TypedEventHandler::new(move |_, _| {
-            let _ = arrived.send(super::view::Msg::Frame);
+            let _ = told.send(super::view::Msg::Frame);
+            Ok(())
+        }))?;
+        // The display gone (unplugged, turned off, its driver started again): the view with it.
+        let closed = item.Closed(&TypedEventHandler::new(move |_, _| {
+            let _ = arrived.send(super::view::Msg::Closed);
             Ok(())
         }))?;
         // No yellow border round the display (Windows 11; asked first, as an app without a package is let at once).
@@ -135,7 +145,7 @@ impl Capture {
         let _ = session.SetIsCursorCaptureEnabled(true);
         let _ = session.SetIsBorderRequired(false);
         session.StartCapture()?;
-        Ok(Capture { pool, session, device, size, token })
+        Ok(Capture { pool, session, device, size, token, item, closed, monitor })
     }
 
     /// The newest picture since the last (copied into `into`, made or remade at its size), its time (µs, the system's
@@ -184,6 +194,7 @@ impl Capture {
 impl Drop for Capture {
     fn drop(&mut self) {
         let _ = self.pool.RemoveFrameArrived(self.token);
+        let _ = self.item.RemoveClosed(self.closed);
         let _ = self.session.Close();
         let _ = self.pool.Close();
     }

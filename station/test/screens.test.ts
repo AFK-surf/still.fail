@@ -533,7 +533,8 @@ test("input as Windows posts it: buttons, a wheel in its units, keys by their sc
 
 /// stillfail-screen as native/screen's is, as a process (node running this): `status` says a display; `view` answers
 /// its request with its info (or, asked for a 1-pixel view, that it cannot capture), each next with a frame (the first
-/// with its config), and notes the request and each input in its log, a JSON line each.
+/// with its config; asked for a 2-pixel view, it ends by itself after the second), and notes the request and each
+/// input in its log, a JSON line each.
 const FAKE_SCREEN = `
 const fs = require("node:fs");
 const [mode, log] = process.argv.slice(2);
@@ -556,6 +557,7 @@ process.stdin.on("data", (chunk) => {
       n++;
       if (n === 1) { const c = Buffer.alloc(8); c.writeUInt32BE(1280, 0); c.writeUInt32BE(800, 4); out(2, Buffer.concat([c, Buffer.from([1, 66, 0, 31])])); }
       const f = Buffer.alloc(9); f[0] = n === 1 ? 1 : 0; f.writeBigUInt64BE(BigInt(n * 1000), 1); out(3, Buffer.concat([f, Buffer.from([0, 0, 0, 1, n])]));
+      if (request.maxWidth === 2 && n === 2) process.stdout.end(() => process.exit(3));
     } else if (kind === 3) fs.appendFileSync(log, payload.toString() + "\\n");
   }
 });
@@ -604,6 +606,31 @@ test("Windows' desktop: a stillfail-screen process a view, asked for each frame,
   assert.equal(await pending, null);
   // One that cannot capture says why.
   await assert.rejects(desktop.open({ maxWidth: 1, maxHeight: 1, codecs: ["jpeg"] }), (e: ScreenRefused) => e.status === 503 && /no display to capture/.test(e.message));
+  await desktop.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("Windows' desktop: a view whose process ends by itself goes on in a new one, from its config; one that keeps ending ends", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sf-winscreen-"));
+  const script = join(dir, "fake-screen.cjs");
+  const log = join(dir, "log");
+  writeFileSync(script, FAKE_SCREEN);
+  writeFileSync(log, "");
+  let views = 0;
+  const start = (_binary: string, args: string[]) => (args[0] === "view" && views++, spawn(process.execPath, [script, args[0]!, log], { stdio: ["pipe", "pipe", "inherit"] }));
+  const desktop = new WindowsDesktop({ binary: "stillfail-screen.exe", changed: () => {}, start });
+  const view = await desktop.open({ maxWidth: 2, maxHeight: 2, codecs: ["h264"] });
+  const frames = [];
+  for (let f = await view.next(); f !== null; f = await view.next()) frames.push(f);
+  // Two frames a process: the first and three started again, each from its config and a key frame; then it ends.
+  assert.equal(views, 4);
+  assert.equal(frames.length, 8);
+  assert.deepEqual(frames.map((f) => f.key), [true, false, true, false, true, false, true, false]);
+  assert.ok(frames.filter((_, i) => i % 2 === 0).every((f) => f.config?.codec === "h264"));
+  // Ended: closed as a view the station closes is (nothing more started).
+  view.close();
+  assert.equal(await view.next(), null);
+  assert.equal(views, 4);
   await desktop.close();
   rmSync(dir, { recursive: true, force: true });
 });

@@ -51,6 +51,8 @@ pub enum Msg {
     Keyframe,
     /// The capture has a new picture.
     Frame,
+    /// The display captured went.
+    Closed,
 }
 
 struct Options {
@@ -156,6 +158,8 @@ struct View {
     staging: Option<ID3D11Texture2D>,
     /// When the picture in the encoder went in.
     pushed_at: Instant,
+    /// When which display is the main one was looked at last.
+    looked: Instant,
 }
 
 fn failed(out: &Out, error: &windows::core::Error, code: &str) -> windows::core::Error {
@@ -189,6 +193,7 @@ impl View {
             jpeg_size: (0, 0),
             staging: None,
             pushed_at: Instant::now(),
+            looked: Instant::now(),
         };
         let encoder = if view.options.jpeg {
             "JPEG, quality 0.8".to_string()
@@ -240,6 +245,10 @@ impl View {
                         self.fresh = true;
                     }
                 }
+                Some(Msg::Closed) => {
+                    out.json(4, json!({ "stopped": "the display went" }));
+                    return;
+                }
                 Some(Msg::Frame) => match self.capture.take(&self.gpu, &mut self.latest) {
                     Ok(Some(at)) => {
                         self.latest_at = at;
@@ -252,6 +261,15 @@ impl View {
                     }
                 },
                 None => {}
+            }
+            // Another display made the main one: this view ends (the station opens the main one again), as its
+            // input would go to the other.
+            if self.looked.elapsed() > Duration::from_secs(1) {
+                self.looked = Instant::now();
+                if main_display().0 != self.capture.monitor {
+                    out.json(4, json!({ "stopped": "another display is the main one now" }));
+                    return;
+                }
             }
             if let Err(e) = self.pump(out) {
                 out.json(4, json!({ "stopped": e.message() }));
