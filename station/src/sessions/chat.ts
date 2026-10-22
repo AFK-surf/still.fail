@@ -29,7 +29,11 @@ export type ChatEvent =
   | { type: "message"; message: InboundMessage }
   | { type: "changed"; channel: string; threadTs: string; ts: string; text: string };
 
-export type ChatMessage = { ts: string; user: string; text: string; fromBot: boolean; files?: InboundFile[] };
+/// A channel or group a bot is in. `kind`: a Slack channel (a new thread in it); a Feishu topic group (a new topic); a
+/// Feishu group (the group's conversation, taken over: docs/feishu.md「会话怎么分」).
+export type Place = { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean };
+
+export type ChatMessage ={ ts: string; user: string; text: string; fromBot: boolean; files?: InboundFile[] };
 
 /// `picture`: their profile picture's address, where the platform gives one; "" when it gives none, absent when looked up
 /// before pictures were kept.
@@ -76,6 +80,15 @@ export interface ChatSurface {
   knownChannel?(channel: string): string | null;
   /// A channel's name without the #, where the platform says; null for direct messages.
   channelName?(channel: string): Promise<string | null>;
+  /// Where the bot can start a conversation (a chat relayed there, sessions/relay.ts): the channels and groups it is in.
+  places?(): Promise<Place[]>;
+  /// Starts a conversation in one of its places with `message`, as the station: the thread it is from now on.
+  begin?(channel: string, message: string): Promise<{ thread: ThreadRef; ts: string }>;
+  /// The thread a link to one of its messages names (a message's own, or the thread a reply is in); null for a link of
+  /// another workspace, or none of its.
+  threadOf?(link: string): ThreadRef | null;
+  /// Where a thread opens in the platform's app, for people; null where it cannot say.
+  permalink?(thread: ThreadRef): string | null;
   /// Messages in the thread strictly before `before`, oldest first, at most `limit`: what was said before the station
   /// joined a thread. Undefined where the platform cannot say (the station cannot join late there).
   history?(thread: ThreadRef, before: string, limit: number): Promise<ChatMessage[]> | undefined;

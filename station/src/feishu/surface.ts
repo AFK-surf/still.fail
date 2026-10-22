@@ -8,7 +8,7 @@ import WebSocket from "ws";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
-import type { ChatEvent, ChatMessage, ChatSurface, Handler, InboundFile, Person, ThreadRef } from "../sessions/chat.ts";
+import type { ChatEvent, ChatMessage, ChatSurface, Handler, InboundFile, Person, Place, ThreadRef } from "../sessions/chat.ts";
 import type { NameBook } from "../slack/names.ts";
 import type { SlackIdentity, SocketStatus } from "../slack/surface.ts";
 import { type Answer, answeredCard, inline, questionCard, textCards } from "./cards.ts";
@@ -491,6 +491,62 @@ export class FeishuSurface implements ChatSurface {
     }
     if (first === null) throw new Error("nothing to post");
     return first;
+  }
+
+  /// The groups the bot is in (`GET /im/v1/chats`), each a topic group or not as Feishu says of it.
+  async places(): Promise<Place[]> {
+    const found: { id: string; name: string }[] = [];
+    let token = "";
+    for (let page = 0; page < 10; page++) {
+      const d = (await this.client.api("GET", "/open-apis/im/v1/chats", null, { page_size: "100", ...(token ? { page_token: token } : {}) }))?.data ?? {};
+      for (const c of Array.isArray(d.items) ? d.items : []) {
+        const id = text(c?.chat_id);
+        if (id !== "") found.push({ id, name: text(c?.name) || id });
+      }
+      token = text(d.page_token);
+      if (d.has_more !== true || token === "") break;
+    }
+    const out: Place[] = [];
+    for (const c of found) {
+      const info = await this.chatInfo(c.id);
+      if (!info.p2p) out.push({ id: c.id, name: info.name ?? c.name, kind: info.topics ? "topics" : "group" });
+    }
+    return out;
+  }
+
+  /// The chat in Feishu's (or Lark's) app; a topic opens with its chat.
+  permalink(thread: ThreadRef): string | null {
+    const app = this.domain === "lark" ? "https://applink.larksuite.com" : "https://applink.feishu.cn";
+    return `${app}/client/chat/open?openChatId=${encodeURIComponent(thread.channel)}`;
+  }
+
+  /// A new message in the chat, as the agent's words are (cards): in a topic group a topic of its own; elsewhere the
+  /// chat's conversation from now on, as a new one asked for in it begins (docs/feishu.md「会话怎么分」).
+  async begin(chat: string, message: string): Promise<{ thread: ThreadRef; ts: string }> {
+    const { topics } = await this.chatInfo(chat);
+    let first: Json = null;
+    let thread: ThreadRef | null = null;
+    for (const c of textCards(message)) {
+      if (thread !== null) {
+        await this.send(thread, "interactive", inline(c));
+        continue;
+      }
+      first = (await this.client.api("POST", "/open-apis/im/v1/messages", { receive_id: chat, msg_type: "interactive", content: inline(c) }, { receive_id_type: "chat_id" }))?.data ?? {};
+      const id = text(first.message_id);
+      if (id === "") throw new Error("feishu gave no message_id");
+      let topic = topics ? text(first.thread_id) : "";
+      // A topic group's message is a topic, whose id Feishu may leave out of the answer: read the message back.
+      if (topics && topic === "") topic = text((await this.client.api("GET", `/open-apis/im/v1/messages/${encodeURIComponent(id)}`))?.data?.items?.[0]?.thread_id);
+      if (topic !== "") {
+        this.threads.heardTopic(this.connect, topic, id);
+        thread = { channel: chat, threadTs: topic };
+      } else {
+        this.threads.begin(this.connect, chat, id);
+        thread = { channel: chat, threadTs: id };
+      }
+    }
+    if (thread === null) throw new Error("nothing to post");
+    return { thread, ts: text(first?.message_id) };
   }
 
   async download(file: InboundFile): Promise<Uint8Array> {

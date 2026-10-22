@@ -9,7 +9,7 @@ export interface Command {
   label: string;
   icon: ComponentType<IconProps>;
   /** The part of ⌘K's list it is under. */
-  group: "update" | "settings";
+  group: "chat" | "update" | "settings";
   /** Other words it is found by (its name in English, as an id is). */
   words?: string;
   /** Only once something is typed: one of many alike (a settings page), or rarely wanted. */

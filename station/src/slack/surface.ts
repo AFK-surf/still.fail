@@ -8,7 +8,7 @@ import WebSocket from "ws";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
-import { type ChatEvent, type ChatMessage, type ChatSurface, type Handler, type InboundFile, type Person, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
+import { type ChatEvent, type ChatMessage, type ChatSurface, type Handler, type InboundFile, type Person, type Place, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
 import { answerOf, answeredBlocks, markdown, questionBlocks } from "./cards.ts";
 import type { NameBook } from "./names.ts";
 import { ThreadStatus } from "./status.ts";
@@ -591,6 +591,73 @@ export class SlackSurface implements ChatSurface {
       ],
       this.botToken,
     );
+  }
+
+  /// The channels the bot is in, public and private (users.conversations), at most a couple of thousand.
+  async places(): Promise<Place[]> {
+    const out: Place[] = [];
+    let cursor = "";
+    for (let page = 0; page < 10; page++) {
+      const params: Params = [
+        ["types", "public_channel,private_channel"],
+        ["exclude_archived", "true"],
+        ["limit", "200"],
+      ];
+      if (cursor !== "") params.push(["cursor", cursor]);
+      const d = await this.client.api("users.conversations", params, this.botToken);
+      for (const c of Array.isArray(d?.channels) ? d.channels : []) {
+        const id = text(c?.id);
+        if (id === "") continue;
+        out.push({ id, name: text(c?.name) || id, kind: "channel", ...(c?.is_private === true ? { private: true } : {}) });
+      }
+      cursor = text(d?.response_metadata?.next_cursor);
+      if (cursor === "") break;
+    }
+    return out;
+  }
+
+  /// The thread in Slack: its workspace's address, the channel, its root's ts without the dot.
+  permalink(thread: ThreadRef): string | null {
+    const url = this.me?.url ?? "";
+    return url === "" ? null : `${url.replace(/\/+$/, "")}/archives/${thread.channel}/p${thread.threadTs.replace(".", "")}`;
+  }
+
+  /// A message's link in this workspace (https://acme.slack.com/archives/C1/p1700000000000100, a reply's with
+  /// ?thread_ts=): the thread it is in.
+  threadOf(link: string): ThreadRef | null {
+    let url: URL;
+    let home: URL;
+    try {
+      url = new URL(link.trim());
+      home = new URL(this.me?.url ?? "");
+    } catch {
+      return null;
+    }
+    if (url.host !== home.host) return null;
+    const found = /^\/archives\/([A-Z0-9]+)\/p(\d{10})(\d{6})\/?$/.exec(url.pathname);
+    if (found === null) return null;
+    const replyTo = url.searchParams.get("thread_ts");
+    return { channel: found[1]!, threadTs: replyTo !== null && /^\d{10}\.\d{6}$/.test(replyTo) ? replyTo : `${found[2]}.${found[3]}` };
+  }
+
+  /// A new message in the channel, its thread's root: what is too long for one message goes on in the thread.
+  async begin(channel: string, message: string): Promise<{ thread: ThreadRef; ts: string }> {
+    const parts = splitForSlack(message, 3500).filter((t) => t !== "");
+    let root = "";
+    for (const part of parts) {
+      const params: Params = [
+        ["channel", channel],
+        ["text", part],
+        ["blocks", JSON.stringify([markdown(part)])],
+        ["unfurl_links", "false"],
+      ];
+      if (root !== "") params.push(["thread_ts", root]);
+      const posted = await this.client.api("chat.postMessage", params, this.botToken);
+      if (root === "") root = text(posted?.ts);
+      if (root === "") throw new Error("slack chat.postMessage gave no ts");
+    }
+    if (root === "") throw new Error("nothing to post");
+    return { thread: { channel, threadTs: root }, ts: root };
   }
 
   /// Sends a file's bytes to Slack (not yet shared anywhere): its file id and title.

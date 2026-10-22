@@ -72,6 +72,8 @@ export const PARAMS: Record<string, string> = {
   "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
   "chat.pin": "pinned?:boolean session:string",
+  "chat.relayPlaces": "thread:number",
+  "chat.relay": "thread:number connect?:string channel?:string link?:string note?:string",
   "decision.dismiss": "thread:number seq:number",
   "decision.close": "thread:number seq:number option:string",
   "chat.report": "thread:number seq:number",
@@ -326,6 +328,17 @@ function stationOp(name: string, params: unknown): Request | null {
     }
     case "chat.pin":
       return op(p.bool("pinned") ? "PUT" : "DELETE", () => `/sessions/${p.at("session")}/pin`, null, session("session"));
+    // Where a chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in, read as asked.
+    case "chat.relayPlaces": {
+      const thread = p.u64("thread");
+      return op("GET", () => `/threads/${thread}/relay`, null, NONE);
+    }
+    // The chat relayed to one of them (`connect`, `channel`) or to the Slack thread of a message's `link`, the person's
+    // note said with it: where it went on.
+    case "chat.relay": {
+      const thread = p.u64("thread");
+      return op("POST", () => `/threads/${thread}/relay`, p.pick(["connect", "channel", "link", "note"]), { kind: "thread", archived: false });
+    }
     case "decision.dismiss": {
       const thread = p.u64("thread");
       const body = { n: p.u64("seq") };

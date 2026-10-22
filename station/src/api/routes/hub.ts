@@ -27,6 +27,7 @@ import {
   openChat,
   say,
 } from "../../sessions/lifecycle.ts";
+import { relay, relayPlaces } from "../../sessions/relay.ts";
 import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
@@ -535,6 +536,33 @@ export const routes = (tools: Tools): Route[] => {
           session(s, key, r);
           await as(400, () => addToThread(a.hub, t.id, key));
           return threadView(r, t.id);
+        }),
+    },
+    // Where the chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in.
+    {
+      method: "GET",
+      pattern: /^\/*threads\/+([^/]+)\/+relay(?:\/.*)?$/,
+      handle: (_r, [rawId]) =>
+        write(async (s, a) => {
+          const t = thread(s, segment(rawId!));
+          return ok({ connects: await as(400, () => relayPlaces(a.hub, t)) });
+        }),
+    },
+    // The chat relayed to one of them (`{connect, channel}`), or to the Slack thread of a message's link (`{link}`), with
+    // a `note`: where it went on.
+    {
+      method: "POST",
+      pattern: /^\/*threads\/+([^/]+)\/+relay(?:\/.*)?$/,
+      handle: (r, [rawId]) =>
+        write(async (s, a) => {
+          const t = thread(s, segment(rawId!));
+          const i = input(r);
+          const connect = text(i.connect).trim();
+          const channel = text(i.channel).trim();
+          const link = text(i.link).trim();
+          if (link === "" && (connect === "" || channel === "")) throw new Refused(400, tr(r.lang, "station.relay.pick"));
+          const by = r.viewer.name.trim() || r.viewer.email;
+          return ok(await as(400, () => relay(a.hub, t, by, link !== "" ? { link } : { connect, channel }, chars(text(i.note), 2000))));
         }),
     },
     // A chat archived or shown again: with its session when it is that session's own.

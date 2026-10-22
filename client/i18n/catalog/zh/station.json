@@ -484,5 +484,10 @@
   "station.context.cannotCompact": "{name} 不支持压缩上下文",
   "station.notice.compacted": "已压缩上下文",
   "station.notice.compactFailed": "无法压缩上下文：{error}",
-  "station.notice.cleared": "已清空上下文，下一条消息将开始新的对话"
+  "station.notice.cleared": "已清空上下文，下一条消息将开始新的对话",
+  "station.relay.opening": "{who} 把 still.fail 的对话 {chat} 接力到了这里，后面在这里接着聊。",
+  "station.relay.relayed": "{who} 把对话接力到了 {place}",
+  "station.relay.untitled": "未命名对话",
+  "station.relay.pick": "请选择要接力到的连接和频道",
+  "station.relay.threadIn": "{place} 的一个 thread"
 }

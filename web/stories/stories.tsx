@@ -47,6 +47,7 @@ import { softwareDemo } from "./software.ts";
 import { lockDemo } from "./lock.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { relaysDemo } from "./relays.ts";
+import { relayDemo } from "./relay.ts";
 import { Console } from "../src/admin/console.tsx";
 import { ACCOUNT } from "../src/demo/station.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
@@ -718,6 +719,9 @@ export const stories: Story[] = [
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
   { id: "app-chat-history-turns", group: "应用", title: "执行历史 · 一轮一轮", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }], demo: historyTurns },
   { id: "app-chat-side", group: "应用", title: "对话 · 侧栏打开", app: true, steps: [{ click: '[aria-label="打开侧栏"]' }] },
+  { id: "app-chat-relay", group: "应用", title: "对话 · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="接力到频道…"]' }] },
+  { id: "app-chat-relay-picked", group: "应用", title: "对话 · 接力到频道 · 选中一个", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="接力到频道…"]' }, { text: "#cue-dev" }] },
+  { id: "app-chat-relay-none", group: "应用", title: "对话 · 接力到频道 · 没有连接", app: true, demo: relayDemo([]), steps: [{ click: '[aria-label="接力到频道…"]' }] },
   { id: "app-sidebar-folded", group: "应用", title: "侧栏收起", app: true, steps: [{ click: '[aria-label="对话"]' }] },
   { id: "app-sidebar-peek", group: "应用", title: "侧栏收起后临时展开", app: true, steps: [{ click: '[aria-label="对话"]' }, { hover: '[aria-label="对话"]' }, { move: [150, 60] }] },
   { id: "app-new-chat", group: "应用", title: "新建对话", app: true, steps: [{ text: "新建对话" }] },
@@ -970,6 +974,7 @@ export const stories: Story[] = [
   { id: "panel-file-card-missing", group: "小面板", title: "消息里的文件卡片 · 找不到", app: true, peek: "missing", steps: [{ move: [1, 1] }, { hover: 'button[class*="fileChip"]' }] },
   { id: "panel-station-card", group: "小面板", title: "station 卡片", app: true, steps: [{ move: [1, 1] }, { hover: "header >> text=/Studio|这台机器/" }] },
   { id: "panel-switcher", group: "小面板", title: "⌘K", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }] },
+  { id: "panel-switcher-relay", group: "小面板", title: "⌘K · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }, { key: "r" }, { key: "e" }, { key: "l" }, { key: "a" }] },
   { id: "panel-switcher-search", group: "小面板", title: "⌘K · 搜索", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }, { key: "c" }, { key: "s" }, { key: "v" }] },
   { id: "panel-switcher-kind", group: "小面板", title: "⌘K · 一类结果", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }, { key: "c" }, { key: "s" }, { key: "v" }, { click: "text=查看更多" }] },
   {

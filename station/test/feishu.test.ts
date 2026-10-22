@@ -216,6 +216,33 @@ test("surface: a topic group's topics are conversations of their own, answered i
   }
 });
 
+test("surface: relaying lists the groups the bot is in, topic group or not; begins a topic in a topic group, the conversation of a group", async () => {
+  const r = await surfaceRig({ topics: true });
+  try {
+    r.fake.answer("GET /open-apis/im/v1/chats", { code: 0, data: { items: [{ chat_id: "oc_t", name: "话题群" }, { chat_id: "oc_g", name: "项目群" }], has_more: false } });
+    assert.deepEqual(await r.surface.places(), [{ id: "oc_t", name: "话题群", kind: "topics" }, { id: "oc_g", name: "项目群", kind: "group" }]);
+    let n = 0;
+    r.fake.answer("POST /open-apis/im/v1/messages", (seen: Json) => ({ code: 0, data: { message_id: `om_r${++n}`, ...(seen.body.receive_id === "oc_t" && n === 1 ? { thread_id: "omt_9" } : {}) } }));
+    // A topic group: the message is a topic, answered in it from now on.
+    assert.deepEqual(await r.surface.begin("oc_t", "接力到这里"), { thread: { channel: "oc_t", threadTs: "omt_9" }, ts: "om_r1" });
+    assert.equal(r.threads.topicRoot("fs", "omt_9"), "om_r1");
+    await r.surface.post({ channel: "oc_t", threadTs: "omt_9" }, "摘要", []);
+    assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages/om_r1/reply").length, 1);
+    // A topic Feishu did not name in its answer is read back from the message.
+    r.fake.answer("GET /open-apis/im/v1/messages/om_r2", { code: 0, data: { items: [{ message_id: "om_r2", thread_id: "omt_10" }] } });
+    assert.deepEqual((await r.surface.begin("oc_t", "再接力")).thread, { channel: "oc_t", threadTs: "omt_10" });
+    // A group: the chat's conversation from now on, followed without @.
+    assert.deepEqual(await r.surface.begin("oc_g", "接力到这里"), { thread: { channel: "oc_g", threadTs: "om_r3" }, ts: "om_r3" });
+    assert.equal(r.threads.current("fs", "oc_g"), "om_r3");
+    r.fake.message({ id: "om_x", chat: "oc_g", text: "收到" });
+    await r.fake.until("heard", () => r.events.length === 1);
+    assert.equal(r.events[0]!.type === "message" && r.events[0]!.message.threadTs, "om_r3");
+    assert.equal(r.surface.permalink({ channel: "oc_g", threadTs: "om_r3" }), "https://applink.feishu.cn/client/chat/open?openChatId=oc_g");
+  } finally {
+    await r.close();
+  }
+});
+
 test("surface: posts as cards in the chat, files after them; a question's button answers as the person and the card shows the answer", async () => {
   const r = await surfaceRig();
   const dir = mkdtempSync(join(tmpdir(), "fsf-"));

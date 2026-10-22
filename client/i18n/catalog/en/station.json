@@ -490,5 +490,10 @@
   "station.context.cannotCompact": "{name} can't compact its context",
   "station.notice.compacted": "Context compacted",
   "station.notice.compactFailed": "Couldn't compact the context: {error}",
-  "station.notice.cleared": "Context cleared; the next message starts a new conversation"
+  "station.notice.cleared": "Context cleared; the next message starts a new conversation",
+  "station.relay.opening": "{who} relayed the still.fail chat {chat} here; it goes on in this thread.",
+  "station.relay.relayed": "{who} relayed this chat to {place}",
+  "station.relay.untitled": "Untitled chat",
+  "station.relay.pick": "Pick the connect and channel to relay to",
+  "station.relay.threadIn": "a thread in {place}"
 }
