@@ -633,6 +633,8 @@ pub fn fixture(mode : String) -> Source {
     picture: fn(_) { "" },
     fatal: fn() { None },
     file: fn(_, _, name) { fixture_file(name) },
+    // a video's still: its first frame as the station makes it (the made-up ones' each a picture of its own)
+    poster: fn(_, _, name) { fixture_file(name) },
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
     read_only: false,

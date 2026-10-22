@@ -1047,8 +1047,8 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
       let key = (src.file)(here.station, owner_of(here, a), base_name(a.path))
       // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
-      note_thumb(c, thumb, open, 10.0)
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, id=open, opacity=if pv_hidden.val == thumb { 0.0 } else { 1.0 }, fn() {
+      note_thumb(c, thumb, open, 10.0, letterbox~)
+      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, id=open, opacity=thumb_shows(thumb), fn() {
         if key != "" && key != "!" {
           c.image(
             key,
@@ -1078,9 +1078,32 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
       |> ignore
     }
     "video" => {
-      let (bw, bh, _) = image_box(a, 96.0)
+      let (bw, bh, letterbox) = image_box(a, 96.0)
       let h = bh * w / bw
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=0x000000FFL, id=open, fn() {
+      // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
+      let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
+      note_thumb(c, thumb, open, 10.0, letterbox~)
+      // the frame the viewer was left at, once it has been closed back into here; else its first as the station makes
+      // it (ChatFiles.kt ChatVideo: the station's poster); else the black alone
+      let still = match pv_frames.get(thumb) {
+        Some((k, _)) => k
+        None => (src.poster)(here.station, owner_of(here, a), base_name(a.path))
+      }
+      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=0x000000FFL, id=open, opacity=thumb_shows(thumb), fn() {
+        if still != "" && still != "!" {
+          c.layer(fn() {
+            c.image(
+              still,
+              w=Px(w),
+              h=Px(h),
+              fit=if letterbox { FitContain } else { FitCover },
+              radius=10.0,
+              bg=0L,
+            )
+            |> ignore
+          })
+          |> ignore
+        }
         c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
           c.box(w=Px(40.0), h=Px(40.0), radius=20.0, bg=0x000000A6L, align=ACenter, justify=JCenter, fn() {
             @sf.icon(c, "play", size=16.0, color=0xFFFFFFFFL) |> ignore

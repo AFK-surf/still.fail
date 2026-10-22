@@ -80,6 +80,245 @@ test "a video plays in a native view, its bytes read through the core; its contr
 }
 
 ///|
+test "a video in the chat: the station's still of it (its poster) on the black, the play mark and its name over it" {
+  reset()
+  let asked : Array[String] = []
+  let src : Source = {
+    ..fixture("chat"),
+    poster: fn(station, key, name) {
+      asked.push(station + " " + key + " " + name)
+      fixture_file(name)
+    },
+  }
+  let a : Attachment = {
+    name: "演示录屏.mp4",
+    path: "uploads/fx/演示录屏.mp4",
+    size: 5242880.0,
+    width: 1280.0,
+    height: 720.0,
+    thumbhash: "",
+    owner: "s-c1",
+  }
+  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
+  let t = @ui.Tester::new(fn(c) { file_item(c, src, here, a, 300.0) }, w=390.0, h=844.0)
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
+  assert_eq(asked[0], "ws1/st1 s-c1 演示录屏.mp4")
+  // 16:9 in 300 wide (image_box: 360 × 203 at most), covering its box
+  let (bw, bh, _) = image_box(a, 96.0)
+  let h = bh * 300.0 / bw
+  assert_true(
+    t.drawn_images().iter().any(fn(i) { (i[2] - 300.0).abs() < 0.5 && (i[3] - h).abs() < 0.5 }),
+  )
+  assert_true(t.find("演示录屏.mp4") is Some(_))
+}
+
+///|
+test "a video's still over its picture until the player's first frame shows; then the picture alone" {
+  let t = preview_tester("video")
+  let poster_drawn = fn() {
+    let (x, y, w, h) = t.holes()[0]
+    t
+    .drawn_images()
+    .iter()
+    .any(fn(i) { (i[0] - x).abs() < 1.0 && (i[1] - y).abs() < 1.0 && (i[2] - w).abs() < 1.0 && (i[3] - h).abs() < 1.0 })
+  }
+  // no frame shown yet: the chat's still where the picture will be
+  t.set_player(1, shown=false)
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
+  assert_true(poster_drawn())
+  // its first frame: the picture alone
+  t.set_player(1, shown=true)
+  t.draw()
+  assert_true(!poster_drawn())
+}
+
+///|
+/// A video open with ten frames a tenth of a second apart (as its player says them), a second long; its timeline's
+/// track (from its left, how wide) and its middle.
+fn ten_frames() -> (@ui.Tester, Double, Double, Double) raise {
+  let t = preview_tester("video")
+  t.set_player(1, duration=1000.0, playing=true)
+  assert_true(
+    t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,100,200,300,400,500,600,700,800,900\"}}"),
+  )
+  t.draw()
+  let (x, y, w, h) = t.ctx().rect_of(t.ctx().id("preview/timeline")).unwrap()
+  (t, x + 6.0, w - 12.0, y + h / 2.0)
+}
+
+///|
+test "a video's timeline dragged: paused, the player told a finger is on it, a seek to each frame it comes to, the head with it" {
+  let (t, x0, span, mid) = ten_frames()
+  let seeks = fn() { t.views().filter(fn(l) { l.has_prefix("control 1 3 ") }) }
+  // down at a quarter: paused, the player's seeks one after another from now, to the frame showing there (200 ms)
+  t.press_at(x0 + span * 0.25, mid)
+  assert_true(t.views().contains("control 1 2 0"))
+  assert_true(t.views().contains("control 1 9 1"))
+  assert_eq(seeks(), ["control 1 3 200"])
+  // on within that frame: nothing more asked
+  t.move(x0 + span * 0.27, mid)
+  assert_eq(seeks().length(), 1)
+  // to three quarters: the frame there (700 ms), the head there before the player says it is
+  t.move(x0 + span * 0.75, mid)
+  assert_eq(seeks(), ["control 1 3 200", "control 1 3 700"])
+  assert_true(
+    t
+    .drawn_rects()
+    .iter()
+    .any(fn(r) { (r.2 - 12.0).abs() < 0.5 && (r.3 - 12.0).abs() < 0.5 && (r.0 + 6.0 - (x0 + span * 0.7)).abs() < 0.5 }),
+  )
+  assert_true(!t.views().contains("control 1 9 0"))
+  // let go further on than its last move (the two in one frame): to the frame there first (900 ms), then told so
+  t.release(x0 + span * 0.95, mid)
+  assert_eq(seeks(), ["control 1 3 200", "control 1 3 700", "control 1 3 900"])
+  let log = t.views()
+  assert_true(log.search("control 1 3 900").unwrap() < log.search("control 1 9 0").unwrap())
+}
+
+///|
+test "a video's timeline tapped: paused at the frame there, no finger along it told" {
+  let (t, x0, span, mid) = ten_frames()
+  t.tap(x0 + span * 0.5, mid)
+  assert_true(t.views().contains("control 1 2 0"))
+  assert_true(t.views().contains("control 1 3 500"))
+  assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 9 ") }))
+}
+
+///|
+test "a video's ‹ and › go to a frame's very start, a frame on from the one the player says it is at (in whole ms)" {
+  let t = preview_tester("video")
+  assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,33.333,66.667\"}}"))
+  t.draw()
+  let tap_button = fn(key : String) {
+    let (x, y, w, h) = t.ctx().rect_of(t.ctx().id(key)).unwrap()
+    t.tap(x + w / 2.0, y + h / 2.0)
+  }
+  // › from the first: to the second's start, as the file has it (no ms rounded up: past it is the third's)
+  tap_button("preview/next")
+  assert_true(t.views().contains("control 1 3 33.333"))
+  // the player there says 33 (whole ms): that is the second still, so › goes to the third
+  t.set_player(1, position=33.0)
+  t.draw()
+  tap_button("preview/next")
+  assert_true(t.views().contains("control 1 3 66.667"))
+  // and ‹ from the third (66) back to the second
+  t.set_player(1, position=66.0)
+  t.draw()
+  tap_button("preview/prev")
+  assert_eq(t.views().filter(fn(l) { l == "control 1 3 33.333" }).length(), 2)
+}
+
+///|
+/// A chat's video (16:9, its still the station's poster) alone on a page, the viewer over it once it is tapped open.
+fn video_in_chat() -> @ui.Tester {
+  reset()
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
+  let a : Attachment = {
+    name: "演示录屏.mp4",
+    path: "uploads/fx/演示录屏.mp4",
+    size: 5242880.0,
+    width: 1280.0,
+    height: 720.0,
+    thumbhash: "",
+    owner: "s-c1",
+  }
+  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
+  let t = @ui.Tester::new(
+    fn(c) {
+      file_item(c, src, here, a, 300.0)
+      preview(c, src)
+    },
+    w=390.0,
+    h=844.0,
+  )
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
+  t
+}
+
+///|
+/// The bytes in hex (a host's grabbed frame as a run's line says it: Tester::view_said).
+fn hex_bytes(b : Bytes) -> String {
+  let digits = "0123456789abcdef"
+  let out = StringBuilder::new()
+  for x in b {
+    out.write_char(digits.get_char(x.to_int() >> 4).unwrap())
+    out.write_char(digits.get_char(x.to_int() & 15).unwrap())
+  }
+  out.to_string()
+}
+
+///|
+test "a video flies from its thumbnail in the chat, its still flying; the player's picture once it is in" {
+  let t = video_in_chat()
+  t.tap_text("演示录屏.mp4")
+  assert_true(viewer.val is Some(_))
+  // halfway: its still flies (the thumbnail hidden meanwhile), the player's picture not yet
+  t.run_for(fly_open_ms / 2.0)
+  assert_eq(t.holes().length(), 0)
+  assert_eq(pv_hidden.val, "ws1/st1/s-c1/uploads/fx/演示录屏.mp4")
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 300.0 && i[2] < 366.0 }))
+  // in: the player's picture where the still was, fitted (390 - 24 wide)
+  t.run_for(fly_open_ms)
+  assert_eq(pv_hidden.val, "")
+  assert_eq(t.holes().length(), 1)
+  assert_true((t.holes()[0].2 - 366.0).abs() < 0.5)
+}
+
+///|
+test "a video closed: the frame it shows grabbed, flown back with and kept by its thumbnail; opened again, on from there" {
+  let t = video_in_chat()
+  t.tap_text("演示录屏.mp4")
+  t.run_for(fly_open_ms)
+  // the player 4 s in
+  t.set_player(1, position=4000.0)
+  t.draw()
+  t.back()
+  // the frame it shows grabbed first, the player's picture there meanwhile
+  assert_true(t.views().contains("control 1 22 640"))
+  assert_eq(t.holes().length(), 1)
+  // grabbed: kept, with where it was; flown back with
+  let frame = fixture_file_png("演示录屏.mp4")
+  assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"\{hex_bytes(frame)}\"}"))
+  t.draw()
+  let id = "ws1/st1/s-c1/uploads/fx/演示录屏.mp4"
+  match pv_frames.get(id) {
+    Some((_, ms)) => assert_eq(ms, 4000.0)
+    None => fail("no frame kept")
+  }
+  assert_eq(t.holes().length(), 0)
+  assert_eq(pv_hidden.val, id)
+  // landed: the viewer gone, its player closed, the thumbnail shown again (with the frame kept)
+  t.run_for(fly_close_ms)
+  assert_true(viewer.val is None && pv_leaving.val is None)
+  assert_true(t.views().contains("close 1"))
+  assert_eq(pv_hidden.val, "")
+  // opened again: on from where it was left, played once its player says how long it is (not left at its end)
+  t.tap_text("演示录屏.mp4")
+  t.draw()
+  let log = t.views()
+  let seek = log.search("control 2 3 4000")
+  let play = log.search("control 2 1 0")
+  assert_true(seek is Some(_) && play is Some(_) && seek.unwrap() < play.unwrap())
+}
+
+///|
+test "a video closed before its first frame shows: back into its thumbnail with its still, nothing kept" {
+  let t = video_in_chat()
+  t.tap_text("演示录屏.mp4")
+  t.run_for(fly_open_ms)
+  t.set_player(1, shown=false)
+  t.draw()
+  t.back()
+  assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 22 ") }))
+  t.run_for(fly_close_ms)
+  assert_true(pv_leaving.val is None)
+  assert_true(pv_frames.is_empty())
+}
+
+///|
 test "a PDF's pages, drawn by the host" {
   let t = preview_tester("pdf")
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("pdf ") }))
