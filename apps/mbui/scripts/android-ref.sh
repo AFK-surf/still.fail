@@ -242,10 +242,12 @@ case "$cmd" in
       fi
     fi
     # the Android host's text the Tester lacks, recorded (TEXT=1: the job found it lacking), then kept in the PR
+    # (nothing compared after it: the run fails for the text to be committed, and the next compares over it; the job
+    # has 10 minutes, and recording, the draw lists again, drawing and comparing them took more: 39773993975)
     if [ "${TEXT:-}" = 1 ]; then
       bash "$0" text || exit 1
       echo "android-ref: the Android text recorded anew: commit this run's screens/text-android.textrec (its artifact) in the PR"
-      fail=1
+      exit 1
     fi
     # (the draw lists again where the text was recorded anew or Android's system changed with its pictures)
     { [ "${TEXT:-}" = 1 ] || [ "${REFS:-}" = 1 ] || [ ! -f $O/dl/print.txt ]; } && { bash "$0" lists || exit 1; }

@@ -348,6 +348,7 @@ fn reset() -> Unit {
   pv_strip.leaving = None
   pv_strip.pinned = None
   pv_strip.near.clear()
+  near_asked.clear()
   viewer_awake_env.val = -1
   src_now.val = fn() { 0.0 }
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)

@@ -1273,7 +1273,12 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   }
   composer_left(src, r)
   readings.remove(k)
+  // what holds the chat's thread at the core with it (its jobs in the bar and their sheets, the images beside one
+  // opened from it): while any is held the core keeps the thread's window as first read, and the chat opened again
+  // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
   (src.leave)("chat", chat_params(r))
+  (src.leave)("chatJobs", chat_params(r))
+  near_left(src, r.station)
   read_chats.remove(k)
 }
 
@@ -1462,7 +1467,6 @@ fn bar_frame(
   after : () -> Unit,
   trailing : () -> Unit,
   more : Bool,
-  room? : Double = 0.0,
   on_more? : () -> Unit = fn() {  },
 ) -> Unit {
   let t = @sf.theme()
@@ -1484,13 +1488,14 @@ fn bar_frame(
     )
     |> ignore
     c.box(dir=Row, w=Fill(1.0), pr=8.0, gap=8.0, align=ACenter, fn() {
-      // the title as long as there is room for it beside what follows it
-      c.box(max_w=dmax(c.width - 4.0 - 40.0 - 16.0 - 8.0 - room, 40.0), fn() {
+      // the title as long as there is room for it beside what follows it (weight(1f, fill = false): what follows is
+      // measured first, as wide as it is, and the title has what is left)
+      c.box(fn() {
         c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false, line=chat_title_line)
         |> ignore
       })
       |> ignore
-      after()
+      c.box(dir=Row, gap=8.0, align=ACenter, keep=true, fn() { after() }) |> ignore
     })
     |> ignore
     trailing()
@@ -1525,27 +1530,6 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
   let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
   let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
-  // what follows the title, as wide as it is drawn
-  let mut room = 0.0
-  if v.agents.length() == 0 {
-    match station {
-      Some(s) => room = room + 8.0 + station_tag_w(s)
-      None => ()
-    }
-  }
-  if v.station_update is Some(Object(_)) {
-    room = room + 8.0 + update_control_w(v.station_update)
-  }
-  if people.length() > 0 {
-    room = room + 8.0 + 19.0 + 14.0 * (people.length() - 1).to_double()
-  }
-  for i, a in v.agents {
-    ignore(a)
-    room = room + 8.0 + (if i == 0 && station is Some(_) { 46.0 } else { 22.0 })
-  }
-  room = room + (if v.thread is Some(_) { 34.0 } else { 0.0 }) +
-    (if has_jobs { 34.0 } else { 0.0 }) +
-    34.0 * archive_share
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
@@ -1630,7 +1614,6 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
         }
       },
       v.thread is Some(_),
-      room~,
       on_more=fn() { open_sheet(c, Info(r)) },
     )
     c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
@@ -1676,18 +1659,6 @@ fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
     @settings.open_station_peek(address)
   }
   c.box(id~, fn() { station_tag(c, s) }) |> ignore
-}
-
-///|
-fn station_tag_w(s : Station) -> Double {
-  let name = s.name.length().to_double() * 7.0
-  dmin(
-    104.0,
-    16.0 +
-    (if s.via != "" { 11.0 } else { 0.0 }) +
-    (if @sf.has_station_mark(s.emoji, s.icon) { 16.0 } else { 0.0 }) +
-    name,
-  )
 }
 
 ///|
@@ -1826,7 +1797,7 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
 }
 
 ///|
-/// People overlapping a little, each ringed in the page's ground (Parts.kt PeopleStack).
+/// People overlapping a little, each ringed in the page's ground (Parts.kt PeopleStack: Avatar(p.id, p.shown.display)).
 fn people_stack(c : @ui.Ctx, src : Source, people : Array[Person], size : Double) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, align=ACenter, fn() {
@@ -1840,14 +1811,8 @@ fn people_stack(c : @ui.Ctx, src : Source, people : Array[Person], size : Double
         align=ACenter,
         justify=JCenter,
         fn() {
-          avatar(
-            c,
-            src,
-            if p.email != "" { p.email } else { p.id },
-            if p.name != "" { p.name } else { p.email },
-            p.picture,
-            size,
-          )
+          // coloured by their id, lettered by what the bar calls them (the viewer 「你」)
+          avatar(c, src, p.id, p.display, p.picture, size)
         },
       )
       |> ignore
