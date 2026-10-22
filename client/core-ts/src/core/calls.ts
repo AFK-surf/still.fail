@@ -65,8 +65,10 @@ export type Call =
   | { kind: "chatRead"; station: string; thread: number; seq: number }
   | { kind: "stationUpload"; station: string; name: string; bytes: Uint8Array }
   | { kind: "stationUploadPart"; station: string; id: string; name: string; size: number; offset: number; bytes: Uint8Array; progress: boolean }
-  | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
-  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean }
+  /// `keep` with the file's `size` as its message says: what is read kept on the device, with its chat, and what is
+  /// kept answered (drive-kept.ts `chat`); without a size, nothing kept.
+  | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean; keep: number | null }
+  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null }
   | { kind: "stationPoster"; station: string; key: string; name: string }
   | { kind: "fileOpen"; station: string; key: string; path: string }
   /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
@@ -86,6 +88,8 @@ export type Call =
   | { kind: "cacheClear"; station: string; thread: number }
   /// What the device keeps of the drives' files let go (drive-kept.ts).
   | { kind: "driveKeptClear" }
+  /// A chat's file kept on the device let go (drive-kept.ts `chat`).
+  | { kind: "cacheFileClear"; station: string; key: string; name: string }
   | { kind: "stationPreview"; station: string; port: number; method: string; path: string; headers: [string, string][]; body: Uint8Array; stream: boolean }
   | { kind: "previewSocket"; station: string; port: number; path: string; headers: [string, string][]; socket: string }
   | { kind: "previewSocketSend"; socket: string; frame: SocketFrame }
@@ -716,8 +720,13 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["name", S, "req"],
         ["thumb", "bool", "default"],
         ["progress", "bool", "default"],
+        ["keep", "bool", "default"],
+        ["size", "f64", "opt"],
       ]);
-      return { kind: "stationFile", station: p.station as string, key: p.key as string, name: p.name as string, thumb: p.thumb as boolean, progress: p.progress as boolean };
+      return {
+        kind: "stationFile", station: p.station as string, key: p.key as string, name: p.name as string, thumb: p.thumb as boolean, progress: p.progress as boolean,
+        keep: p.keep && !p.thumb && p.size !== null ? (p.size as number) : null,
+      };
     }
     case "station.file.part": {
       const p = read(params, [
@@ -728,8 +737,13 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["length", "u64", "req"],
         ["progress", "bool", "default"],
         ["stream", "bool", "default"],
+        ["keep", "bool", "default"],
+        ["size", "f64", "opt"],
       ]);
-      return { kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean };
+      return {
+        kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean,
+        keep: p.keep && p.size !== null ? (p.size as number) : null,
+      };
     }
     // The station's drive (docs/drive.md): a part of a file read, a part of one written, a folder read again.
     case "drive.read": {
@@ -824,6 +838,14 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       return { kind: "markdown", text: read(params, [["text", S, "req"]]).text as string };
     case "drive.kept.clear":
       return { kind: "driveKeptClear" };
+    case "cache.file.clear": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["name", S, "req"],
+      ]);
+      return { kind: "cacheFileClear", station: p.station as string, key: p.key as string, name: p.name as string };
+    }
     case "cache.clear": {
       const p = read(params, [
         ["station", S, "req"],

@@ -486,6 +486,7 @@ pub fn left(route : Route) -> Unit {
     KeptFiles => {
       kept.chats = None
       kept.drive = 0.0
+      kept.loose = []
       kept.asked += 1
     }
     Changelog => changelog_state.seen = false
@@ -599,6 +600,7 @@ pub fn reset() -> Unit {
   // what this device keeps, asked of a run's own core
   kept.chats = None
   kept.drive = 0.0
+  kept.loose = []
   kept.asked = 0
   kept.read = -1
   run_opened.clear()

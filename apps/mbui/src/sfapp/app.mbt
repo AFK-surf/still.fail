@@ -344,6 +344,7 @@ fn reset() -> Unit {
   marking.note_field.set("")
   pv_thumbs.clear()
   pv_frames.clear()
+  fix_fetches.clear()
   pv_frames_n.val = 0
   pv_hidden.val = ""
   pv_read.clear()

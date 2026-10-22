@@ -80,6 +80,10 @@ fn fixture_preview(mode : String) -> Unit {
 }
 
 ///|
+/// What the fixture was asked with bytes, in order: the call and its params.
+let fix_fetches : Array[(String, Json)] = []
+
+///|
 /// What the fixture answers with bytes: a made-up file whole (`station.file`) or a part of it (`station.file.part`;
 /// a video's reads never answered).
 fn fixture_fetch(
@@ -87,6 +91,7 @@ fn fixture_fetch(
   params : Json,
   done : (Result[(Json, Bytes), Json]) -> Unit,
 ) -> Unit {
+  fix_fetches.push((name, params))
   let p = Some(params)
   let file = text(p, "name")
   let mut found : Bytes? = None

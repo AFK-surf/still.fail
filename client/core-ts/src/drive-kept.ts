@@ -7,10 +7,14 @@
 // `played`: a video or song, by the ranges played. Past a kind's bound the least lately read of it go, never the one
 // just read nor one being written (FILES_MAX, PLAYED_MAX). What is kept is counted with the rest the device keeps
 // (`cache.usage`'s `drive`) and let go all at once (`drive.kept.clear`).
+// A chat's files are kept here too, as Android keeps those its viewers open (ChatFiles.kt toDisk, onDisk: a video, a
+// song, a PDF, a big file; `station.file`, `station.file.part` with `keep`): `chat`, by the station, the session and
+// the name (a file sent never changes), its size as the message says; none let go by itself, but by the person, a
+// file at a time (`cache.file.clear`), a chat's with it (`cache.clear`), and listed with its chat (`cache.usage`).
 import { Effect } from "effect";
 import type { Host, Sql } from "./host.ts";
 
-export type KeepKind = "file" | "played";
+export type KeepKind = "file" | "played" | "chat";
 
 /// Files read whole or from their start: the least lately read go past this (DriveCache.kt FILES_MAX).
 export const FILES_MAX = 512 * 1024 * 1024;
@@ -29,6 +33,14 @@ export function keptId(station: string, root: string, path: string): string {
   return `${station}\n${root}\n${path}`;
 }
 
+/// A chat's file's own name among those kept: its station, its session, its name (`chat` first: no station's is so).
+export function chatKeptId(station: string, key: string, name: string): string {
+  return `chat\n${station}\n${key}\n${name}`;
+}
+
+/// A chat's file kept: where it is, its size, the bytes kept of it (fewer: a part of it read), when it was last read.
+export type ChatKept = { station: string; key: string; name: string; size: number; bytes: number; used: number };
+
 export class DriveKept {
   readonly #host: Host;
   /// How much of each kind is kept at most.
@@ -38,7 +50,7 @@ export class DriveKept {
   /// Files a part of which is being written, how many: not let go meanwhile.
   readonly #writing = new Map<string, number>();
 
-  constructor(host: Host, most: Record<KeepKind, number> = { file: FILES_MAX, played: PLAYED_MAX }) {
+  constructor(host: Host, most: Record<KeepKind, number> = { file: FILES_MAX, played: PLAYED_MAX, chat: Number.POSITIVE_INFINITY }) {
     this.#host = host;
     this.#most = most;
   }
@@ -67,7 +79,7 @@ export class DriveKept {
   #kept(sql: Sql, id: string): Kept | null {
     const r = sql.all("SELECT kind, mtime, size, type, used FROM kept WHERE id = ?", [id])[0];
     if (r === undefined) return null;
-    return { kind: r[0] === "played" ? "played" : "file", mtime: Number(r[1]), size: Number(r[2]), type: String(r[3] ?? ""), used: Number(r[4]) };
+    return { kind: r[0] === "played" || r[0] === "chat" ? r[0] : "file", mtime: Number(r[1]), size: Number(r[2]), type: String(r[3] ?? ""), used: Number(r[4]) };
   }
 
   /// A file and its parts let go: their rows at once, their bytes after.
@@ -180,20 +192,45 @@ export class DriveKept {
     return Effect.flatMap(this.#db(), (sql) => (sql === null || this.#writing.has(id) ? Effect.void : this.#drop(sql, id)));
   }
 
-  /// The bytes kept, every file's.
+  /// The bytes kept of the drives' files (not the chats').
   usage(): Effect.Effect<number> {
-    return Effect.map(this.#db(), (sql) => (sql === null ? 0 : Number(sql.all("SELECT coalesce(sum(length), 0) FROM part")[0]?.[0] ?? 0)));
+    return Effect.map(this.#db(), (sql) =>
+      sql === null ? 0 : Number(sql.all("SELECT coalesce(sum(p.length), 0) FROM part p JOIN kept k ON k.id = p.id WHERE k.kind != 'chat'")[0]?.[0] ?? 0),
+    );
   }
 
-  /// Everything kept let go (read from the stations again when opened), but what is being written.
+  /// The drives' files kept let go (read from the stations again when opened), but what is being written.
   clear(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const sql = yield* this.#db();
       if (sql === null) return;
-      for (const r of sql.all("SELECT id FROM kept")) {
+      for (const r of sql.all("SELECT id FROM kept WHERE kind != 'chat'")) {
         const id = String(r[0]);
         if (!this.#writing.has(id)) yield* this.#drop(sql, id);
       }
+    });
+  }
+
+  /// The chats' files kept, the most lately read first.
+  chatFiles(): Effect.Effect<ChatKept[]> {
+    return Effect.map(this.#db(), (sql) => {
+      if (sql === null) return [];
+      const rows = sql.all("SELECT k.id, k.size, k.used, coalesce(sum(p.length), 0) FROM kept k LEFT JOIN part p ON p.id = k.id WHERE k.kind = 'chat' GROUP BY k.id ORDER BY k.used DESC, k.id");
+      const out: ChatKept[] = [];
+      for (const r of rows) {
+        const [, station, key, ...name] = String(r[0]).split("\n");
+        if (station === undefined || key === undefined || name.length === 0) continue;
+        out.push({ station, key, name: name.join("\n"), size: Number(r[1]), bytes: Number(r[3]), used: Number(r[2]) });
+      }
+      return out;
+    });
+  }
+
+  /// The files kept of a station's sessions `keys` let go (a chat's, as its messages are), but what is being written.
+  forgetChat(station: string, keys: readonly string[]): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const files = yield* this.chatFiles();
+      for (const f of files) if (f.station === station && keys.includes(f.key)) yield* this.forget(chatKeptId(f.station, f.key, f.name));
     });
   }
 }

@@ -31,6 +31,8 @@ priv struct SettingsFixture {
   mut pairing : Bool
   /// the bytes of the drives' files kept (`cache.usage`'s `drive`), until let go (`drive.kept.clear`)
   mut drive_kept : Double
+  /// the chats' files kept let go (`cache.file.clear`), by name
+  kept_cleared : Array[String]
 }
 
 ///|
@@ -49,6 +51,28 @@ let fx : SettingsFixture = {
   models_added: [],
   pairing: false,
   drive_kept: fx_drive_kept,
+  kept_cleared: [],
+}
+
+///|
+/// A chat's file kept (`cache.usage`'s `files`, `loose`): its session, its name, its size, the bytes kept of it, when
+/// it was last opened (the fixture's clock stands at 0), unless let go.
+fn fx_kept_file(key : String, name : String, size : Double, bytes : Double, opened : Double, station? : String) -> Json? {
+  if fx.kept_cleared.contains(name) {
+    return None
+  }
+  let o : Map[String, Json] = {
+    "key": str(key),
+    "name": str(name),
+    "size": Json::number(size),
+    "bytes": Json::number(bytes),
+    "opened": Json::number(opened),
+  }
+  match station {
+    Some(s) => o["station"] = str(s)
+    None => ()
+  }
+  Some(Json::object(o))
 }
 
 ///|
@@ -80,6 +104,7 @@ fn fixture_reset() -> Unit {
   fx.restored.clear()
   fx.skills_shared.clear()
   fx.drive_kept = fx_drive_kept
+  fx.kept_cleared.clear()
   fx.resets_used = 0
   fx.models_added.clear()
   fx.version = 0
@@ -1307,17 +1332,39 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
             (
               "chats",
               [
-                obj([("station", str("ws1/st1")), ("thread", Json::number(1.0)), ("title", str("整理发布清单")), ("sessions", ["s-c1"]), ("bytes", Json::number(2400000.0))]),
+                // a PDF opened, 5 minutes ago; a video, 12 of its 48 MB come
+                obj([
+                  ("station", str("ws1/st1")),
+                  ("thread", Json::number(1.0)),
+                  ("title", str("整理发布清单")),
+                  ("sessions", ["s-c1"]),
+                  ("bytes", Json::number(2400000.0)),
+                  (
+                    "files",
+                    Json::array(
+                      [
+                        fx_kept_file("s-c1", "季度报告.pdf", 3355443.0, 3355443.0, -300000.0),
+                        fx_kept_file("s-c1", "演示录屏.mp4", 50331648.0, 12582912.0, -7200000.0),
+                      ].filter_map(fn(f) { f }),
+                    ),
+                  ),
+                ]),
                 obj([("station", str("ws1/st1")), ("thread", Json::number(4.0)), ("title", str("给设置页加一个深色模式开关")), ("sessions", ["s-c4"]), ("bytes", Json::number(860000.0))]),
                 obj([("station", str("ws1/st2")), ("thread", Json::number(3.0)), ("title", str("夜里的构建又失败了")), ("sessions", ["s-c3"]), ("bytes", Json::number(41000.0))]),
               ],
             ),
             ("drive", Json::number(fx.drive_kept)),
+            // one of a chat no longer kept here, 3 days ago
+            ("loose", Json::array([fx_kept_file("s-old", "旧日志.zip", 921600.0, 921600.0, -3.0 * 86400000.0, station="ws1/st2")].filter_map(fn(f) { f }))),
           ]),
         ),
       )
     "drive.kept.clear" => {
       fx.drive_kept = 0.0
+      Some(Ok(Json::null()))
+    }
+    "cache.file.clear" => {
+      fx.kept_cleared.push(text(p, "name"))
       Some(Ok(Json::null()))
     }
     "machineSessions.list" => Some(Ok(obj([("sessions", [])])))
