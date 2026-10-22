@@ -124,6 +124,10 @@ jobs:
         with:
           android: 'true'
           ndk: ${{ steps.what.outputs.refs == '1' && 'true' || 'false' }}
+          # (the setup's Gradle home not written either: this job builds with Gradle only when Android's pictures are taken
+          # anew, and the home it wrote in its other runs was empty: the newest of this job, restored before a build,
+          # which then started cold, ~85 s configuring, 39740407276)
+          gradle-read-only: 'true'
       - uses: ./.github/actions/mbui-apk
         if: steps.emu.outputs.on == '1'
       - name: The mbui app, for the text it lacks (APP=sffix, debug, for the x86_64 emulator)

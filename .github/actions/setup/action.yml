@@ -10,6 +10,9 @@ inputs:
   ndk:
     description: With android, the NDK too (what packs the app strips its native parts with; lint does without it)
     default: 'true'
+  gradle-read-only:
+    description: With android, Gradle's home read, never written (on main too)
+    default: 'false'
   cross:
     description: Install Linux station cross compilers
     default: 'false'
@@ -111,7 +114,7 @@ runs:
     - if: inputs.android == 'true'
       uses: gradle/actions/setup-gradle@v4
       with:
-        cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+        cache-read-only: ${{ inputs.gradle-read-only == 'true' || github.ref != 'refs/heads/main' }}
     # The NDK is a gigabyte from Google's servers: fetched once, then from the Actions cache (a download cut short failed
     # a lint job on main, 2026-10-19, and check-android, 2026-10-21: "Error on ZipFile unknown archive")
     - if: inputs.android == 'true' && inputs.ndk == 'true' && runner.os == 'Linux'
