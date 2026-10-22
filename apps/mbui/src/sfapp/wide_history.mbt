@@ -389,7 +389,7 @@ let wh_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_file : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let wh_file : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)

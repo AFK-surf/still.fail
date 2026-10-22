@@ -37,8 +37,10 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
 ///|
 test "wide: an agent's history's head as the web's: its control, 只看收发 leaving its steps out, 详情 folding" {
   reset()
-  let src = fixture("chat-history-side")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  side_open(r, "history/s-c1")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.nav_push_ms)
   // (where its transcript is: asked once the frame is built, answered at once)
