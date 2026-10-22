@@ -582,8 +582,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta) |> ignore
                   chevron(c)
                 }) {
-                dui.letters_open = ""
-                open_sheet(c, LettersOf(r, th))
+                open_letters(c, r, th)
               }
             _ => ()
           }
@@ -1786,6 +1785,14 @@ fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@ui.R
 }
 
 ///|
+/// Opens the chat's letters' sheet at its list; its letters held (the core's `chatLetters`) until the chat is left.
+fn open_letters(c : @ui.Ctx, r : ChatRef, thread : Double) -> Unit {
+  dui.letters_open = ""
+  dui.letters_held[r.station + "\u{1}" + r.session] = thread
+  open_sheet(c, LettersOf(r, thread))
+}
+
+///|
 /// The params of a chat's letters (the core's `chatLetters` view).
 fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
   { "station": Json::string(r.station), "thread": Json::number(thread) }
@@ -1863,7 +1870,6 @@ let letters_foot : @ui.Style = @ui.style(h=S8)
 /// written, each drawn as the chat draws a message (Chat.kt SaidAlone).
 fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
   let topic = (src.topic)("chatLetters", letters_params(r, thread))
-  dui.letters_held[r.station + "\u{1}" + r.session] = thread
   let (chat, _, _) = view_of_chat(src, r)
   sheet_frame(c, "letters", c.height * 0.8, draggable=true, fn() {
     sheet_head(c, tr("web-main.letters.title"))

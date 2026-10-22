@@ -586,10 +586,12 @@ pub fn open_fixture(mode : String) -> Unit {
     "chat-info" | "chat-letters-info" => dui.sheet = Some(Info(r))
     "chat-letters" => {
       dui.letters_open = ""
+      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
       dui.sheet = Some(LettersOf(r, 7.0))
     }
     "chat-letters-open" => {
       dui.letters_open = fix_letters_link
+      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
       dui.sheet = Some(LettersOf(r, 7.0))
     }
     // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
