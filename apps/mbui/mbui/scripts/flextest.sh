@@ -3,6 +3,7 @@
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
+mkdir -p out
 moon_test_native -p mbui/flex 2>&1 | grep -v '^Warning' > out/flextest.log
 python3 - <<'PY'
 import re, collections
