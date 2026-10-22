@@ -35,6 +35,10 @@ the bridge copies files over its connection:
 | A file the agent attaches (`chat_post` files and the like) | there → here | when it is attached |
 | A job's output and exit code | there → here | as it runs (the job's shell here runs the bridge) |
 
+The station's GitHub login (gh's, on its machine) is lent the same way: each program started there gets
+`gh auth token`'s token, read as it starts, as `GH_TOKEN`, and git's credentials for github.com from gh there
+(`gh auth git-credential`, through `GIT_CONFIG_*`); nothing when gh on the station is not signed in.
+
 Everything else of the workspace (checkouts, builds, what the agent writes) is the sandbox's alone. A subscription's
 login stays here: each process there is lent a short-lived token, as a subscription borrowed from another station is
 (Claude: `CLAUDE_CODE_OAUTH_TOKEN`; Codex: an auth.json without its refresh token, renewed under the running app-server).

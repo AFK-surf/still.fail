@@ -218,6 +218,8 @@ export function inSandbox(data: string, key: string, program: string, args: stri
   const spec = {
     ...bridgeSpec(at, config, data, name, cwd, sync), program, args, cwd,
     ...(create ? { create } : {}), ...(how.agent ? { agent: true } : {}), ...(how.lostFile ? { lostFile: how.lostFile } : {}),
+    // The station's GitHub login, lent to what runs there (sandbox-bridge.mjs `lendGh`).
+    gh: true,
   };
   return { program: node, args: [BRIDGE, "host", JSON.stringify(spec)] };
 }

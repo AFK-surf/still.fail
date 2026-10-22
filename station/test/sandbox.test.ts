@@ -433,6 +433,33 @@ describe("Codex", () => {
   });
 });
 
+describe("the station's GitHub login", () => {
+  test("lent to a program there as GH_TOKEN, with git's credentials from gh there; nothing when gh here is not signed in", async () => {
+    const dir = tempdir();
+    const ssh = fakeSsh(dir);
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const show = "printf '%s|%s\\n' \"$GH_TOKEN\" \"$(git config --get credential.https://github.com.helper)\"";
+    const run = (env: NodeJS.ProcessEnv) =>
+      new Promise<string>((resolve) => {
+        const spec = { ssh: [ssh, "s-x.ws@host"], program: "/bin/sh", args: ["-c", show], cwd: dir, ports: [], gh: true };
+        const child = spawn(process.execPath, [BRIDGE, "host", JSON.stringify(spec)], { stdio: ["ignore", "pipe", "ignore"], env });
+        let out = "";
+        child.stdout.on("data", (b) => (out += b));
+        child.on("close", () => resolve(out.trim()));
+      });
+    // gh here signed in: its token.
+    writeFileSync(join(bin, "gh"), "#!/bin/sh\n[ \"$1 $2\" = \"auth token\" ] && echo gho_lent && exit 0\nexit 1\n");
+    chmodSync(join(bin, "gh"), 0o755);
+    // git's own configuration here left out: only what is lent counts.
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+    assert.equal(await run(env), "gho_lent|!gh auth git-credential");
+    // Not signed in: nothing lent.
+    writeFileSync(join(bin, "gh"), "#!/bin/sh\nexit 1\n");
+    assert.equal(await run(env), "|");
+  });
+});
+
 describe("paths in a sandbox with persist", () => {
   test("its data directory is a link into persist there, a shell there says the station's path, and a path under persist is the station's", async () => {
     const dir = tempdir();
