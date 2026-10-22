@@ -55,3 +55,16 @@ test "Android: a finger that moves on from a field leaves it be; one that lifts 
   t.tap(40.0, 10.0)
   assert_true(t.ime().0)
 }
+
+///|
+test "Android: a tap on the field that has the focus says it to the host again (which asks for its keyboard again)" {
+  let field = Field::new()
+  field.set("hello world")
+  let t = handle_tester(field)
+  t.tap(40.0, 10.0)
+  assert_true(t.ime().0)
+  let told = fake.val.unwrap().ime_told
+  // the same place: nothing of the field changed, and still said
+  t.tap(40.0, 10.0)
+  assert_true(fake.val.unwrap().ime_told > told)
+}

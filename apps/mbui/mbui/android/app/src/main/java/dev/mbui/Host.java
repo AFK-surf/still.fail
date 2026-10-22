@@ -96,6 +96,15 @@ final class Host {
     // system's boot), is let go by the system; owed until both, each told as it comes (windowFocused, and the insets
     // controller's controllable types), then asked.
     private static boolean imeOwed;
+    /** The soft keyboard shown, as the insets last said (MainActivity). */
+    static boolean imeVisible;
+    /** The app asked for the keyboard and it has not shown since: a hiding seen meanwhile is the one before the
+     *  asking (the app's own, still under way), not the person putting it away (MainActivity's text 7). Set as
+     *  imeActive is, on the app's thread, so the two never disagree. */
+    static volatile boolean imeAwaited;
+    /** Fingers lifted off the view (MBView, main thread), and as many as setIme had seen. */
+    static int lifts;
+    private static int liftsSeen;
     private static boolean imeControllable;
     private static android.view.View imeWatched;  // the view whose controller tells them (an activity made anew: anew)
 
@@ -153,6 +162,7 @@ final class Host {
         boolean cleared = text.isEmpty() && !imeText.isEmpty();
         // (MoonBit's words, what is composed left out: what a connection made anew starts from, MBView.MBInput)
         imeActive = active;
+        if (active != was) imeAwaited = active;
         imeText = text;
         selStart = a;
         selEnd = b;
@@ -162,6 +172,8 @@ final class Host {
         main.post(() -> {
             InputMethodManager imm = (InputMethodManager)
                     activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            boolean lifted = lifts != liftsSeen;
+            liftsSeen = lifts;
             if (active && !was) {
                 view.requestFocus();
                 imm.restartInput(view);
@@ -171,6 +183,13 @@ final class Host {
                 imeOwed = false;
                 imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
             } else if (active) {
+                // the field it has tapped again with no keyboard up (one that did not come, or went): asked for again,
+                // as Compose's tap on a focused field shows it (the app says its field anew on such a tap)
+                if (lifted && !imeVisible && !imeOwed) {
+                    imeOwed = true;
+                    imeAwaited = true;
+                    showOwedIme();
+                }
                 MBView.MBInput in = view.input;
                 if (in == null || taken != imeSent || !in.took(text, a, b)) return;
                 // MoonBit changed the field itself: its words cleared (sent) as a TextView's set anew, the input

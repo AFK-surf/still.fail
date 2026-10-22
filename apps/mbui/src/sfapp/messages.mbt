@@ -1754,26 +1754,18 @@ fn activity(
     bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { 0L },
     id~,
     fn() {
-    let face = c.box(w=Px(24.0), h=Px(24.0), tx=-3.0, align=ACenter, justify=JCenter, fn() {
+    let face = c.box(w=Px(24.0), h=Px(24.0), tx=-ring_room, align=ACenter, justify=JCenter, fn() {
       let av = c.box(fn() { agent_avatar(c, a.maker, a.runtime) })
       @motion.measure(c, av, "emit-avatar/" + ek + "/" + a.key)
-      if em.copied == a.key {
-        c.look(av, @ui.look(alpha=0.0))
-      }
       // its turn over, the ring goes first (Chat.kt WorkRing: 160 ms)
       let ring = @motion.animate(c, "ring/" + here.station + "/" + a.key, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(160.0))
-      let rl = c.layer(fn() {
-        if a.wait is Some(_) {
-          c.box(w=Px(24.0), h=Px(24.0), radius=12.0, border=1.5, border_color=t.p.line, fn() {  })
-          |> ignore
-        } else {
-          // eight arcs in the accent, the brightest a step further round every 100 ms (Chat.kt WorkRing, Spokes.kt)
-          @sf.segments(c, 24.0, 1.5, k.accent) |> ignore
-        }
-      })
+      let rl = c.layer(fn() { work_ring(c, a.wait is Some(_)) })
       c.look(rl, @ui.look(alpha=ring))
     })
-    ignore(face)
+    // away while its copy flies, the ring with it (Chat.kt: the face's alpha while motion.copied is this agent)
+    if em.copied == a.key {
+      c.look(face, @ui.look(alpha=0.0))
+    }
     // what it does now and how long: folded away to its width's share, cut there, faded
     let natural = match @motion.measured_rect(c, "emit-tail/" + ek + "/" + a.key) {
       Some(r) => r.2
@@ -1799,6 +1791,22 @@ fn activity(
   )
   |> ignore
   ignore(first)
+}
+
+///|
+/// How far an activity's ring reaches round its avatar (Chat.kt: the messages' 18dp avatar, its ring 3dp round it).
+let ring_room : Double = 3.0
+
+///|
+/// An agent's ring round its avatar (Chat.kt WorkRing): at work, eight arcs in the accent, the brightest a step further
+/// round every 100 ms (Spokes.kt); waiting on work it started, a still, quiet whole ring.
+fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
+  let t = @sf.theme()
+  if waiting {
+    c.box(w=Px(24.0), h=Px(24.0), radius=12.0, border=1.5, border_color=t.p.line, fn() {  }) |> ignore
+  } else {
+    @sf.segments(c, 24.0, 1.5, ink().accent, t.p.bg) |> ignore
+  }
 }
 
 ///|

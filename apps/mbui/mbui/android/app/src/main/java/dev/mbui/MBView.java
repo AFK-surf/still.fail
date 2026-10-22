@@ -214,7 +214,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: kind = 0; break;
             case MotionEvent.ACTION_MOVE: kind = 1; break;
-            case MotionEvent.ACTION_UP: kind = 2; break;
+            case MotionEvent.ACTION_UP: kind = 2; Host.lifts++; break;
             case MotionEvent.ACTION_CANCEL: kind = 3; break;
             case MotionEvent.ACTION_POINTER_DOWN:
             case MotionEvent.ACTION_POINTER_UP: {

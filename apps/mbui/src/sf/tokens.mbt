@@ -546,6 +546,11 @@ pub let found_start : @ui.Space = Exact(22.0)
 pub let grow : @ui.Len = Grow(1.0)
 
 ///|
+/// Words on one line given the room left in their row, cut there with an ellipsis (Compose's Text with maxLines = 1
+/// in a Row: measured in what is left).
+pub let line_left : @ui.Size = Fill(1.0)
+
+///|
 /// A visualization in a message (Android ui/Viz.kt, chat/VizFiles.kt): its place while it comes (120 high), the ways
 /// under it (22 boxes); a whole page's corners (Smooth 20, the web's card) on its paper (#F6F2EA, dark #26272B); the
 /// full screen's name 18 in (Viz.kt VizFull).

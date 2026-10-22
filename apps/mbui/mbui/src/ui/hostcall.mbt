@@ -16,6 +16,8 @@ struct FakeHost {
   mut ime_text : String
   mut ime_sel : (Int, Int)
   mut ime_rect : (Double, Double, Double, Double)
+  /// how many times the field was said to the host (set_ime)
+  mut ime_told : Int
   mut clipboard : String
   /// the last words put there were a secret: taken off this long after (Ctx::copy_secret); -1 not a secret
   mut clipboard_secret : Double
@@ -451,6 +453,7 @@ fn h_set_ime(
       f.ime_text = text
       f.ime_sel = (a, b)
       f.ime_rect = (x, y, w, h)
+      f.ime_told = f.ime_told + 1
     }
     None => @hostapi.set_ime(active, x, y, w, h, text, a, b)
   }

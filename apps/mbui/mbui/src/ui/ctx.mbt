@@ -204,6 +204,9 @@ pub struct Ctx {
   mut press_x : Double
   /// when the press under way went down (ms), and the press a link's hold was last told of
   mut press_at : Double
+  /// Android's: the press went down in what scrolls, so it shows as pressed only once it has stayed tap_indication_ms
+  /// (Compose's clickable in a scrollable container: a finger that goes on to scroll presses nothing on the way)
+  mut press_late : Bool
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
   mut held_told : Double
@@ -262,8 +265,8 @@ pub struct Ctx {
   /// the boxes whose presses another takes (Ctx::presses_to), by node: that one's id and where it was said
   press_owners : Map[Int, (Int, SourceLoc)]
   mut nav_rest : Double
-  /// what is under everything the frame draws (0-1: what the host clears to as it presents it)
-  clear : (Double, Double, Double)
+  /// what is under everything the frame draws (0-1: what the host clears to as it presents it; Ctx::set_clear)
+  mut clear : (Double, Double, Double)
   /// what of the host's answers is being recorded (hostrec.mbt)
   host_rec : HostRec
   /// covers by their ids, and those asked for this frame (cover.mbt)
@@ -392,6 +395,7 @@ fn Ctx::new() -> Ctx {
     dragging: false,
     press_x: 0.0,
     press_at: -1.0,
+    press_late: false,
     pointer_t: 0.0,
     held_told: -1.0,
     tapped: None,
@@ -972,14 +976,38 @@ pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
 }
 
 ///|
+/// What is under everything the frame draws, as an 0xAARRGGBB colour (its alpha not used): what the host clears to,
+/// and what shows where the app has not drawn yet (under a soft keyboard as it moves, the frame before the app's
+/// follows it). An app sets its ground, as a window's background is.
+pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
+  self.clear = (
+    ((color >> 16) & 0xFFL).to_double() / 255.0,
+    ((color >> 8) & 0xFFL).to_double() / 255.0,
+    (color & 0xFFL).to_double() / 255.0,
+  )
+}
+
+///|
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
   self.hover == id
 }
 
 ///|
 pub fn Ctx::pressed(self : Ctx, id : Int) -> Bool {
-  self.active == id && self.down
+  if self.active != id || !self.down {
+    return false
+  }
+  if self.press_late && self.now < self.press_at + tap_indication_ms {
+    self.wake_at_time(self.press_at + tap_indication_ms)
+    return false
+  }
+  true
 }
+
+///|
+/// How long a press in what scrolls stays before it shows (Android's ViewConfiguration tap timeout, Compose's
+/// TapIndicationDelay).
+pub let tap_indication_ms : Double = 100.0
 
 ///|
 /// Whether a frame is being built now (on_frame): a frame asked for outside one is the host's to be told of.
