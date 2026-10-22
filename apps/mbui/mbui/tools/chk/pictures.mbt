@@ -1,4 +1,4 @@
-// Pictures checked: a renderer's lines (chk lines PNG), Android's round page (chk views-round LOG PNG)
+// Pictures checked: a renderer's lines (chk lines PNG), its shapes (chk shapes PNG), Android's round page (chk views-round LOG PNG)
 
 ///|
 fn picture(path : String) -> @png.Picture? {
@@ -266,5 +266,73 @@ fn double_of_signed(s : String) -> Double {
     -double_of(s.view(start_offset=1).to_string()).unwrap_or(0.0)
   } else {
     double_of(s).unwrap_or(0.0)
+  }
+}
+
+///|
+/// Whether a renderer draws shapes (scene.mbt's kind 11) as they are: the picture of
+/// src/kitdemo/gallery/dl_print_wbtest.mbt's shapes_shown (160 by 160 at scale 2, on white) drawn by it. Its squares
+/// are filled round their holes and not in them (the nonzero rule with the hole's outline going back, the even-odd
+/// one), its line is inked along its middle and not 5 off it, its disc inside its circle and not outside it.
+fn shapes(args : Array[String]) -> Int {
+  if args.length() != 1 {
+    @sys.eprintln("chk shapes PNG")
+    return 2
+  }
+  let path = args[0]
+  let pic = match picture(path) {
+    Some(p) => p
+    None => return 1
+  }
+  let tol = 3
+  let s = 2 // the picture's scale
+  if pic.w != 160 * s || pic.h != 160 * s {
+    say("shapes check: \{path}: \{pic.w}x\{pic.h}, not \{160 * s}x\{160 * s}")
+    return 1
+  }
+  let at = fn(x : Double, y : Double) {
+    pic.rgb((x * s.to_double()).to_int(), (y * s.to_double()).to_int())
+  }
+  let red = (0xFF, 0x3B, 0x30)
+  let blue = (0x15, 0x59, 0xC4)
+  let white = (0xFF, 0xFF, 0xFF)
+  let bad = []
+  let want = fn(what : String, x : Double, y : Double, c : (Int, Int, Int)) {
+    if !near_max(at(x, y), c, tol) {
+      bad.push("\{what} at (\{num_text(x)}, \{num_text(y)}): \{rgb_text(at(x, y))}, not \{rgb_text(c)}")
+    }
+  }
+  for p in [(15.0, 15.0), (15.0, 40.0), (40.0, 15.0), (65.0, 65.0), (40.0, 25.0)] {
+    want("the red square is not filled", p.0, p.1, red)
+  }
+  for p in [(40.0, 40.0), (33.0, 33.0), (47.0, 47.0), (5.0, 40.0), (75.0, 40.0)] {
+    want("the red square is filled in its hole or outside it", p.0, p.1, white)
+  }
+  for p in [(95.0, 15.0), (95.0, 40.0), (145.0, 65.0), (120.0, 25.0)] {
+    want("the blue square (even-odd) is not filled", p.0, p.1, blue)
+  }
+  for p in [(120.0, 40.0), (113.0, 33.0), (155.0, 40.0)] {
+    want("the blue square (even-odd) is filled in its hole or outside it", p.0, p.1, white)
+  }
+  for p in [(15.0, 100.0), (40.0, 100.0), (70.0, 100.0), (70.0, 125.0), (70.0, 148.0)] {
+    want("the line is not inked along its middle", p.0, p.1, blue)
+  }
+  for p in [(40.0, 105.0), (40.0, 95.0), (65.0, 125.0), (75.0, 125.0)] {
+    want("the line is inked 5 off its middle", p.0, p.1, white)
+  }
+  for p in [(120.0, 125.0), (120.0, 103.0), (98.0, 125.0), (138.0, 140.0)] {
+    want("the disc is not filled", p.0, p.1, red)
+  }
+  for p in [(120.0, 97.0), (148.0, 125.0), (142.0, 147.0)] {
+    want("the disc is filled outside its circle", p.0, p.1, white)
+  }
+  for b in bad {
+    say("shapes check: " + b)
+  }
+  if bad.is_empty() {
+    say("shapes check: \{path}: its shapes drawn as they are")
+    0
+  } else {
+    1
   }
 }

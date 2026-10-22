@@ -87,6 +87,8 @@ pub fn Look::is_still(self : Look) -> Bool {
 /// instances and its drawn rect, relative to the corner of the node it was kept against.
 pub struct Drawing {
   insts : Array[Double]
+  /// the pieces of the shapes it drew (shape.mbt), its bands' first pieces (12) counted from the first of these
+  segs : Array[Double]
   mut x : Double
   mut y : Double
   mut w : Double
@@ -97,13 +99,13 @@ pub struct Drawing {
 
 ///|
 pub fn Drawing::new() -> Drawing {
-  { insts: [], x: 0.0, y: 0.0, w: 0.0, h: 0.0, frame: -1 }
+  { insts: [], segs: [], x: 0.0, y: 0.0, w: 0.0, h: 0.0, frame: -1 }
 }
 
 ///|
 /// A copy of it, kept as it is now.
 pub fn Drawing::copy(self : Drawing) -> Drawing {
-  { insts: self.insts.copy(), x: self.x, y: self.y, w: self.w, h: self.h, frame: self.frame }
+  { insts: self.insts.copy(), segs: self.segs.copy(), x: self.x, y: self.y, w: self.w, h: self.h, frame: self.frame }
 }
 
 ///|
@@ -551,9 +553,22 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     Some(d) if e.keep_rel >= 0 => {
       let l = self.nodes[e.keep_rel]
       d.insts.clear()
+      d.segs.clear()
       let a = self.inst
       for b in (i0 * inst_size)..<(self.ninst * inst_size) {
         d.insts.push(a[b])
+      }
+      // its shapes' pieces, kept with it (the frame's go with the frame)
+      let mut q = 0
+      while q < d.insts.length() {
+        if d.insts[q + 5] == 11.0 {
+          let first = d.insts[q + 12].to_int()
+          d.insts[q + 12] = (d.segs.length() / 4).to_double()
+          for v in (first * 4)..<((first + d.insts[q + 13].to_int()) * 4) {
+            d.segs.push(self.segs[v])
+          }
+        }
+        q = q + inst_size
       }
       // relative to its corner
       let mut q = 0
@@ -774,8 +789,14 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
   for q in 0..<d.insts.length() {
     a[base + q] = d.insts[q]
   }
+  // its shapes' pieces among this frame's
+  let seg0 = (self.segs.length() / 4).to_double()
+  self.segs.append(d.segs)
   for j in 0..<count {
     let b = base + j * inst_size
+    if a[b + 5] == 11.0 {
+      a[b + 12] = a[b + 12] + seg0
+    }
     a[b] = a[b] + n.x
     a[b + 1] = a[b + 1] + n.y
     clamp_inst_clip(a, b, a[b + 16] + n.x, a[b + 17] + n.y, a[b + 18] + n.x, a[b + 19] + n.y, cut, cut_r, cut_s)

@@ -10,7 +10,7 @@ let corner_end : String = "// corner.sl end"
 fn corner_header(lines : Array[String]) -> String {
   let out = [
     "// src/host/corner.sl as a C string (scripts/chk corner-sl makes it: edit corner.sl, then run it). The shaders",
-    "// write float2; GLSL's take it with `#define float2 vec2` before it.",
+    "// write float2; GLSL's take it with `#define float2 vec2` and `#define float4 vec4` before it.",
     "#define MB_CORNER_SL \\",
   ]
   for l in lines {
@@ -83,6 +83,8 @@ fn corner_web(text : String, lines : Array[String]) -> String? {
     "\n" +
     indent +
     "#define float2 vec2\n" +
+    indent +
+    "#define float4 vec4\n" +
     body.to_string() +
     indent +
     chars(t, b, t.length()),

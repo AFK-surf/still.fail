@@ -391,7 +391,7 @@ fn on_screen_nodes(
   for i in 0..<c.count {
     let n = c.nodes[i]
     let hit = match icon {
-      Some(k) => n.kind == kind_image && n.text.contains(k)
+      Some(k) => (n.kind == kind_image || n.shapes.length() > 0) && n.text.contains(k)
       None =>
         // a box by what it is called (its label, whole), as Compose's test finds a node by its contentDescription
         (n.kind == kind_box && n.label != "" && field is None && n.label == exact.unwrap_or(what)) ||

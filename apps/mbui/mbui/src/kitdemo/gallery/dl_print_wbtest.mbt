@@ -136,6 +136,76 @@ fn lines_shown() -> @ui.Tester {
 }
 
 ///|
+/// Shapes (Ctx::shapes, scene.mbt's kind 11) in a window 160 by 160 at scale 2, on white (scripts/chk shapes reads its
+/// picture): a red square 60 across at (10, 10) with a hole 20 across in its middle, its outline going back (the
+/// nonzero rule); a blue one at (90, 10) with its middle's outline going the same way, filled by the even-odd rule (a
+/// hole too); a blue line from (10, 100) to (70, 100) and down to (70, 150), 6 wide; a red disc about (120, 125) of
+/// radius 25.
+fn shapes_shown() -> @ui.Tester {
+  let red = 0xFF3B30FFL
+  let blue = 0x1559C4FFL
+  let square = fn(x : Double, y : Double, s : Double, back : Bool) -> (Array[Double], Bool) {
+    if back {
+      ([x, y, x, y + s, x + s, y + s, x + s, y], true)
+    } else {
+      ([x, y, x + s, y, x + s, y + s, x, y + s], true)
+    }
+  }
+  let disc = []
+  for k in 0..<64 {
+    let a = k.to_double() * 2.0 * 3.141592653589793 / 64.0
+    disc.push(120.0 + 25.0 * @dmath.cos(a))
+    disc.push(125.0 + 25.0 * @dmath.sin(a))
+  }
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, align=AStart, fn() {
+        c.shapes(
+          [
+            @ui.shape_of([square(10.0, 10.0, 60.0, false), square(30.0, 30.0, 20.0, true)], fill=red),
+            @ui.shape_of([square(90.0, 10.0, 60.0, false), square(110.0, 30.0, 20.0, false)], fill=blue, even_odd=true),
+            @ui.shape_of([([10.0, 100.0, 70.0, 100.0, 70.0, 150.0], false)], stroke=blue, width=6.0),
+            @ui.shape_of([(disc, true)], fill=red),
+          ],
+          w=Px(160.0),
+          h=Px(160.0),
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+    w=160.0,
+    h=160.0,
+    scale=2.0,
+  )
+  t.draw()
+  t
+}
+
+///|
+test "shapes' draw list printed when asked (MBUI_DL_PRINT=shapes: scripts/render_dl.sh)" {
+  if node_env("MBUI_DL_PRINT") == "shapes" {
+    println("DLBEGIN")
+    println(shapes_shown().drawlist())
+    println("DLEND")
+  }
+}
+
+///|
+test "shapes cover what they are said to: their insides, not their holes, their strokes as wide as said" {
+  let t = shapes_shown()
+  assert_eq(t.shape_cover(15.0, 40.0), 1.0)
+  assert_eq(t.shape_cover(40.0, 40.0), 0.0)
+  assert_eq(t.shape_cover(95.0, 40.0), 1.0)
+  assert_eq(t.shape_cover(120.0, 40.0), 0.0)
+  assert_eq(t.shape_cover(40.0, 100.0), 1.0)
+  assert_eq(t.shape_cover(70.0, 125.0), 1.0)
+  assert_eq(t.shape_cover(40.0, 105.0), 0.0)
+  assert_eq(t.shape_cover(120.0, 125.0), 1.0)
+  assert_eq(t.shape_cover(148.0, 125.0), 0.0)
+}
+
+///|
 test "lines' draw list printed when asked (MBUI_DL_PRINT=lines: scripts/render_dl.sh)" {
   if node_env("MBUI_DL_PRINT") == "lines" {
     println("DLBEGIN")

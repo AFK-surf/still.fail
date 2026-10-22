@@ -79,6 +79,8 @@ static const char *shader_src =
     "Texture2D atlas : register(t0);\n"
     "Texture2D img : register(t1);\n"
     "Texture2D bd : register(t2);\n"
+    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 9 fours each\n"
+    "Buffer<float4> segs : register(t3);\n"
     "SamplerState samp : register(s0);\n"
     "struct VIn { float4 rect : INST0; float4 p : INST1; float4 color : INST2; float4 c2 : INST3;\n"
     "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; float4 rs : INST7; float4 rot : INST8;\n"
@@ -96,6 +98,8 @@ static const char *shader_src =
     "  float grow = kind == 2 ? I.p.w * 3.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);\n"
     "  float2 pos = I.rect.xy - grow + corner * (I.rect.zw + 2.0 * grow);\n"
     "  if (kind == 6) pos = lerp(ggb.xy, ggb.zw, corner);\n"
+    "  // the pieces of shapes (kind 12): nothing drawn\n"
+    "  if (kind == 12) pos = float2(0.0, 0.0);\n"
     "  // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (o.p), its clip\n"
     "  // there too or (35: one from outside what turned) where it is drawn (o.cp)\n"
     "  float2 at = pos;\n"
@@ -160,6 +164,22 @@ static const char *shader_src =
     "  int kind = int(I.prm.y + 0.5);\n"
     "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(I.prm.x, min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
     "  float4 col = I.color;\n"
+    "  if (kind == 11) {\n"
+    "    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; prm.x half its stroke's width (0: a fill,\n"
+    "    // c2.z 1 by the even-odd rule)\n"
+    "    int first = int(I.c2.x + 0.5), n = int(I.c2.y + 0.5);\n"
+    "    float a;\n"
+    "    if (I.prm.x > 0.0) {\n"
+    "      float d = 1e9;\n"
+    "      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(segs.Load((i / 6) * 9 + mb_seg_slot(i)), I.rect, p));\n"
+    "      a = saturate(0.5 - (d - I.prm.x) * scale);\n"
+    "    } else {\n"
+    "      float4 w = float4(0.0, 0.0, 0.0, 0.0);\n"
+    "      for (int i = first; i < first + n; i++) w += mb_path_rows(segs.Load((i / 6) * 9 + mb_seg_slot(i)), I.rect, p, scale);\n"
+    "      a = mb_path_cover(w, I.c2.z);\n"
+    "    }\n"
+    "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
+    "  }\n"
     "  if (kind == 10) {\n"
     "    // a piece of a line (scene.mbt): from c2.xy to c2.zw (shares of its rect), prm.x half its width, its ends round\n"
     "    float2 a = I.rect.xy + I.c2.xy * I.rect.zw, ab = I.rect.xy + I.c2.zw * I.rect.zw - a;\n"
@@ -625,6 +645,41 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
   return 1;
 }
 
+// The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the pixel
+// shader to read (segs, t3): as they are, 9 fours an instance.
+static ID3D11Buffer *segs_buf;
+static ID3D11ShaderResourceView *segs_srv;
+static size_t segs_cap;
+
+static void segs_upload(const float *f, int32_t count) {
+  int32_t d = count;
+  while (d > 0 && (int)(f[(d - 1) * MB_INST + 5] + 0.5f) == 12) d--;
+  if (d == count) return;
+  size_t need = (size_t)(count - d) * MB_INST * sizeof(float);
+  if (segs_cap < need) {
+    if (segs_srv) segs_srv->Release();
+    if (segs_buf) segs_buf->Release();
+    segs_srv = NULL;
+    segs_cap = need * 2;
+    D3D11_BUFFER_DESC bd = {(UINT)segs_cap, D3D11_USAGE_DYNAMIC, D3D11_BIND_SHADER_RESOURCE, D3D11_CPU_ACCESS_WRITE, 0, 0};
+    if (FAILED(dev->CreateBuffer(&bd, NULL, &segs_buf))) {
+      segs_buf = NULL;
+      segs_cap = 0;
+      return;
+    }
+    D3D11_SHADER_RESOURCE_VIEW_DESC sd = {};
+    sd.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    sd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+    sd.Buffer.FirstElement = 0;
+    sd.Buffer.NumElements = (UINT)(segs_cap / 16);
+    dev->CreateShaderResourceView(segs_buf, &sd, &segs_srv);
+  }
+  D3D11_MAPPED_SUBRESOURCE m;
+  if (FAILED(ctx->Map(segs_buf, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) return;
+  memcpy(m.pData, f + (size_t)d * MB_INST, need);
+  ctx->Unmap(segs_buf, 0);
+}
+
 // the main pipeline's state, at the start and after the passes
 static void main_state(ID3D11RenderTargetView *target, int pw, int ph) {
   D3D11_VIEWPORT vp = {0, 0, (float)pw, (float)ph, 0, 1};
@@ -643,6 +698,7 @@ static void main_state(ID3D11RenderTargetView *target, int pw, int ph) {
   ctx->PSSetConstantBuffers(0, 2, cbs);
   ctx->PSSetShaderResources(0, 1, &atlas_srv);
   ctx->PSSetShaderResources(2, 1, gsrv ? &gsrv : &atlas_srv);
+  ctx->PSSetShaderResources(3, 1, &segs_srv);
   ctx->PSSetSamplers(0, 1, &sampler);
   ctx->OMSetBlendState(blend, NULL, 0xffffffff);
 }
@@ -657,6 +713,7 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
   ctx->UpdateSubresource(ubuf, 0, NULL, &u, 0, 0);
   memset(&gu, 0, sizeof gu);
   gsrv = NULL;
+  segs_upload(f, count);
   main_state(target, pw, ph);
   // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in), or sharing one
   // capture of glass (negative)

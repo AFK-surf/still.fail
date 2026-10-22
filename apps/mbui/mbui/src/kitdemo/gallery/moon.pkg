@@ -8,6 +8,7 @@ import {
 
 import {
   "moonbitlang/core/env",
+  "mbui/dmath",
 } for "wbtest"
 
 options(

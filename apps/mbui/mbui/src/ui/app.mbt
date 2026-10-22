@@ -265,6 +265,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   let t2 = h_now()
   c.ninst = 0
+  c.segs.clear()
   text_runs.runs.clear()
   c.next_hit_ids.clear()
   c.next_hit_rects.clear()
@@ -274,6 +275,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.glass_frame()
   c.paint(root, 1.0)
   c.paint_overlays()
+  c.emit_segs()
   c.sync_views()
   // the streams' frames taken in this frame said shown (stream.mbt)
   streams_after_paint()

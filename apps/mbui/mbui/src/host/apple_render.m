@@ -54,6 +54,8 @@ static NSString *shader_src = @
 "  float grow = kind == 2 ? I.p.w * 3.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);\n"
 "  float2 pos = I.rect.xy - grow + corner * (I.rect.zw + 2.0 * grow);\n"
 "  if (kind == 6) pos = mix(g.gb.xy, g.gb.zw, corner);\n"
+"  // the pieces of shapes (kind 12): nothing drawn\n"
+"  if (kind == 12) pos = float2(0.0, 0.0);\n"
 "  // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (o.p), its clip there\n"
 "  // too or (35: one from outside what turned) where it is drawn (o.cp)\n"
 "  float2 at = pos;\n"
@@ -172,6 +174,23 @@ MB_CORNER_SL
 "    float h = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0);\n"
 "    float d = length(p - a - ab * h) - I.p.x;\n"
 "    return (float4(col.rgb, 1.0) * col.a * clamp(0.5 - d * u.scale, 0.0, 1.0)) * cover;\n"
+"  }\n"
+"  if (kind == 11) {\n"
+"    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x, among those after every instance drawn\n"
+"    // (kind 12, from instance u.pad on); p.x half its stroke's width (0: a fill, c2.z 1 by the even-odd rule)\n"
+"    const device float4* sg = (const device float4*)inst;\n"
+"    int first = int(I.c2.x + 0.5), n = int(I.c2.y + 0.5), base = int(u.pad + 0.5);\n"
+"    float a;\n"
+"    if (I.p.x > 0.0) {\n"
+"      float d = 1e9;\n"
+"      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(sg[(base + i / 6) * 9 + mb_seg_slot(i)], I.rect, p));\n"
+"      a = clamp(0.5 - (d - I.p.x) * u.scale, 0.0, 1.0);\n"
+"    } else {\n"
+"      float4 w = float4(0.0);\n"
+"      for (int i = first; i < first + n; i++) w += mb_path_rows(sg[(base + i / 6) * 9 + mb_seg_slot(i)], I.rect, p, u.scale);\n"
+"      a = mb_path_cover(w, I.c2.z);\n"
+"    }\n"
+"    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
 "  }\n"
 "  float2 hs = I.rect.zw * 0.5;\n"
 "  float2 c = I.rect.xy + hs;\n"
@@ -445,6 +464,9 @@ static int capture(id<MTLCommandBuffer> cb, id<MTLTexture> target, const float *
   return 1;
 }
 
+// where the pieces of the frame's shapes start (src/ui/shape.mbt: the instances of kind 12 after every one drawn)
+static int32_t seg_base;
+
 static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderPipelineState> p,
                                               id<MTLBuffer> buf, int clear, double r, double g, double b) {
   MTLRenderPassDescriptor *rp = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -453,7 +475,7 @@ static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTex
   rp.colorAttachments[0].storeAction = MTLStoreActionStore;
   rp.colorAttachments[0].clearColor = MTLClearColorMake(r, g, b, 1);
   id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rp];
-  struct { float vp[2]; float scale; float pad; } u = {{(float)vw, (float)vh}, (float)vscale, 0};
+  struct { float vp[2]; float scale; float pad; } u = {{(float)vw, (float)vh}, (float)vscale, (float)seg_base};
   [enc setRenderPipelineState:p];
   [enc setVertexBuffer:buf offset:0 atIndex:0];
   [enc setVertexBytes:&u length:sizeof(u) atIndex:1];
@@ -470,12 +492,14 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
                    id<MTLBuffer> buf, int32_t count, double r, double g, double b) {
   gtex = nil;
   memset(&gu, 0, sizeof gu);
+  const float *f = (const float *)buf.contents;
+  seg_base = count;
+  while (seg_base > 0 && (int)(f[(seg_base - 1) * MB_INST + 5] + 0.5f) == 12) seg_base--;
   id<MTLRenderCommandEncoder> enc = begin_pass(cb, target, p, buf, 1, r, g, b);
   // one draw per run of instances showing the same image (slot 20; 0:
   // none, the atlas stands in), or sharing one capture of glass (negative),
   // and holes for native views (kind 9) apart, unblended. Glass over a hole
   // sees the hole (the canvas only, not the view under it).
-  const float *f = (const float *)buf.contents;
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {

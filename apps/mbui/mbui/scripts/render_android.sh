@@ -53,6 +53,8 @@ case "${1:-run}" in
     # lines drawn as they are (no reference: checked)
     draw lines $O/lines.png
     "$D/chk" lines $O/lines.png
+    draw shapes $O/shapes.png
+    "$D/chk" shapes $O/shapes.png
     $ADB shell am force-stop $APP_ID
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then

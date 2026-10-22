@@ -303,42 +303,52 @@ fn raster(d : Drawable, pw : Int, ph : Int, tint : Int64?) -> FixedArray[Byte] {
 }
 
 ///|
-/// `d` drawn `w` wide (its height as its viewport's), under `key`.
-fn draw_drawable(
-  c : @ui.Ctx,
-  key : String,
-  d : Drawable,
-  w : Double,
-  tint : Int64?,
-  held? : String,
-) -> Int {
+/// `d` drawn `w` wide (its height as its viewport's) by the GPU (mbui's Ctx::shapes), its shapes kept by `key`, its
+/// curves cut fine enough for the screen's pixels.
+fn draw_drawable(c : @ui.Ctx, key : String, d : Drawable, w : Double, tint : Int64?) -> Int {
   let h = w * d.h / d.w
-  let pw = px_of(c, w)
-  let ph = imax((pw.to_double() * d.h / d.w).round().to_int(), 1)
   let tk = match tint {
     Some(t) => t.to_string()
     None => "-"
   }
-  let k = "mem:sf/pic/\{key}/\{pw}x\{ph}/\{tk}"
-  if !made.contains(k) {
-    made[k] = true
-    @ui.add_image(k, png(pw, ph, raster(d, pw, ph, tint)))
-  }
-  // a picture of one state after another (`held`: what it is, the stations' glyph breathing): the last one ready
-  // shown while the next is decoded, never a frame of nothing between them
-  let shown = match held {
-    Some(what) => {
-      let px = imax(pw, ph).to_double()
-      if c.image_ready(k, px) {
-        held_shown[what] = k
-        k
-      } else {
-        held_shown.get(what).unwrap_or(k)
-      }
+  let k = "pic/\{key}/\{w}/\{c.scale}/\{tk}"
+  let shapes = match shapes_made.get(k) {
+    Some(s) => s
+    None => {
+      let s = drawable_shapes(d, w, c.scale, tint)
+      shapes_made[k] = s
+      s
     }
-    None => k
   }
-  c.image(shown, w=Px(w), h=Px(h), fit=FitFill, bg=0L, fade=false)
+  c.shapes(shapes, w=Px(w), h=Px(h), name="sf/" + k)
+}
+
+///|
+/// The shapes of `d` drawn `w` wide at `scale` pixels a point, every colour in `tint`'s when it is given: each path's
+/// fill, then its stroke, as its layers say.
+fn drawable_shapes(d : Drawable, w : Double, scale : Double, tint : Int64?) -> Array[@ui.Shape] {
+  let k = w / d.w
+  let out : Array[@ui.Shape] = []
+  for l in d.layers {
+    let subs = path_subpaths(l.d, dmax(k * l.sx, k * l.sy) * scale).map(fn(sub) {
+      let (pts, closed) = sub
+      let moved = Array::make(pts.length(), 0.0)
+      let mut j = 0
+      while j + 1 < pts.length() {
+        moved[j] = (pts[j] * l.sx + l.tx) * k
+        moved[j + 1] = (pts[j + 1] * l.sy + l.ty) * k
+        j += 2
+      }
+      (moved, closed)
+    })
+    if l.fill != 0L {
+      out.push(@ui.shape_of(subs, fill=tinted(l.fill, tint), even_odd=l.even_odd))
+    }
+    if l.stroke != 0L && l.width > 0.0 {
+      out.push(@ui.shape_of(subs, stroke=tinted(l.stroke, tint), width=l.width * l.sx * k))
+    }
+  }
+  out
 }
 
 ///|

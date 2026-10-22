@@ -243,9 +243,9 @@ test "the history's post: where it went with its platform's mark, in the accent'
   // still.fail's mark (12) just before the name, on its line
   assert_true(
     t
-    .drawn_images()
+    .shape_boxes()
     .iter()
-    .any(fn(i) { i[2] >= 11.0 && i[2] <= 13.0 && i[0] + i[2] <= x && i[0] + i[2] >= x - 6.0 && i[1] < y + h && i[1] + i[3] > y }),
+    .any(fn(i) { i.3 >= 11.0 && i.3 <= 13.0 && i.1 + i.3 <= x && i.1 + i.3 >= x - 6.0 && i.2 < y + h && i.2 + i.4 > y }),
   )
   // the chat it went to is the one under the history: back to it
   t.tap_text("整理发布清单")

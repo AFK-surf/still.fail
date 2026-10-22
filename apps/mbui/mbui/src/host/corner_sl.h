@@ -1,5 +1,5 @@
 // src/host/corner.sl as a C string (scripts/chk corner-sl makes it: edit corner.sl, then run it). The shaders
-// write float2; GLSL's take it with `#define float2 vec2` before it.
+// write float2; GLSL's take it with `#define float2 vec2` and `#define float4 vec4` before it.
 #define MB_CORNER_SL \
   "// mbui's corners (src/ui/smooth.mbt: these are its smoothness, sd_corner and sd_box, number for number), the one copy\n" \
   "// every renderer draws by: Metal's, Direct3D's and both GLs' shaders take it in as it is (corner_sl.h; web/host.js\n" \
@@ -74,5 +74,41 @@
   "    y += st;\n" \
   "  }\n" \
   "  return v;\n" \
+  "}\n" \
+  "// A shape (src/ui/shape.mbt, scene.mbt's kind 11): its pieces s (x0 y0 x1 y1 as shares of its band's rect r) worked\n" \
+  "// into the pixel about p, scale its pixels a point. A fill's: each piece's crossings of 4 rows across the pixel, each\n" \
+  "// counted by how much of the row lies left of it (+ going down, - going up); their sums over every piece, the rows'\n" \
+  "// winding numbers across the pixel, make its cover (even_odd 1: by the even-odd rule, else the nonzero one).\n" \
+  "// (mb4: v in all four; Direct3D's float4 takes no single number)\n" \
+  "float4 mb4(float v) {\n" \
+  "  return float4(v, v, v, v);\n" \
+  "}\n" \
+  "float4 mb_path_rows(float4 s, float4 r, float2 p, float scale) {\n" \
+  "  float2 a = r.xy + s.xy * r.zw;\n" \
+  "  float2 b = r.xy + s.zw * r.zw;\n" \
+  "  if (a.y == b.y) return mb4(0.0);\n" \
+  "  float dir = b.y > a.y ? 1.0 : -1.0;\n" \
+  "  float4 ys = mb4(p.y) + float4(-0.375, -0.125, 0.125, 0.375) / scale;\n" \
+  "  float4 in_ = step(mb4(min(a.y, b.y)), ys) * (mb4(1.0) - step(mb4(max(a.y, b.y)), ys));\n" \
+  "  float4 xs = mb4(a.x) + (ys - mb4(a.y)) * ((b.x - a.x) / (b.y - a.y));\n" \
+  "  return in_ * dir * clamp((xs - mb4(p.x)) * scale + mb4(0.5), mb4(0.0), mb4(1.0));\n" \
+  "}\n" \
+  "float mb_path_cover(float4 w, float even_odd) {\n" \
+  "  float4 a = abs(w);\n" \
+  "  float4 f = a - floor(a * 0.5) * 2.0;\n" \
+  "  float4 c = even_odd > 0.5 ? mb4(1.0) - abs(mb4(1.0) - f) : min(a, mb4(1.0));\n" \
+  "  return dot(c, mb4(0.25));\n" \
+  "}\n" \
+  "// A stroke's: how far p is from a piece (its ends round).\n" \
+  "float mb_seg_dist(float4 s, float4 r, float2 p) {\n" \
+  "  float2 a = r.xy + s.xy * r.zw;\n" \
+  "  float2 ab = r.xy + s.zw * r.zw - a;\n" \
+  "  float h = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0);\n" \
+  "  return length(p - a - ab * h);\n" \
+  "}\n" \
+  "// Which of a data instance's (kind 12) fours piece i is in: 0, 2, 3, 4, 6, 7 (shape.mbt seg_slots), six to an instance.\n" \
+  "int mb_seg_slot(int i) {\n" \
+  "  int s = i - (i / 6) * 6;\n" \
+  "  return s + (s >= 1 ? 1 : 0) + (s >= 4 ? 1 : 0);\n" \
   "}\n" \
   ""
