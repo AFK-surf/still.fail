@@ -10,6 +10,9 @@
 # picture is kept and neither Android's pictures nor the Android text are to be taken.
 # A free runner: ubuntu with KVM, the emulator's system image named here (x86_64): mbui-render built for it,
 # Android's (arm64 alone: its core's engine) run through the image's ARM translation.
+# In jobs of 10 minutes at most: `plan` says what is to be done (and does it where no emulator is needed); the apps
+# are built each in a job of its own, once; the screens are drawn on emulators a few at a time (`shard`, each its own
+# emulator), and `report` says how they went together.
 name: mbui-android-ref
 on:
   pull_request:
@@ -33,12 +36,18 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  screens:
+  plan:
     if: github.repository == 'AFK-surf/still.fail'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       MBUI_FRESH: 1
+    outputs:
+      refs: ${{ steps.what.outputs.refs }}
+      lacks: ${{ steps.text.outputs.lacks }}
+      on: ${{ steps.emu.outputs.on }}
+      key: ${{ steps.changed.outputs.key }}
+      shards: ${{ steps.shards.outputs.shards }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -79,7 +88,7 @@ jobs:
       - uses: ./.github/actions/mbui-moonbit
       # the screens drawn in the Tester over the Android host's text (src/sfscreens/android_ref_wbtest.mbt), their draw
       # lists and their pictures' keys (android-ref.sh lists); text it lacks is recorded on the emulator (the mbui app
-      # run once a screen; this run's artifact has it, committed in the PR)
+      # run once a screen; the run's artifacts have it, committed in the PR)
       - name: The screens' draw lists
         id: text
         run: |
@@ -100,43 +109,44 @@ jobs:
           echo "to draw: ${need:-none}"
           if [ "${{ steps.what.outputs.refs }}" = 1 ] || [ "${{ steps.text.outputs.lacks }}" = 1 ] || [ -n "$need" ]; then
             echo "on=1" >> "$GITHUB_OUTPUT"; else echo "on=0" >> "$GITHUB_OUTPUT"; fi
+      # the screens a few at a time, an emulator each (Android's pictures, the text, the mbui app's pictures: each of
+      # those for six screens fits a job's ten minutes)
+      - name: The screens shared out
+        id: shards
+        run: |
+          names=$(cd client/fixtures/screens && ls *.json | sed 's/\.json$//' | grep -v -x allowed | LC_ALL=C sort)
+          echo "shards=$(echo $names | tr ' ' '\n' | paste -d' ' - - - - - - | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
       - name: The screens compared, every picture kept (no emulator)
         if: steps.emu.outputs.on == '0'
         run: bash apps/mbui/scripts/android-ref.sh ci
-      # the emulator from the Actions cache (the android-sdk workflow puts its build and this image in): nothing
-      # downloaded here (the system image's download broke off: "Error on ZipFile unknown archive", 39662296477);
-      # started now and booting while the apps are built, its boot followed before the screens are drawn
-      - uses: ./.github/actions/mbui-android-emulator
-        if: steps.emu.outputs.on == '1'
-        with: { api: "36", target: google_apis, profile: pixel_7, phase: start }
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.emu.outputs.on == '0'
+        with:
+          name: mbui-android-ref
+          path: |
+            apps/mbui/out/android-ref/
+            apps/mbui/screens/text-android.textrec
+            client/fixtures/screens/android/
+          if-no-files-found: ignore
+  # Android's app and its tests (ScreensRefTest), where its pictures are taken anew
+  android:
+    needs: plan
+    if: needs.plan.outputs.on == '1' && needs.plan.outputs.refs == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
       - uses: actions/setup-java@v4
-        if: steps.emu.outputs.on == '1'
         with: { distribution: temurin, java-version: 21 }
       # (read only, on main too: it restores the newest Gradle home of the OS (mbui's android job writes one), and its own
       # writes, ~1 GB a commit with their parts, pushed out of the 10 GB the toolchain caches the jobs need)
       - uses: gradle/actions/setup-gradle@v4
-        if: steps.what.outputs.refs == '1'
         with: { cache-read-only: true }
-      # (the NDK only for Android's app, when its pictures are taken anew: the mbui apps build with the runner's own,
-      # and a gigabyte from Google's servers each run, cut short, failed this job: 2026-10-21)
       - uses: ./.github/actions/setup
-        if: steps.emu.outputs.on == '1'
-        with:
-          android: 'true'
-          ndk: ${{ steps.what.outputs.refs == '1' && 'true' || 'false' }}
-      - uses: ./.github/actions/mbui-apk
-        if: steps.emu.outputs.on == '1'
-      - name: The mbui app, for the text it lacks (APP=sffix, debug, for the x86_64 emulator)
-        if: steps.text.outputs.lacks == '1'
-        run: ABI=x86_64 APP=sffix bash apps/mbui/scripts/android.sh build
-      - name: mbui-render's app, which draws the screens' draw lists (for the x86_64 emulator)
-        if: steps.emu.outputs.on == '1'
-        working-directory: apps/mbui/mbui
-        run: ABI=x86_64 APP=render MBUI_ANDROID_HOOK=$PWD/scripts/render_android_hook.sh bash scripts/android.sh build
+        with: { android: 'true', ndk: 'true' }
       # Android's build directories as pipeline's check-android left them (this branch's, else main's; read only, that
-      # job keeps them): what did not change is up to date (from nothing, Gradle took 176-222 s of this job)
+      # job keeps them): what did not change is up to date
       - uses: actions/cache/restore@v4
-        if: steps.what.outputs.refs == '1'
         with:
           path: |
             apps/android/.gradle
@@ -152,53 +162,124 @@ jobs:
             android-build-${{ github.ref_name }}-
             android-build-main-
       - name: Android's app and its tests (ScreensRefTest)
-        if: steps.what.outputs.refs == '1'
         env:
           ORG_GRADLE_PROJECT_motionTest: 1
         run: python3 apps/android/build.py --tasks :app:assembleDebug :app:assembleDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mbui-android-ref-android-apks
+          path: |
+            apps/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          retention-days: 1
+  # the mbui apps for the x86_64 emulator: mbui-render's (it draws the screens' draw lists), and the mbui app where its
+  # Android text is lacking
+  mbui:
+    needs: plan
+    if: needs.plan.outputs.on == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      MBUI_FRESH: 1
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: ./.github/actions/setup
+        with: { android: 'true', ndk: 'false' }
+      - uses: ./.github/actions/mbui-apk
+      - name: The mbui app, for the text it lacks (APP=sffix, debug)
+        if: needs.plan.outputs.lacks == '1'
+        run: ABI=x86_64 APP=sffix bash apps/mbui/scripts/android.sh build
+      - name: mbui-render's app, which draws the screens' draw lists
+        working-directory: apps/mbui/mbui
+        run: ABI=x86_64 APP=render MBUI_ANDROID_HOOK=$PWD/scripts/render_android_hook.sh bash scripts/android.sh build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mbui-android-ref-mbui-apks
+          path: |
+            apps/mbui/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/mbui/mbui/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 1
+  shard:
+    needs: [plan, android, mbui]
+    if: always() && needs.plan.outputs.on == '1' && needs.mbui.result == 'success' && needs.android.result != 'failure' && needs.android.result != 'cancelled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        names: ${{ fromJson(needs.plan.outputs.shards) }}
+    env:
+      MBUI_FRESH: 1
+    steps:
+      - uses: actions/checkout@v5
       - uses: ./.github/actions/mbui-android-emulator
-        if: steps.emu.outputs.on == '1'
+        with: { api: "36", target: google_apis, profile: pixel_7, phase: start }
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/download-artifact@v4
+        with: { pattern: mbui-android-ref-*-apks, path: .ci/apks }
+      - uses: actions/cache/restore@v4
+        with:
+          path: apps/mbui/out/android-ref-pics
+          key: mbui-android-ref-pics-none
+          restore-keys: mbui-android-ref-pics-
+      - uses: ./.github/actions/mbui-android-emulator
         with: { api: "36", target: google_apis, profile: pixel_7, phase: wait }
-      - name: The screens, Android's and the mbui app's, compared
-        if: steps.emu.outputs.on == '1'
+      - name: The screens, Android's and the mbui app's, compared (${{ matrix.names }})
         env:
-          REFS: ${{ steps.what.outputs.refs }}
-          TEXT: ${{ steps.text.outputs.lacks }}
-          ANDROID_APK: ${{ steps.what.outputs.refs == '1' && format('{0}/apps/android/app/build/outputs/apk/debug/app-debug.apk', github.workspace) || '' }}
-          ANDROID_TEST_APK: ${{ steps.what.outputs.refs == '1' && format('{0}/apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk', github.workspace) || '' }}
-          MBUI_APK: ${{ steps.text.outputs.lacks == '1' && format('{0}/apps/mbui/android/app/build/outputs/apk/debug/app-debug.apk', github.workspace) || '' }}
-          RENDER_APK: ${{ github.workspace }}/apps/mbui/mbui/android/app/build/outputs/apk/debug/app-debug.apk
-        run: bash apps/mbui/scripts/android-ref.sh ci
+          REFS: ${{ needs.plan.outputs.refs }}
+          TEXT: ${{ needs.plan.outputs.lacks }}
+          ANDROID_APK: ${{ needs.plan.outputs.refs == '1' && format('{0}/.ci/apks/mbui-android-ref-android-apks/debug/app-debug.apk', github.workspace) || '' }}
+          ANDROID_TEST_APK: ${{ needs.plan.outputs.refs == '1' && format('{0}/.ci/apks/mbui-android-ref-android-apks/androidTest/debug/app-debug-androidTest.apk', github.workspace) || '' }}
+          MBUI_APK: ${{ needs.plan.outputs.lacks == '1' && format('{0}/.ci/apks/mbui-android-ref-mbui-apks/android/app/build/outputs/apk/debug/app-debug.apk', github.workspace) || '' }}
+          RENDER_APK: ${{ github.workspace }}/.ci/apks/mbui-android-ref-mbui-apks/mbui/android/app/build/outputs/apk/debug/app-debug.apk
+        run: bash apps/mbui/scripts/android-ref.sh ci ${{ matrix.names }}
       # Android's pictures taken over all this came out as those kept: marked, not taken again for it
       - name: Android's pictures the same as kept, marked
-        if: always() && steps.what.outputs.refs == '1' && hashFiles('apps/mbui/out/android-ref/refs-same') != ''
+        if: always() && needs.plan.outputs.refs == '1' && hashFiles('apps/mbui/out/android-ref/refs-same') != ''
         run: mkdir -p .ci/android-refs-same && cp apps/mbui/out/android-ref/refs-same .ci/android-refs-same/
-      - uses: actions/cache/save@v4
-        if: always() && steps.what.outputs.refs == '1' && hashFiles('apps/mbui/out/android-ref/refs-same') != ''
-        with:
-          path: .ci/android-refs-same
-          key: mbui-android-refs-same-${{ steps.changed.outputs.key }}
-      # the pictures drawn now kept for the runs after, by their keys (those of this run's screens only; drawn right
-      # whatever the comparison found)
-      - name: The pictures kept, this run's screens'
+      - name: The pictures kept, this shard's screens'
         id: pics
-        if: always() && steps.emu.outputs.on == '1'
+        if: always()
         run: |
           cd apps/mbui/out
           keep=$(for f in android-ref/dl/*.key; do n=$(basename $f .key); echo "$(cat $f)-$n.png"; done)
           for p in android-ref-pics/*.png; do echo "$keep" | grep -qx "$(basename $p)" || rm -f "$p"; done
           echo "key=$(echo "$keep" | shasum -a 256 | cut -c1-32)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/save@v4
-        if: always() && steps.emu.outputs.on == '1'
+        if: always()
         with:
           path: apps/mbui/out/android-ref-pics
-          key: mbui-android-ref-pics-${{ steps.pics.outputs.key }}-${{ github.run_id }}
+          key: mbui-android-ref-pics-${{ steps.pics.outputs.key }}-${{ github.run_id }}-${{ strategy.job-index }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: mbui-android-ref
+          name: mbui-android-ref-${{ strategy.job-index }}
           path: |
             apps/mbui/out/android-ref/
             apps/mbui/screens/text-android.textrec
             client/fixtures/screens/android/
+            .ci/android-refs-same/
           if-no-files-found: ignore
+  # the shards together: every one compared as allowed, and Android's pictures, when taken anew, the same as kept
+  # for all of them (then marked, not taken again over this)
+  report:
+    needs: [plan, shard]
+    if: always() && needs.plan.outputs.on == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: mbui-android-ref-[0-9]*, path: shards }
+      - id: same
+        run: |
+          n=$(ls -d shards/*/ 2>/dev/null | wc -l)
+          s=$(ls shards/*/.ci/android-refs-same/refs-same 2>/dev/null | wc -l)
+          cat shards/*/apps/mbui/out/android-ref/report.md 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+          [ "$n" -gt 0 ] && [ "$s" = "$n" ] && { mkdir -p .ci/android-refs-same && echo same > .ci/android-refs-same/refs-same; }
+          [ "${{ needs.shard.result }}" = success ] || { echo "the screens: a shard failed (each one's artifact says why)"; exit 1; }
+      - uses: actions/cache/save@v4
+        if: needs.plan.outputs.refs == '1' && hashFiles('.ci/android-refs-same/refs-same') != ''
+        with:
+          path: .ci/android-refs-same
+          key: mbui-android-refs-same-${{ needs.plan.outputs.key }}

@@ -210,14 +210,14 @@ case "$cmd" in
     python3 "$D/android_ref.py" "$R" "$O/mbui" "$O" "$S/allowed.json" $names
     ;;
   ci)
-    # CI's run (mbui-android-ref.yml): the runner's CPU said (the emulator draws in software on it); Android's
+    # CI's run (mbui-android-ref.yml: the screens named, a shard's, else every one): the runner's CPU said (the emulator draws in software on it); Android's
     # pictures taken anew where its app or the screens changed (REFS=1), held to those kept (a change is a new
     # reference: this run's, committed in its PR); then the mbui app's, compared
     fail=0
     echo "android-ref: on $(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//')"
     if [ "${REFS:-}" = 1 ] || [ ! -f $R/android.json ]; then
       rm -rf $O/kept && mkdir -p $O && { [ -f $R/android.json ] && cp -r $R $O/kept; true; }
-      bash "$0" refs || exit 1
+      bash "$0" refs $names || exit 1
       # held to those kept as android_ref.py compares (a channel a step apart the same: the same picture has come out so
       # on another runner, at circles' edges), the kept ones then left as they are
       if [ -f $O/kept/android.json ] && cmp -s $O/kept/android.json $R/android.json \
@@ -232,21 +232,21 @@ case "$cmd" in
         # new ones taken again, to be references (one that differs from itself is none: the run says where); those the
         # same as kept need not be, the kept ones having been so
         rm -rf $O/again && cp -r $R $O/again
-        bash "$0" refs > /dev/null || exit 1
+        bash "$0" refs $names > /dev/null || exit 1
         python3 "$D/android_ref.py" "$O/again" "$R" "$O/again-diff" /nonexistent $names | grep '^| [a-z]' \
           | sed 's/^/android-ref: Android twice: /'
       fi
     fi
     # the Android host's text the Tester lacks, recorded (TEXT=1: the job found it lacking), then kept in the PR
     if [ "${TEXT:-}" = 1 ]; then
-      bash "$0" text || exit 1
+      bash "$0" text $names || exit 1
       echo "android-ref: the Android text recorded anew: commit this run's screens/text-android.textrec (its artifact) in the PR"
       fail=1
     fi
     # (the draw lists again where the text was recorded anew or Android's system changed with its pictures)
-    { [ "${TEXT:-}" = 1 ] || [ "${REFS:-}" = 1 ] || [ ! -f $O/dl/print.txt ]; } && { bash "$0" lists || exit 1; }
-    bash "$0" mbui || exit 1
-    bash "$0" compare || fail=1
+    { [ "${TEXT:-}" = 1 ] || [ "${REFS:-}" = 1 ] || [ ! -f $O/dl/print.txt ]; } && { bash "$0" lists $names || exit 1; }
+    bash "$0" mbui $names || exit 1
+    bash "$0" compare $names || fail=1
     exit $fail
     ;;
   *) die "refs, mbui or compare (scripts/android-ref.sh)" ;;
