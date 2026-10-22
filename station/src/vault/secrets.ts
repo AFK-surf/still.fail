@@ -141,7 +141,7 @@ export class Secrets {
     this.proxy = d.proxy ?? new Proxy(`${d.data}/vault`, d.now);
     this.#restore(ended);
     d.hub.store.subscribe((c) => {
-      if (c.type === "sessionRemoved" || (c.type === "session" && ended(c.key))) this.keeper.end(c.key);
+      if ((c.type === "sessionRemoved" || c.type === "session") && this.keeper.holds(c.key) && ended(c.key)) this.keeper.end(c.key);
     });
   }
 

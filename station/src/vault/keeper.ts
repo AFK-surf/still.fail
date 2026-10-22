@@ -148,6 +148,12 @@ export class Keeper {
     this.#forget(id);
   }
 
+  /// Whether `session` holds a grant here (used up or not).
+  holds(session: string): boolean {
+    for (const h of this.#held.values()) if (h.request.session === session) return true;
+    return false;
+  }
+
   /// `session`'s chat archived or gone: its grants end.
   end(session: string) {
     for (const h of [...this.#held.values()]) if (h.request.session === session) this.#forget(h.request.id);
