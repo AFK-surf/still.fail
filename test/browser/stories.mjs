@@ -14,6 +14,8 @@ import { build, preview } from 'vite';
 import { corners, drawn, panels } from './measure.mjs';
 const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.env.SHOTS;
+// (how far the page's own time runs on after each step: the longest of its motions and of what waits on them)
+const still_ms = 3000;
 const only = process.env.ONLY?.split(',');
 let server, browser, dist;
 try {
@@ -33,28 +35,32 @@ try {
   const stories = (await index.evaluate(() => window.stories)).filter((s, i) => (!only || only.includes(s.id)) && i % shards === shard - 1);
   await index.close();
 
-  // Settled: fonts in, every transition and finite animation over (spinners go on), after `ms` for what starts late.
-  const settle = (page, ms) => page.waitForTimeout(ms).then(() => page.evaluate(() => Promise.race([
-    document.fonts.ready.then(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {})))),
-    new Promise((ok) => setTimeout(ok, 3000)),
-  ])));
-
-  // Still: drawn the same twice a little apart (what moves by script, its springs, is not among the page's animations).
-  const steady = async (page) => {
-    let was = null;
-    for (let i = 0; i < 20; i++) {
-      const { lines, loops } = await page.evaluate(drawn);
-      const now = JSON.stringify(lines.filter((l) => { const at = l.split(' ')[0]; return !loops.some((x) => at === x || at.startsWith(`${x}>`)); }));
-      if (now === was) return;
-      was = now;
-      await page.waitForTimeout(150);
+  // The page's time is the test's (Playwright's clock): its timers, its frames and the demo's core run as far as a step
+  // says, at once, never a wait of real time. Settled: fonts and pictures in, the page's time run on by `ms` (what
+  // comes late: the demo's next line), then by `still_ms` more in steps, each step's transitions and finite animations
+  // taken to their ends (they run on the browser's own clock: finished, not waited for; spinners go on), so that what
+  // the app times by them (a row's turn after the one before it, listQueue.ts) comes as it would.
+  const settle = async (page, ms) => {
+    await page.evaluate(() => Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]));
+    await page.clock.runFor(ms);
+    for (let t = 0; t < still_ms; t += 100) {
+      await page.evaluate(async () => {
+        const going = document.getAnimations().filter((a) => (a.playState === 'running' || a.pending) && a.effect?.getTiming().iterations !== Infinity);
+        for (const a of going) a.finish();
+        await Promise.all(going.map((a) => a.finished.catch(() => {})));
+      });
+      await page.clock.runFor(100);
     }
   };
+
+  // Still: what moves by script (its springs, not among the page's animations) at its end: settled.
+  const steady = (page) => settle(page, 0);
 
   const wrong = [];
   /** A page with the story in it, taken to its state by its steps; whether it got there. */
   const open = async (story) => {
     const page = await browser.newPage({ viewport: story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN', reducedMotion: 'no-preference' });
+    await page.clock.install();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`${base}?story=${story.id}&theme=light`);
@@ -75,7 +81,7 @@ try {
           const cdp = await page.context().newCDPSession(page);
           await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }] });
-          await page.waitForTimeout(800);
+          await page.clock.runFor(800);
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         }
         await settle(page, 450);
