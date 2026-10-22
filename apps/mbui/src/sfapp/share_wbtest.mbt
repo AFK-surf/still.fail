@@ -133,8 +133,8 @@ fn over_toast_foot(foot : Double) -> Double raise {
 ///|
 test "over another app, the view under the bars: the toasts kept above the navigation bar" {
   let bare = over_toast_foot(0.0)
-  assert_eq(bars_foot.val, 0.0)
+  assert_eq(@ui.system_bars().bottom, 0.0)
   let under = over_toast_foot(48.0)
-  assert_eq(bars_foot.val, 48.0)
+  assert_eq(@ui.system_bars().bottom, 48.0)
   assert_eq(bare - under, 48.0)
 }

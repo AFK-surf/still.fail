@@ -935,25 +935,12 @@ fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
 }
 
 ///|
-/// A ThumbHash's width over its height, from its header (thumbhash.js thumbHashToApproximateAspectRatio).
+/// A ThumbHash's width over its height, from its header (mbui's @pixels.thumbhash_ratio).
 fn thumb_ratio(hash : String) -> Double? {
   if hash == "" {
     return None
   }
-  let bytes = @gallery.b64_decode(hash)
-  if bytes.length() < 5 {
-    return None
-  }
-  let header = bytes[3]
-  let has_alpha = (bytes[2] & 0x80) != 0
-  let is_landscape = (bytes[4] & 0x80) != 0
-  let lx = if is_landscape { if has_alpha { 5 } else { 7 } } else { header & 7 }
-  let ly = if is_landscape { header & 7 } else if has_alpha { 5 } else { 7 }
-  if ly == 0 {
-    None
-  } else {
-    Some(lx.to_double() / ly.to_double())
-  }
+  @pixels.thumbhash_ratio(@codec.from_base64(hash))
 }
 
 ///|

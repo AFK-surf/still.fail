@@ -585,13 +585,12 @@ test "image sizes from their bytes" {
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x06, 0x40,
     0, 0, 0x03, 0x84, 8, 6, 0, 0, 0,
   ].map(fn(i) { i.to_byte() }))
-  assert_eq(image_size(png), Some((1600, 900)))
+  assert_eq(@pixels.image_size(png), Some((1600, 900)))
   let gif = Bytes::from_array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 3, 0, 2, 0, 0, 0].map(fn(i) { i.to_byte() }))
-  assert_eq(image_size(gif), Some((3, 2)))
-  assert_eq(image_size(b"plain words"), None)
+  assert_eq(@pixels.image_size(gif), Some((3, 2)))
+  assert_eq(@pixels.image_size(b"plain words"), None)
   assert_eq(paste_preview("\n  first line\r\nsecond"), "first line")
   assert_eq(uuid("0123456789abcdef0123456789abcdef"), "01234567-89ab-cdef-0123-456789abcdef")
-  assert_eq(utf8_bytes("会").length(), 3)
 }
 
 ///|

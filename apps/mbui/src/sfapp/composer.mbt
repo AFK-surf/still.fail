@@ -556,66 +556,12 @@ fn upload_id(what : String, n : Int) -> String {
 }
 
 ///|
-/// The width and height a picture's bytes say (PNG, JPEG, GIF, WebP), or None.
-fn image_size(b : Bytes) -> (Int, Int)? {
-  let n = b.length()
-  let u8 = fn(i : Int) -> Int { if i < n { b[i].to_int() } else { 0 } }
-  let be16 = fn(i : Int) -> Int { (u8(i) << 8) | u8(i + 1) }
-  let le16 = fn(i : Int) -> Int { u8(i) | (u8(i + 1) << 8) }
-  let be32 = fn(i : Int) -> Int { (be16(i) << 16) | be16(i + 2) }
-  if n >= 24 && u8(0) == 0x89 && u8(1) == 0x50 && u8(2) == 0x4E && u8(3) == 0x47 {
-    return Some((be32(16), be32(20)))
-  }
-  if n >= 10 && u8(0) == 0x47 && u8(1) == 0x49 && u8(2) == 0x46 {
-    return Some((le16(6), le16(8)))
-  }
-  if n >= 30 && u8(0) == 0x52 && u8(1) == 0x49 && u8(8) == 0x57 && u8(9) == 0x45 {
-    // RIFF….WEBP: VP8 , VP8L, VP8X
-    let kind = u8(15)
-    if kind == 0x20 {
-      return Some((le16(26) & 0x3FFF, le16(28) & 0x3FFF))
-    } else if kind == 0x4C {
-      let bits = u8(21) | (u8(22) << 8) | (u8(23) << 16) | (u8(24) << 24)
-      return Some(((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1))
-    } else if kind == 0x58 {
-      return Some(
-        (
-          (u8(24) | (u8(25) << 8) | (u8(26) << 16)) + 1,
-          (u8(27) | (u8(28) << 8) | (u8(29) << 16)) + 1,
-        ),
-      )
-    }
-    return None
-  }
-  if n >= 4 && u8(0) == 0xFF && u8(1) == 0xD8 {
-    let mut i = 2
-    while i + 9 < n {
-      if u8(i) != 0xFF {
-        i += 1
-        continue
-      }
-      let m = u8(i + 1)
-      if m == 0xD8 || m == 0x01 || (m >= 0xD0 && m <= 0xD7) || m == 0xFF {
-        i += if m == 0xFF { 1 } else { 2 }
-        continue
-      }
-      // a start of frame (not DHT C4, JPG C8, DAC CC)
-      if m >= 0xC0 && m <= 0xCF && m != 0xC4 && m != 0xC8 && m != 0xCC {
-        return Some((be16(i + 7), be16(i + 5)))
-      }
-      i += 2 + be16(i + 2)
-    }
-  }
-  None
-}
-
-///|
 /// A file picked or pasted, into the draft and up to the station at once (Composer.kt upload): over 1 GB it is
 /// refused where it shows; on a read-only run it goes nowhere.
 fn add_file(src : Source, d : Draft, station : String, name : String, bytes : Bytes, pasted : String?) -> Unit {
   let id = next_pending.val
   next_pending.val += 1
-  let (w, h) = match image_size(bytes) {
+  let (w, h) = match @pixels.image_size(bytes) {
     Some(s) if pasted is None => s
     _ => (0, 0)
   }
@@ -922,7 +868,7 @@ fn uploading_text(f : Pending) -> String {
 /// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name).
 fn paste_as_file(src : Source, d : Draft, station : String, words : String) -> Unit {
   let name = paste_name(d.key + "\u{1}" + d.id, words, d.files.length())
-  add_file(src, d, station, name, utf8_bytes(words), Some(words))
+  add_file(src, d, station, name, @utf8.encode(words), Some(words))
 }
 
 ///|
@@ -2364,31 +2310,6 @@ fn composer_left(src : Source, r : ChatRef) -> Unit {
   }
   cui.attach = false
   pick_clear()
-}
-
-///|
-/// Words as UTF-8.
-fn utf8_bytes(s : String) -> Bytes {
-  let out = @buffer.new(size_hint=s.length() * 3)
-  for ch in s {
-    let u = ch.to_int()
-    if u < 0x80 {
-      out.write_byte(u.to_byte())
-    } else if u < 0x800 {
-      out.write_byte((0xC0 | (u >> 6)).to_byte())
-      out.write_byte((0x80 | (u & 0x3F)).to_byte())
-    } else if u < 0x10000 {
-      out.write_byte((0xE0 | (u >> 12)).to_byte())
-      out.write_byte((0x80 | ((u >> 6) & 0x3F)).to_byte())
-      out.write_byte((0x80 | (u & 0x3F)).to_byte())
-    } else {
-      out.write_byte((0xF0 | (u >> 18)).to_byte())
-      out.write_byte((0x80 | ((u >> 12) & 0x3F)).to_byte())
-      out.write_byte((0x80 | ((u >> 6) & 0x3F)).to_byte())
-      out.write_byte((0x80 | (u & 0x3F)).to_byte())
-    }
-  }
-  out.to_bytes()
 }
 
 ///|

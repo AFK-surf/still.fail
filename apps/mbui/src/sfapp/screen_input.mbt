@@ -1,7 +1,7 @@
 // What a person does on the device, as a station's screen takes it (ember apps/android app/remote/Input.kt;
 // docs/remote-screens.md, `screen.input`): points in 0..1 of the frame, buttons as the DOM's bit mask, keys by the DOM's
 // KeyboardEvent names, typed text as it is committed. And the frame's own zoom and the trackpad's pointer, on this
-// device only (ScreenViewer.kt ViewZoom, PadPointer).
+// device only (ScreenViewer.kt ViewZoom: mbui's @kit.Zoom; PadPointer).
 
 ///|
 /// The DOM's mouse buttons (MouseEvent.buttons).
@@ -204,12 +204,13 @@ fn type_words(send : (Json) -> Unit, held : HeldKeys, words : String) -> Unit {
 }
 
 ///|
-/// The frame's own zoom, on this device only (never sent): `scale` over the fitted size, the frame moved by `x`, `y`
-/// (px) from where it sits fitted. Kept within the stage: smaller than it, centred; larger, no gap at its edges.
-priv struct ViewZoom {
-  mut scale : Double
-  mut x : Double
-  mut y : Double
+/// The frame's own zoom, on this device only (never sent): mbui's @kit.Zoom, the frame fitted edge to edge (larger
+/// than its pixels where the stage has room), zoomed from the fitted size to `screen_max_zoom` times it. Kept within
+/// the stage: smaller than it, centred; larger, no gap at its edges.
+fn screen_zoom() -> @kit.Zoom {
+  @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true, min_scale=fn(fit) { fit }, max_scale=fn(fit) {
+    fit * screen_max_zoom
+  })
 }
 
 ///|
@@ -217,137 +218,12 @@ priv struct ViewZoom {
 let screen_max_zoom : Double = 5.0
 
 ///|
-fn ViewZoom::zoomed(self : ViewZoom) -> Bool {
-  self.scale > 1.01
-}
-
-///|
-/// Where the frame is drawn on the stage, fitted at `fit`.
-fn ViewZoom::shown(self : ViewZoom, fit : SRect) -> SRect {
-  { x: fit.x + self.x, y: fit.y + self.y, w: fit.w * self.scale, h: fit.h * self.scale }
-}
-
-///|
-/// At `next` over `fit`, its top left at `left`, `top` on the stage as near as its edges let it be.
-fn ViewZoom::put(
-  self : ViewZoom,
-  next : Double,
-  left : Double,
-  top : Double,
-  fit : SRect,
-  bw : Double,
-  bh : Double,
-) -> Unit {
-  let place = fn(want : Double, size : Double, room : Double) {
-    if size <= room {
-      (room - size) / 2.0
-    } else {
-      clamp_to(want, room - size, 0.0)
-    }
+/// Where the frame is drawn on the stage now (zoomed), nothing before its size is known.
+fn ScreenUi::shown(self : ScreenUi) -> SRect {
+  match self.zoom.rect() {
+    Some((x, y, w, h)) => { x, y, w, h }
+    None => srect_zero
   }
-  self.scale = next
-  self.x = place(left, fit.w * next, bw) - fit.x
-  self.y = place(top, fit.h * next, bh) - fit.y
-}
-
-///|
-/// By `factor` around (fx, fy), and moved by (dx, dy) (on the stage, px).
-fn ViewZoom::by(
-  self : ViewZoom,
-  factor : Double,
-  fx : Double,
-  fy : Double,
-  dx : Double,
-  dy : Double,
-  fit : SRect,
-  bw : Double,
-  bh : Double,
-) -> Unit {
-  if fit.w <= 0.0 {
-    return
-  }
-  let before = self.shown(fit)
-  let next = clamp_to(self.scale * factor, 1.0, screen_max_zoom)
-  let ux = (fx - before.x) / before.w
-  let uy = (fy - before.y) / before.h
-  self.put(next, fx - ux * fit.w * next + dx, fy - uy * fit.h * next + dy, fit, bw, bh)
-}
-
-///|
-fn ViewZoom::pan(self : ViewZoom, dx : Double, dy : Double, fit : SRect, bw : Double, bh : Double) -> Unit {
-  self.by(1.0, fit.x + fit.w / 2.0, fit.y + fit.h / 2.0, dx, dy, fit, bw, bh)
-}
-
-///|
-/// `at` (0..1 of the frame) brought `margin` px within the stage's edges, the frame moved as little as it takes.
-fn ViewZoom::keep(
-  self : ViewZoom,
-  at : (Double, Double),
-  margin : Double,
-  fit : SRect,
-  bw : Double,
-  bh : Double,
-) -> Unit {
-  let s = self.shown(fit)
-  let px = s.x + at.0 * s.w
-  let py = s.y + at.1 * s.h
-  let off = fn(v : Double, room : Double) {
-    if room < 2.0 * margin {
-      room / 2.0 - v
-    } else if v < margin {
-      margin - v
-    } else if v > room - margin {
-      room - margin - v
-    } else {
-      0.0
-    }
-  }
-  let dx = off(px, bw)
-  let dy = off(py, bh)
-  if dx != 0.0 || dy != 0.0 {
-    self.pan(dx, dy, fit, bw, bh)
-  }
-}
-
-///|
-/// The stage resized (the keyboard up or down): the frame drawn as large as it was, so what is typed into stays as
-/// legible, `at` (0..1 of the frame; else what was in the middle) where it was on the stage and kept in sight.
-fn ViewZoom::refit(
-  self : ViewZoom,
-  before : SRect,
-  after : SRect,
-  bw : Double,
-  bh : Double,
-  at : (Double, Double)?,
-  margin : Double,
-) -> Unit {
-  if before.w <= 0.0 || after.w <= 0.0 {
-    self.reset()
-    return
-  }
-  let was = self.shown(before)
-  let u = match at {
-    Some(a) => a
-    None =>
-      ((before.x + before.w / 2.0 - was.x) / was.w, (before.y + before.h / 2.0 - was.y) / was.h)
-  }
-  let next = clamp_to(was.w / after.w, 1.0, screen_max_zoom)
-  self.put(
-    next,
-    was.x + u.0 * was.w - u.0 * after.w * next,
-    was.y + u.1 * was.h - u.1 * after.h * next,
-    after,
-    bw,
-    bh,
-  )
-  self.keep(u, margin, after, bw, bh)
-}
-
-///|
-fn ViewZoom::reset(self : ViewZoom) -> Unit {
-  self.scale = 1.0
-  self.x = 0.0
-  self.y = 0.0
 }
 
 ///|

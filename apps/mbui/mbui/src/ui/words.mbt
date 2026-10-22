@@ -2,8 +2,8 @@
 // they are laid out as one text, one paragraph to a line. The app marks the box while building it (Ctx::words) with a
 // key and, if it has one, the passage selected (offsets in that text) and its colour; once laid out, what the box holds
 // is kept under the key (Ctx::words_of: where each paragraph is, its layout) for the app to find offsets, words and
-// rects in, from a finger's place; the passage is drawn behind the words of each paragraph it covers. Selection itself
-// (holding, widening by words, handles, what to do with it) is the app's: this is what it needs of the layout.
+// rects in, from a finger's place; the passage is drawn behind the words of each paragraph it covers. How a finger
+// selects (holding, widening by words, the handles) is @kit.Pick's over these; what is done with it, the app's.
 
 ///|
 /// A paragraph among the words: its layout, where its text's top left is in the window, its size, and where its

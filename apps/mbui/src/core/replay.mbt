@@ -113,7 +113,7 @@ pub fn Replay::parse(log : String) -> Replay {
           _ => (0.0, false)
         }
         let bytes = match m.get("b") {
-          Some(String(h)) => Some(unhex(h))
+          Some(String(h)) => Some(@codec.from_hex(h))
           _ => None
         }
         evs.push({ out: true, msg: o, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false })
@@ -124,7 +124,7 @@ pub fn Replay::parse(log : String) -> Replay {
           _ => (0.0, false)
         }
         let bytes = match (m.get("b"), m.get("bn")) {
-          (Some(String(h)), _) => Some(unhex(h))
+          (Some(String(h)), _) => Some(@codec.from_hex(h))
           // (bytes the trace left out, their length kept: as many zeros)
           (_, Some(Number(n, ..))) => Some(Bytes::new(n.to_int()))
           _ => None

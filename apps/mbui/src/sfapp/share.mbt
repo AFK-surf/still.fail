@@ -201,7 +201,7 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
           continue
         }
         let name = text(Some(f), "name")
-        let image = match image_size(bytes) {
+        let image = match @pixels.image_size(bytes) {
           Some(_) => {
             share_files_made.val += 1
             let key = "mem:share-in/\{share_files_made.val}"

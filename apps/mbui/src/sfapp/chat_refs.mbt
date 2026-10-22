@@ -174,12 +174,12 @@ fn linked_chat(href : String) -> LinkedChat? {
   let n = parts.length()
   let ok = fn(p : String) { p != "" && !p.contains("?") && !p.contains("#") && !p.contains(" ") }
   if n >= 4 && parts[n - 4] == "o" && ok(parts[n - 3]) && ok(parts[n - 2]) && ok(parts[n - 1]) {
-    return Some({ station: parts[n - 3] + "/" + parts[n - 2], id: decode_component(parts[n - 1]), history })
+    return Some({ station: parts[n - 3] + "/" + parts[n - 2], id: @codec.percent_decoded(parts[n - 1]), history })
   }
   if n >= 6 && parts[n - 6] == "w" && parts[n - 4] == "s" && parts[n - 2] == "chats" && ok(parts[n - 5]) &&
     ok(parts[n - 3]) &&
     ok(parts[n - 1]) {
-    return Some({ station: parts[n - 5] + "/" + parts[n - 3], id: decode_component(parts[n - 1]), history })
+    return Some({ station: parts[n - 5] + "/" + parts[n - 3], id: @codec.percent_decoded(parts[n - 1]), history })
   }
   None
 }
@@ -210,73 +210,6 @@ fn history_ok(h : String) -> Bool {
       true
     }
   }
-}
-
-///|
-/// `%XX` put back as the bytes they are (UTF-8), as JavaScript's decodeURIComponent; the words as they are where they
-/// are not well formed.
-fn decode_component(s : String) -> String {
-  if !s.contains("%") {
-    return s
-  }
-  let hex = fn(ch : Int) -> Int {
-    if ch >= 48 && ch <= 57 {
-      ch - 48
-    } else if ch >= 65 && ch <= 70 {
-      ch - 55
-    } else if ch >= 97 && ch <= 102 {
-      ch - 87
-    } else {
-      -1
-    }
-  }
-  let out = StringBuilder()
-  let mut i = 0
-  while i < s.length() {
-    // a run of %XX: its bytes as UTF-8
-    let bytes : Array[Int] = []
-    while i + 2 < s.length() &&
-      s.at(i).to_int() == 37 &&
-      hex(s.at(i + 1).to_int()) >= 0 &&
-      hex(s.at(i + 2).to_int()) >= 0 {
-      bytes.push(hex(s.at(i + 1).to_int()) * 16 + hex(s.at(i + 2).to_int()))
-      i = i + 3
-    }
-    if bytes.is_empty() {
-      out.write_string(s.view(start_offset=i, end_offset=i + 1).to_string())
-      i = i + 1
-      continue
-    }
-    let mut k = 0
-    while k < bytes.length() {
-      let b0 = bytes[k]
-      let (n, init) = if b0 < 0x80 {
-        (0, b0)
-      } else if b0 >= 0xC0 && b0 < 0xE0 {
-        (1, b0 & 0x1F)
-      } else if b0 >= 0xE0 && b0 < 0xF0 {
-        (2, b0 & 0x0F)
-      } else if b0 >= 0xF0 && b0 < 0xF8 {
-        (3, b0 & 0x07)
-      } else {
-        (-1, 0)
-      }
-      if n < 0 || k + n >= bytes.length() {
-        return s
-      }
-      let mut cp = init
-      for j in 1..=n {
-        let b = bytes[k + j]
-        if (b & 0xC0) != 0x80 {
-          return s
-        }
-        cp = (cp << 6) | (b & 0x3F)
-      }
-      out.write_char(Int::unsafe_to_char(cp))
-      k = k + n + 1
-    }
-  }
-  out.to_string()
 }
 
 ///|
@@ -446,7 +379,7 @@ fn mark_pasted(
         "/s/" +
         chat.station.view(start_offset=at + 1).to_string() +
         "/chats/" +
-        encode_component(chat.id) +
+        @codec.encode_uri_component(chat.id) +
         chat.history
       // the mark only once the core keeps its link (failing, the link stays as it is)
       (src.call)(

@@ -55,6 +55,7 @@ fn messages_reset() -> Unit {
   tape.val = None
   between_frames.val = None
   outside_due.val = None
+  system_bars_now.val = { top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 }
 }
 
 ///|
@@ -129,6 +130,9 @@ fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
   if taping() {
     tape_line("MSG " + message_line(channel, json, bytes))
   }
+  if channel == @hostapi.system_channel {
+    system_took(json)
+  }
   match message_handlers.get(channel) {
     Some(f) => {
       messages_handed.val += 1
@@ -142,7 +146,7 @@ fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
 fn message_line(channel : String, json : String, bytes : Bytes?) -> String {
   let m : Map[String, Json] = { "c": Json::string(channel), "j": Json::string(json) }
   match bytes {
-    Some(b) => m["b"] = Json::string(base64_of(b))
+    Some(b) => m["b"] = Json::string(@codec.base64(b))
     None => ()
   }
   Json::object(m).stringify()
@@ -162,7 +166,7 @@ fn replay_message(f : FakeHost, line : String) -> Unit {
   guard j is Object(m) else { return }
   guard (m.get("c"), m.get("j")) is (Some(String(channel)), Some(String(json))) else { return }
   let bytes = match m.get("b") {
-    Some(String(s)) => Some(bytes_of_base64(s))
+    Some(String(s)) => Some(@codec.from_base64(s))
     _ => None
   }
   fake_post(f, channel, json, bytes)
@@ -248,75 +252,3 @@ pub fn Tester::tape(self : Tester) -> String {
   }
 }
 
-///|
-fn base64_char(v : Int) -> Char {
-  let n = if v < 26 {
-    'A'.to_int() + v
-  } else if v < 52 {
-    'a'.to_int() + v - 26
-  } else if v < 62 {
-    '0'.to_int() + v - 52
-  } else if v == 62 {
-    '+'.to_int()
-  } else {
-    '/'.to_int()
-  }
-  n.unsafe_to_char()
-}
-
-///|
-fn base64_of(b : Bytes) -> String {
-  let sb = StringBuilder::new()
-  let n = b.length()
-  let mut i = 0
-  while i < n {
-    let a = b[i].to_int()
-    let c1 = if i + 1 < n { b[i + 1].to_int() } else { 0 }
-    let c2 = if i + 2 < n { b[i + 2].to_int() } else { 0 }
-    let v = (a << 16) | (c1 << 8) | c2
-    sb.write_char(base64_char((v >> 18) & 63))
-    sb.write_char(base64_char((v >> 12) & 63))
-    sb.write_char(if i + 1 < n { base64_char((v >> 6) & 63) } else { '=' })
-    sb.write_char(if i + 2 < n { base64_char(v & 63) } else { '=' })
-    i = i + 3
-  }
-  sb.to_string()
-}
-
-///|
-fn base64_digit(c : Char) -> Int {
-  let n = c.to_int()
-  if n >= 'A'.to_int() && n <= 'Z'.to_int() {
-    n - 'A'.to_int()
-  } else if n >= 'a'.to_int() && n <= 'z'.to_int() {
-    n - 'a'.to_int() + 26
-  } else if n >= '0'.to_int() && n <= '9'.to_int() {
-    n - '0'.to_int() + 52
-  } else if c == '+' {
-    62
-  } else if c == '/' {
-    63
-  } else {
-    -1
-  }
-}
-
-///|
-fn bytes_of_base64(s : String) -> Bytes {
-  let out : Array[Byte] = []
-  let mut acc = 0
-  let mut bits = 0
-  for c in s {
-    let v = base64_digit(c)
-    if v < 0 {
-      continue
-    }
-    acc = ((acc << 6) | v) & 0xffffff
-    bits = bits + 6
-    if bits >= 8 {
-      bits = bits - 8
-      out.push(((acc >> bits) & 255).to_byte())
-    }
-  }
-  Bytes::from_array(out)
-}

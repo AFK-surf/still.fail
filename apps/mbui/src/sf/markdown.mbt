@@ -181,129 +181,12 @@ pub fn file_name_of(url : String) -> String {
   } else if u.has_prefix("file://") {
     u = u.view(start_offset=7).to_string()
   }
-  let u = percent_decoded(u)
+  let u = @codec.percent_decoded(u)
   let mut i = u.length()
   while i > 0 && u.at(i - 1).to_int() != 47 {
     i = i - 1
   }
   u.view(start_offset=i).to_string()
-}
-
-///|
-/// %XX escapes undone (as UTF-8); the text as it is where they do not make
-/// one.
-fn percent_decoded(s : String) -> String {
-  unescaped(s).unwrap_or(s)
-}
-
-///|
-/// As JavaScript's decodeURIComponent (Markdown.kt decoded): %XX escapes
-/// undone (as UTF-8); None where it throws (a `%` of no two hex digits,
-/// bytes of no UTF-8).
-fn decoded(s : String) -> String? {
-  let mut i = 0
-  while i < s.length() {
-    if s.at(i).to_int() == 37 {
-      let hex = fn(k : Int) {
-        if k >= s.length() {
-          return false
-        }
-        let c = s.at(k).to_int()
-        (c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102)
-      }
-      if !hex(i + 1) || !hex(i + 2) {
-        return None
-      }
-      i = i + 3
-    } else {
-      i = i + 1
-    }
-  }
-  unescaped(s)
-}
-
-///|
-/// %XX escapes undone (as UTF-8), those that make none kept as written; None
-/// where the bytes are no UTF-8.
-fn unescaped(s : String) -> String? {
-  if !s.contains("%") {
-    return Some(s)
-  }
-  let hex = fn(c : Int) -> Int {
-    if c >= 48 && c <= 57 {
-      c - 48
-    } else if c >= 97 && c <= 102 {
-      c - 87
-    } else if c >= 65 && c <= 70 {
-      c - 55
-    } else {
-      -1
-    }
-  }
-  // the bytes, the text's own characters as UTF-8
-  let bytes : Array[Int] = []
-  for ch in s {
-    let k = ch.to_int()
-    if k < 0x80 {
-      bytes.push(k)
-    } else if k < 0x800 {
-      bytes.push(0xC0 | (k >> 6))
-      bytes.push(0x80 | (k & 0x3F))
-    } else if k < 0x10000 {
-      bytes.push(0xE0 | (k >> 12))
-      bytes.push(0x80 | ((k >> 6) & 0x3F))
-      bytes.push(0x80 | (k & 0x3F))
-    } else {
-      bytes.push(0xF0 | (k >> 18))
-      bytes.push(0x80 | ((k >> 12) & 0x3F))
-      bytes.push(0x80 | ((k >> 6) & 0x3F))
-      bytes.push(0x80 | (k & 0x3F))
-    }
-  }
-  let raw : Array[Int] = []
-  let mut i = 0
-  while i < bytes.length() {
-    if bytes[i] == 37 && i + 2 < bytes.length() {
-      let a = hex(bytes[i + 1])
-      let b = hex(bytes[i + 2])
-      if a >= 0 && b >= 0 {
-        raw.push(a * 16 + b)
-        i = i + 3
-        continue
-      }
-    }
-    raw.push(bytes[i])
-    i = i + 1
-  }
-  let sb = StringBuilder()
-  let mut j = 0
-  while j < raw.length() {
-    let b0 = raw[j]
-    let (n, first) = if b0 < 0x80 {
-      (1, b0)
-    } else if b0 >> 5 == 6 {
-      (2, b0 & 0x1F)
-    } else if b0 >> 4 == 14 {
-      (3, b0 & 0x0F)
-    } else if b0 >> 3 == 30 {
-      (4, b0 & 0x07)
-    } else {
-      return None
-    }
-    if j + n > raw.length() {
-      return None
-    }
-    let mut code = first
-    for k in 1..<n {
-      if raw[j + k] >> 6 != 2 {
-        return None
-      }
-      code = (code << 6) | (raw[j + k] & 0x3F)
-    }
-    sb.write_char(code.unsafe_to_char())
-    j = j + n
-  }
-  Some(sb.to_string())
 }
 
 ///|
@@ -345,7 +228,7 @@ pub fn screen_of_link(href : String) -> (String, String)? {
   guard w_parts(href) is Some(p) && p.length() == 5 && p[1] == "s" && p[3] == "screen" else {
     return None
   }
-  guard decoded(p[0]) is Some(ws) && decoded(p[2]) is Some(st) && decoded(p[4]) is Some(id) else {
+  guard @codec.decode_uri_component(p[0]) is Some(ws) && @codec.decode_uri_component(p[2]) is Some(st) && @codec.decode_uri_component(p[4]) is Some(id) else {
     return None
   }
   Some((ws + "/" + st, id))
@@ -359,7 +242,7 @@ pub fn adb_of_link(href : String) -> String? {
   guard w_parts(href) is Some(p) && p.length() == 4 && p[1] == "s" && p[3] == "adb" else {
     return None
   }
-  guard decoded(p[0]) is Some(ws) && decoded(p[2]) is Some(st) else { return None }
+  guard @codec.decode_uri_component(p[0]) is Some(ws) && @codec.decode_uri_component(p[2]) is Some(st) else { return None }
   Some(ws + "/" + st)
 }
 
@@ -375,7 +258,7 @@ pub fn is_card_link(href : String) -> Bool {
 /// written, or decoded).
 pub fn is_bare_link(words : String, href : String) -> Bool {
   let w = words.trim(chars=" \t\n").to_string()
-  w == href || decoded(href) == Some(w)
+  w == href || @codec.decode_uri_component(href) == Some(w)
 }
 
 ///|

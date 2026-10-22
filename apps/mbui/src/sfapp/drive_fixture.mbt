@@ -274,11 +274,11 @@ fn fixture_drive_read(name : String, params : Json) -> Result[(Json, Bytes), Jso
   let p = Some(params)
   let path = text(p, "path")
   let whole = if path.has_suffix(".md") {
-    utf8_bytes(fixture_markdown())
+    @utf8.encode(fixture_markdown())
   } else if path.has_suffix("小说.txt") {
-    utf8_bytes(novel_text())
+    @utf8.encode(novel_text())
   } else {
-    utf8_bytes("这是一个说明文件。\n")
+    @utf8.encode("这是一个说明文件。\n")
   }
   let offset = number(p, "offset").to_int()
   let length = number(p, "length").to_int()

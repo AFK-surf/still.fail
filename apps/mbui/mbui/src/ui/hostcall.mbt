@@ -1223,7 +1223,7 @@ fn h_view_site_body(id : Int, req : Int) -> Bytes {
       if views_tracer.val is Some(_) || taping() {
         view_say({
           "sitebody": Json::object({ "view": Json::number(id.to_double()), "req": Json::number(req.to_double()) }),
-          "b": Json::string(hex_of(site_body_kept(b))),
+          "b": Json::string(@codec.hex(site_body_kept(b))),
         })
       }
       b
@@ -1319,7 +1319,7 @@ fn h_view_still(id : Int) -> Bytes {
     None => {
       let b = @hostapi.view_still(id)
       if views_tracer.val is Some(_) || taping() {
-        view_say({ "still": Json::object({ "view": Json::number(id.to_double()) }), "b": Json::string(hex_of(b)) })
+        view_say({ "still": Json::object({ "view": Json::number(id.to_double()) }), "b": Json::string(@codec.hex(b)) })
       }
       b
     }
@@ -1396,18 +1396,6 @@ fn view_say(m : Map[String, Json]) -> Unit {
     Some(t) => t(m)
     None => ()
   }
-}
-
-///|
-fn hex_of(b : Bytes) -> String {
-  let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
-  for i in 0..<b.length() {
-    let v = b[i].to_int()
-    out.write_char(digits.get_char(v >> 4).unwrap())
-    out.write_char(digits.get_char(v & 15).unwrap())
-  }
-  out.to_string()
 }
 
 ///|

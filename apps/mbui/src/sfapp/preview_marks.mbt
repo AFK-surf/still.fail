@@ -1211,7 +1211,7 @@ fn marks_pick_color(col : Int64) -> Unit {
 ///|
 /// Where what is being written ends on the stage (ImageMarks.kt writingBottom): the words being written's foot; the
 /// open note's pin's point and the note's box under it (NOTE_BOX, 140); None while neither is.
-fn marks_writing_bottom(z : Zoom) -> Double? {
+fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
   if !marking.on {
     return None
   }

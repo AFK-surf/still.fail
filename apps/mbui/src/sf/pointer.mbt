@@ -28,20 +28,21 @@ pub fn pointer_image(c : @ui.Ctx) -> String {
   let key = "mem:sf/pointer/\{px}"
   if !made.contains(key) {
     made[key] = true
-    // the edge drawn half inside and half outside the outline, over the white inside it
-    let inside = Art::new(pointer_size)
-    inside.fills.push([pointer_outline])
-    let edge = Art::new(pointer_size)
-    edge.stroke(pointer_outline, 1.2, true)
-    let fill = inside.cover(px)
-    let line = edge.cover(px)
+    // the edge drawn half inside and half outside the outline, over the white inside it (mbui's @pixels: the
+    // outline in the image's pixels)
+    let k = px.to_double() / pointer_size
+    let outline = pointer_outline.map(fn(v) { v * k })
+    let fill = FixedArray::make(px * px, 0.0)
+    @pixels.fill_cover(fill, px, px, [outline])
+    let line = FixedArray::make(px * px, 0.0)
+    @pixels.stroke_cover(line, px, px, outline, true, 0.6 * k)
     let rgba = FixedArray::make(px * px * 4, b'\x00')
     let er = ((pointer_edge >> 24) & 0xFFL).to_double()
     let eg = ((pointer_edge >> 16) & 0xFFL).to_double()
     let eb = ((pointer_edge >> 8) & 0xFFL).to_double()
     for i in 0..<(px * px) {
       let a_line = line[i]
-      let a_fill = fill[i]
+      let a_fill = if fill[i] > 1.0 { 1.0 } else { fill[i] }
       // the edge over the white: straight alpha
       let a = a_line + a_fill * (1.0 - a_line)
       if a > 0.0 {
@@ -55,7 +56,7 @@ pub fn pointer_image(c : @ui.Ctx) -> String {
         rgba[i * 4 + 3] = (a * 255.0 + 0.5).to_int().to_byte()
       }
     }
-    @ui.add_image(key, png(px, px, rgba))
+    @ui.add_image(key, @pixels.png(px, px, rgba))
   }
   key
 }

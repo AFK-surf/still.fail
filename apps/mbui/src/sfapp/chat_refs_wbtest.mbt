@@ -114,10 +114,10 @@ test "marks and `@words` as Android's regexes take them: 120 at most, `\\s` its 
 
 ///|
 test "a chat's link: its key decoded as UTF-8, one ill-formed kept as it is" {
-  assert_eq(decode_component("%E9%A6%96%E9%A1%B5"), "首页")
-  assert_eq(decode_component("a%20b"), "a b")
-  assert_eq(decode_component("%E9%A6"), "%E9%A6")
-  assert_eq(decode_component("100%"), "100%")
+  assert_eq(@codec.percent_decoded("%E9%A6%96%E9%A1%B5"), "首页")
+  assert_eq(@codec.percent_decoded("a%20b"), "a b")
+  assert_eq(@codec.percent_decoded("%E9%A6"), "%E9%A6")
+  assert_eq(@codec.percent_decoded("100%"), "100%")
   assert_true(linked_chat("https://app.still.fail/o/ws1/st1") is None)
   assert_true(linked_chat("https://example.com/x") is None)
   match linked_chat("https://app.still.fail/o/ws1/st1/s-c2/") {

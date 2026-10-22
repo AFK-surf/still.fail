@@ -144,7 +144,7 @@ fn link_said(src : Source, p : ServicePage, site : @ui.NativeView, words : Strin
     "sendBinary" => {
       let sid = text(m, "sid")
       if l.sockets.contains(sid) {
-        match bytes_of_b64(text(m, "b64")) {
+        match @codec.from_base64_exact(text(m, "b64")) {
           Some(b) => link_send(src, l, sid, { "socket": Json::string(sid), "binary": Json::boolean(true) }, Some(b))
           None => ()
         }
@@ -168,7 +168,7 @@ fn link_said(src : Source, p : ServicePage, site : @ui.NativeView, words : Strin
     }
     "stash" => {
       let id = text(m, "id")
-      match bytes_of_b64(text(m, "b64")) {
+      match @codec.from_base64_exact(text(m, "b64")) {
         Some(b) if link_name(id) => l.bodies[id] = (b, text(m, "type"))
         _ => ()
       }
@@ -244,7 +244,7 @@ fn link_open(src : Source, p : ServicePage, site : @ui.NativeView, sid : String,
       match (field(Some(v), "open"), field(Some(v), "text"), bytes) {
         (Some(Object(o)), _, _) => event("open", [Json::string(text(Some(Json::object(o)), "protocol"))])
         (_, Some(String(words)), _) => event("text", [Json::string(words)])
-        (_, _, Some(b)) if field(Some(v), "binary") is Some(_) => event("binary", [Json::string(b64_of(b))])
+        (_, _, Some(b)) if field(Some(v), "binary") is Some(_) => event("binary", [Json::string(@codec.base64(b))])
         _ => ()
       }
     },
@@ -321,7 +321,7 @@ fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json) -> 
       let headers = link_headers(field(Some(m), "headers"))
       let body = match field(Some(m), "body") {
         Some(String("")) | None => Some(Bytes::new(0))
-        Some(String(s)) => bytes_of_b64(s)
+        Some(String(s)) => @codec.from_base64_exact(s)
         _ => None
       }
       let body = match body {
@@ -358,7 +358,7 @@ fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json) -> 
             "headers": Json::array(hs.map(fn(h) { Json::array([Json::string(h.0), Json::string(h.1)]) })),
           })
         },
-        chunk: fn(b) { tell({ "t": Json::string("chunk"), "b": Json::string(b64_of(b)) }) },
+        chunk: fn(b) { tell({ "t": Json::string("chunk"), "b": Json::string(@codec.base64(b)) }) },
         end: fn(error) {
           if ended.val {
             return
@@ -498,7 +498,7 @@ fn tagging_take(t : Tagging, b : Bytes, last : Bool) -> Bytes {
   t.placed = true
   let out = @buffer.new(size_hint=so_far.length() + 64)
   out.write_bytes(so_far[0:at].to_bytes())
-  out.write_bytes(utf8_bytes(page_js_tag))
+  out.write_bytes(@utf8.encode(page_js_tag))
   out.write_bytes(so_far[at:].to_bytes())
   out.to_bytes()
 }
@@ -558,58 +558,3 @@ fn tag_end(lower : Array[Int], name : String) -> Int? {
 
 // ── base64 ─
 
-///|
-// kept across runs: a table, never written
-let b64_digits : Array[Char] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".to_array()
-
-///|
-/// Bytes as base64 (padded).
-fn b64_of(b : Bytes) -> String {
-  let sb = StringBuilder::new(size_hint=(b.length() + 2) / 3 * 4)
-  let n = b.length()
-  let mut i = 0
-  while i < n {
-    let b0 = b[i].to_int()
-    let b1 = if i + 1 < n { b[i + 1].to_int() } else { 0 }
-    let b2 = if i + 2 < n { b[i + 2].to_int() } else { 0 }
-    sb.write_char(b64_digits[b0 >> 2])
-    sb.write_char(b64_digits[((b0 & 3) << 4) | (b1 >> 4)])
-    sb.write_char(if i + 1 < n { b64_digits[((b1 & 15) << 2) | (b2 >> 6)] } else { '=' })
-    sb.write_char(if i + 2 < n { b64_digits[b2 & 63] } else { '=' })
-    i += 3
-  }
-  sb.to_string()
-}
-
-///|
-/// Base64's bytes (its padding and white space passed over); None for anything else in it.
-fn bytes_of_b64(s : String) -> Bytes? {
-  let out = @buffer.new(size_hint=s.length() / 4 * 3 + 3)
-  let mut acc = 0
-  let mut bits = 0
-  for ch in s {
-    let c = ch.to_int()
-    let v = if c >= 65 && c <= 90 {
-      c - 65
-    } else if c >= 97 && c <= 122 {
-      c - 97 + 26
-    } else if c >= 48 && c <= 57 {
-      c - 48 + 52
-    } else if c == 43 {
-      62
-    } else if c == 47 {
-      63
-    } else if c == 61 || c == 32 || c == 10 || c == 13 || c == 9 {
-      continue
-    } else {
-      return None
-    }
-    acc = ((acc << 6) | v) & 0xFFFFFF
-    bits += 6
-    if bits >= 8 {
-      bits -= 8
-      out.write_byte(((acc >> bits) & 0xFF).to_byte())
-    }
-  }
-  Some(out.to_bytes())
-}

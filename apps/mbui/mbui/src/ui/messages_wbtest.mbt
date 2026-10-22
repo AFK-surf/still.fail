@@ -128,7 +128,7 @@ test "bytes beside a message are kept on the tape as they were" {
   let b = b"\x00\x01\x02\xfd\xfe\xff\x10"
   for n in 0..=b.length() {
     let part = Bytes::from_array(b.to_array()[0:n].to_array())
-    assert_eq(bytes_of_base64(base64_of(part)), part)
+    assert_eq(@codec.from_base64(@codec.base64(part)), part)
   }
 }
 

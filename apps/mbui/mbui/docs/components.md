@@ -109,6 +109,8 @@ The gallery's page for each is `MBUI_SCREEN=<page>`.
 | Tabs | `@kit.tabs(c, key, tabs, value, panel, manual?) -> Changed[String]`: the arrows choose as they move unless `manual` | disclosure |
 | ScrollArea | `@kit.scroll_area(c, key, h, body)`: a list's scrolling (wheel, drag, keys, its bar) round what is taller than its room | disclosure |
 | Form | `@kit.form(c, key, fields, submit?) -> FormResult`: fields by `form_field` (needed, an email, a number, the view's check); what is wrong shows once left or handed on | disclosure |
+| (a zoom) | `@kit.Zoom`: a picture in a stage fitted, zoomed round a point (`transform`, `zoom_to`, `double_tap`, gliding), panned, kept within the stage (`keep`, `resize_keeping`); the fingers' are the view's | |
+| (a pick of words) | `@kit.Pick` over `Ctx::words`: held still, the word; sliding on, widened by words; its ends' handles; a tap elsewhere lets go. What it is for, and its look, the view's | |
 
 ## Radix's utilities
 

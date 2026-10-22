@@ -37,26 +37,6 @@ pub fn Tester::drawlist(self : Tester, bytes? : Bool = false) -> String {
 }
 
 ///|
-/// `data` in base64 (standard, padded).
-fn to_base64(data : Bytes) -> String {
-  let abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-  let sb = StringBuilder()
-  let n = data.length()
-  let mut i = 0
-  while i < n {
-    let b0 = data[i].to_int()
-    let b1 = if i + 1 < n { data[i + 1].to_int() } else { 0 }
-    let b2 = if i + 2 < n { data[i + 2].to_int() } else { 0 }
-    sb.write_char(abc[b0 >> 2].unsafe_to_char())
-    sb.write_char(abc[((b0 & 3) << 4) | (b1 >> 4)].unsafe_to_char())
-    sb.write_char(if i + 1 < n { abc[((b1 & 15) << 2) | (b2 >> 6)].unsafe_to_char() } else { '=' })
-    sb.write_char(if i + 2 < n { abc[b2 & 63].unsafe_to_char() } else { '=' })
-    i = i + 3
-  }
-  sb.to_string()
-}
-
-///|
 /// The images the last frame drew that the app handed over as bytes (Ctx::image_bytes, add_image), in the list's
 /// order: their sources and bytes, for a renderer beside the draw list (its `.img<N>` files).
 pub fn Tester::drawlist_images(self : Tester) -> Array[(Int, String, Bytes)] {
@@ -282,7 +262,7 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
       Some(data) => {
         sb.write_string(" \{data.length()}")
         if bytes {
-          sb.write_string("\nbytes \{n} " + to_base64(data))
+          sb.write_string("\nbytes \{n} " + @codec.base64(data))
         }
       }
       None => ()

@@ -238,8 +238,6 @@ fn reset() -> Unit {
   share_in.query = ""
   share_in.find.set("")
   share_over.val = false
-  bars_top.val = 0.0
-  bars_foot.val = 0.0
   share_closing.val = false
   update.available = None
   update.asked = false
@@ -1201,23 +1199,16 @@ fn attend(src : Source, workspace : String) -> Unit {
 /// {away}`, client/core-ts src/wake.ts), and a newer build is asked for again (onStart's checkUpdates); the default
 /// network changed, every link it had is taken for dead (NetworkWatch: `client.wake {away: 0, network: true}`).
 fn system_said(json : String) -> Unit {
-  let v = @json.parse(json) catch { _ => return }
-  // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
-  match field(Some(v), "link") {
-    Some(String(url)) => link_later.push(url)
-    _ => ()
-  }
-  // shown over another app, or in its own window again (share.mbt)
-  match field(Some(v), "over") {
-    Some(True) => share_over.val = true
-    Some(False) => share_over.val = false
-    _ => ()
-  }
-  // how far the bars reach in over the view (bars.mbt): edge to edge, or over another app
-  let bars = field(Some(v), "bars")
-  if bars is Some(Object(_)) {
-    bars_top.val = number(bars, "top")
-    bars_foot.val = number(bars, "bottom")
+  let said = @hostapi.system_said(json)
+  for s in said {
+    match s {
+      // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
+      Link(url) => link_later.push(url)
+      // shown over another app, or in its own window again (share.mbt)
+      Over(over) => share_over.val = over
+      // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
+      _ => ()
+    }
   }
   let src = match attention.src {
     Some(s) => s
@@ -1226,31 +1217,23 @@ fn system_said(json : String) -> Unit {
   if src.read_only {
     return
   }
-  match field(Some(v), "shown") {
-    Some(Object(_) as s) => {
-      let away = match field(Some(s), "away") {
-        Some(Number(n, ..)) => n
-        _ => 0.0
+  for s in said {
+    match s {
+      Shown(away~) => {
+        (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
+        update_check(src, false)
       }
-      (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
-      update_check(src, false)
+      // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
+      InstallAllow(..) => toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
+      InstallFailed(error~, ..) => toast_later(pv_fill("android-chat.file.installFailed", [("error", error)]))
+      Network =>
+        (src.call)(
+          "client.wake",
+          { "away": Json::number(0.0), "network": Json::boolean(true) },
+          fn(_) {  },
+        )
+      _ => ()
     }
-    _ => ()
-  }
-  // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
-  match field(Some(v), "install") {
-    Some(Object(_) as i) if flag(Some(i), "allow") =>
-      toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
-    Some(Object(_) as i) =>
-      toast_later(pv_fill("android-chat.file.installFailed", [("error", text(Some(i), "error"))]))
-    _ => ()
-  }
-  if flag(Some(v), "network") {
-    (src.call)(
-      "client.wake",
-      { "away": Json::number(0.0), "network": Json::boolean(true) },
-      fn(_) {  },
-    )
   }
 }
 

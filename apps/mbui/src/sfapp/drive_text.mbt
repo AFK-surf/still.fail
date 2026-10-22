@@ -1,8 +1,9 @@
-// The text side of the drive's reader (ember apps/android drive/TextModel.kt, Novel.kt, ReaderMarkdown.kt): decoding,
-// a hard-wrapped novel reflowed into paragraphs, its chapters found, the text cut into blocks a list lays out one at a
-// time, the paragraphs' indent, search, and Markdown drawn as runs with the way back to the raw offsets search and
-// jumps use. Plain MoonBit over a String (UTF-16 offsets, as the Kotlin's): no page, no core. Where the reader is, is
-// an offset into the text it shows (the core's drivePlace `at`).
+// The text side of the drive's reader (ember apps/android drive/TextModel.kt, Novel.kt, ReaderMarkdown.kt): its
+// decoding mbui's (@hostapi.decode_text), a hard-wrapped novel reflowed into paragraphs, its chapters found, the text
+// cut into blocks a list lays out one at a time, the paragraphs' indent, search, and Markdown drawn as runs with the
+// way back to the raw offsets search and jumps use (ReaderMarkdown.kt's few forms, not @md's whole Markdown: the
+// Android app's reader draws only those). Plain MoonBit over a String (UTF-16 offsets, as the Kotlin's): no page, no
+// core. Where the reader is, is an offset into the text it shows (the core's drivePlace `at`).
 
 ///|
 /// How much text one block holds (TextModel.kt CHUNK_CHARS): 2–3 phone pages.
@@ -56,111 +57,6 @@ fn tx_find(s : String, what : String, from : Int) -> Int {
 fn tx_starts(s : String, what : String, at : Int) -> Bool {
   at + what.length() <= s.length() &&
   s.view(start_offset=at, end_offset=at + what.length()) == what.view()
-}
-
-// ── decoding ─────────────────────────────────────────────────────────────
-
-///|
-/// A file's bytes as text, and the encoding that made it (TextModel.kt decodeText): a byte order mark settles it;
-/// else strict UTF-8 (a character cut in half at the end of a `truncated` front, or of a half-copied file, dropped);
-/// else GB18030, as the system's tables decode it (@hostapi.decode_charset), as the Android app reads such a file; UTF-8
-/// with replacement characters where the host knows no GB18030.
-fn decode_text(b : Bytes, truncated? : Bool = false) -> (String, String) {
-  let n = b.length()
-  if n == 0 {
-    return ("", "UTF-8")
-  }
-  let at = fn(i : Int) -> Int { b[i].to_int() }
-  if n >= 3 && at(0) == 0xEF && at(1) == 0xBB && at(2) == 0xBF {
-    let v = b.clamped_view(start=3, end=tx_utf8_end(b, 3, n, truncated))
-    return (@utf8.decode(v) catch { _ => @utf8.decode_lossy(v) }, "UTF-8 BOM")
-  }
-  if n >= 2 && at(0) == 0xFF && at(1) == 0xFE {
-    return (tx_utf16(b, 2, true), "UTF-16LE")
-  }
-  if n >= 2 && at(0) == 0xFE && at(1) == 0xFF {
-    return (tx_utf16(b, 2, false), "UTF-16BE")
-  }
-  let whole = b.clamped_view(start=0, end=tx_utf8_end(b, 0, n, truncated))
-  let strict : String? = Some(@utf8.decode(whole)) catch { _ => None }
-  if strict is Some(s) {
-    return (s, "UTF-8")
-  }
-  if !truncated {
-    let cut = b.clamped_view(start=0, end=tx_utf8_end(b, 0, n, true))
-    let cut_strict : String? = Some(@utf8.decode(cut)) catch { _ => None }
-    if cut_strict is Some(s) {
-      return (s, "UTF-8")
-    }
-  }
-  // not UTF-8: GB18030 (a superset of GBK, the usual answer for older Chinese text), as the system's tables decode it
-  // (@hostapi.decode_charset); a character the end cuts in half dropped
-  match @hostapi.decode_charset(b, "GB18030") {
-    Some(s) => {
-      let mut text = s
-      if truncated {
-        while text.has_suffix("\u{FFFD}") {
-          text = text.view(end_offset=text.length() - 1).to_owned()
-        }
-      }
-      (text, "GB18030")
-    }
-    None => (@utf8.decode_lossy(whole), "UTF-8 (lossy)")
-  }
-}
-
-///|
-/// Where UTF-8 from `from` ends: `n`, or before a character the end cuts in half when `drop_tail`.
-fn tx_utf8_end(b : Bytes, from : Int, n : Int, drop_tail : Bool) -> Int {
-  if !drop_tail {
-    return n
-  }
-  let mut k = 1
-  while k <= 3 && n - k >= from {
-    let x = b[n - k].to_int()
-    if x < 0x80 {
-      return n
-    }
-    if x >= 0xC0 {
-      let need = if x >= 0xF0 { 4 } else if x >= 0xE0 { 3 } else { 2 }
-      return if k < need { n - k } else { n }
-    }
-    k += 1
-  }
-  n
-}
-
-///|
-/// UTF-16 from `from` (little-endian or not), lone surrogates as replacement characters, an odd last byte dropped.
-fn tx_utf16(b : Bytes, from : Int, little : Bool) -> String {
-  let out = StringBuilder()
-  let n = b.length()
-  let unit = fn(i : Int) -> Int {
-    if little {
-      b[i].to_int() | (b[i + 1].to_int() << 8)
-    } else {
-      (b[i].to_int() << 8) | b[i + 1].to_int()
-    }
-  }
-  let mut i = from
-  while i + 1 < n {
-    let u = unit(i)
-    i += 2
-    if u >= 0xD800 && u <= 0xDBFF && i + 1 < n {
-      let v = unit(i)
-      if v >= 0xDC00 && v <= 0xDFFF {
-        i += 2
-        out.write_char((0x10000 + ((u - 0xD800) << 10) + (v - 0xDC00)).unsafe_to_char())
-        continue
-      }
-    }
-    if u >= 0xD800 && u <= 0xDFFF {
-      out.write_char('\u{FFFD}')
-    } else {
-      out.write_char(u.unsafe_to_char())
-    }
-  }
-  out.to_string()
 }
 
 // ── line reflow ──────────────────────────────────────────────────────────
@@ -789,7 +685,7 @@ fn Novel::offset_of(self : Novel, chunk : Int, within : Double) -> Int {
 /// Decoded, reflowed where it was hard-wrapped (its strict headings kept as paragraphs), cut into blocks, its
 /// chapters found (Markdown's from its headings) (Novel.kt buildNovel).
 fn build_novel(name : String, b : Bytes, truncated : Bool) -> Novel {
-  let (decoded, encoding) = decode_text(b, truncated~)
+  let (decoded, encoding) = @hostapi.decode_text(b, truncated~)
   let normalised = normalise_line_endings(decoded)
   let lower = name.to_lower()
   let markdown = lower.has_suffix(".md") || lower.has_suffix(".markdown")

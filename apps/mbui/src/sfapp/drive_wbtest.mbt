@@ -9,16 +9,16 @@ fn utf8_of(s : String) -> Bytes {
 
 ///|
 test "decoding: UTF-8, its byte order mark, UTF-16, a character cut at the end" {
-  assert_eq(decode_text(utf8_of("第一章 开始")).0, "第一章 开始")
+  assert_eq(@hostapi.decode_text(utf8_of("第一章 开始")).0, "第一章 开始")
   let bom = Bytes::from_array([b'\xEF', b'\xBB', b'\xBF', b'a', b'b'][:])
-  assert_eq(decode_text(bom), ("ab", "UTF-8 BOM"))
+  assert_eq(@hostapi.decode_text(bom), ("ab", "UTF-8 BOM"))
   let le = Bytes::from_array([b'\xFF', b'\xFE', b'\x2C', b'\x7B', b'a', b'\x00'][:])
-  assert_eq(decode_text(le), ("第a", "UTF-16LE"))
+  assert_eq(@hostapi.decode_text(le), ("第a", "UTF-16LE"))
   // 第 is E7 AC AC: its last byte cut off the front of a bigger file
   let cut = Bytes::from_array([b'a', b'\xE7', b'\xAC'][:])
-  assert_eq(decode_text(cut, truncated=true), ("a", "UTF-8"))
+  assert_eq(@hostapi.decode_text(cut, truncated=true), ("a", "UTF-8"))
   // a half-copied file is still UTF-8
-  assert_eq(decode_text(cut), ("a", "UTF-8"))
+  assert_eq(@hostapi.decode_text(cut), ("a", "UTF-8"))
 }
 
 ///|
@@ -29,10 +29,10 @@ test "decoding: a file that is not UTF-8 read as GB18030 (第一章 开始)" {
   let gb = Bytes::from_array(
     [b'\xB5', b'\xDA', b'\xD2', b'\xBB', b'\xD5', b'\xC2', b' ', b'\xBF', b'\xAA', b'\xCA', b'\xBC'][:],
   )
-  assert_eq(decode_text(gb), ("第一章 开始", "GB18030"))
+  assert_eq(@hostapi.decode_text(gb), ("第一章 开始", "GB18030"))
   // the front of a bigger file, its last character cut in half: dropped
   let cut = Bytes::from_array([b'\xB5', b'\xDA', b'\xD2'][:])
-  assert_eq(decode_text(cut, truncated=true), ("第", "GB18030"))
+  assert_eq(@hostapi.decode_text(cut, truncated=true), ("第", "GB18030"))
 }
 
 ///|

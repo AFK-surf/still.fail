@@ -31,6 +31,25 @@ pub fn shape_of(
 }
 
 ///|
+/// The shapes of the picture `v` (an SVG's, an Android vector drawable's paths: @pixels.Vector) drawn `w` wide (its
+/// height as its viewport's) at `scale` pixels a point, every colour in `tint`'s when it is given: each path's fill,
+/// then its stroke, as its layers say, its curves cut fine enough for those pixels.
+pub fn vector_shapes(v : @pixels.Vector, w : Double, scale : Double, tint? : Int64) -> Array[Shape] {
+  let k = w / v.w
+  let out : Array[Shape] = []
+  for l in v.layers {
+    let subs = l.outlines(k, scale)
+    if l.fill != 0L {
+      out.push(shape_of(subs, fill=@pixels.tinted(l.fill, tint), even_odd=l.even_odd))
+    }
+    if l.stroke != 0L && l.width > 0.0 {
+      out.push(shape_of(subs, stroke=@pixels.tinted(l.stroke, tint), width=l.width * l.sx * k))
+    }
+  }
+  out
+}
+
+///|
 /// A box `w` by `h` that draws `shapes` over its ground, one after another (in its own coordinates, from its top left);
 /// `name`: what it is (an icon's ".../icon/<name>/...": what a scripted run's `icon:<name>` finds, as an image's source).
 pub fn Ctx::shapes(self : Ctx, shapes : Array[Shape], w~ : Size, h~ : Size, name? : String = "") -> Int {
