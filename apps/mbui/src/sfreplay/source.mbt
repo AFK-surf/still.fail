@@ -87,6 +87,15 @@ pub fn source() -> @sfapp.Source {
       let id = station + "\u{1}" + key + "\u{1}" + name
       image("station.file", Json::object(params), "file " + id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
     },
+    poster: fn(station, key, name) {
+      let params : Map[String, Json] = {
+        "station": Json::string(station),
+        "key": Json::string(key),
+        "name": Json::string(name),
+      }
+      let id = station + "\u{1}" + key + "\u{1}" + name + "\u{1}poster"
+      image("station.poster", Json::object(params), "poster " + id, "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
+    },
     now: fn() { @ui.wall_ms() },
     leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
     read_only: false,

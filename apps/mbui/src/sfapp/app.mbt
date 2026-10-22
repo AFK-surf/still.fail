@@ -343,6 +343,8 @@ fn reset() -> Unit {
   marking.write_field.set("")
   marking.note_field.set("")
   pv_thumbs.clear()
+  pv_frames.clear()
+  pv_frames_n.val = 0
   pv_hidden.val = ""
   pv_read.clear()
   pv_strip.leaving = None

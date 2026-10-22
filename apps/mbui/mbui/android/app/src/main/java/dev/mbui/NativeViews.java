@@ -770,68 +770,192 @@ final class NativeViews {
         }
 
         /**
-         * What the extractor and the retriever have read, in blocks of BLOCK by their place in the file (the last few
-         * kept): they ask a few KB at a time, each of which would be a read through the app (and the core's round trip).
+         * The file's bytes as the app gave them, kept on the disk while the view is open (a file of its own in the
+         * app's cache, in blocks of BLOCK at their place in the file): what the player, its frames' reader and a frame
+         * grabbed read is asked of the app once, and read from here again (a seek back over what has played, a finger
+         * along the timeline to and fro, the frames read beside the player). A reader missing a block asks for a run
+         * of them from it (DriveSource.kt's window: one after a jump, twice as many while it reads on from its last
+         * run, up to RUN, a core's part of 4 MB), stopping short of one here or on its way for another reader, whose
+         * run it waits for instead. A run asked goes on to its end when the reader that asked lets go (the player
+         * seeking elsewhere): what it brings is kept all the same.
          */
-        static final int BLOCK = 256 << 10;
-        final java.util.LinkedHashMap<Long, byte[]> blocks = new java.util.LinkedHashMap<Long, byte[]>(16, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(java.util.Map.Entry<Long, byte[]> e) {
-                return size() > 16;
-            }
-        };
+        static final int BLOCK = 256 << 10, RUN = 16;
+        final Object keptLock = new Object();
+        /** The blocks here whole (the file's last, to its end), and the runs on their way by the blocks they bring. */
+        final java.util.BitSet have = new java.util.BitSet();
+        final java.util.HashMap<Integer, Fetch> coming = new java.util.HashMap<>();
+        java.io.File cacheDir, diskFile;
+        java.nio.channels.FileChannel disk;
+        /** No disk to keep it on (its file could not be made or written): each reader reads from its last run alone. */
+        volatile boolean noDisk;
+        static final java.util.concurrent.ExecutorService fetchers = java.util.concurrent.Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "mbui-read");
+            t.setDaemon(true);
+            return t;
+        });
+        /** Whether this process has cleared what views of an earlier one left on the disk (main thread). */
+        static boolean swept;
 
-        /** Block `at` of the file (BLOCK long, shorter at its end), read once and kept. */
-        byte[] block(long at) throws IOException {
-            synchronized (blocks) {
-                byte[] b = blocks.get(at);
-                if (b != null) return b;
+        /** A run of blocks asked of the app: what came of it once it is done, or why nothing did. */
+        static final class Fetch {
+            final long from;
+            final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+            volatile byte[] data = new byte[0];
+            volatile IOException error;
+
+            Fetch(long from) {
+                this.from = from;
             }
-            Read r = ask(at * BLOCK, BLOCK);
-            // kept whole, or the file's last (a shorter answer before the end is used once, not kept)
-            if (r.data.length == BLOCK || (total >= 0 && at * BLOCK + r.data.length >= total)) {
-                synchronized (blocks) {
-                    blocks.put(at, r.data);
+        }
+
+        /** How one reader of it goes: where its last run of blocks ended and how long it was; what it read last. */
+        static final class Pace {
+            int end = -1, run = 1;
+            long from;
+            byte[] data = new byte[0];
+        }
+
+        /** Up to `len` bytes of the file at `p` into `buf` for the reader `pace`: how many (at least one), -1 at its end. */
+        int bytesAt(long p, byte[] buf, int off, int len, Pace pace) throws IOException {
+            if (len <= 0) return 0;
+            for (;;) {
+                if (total >= 0 && p >= total) return -1;
+                // in what it read last
+                if (p >= pace.from && p < pace.from + pace.data.length) {
+                    int k = (int) Math.min(len, pace.from + pace.data.length - p);
+                    System.arraycopy(pace.data, (int) (p - pace.from), buf, off, k);
+                    return k;
+                }
+                int b = (int) (p / BLOCK);
+                boolean here;
+                Fetch f;
+                synchronized (keptLock) {
+                    here = have.get(b);
+                    f = here ? null : coming.get(b);
+                    if (!here && f == null) {
+                        int run = b == pace.end ? Math.min(pace.run * 2, RUN) : 1;
+                        int n = 0;
+                        while (n < run && !have.get(b + n) && !coming.containsKey(b + n)
+                                && (n == 0 || total < 0 || (long) (b + n) * BLOCK < total)) n++;
+                        pace.end = b + n;
+                        pace.run = run;
+                        f = new Fetch((long) b * BLOCK);
+                        for (int i = 0; i < n; i++) coming.put(b + i, f);
+                        fetch(f, b, n);
+                    }
+                }
+                if (here) {
+                    int k = (int) Math.min(len, (long) (b + 1) * BLOCK - p);
+                    if (total >= 0) k = (int) Math.min(k, total - p);
+                    if (fromDisk(p, buf, off, k)) return k;
+                    // (not read back: asked again)
+                    synchronized (keptLock) {
+                        have.clear(b);
+                    }
+                    continue;
+                }
+                try {
+                    while (!f.done.await(250, TimeUnit.MILLISECONDS)) {
+                        if (closed) throw new InterruptedIOException("view " + id + " closed");
+                    }
+                } catch (InterruptedException e) {
+                    throw new InterruptedIOException();
+                }
+                if (f.error != null) throw f.error;
+                if (f.data.length == 0) return -1;
+                pace.from = f.from;
+                pace.data = f.data;
+                if (p >= f.from + f.data.length) {
+                    // fewer than asked, short of where it reads, before the end: what it asks, as it is
+                    Read r = ask(p, len);
+                    if (r.data.length == 0) return -1;
+                    pace.from = p;
+                    pace.data = r.data;
                 }
             }
-            return r.data;
+        }
+
+        /** The run of `n` blocks from block `b` asked of the app, kept as it comes, its waiters told (a reader's thread). */
+        void fetch(Fetch f, int b, int n) {
+            fetchers.execute(() -> {
+                try {
+                    byte[] data = ask(f.from, n * BLOCK).data;
+                    keep(b, data);
+                    f.data = data;
+                } catch (IOException e) {
+                    f.error = e;
+                } finally {
+                    synchronized (keptLock) {
+                        for (int i = 0; i < n; i++) coming.remove(b + i, f);
+                    }
+                    f.done.countDown();
+                }
+            });
+        }
+
+        /** What came of a run from block `b`, kept on the disk: its whole blocks, and the file's last to its end. */
+        void keep(int b, byte[] data) {
+            if (noDisk || data.length == 0) return;
+            try {
+                synchronized (keptLock) {
+                    if (closed) return;
+                    if (disk == null) {
+                        java.io.File dir = new java.io.File(cacheDir, "mbui-views");
+                        if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("no " + dir);
+                        diskFile = new java.io.File(dir, "view-" + android.os.Process.myPid() + "-" + id);
+                        disk = new java.io.RandomAccessFile(diskFile, "rw").getChannel();
+                    }
+                }
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(data);
+                long at = (long) b * BLOCK;
+                while (bb.hasRemaining()) disk.write(bb, at + bb.position());
+            } catch (IOException e) {
+                if (!closed) Host.log("view " + id + ": its bytes not kept on the disk: " + e);
+                noDisk = true;
+                return;
+            }
+            synchronized (keptLock) {
+                for (int i = 0; (long) i * BLOCK < data.length; i++) {
+                    long end = Math.min((long) (i + 1) * BLOCK, data.length);
+                    if (end - (long) i * BLOCK == BLOCK || (total >= 0 && (long) b * BLOCK + end >= total)) have.set(b + i);
+                }
+            }
+        }
+
+        /** `k` bytes at `p` read back from the disk into `buf`; false if they could not be. */
+        boolean fromDisk(long p, byte[] buf, int off, int k) {
+            java.nio.channels.FileChannel d = disk;
+            if (d == null) return false;
+            try {
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(buf, off, k);
+                while (bb.hasRemaining()) {
+                    if (d.read(bb, p + (bb.position() - off)) < 0) return false;
+                }
+                return true;
+            } catch (IOException e) {
+                return false;
+            }
         }
 
         /** The file through the app's reads, for the system's extractor and retriever (as the player reads it). */
         final class Media extends MediaDataSource {
+            final Pace pace = new Pace();
+
             @Override
             public int readAt(long position, byte[] buffer, int offset, int size) throws IOException {
                 if (size == 0) return 0;
-                if (total >= 0 && position >= total) return -1;
                 int n = 0;
                 while (n < size) {
-                    long p = position + n;
-                    if (total >= 0 && p >= total) break;
-                    byte[] b = block(p / BLOCK);
-                    int in = (int) (p % BLOCK);
-                    if (in >= b.length) {
-                        // the app gave less than a block before the end: what is asked, as it was before blocks
-                        if (total >= 0 && p < total) {
-                            Read r = ask(p, Math.min(size - n, 4 << 20));
-                            if (r.data.length == 0) break;
-                            int k = Math.min(size - n, r.data.length);
-                            System.arraycopy(r.data, 0, buffer, offset + n, k);
-                            n += k;
-                        }
-                        break;
-                    }
-                    int k = Math.min(size - n, b.length - in);
-                    System.arraycopy(b, in, buffer, offset + n, k);
+                    int k = bytesAt(position + n, buffer, offset + n, size - n, pace);
+                    if (k < 0) break;
                     n += k;
-                    // a short block: the file's end (or a short answer: the rest asked next time)
-                    if (b.length < BLOCK) break;
                 }
                 return n == 0 ? -1 : n;
             }
 
             @Override
             public long getSize() throws IOException {
-                if (total < 0) ask(0, 1);
+                if (total < 0) bytesAt(0, new byte[1], 0, 1, pace);
                 return total;
             }
 
@@ -906,6 +1030,40 @@ final class NativeViews {
             }, "mbui-grab").start();
         }
 
+        /**
+         * The frame showing now, the texture's (its content at the video's proportions, not the transform the app's
+         * zoom puts on it), at most `side` pixels on its longer side, as a JPEG: `still` once it is made (main thread).
+         * As still.fail's Android app keeps the frame a video was left at (VideoViewer.kt frameOut: getBitmap).
+         */
+        void grabShown(double side) {
+            stillState = 1;
+            still = new byte[0];
+            Bitmap b = null;
+            if (texture != null && framed > 0 && nw > 0 && nh > 0) {
+                double k = Math.min(1.0, side / Math.max(nw, nh));
+                try {
+                    b = texture.getBitmap(Math.max(1, (int) Math.round(nw * k)), Math.max(1, (int) Math.round(nh * k)));
+                } catch (RuntimeException e) {
+                    Host.log("view " + id + ": the frame shown not grabbed: " + e);
+                }
+            }
+            if (b == null) {
+                stillState = -1;
+                Native.tell(Native.OUTSIDE_GRAB, id, -1);
+                return;
+            }
+            Bitmap shot = b;
+            new Thread(() -> {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                shot.compress(Bitmap.CompressFormat.JPEG, 90, out);
+                shot.recycle();
+                still = out.toByteArray();
+                stillState = 2;
+                Host.log("view " + id + ": the frame shown grabbed (" + still.length + " bytes)");
+                Native.tell(Native.OUTSIDE_GRAB, id, 1);
+            }, "mbui-grab").start();
+        }
+
         /** Bytes from `offset` (at most `length`), asked of the app and waited for: on the player's loading thread. */
         Read ask(long offset, int length) throws IOException {
             Read r = new Read(nextRead.incrementAndGet(), offset, length);
@@ -936,6 +1094,13 @@ final class NativeViews {
 
         @Override
         void make(Context c) {
+            cacheDir = c.getCacheDir();
+            // what an earlier process's views left on the disk (it ended without closing them), cleared once
+            if (!swept) {
+                swept = true;
+                java.io.File[] left = new java.io.File(cacheDir, "mbui-views").listFiles();
+                if (left != null) for (java.io.File f : left) f.delete();
+            }
             texture = new TextureView(c);
             clip.addView(texture, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT));
@@ -1025,12 +1190,17 @@ final class NativeViews {
                     break;
                 case 2: player.pause(); break;
                 case 3:
-                    player.seekTo((long) value);
+                    // whole ms, floored: Media3 shows the first frame from there, so a frame's start (1583.33) is
+                    // that frame (to 1584, the next)
+                    player.seekTo((long) Math.floor(value));
                     position = value;
                     break;
                 case 4: player.setPlaybackParameters(new PlaybackParameters((float) value)); break;
+                // a finger along its timeline: its seeks one after another, each shown (Media3's scrubbing mode)
+                case 9: player.setScrubbingModeEnabled(value > 0); break;
                 case 20: readFrames(); break;
                 case 21: grab(value); break;
+                case 22: grabShown(value); break;
                 default: break;
             }
         }
@@ -1045,22 +1215,28 @@ final class NativeViews {
             }
             if (player != null) player.release();
             player = null;
+            // what was kept of its file, gone with it
+            synchronized (keptLock) {
+                try {
+                    if (disk != null) disk.close();
+                } catch (IOException ignored) {
+                }
+                disk = null;
+                if (diskFile != null) diskFile.delete();
+            }
         }
     }
 
     /**
-     * What the player reads the file through: ranged reads asked of the app (DriveSource.kt's window: small first,
-     * doubling while reads run on from each other up to a core's part of 4 MB, small again after a jump; what is in
-     * the window served from it, as the extractor reopens around seeks).
+     * What the player reads the file through: the view's bytes as they are kept (Video.bytesAt: on the disk once the
+     * app has given them, asked of it in runs that grow while reads go on from each other, small again after a jump).
      */
     static final class ViewSource extends BaseDataSource {
-        static final int FIRST = 256 * 1024, MAX = 4 << 20;
         final Video v;
+        final Video.Pace pace = new Video.Pace();
+        final byte[] probe = new byte[1];
         Uri uri;
         long position, remaining;
-        byte[] window = new byte[0];
-        long windowStart;
-        int windowValid, cursor, planned = FIRST;
         boolean opened;
 
         ViewSource(Video v) {
@@ -1073,13 +1249,9 @@ final class NativeViews {
             uri = spec.uri;
             long start = spec.position;
             position = start;
-            if (start < windowStart || start >= windowStart + windowValid) {
-                windowStart = start;
-                windowValid = 0;
-            }
-            cursor = (int) (start - windowStart);
             transferInitializing(spec);
-            if (v.total < 0 && !fill() && v.total < 0) v.total = start;
+            // its size, from the first read (none there: it ends where it is opened)
+            if (v.total < 0 && v.bytesAt(start, probe, 0, 1, pace) < 0 && v.total < 0) v.total = start;
             if (start > v.total) throw new IOException("the file is " + v.total + " bytes, opened at " + start);
             remaining = spec.length == C.LENGTH_UNSET ? v.total - start : Math.min(spec.length, v.total - start);
             opened = true;
@@ -1091,30 +1263,12 @@ final class NativeViews {
         public int read(byte[] buffer, int offset, int length) throws IOException {
             if (length == 0) return 0;
             if (remaining <= 0) return C.RESULT_END_OF_INPUT;
-            if (cursor >= windowValid && !fill()) return C.RESULT_END_OF_INPUT;
-            int n = (int) Math.min(Math.min(length, windowValid - cursor), remaining);
-            System.arraycopy(window, cursor, buffer, offset, n);
-            cursor += n;
+            int n = v.bytesAt(position, buffer, offset, (int) Math.min(length, remaining), pace);
+            if (n < 0) return C.RESULT_END_OF_INPUT;
             position += n;
             remaining -= n;
             bytesTransferred(n);
             return n;
-        }
-
-        /** The window read from `position`; false at the file's end. */
-        boolean fill() throws IOException {
-            if (v.total >= 0 && position >= v.total) return false;
-            boolean on = windowValid > 0 && position == windowStart + windowValid;
-            planned = on ? Math.min(planned * 2, MAX) : FIRST;
-            int want = v.total >= 0 ? (int) Math.min(planned, v.total - position) : planned;
-            if (want <= 0) return false;
-            Read r = v.ask(position, want);
-            if (r.data.length == 0) return false;
-            window = r.data;
-            windowStart = position;
-            windowValid = r.data.length;
-            cursor = 0;
-            return true;
         }
 
         @Override

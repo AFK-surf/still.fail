@@ -367,6 +367,8 @@ pub fn NativeView::close(self : NativeView) -> Unit {
   if self.id != 0 {
     h_view_close(self.id)
     open_views.retain(fn(v) { !physical_equal(v, self) })
+    // a grab it was asked and had not answered is answered no more (a host tells a closed view's nothing)
+    outside_end(outside_grab, self.id)
   }
 }
 
@@ -425,6 +427,29 @@ pub fn NativeView::grab_frame(self : NativeView, ms : Double) -> Unit {
 }
 
 ///|
+/// A video's frame as it shows now (the player's picture, not the file's frame read again: at once), at most `side`
+/// pixels on its longer side, as a JPEG (`grabbed` once it is here, empty when it could not be: no frame shown yet, a
+/// host that grabs none): what a viewer closing into its thumbnail goes with. One grab of a view at a time, as
+/// grab_frame's.
+pub fn NativeView::grab_shown(self : NativeView, side : Double) -> Unit {
+  if self.id != 0 && !self.closed {
+    if outside_tickets.contains(outside_key(outside_grab, self.id)) {
+      let s = "NativeView::grab_shown: view \{self.id} grabs a frame already: one at a time, its `grabbed` taken first"
+      println(s)
+      abort(s)
+    }
+    outside_start(outside_grab, self.id, "the frame view \{self.id} shows grabbed")
+    h_view_control(self.id, 22, side)
+  }
+}
+
+///|
+/// Whether a grab of this view is on its way (grab_frame's, grab_shown's): its `grabbed` not taken yet.
+pub fn NativeView::grabbing(self : NativeView) -> Bool {
+  self.id != 0 && outside_tickets.contains(outside_key(outside_grab, self.id))
+}
+
+///|
 /// A frame grabbed: None while it is grabbed (or none was asked), Some(png) once here (taken once), Some(empty) when it
 /// could not be.
 pub fn NativeView::grabbed(self : NativeView) -> Bytes? {
@@ -450,11 +475,23 @@ pub fn NativeView::pause(self : NativeView) -> Unit {
 }
 
 ///|
-/// To `ms` into it, exactly (the frame there).
+/// To `ms` into it, exactly: the frame showing then (a frame's start, to the µs, shows that frame: Android's host
+/// gives Media3 whole ms, floored, and it shows the first frame from there; Apple's seeks to the µs).
 pub fn NativeView::seek(self : NativeView, ms : Double) -> Unit {
   if self.id != 0 && !self.closed {
     h_view_control(self.id, 3, ms)
     self.info[1] = ms
+  }
+}
+
+///|
+/// A finger along its timeline (`on`), until it is let go (`false`): its seeks come one after another, each shown
+/// before the next is taken up and those asked meanwhile skipped but the last, its sound off meanwhile (Android: Media3's
+/// scrubbing mode; Apple's host takes its seeks one at a time always). Without it each seek gives up the one before,
+/// and while the finger moves no frame shows.
+pub fn NativeView::scrub(self : NativeView, on : Bool) -> Unit {
+  if self.id != 0 && !self.closed {
+    h_view_control(self.id, 9, if on { 1.0 } else { 0.0 })
   }
 }
 

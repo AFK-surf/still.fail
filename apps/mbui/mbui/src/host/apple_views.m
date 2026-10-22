@@ -172,6 +172,9 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) double logNext;  // the next count of bytes to log a read at
 @property(nonatomic) int32_t nextRid;
 @property(nonatomic) double speed;
+// a seek on its way (to seekMs), and the one asked meanwhile to go to once it is done (chaseMs), if any
+@property(nonatomic) BOOL seeking, chasing;
+@property(nonatomic) double seekMs, chaseMs;
 @property(nonatomic) BOOL observing, readyLogged, frameLogged;
 @property(nonatomic, strong) NSMutableArray<MBRead *> *pending;                  // not yet taken
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBRead *> *taken;  // taken, not answered
@@ -212,6 +215,8 @@ id mb_views_root(CGRect frame) {
 - (void)end:(MBLoad *)l error:(BOOL)err;
 - (void)logState;
 - (void)refreshSnap;
+- (void)seekTo:(double)ms;
+- (CGImageRef)copyFrame;
 @end
 
 static NSMutableDictionary<NSNumber *, MBNative *> *views;
@@ -270,6 +275,37 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 @end
 
 @implementation MBNative
+// To `ms`, exactly, one seek at a time (Apple's QA1820, chasing the time): asked again while one is on its way, the
+// last asked goes once it is done and those between are skipped, so a finger along the timeline sees each frame it
+// gets to (AVPlayer gives up a seek on its way for the next, and while the finger moves none would show).
+- (void)seekTo:(double)ms {
+  // (one on its way, or the item not ready for one yet: this one next, once it is)
+  if (self.seeking || self.item.status != AVPlayerItemStatusReadyToPlay) {
+    self.chasing = YES;
+    self.chaseMs = ms;
+    return;
+  }
+  self.seeking = YES;
+  self.seekMs = ms;
+  __weak MBNative *wv = self;
+  // (to the µs: a frame's start, said with its fraction of a ms, is that frame's, not the one before)
+  [self.player seekToTime:CMTimeMake((int64_t)llround(ms * 1000.0), 1000000)
+          toleranceBefore:kCMTimeZero
+           toleranceAfter:kCMTimeZero
+        completionHandler:^(BOOL done) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            MBNative *v = wv;
+            if (!v) return;
+            v.seeking = NO;
+            if (v.chasing && !v.closed) {
+              v.chasing = NO;
+              [v seekTo:v.chaseMs];
+            }
+            mb_host_request_frame();
+          });
+        }];
+}
+
 // The video track's frames' times (its samples' presentation times, through a sample cursor: the index only), on a
 // queue of its own; said once read.
 - (void)readFrames {
@@ -352,6 +388,50 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   }
 }
 
+
+// The frame showing now (the player's picture, copyFrame's), at most `side` pixels on its longer side, as a JPEG:
+// what a viewer closing into its thumbnail goes with (native.mbt grab_shown).
+- (void)grabShown:(double)side {
+  self.stillState = 1;
+  self.still = nil;
+  CGImageRef img = [self copyFrame];
+  NSMutableData *jpeg = nil;
+  if (img) {
+    size_t w = CGImageGetWidth(img), h = CGImageGetHeight(img);
+    double k = fmin(1.0, side / (double)MAX(w, h));
+    size_t tw = MAX((size_t)1, (size_t)llround(w * k)), th = MAX((size_t)1, (size_t)llround(h * k));
+    CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef c = CGBitmapContextCreate(NULL, tw, th, 8, 0, cs, kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little);
+    CGColorSpaceRelease(cs);
+    CGImageRef small = NULL;
+    if (c) {
+      CGContextSetInterpolationQuality(c, kCGInterpolationHigh);
+      CGContextDrawImage(c, CGRectMake(0, 0, tw, th), img);
+      small = CGBitmapContextCreateImage(c);
+      CGContextRelease(c);
+    }
+    CGImageRelease(img);
+    if (small) {
+      jpeg = [NSMutableData new];
+      CGImageDestinationRef dst =
+          CGImageDestinationCreateWithData((__bridge CFMutableDataRef)jpeg, CFSTR("public.jpeg"), 1, NULL);
+      if (dst) {
+        CGImageDestinationAddImage(dst, small, (__bridge CFDictionaryRef) @{(__bridge NSString *)kCGImageDestinationLossyCompressionQuality : @0.9});
+        if (!CGImageDestinationFinalize(dst)) jpeg = nil;
+        CFRelease(dst);
+      } else {
+        jpeg = nil;
+      }
+      CGImageRelease(small);
+    }
+  }
+  vlog(@"view %d: the frame shown %@", self.vid,
+       jpeg ? [NSString stringWithFormat:@"grabbed (%lu bytes)", (unsigned long)jpeg.length] : @"not grabbed");
+  self.still = jpeg;
+  self.stillState = jpeg ? 2 : -1;
+  mb_host_outside(MB_OUTSIDE_GRAB, self.vid, jpeg ? 1 : -1);
+  mb_host_request_frame();
+}
 
 - (void)dealloc {
   if (_lastFrame) CVPixelBufferRelease(_lastFrame);
@@ -510,6 +590,11 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   dispatch_async(dispatch_get_main_queue(), ^{
     if (self.closed) return;
     [self logState];
+    // a seek asked before it was ready (where it was left, opened again): taken up now
+    if (self.chasing && !self.seeking && self.item.status == AVPlayerItemStatusReadyToPlay) {
+      self.chasing = NO;
+      [self seekTo:self.chaseMs];
+    }
     // a player is ready for the app once its first frame can be shown (a video), or once it can play at all with
     // no picture to show (a sound: its presentation size 0 × 0); or it failed
     BOOL can = self.item.status == AVPlayerItemStatusReadyToPlay;
@@ -1064,18 +1149,7 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
       break;
     }
     case 2: [v.player pause]; break;
-    case 3: {
-      __weak MBNative *wv = v;
-      [v.player seekToTime:CMTimeMake((int64_t)llround(value), 1000)
-           toleranceBefore:kCMTimeZero
-            toleranceAfter:kCMTimeZero
-         completionHandler:^(BOOL done) {
-           dispatch_async(dispatch_get_main_queue(), ^{
-             if (wv) mb_host_request_frame();
-           });
-         }];
-      break;
-    }
+    case 3: [v seekTo:value]; break;
     case 4:
       if (value <= 0) break;
       v.speed = value;
@@ -1083,6 +1157,7 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
       break;
     case 20: [v readFrames]; break;
     case 21: [v grabAt:value]; break;
+    case 22: [v grabShown:value]; break;
   }
 }
 
@@ -1130,6 +1205,8 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   out[0] = [v durationMs];
   CMTime t = v.player.currentTime;
   out[1] = CMTIME_IS_NUMERIC(t) ? CMTimeGetSeconds(t) * 1000.0 : 0;
+  // seeking (or a seek waiting for it to be ready): where it was last asked to go
+  if (v.seeking || v.chasing) out[1] = v.chasing ? v.chaseMs : v.seekMs;
   out[2] = v.player.rate > 0 ? 1 : 0;
   CGSize s = it.presentationSize;
   out[3] = s.width;

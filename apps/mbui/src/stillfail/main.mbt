@@ -129,6 +129,35 @@ fn chat_file(station : String, key : String, name : String) -> String {
 }
 
 ///|
+/// A video of a chat's still as its station makes it (`station.poster`), asked once: its key once here, "" while it
+/// comes, "!" when there is none (the station could not make one, or is from before posters).
+fn chat_poster(station : String, key : String, name : String) -> String {
+  let id = station + "\u{1}" + key + "\u{1}" + name + "\u{1}poster"
+  match chat_files.get(id) {
+    Some(k) => k
+    None => {
+      chat_files[id] = ""
+      let params : Map[String, Json] = {
+        "station": Json::string(station),
+        "key": Json::string(key),
+        "name": Json::string(name),
+      }
+      @core.call_bytes("station.poster", params=Json::object(params), on_done=fn(r) {
+        match r {
+          Ok((_, Some(bytes))) if bytes.length() > 0 => {
+            let k = "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
+            @ui.add_image(k, bytes)
+            chat_files[id] = k
+          }
+          _ => chat_files[id] = "!"
+        }
+      })
+      ""
+    }
+  }
+}
+
+///|
 /// MBUI_READONLY=1: nothing the reader does is told to the core (no read marks, no place kept, nothing sent, no draft
 /// kept, no file put up), for runs on a real account that must change nothing in it.
 let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
@@ -138,7 +167,7 @@ let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
 /// list's filter) and the faces' files it keeps for them. Anything else (sending, drafts kept, files put up, read marks, places, archiving…) is refused here,
 /// whatever page asks it.
 let read_only_calls : Array[String] = [
-  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part",
+  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part", "station.poster",
   "picture", "memory.get", "prefs.set", "drive.read", "drive.folders", "drive.refresh", "fonts.fetch", "fonts.file",
   "fonts.keep", "fonts.preview",
 ]
@@ -269,6 +298,7 @@ let core_source : @sfapp.Source = {
   picture,
   fatal: fn() { @core.fatal() },
   file: chat_file,
+  poster: chat_poster,
   now: fn() { @ui.wall_ms() },
   leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
   read_only,

@@ -48,8 +48,12 @@ test "a native view shows where it is painted: a hole in the canvas, the host to
   assert_true(t.views().iter().any(fn(l) { l.has_suffix("hidden") }))
   v.play()
   v.seek(2500.0)
+  v.scrub(true)
+  v.scrub(false)
   assert_true(t.views().contains("control 1 1 0"))
   assert_true(t.views().contains("control 1 3 2500"))
+  assert_true(t.views().contains("control 1 9 1"))
+  assert_true(t.views().contains("control 1 9 0"))
   v.close()
   assert_true(t.views().contains("close 1"))
 }

@@ -7,11 +7,13 @@
 // download. One bar floats at the top with its name and tools and fades when left alone; a tap brings it back. Back (or
 // ×) closes it.
 //
-// Not yet, against the Android app: the flight from the chat's thumbnail and back (it fades in and out, as the
-// Android app does when the thumbnail is not on the screen), stepping through the chat's images (`imageNear`),
-// pinching on iOS (no second finger told there yet), marking an image (ImageMarks.kt), a video's frame-exact steps (its frames' times
-// read by MediaExtractor: here steps of a guessed 60 fps), saving a frame and turning to landscape, the frosted glass
-// (the bars are a solid tint: a native view under them cannot be blurred, and the canvas's blur is another slice's).
+// An image or a video flies from the chat's thumbnail and back into it (FilePreview.kt ViewerFlight); a video closed
+// so keeps the frame it was left at, which its thumbnail shows and where it goes on from when opened again
+// (FileViewers.frames). Its bytes stream (the Android app reads it whole first): a finger along its timeline puts its
+// player in a mode of seeks one after another (NativeView::scrub), and the host keeps what it read.
+//
+// Not yet, against the Android app: pinching on iOS (no second finger told there yet), the frosted glass (the bars
+// are a solid tint: a native view under them cannot be blurred, and the canvas's blur is another slice's).
 
 ///|
 /// The words this page adds (client/i18n/catalog/zh android-chat.json, common.json).
@@ -278,8 +280,10 @@ priv struct Viewer {
   fade : @motion.Value
   // a finger on the stage: where it was last frame, how far it has gone, the last tap (time, where)
   mut held : Bool
-  /// a finger on a video's timeline: the bars stay while it is (their rest counted from when it is let go)
+  /// a finger on a video's timeline: the bars stay while it is (their rest counted from when it is let go), the player
+  /// paused and its seeks one after another (NativeView::scrub); where it was last sent (-1 none yet)
   mut scrubbing : Bool
+  mut scrub_to : Double
   mut last_x : Double
   mut last_y : Double
   mut moved : Double
@@ -317,6 +321,14 @@ priv struct Viewer {
   mut grabbing : Bool
   mut grab_frame : Int
   mut turned : Bool
+  /// a video's picture as it flies (its still, or the frame it goes back with)
+  mut fly_pic : String
+  /// a video opened again: where it was left (ms; -1 from its start), until its player is ready to go on from there
+  mut start_at : Double
+  /// a video closing into its thumbnail: the frame it shows being grabbed first (what it goes back with), and where
+  /// it was then
+  mut leaving_grab : Bool
+  mut left_at : Double
 }
 
 ///|
@@ -328,6 +340,8 @@ priv struct Thumb {
   w : Double
   h : Double
   radius : Double
+  /// its picture letterboxed in it (ChatFiles.kt imageBox's fit): fitted inside its box, not cropped to it
+  letterbox : Bool
   frame : Int
 }
 
@@ -336,14 +350,29 @@ priv struct Thumb {
 let pv_thumbs : Map[String, Thumb] = Map([])
 
 ///|
+/// A video closed back into its thumbnail keeps the frame it was left at (FilePreview.kt FileViewers.frames): the
+/// thumbnail shows it from then on, and opened again the video goes on from there. By the thumbnail's id (Viewer::id):
+/// the frame's image, where it was (ms).
+let pv_frames : Map[String, (String, Double)] = Map([])
+
+///|
+/// How many frames have been kept (each one's image a key of its own).
+let pv_frames_n : Ref[Int] = { val: 0 }
+
+///|
+/// A frame kept is this many pixels at most on its longer side (the station's poster's, posters.ts SIDE).
+let kept_frame_side : Double = 640.0
+
+///|
 /// The thumbnail hidden while the viewer is its picture (one picture on the screen, never two), by its file's id.
 let pv_hidden : Ref[String] = { val: "" }
 
 ///|
 /// A thumbnail of the chat drawn this frame as node `node` (messages.mbt): kept for the viewer to fly from.
-fn note_thumb(c : @ui.Ctx, id : String, node : Int, radius : Double) -> Unit {
+fn note_thumb(c : @ui.Ctx, id : String, node : Int, radius : Double, letterbox? : Bool = false) -> Unit {
   match c.rect_of(node) {
-    Some((x, y, w, h)) if w > 0.0 && h > 0.0 => pv_thumbs[id] = { x, y, w, h, radius, frame: c.frame_number() }
+    Some((x, y, w, h)) if w > 0.0 && h > 0.0 =>
+      pv_thumbs[id] = { x, y, w, h, radius, letterbox, frame: c.frame_number() }
     _ =>
       match pv_thumbs.get(id) {
         // under the viewer nothing of the page is hit, so its place is not read back (Ctx::rect_of): where it was
@@ -352,6 +381,16 @@ fn note_thumb(c : @ui.Ctx, id : String, node : Int, radius : Double) -> Unit {
           pv_thumbs[id] = { ..t, frame: c.frame_number() }
         _ => pv_thumbs.remove(id)
       }
+  }
+}
+
+///|
+/// How much of the chat's thumbnail `id` shows: none while the viewer is its picture, else all of it.
+fn thumb_shows(id : String) -> Double {
+  if pv_hidden.val == id {
+    0.0
+  } else {
+    1.0
   }
 }
 
@@ -479,6 +518,7 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     fade: @motion.Value::new(0.0),
     held: false,
     scrubbing: false,
+    scrub_to: -1.0,
     last_x: 0.0,
     last_y: 0.0,
     moved: 0.0,
@@ -502,6 +542,13 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     fly: @motion.Value::new(0.0),
     fly_back: false,
     fly_from: None,
+    fly_pic: "",
+    start_at: match pv_frames.get(station + "/" + key + "/" + a.path) {
+      Some((_, ms)) if drive is None && ms > 0.0 => ms
+      _ => -1.0
+    },
+    leaving_grab: false,
+    left_at: 0.0,
     grabbing: false,
     grab_frame: 0,
     turned: false,
@@ -842,9 +889,25 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
             }
           })
         })
-        // the view just made, played once the frame's builds are over
-        c.tell("preview-play", fn() { n.play() })
+        // the view just made, played once the frame's builds are over; opened again where it was left, from there
+        // (VideoViewer.kt startAtUs: played once its length says it was not left at its end)
+        if v.start_at > 0.0 {
+          let at = v.start_at
+          c.tell("preview-start", fn() { n.seek(at) })
+        } else {
+          c.tell("preview-play", fn() { n.play() })
+        }
         v.video = Some(n)
+      }
+      match v.video {
+        Some(n) if v.start_at > 0.0 && n.duration() > 0.0 => {
+          let at = v.start_at
+          v.start_at = -1.0
+          if at < n.duration() - 50.0 {
+            c.tell("preview-play", fn() { n.play() })
+          }
+        }
+        _ => ()
       }
       return
     }
@@ -915,6 +978,10 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
             v.flies = true
             v.fly_back = false
             v.fly_from = Some(t)
+            // a video's: its still (the frame it was left at, else the station's poster), the black where it has none
+            if v.shown_kind() == Some(KVideo) {
+              v.fly_pic = v.still(src)
+            }
             v.fly.set(0.0)
             ignore(v.fly.start(1.0, @motion.tween(fly_open_ms, ease=Arrive)))
             pv_hidden.val = v.id()
@@ -948,7 +1015,11 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
   }
   let faded = if v.flies { 1.0 } else { v.fade.get() }
   // (faded by the frame's time: the same in each build of the frame)
-  if v.closing && !v.flies && !v.fade.is_animating() {
+  // a video closing into its thumbnail: the frame it shows, once grabbed, kept and gone back with
+  if v.leaving_grab {
+    v.left_with_frame(c, src)
+  }
+  if v.closing && !v.flies && !v.leaving_grab && !v.fade.is_animating() {
     // faded out: gone
     leaving_done()
     return
@@ -1041,6 +1112,19 @@ fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
         ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms * p), ease=Arrive)))
         pv_hidden.val = self.id()
       }
+      // a video, its thumbnail on the screen: back into it with the frame it shows (grabbed first: the thumbnail keeps
+      // it, and where it was), else with its still (FilePreview.kt close: flight.frame())
+      (Some(t), Some(KVideo), _) if self.drive is None && self.vzoom.rect() is Some(_) => {
+        self.fly_from = Some(t)
+        match self.video {
+          Some(n) if n.here() && n.shown() && !n.grabbing() && !self.grabbing => {
+            self.leaving_grab = true
+            self.left_at = n.position()
+            c.tell("preview-grab", fn() { n.grab_shown(kept_frame_side) })
+          }
+          _ => self.fly_home("")
+        }
+      }
       // the way in played backwards (web's fp: ease-out on the way in, the same curve run back on the way out): the
       // ground and the picture stay nearly whole at first, then go
       _ => ignore(self.fade.start(0.0, @motion.tween(pv_fade_ms, ease=Bezier(0.8, 0.0, 0.8, 0.3))))
@@ -1052,6 +1136,50 @@ fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       None => ()
     }
   }
+}
+
+///|
+/// A video back into its thumbnail with `picture` (from where a flight in has got to, in as much of its time).
+fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
+  let p = self.flying()
+  self.fly_pic = picture
+  self.fly_back = true
+  if !self.flies {
+    self.flies = true
+    self.fly.set(1.0)
+  }
+  ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms * p), ease=Arrive)))
+  pv_hidden.val = self.id()
+}
+
+///|
+/// A video closing into its thumbnail, its frame grabbed: once here, kept for the thumbnail (with where it was) and
+/// gone back with; none to be had, back with its still.
+fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
+  let n = match self.video {
+    Some(n) => n
+    None => {
+      self.leaving_grab = false
+      self.fly_home(self.still(src))
+      return
+    }
+  }
+  match n.grabbed() {
+    Some(jpeg) => {
+      self.leaving_grab = false
+      if jpeg.length() > 0 {
+        pv_frames_n.val += 1
+        let key = "mem:pv-frame/\{pv_frames_n.val}/\{self.name}"
+        @ui.add_image(key, jpeg)
+        pv_frames[self.id()] = (key, self.left_at)
+        self.fly_home(key)
+      } else {
+        self.fly_home(self.still(src))
+      }
+    }
+    None => ()
+  }
+  ignore(c)
 }
 
 ///|
@@ -1485,7 +1613,26 @@ fn Viewer::flying(self : Viewer) -> Double {
 ///|
 /// Where the picture is on the stage when it is still (fitted), once its size is known here.
 fn Viewer::flight_target(self : Viewer, c : @ui.Ctx, src : Source) -> (Double, Double, Double, Double)? {
-  if self.shown_kind() != Some(KImage) || self.drive is Some(_) {
+  if self.drive is Some(_) {
+    return None
+  }
+  // a video: where its picture will be, by its size as sent, else its still's (FilePreview.kt: known from the still
+  // before the player is ready); none known, it fades in
+  if self.shown_kind() == Some(KVideo) {
+    let still = self.still(src)
+    let (nw, nh) = if self.file.width > 0.0 && self.file.height > 0.0 {
+      (self.file.width, self.file.height)
+    } else if still != "" {
+      @ui.image_natural(still).unwrap_or((0.0, 0.0))
+    } else {
+      (0.0, 0.0)
+    }
+    return match self.vzoom.rect() {
+      Some(r) => Some(r)
+      None => fitted_rect(nw, nh, c.width, c.height)
+    }
+  }
+  if self.shown_kind() != Some(KImage) {
     return None
   }
   let picture = self.picture(src)
@@ -1517,20 +1664,37 @@ fn Viewer::flight_picture(self : Viewer, src : Source, picture : String) -> Stri
 ///|
 /// The picture in flight (FilePreview.kt viewerFlying): a box from the thumbnail's to the picture's place, its corners
 /// from the thumbnail's to none, the picture covering it (cropped as the chat crops it at the start, whole at the end).
-fn Viewer::draw_flight(self : Viewer, c : @ui.Ctx, picture : String, to : (Double, Double, Double, Double), p : Double) -> Unit {
+fn Viewer::draw_flight(
+  self : Viewer,
+  c : @ui.Ctx,
+  picture : String,
+  to : (Double, Double, Double, Double),
+  p : Double,
+  ground? : Int64 = 0L,
+) -> Unit {
   let from = match self.fly_from {
     Some(t) => t
     None => return
   }
   let (tx, ty, tw, th) = to
-  let x = from.x + (tx - from.x) * p
-  let y = from.y + (ty - from.y) * p
-  let w = from.w + (tw - from.w) * p
-  let h = from.h + (th - from.h) * p
+  // a picture letterboxed in its thumbnail flies from where it shows there, fitted inside the box (FilePreview.kt
+  // fitted)
+  let (fx, fy, fw, fh) = if from.letterbox && tw > 0.0 && th > 0.0 {
+    let k = dmin(from.w / tw, from.h / th)
+    (from.x + (from.w - tw * k) / 2.0, from.y + (from.h - th * k) / 2.0, tw * k, th * k)
+  } else {
+    (from.x, from.y, from.w, from.h)
+  }
+  let x = fx + (tx - fx) * p
+  let y = fy + (ty - fy) * p
+  let w = fw + (tw - fw) * p
+  let h = fh + (th - fh) * p
   let r = from.radius * (1.0 - p)
   c.layer(fn() {
-    c.box(w=Px(w), h=Px(h), tx=x, ty=y, radius=r, clip=true, fn() {
-      c.image(picture, w=Px(w), h=Px(h), fit=FitCover, radius=r, bg=0L, fade=false) |> ignore
+    c.box(w=Px(w), h=Px(h), tx=x, ty=y, radius=r, clip=true, bg=ground, fn() {
+      if picture != "" {
+        c.image(picture, w=Px(w), h=Px(h), fit=FitCover, radius=r, bg=0L, fade=false) |> ignore
+      }
     })
     |> ignore
   })
@@ -2035,12 +2199,32 @@ fn Viewer::gestures(
 // ── a video ────────────────────────────────────────────────────────────
 
 ///|
+/// The chat's still of a video, as the chat shows it (ChatFiles.kt ChatVideo): the frame it was left at when it was
+/// closed into its thumbnail, else the station's poster (its first frame); an image's key, "" while it comes or where
+/// there is none (a drive's file).
+fn Viewer::still(self : Viewer, src : Source) -> String {
+  if self.drive is Some(_) {
+    return ""
+  }
+  match pv_frames.get(self.id()) {
+    Some((k, _)) => return k
+    None => ()
+  }
+  match (src.poster)(self.station, self.key, self.name) {
+    "!" => ""
+    k => k
+  }
+}
+
+///|
 /// The video where its zoom puts it: the system's player, a native view under the canvas, shown through a hole in
-/// it. Before its first frame the stage's black (the chat has no still of it yet).
+/// it. Until its first frame shows, the chat's still of it over it (VideoViewer.kt poster), else the stage's black;
+/// its size, until the player says it, as sent, else the still's.
 fn Viewer::video_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
   let v = self
   let z = v.vzoom
   z.boxed(c.width, c.height)
+  let still = v.still(src)
   match v.video {
     Some(n) => {
       let (nw, nh) = n.natural()
@@ -2048,10 +2232,17 @@ fn Viewer::video_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
         z.natural(nw, nh)
       } else if v.file.width > 0.0 && v.file.height > 0.0 {
         z.natural(v.file.width, v.file.height)
+      } else {
+        match @ui.image_natural(still) {
+          Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh)
+          _ => ()
+        }
       }
       z.step()
       v.gestures(c, src, stage, z, false, false)
-      if !v.closing && n.here() {
+      // the player's picture: not while it flies from its thumbnail or back into it (its still flies, or the frame it
+      // goes back with), nor once it has gone, but while that frame is grabbed
+      if !v.flies && (!v.closing || v.leaving_grab) && n.here() {
         match z.rect() {
           Some(r) => c.native(n, content=Some(r)) |> ignore
           // its size not known yet (not sent with it): placed all the same, a point in the middle, so the player has
@@ -2059,6 +2250,16 @@ fn Viewer::video_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
           None =>
             c.native(n, content=Some((z.bw / 2.0, z.bh / 2.0, 1.0, 1.0))) |> ignore
         }
+      }
+      match z.rect() {
+        // flying: from the thumbnail's box to the picture's place, or back (FilePreview.kt viewerFlying), on the
+        // black the chat's box has
+        Some(r) if v.flies =>
+          v.draw_flight(c, if v.fly_pic != "" { v.fly_pic } else { still }, r, v.flying(), ground=0x000000FFL)
+        // the still over the picture, where the player will show it, until its first frame does
+        Some((x, y, w, h)) if still != "" && !n.shown() =>
+          c.layer(fn() { c.picture(still, x~, y~, w~, h~) |> ignore }) |> ignore
+        _ => ()
       }
       if n.state() == -1 {
         c.layer(align=ACenter, fn() {
@@ -2116,13 +2317,32 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
   // the frame showing (the last to start by now)
   let at = match starts {
     Some(list) => frame_at(list, pos)
-    None => if dur > 0.0 { (pos / step).floor().to_int() } else { 0 }
+    None => if dur > 0.0 { ((pos + frame_slack) / step).floor().to_int() } else { 0 }
   }
   let start_of = fn(i : Int) -> Double {
     match starts {
-      // a little past its start (the player rounds to ms)
-      Some(list) => list[if i < 0 { 0 } else if i >= list.length() { list.length() - 1 } else { i }].ceil()
+      // its start: the host shows the frame showing then (NativeView::seek), that one
+      Some(list) => list[if i < 0 { 0 } else if i >= list.length() { list.length() - 1 } else { i }]
       None => dmax(0.0, dmin(dmax(dur, 0.0), i.to_double() * step))
+    }
+  }
+  // the timeline (VideoViewer.kt): from the first frame's start to the last one's end (as long as the one before it),
+  // the head at the start of the frame showing; a place on it is the frame showing there
+  let (first, last) = match starts {
+    Some(list) => {
+      let k = list.length() - 1
+      (list[0], list[k] + (if k > 0 { list[k] - list[k - 1] } else { 0.0 }))
+    }
+    None => (0.0, dmax(dur, 0.0))
+  }
+  let now = match starts {
+    Some(list) => list[at]
+    None => pos
+  }
+  let frame_of = fn(ms : Double) -> Double {
+    match starts {
+      Some(list) => start_of(frame_at(list, ms))
+      None => start_of((ms / step).floor().to_int())
     }
   }
   // a frame asked for to be saved, come: kept with the downloads (`<name>-<frame>.png`)
@@ -2161,7 +2381,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
       bg=solid_glass(),
       id=if on { controls } else { 0 },
       fn() {
-        timeline(c, v, n, dur, pos)
+        timeline(c, v, n, first, last, now, frame_of)
         c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
           c.box(dir=Row, gap=2.0, fn() {
             if picture_button(c, "preview/prev", "chevron-left", dark_muted, on, said=pv("android-chat.video.prev")) {
@@ -2272,14 +2492,19 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
 }
 
 ///|
-/// The frame showing at `ms` among frames starting at `starts` (in order): the last to start by then (a 10th of a ms
-/// over taken as by then).
+/// How far past a time a frame may start and still be the one showing then: where a player is is said in whole ms
+/// (Android's: a frame starting at 1583.33 shows once it was sent to 1583), and no two frames start a ms apart.
+let frame_slack : Double = 1.0
+
+///|
+/// The frame showing at `ms` among frames starting at `starts` (in order): the last to start by then (up to
+/// frame_slack over taken as by then).
 fn frame_at(starts : Array[Double], ms : Double) -> Int {
   let mut lo = 0
   let mut hi = starts.length() - 1
   while lo < hi {
     let mid = (lo + hi + 1) / 2
-    if starts[mid] <= ms + 0.1 {
+    if starts[mid] <= ms + frame_slack {
       lo = mid
     } else {
       hi = mid - 1
@@ -2289,31 +2514,78 @@ fn frame_at(starts : Array[Double], ms : Double) -> Int {
 }
 
 ///|
-/// Where in the video it is (VideoViewer.kt Timeline): a thin track, what has played, a round head; tapped or dragged
-/// along to go there.
-fn timeline(c : @ui.Ctx, v : Viewer, n : @ui.NativeView, dur : Double, pos : Double) -> Unit {
+/// Where in the video it is (VideoViewer.kt Timeline): a thin track from `first` to `last` (ms), what has played, a
+/// round head at `now`; tapped or dragged along to go there (`frame_of`: the frame showing at a time, where it goes),
+/// paused as it goes (VideoViewer.kt go). Dragged, the player is told a finger is on it (NativeView::scrub: each
+/// frame it goes to shown before the next is taken up), the head where the finger sent it.
+fn timeline(
+  c : @ui.Ctx,
+  v : Viewer,
+  n : @ui.NativeView,
+  first : Double,
+  last : Double,
+  now : Double,
+  frame_of : (Double) -> Double,
+) -> Unit {
   let id = c.id("preview/timeline")
-  let part = if dur > 0.0 { dmax(0.0, dmin(1.0, pos / dur)) } else { 0.0 }
-  let held = match c.rect_of(id) {
-    Some((x, _, w, _)) if c.pressed(id) && dur > 0.0 => {
-      let (px, _, _) = c.pointer()
-      let to = dmax(0.0, dmin(1.0, (px - x) / dmax(1.0, w))) * dur
-      // (once the frame's builds are over: where the finger is on the track as the last laid it out)
-      c.after_build("preview/seek", fn() { n.seek(to) })
-      true
+  let span = last - first
+  // the time under the finger, on the track (inside the box's 6 each side)
+  let under = fn() -> Double? {
+    match c.rect_of(id) {
+      Some((x, _, w, _)) if span > 0.0 => {
+        let (px, _, _) = c.pointer()
+        Some(frame_of(first + dmax(0.0, dmin(1.0, (px - x - 6.0) / dmax(1.0, w - 12.0))) * span))
+      }
+      _ => None
     }
-    _ => false
   }
+  let held = c.pressed(id)
   if held {
+    if !v.scrubbing {
+      // a finger down on it: paused, its seeks one after another until it is let go
+      v.scrubbing = true
+      v.scrub_to = -1.0
+      c.tell("preview-scrub", fn() {
+        n.pause()
+        n.scrub(true)
+      })
+    }
+    match under() {
+      Some(to) if to != v.scrub_to => {
+        v.scrub_to = to
+        c.tell("preview-seek", fn() { n.seek(to) })
+      }
+      _ => ()
+    }
     // held there: the bars stay (seen again as it moves; a finger held still asks nothing)
     v.awake = true
     v.rest_len = -1.0
-    v.scrubbing = true
   } else if v.scrubbing {
-    // let go: the bars rest from now
+    // let go: to where it was let go if the finger moved on since the last seek (its last move and its lifting in one
+    // frame), then the player as before (that seek taken up), the bars rest from now
+    match under() {
+      Some(to) if to != v.scrub_to => c.tell("preview-seek", fn() { n.seek(to) })
+      _ => ()
+    }
     v.scrubbing = false
+    v.scrub_to = -1.0
+    c.tell("preview-scrub", fn() { n.scrub(false) })
+    v.wake(tap_rest_ms)
+  } else if c.clicked(id) {
+    // tapped (down and up within a frame): paused there
+    match under() {
+      Some(to) =>
+        c.tell("preview-seek", fn() {
+          n.pause()
+          n.seek(to)
+        })
+      None => ()
+    }
     v.wake(tap_rest_ms)
   }
+  // where the head is: where the finger sent it while it is on the track, else where the player is
+  let at = if v.scrubbing && v.scrub_to >= 0.0 { v.scrub_to } else { now }
+  let part = if span > 0.0 { dmax(0.0, dmin(1.0, (at - first) / span)) } else { 0.0 }
   c.box(w=Fill(1.0), h=Px(22.0), padx=6.0, justify=JCenter, id~, fn() {
     // what has played, then the rest (Fill shares the row: one alone would fill it)
     c.box(dir=Row, w=Fill(1.0), h=Px(4.0), radius=2.0, bg=0xFFFFFF33L, fn() {
@@ -2325,12 +2597,14 @@ fn timeline(c : @ui.Ctx, v : Viewer, n : @ui.NativeView, dur : Double, pos : Dou
       }
     })
     |> ignore
+    // the head, its middle where what has played ends (the layer is the box's whole width, its 6 each side
+    // included: the head's 12 take them up)
     c.layer(fn() {
       c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), align=ACenter, fn() {
         if part > 0.0 {
           c.box(w=Fill(part), fn() {  }) |> ignore
         }
-        c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=dark_text, tx=-6.0, fn() {  }) |> ignore
+        c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=dark_text, fn() {  }) |> ignore
         if part < 1.0 {
           c.box(w=Fill(1.0 - part), fn() {  }) |> ignore
         }
