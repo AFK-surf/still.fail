@@ -31,8 +31,6 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: The steps' network is none (a connection out fails at once)
         run: if curl -fsS --max-time 5 -o /dev/null https://github.com; then echo "reached github.com"; exit 1; fi
-      - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (scripts/detlint.py, docs/detlint.md)"
-        run: python3 scripts/detlint_test.py && python3 scripts/detlint.py
       - name: "The outsides' kinds: each its own number in src/ui/hostcall.mbt, every host's named the same (scripts/outside_kinds.py)"
         run: python3 scripts/outside_kinds.py
       - name: "What the scripts wait with, on Linux's events (scripts/logwait_test.py: inotify, a pidfd)"
@@ -42,6 +40,8 @@ jobs:
       - name: "The kept runs: textrec_runs.mbt is what textrec_runs.txt makes, and lists every run git keeps (scripts/textrec_test.py --check)"
         run: python3 scripts/textrec_test.py --check
       - uses: ./.github/actions/mbui-moonbit
+      - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (tools/detlint, docs/detlint.md)"
+        run: scripts/detlint
       - name: Check
         run: moon version --all && moon check --target native --output-json 2>&1 | python3 scripts/errs.py
       - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"
@@ -54,7 +54,7 @@ jobs:
         run: |
           set -o pipefail
           moon test --target native -p mbui/dmath -p mbui/zip -p mbui/pixels 2>&1 | tail -3
-      - name: "The C step (tools/mbc): the splitter on made-up C, then programs built with it, a MoonBit one whole and split (scripts/mbc_test.sh)"
+      - name: "The tools (tools/): detlint's rules on made-up files; the C step (tools/mbc): the splitter on made-up C, then programs built with it, a MoonBit one whole and split (scripts/mbc_test.sh)"
         run: |
           set -o pipefail
           (cd tools && moon test --target native 2>&1 | tail -3)

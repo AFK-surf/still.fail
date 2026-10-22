@@ -1,7 +1,7 @@
 # Working in mbui (for agents)
 
 These are the owner's rules. They are not reviewed PR by PR: you are expected to follow them yourself, and what can be
-checked is checked by CI (`scripts/detlint.py`, docs/detlint.md; the Tester's own checks). Where a rule has no check
+checked is checked by CI (`scripts/detlint`, docs/detlint.md; the Tester's own checks). Where a rule has no check
 yet and you can add one, add it.
 
 ## Time in a test is declared, never waited for
@@ -59,7 +59,7 @@ yet and you can add one, add it.
 ## Before a PR
 
 - Run what CI runs for what you touched (`scripts/test.sh`, the `moon test` packages of the repository's `.github/workflows/mbui-ci.yml`,
-  `python3 scripts/detlint.py`), not a subset of your own.
+  `scripts/detlint`), not a subset of your own.
 - One PR per piece of work. Squash with `git reset --soft $(git merge-base HEAD origin/main)`, never onto
   `origin/main`; check `git diff origin/main --stat` lists only your files.
 - Merge it yourself once every check has finished green (`gh pr checks <n> --watch`), not only the gate.

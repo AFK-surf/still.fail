@@ -280,7 +280,7 @@ fn Ctx::rest_why(self : Ctx) -> String {
 ///|
 /// Whether the app is at its rest after the last frame (Ctx::at_rest, as that frame ended), with no frame asked for
 /// between frames and no message posted that no frame took. For assertions only (`assert_true(t.at_rest())`, a test's
-/// end): no loop, `until` or run goes on until it is (scripts/detlint.py's at-rest-wait).
+/// end): no loop, `until` or run goes on until it is (detlint's at-rest-wait).
 pub fn Tester::at_rest(self : Tester) -> Bool {
   g().frame_rest && !self.fake.wants && posted_left() == ""
 }

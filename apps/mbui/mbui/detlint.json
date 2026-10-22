@@ -46,7 +46,6 @@
     "web/*.mjs"
   ],
   "skip": [
-    "scripts/detlint*.py",
     "scripts/bench*",
     "src/bench"
   ],

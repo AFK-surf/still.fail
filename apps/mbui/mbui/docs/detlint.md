@@ -1,18 +1,17 @@
 # detlint: what determinism must not rest on
 
 A run is deterministic because every input is given by the test: inputs, the core's messages, the host's results,
-the clock. Not because anything waits for the app to "settle". `scripts/detlint.py` stops what goes the other way:
-a guessed time, a wait for stability, a frame the app asks for itself, the machine's own clock. Being settled stays
-one assertion, at a test's end (no input, no animation: no frame).
+the clock. Not because anything waits for the app to "settle". `scripts/detlint` (tools/detlint, in MoonBit) stops
+what goes the other way: a guessed time, a wait for stability, a frame the app asks for itself, the machine's own
+clock. Being settled stays one assertion, at a test's end (no input, no animation: no frame).
 
-    python3 scripts/detlint.py                 the report; fails above or below the bar
-    python3 scripts/detlint.py . --list RULE   every finding of RULE, file:line
-    python3 scripts/detlint.py . --update      the counts found become the bar (never raised: --update=raise)
-    python3 scripts/detlint_test.py            each rule's failing and passing example
+    scripts/detlint                            the report; fails above or below the bar
+    scripts/detlint . --list RULE              every finding of RULE, file:line
+    scripts/detlint . --update                 the counts found become the bar (never raised: --update=raise)
+    (cd tools && moon test --target native -p detlint)   each rule's failing and passing example
 
-It runs first in `scripts/check.sh` and in CI's test job. still.fail's `apps/mbui` runs this file, of the mbui its
-`mbui.rev` pins (`python3 "$MBUI_DIR/scripts/detlint.py" apps/mbui`), with its own `apps/mbui/detlint.json`, from
-`apps/mbui/scripts/check.sh` and still.fail's `scripts/check.sh`: a change to the rules reaches it with a bump.
+It runs first in `scripts/check.sh` and in CI's test job. still.fail's `apps/mbui` runs it (`"$MBUI_DIR/scripts/detlint"
+apps/mbui`), with its own `apps/mbui/detlint.json`, from `apps/mbui/scripts/check.sh`.
 
 ## The bar
 

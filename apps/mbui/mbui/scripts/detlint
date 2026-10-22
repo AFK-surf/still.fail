@@ -1,0 +1,13 @@
+#!/bin/sh
+# The determinism lint (tools/detlint, in MoonBit; docs/detlint.md, its main.mbt says how it is run): detlint [ROOT]
+# [--update | --list RULE], ROOT this module when none is given. Built here only when there is none built from these
+# very sources (by content).
+D=$(cd "$(dirname "$0")" && pwd)
+T=$D/../tools
+B=$T/_build/native/release/build/detlint/detlint.exe
+src=$(cd "$T" && find detlint sys re rjson moon.mod moon.work -type f | LC_ALL=C sort | xargs cat | cksum)
+if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  (cd "$T" && env -u MOON_CC moon build --target native --release >&2) || { echo "detlint: tools/detlint did not build" >&2; exit 1; }
+  echo "$src" > "$B.src"
+fi
+DETLINT_HOME=$D exec "$B" "$@"
