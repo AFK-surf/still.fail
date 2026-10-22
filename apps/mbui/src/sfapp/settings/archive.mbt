@@ -30,6 +30,7 @@ fn archive_reset() -> Unit {
 
 ///|
 priv enum ArchiveEntry {
+  Room(Double)
   Search
   Wait(Json?, String)
   Error(String)
@@ -52,7 +53,9 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     None => ()
   }
   let view = archive_state.last
-  let entries : Array[ArchiveEntry] = [Search]
+  // under the app's top bar at the bar's top, from under it, scrolling under it (Archive.kt: contentPadding top)
+  let top = top_room()
+  let entries : Array[ArchiveEntry] = if top > 0.0 { [Room(top), Search] } else { [Search] }
   let days = items(view, "days")
   let wait = field(view, "wait")
   if view is None || (days.length() == 0 && note_waits(wait)) {
@@ -97,6 +100,7 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   place_page(c, core, tr("android-misc.bar.place.archive"), back=tr("android-misc.bar.place.chats"), fn() {
     c.list("settings/archive", entries.length(), 54.0, fn(i) {
       match entries[i] {
+        Room(h) => gap(c, h)
         Search => archive_search(c)
         Wait(note, error) =>
           waiting_rows(c, count=7, error~, failing=failing_of(note))

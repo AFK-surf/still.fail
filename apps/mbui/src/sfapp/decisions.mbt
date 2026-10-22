@@ -93,24 +93,37 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else {
       nav_bar(c, tr("android-misc.bar.place.decisions"))
     }
-    c.box(w=Fill(1.0), h=Fill(1.0), pt=4.0, pb=if place && has_bar() { nav_foot() + bar_room } else { nav_foot() }, fn() {
-      if shown.length() == 0 {
-        // none yet while stations are still read is not none: their cards to come
-        if view is Some(_) && !flag(field(view, "wait"), "reading") {
-          decisions_idle(c, view)
-        } else {
-          waiting_cards(c, topic.error)
-        }
-        // the last one, gone: drawn going over them
+    // what it shows 4 under the bar (Decisions.kt: Spacer(top)); none left and all read, the day so far, scrolling up
+    // to the bar, its 4 inside what scrolls (Idle's `top`)
+    let idle = shown.length() == 0 && view is Some(_) && !flag(field(view, "wait"), "reading")
+    c.box(w=Fill(1.0), h=Fill(1.0), pb=if place && has_bar() { nav_foot() + bar_room } else { nav_foot() }, fn() {
+      if idle {
+        decisions_idle(c, view, 4.0)
+        // the last one, gone: drawn going over it
         deck_out(c, src, c.width, c.height)
         return
       }
-      deck(c, src, shown)
+      c.box(style=decisions_body, fn() {
+        if shown.length() == 0 {
+          // none yet while stations are still read is not none: their cards to come
+          waiting_cards(c, topic.error)
+          // the last one, gone: drawn going over them
+          deck_out(c, src, c.width, c.height)
+          return
+        }
+        deck(c, src, shown)
+      })
+      |> ignore
     })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// What the page shows, 4 under its bar (Decisions.kt: Spacer(top), PlacePage.kt's `top` for a page pushed).
+// kept across runs: a value (no field of it changes)
+let decisions_body : @ui.Style = @ui.style(w=Full, h=Full, pt=S1)
 
 ///|
 /// Cards to come, breathing (Waiting.kt Waiting, WaitShape.Cards): what went wrong over them in red.
@@ -133,15 +146,16 @@ fn waiting_cards(c : @ui.Ctx, error : Json?) -> Unit {
 
 ///|
 /// None left (Decisions.kt Idle): the page stays for the next to come and says how the day went, where the next may come
-/// from (the viewer's chats with an agent at work or waiting) and what was answered today. Each opens its chat.
-fn decisions_idle(c : @ui.Ctx, view : Json?) -> Unit {
+/// from (the viewer's chats with an agent at work or waiting) and what was answered today. Each opens its chat. `top`:
+/// the room over it, inside what scrolls (Decisions.kt Idle: `top = top + 16.dp`).
+fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
   let t = @sf.theme()
   let today = field(view, "today")
   let working = items(view, "working")
   let answered = items(view, "answered")
   let rows : Array[() -> Unit] = [
     fn() {
-      c.box(w=Fill(1.0), pt=16.0, align=ACenter, fn() {
+      c.box(w=Fill(1.0), pt=top + 16.0, align=ACenter, fn() {
         for f in items(field(view, "wait"), "failing") {
           c.box(pb=8.0, fn() { @sf.wait_pill(c, text(Some(f), "text"), error=true) }) |> ignore
         }
