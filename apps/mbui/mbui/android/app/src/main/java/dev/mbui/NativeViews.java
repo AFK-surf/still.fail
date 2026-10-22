@@ -104,6 +104,9 @@ final class NativeViews {
         final float[] at = new float[9];
         boolean shown;
         private boolean told;
+        // (main thread) placed once where told and shown; its host done with it (ready or failed); its first frame so
+        // on the display said (VIEWDRAWN: scripts/host_contract.sh android views takes its picture then)
+        private boolean placedOnce, doneOnce, drawnSaid;
 
         NView(int id, int kind) {
             this.id = id;
@@ -120,6 +123,18 @@ final class NativeViews {
                 told = true;
             }
             Host.view.toGL(() -> Native.outside(Native.OUTSIDE_VIEW, id, st));
+            Host.main.post(() -> {
+                doneOnce = true;
+                drawnWhenBoth();
+            });
+        }
+
+        /** Once placed and done: the next frame committed to the display with it said (VIEWDRAWN id), once. */
+        void drawnWhenBoth() {
+            if (!placedOnce || !doneOnce || drawnSaid || clip == null || closed) return;
+            drawnSaid = true;
+            clip.getViewTreeObserver().registerFrameCommitCallback(() -> Host.log("VIEWDRAWN " + id));
+            clip.invalidate();
         }
 
         /**
@@ -140,8 +155,8 @@ final class NativeViews {
 
         /**
          * A page's readiness once it is loaded: once what it shows is drawn when it shows (WebView's visual state
-         * callback), at once when it does not show (nothing of it is on the screen to wait for). The callback comes
-         * only for a view that is drawn; one that does not come within a second is not waited on.
+         * callback: it comes for a view that is drawn, and one that shows is), at once when it does not show (nothing of
+         * it is on the screen to wait for).
          */
         void pageReady(WebView w) {
             if (w == null) return;
@@ -155,7 +170,6 @@ final class NativeViews {
                     tell(1);
                 }
             });
-            Host.main.postDelayed(() -> tell(1), 1000);
         }
 
         void make(Context c) {}
@@ -436,6 +450,8 @@ final class NativeViews {
             if (shown) {
                 Host.log(String.format(java.util.Locale.ROOT, "VIEWAT %d %.4f %.4f %.4f %.4f %d %d %d %d %.4f", id, to[0],
                         to[1], to[2], to[3], l, t, l + cw, t + ch, to[8]));
+                v.placedOnce = true;
+                v.drawnWhenBoth();
             }
         });
     }

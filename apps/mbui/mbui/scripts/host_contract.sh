@@ -369,6 +369,10 @@ PYEOF
       "$PY" scripts/android_end.py --adb "$ADB" --app dev.mbui.demo --file round.log \
         --uid $(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
         --end "VIEWCHECK placed|FATAL EXCEPTION|Fatal signal"
+      # (the picture once the host says the page, placed and done, is on the display: its frame committed, VIEWDRAWN)
+      "$PY" scripts/android_end.py --adb "$ADB" --app dev.mbui.demo --file round.log \
+        --uid $(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
+        --end "VIEWDRAWN 2\b|FATAL EXCEPTION|Fatal signal"
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh shown && $ADB exec-out screencap -p > $O/views-round.png
       $ADB exec-out run-as dev.mbui.demo cat files/round.log > $O/views-round.log
       $ADB shell am force-stop dev.mbui.demo

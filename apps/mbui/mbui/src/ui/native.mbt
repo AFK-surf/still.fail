@@ -515,6 +515,14 @@ pub fn NativeView::shown(self : NativeView) -> Bool {
 }
 
 ///|
+/// Whether its host said it is done opening it (a page: its content ready to be drawn, WebView's visual state;
+/// failed too), the event the app's run waits on as the host works (hostcall.mbt's outside_view): later than
+/// `state` (a page: loaded)
+pub fn NativeView::host_done(self : NativeView) -> Bool {
+  views_told.contains(self.id)
+}
+
+///|
 pub fn NativeView::buffering(self : NativeView) -> Bool {
   self.info[7] > 0.0
 }

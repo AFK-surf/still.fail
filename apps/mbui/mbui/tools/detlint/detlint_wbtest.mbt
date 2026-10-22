@@ -8,6 +8,7 @@ let conf_text : String =
   #| "globals": {"roots": ["src/app"]},
   #| "flows": ["flows/*.drive"],
   #| "scripts": ["scripts/*.sh", "scripts/*.mjs"],
+  #| "hosts": ["android/*.java", "src/host/*.m"],
   #| "counts": {}}
 
 ///|
@@ -1384,4 +1385,35 @@ test "update, then pass, then more fails, less fails" {
   }
   assert_has(out, "forbidden")
   t.clear()
+}
+
+///|
+test "host-delay" {
+  found(
+    [
+      (
+        "android/app/Views.java",
+        "void ready(WebView w) {\n  Host.main.postDelayed(() -> tell(1), 1000);\n}\n",
+      ),
+      (
+        "src/host/mac_views.m",
+        "static void later(void) {\n  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 500), q, ^{ go(); });\n}\n",
+      ),
+    ],
+    "host-delay",
+    2,
+  )
+  |> ignore
+  // on the event it is for; a comment naming one; the app's own wake, said
+  found(
+    [
+      (
+        "android/app/Views.java",
+        "void ready(WebView w) {\n  w.postVisualStateCallback(id, cb);\n  // postDelayed( was here\n  main.postDelayed(Host::requestFrame, ms); // det-ok(host-delay): the app's wake_after\n}\n",
+      ),
+    ],
+    "host-delay",
+    0,
+  )
+  |> ignore
 }
