@@ -36,14 +36,15 @@ test "turns: a row comes in at once when none plays; a change asked after it wai
   // the change and the next row wait for the row's turn
   assert_eq(tu.shown.get("k"), Some(true))
   assert_true(tu.waiting.contains("b"))
-  t.run_for(row_turn_ms)
+  // (each turn holds the next two frames past its motion: turn_calm_ms)
+  t.run_for(row_turn_ms + turn_calm_ms)
   assert_eq(tu.shown.get("k"), Some(false))
-  assert_eq(tu.started_at("k"), a_at + row_turn_ms)
+  assert_eq(tu.started_at("k"), a_at + row_turn_ms + turn_calm_ms)
   assert_true(tu.waiting.contains("b"))
   // the close holds the next row for its 520 ms
-  t.run_for(close_turn_ms)
+  t.run_for(close_turn_ms + turn_calm_ms)
   assert_false(tu.waiting.contains("b"))
-  assert_eq(tu.started_at("b"), a_at + row_turn_ms + close_turn_ms)
+  assert_true((tu.started_at("b") - (a_at + row_turn_ms + close_turn_ms + 2.0 * turn_calm_ms)).abs() < 0.001)
   t.assert_idle()
 }
 

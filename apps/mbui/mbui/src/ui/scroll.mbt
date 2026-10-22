@@ -406,8 +406,9 @@ fn Ctx::feed(self : Ctx, st : ListState, d : Double, source : Int) -> Unit {
   st.pending = st.pending + d
   if source == 1 {
     self.scrolled(st)
-    // a finger takes over from a glide to the end (Ctx::list_to_end)
+    // a finger takes over from a glide to the end (Ctx::list_to_end), and lets go of a row followed
     st.glide = false
+    st.follow_item = -1
     st.drag_pending = st.drag_pending + d
   }
 }

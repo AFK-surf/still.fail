@@ -456,3 +456,41 @@ test "a click seen in a list's row is drawn by the next frame" {
   assert_true(on.val)
   assert_true(t.find("开着") is Some(_))
 }
+
+///|
+test "a row followed from its top: a glide to the end stops with its top under the view's, not past it" {
+  let n = Ref::new(10)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list(
+        "rows",
+        n.val,
+        40.0,
+        fn(i) {
+          // the last row taller than the view
+          c.column(h=Px(if i == 10 { 600.0 } else { 40.0 }), fn() { c.text("row \{i}", wrap=false) |> ignore })
+          |> ignore
+        },
+        stick_end=true,
+        glide_on_growth=true,
+      )
+      |> ignore
+    },
+    w=200.0,
+    h=300.0,
+  )
+  // (half a second on, as the app lets its list glide)
+  t.run_for(@ui.list_glide_ms * 5.0)
+  // (followed from its top as it comes: told before the frame it is laid out in)
+  t.ctx().list_follow_from("rows", 10, margin=test_follow_margin)
+  n.val = 11
+  t.draw()
+  t.run_for(@ui.list_glide_ms * 10.0)
+  let (_, y, _, _) = t.rect_of("row 10").unwrap()
+  assert_true((y - test_follow_margin).abs() < 1.0)
+  assert_false(t.at_end())
+}
+
+///|
+/// How far under the view's top a followed row stops in this test.
+let test_follow_margin : Double = 12.0

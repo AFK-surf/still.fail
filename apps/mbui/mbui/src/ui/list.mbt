@@ -107,6 +107,7 @@ fn Ctx::scroll_list(self : Ctx, id : Int, d : Double) -> Unit {
       st.pending = st.pending + d
       self.scrolled(st)
       st.glide = false
+      st.follow_item = -1
     }
     None => ()
   }
@@ -128,6 +129,7 @@ fn Ctx::ease_list(self : Ctx, id : Int, d : Double) -> Unit {
       st.ease_t0 = self.now
       self.scrolled(st)
       st.glide = false
+      st.follow_item = -1
     }
     None => ()
   }
@@ -323,6 +325,8 @@ pub fn Ctx::list(
         glide_l0: 0.0,
         glide_rest: -1.0,
         glide_left: 0.0,
+        follow_item: -1,
+        follow_margin: 0.0,
         built: -1,
         scroll_asked: (-1, 0, 0.0),
         fling: 0,
@@ -530,7 +534,8 @@ fn Ctx::place_list(
   let mut pinned_end = false
   // down, then up, then down again if the start was reached
   for pass in 0..<2 {
-    while bottom < bottom_edge && last + 1 < st.count {
+    // (and down to a row followed from its top, while gliding to it: its top is where the glide goes)
+    while (bottom < bottom_edge || (st.glide && st.follow_item > last)) && last + 1 < st.count {
       last = last + 1
       let (r, h) = lay(last, bottom)
       rows.push(r)
@@ -636,10 +641,21 @@ fn Ctx::place_list(
   }
   if st.glide {
     // how far it is above its end: the rows not laid out by their heights as known (measured, or estimated)
-    let left = if last == st.count - 1 {
+    let to_end = if last == st.count - 1 {
       bottom - bottom_edge
     } else {
       st.above(st.count) - st.above(last + 1) + (bottom - bottom_edge)
+    }
+    // a row followed from its top: its top `follow_margin` under the view's, or the end, whichever comes first
+    // (Follow.kt left)
+    let mut left = to_end
+    if st.follow_item >= 0 {
+      for r in order {
+        let rn = self.nodes[r]
+        if rn.item == st.follow_item {
+          left = dmin(to_end, rn.y - iy - st.follow_margin)
+        }
+      }
     }
     st.glide_left = left
     if st.glide_t0 == @double.infinity {
@@ -651,7 +667,7 @@ fn Ctx::place_list(
     }
     if left < 1.0 {
       st.glide = false
-      st.at_end = true
+      st.at_end = to_end < 1.0
     }
   }
   // a finger pulls past the end it reached; a fling stops there
@@ -740,6 +756,7 @@ pub fn Ctx::list_scroll_to(
 pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit {
   match self.lists.get(self.id(key)) {
     Some(st) => {
+      st.follow_item = -1
       if glide {
         st.stop()
         self.glide_to_end(st)
@@ -747,6 +764,21 @@ pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit 
         st.scroll_to_end()
       }
       self.read_changed("a list sent to its end")
+    }
+    None => ()
+  }
+}
+
+///|
+/// List `key` follows its row `item` from its top: gliding to the end from now on (what comes at it, Ctx::list's
+/// glide_on_growth) stops once that row's top is `margin` under the view's, if the end does not come first (still.fail's
+/// Follow.kt: a message arriving while the list is at its end is read from its start). -1: none. Let go by the
+/// reader's scroll, or a glide asked to the end (list_to_end).
+pub fn Ctx::list_follow_from(self : Ctx, key : String, item : Int, margin? : Double = 0.0) -> Unit {
+  match self.lists.get(self.id(key)) {
+    Some(st) => {
+      st.follow_item = item
+      st.follow_margin = margin
     }
     None => ()
   }
@@ -783,7 +815,12 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
     return
   }
   if self.now >= st.glide_rest {
-    st.scroll_to_end()
+    // there: its end, or the top of the row it follows (its goal as last laid out)
+    if st.follow_item >= 0 {
+      st.pending = st.pending + st.glide_left
+    } else {
+      st.scroll_to_end()
+    }
     st.glide = false
     return
   }
@@ -814,6 +851,8 @@ pub(all) struct ListInfo {
   below : Double
   /// gliding to its end (list_to_end)
   gliding : Bool
+  /// a row followed from its top (Ctx::list_follow_from), not let go by the reader since
+  following_row : Bool
   /// when it is at rest by itself, on the frames' clock: its fling, its overscroll going back, a wheel's ease and its
   /// glide over (its scroll bar's fading aside); inf while a finger holds it or a glide's way is not known yet (it
   /// sets out at its next layout); -1 at rest
@@ -832,6 +871,7 @@ pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
         at_end: st.at_end,
         below: st.below,
         gliding: st.glide,
+        following_row: st.follow_item >= 0,
         rest: st.own_rest(),
       })
     None => None

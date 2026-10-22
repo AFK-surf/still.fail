@@ -816,6 +816,35 @@ fn dump_node(sb : StringBuilder, i : Int, depth : Int) -> Unit {
 }
 
 ///|
+/// The words drawn now, as another app's frame is compared with this one's (still.fail's apps/mbui tape.mbt): each
+/// text node's words, where its top left is drawn (moved by its own look and its ancestors': Ctx::drawn_at), its size
+/// as laid out, and how opaque it is drawn (its and its ancestors' opacities and looks' alphas, multiplied).
+pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    // (a field's placeholder too, as Android's hint is words of their own)
+    if (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) && n.text != "" {
+      let (x, y) = c.drawn_at(i)
+      let mut alpha = 1.0
+      let mut p = i
+      while p >= 0 {
+        alpha = alpha * c.nodes[p].opacity
+        match c.drawn_entry(p) {
+          Some(e) => alpha = alpha * e.look.alpha
+          None => ()
+        }
+        p = c.nodes[p].parent
+      }
+      out.push((n.text, x, y, n.fw, n.fh, alpha))
+    }
+  }
+  out
+}
+
+///|
 /// The rectangle of the first node whose text contains `s` (x, y, w, h).
 pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
   let c = g()

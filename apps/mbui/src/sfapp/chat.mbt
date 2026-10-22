@@ -115,6 +115,11 @@ priv struct Reading {
   rises : Map[String, @motion.Anim]
   /// when the list's own motion is at rest, as last laid out (ListInfo's `rest`): a turn waits for it
   mut list_rest : Double
+  /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
+  /// anchor: a message arriving while it is followed is read from its start)
+  mut newest : String
+  mut following_row : Bool
+  mut follow_key : String
   /// the outbox entries messages were sent from here as, by seq (their rows go on being those: Chat.kt sentAs)
   sent : Map[Double, String]
   /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220): Lingering
@@ -170,6 +175,9 @@ fn reading_of(key : String) -> Reading {
         admitted: {},
         rises: {},
         list_rest: -1.0,
+        newest: "",
+        following_row: false,
+        follow_key: "",
         sent: {},
         linger: {},
         running: {},
@@ -349,6 +357,7 @@ fn messages(
   let dkey = draft_key(r)
   let turns = turns_of(ek)
   let (list, keys) = row_keys(c, rd, v, with_lingering(rd, read), key, turns, em, flight_of(dkey))
+  follow_newest(c, rd, list, keys, key)
   flight_frame(c, dkey)
   let flight = flight_of(dkey)
   // half a second after it was put in place (shown), what comes at its end may glide: asked each frame it is drawn
@@ -809,7 +818,7 @@ fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool
     let turns = turns_of(rk)
     turns.step(c, rd.list_rest)
     let playing = em.current is Some(_) || em.queue.length() > 0
-    em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && app_in_front()
+    em.watched = (rd.at_end || rd.following_row || (playing && !rd.jump)) && !v.newer && app_in_front()
     let showing : Map[String, Bool] = {}
     for k, _ in running {
       showing[k] = true
@@ -921,8 +930,12 @@ fn row_keys(
   })
   let info = c.list_info(key)
   let following = match info {
-    Some(i) => i.at_end || i.gliding
+    Some(i) => i.at_end || i.gliding || i.following_row
     None => true
+  }
+  rd.following_row = match info {
+    Some(i) => i.following_row
+    None => false
   }
   rd.list_rest = match info {
     Some(i) => i.rest
@@ -993,6 +1006,41 @@ fn row_keys(
   rd.drawn = true
   (list, keys)
 }
+
+///|
+/// The newest row (a message, an outbox entry; not an agent's line, which folds away) come while the list follows its
+/// end: followed from its top, its top follow_margin under the bar (Chat.kt newestKey, Follow.kt anchor), not past its
+/// end; the row kept by its key as rows come and go round it.
+fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Array[String], key : String) -> Unit {
+  let mut at = -1
+  for i, e in list {
+    match e {
+      Working(_) | Foot | Newer => ()
+      _ => at = i
+    }
+  }
+  let newest = if at >= 0 { keys[at] } else { "" }
+  let following = match c.list_info(key) {
+    Some(i) => i.at_end || i.gliding || i.following_row
+    None => false
+  }
+  let came = rd.placed && rd.newest != "" && newest != rd.newest && following
+  if came {
+    rd.follow_key = newest
+  }
+  rd.newest = newest
+  // (by its index as the rows stand now, while the list holds it: the reader's scroll lets it go)
+  if came || rd.following_row {
+    match keys.search(rd.follow_key) {
+      Some(i) => c.list_follow_from(key, i, margin=status_top() + chat_bar_h + 14.0 + follow_margin)
+      None => ()
+    }
+  }
+}
+
+///|
+/// How far under the list's room at its top a row followed from its top stops (Chat.kt followMargin).
+let follow_margin : Double = 12.0
 
 ///|
 /// The message each chat is to go to once its list is in place (Screen.Chat.at: a notification's), by chat.
