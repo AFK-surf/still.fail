@@ -680,7 +680,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
           {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
         </ul>
       )}
-      {(onFiles || chat.letters || onRelay || chat.slackUrl || chat.feishuUrl) && <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>
+      {(onFiles || chat.letters || onRelay || chat.slackUrl || chat.feishuUrl) && <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
         {onFiles && <PanelRow icon={<Folder size={14} />} label={t("web-pages.chat.files")} onClick={onFiles} />}
         {/* What its agents and other chats' wrote each other, not in the chat: their tab beside it. */}
         {chat.letters && <PanelRow icon={<Chats size={14} />} label={t("web-main.letters.title")} end={t("web-main.letters.count", { n: chat.letters })} onClick={onLetters} />}
