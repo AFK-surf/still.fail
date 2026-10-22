@@ -324,6 +324,9 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
   let value : Json? = match name {
     "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
+    // a draft's files going up in the core (composer.add): up at once
+    "composer" =>
+      Some({ "files": Json::array(fix_composers.get(text(Some(Json::object(params)), "key")).unwrap_or([])) })
     // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the
     // account not let into this app)
     "workspaces" if f.mode == "landing" || f.mode == "landing-invited" || f.mode == "blocked" => {

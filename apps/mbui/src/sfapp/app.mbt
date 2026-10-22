@@ -274,6 +274,7 @@ fn reset() -> Unit {
   fix_due.clear()
   fix_unsaid.clear()
   fix_drafts.clear()
+  fix_composers.clear()
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()

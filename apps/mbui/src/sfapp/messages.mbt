@@ -1556,6 +1556,27 @@ fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
         bubble(c, o.text, "o:" + o.id)
       }
       files(c, src, here, o.attachments, true)
+      // still going up: it is sent once they are (the core sends it), as the web's says (Chat.kt Out)
+      for i, u in o.uploads {
+        let (name, size, sent) = u
+        let f : Pending = {
+          id: i,
+          name,
+          size,
+          image: "",
+          width: 0,
+          height: 0,
+          pasted: None,
+          local: None,
+          done: None,
+          sent,
+          error: if failed { Some(if o.error != "" { o.error } else { tr("android-chat.file.failed") }) } else { None },
+          core_id: "",
+          retry: false,
+          retrying: false,
+        }
+        file_tile(c, f, 0, closable=false) |> ignore
+      }
     })
     |> ignore
     if failed {
@@ -1585,7 +1606,13 @@ fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
       })
       |> ignore
     } else if !o.followed {
-      let sending = if o.waits != "" { o.waits } else { tr("android-chat.chat.sending") }
+      let sending = if o.waits != "" {
+        o.waits
+      } else if o.uploads.length() > 0 {
+        tr("common.uploading")
+      } else {
+        tr("android-chat.chat.sending")
+      }
       // not seen while its words fly here, its room kept (Chat.kt Out: a layer at no opacity)
       match flying.val {
         Some(_) => {

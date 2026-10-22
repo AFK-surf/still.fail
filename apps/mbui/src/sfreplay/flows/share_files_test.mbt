@@ -1,7 +1,7 @@
 // 93-share-files (e2e/traces/share-files.trace): files shared in from another app (Android: ACTION_SEND of a photo
 // through the app's own provider, as a gallery shares one; macOS: MBUI_SHARE_FILES, a photo and a PDF): the sheet heads
 // with them (the picture's tile), 发到 the chats; the test chat tapped: they are in its composer, going up at once as
-// ＋'s files do (station.upload.part: the run's bytes); sent with words.
+// ＋'s files do (composer.add: the run's bytes); sent with words.
 
 ///|
 test "93-share-files" {

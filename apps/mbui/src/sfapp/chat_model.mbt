@@ -345,6 +345,8 @@ pub(all) struct Outgoing {
   seq : Double
   /// why it has not reached the station yet, in place of 正在发送 ("" none)
   waits : String
+  /// its files still going up before it goes (`uploads`): each one's name, size and how much of it the station has
+  uploads : Array[(String, Int, Int)]
 }
 
 ///|
@@ -447,6 +449,9 @@ pub fn chat_view(v : Json) -> ChatView {
         followed: flag(s, "followed"),
         seq: opt_number(s, "seq").unwrap_or(-1.0),
         waits: text(s, "waits"),
+        uploads: items(s, "uploads").map(fn(u) {
+          (text(Some(u), "name"), number(Some(u), "size").to_int(), number(Some(u), "sent").to_int())
+        }),
       }
     }),
     offline: flag(s, "offline"),

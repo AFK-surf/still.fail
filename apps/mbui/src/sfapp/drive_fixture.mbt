@@ -441,6 +441,9 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         done: Some({ "name": "发布清单.md", "path": "uploads/发布清单.md", "size": 4210 }),
         sent: 4210,
         error: None,
+        core_id: "",
+        retry: false,
+        retrying: false,
       })
       let folder = draft_ref("ws1/st1", "Studio", fix_docs, "设计稿", "设计稿", true)
       folder.mode = "file"
@@ -456,6 +459,9 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         done: None,
         sent: 0,
         error: None,
+        core_id: "",
+        retry: false,
+        retrying: false,
       })
       draft_refs["ws1/st1:s-c1"] = [file, folder]
       if mode == "chat-station-sheet" {

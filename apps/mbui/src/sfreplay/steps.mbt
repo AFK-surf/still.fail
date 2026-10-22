@@ -966,7 +966,12 @@ pub fn Flow::share_files(self : Flow, names : Array[String]) -> Unit raise {
   emit("#env MBUI_SHARE_FILES=" + names.map(fn(n) { "{FILES}/" + n }).join("|"))
   let files = []
   for n in names {
-    match self.r.sent_bytes("station.upload.part", "name", n) {
+    // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
+    let handed = match self.r.sent_bytes("composer.add", "name", n) {
+      Some(b) => Some(b)
+      None => self.r.sent_bytes("station.upload.part", "name", n)
+    }
+    match handed {
       Some(b) => files.push((n, b))
       None => fail("flow: the trace has none of " + n + "'s bytes (over scripts/trace make's MAX_BYTES?)")
     }

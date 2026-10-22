@@ -3,8 +3,10 @@
 // with the words up to six lines, the round send button; focused or holding something, the field takes the whole
 // width and the buttons go under it. What waits to go with the words sits over the field: the quotes (each with a
 // line for a comment) and the files (pictures as tiles, a long paste as its card, any other file as a card), each
-// going up to the station as soon as it is added (`station.upload.part`, 4 MB a part), waiting there in no chat until
-// a message takes it. Enter is a new line, as the Android app's field has it; send sends.
+// handed to the core as soon as it is added, which sends it up to the station (`composer.add`, its bytes beside the
+// call; a station that has it already copies its own), where it waits in no chat until a message takes it. A message
+// sent while one is still going up names it (`uploads`) and waits in the outbox until it is up; one that failed goes
+// again from what the core kept (`composer.retry`). Enter is a new line, as the Android app's field has it; send sends.
 //
 // Each chat has its own draft (`<station>:<session>`, as the Android app keys it): the words, the quotes with what is
 // said about them, the files already up, kept by the core on the device (`draft.get`, `draft.put` a moment after each
@@ -158,6 +160,13 @@ priv struct Pending {
   /// how much of it the station has
   mut sent : Int
   mut error : String?
+  /// its id in the core, which sends it up (`composer.add`): a message sent before it is up names it (`uploads`); ""
+  /// for one going up here (a station's file switched to one) and for any other
+  mut core_id : String
+  /// failed going up in the core: it can go again from what the core kept (`composer.retry`)
+  mut retry : Bool
+  /// asked to go again: the core's failure said before it is not taken again, until it says otherwise
+  mut retrying : Bool
 }
 
 ///|
@@ -330,6 +339,9 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       done: Some(a),
       sent: number(as_, "size").to_int(),
       error: None,
+      core_id: "",
+      retry: false,
+      retrying: false,
     })
   }
   // links shared in (share-in.ts): each a card among the files, kept and sent as words
@@ -352,6 +364,9 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       done: Some({ "link": l }),
       sent: 0,
       error: None,
+      core_id: "",
+      retry: false,
+      retrying: false,
     })
   }
 }
@@ -486,15 +501,24 @@ fn uploading(d : Draft) -> Bool {
 }
 
 ///|
-/// Something can be sent: words, a file up or a quote, nothing still going up, nothing locking it.
+/// A file going up outside the core (a station's file switched to one, station_files.mbt): sending waits for it here
+/// (Composer.kt goingHere).
+fn going_here(d : Draft) -> Bool {
+  d.files.iter().any(fn(f) { f.done is None && f.error is None && f.core_id == "" }) || refs_uploading(d.key)
+}
+
+///|
+/// Something can be sent (Composer.kt ready): words, a file up or going up in the core, or a quote; nothing going up
+/// here, no file that failed (sent again or taken out first, never left out unsaid), nothing locking it.
 fn draft_ready(d : Draft, locked : Bool) -> Bool {
   (
     d.text.trim(chars=" \n\t") != "" ||
-    d.files.iter().any(fn(f) { f.done is Some(_) }) ||
+    d.files.iter().any(fn(f) { f.done is Some(_) || f.core_id != "" }) ||
     d.quotes.length() > 0 ||
     refs_of(d.key).length() > 0
   ) &&
-  !uploading(d) &&
+  !going_here(d) &&
+  !d.files.iter().any(fn(f) { f.error is Some(_) }) &&
   !locked
 }
 
@@ -614,6 +638,9 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
     done: None,
     sent: 0,
     error: None,
+    core_id: "",
+    retry: false,
+    retrying: false,
   }
   d.files.push(p)
   if bytes.length() > max_file {
@@ -624,15 +651,174 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
     p.error = Some(read_only_words)
     return
   }
-  upload_part(
-    src,
-    d,
-    station,
-    p,
+  // the core sends it up, from its bytes handed over beside the call; a message sent before it is up waits for it
+  let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1)
+  p.core_id = cid
+  let blob : Map[String, Json] = {
+    "hostBytes": [0, Json::number(bytes.length().to_double())],
+    "type": Json::string(file_type(name)),
+  }
+  // named by its content first, so a station that has it already copies its own (PickedFiles.kt picked.hash: worked
+  // out here, on the frame's thread, only for what that is quick for)
+  if bytes.length() <= hashed_max {
+    blob["sha256"] = Json::string(@zip.sha256(bytes))
+  }
+  let one : Map[String, Json] = {
+    "id": Json::string(cid),
+    "name": Json::string(name),
+    "size": Json::number(bytes.length().to_double()),
+    "blob": Json::object(blob),
+  }
+  (src.call_bytes)(
+    "composer.add",
+    Json::object({
+      "key": Json::string(upload_key(d)),
+      "station": Json::string(station),
+      "files": Json::array([Json::object(one)]),
+    }),
     bytes,
-    upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1),
-    0,
+    fn(res) {
+      match res {
+        Err(e) if p.done is None =>
+          p.error = Some(
+            match text(Some(e), "message") {
+              "" => tr("android-chat.file.uploadFailed")
+              m => m
+            },
+          )
+        _ => ()
+      }
+    },
   )
+}
+
+///|
+/// The most of a file named by its content before it goes up (its SHA-256, on the frame's thread).
+let hashed_max : Int = 32 * 1024 * 1024
+
+///|
+/// Where a draft's files go up in the core: a composer of their own there (`composer.add`), by a key no chat has, so
+/// nothing of it is kept there; the draft keeps what is written (Composer.kt uploadKey).
+fn upload_key(d : Draft) -> String {
+  "mbui:" + d.key
+}
+
+///|
+/// What a file is by its name's ending, for the core (URLConnection.guessContentTypeFromName: a picture's size is read
+/// from its head as it goes up): "" when not known.
+fn file_type(name : String) -> String {
+  let lower = name.to_lower()
+  let ends = fn(e : String) { lower.has_suffix(e) }
+  if ends(".png") {
+    "image/png"
+  } else if ends(".jpg") || ends(".jpeg") {
+    "image/jpeg"
+  } else if ends(".gif") {
+    "image/gif"
+  } else if ends(".webp") {
+    "image/webp"
+  } else if ends(".heic") {
+    "image/heic"
+  } else if ends(".pdf") {
+    "application/pdf"
+  } else if ends(".txt") {
+    "text/plain"
+  } else {
+    ""
+  }
+}
+
+///|
+/// What the core says of the draft's files as they go up (its composer's topic), each frame one is going: how far,
+/// up (with a picture's size from here when the station gave none), or failed (to go again).
+fn follow_uploads(src : Source, d : Draft) -> Unit {
+  if !d.files.iter().any(fn(f) { f.core_id != "" && f.done is None && f.error is None }) {
+    return
+  }
+  let v = (src.topic)("composer", { "key": Json::string(upload_key(d)) }).value
+  for one in items(v, "files") {
+    let id = text(Some(one), "id")
+    for f in d.files {
+      if f.core_id != id || f.done is Some(_) || f.error is Some(_) {
+        continue
+      }
+      match field(Some(one), "sent") {
+        Some(Number(n, ..)) => f.sent = n.to_int()
+        _ => ()
+      }
+      match field(Some(one), "done") {
+        Some(Object(a)) => {
+          let file = a.copy()
+          if f.width > 0 && f.height > 0 && !file.contains("width") {
+            file["width"] = Json::number(f.width.to_double())
+            file["height"] = Json::number(f.height.to_double())
+          }
+          f.sent = f.size
+          f.done = Some(Json::object(file))
+        }
+        _ =>
+          match text(Some(one), "error") {
+            "" => f.retrying = false
+            _ if f.retrying => ()
+            e => {
+              f.error = Some(e)
+              f.retry = true
+            }
+          }
+      }
+    }
+  }
+}
+
+///|
+/// A file that failed going up in the core, sent again from what it kept (`composer.retry`).
+fn retry_upload(src : Source, d : Draft, f : Pending) -> Unit {
+  if !f.retry || f.core_id == "" {
+    return
+  }
+  f.error = None
+  f.sent = 0
+  f.retry = false
+  f.retrying = true
+  (src.call)("composer.retry", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id) }), fn(res) {
+    match res {
+      Err(e) if f.done is None => {
+        f.retrying = false
+        f.error = Some(text(Some(e), "message"))
+      }
+      // taken again: what it says from here on is of this try
+      _ => f.retrying = false
+    }
+  })
+}
+
+///|
+/// A file taken out of the draft: one going up in the core stops (it lets go of it: `composer.remove`).
+fn take_out(src : Source, d : Draft, f : Pending) -> Unit {
+  d.files.retain(fn(x) { x.id != f.id })
+  if f.core_id != "" && f.done is None {
+    (src.call)("composer.remove", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id) }), fn(_) {  })
+  }
+}
+
+///|
+/// The files still going up in the core as a message takes them (Taken.uploads): it waits for them in the outbox.
+fn up_uploads(d : Draft) -> Array[Json] {
+  d.files.filter_map(fn(f) {
+    if f.core_id == "" || f.done is Some(_) || f.error is Some(_) {
+      return None
+    }
+    let u : Map[String, Json] = {
+      "id": Json::string(f.core_id),
+      "name": Json::string(f.name),
+      "size": Json::number(f.size.to_double()),
+    }
+    if f.width > 0 && f.height > 0 {
+      u["width"] = Json::number(f.width.to_double())
+      u["height"] = Json::number(f.height.to_double())
+    }
+    Some(Json::object(u))
+  })
 }
 
 ///|
@@ -927,6 +1113,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   let words = with_link_words(with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key), d)
   // (the station files sent as files with them, taken before the draft lets go of its refs)
   let files = up_files(d)
+  let uploads = up_uploads(d)
   for a in ref_attachments(d.key) {
     files.push(a)
   }
@@ -975,6 +1162,10 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     "attachments": Json::array(files),
     "quotes": Json::array(quotes),
   }
+  // the files still going up: it waits for them in the outbox (the core sends it once they are)
+  if uploads.length() > 0 {
+    params["uploads"] = Json::array(uploads)
+  }
   match v.thread {
     Some(th) => params["thread"] = Json::number(th)
     None => params["session"] = Json::string(r.session)
@@ -1020,6 +1211,8 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     Some(f) => f.key
     None => draft_key(r)
   })
+  // its files as they go up in the core
+  follow_uploads(src, d)
   let offline = match v {
     Some(v) => v.offline
     None => false
@@ -1667,18 +1860,23 @@ fn draft_is_picture(f : Pending, picture : String) -> Bool {
 fn draft_file(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending, locked : Bool) -> Unit {
   let remove = c.id("composer/remove/\{f.id}")
   if c.clicked(remove) {
-    d.files.retain(fn(x) { x.id != f.id })
+    take_out(src, d, f)
+  }
+  // failed going up in the core: tapped, it goes again (Composer.kt: the tile's 失败, a card's retry key)
+  let again = c.id("composer/retry/\{f.id}")
+  if c.clicked(again) {
+    retry_upload(src, d, f)
   }
   let picture = draft_picture_key(src, r, f)
   if draft_is_picture(f, picture) {
-    draft_picture(c, r.station, f, picture, remove)
+    draft_picture(c, r.station, f, picture, remove, again)
   } else {
     // (as far down as a picture's tile, under its remove button's room: their tops in line; as wide as it is,
     // never squeezed by a row too narrow for all of them)
     c.box(w=Px(if f.pasted is Some(_) { pasted_card_w } else { file_card_w }), pt=picture_remove_out, fn() {
       let card = match f.pasted {
         Some(words) => pasted_card(c, src, r, d, f, words, remove, locked)
-        None => file_tile(c, f, remove)
+        None => file_tile(c, f, remove, again~)
       }
       @motion.measure(c, card, "composer/tile/\{f.id}")
     })
@@ -1709,7 +1907,7 @@ fn draft_face(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending) ->
 /// remove button over its corner. Tapped, it opens in the viewer, growing out of its tile, from the bytes picked
 /// (Composer.kt draftPicture: `draft:<id>`, no session's; nothing to mark it into, it is in the draft already); one of
 /// a draft kept, whose bytes are not, opens nothing.
-fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, remove : Int) -> Unit {
+fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, remove : Int, again : Int) -> Unit {
   let open = c.id("composer/picture/\{f.id}")
   let a : Attachment = {
     name: f.name,
@@ -1730,7 +1928,7 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
     _ => ()
   }
   with_remove(c, remove, picture_tile, fn() {
-    let tile = picture_face(c, f, picture, if f.local is Some(_) { open } else { 0 })
+    let tile = picture_face(c, f, picture, if f.local is Some(_) { open } else { 0 }, again~)
     @motion.measure(c, tile, "composer/tile/\{f.id}")
     if f.local is Some(_) {
       note_thumb(c, thumb, open, files_corner())
@@ -1743,9 +1941,9 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
 }
 
 ///|
-/// A picture's tile (56, its corner the files' row's): darkened with a spinner while it goes up, 失败 when it failed.
-/// Its node; `id` what a tap on it is (0 none).
-fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int) -> Int {
+/// A picture's tile (56, its corner the files' row's): darkened with a spinner while it goes up, 失败 when it failed
+/// (with the retry mark over it when it can go again: tapped, `again`). Its node; `id` what a tap on it is (0 none).
+fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int, again? : Int = 0) -> Int {
   let t = @sf.theme()
   c.box(
     w=Px(picture_tile),
@@ -1760,21 +1958,28 @@ fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int) -> Int {
       }
       if f.done is None {
         c.layer(fn() {
-          c.box(
+          let can = f.error is Some(_) && f.retry && again != 0
+          let shade = c.box(
             w=Fill(1.0),
             h=Fill(1.0),
             bg=@sf.alpha(0x000000FFL, if f.error is Some(_) { 0.5 } else { 0.25 }),
             align=ACenter,
             justify=JCenter,
+            id=if can { again } else { 0 },
             fn() {
               if f.error is Some(_) {
+                if can {
+                  @sf.icon(c, "retry", size=16.0, color=0xFFFFFFFFL) |> ignore
+                }
                 c.text(tr("android-chat.file.failed"), size=11.0, color=0xFFFFFFFFL, wrap=false) |> ignore
               } else {
                 @sf.spinner(c, ring=@sf.alpha(0xFFFFFFFFL, 0.3), arc=0xFFFFFFFFL) |> ignore
               }
             },
           )
-          |> ignore
+          if can {
+            c.semantics(shade, Button, id=again, label=tr("web-main.composer.retryUpload"))
+          }
         })
         |> ignore
       }
@@ -1791,12 +1996,13 @@ fn files_corner() -> Double {
 }
 
 ///|
-/// The round × of a file's card in the composer, at its trailing end (ChatFiles.kt FileCard).
+/// The round × of a file's card in the composer, at its trailing end (ChatFiles.kt FileCard); `icon` another key's
+/// mark of the same look (its retry).
 /// `label`: what it says to a screen reader (a pasted text's: Composer.kt PastedCard's removePaste), none else.
-fn card_close(c : @ui.Ctx, remove : Int, label? : String = "") -> Unit {
+fn card_close(c : @ui.Ctx, remove : Int, label? : String = "", icon? : String = "close") -> Unit {
   let t = @sf.theme()
   let b = c.box(w=Px(22.0), h=Px(22.0), radius=11.0, bg=@sf.alpha(t.p.text, 0.06), align=ACenter, justify=JCenter, id=remove, fn() {
-    @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore
+    @sf.icon(c, icon, size=12.0, color=t.p.muted) |> ignore
   })
   if label != "" {
     c.semantics(b, Button, id=remove, label~)
@@ -1845,10 +2051,10 @@ fn pasted_card(
   let can_restore = words.length() <= paste_restore_limit && !locked
   if c.clicked(action) {
     if can_retry {
-      d.files.retain(fn(x) { x.id != f.id })
+      take_out(src, d, f)
       paste_as_file(src, d, r.station, words)
     } else if can_restore {
-      d.files.retain(fn(x) { x.id != f.id })
+      take_out(src, d, f)
       let now = if d.text == "" { words } else { d.text + "\n" + words }
       d.text = now
       d.put_text = Some(now)
@@ -1922,7 +2128,7 @@ fn pasted_card(
 ///|
 /// Any other file in the composer (ChatFiles.kt FileCard, in the composer's shape): its kind's mark, its name, its
 /// size or how it goes.
-fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Int {
+fn file_tile(c : @ui.Ctx, f : Pending, remove : Int, again? : Int = 0, closable? : Bool = true) -> Int {
   let t = @sf.theme()
   let k = ink()
   let busy = f.done is None && f.error is None
@@ -1972,7 +2178,13 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Int {
       |> ignore
     })
     |> ignore
-    card_close(c, remove)
+    // failed going up in the core: its retry key before its × (ChatFiles.kt FileCard onRetry)
+    if f.error is Some(_) && f.retry && again != 0 {
+      card_close(c, again, icon="retry", label=tr("web-main.composer.retryUpload"))
+    }
+    if closable {
+      card_close(c, remove)
+    }
     },
   )
 }

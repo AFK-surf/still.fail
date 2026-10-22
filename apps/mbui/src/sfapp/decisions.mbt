@@ -781,6 +781,7 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
   let v = Some(item)
   let words = with_link_words(d.text.trim(chars=" \n\t").to_owned(), d)
   let files = up_files(d)
+  let uploads = up_uploads(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   let taken_text = d.text
   let taken_files = d.files.copy()
@@ -795,16 +796,21 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
   save_draft(src, d)
   c.blur()
   go_decision(c, 2, item, fn() { dui.dgone.push(key) })
+  let reply : Map[String, Json] = {
+    "station": Json::string(text(v, "station")),
+    "thread": Json::number(number(v, "thread")),
+    "seq": Json::number(number(v, "seq")),
+    "text": Json::string(words),
+    "attachments": Json::array(files),
+    "quotes": Json::array(quotes),
+  }
+  // the files still going up: it waits for them (Decisions.kt reply's taken.uploads)
+  if uploads.length() > 0 {
+    reply["uploads"] = Json::array(uploads)
+  }
   (src.call)(
     "decision.reply",
-    Json::object({
-      "station": Json::string(text(v, "station")),
-      "thread": Json::number(number(v, "thread")),
-      "seq": Json::number(number(v, "seq")),
-      "text": Json::string(words),
-      "attachments": Json::array(files),
-      "quotes": Json::array(quotes),
-    }),
+    Json::object(reply),
     fn(res) {
       match res {
         Err(e) => {
