@@ -227,8 +227,8 @@ fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit)
 
 ///|
 /// A round button in a bar (Parts.kt NavButton), 34 across, the icon alone (18 unless said).
-fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0) -> Bool {
-  nav_button(c, icon, size, key~)
+fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String) -> Bool {
+  nav_button(c, icon, size, key~, said?)
 }
 
 ///|

@@ -176,6 +176,8 @@ pub fn fixture_page(mode : String) -> String {
       fx_many_models.val = true
       run_list["session:s-c1"] = "model"
     }
+    // the run's accounts listed (run_more.mbt account_list)
+    "settings-run-accounts" => run_list["session:s-c1"] = "account"
     // the fonts page at code's faces
     "settings-fonts-code" => fonts_at.val = 2
     "settings-new-connect-platform" => fx_connect_step.val = "platform"
@@ -209,7 +211,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-changelog" => "changelog"
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
-    "settings-run" | "settings-run-models" => "run:ws1/st1#s-c1"
+    "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"
     "settings-notify-off" | "settings-lock-prompt" => "home"
     "settings-station" => "station:ws1/st1"
@@ -1642,7 +1644,26 @@ fn fx_session_pick() -> Json {
     ("becomes", ["Opus 5.5", "high", "自动 · Claude 主账号"]),
     ("accountText", str("自动分配")),
     ("accountNote", str("Claude 主账号 · 5 小时窗口已用 62%")),
-    ("accounts", [obj([("id", str("p1")), ("name", str("Claude 主账号")), ("line", str("订阅 · 只在 Studio"))])]),
+    // (RunnableProfile: its kind, its runtime, its allowance)
+    (
+      "accounts",
+      [
+        obj([
+          ("id", str("p1")),
+          ("name", str("Claude 主账号")),
+          ("current", Json::boolean(true)),
+          ("kind", str("subscription")),
+          ("runtime", str("claude")),
+          (
+            "quota",
+            obj([
+              ("state", str("ok")),
+              ("windows", [obj([("mark", str("5H")), ("left", Json::number(38.0)), ("level", str("ok"))]), obj([("mark", str("W")), ("left", Json::number(70.0)), ("level", str("ok"))])]),
+            ]),
+          ),
+        ]),
+      ],
+    ),
     ("changed", Json::boolean(true)),
     ("saveText", str("改成 Opus 5.5 · high · 自动分配")),
   ])

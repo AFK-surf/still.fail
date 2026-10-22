@@ -400,7 +400,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
       })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
     // (a chat's agent's run settings, a settings page: the settings' own)
-    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" => @settings.fixture_topic(f.mode, name, params)
+    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
+      @settings.fixture_topic(f.mode, name, params)
     "newChat" | "pick" => fixture_new_topic(f, name)
     _ =>
       match decide_fixture_topic(f, name, params) {

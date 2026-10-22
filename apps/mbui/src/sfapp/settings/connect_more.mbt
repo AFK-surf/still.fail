@@ -614,27 +614,10 @@ fn connect_run_page(c : @ui.Ctx, core : Core, station : String, id : String) -> 
         return
       }
       "account" => {
-        scroll_page(c, "run-accounts/" + of, [
-          fn() {
-            if pick_row(c, "run-account/auto", tr("android-settings.connect.autoAccount"), checked=!has(draft, "profile")) {
-              pick([("profile", Json::null())])
-              run_list.remove(of)
-            }
-            for a in items(v, "accounts") {
-              let av = Some(a)
-              if pick_row(
-                  c,
-                  "run-account/" + text(av, "id"),
-                  text(av, "name"),
-                  sub=text(av, "line"),
-                  checked=text(draft, "profile") == text(av, "id"),
-                ) {
-                pick([("profile", str(text(av, "id")))])
-                run_list.remove(of)
-              }
-            }
-          },
-        ])
+        account_list(c, "run-accounts/" + of, items(v, "accounts"), runtime, text(draft, "profile"), fn(p) {
+          pick([("profile", match p { Some(id) => str(id); None => Json::null() })])
+          run_list.remove(of)
+        })
         return
       }
       _ => ()

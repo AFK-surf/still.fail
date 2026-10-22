@@ -496,7 +496,7 @@ fn folder_page(
             @motion.ripple(c, id, 6.0)
           })
           |> ignore
-          if dv_nav_button(c, "drive-chosen-more", "more") {
+          if dv_nav_button(c, "drive-chosen-more", "more", said=tr("android-misc.drive.chosenActions")) {
             let picked = entries.filter(fn(e) { chosen.contains(e.name) })
             match picked {
               [] => ()
@@ -515,7 +515,7 @@ fn folder_page(
         if c.clicked(rid) {
           reload()
         }
-        c.box(
+        let rb = c.box(
           w=Px(34.0),
           h=Px(34.0),
           radius=17.0,
@@ -532,11 +532,11 @@ fn folder_page(
             @motion.ripple(c, rid, 17.0)
           },
         )
-        |> ignore
-        if can.write && dv_nav_button(c, "drive-add", "plus", size=20.0) {
+        c.semantics(rb, Button, id=rid, label=tr("android-misc.drive.refresh"))
+        if can.write && dv_nav_button(c, "drive-add", "plus", size=20.0, said=tr("android-misc.drive.add")) {
           dv_open(c, Add(here, name, can.manage && top))
         }
-        if dv_nav_button(c, "drive-view", "more") {
+        if dv_nav_button(c, "drive-view", "more", said=tr("android-misc.drive.view")) {
           dv_open(c, View(here, can.manage && top))
         }
       })

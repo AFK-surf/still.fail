@@ -336,3 +336,13 @@ test "a text read where it was left goes there, then asks for no frame more" {
   assert_eq(r.chunk, 2)
   t.assert_idle()
 }
+
+///|
+test "a folder's buttons said to a screen reader as Android's: 刷新, 添加, 显示方式" {
+  let t = drive_tester("drive")
+  t.tap_text("文档")
+  nav_rested(t)
+  assert_true(t.query(Button, label="刷新") is Some(_))
+  assert_true(t.query(Button, label="添加") is Some(_))
+  assert_true(t.query(Button, label="显示方式") is Some(_))
+}
