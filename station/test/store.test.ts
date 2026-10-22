@@ -240,6 +240,30 @@ test("archiving writes a thread out to a zstd file and back", () => {
   assert.deepEqual(store.entriesAfter(shared.id, 0).map((e) => e.text), ["hi"], "b's archived thread stays");
 });
 
+test("what other chats' agents wrote to a chat is neither its unread nor what lists show of it, archived or not", () => {
+  const data = tempdir();
+  const store = open(join(data, "stillfail.db"), join(data, "archive"));
+  session(store, "a");
+  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  store.joinThread(thread.id, "a", "ember");
+  // Opened by another chat's agent: what it is about is the chat's first message, said as any other.
+  say(store, thread.id, "1.2", "agent", "b", "由 [备份](https://x/o/w/s/b) 开的 chat：\n\n看看备份");
+  say(store, thread.id, "1.3", "agent", "a", "好，在看");
+  // Letters: from a session here and from one of another station, in either language; and this chat's own agent quoting one.
+  say(store, thread.id, "1.4", "agent", "b", "来自 [备份](https://x/o/w/s/b)：\n\n脚本放好了");
+  say(store, thread.id, "1.5", "agent", "peer/ember:c-9", "From [Backups](https://x/o/w/t/c):\n\nDone");
+  const reader = read.openStore(data);
+  const lists = () => [store.listThreads("local", null, null), read.listThreads(reader, "local", null, null)];
+  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread]), [["1.3", 2]]);
+  assert.equal(store.unreadCount("local", thread.id), 2);
+  say(store, thread.id, "1.6", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
+  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread]), [["1.6", 3]]);
+  // Archived, read from its file: the same.
+  store.setArchived("a", true, MANUAL);
+  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread]), [["1.6", 3]]);
+  reader.db.close();
+});
+
 test("an archived thread whose file is lost reads as empty, and is counted on from what was read of it", () => {
   const data = tempdir();
   const store = open(join(data, "stillfail.db"), join(data, "archive"));

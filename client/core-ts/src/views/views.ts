@@ -25,7 +25,7 @@ import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
-import { markdown } from "../markdown.ts";
+import { markdown, plainOf } from "../markdown.ts";
 import { near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
@@ -141,15 +141,23 @@ export function chatTitle(thread: J): string {
 /// What a message another chat's agent sent (session_send, or the first of a chat it opened with chat_create) is headed
 /// with: its chat's title and link, and the message.
 export function sentFrom(text: string): [string, string, string] | null {
+  const sent = sentHead(text);
+  return sent === null ? null : [sent.title, sent.link, sent.rest];
+}
+
+/// What sentFrom reads, and whether it heads the first message of a chat that agent opened (`由 … 开的 chat：`) rather
+/// than one it wrote to (`来自 …：`).
+function sentHead(text: string): { title: string; link: string; rest: string; opened: boolean } | null {
   const at = text.indexOf("\n\n");
   if (at < 0) return null;
   const head = text.slice(0, at);
   const rest = text.slice(at + 2);
   let named: string | null = null;
+  let opened = false;
   if (head.startsWith("来自 ") && head.endsWith("：")) named = head.slice(3, -1);
   else if (head.startsWith("From ") && head.endsWith(":")) named = head.slice(5, -1);
-  else if (head.startsWith("由 ") && head.endsWith(" 开的 chat：")) named = head.slice(2, -" 开的 chat：".length);
-  else if (head.startsWith("Opened by ") && head.endsWith(":")) named = head.slice(10, -1);
+  else if (head.startsWith("由 ") && head.endsWith(" 开的 chat：")) [named, opened] = [head.slice(2, -" 开的 chat：".length), true];
+  else if (head.startsWith("Opened by ") && head.endsWith(":")) [named, opened] = [head.slice(10, -1), true];
   if (named === null) return null;
   let title: string;
   let link: string;
@@ -167,7 +175,51 @@ export function sentFrom(text: string): [string, string, string] | null {
     title = inner.slice(cut + 1);
   } else return null;
   if (title === "" || !link.startsWith("http") || /\s/.test(link)) return null;
-  return [title, link, rest];
+  return { title, link, rest, opened };
+}
+
+/// Whether a message is a letter: one another chat's agent wrote to this chat (session_send), as its station posts it
+/// (headed `来自 …：`), by an agent that is not one of this chat's (`keys`). The first message of a chat such an agent
+/// opened is not: it is what the chat is about.
+export function isLetter(message: J, keys: ReadonlySet<string>): boolean {
+  if (message.authorKind !== "agent" || keys.has(str(message.author) ?? "")) return false;
+  const sent = sentHead(str(message.text) ?? "");
+  return sent !== null && !sent.opened;
+}
+
+/// A chat's letters (isLetter) folded, so that what agents write to each other does not bury what people and the
+/// chat's own agents say: each run of them, with nothing else said between, is one line on its first (`letters`: who
+/// wrote, how many, the start of the latest), the rest of it out of the list; a run with one of its messages in `open`
+/// shows whole, under that line. Messages as shownMessage made them (a letter's words without their heading).
+export function lettersFolded(messages: J[], letter: (m: J) => boolean, open: ReadonlySet<number>): { messages: J[]; runs: number[][] } {
+  const runs: number[][] = [];
+  const out: J[] = [];
+  for (let i = 0; i < messages.length; ) {
+    if (!letter(messages[i]!)) {
+      out.push(messages[i]!);
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < messages.length && letter(messages[j]!)) j++;
+    const run = messages.slice(i, j);
+    const seqs = run.flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
+    runs.push(seqs);
+    const shown = seqs.some((s) => open.has(s));
+    const from: string[] = [];
+    for (const m of run) {
+      const name = str(get(m.by, "name"));
+      if (name !== null && !from.includes(name)) from.push(name);
+    }
+    const names = from.map((name) => t("core-views.letters.name", { name })).join(t("core-views.list_separator"));
+    const line = t("core-views.letters.line", { from: names, n: run.length });
+    const latest = str(run.at(-1)!.text) ?? "";
+    const last = plainOf(markdown(latest), latest).split("\n").map((l) => format.splitWhitespace(l).join(" ")).find((l) => l !== "") ?? "";
+    out.push({ ...run[0]!, letters: { count: run.length, line, last, open: shown } });
+    if (shown) out.push(...run.slice(1));
+    i = j;
+  }
+  return { messages: out, runs };
 }
 
 /// The notices that a runtime is not installed, said where they matter: under the viewer's message that waits for it
@@ -377,6 +429,10 @@ export class Views implements Owner {
   /// Per live view, the topics it watches.
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
   readonly #updateNoticesOpen = new Set<string>();
+  /// Per chat (`station␁thread`), the messages whose run of letters is shown whole (lettersFolded), as `chat.letters`
+  /// opened them; and its runs as last shown, which closing one goes by.
+  readonly #lettersOpen = new Map<string, Set<number>>();
+  readonly #letterRuns = new Map<string, number[][]>();
   /// Views whose words count seconds (a chat's jobs): each computed again when they next change.
   readonly #again = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The scopes whose stations' rows are being loaded (the list showed its first screen meanwhile).
@@ -484,6 +540,18 @@ export class Views implements Owner {
   /// The station has the message as entry `seq` (see Local.outboxSent).
   outboxSent(station: string, thread: number, id: string, seq: number): void {
     this.local.outboxSent(station, thread, id, seq, this.chatViews(station, thread).length > 0);
+  }
+
+  /// The run of letters with message `seq` in it shown whole (`open`), or folded again (`chat.letters`), in the pages
+  /// showing that chat; kept while the core runs.
+  lettersOpen(station: string, thread: number, seq: number, open: boolean): void {
+    const key = `${station}\u0001${thread}`;
+    const shown = this.#lettersOpen.get(key) ?? new Set<number>();
+    if (open) shown.add(seq);
+    else for (const s of this.#letterRuns.get(key)?.find((run) => run.includes(seq)) ?? [seq]) shown.delete(s);
+    if (shown.size > 0) this.#lettersOpen.set(key, shown);
+    else this.#lettersOpen.delete(key);
+    for (const view of this.chatViews(station, thread)) this.#core.store.invalidate(view);
   }
 
   updateNoticeOpen(station: string, open: boolean): void {
@@ -1318,6 +1386,9 @@ export class Views implements Owner {
     const manages = role === "owner" || role === "admin";
     // A failure notice may be sent to the still.fail team where the station takes bug reports.
     const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
+    // What other chats' agents wrote to it, read before their headings are taken off.
+    const keys = new Set(members(thread));
+    const letters = new Set(messages.flatMap((m) => (isLetter(m, keys) && u64(m.seq) !== null ? [m.seq as number] : [])));
     for (let i = 0; i < messages.length; i++) {
       const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
       messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
@@ -1394,6 +1465,12 @@ export class Views implements Owner {
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
     messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed")));
+    if (letters.size > 0) {
+      const key = `${station}\u0001${id}`;
+      const folded = lettersFolded(messages, (m) => letters.has(m.seq), this.#lettersOpen.get(key) ?? new Set());
+      messages.splice(0, messages.length, ...folded.messages);
+      this.#letterRuns.set(key, folded.runs);
+    }
     const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots });
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
     const view: J = {

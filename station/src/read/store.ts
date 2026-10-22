@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { type InWorkspace, liveShare, sees, toChatShare } from "../store/rows.ts";
+import { type InWorkspace, LETTER_SQL, isLetter, liveShare, sees, toChatShare } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -385,7 +385,7 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
     return {
       sessions: threadSessions(s, t.id),
       last: lastEntry(s, t.id, at),
-      lastMessage: lastMessage(s, t.id, at),
+      lastMessage: lastSaid(s, t.id, at),
       read,
       unread: unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own, at),
       people: threadPeople(s, t.id, t.surface, at),
@@ -406,7 +406,9 @@ export type ArchivedSummary = {
   version: string;
   last: number;
   lastMessage: MessageRow | null;
-  messages: { n: number; authorKind: string; author: string }[];
+  /// Its latest message that is not a letter (isLetter).
+  lastSaid: MessageRow | null;
+  messages: { n: number; authorKind: string; author: string; letter: boolean }[];
   /// The people who wrote in it, in the order they first did, and with when they first did.
   authors: string[];
   firstAt: [string, number][];
@@ -429,11 +431,13 @@ function archivedSummary(s: Store, thread: number, at?: number | null): Archived
     if (at === undefined || e.at < at) firstAt.set(e.author, e.at);
   }
   const first = merged.find((m) => m.authorKind === "person");
+  const keys = new Set(threadSessions(s, thread).map((m) => m.session));
   const made: ArchivedSummary = {
     version,
     last: entries.at(-1)?.n ?? 0,
     lastMessage: merged.at(-1) ?? null,
-    messages: merged.map((m) => ({ n: m.n, authorKind: m.authorKind, author: m.author })),
+    lastSaid: merged.findLast((m) => !isLetter(m, keys)) ?? null,
+    messages: merged.map((m) => ({ n: m.n, authorKind: m.authorKind, author: m.author, letter: isLetter(m, keys) })),
     authors: [...firstAt.keys()],
     firstAt: [...firstAt],
     firstText: first ? takeChars(first.text, 300) : null,
@@ -450,6 +454,14 @@ export function lastMessage(s: Store, thread: number, at?: number | null): Messa
   return r ? toMessage(r) : null;
 }
 
+/// The thread's latest message that is not a letter (isLetter), for lists: what they show and sort by.
+export function lastSaid(s: Store, thread: number, at?: number | null): MessageRow | null {
+  const archived = archivedSummary(s, thread, at);
+  if (archived !== null) return archived.lastSaid === null ? null : { ...archived.lastSaid };
+  const r = one(s, `SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread, thread);
+  return r ? toMessage(r) : null;
+}
+
 /// Messages after the read position that are not the viewer's own (nor of a Slack user they are).
 function unreadCount(s: Store, viewer: string, thread: number, read: number): number {
   const t = getThread(s, thread);
@@ -459,17 +471,18 @@ function unreadCount(s: Store, viewer: string, thread: number, read: number): nu
   return unreadOf(s, thread, read, selves);
 }
 
-/// Messages after `read` that are not of `selves`.
+/// Messages after `read` that are not of `selves`, nor letters (isLetter).
 function unreadOf(s: Store, thread: number, read: number, selves: string[], at?: number | null): number {
   const archived = archivedSummary(s, thread, at);
-  if (archived !== null) return archived.messages.filter((m) => m.n > read && !(m.authorKind === "person" && selves.includes(m.author))).length;
+  if (archived !== null) return archived.messages.filter((m) => m.n > read && !m.letter && !(m.authorKind === "person" && selves.includes(m.author))).length;
   return one(
     s,
     `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
-     AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?)))`,
+     AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?))) AND NOT ${LETTER_SQL}`,
     thread,
     read,
     JSON.stringify(selves),
+    thread,
   ).c;
 }
 

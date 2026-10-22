@@ -416,6 +416,28 @@ const followed: DemoExtension = {
     return { ...chat, messages: [...chat.messages, ...said] };
   },
 };
+/** What other chats' agents wrote to the chat, between the person's message and the agent's answer: folded into one
+ *  line (the core's `letters`, views.ts lettersFolded), or (`open`) the line with the run whole under it. */
+const letters = (open: boolean): DemoExtension => ({
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as ChatView;
+    const last = chat.messages.at(-1);
+    if (!last) return undefined;
+    const start = Date.now() - 6 * 60_000;
+    const from = { name: "BFT 备份尺寸分析", from: "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e", maker: ANTHROPIC };
+    const at = (i: number) => start + i * 50_000;
+    const base = (i: number) => ({ seq: last.seq + 1 + i, thread: last.thread, ts: `${at(i) / 1000}`, attachments: [], quotes: [], createdAt: at(i), waiting: false, time: { createdAt: stamp(at(i)) } });
+    const asked: ChatMessage = { ...base(0), authorKind: "person", author: "local", authorName: "你", text: "备份改成 zstd，顺便看看每份为什么这么大", mine: true, system: false, by: { name: "你" } };
+    const words = ["用户让精简备份并改用 zstd。我没有 host2 的权限，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下", "补充一点：macOS 自带的 `/usr/bin/tar` 能直接解 zstd，guest 里不用另装", "已替换，**今晚 02:00** 那份会按新脚本出"];
+    const said: ChatMessage[] = words.map((text, i) => ({ ...base(1 + i), authorKind: "agent", author: `peer/ember:c-${i}`, text, mine: false, system: false, by: from }));
+    const line = { count: said.length, line: `「${from.name}」发来 ${said.length} 条消息`, last: "已替换，今晚 02:00 那份会按新脚本出", open };
+    const own = chat.messages.findLast((m) => m.authorKind === "agent") ?? last;
+    const answer: ChatMessage = { ...base(4), authorKind: "agent", author: own.author, text: "备份改好了：每份从 650 MiB 降到 180 MiB，今晚 02:00 起按新脚本出", mine: false, system: false, by: own.by };
+    const run = open ? [{ ...said[0]!, letters: line }, ...said.slice(1)] : [{ ...said[0]!, letters: line }];
+    return { ...chat, messages: [...chat.messages, asked, ...run, answer] };
+  },
+});
 /** A message sent while the chat's station updates: it waits for the update to finish, saying so under it
  *  (`Outgoing.waits`), and the chat's head says the station is updating. */
 const sentUpdating: DemoExtension = {
@@ -687,6 +709,9 @@ export const stories: Story[] = [
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
+  { id: "app-chat-letters", group: "应用", title: "对话 · 别的对话的 agent 发来的消息（折起）", app: true, demo: letters(false) },
+  { id: "app-chat-letters-open", group: "应用", title: "对话 · 别的对话的 agent 发来的消息（展开）", app: true, demo: letters(true) },
+  { id: "phone-chat-letters", group: "手机", title: "对话 · 别的对话的 agent 发来的消息（折起）", app: true, phone: true, demo: letters(false) },
   { id: "app-chat-sent-updating", group: "应用", title: "对话 · station 更新时发出的消息", app: true, demo: sentUpdating },
   { id: "phone-chat-sent-updating", group: "手机", title: "对话 · station 更新时发出的消息", app: true, phone: true, demo: sentUpdating },
   { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },

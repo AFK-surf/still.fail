@@ -266,6 +266,10 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
       const { enter, emitted, caught } = rowOf(m);
       return <MessageRow key={`m:${m.seq}`} message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />;
     });
+    if (m.letters) drawn.set(`l:${m.seq}`, () => {
+      const { enter, caught } = rowOf(m);
+      return <LettersLine key={`l:${m.seq}`} message={m} enter={enter} caught={caught} />;
+    });
     sent(m.elsewhere);
   }
   // The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it.
@@ -513,9 +517,11 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   for (const m of messages) {
     if (m.seq === divider) items.push({ key: "line", estimate: 20 });
+    // The first of a run of what other chats' agents wrote to it: the run's line (LettersLine), the message only open.
+    if (m.letters) items.push({ key: `l:${m.seq}`, estimate: 36 });
     // One waiting to come out of its avatar takes no room, not even the gap before it (the list measures it so): known,
-    // not guessed, so that nothing below it moves for a guess and back for the fact.
-    items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
+    // not guessed, so that nothing below it moves for a guess and back for the fact. A run folded is its line alone.
+    if (!m.letters || m.letters.open) items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
     for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   }
   if (chat.newer) items.push({ key: "newer", estimate: 30, place: false });
@@ -555,7 +561,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   useLoadNear(virtual, "top", !!chat.more, chat.messages[0]?.seq, older);
-  useJumpTo(list, virtual, station, id, messages, chat.more, older);
+  useJumpTo(list, virtual, station, id, messages, chat.more, older, (seq) => (id === null ? Promise.resolve() : sending.around(id, seq)));
   const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
   useLoadNear(virtual, "bottom", short, chat.messages.at(-1)?.seq, newer);
   useShowing(virtual, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
@@ -683,11 +689,13 @@ function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessa
 /**
  * A message asked to be shown (jumpTo.ts: a row's state line pressed): once it is in the list, scrolled to the top
  * (below what floats there, as the unread line) and flashed, after the list has been put where it opens (the unread
- * line, where it was left). Older than the window: older pages load until it is in; not there at all, nothing.
+ * line, where it was left). Older than the window: older pages load until it is in; among what other chats' agents
+ * wrote to it, folded, the core asked to show it (`chat.around` shows their run whole); not there at all, nothing.
  */
-function useJumpTo(list: RefObject<HTMLDivElement | null>, virtual: VirtualList, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>) {
+function useJumpTo(list: RefObject<HTMLDivElement | null>, virtual: VirtualList, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>, around: (seq: number) => Promise<unknown>) {
   const seq = useJump(station, thread);
   const loading = useRef(false);
+  const asked = useRef<number | null>(null);
   useEffect(() => {
     if (seq === null || !messages.length || loading.current) return;
     const message = messages.find((m) => m.seq === seq);
@@ -695,6 +703,10 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, virtual: VirtualList,
       if (more && seq < messages[0]!.seq) {
         loading.current = true;
         void older().catch(() => jumped()).finally(() => { loading.current = false; });
+      } else if (asked.current !== seq && messages.some((m) => m.letters && !m.letters.open)) {
+        // Its run comes whole with the chat's next value (this effect again, finding it there).
+        asked.current = seq;
+        void around(seq).catch(() => jumped());
       } else jumped();
       return;
     }
@@ -1152,6 +1164,29 @@ function SystemNotice({ text, profile, install, report, time, ts, enter, caught,
         </div>
       </div>
       {open && <Time className={conversationCss.msgTime} stamp={time} />}
+    </div>
+  );
+}
+
+/**
+ * What other chats' agents wrote to this one, a run of it with nothing else said between (the core's `letters`, on its
+ * first message): a pill across the chat as still.fail's notices are, saying who wrote and how many, and folded the
+ * start of the latest. Pressed, the run shows whole under it, or folds again (`chat.letters`).
+ */
+function LettersLine({ message: m, enter, caught }: { message: ChatMessage; enter: true | undefined; caught: true | undefined }) {
+  const sending = useChatSend();
+  const act = useAct();
+  const letters = m.letters!;
+  const toggle = () => act(sending.letters(m.thread, m.seq, !letters.open), t(letters.open ? "web-main.chat.letters.close" : "web-main.chat.letters.open"));
+  return (
+    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-vk={`l:${m.seq}`} data-role="letters" data-enter={enter} data-caught={caught}>
+      <div className={css.msgSystemBox} role="button" tabIndex={0} aria-expanded={letters.open}
+        onClick={toggle} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
+        <div className={css.msgSystemLine}>
+          <span className={css.lettersWho}>{letters.line}</span>
+          {!letters.open && letters.last && <><span className={css.blockedDot} aria-hidden>·</span><span className={css.lettersLast}>{letters.last}</span></>}
+        </div>
+      </div>
     </div>
   );
 }

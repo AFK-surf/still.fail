@@ -98,6 +98,17 @@ export type CardAnswer = { question: MessageRow; card: Json; by: string; at: num
 export type PendingMessage = { message: MessageRow; surface: string; channel: string; threadTs: string; connect: string };
 
 /// A thread for listings: who takes part, the last thing said, and how much the viewer has not read.
+/// Whether a message is a letter: one another chat's agent wrote to this thread (session_send), headed as
+/// sessions/messages.ts heads it (`来自 …：`, `From …:`), by an agent that is not one of the thread's (`keys`). Lists
+/// and unread counts leave letters out, so that what agents write to each other does not bury what people say; the
+/// chat's page folds them (core views.ts `lettersFolded`).
+export function isLetter(m: { authorKind: string; author: string; text: string }, keys: ReadonlySet<string>): boolean {
+  return m.authorKind === "agent" && !keys.has(m.author) && (m.text.startsWith("来自 ") || m.text.startsWith("From "));
+}
+
+/// isLetter in SQL, of an entry or merged row of `thread` (its one parameter: the thread).
+export const LETTER_SQL = "(author_kind = 'agent' AND (text LIKE '来自 %' OR text LIKE 'From %') AND author NOT IN (SELECT session FROM thread_sessions WHERE thread = ?))";
+
 export type ThreadSummary = {
   thread: ThreadRow; sessions: Membership[]; last: number; lastMessage: MessageRow | null; read: number; unread: number;
   people: string[]; firstText: string | null;

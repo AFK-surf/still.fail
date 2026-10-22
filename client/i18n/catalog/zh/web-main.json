@@ -135,6 +135,8 @@
   "web-main.chat.asks.go": "跳转到待决策的消息",
   "web-main.chat.copyLink": "复制会话链接",
   "web-main.chat.historyRefTitle": "执行记录：{title}",
+  "web-main.chat.letters.close": "收起消息",
+  "web-main.chat.letters.open": "展开消息",
   "web-main.chat.linkCopied": "已复制：粘贴到另一个会话后，该会话的 agent 即可读取此会话",
   "web-main.chat.historyLinkCopied": "已复制：粘贴到另一个会话后，该会话的 agent 即可读取此处 agent 的执行记录",
   "web-main.chat.copyFailed": "无法复制：{error}",

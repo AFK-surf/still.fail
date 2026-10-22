@@ -165,6 +165,11 @@
   "core-views.joinable.offline": "离线",
   "core-views.joinable.needsLock": "{workspace} 已开启安全模式，需在此 workspace 也开启安全模式后才能添加",
   "core-views.joinable.online": "在线",
+  "core-views.letters.line": {
+    "one": "{from}发来消息",
+    "other": "{from}发来 {n} 条消息"
+  },
+  "core-views.letters.name": "「{name}」",
   "core-views.list_separator": "、",
   "core-views.local_author": "本机",
   "core-views.marks.alert": "{n} 个出错",
