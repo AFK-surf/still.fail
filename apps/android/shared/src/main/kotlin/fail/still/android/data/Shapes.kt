@@ -2091,6 +2091,10 @@ data class ChatView (
 	/// after a message is that message's `elsewhere`. Not kept in it.
 	val elsewhere: List<ChatSentElsewhere>? = null,
 	val more: Boolean,
+	/// First loaded entry before messages are merged or folded; the cursor for loading older pages.
+	val firstEntry: Long? = null,
+	/// Last loaded entry before messages are merged or folded; the cursor for loading newer pages.
+	val lastEntry: Long? = null,
 	/// Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,
 	/// `chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`.
 	val newer: Boolean? = null,

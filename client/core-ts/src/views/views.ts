@@ -1505,6 +1505,8 @@ export class Views implements Owner {
       elsewhere,
       more: u64(page.first) !== null && page.first > 1,
       newer: page.end === false,
+      firstEntry: u64(page.first),
+      lastEntry: u64(page.last),
       at: page.at ?? null,
       atOffset: page.atOffset ?? null,
       caught: page.caught ?? null,

@@ -1044,6 +1044,26 @@ const chatTopic = (station: string, th: number): Topic => ({ topic: "chat", stat
 const agentPage = (station: string, key: string): Topic => ({ topic: "chat", station, thread: null, session: key });
 const hasTopic = (list: Topic[], topic: Topic) => list.some((x) => topicKey(x) === topicKey(topic));
 
+test("folded_letters_keep_the_loaded_entry_cursors_advancing", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], t.host.nowMs())]);
+  for (const last of [50, 100, 150]) {
+    const entries = Array.from({ length: last }, (_, i) => ({
+      ...entry(i + 1, "来自 [other](https://still.fail/o/ws/a/other)：\n\n更新"),
+      authorKind: "agent", author: "other",
+    }));
+    t.set(pageOf("ws/a", 7), { first: 1, last, entries, end: false, thread: null });
+    await t.read(u, 1);
+    assert.equal(u.value.messages.length, 1);
+    assert.equal(u.value.messages[0].seq, 1, "the displayed row keeps its identity");
+    assert.equal(u.value.messages[0].letters.count, last);
+    assert.deepEqual([u.value.firstEntry, u.value.lastEntry], [1, last]);
+  }
+});
+
 test("an_items_page_is_its_agents_and_becomes_its_chat", async () => {
   const t = setup();
   const u = ui();
@@ -1287,7 +1307,7 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   const appended: J[] = merge([entry(41, "新的")]);
   appended[0].mine = false;
   appended[0].system = false;
-  assert.deepEqual(plain(delta), plain([{ path: ["messages"], append: appended }]));
+  assert.deepEqual(plain(delta), plain([{ path: ["lastEntry"], set: 41 }, { path: ["messages"], append: appended }]));
   u.value = applyOps(u.value, delta);
   t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, { n: 42, kind: "edit", target: 41, text: "新的（改）", attachments: [], quotes: [], at: 42 }], last: 42 }));
   await t.read(u, 1);

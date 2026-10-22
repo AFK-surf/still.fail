@@ -2143,6 +2143,10 @@ export interface ChatView {
 	 */
 	elsewhere?: ChatSentElsewhere[];
 	more: boolean;
+	/** First loaded entry before messages are merged or folded; the cursor for loading older pages. */
+	firstEntry?: number;
+	/** Last loaded entry before messages are merged or folded; the cursor for loading newer pages. */
+	lastEntry?: number;
 	/**
 	 * Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,
 	 * `chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`.

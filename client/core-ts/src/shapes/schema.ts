@@ -2358,6 +2358,8 @@ export const SHAPES: Record<string, Shape> = {
     ["messages", vec("ChatMessage")],
     ["elsewhere", vec("ChatSentElsewhere"), { default: true, doc: "What its agents said in Slack and were given from it before its first message (not in this chat): what came\nafter a message is that message's `elsewhere`. Not kept in it." }],
     ["more", "bool"],
+    ["firstEntry", opt("i64"), { client: opt("I54"), doc: "First loaded entry before messages are merged or folded; the cursor for loading older pages." }],
+    ["lastEntry", opt("i64"), { client: opt("I54"), doc: "Last loaded entry before messages are merged or folded; the cursor for loading newer pages." }],
     ["newer", "bool", { default: true, doc: "Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,\n`chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`." }],
     ["at", opt("i64"), { client: opt("I54"), doc: "The entry the chat opened at when not at its end (its first unread, or where it was left): the list shows it\nat its top. Absent when it opened at its end." }],
     ["atOffset", opt("f64"), { doc: "Opened where it was left (`at`): how far below the top of the list that entry's top was then, as the client\nthat left it said (`chat.place`). Absent otherwise, and from a core before it." }],
