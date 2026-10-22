@@ -68,9 +68,18 @@ let wide : Wide = {
 let wide_on : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether a window this wide is drawn wide.
+/// Whether a window this wide is drawn wide: a desktop's or a browser's, never a phone's (a phone turned sideways for a
+/// film is as wide, and the desktop's frame took it over: its rail and lists beside the film, a finger's drag no
+/// list's, and upright again none could be dragged).
 pub fn is_wide(c : @ui.Ctx) -> Bool {
-  c.width >= wide_from
+  c.width >= wide_from && !phone()
+}
+
+///|
+/// Whether the app runs on a phone's system (iOS, Android).
+fn phone() -> Bool {
+  let p = @ui.platform()
+  p == 1 || p == 2
 }
 
 ///|

@@ -126,3 +126,19 @@ test "wide: Enter sends the composer's words, ⇧Enter is a new line" {
   assert_eq(sent.length(), 1)
   assert_eq(text(Some(sent[0].params), "text"), "第一行\n第二行")
 }
+
+///|
+test "a phone is never drawn wide: turned sideways (a film's), its pages as they are, a finger dragging their lists" {
+  reset()
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  t.resize(844.0, 390.0)
+  assert_true(!wide_on.val)
+  t.resize(390.0, 844.0)
+  assert_true(!wide_on.val)
+  // a desktop as wide: its frame
+  let d = @ui.Tester::new(fn(c) { view(c, src) }, w=844.0, h=390.0, platform=0)
+  d.draw()
+  assert_true(wide_on.val)
+}
