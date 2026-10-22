@@ -1526,7 +1526,7 @@ export class Views implements Owner {
   /// (`whole` once all is): by the other chat, as lettersByChat has them, each named as the chat's page names its
   /// messages, with the chat's title.
   #chatLetters(station: string, id: number): Value | undefined {
-    const chat = this.value({ topic: "chat", station, thread: id });
+    const chat = this.value({ topic: "chat", station, thread: id, session: null });
     if (chat === undefined || "err" in chat) return chat;
     const held = this.value({ topic: "letters", station, thread: id });
     if (held === undefined || "err" in held) return held;
