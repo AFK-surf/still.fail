@@ -544,6 +544,23 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       sideways_down(c, id, x, y)
     }
     c.editor_drag = false
+    c.handle_drag = 0
+    // the caret's handle under the finger (Android's): the finger moves the caret, nothing under it pressed or scrolled
+    match c.editors.get(c.focus) {
+      Some(st) if st.on_handle(x, y) => {
+        c.handle_drag = c.focus
+        c.handle_dy = y - st.handle_y
+        c.claimed = true
+        for other in c.press_chain {
+          drag_cancel(other)
+        }
+        c.active = 0
+        c.edge = 0
+        h_request_frame()
+        return
+      }
+      _ => ()
+    }
     c.edge = if c.on_edge(x, y) { 1 } else { 0 }
     // a drag area under it (a sheet's top, the bottom bar, a row or a card swiped across): no edge swipe under it
     for id in c.press_chain {
@@ -579,22 +596,15 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       Some(st) => st.stop()
       None => ()
     }
+    c.editor_tap = 0
     match c.editors.get(target) {
+      // Android's: a field takes the focus and the caret where it is tapped, the finger lifted where it came down
+      // (Compose's tap); a finger that moves on drags what is under it (the list), the field untouched
+      Some(_) if h_platform() == 2 => c.editor_tap = target
       Some(st) => {
         c.focus = target
         c.editor_drag = true
-        st.blink0 = t
-        match st.tl {
-          Some(tl) => {
-            if st.marked.length() > 0 {
-              st.text_input(2, "", 0, 0, t)
-            }
-            let off = tl.offset_at(x - st.ox, y - st.oy)
-            st.caret = imin(off, st.text.length())
-            st.anchor = st.caret
-          }
-          None => ()
-        }
+        place_caret(st, x, y, t)
       }
       None => if target == 0 { c.focus = 0 }
     }
@@ -603,7 +613,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)
-      if c.edge > 0 && c.edge_move(x, y, t) {
+      if c.handle_drag != 0 {
+        handle_move(c, x, y, t)
+      } else if c.edge > 0 && c.edge_move(x, y, t) {
         ()
       } else if select_move(x, y) {
         // picking words: the press is no tap
@@ -710,13 +722,33 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         )
       }
     }
+    // a tap on a field (Android's): the focus and the caret where it was tapped, its handle under the caret
+    if c.editor_tap != 0 &&
+      !c.dragging &&
+      (x - c.press_x).abs() <= touch_slop() &&
+      (y - c.press_y).abs() <= touch_slop() {
+      match c.editors.get(c.editor_tap) {
+        Some(st) => {
+          c.focus = c.editor_tap
+          place_caret(st, c.press_x, c.press_y, t)
+          st.handle = st.text.length() > 0
+          h_request_frame()
+        }
+        None => ()
+      }
+    }
+    c.editor_tap = 0
     c.down = false
     c.dragging = false
     c.active = 0
     c.editor_drag = false
+    c.handle_drag = 0
     picked.dragging = false
     second_ptr[2] = 0.0
   } else {
+    // (the touch cancelled: no tap, no handle dragged)
+    c.editor_tap = 0
+    c.handle_drag = 0
     if c.edge == 2 {
       c.back_gesture(3, x, t)
     }
@@ -949,6 +981,41 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
       st.text_input(kind, s, a, b, h_now())
       h_request_frame()
     }
+    None => ()
+  }
+}
+
+///|
+/// The caret put where (`x`, `y`) is in the field `st` (what is composed committed first), its blinking from `t`.
+fn place_caret(st : EditorState, x : Double, y : Double, t : Double) -> Unit {
+  st.blink0 = t
+  match st.tl {
+    Some(tl) => {
+      if st.marked.length() > 0 {
+        st.text_input(2, "", 0, 0, t)
+      }
+      st.caret = imin(tl.offset_at(x - st.ox, y - st.oy), st.text.length())
+      st.anchor = st.caret
+    }
+    None => ()
+  }
+}
+
+///|
+/// The caret's handle dragged to (`x`, `y`): the caret where the handle's tip comes, in the middle of the line over it.
+fn handle_move(c : Ctx, x : Double, y : Double, t : Double) -> Unit {
+  match c.editors.get(c.handle_drag) {
+    Some(st) =>
+      match st.tl {
+        Some(tl) => {
+          let tip = y - c.handle_dy
+          st.caret = imin(tl.offset_at(x - st.ox, tip - tl.line_h / 2.0 - st.oy), st.text.length())
+          st.anchor = st.caret
+          st.blink0 = t
+          h_request_frame()
+        }
+        None => ()
+      }
     None => ()
   }
 }

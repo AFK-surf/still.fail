@@ -662,6 +662,10 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   c.layer(fn() {
     c.box(style=search_page_box, id=c.id("search/page"), fn() {
+      // under the status bar (Search.kt: windowInsetsPadding(statusBars))
+      if status_top() > 0.0 {
+        c.box(style=@ui.style(w=Full, h=Fixed(status_top())), fn() {  }) |> ignore
+      }
       c.box(style=search_bar_row, fn() {
         // as wide as the list's while there, narrowing to its room as it comes up (and back as it goes): 取消 comes
         // in with its right edge, not the field jumping between the two widths

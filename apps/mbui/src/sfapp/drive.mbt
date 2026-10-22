@@ -31,7 +31,10 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
       }
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      files_body(c, src, list, error, lenders, if place { bar_h + 8.0 } else { 4.0 })
+      // under the top bar (and the status bar); at the foot 30 over the navigation bar, and the bottom bar's room at a
+      // place's top (Files.kt foot)
+      let foot = nav_foot() + 30.0 + (if place && !wide_on.val { bar_room } else { 0.0 })
+      files_body(c, src, list, error, lenders, if place { status_top() + bar_h + 8.0 } else { 4.0 }, foot)
       if place {
         c.layer(fn() { files_top_bar(c) }) |> ignore
       }
@@ -91,7 +94,8 @@ fn under_page() -> Page? {
 fn files_top_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
+    // under the status bar (TopGlassBar)
+    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top() + 8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="files-settings") {
         app.nav.push(Settings)
       }
@@ -131,6 +135,7 @@ fn files_body(
   error : String?,
   lenders : Array[DvStation],
   top : Double,
+  foot : Double,
 ) -> Unit {
   ignore(src)
   let t = @sf.theme()
@@ -199,7 +204,7 @@ fn files_body(
           },
         )
       FRow(l) => files_row(c, l)
-      FFoot => c.box(h=Px(30.0), fn() {  }) |> ignore
+      FFoot => c.box(h=Px(foot), fn() {  }) |> ignore
     }
   })
   |> ignore
@@ -328,7 +333,8 @@ fn roots_page(
         if i == 0 {
           dv_count_line(c, dv_count("android-misc.drive.roots.count", rs.length()))
         } else if i == rs.length() + 1 {
-          c.box(h=Px(30.0), fn() {  }) |> ignore
+          // 30 over the navigation bar (DriveScreen.kt contentPadding)
+          c.box(h=Px(30.0 + nav_foot()), fn() {  }) |> ignore
         } else {
           root_row(c, station, rs[i - 1], i == 1, i == rs.length(), can.manage)
         }
@@ -595,7 +601,8 @@ fn folder_page(
             dv.chosen[key] = now + [e.name]
           }
         }, shown)
-      Foot => c.box(h=Px(30.0), fn() {  }) |> ignore
+      // 30 over the navigation bar (DriveScreen.kt contentPadding)
+      Foot => c.box(h=Px(30.0 + nav_foot()), fn() {  }) |> ignore
     }
   })
   |> ignore

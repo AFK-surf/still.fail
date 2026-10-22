@@ -140,6 +140,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 gl) {
+        // a view not the host's (its activity paused under another of the app's: an OverActivity's draws), kept as it
+        // last drew: one thread draws the app at a time
+        if (Host.view != this) return;
         // another view set the drawing up in its own context since this one did (an OverActivity came and went): set
         // up again here, at this view's size
         if (mine != setUp) {
@@ -175,6 +178,19 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         requestRender();
     };
     private final Runnable postVsync = () -> Choreographer.getInstance().postFrameCallback(vsync);
+
+    /**
+     * A frame now, at the vsync being drawn (main thread, within a Choreographer frame: the keyboard's motion said by
+     * WindowInsetsAnimation's onProgress), not the next: what rides on the keyboard drawn in the frame the system
+     * moves the keyboard in, not a vsync behind it.
+     */
+    void frameNow() {
+        if (shotTaken) return;
+        // (the frame's own vsync time is not public: now, a moment after it, never before a frame drawn)
+        vsyncNanos = System.nanoTime();
+        wanted.set(false);
+        requestRender();
+    }
 
     /** A frame at the next vsync (from any thread). */
     void wantFrame() {

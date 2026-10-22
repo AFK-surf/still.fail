@@ -98,7 +98,7 @@ fn new_chat_bar(c : @ui.Ctx) -> Unit {
     c.box(w=Fill(1.0), h=Px(45.0), fn() {  }) |> ignore
     return
   }
-  if @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg) {
+  if @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg, top=status_top()) {
     app.nav.pop() |> ignore
   }
 }
@@ -110,7 +110,8 @@ fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let topic = new_chat_topic(src, w.id)
   let v = topic.value
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+  // over the navigation bar (ChatHost.kt: windowInsetsPadding(keyboard.union(navigationBars)))
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
     new_chat_bar(c)
     let station = match field(v, "station") {
       Some(Object(_)) as s => s
@@ -679,7 +680,7 @@ fn new_chat_rise(c : @ui.Ctx, r : ChatRef) -> Double {
       if k <= 0.0 {
         return 0.0
       }
-      let rise = dmax(0.0, c.height - composer_room_of(c) - chat_bar_h - 120.0)
+      let rise = dmax(0.0, c.height - nav_foot() - composer_room_of(c) - status_top() - chat_bar_h - 120.0)
       rise * k
     }
     _ => 0.0

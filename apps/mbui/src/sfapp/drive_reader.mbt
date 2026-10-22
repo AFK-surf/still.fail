@@ -536,12 +536,16 @@ fn reader_book(
   if c.clicked(tap) {
     reader_toggle(c, r)
   }
+  // the clock and the icons on the paper, not over the text running under them (Reader.kt: the status bar's room
+  // on the paper over the text)
+  bar_room_box(c, status_top())
   c.box(w=Fill(1.0), h=Fill(1.0), id=tap, fn() {
     c.list(list_key, n + 2, est, fn(i) {
+      // 12 under the status bar, 200 over the navigation bar (Reader.kt TextColumn contentPadding)
       if i == 0 {
         c.box(h=Px(12.0), fn() {  }) |> ignore
       } else if i == n + 1 {
-        c.box(h=Px(200.0), fn() {  }) |> ignore
+        c.box(h=Px(nav_foot() + 200.0), fn() {  }) |> ignore
       } else {
         reader_chunk(c, r, novel, i - 1, prefs, p, size, line, margin, mark, mark_now)
       }
@@ -583,6 +587,8 @@ fn reader_book(
     if k > 0.0 {
       reader_bottom_bar(c, src, r, novel, p, chapter, has_chapters, k)
     }
+    // over the navigation bar (BottomBar: windowInsetsPadding(navigationBars), then 8)
+    bar_room_box(c, nav_foot())
   })
   |> ignore
   reader_panels(c, src, r, novel, prefs, chapter, has_chapters)
@@ -763,6 +769,8 @@ fn reader_top_bar(
   shown : Double,
   download? : (() -> Unit)? = None,
 ) -> Unit {
+  // under the status bar (TopBar: windowInsetsPadding(statusBars), then 6)
+  bar_room_box(c, status_top())
   c.box(w=Fill(1.0), padx=8.0, pady=6.0, opacity=shown, fn() {
     c.box(
       w=Fill(1.0),

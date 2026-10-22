@@ -12,7 +12,7 @@ fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
     }
     return
   }
-  if @sf.nav_bar(c, "nav-back", tr("android-misc.bar.place.chats"), title) {
+  if @sf.nav_bar(c, "nav-back", tr("android-misc.bar.place.chats"), title, top=status_top()) {
     app.nav.pop() |> ignore
   }
 }

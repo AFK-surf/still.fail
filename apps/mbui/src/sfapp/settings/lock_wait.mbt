@@ -25,8 +25,9 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let asking = is_doing(core, ["lock.pair"], on)
   let checking = is_doing(core, ["lock.pairCode"], on) || state == "checking"
   let typing = state == "code" || state == "wrong" || state == "checking"
-  // (a column a phone's width at most, in the middle: on a desktop's window too)
-  c.box(style=@sf.phone_page, fn() {
+  // (a column a phone's width at most, in the middle: on a desktop's window too; over the navigation bar,
+  // SecurityWaitingScreen's windowInsetsPadding(navigationBars))
+  c.box(style=lock_room, fn() { c.box(style=lock_page, fn() {
     c.box(style=lock_column, fn() {
       @sf.icon(c, "shield-check", size=c.space(S11), color=c.color(Fg)) |> ignore
       c.text(tr("web-pages.security.waitingTitle"), style=@sf.title.then(@sf.centered)) |> ignore
@@ -85,6 +86,8 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     |> ignore
   })
   |> ignore
+  bar_room_gap(c, nav_foot.val) })
+  |> ignore
 }
 
 ///|
@@ -101,3 +104,13 @@ fn note_center(c : @ui.Ctx, words : String) -> Unit {
 fn error_center(c : @ui.Ctx, words : String) -> Unit {
   c.text(words, style=@sf.error_note.then(@sf.centered)) |> ignore
 }
+
+///|
+/// The page and the navigation bar's room under it.
+// kept across runs: a value (no field of it changes)
+let lock_room : @ui.Style = @ui.style(w=Full, h=Full)
+
+///|
+/// The page: a phone's width, in the middle of what is over the navigation bar.
+// kept across runs: a value (no field of it changes)
+let lock_page : @ui.Style = @sf.phone_page.then(@ui.style(h=@sf.grow))

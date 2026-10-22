@@ -13,7 +13,7 @@
 /// A page's compact bar (Parts.kt NavBar): back, with where it goes back to, in the accent; the title in the middle;
 /// what is at its end.
 fn page_bar(c : @ui.Ctx, key : String, back : String, title : String, trailing : () -> Unit) -> Unit {
-  if @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg) {
+  if @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg, top=status_top()) {
     app.nav.pop() |> ignore
   }
 }
@@ -43,7 +43,8 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
     "" => ""
     l => l + "?history=" + encode_component(key)
   }
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+  // over the navigation bar (History.kt: windowInsetsPadding(navigationBars))
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
     page_bar(c, "history", tr("common.back"), tr("android-chat.history.title"), fn() {
       if title != "" && link != "" && nav_button(c, "copy", 18.0, key="history/copy") {
         copy_chat_link(c, title, link)

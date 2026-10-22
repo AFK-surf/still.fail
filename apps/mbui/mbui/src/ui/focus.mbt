@@ -389,8 +389,10 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
   if trap != 0 && target == trap {
     return
   }
+  // (a field on Android takes it as the finger lifts where it came down: a tap, app.mbt editor_tap)
+  let tap_later = h_platform() == 2 && self.editors.contains(target)
   for f in self.last_focusables {
-    if f.id == target && f.on_press {
+    if f.id == target && f.on_press && !tap_later {
       self.focus = target
       return
     }
