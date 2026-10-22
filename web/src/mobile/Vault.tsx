@@ -14,7 +14,7 @@ import { KindIcon } from "../cloud/Vault.tsx";
 import { VaultChoices } from "../VaultApproval.tsx";
 import { stationBase } from "../station.tsx";
 import {
-  ITEM_SECTIONS, KINDS, blankForm, copySecret, listLine, useVaultUses, type Kind, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemLasts, lastsChoice, lastsName, listLine, useVaultUses, type Kind, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -135,6 +135,7 @@ function Vaults({ view }: { view: VaultsView }) {
         {view.requests.map((r) => <Request key={r.id} r={r} />)}
       </>}
       <LibraryState />
+      {view.vaults.filter((v) => v.mine).slice(0, 1).map((v) => <Lasts key={v.id} v={v} />)}
       {!plain && (view.plainLeft ?? 0) > 0 && <Migrate n={view.plainLeft!} />}
       <ProfileAccounts />
       {view.vaults.map((v) => (plain || v.keyed ? <LibraryVault key={v.id} v={v} plain={plain} /> : <VaultItems key={v.id} v={v} />))}
@@ -332,6 +333,9 @@ function EditorSheet({ vault, first, id, plain = false, kinds = true }: { vault:
           <span className={securityCss.mNote}>{f.kind === "ssh_key" ? t("web-pages.vault.editor.sshNote") : f.mode === "proxy" ? t("web-pages.vault.editor.proxyNote") : t("web-pages.vault.editor.envNote")}</span>
           {f.kind !== "ssh_key" && f.mode === "proxy" && <><span className={css.mLabel}>{t("web-pages.vault.editor.hosts")}</span>{field("hosts", t("web-pages.vault.editor.hostsPlaceholder"))}</>}
           {f.kind !== "ssh_key" && <><span className={css.mLabel}>{t("web-pages.vault.editor.env")}</span>{field("env", t("web-pages.vault.editor.envPlaceholder"), { mono: true })}</>}
+          <span className={css.mLabel}>{t("web-pages.vault.editor.lasts")}</span>
+          <Seg fill options={LASTS.map(lastsChoice)} selected={LASTS.indexOf(f.lasts)} onSelect={(i) => change({ lasts: LASTS[i]! })} />
+          <span className={securityCss.mNote}>{t("web-pages.vault.editor.lastsNote")}</span>
         </>}
         <div className={css.mTools}>
           {id && <LinkButton label={t("common.delete")} className={partsCss.mRed} onClick={remove} />}
@@ -395,6 +399,31 @@ function LibraryState() {
         {plain ? <span className={partsCss.mAccent}>{t("web-pages.vault.lib.turnOn")}</span> : <ChevronRight size={14} className={partsCss.mSubtle} />}
       </ListRow>
     </ListCard>
+  );
+}
+
+/** The longest an agent's request for the person's secrets is approved for, where a secret does not say its own. */
+function Lasts({ v }: { v: VaultRow }) {
+  const app = useApp();
+  const run = useVaultCall();
+  const ws = app.entry.id;
+  const setting = useDoing("vault.setLasts", { workspace: ws, vault: v.id });
+  const now = SCOPES.indexOf((v.lasts ?? "chat") as (typeof SCOPES)[number]);
+  return (
+    <>
+      <SectionHeader title={t("web-pages.vault.lasts.title")} start={24} />
+      <ListCard><div className={securityCss.mBody}>
+        <span className={securityCss.mNote}>{t("web-pages.vault.lasts.note")}</span>
+        <div className={connectsCss.mChoices}>
+          {SCOPES.map((s, i) => (
+            <button key={s} type="button" className={connectsCss.mChoice} data-on={i === now || undefined} aria-pressed={i === now}
+              onClick={() => { if (!setting && i !== now) void run("vault.setLasts", { workspace: ws, vault: v.id, lasts: s }, t("web-pages.vault.lasts.what")); }}>
+              <b>{lastsName(s)}</b><span>{t(`web-pages.vault.lasts.${s}Detail`)}</span>
+            </button>
+          ))}
+        </div>
+      </div></ListCard>
+    </>
   );
 }
 
@@ -568,6 +597,7 @@ export function VaultItemScreen() {
           <dl className={css.mFacts}>
             <dt>{t("web-pages.vault.how")}</dt><dd>{row.modes.map((m) => howLine(m, row.hosts)).join("、")}</dd>
             {row.env && <><dt>{t("web-pages.vault.editor.env")}</dt><dd className={css.mMono}>{row.env}</dd></>}
+            <dt>{t("web-pages.vault.editor.lasts")}</dt><dd>{itemLasts(row.lasts, v.lasts)}</dd>
           </dl>
         ) : <span className={partsCss.mSubtle}>{t("web-pages.vault.notForAgents")}</span>}
       </div></ListCard>

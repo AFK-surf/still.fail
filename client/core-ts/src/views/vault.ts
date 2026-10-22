@@ -27,6 +27,8 @@
 //   open {item}                   an item's plaintext (asks the person, unless its vault is unlocked)
 //   recover {words}               this device keyed into one's vaults by the recovery words
 //   approve {request, scope}      an agent's request granted: the item sealed to it, signed
+//   setLasts {vault, lasts}       the longest grant of the vault's items that say none (its owner signs; the plain
+//                                 library's told to each station keeping it)
 //   deny {request}                turned down, signed
 //   migrate                       the plain library's items moved into one's own vault, encrypted (security mode on)
 //   lock                          the unlocked keys forgotten now
@@ -48,7 +50,7 @@ import type { SpanContext } from "../trace.ts";
 import { get, isObject, utf8 } from "../util.ts";
 import {
   type BoxCert, type Deny, type Grant, type Item, type Listing, type Plain, type Request, type Scope, type Vault,
-  TAG, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, sealWith, sign, signedOk, toWords,
+  SCOPES, TAG, allows, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, sealWith, sign, signedOk, toWords,
 } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { ofAddress } from "../workspace.ts";
@@ -64,8 +66,9 @@ export const UNLOCK_MS = 5 * 60_000;
 /// rest (no asking needed to know it).
 export const BOX_KEY = "vault-box";
 export const BOX_PUB = "vault-box-pub";
-/// How long a grant lasts: one use or an hour, a chat's for a day.
-const GRANT_SECS: Record<Scope, number> = { once: 3600, hour: 3600, chat: 86400 };
+/// How long a grant lasts: one use or an hour; a chat's until the chat is archived, which the station ends it at (30
+/// days at most).
+const GRANT_SECS: Record<Scope, number> = { once: 3600, hour: 3600, chat: 30 * 86400 };
 
 /// What the workspace's stations hold, as held here (the `vault` record of the workspace): the vaults by id and the
 /// station each is on, the box certificates by device, the requests waiting and the station each came from, and the
@@ -75,8 +78,9 @@ type Held = {
   /// What each station holds of each vault (by vault, then station): its version and its items' (by id); the stations
   /// that answered what vaults they hold (those a copy may be brought to).
   on: Record<string, Record<string, Holding>>; keeps: string[];
-  /// The plain library's items by id (without their fields) and the station each is on; the stations that keep one.
-  plain: Record<string, PlainRow>; plainOn: string[];
+  /// The plain library's items by id (without their fields) and the station each is on; the stations that keep one;
+  /// the longest grant of its items that say none, as said last on any of them.
+  plain: Record<string, PlainRow>; plainOn: string[]; plainLasts?: { lasts: Scope; at: number };
   /// The uses of each vault's items (`<station>/<vault>`), as the station keeping it said them, the latest first.
   uses: Record<string, Use[]>;
 };
@@ -225,6 +229,9 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
         for (const [id, row] of Object.entries(h.plain)) if (row.station === station) delete h.plain[id];
         for (const i of plainItems ?? []) if (typeof i?.id === "string") h.plain[i.id] = { ...i, station };
         h.plainOn = h.plainOn.filter((s) => s !== station).concat(plainItems !== null ? [station] : []);
+        const lasts = SCOPES.find((s) => s === get(plain._tag === "Success" ? plain.success : null, "lasts"));
+        const at = get(plain._tag === "Success" ? plain.success : null, "lastsAt");
+        if (lasts && typeof at === "number" && (h.plainLasts === undefined || h.plainLasts.at < at)) h.plainLasts = { lasts, at };
       });
     }
     // The requests are the keeper's (a station without one answers 404: none).
@@ -473,8 +480,8 @@ export function vaultsView(inner: Inner, ws: string): J {
   const stationName = new Map(stationsOf(inner, ws).map((s) => [s.id, s.name]));
   const base = { available: able(inner), locked: !(lock instanceof CoreError), canSign: false, setUp: false, vaults: [] as J[], requests: [] as J[], refused: Object.entries(h.refused).map(([id, code]) => ({ station: id, name: stationName.get(id) ?? "", code })) };
   const plainItems = Object.values(h.plain).filter((i) => !i.deleted);
-  const requestRow = (r: Request, itemName: string | null, vaultName: string) => ({
-    id: r.id, vault: r.vault, vaultName, item: r.item, itemName,
+  const requestRow = (r: Request, itemName: string | null, vaultName: string, lasts: Scope) => ({
+    id: r.id, vault: r.vault, vaultName, item: r.item, itemName, lasts,
     session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at,
   });
   const personal = t("core-misc.vault.personal");
@@ -485,12 +492,12 @@ export function vaultsView(inner: Inner, ws: string): J {
     const on = [...h.plainOn].sort((a, b) => (count.get(b) ?? 0) - (count.get(a) ?? 0))[0];
     const row = on === undefined || sub === null ? [] : [{
       id: PLAIN, name: personal, owner: sub, ownerName: nameOf(sub), mine: true, members: [{ sub, name: nameOf(sub) }],
-      station: on, stationName: stationName.get(on) ?? "", items: plainItems.length, devices: 0, open: true, keyed: true, missing: 0, recoverable: false,
+      station: on, stationName: stationName.get(on) ?? "", items: plainItems.length, devices: 0, open: true, keyed: true, missing: 0, recoverable: false, lasts: h.plainLasts?.lasts ?? "chat",
     }];
     const requests = Object.values(h.requests)
       .filter((r) => r.status === "pending" && r.vault === PLAIN)
       .sort((a, b) => a.at - b.at)
-      .map((r) => requestRow(r, h.plain[r.item]?.name ?? null, personal));
+      .map((r) => requestRow(r, h.plain[r.item]?.name ?? null, personal, h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat"));
     return { ...base, plain: true, vaults: row, requests };
   }
   const self = me(lock, signerOf(inner));
@@ -510,13 +517,16 @@ export function vaultsView(inner: Inner, ws: string): J {
         // Whether this device has a key to it; members' devices set up since that have none yet (its owner adds them).
         keyed: self !== null && mine !== undefined && keyed.get(self.device) === mine.box,
         missing: vouched.filter((c) => v.members.includes(c.sub) && keyed.get(c.device) !== c.box).length,
-        recoverable: v.recovery !== undefined,
+        recoverable: v.recovery !== undefined, lasts: v.lasts ?? "chat",
       };
     });
   const requests = Object.values(h.requests)
     .filter((r) => r.status === "pending" && h.vaults[r.vault] !== undefined && sub !== null && h.vaults[r.vault]!.members.includes(sub))
     .sort((a, b) => a.at - b.at)
-    .map((r) => requestRow(r, items(inner, ws, r.vault)[r.item]?.listing?.name ?? null, h.vaults[r.vault]!.name));
+    .map((r) => {
+      const listing = items(inner, ws, r.vault)[r.item]?.listing;
+      return requestRow(r, listing?.name ?? null, h.vaults[r.vault]!.name, listing?.lasts ?? h.vaults[r.vault]!.lasts ?? "chat");
+    });
   // What is left of the plain library from before security mode, to be moved into the person's vault.
   return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
 }
@@ -559,7 +569,7 @@ function plainItemsView(inner: Inner, ws: string): J {
     .filter((i) => !i.deleted)
     .map((i) => ({
       id: i.id, version: i.version, at: i.at, name: i.name, kind: i.kind,
-      listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null,
+      listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null, lasts: i.listing?.lasts ?? null,
       ...(last.has(i.id) ? { lastUse: last.get(i.id) } : {}),
     }))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
@@ -588,7 +598,7 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
       return {
         id: i.id, version: i.version, at: i.at,
         name: str(plain?.name) ?? i.listing?.name ?? null, kind: str(plain?.kind) ?? i.listing?.kind ?? null,
-        listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null,
+        listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null, lasts: i.listing?.lasts ?? null,
         ...(last.has(i.id) ? { lastUse: last.get(i.id) } : {}),
       };
     })
@@ -647,6 +657,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       return v.approve(p("request"), (str(c.params.scope) ?? "once") as Scope);
     case "deny":
       return v.deny(p("request"));
+    case "setLasts":
+      return v.setLasts(p("vault"), p("lasts"));
     default:
       return Effect.fail(CoreError.invalid(`no vault call ${c.name}`));
   }
@@ -667,7 +679,8 @@ function listingOf(v: unknown): Listing | undefined {
   if (v === undefined || v === null) return undefined;
   if (!isObject(v) || typeof v.name !== "string" || !KINDS.includes(v.kind as string)) throw CoreError.invalid("listing: {name, kind, modes, hosts, env?}");
   const modes = arr(v.modes).filter((m) => MODES.includes(m));
-  return { name: v.name, kind: v.kind as Listing["kind"], modes, hosts: arr(v.hosts).filter((x) => typeof x === "string"), ...(typeof v.env === "string" ? { env: v.env } : {}) };
+  const lasts = SCOPES.find((s) => s === v.lasts);
+  return { name: v.name, kind: v.kind as Listing["kind"], modes, hosts: arr(v.hosts).filter((x) => typeof x === "string"), ...(typeof v.env === "string" ? { env: v.env } : {}), ...(lasts ? { lasts } : {}) };
 }
 
 class Vaults {
@@ -837,6 +850,30 @@ class Vaults {
       const v = yield* self.#putVault(next, on);
       self.#keep(v, key);
       return { id, station: on };
+    });
+  }
+
+  /// The longest grant of a vault's items that say none: a new version its owner signs; the plain library's told to
+  /// each station keeping it (the latest word kept on each).
+  setLasts(id: string, lasts: string): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      const scope = SCOPES.find((s) => s === lasts);
+      if (!scope) return yield* Effect.fail(CoreError.invalid("lasts: once, hour or chat"));
+      if (id === PLAIN) {
+        const at = nowS(inner);
+        const told = yield* Effect.forEach(held(inner, self.ws).plainOn, (s) => Effect.map(Effect.result(self.#station(s, "PUT", "/vault/plain/lasts", { lasts: scope, at })), (r) => r._tag === "Success"), { concurrency: 4 });
+        if (!told.some((ok) => ok)) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
+        change(inner, self.ws, (h) => void (h.plainLasts = { lasts: scope, at }));
+        return { lasts: scope };
+      }
+      const { lock, signer, self: who } = yield* self.#ready();
+      const v = yield* self.#vault(lock, id);
+      if (v.owner !== who.sub) return yield* fail("vault_not_owner", t("core-misc.vault.notOwnerLasts"));
+      const { sig: _, ...rest } = v;
+      yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, lasts: scope, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
+      return { lasts: scope };
     });
   }
 
@@ -1017,6 +1054,8 @@ class Vaults {
       const asked = yield* self.#request(id);
       if (asked.r.vault === PLAIN) {
         const { r, station } = asked;
+        const h = held(inner, self.ws);
+        if (!allows(h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts, scope)) return yield* fail("vault_scope", t("core-misc.vault.scopeTooLong"));
         yield* self.#station(station, "POST", "/vault/plain/grants", { request: r.id, scope });
         self.#settled(r.id);
         return { request: r.id, scope };
@@ -1027,6 +1066,7 @@ class Vaults {
       if (!v.members.includes(who.sub)) return yield* fail("vault_unknown", t("core-misc.vault.unknown"));
       const item = items(inner, self.ws, v.id)[r.item];
       if (!item || item.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
+      if (!allows(item.listing?.lasts ?? v.lasts, scope)) return yield* fail("vault_scope", t("core-misc.vault.scopeTooLong"));
       const key = yield* self.#key(v, who, true, t("core-misc.vault.reason.approve", { name: item.listing?.name ?? v.name }));
       const bytes = yield* self.#plain(lock, v, item, key);
       const eph = new Uint8Array(32);

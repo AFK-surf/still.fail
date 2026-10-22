@@ -2,7 +2,9 @@
 // session's chat for the vault's owner, the grant or refusal the owner's app sends back (checked by the keeper, which
 // alone ever holds the secret), and the commands run with a grant. Without security mode, the secrets are the plain
 // library's (plain.ts): the same request and card, decided by the item's owner, the value read from the station. The requests and what was done with them are kept
-// in the station's database (`vault_requests`, `vault_audit`), never a secret; the grants themselves only in memory.
+// in the station's database (`vault_requests`, `vault_audit`), never a secret; the vaults' grants only in memory, the
+// plain library's written down without their value (`vault_grants`) and taken up again after a restart. A grant ends
+// with its chat: archived or deleted, its session's grants are dropped.
 import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { LockState } from "../cloud/lock.ts";
@@ -11,8 +13,8 @@ import { wall } from "../ops/fibers.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
-import { type Deny, type Grant, type Listing, type Mode, type Request, type Scope, TAG, signedOk, signerOf } from "./crypto.ts";
-import { type Held, Keeper } from "./keeper.ts";
+import { type Deny, type Grant, type Listing, type Mode, type Request, type Scope, SCOPES, TAG, allows, signedOk, signerOf } from "./crypto.ts";
+import { type Held, Keeper, hostAllowed, valueOf } from "./keeper.ts";
 import { PLAIN, type PlainStore } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
 import { type Ran, SECRET_VAR, runWith } from "./run.ts";
@@ -39,7 +41,21 @@ CREATE TABLE IF NOT EXISTS vault_audit (
   kind TEXT NOT NULL,
   detail TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS vault_grants (
+  ws TEXT NOT NULL,
+  id TEXT NOT NULL,
+  session TEXT NOT NULL,
+  body TEXT NOT NULL,
+  PRIMARY KEY (ws, id)
+);
 `;
+
+/// The words of a grant's scope on its card, and what each means.
+const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
+  once: { label: "仅本次", detail: "只给这一条命令用，下次还要再批准" },
+  hour: { label: "本对话 1 小时内", detail: "1 小时内这个对话可以反复使用，不用再批准" },
+  chat: { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
+};
 
 /// How long secret_use waits for the decision before it says the request is waiting: within the minute the agents'
 /// MCP clients give a tool call (Claude Code's, Codex's), or the call times out unanswered, and a decision after that
@@ -104,9 +120,47 @@ export class Secrets {
   constructor(d: SecretsDeps) {
     this.#d = d;
     d.db.exec(SCHEMA);
-    this.keeper = new Keeper(() => Math.floor(d.now() / 1000));
+    const ended = (session: string) => {
+      const row = d.hub.store.getSession(session);
+      return row === null || row.archivedAt != null;
+    };
+    this.keeper = new Keeper(() => Math.floor(d.now() / 1000), {
+      ended,
+      kept: {
+        // The plain library's only: a vault's secret is never written down, and its grant is gone with the process.
+        save: (h) => {
+          if (h.request.vault !== PLAIN) return;
+          const { secret: _, ...grant } = h.grant;
+          d.db.prepare("INSERT INTO vault_grants (ws, id, session, body) VALUES (?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET body = excluded.body")
+            .run(h.request.ws, h.request.id, h.request.session, JSON.stringify({ request: h.request, grant, uses: h.uses }));
+        },
+        forget: (id) => d.db.prepare("DELETE FROM vault_grants WHERE id = ?").run(id),
+      },
+    });
     this.plain = d.plain;
     this.proxy = d.proxy ?? new Proxy(`${d.data}/vault`, d.now);
+    this.#restore(ended);
+    d.hub.store.subscribe((c) => {
+      if ((c.type === "sessionRemoved" || c.type === "session") && this.keeper.holds(c.key) && ended(c.key)) this.keeper.end(c.key);
+    });
+  }
+
+  /// The plain library's grants written down before a restart, held again: those not run out, whose chat goes on and
+  /// whose item is still given as granted, its value read again from the store.
+  #restore(ended: (session: string) => boolean) {
+    const now = Math.floor(this.#d.now() / 1000);
+    const rows = this.#d.db.prepare("SELECT ws, id, body FROM vault_grants").all() as { ws: string; id: string; body: string }[];
+    for (const row of rows) {
+      const { request, grant, uses } = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number };
+      const item = this.#d.plain.item(row.ws, request.item);
+      const l = item?.listing;
+      const secret = item ? { kind: item.kind, name: item.name, fields: item.fields } : null;
+      const still = grant.exp > now && !ended(request.session) && this.#d.lock(row.ws) === null && l !== undefined && !item!.deleted && l.modes.includes(grant.mode)
+        && allows(l.lasts ?? this.#d.plain.lasts(row.ws, item!.owner)?.lasts, grant.scope)
+        && grant.hosts.every((h) => l.hosts.includes(h) || (!h.startsWith("*.") && hostAllowed(h, l.hosts))) && secret !== null && valueOf(secret) !== null;
+      if (still) this.keeper.restore({ request, grant: { ...grant, secret: "" } as Grant, secret: secret!, uses });
+      else this.#d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ?").run(row.ws, row.id);
+    }
   }
 
   /// Tells `f` of each request made or decided (the members' event streams).
@@ -219,6 +273,13 @@ export class Secrets {
     }
   }
 
+  /// The longest grant a request's item (listed as `l`) is given for: its own, else its vault's or (the plain library)
+  /// its owner's; null: any.
+  #lastsOf(r: Request, l: Listing): Scope | null {
+    if (l.lasts) return l.lasts;
+    return (r.vault === PLAIN ? (r.owner ? this.#d.plain.lasts(r.ws, r.owner)?.lasts : undefined) : this.#d.vaults.vault(r.ws, r.vault)?.lasts) ?? null;
+  }
+
   /// The listing of a request's item, where it still is.
   #listingOf(r: Request): Listing | undefined {
     return r.vault === PLAIN ? this.#d.plain.item(r.ws, r.item)?.listing : this.#d.vaults.item(r.ws, r.vault, r.item)?.listing;
@@ -272,7 +333,8 @@ export class Secrets {
         : held.grant.mode === "ssh"
           ? "The command gets SSH_AUTH_SOCK for an agent holding the key (ssh, git over ssh use it)."
           : `The command gets the value in ${l.env ?? "the variable you name in env"} and ${SECRET_VAR}; its output comes back with the value hidden.`;
-    const lasts = held.grant.scope === "once" ? "for one command" : `until ${new Date(held.grant.exp * 1000).toISOString()}`;
+    const until = new Date(held.grant.exp * 1000).toISOString();
+    const lasts = held.grant.scope === "once" ? "for one command" : held.grant.scope === "chat" ? `until this chat is archived (${until} at the latest)` : `until ${until}`;
     return `Granted: 「${l.name}」, grant ${r.id}, ${lasts}. Run with secret_run {grant: "${r.id}", command: "…"${l.env ? "" : ', env: "NAME"'}}. ${how} You never get the value itself.`;
   }
 
@@ -304,12 +366,14 @@ export class Secrets {
     // In a still.fail chat the card says where it is approved; Slack has no card, so the words say it.
     const where = stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"];
     const text = [`申请使用「${l.name}」：${r.reason}`, ...(r.command ? [`命令：\`${r.command.replace(/`/g, "'")}\``] : []), `方式：${how}`, ...where].join("\n\n");
+    // The scopes the item allows, the longest recommended.
+    const lasts = this.#lastsOf(r, l);
+    const scopes = SCOPES.filter((s) => allows(lasts, s));
     const card = stillfail
       ? {
           type: "options",
           options: [
-            { label: "仅本次", detail: "单次有效", recommended: true },
-            { label: "本对话 1 小时内", detail: "期间无需再次批准" },
+            ...scopes.map((s, i) => ({ ...SCOPE_WORDS[s], ...(i === scopes.length - 1 ? { recommended: true } : {}) })),
             { label: "拒绝", detail: "通知 agent 已拒绝" },
           ],
           ...(owner ? { assignee: owner.toLowerCase() } : {}),
@@ -374,7 +438,7 @@ export class Secrets {
     const item = this.#d.plain.item(ws, k.request.item);
     if (item === null || item.deleted || item.listing === undefined) return "the item is gone, or not one agents may ask for";
     const hosts = k.request.mode === "proxy" ? (k.request.hosts ?? item.listing.hosts) : [];
-    const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing }, { kind: item.kind, name: item.name, fields: item.fields });
+    const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing, lasts: this.#lastsOf(k.request, item.listing) }, { kind: item.kind, name: item.name, fields: item.fields });
     if (why !== null) return why;
     this.#settle(k.request, "granted", d.scope as Scope);
     return null;

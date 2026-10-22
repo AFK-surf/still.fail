@@ -13,6 +13,22 @@ export type { VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView, 
 export type Kind = "token" | "ssh_key" | "login";
 export type Mode = "proxy" | "env" | "ssh";
 export const KINDS: Kind[] = ["token", "ssh_key", "login"];
+/** How long a grant lasts, shortest first: one use, an hour, the chat until it is archived. */
+export type Scope = "once" | "hour" | "chat";
+export const SCOPES: Scope[] = ["once", "hour", "chat"];
+/** The scope `lasts` names (the longest an item is granted for), any when it names none. */
+export const scopeOf = (lasts: string | undefined | null): Scope => SCOPES.find((s) => s === lasts) ?? "chat";
+/** The scopes up to `lasts`. */
+export const scopesUpTo = (lasts: string | undefined | null): Scope[] => SCOPES.slice(0, SCOPES.indexOf(scopeOf(lasts)) + 1);
+/** The longest an item is granted for, in a word: 仅一次, 1 小时, 直到对话归档. */
+export const lastsName = (lasts: string | undefined | null): string => t(`web-pages.vault.lasts.${scopeOf(lasts)}`);
+/** An item's longest grant as its editor offers it: its own, or its vault's (`default`, the library's setting). */
+export type Lasts = Scope | "default";
+export const LASTS: Lasts[] = ["default", ...SCOPES];
+export const lastsChoice = (l: Lasts): string => (l === "default" ? t("web-pages.vault.lasts.default") : lastsName(l));
+/** What an item's page says of its longest grant: its own, or 跟随默认 · the vault's. */
+export const itemLasts = (own: string | undefined | null, vault: string | undefined | null): string =>
+  own ? lastsName(own) : t("web-pages.vault.lasts.following", { lasts: lastsName(vault) });
 
 /** What an item holds (its plaintext, docs/vault.md 条目): `vault.open` gives it, `vault.putItem` takes it. */
 export interface Plain { kind: Kind; name: string; fields: Record<string, string>; domains: string[]; notes: string }
@@ -123,9 +139,11 @@ export interface Form {
   mode: Mode;
   hosts: string;
   env: string;
+  /** The longest grant given for it: its own, or the library's (`default`). */
+  lasts: Lasts;
 }
 
-export const blankForm = (): Form => ({ kind: "token", name: "", value: "", privateKey: "", publicKey: "", username: "", password: "", totp: "", agent: false, mode: "proxy", hosts: "", env: "" });
+export const blankForm = (): Form => ({ kind: "token", name: "", value: "", privateKey: "", publicKey: "", username: "", password: "", totp: "", agent: false, mode: "proxy", hosts: "", env: "", lasts: "default" });
 
 /** The form for an item opened (with its row: how agents may ask for it). */
 export function formOf(opened: Opened, row: VaultItemRow | undefined): Form {
@@ -135,7 +153,7 @@ export function formOf(opened: Opened, row: VaultItemRow | undefined): Form {
   return {
     ...blankForm(), kind, name: opened.plain.name, value: f.value ?? "", privateKey: f.private_key ?? "", publicKey: f.public_key ?? "",
     username: f.username ?? "", password: f.password ?? "", totp: f.totp ?? "",
-    agent: row?.listed ?? false, mode, hosts: (row?.hosts ?? []).join(", "), env: row?.env ?? "",
+    agent: row?.listed ?? false, mode, hosts: (row?.hosts ?? []).join(", "), env: row?.env ?? "", lasts: SCOPES.find((s) => s === row?.lasts) ?? "default",
   };
 }
 
@@ -156,7 +174,7 @@ export function formProblem(f: Form): "name" | "value" | "hosts" | null {
 }
 
 /** `vault.putItem`'s `plain` and `listing` (the listing only when agents may ask for it). */
-export function putOf(f: Form, notes = ""): { plain: Plain; listing?: { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string } } {
+export function putOf(f: Form, notes = ""): { plain: Plain; listing?: { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope } } {
   const fields: Record<string, string> =
     f.kind === "token" ? { value: f.value.trim() }
     : f.kind === "ssh_key" ? { private_key: f.privateKey.trim() + "\n", ...(f.publicKey.trim() ? { public_key: f.publicKey.trim() } : {}) }
@@ -166,7 +184,7 @@ export function putOf(f: Form, notes = ""): { plain: Plain; listing?: { name: st
   if (!f.agent) return { plain };
   const mode = modesOf(f.kind).includes(f.mode) ? f.mode : modesOf(f.kind)[0]!;
   const env = f.kind === "ssh_key" ? "" : f.env.trim();
-  return { plain, listing: { name, kind: f.kind, modes: [mode], hosts: hostsOf(f.hosts), ...(env ? { env } : {}) } };
+  return { plain, listing: { name, kind: f.kind, modes: [mode], hosts: hostsOf(f.hosts), ...(env ? { env } : {}), ...(f.lasts !== "default" ? { lasts: f.lasts } : {}) } };
 }
 
 /** An item's fields as its detail shows them, in order: what each is called, its value, whether it is masked. */

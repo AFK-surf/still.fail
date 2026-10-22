@@ -23,6 +23,7 @@ import { PLAIN, PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 import { answer, parseSshKey, serveAgent } from "../src/vault/ssh-agent.ts";
 import { VaultStore } from "../src/vault/store.ts";
+import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 import { makeCa, makeLeaf, pem } from "../src/vault/x509.ts";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -139,6 +140,21 @@ test("the keeper takes a grant only as asked, signed by a member of the vault, w
   now = 1000 + 3600;
   assert.match(keeper.usable("s1", "r_4") as string, /ran out/);
   assert.deepEqual(keeper.held("s1").map((h) => h.request.id), []);
+  now = 1000;
+
+  // The chat's, until it is archived (30 days at most); none longer than the item allows.
+  const r5 = fresh("r_5");
+  assert.match(take(r5, grantOf(r5, w.alice, w.plain, { scope: "chat", exp: 1000 + 31 * 86400 }))!, /expiry/);
+  assert.equal(take(r5, grantOf(r5, w.alice, w.plain, { scope: "chat", exp: 1000 + 30 * 86400 })), null);
+  const short = { ...w.item, listing: { ...w.item.listing!, lasts: "hour" as const } };
+  const r6 = fresh("r_6");
+  assert.match(keeper.accept(w.state, w.vault, short, r6, grantOf(r6, w.alice, w.plain, { scope: "chat", exp: 1000 + 600 }))!, /hour at most/);
+  assert.equal(keeper.accept(w.state, w.vault, short, r6, grantOf(r6, w.alice, w.plain, { scope: "hour", exp: 1000 + 600 })), null);
+  // An item that says none follows its vault's; one that says its own, its own.
+  const once = { ...w.vault, lasts: "once" as const };
+  const r7 = fresh("r_7");
+  assert.match(keeper.accept(w.state, once, w.item, r7, grantOf(r7, w.alice, w.plain, { scope: "hour", exp: 1000 + 600 }))!, /once at most/);
+  assert.equal(keeper.accept(w.state, once, { ...w.item, listing: { ...w.item.listing!, lasts: "chat" } }, r7, grantOf(r7, w.alice, w.plain, { scope: "hour", exp: 1000 + 600 })), null);
 
   assert.ok(hostAllowed("api.github.com", ["api.github.com"]));
   assert.ok(hostAllowed("a.b.example.com", ["*.example.com"]));
@@ -332,6 +348,7 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
       participants: (k: string) => new Map([[k, [starter]]]),
       latestThread: () => null,
       withdrawCard: () => true,
+      subscribe: () => () => {},
     },
     notify: (k: string, text: string) => notified.push([k, text]),
   };
@@ -389,6 +406,7 @@ test("the plain library (no security mode): listed for its owner's chats, decide
       participants: (k: string) => new Map([[k, [starter]]]),
       latestThread: () => null,
       withdrawCard: () => true,
+      subscribe: () => () => {},
     },
     notify: (k: string, text: string) => notified.push([k, text]),
   };
@@ -432,6 +450,92 @@ test("the plain library (no security mode): listed for its owner's chats, decide
     assert.match(secrets.grantPlain(ws, lock, bob.email, { request: pending!.id, scope: "once" })!, /security mode is on/);
     assert.equal(secrets.denyPlain(ws, bob.email, { request: pending!.id }), null);
     await third;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a grant for the chat: offered as far as the item allows, kept across a restart (the plain library's), ended when the chat is archived", async () => {
+  const db = new DatabaseSync(":memory:");
+  const plain = new PlainStore(db);
+  const ws = "ws1";
+  const listing = { name: "Slack", kind: "token" as const, modes: ["proxy" as const], hosts: ["slack.com"] };
+  const item = { ws, id: "i_01JAPLAIN0000000000000000SL", owner: "bob@x.com", version: 0, kind: "token" as const, name: "Slack", fields: { value: TOKEN }, notes: "", listing, at: 1000 };
+  plain.put(item);
+  const sessions = new Map<string, { archivedAt: number | null }>([["s1", { archivedAt: null }], ["s2", { archivedAt: null }]]);
+  let listener: (c: { type: string; key: string }) => void = () => {};
+  const cards: { options: { label: string; recommended?: boolean }[] }[] = [];
+  let thread: unknown = null;
+  const hub = {
+    store: {
+      getSession: (k: string) => (sessions.has(k) ? { key: k, ws: null, workspace: "/tmp", ...sessions.get(k) } : null),
+      participants: (k: string) => new Map([[k, ["bob@x.com"]]]),
+      latestThread: () => thread,
+      withdrawCard: () => true,
+      restateCard: () => true,
+      insertMessage: (m: { card: (typeof cards)[number] }) => (cards.push(m.card), [1]),
+      subscribe: (f: typeof listener) => ((listener = f), () => {}),
+    },
+    chat: () => ({ post: async () => "1.0" }),
+    shared: () => {},
+    notify: () => {},
+  };
+  const dir = mkdtempSync(join(tmpdir(), "vault-chat-"));
+  let now = 1_000_000;
+  const make = () => new Secrets({ db, vaults: new VaultStore(db), plain, home: () => ws, hub: hub as never, data: dir, lock: () => null, now: () => now });
+  const grant = async (secrets: Secrets, session: string, scope: string) => {
+    const asked = secrets.ask(session, { item: "Slack", reason: "backfill" });
+    await new Promise((r) => setImmediate(r));
+    const [request] = secrets.pending(ws, null, { sub: "bob", email: "bob@x.com" });
+    const why = secrets.grantPlain(ws, null, "bob@x.com", { request: request!.id, scope });
+    // Refused: turned down, so nothing is left waiting.
+    if (why !== null) secrets.denyPlain(ws, "bob@x.com", { request: request!.id });
+    await asked;
+    return [why, request!.id] as const;
+  };
+  try {
+    // The card offers every scope, the longest recommended; an item that stops at an hour, those up to it.
+    thread = { connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } };
+    let secrets = make();
+    const [, first] = await grant(secrets, "s1", "chat");
+    assert.deepEqual(cards[0]!.options.map((o) => [o.label, !!o.recommended]), [["仅本次", false], ["本对话 1 小时内", false], ["本对话直到归档", true], ["拒绝", false]]);
+    plain.put({ ...item, version: 1, listing: { ...listing, lasts: "hour" } });
+    const [refused] = await grant(secrets, "s2", "chat");
+    assert.match(refused!, /hour at most/);
+    assert.deepEqual(cards[1]!.options.map((o) => [o.label, !!o.recommended]), [["仅本次", false], ["本对话 1 小时内", true], ["拒绝", false]]);
+    // The owner's longest grant, for the items that say none (the latest word kept); an item's own goes first.
+    plain.put({ ...item, version: 2 });
+    assert.equal(plain.setLasts(ws, "bob@x.com", "once", 10), null);
+    assert.equal(plain.setLasts(ws, "bob@x.com", "chat", 5), null);
+    assert.match(plain.setLasts(ws, "bob@x.com", "week", 20)!, /once, hour or chat/);
+    assert.deepEqual(plain.lasts(ws, "bob@x.com"), { lasts: "once", at: 10 });
+    const [refusedOnce] = await grant(secrets, "s2", "hour");
+    assert.match(refusedOnce!, /once at most/);
+    assert.deepEqual(cards[2]!.options.map((o) => o.label), ["仅本次", "拒绝"]);
+    plain.put({ ...item, version: 3, listing: { ...listing, lasts: "chat" } });
+    assert.equal((await grant(secrets, "s2", "hour"))[0], null);
+    assert.equal(plain.setLasts(ws, "bob@x.com", "chat", 30), null);
+    plain.put({ ...item, version: 4 });
+    thread = null;
+
+    // After a restart a grant for one use, used, stays used; a day later the chat's is still held, its value read again.
+    const [, once] = await grant(secrets, "s2", "once");
+    secrets.keeper.spend(once);
+    assert.match(make().keeper.usable("s2", once) as string, /one use/);
+    now += 86400_000;
+    secrets = make();
+    assert.deepEqual(secrets.held("s1").map((h) => [h.request.id, h.grant.scope, h.secret.fields.value]), [[first, "chat", TOKEN]]);
+
+    // Archived: it ends, and is not taken up by the next restart.
+    sessions.set("s1", { archivedAt: now });
+    listener({ type: "session", key: "s1" });
+    assert.deepEqual(secrets.held("s1"), []);
+    sessions.set("s1", { archivedAt: null });
+    assert.deepEqual(make().held("s1"), []);
+    // Run out after 30 days, restart or not.
+    const [, second] = await grant(secrets, "s1", "chat");
+    now += 30 * 86400_000;
+    assert.match(make().keeper.usable("s1", second) as string, /no such grant/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

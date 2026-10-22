@@ -4,8 +4,9 @@
 // only by the keeper; a refused one says why. GET vault/uses: the requests decided, as a vault's uses.
 //
 // The plain library (vault/plain.ts, docs/vault.md 不加锁的库), a workspace's without security mode: GET vault/plain (the
-// viewer's items, without their fields), GET vault/plain/item?id= (one, with them), PUT vault/plain (a version; security
-// mode on, only a deletion: the items are moved into the viewer's vault), and POST vault/plain/grants and
+// viewer's items, without their fields, and their longest grant), GET vault/plain/item?id= (one, with them), PUT
+// vault/plain (a version; security mode on, only a deletion: the items are moved into the viewer's vault), PUT
+// vault/plain/lasts ({lasts, at}: the longest grant of the viewer's items that say none), and POST vault/plain/grants and
 // vault/plain/denials (its requests decided by the item's owner, not signed: nothing here is encrypted).
 import type { LockState } from "../../cloud/lock.ts";
 import type { Deny, Grant } from "../../vault/crypto.ts";
@@ -74,7 +75,19 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
     {
       method: "GET",
       pattern: /^\/vault\/plain$/,
-      handle: async (r) => json(200, JSON.stringify({ items: plain.items(r.viewer.workspace, owner(r)).map(shown), locked: locked(r) !== null })),
+      handle: async (r) => {
+        const lasts = plain.lasts(r.viewer.workspace, owner(r));
+        return json(200, JSON.stringify({ items: plain.items(r.viewer.workspace, owner(r)).map(shown), locked: locked(r) !== null, ...(lasts ? { lasts: lasts.lasts, lastsAt: lasts.at } : {}) }));
+      },
+    },
+    {
+      method: "PUT",
+      pattern: /^\/vault\/plain\/lasts$/,
+      handle: async (r) => {
+        const o = body(r) as { lasts?: unknown; at?: unknown } | null;
+        const why = plain.setLasts(r.viewer.workspace, owner(r), o?.lasts, o?.at);
+        return why === null ? json(200, JSON.stringify({ ok: true })) : refuse(400, "vault_invalid", why);
+      },
     },
     {
       method: "GET",

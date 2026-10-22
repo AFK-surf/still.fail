@@ -1,6 +1,7 @@
 // An agent's request to use a vault item (docs/vault.md 申请和授权): under the agent's post in its chat, on the
-// decisions page (奏) and on the vault's page, in place of the card's options. Three rows as a decision's options are
-// drawn (Decisions.css.ts): 仅本次 (`once`), 本对话 1 小时内 (`hour`), 拒绝; the first recommended. A tap asks the core
+// decisions page (奏) and on the vault's page, in place of the card's options. Rows as a decision's options are drawn
+// (Decisions.css.ts): 仅本次 (`once`), 本对话 1 小时内 (`hour`), 本对话直到归档 (`chat`), as far as the item allows
+// (`lasts`), the longest recommended; then 拒绝. A tap asks the core
 // (`vault.approve`, which has the system ask the person; `vault.deny`); once decided the station takes the card back.
 // Only the request's own (the `vaults` topic's requests: one waiting on the viewer) can be answered, and only in an app
 // that keeps keys: a web page shows no rows, only that it is approved in a client (desktop or Android); elsewhere the
@@ -8,20 +9,20 @@
 import { useState } from "react";
 import { scopeOf } from "./station.tsx";
 import { useDoingList, doingMatches, failed } from "./doing.ts";
-import { useVaultCall, useVaultRequest } from "./vault.ts";
-import { Option1, Option2, Option3 } from "@stillfail/ui/icons.tsx";
+import { type Scope, scopesUpTo, useVaultCall, useVaultRequest } from "./vault.ts";
+import { Option1, Option2, Option3, Option4 } from "@stillfail/ui/icons.tsx";
 import * as css from "./Decisions.css.ts";
 import * as own from "./VaultApproval.css.ts";
 import { Spinner } from "@stillfail/ui/waiting.tsx";
 import { t } from "./i18n.ts";
 
-type Choice = { scope: "once" | "hour" | null; label: string; detail: string };
-const choices = (): Choice[] => [
-  { scope: "once", label: t("web-pages.vault.approve.once"), detail: t("web-pages.vault.approve.onceDetail") },
-  { scope: "hour", label: t("web-pages.vault.approve.hour"), detail: t("web-pages.vault.approve.hourDetail") },
+type Choice = { scope: Scope | null; label: string; detail: string };
+/** The rows for an item granted up to `lasts`: its scopes, then 拒绝. */
+const choices = (lasts: string | undefined): Choice[] => [
+  ...scopesUpTo(lasts).map((s) => ({ scope: s, label: t(`web-pages.vault.approve.${s}`), detail: t(`web-pages.vault.approve.${s}Detail`) })),
   { scope: null, label: t("web-pages.vault.approve.deny"), detail: t("web-pages.vault.approve.denyDetail") },
 ];
-const DIGITS = [Option1, Option2, Option3];
+const DIGITS = [Option1, Option2, Option3, Option4];
 
 /**
  * The approval's rows for request `id` (a station's address or a workspace says where). `onDecided` once it went
@@ -48,6 +49,7 @@ export function VaultChoices({ workspace, id, onDecided }: { workspace: string; 
       if (v !== undefined) onDecided?.();
     });
   };
+  const rows = choices(request?.lasts);
   // A web page keeps no keys: no rows to look at, only where to go.
   if (view && !view.available && view.plain !== true) {
     return (
@@ -59,12 +61,13 @@ export function VaultChoices({ workspace, id, onDecided }: { workspace: string; 
   }
   return (
     <div className={css.options} role="group" aria-label={request?.itemName ? t("web-pages.vault.approve.wants", { name: request.itemName }) : t("web-main.decisions.options")}>
-      {choices().map((c, i) => {
+      {rows.map((c, i) => {
         const Digit = DIGITS[i]!;
         const now = busy(c);
+        const recommended = i === rows.length - 2;
         return (
-          <button key={c.label} type="button" className={css.choice} data-recommended={i === 0 || undefined} data-busy={now || undefined}
-            disabled={!able || under} aria-busy={now || undefined} aria-description={i === 0 ? t("common.recommended") : undefined} onClick={() => pick(c)}>
+          <button key={c.label} type="button" className={css.choice} data-recommended={recommended || undefined} data-busy={now || undefined}
+            disabled={!able || under} aria-busy={now || undefined} aria-description={recommended ? t("common.recommended") : undefined} onClick={() => pick(c)}>
             <span className={css.choiceNumber} aria-hidden="true"><Digit size={20} /></span>
             <span className={css.choiceLabel}>{c.label}</span>
             <span className={css.choiceDetail}>{c.detail}</span>

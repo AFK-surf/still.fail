@@ -62,18 +62,19 @@ function items(story: VaultStory): VaultItemsView {
 export const LONG_COMMAND = "sh /private/tmp/claude-501/-Users-ada--stillfail-sessions-ember-c-28ddcd9a46-workspace/a511bb72-32b1-47de-b73d-590cfd491c4a/scratchpad/s/search.sh --query 'release job' --channels eng,ops --since 2026-10-01 --limit 200 --format json --fields ts,user,text,thread_ts,reactions --sort recent --out /tmp/release-job.json";
 
 /** How the request's card is told: its command, and how it ended (none: it waits). */
-export type CardStory = { command?: string; status?: "granted" | "denied" | "expired"; scope?: "once" | "hour" };
+export type CardStory = { command?: string; status?: "granted" | "denied" | "expired"; scope?: "once" | "hour" | "chat"; lasts?: "once" | "hour" };
 
 /** The station's card for the request, under the agent's post in the chat on show (as station/src/vault/secrets.ts posts it). */
 function withCard(chat: ChatView, told: CardStory): ChatView {
   const last = [...chat.messages].reverse().find((m) => m.authorKind === "agent");
   if (!last || chat.messages.some((m) => m.card?.vault)) return chat;
   const seq = (chat.messages.at(-1)?.seq ?? 0) + 1;
-  const options = [
-    { label: "仅本次", detail: "单次有效", recommended: true },
-    { label: "本对话 1 小时内", detail: "期间无需再次批准" },
-    { label: "拒绝", detail: "通知 agent 已拒绝" },
-  ];
+  const scopes = [
+    { label: "仅本次", detail: "只给这一条命令用，下次还要再批准" },
+    { label: "本对话 1 小时内", detail: "1 小时内这个对话可以反复使用，不用再批准" },
+    { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
+  ].slice(0, told.lasts === "once" ? 1 : told.lasts === "hour" ? 2 : 3);
+  const options = [...scopes.map((o, i) => (i === scopes.length - 1 ? { ...o, recommended: true } : o)), { label: "拒绝", detail: "通知 agent 已拒绝" }];
   const command = told.command ?? REQUEST.command!;
   const ask: ChatMessage = {
     ...last, seq, ts: `${Number(last.ts) + 30}`, quotes: [], attachments: [],
@@ -91,7 +92,14 @@ function withCard(chat: ChatView, told: CardStory): ChatView {
 /** The demo with the vault in state `story`; `card`: the request's card in the chat on show too, told as it says. */
 export function vaultDemo(story: VaultStory, card: boolean | CardStory = false): DemoExtension {
   return {
-    topic: (t) => (t.topic === "vaults" ? view(story) : t.topic === "vaultItems" ? items(story) : undefined),
+    topic: (t) => {
+      if (t.topic === "vaults") {
+        const v = view(story);
+        const lasts = typeof card === "object" ? card.lasts : undefined;
+        return lasts ? { ...v, requests: v.requests.map((r) => ({ ...r, lasts })) } : v;
+      }
+      return t.topic === "vaultItems" ? items(story) : undefined;
+    },
     then: (t, value) => (card && t.topic === "chat" && value && typeof value === "object" && "messages" in value ? withCard(value as ChatView, card === true ? {} : card) : undefined),
     call: (name, params) => {
       if (name === "vault.setup") return { words: WORDS, device: "d_demo", stations: ["local"] };

@@ -1368,6 +1368,7 @@ export const SHAPES: Record<string, Shape> = {
     ["keyed", "bool", { doc: "This device holds its key." }],
     ["missing", "u32", { doc: "Members' devices set up since that hold no key yet (`vault.addDevice`, by its owner)." }],
     ["recoverable", "bool", { doc: "Its key is also sealed to its owner's recovery words." }],
+    ["lasts", opt("String"), { doc: "The longest grant of its items that say none (`vault.setLasts`): `once`, `hour` or `chat`." }],
   ], { doc: "A vault the viewer is a member of." }),
   VaultRequest: struct([
     ["id", "String"],
@@ -1375,6 +1376,7 @@ export const SHAPES: Record<string, Shape> = {
     ["vaultName", "String"],
     ["item", "String"],
     ["itemName", opt("String")],
+    ["lasts", opt("String"), { doc: "The longest grant its item allows: `once`, `hour` or `chat`; the approval offers those up to it." }],
     ["session", "String"],
     ["chat", "String"],
     ["station", opt("String"), { doc: "The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`." }],
@@ -1410,6 +1412,7 @@ export const SHAPES: Record<string, Shape> = {
     ["modes", vec("String")],
     ["hosts", vec("String")],
     ["env", opt("String"), { doc: "The variable its listing suggests the command gets it in (`GH_TOKEN`)." }],
+    ["lasts", opt("String"), { doc: "The longest grant it is given for, its own: `once`, `hour` or `chat` (none: its vault's, VaultRow `lasts`)." }],
     ["lastUse", opt("VaultUse"), { doc: "The last time an agent used it." }],
   ], { doc: "An item of a vault." }),
   VaultUse: struct([

@@ -8,7 +8,7 @@ import { Link, useNavigate } from "react-router";
 import { Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
-import { Button, Confirm, Dialog, Field, IconButton, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
+import { Button, Choices, Confirm, Dialog, Field, IconButton, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
 import { useProfiles, useStations } from "../api.ts";
 import { profilePath } from "../ProfilesNav.tsx";
 import { profileGroups } from "./settings.tsx";
@@ -17,7 +17,7 @@ import { AddKinds } from "../VaultAdd.tsx";
 import { stationBase } from "../station.tsx";
 import { VaultChoices } from "../VaultApproval.tsx";
 import {
-  ITEM_SECTIONS, KINDS, blankForm, copySecret, itemPath, listLine, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemPath, lastsChoice, lastsName, listLine, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -174,6 +174,7 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
           </div>
         )}
       </div>
+      {mine && <Lasts entry={entry} v={mine} />}
       {!plain && (view.plainLeft ?? 0) > 0 && <Migrate entry={entry} n={view.plainLeft!} />}
       <ProfileAccounts entry={entry} />
       {view.vaults.length === 0 && !plain && (
@@ -200,6 +201,21 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
       </Dialog>
       {editing && mine && <Editor workspace={entry.id} vault={mine.id} first={{ ...blankForm(), kind: editing }} id={null} plain={plain} kinds={false} onClose={() => setEditing(null)} />}
     </>
+  );
+}
+
+/** The longest an agent's request for the person's secrets is approved for, where a secret does not say its own. */
+function Lasts({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
+  const run = useVaultCall();
+  const setting = useDoing("vault.setLasts", { workspace: entry.id, vault: v.id });
+  const set = (lasts: string) => void run("vault.setLasts", { workspace: entry.id, vault: v.id, lasts }, t("web-pages.vault.lasts.what"));
+  return (
+    <div className={`${pagesCss.card} ${css.lead}`}>
+      <div className={css.state}>{t("web-pages.vault.lasts.title")}</div>
+      <p className={css.sub}>{t("web-pages.vault.lasts.note")}</p>
+      <Choices label={t("web-pages.vault.lasts.title")} value={v.lasts ?? "chat"} onChange={set}
+        options={SCOPES.map((s) => ({ value: s, title: lastsName(s), description: t(`web-pages.vault.lasts.${s}Detail`), disabled: setting }))} />
+    </div>
   );
 }
 
@@ -500,6 +516,10 @@ export function Editor({ workspace, vault, first, id, plain = false, kinds = tru
             <p className={css.note}>{f.kind === "ssh_key" ? t("web-pages.vault.editor.sshNote") : f.mode === "proxy" ? t("web-pages.vault.editor.proxyNote") : t("web-pages.vault.editor.envNote")}</p>
             {f.kind !== "ssh_key" && f.mode === "proxy" && input("hosts", t("web-pages.vault.editor.hosts"), { placeholder: t("web-pages.vault.editor.hostsPlaceholder"), error: problem === "hosts" && f.hosts !== "" ? t("web-pages.vault.editor.hostsNeeded") : undefined })}
             {f.kind !== "ssh_key" && input("env", t("web-pages.vault.editor.env"), { mono: true, placeholder: t("web-pages.vault.editor.envPlaceholder") })}
+            <Field label={t("web-pages.vault.editor.lasts")}>
+              <div><Segmented label={t("web-pages.vault.editor.lasts")} value={f.lasts} onChange={(lasts) => change({ lasts })} options={LASTS.map((l) => ({ value: l, label: lastsChoice(l) }))} /></div>
+            </Field>
+            <p className={css.note}>{t("web-pages.vault.editor.lastsNote")}</p>
           </>}
         </div>
       </Dialog>

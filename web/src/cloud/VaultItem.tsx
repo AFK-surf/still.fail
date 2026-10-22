@@ -8,7 +8,7 @@ import { useDoing } from "../doing.ts";
 import { BackLink, Button, IconButton, Pill, Section, Spinner, Time, Waiting } from "../ui.tsx";
 import { stationBase } from "../station.tsx";
 import { Editor, KindIcon, Secret } from "./Vault.tsx";
-import { fieldsOf, formOf, howLine, kindName, masked, modeName, useVaultCall, useVaultItems, useVaultUses, useVaults, type Kind, type Opened, type VaultUse } from "../vault.ts";
+import { fieldsOf, formOf, howLine, itemLasts, kindName, masked, modeName, useVaultCall, useVaultItems, useVaultUses, useVaults, type Kind, type Opened, type VaultUse } from "../vault.ts";
 import { t } from "../i18n.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -80,6 +80,7 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
           <dl className={css.facts}>
             <dt>{t("web-pages.vault.how")}</dt><dd>{row.modes.map((m) => howLine(m, row.hosts)).join("、")}</dd>
             {row.env && <><dt>{t("web-pages.vault.editor.env")}</dt><dd><code className={css.mono}>{row.env}</code></dd></>}
+            <dt>{t("web-pages.vault.editor.lasts")}</dt><dd>{itemLasts(row.lasts, v?.lasts)}</dd>
           </dl>
         ) : <p className={css.note}>{t("web-pages.vault.notForAgents")}</p>}
       </Section>

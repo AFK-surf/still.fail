@@ -4953,6 +4953,8 @@ data class VaultItemRow (
 	val hosts: List<String>,
 	/// The variable its listing suggests the command gets it in (`GH_TOKEN`).
 	val env: String? = null,
+	/// The longest grant it is given for, its own: `once`, `hour` or `chat` (none: its vault's, VaultRow `lasts`).
+	val lasts: String? = null,
 	/// The last time an agent used it.
 	val lastUse: VaultUse? = null
 )
@@ -4990,6 +4992,8 @@ data class VaultRequest (
 	val vaultName: String,
 	val item: String,
 	val itemName: String? = null,
+	/// The longest grant its item allows: `once`, `hour` or `chat`; the approval offers those up to it.
+	val lasts: String? = null,
 	val session: String,
 	val chat: String,
 	/// The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`.
@@ -5025,7 +5029,9 @@ data class VaultRow (
 	/// Members' devices set up since that hold no key yet (`vault.addDevice`, by its owner).
 	val missing: UInt,
 	/// Its key is also sealed to its owner's recovery words.
-	val recoverable: Boolean
+	val recoverable: Boolean,
+	/// The longest grant of its items that say none (`vault.setLasts`): `once`, `hour` or `chat`.
+	val lasts: String? = null
 )
 
 /// An item's uses, the latest first (the `vaultUses` topic).
