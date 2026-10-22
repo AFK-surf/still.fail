@@ -23,8 +23,8 @@ fn chat_with_bars(top : Double, bottom : Double) -> ((Double, Double, Double, Do
 test "bars: a chat's title under the status bar, its composer over the navigation bar" {
   let (title0, words0) = chat_with_bars(0.0, 0.0)
   let (title, words) = chat_with_bars(24.0, 48.0)
-  assert_eq(title.1 - title0.1, 24.0)
-  assert_eq(words.1 - words0.1, -48.0)
+  assert_true((title.1 - title0.1 - 24.0).abs() < 1.0e-9)
+  assert_true((words.1 - words0.1 + 48.0).abs() < 1.0e-9)
   assert_eq(status_top(), 24.0)
   assert_eq(nav_foot(), 48.0)
 }

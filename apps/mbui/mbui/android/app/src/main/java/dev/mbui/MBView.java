@@ -140,6 +140,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 gl) {
+        // a view not the host's (its activity paused under another of the app's: an OverActivity's draws), kept as it
+        // last drew: one thread draws the app at a time
+        if (Host.view != this) return;
         // another view set the drawing up in its own context since this one did (an OverActivity came and went): set
         // up again here, at this view's size
         if (mine != setUp) {

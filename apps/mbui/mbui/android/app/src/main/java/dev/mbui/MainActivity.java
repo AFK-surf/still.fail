@@ -219,6 +219,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onStop() {
+        // the drawing paused once the window is off the screen, not as it starts going: the system's animation of
+        // the window going (into the launcher's icon, to the recent apps) moves what it last drew, as a View's
+        mbView.onPause();
         if (multicast != null) multicast.release();
         if (hiddenAt == 0) hiddenAt = android.os.SystemClock.elapsedRealtime();
         super.onStop();
@@ -375,10 +378,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        // told before the GL thread pauses (its queued events run first): the core hears the app left the front
+        // the core hears the app left the front (its drawing goes on until the window is off the screen: onStop)
         Host.resumed = false;
         Host.tellAppState();
-        mbView.onPause();
     }
 
     @Override
