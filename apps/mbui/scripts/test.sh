@@ -22,7 +22,9 @@ for t in ${TARGETS:-native}; do
   # (mbui's scripts/env.sh native_tests: the C split by mbui's scripts/mbc, units kept by content in MBC_STORE)
   if [ $t = native ]; then native_tests "$A"; mode=$NATIVE; fi
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
-  # side: the flows in packages of their own for it, src/sfreplay/flows/*/)
+  # side. The flows in one package, src/sfreplay/flows: each test package is a program of the whole app, its C
+  # compiled apart, and five of them compiled the same change five times over; on CI's four cores the replay part was
+  # 194 s with them apart and 140 s together, 2026-10-22)
   pkgs=""
   if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
     pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
@@ -30,7 +32,7 @@ for t in ${TARGETS:-native}; do
   fi
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
-    for g in src/sfreplay/flows/*/; do pkgs="$pkgs -p stillfail/sfreplay/flows/$(basename "$g")"; done
+    pkgs="$pkgs -p stillfail/sfreplay/flows"
   fi
   moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1

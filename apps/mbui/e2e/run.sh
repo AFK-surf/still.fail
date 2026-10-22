@@ -51,7 +51,7 @@ export E2E_ACCOUNT_B64=$(curl -sf "$MBUI_CLOUD/__dev/account?user=alice" | base6
 mkdir -p $FILES
 [ -f $FILES/e2e-photo.jpg ] || cp $MBUI_DIR/test/images/$(ls $MBUI_DIR/test/images | grep -i '\.jpg$' | head -1) $FILES/e2e-photo.jpg
 # (its bytes a rule, not random: byte i is (i ^ i >> 8 ^ i >> 16) & 255, so a test makes the same ones and what the app
-# names an upload by, their hash, is the run's: src/sfreplay/flows/drive/drive_upload_test.mbt)
+# names an upload by, their hash, is the run's: src/sfreplay/flows/drive_upload_test.mbt)
 python3 -c 'import sys; sys.stdout.buffer.write(bytes((i ^ i >> 8 ^ i >> 16) & 255 for i in range(9437184)))' > $FILES/e2e-data.bin
 # what alice's other device sends for the preview (38-preview): a PDF of two pages, a short video (H.264, its index
 # first), a page with a script
