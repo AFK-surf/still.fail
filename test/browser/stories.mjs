@@ -104,6 +104,10 @@ try {
       // whichever way (a bar woken by the pointer the page's change moves over again) or with time is not its doing; nor
       // is what loops, or what is in it.
       await page.evaluate(() => window.endDemo?.());
+      // The clock's time held where it is from here on (its timers and frames still run, so what moves gets to its end):
+      // what reads the time (a wait's minutes and seconds) says the same at each look. Run on, a counter's width matched
+      // with motion twice and not without, by chance (run 39732288569).
+      await page.clock.setFixedTime(await page.evaluate(() => Date.now()));
       const at = async (reducedMotion) => {
         await page.emulateMedia({ reducedMotion });
         await steady(page);
