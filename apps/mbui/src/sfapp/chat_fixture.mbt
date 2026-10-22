@@ -884,7 +884,12 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
     "session.transcript" => Some(Ok({ "path": "/Users/lin/.claude/projects/release/7c1e5b2a-4f0d-4c8e-9a61-3b2f.jsonl" }))
     // the messages of the made-up chat that have every word (topics.ts find): all of it on the device
     "chat.find" => {
-      let words = text(p, "query").to_lower().split(" ").filter(fn(w) { w != "" }).map(fn(w) { w.to_string() }).collect()
+      let words : Array[String] = []
+      for w in text(p, "query").to_lower().split(" ") {
+        if w.length() > 0 {
+          words.push(w.to_string())
+        }
+      }
       let all = items(Some(rich_chat(f.older)), "messages")
       let hits : Array[Json] = []
       for m in all {
@@ -893,7 +898,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         for w in words {
           let mut from = 0
           while from <= said.length() {
-            match said.view(start_offset=from).find(w) {
+            match said.view(start_offset=from).to_string().find(w) {
               Some(i) => {
                 count += 1
                 from = from + i + w.length()
