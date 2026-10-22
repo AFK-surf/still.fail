@@ -212,6 +212,7 @@
   "web-main.find.partial": "Searched only the {held} loaded items of {of}",
   "web-main.find.placeholder": "Find in chat",
   "web-main.find.prev": "Previous",
+  "web-main.letters.back": "All agent messages",
   "web-main.letters.close": "Close agent messages",
   "web-main.letters.count": {
     "one": "1 message",

@@ -29,7 +29,7 @@ class ChatLettersTest {
     private fun going(seq: Long, text: String) = Fixtures.agent(seq, text).copy(way = "out")
     private val letters = ChatLettersView(
         title = "修一下登录",
-        chats = listOf(LettersChat(title = "BFT 备份尺寸分析", link = link, letters = listOf(
+        chats = listOf(LettersChat(key = link, title = "BFT 备份尺寸分析", link = link, last = "补充一点：macOS 自带的 tar 能直接解 zstd", lastActiveAt = Fixtures.NOW, time = Fixtures.stamp(Fixtures.NOW).mapKeys { "lastActiveAt" }, letters = listOf(
             coming(2, "用户让精简备份并改用 zstd。改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下"),
             going(3, "已替换，今晚 02:00 那份会按新脚本出"),
             coming(4, "补充一点：macOS 自带的 tar 能直接解 zstd"),
@@ -45,16 +45,22 @@ class ChatLettersTest {
         h.fake.put(Topics.chatLetters(Fixtures.STATION, Fixtures.THREAD), letters)
         h.launch(listOf(Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
         rule.onNodeWithText("补充一点", substring = true).assertDoesNotExist()
-        val chat = h.record("letters-chat")
-        chat.end()
+        val inChat = h.record("letters-chat")
+        inChat.end()
         val opening = h.record("letters-open")
         opening.frame { rule.onNodeWithContentDescription("agent 往来 · 3 条").performClick() }
         opening.frames(16)
         opening.end()
+        // The chats it wrote with, a row each: the last letter in brief; a tap opens its letters.
+        rule.onNodeWithText("3 条", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("「BFT 备份尺寸分析」的 agent").assertDoesNotExist()
+        val chat = h.record("letters-chat-open")
+        chat.frame { rule.onNodeWithText("BFT 备份尺寸分析").performClick() }
+        chat.frames(8)
+        chat.end()
         rule.onNodeWithText("补充一点", substring = true).assertIsDisplayed()
         // Coming in, by that chat's agent; going out, by this chat's own.
         rule.onAllNodesWithText("「BFT 备份尺寸分析」的 agent").assertCountEquals(2)
         rule.onNodeWithText("已替换", substring = true).assertIsDisplayed()
-        rule.onNodeWithText("BFT 备份尺寸分析").assertIsDisplayed()
     }
 }

@@ -217,7 +217,14 @@ export function lettersByChat(letters: { message: J; way: "in" | "out"; title: s
     const seq = u64(l.message.seq) ?? 0;
     chats.set(key, was === undefined ? { title: l.title, link: l.link, letters: [letter], last: seq } : { ...was, letters: [...was.letters, letter], last: Math.max(was.last, seq) });
   }
-  return [...chats.values()].sort((a, b) => b.last - a.last).map(({ title, link, letters }) => ({ title, link, letters }));
+  return [...chats.values()].sort((a, b) => b.last - a.last).map(({ title, link, letters }) => {
+    const last = letters.at(-1)!;
+    // In brief, as a row of the page's list has it: the last letter's words on a line, said by this chat's agent when
+    // it went out (one coming in is the row's own chat's).
+    const words = format.plainText(str(last.text) ?? "").replace(/\s+/g, " ").trim();
+    const said = last.way === "out" ? t("core-views.letters.out", { name: str(get(last.by, "name")) ?? "", text: words }) : words;
+    return { key: link ?? title, title, link, letters, last: said, lastActiveAt: u64(last.createdAt) ?? 0 };
+  });
 }
 
 /// The notices that a runtime is not installed, said where they matter: under the viewer's message that waits for it

@@ -191,6 +191,7 @@
   "web-main.find.partial": "仅搜索了已加载的 {held} 条，共 {of} 条",
   "web-main.find.placeholder": "在对话中查找",
   "web-main.find.prev": "上一个",
+  "web-main.letters.back": "所有往来",
   "web-main.letters.close": "关闭 agent 往来",
   "web-main.letters.count": {
     "one": "1 条",

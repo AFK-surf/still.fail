@@ -437,10 +437,10 @@ const letters: DemoExtension = {
       title: "备份改成 zstd",
       whole: true,
       chats: [
-        { title: "接手监督 mbui", link: mbui, letters: [
+        { key: mbui, title: "接手监督 mbui", link: mbui, last: "测试版 4521 已出，你这边的 #1108 等它跑完再合", lastActiveAt: at(3), time: { lastActiveAt: stamp(at(3)) }, letters: [
           letter(3, "in", "测试版 **4521** 已出，你这边的 #1108 等它跑完再合", theirs("接手监督 mbui", mbui)),
         ] },
-        { title: "BFT 备份尺寸分析", link, letters: [
+        { key: link, title: "BFT 备份尺寸分析", link, last: "补充一点：macOS 自带的 /usr/bin/tar 能直接解 zstd，guest 里不用另装", lastActiveAt: at(2), time: { lastActiveAt: stamp(at(2)) }, letters: [
           letter(0, "in", "用户让精简备份并改用 zstd。我没有 host2 的权限，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下"),
           letter(1, "out", "已替换，**今晚 02:00** 那份会按新脚本出"),
           letter(2, "in", "补充一点：macOS 自带的 `/usr/bin/tar` 能直接解 zstd，guest 里不用另装"),
@@ -726,7 +726,9 @@ export const stories: Story[] = [
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
   { id: "app-chat-letters", group: "应用", title: "对话 · agent 往来", app: true, demo: letters, steps: [{ click: '[aria-label^="agent 往来"]' }] },
+  { id: "app-chat-letters-open", group: "应用", title: "对话 · agent 往来 · 打开一个对话的", app: true, demo: letters, steps: [{ click: '[aria-label^="agent 往来"]' }, { click: "text=BFT 备份尺寸分析" }] },
   { id: "phone-chat-letters", group: "手机", title: "对话 · agent 往来", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label^="agent 往来"]' }] },
+  { id: "phone-chat-letters-open", group: "手机", title: "对话 · agent 往来 · 打开一个对话的", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label^="agent 往来"]' }, { click: "text=BFT 备份尺寸分析" }] },
   { id: "app-chat-sent-updating", group: "应用", title: "对话 · station 更新时发出的消息", app: true, demo: sentUpdating },
   { id: "phone-chat-sent-updating", group: "手机", title: "对话 · station 更新时发出的消息", app: true, phone: true, demo: sentUpdating },
   { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },

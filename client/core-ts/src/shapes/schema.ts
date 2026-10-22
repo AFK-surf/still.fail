@@ -219,14 +219,18 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said\nit, and whether its agents have yet to take it." }),
   ChatLettersView: struct([
     ["title", "String", { doc: "The chat's title." }],
-    ["chats", vec("LettersChat"), { doc: "By the other chat, the one written with last first." }],
+    ["chats", vec("LettersChat"), { doc: "By the other chat, the one written with last first: the page lists them, one opened shows its letters." }],
     ["whole", "bool", { doc: "All of the chat is on the device: no letter is missing. Until then, those held, more coming." }],
   ], { doc: "What a chat's agents and other chats' agents wrote each other (session_send): not said in the chat, read on a page of\nits own (the `chatLetters` view {station, thread})." }),
   LettersChat: struct([
+    ["key", "String", { doc: "Which it is, among the page's (its link, else its title)." }],
     ["title", "String"],
     ["link", opt("String"), { doc: "Its link, opened as a chat link is. Absent when its station gave none." }],
+    ["last", "String", { doc: "Its last letter in brief, on a line, for the page's list: by this chat's agent, its name before it\n(Opus 5.5：…)." }],
+    ["lastActiveAt", "i64", { client: "I54", doc: "When its last letter was written." }],
+    ["time", opt(map("Stamp")), { doc: "`lastActiveAt` in words." }],
     ["letters", vec("ChatMessage"), { doc: "Both ways, in the order written (`way`): one coming in by that chat's agent, named by the chat; one going out by\nthis chat's agent." }],
-  ], { doc: "The letters between a chat and another." }),
+  ], { doc: "The letters between a chat and another: a row of the page's list, its letters once it is opened." }),
   RuntimeInstall: struct([
     ["runtime", "String", { doc: "claude | codex | dsh | grok | cursor | devin: what `software.update` installs ({station, id: runtime})." }],
     ["state", "String", { doc: "missing | installing | failed | installed" }],

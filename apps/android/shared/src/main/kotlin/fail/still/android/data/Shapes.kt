@@ -1830,12 +1830,21 @@ data class ChatMessage (
 	val way: String? = null
 )
 
-/// The letters between a chat and another.
+/// The letters between a chat and another: a row of the page's list, its letters once it is opened.
 @Serializable
 data class LettersChat (
+	/// Which it is, among the page's (its link, else its title).
+	val key: String,
 	val title: String,
 	/// Its link, opened as a chat link is. Absent when its station gave none.
 	val link: String? = null,
+	/// Its last letter in brief, on a line, for the page's list: by this chat's agent, its name before it
+	/// (Opus 5.5：…).
+	val last: String,
+	/// When its last letter was written.
+	val lastActiveAt: Long,
+	/// `lastActiveAt` in words.
+	val time: Map<String, Stamp>? = null,
 	/// Both ways, in the order written (`way`): one coming in by that chat's agent, named by the chat; one going out by
 	/// this chat's agent.
 	val letters: List<ChatMessage>
@@ -1847,7 +1856,7 @@ data class LettersChat (
 data class ChatLettersView (
 	/// The chat's title.
 	val title: String,
-	/// By the other chat, the one written with last first.
+	/// By the other chat, the one written with last first: the page lists them, one opened shows its letters.
 	val chats: List<LettersChat>,
 	/// All of the chat is on the device: no letter is missing. Until then, those held, more coming.
 	val whole: Boolean

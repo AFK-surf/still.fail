@@ -878,6 +878,8 @@ test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_lette
     ["备份", "https://x/o/w/s/b", [[2, "in", "脚本放好了"], [3, "out", "已替换"], [6, "in", "**补充**一点\n\n第二段"]]],
     ["部署", "https://x/o/w/s/d", [[5, "in", "部署好了"]]],
   ]);
+  // In brief, for the page's list: the last letter's words on a line, by whom when it went out of here.
+  assert.deepEqual(page.chats.map((c: J) => [c.key, c.last, c.lastActiveAt]), [["https://x/o/w/s/b", "补充一点 第二段", 6], ["https://x/o/w/s/d", "部署好了", 5]]);
   // Coming in: by that chat's agent, its name opening that chat; going out: by this chat's own agent.
   const [incoming, outgoing] = page.chats[0].letters;
   assert.equal(incoming.by.name, "「备份」的 agent");
