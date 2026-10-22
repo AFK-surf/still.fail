@@ -575,6 +575,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         c.drag_scroll = 0
       }
     }
+    c.press_late = h_platform() == 2 && c.drag_scroll != 0
     match c.lists.get(c.drag_scroll) {
       // a list moving on its own (flung, springing back from an end) is
       // caught: the finger drags it from there, and presses nothing in it
@@ -729,6 +730,10 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       (y - c.press_y).abs() <= touch_slop() {
       match c.editors.get(c.editor_tap) {
         Some(st) => {
+          // (tapped again: said to the host anew, which asks for its keyboard again if none is up)
+          if c.focus == c.editor_tap {
+            c.ime_sig = "tap"
+          }
           c.focus = c.editor_tap
           place_caret(st, c.press_x, c.press_y, t)
           st.handle = st.text.length() > 0

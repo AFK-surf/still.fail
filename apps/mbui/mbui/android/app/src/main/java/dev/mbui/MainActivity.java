@@ -130,12 +130,15 @@ public class MainActivity extends Activity {
             if (!imeMoving) keyboardAt(insets);
             // the keyboard put away by the person (its own key, Back, a swipe), not by the app: what was typed into
             // lets go of the focus, as the Android app's composer does; tapped again, it takes it and the keyboard
-            // comes back (the app's own hiding comes after its focus went: Host.imeActive is off by then)
+            // comes back (the app's own hiding comes after its focus went: Host.imeActive is off by then; a hiding seen
+            // after the app asked for it again, the app's still under way: Host.imeAwaited)
             boolean shown = insets.isVisible(WindowInsets.Type.ime());
-            if (imeShown && !shown && Host.imeActive && mbView.hasWindowFocus()) {
+            if (imeShown && !shown && Host.imeActive && !Host.imeAwaited && mbView.hasWindowFocus()) {
                 mbView.toGL(() -> Native.text(7, "", 0, 0));
             }
             imeShown = shown;
+            Host.imeVisible = shown;
+            if (shown) Host.imeAwaited = false;
             return WindowInsets.CONSUMED;
         });
         root.setWindowInsetsAnimationCallback(new WindowInsetsAnimation.Callback(
@@ -162,6 +165,7 @@ public class MainActivity extends Activity {
                 imeMoving = false;
                 WindowInsets now = root.getRootWindowInsets();
                 if (now != null) keyboardAt(now);
+                if (now != null && now.isVisible(WindowInsets.Type.ime())) Host.imeAwaited = false;
             }
         });
         setContentView(root);

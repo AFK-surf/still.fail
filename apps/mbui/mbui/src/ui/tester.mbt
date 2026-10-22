@@ -187,6 +187,7 @@ pub fn Tester::new(
     ime_active: false,
     ime_text: "",
     ime_sel: (0, 0),
+    ime_told: 0,
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
     clipboard_secret: -1.0,

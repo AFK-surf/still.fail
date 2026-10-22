@@ -138,8 +138,10 @@ pub fn spokes(c : @ui.Ctx, size : Double, color : Int64, box? : Double) -> Int {
 ///|
 /// The same steps as a ring of eight arcs round an avatar (Spokes.kt drawSegments, the web's `segments`): in a box
 /// `size` across, a circle `stroke` thick on its edge, each arc 31° of its 45° with round ends (shortened by their
-/// ends' reach, so the gaps stay 14°), the first straight up.
-pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64) -> Int {
+/// ends' reach, so the gaps stay 14°), the first straight up. Each in `color` at its strength over `ground` (what is
+/// under it), mixed: an arc is drawn as pieces whose round ends lie over each other, which see-through ink shows as
+/// beads along it.
+pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64, ground : Int64) -> Int {
   let step = spoke_step(c)
   let r = size / 2.0 - stroke / 2.0
   let mid = size / 2.0
@@ -153,7 +155,7 @@ pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64) -> I
       @ui.line(
         @ui.arc(mid, mid, r, from~, sweep=(31.0 - 2.0 * cap) * deg),
         width=stroke,
-        color=alpha(color, spoke_alpha[(step - i + 8) % 8]),
+        color=mix(color, spoke_alpha[(step - i + 8) % 8], ground),
       ),
     )
   }

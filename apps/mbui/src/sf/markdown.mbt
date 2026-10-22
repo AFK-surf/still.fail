@@ -1041,9 +1041,10 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
   self.n = self.n + 1
   let key = "sf-md/table\{self.n}"
   let id = c.id(key)
-  // as wide as the message last laid it out (the frame's line either side taken off)
-  let avail = match c.rect_of(id) {
-    Some((_, _, rw, _)) => rw - 2.0
+  // as wide as the message lays it out (the frame's line either side taken off): its box, not what of it shows (a
+  // page sliding in shows part of it, which had the columns squeezed)
+  let avail = match c.laid_size(id) {
+    Some((rw, _)) => rw - 2.0
     None => c.width - 2.0
   }
   let least = 4.0 * 13.0 + 24.0

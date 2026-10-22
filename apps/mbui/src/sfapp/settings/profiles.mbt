@@ -230,7 +230,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                 c.box(w=Fill(1.0), opacity=if usable { 1.0 } else { 0.55 }, fn() {
                   c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
                     presence_dot(c, if usable { tone_dot(text(p, "checkTone")) } else { "error" })
-                    c.text(text(p, "name"), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+                    c.text(text(p, "name"), size=15.0, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
                   })
                   |> ignore
                   let line = if !usable {
@@ -296,7 +296,7 @@ fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
       c.box(w=Fill(1.0), fn() {
         c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
           presence_dot(c, tone_dot(text(pv, "checkTone")))
-          c.text(text(pv, "name"), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+          c.text(text(pv, "name"), size=15.0, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
         })
         |> ignore
         let kind = text(field(pv, "access"), "kind")

@@ -270,9 +270,10 @@ fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
   let mut steps = 0
   while steps < 6 {
     steps = steps + 1
+    // (none left: still on to say no copy flies, its activity's avatar back)
     let t = match e.current {
       Some(t) => t
-      None => return
+      None => break
     }
     if t.clock.moving() {
       break
@@ -433,12 +434,16 @@ fn emit_flyer(c : @ui.Ctx, key : String, e : Emits, v : ChatView) -> Unit {
     Some(t) => v.agents.iter().find_first(fn(a) { a.key == t.agent })
     None => None
   }
-  let (maker, runtime) = match a {
-    Some(a) => (a.maker, a.runtime)
-    None => ("", "")
+  let (maker, runtime, waiting) = match a {
+    Some(a) => (a.maker, a.runtime, a.wait is Some(_))
+    None => ("", "", false)
   }
+  // the avatar with its ring round it, as its activity has them (Chat.kt Flyer)
   c.layer(fn() {
-    let b = c.box(tx=x, ty=y, w=Px(18.0), h=Px(18.0), fn() { agent_avatar(c, maker, runtime) })
+    let b = c.box(tx=x - ring_room, ty=y - ring_room, w=Px(24.0), h=Px(24.0), align=ACenter, justify=JCenter, fn() {
+      agent_avatar(c, maker, runtime)
+      c.layer(fn() { work_ring(c, waiting) }) |> ignore
+    })
     c.look(b, @ui.look(sx~, sy~))
     c.draw_only(b)
   })

@@ -25,3 +25,19 @@ test "activity: its ring steps round" {
   assert_true(t.drawlist() != at)
   fix_clock.val = None
 }
+
+///|
+test "its avatar is back in its activity once a message has come out of it, the agent still at work" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  t.run_for(emit_all_ms())
+  assert_true(em.watched)
+  assert_true(em.current is None)
+  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  // (the copy that flew is gone: the activity's own avatar shows again)
+  assert_eq(em.copied, "")
+  emit_restore()
+}

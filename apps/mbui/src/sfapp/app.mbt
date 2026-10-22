@@ -398,6 +398,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   appearance(src)
   faces(src)
   let t = @sf.begin(c)
+  // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
+  c.set_clear(t.p.bg)
   // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
   wide_on.val = is_wide(c)
   @settings.wide.val = wide_on.val
