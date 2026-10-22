@@ -250,33 +250,13 @@ fn new_chat_on(
         if combos.length() > 0 {
           c.box(w=Fill(1.0), pt=12.0, pb=12.0, gap=8.0, align=ACenter, fn() {
             c.text(tr("android-chat.new.frequent"), size=12.0, color=t.p.muted, wrap=false) |> ignore
-            // as many a line as fit, in the middle (FlowRow): each as wide as its words (13: a CJK character
-            // 13, any other about 7) and its room
-            let room = c.width - 60.0
-            let lines : Array[Array[Json]] = [[]]
-            let mut used = 0.0
-            for combo in combos {
-              let mut ww = 20.0
-              for ch in text(Some(combo), "label") {
-                ww = ww + (if ch.to_int() > 0x2E80 { 13.0 } else { 7.2 })
+            // as many a line as fit, in the middle (FlowRow, 6 apart each way): each as wide as its words
+            c.box(style=frequent_flow, flow=true, fn() {
+              for combo in combos {
+                frequent_chip(c, src, w, Some(combo), leaving)
               }
-              let line = lines[lines.length() - 1]
-              if line.length() > 0 && used + 6.0 + ww > room {
-                lines.push([combo])
-                used = ww
-              } else {
-                used = used + (if line.length() > 0 { 6.0 } else { 0.0 }) + ww
-                line.push(combo)
-              }
-            }
-            for line in lines {
-              c.box(dir=Row, gap=6.0, justify=JCenter, fn() {
-                for combo in line {
-                  frequent_chip(c, src, w, Some(combo), leaving)
-                }
-              })
-              |> ignore
-            }
+            })
+            |> ignore
           })
           |> ignore
         }
@@ -1179,3 +1159,8 @@ let run_picker_opened : Ref[Bool] = { val: false }
 
 ///|
 let run_picker_saving : Ref[Bool] = { val: false }
+
+///|
+/// The frequent choices in lines, in the middle, 6 apart each way (NewChat.kt: a FlowRow).
+// kept across runs: a value (no field of it changes)
+let frequent_flow : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, justify=JCenter)

@@ -700,7 +700,8 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
 /// its name and when it refills.
 fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
   let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), gap=36.0, fn() {
+  // (a FlowRow: 36 apart, 12 between its lines)
+  c.box(dir=Row, w=Fill(1.0), gap=36.0, flow=true, line_gap=12.0, fn() {
     for w in windows {
       let wv = Some(w)
       let level = text(wv, "level")

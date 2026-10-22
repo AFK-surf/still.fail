@@ -1552,22 +1552,19 @@ fn fact_row(c : @ui.Ctx, rest : Array[(String, String?)]) -> Unit {
     return
   }
   let t = @sf.theme()
-  let runs = []
-  for i, f in rest {
-    if i > 0 {
-      runs.push(@ui.span("   "))
-    }
-    runs.push(@ui.span(f.0))
-    match f.1 {
-      Some(v) => {
-        runs.push(@ui.span(" "))
-        runs.push(@ui.span(v, weight=500, color=t.p.muted, mono=true))
+  // (ToolStep.kt FactRow: a FlowRow, 10 apart, 4 between its lines; each fact whole on a line)
+  c.box(dir=Row, w=Fill(1.0), padx=2.0, gap=10.0, flow=true, line_gap=4.0, fn() {
+    for f in rest {
+      let runs = [@ui.span(f.0)]
+      match f.1 {
+        Some(v) => {
+          runs.push(@ui.span(" "))
+          runs.push(@ui.span(v, weight=500, color=t.p.muted, mono=true))
+        }
+        None => ()
       }
-      None => ()
+      c.rich(runs, size=11.0, color=t.p.subtle) |> ignore
     }
-  }
-  c.box(w=Fill(1.0), padx=2.0, fn() {
-    c.rich(runs, size=11.0, color=t.p.subtle, w=Fill(1.0)) |> ignore
   })
   |> ignore
 }

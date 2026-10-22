@@ -583,6 +583,8 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap. `keep`: in a row, as wide
 /// as its content even where the row is short of room, its siblings squeezed instead (as Compose's Row measures what
 /// has no weight whole, a weight(1f, fill = false) sibling given the rest: a bar's title cut short, not its buttons).
+/// `flow`: a row that goes on in lines when what it holds does not fit, each thing in it as wide as it is, `gap` apart
+/// along the line and between the lines, or `line_gap` between the lines (Compose's FlowRow and its two spacedBy).
 /// `label`: what it is called where it shows no words (an icon's button, as Compose's contentDescription), found by
 /// them whole as words are (a drive's `=WORDS`, Tester::locate).
 ///
@@ -630,6 +632,8 @@ pub fn Ctx::box(
   notch_fillet? : Double = 0.0,
   aspect? : Double = 0.0,
   keep? : Bool = false,
+  flow? : Bool = false,
+  line_gap? : Double = -1.0,
   label? : String = "",
   id? : Int = 0,
   body : () -> Unit,
@@ -662,6 +666,8 @@ pub fn Ctx::box(
   n.rtl = self.direction == Rtl
   n.aspect = aspect
   n.keep = keep
+  n.flow = flow
+  n.line_gap = line_gap
   n.label = label
   n.w = first(
     w,

@@ -389,45 +389,22 @@ fn snapshot_files(c : @ui.Ctx, src : Source, station : String, files : Array[Jso
   // the card's room: the sheet's less its insets (20) and the card's (16)
   let room = c.width - 72.0
   let widths = files.map(fn(f) { if is_picture(Some(f)) { toggle_image_w } else { dmin(file_card_w, room) } })
-  let rows : Array[Array[Int]] = []
-  let mut used = 0.0
-  for i, w in widths {
-    if rows.length() == 0 || used + files_apart + w > room {
-      rows.push([i])
-      used = w
-    } else {
-      rows[rows.length() - 1].push(i)
-      used = used + files_apart + w
-    }
-  }
-  c.box(style=preview_file_rows, fn() {
-    for r in rows {
-      c.box(style=preview_file_row, fn() {
-        for i in r {
-          file_toggle(c, src, station, Some(files[i]), widths[i])
-        }
-      })
-      |> ignore
+  c.box(style=preview_file_flow, flow=true, fn() {
+    for i, f in files {
+      file_toggle(c, src, station, Some(f), widths[i])
     }
   })
   |> ignore
 }
 
 ///|
-/// How far apart attachments are (FlowRow's 6).
-let files_apart : Double = 6.0
-
-///|
 /// An image's box in the preview (Publish.kt FileToggle: 160 wide, its own proportions).
 let toggle_image_w : Double = 160.0
 
 ///|
+/// The attachments in lines, 6 apart each way, 2 under the words (Publish.kt: a FlowRow).
 // kept across runs: a value (no field of it changes)
-let preview_file_rows : @ui.Style = @ui.style(pt=S0_5, gap=S1_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let preview_file_row : @ui.Style = @ui.style(row=true, gap=S1_5)
+let preview_file_flow : @ui.Style = @ui.style(row=true, w=Full, pt=S0_5, gap=S1_5)
 
 ///|
 /// Whether an attachment is drawn as its picture: an image its station keeps (its owner known).
