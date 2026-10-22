@@ -391,7 +391,8 @@ fn add_station_steps(
 }
 
 ///|
-/// A command to run elsewhere, with a button that copies it (Settings.kt CommandBox).
+/// A command to run elsewhere, with a button that copies it (Settings.kt CommandBox): on surface2, its corner taken from
+/// its button's, 10 in from its edges.
 fn command_box(c : @ui.Ctx, core : Core, words : String) -> Unit {
   let t = @sf.theme()
   let id = c.id("command-copy")
@@ -407,8 +408,8 @@ fn command_box(c : @ui.Ctx, core : Core, words : String) -> Unit {
     pt=10.0,
     pb=10.0,
     gap=8.0,
-    radius=12.0,
-    bg=t.p.card,
+    radius=@sf.command_box_corner,
+    bg=t.p.card2,
     border=1.0,
     border_color=t.p.line,
     fn() {

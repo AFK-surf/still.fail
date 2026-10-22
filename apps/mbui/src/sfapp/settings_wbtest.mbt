@@ -499,3 +499,19 @@ test "the run's 账号: what 自动分配 means, then 自动分配 and each acco
   assert_true(t.find("38%") is Some(_))
   assert_true(t.find("70%") is Some(_))
 }
+
+///|
+test "a subscription's page: where it stands at the head of its sign-in's card, 重新登录 with 在机器上手动登录 beside it (Profiles.kt SignIn)" {
+  let t = settings_tester("profile:ws1/st1#cc")
+  // one card for the account: its pill, then the button and the link beside it, no title over the card
+  let (_, pill_y) = t.find("可用").unwrap()
+  let (bx, by) = t.find("重新登录").unwrap()
+  let (mx, my) = t.find("在机器上手动登录").unwrap()
+  assert_true(by > pill_y)
+  assert_true((my - by).abs() < 2.0 && mx > bx)
+  assert_true(t.find("Claude 订阅") is None)
+  // the command to run by hand, under them once asked
+  t.tap_text("在机器上手动登录")
+  t.draw()
+  assert_true(t.find("claude setup-token") is Some(_))
+}
