@@ -142,6 +142,8 @@ pub(open) trait Host {
   st_show(Self, Int, Double) -> Unit = _
   st_close(Self, Int) -> Unit = _
   st_h264_here(Self) -> Int = _
+  st_feeds(Self) -> Int = _
+  st_codec(Self, Int, String, Bytes) -> Unit = _
   cl_read(Self) -> Int = _
   cl_state(Self, Int) -> Int = _
   cl_picture(Self, Int) -> Int = _
@@ -808,6 +810,16 @@ impl Host with st_show(_, _, _) {
 
 ///|
 impl Host with st_close(_, _) {
+  ()
+}
+
+///|
+impl Host with st_feeds(_) {
+  0
+}
+
+///|
+impl Host with st_codec(_, _, _, _) {
   ()
 }
 
@@ -1819,6 +1831,16 @@ fn st_close(id : Int) -> Unit {
 ///|
 fn st_h264_here() -> Int {
   current.val.st_h264_here()
+}
+
+///|
+fn st_feeds() -> Int {
+  current.val.st_feeds()
+}
+
+///|
+fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit {
+  current.val.st_codec(id, cmd, data)
 }
 
 ///|

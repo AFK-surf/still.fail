@@ -226,3 +226,50 @@ test "a run's tape replayed: its stream events taken at the frames they were tak
   assert_eq(s.size(), Some((64, 48)))
   s.close()
 }
+
+///|
+test "a host whose decoder is driven from here: told what to do, its words taken in their order, the frame shown" {
+  let v = screen()
+  v.t.set_stream_feeds(true)
+  v.s.h264(avcc, 640, 360)
+  v.s.frame(b"\x00\x00\x00\x01\x65", true, 100.0)
+  let id = v.s.id()
+  assert_eq(v.t.stream_fed(id), ["h264 640x360 avcc=21", "do start 1"])
+  v.t.stream_codec_said(id, "up 1")
+  v.t.stream_codec_said(id, "in 1 0")
+  v.t.draw()
+  v.t.stream_codec_said(id, "out 1 0 100 1")
+  v.t.draw()
+  assert_eq(v.acks, [])
+  v.t.stream_codec_said(id, "arr 1")
+  v.t.draw()
+  assert_eq(v.t.stream_fed(id)[2:].to_array(), [
+    "do queue 1 0 100 1 bytes=5", "do release 1 0 100", "do latch 100 1 640 360",
+  ])
+  v.t.draw()
+  assert_eq(v.acks, [100.0])
+  assert_eq(v.s.shown_at(), Some(100.0))
+}
+
+///|
+test "driven from here: a decoder that fails before its frame arrived, the frame's late arrival does not hold the stream" {
+  let v = screen()
+  v.t.set_stream_feeds(true)
+  v.s.h264(avcc, 640, 360)
+  v.s.frame(b"\x00\x00\x00\x01\x65", true, 100.0)
+  let id = v.s.id()
+  for e in ["up 1", "in 1 0", "out 1 0 100 1", "err 1", "arr 1", "up 2", "in 2 0"] {
+    v.t.stream_codec_said(id, e)
+  }
+  v.t.draw()
+  assert_eq(v.broke.val, 1)
+  v.s.frame(b"\x00\x00\x00\x01\x65", true, 200.0)
+  v.t.stream_codec_said(id, "out 2 0 200 1")
+  v.t.stream_codec_said(id, "arr 1")
+  v.t.draw()
+  v.t.draw()
+  assert_eq(v.acks, [100.0, 200.0])
+  assert_eq(v.s.shown_at(), Some(200.0))
+  let fed = v.t.stream_fed(id)
+  assert_eq(fed[fed.length() - 3:].to_array(), ["do drop 1", "do release 2 0 200", "do latch 200 1 640 360"])
+}

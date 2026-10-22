@@ -256,6 +256,7 @@ pub fn Tester::new(
     page_there: {},
     scripts_sent: [],
     h264,
+    stream_feeds: false,
     stream_ids: 0,
     streams_fed: {},
     stream_said: {},

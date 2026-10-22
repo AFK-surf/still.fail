@@ -6,8 +6,9 @@
 // sets the later ones again at their place (its fake host's: Tester::set_reduce_motion,
 // set_reduce_transparency, set_dark, set_window_inset), so a run is drawn again by the settings it was drawn by.
 //
-//   ENV {"motion":0|1,"glass":0|1,"dark":0|1,"inset":0|1,"h264":0|1,"ime":H,"copy":0|1}    motion reduced,
-//       transparency reduced (glass solid), dark, the window's inset, H.264 decoded (a tape without it: not), the soft
+//   ENV {"motion":0|1,"glass":0|1,"dark":0|1,"inset":0|1,"h264":0|1,"feed":0|1,"ime":H,"copy":0|1}    motion reduced,
+//       transparency reduced (glass solid), dark, the window's inset, H.264 decoded (a tape without it: not), its
+//       decoder driven from here (stream_feed.mbt; a tape without it: not), the soft
 //       keyboard's height (points; each step of its motion a line), the system saying a copy itself (device.mbt)
 
 ///|
@@ -26,6 +27,7 @@ fn env_at_frame() -> Unit {
     "dark": Json::number(if system_dark() { 1.0 } else { 0.0 }),
     "inset": Json::number(if window_inset() { 1.0 } else { 0.0 }),
     "h264": Json::number(if h_h264_here() { 1.0 } else { 0.0 }),
+    "feed": Json::number(if h_stream_feeds() { 1.0 } else { 0.0 }),
     "ime": Json::number(g().dev.ime_inset),
     "copy": Json::number(if copy_shown() { 1.0 } else { 0.0 }),
   }
@@ -53,6 +55,7 @@ fn replay_env(f : FakeHost, line : String) -> Unit {
   f.dark = on("dark", f.dark)
   f.inset = on("inset", f.inset)
   f.h264 = on("h264", f.h264)
+  f.stream_feeds = on("feed", f.stream_feeds)
   f.dev.copy_shown = on("copy", f.dev.copy_shown)
   match m.get("ime") {
     Some(Number(d, ..)) => f.dev.ime_inset = d
