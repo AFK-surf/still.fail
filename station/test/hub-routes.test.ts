@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { dirname, join, basename } from "node:path";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import type { Request } from "../src/api/request.ts";
@@ -219,6 +220,35 @@ test("a file in parts: each added where the file ends, asked again or out of pla
     assert.equal((await part(0, "x", 10, "../../etc"))[0], 400);
     assert.equal((await part(0, "x".repeat(11), 10, "pastsize12"))[0], 413);
     assert.equal((await r.ask("POST", "/uploads/parts", Buffer.from("x"), [["id", "noquery123"]]))[0], 400);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a file sent again is copied from where the station keeps it, and none of it comes again", async () => {
+  const r = rig();
+  try {
+    const sha = (text: string) => createHash("sha256").update(text).digest("hex");
+    const ask = (id: string, offset: number, body: string, extra: [string, string][] = []) =>
+      r.ask("POST", "/uploads/parts", Buffer.from(body), [["id", id], ["name", "shot.png"], ["size", "10"], ["offset", String(offset)], ...extra]);
+    // Not here yet: nothing, and it comes in parts as before.
+    assert.deepEqual(await ask("firstone12", 0, "", [["sha256", sha("0123456789")]]), [200, { have: 0 }]);
+    await ask("firstone12", 0, "01234");
+    const [, first] = await ask("firstone12", 5, "56789");
+    // Sent with a message: it moves into the chat's uploads, and is known there.
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    assert.equal((await r.ask("POST", `/threads/${made.thread.id}/messages`, { text: "a", attachments: [first.file] }))[0], 200);
+    assert.ok(!existsSync(first.file.path));
+    // Sent again: a copy of its own, at once.
+    const [status, again] = await ask("secondone1", 0, "", [["sha256", sha("0123456789")]]);
+    assert.equal(status, 200);
+    assert.equal(again.have, 10);
+    assert.notEqual(again.file.path, first.file.path);
+    assert.equal(readFileSync(again.file.path, "utf8"), "0123456789");
+    // Another content, or a size that is not its: not taken for it.
+    assert.deepEqual(await ask("thirdone12", 0, "", [["sha256", sha("x")]]), [200, { have: 0 }]);
+    assert.deepEqual(await r.ask("POST", "/uploads/parts", Buffer.alloc(0), [["id", "fourthone1"], ["name", "a"], ["size", "9"], ["offset", "0"], ["sha256", sha("0123456789")]]), [200, { have: 0 }]);
+    assert.equal((await ask("fifthone12", 0, "", [["sha256", "nothex"]]))[0], 400);
   } finally {
     await r.close();
   }

@@ -120,6 +120,15 @@ files go up in a composer of their own (a key no chat has), so a message sent
 before they are up names them in `uploads` and waits in the outbox, as the web's
 does. `composer.retry {key, id}` sends a failed one up again from what was kept.
 
+Before its first part a file is named by its content (SHA-256): by the app on a
+phone (`picked.hash`, up to 256 MB), else read here when it is at most 64 MB and
+the host has `crypto.subtle`. `POST /uploads/parts?…&offset=0&sha256=<hex>` with
+no bytes asks the station first: one that keeps that content already (an upload
+it took, where a message moved it since, unchanged) copies it and answers the
+file, and nothing more goes; otherwise it answers `{ have: 0 }` (as does a
+station from before this) and the parts go as before. The station knows what it
+was sent since it started, in memory.
+
 UI → core:
 
 ```jsonc

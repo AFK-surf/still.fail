@@ -20,8 +20,9 @@
 //     headers: [[name, value]]} + the body, or {end}; listen.respond {id, request, status, headers} + body;
 //     listen.close {id} — a login's loopback listener (docs/remote-login.md), answered by the app (Kotlin:
 //     Loopback.kt, where the app keeps itself running while it listens), not the shell
-//   picked.read {file, start, end} → bytes; picked.release {file} — a file picked in the app, read a part at a time as
-//     it goes up (`composer.add` with `blob: {hostFile, size, type}`), answered by the app (Kotlin: PickedFiles.kt)
+//   picked.read {file, start, end} → bytes; picked.hash {file} → {sha256}; picked.release {file} — a file picked in
+//     the app, read a part at a time as it goes up (`composer.add` with `blob: {hostFile, size, type}`) and named by
+//     its content first (a station that has it already copies its own), answered by the app (Kotlin: PickedFiles.kt)
 //   reset {} — the connections kept for requests are taken for gone
 //   iroh.bind {relayUrls, lookup, relayOnly, alpns: [hex]} + key → {id}; iroh.connect {id, addr, additional: [hex]} +
 //     alpn → {id}; iroh.accept {id} → {id, alpn: hex} (the next connection coming, its handshake done; {end} once the
@@ -417,7 +418,11 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
                 const got = a.bytes ?? new Uint8Array(0);
                 return (got.buffer as ArrayBuffer).slice(got.byteOffset, got.byteOffset + got.byteLength);
               })),
-              () => { Effect.runFork(Effect.ignore(bridge.call("picked.release", { file }))); });
+              () => { Effect.runFork(Effect.ignore(bridge.call("picked.release", { file }))); },
+              () => Effect.runPromise(Effect.orElseSucceed(Effect.map(bridge.call("picked.hash", { file }), (a) => {
+                const sha = (a.json as { sha256?: unknown } | null)?.sha256;
+                return typeof sha === "string" && /^[0-9a-f]{64}$/.test(sha) ? sha : null;
+              }), () => null)));
           }
           later((core) => core.receiveRaw(client, raw, bytes));
           return;

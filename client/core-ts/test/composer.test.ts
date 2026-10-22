@@ -72,6 +72,25 @@ test("a_failed_upload_goes_up_again_from_the_composer", async () => {
   t.core.close();
 });
 
+test("a_file_the_station_has_already_is_not_sent_again", async () => {
+  const t = await setup();
+  const asked: J[] = [];
+  let parts = 0;
+  const requests = t.core.inner.stations.requests as J;
+  requests.uploadName = Object.getPrototypeOf(requests).uploadName;
+  (t.core.inner.stations.requests as J).uploadHave = (_addr: unknown, q: J) => { asked.push(q); return Effect.succeed({ name: q.name, path: "/u/kept.png", size: q.size }); };
+  (t.core.inner.stations.requests as J).uploadPart = () => { parts++; return Effect.fail(new CoreError("upload", "not asked")); };
+  await t.watch(1, "ws/st:k");
+  call(t.core, t.ui, 101, "composer.add", { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "image.png", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])]) }] });
+  await t.settle();
+  assert.equal(v(t.values, 1).files[0].done.path, "/u/kept.png");
+  assert.equal(parts, 0);
+  // Named by its content, as the station names what it has.
+  assert.equal(asked[0].sha256, "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81");
+  assert.equal(asked[0].size, 3);
+  t.core.close();
+});
+
 test("desktop_files_reach_upload_and_release_on_success_or_removal_after_failure", async () => {
   const t = await setup();
   const received: number[][] = [];
@@ -107,6 +126,13 @@ test("desktop_files_reach_upload_and_release_on_success_or_removal_after_failure
 });
 
 async function setup() {
+  const t = await setupBare();
+  // No station here has a file before it goes up (one that has: its own test).
+  (t.core.inner.stations.requests as J).uploadName = () => Promise.resolve(null);
+  return t;
+}
+
+async function setupBare() {
   const s = await started();
   const ui = s.core.connect();
   let id = 100;

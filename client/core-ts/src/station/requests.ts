@@ -4,6 +4,7 @@ import { Effect, Scope } from "effect";
 import { Decompress } from "fzstd";
 import type { Inner } from "../core.ts";
 import { CoreError, HostError, asCoreError } from "../error.ts";
+import { FileSource } from "../file-source.ts";
 import type { Pull } from "../host.ts";
 import { current, t } from "../i18n.ts";
 import { encode } from "../ops.ts";
@@ -89,6 +90,11 @@ function isNoRoute(body: Uint8Array): boolean {
   const e = get(parseJson(body), "error");
   return typeof e === "string" && e.startsWith("no route ");
 }
+
+/// The most of a file read whole here to name its content (where its host does not name it: the web's, the desktop's),
+/// read a part at a time as it goes up.
+const NAMED_MAX = 64 * 1024 * 1024;
+const NAMED_PART = 4 * 1024 * 1024;
 
 export class Requests {
   readonly #core: Inner;
@@ -244,8 +250,8 @@ export class Requests {
   /// (the same key, the same offset). A station from before parts (it does not know the route) gets the file whole in
   /// one upload once all of it is here, as long as that takes it (UPLOAD_WHOLE_MAX). `wrote`: the part's bytes gone so
   /// far, as they go.
-  uploadPart(station: StationAddr, q: { id: string; name: string; size: number; offset: number }, bytes: Uint8Array, ctx: SpanContext | null, wrote?: (sent: number) => void): Effect.Effect<{ have: number; file?: unknown }, CoreError> {
-    const path = `/uploads/parts?id=${encode(q.id)}&name=${encode(q.name)}&size=${q.size}&offset=${q.offset}`;
+  uploadPart(station: StationAddr, q: { id: string; name: string; size: number; offset: number; sha256?: string }, bytes: Uint8Array, ctx: SpanContext | null, wrote?: (sent: number) => void): Effect.Effect<{ have: number; file?: unknown }, CoreError> {
+    const path = `/uploads/parts?id=${encode(q.id)}&name=${encode(q.name)}&size=${q.size}&offset=${q.offset}${q.sha256 ? `&sha256=${q.sha256}` : ""}`;
     return Effect.flatMap(this.exchange(station, "POST", path, [["content-type", "application/octet-stream"]], bytes, false, ctx, undefined, wrote), (r) => {
       const parsed = parseJson(r.body);
       const data = parsed === undefined ? {} : parsed;
@@ -255,6 +261,30 @@ export class Requests {
       const file = get(data, "file");
       return Effect.succeed({ have: typeof have === "number" ? have : q.offset + bytes.length, ...(file !== undefined ? { file } : {}) });
     });
+  }
+
+  /// A file's content named (SHA-256, hex) before it goes up, so a station that has it already (sent before) copies its
+  /// own and nothing goes: its host's name for it where it has one (a phone's), else read whole and named here when it is
+  /// small enough and this can (crypto.subtle: not in Hermes). Null when it cannot be, or failed.
+  async uploadName(blob: Blob | FileSource, size: number): Promise<string | null> {
+    try {
+      if (blob instanceof FileSource && blob.hash) return await blob.hash();
+      const subtle = (globalThis as { crypto?: { subtle?: SubtleCrypto } }).crypto?.subtle;
+      if (!subtle || size > NAMED_MAX) return null;
+      const parts = await Promise.all(Array.from({ length: Math.ceil(size / NAMED_PART) }, (_, i) => blob.slice(i * NAMED_PART, Math.min(size, (i + 1) * NAMED_PART)).arrayBuffer()));
+      const whole = new Uint8Array(size);
+      let at = 0;
+      for (const p of parts) { whole.set(new Uint8Array(p), at); at += p.byteLength; }
+      return hex(new Uint8Array(await subtle.digest("SHA-256", whole)));
+    } catch {
+      return null;
+    }
+  }
+
+  /// Before an upload's first part, what the file is (its content's SHA-256), with no bytes: a station that has it
+  /// already (sent before) copies its own and answers the file; one that does not, or one from before this, does not.
+  uploadHave(station: StationAddr, q: { id: string; name: string; size: number; sha256: string }, ctx: SpanContext | null): Effect.Effect<unknown | null, CoreError> {
+    return Effect.map(this.uploadPart(station, { ...q, offset: 0 }, new Uint8Array(0), ctx), (told) => told.file ?? null);
   }
 
   /// Parts kept here for a station from before parts, by station and id, until the file is whole.
