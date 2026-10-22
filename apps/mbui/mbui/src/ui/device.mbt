@@ -163,6 +163,8 @@ priv struct FakeDevice {
   mut copy_shown : Bool
   mut ime_inset : Double
   mut key_catch : Bool
+  /// the input method's action the app last said (@hostapi.ime_action)
+  mut ime_action : Int
   reads : Array[FakeClipRead]
   held : Array[Clipboard]
   /// the app's native calls (native.mbt), their answers given before a call (by its name), and the answers given by
@@ -182,6 +184,7 @@ fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
     copy_shown,
     ime_inset: 0.0,
     key_catch: false,
+    ime_action: 0,
     reads: [],
     held: [],
     natives: [],
@@ -434,6 +437,14 @@ let text_state = 5
 ///|
 /// The host's event saying the soft keyboard was put away by the person: the field lets go of the focus.
 let text_keyboard_gone = 7
+
+///|
+fn h_ime_action(kind : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.dev.ime_action = kind
+    None => @hostapi.ime_action(kind)
+  }
+}
 
 ///|
 fn h_key_catch(on : Bool) -> Unit {
@@ -711,4 +722,11 @@ fn catcher_text(c : Ctx, kind : Int, s : String, a : Int, b : Int) -> Bool {
     _ => ()
   }
   true
+}
+
+///|
+/// The input method's action the app last told its host (@hostapi.ime_action_*: a search field's, when one has the
+/// focus).
+pub fn Tester::ime_action(self : Tester) -> Int {
+  self.fake.dev.ime_action
 }

@@ -351,7 +351,8 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 }
 - (UIKeyboardType)keyboardType { return UIKeyboardTypeDefault; }
 - (UITextAutocorrectionType)autocorrectionType { return UITextAutocorrectionTypeNo; }
-- (UIReturnKeyType)returnKeyType { return UIReturnKeySend; }
+// a search field's (hostapi ime_action, apple_device.h) a search key, else Send
+- (UIReturnKeyType)returnKeyType { return ime_action_kind == 1 ? UIReturnKeySearch : UIReturnKeySend; }
 
 @end
 

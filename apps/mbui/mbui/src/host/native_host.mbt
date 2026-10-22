@@ -716,6 +716,11 @@ impl @hostapi.Host for Native with dv_haptic(_, kind) {
 }
 
 ///|
+impl @hostapi.Host for Native with dv_ime_action(_, kind) {
+  dv_ime_action(kind)
+}
+
+///|
 impl @hostapi.Host for Native with ncall_call(_, name, params) {
   ncall_call(name, params)
 }

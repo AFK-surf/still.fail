@@ -685,6 +685,8 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                   placeholder=tr("android-chat.search.field"),
                   font_size=16.0,
                   max_lines=1,
+                  // the keyboard's search key (Search.kt: ImeAction.Search)
+                  ime_action=@hostapi.ime_action_search,
                   plain=true,
                   color=t.p.text,
                   placeholder_color=t.p.muted,

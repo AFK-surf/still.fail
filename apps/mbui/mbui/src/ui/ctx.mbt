@@ -118,6 +118,8 @@ struct EditorState {
   mut limit : Int
   /// Enter sends (the words go to `submitted`); else it is a new line
   mut enter_sends : Bool
+  /// the input method's action key for it (@hostapi.ime_action_*: a search field's)
+  mut ime_action : Int
   /// its look, as the last frame said it: the line's height (0: the font's), the words', the placeholder's, the
   /// caret's and the selection's colours
   mut line : Double
@@ -345,6 +347,8 @@ pub struct Ctx {
   // the pieces of the shapes painted this frame (shape.mbt): x0 y0 x1 y1 each, as shares of their instance's rect
   segs : Array[Double]
   mut ime_sig : String
+  /// the input method's action last told the host (@hostapi.ime_action)
+  mut ime_action_told : Int
   // stats
   mut t_build : Double
   mut t_layout : Double
@@ -487,6 +491,7 @@ fn Ctx::new() -> Ctx {
     ninst: 0,
     segs: [],
     ime_sig: "",
+    ime_action_told: 0,
     t_build: 0.0,
     t_layout: 0.0,
     t_paint: 0.0,

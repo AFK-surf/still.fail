@@ -344,6 +344,7 @@ pub fn Ctx::editor(
   placeholder_color? : Int64 = 0x8E8E93FFL,
   caret_color? : Int64 = 0x0A84FFFFL,
   enter_sends? : Bool = true,
+  ime_action? : Int = 0,
   paste_limit? : Int = 0,
   secret? : Bool = false,
   words? : Bool = false,
@@ -371,6 +372,7 @@ pub fn Ctx::editor(
   }
   st.limit = paste_limit
   st.enter_sends = enter_sends
+  st.ime_action = ime_action
   st.secret = secret
   st.words = words
   st.look = look
@@ -616,6 +618,11 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
     Some(st) =>
       match st.tl {
         Some(tl) => {
+          // its input method's action said before the field takes it (the host starts the input method anew)
+          if st.ime_action != self.ime_action_told {
+            self.ime_action_told = st.ime_action
+            h_ime_action(st.ime_action)
+          }
           let coff = st.caret + st.marked.length()
           let (cx, cl) = tl.caret(coff)
           let x = st.ox + cx
@@ -663,6 +670,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     pasted: None,
     limit: 0,
     enter_sends: true,
+    ime_action: 0,
     line: 0.0,
     color: 0L,
     ph_color: 0L,
