@@ -1068,6 +1068,10 @@ fn bar_shadow(c : @ui.Ctx, w : Double, top : Double, bottom : Double) -> Unit {
 }
 
 ///|
+/// 令's ground: the accent at 86% (Bar.kt: accent.copy(alpha = 0.86f) over the page).
+let action_ink : Double = 0.86
+
+///|
 /// How far below the glass its shadow falls (Bar.kt: translate 4).
 let bar_shadow_y : Double = 4.0
 
@@ -1363,6 +1367,22 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     c.spacer()
     holder = c.box(w=Px(w), h=Px(panel), tx=22.0, ty=-foot, fn() {
       bar_shadow(c, w, clip_top, panel)
+      // under the glass, 令's own disc: the glass frosts it as it frosts the pages (Bar.kt: the action a haze source),
+      // its warmth round the notch, fading down from it; the disc itself under 令, as large and as grown
+      if k_now > 0.001 {
+        let under = at(
+          c,
+          w / 2.0 - drop / 2.0,
+          row_top - lift - drop / 2.0,
+          drop,
+          drop,
+          radius=drop / 2.0,
+          bg=@sf.over(t.p.bg, @sf.alpha(t.p.accent, action_ink)),
+        )
+        if k_now < 1.0 {
+          c.look(under, @ui.look(alpha=dmin(1.0, k_now * 3.0), scale=dmax(0.001, k_now), dy=lift * (1.0 - k_now)))
+        }
+      }
       bar_glass(c, w, clip_top, panel, notch_y, notch_r)
       // the glass takes the gestures (its places' taps are read where they land)
       at(c, 0.0, clip_top, w, panel - clip_top, body=fn() {

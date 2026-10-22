@@ -237,7 +237,8 @@ fn pick_row(
           Some(w) =>
             c.box(w=Px(24.0), h=Px(24.0), align=ACenter, justify=JCenter, fn() {
               if @sf.has_station_mark(w.emoji, w.icon) {
-                @sf.station_mark(c, w.emoji, w.icon, 22.0, t.p.text)
+                // a GIF moving only for the workspace in use (Workspaces.kt: still for the others)
+                @sf.station_mark(c, w.emoji, w.icon, 22.0, t.p.text, still=!checked)
               } else {
                 c.text(initial(w.name), size=15.0, weight=600, color=t.p.muted, wrap=false)
                 |> ignore

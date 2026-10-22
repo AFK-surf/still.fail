@@ -461,6 +461,12 @@ pub fn glyph_color(name : String, dark : Bool) -> Int64? {
 }
 
 ///|
+/// A picture put up by its address as an image's key once it is here ("" until then): the app's (its core's
+/// `picture`), said as it starts; until then the address itself, which the host loads.
+// kept across runs: the app says it as its view is built, the same function every run
+pub let picture_of : Ref[(String) -> String] = Ref(fn(url) { url })
+
+///|
 /// Whether a station has anything to be shown by (`station_mark` draws
 /// nothing for it otherwise).
 pub fn has_station_mark(emoji : String, icon : String) -> Bool {
@@ -478,6 +484,7 @@ pub fn station_mark(
   size : Double,
   tint : Int64,
   none? : String,
+  still? : Bool = false,
 ) -> Unit {
   if icon.has_prefix("glyph:") {
     let rest = icon.view(start_offset=6).to_owned()
@@ -526,11 +533,14 @@ pub fn station_mark(
       None => ()
     }
   }
-  // a picture still.fail cloud keeps (cloud/src/icons.ts), by its address
+  // a picture still.fail cloud keeps (cloud/src/icons.ts), by its address: its bytes the core's (`picture`, as
+  // Parts.kt rememberStationPicture), so a GIF among them moves (mbui's gif.mbt); its emoji (below) while it comes
   if icon.has_prefix("https://") || icon.has_prefix("http://") {
-    c.image(icon, w=Px(size), h=Px(size), fit=FitCover, radius=size * 0.24, bg=0L)
-    |> ignore
-    return
+    let key = (picture_of.val)(icon)
+    if key != "" {
+      c.image(key, w=Px(size), h=Px(size), fit=FitCover, radius=size * 0.24, bg=0L, still~) |> ignore
+      return
+    }
   }
   if icon.has_prefix("data:image/") {
     match icon.find("base64,") {
@@ -540,7 +550,7 @@ pub fn station_mark(
           made[key] = true
           @ui.add_image(key, base64(icon.view(start_offset=i + 7).to_owned()))
         }
-        c.image(key, w=Px(size), h=Px(size), radius=size * 0.24, bg=0L) |> ignore
+        c.image(key, w=Px(size), h=Px(size), radius=size * 0.24, bg=0L, still~) |> ignore
         return
       }
       None => ()
