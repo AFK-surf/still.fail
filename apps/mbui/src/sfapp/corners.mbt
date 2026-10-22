@@ -289,6 +289,8 @@ fn recent_panel(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
       c.box(style=recent_all, id~, fn() {
         c.text(tr("android-misc.wide.all"), style=recent_all_words) |> ignore
         @sf.icon(c, "chevron-right", size=16.0, color=@sf.theme().p.accent_text) |> ignore
+        // Wide.kt Recent: 全部 clickable over its clip, Smooth(concentric(PANEL_PAD + 16, PANEL_PAD))
+        @motion.ripple(c, id, 22.0 - 6.0 / @sf.smooth_scale)
       })
       |> ignore
     })
@@ -362,7 +364,6 @@ let recent_all : @ui.Style = @ui.style(
   pb=S1_5,
   radius=Inner,
   align=ACenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -419,6 +420,8 @@ fn stations_button(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   let node = c.box(style=stations_box, id~, fn() {
     @sf.station_glyph(c, glyph, 24.0, t.p.text, t.p.red) |> ignore
+    // Home.kt: the stations' button clickable over its circle
+    @motion.ripple(c, id, 17.0)
   })
   c.semantics(node, Button, id~, label=said)
 }
@@ -431,5 +434,4 @@ let stations_box : @ui.Style = @ui.style(
   radius=Full,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O10)),
 )

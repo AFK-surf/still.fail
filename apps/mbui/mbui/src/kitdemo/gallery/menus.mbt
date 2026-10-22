@@ -24,7 +24,7 @@ fn menus(c : @ui.Ctx) -> Unit {
   section(c, "Dropdown menu", fn() {
     c.box(dir=Row, gap=12.0, align=AStart, fn() {
       @kit.menu_look(c, 200.0, fn() {
-        let row = fn(e : @kit.Entry, lit : Bool, open : Bool) { @kit.menu_item_look(c, { entry: e, lit, open, hot: lit }) }
+        let row = fn(e : @kit.Entry, lit : Bool, open : Bool) { @kit.menu_item_look(c, { entry: e, lit, open, hot: lit, id: 0 }) }
         row(@kit.menu_label("File"), false, false)
         row(@kit.menu_item("new", label="New tab", shortcut="⌘T"), true, false)
         row(@kit.menu_item("private", label="Private window", disabled=true), false, false)

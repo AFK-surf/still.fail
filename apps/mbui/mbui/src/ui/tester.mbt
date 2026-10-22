@@ -1284,6 +1284,27 @@ pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Doub
 }
 
 ///|
+/// The shadows drawn in the last frame (a blurred shape, kind 2): (x, y, w, h, its corner, its blur, colour
+/// RRGGBBAA with its opacity applied).
+pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Double, Double, Double, Int64)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 2.0 {
+      let ch = fn(v : Double) { (v * 255.0).round().to_int64() }
+      let color = (ch(c.inst[b + 8]) << 24) |
+        (ch(c.inst[b + 9]) << 16) |
+        (ch(c.inst[b + 10]) << 8) |
+        ch(c.inst[b + 11])
+      out.push((c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3], c.inst[b + 4], c.inst[b + 7], color))
+    }
+  }
+  out
+}
+
+///|
 /// The glyphs drawn in the last frame: (x, y, colour).
 pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
   ignore(self)

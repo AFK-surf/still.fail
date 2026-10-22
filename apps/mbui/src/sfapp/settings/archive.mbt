@@ -185,7 +185,6 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
     pr=10.0,
     pt=6.0,
     pb=6.0,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L },
     id~,
     fn() {
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=10.0, align=ACenter, fn() {
@@ -248,6 +247,8 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
         c.text(text(v, "last"), size=14.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=20.0) |> ignore
       })
       |> ignore
+      // Archive.kt Row: clickable over the whole row
+      @motion.ripple(c, id, 0.0)
     },
   )
   |> ignore
@@ -267,9 +268,12 @@ fn round_action(c : @ui.Ctx, key : String, icon : String, label? : String = "") 
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
     id~,
-    fn() { @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore
+      // Archive.kt Action: clip(CircleShape).clickable
+      @motion.ripple(c, id, 17.0)
+    },
   )
   // what it says to a screen reader (Archive.kt Action: its contentDescription)
   c.semantics(b, Button, id~, label~)

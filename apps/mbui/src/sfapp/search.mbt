@@ -473,7 +473,6 @@ let search_more_row : @ui.Style = @ui.style(
   pr=S4,
   pt=S2_5,
   pb=S2_5,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -492,7 +491,6 @@ let search_back_row : @ui.Style = @ui.style(
   pb=S1,
   gap=S1,
   align=ACenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -527,7 +525,6 @@ let found_hit_row : @ui.Style = @ui.style(
   pl=@sf.found_start,
   pr=S4,
   justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -541,7 +538,6 @@ let found_item_row : @ui.Style = @ui.style(
   pr=S4,
   gap=S3,
   align=ACenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -751,6 +747,8 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
       c.box(style=search_back_row, id~, fn() {
         @sf.icon(c, "chevron-left", size=16.0, color=t.p.accent) |> ignore
         c.text(tr("android-chat.search.all"), style=search_link_words) |> ignore
+        // Search.kt BackRow: the row clickable
+        @motion.ripple(c, id, 0.0)
       })
       |> ignore
     }
@@ -797,6 +795,8 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
       }
       c.box(style=search_more_row, id~, fn() {
         c.text(tr("android-chat.search.more"), style=search_link_words) |> ignore
+        // Search.kt MoreRow: the row clickable
+        @motion.ripple(c, id, 0.0)
       })
       |> ignore
     }
@@ -847,6 +847,8 @@ fn hit_row(
       }
     })
     |> ignore
+    // Search.kt HitRow: the row clickable
+    @motion.ripple(c, id, 0.0)
   })
   |> ignore
   c.clicked(id)
@@ -909,6 +911,8 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
       }
     })
     |> ignore
+    // Search.kt ItemRow: the row clickable
+    @motion.ripple(c, id, 0.0)
   })
   |> ignore
   c.clicked(id)

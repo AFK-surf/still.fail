@@ -1695,9 +1695,12 @@ fn bar_frame(
       radius=20.0,
       align=ACenter,
       justify=JCenter,
-      bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, back)),
       id=back,
-      fn() { @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore },
+      fn() {
+        @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
+        // Chat.kt: back, clip(CircleShape).clickable
+        @motion.ripple(c, back, 20.0)
+      },
     )
     |> ignore
     c.box(dir=Row, w=Fill(1.0), pr=8.0, gap=8.0, align=ACenter, fn() {

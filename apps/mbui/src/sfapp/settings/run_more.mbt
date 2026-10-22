@@ -284,7 +284,7 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
     open_machine_sessions(core, station, name)
   }
   c.box(pt=8.0, fn() {
-    c.box(dir=Row, padx=10.0, pady=6.0, gap=6.0, radius=10.0, align=ACenter, bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L }, id~, fn() {
+    c.box(dir=Row, padx=10.0, pady=6.0, gap=6.0, radius=10.0, align=ACenter, id~, fn() {
       @sf.icon(c, "monitor", size=14.0, color=t.p.muted) |> ignore
       c.text(
         fill("android-chat.new.machine.offer", [("station", if name == "" { tr("android-chat.new.machine.here") } else { name })]),
@@ -293,6 +293,7 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
         wrap=false,
       )
       |> ignore
+      @motion.ripple(c, id, 10.0)
     })
     |> ignore
   })
@@ -319,7 +320,7 @@ pub fn open_machine_sessions(_core : Core, station : String, name : String) -> U
             if hit(c, id) {
               look_at_machine_session(core, station, name, s)
             }
-            c.box(dir=Row, w=Fill(1.0), padx=20.0, pady=10.0, gap=12.0, align=ACenter, bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L }, id~, fn() {
+            c.box(dir=Row, w=Fill(1.0), padx=20.0, pady=10.0, gap=12.0, align=ACenter, id~, fn() {
               @sf.maker_mark(c, "", text(sv, "runtime"), 18.0) |> ignore
               c.box(w=Fill(1.0), fn() {
                 c.text(first_text(sv, ["title", "first"], ""), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
@@ -329,6 +330,7 @@ pub fn open_machine_sessions(_core : Core, station : String, name : String) -> U
               if has(sv, "session") {
                 c.text(fill("android-chat.new.machine.inApp", [("app", "still.fail")]), size=12.0, color=t.p.muted, wrap=false) |> ignore
               }
+              @motion.ripple(c, id, 0.0)
             })
             |> ignore
           }

@@ -114,6 +114,8 @@ test "the player: the speed steps through 1× 1.25× 1.5× 2× 0.5× 0.75×; bac
   t.tap(26.0, y)
   assert_eq(backs.length(), 1)
   ignore(opened)
+  // the keys' ripples gone (their way in, then out)
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 

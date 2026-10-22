@@ -1049,13 +1049,16 @@ fn bar_icon(c : @ui.Ctx, key : String, icon : String, enabled : Bool) -> Bool {
     radius=14.0,
     align=ACenter,
     justify=JCenter,
-    bg=if enabled { @sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)) } else { 0L },
     id=if enabled { id } else { 0 },
     fn() {
       c.box(opacity=if enabled { 1.0 } else { 0.35 }, fn() {
         @sf.icon(c, icon, size=14.0, color=t.p.text) |> ignore
       })
       |> ignore
+      // Preview.kt BarIcon: clip(CircleShape).clickable
+      if enabled {
+        @motion.ripple(c, id, 14.0)
+      }
     },
   )
   |> ignore
@@ -1609,7 +1612,6 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
         padx=10.0,
         gap=10.0,
         align=ACenter,
-        bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
         id~,
         fn() {
           c.box(w=Px(18.0), align=ACenter, fn() {
@@ -1623,6 +1625,8 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
           })
           |> ignore
           c.text(note, size=13.0, color=t.p.muted, wrap=false) |> ignore
+          // the row clickable over its clip
+          @motion.ripple(c, id, 12.0)
         },
       )
       |> ignore

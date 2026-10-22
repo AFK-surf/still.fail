@@ -750,9 +750,12 @@ fn reader_icon(c : @ui.Ctx, key : String, icon : String, p : PaperInk, said~ : S
     radius=20.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(p.ink, 0.08) } else { 0L },
     id~,
-    fn() { @sf.icon(c, icon, size=20.0, color=p.ink) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=20.0, color=p.ink) |> ignore
+      // Reader.kt BarIcon: clip(CircleShape).clickable
+      @motion.ripple(c, id, 20.0)
+    },
   )
   // named `said` (Reader.kt BarIcon's contentDescription)
   c.semantics(b, Button, id~, label=said)
@@ -1018,11 +1021,15 @@ fn reader_text_key(c : @ui.Ctx, key : String, label : String, p : PaperInk, on :
     pady=6.0,
     // (上一章 and 下一章 stand in the bar's top corners: as far from both edges, concentric with it)
     radius=@ui.concentric(reader_bar_radius, reader_bar_inset),
-    bg=@sf.alpha(p.ink, if on && c.pressed(id) { 0.12 } else if on { 0.07 } else { 0.04 }),
+    bg=@sf.alpha(p.ink, if on { 0.07 } else { 0.04 }),
     id=if on { id } else { 0 },
     fn() {
       c.text(label, size=13.0, color=if on { p.ink } else { @sf.alpha(p.ink, 0.3) }, wrap=false)
       |> ignore
+      // Reader.kt: clip(Smooth(concentric(BAR_CORNER, BAR_PAD))).clickable
+      if on {
+        @motion.ripple(c, id, @ui.concentric(reader_bar_radius, reader_bar_inset))
+      }
     },
   )
   |> ignore
@@ -1039,11 +1046,12 @@ fn reader_tool(c : @ui.Ctx, key : String, icon : String, label : String, p : Pap
     gap=2.0,
     radius=12.0,
     align=ACenter,
-    bg=if c.pressed(id) { @sf.alpha(p.ink, 0.07) } else { 0L },
     id~,
     fn() {
       @sf.icon(c, icon, size=20.0, color=p.ink) |> ignore
       c.text(label, size=11.0, color=p.muted, wrap=false) |> ignore
+      // Reader.kt: a tool, clip(Smooth(concentric(BAR_CORNER, BAR_PAD))).clickable
+      @motion.ripple(c, id, @ui.concentric(reader_bar_radius, reader_bar_inset))
     },
   )
   |> ignore
@@ -1177,11 +1185,12 @@ fn reader_panels(
               w=Fill(1.0),
               padx=20.0,
               pady=10.0,
-              bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
               id~,
               fn() {
                 c.rich(reader_snippet(novel.chunks[m.chunk], m, t.p.accent), size=15.0, color=t.p.text, line=22.0, w=Fill(1.0))
                 |> ignore
+                // Reader.kt: a hit's row, clip(Smooth(LIST_ROW_CORNER)).clickable
+                @motion.ripple(c, id, @sf.row_corner)
               },
             )
             |> ignore
@@ -1316,12 +1325,16 @@ fn reader_step_key(c : @ui.Ctx, key : String, icon : String, on : Bool, said~ : 
     w=Px(40.0),
     h=Px(40.0),
     radius=20.0,
-    bg=@sf.alpha(t.p.text, if on && c.pressed(id) { 0.12 } else { 0.07 }),
+    bg=@sf.alpha(t.p.text, 0.07),
     align=ACenter,
     justify=JCenter,
     id=if on { id } else { 0 },
     fn() {
       @sf.icon(c, icon, size=18.0, color=if on { t.p.text } else { t.p.subtle }) |> ignore
+      // Reader.kt: clip(CircleShape).clickable
+      if on {
+        @motion.ripple(c, id, 20.0)
+      }
     },
   )
   // named `said` (Reader.kt StepKey's contentDescription), off at its end

@@ -376,9 +376,9 @@ let relay_chip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap
 let relay_chip_words_on : @ui.TextStyle = relay_chip_words.then(@ui.text_style(color=Bg))
 
 ///|
-/// 显示全部: in the link's ink, 8 by 6 in, its corner 8, faded while pressed.
+/// 显示全部: in the link's ink, 8 by 6 in, its corner 8, rippled where it is pressed.
 // kept across runs: a value (no field of it changes)
-let relay_show_all : @ui.Style = @ui.style(px=S2, py=S1_5, radius=Lg, pressed=@ui.patch(opacity=O60))
+let relay_show_all : @ui.Style = @ui.style(px=S2, py=S1_5, radius=Lg)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -401,7 +401,7 @@ let relay_field_box : @ui.Style = @ui.style(w=Full, px=S3_5, py=S3, radius=Xl, b
 
 ///|
 /// A place's row (PlaceRow): 40 high at least, 10 by 8 in, its parts 8 apart, its corner the scale's nearest to
-/// Smooth(10.dp) (12); picked, on the accent's ground; pressed, the ink's at 6%.
+/// Smooth(10.dp) (12); picked, on the accent's ground; rippled where it is pressed (clip(Smooth(10)).clickable).
 // kept across runs: a value (no field of it changes)
 let relay_place : @ui.Style = @ui.style(
   row=true,
@@ -412,7 +412,6 @@ let relay_place : @ui.Style = @ui.style(
   gap=S2,
   radius=Xl,
   align=ACenter,
-  pressed=@ui.patch(bg=Tint),
 )
 
 ///|
@@ -491,6 +490,8 @@ fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : Re
         }
         c.box(style=relay_show_all, id~, fn() {
           c.text(fill("web-main.relay.showAll", [("count", n.to_string())]), style=relay_show_all_words) |> ignore
+          // Relay.kt: clip(Smooth(8)).clickable
+          @motion.ripple(c, id, 8.0)
         })
         |> ignore
       }
@@ -555,6 +556,8 @@ fn relay_scope_chip(c : @ui.Ctx, key : String, kind : String?, label : String, o
       None => ()
     }
     c.text(label, style=if on { relay_chip_words_on } else { relay_chip_words }) |> ignore
+    // Relay.kt ScopeChip: clip(Smooth(13)).clickable
+    @motion.ripple(c, id, 13.0)
   })
   |> ignore
   c.clicked(id)
@@ -596,6 +599,8 @@ fn relay_place_row(
       Some(n) => c.text(n, style=aside) |> ignore
       None => ()
     }
+    // Relay.kt PlaceRow: clip(Smooth(10)).clickable
+    @motion.ripple(c, id, 10.0)
   })
   |> ignore
   c.clicked(id)

@@ -438,7 +438,6 @@ let ref_menu_row : @ui.Style = @ui.style(
   gap=S2_5,
   align=ACenter,
   radius=Inner,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -555,6 +554,8 @@ fn chat_ref_menu(c : @ui.Ctx, src : Source, d : Draft, station : String, here : 
                 if item.ago != "" {
                   c.text(item.ago, style=ref_menu_ago) |> ignore
                 }
+                // Composer.kt ChatRefMenu: clip(Smooth(concentric(ComposerCorner, 12))).clickable
+                @motion.ripple(c, id, composer_corner - 12.0 / @sf.smooth_scale)
               })
               |> ignore
             }

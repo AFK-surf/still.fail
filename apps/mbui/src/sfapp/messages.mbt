@@ -1362,14 +1362,6 @@ fn decision_options(
           align=AStart,
           radius=18.0,
           opacity=if enabled || chosen == Some(o.label) { 1.0 } else { 0.5 },
-          bg={
-            let p = if free { @motion.pressing(c, id) } else { 0.0 }
-            if p > 0.0 {
-              @sf.alpha(t.p.text, 0.08 * p)
-            } else {
-              0L
-            }
-          },
           id~,
           fn() {
             c.box(
@@ -1399,6 +1391,10 @@ fn decision_options(
             if busy == Some(o.label) {
               c.box(h=Px(21.0), justify=JCenter, fn() { @sf.spinner(c, size=12.0) |> ignore })
               |> ignore
+            }
+            // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
+            if free {
+              @motion.ripple(c, id, 18.0, ink=@sf.alpha(t.p.text, 0.1))
             }
           },
         )
@@ -1686,7 +1682,6 @@ fn unsent_button(
     radius=7.0,
     align=ACenter,
     opacity=if enabled { 1.0 } else { 0.5 },
-    bg=if enabled { @sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)) } else { 0L },
     id~,
     fn() {
       if busy {
@@ -1695,6 +1690,10 @@ fn unsent_button(
         @sf.icon(c, icon, size=12.0, color=k.muted) |> ignore
       }
       c.text(label, size=13.0, color=k.muted, wrap=false) |> ignore
+      // Chat.kt: clip(Smooth(7)).clickable (not while busy)
+      if enabled && !busy {
+        @motion.ripple(c, id, 7.0)
+      }
     },
   )
   |> ignore

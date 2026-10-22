@@ -476,6 +476,8 @@ fn page_mark_key(c : @ui.Ctx, on : Bool) -> Bool {
   let id = c.id("service/mark")
   c.box(style=if on { mark_key_on } else { mark_key }, id~, fn() {
     @sf.icon(c, "edit", size=bar_icon_size, color=if on { t.p.accent_text } else { t.p.text }) |> ignore
+    // Preview.kt BarKey: clip(CircleShape).clickable
+    @motion.ripple(c, id, 14.0)
   })
   |> ignore
   c.clicked(id)
@@ -487,7 +489,7 @@ let bar_icon_size : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_key : @ui.Style = @ui.style(w=S7, h=S7, radius=Full, align=ACenter, justify=JCenter, pressed=@ui.patch(bg=Hover))
+let mark_key : @ui.Style = @ui.style(w=S7, h=S7, radius=Full, align=ACenter, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)

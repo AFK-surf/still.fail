@@ -959,7 +959,6 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?, bare? 
           pady=11.0,
           gap=12.0,
           align=ACenter,
-          bg=if c.pressed(mid) { @sf.alpha(t.p.text, 0.05) } else { 0L },
           id=mid,
           fn() {
             c.box(w=Px(20.0), h=Px(20.0), radius=6.0, bg=if ticked { t.p.accent } else { t.p.chip }, align=ACenter, justify=JCenter, fn() {
@@ -974,6 +973,8 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?, bare? 
             if pending.contains(m) {
               spinner(c, inline=true)
             }
+            // Profiles.kt ModelsSection: the row clickable
+            @motion.ripple(c, mid, 0.0)
           },
         )
         |> ignore

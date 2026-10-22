@@ -295,10 +295,10 @@ fn band_filter(c : @ui.Ctx, key : String, options : Array[String], selected : In
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
     id~,
     fn() {
       @sf.icon(c, "filter", size=20.0, color=if selected != 0 { t.p.accent } else { t.p.text }) |> ignore
+      @motion.ripple(c, id, 17.0)
     },
   )
   |> ignore
@@ -332,7 +332,6 @@ fn menu_overlay(c : @ui.Ctx) -> Unit {
           align=ACenter,
           justify=JBetween,
           radius=menu_row,
-          bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
           id~,
           fn() {
             c.text(label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
@@ -341,6 +340,8 @@ fn menu_overlay(c : @ui.Ctx) -> Unit {
             } else {
               c.box(w=Px(16.0), h=Px(16.0), fn() {  }) |> ignore
             }
+            // Sheet.kt MenuHost: clip(Smooth(MENU_ROW)).clickable
+            @motion.ripple(c, id, menu_row)
           },
         )
         |> ignore

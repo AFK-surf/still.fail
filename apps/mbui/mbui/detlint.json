@@ -152,6 +152,7 @@
       "src/kitdemo/gallery/menus.mbt": 11,
       "src/kitdemo/gallery/overlays.mbt": 16,
       "src/motion/layer.mbt": 2,
+      "src/motion/ripple.mbt": 2,
       "src/textdiff/main.mbt": 4,
       "src/ui/code_field.mbt": 5,
       "src/ui/ctx.mbt": 3,

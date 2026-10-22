@@ -289,13 +289,17 @@ fn dv_button(
     padx=16.0,
     gap=8.0,
     align=ACenter,
-    bg=if on && c.pressed(id) { @sf.mix(ground, 0.85, t.p.bg) } else { ground },
+    bg=ground,
     id=if on { id } else { 0 },
     fn() {
       if busy {
         @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
       }
       c.text(label, size=14.0, weight=600, color=ink, wrap=false) |> ignore
+      // Controls.kt Button: clickable over its capsule
+      if on {
+        @motion.ripple(c, id, 19.0)
+      }
     },
   )
   |> ignore
@@ -329,7 +333,6 @@ fn dv_pick_row(
       pady=12.0,
       gap=12.0,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id~,
       fn() {
         if icon != "" {
@@ -351,6 +354,8 @@ fn dv_pick_row(
         if checked {
           @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
         }
+        // Controls.kt PickRow: clip(Smooth(LIST_ROW_CORNER)).clickable
+        @motion.ripple(c, id, @sf.row_corner)
       },
     )
     |> ignore
@@ -462,20 +467,21 @@ fn dv_card_row(
           |> ignore
         }
       }
-      if id != 0 && c.pressed(id) {
-        c.layer(fn() {
-          c.box(
-            w=Fill(1.0),
-            h=Fill(1.0),
-            radius=if first && last { 16.0 } else { 0.0 },
-            bg=@sf.alpha(t.p.text, 0.05),
-            fn() {  },
+      c.box(w=Fill(1.0), id~, fn() {
+        body()
+        // DriveScreen.kt cardRow: clickable inside the card's padding (LIST_PAD), clip(Smooth(LIST_ROW_CORNER))
+        if id != 0 {
+          @motion.ripple(
+            c,
+            id,
+            @sf.row_corner,
+            out_x=-@sf.list_pad,
+            out_top=if first { -@sf.list_pad } else { 0.0 },
+            out_bottom=if last { -@sf.list_pad } else { 0.0 },
           )
-          |> ignore
-        })
-        |> ignore
-      }
-      c.box(w=Fill(1.0), id~, body) |> ignore
+        }
+      })
+      |> ignore
     })
     |> ignore
   })

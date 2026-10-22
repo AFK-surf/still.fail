@@ -789,6 +789,10 @@ fn Player::controls(
         id=if on { sid } else { 0 },
         fn() {
           c.text(speed_label(p.speed), size=12.0, weight=600, color=ink, wrap=false) |> ignore
+          // Player.kt SpeedKey: clickable over its clip
+          if on {
+            @motion.ripple(c, sid, if speed_last { @ui.concentric(bar_radius, speed_inset) } else { speed_corner })
+          }
         },
       )
       c.semantics(speed_key, Button, id=sid, label=word("android-misc.drive.player.speed"), disabled=!on)
@@ -942,20 +946,21 @@ let speed_corner : Double = 10.0
 /// on. True on the frame it was tapped; `on` false, it takes no tap (what is under it does).
 fn key_button(c : @ui.Ctx, key : String, icon : String, on : Bool, lit? : Bool = false, said~ : String) -> Bool {
   let id = c.id(key)
-  let pressing = if on { @motion.pressing(c, id) } else { 0.0 }
   let b = c.box(
     w=Px(key_size),
     h=Px(key_size),
     radius=key_size / 2.0,
     align=ACenter,
     justify=JCenter,
-    bg=if lit {
-      0xFFFFFF24L
-    } else {
-      @sf.alpha(0xFFFFFFFFL, 0.12 * pressing)
-    },
+    bg=if lit { 0xFFFFFF24L } else { 0L },
     id=if on { id } else { 0 },
-    fn() { @sf.icon(c, icon, size=20.0, color=ink) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=20.0, color=ink) |> ignore
+      // Player.kt Key: clip(CircleShape).clickable
+      if on {
+        @motion.ripple(c, id, key_size / 2.0)
+      }
+    },
   )
   // named `said` (Player.kt Key's contentDescription), pressed while `lit`
   c.semantics(b, Button, id~, label=said, disabled=!on, pressed=lit)
@@ -969,12 +974,16 @@ fn chip(c : @ui.Ctx, key : String, label : String) -> Bool {
   c.box(
     max_w=280.0,
     radius=12.0,
-    bg=@sf.alpha(0xFFFFFFFFL, 0.14 + 0.08 * @motion.pressing(c, id)),
+    bg=@sf.alpha(0xFFFFFFFFL, 0.14),
     padx=16.0,
     pady=9.0,
     clip=true,
     id~,
-    fn() { c.text(label, size=14.0, color=ink, wrap=false) |> ignore },
+    fn() {
+      c.text(label, size=14.0, color=ink, wrap=false) |> ignore
+      // Player.kt Chip: clip(Smooth(12)).clickable
+      @motion.ripple(c, id, 12.0)
+    },
   )
   |> ignore
   c.clicked(id)

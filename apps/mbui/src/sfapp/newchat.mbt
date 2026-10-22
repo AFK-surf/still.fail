@@ -478,11 +478,7 @@ fn chooser(
     gap=6.0,
     align=ACenter,
     radius=15.0,
-    glass=if c.pressed(id) {
-      @sf.glass_floating(tint=@sf.over(t.p.raised, @sf.alpha(t.p.text, 0.08)))
-    } else {
-      @sf.glass_floating()
-    },
+    glass=@sf.glass_floating(),
     shadow=@sf.floating.sigma,
     shadow_color=@sf.floating.color,
     shadow_y=@sf.floating.dy,
@@ -497,6 +493,8 @@ fn chooser(
       if chevron {
         @sf.icon(c, "chevron-down", size=12.0, color=t.p.muted) |> ignore
       }
+      // NewChat.kt: floating(Smooth(15)).clickable
+      @motion.ripple(c, id, 15.0)
     },
   )
   |> ignore
@@ -748,7 +746,6 @@ fn pick_station_sheet(c : @ui.Ctx, src : Source, ws : String) -> Unit {
           pady=12.0,
           gap=12.0,
           align=ACenter,
-          bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
           id~,
           fn() {
             station_or_server(c, text(st, "emoji"), text(st, "icon"), 22.0, t.p.text)
@@ -762,6 +759,8 @@ fn pick_station_sheet(c : @ui.Ctx, src : Source, ws : String) -> Unit {
             if text(st, "station") == current {
               @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
             }
+            // NewChat.kt: clip(Smooth(LIST_ROW_CORNER)).clickable
+            @motion.ripple(c, id, @sf.row_corner)
           },
         )
         |> ignore
@@ -805,13 +804,7 @@ fn cascade_option(
     gap=10.0,
     align=ACenter,
     radius=10.0,
-    bg=if checked {
-      t.p.accent_bg
-    } else if c.pressed(id) {
-      @sf.alpha(t.p.text, 0.06)
-    } else {
-      0L
-    },
+    bg=if checked { t.p.accent_bg } else { 0L },
     id~,
     fn() {
       match lead {
@@ -842,6 +835,8 @@ fn cascade_option(
       if checked {
         @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
       }
+      // NewChat.kt: the cascade's row, clip(Smooth(concentric(CASCADE_CORNER, CASCADE_PAD))).clickable
+      @motion.ripple(c, id, 14.0 - 4.0 / @sf.smooth_scale)
     },
   )
   |> ignore
@@ -1084,7 +1079,6 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
       gap=4.0,
       radius=12.0,
       align=ACenter,
-      bg=if c.pressed(who) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id=who,
       fn() {
         c.text(tr("android-chat.new.account"), size=14.0, color=t.p.muted, wrap=false) |> ignore
@@ -1099,6 +1093,8 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
         })
         |> ignore
         @sf.icon(c, "chevron-right", size=14.0, color=t.p.muted) |> ignore
+        // NewChat.kt: clip(Smooth(12)).clickable
+        @motion.ripple(c, who, 12.0)
       },
     )
     |> ignore

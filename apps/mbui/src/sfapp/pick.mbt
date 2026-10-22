@@ -229,13 +229,14 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       gap=5.0,
       radius=16.0,
       align=ACenter,
-      bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)),
       id~,
       fn() {
         if icon != "" {
           @sf.icon(c, icon, size=15.0, color=t.p.text) |> ignore
         }
         c.text(label, size=14.0, color=t.p.text, wrap=false) |> ignore
+        // MessagePick.kt: clip(Smooth(16)).clickable
+        @motion.ripple(c, id, 16.0)
       },
     )
     |> ignore

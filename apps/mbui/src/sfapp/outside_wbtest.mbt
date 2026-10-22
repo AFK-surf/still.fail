@@ -106,6 +106,8 @@ test "a share that fails is said in the sheet: nothing goes, the words stay; 取
   // sent again: asked again
   tap_send(t)
   assert_eq(named(calls, "chat.outsideRefs").length(), 2)
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 

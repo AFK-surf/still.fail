@@ -395,7 +395,6 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
         pb=row_pad,
         gap=12.0,
         radius=18.0,
-        bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
         id~,
         fn() {
           c.box(
@@ -425,6 +424,10 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
           |> ignore
           if busy == i {
             spinner(c, inline=true)
+          }
+          // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
+          if busy < 0 {
+            @motion.ripple(c, id, 18.0, ink=@sf.alpha(t.p.text, 0.1))
           }
         },
       )

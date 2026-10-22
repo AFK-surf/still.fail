@@ -254,7 +254,6 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
     pady=8.0,
     gap=10.0,
     radius=10.0,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
     id~,
     fn() {
       c.box(w=Px(12.0), h=Px(12.0), pt=4.0, align=ACenter, justify=JCenter, fn() {
@@ -271,6 +270,8 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
       })
       |> ignore
       c.text(at, size=12.0, color=t.p.subtle, wrap=false) |> ignore
+      // Decisions.kt IdleRow: clip(Smooth(10)).clickable
+      @motion.ripple(c, id, 10.0)
     },
   )
   |> ignore
@@ -668,12 +669,13 @@ fn decision_face(
       pady=8.0,
       gap=4.0,
       align=ACenter,
-      bg=if c.pressed(open) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id=open,
       fn() {
         c.box(fn() { c.text(text(v, "title"), size=13.0, color=t.p.muted, wrap=false) |> ignore })
         |> ignore
         @sf.icon(c, "chevron-right", size=14.0, color=t.p.subtle) |> ignore
+        // Decisions.kt: the row clickable
+        @motion.ripple(c, open, 0.0)
       },
     )
     |> ignore
