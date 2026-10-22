@@ -312,6 +312,71 @@ test "Android: a fling into the end stretches there and comes back" {
 }
 
 ///|
+/// The stretch's way back as it was worked out before (BackPath::plan_edge looking for the limit through all of 60 s):
+/// the reference what it does now is held to.
+fn plan_edge_through(p : BackPath, h : Double) -> Unit {
+  let gone = fn(x : Double, v : Double) { x < 0.0 || (v.abs() < 0.01 && x < 0.001) }
+  let close = fn(x : Double, v : Double) { v.abs() <= 200.0 && x.abs() < 8.0 && v < 0.0 && x > 0.0 }
+  let over = fn(x0 : Double, v0 : Double) {
+    fn(t : Double) {
+      let (x, v) = edge_spring_at(x0, v0, h, t)
+      gone(x, v) || close(x, v)
+    }
+  }
+  let mut from_t = 0.0
+  let mut x0 = p.x0
+  let mut v0 = p.v0
+  if x0 < 1.0 {
+    let x0_ = x0
+    let v0_ = v0
+    let out = first_when(fn(t) { edge_spring_at(x0_, v0_, h, t).0 / h > 1.0 }, 0.001, 60.0)
+    let first = first_when(over(x0_, v0_), 0.001, 60.0)
+    if out < first {
+      p.clamp_at = p.t0 + out * 1000.0
+      from_t = out
+      x0 = 1.0
+      v0 = 0.0
+    }
+  }
+  let end = first_when(over(x0, v0), 0.001, 60.0)
+  if end == @double.infinity {
+    p.rest = @double.infinity
+    return
+  }
+  let (x, v) = edge_spring_at(x0, v0, h, end)
+  let at = p.t0 + (from_t + end) * 1000.0
+  if close(x, v) && !gone(x, v) {
+    p.lin_at = at
+    p.lin_x = x / h
+    p.rest = at + x / 200.0 * 1000.0
+  } else {
+    p.rest = at
+  }
+}
+
+///|
+test "Android: the stretch's way back is the same looked for no further than its own end" {
+  // a pull let go (still), and flings into the end from slow to the fastest, on a short view and a phone's
+  for h in [600.0, 2532.0] {
+    for x0 in [0.0, 0.01, 0.2, 0.6, 0.97, 1.0] {
+      for v0 in [0.0, -900.0, 650.0, 13000.0, 39000.0, 104000.0, 312000.0] {
+        let now = BackPath::new()
+        let was = BackPath::new()
+        for p in [now, was] {
+          p.t0 = 1000.0
+          p.x0 = x0
+          p.v0 = v0
+        }
+        now.plan_edge(h)
+        plan_edge_through(was, h)
+        let said = "h \{h} x0 \{x0} v0 \{v0}"
+        assert_eq((said, now.clamp_at, now.lin_at, now.lin_x, now.rest), (said, was.clamp_at, was.lin_at, was.lin_x, was.rest))
+      }
+    }
+  }
+}
+
+///|
 test "Android: a finger on a flinging list stops it and taps nothing" {
   clicks.clear()
   let t = Tester::new(rows_view(500), platform=2)

@@ -90,44 +90,41 @@ fn first_when(hit : (Double) -> Bool, step : Double, most : Double) -> Double {
 fn BackPath::plan_edge(self : BackPath, h : Double) -> Unit {
   let gone = fn(x : Double, v : Double) { x < 0.0 || (v.abs() < 0.01 && x < 0.001) }
   let close = fn(x : Double, v : Double) { v.abs() <= 200.0 && x.abs() < 8.0 && v < 0.0 && x > 0.0 }
-  // (seconds, in steps of a millisecond)
-  let mut from_t = 0.0
-  let mut x0 = self.x0
-  let mut v0 = self.v0
-  if x0 < 1.0 {
-    let x0_ = x0
-    let v0_ = v0
-    let out = first_when(fn(t) { edge_spring_at(x0_, v0_, h, t).0 / h > 1.0 }, 0.001, 60.0)
-    let first = first_when(
+  // when the way from (x0, v0) is over: gone, or close enough to go straight in (seconds, in steps of a millisecond)
+  let over_at = fn(x0 : Double, v0 : Double) {
+    first_when(
       fn(t) {
-        let (x, v) = edge_spring_at(x0_, v0_, h, t)
+        let (x, v) = edge_spring_at(x0, v0, h, t)
         gone(x, v) || close(x, v)
       },
       0.001,
       60.0,
     )
-    if out < first {
+  }
+  let mut from_t = 0.0
+  let mut x0 = self.x0
+  let mut v0 = self.v0
+  let mut end = over_at(x0, v0)
+  if x0 < 1.0 {
+    // whether it meets the limit before that, looked for up to that end (and the step it was found in) only: not
+    // through all 60 s of a spring that never gets there, 60 000 of its sines and cosines in the frame a fling meets
+    // the end, which came late (the list stopping a moment short of its end)
+    let x0_ = x0
+    let v0_ = v0
+    let out = first_when(fn(t) { edge_spring_at(x0_, v0_, h, t).0 / h > 1.0 }, 0.001, dmin(end + 0.001, 60.0))
+    if out < end {
       self.clamp_at = self.t0 + out * 1000.0
       from_t = out
       x0 = 1.0
       v0 = 0.0
+      end = over_at(x0, v0)
     }
   }
-  let x0_ = x0
-  let v0_ = v0
-  let end = first_when(
-    fn(t) {
-      let (x, v) = edge_spring_at(x0_, v0_, h, t)
-      gone(x, v) || close(x, v)
-    },
-    0.001,
-    60.0,
-  )
   if end == @double.infinity {
     self.rest = @double.infinity
     return
   }
-  let (x, v) = edge_spring_at(x0_, v0_, h, end)
+  let (x, v) = edge_spring_at(x0, v0, h, end)
   let at = self.t0 + (from_t + end) * 1000.0
   if close(x, v) && !gone(x, v) {
     self.lin_at = at
