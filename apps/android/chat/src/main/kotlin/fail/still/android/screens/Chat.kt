@@ -296,6 +296,11 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
             NavButton(Icons.Web, { openJobs(app, station, of) })
             if (alarm != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(11.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(if (alarm == Tone.Fail) C.red else C.warn))
         }
+        // What its agents and other chats' wrote each other, not in the chat: its own sheet (Letters.kt).
+        val letters = view.letters ?: 0L
+        if (letters > 0 && thread != null) Box(Modifier.semantics { contentDescription = t("web-main.letters.open", "n" to letters) }) {
+            NavButton(Icons.Chats, { openLetters(app, Here(station, of, view, agents), thread.id) })
+        }
     }) {
         // The station on its own while the chat has no agent; else on the first agent's tile.
         if (agents.isEmpty()) ChatStationChip(station)
@@ -356,8 +361,6 @@ private sealed interface Entry {
     data class Said(val m: ChatMessage, val sent: String? = null) : Entry {
         override val id get() = sent?.let { "o:$it" } ?: "m:${m.ts}"
     }
-    /** A run of what other chats' agents wrote to it, as its first message has it (the core's `letters`): its line. */
-    data class Letters(val m: ChatMessage) : Entry { override val id get() = "l:${m.ts}" }
     data class Out(val o: Outgoing) : Entry { override val id get() = "o:${o.id}" }
     /** What was said in Slack by or to an agent of the chat (the core's `elsewhere`): shown, not one of the chat's. */
     data class Sent(val s: ChatSentElsewhere) : Entry { override val id get() = "s:${s.key}" }
@@ -489,6 +492,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val lineAt = view.unreadLine
     val above = view.unreadAbove == true
     val first = view.messages.firstOrNull()?.seq
+    val firstEntry = view.firstEntry ?: first
 
     // Messages the agents have not taken yet (the core says which): after a second, yours say they wait.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -561,9 +565,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         messages.forEach { m ->
             if (motion.held(m.seq)) return@forEach
             if (m.seq == lineAt) add(Entry.Line)
-            // The first of a run of what other chats' agents wrote to it: the run's line, the message only open.
-            if (m.letters != null) add(Entry.Letters(m))
-            if (m.letters?.open != false) add(Entry.Said(m, sentAs[m.seq]))
+            add(Entry.Said(m, sentAs[m.seq]))
             elsewhere[m.seq]?.forEach { add(Entry.Sent(it)) }
         }
         if (short) add(Entry.Newer)
@@ -609,7 +611,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val caught = { row: Entry ->
         when (row) {
             is Entry.Said -> row.m.said != true
-            is Entry.Letters -> row.m.said != true
             is Entry.Working -> row.agent.key !in started
             else -> false
         }
@@ -628,7 +629,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         r.id !in known && r.id !in admitted && !caught(r) && !sentRow(r) &&
             // (Sent otherwise than from the composer, a decision's option picked: in its turn as anything else coming,
             // before the options close, as they do once it is answered.)
-            (r is Entry.Working || r is Entry.Out || r is Entry.Letters || (r is Entry.Said && !motion.emits(r.m.seq)))
+            (r is Entry.Working || r is Entry.Out || (r is Entry.Said && !motion.emits(r.m.seq)))
     }
     // Words sent from here (the composer counts them: `sends`) wait from this very composition, not only once their turn
     // is asked for after it (a SideEffect): a core that has them in the outbox at once would else bring their row in now.
@@ -696,7 +697,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // pages before brought in until it is loaded (none left, or it is gone: where the chat opened).
     // Whether the unread line was gone to (or is not to be: the chat opened at a message asked for, below).
     val lineShown = remember { mutableStateOf(false) }
-    val aroundAsked = remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(follow.placed, first, reveal.revealing, host.goTo, messages) {
         val target = host.goTo ?: return@LaunchedEffect
         if (!follow.placed || reveal.revealing) return@LaunchedEffect
@@ -713,14 +713,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 jumpTo(m.ts, if (words.isNotEmpty()) FOUND else "")
             }
             view.more && thread != null && first != null && first > target -> {
-                asked.value = first
+                asked.value = firstEntry
                 try { api.older(thread.id) } catch (_: CoreException) { host.goTo = null }
-            }
-            // Among what other chats' agents wrote to it, folded: the core asked to show it (their run comes whole, and
-            // this again finds it).
-            thread != null && aroundAsked.value != target && messages.any { it.letters?.open == false } -> {
-                aroundAsked.value = target
-                try { api.around(thread.id, target) } catch (_: CoreException) { host.goTo = null }
             }
             else -> host.goTo = null
         }
@@ -866,19 +860,20 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             shown.first().key != at.key && index != at.index -> list.requestScrollToItem(index, -at.offset)
         }
     }
-    // Near the top: the page before comes in (once per page); what is on screen stays put.
-    LaunchedEffect(view.more, first, follow.placed, reveal.revealing) {
+    // Near the top: the page before comes in (once per page); what is on screen stays put. Pages go by entries, not
+    // messages: one of what the chat does not show (letters, edits) moves it too.
+    LaunchedEffect(view.more, firstEntry, follow.placed, reveal.revealing) {
         if (!view.more || thread == null || !follow.placed || reveal.revealing) return@LaunchedEffect
         snapshotFlow { list.firstVisibleItemIndex }.collect { index ->
-            if (index <= 2 && asked.value != first) {
-                asked.value = first
+            if (index <= 2 && asked.value != firstEntry) {
+                asked.value = firstEntry
                 try { api.older(thread.id) } catch (_: CoreException) { asked.value = null }
             }
         }
     }
     // Near the end, short of the chat's: the page after comes in (once per page), read rather than said (no motion);
     // as many go at the start, and what is on screen stays put.
-    val lastSeq = messages.lastOrNull()?.seq
+    val lastSeq = view.lastEntry ?: messages.lastOrNull()?.seq
     val askedNewer = remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(short, lastSeq, follow.placed, reveal.revealing) {
         if (!short || thread == null || !follow.placed || reveal.revealing) return@LaunchedEffect
@@ -979,7 +974,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.waiting && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
                         is Entry.Sent -> SentElsewhere(ctx, row.s)
-                        is Entry.Letters -> LettersLine(ctx, row.m)
                         is Entry.Working -> Activity(ctx, row.agent, leaving(row.agent.key), opening = fresh)
                         is Entry.Floor -> Spacer(Modifier.fillMaxWidth().height(with(LocalDensity.current) { row.px.toDp() }))
                     } }
@@ -1366,32 +1360,6 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
             )
         }
         if (open) MessageTime(time)
-    }
-}
-
-/**
- * What other chats' agents wrote to this one, a run of it with nothing else said between (web Chat.tsx LettersLine, the
- * core's `letters` on its first message): a pill across the chat as still.fail's notices are, saying which chat's agent
- * wrote to which and how many, cut short where it does not fit. A tap shows the run whole under it, or folds it again
- * (`chat.letters`).
- */
-@Composable
-private fun LettersLine(ctx: Here, m: ChatMessage) {
-    val app = LocalApp.current
-    val letters = m.letters ?: return
-    val ground = if (C.dark) Color.White.copy(alpha = 0.05f) else Color(0xFF262117).copy(alpha = 0.065f)
-    val ink = chatInk().text
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Row(
-            Modifier.clip(RoundedCornerShape(50)).background(ground)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                    app.act(t(if (letters.open) "web-main.chat.letters.close" else "web-main.chat.letters.open")) { app.api(ctx.station).letters(m.thread, m.seq, !letters.open) }
-                }
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(letters.line, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
     }
 }
 

@@ -843,42 +843,47 @@ test("a_chat_shown_has_its_unread_line_and_is_read_while_its_end_is_in_view", as
   core.close();
 });
 
-test("what_other_chats_agents_wrote_is_a_line_the_page_opens_and_folds_and_a_message_asked_for_opens", async () => {
+test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_letters_page_by_the_other_chat", async () => {
   const said = (n: number, over: J = {}) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n, ...over });
-  const letter = (n: number, text: string) => said(n, { author: "peer/ember:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}` });
+  const backups = { title: "备份", link: "https://x/o/w/s/b" };
+  const coming = (n: number, text: string) => said(n, { author: "peer/ember:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } });
+  const going = (n: number, text: string) => said(n, { text: `发给 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "out", ...backups } });
   const { host, core } = await started({
     ...base(),
-    "GET /threads": [threadView(7, 6)],
-    "GET /threads/7/entries?limit=50": { first: 1, last: 6, entries: [
-      said(1, { authorKind: "person", author: "me@x", text: "改备份" }), letter(2, "脚本放好了"), letter(3, "**补充**一点\n\n第二段"), said(4),
-      letter(5, "已替换"), said(6, { text: "来自 [备份](https://x/o/w/s/b)：\n\n它的 agent 说了这句" }),
+    "GET /threads": [{ ...threadView(7, 8), letters: 4 }],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 8, entries: [
+      said(1, { authorKind: "person", author: "me@x", text: "改备份" }), coming(2, "脚本放好了"), going(3, "已替换"), said(4),
+      // From a station before letters were marked: known by its heading.
+      said(5, { author: "peer/ember:c-8", text: "来自 [部署](https://x/o/w/s/d)：\n\n部署好了" }),
+      coming(6, "**补充**一点\n\n第二段"),
+      // The chat's own agent quoting one in the chat says it in the chat.
+      said(7, { text: "来自 [备份](https://x/o/w/s/b)：\n\n它的 agent 说了这句" }), said(8),
     ] },
   });
   const ui = core.connect();
   const values = new Map();
   subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  subscribe(core, ui, 2, { topic: "chatLetters", station: "ws/st", thread: 7 });
   await host.settle();
   apply(host, values);
-  const shown = () => v(values, 1).messages.map((m: J) => [m.seq, m.letters ? [m.letters.line, m.letters.open] : null]);
-  // Who wrote to whom: the chat's one agent by its label.
-  const to = v(values, 1).agents[0].session.agentText;
-  assert.ok(typeof to === "string" && to !== "");
-  // Each run of them is a line on its first, the rest out of the list; the chat's own agent quoting one is its own.
-  assert.deepEqual(shown(), [[1, null], [2, [`「备份」发给 ${to} · 2 条`, false]], [4, null], [5, [`「备份」发给 ${to}`, false]], [6, null]]);
-  call(core, ui, 2, "chat.letters", { station: "ws/st", thread: 7, seq: 2, open: true });
-  await host.settle();
-  apply(host, values);
-  assert.deepEqual(shown().map(([seq, l]: J) => [seq, l?.[1] ?? null]), [[1, null], [2, true], [3, null], [4, null], [5, false], [6, null]]);
-  // Folded again by any of its messages.
-  call(core, ui, 3, "chat.letters", { station: "ws/st", thread: 7, seq: 3, open: false });
-  await host.settle();
-  apply(host, values);
-  assert.deepEqual(shown().map(([seq]: J) => seq), [1, 2, 4, 5, 6]);
-  // A message of it asked to be shown (a search found it): its run whole.
-  call(core, ui, 4, "chat.around", { station: "ws/st", thread: 7, seq: 3 });
-  await host.settle();
-  apply(host, values);
-  assert.deepEqual(shown().map(([seq]: J) => seq), [1, 2, 3, 4, 5, 6]);
+  const chat = v(values, 1);
+  assert.deepEqual(chat.messages.map((m: J) => m.seq), [1, 4, 7, 8]);
+  assert.equal(chat.letters, 4);
+  // Pages go by entries: what the chat does not show moves them too.
+  assert.deepEqual([chat.firstEntry, chat.lastEntry], [1, 8]);
+  const page = v(values, 2);
+  assert.equal(page.whole, true);
+  // By the other chat, the one written with last first; both ways, in the order written, without their headings.
+  assert.deepEqual(page.chats.map((c: J) => [c.title, c.link, c.letters.map((m: J) => [m.seq, m.way, m.text])]), [
+    ["备份", "https://x/o/w/s/b", [[2, "in", "脚本放好了"], [3, "out", "已替换"], [6, "in", "**补充**一点\n\n第二段"]]],
+    ["部署", "https://x/o/w/s/d", [[5, "in", "部署好了"]]],
+  ]);
+  // Coming in: by that chat's agent, its name opening that chat; going out: by this chat's own agent.
+  const [incoming, outgoing] = page.chats[0].letters;
+  assert.equal(incoming.by.name, "「备份」的 agent");
+  assert.equal(incoming.by.from, "https://x/o/w/s/b");
+  assert.equal(outgoing.by.agent, "k1");
+  assert.ok(incoming.md !== undefined, "drawn as the chat draws an agent's words");
   core.close();
 });
 

@@ -38,7 +38,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -59,6 +59,8 @@ export class StationTopics implements Owner {
   readonly #windows = new Map<string, Window>();
   /// Each live topic's first item shown (history.older moves it back).
   readonly #firsts = new Map<string, number>();
+  /// Each open `letters` topic: how far its chat went when all of it was last asked for.
+  readonly #wholes = new Map<string, number>();
   /// Where chats were left (`chat.place`), as told this run or read from the database.
   readonly #places = new Map<string, LeftAt | null>();
   /// The chats whose place cores before kept in the host's storage was looked for this run.
@@ -80,7 +82,7 @@ export class StationTopics implements Owner {
     sync.onChange = (address, what, key) => this.#changed(address, what, key);
     sync.onTold = (address, id, entries) => this.tell(address, id, entries);
     core.data.onLogChange((table, station, id) => {
-      const topics = core.store.liveTopics().filter((t) => t.station === station && ((table === "entry" && t.topic === "thread" && String(t.thread) === id) || (table === "transcript" && t.topic === "live" && t.key === id)));
+      const topics = core.store.liveTopics().filter((t) => t.station === station && ((table === "entry" && (t.topic === "thread" || t.topic === "letters") && String(t.thread) === id) || (table === "transcript" && t.topic === "live" && t.key === id)));
       for (const topic of topics) core.store.changed(topic);
     });
   }
@@ -184,6 +186,7 @@ export class StationTopics implements Owner {
     if (station === null) return;
     const key = topicKey(topic);
     if (topic.topic === "thread") this.#core.data.opened("entry", station, String(topic.thread), false);
+    this.#wholes.delete(key);
     if (topic.topic === "live") this.#core.data.opened("transcript", station, topic.key as string, false);
     if (topic.topic === "stationSearch") this.#sync.searchHidden(topic);
     if (topic.topic === "net" || topic.topic === "way") this.#unsampleNet(station, topic.topic);
@@ -247,6 +250,9 @@ export class StationTopics implements Owner {
       case "thread":
         if (error) return { err: error };
         return this.#thread(topic);
+      case "letters":
+        if (error) return { err: error };
+        return this.#letters(topic);
       default:
         // Held: what is held goes out (the store reads it); with nothing held, why not, once known.
         return error ? { err: error } : undefined;
@@ -488,6 +494,25 @@ export class StationTopics implements Owner {
     if (window.at !== null) value.at = window.at;
     if (window.atOffset !== null) value.atOffset = window.atOffset;
     return { ok: value };
+  }
+
+  /// What two chats' agents wrote each other in a chat (`letters`): all of its entries held, from its first; those not
+  /// held yet asked for once each time it goes further (a chat's page holds only a window of it). `whole` once all are
+  /// here.
+  #letters(topic: Topic): Value | undefined {
+    const station = topic.station as string;
+    const id = topic.thread as number;
+    const data = this.#core.data;
+    if (this.summary(station, id) === null) return undefined;
+    const latest = this.#latest(station, id);
+    const held = data.logRange("entry", station, String(id), 1, latest);
+    const tk = topicKey(topic);
+    if (held.size < latest && (this.#wholes.get(tk) ?? 0) < latest) {
+      this.#wholes.set(tk, latest);
+      this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/1`, this.#sync.channels.range(entriesOf(station, id), 1, latest, { quiet: false }))));
+    }
+    const entries = [...held.keys()].sort((a, b) => a - b).map((n) => held.get(n));
+    return { ok: { entries, whole: held.size >= latest, thread: this.summary(station, id) } };
   }
 
   #window(station: string, id: number): [string, Window] | null {

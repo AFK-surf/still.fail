@@ -5,7 +5,8 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, ArrowUpRight, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Letters } from "../Letters.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
@@ -133,7 +134,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   useEffect(() => {
     for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
-  const known = agents.length ? tabs.filter((key) => key === JOBS || key === FILES || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
+  const known = agents.length ? tabs.filter((key) => key === JOBS || key === FILES || key === LETTERS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   const isAgent = (key: string) => agents.some((a) => a.session.key === key);
   const open = known;
   // The job picked in the 任务 tab.
@@ -275,6 +276,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // Files dragged anywhere over the chat go into its message (useChatDrop).
   const drop = useChatDrop(chatKey, station.address);
   const toggleFiles = () => (open.includes(FILES) && shown === FILES ? closeTab(FILES) : openTab(FILES));
+  const toggleLetters = () => (open.includes(LETTERS) && shown === LETTERS ? closeTab(LETTERS) : openTab(LETTERS));
   useShortcut("panel.close", open.length ? closePanel : null);
   const thread = chatView.value?.thread?.id ?? null;
   const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
@@ -344,6 +346,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
+          {/* What its agents and other chats' wrote each other, not in the chat: in a tab beside it (Letters.tsx). */}
+          {chat.letters && thread !== null && <IconButton label={t("web-main.letters.open", { n: chat.letters })} icon={Chats} onMouseDown={keepFocus} onClick={toggleLetters} />}
           {relayable && <IconButton label={t("web-main.relay.action")} icon={ArrowUpRight} onClick={relay} />}
           {drive && <IconButton label={t("web-pages.chat.files")} icon={Folder} onMouseDown={keepFocus} onClick={toggleFiles} />}
           {chat.thread && <ChatInfo station={station.address} session={chatSession} />}
@@ -384,6 +388,16 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                     );
                   }
                   if (key === FILES) return <FilesTab key={key} onClose={() => closeTab(key)} />;
+                  if (key === LETTERS) {
+                    return (
+                      <span key={key} className={css.sideTabWrap}>
+                        <Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
+                          <span className={css.sideTabAgent}><Chats size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={t("web-main.letters.title")}>{t("web-main.letters.title")}</span></span>
+                        </Tabs.Trigger>
+                        <button type="button" className={css.sideTabClose} aria-label={t("web-main.letters.close")} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                      </span>
+                    );
+                  }
                   const file = fileOf(key);
                   if (file) {
                     return (
@@ -428,6 +442,13 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                 return (
                   <SidePane key={key} of={key} shown={side.shown}>
                     <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} chat={chatKey} />
+                  </SidePane>
+                );
+              }
+              if (key === LETTERS) {
+                return (
+                  <SidePane key={key} of={key} shown={side.shown}>
+                    {thread !== null && keeper && <Letters station={station.address} thread={thread} keeper={keeper} />}
                   </SidePane>
                 );
               }
@@ -554,6 +575,8 @@ function useChatAgent(station: string, session: string, key: string): ChatAgent 
 
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
+/** The agent 往来 tab's key: what the chat's agents and other chats' wrote each other (Letters.tsx). */
+const LETTERS = "letters";
 /** A visualization's tab: its place among the previews (Preview.tsx's fileService), opened from its message. */
 function fileTab(session: string, path: string, name: string): string {
   return fileService({ session, path, name });

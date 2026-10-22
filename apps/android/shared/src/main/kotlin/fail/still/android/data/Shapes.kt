@@ -1747,17 +1747,6 @@ data class ChatSentElsewhere (
 	val time: Map<String, Stamp>? = null
 )
 
-/// A run of messages other chats' agents wrote to a chat, folded into a line (core views.ts `lettersFolded`), so they
-/// do not bury what people and the chat's own agents say.
-@Serializable
-data class Letters (
-	val count: Long,
-	/// Who wrote them to whom and how many, in words: 「X」发给 Opus 5.5 · 3 条.
-	val line: String,
-	/// Shown whole: `chat.letters` {station, thread, seq, open} opens it or folds it again.
-	val open: Boolean
-)
-
 /// A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said
 /// it, and whether its agents have yet to take it.
 @Serializable
@@ -1836,10 +1825,32 @@ data class ChatMessage (
 	/// order it names them, drawn where it names them; the rest go below it. Absent when it places none (a person's
 	/// words never do).
 	val placed: List<String>? = null,
-	/// In a chat's page: the first of a run of messages other chats' agents wrote to it (session_send), with nothing
-	/// else said between: the run is one line on it. Folded, it shows the line alone and the rest of the run is not in the
-	/// list; open (`chat.letters`), the line over it and the rest after it. Absent on every other message.
-	val letters: Letters? = null
+	/// On a chat's letters page (`chatLetters`): in, another chat's agent wrote it to this chat's; out, this chat's
+	/// agent wrote it to the other. Absent in a chat's page, which has no letters.
+	val way: String? = null
+)
+
+/// The letters between a chat and another.
+@Serializable
+data class LettersChat (
+	val title: String,
+	/// Its link, opened as a chat link is. Absent when its station gave none.
+	val link: String? = null,
+	/// Both ways, in the order written (`way`): one coming in by that chat's agent, named by the chat; one going out by
+	/// this chat's agent.
+	val letters: List<ChatMessage>
+)
+
+/// What a chat's agents and other chats' agents wrote each other (session_send): not said in the chat, read on a page of
+/// its own (the `chatLetters` view {station, thread}).
+@Serializable
+data class ChatLettersView (
+	/// The chat's title.
+	val title: String,
+	/// By the other chat, the one written with last first.
+	val chats: List<LettersChat>,
+	/// All of the chat is on the device: no letter is missing. Until then, those held, more coming.
+	val whole: Boolean
 )
 
 /// A snapshot of a chat its station keeps for anyone with its link (`chat.publish` answers one too).
@@ -2091,6 +2102,13 @@ data class ChatView (
 	/// after a message is that message's `elsewhere`. Not kept in it.
 	val elsewhere: List<ChatSentElsewhere>? = null,
 	val more: Boolean,
+	/// The first entry loaded (letters and edits are not messages): the cursor for loading older pages.
+	val firstEntry: Long? = null,
+	/// The last entry loaded: the cursor for loading newer pages.
+	val lastEntry: Long? = null,
+	/// How many letters its agents and other chats' wrote each other (not in `messages`; the `chatLetters` view shows
+	/// them). Absent when none.
+	val letters: Long? = null,
 	/// Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,
 	/// `chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`.
 	val newer: Boolean? = null,

@@ -82,13 +82,20 @@ export type EntryRow = {
   authorKind: AuthorKind; author: string; text: string | null; attachments: Attachment[]; quotes: Quote[];
   declared: string | null; client: string | null; profile: string | null; runtime: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
+  /// A letter's (isLetter): which way it went and the other chat. Absent on every other entry.
+  letter?: Letter;
 };
+
+/// What two chats' agents wrote each other (session_send), kept apart from what is said in a chat: `in`, another chat's
+/// agent wrote this one (delivered to its agents); `out`, this chat's agent wrote another (`author`, delivered to none
+/// here). `title` and `link` name the other chat.
+export type Letter = { way: "in" | "out"; title: string; link: string | null };
 
 /// A message as it reads now: its latest edit's words, files and quotes.
 export type MessageRow = {
   agentIdentity: Json | null; thread: number; n: number; ts: string; authorKind: AuthorKind; author: string; text: string;
   attachments: Attachment[]; quotes: Quote[]; declared: string | null; client: string | null; createdAt: number;
-  editedAt: number | null;
+  editedAt: number | null; letter?: Letter;
 };
 
 /// A card someone answered (`answersSince`).
@@ -98,20 +105,33 @@ export type CardAnswer = { question: MessageRow; card: Json; by: string; at: num
 export type PendingMessage = { message: MessageRow; surface: string; channel: string; threadTs: string; connect: string };
 
 /// A thread for listings: who takes part, the last thing said, and how much the viewer has not read.
-/// Whether a message is a letter: one another chat's agent wrote to this thread (session_send), headed as
-/// sessions/messages.ts heads it (`来自 …：`, `From …:`), by an agent that is not one of the thread's (`keys`). Lists
-/// and unread counts leave letters out, so that what agents write to each other does not bury what people say; the
-/// chat's page folds them (core views.ts `lettersFolded`).
-export function isLetter(m: { authorKind: string; author: string; text: string }, keys: ReadonlySet<string>): boolean {
+/// Whether a message is a letter (Letter): marked so when it was recorded; one from before letters were marked, by
+/// another chat's agent (not of the thread's `keys`) headed as sessions/messages.ts heads them (`来自 …：`, `From …:`),
+/// is one coming in. Lists, unread counts and the chat's page leave letters out, so that what agents write to each other
+/// does not bury what people say; the page shows them apart (core views.ts).
+export function isLetter(m: { authorKind: string; author: string; text: string; letter?: Letter }, keys: ReadonlySet<string>): boolean {
+  if (m.letter !== undefined) return true;
   return m.authorKind === "agent" && !keys.has(m.author) && (m.text.startsWith("来自 ") || m.text.startsWith("From "));
 }
 
-/// isLetter in SQL, of an entry or merged row of `thread` (its one parameter: the thread).
-export const LETTER_SQL = "(author_kind = 'agent' AND (text LIKE '来自 %' OR text LIKE 'From %') AND author NOT IN (SELECT session FROM thread_sessions WHERE thread = ?))";
+/// isLetter in SQL, of an entry or merged row (marked when recorded, or on opening for those from before: schema.ts
+/// addLetterColumn).
+export const LETTER_SQL = "(letter IS NOT NULL)";
+
+/// The letter an entry's `letter` column (or an archive file's entry) holds (absent: none, or one not read).
+export function letterOf(v: unknown): Letter | undefined {
+  const l = typeof v === "string" ? parsed(v) : v;
+  if (l === null || l === undefined || typeof l !== "object") return undefined;
+  const way = l.way === "in" || l.way === "out" ? l.way : null;
+  if (way === null || typeof l.title !== "string") return undefined;
+  return { way, title: l.title, link: typeof l.link === "string" ? l.link : null };
+}
 
 export type ThreadSummary = {
   thread: ThreadRow; sessions: Membership[]; last: number; lastMessage: MessageRow | null; read: number; unread: number;
   people: string[]; firstText: string | null;
+  /// How many letters it has (Letter), in either way.
+  letters: number;
 };
 
 /// The message a turn's state is about: its thread, entry (`seq`) and ts.
@@ -136,7 +156,7 @@ export type ProcessRow = { pgid: number; startedAt: number; runtime: string; lab
 export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
   quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
-  options?: Json | null; at?: number | null;
+  options?: Json | null; at?: number | null; letter?: Letter;
 };
 
 export const newMessage = (thread: number, ts: string, authorKind: AuthorKind, author: string, text: string): NewMessage => ({
@@ -367,15 +387,22 @@ export function toEntry(r: Json): EntryRow {
     target: r.target, ts: r.ts, authorKind: authorKind(r.author_kind), author: r.author, text: r.text,
     attachments: fromJsonList(r.attachments, attachment), quotes: fromJsonList(r.quotes, quote), declared: r.declared,
     client: r.client, profile: r.profile, runtime: r.runtime ?? null, options: parsed(r.options), card: parsed(r.card), at: r.at,
+    ...withLetter(r.letter),
   };
 }
+
+/// `letter` when there is one (letterOf), to spread into a row.
+export const withLetter = (v: unknown): { letter?: Letter } => {
+  const letter = letterOf(v);
+  return letter === undefined ? {} : { letter };
+};
 
 export function toMessage(r: Json): MessageRow {
   return {
     agentIdentity: parsed(r.agent_identity) ?? null, thread: r.thread, n: r.n, ts: r.ts ?? "",
     authorKind: authorKind(r.author_kind), author: r.author, text: r.text ?? "",
     attachments: fromJsonList(r.attachments, attachment), quotes: fromJsonList(r.quotes, quote), declared: r.declared,
-    client: r.client, createdAt: r.created_at, editedAt: r.edited_at,
+    client: r.client, createdAt: r.created_at, editedAt: r.edited_at, ...withLetter(r.letter),
   };
 }
 
@@ -424,7 +451,7 @@ export function mergeEntries(entries: EntryRow[]): MessageRow[] {
       messages.set(e.n, {
         agentIdentity: e.agentIdentity ?? null, thread: e.thread, n: e.n, ts: e.ts ?? "", authorKind: e.authorKind,
         author: e.author, text: e.text ?? "", attachments: e.attachments, quotes: e.quotes, declared: e.declared,
-        client: e.client, createdAt: e.at, editedAt: null,
+        client: e.client, createdAt: e.at, editedAt: null, ...(e.letter !== undefined ? { letter: e.letter } : {}),
       });
     } else {
       const m = e.target === null ? undefined : messages.get(e.target);

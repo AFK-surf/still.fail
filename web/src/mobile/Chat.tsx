@@ -18,7 +18,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
 import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -40,6 +40,7 @@ import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideSh
 import { useAction } from "../action.ts";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
+import { Letters } from "../Letters.tsx";
 import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
@@ -128,10 +129,13 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
 interface Bar {
   title: string; thread: ChatThread | null; archivable: boolean; people: ChatView["people"]; stationUpdate: ChatView["stationUpdate"];
   agents: { key: string; maker: ChatAgent["session"]["maker"]; runtime: ChatAgent["session"]["runtime"]; badge: ChatAgent["badge"]; badgeText: ChatAgent["session"]["badgeText"]; agentText: string }[];
+  /** How many letters its agents and other chats' wrote each other (not in the chat: their own sheet). */
+  letters: number;
 }
 const barOf = (view: ChatView): Bar => ({
   title: view.title, thread: view.thread ?? null, archivable: !!view.archivable, people: view.people, stationUpdate: view.stationUpdate,
   agents: view.agents.map((a) => ({ key: a.session.key, maker: a.session.maker, runtime: a.session.runtime, badge: a.badge, badgeText: a.session.badgeText, agentText: a.session.agentText })),
+  letters: view.letters ?? 0,
 });
 // Its thread compared by what the bar does with it (its id): the thread's own times change with every message.
 const sameBar = (a: Bar | undefined, b: Bar | undefined) => a === b || (!!a && !!b && a.thread?.id === b.thread?.id
@@ -161,6 +165,12 @@ const ChatBar = memo(function ChatBar({ station: address, session }: { station: 
         {/* Nothing left in it (the core's `archivable`): archived with one tap. */}
         {bar.archivable && thread && <ArchiveButton station={address} session={session} />}
         {jobs && jobs.jobs.length > 0 && <JobsButton station={address} session={session} alarm={jobs.alarm} />}
+        {bar.letters > 0 && thread && bar.agents[0] && (
+          <button type="button" className={barsCss.mNavButton} aria-label={t("web-main.letters.open", { n: bar.letters })}
+            onClick={() => openLetters(app, address, thread.id, bar.agents[0]!.key)}>
+            <Chats size={18} />
+          </button>
+        )}
       </>}>
       {bar.agents.length === 0 && <StationChip station={address} />}
       <StationUpdate station={address} notice={bar.stationUpdate} />
@@ -525,6 +535,17 @@ function JobsButton({ station, session, alarm }: { station: string; session: str
       {alarm && <span className={css.mJobsAlarm} data-alarm={alarm} aria-hidden="true" />}
     </button>
   );
+}
+
+/** What the chat's agents and other chats' wrote each other, not in the chat (Letters.tsx), in a sheet. */
+function openLetters(app: MobileApp, station: string, thread: number, keeper: string) {
+  app.sheet({ height: 0.8, draggable: true, content: () => (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-main.letters.title")} />
+      <div className={sheetsCss.mSheetScroll}><Letters station={station} thread={thread} keeper={keeper} /></div>
+    </>
+  ) });
 }
 
 /** One of the chat's agents in brief, in a sheet (AgentSheet.tsx): from its name, its mark in the bar, its row in the chat's sheet. */

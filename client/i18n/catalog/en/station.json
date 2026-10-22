@@ -310,6 +310,7 @@
   "station.place.timeout": "Couldn't check {cwd} within {seconds} seconds. macOS protects this folder and may be asking on {machine} whether the station may open it: allow it there, then try again.",
   "station.session.fastOpenAiOnly": "Fast is only for OpenAI subscriptions",
   "station.session.from": "From {from}:",
+  "station.session.to": "To {to}:",
   "station.session.openerNotTold": "Couldn't tell the agent that opened this chat how this turn ended: {error}",
   "station.session.opened": "Opened a chat: {chat}",
   "station.session.openedBy": "Opened by {from}:",

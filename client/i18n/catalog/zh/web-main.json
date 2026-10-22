@@ -135,8 +135,6 @@
   "web-main.chat.asks.go": "跳转到待决策的消息",
   "web-main.chat.copyLink": "复制会话链接",
   "web-main.chat.historyRefTitle": "执行记录：{title}",
-  "web-main.chat.letters.close": "收起消息",
-  "web-main.chat.letters.open": "展开消息",
   "web-main.chat.linkCopied": "已复制：粘贴到另一个会话后，该会话的 agent 即可读取此会话",
   "web-main.chat.historyLinkCopied": "已复制：粘贴到另一个会话后，该会话的 agent 即可读取此处 agent 的执行记录",
   "web-main.chat.copyFailed": "无法复制：{error}",
@@ -193,6 +191,17 @@
   "web-main.find.partial": "仅搜索了已加载的 {held} 条，共 {of} 条",
   "web-main.find.placeholder": "在对话中查找",
   "web-main.find.prev": "上一个",
+  "web-main.letters.close": "关闭 agent 往来",
+  "web-main.letters.count": {
+    "one": "1 条",
+    "other": "{n} 条"
+  },
+  "web-main.letters.none": "暂无 agent 往来",
+  "web-main.letters.open": {
+    "one": "agent 往来 · 1 条",
+    "other": "agent 往来 · {n} 条"
+  },
+  "web-main.letters.title": "agent 往来",
   "web-main.outside.title": "分享对话",
   "web-main.outside.lead": "发送后，此 workspace 中的 agent 可读取以下内容（连续 6 小时未使用即失效）：",
   "web-main.outside.from": "来自 {name}",

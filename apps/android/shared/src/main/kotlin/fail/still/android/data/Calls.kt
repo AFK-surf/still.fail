@@ -114,13 +114,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** The chat's latest page in place of what it shows: the reader goes to its end. */
     suspend fun latest(thread: Long) { chat("chat.latest", thread) }
 
-    /** The chat's window about one of its messages (`chat.around`): a page on either side, read where not held; among
-     *  what other chats' agents wrote to it, their run shown whole. */
+    /** The chat's window about one of its messages (`chat.around`): a page on either side, read where not held. */
     suspend fun around(thread: Long, seq: Long) { chat("chat.around", thread) { put("seq", seq) } }
-
-    /** The run of other chats' agents' messages with `seq` in it shown whole (`open`), or folded into its line again
-     *  (`chat.letters`; the core's `letters`). */
-    suspend fun letters(thread: Long, seq: Long, open: Boolean) { chat("chat.letters", thread) { put("seq", seq); put("open", open) } }
 
     /** Where the reader leaves the chat: the message at the top of what shows and how far below the list's top its top
      *  is (`offset`, px), or none at its end (it opens there next, while nothing is unread). */
