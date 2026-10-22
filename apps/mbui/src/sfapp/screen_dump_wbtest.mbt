@@ -112,6 +112,16 @@ fn screen_dump(mode : String, at : Double) -> Json? {
     h=844.0,
     platform=2,
   )
+  // the words on it as its data is first drawn (what Android's test, and the Tester taking its moment, wait for:
+  // src/sfscreens/android_ref_wbtest.mbt to_shows)
+  t.draw()
+  t.finish_all()
+  let first : Array[String] = []
+  for w in t.words() {
+    if w.5 > 0.0 {
+      first.push(w.0.trim(chars=" \n").to_string())
+    }
+  }
   t.run_for(at)
   // (what lies over the pages, a file's viewer, a sheet: not opened by Android's test yet)
   if viewer.val is Some(_) || @settings.sheet_up() {
@@ -128,12 +138,12 @@ fn screen_dump(mode : String, at : Double) -> Json? {
         }
     }
   }
-  // what Android's test waits to see before its moment (ScreensRefTest `shows`): the two longest words drawn, their
-  // first six characters (a line cut short there all the same)
+  // what Android's test waits to see before its moment (ScreensRefTest `shows`): the two longest words drawn then and
+  // as its data first is, their first six characters (a line cut short there all the same)
   let seen : Array[String] = []
   for w in t.words() {
     let s = w.0.trim(chars=" \n").to_string()
-    if w.5 > 0.0 && s.length() >= 4 && !seen.contains(s) {
+    if w.5 > 0.0 && s.length() >= 4 && !seen.contains(s) && first.contains(s) {
       seen.push(s)
     }
   }
