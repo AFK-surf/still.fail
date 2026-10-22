@@ -138,6 +138,10 @@ class ScreensRefTest(private val name: String) {
         fail.still.android.ui.FaceFiles.init(activity)
         val app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(activity, "http://127.0.0.1:9", fake.core), PrefsView())
         for (p in screen["open"]?.jsonArray.orEmpty()) app.push(page(p.jsonObject))
+        // the test's clock alone from the first frame: what moves (a spinner's turn, a list's glide) is where the
+        // moment has it, not where the machine's speed left it before the clock stopped
+        rule.mainClock.autoAdvance = false
+        val start = rule.mainClock.currentTime
         rule.setContent {
             StillFailTheme(dark, fail.still.android.ui.rememberFonts(app.kept.faces)) {
                 CompositionLocalProvider(LocalApp provides app, LocalUi provides app) { StillFailApp(app) }
@@ -148,9 +152,12 @@ class ScreensRefTest(private val name: String) {
         // picture whatever the machine's speed
         val shows = screen["shows"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
         val shown = { shows.all { rule.onAllNodesWithText(it, substring = true).fetchSemanticsNodes().isNotEmpty() } }
-        try { rule.waitUntil(20_000) { shown() } } catch (_: androidx.compose.ui.test.ComposeTimeoutException) {}
-        rule.mainClock.autoAdvance = false
-        rule.mainClock.advanceTimeBy(screen["at"]?.jsonPrimitive?.long ?: 3000L)
+        // a frame at a time on that clock until it shows them (what the fake core said come in, off the main thread)
+        val limit = android.os.SystemClock.uptimeMillis() + 20_000
+        while (!shown() && android.os.SystemClock.uptimeMillis() < limit) rule.mainClock.advanceTimeByFrame()
+        rule.waitForIdle()
+        val at = screen["at"]?.jsonPrimitive?.long ?: 3000L
+        rule.mainClock.advanceTimeBy(maxOf(0L, start + at - rule.mainClock.currentTime))
         // the window as composed at that moment (PixelCopy of the composition just drawn: not the display's last
         // frame, which may be one behind a paused clock), the whole of it, under the system's bars too; where those
         // bars are (their icons the system's, not the app's: left out of the comparison) beside it

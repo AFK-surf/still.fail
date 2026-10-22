@@ -126,13 +126,16 @@ case "$cmd" in
     # this emulator gives the app (its screen between the bars android.json says, in its density's points)
     [ -f $R/android.json ] || die "no references ($R/android.json): scripts/android-ref.sh refs first"
     win=$(machine | python3 -c 'import json,sys; m=json.load(sys.stdin); b=json.load(open(sys.argv[1]))["bars"]; w,h=map(int,m["size"].split("x")); s=int(m["density"])/160; print(w/s, (h-b["top"]-b["bottom"])/s, s)' $R/android.json)
+    t0=$(date +%s)
     (cd $A && MBUI_ANDROID_REF=moments MBUI_ANDROID_WINDOW="$win" moon_test_native -p stillfail/sfscreens 2>&1) > $O/text/moments.txt \
       || { grep -a -E "failed|FAILED" $O/text/moments.txt | head -10; die "the screens' moments not found (src/sfscreens/android_ref_wbtest.mbt)"; }
+    echo "android-ref: the screens' moments found in $(($(date +%s) - t0)) s"
     for n in $names; do
       json=$(python3 -c 'import json,sys,base64; print(base64.b64encode(json.dumps(json.load(open(sys.argv[1])),ensure_ascii=False,separators=(",",":")).encode()).decode())' $S/$n.json)
       # (the run to that moment on its clock: MBView draws until its clock reaches it, that frame the last)
       at=$(awk -v n="$n" '$1 == "MOMENT" && $2 == n { printf "%d", ($3 == int($3)) ? $3 : int($3) + 1 }' $O/text/moments.txt)
       [ -n "$at" ] || die "$n: no moment said for it ($O/text/moments.txt)"
+      t0=$(date +%s)
       $ADB shell am force-stop $PKG
       $ADB shell run-as $PKG rm -f files/run.log || true
       $ADB logcat -b all -c
@@ -141,9 +144,12 @@ case "$cmd" in
       python3 "$MBUI_DIR/scripts/android_end.py" --adb "$ADB" --app $PKG --uid $uid --file run.log \
         --end "SHOT |FATAL EXCEPTION|Fatal signal" > $O/text/$n.end || { cat $O/text/$n.end; die "$n: no picture's moment"; }
       grep -q "SHOT " $O/text/$n.end || { cat $O/text/$n.end; die "$n: the app ended before its moment"; }
+      t1=$(date +%s)
       $ADB exec-out run-as $PKG cat files/run.log > $O/text/$n.log
       $ADB shell am force-stop $PKG
       python3 "$A/scripts/screens.py" keep $n $O/text/$n.log "$A/screens/text-android.textrec" || exit 1
+      # (where its time went: the app's run to its moment, then reading its log and keeping its text)
+      echo "android-ref: $n: the app's run $((t1 - t0)) s, its text kept $(($(date +%s) - t1)) s"
     done
     ;;
   lists)
