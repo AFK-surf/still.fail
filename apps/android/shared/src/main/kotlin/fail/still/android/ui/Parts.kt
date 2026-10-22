@@ -436,18 +436,19 @@ fun IconIn(icon: ImageVector, size: Dp = 18.dp, tint: Color = C.ink, modifier: M
 
 /**
  * A station where it is named (web/src/StationMark.tsx): its `icon` first, one of still.fail's (glyph:<name>, StationIcons;
- * glyph:<name>:<colour> in one of MARK_COLORS, else `tint`) or a picture put up (a data URL); else its emoji; else `none`
- * (nothing when null). A glyph this build does not know shows the emoji kept beside it.
+ * glyph:<name>:<colour> in one of MARK_COLORS, else `tint`) or a picture put up (its address, or a data URL); else its
+ * emoji; else `none` (nothing when null). A glyph this build does not know shows the emoji kept beside it. `still`: a GIF
+ * holds its first frame.
  */
 @Composable
-fun StationMark(emoji: String?, icon: String?, size: Dp, tint: Color, modifier: Modifier = Modifier, none: ImageVector? = null) {
+fun StationMark(emoji: String?, icon: String?, size: Dp, tint: Color, modifier: Modifier = Modifier, none: ImageVector? = null, still: Boolean = false) {
     val glyph = StationIcons.of(icon)
     val shown = rememberStationPicture(icon)
     val moving = shown as? android.graphics.drawable.AnimatedImageDrawable
     val picture = shown as? ImageBitmap
     when {
         glyph != null -> Icon(glyph.icon, null, modifier.size(size), tint = markColor(glyphColor(icon)) ?: tint)
-        moving != null -> MovingPicture(moving, modifier.size(size).clip(Smooth(size * 0.24f)))
+        moving != null -> MovingPicture(moving, modifier.size(size).clip(Smooth(size * 0.24f)), play = !still)
         picture != null -> Image(picture, null, modifier.size(size).clip(Smooth(size * 0.24f)), contentScale = ContentScale.Crop)
         emoji != null -> Text(emoji, fontSize = (size.value * 0.9f).sp, lineHeight = size.value.sp, modifier = modifier)
         none != null -> Icon(none, null, modifier.size(size), tint = tint)
@@ -517,19 +518,19 @@ private fun stationPictureOf(bytes: ByteArray): Any? = try {
     }
 } catch (_: Exception) { null }
 
-/** An animation filling its box, its middle square shown (as ContentScale.Crop), moving while it is shown. */
+/** An animation filling its box, its middle square shown (as ContentScale.Crop), moving while it is shown (unless not `play`: its first frame). */
 @Composable
-private fun MovingPicture(drawable: android.graphics.drawable.AnimatedImageDrawable, modifier: Modifier) {
+private fun MovingPicture(drawable: android.graphics.drawable.AnimatedImageDrawable, modifier: Modifier, play: Boolean = true) {
     // The drawable asks to be drawn again for each frame; drawing reads `frame`, so each ask redraws it.
     var frame by remember(drawable) { mutableStateOf(0) }
-    androidx.compose.runtime.DisposableEffect(drawable) {
+    androidx.compose.runtime.DisposableEffect(drawable, play) {
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         drawable.callback = object : android.graphics.drawable.Drawable.Callback {
             override fun invalidateDrawable(who: android.graphics.drawable.Drawable) { frame++ }
             override fun scheduleDrawable(who: android.graphics.drawable.Drawable, what: Runnable, `when`: Long) { main.postAtTime(what, `when`) }
             override fun unscheduleDrawable(who: android.graphics.drawable.Drawable, what: Runnable) { main.removeCallbacks(what) }
         }
-        drawable.start()
+        if (play) drawable.start()
         onDispose { drawable.stop(); drawable.callback = null }
     }
     Canvas(modifier) {

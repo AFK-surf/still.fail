@@ -536,7 +536,7 @@ function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?
                 <span className={css.menuCheck}>{here && <Check {...ICON} size={14} />}</span>
                 <span className={css.menuWorkspace}>
                   <span className={css.menuWorkspaceName}>
-                    {marked(w) && <WorkspaceMark w={w} size={14} />}
+                    {marked(w) && <WorkspaceMark w={w} size={14} still={!here} />}
                     <span className={css.menuWorkspaceText}>{w.name}</span>
                     {!here && <MarkCounts mark={marks?.workspaces[w.id]} />}
                   </span>
