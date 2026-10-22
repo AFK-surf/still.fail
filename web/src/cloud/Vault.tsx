@@ -8,7 +8,7 @@ import { Link, useNavigate } from "react-router";
 import { Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
-import { Button, Confirm, Dialog, Field, IconButton, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
+import { Button, Choices, Confirm, Dialog, Field, IconButton, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
 import { useProfiles, useStations } from "../api.ts";
 import { profilePath } from "../ProfilesNav.tsx";
 import { profileGroups } from "./settings.tsx";
@@ -212,10 +212,9 @@ function Lasts({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
   return (
     <div className={`${pagesCss.card} ${css.lead}`}>
       <div className={css.state}>{t("web-pages.vault.lasts.title")}</div>
-      <div className={css.actions}>
-        <Segmented label={t("web-pages.vault.lasts.title")} value={v.lasts ?? "chat"} onChange={set} options={SCOPES.map((s) => ({ value: s, label: lastsName(s), disabled: setting }))} />
-      </div>
       <p className={css.sub}>{t("web-pages.vault.lasts.note")}</p>
+      <Choices label={t("web-pages.vault.lasts.title")} value={v.lasts ?? "chat"} onChange={set}
+        options={SCOPES.map((s) => ({ value: s, title: lastsName(s), description: t(`web-pages.vault.lasts.${s}Detail`), disabled: setting }))} />
     </div>
   );
 }

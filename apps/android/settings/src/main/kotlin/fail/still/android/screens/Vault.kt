@@ -498,11 +498,13 @@ private fun DefaultLasts(ws: String, v: VaultRow) {
     val setting = app.isDoing("vault.setLasts", "workspace" to ws, "vault" to v.id)
     SectionHeader(t("android-settings.vault.lasts.title"), start = 24.dp)
     Card {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Seg(SCOPES.map(::lastsName), now, { i ->
-                if (!setting && i != now) app.vaultAct(t("android-settings.vault.lasts.what")) { app.vaultCall(ws, "setLasts") { put("vault", v.id); put("lasts", SCOPES[i]) } }
-            }, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
-            Text(t("android-settings.vault.lasts.note"), fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
+        Column {
+            Text(t("android-settings.vault.lasts.note"), fontSize = 13.sp, lineHeight = 19.sp, color = C.muted, modifier = Modifier.padding(bottom = 4.dp))
+            SCOPES.forEachIndexed { i, s ->
+                PickLine(lastsName(s), t("android-settings.vault.lasts.${s}Detail"), checked = i == now, onClick = {
+                    if (!setting && i != now) app.vaultAct(t("android-settings.vault.lasts.what")) { app.vaultCall(ws, "setLasts") { put("vault", v.id); put("lasts", s) } }
+                })
+            }
         }
     }
 }

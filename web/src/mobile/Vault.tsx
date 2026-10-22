@@ -413,8 +413,15 @@ function Lasts({ v }: { v: VaultRow }) {
     <>
       <SectionHeader title={t("web-pages.vault.lasts.title")} start={24} />
       <ListCard><div className={securityCss.mBody}>
-        <Seg fill options={SCOPES.map(lastsName)} selected={now} onSelect={(i) => { if (!setting && i !== now) void run("vault.setLasts", { workspace: ws, vault: v.id, lasts: SCOPES[i] }, t("web-pages.vault.lasts.what")); }} />
         <span className={securityCss.mNote}>{t("web-pages.vault.lasts.note")}</span>
+        <div className={connectsCss.mChoices}>
+          {SCOPES.map((s, i) => (
+            <button key={s} type="button" className={connectsCss.mChoice} data-on={i === now || undefined} aria-pressed={i === now}
+              onClick={() => { if (!setting && i !== now) void run("vault.setLasts", { workspace: ws, vault: v.id, lasts: s }, t("web-pages.vault.lasts.what")); }}>
+              <b>{lastsName(s)}</b><span>{t(`web-pages.vault.lasts.${s}Detail`)}</span>
+            </button>
+          ))}
+        </div>
       </div></ListCard>
     </>
   );
