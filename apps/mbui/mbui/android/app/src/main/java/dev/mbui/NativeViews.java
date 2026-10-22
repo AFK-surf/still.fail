@@ -102,6 +102,9 @@ final class NativeViews {
         volatile double duration = -1, position, playing, nw, nh, bytes, framed, buffering, buffered, ended;
         // placed: x y w h cx0 cy0 cx1 cy1, the content's corners' radius, in pixels; shown
         final float[] at = new float[9];
+        /** Where it was told to go before it was made (made once the window has had the focus): put there as it is. */
+        float[] pendingTo;
+        boolean pendingShown;
         boolean shown;
         private boolean told;
         // (main thread) placed once where told and shown; its host done with it (ready or failed); its first frame so
@@ -399,9 +402,32 @@ final class NativeViews {
                 afterCookies.add(() -> make(v, kind));
                 return;
             }
+            // a WebView's first, made before the window first had the focus: the browser's engine starting on the main
+            // thread (seconds on an emulator) held the window's FocusEvent past the input timeout, an ANR, the app
+            // ended (mbui-host-android's site contract, 39781713658): made once that event is handled
+            if (kind != 1 && !focusedOnce) {
+                afterFocus.add(() -> make(v, kind));
+                return;
+            }
             make(v, kind);
         });
         return id;
+    }
+
+    /** Whether the window has had the focus since the app started (main thread). */
+    static boolean focusedOnce;
+
+    /** Views waiting for that (main thread). */
+    static final java.util.ArrayList<Runnable> afterFocus = new java.util.ArrayList<>();
+
+    /** The window has the focus (MainActivity.onWindowFocusChanged): the views waiting for it made after this event. */
+    static void focused() {
+        if (focusedOnce) return;
+        focusedOnce = true;
+        Host.main.post(() -> {
+            for (Runnable r : afterFocus) r.run();
+            afterFocus.clear();
+        });
     }
 
     /** A view made and put in the layer (main thread). */
@@ -418,6 +444,10 @@ final class NativeViews {
         v.clip.setVisibility(View.GONE);
         v.make(v.context);
         layer.addView(v.clip, new FrameLayout.LayoutParams(0, 0));
+        if (v.pendingTo != null) {
+            put(v, v.pendingTo, v.pendingShown);
+            v.pendingTo = null;
+        }
     }
 
     static void place(int id, float x, float y, float w, float h, float cx0, float cy0, float cx1, float cy1,
@@ -427,7 +457,20 @@ final class NativeViews {
         float d = Host.view.density;
         float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d, radius * d};
         Host.main.post(() -> {
-            if (v.closed || v.clip == null) return;
+            if (v.closed) return;
+            if (v.clip == null) {
+                v.pendingTo = to;
+                v.pendingShown = shown;
+                return;
+            }
+            put(v, to, shown);
+        });
+    }
+
+    /** View `v` (made) put at `to` (device pixels: its content's rect, its clip, its corners), shown or not (main thread). */
+    private static void put(NView v, float[] to, boolean shown) {
+        {
+            int id = v.id;
             boolean same = v.shown == shown;
             for (int i = 0; i < 9 && same; i++) same = Math.abs(v.at[i] - to[i]) < 0.5f;
             if (same) return;
@@ -453,7 +496,7 @@ final class NativeViews {
                 v.placedOnce = true;
                 v.drawnWhenBoth();
             }
-        });
+        }
     }
 
     /**
