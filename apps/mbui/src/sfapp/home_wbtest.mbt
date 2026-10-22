@@ -255,3 +255,44 @@ test "a row's state line in red while a message of the viewer's in it did not go
   t2.draw()
   assert_true(t2.drawn_glyphs().iter().all(fn(g) { g.2 == muted.val }))
 }
+
+///|
+test "the filter's other lists read once its menu opens; one picked slides in over 240 ms (Home.kt shift)" {
+  reset()
+  let base = fixture("home")
+  let read : Array[String] = []
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "chats" {
+        let k = Json::object(params).stringify()
+        if !read.contains(k) {
+          read.push(k)
+        }
+      }
+      (base.topic)(name, params)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.draw()
+  let mine = fn() { read.iter().any(fn(k) { k.contains("\"mine\":true") }) }
+  assert_false(mine())
+  // the filter's button, at the bar's right
+  t.tap(390.0 - 16.0 - 17.0, 25.0)
+  // (the menu open, built again from it)
+  t.draw()
+  assert_true(mine())
+  t.tap_text("我参与的")
+  // half way: the list switched from going out to the left, the one picked coming in from the right (where words
+  // are drawn: their lists' looks move them)
+  let drawn = fn() { t.words().filter(fn(w) { w.0 == "和 Ana 一起看新版的引导页" }).map(fn(w) { w.1 }) }
+  t.run_for(home_filter_ms / 2.0)
+  let xs = drawn()
+  assert_true(xs.length() == 2)
+  assert_true(xs.iter().any(fn(x) { x < 0.0 }) && xs.iter().any(fn(x) { x > 22.0 }))
+  t.run_for(home_filter_ms)
+  // at rest: only the list picked, where a list is
+  let xs = drawn()
+  assert_eq(xs.length(), 1)
+  assert_true(xs[0] > 0.0 && xs[0] < 195.0)
+}

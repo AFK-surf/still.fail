@@ -323,6 +323,7 @@ fn reset() -> Unit {
   quote_fields.clear()
   rename_field.set("")
   rename_given.val = ""
+  relay_reset()
   marked_into.clear()
   shared_into.clear()
   share_files_made.val = 0

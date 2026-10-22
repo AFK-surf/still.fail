@@ -89,6 +89,19 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
 }
 
 ///|
+/// Whether lines ending at `line_end` (clusters, whose first code units are `cu`) were broken where the width ran out,
+/// not only at the words' own new lines.
+fn soft_wrapped(line_end : Array[Int], cu : Array[Int]) -> Bool {
+  for l in 0..<(line_end.length() - 1) {
+    let e = line_end[l]
+    if e <= 0 || e > cu.length() || !is_nl(cu[e - 1]) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// The content size of a leaf for the flex engine.
 fn leaf_size(
   n : Node,
@@ -98,12 +111,14 @@ fn leaf_size(
   hm : @flex.MeasureMode,
 ) -> (Double, Double) {
   let max_w = if wm == Undefined { 1.0e9 } else { w }
+  // words broken onto more lines than their own take all the width they may (Compose's Text: a paragraph wrapped is
+  // as wide as its constraint, not its widest line), as a message's bubble is
   if n.kind == kind_text {
     let tl = n.text_layout(max_w)
-    (if wm == Exactly { w } else { tl.w }, tl.h)
+    (if wm == Exactly || (wm == AtMost && n.wrap && soft_wrapped(tl.line_end, tl.shaped.cu)) { w } else { tl.w }, tl.h)
   } else if n.kind == kind_rich {
     match n.rich_layout(max_w) {
-      Some(rl) => (if wm == Exactly { w } else { rl.w }, rl.h)
+      Some(rl) => (if wm == Exactly || (wm == AtMost && n.wrap && soft_wrapped(rl.line_end, rl.cu)) { w } else { rl.w }, rl.h)
       None => (0.0, 0.0)
     }
   } else if n.kind == kind_editor {

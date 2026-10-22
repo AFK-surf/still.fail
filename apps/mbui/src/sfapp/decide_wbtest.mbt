@@ -252,3 +252,63 @@ test "the history's post: where it went with its platform's mark, in the accent'
   t.run_for(@ui.nav_push_ms)
   assert_true(app.nav.top() is Chat(_))
 }
+
+///|
+test "接力到频道: the places the station's bots are in, one picked, relayed there with a note (Relay.kt)" {
+  reset()
+  let calls : Array[Made] = []
+  let base = fixture("chat-info")
+  let places : Json = {
+    "connects": [
+      {
+        "id": "slack-1",
+        "kind": "slack",
+        "name": "星火助手",
+        "team": "星火",
+        "places": [
+          { "id": "C1", "name": "dev", "kind": "channel", "used": 20 },
+          { "id": "C2", "name": "ops", "kind": "channel", "private": true },
+        ],
+      },
+    ],
+  }
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      match name {
+        "chat.relayPlaces" => done(Ok(places))
+        "chat.relay" => done(Ok({ "place": "#dev" }))
+        _ => done(Ok(Json::object({})))
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_fixture("chat-info")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("接力到频道…")
+  assert_eq(named(calls, "chat.relayPlaces").length(), 1)
+  // (the info sheet goes, the relay sheet comes up, to where it rests)
+  t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
+  assert_true(t.find("接力到频道") is Some(_))
+  assert_true(t.find("#dev") is Some(_))
+  assert_true(t.find("🔒 #ops") is Some(_))
+  // nothing picked: 接力 not lit
+  t.tap_text("#dev")
+  assert_true(t.find("接力到 #dev") is Some(_))
+  assert_true(t.find("开头附一句（可选）") is Some(_))
+  t.tap_text("接力到 #dev")
+  let relayed = named(calls, "chat.relay")
+  assert_eq(relayed.length(), 1)
+  assert_eq(text(Some(relayed[0].params), "connect"), "slack-1")
+  assert_eq(text(Some(relayed[0].params), "channel"), "C1")
+}
+
+///|
+test "接力: a pasted Slack message's link offers that thread, nothing else to pick" {
+  assert_true(slack_link("https://star.slack.com/archives/C0123ABC/p1729580000123456"))
+  assert_false(slack_link("https://star.slack.com/archives/C0123ABC"))
+  assert_false(slack_link("https://star.slack.com/archives/c0123abc/p1729580000123456"))
+  assert_false(slack_link("ops"))
+}
