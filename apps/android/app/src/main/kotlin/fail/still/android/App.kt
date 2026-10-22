@@ -21,6 +21,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -31,6 +33,9 @@ import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.runtime.withFrameNanos
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.sqrt
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
@@ -271,14 +276,23 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         val under = app.stack.getOrNull(app.stack.size - 2)
         var start: Float? = null
         var following = false
+        val finger = Follow()
         try {
-            progress.collect { e ->
-                // Only from a page at rest (not while one still moves in); by the finger's own way from where it began.
-                if (under == null || pages.currentState != pages.targetState && !following) return@collect
-                val x0 = start ?: e.touchX.also { start = it }
-                val dx = if (e.swipeEdge == BackEventCompat.EDGE_RIGHT) x0 - e.touchX else e.touchX - x0
-                if (!following) { swiped = true; following = true }
-                pages.seekTo((dx / width.coerceAtLeast(1f)).coerceIn(0f, 1f), under)
+            coroutineScope {
+                // The page goes after the finger a frame at a time. Where the finger is comes as the system sends it, not
+                // with the frames (a frame can get none of it and the next two), so the page put where each one says
+                // went in fits and starts; a list's scroll does not, its finger's touches sampled again for each frame.
+                var frames: Job? = null
+                progress.collect { e ->
+                    // Only from a page at rest (not while one still moves in); by the finger's own way from where it began.
+                    if (under == null || pages.currentState != pages.targetState && !following) return@collect
+                    val x0 = start ?: e.touchX.also { start = it }
+                    val dx = if (e.swipeEdge == BackEventCompat.EDGE_RIGHT) x0 - e.touchX else e.touchX - x0
+                    finger.to(dx / width.coerceAtLeast(1f), first = !following)
+                    if (!following) { swiped = true; following = true }
+                    if (frames?.isActive != true) frames = launch { finger.follow { pages.seekTo(it, under) } }
+                }
+                frames?.cancel()
             }
             // Let go: on from where the finger left it at once, moving as it was (out, easing to rest), and only then off
             // the stack. Popping first waited a frame or two for the pages to recompose, then started from still: a stop
@@ -522,10 +536,59 @@ private suspend fun seekAlong(from: Float, to: Float, ms: Float, easing: Easing,
 }
 
 /**
- * Swiped back: the page goes right with the finger (linear in the seek, so it is where the finger is) and the one under
- * it comes along beside it, edge to edge, as a tapped back moves them. Settings came from the left (`toLeft`): they go
- * back that way, the list coming from the right. An unsent new chat (`rose`) rose from the bottom: it
- * sinks back down with the finger over the page under it, as a tapped back takes it.
+ * Where a page swiped back is (`at`, a share of its width) as it goes after the finger (`to`): the system's own smoothing
+ * of a back gesture's progress (BackProgressAnimator: a spring of medium stiffness without bounce), on the finger's
+ * place, stepped with the frames: steady however unevenly the places come, a little behind the finger while it moves
+ * and where it is once it stops.
+ */
+private class Follow {
+    var at = 0f
+        private set
+    private var goal = 0f
+    private var speed = 0f
+    /** How long a frame has been (ns): the first of a run of frames, after it rested, is taken to be as long. */
+    private var frame = 0L
+
+    fun to(x: Float, first: Boolean) {
+        goal = x
+        if (first) { at = x; speed = 0f }
+    }
+
+    /** Steps it a frame at a time, `seek` putting the page where it is, until it rests where the finger is. */
+    suspend fun follow(seek: suspend (Float) -> Unit) {
+        var last = -1L
+        do {
+            val now = withFrameNanos { it }
+            if (last >= 0) frame = (now - last).coerceIn(0L, 50_000_000L)
+            last = now
+            step(frame / 1e9f, kotlin.coroutines.coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f)
+            seek(at.coerceIn(0f, 1f))
+        } while (at != goal)
+    }
+
+    /** `dt` seconds on, on the system's animation speed (`scale`; 0, there at once). */
+    private fun step(dt: Float, scale: Float) {
+        if (scale <= 0f) { at = goal; speed = 0f; return }
+        val t = dt / scale
+        // Critically damped: where it is and how fast after t, exactly, however long the frame.
+        val c1 = at - goal
+        val c2 = speed + W * c1
+        val e = exp(-W * t)
+        at = goal + (c1 + c2 * t) * e
+        speed = (c2 - W * (c1 + c2 * t)) * e
+        // Within a tenth of a pixel, still: there.
+        if (abs(at - goal) < 1e-4f && abs(speed) < 1e-3f) { at = goal; speed = 0f }
+    }
+
+    /** SpringForce.STIFFNESS_MEDIUM (1500), its square root. */
+    private companion object { val W = sqrt(1500f) }
+}
+
+/**
+ * Swiped back: the page goes right with the finger (linear in the seek, so it is where the finger has it, Follow) and
+ * the one under it comes along beside it, edge to edge, as a tapped back moves them. Settings came from the left
+ * (`toLeft`): they go back that way, the list coming from the right. An unsent new chat (`rose`) rose from the bottom:
+ * it sinks back down with the finger over the page under it, as a tapped back takes it.
  */
 private fun swipe(toLeft: Boolean, z: Float, rose: Boolean): ContentTransform {
     val linear = tween<IntOffset>(300, easing = LinearEasing)
