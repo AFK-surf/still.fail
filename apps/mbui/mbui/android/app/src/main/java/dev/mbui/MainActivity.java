@@ -38,6 +38,9 @@ public class MainActivity extends Activity {
                 defaults = meta.getString("dev.mbui.env");
                 // what shows under the system bars, light and dark (<meta-data android:name="dev.mbui.ground"
                 // android:value="#F5F3EF,#1B1C1F">: the app's page ground), else mbui's own
+                // the app lays itself out round the system bars (<meta-data android:name="dev.mbui.edge"
+                // android:value="true">): its view under them, from the screen's top to its foot, `bars` said to it
+                edge = meta.getBoolean("dev.mbui.edge", false);
                 String ground = meta.getString("dev.mbui.ground");
                 if (ground != null && ground.indexOf(',') > 0) {
                     try {
@@ -109,6 +112,11 @@ public class MainActivity extends Activity {
             if (over()) {
                 sayBars(bars);
                 bars = Insets.NONE;
+            } else if (edge) {
+                // edge to edge, as Android's app is: its pages run under the status bar and the navigation bar, each
+                // padded by what the bars cover (`bars`, top and bottom); a cutout at a side kept out of the view
+                sayBars(Insets.of(0, bars.top, 0, bars.bottom));
+                bars = Insets.of(bars.left, 0, bars.right, 0);
             }
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) view.getLayoutParams();
             if (p.leftMargin != bars.left || p.topMargin != bars.top
@@ -225,6 +233,8 @@ public class MainActivity extends Activity {
     private boolean imeMoving;
     /** Whether the soft keyboard was shown, as the insets last said. */
     private boolean imeShown;
+    /** The app lays itself out round the system bars (its manifest's dev.mbui.edge): its view under them. */
+    private static boolean edge;
 
     /** This activity's own view and native views' layer: the host's (Host.view, NativeViews.layer) while it is resumed. */
     private MBView mbView;
@@ -258,7 +268,11 @@ public class MainActivity extends Activity {
         int over = Math.max(0, ime - bars);
         if (over != Host.imeBottom) {
             Host.imeBottom = over;
-            if (Host.view != null) Host.view.wantFrame();
+            // as it moves (onProgress, within the system's frame for it): drawn in this frame, as the keyboard is
+            if (Host.view != null) {
+                if (imeMoving) Host.view.frameNow();
+                else Host.view.wantFrame();
+            }
         }
     }
 

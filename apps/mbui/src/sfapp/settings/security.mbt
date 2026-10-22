@@ -93,15 +93,23 @@ fn security_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 ///|
 /// The page's main action along the screen's foot, as wide as it (Security.kt Foot); a note over it.
 fn foot(c : @ui.Ctx, f : () -> Unit, words? : String = "") -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), padx=16.0, pady=10.0, gap=8.0, align=ACenter, bg=t.p.bg, fn() {
-    if words != "" {
-      note(c, words)
-    }
-    f()
+  // over the navigation bar, on the page's ground (Foot: windowInsetsPadding(navigationBars), then 10)
+  c.box(style=foot_ground, fn() {
+    c.box(w=Fill(1.0), padx=16.0, pady=10.0, gap=8.0, align=ACenter, fn() {
+      if words != "" {
+        note(c, words)
+      }
+      f()
+    })
+    |> ignore
+    bar_room_gap(c, nav_foot.val)
   })
   |> ignore
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_ground : @ui.Style = @ui.style(w=Full, bg=Bg)
 
 ///|
 /// Off (Security.kt Off): what it is now and once on, how new devices come in; who may turn it on.

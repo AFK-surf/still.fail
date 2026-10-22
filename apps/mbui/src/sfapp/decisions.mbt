@@ -93,7 +93,7 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else {
       nav_bar(c, tr("android-misc.bar.place.decisions"))
     }
-    c.box(w=Fill(1.0), h=Fill(1.0), pt=4.0, pb=if place && !wide_on.val { bar_room } else { 0.0 }, fn() {
+    c.box(w=Fill(1.0), h=Fill(1.0), pt=4.0, pb=if place && !wide_on.val { nav_foot() + bar_room } else { nav_foot() }, fn() {
       if shown.length() == 0 {
         // none yet while stations are still read is not none: their cards to come
         if view is Some(_) && !flag(field(view, "wait"), "reading") {

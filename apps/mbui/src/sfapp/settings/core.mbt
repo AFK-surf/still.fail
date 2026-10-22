@@ -541,6 +541,9 @@ pub fn reset() -> Unit {
   frame_core.val = None
   at_root.val = false
   wide.val = false
+  status_top.val = 0.0
+  nav_foot.val = 0.0
+  bar_room.val = 0.0
   wide_deep.val = false
   top_trailing.val = None
   top_label.val = ""

@@ -18,7 +18,10 @@
 //   bar, the navigation bar, a display cutout) reach in over the app's view from each edge, in points; said as the
 //   view is laid out over another app and as they change. The soft keyboard up, the view ends where the keyboard
 //   starts plus `bottom`, so a sheet padded by `bottom` sits on the keyboard. In the app's own window the view is
-//   inside the bars and nothing is said.
+//   inside the bars and nothing is said, unless the app lays itself out round them (its manifest's
+//   `<meta-data android:name="dev.mbui.edge" android:value="true">`, as Android's apps edge to edge): then its view is
+//   under them too, from the screen's top to its foot, and `bars` says their `top` and `bottom` (a cutout at a side is
+//   kept out of the view: `left` and `right` 0), the keyboard up as over another app.
 // - `{"network": true}`: the device's default network became another one than the one before (Wi-Fi to mobile data,
 //   back online after none: ConnectivityManager's default network callback, with ACCESS_NETWORK_STATE in the app's
 //   manifest). Not for the first one seen.

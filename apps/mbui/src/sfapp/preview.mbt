@@ -1223,7 +1223,11 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     } else {
       c.layer(fn() {
         c.spacer()
+        // over the navigation bar (FilePreview.kt MarksFoot)
         marks_foot(c)
+        if nav_foot() > 0.0 {
+          c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
+        }
       })
       |> ignore
     }
@@ -2408,6 +2412,8 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
     |> ignore
   })
   |> ignore
+  // over the navigation bar (VideoViewer.kt: windowInsetsPadding(navigationBars), then 8)
+  bar_room_box(c, nav_foot())
 }
 
 ///|
@@ -2543,10 +2549,11 @@ fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> Unit
   tap_stage(c, v, stage)
   let w = c.width - 24.0
   c.list("preview/pdf/" + v.file.path, pdf.pages + 2, 400.0, fn(i) {
+    // 60 under the status bar, 12 over the navigation bar (FilePreview.kt contentPadding)
     if i == 0 {
-      c.box(w=Fill(1.0), h=Px(60.0), fn() {  }) |> ignore
+      c.box(w=Fill(1.0), h=Px(60.0 + status_top()), fn() {  }) |> ignore
     } else if i == pdf.pages + 1 {
-      c.box(w=Fill(1.0), h=Px(12.0), fn() {  }) |> ignore
+      c.box(w=Fill(1.0), h=Px(12.0 + nav_foot()), fn() {  }) |> ignore
     } else {
       let (pw, ph) = pdf.sizes[i - 1]
       let h = if pw > 0.0 { w * ph / pw } else { w * 1.294 }
@@ -2597,7 +2604,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
         p
       }
     }
-    c.box(w=Fill(1.0), h=Fill(1.0), pt=60.0, fn() {
+    c.box(w=Fill(1.0), h=Fill(1.0), pt=60.0 + status_top(), fn() {
       if page.here() && !v.closing {
         c.native(page) |> ignore
       } else if !page.here() {
@@ -2645,7 +2652,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
         c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=8.0, pb=8.0, bg=@sf.alpha(t.p.red, 0.0), fn() {  })
         |> ignore
       }
-      c.box(w=Fill(1.0), h=Px(if markdown { 64.0 } else if code { 80.0 } else { 60.0 }), fn() {  })
+      c.box(w=Fill(1.0), h=Px(status_top() + (if markdown { 64.0 } else if code { 80.0 } else { 60.0 })), fn() {  })
       |> ignore
       if cut {
         cut_line(c, pv_fill("android-chat.file.cut", [("size", file_size(show_limit.to_double()))]))
@@ -2818,7 +2825,7 @@ fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool) ->
   }
   c.list("preview/csv/" + v.file.path, body_n + 3, 37.0, fn(i) {
     if i == 0 {
-      c.box(w=Fill(1.0), h=Px(60.0), fn() {  }) |> ignore
+      c.box(w=Fill(1.0), h=Px(60.0 + status_top()), fn() {  }) |> ignore
     } else if i == 1 {
       c.box(dir=Row, bg=ink().canvas, border=0.0, fn() {
         c.box(w=Px(number), fn() {  }) |> ignore
@@ -2863,7 +2870,8 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
   let tint = if dark { dark_muted } else { t.p.muted }
   let kind = v.shown_kind()
   ignore(src)
-  c.box(w=Fill(1.0), pt=8.0, align=ACenter, opacity=if on { shown } else { 0.0 }, fn() {
+  // under the status bar, 8 at least (FilePreview.kt: statusBars' top, coerceAtLeast(8))
+  c.box(w=Fill(1.0), pt=dmax(status_top(), 8.0), align=ACenter, opacity=if on { shown } else { 0.0 }, fn() {
     c.box(
       dir=Row,
       h=Px(44.0),

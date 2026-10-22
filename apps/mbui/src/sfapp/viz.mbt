@@ -806,7 +806,8 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
       let t = @sf.theme()
       c.on_back(fn() { viz_close_full() })
       c.layer(fn() {
-        c.box(style=viz_ground, fn() {
+        // inside the bars (Viz.kt VizFull: windowInsetsPadding(systemBars)), on the page's ground
+        within_bars(c, ground=viz_ground, fn() { c.box(style=bars_fill, fn() {
           c.box(style=viz_full_bar, fn() {
             c.box(style=viz_full_name_box, fn() { c.text(v.name, style=viz_full_name) |> ignore }) |> ignore
             let close = c.id("viz/full/close")
@@ -834,7 +835,7 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
           })
           |> ignore
         })
-        |> ignore
+        |> ignore })
       })
       |> ignore
     }

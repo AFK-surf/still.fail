@@ -253,7 +253,8 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json]) -> Unit {
     }
   }
   let asking = landing.asked
-  c.box(style=landing_page, fn() {
+  // inside the bars (Workspaces.kt Landing: windowInsetsPadding(systemBars.union(keyboard)))
+  within_bars(c, fn() { c.box(style=landing_page, fn() {
     landing_picture(c)
     if pending.length() > 0 {
       c.text(tr("android-misc.invite.received"), style=landing_title) |> ignore
@@ -318,7 +319,7 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json]) -> Unit {
       switch_account_button(c, src)
     }
   })
-  |> ignore
+  |> ignore })
 }
 
 ///|
@@ -353,7 +354,8 @@ fn open_invite_link() -> Unit {
 /// An account the app may not be used with (Blocked): why, its email; it signs out, or another signs in.
 fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
   let account = field(entry, "account")
-  c.box(style=landing_page, fn() {
+  // inside the bars (Workspaces.kt Blocked: windowInsetsPadding(systemBars))
+  within_bars(c, fn() { c.box(style=landing_page, fn() {
     landing_picture(c)
     c.text(text(entry, "blocked"), style=landing_title) |> ignore
     c.text(text(account, "email"), style=landing_lead) |> ignore
@@ -374,5 +376,5 @@ fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
     }
     switch_account_button(c, src)
   })
-  |> ignore
+  |> ignore })
 }

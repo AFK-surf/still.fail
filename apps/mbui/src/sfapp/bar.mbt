@@ -1292,9 +1292,10 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   let notch_y = -lift * k_now
   let idle = if t.dark { 0xD1D5DBFFL } else { 0x6B7280FFL }
   let lit = if t.dark { 0xFFFFFFFFL } else { 0x111827FFL }
-  // the panel's frame in the window
+  // the panel's frame in the window: 22 over the navigation bar (Bar.kt: padding(bottom = 22.dp + navBottom))
+  let foot = 22.0 + nav_foot()
   let fx = 22.0
-  let fy = c.height - 22.0 - panel
+  let fy = c.height - foot - panel
   // the panel open: a press anywhere else closes it (and does nothing else)
   if shown && m.mode {
     let catcher = c.id("bar/catch")
@@ -1335,7 +1336,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   let mut holder = -1
   c.layer(fn() {
     c.spacer()
-    holder = c.box(w=Px(w), h=Px(panel), tx=22.0, ty=-22.0, fn() {
+    holder = c.box(w=Px(w), h=Px(panel), tx=22.0, ty=-foot, fn() {
       bar_shadow(c, w, clip_top, panel)
       bar_glass(c, w, clip_top, panel, notch_y, notch_r)
       // the glass takes the gestures (its places' taps are read where they land)
@@ -1831,7 +1832,8 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
     return
   }
   c.box(w=Fill(1.0), bg=@sf.alpha(t.p.bg, 0.94), fn() {
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
+    // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then 8)
+    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top() + 8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="place-settings") {
         app.nav.push(Settings)
       }

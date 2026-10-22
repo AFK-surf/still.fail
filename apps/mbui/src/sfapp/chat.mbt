@@ -254,7 +254,8 @@ fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
 fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   let t = @sf.theme()
   let (view, list, error) = view_of_chat(src, r)
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+  // over the navigation bar (ChatHost.kt: windowInsetsPadding(keyboard.union(navigationBars)))
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
     match view {
       None => {
         // until the core has it, already a chat's page: its bar (no title yet), the messages to come breathing
@@ -271,6 +272,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         c.layer(fn() {
           c.spacer()
           composer(c, src, r, None)
+          // over the navigation bar (a layer goes on under the page's padding)
+          bar_room_box(c, nav_foot())
         })
         |> ignore
       }
@@ -280,6 +283,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         c.layer(fn() {
           c.spacer()
           composer(c, src, r, Some(v))
+          // over the navigation bar (a layer goes on under the page's padding)
+          bar_room_box(c, nav_foot())
         })
         |> ignore
         // words sent, as typed, until their row is in the list (flight.mbt)
@@ -397,7 +402,7 @@ fn messages(
           gap
         }
         match e {
-          Top => c.box(h=Px(chat_bar_h + 14.0), fn() {  }) |> ignore
+          Top => c.box(h=Px(status_top() + chat_bar_h + 14.0), fn() {  }) |> ignore
           Foot => c.box(h=Px(composer_room_for(c, draft_key(r), Some(v)) + 10.0), fn() {  }) |> ignore
           Working(a) => {
             // coming in, its room opens (220 ms, Ease.Out) as it fades in and grows from its avatar; its turn over,
@@ -526,12 +531,12 @@ fn messages(
       }
       put_now = line >= 0 || at >= 0
       if line >= 0 {
-        c.list_scroll_to(key, line, offset=-(chat_bar_h + 14.0 + 85.0))
+        c.list_scroll_to(key, line, offset=-(status_top() + chat_bar_h + 14.0 + 85.0))
       } else if at >= 0 {
         c.list_scroll_to(
           key,
           at,
-          offset=-(chat_bar_h + 14.0 + v.at_offset.unwrap_or(0.0)),
+          offset=-(status_top() + chat_bar_h + 14.0 + v.at_offset.unwrap_or(0.0)),
         )
       }
     }
@@ -576,7 +581,7 @@ fn messages(
           } else {
             flash_start(rd)
           }
-          c.list_scroll_to(key, at, offset=-(chat_bar_h + 14.0))
+          c.list_scroll_to(key, at, offset=-(status_top() + chat_bar_h + 14.0))
           @hostapi.log("chat: gone to message \{target.to_int()}")
         } else {
           match v.thread {
@@ -1256,7 +1261,8 @@ fn bar_frame(
   on_more? : () -> Unit = fn() {  },
 ) -> Unit {
   let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=6.0, pb=8.0, align=ACenter, fn() {
+  // under the status bar (Chat.kt BarFrame: windowInsetsPadding(statusBars), then 6)
+  c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=status_top() + 6.0, pb=8.0, align=ACenter, fn() {
     let back = c.id("chat-back")
     if c.clicked(back) {
       app.nav.pop() |> ignore

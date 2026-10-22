@@ -94,10 +94,6 @@ let share_in : ShareIn = {
 /// Shown over another app (the host's say, @hostapi.system_channel `over`): only the share sheet is drawn.
 let share_over : Ref[Bool] = Ref(false)
 
-///|
-/// Over another app, how far the navigation bar reaches in over the app's foot (@hostapi.system_channel `bars`: the view
-/// under the bars there, as ShareActivity is edge to edge): the sheet's content and the toasts kept above it.
-let share_foot : Ref[Double] = Ref(0.0)
 
 ///|
 /// Over another app, its sheet closed by hand: the app goes once it has sunk away (ShareScreen: onClose after its spring).

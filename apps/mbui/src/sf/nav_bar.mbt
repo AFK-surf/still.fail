@@ -79,7 +79,8 @@ pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0
 
 ///|
 /// The bar (NavBar): back (`back_key` its id, `back` its word, `back_max` how wide the word may be), `title` in the
-/// middle and `sub` under it, `trailing` at the end; on `bg` when it is said. True on the frame after back was tapped.
+/// middle and `sub` under it, `trailing` at the end; on `bg` when it is said, from `top` above it down (the status
+/// bar's height, the view under it: NavBar's windowInsetsPadding(statusBars)). True on the frame after back was tapped.
 pub fn nav_bar(
   c : @ui.Ctx,
   back_key : String,
@@ -89,8 +90,9 @@ pub fn nav_bar(
   trailing? : () -> Unit,
   back_max? : Double = 0.0,
   bg? : Int64 = 0L,
+  top? : Double = 0.0,
 ) -> Bool {
-  nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~)
+  nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~, top~)
 }
 
 ///|
@@ -103,10 +105,15 @@ fn nav_bar_in(
   trailing? : () -> Unit,
   back_max~ : Double,
   bg~ : Int64,
+  top~ : Double,
 ) -> Bool {
   let mut went = false
   // det-ok(box-loose): the page's own ground (still.fail's palette, not one of mbui's theme roles yet), as the page has it
   c.box(style=nav_bar_box, bg~, fn() {
+    // under the status bar
+    if top > 0.0 {
+      c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore
+    }
     c.box(style=nav_bar_inner, fn() {
       // the title, in the flow: as tall as its lines make the bar
       c.box(style=nav_title_column, fn() {
