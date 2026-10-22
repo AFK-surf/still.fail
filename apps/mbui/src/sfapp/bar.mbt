@@ -1037,7 +1037,8 @@ fn bar_shadow(c : @ui.Ctx, w : Double, top : Double, bottom : Double) -> Unit {
       h=Px(h),
       ty=4.0,
       radius=dmin(rad, h / 2.0),
-      shadow=10.0,
+      // (Bar.kt: BlurMaskFilter of a CSS deviation of 6)
+      shadow=6.0,
       shadow_color=color,
       shadow_y=0.0,
       fn() {  },

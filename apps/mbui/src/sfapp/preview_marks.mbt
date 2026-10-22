@@ -636,7 +636,7 @@ fn picture_pin(c : @ui.Ctx, n : Int, color : Int64, size : Double, id? : Int = 0
   let small = size < 20.0
   let edge = if small { 0.0 } else { 2.0 }
   let point = if small { 2.0 } else { 3.0 }
-  c.box(w=Px(size), h=Px(size), id~, shadow=if small { 0.0 } else { 3.0 }, radius=size / 2.0, bg=if small { color } else { halo }, fn() {
+  c.box(w=Px(size), h=Px(size), id~, shadow=if small { 0.0 } else { @sf.pin_raised.sigma }, shadow_y=@sf.pin_raised.dy, shadow_color=@sf.pin_raised.color, radius=size / 2.0, bg=if small { color } else { halo }, fn() {
     // its pointed corner: a square over the round one at the foot towards the mark
     c.layer(fn() {
       c.box(w=Px(size / 2.0), h=Px(size / 2.0), ty=size / 2.0, radius=point, bg=if small { color } else { halo }, fn() {  })
@@ -1059,7 +1059,7 @@ fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
   if c.clicked(done) {
     marks_note_done(c)
   }
-  let box = c.box(w=Fill(1.0), pl=8.0, pr=8.0, pt=10.0, pb=8.0, gap=6.0, radius=note_box_corner, bg=note_ground, shadow=1.0, fn() {
+  let box = c.box(w=Fill(1.0), pl=8.0, pr=8.0, pt=10.0, pb=8.0, gap=6.0, radius=note_box_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, fn() {
     c.box(style=note_head, fn() {
       picture_pin(c, n, color, 16.0) |> ignore
       c.text(what, size=13.0, line=18.0, color=note_muted, wrap=false) |> ignore
@@ -1105,7 +1105,7 @@ fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
 fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
   let (mid, n, what, color) = note
   let said = marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string()
-  c.box(w=Px(160.0), padx=12.0, pady=9.0, gap=3.0, radius=16.0, bg=note_ground, shadow=1.0, id~, fn() {
+  c.box(w=Px(160.0), padx=12.0, pady=9.0, gap=3.0, radius=16.0, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, id~, fn() {
     c.box(style=card_head, fn() {
       picture_pin(c, n, color, 16.0) |> ignore
       c.box(w=Fill(1.0), clip=true, fn() {

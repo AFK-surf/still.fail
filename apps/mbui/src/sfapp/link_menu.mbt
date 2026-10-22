@@ -101,8 +101,9 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
       ty=y,
       radius=14.0,
       bg=t.p.card,
-      shadow=18.0,
-      shadow_y=6.0,
+      shadow=@sf.menu_raised.sigma,
+      shadow_y=@sf.menu_raised.dy,
+      shadow_color=@sf.menu_raised.color,
       clip=true,
       fn() {
         for i, it in link_menu.items {

@@ -1874,7 +1874,7 @@ fn Viewer::side_buttons(self : Viewer, c : @ui.Ctx, src : Source, shown : Double
           if self.bars_shown() && c.clicked(id) {
             self.go(c, src, side.1, 0.0)
           }
-          c.box(w=Px(36.0), h=Px(36.0), radius=18.0, bg=@sf.alpha(0x121214FFL, 0.8), align=ACenter, justify=JCenter, shadow=1.0, id~, fn() {
+          c.box(w=Px(36.0), h=Px(36.0), radius=18.0, bg=@sf.alpha(0x121214FFL, 0.8), align=ACenter, justify=JCenter, shadow=@sf.button_raised.sigma, shadow_y=@sf.button_raised.dy, shadow_color=@sf.button_raised.color, id~, fn() {
             @sf.icon(c, side.2, size=22.0, color=dark_text) |> ignore
           })
           |> ignore
@@ -2582,7 +2582,7 @@ fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> Unit
       let (pw, ph) = pdf.sizes[i - 1]
       let h = if pw > 0.0 { w * ph / pw } else { w * 1.294 }
       c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=if i < pdf.pages { 12.0 } else { 0.0 }, fn() {
-        c.box(w=Px(w), h=Px(h), bg=0xFFFFFFFFL, shadow=2.0, shadow_y=1.0, fn() {
+        c.box(w=Px(w), h=Px(h), bg=0xFFFFFFFFL, shadow=@sf.page_raised.sigma, shadow_y=@sf.page_raised.dy, shadow_color=@sf.page_raised.color, fn() {
           c.image(pdf.page_src(i - 1), w=Px(w), h=Px(h), fit=FitFill, bg=t.p.neutral_bg) |> ignore
         })
         |> ignore
@@ -2913,8 +2913,9 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
       } else {
         0xFFFFFFEBL
       },
-      shadow=if dark { 0.0 } else { 6.0 },
-      shadow_color=0x0000001FL,
+      shadow=if dark { 0.0 } else { @sf.viewer_bar_raised.sigma },
+      shadow_y=@sf.viewer_bar_raised.dy,
+      shadow_color=@sf.viewer_bar_raised.color,
       fn() {
         c.box(w=Auto, pr=12.0, max_w=c.width - 16.0 - 14.0 - 4.0 * 36.0, clip=true, fn() {
           c.text(v.file.name, size=15.0, weight=600, color=if dark { dark_text } else { t.p.text }, wrap=false)

@@ -1301,9 +1301,9 @@ fn jump_to_latest(
         align=ACenter,
         justify=JCenter,
         glass=@sf.glass_floating(),
-        shadow=2.0,
-        shadow_color=0x0000004DL,
-        shadow_y=0.5,
+        shadow=@sf.floating.sigma,
+        shadow_color=@sf.floating.color,
+        shadow_y=@sf.floating.dy,
         id~,
         fn() {
           @sf.icon(c, "arrow-down", size=18.0, color=t.p.text) |> ignore
@@ -1400,9 +1400,9 @@ fn jump_to_ask(
         align=ACenter,
         justify=JCenter,
         glass=@sf.glass_floating(),
-        shadow=2.0,
-        shadow_color=0x0000004DL,
-        shadow_y=0.5,
+        shadow=@sf.floating.sigma,
+        shadow_color=@sf.floating.color,
+        shadow_y=@sf.floating.dy,
         id~,
         fn() { @sf.icon(c, "bell", size=18.0, color=t.p.text) |> ignore },
       )

@@ -713,6 +713,7 @@ pub fn Ctx::box(
   n.shadow_c = first(
     shadow_color,
     match st.shadow {
+      Some(Cast(_, _, c)) => Some(c)
       Some(_) => Some(th.shadow)
       None => None
     },

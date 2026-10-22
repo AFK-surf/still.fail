@@ -139,7 +139,7 @@ let update_pop : @ui.Style = @ui.style(
   gap=S2,
   radius=Xl4,
   bg=Raised,
-  shadow=Md,
+  shadow=@sf.update_raised.cast(),
 )
 
 ///|

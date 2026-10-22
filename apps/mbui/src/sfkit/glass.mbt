@@ -75,9 +75,9 @@ fn glass_view(c : @ui.Ctx) -> Unit {
           justify=JBetween,
           padx=24.0,
           glass=@sf.glass_bottom_bar(),
-          shadow=2.0,
-          shadow_color=0x0000004DL,
-          shadow_y=0.5,
+          shadow=@sf.floating.sigma,
+          shadow_color=@sf.floating.color,
+          shadow_y=@sf.floating.dy,
           fn() {
             for icon in ["chat", "folder", "user"] {
               @sf.icon(c, icon, size=22.0, color=t.p.text) |> ignore
@@ -92,9 +92,9 @@ fn glass_view(c : @ui.Ctx) -> Unit {
           align=ACenter,
           justify=JCenter,
           glass=@sf.glass_floating(),
-          shadow=2.0,
-          shadow_color=0x0000004DL,
-          shadow_y=0.5,
+          shadow=@sf.floating.sigma,
+          shadow_color=@sf.floating.color,
+          shadow_y=@sf.floating.dy,
           fn() { @sf.icon(c, "plus", size=22.0, color=t.p.text) |> ignore },
         )
         |> ignore

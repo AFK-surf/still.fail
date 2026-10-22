@@ -467,9 +467,9 @@ fn chooser(
     } else {
       @sf.glass_floating()
     },
-    shadow=2.0,
-    shadow_color=0x0000004DL,
-    shadow_y=0.5,
+    shadow=@sf.floating.sigma,
+    shadow_color=@sf.floating.color,
+    shadow_y=@sf.floating.dy,
     clip=true,
     id~,
     fn() {

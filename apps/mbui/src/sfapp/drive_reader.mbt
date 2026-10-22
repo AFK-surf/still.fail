@@ -778,8 +778,9 @@ fn reader_top_bar(
       padx=4.0,
       radius=16.0,
       bg=paper_glass(p),
-      shadow=2.0,
-      shadow_color=0x0000004DL,
+      shadow=@sf.floating.sigma,
+      shadow_color=@sf.floating.color,
+      shadow_y=@sf.floating.dy,
       id=c.id("reader-top"),
       fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), align=ACenter, fn() {
@@ -835,8 +836,9 @@ fn found_pill(c : @ui.Ctx, r : TextReading, novel : Novel, p : PaperInk) -> Unit
       gap=2.0,
       radius=18.0,
       bg=paper_glass(p),
-      shadow=2.0,
-      shadow_color=0x0000004DL,
+      shadow=@sf.floating.sigma,
+      shadow_color=@sf.floating.color,
+      shadow_y=@sf.floating.dy,
       align=ACenter,
       id=c.id("reader-found"),
       fn() {
@@ -897,8 +899,9 @@ fn reader_bottom_bar(
       gap=6.0,
       radius=reader_bar_radius,
       bg=paper_glass(p),
-      shadow=2.0,
-      shadow_color=0x0000004DL,
+      shadow=@sf.floating.sigma,
+      shadow_color=@sf.floating.color,
+      shadow_y=@sf.floating.dy,
       id=c.id("reader-bottom"),
       fn() {
         if has_chapters {

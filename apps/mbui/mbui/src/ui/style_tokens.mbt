@@ -465,10 +465,12 @@ pub(all) enum Shadow {
   Md
   Lg
   Xl
+  /// a shadow said whole: its sigma, how far down, its colour (an app's own, worked out once where it says why)
+  Cast(Double, Double, Int64)
 } derive(Eq, Show, Debug)
 
 ///|
-/// A shadow's blur and how far down it falls.
+/// A shadow's blur (its sigma, as CALayer's shadowRadius) and how far down it falls.
 fn Shadow::blur_y(self : Shadow) -> (Double, Double) {
   match self {
     NoShadow => (0.0, -1.0)
@@ -477,6 +479,7 @@ fn Shadow::blur_y(self : Shadow) -> (Double, Double) {
     Md => (6.0, 4.0)
     Lg => (15.0, 10.0)
     Xl => (25.0, 20.0)
+    Cast(b, y, _) => (b, y)
   }
 }
 

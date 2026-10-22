@@ -360,7 +360,9 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
           bg=t.p.raised,
           border=1.0,
           border_color=t.p.line,
-          shadow=8.0,
+          shadow=@sf.pick_raised.sigma,
+          shadow_y=@sf.pick_raised.dy,
+          shadow_color=@sf.pick_raised.color,
           align=ACenter,
           id=bar,
           fn() {

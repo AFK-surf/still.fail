@@ -168,7 +168,7 @@ fn view(c : @ui.Ctx) -> Unit {
       }
     })
     |> ignore
-    c.box(bg=0xFFFFFFFFL, radius=14.0, pad=16.0, gap=12.0, shadow=3.0, fn() {
+    c.box(bg=0xFFFFFFFFL, radius=14.0, pad=16.0, gap=12.0, shadow=1.5, fn() {
       c.row(gap=8.0, fn() {
         c.text("账号", size=13.0, weight=600, color=grey, wrap=false) |> ignore
         c.spacer()

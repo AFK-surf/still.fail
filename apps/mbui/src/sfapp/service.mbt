@@ -1183,8 +1183,10 @@ fn service_stage(
             tx=pl.x,
             ty=pl.y,
             radius=corner * pl.scale,
-            shadow=6.0,
-            shadow_y=2.0,
+            // (Preview.kt: the page's view at an elevation of 6)
+            shadow=@sf.bubble_raised.sigma,
+            shadow_y=@sf.bubble_raised.dy,
+            shadow_color=@sf.bubble_raised.color,
             bg=0xFFFFFFFFL,
             fn() {  },
           )
@@ -1349,7 +1351,9 @@ fn service_restart(c : @ui.Ctx, name : String, restarts : Int) -> Unit {
     // (round at its ends whatever its height: Preview.kt's CircleShape)
     radius=1.0e6,
     bg=t.p.card,
-    shadow=8.0,
+    shadow=@sf.pick_raised.sigma,
+    shadow_y=@sf.pick_raised.dy,
+    shadow_color=@sf.pick_raised.color,
     align=ACenter,
     fn() {
       job_dot(c, "restart")
@@ -1405,10 +1409,11 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
       // Preview.kt's glass (the surface at 72%; dark, surface2 at 84%) as it shows over the dock's ground: laid on it
       // here, so its shadow does not show through it (Compose draws an elevation's shadow outside the shape only)
       bg=if t.dark { @sf.mix(0x2C2D31FFL, 0.84, ground) } else { @sf.mix(t.p.card, 0.72, ground) },
-      // (Preview.kt: shadow(4.dp) in black at 12%, ambient and spot; Compose's elevation shadow at that is as light as
-      // this blur at 5%: its darkest 247 on white, as measured side by side on the same emulator)
-      shadow=4.0,
-      shadow_color=0x0000000DL,
+      // (Preview.kt: shadow(4.dp) in black at 12%, ambient and spot: its darkest 247 on white, as measured side by side
+      // on the same emulator)
+      shadow=@sf.strip_raised.sigma,
+      shadow_y=@sf.strip_raised.dy,
+      shadow_color=@sf.strip_raised.color,
       padx=6.0,
       gap=4.0,
       align=ACenter,
@@ -1544,7 +1549,9 @@ fn size_chip(c : @ui.Ctx, key : String, label : String, on : Bool) -> Bool {
     align=ACenter,
     justify=JCenter,
     bg=if on { if t.dark { t.p.bg } else { t.p.card } } else { 0L },
-    shadow=if on { 1.0 } else { 0.0 },
+    shadow=if on { @sf.button_raised.sigma } else { 0.0 },
+    shadow_y=@sf.button_raised.dy,
+    shadow_color=@sf.button_raised.color,
     id~,
     fn() {
       c.text(label, size=13.0, weight=if on { 600 } else { 400 }, color=if on { t.p.text } else { t.p.muted }, wrap=false)
