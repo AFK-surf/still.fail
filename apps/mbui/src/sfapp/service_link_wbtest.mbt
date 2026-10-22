@@ -370,13 +370,19 @@ test "the system's back steps the page back in its own history first; at its fir
     "{\"sitestate\":{\"view\":\{site},\"state\":{\"path\":\"\{path}\",\"loading\":false,\"title\":\"\",\"forward\":false,\"back\":\{back}}}}"
   }
   assert_true(t.view_said(state("/b.html", true)))
+  // (the view's word taken as a frame begins, the page's back as the frame after builds it)
   t.frame()
+  t.draw()
   t.back()
   // the page a step back, the service's page still there
-  assert_true(t.views().iter().any(fn(s) { s.has_prefix("control \{site} 5 ") }))
+  if !t.views().iter().any(fn(s) { s.has_prefix("control \{site} 5 ") }) {
+    fail("the page not stepped back: \{t.views()}")
+  }
   assert_eq(app.nav.depth(), depth)
   assert_true(t.view_said(state("/", false)))
+  // (the view's word taken as a frame begins, the page's back as the frame after builds it)
   t.frame()
+  t.draw()
   t.back()
   t.run_for(@ui.nav_rest() - t.time())
   assert_eq(app.nav.depth(), depth - 1)
