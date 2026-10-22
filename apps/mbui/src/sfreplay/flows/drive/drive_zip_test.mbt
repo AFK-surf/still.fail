@@ -5,7 +5,7 @@
 ///|
 test "92-drive-zip" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_drive_zip, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("drive-zip"), seed~)
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-105609")
     f.run_to(@ui.nav_rest())

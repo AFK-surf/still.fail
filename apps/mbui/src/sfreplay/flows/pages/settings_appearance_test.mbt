@@ -4,7 +4,7 @@
 ///|
 test "33-settings-appearance" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_appearance, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-appearance"), seed~)
     f.see("端到端测试")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)

@@ -284,7 +284,7 @@ fn main {
   // account's core says (its tokens, a vault's values) is never put on a log.
   let cloud = @ui.env("MBUI_CLOUD")
   if @ui.env("MBUI_CORE_TRACE") == "1" && local_cloud(cloud) {
-    // (bytes over MBUI_CORE_TRACE_BYTES, scripts/trace.py's MAX_BYTES, kept as their length alone)
+    // (bytes over MBUI_CORE_TRACE_BYTES, scripts/trace make's MAX_BYTES, kept as their length alone)
     let bytes_max = @string.parse_int(@ui.env("MBUI_CORE_TRACE_BYTES")[:]) catch { _ => 16384 }
     @core.trace_to(fn(line) { @hostapi.log("CORETRACE " + line) }, bytes_max~)
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked

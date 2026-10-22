@@ -6,7 +6,7 @@
 ///|
 test "96-viewer" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_viewer, seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
+    let f = @sfreplay.Flow::start(@sfreplay.trace("viewer"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
     // (what the host drew of the marks, as the run's gave it: the PNG it sent up)
     let marked = match f.r.sent_bytes_from("station.upload.part", "name", "e2e-photo-标注-") {
       Some(b) => b

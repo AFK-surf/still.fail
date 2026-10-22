@@ -491,7 +491,7 @@ pub fn Replay::step_taken(self : Replay, line : String) -> Bool {
 ///|
 /// The bytes the run sent beside its first call `name` whose params' `key` is `value` (a part of a file going up:
 /// `station.upload.part`, `name`, `e2e-photo.jpg`), as the trace keeps them: what a test hands the app again (shared
-/// in, a picture marked) for it to send the same. None where the trace has none (over trace.py's MAX_BYTES).
+/// in, a picture marked) for it to send the same. None where the trace has none (over scripts/trace make's MAX_BYTES).
 pub fn Replay::sent_bytes(self : Replay, name : String, key : String, value : String) -> Bytes? {
   for e in self.evs {
     if e.out && e.msg is Object(m) && name_of(m) == name {

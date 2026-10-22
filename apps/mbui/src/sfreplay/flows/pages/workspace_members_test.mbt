@@ -4,7 +4,7 @@
 ///|
 test "37-workspace-members" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_workspace_members, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("workspace-members"), seed~)
     f.see("端到端测试")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)

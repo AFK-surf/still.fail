@@ -4,7 +4,7 @@
 ///|
 test "05-agent-reply" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_agent_reply, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("agent-reply"), seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over
     f.run_for(@ui.nav_push_ms)

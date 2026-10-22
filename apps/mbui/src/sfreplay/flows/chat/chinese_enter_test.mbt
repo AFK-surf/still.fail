@@ -5,7 +5,7 @@
 test "04-chinese-enter" {
   @sfreplay.orders(fn(seed) raise {
     // (the run's first flow: its app gave the core the account it was started with, migrate)
-    let f = @sfreplay.Flow::start(@sfreplay.trace_chinese_enter, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("chinese-enter"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")

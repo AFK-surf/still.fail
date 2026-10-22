@@ -5,7 +5,7 @@
 ///|
 test "66-wide-resize" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_wide_resize, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("wide-resize"), seed~)
     f.see("端到端测试")
     f.resize(1280.0, 800.0)
     f.see("新建对话")

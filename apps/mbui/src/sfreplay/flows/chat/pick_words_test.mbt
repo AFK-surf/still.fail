@@ -6,7 +6,7 @@
 ///|
 test "73-pick-words" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_pick_words, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("pick-words"), seed~)
     let said = "选词测试 201409 这一句话里有好几个可以单独选中的词语"
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)

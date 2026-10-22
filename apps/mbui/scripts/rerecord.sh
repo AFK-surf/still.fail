@@ -2,7 +2,7 @@
 # Records a flow's trace again from its test (src/sfreplay/flows/*/NAME_test.mbt), one command, nothing kept by hand:
 # the test's steps, as its first order takes them, written as a scripted run (src/sfreplay/emit.mbt: FLOW_EMIT), run
 # in the app against a local still.fail of its own (scripts/e2e-local.sh up, e2e/run.sh with MBUI_CORE_TRACE=1), its
-# conversation made the test's trace again (scripts/trace.py) and what changed of its asks said (scripts/tracediff.py),
+# conversation made the test's trace again (scripts/trace make) and what changed of its asks said (scripts/trace diff),
 # then the test run over the new trace.
 #
 #   scripts/rerecord.sh NAME…        each a test's NAME (drive_list) or an end-to-end flow kept in e2e/flows (18-drive-upload)
@@ -11,7 +11,7 @@
 # The run's mark ({T}, e2e-<tag>) and the station's directory are the old trace's, so the words the test looks for are
 # the same. One run for all NAMEs: they share their mark (a batch recorded together). macOS, a machine that runs the
 # e2e (scripts/e2e-local.sh). E2E_PORT, E2E_RELAY as e2e-local.sh's; E2E_KEEP=1 leaves the local still.fail up;
-# MAX_BYTES as trace.py's (a long text's bytes kept).
+# MAX_BYTES as scripts/trace make's (a long text's bytes kept).
 set -u
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -27,10 +27,8 @@ tag=""; station=""; tests=""; i=0
 first_start=""
 for n in "$@"; do
   [ -f "e2e/flows/$n.drive" ] && break
-  ident=$(grep -o '@sfreplay\.trace_[a-z0-9_]*' $(ls src/sfreplay/flows/*/"${n}_test.mbt" 2> /dev/null | head -1) 2> /dev/null | head -1 | sed 's/.*trace_//')
-  for t in e2e/traces/*.trace; do
-    [ "$(basename "$t" .trace | tr -c 'a-z0-9\n' '_')" = "$ident" ] && grep -q '"call":"migrate"' "$t" && first_start=1
-  done
+  tn=$(grep -o '@sfreplay\.trace("[^"]*")' $(ls src/sfreplay/flows/*/"${n}_test.mbt" 2> /dev/null | head -1) 2> /dev/null | head -1 | sed 's/.*trace("//; s/")//')
+  [ -n "$tn" ] && grep -q '"call":"migrate"' "e2e/traces/$tn.trace" 2> /dev/null && first_start=1
   break
 done
 if [ -z "$first_start" ] && [ -f e2e/flows/01-signin.drive ]; then cp e2e/flows/01-signin.drive "$TMP/00-01-signin.drive"; fi
@@ -43,23 +41,12 @@ for n in "$@"; do
   fi
   test=$(ls src/sfreplay/flows/*/"${n}_test.mbt" 2> /dev/null | head -1)
   [ -n "$test" ] || die "no test src/sfreplay/flows/*/${n}_test.mbt, nor flow e2e/flows/$n.drive"
-  ident=$(grep -o '@sfreplay\.trace_[a-z0-9_]*' "$test" | head -1 | sed 's/.*trace_//')
-  [ -n "$ident" ] || die "$test names no @sfreplay.trace_…"
-  trace=""
-  for t in e2e/traces/*.trace; do
-    b=$(basename "$t" .trace)
-    [ "$(printf '%s' "$b" | tr -c 'a-z0-9\n' '_')" = "$ident" ] && trace=$t
-  done
-  [ -n "$trace" ] || die "no e2e/traces/*.trace for trace_$ident"
+  tn=$(grep -o '@sfreplay\.trace("[^"]*")' "$test" | head -1 | sed 's/.*trace("//; s/")//')
+  [ -n "$tn" ] || die "$test names no @sfreplay.trace(…)"
+  trace=e2e/traces/$tn.trace
+  [ -f "$trace" ] || die "no $trace"
   # its mark: the six digits the test's words and its trace share most; its station's directory as the trace has it
-  t=$(python3 - "$test" "$trace" <<'PY'
-import re, sys, collections
-words = open(sys.argv[1], encoding="utf-8").read()
-trace = open(sys.argv[2], encoding="utf-8").read()
-c = collections.Counter(m for m in re.findall(r"(?<!\d)(\d{6})(?!\d)", trace) if m in words)
-print(c.most_common(1)[0][0] if c else "")
-PY
-)
+  t=$("$D/trace" mark "$test" "$trace")
   s=$(grep -o '/tmp/mb[A-Za-z0-9-]*' "$trace" | sort | uniq -c | sort -rn | awk 'NR==1 {print $2}')
   # (a test whose words hold no mark of its run looks for none: it goes with the others' mark)
   [ -z "$t" ] || [ -z "$tag" ] || [ "$tag" = "$t" ] || die "$n was recorded with the mark $t, the others before it $tag: rerecord them apart"
@@ -78,17 +65,7 @@ done
 # bytes kept as the old traces kept them: their largest beside a message (a novel read whole was kept whole), unless
 # MAX_BYTES says otherwise
 if [ -z "${MAX_BYTES:-}" ]; then
-  MAX_BYTES=$(python3 - $(for x in $tests; do r=${x#*:}; echo "${r%%:*}"; done) <<'PY'
-import json, sys
-most = 16384
-for path in sys.argv[1:]:
-    for line in open(path, encoding="utf-8"):
-        line = line.strip()
-        if line:
-            most = max(most, len(json.loads(line).get("b", "")) // 2)
-print(most)
-PY
-)
+  MAX_BYTES=$("$D/trace" maxbytes $(for x in $tests; do r=${x#*:}; echo "${r%%:*}"; done))
   export MAX_BYTES
 fi
 # (none of them with a mark of its own: a new one)
@@ -123,15 +100,12 @@ for x in $tests; do
     continue
   fi
   cp "$trace" "$TMP/$(basename "$trace").old"
-  mbt="src/sfreplay/trace_$(basename "$trace" .trace | tr -c 'a-z0-9\n' '_').mbt"
-  cp "$mbt" "$TMP/$(basename "$mbt").old"
-  python3 scripts/trace.py "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"
-  python3 scripts/tracediff.py "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
+  "$D/trace" make "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"
+  "$D/trace" diff "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
   if moon_test_native "$test" > "$TMP/$name.after.log" 2>&1; then echo "  $test: passes"; else
     echo "  $test: fails over the new trace ($TMP/$name.after.log):"; grep -a '^flow:\|assert_idle' "$TMP/$name.after.log" | head -5 | cut -c1-300; code=1
     # (the new trace is the run's; the test does not hold over it: the old one back, said)
     cp "$TMP/$(basename "$trace").old" "$trace"
-    cp "$TMP/$(basename "$mbt").old" "$mbt"
     # (the run's log kept with it: the next run's takes its place in out/e2e/mac)
     cp "out/e2e/mac/$name.log" "$TMP/$name.run.log" 2>/dev/null
     kept="$kept

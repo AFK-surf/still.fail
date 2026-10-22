@@ -5,7 +5,7 @@
 ///|
 test "28-decisions-page" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_decisions_page, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("decisions-page"), seed~)
     // the 奏 page over Home from the start, as MBUI_OPEN_PAGE=decisions opened it
     f.open_page(@sfapp.Page::Decisions)
     // (a live run's step beside the app, the trace has what came of it)

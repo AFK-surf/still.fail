@@ -5,7 +5,7 @@
 ///|
 test "67-lock-wait" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_lock_wait, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("lock-wait"), seed~)
     // (the station locked before the app starts, then let wait and unlocked: a live run's steps)
     f.before("peer lock-on")
     f.see("等待批准此设备")

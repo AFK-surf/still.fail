@@ -4,7 +4,7 @@
 ///|
 test "13-delete-failed" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_delete_failed, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("delete-failed"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")

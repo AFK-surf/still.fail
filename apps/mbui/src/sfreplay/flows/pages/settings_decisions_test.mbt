@@ -4,7 +4,7 @@
 ///|
 test "86-decisions" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_decisions, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-decisions"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
     f.wheel_at("Workspace", 300.0)

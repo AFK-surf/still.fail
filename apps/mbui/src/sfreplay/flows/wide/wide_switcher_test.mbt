@@ -5,7 +5,7 @@
 ///|
 test "63-wide-switcher" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_wide_switcher, seed~, w=1280.0, h=800.0)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("wide-switcher"), seed~, w=1280.0, h=800.0)
     f.see("端到端测试")
     f.key("cmd+k")
     f.see("搜索全部内容和操作")

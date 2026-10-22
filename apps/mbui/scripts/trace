@@ -1,0 +1,14 @@
+#!/bin/sh
+# A flow's trace made and looked at (tools/trace, in MoonBit: trace make LOG NAME, diff OLD NEW, mark, maxbytes; its
+# main.mbt says each), run with these arguments; built here only when there is none built from these very sources (by
+# content). scripts/rerecord.sh runs it.
+D=$(cd "$(dirname "$0")" && pwd)
+A=$(cd "$D/.." && pwd)
+T=$A/tools
+B=$T/_build/native/release/build/sftools/trace/trace.exe
+src=$(cd "$A" && find tools/trace tools/moon.mod tools/moon.work mbui/tools/re mbui/tools/rjson -type f | LC_ALL=C sort | xargs cat | cksum)
+if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  (cd "$T" && env -u MOON_CC moon build --target native --release >&2) || { echo "trace: tools/trace did not build" >&2; exit 1; }
+  echo "$src" > "$B.src"
+fi
+SF_ROOT=${SF_ROOT:-$A} exec "$B" "$@"

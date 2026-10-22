@@ -5,7 +5,7 @@
 ///|
 test "11-quote" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_quote, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("quote"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")

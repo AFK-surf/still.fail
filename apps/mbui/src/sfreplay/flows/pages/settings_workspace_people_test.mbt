@@ -4,7 +4,7 @@
 ///|
 test "88-workspace-people" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_workspace_people, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-workspace-people"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
     f.tap("=Workspace")

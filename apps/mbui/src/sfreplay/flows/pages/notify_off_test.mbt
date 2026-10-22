@@ -5,7 +5,7 @@
 ///|
 test "43-notify-off" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_notify_off, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("notify-off"), seed~)
     f.see("端到端测试")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)

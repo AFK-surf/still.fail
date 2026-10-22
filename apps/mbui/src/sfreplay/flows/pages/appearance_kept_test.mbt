@@ -4,7 +4,7 @@
 ///|
 test "34-appearance-kept" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_appearance_kept, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("appearance-kept"), seed~)
     f.see("端到端测试")
     assert_true(@sf.theme().dark)
     f.tap("icon:settings")

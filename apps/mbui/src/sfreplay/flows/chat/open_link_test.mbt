@@ -3,7 +3,7 @@
 ///|
 test "75-open-link" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_open_link, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("open-link"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")

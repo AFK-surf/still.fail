@@ -5,7 +5,7 @@
 ///|
 test "65-wide-places" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_wide_places, seed~, w=1280.0, h=800.0)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("wide-places"), seed~, w=1280.0, h=800.0)
     f.see("新建对话")
     f.tap("icon:folder")
     f.see("主目录")

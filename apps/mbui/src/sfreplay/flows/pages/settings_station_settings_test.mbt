@@ -4,7 +4,7 @@
 ///|
 test "82-station-settings" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_station_settings, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-station-settings"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
     f.tap("=Station")

@@ -4,7 +4,7 @@
 ///|
 test "02-home-new-chat" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_home_new_chat, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("home-new-chat"), seed~)
     f.see("端到端测试")
     // (alice's other device makes the chat: a live run's step beside the app)
     f.peer("peer create 另一台设备新建的对话 082947 post:新对话里的回复 082947")

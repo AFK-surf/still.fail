@@ -4,7 +4,7 @@
 ///|
 test "89-run-settings" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_run_settings, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-run-settings"), seed~)
     f.tap("端到端测试")
     f.run_to(@ui.nav_rest())
     f.see("=studio")

@@ -24,7 +24,7 @@ fn clip_reads(f : @sfreplay.Flow, v : Int, rest : Int, total : Int) -> Unit rais
 ///|
 test "97-video-frames" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_video_frames, seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
+    let f = @sfreplay.Flow::start(@sfreplay.trace("video-frames"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
     f.see("端到端测试")
     f.peer("peer createfiles 一段视频 201493 post:收到视频 201493 -- e2e-clip.mp4")
     f.see("一段视频 201493")

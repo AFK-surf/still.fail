@@ -4,7 +4,7 @@
 ///|
 test "84-connect" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_connect, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-connect"), seed~)
     // (the connect made on the test station before the app starts: e2e/peer.ts connect-put)
     f.before("peer connect-put e2e-080726")
     f.tap("icon:settings")

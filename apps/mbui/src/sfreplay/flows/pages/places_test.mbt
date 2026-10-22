@@ -6,7 +6,7 @@
 ///|
 test "31-places" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_places, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("places"), seed~)
     f.see("端到端测试")
     f.tap("icon:folder")
     // 文件's page in from the side the ball goes to; the ball there

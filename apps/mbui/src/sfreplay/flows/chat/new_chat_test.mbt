@@ -5,7 +5,7 @@
 ///|
 test "30-new-chat" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_new_chat, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("new-chat"), seed~)
     f.see("端到端测试")
     f.tap("icon:ling")
     f.run_for(@ui.nav_rise_ms)

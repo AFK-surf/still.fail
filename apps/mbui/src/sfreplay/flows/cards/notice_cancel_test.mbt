@@ -4,7 +4,7 @@
 ///|
 test "44-notice-cancel" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_notice_cancel, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("notice-cancel"), seed~)
     f.see("端到端测试")
     // (a live run's step beside the app, the trace has what came of it)
     f.peer("peer send 打开就消失 083209 card:看一眼就行 083209|好 083209|不好 083209")
