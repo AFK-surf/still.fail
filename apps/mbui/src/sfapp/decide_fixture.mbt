@@ -617,7 +617,7 @@ fn fix_with_letters(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
-      o["letters"] = Json::number(4)
+      o["letters"] = Json::number(4.0)
       Json::object(o)
     }
     _ => v
@@ -656,7 +656,7 @@ fn fix_letters() -> Json {
         "title": "接手监督 mbui",
         "link": mbui,
         "last": "测试版 4521 已出，你这边的改动等它跑完再合",
-        "lastActiveAt": 1790000300000,
+        "lastActiveAt": 1790000300000.0,
         "time": { "lastActiveAt": { "ago": "4 分钟前" } },
         "letters": [
           way(msg(300, "agent", theirs("接手监督 mbui", mbui), "测试版 **4521** 已出，你这边的改动等它跑完再合", "4 分钟前", { "author": "peer/ember:c-8" }), "in"),
@@ -667,7 +667,7 @@ fn fix_letters() -> Json {
         "title": "BFT 备份尺寸分析",
         "link": link,
         "last": "补充一点：系统自带的 tar 能直接解 zstd",
-        "lastActiveAt": 1790000200000,
+        "lastActiveAt": 1790000200000.0,
         "time": { "lastActiveAt": { "ago": "5 分钟前" } },
         "letters": [
           way(msg(200, "agent", theirs("BFT 备份尺寸分析", link), "用户让精简备份并改用 zstd，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下", "7 分钟前", { "author": "peer/ember:c-9" }), "in"),

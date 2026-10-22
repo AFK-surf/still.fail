@@ -6,7 +6,7 @@
 test "letters are not in the chat: from its sheet, the chats written with, one opened shows its letters both ways" {
   reset()
   let base = fixture("chat-info")
-  let asked : Array[Json] = []
+  let asked : Array[Map[String, Json]] = []
   let src : Source = {
     ..base,
     topic: fn(name, params) {
@@ -33,7 +33,8 @@ test "letters are not in the chat: from its sheet, the chats written with, one o
   // (the chat's sheet goes, theirs comes up, to where it rests)
   t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
   assert_true(asked.length() > 0)
-  assert_eq(asked[0], { "station": "ws1/st1", "thread": 7 })
+  let of_chat : Map[String, Json] = { "station": Json::string("ws1/st1"), "thread": Json::number(7.0) }
+  assert_eq(asked[0], of_chat)
   // the chats written with, a row each: how many and when, the last letter in brief; none of the letters yet
   assert_true(t.find("BFT 备份尺寸分析") is Some(_))
   assert_true(t.find("3 条 · 5 分钟前") is Some(_))

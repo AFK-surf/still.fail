@@ -579,8 +579,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   @sf.icon(c, "chats", size=16.0, color=t.p.text) |> ignore
                   c.box(style=@sf.full_width, fn() { c.text(tr("web-main.letters.title"), style=info_words) |> ignore })
                   |> ignore
-                  c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), size=13.0, color=t.p.muted, wrap=false)
-                  |> ignore
+                  c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta) |> ignore
                   chevron(c)
                 }) {
                 dui.letters_open = ""
@@ -1788,9 +1787,74 @@ fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@ui.R
 
 ///|
 /// The params of a chat's letters (the core's `chatLetters` view).
-fn letters_params(r : ChatRef, thread : Double) -> Json {
+fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
   { "station": Json::string(r.station), "thread": Json::number(thread) }
 }
+
+///|
+/// A chat written with, its row in the letters' sheet (Letters.kt): 18 in, 10 over and under, its two lines 2 apart;
+/// pressed a shade.
+// kept across runs: a value (no field of it changes)
+let letters_row : @ui.Style = @ui.style(w=Full, px=S4_5, py=S2_5, gap=S0_5, pressed=@ui.patch(bg=A(Fg, O5)))
+
+///|
+/// Its first line: its title as wide as there is room, how many and when at its end, 8 apart.
+// kept across runs: a value (no field of it changes)
+let letters_row_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+
+///|
+/// What fills a line's room (its title, beside what is at its end).
+// kept across runs: a value (no field of it changes)
+let letters_grow : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+/// A chat's title (15, medium) and what is said in brief of it (13, muted), each on a line.
+// kept across runs: a value (no field of it changes)
+let letters_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let letters_meta : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+
+///|
+/// None: said 18 in, 12 over and under, 15 muted.
+// kept across runs: a value (no field of it changes)
+let letters_none_box : @ui.Style = @ui.style(px=S4_5, py=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let letters_none : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted)
+
+///|
+/// One opened, its head: back (a round 36, pressed a shade), then its title; 6 in at the start, 18 at the end.
+// kept across runs: a value (no field of it changes)
+let letters_head : @ui.Style = @ui.style(row=true, w=Full, pl=S1_5, pr=S4_5, pb=S1_5, gap=S1, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let letters_back : @ui.Style = @ui.style(
+  w=S9,
+  h=S9,
+  radius=Full,
+  align=ACenter,
+  justify=JCenter,
+  pressed=@ui.patch(bg=A(Fg, O5)),
+)
+
+///|
+/// A letter, as the chat draws a message: 14 in, 20 under the one before.
+// kept across runs: a value (no field of it changes)
+let letters_said : @ui.Style = @ui.style(w=Full, px=S3_5, pt=S1, pb=S4)
+
+///|
+/// Older ones on their way: a spinner, 8 under the last.
+// kept across runs: a value (no field of it changes)
+let letters_more : @ui.Style = @ui.style(w=Full, pt=S2, align=ACenter)
+
+///|
+/// Room under the last row, over the sheet's foot (Letters.kt bottom = 30).
+// kept across runs: a value (no field of it changes)
+let letters_foot : @ui.Style = @ui.style(h=S8)
 
 ///|
 /// What the chat's agents and other chats' wrote each other, not said in it (Letters.kt openLetters): the chats it
@@ -1798,7 +1862,6 @@ fn letters_params(r : ChatRef, thread : Double) -> Json {
 /// them); one opened, back to the list and its title (which opens that chat), then its letters both ways in the order
 /// written, each drawn as the chat draws a message (Chat.kt SaidAlone).
 fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
-  let t = @sf.theme()
   let topic = (src.topic)("chatLetters", letters_params(r, thread))
   let (chat, _, _) = view_of_chat(src, r)
   sheet_frame(c, "letters", c.height * 0.8, draggable=true, fn() {
@@ -1820,7 +1883,7 @@ fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Uni
     let rows : Array[() -> Unit] = []
     if chats.length() == 0 {
       rows.push(fn() {
-        c.box(padx=18.0, pady=12.0, fn() { c.text(tr("web-main.letters.none"), size=15.0, color=t.p.muted) |> ignore })
+        c.box(style=letters_none_box, fn() { c.text(tr("web-main.letters.none"), style=letters_none) |> ignore })
         |> ignore
       })
     }
@@ -1831,28 +1894,20 @@ fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Uni
         let link = text(ch, "link")
         rows.push(fn() {
           // back to the list, and its title (which opens that chat)
-          c.box(dir=Row, w=Fill(1.0), pl=6.0, pr=18.0, pb=6.0, gap=4.0, align=ACenter, fn() {
+          c.box(style=letters_head, fn() {
             let back = c.id("letters/back")
             if c.clicked(back) {
               dui.letters_open = ""
             }
-            c.box(
-              w=Px(36.0),
-              h=Px(36.0),
-              radius=18.0,
-              bg=if c.pressed(back) { @sf.alpha(t.p.text, 0.06) } else { 0L },
-              align=ACenter,
-              justify=JCenter,
-              id=back,
-              fn() { @sf.icon(c, "chevron-left", size=20.0, color=t.p.accent) |> ignore },
-            )
+            c.box(style=letters_back, id=back, fn() {
+              @sf.icon(c, "chevron-left", size=20.0, color=@sf.theme().p.accent) |> ignore
+            })
             |> ignore
             let name = c.id("letters/chat")
             if link != "" && c.clicked(name) {
               open_link(link)
             }
-            c.box(id=name, fn() { c.text(text(ch, "title"), size=15.0, weight=500, color=t.p.text, wrap=false) |> ignore })
-            |> ignore
+            c.box(id=name, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
           })
           |> ignore
         })
@@ -1860,8 +1915,7 @@ fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Uni
         for m in items(ch, "letters") {
           let message = message_of(m)
           rows.push(fn() {
-            c.box(w=Fill(1.0), pl=14.0, pr=14.0, pt=4.0, pb=16.0, fn() { said(c, src, here, message, [], decide=false) })
-            |> ignore
+            c.box(style=letters_said, fn() { said(c, src, here, message, [], decide=false) }) |> ignore
           })
         }
       }
@@ -1875,34 +1929,23 @@ fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Uni
             if c.clicked(id) {
               dui.letters_open = key
             }
-            c.box(
-              w=Fill(1.0),
-              padx=18.0,
-              pady=10.0,
-              gap=2.0,
-              bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
-              id~,
-              fn() {
-                c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
-                  c.box(w=Fill(1.0), fn() { c.text(text(ch, "title"), size=15.0, weight=500, color=t.p.text, wrap=false) |> ignore })
-                  |> ignore
-                  let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
-                  let ago = text(field(field(ch, "time"), "lastActiveAt"), "ago")
-                  c.text(if ago == "" { n } else { n + " · " + ago }, size=13.0, color=t.p.muted, wrap=false) |> ignore
-                })
-                |> ignore
-                c.text(text(ch, "last"), size=13.0, color=t.p.muted, wrap=false) |> ignore
-              },
-            )
+            c.box(style=letters_row, id~, fn() {
+              c.box(style=letters_row_head, fn() {
+                c.box(style=letters_grow, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
+                let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
+                let ago = text(field(field(ch, "time"), "lastActiveAt"), "ago")
+                c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_meta) |> ignore
+              })
+              |> ignore
+              c.text(text(ch, "last"), style=letters_meta) |> ignore
+            })
             |> ignore
           })
         }
     }
     // not all of the chat is here yet: older ones may come
     if !whole {
-      rows.push(fn() {
-        c.box(w=Fill(1.0), pt=8.0, align=ACenter, fn() { @sf.spinner(c, size=16.0) |> ignore }) |> ignore
-      })
+      rows.push(fn() { c.box(style=letters_more, fn() { @sf.spinner(c, size=16.0) |> ignore }) |> ignore })
     }
     c.list(
       "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open,
@@ -1912,7 +1955,7 @@ fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Uni
         if i < rows.length() {
           (rows[i])()
         } else {
-          c.box(h=Px(30.0), fn() {  }) |> ignore
+          c.box(style=letters_foot, fn() {  }) |> ignore
         }
       },
     )
