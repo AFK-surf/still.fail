@@ -1,5 +1,5 @@
 // Server-sent events: a text/event-stream split into (event name, data) as chunks arrive (station.rs `SseParser`), with
-// its id where the event has one.
+// its id where the event has one; a block with an id and no data is an id alone (name and data "").
 
 export class SseParser {
   #buffer: number[] = [];
@@ -32,6 +32,8 @@ export class SseParser {
         }
       }
       if (data.length > 0) events.push(id === null ? [name, data.join("\n")] : [name, data.join("\n"), id]);
+      // An id alone: where the station's log is, no event (events.ts, a stream read afresh).
+      else if (id !== null) events.push(["", "", id]);
     }
     return events;
   }

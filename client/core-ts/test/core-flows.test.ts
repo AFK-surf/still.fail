@@ -53,7 +53,7 @@ test("two_workspaces_are_kept_apart", async () => {
   subscribe(core, ui, 2, { topic: "workspace", workspace: "w2" });
   await host.settle();
   assert.deepEqual([inner.workspaces.owner("w1"), inner.workspaces.owner("w2")], ["s1", "s2"]);
-  for (const station of ["w1/a", "w2/b"]) inner.data.set({ topic: "overview", station }, { profiles: [] });
+  for (const station of ["w1/a", "w2/b"]) inner.data.set({ topic: "overview", station }, { ...overview, profiles: [] });
   // A station slow in W1: W1's status and the plain one say so, W2's does not.
   const w1 = inner.workspaces.of("w1").status;
   const slow = w1.begin(STATION("w1/a"), "读取对话", false);

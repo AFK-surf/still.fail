@@ -32,6 +32,7 @@ import * as settingsCss from "./styles/settings.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import { RetryPill } from "../Connection.tsx";
 export function NewChatScreen() {
   const app = useApp();
   // The station last started on (or picked) in this workspace and what it runs there, on either screen (../pick.ts).
@@ -128,6 +129,8 @@ function NewChatOn({ choice, view, stations, pick, create }: {
       <div className={css.mNewFoot} ref={foot} data-made-leave="fade">
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {choice.spent && <p className={css.mNewSpent}>{choice.spent}</p>}
+        {/* Its station went down as it was written in: the page stays, said so, with 重试. */}
+        {choice.down && <p className={css.mNewSpent} role="status">{t("web-main.newChat.down", { name: view.name })} <RetryPill /></p>}
         {/* The choices, then the composer as a floating capsule, as in a chat. */}
         <div className={css.mNewBottom}>
           <div className={css.mChoosers}>

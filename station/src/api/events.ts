@@ -232,6 +232,10 @@ export class Events {
       if (stop) client.stops.push(stop);
     }
     if (host) void this.deps.host().then((info) => client.send("host", info), () => {});
+    // Read afresh: where the log is as it joins, an id alone (no event), so the next stream goes on from here even when
+    // nothing is told meanwhile. On a quiet station a stream without it had no id to go on from, and each that a weak
+    // link cut read the whole station again (a dozen reads). Clients from before skip a block without data.
+    if (!resumes && this.rowsTold.has(k)) client.raw(`id: ${this.log.at()}\n\n`);
     this.clients.push(client);
     this.last = { viewer, lang };
     this.lingering?.();

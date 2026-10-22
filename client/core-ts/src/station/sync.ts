@@ -161,6 +161,12 @@ export class StationsSync {
     this.#links.cameOnline(address);
   }
 
+  /// still.fail cloud is reached again after it was not: the device's network is back, and every station waiting to
+  /// reconnect tries now.
+  networkBack(): void {
+    this.#links.networkBack();
+  }
+
   /// Opens the station's stream for what it is wanted for now, unless the one open gives that (or `anew`).
   openEvents(address: string, anew: boolean): void {
     this.#links.openEvents(address, anew);

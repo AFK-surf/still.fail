@@ -592,6 +592,10 @@ export class Mesh {
   readonly #directHeldUntil = new Map<string, number>();
   /// By address: when a way on the LAN endpoint last answered its ping (LAN_RECALL_MS).
   readonly #lanAt = new Map<string, number>();
+  /// By address: whether a way to it answers its pings, as the last tick found (`healthy`), and who waits for that to
+  /// change (`healthChange`).
+  readonly #health = new Map<string, boolean>();
+  readonly #healthWaiting = new Map<string, Deferred.Deferred<boolean>[]>();
   #closed = false;
   /// By address: the relays its workspace has of its own, as the last `link` to it said.
   readonly #theirs = new Map<string, string[]>();
@@ -964,6 +968,7 @@ export class Mesh {
     }
     for (const w of this.#ways.get(addr) ?? []) w.link.conn.close(0, "woke");
     this.#ways.delete(addr);
+    this.#tellHealth(addr);
   }
 
   /// Takes over the device key a page kept before the core existed (32 bytes): stored, the endpoint bound anew with
@@ -1127,6 +1132,8 @@ export class Mesh {
     const ways = this.#live(addr);
     if (ways.some((w) => w.link === link)) return;
     this.#ways.set(addr, [...ways, new Way(link)]);
+    // A way just opened answers: not taken for unanswered as the ways before it were.
+    this.#tellHealth(addr);
     if (link.pinned !== LAN) this.#env.runner.fork(Effect.andThen(Deferred.await(link.answered), Effect.sync(() => this.#heard(addr, link))));
     // One way there is all it has (no relays, or one): nothing to choose between.
     if (!this.#steering.has(addr) && this.#waysFor(addr).length >= 2) {
@@ -1183,6 +1190,32 @@ export class Mesh {
   /// Whether a way to the station is up: one open that answered its last ping (one not pinged yet: its handshake did).
   standing(addr: string): boolean {
     return this.#links.has(addr) && this.#live(addr).some((w) => w.missed === 0);
+  }
+
+  /// Whether a way to the station answers its pings: one open that has not missed DEAD_PINGS in a row (none open: no).
+  healthy(addr: string): boolean {
+    return this.#links.has(addr) && this.#live(addr).some((w) => w.missed < DEAD_PINGS);
+  }
+
+  /// Succeeds with whether a way to the station answers its pings once that is no longer `was`, as the ticks find it.
+  healthChange(addr: string, was: boolean): Effect.Effect<boolean> {
+    return Effect.suspend(() => {
+      const now = this.#health.get(addr) ?? this.healthy(addr);
+      if (now !== was) return Effect.succeed(now);
+      const d = Deferred.makeUnsafe<boolean>();
+      this.#healthWaiting.set(addr, [...(this.#healthWaiting.get(addr) ?? []), d]);
+      return Deferred.await(d);
+    });
+  }
+
+  /// After a tick: how its pings went, told to those waiting where it changed.
+  #tellHealth(addr: string): void {
+    const now = this.healthy(addr);
+    if (this.#health.get(addr) === now) return;
+    this.#health.set(addr, now);
+    const waiting = this.#healthWaiting.get(addr) ?? [];
+    this.#healthWaiting.delete(addr);
+    for (const d of waiting) Deferred.doneUnsafe(d, Effect.succeed(now));
   }
 
   /// Pings a way: its credential presented again on it, answered by the station. Not answered within PING_TIMEOUT_MS,
@@ -1392,6 +1425,7 @@ export class Mesh {
         const cur = this.current(addr);
         if (this.#live(addr).length === 0 && (cur === null || !cur.usable())) break;
         yield* this.#sample(addr);
+        this.#tellHealth(addr);
         for (const w of this.#live(addr)) this.#watchPaths(addr, w);
         this.#choose(addr, false);
         this.#prune(addr);
@@ -1886,6 +1920,11 @@ export class MeshWire implements StationWire {
 
   standing(station: StationAddr): boolean {
     return this.#env.meshNow()?.standing(station.toString()) ?? false;
+  }
+
+  healthChange(station: StationAddr, was: boolean): Effect.Effect<boolean> {
+    const mesh = this.#env.meshNow();
+    return mesh === null ? Effect.never : mesh.healthChange(station.toString(), was);
   }
 
   net(station: StationAddr): LinkNet | null {

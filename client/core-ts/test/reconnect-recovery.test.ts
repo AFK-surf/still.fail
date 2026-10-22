@@ -3,14 +3,17 @@
 // that failed (link.ts, cursor.ts, sync/cloud.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect, Queue } from "effect";
+import { Deferred, Effect, Queue } from "effect";
 import { Core } from "../src/core.ts";
 import { HostError } from "../src/error.ts";
-import { RECONNECT_MAX_MS, RECONNECT_MS, STREAM_HELD_MS } from "../src/station/link.ts";
+import { BRIEF_MAX_MS, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_HELD_MS } from "../src/station/link.ts";
+import { StationAddr } from "../src/station/addr.ts";
+import { SOCKET_RETRY_MAX_MS } from "../src/sync/cloud.ts";
+import { apply, call, subscribe } from "./helpers.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { Wake } from "../src/wake.ts";
 import { run } from "./run.ts";
-import { base, started, stationReplies, status } from "./station-fixture.ts";
+import { base, started, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
 
 const ST = "ws/st";
 
@@ -148,6 +151,226 @@ test("a_failed_cloud_replacement_lets_the_next_wake_reconnect", async () => {
     assert.equal(s.host.openSockets("/v1/events"), 1);
     await s.host.time.pass(61000, 1000);
     assert.equal(attempts, 3, "the first heartbeat also has a deadline");
+  } finally {
+    s.core.close();
+  }
+});
+
+// ── a station that tells a stream read afresh where its log is (station/src/api/events.ts) ──
+
+/// The stream open now ends, `streak` times in a row each after `lasted` ms; resolves as the last one has ended.
+async function flap(s: Awaited<ReturnType<typeof started>>, streak: number, lasted = 10_000): Promise<void> {
+  for (let i = 0; i < streak; i++) {
+    await s.host.time.pass(lasted, 500);
+    const n = s.streams.length;
+    s.end();
+    if (i < streak - 1) while (s.streams.length <= n) await s.host.time.pass(250, 250);
+  }
+}
+
+/// How long until the next stream opens.
+async function reopens(s: Awaited<ReturnType<typeof started>>, limit = 120_000): Promise<number> {
+  const n = s.streams.length;
+  const from = s.host.nowMs();
+  while (s.streams.length <= n && s.host.nowMs() - from < limit) await s.host.time.pass(250, 250);
+  return s.host.nowMs() - from;
+}
+
+test("brief_streams_that_go_on_from_where_they_were_wait_at_most_BRIEF_MAX_MS_and_read_no_lists_again", async () => {
+  const s = await started();
+  s.gate.resumes = true;
+  s.gate.marks = true;
+  try {
+    await flap(s, 1);
+    await reopens(s);
+    const lists = () => s.host.requests.filter((r) => /\/admin\/api\/(changed\/)?(chats|sessions|threads)(\?|$)/.test(r.url) || r.url.endsWith("/admin/api/batch")).length;
+    const before = lists();
+    for (let i = 0; i < 8; i++) {
+      await flap(s, 1);
+      assert.ok((await reopens(s)) <= BRIEF_MAX_MS, `try ${i}`);
+      assert.ok(s.streams.at(-1)!.path.includes("since=abcdef."), s.streams.at(-1)!.path);
+    }
+    assert.equal(lists(), before, "each went on from where it was: nothing read afresh");
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_brief_stream_that_goes_on_opens_again_as_soon_as_the_station_answers", async () => {
+  const s = await started();
+  s.gate.resumes = true;
+  s.gate.marks = true;
+  try {
+    await flap(s, 6);
+    const n = s.streams.length;
+    const ended = s.host.nowMs();
+    await s.host.time.pass(1000, 250);
+    s.core.inner.stations.requests.onAnswered?.(StationAddr.parse(ST));
+    while (s.streams.length <= n) await s.host.time.pass(250, 250);
+    assert.ok(s.host.nowMs() - ended <= 1250, `${s.host.nowMs() - ended} ms`);
+  } finally {
+    s.core.close();
+  }
+});
+
+/// A wire whose pings the test says (mesh.ts `healthChange`).
+function pinging(host: Parameters<typeof started>[2] extends ((h: infer H) => unknown) | undefined ? H : never) {
+  const wire = new HostWire(host) as HostWire & { healthChange(station: StationAddr, was: boolean): Effect.Effect<boolean>; set(up: boolean): void };
+  let up = true;
+  let waiting: Deferred.Deferred<boolean>[] = [];
+  wire.healthChange = (_station, was) => Effect.suspend(() => {
+    if (up !== was) return Effect.succeed(up);
+    const d = Deferred.makeUnsafe<boolean>();
+    waiting.push(d);
+    return Deferred.await(d);
+  });
+  wire.set = (now) => {
+    up = now;
+    const told = waiting;
+    waiting = [];
+    for (const d of told) Deferred.doneUnsafe(d, Effect.succeed(now));
+  };
+  return wire;
+}
+
+test("pings_unanswered_show_the_station_coming_back_at_once_and_answered_again_reached", async () => {
+  let wire: ReturnType<typeof pinging> | undefined;
+  const s = await started(base(), 0, (host) => (wire = pinging(host)));
+  try {
+    const state = () => (s.core.inner.stations.link(ST)?.state as { state: string }).state;
+    assert.equal(state(), "online");
+    wire!.set(false);
+    await s.host.time.pass(100, 50);
+    assert.equal(state(), "reconnecting", "not STREAM_IDLE_MS later");
+    wire!.set(true);
+    await s.host.time.pass(100, 50);
+    assert.equal(state(), "online");
+    // Something coming on the stream shows it reached too.
+    wire!.set(false);
+    await s.host.time.pass(100, 50);
+    s.push("overview", {});
+    await s.host.time.pass(100, 50);
+    assert.equal(state(), "online");
+  } finally {
+    s.core.close();
+  }
+});
+
+test("pings_answered_again_open_a_brief_stream_that_goes_on_at_once", async () => {
+  let wire: ReturnType<typeof pinging> | undefined;
+  const s = await started(base(), 0, (host) => (wire = pinging(host)));
+  s.gate.resumes = true;
+  s.gate.marks = true;
+  try {
+    await flap(s, 6);
+    const n = s.streams.length;
+    const ended = s.host.nowMs();
+    wire!.set(false);
+    await s.host.time.pass(1000, 250);
+    wire!.set(true);
+    while (s.streams.length <= n) await s.host.time.pass(250, 250);
+    assert.ok(s.host.nowMs() - ended <= 1250, `${s.host.nowMs() - ended} ms`);
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_station_tried_seldom_after_long_down_is_tried_as_still_fail_cloud_is_reached_again", async () => {
+  const s = await started();
+  let down = true;
+  stationLater(s.host, (req) => (down && req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
+  try {
+    s.host.refuseSockets = true;
+    s.gate.stream = "fail";
+    s.host.socketClose("/v1/events");
+    s.end();
+    // Some ten minutes of tries: it is tried every OFFLINE_RETRY_MS now.
+    await s.host.time.pass(7.3 * 60_000, 1000);
+    down = false;
+    s.host.refuseSockets = false;
+    s.gate.stream = "open";
+    // The cloud's socket is tried within SOCKET_RETRY_MAX_MS, and the station with it.
+    assert.ok((await reopens(s, OFFLINE_RETRY_MS)) <= SOCKET_RETRY_MAX_MS + 2_000);
+  } finally {
+    s.core.close();
+  }
+});
+
+/// Takes the station down (nothing reaches it, its stream not opened) until the returned function brings it back.
+async function takenDown(s: Awaited<ReturnType<typeof started>>): Promise<() => void> {
+  let down = true;
+  stationLater(s.host, (req) => (down && req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
+  s.gate.stream = "fail";
+  s.end();
+  await s.host.time.pass(60_000, 1000);
+  assert.equal((s.core.inner.stations.link(ST)?.state as { state: string }).state, "offline");
+  return () => {
+    down = false;
+    s.gate.stream = "open";
+  };
+}
+
+test("messages_that_failed_as_their_station_was_down_go_in_order_once_it_is_reached_and_refused_ones_do_not", async () => {
+  const s = await started();
+  const posted: string[] = [];
+  let n = 3;
+  stationReplies(s.host, (req) => {
+    if (req.method !== "POST" || !req.url.endsWith("/threads/7/messages")) return undefined;
+    const text = JSON.parse(new TextDecoder().decode(req.body!)).text as string;
+    if (text === "refused") return status(400, { error: "no such file" });
+    posted.push(text);
+    return { n: ++n };
+  });
+  try {
+    // Refused as it is: not sent again.
+    call(s.core, 1, 900, "chat.send", { station: ST, thread: 7, text: "refused" });
+    await s.host.time.pass(1000, 250);
+    const back = await takenDown(s);
+    for (const [i, text] of ["一", "二", "三"].entries()) {
+      call(s.core, 1, 901 + i, "chat.send", { station: ST, thread: 7, text });
+      await s.host.time.pass(1000, 250);
+    }
+    const states = () => s.core.inner.views.local.outbox(ST, 7).map((m: { text: string; state: string; seq?: number }) => [m.text, m.seq !== undefined ? "sent" : m.state]);
+    assert.deepEqual(states(), [["refused", "failed"], ["一", "failed"], ["二", "failed"], ["三", "failed"]]);
+    back();
+    await reopens(s, 20 * 60_000);
+    await s.host.time.pass(2000, 250);
+    assert.deepEqual(posted, ["一", "二", "三"]);
+    assert.deepEqual(states().filter(([text]) => text === "refused"), [["refused", "failed"]]);
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_new_chat_whose_station_went_down_stays_said_down_and_is_asked_for_once_the_station_is_reached", async () => {
+  const s = await started();
+  const asked: string[] = [];
+  stationReplies(s.host, (req) => {
+    if (req.method === "POST" && req.url.endsWith("/admin/api/sessions")) {
+      asked.push(req.url);
+      return { key: "ember:c-9", thread: threadView(9, 0) };
+    }
+    return undefined;
+  });
+  try {
+    call(s.core, 1, 1, "newChat.pick", { scope: "ws", station: "st" });
+    subscribe(s.core, 1, 2, { topic: "newChat", scope: "ws" });
+    await s.host.time.pass(1000, 250);
+    const back = await takenDown(s);
+    const values = new Map();
+    subscribe(s.core, 1, 3, { topic: "newChat", scope: "ws" });
+    await s.host.time.pass(500, 250);
+    apply(s.host, values);
+    const page = values.get(3) as { down: boolean; station: { id: string } | null };
+    assert.deepEqual([page.down, page.station?.id], [true, "st"]);
+    // Sent while down: not asked of the station (it might make it twice), asked once it is reached.
+    call(s.core, 1, 4, "chat.create", { station: ST, runtime: "claude", model: "opus" });
+    await s.host.time.pass(5000, 250);
+    assert.equal(asked.length, 0);
+    back();
+    await reopens(s, 20 * 60_000);
+    await s.host.time.pass(2000, 250);
+    assert.equal(asked.length, 1);
   } finally {
     s.core.close();
   }

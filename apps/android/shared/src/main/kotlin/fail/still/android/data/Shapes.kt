@@ -4044,8 +4044,12 @@ data class NewChatView (
 	val error: String? = null,
 	/// Whether the scope has any station, up or not.
 	val any: Boolean,
-	/// The one it starts on: the one kept, else the first up; none when none is up.
+	/// The one it starts on: the one kept, else the first up; none when none is up but the one kept, which stays
+	/// while it is down (`down`).
 	val station: StationView? = null,
+	/// `station` is the one kept, down now: the page stays as it was, said to be waiting for it; what is sent goes
+	/// once it is reached again.
+	val down: Boolean? = null,
 	val model: ModelOption? = null,
 	val runtime: RuntimeKind? = null,
 	val effort: String? = null,

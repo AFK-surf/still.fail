@@ -14,7 +14,7 @@ import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -616,6 +616,28 @@ const truly = (s: Sim, relay: string) => {
   const bps = Math.min(d.bps ?? Infinity, st.bps ?? Infinity);
   return cost(2 * (d.ms + st.ms), Number.isFinite(bps) ? bps : null);
 };
+
+sim("its_pings_say_when_no_way_answers_and_when_one_answers_again", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 30 }, station: { ms: 30 } });
+  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const link = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  await request(s, link, head("/admin/api/overview"));
+  await s.time.pass(2 * TICK_MS);
+  assert.equal(mesh.healthy(id), true);
+  // Its way answers nothing more: once it missed DEAD_PINGS (3) in a row, and not before.
+  station.deadBelow = station.conns.length;
+  const went = s.time.now();
+  const lost = await s.settle(s.runner.run(mesh.healthChange(id, true)));
+  assert.equal(lost, false);
+  const after = s.time.now() - went;
+  assert.ok(after >= 2 * TICK_MS && after <= 4 * TICK_MS + PING_TIMEOUT_MS, `${after}`);
+  // It answers again: told at the next tick.
+  station.deadBelow = 0;
+  const back = await s.settle(s.runner.run(mesh.healthChange(id, false)));
+  assert.equal(back, true);
+  await close(s, station, mesh);
+});
 
 /// 2026-10-08: bft in Tokyo, phones in China. The phone's own relay (Beijing's, nearest it) lost a third of what went
 /// between it and the station, and the phone dialled the station there alone: most tries waited out CONNECT_TIMEOUT_MS,

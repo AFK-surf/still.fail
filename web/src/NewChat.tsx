@@ -34,6 +34,7 @@ import * as jobsCss from "./styles/jobs.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
 import * as chatCss from "./pages/ChatPage.css.ts";
 import { MachineSessions } from "./MachineSessions.tsx";
+import { RetryPill } from "./Connection.tsx";
 import { composerText } from "./Chat.css.ts";
 import { notSent, sendingFirst } from "./madeChat.ts";
 import { OVER_DOCK } from "./Chat.tsx";
@@ -196,6 +197,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
             <Illustration name="new-chat" data-made-leave="up" />
             <h1 className={css.newChatTitle} data-made-leave="up">{t("web-main.newChat.title")}</h1>
             <p className={css.newChatSub} data-made-leave="up">{t("web-main.newChat.sub", { name: station.name || t("web-main.newChat.thisMachine") })}</p>
+            {/* Its station went down as it was written in (the network went): the page stays, said so, with 重试. */}
+            {choice.down && <p className={css.spentNotice} role="status" data-made-leave="up">{t("web-main.newChat.down", { name: station.name || t("web-main.newChat.thisMachine") })} <RetryPill /></p>}
             {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
             {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="up">{choice.spent}</p>}
             {composer}

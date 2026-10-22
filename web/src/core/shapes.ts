@@ -4085,8 +4085,16 @@ export interface NewChatView {
 	error?: string;
 	/** Whether the scope has any station, up or not. */
 	any: boolean;
-	/** The one it starts on: the one kept, else the first up; none when none is up. */
+	/**
+	 * The one it starts on: the one kept, else the first up; none when none is up but the one kept, which stays
+	 * while it is down (`down`).
+	 */
 	station?: StationView;
+	/**
+	 * `station` is the one kept, down now: the page stays as it was, said to be waiting for it; what is sent goes
+	 * once it is reached again.
+	 */
+	down?: boolean;
 	model?: ModelOption;
 	runtime?: RuntimeKind;
 	effort?: string;

@@ -452,6 +452,7 @@
   "web-main.newChat.addProfile": "Add profile",
   "web-main.newChat.addProfileFor": "Add a profile for {name}",
   "web-main.newChat.changeModelWhat": "change model",
+  "web-main.newChat.down": "Can't reach {name} right now; reconnecting. Keep writing: what you send goes once it is reached.",
   "web-main.newChat.goPickModels": "Choose models",
   "web-main.newChat.noModels": "No models available · Choose models",
   "web-main.newChat.noModelsLead": "Profiles on {name} have no models enabled. Choose models to start chatting.",

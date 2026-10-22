@@ -407,6 +407,7 @@
   "web-main.newChat.addProfile": "添加 Profile",
   "web-main.newChat.addProfileFor": "为 {name} 添加 Profile",
   "web-main.newChat.changeModelWhat": "更改模型",
+  "web-main.newChat.down": "暂时连不上 {name}，正在重连。可以继续写，发送后会在连上时自动发出。",
   "web-main.newChat.goPickModels": "勾选模型",
   "web-main.newChat.noModels": "没有可用模型 · 前往勾选",
   "web-main.newChat.noModelsLead": "{name} 的 Profile 尚未启用模型，勾选后即可开始对话",
