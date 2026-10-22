@@ -795,3 +795,17 @@ let confirm_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
 ///|
 // kept across runs: a value (no field of it changes)
 let confirm_foot : @ui.Style = @ui.style(row=true, w=Full, pt=S3, gap=S2, align=ACenter, justify=JEnd)
+
+///|
+/// The models' column: 360 high at most (runPicker), a row about 31 (30 at least, 1 apart), 200 wide.
+let triple_list_h : Double = 360.0
+
+///|
+let triple_row_h : Double = 31.0
+
+///|
+let triple_models_w : Double = 200.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_head_box : @ui.Style = @ui.style(px=S2_5, pt=S1, pb=S1_5)
