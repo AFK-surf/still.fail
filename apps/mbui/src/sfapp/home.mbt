@@ -382,10 +382,13 @@ fn top_bar(
 }
 
 ///|
-/// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, on one line.
+/// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, its letters 0.4 closer, on one line.
 fn top_bar_title(c : @ui.Ctx, s : String) -> Int {
-  c.text(s, size=24.0, weight=700, color=@sf.theme().p.text, wrap=false, line=30.0)
+  c.text(s, size=24.0, weight=700, color=@sf.theme().p.text, wrap=false, line=30.0, tracking=top_title_tracking)
 }
+
+///|
+let top_title_tracking : Double = -0.4
 
 ///|
 /// A round button in a bar (Parts.kt NavButton): 34 across, the icon alone, no disc behind it (a ground while
