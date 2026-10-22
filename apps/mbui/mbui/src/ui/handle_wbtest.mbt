@@ -24,15 +24,7 @@ test "handle: shown by a tap, under the caret; dragged, the caret goes with it; 
   // the finger on the handle's circle, moved right along the line
   let hx = st.handle_x
   let hy = st.handle_y + handle_r * 1.4
-  t.touch(0, hx, hy)
-  t.frame()
-  for k in 1..=6 {
-    t.advance(16.0)
-    t.touch(1, hx + 10.0 * k.to_double(), hy)
-    t.frame()
-  }
-  t.touch(2, hx + 60.0, hy)
-  t.draw()
+  t.drag(hx, hy, hx + 60.0, hy, steps=6)
   assert_true(field.selection().0 > before)
   assert_true(st.handle_on)
   t.type_text("!")
@@ -51,4 +43,15 @@ test "handle: none off Android" {
   t.tap(20.0, 10.0)
   t.draw()
   assert_false(g().editors.get(g().focus).unwrap().handle_on)
+}
+
+///|
+test "Android: a finger that moves on from a field leaves it be; one that lifts where it came down takes it" {
+  let field = Field::new()
+  field.set("hello world")
+  let t = handle_tester(field)
+  t.drag(40.0, 10.0, 40.0, 70.0, steps=5)
+  assert_false(t.ime().0)
+  t.tap(40.0, 10.0)
+  assert_true(t.ime().0)
 }
