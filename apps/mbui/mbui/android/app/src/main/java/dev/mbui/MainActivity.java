@@ -296,15 +296,14 @@ public class MainActivity extends Activity {
 
     // Back: while the app has a page to go back to (Host.backEnabled), the system's back is the app's, its
     // predictive back gesture followed as it goes (Android 14 on: OnBackAnimationCallback; 13: back only once
-    // done); otherwise the system's own (leaving the app). Told to MoonBit on the GL thread (Native.back).
+    // done); otherwise the system's own (leaving the app). Told to MoonBit on the GL thread by the next frame (MBView.back).
     private boolean backOn;
     private Object backCallback;
 
     private void back(int kind, float x, float progress, int edge) {
         MBView v = Host.view;
         if (v == null) return;
-        float d = v.density;
-        v.toGL(() -> Native.back(kind, x / d, progress, edge));
+        v.back(kind, x / v.density, progress, edge);
     }
 
     void setBackEnabled(boolean on) {
