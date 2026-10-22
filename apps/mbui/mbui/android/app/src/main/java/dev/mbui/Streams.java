@@ -122,6 +122,7 @@ final class Streams {
         dropSurfaces();
         Stream s = streams.get(id);
         if (s == null) return "";
+        if (s.video != null && s.st != null) s.video.dropStrays();
         synchronized (s.events) {
             String e = s.events.poll();
             return e == null ? "" : e;
@@ -430,6 +431,8 @@ final class Streams {
         private boolean slotBusy, slotReady;
         private double slotTs;
         private int available;
+        /** Frames are on it that no one is told of, the next one held until they are latched away (dropStrays). */
+        private boolean straysOwed;
         /** Set on the GL thread (which latches from it), read on the decoder's (whose frames arrive on it). */
         private volatile SurfaceTexture st;
 
@@ -447,6 +450,7 @@ final class Streams {
             synchronized (slot) {
                 st = t;
                 available = 0;
+                straysOwed = false;
                 // a frame told and not shown yet was on the old one: let go with it (its "f" still comes)
                 if (slotReady) slotBusy = slotReady = false;
             }
@@ -622,6 +626,15 @@ final class Streams {
             if (c == null) return;
             synchronized (slot) {
                 if (slotBusy || held.isEmpty()) return;
+                // Frames on it that no one is told of (a decoder stopped after it released one: its frame arrives after
+                // it): queued there, unlatched, they would have the next one released take a stray's place in the queue,
+                // replaced, and its arrival never said (the slot busy for good, every frame after held). Latched away
+                // first, on the GL thread (dropStrays), which then releases this one.
+                if (available > 0) {
+                    straysOwed = true;
+                    Host.requestFrame();
+                    return;
+                }
                 Out o = held.poll();
                 try {
                     c.releaseOutputBuffer(o.index, true);
@@ -633,6 +646,27 @@ final class Streams {
                 slotReady = false;
                 slotTs = o.ts;
             }
+        }
+
+        /** Frames on the SurfaceTexture no one is told of latched away, before the next is released (GL thread, as the
+         * frame begins). */
+        void dropStrays() {
+            SurfaceTexture t = st;
+            synchronized (slot) {
+                if (!straysOwed || slotBusy || t == null) return;
+                straysOwed = false;
+                while (available > 0) {
+                    try {
+                        t.updateTexImage();
+                    } catch (RuntimeException e) {
+                        Host.log("stream " + stream.id + ": updateTexImage: " + e);
+                        available = 0;
+                        break;
+                    }
+                    available--;
+                }
+            }
+            handler.post(this::pump);
         }
 
         /** A frame reached the SurfaceTexture (the decoder's thread): the app told, if it is the one released. */
