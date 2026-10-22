@@ -357,6 +357,7 @@
   },
   "core-views.station.unreachable": "Can't reach {name}",
   "core-views.station.not_listed": "This station isn't in the list",
+  "core-views.unsent": "Not sent: {text}",
   "core-views.usage.archived": "Archived",
   "core-views.usage.basis": "Subscriptions aren't billed per token; cost is estimated at standard API prices, without surcharges",
   "core-views.usage.by.chats": "By chat",

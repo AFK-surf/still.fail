@@ -297,6 +297,7 @@
   "core-views.station.troubles": "{n} 台 station 异常",
   "core-views.station.unreachable": "无法连接 {name}",
   "core-views.station.not_listed": "此 station 不在列表中",
+  "core-views.unsent": "未发送：{text}",
   "core-views.usage.archived": "已归档",
   "core-views.usage.basis": "订阅账号不按 token 收费；费用按 API 标准单价估算，不含长上下文和服务等级等加价",
   "core-views.usage.by.chats": "按对话",

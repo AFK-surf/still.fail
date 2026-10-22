@@ -458,6 +458,32 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.equal(m.workspaces.ws.items[0].text, "奏 · k1 要合吗？", "its row's line");
 });
 
+// A message that did not go was said only in its chat, below what the agent last said: the list showed the agent's
+// state (做完了) and no mark, so it went unseen there (2026-10-22).
+test("a_chat_with_a_message_that_did_not_go_is_marked_on_its_row_until_it_goes", async () => {
+  const t = setup();
+  const chats = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const r = row("7", t.host.nowMs() - 1000);
+  t.set(rows("ws/st"), [r]);
+  await t.read(chats, 1);
+  const of = () => chats.value.days.flatMap((d: J) => d.items).find((i: J) => i.id === "7");
+  assert.deepEqual([of().tone, of().stateText], [undefined, undefined]);
+  const id = t.views.outboxAdd("ws/st", 7, { text: "开始吧\n第二行", attachments: [], quotes: [] });
+  await t.read(chats, 1);
+  assert.deepEqual([of().tone, of().stateText], [undefined, undefined], "on its way, nothing to say");
+  t.views.local.outboxState("ws/st", 7, id, "Office-VM-1 离线");
+  await t.read(chats, 1);
+  assert.deepEqual([of().tone, of().stateText], ["alert", "未发送：开始吧 第二行"]);
+  t.views.local.outboxState("ws/st", 7, id, null);
+  await t.read(chats, 1);
+  assert.deepEqual([of().tone, of().stateText], [undefined, undefined], "sent again");
+});
+
 function typing(id: string, th: number, seq: number, at: number): J {
   const r = row(id, at);
   r.thread = th;
