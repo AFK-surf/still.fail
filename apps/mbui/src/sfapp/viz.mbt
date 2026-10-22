@@ -722,7 +722,12 @@ fn viz_file(c : @ui.Ctx, src : Source, here : Here, ts : String, a : Attachment,
 /// One of the ways under a page (VizFiles.kt): a 22 box (corners Smooth 6), a 14 icon in the web's subtle grey.
 fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String) -> Unit {
   ignore(label)
-  c.box(style=viz_way, id~, fn() { @sf.icon(c, icon, size=14.0, color=ink().subtle) |> ignore }) |> ignore
+  c.box(style=viz_way, id~, fn() {
+    @sf.icon(c, icon, size=14.0, color=ink().subtle) |> ignore
+    // VizFiles.kt: clip(Smooth(6)).clickable
+    @motion.ripple(c, id, 6.0)
+  })
+  |> ignore
 }
 
 ///|
@@ -752,7 +757,6 @@ let viz_way : @ui.Style = @ui.style(
   radius=Md,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=Hover),
 )
 
 // ── over the whole screen (Viz.kt VizFull, VizFiles.kt VizOpen) ────────
@@ -814,7 +818,11 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
             if c.clicked(close) {
               viz_close_full()
             }
-            c.box(style=viz_full_close, id=close, fn() { @sf.icon(c, "close", size=18.0, color=t.p.text) |> ignore })
+            c.box(style=viz_full_close, id=close, fn() {
+              @sf.icon(c, "close", size=18.0, color=t.p.text) |> ignore
+              // Viz.kt: clip(CircleShape).clickable
+              @motion.ripple(c, close, 18.0)
+            })
             |> ignore
           })
           |> ignore
@@ -863,7 +871,6 @@ let viz_full_close : @ui.Style = @ui.style(
   radius=Full,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=Hover),
 )
 
 ///|

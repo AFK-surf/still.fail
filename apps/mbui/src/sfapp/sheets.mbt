@@ -132,13 +132,13 @@ fn info_row(c : @ui.Ctx, key : String, body : () -> Unit, align? : @ui.Align = A
   let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
   let look = if tile { info_row_style.then(info_row_tile) } else { info_row_style }
-  c.box(
-    style=look.then(@ui.style(align~)),
-    radius=info_row_radius,
-    bg=if id != 0 && c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
-    id~,
-    body,
-  )
+  c.box(style=look.then(@ui.style(align~)), radius=info_row_radius, id~, fn() {
+    body()
+    // ChatInfo.kt InfoRow: clip(Smooth(INFO_ROW)).clickable
+    if id != 0 {
+      @motion.ripple(c, id, info_row_radius)
+    }
+  })
   |> ignore
   id != 0 && c.clicked(id)
 }
@@ -478,11 +478,15 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
             w=Px(32.0),
             h=Px(32.0),
             radius=16.0,
-            bg=@sf.alpha(t.p.text, if c.pressed(id) { 0.1 } else { 0.05 }),
+            bg=@sf.alpha(t.p.text, 0.05),
             align=ACenter,
             justify=JCenter,
             id~,
-            fn() { @sf.icon(c, "edit", size=16.0, color=t.p.text) |> ignore },
+            fn() {
+              @sf.icon(c, "edit", size=16.0, color=t.p.text) |> ignore
+              // ChatInfo.kt: clip(CircleShape).clickable
+              @motion.ripple(c, id, 16.0)
+            },
           )
           |> ignore
         }
@@ -782,11 +786,15 @@ fn sheet_button(c : @ui.Ctx, key : String, label : String, primary : Bool, enabl
     pady=10.0,
     radius=12.0,
     opacity=if enabled { 1.0 } else { 0.4 },
-    bg=if c.pressed(id) && enabled { @sf.over(ground, @sf.alpha(t.p.bg, 0.15)) } else { ground },
+    bg=ground,
     id~,
     fn() {
       c.text(label, size=15.0, weight=600, color=if primary { t.p.bg } else { t.p.text }, wrap=false)
       |> ignore
+      // Controls.kt Button: clickable over its clip
+      if enabled {
+        @motion.ripple(c, id, 12.0)
+      }
     },
   )
   |> ignore
@@ -956,7 +964,7 @@ fn stop_button(c : @ui.Ctx, src : Source, station : String, key : String) -> Uni
     gap=6.0,
     radius=16.0,
     align=ACenter,
-    bg=@sf.alpha(t.p.red, if c.pressed(id) { 0.22 } else { 0.14 }),
+    bg=@sf.alpha(t.p.red, 0.14),
     id~,
     fn() {
       if busy {
@@ -965,6 +973,8 @@ fn stop_button(c : @ui.Ctx, src : Source, station : String, key : String) -> Uni
         @sf.icon(c, "stop", size=11.0, color=t.p.red) |> ignore
       }
       c.text(tr("android-chat.agent.stop"), size=13.0, weight=500, color=t.p.red, wrap=false) |> ignore
+      // its clip clickable
+      @motion.ripple(c, id, 16.0)
     },
   )
   |> ignore
@@ -1324,15 +1334,11 @@ fn sheet_link(c : @ui.Ctx, key : String, body : () -> Unit) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   c.box(pt=14.0, fn() {
-    c.box(
-      padx=2.0,
-      pady=6.0,
-      gap=2.0,
-      radius=8.0,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
-      id~,
-      body,
-    )
+    c.box(padx=2.0, pady=6.0, gap=2.0, radius=8.0, id~, fn() {
+      body()
+      // Jobs.kt SheetLink: clip(Smooth(8)).clickable
+      @motion.ripple(c, id, 8.0)
+    })
     |> ignore
   })
   |> ignore
@@ -1538,7 +1544,7 @@ fn job_sheet(c : @ui.Ctx, src : Source, r : ChatRef, id : String) -> Unit {
           gap=6.0,
           align=ACenter,
           justify=JCenter,
-          bg=@sf.alpha(t.p.red, if c.pressed(sid) { 0.2 } else { 0.12 }),
+          bg=@sf.alpha(t.p.red, 0.12),
           id=sid,
           fn() {
             if busy {
@@ -1548,6 +1554,8 @@ fn job_sheet(c : @ui.Ctx, src : Source, r : ChatRef, id : String) -> Unit {
             }
             c.text(tr("android-misc.jobs.stop"), size=15.0, weight=500, color=t.p.red, wrap=false)
             |> ignore
+            // Jobs.kt: clip(Smooth(23)).clickable
+            @motion.ripple(c, sid, 23.0)
           },
         )
         |> ignore
@@ -1648,7 +1656,6 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     gap=10.0,
     radius=10.0,
     align=ACenter,
-    bg=if c.pressed(row) { @sf.alpha(t.p.text, 0.06) } else { 0L },
     id=row,
     fn() {
       c.box(w=Px(16.0), align=ACenter, fn() { job_dot(c, text(job, "tone")) }) |> ignore
@@ -1672,6 +1679,8 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
         }
       })
       |> ignore
+      // the row clickable over its clip
+      @motion.ripple(c, row, 10.0)
     },
   )
   |> ignore

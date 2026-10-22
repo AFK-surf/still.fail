@@ -526,7 +526,6 @@ fn share_row(
       pady=12.0,
       gap=12.0,
       align=ACenter,
-      bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
       id=if enabled { id } else { 0 },
       fn() {
         c.box(w=Px(16.0), align=ACenter, fn() { lead() }) |> ignore
@@ -541,6 +540,10 @@ fn share_row(
           @sf.spinner(c, size=14.0) |> ignore
         } else if checked {
           @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+        }
+        // a PickRow: clip(Smooth(LIST_ROW_CORNER)).clickable
+        if enabled {
+          @motion.ripple(c, id, @sf.row_corner)
         }
       },
     )

@@ -210,6 +210,8 @@ test "a folder: what it holds in a line, folders first, hidden files left out; i
   assert_true(t.find("长篇小说.txt") is Some(_))
   // (the bottom bar comes back over the place's pages on its springs: run to where they said they rest)
   bar_rested(t)
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 

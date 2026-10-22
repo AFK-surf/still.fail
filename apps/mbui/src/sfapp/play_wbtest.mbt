@@ -41,6 +41,8 @@ test "a video's row on a folder's page plays it" {
     DrivePlay(at) => assert_eq(at.path, "演示录屏.mp4")
     _ => fail("not the player")
   }
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -56,5 +58,7 @@ test "a song of the drive: its mark and name in the middle; an episode at its en
     DrivePlay(at) => assert_eq(at.path, fix_films + "/第02集.mp4")
     _ => fail("not the next one")
   }
+  // the last tap's ripple shown whole, its way in and out
+  e.run_for(@motion.ripple_tap_ms)
   e.assert_idle()
 }

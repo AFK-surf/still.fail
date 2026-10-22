@@ -1509,11 +1509,14 @@ fn composer_bar(
       radius=18.0,
       align=ACenter,
       justify=JCenter,
-      bg=if locked { 0L } else { @sf.alpha(t.p.text, 0.08 * @motion.pressing(c, plus)) },
       id=plus,
       fn() {
         @sf.icon(c, "plus", size=18.0, color=if locked { @sf.alpha(t.p.text, 0.35) } else { t.p.text })
         |> ignore
+        // Composer.kt: clip(CircleShape).clickable (not when locked)
+        if !locked {
+          @motion.ripple(c, plus, 18.0)
+        }
       },
     )
     c.semantics(b, Button, id=plus, label=tr("android-chat.attach.title"), disabled=locked)
@@ -1533,6 +1536,10 @@ fn composer_bar(
       id=send,
       fn() {
         @sf.icon(c, "arrow-up", size=18.0, color=if ready { t.p.bg } else { ground }) |> ignore
+        // Composer.kt: clip(CircleShape).clickable(enabled = ready)
+        if ready {
+          @motion.ripple(c, send, 18.0)
+        }
       },
     )
     c.semantics(b, Button, id=send, label=tr("android-chat.composer.send"), disabled=!ready)
@@ -2284,13 +2291,15 @@ fn attach_sheet(
               padx=4.0,
               gap=6.0,
               radius=14.0,
-              bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { t.p.chip },
+              bg=t.p.chip,
               align=ACenter,
               justify=JCenter,
               id~,
               fn() {
                 @sf.icon(c, icon, size=22.0, color=t.p.text) |> ignore
                 c.text(label, size=13.0, color=t.p.text, wrap=false, line=18.0) |> ignore
+                // Attach.kt: clip(Smooth(14)).clickable
+                @motion.ripple(c, id, 14.0)
               },
             )
             |> ignore

@@ -353,7 +353,6 @@ fn usage_item(c : @ui.Ctx, core : Core, it : Json, rank : Int, kind : String) ->
     w=Fill(1.0),
     pady=10.0,
     radius=12.0,
-    bg=if opens && c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L },
     id=if opens { id } else { 0 },
     fn() {
       c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
@@ -407,6 +406,10 @@ fn usage_item(c : @ui.Ctx, core : Core, it : Json, rank : Int, kind : String) ->
         |> ignore
       })
       |> ignore
+      // Usage.kt ItemRow: a chat's clickable over its clip, Smooth(LIST_ROW_CORNER)
+      if opens {
+        @motion.ripple(c, id, @sf.row_corner)
+      }
     },
   )
   |> ignore

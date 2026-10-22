@@ -94,6 +94,8 @@ pub(all) struct MenuItemState {
   lit : Bool
   open : Bool
   hot : Bool
+  /// what it is pressed as (its row's id): for what the look draws of a press itself (a ripple)
+  id : Int
 }
 
 ///|
@@ -211,6 +213,7 @@ fn menu_panel(
                   lit: c.has_focus(iid) || (on && !mine),
                   open: on,
                   hot: (c.has_focus(iid) && (c.focus_shown(iid) || r.hovered)) || (on && !mine),
+                  id: iid,
                 })
               })
               let actions = pick(e.disabled, [], [@ui.Activate])

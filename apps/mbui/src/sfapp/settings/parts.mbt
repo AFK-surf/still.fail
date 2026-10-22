@@ -420,7 +420,17 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false
     Some(r) => card_ground.then(@ui.style(radius=r))
     None => if foot { card_foot_ground } else { card_ground }
   }
-  c.box(style=card_room, fn() { c.box(style=ground, id~, body) |> ignore }) |> ignore
+  c.box(style=card_room, fn() {
+    c.box(style=ground, id~, fn() {
+      body()
+      // Parts.kt Card: clickable over its clip (Smooth: its corner, or a foot's)
+      if id != 0 {
+        @motion.ripple(c, id, if foot { @sf.card_pad + 19.0 } else { @sf.card_corner })
+      }
+    })
+    |> ignore
+  })
+  |> ignore
   id != 0 && hit(c, id)
 }
 
@@ -430,16 +440,9 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false
 let card_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
 
 ///|
-/// A card: 20 in (CARD_PAD), 22 round (CARD_CORNER), the ink at 5% over it while pressed (tapped: an id).
+/// A card: 20 in (CARD_PAD), 22 round (CARD_CORNER); rippled where it is tapped (an id).
 // kept across runs: a value (no field of it changes)
-let card_ground : @ui.Style = @ui.style(
-  w=Full,
-  p=S5,
-  radius=Xl3,
-  bg=Card,
-  clip=true,
-  pressed=@ui.patch(bg=Over(Card, A(Fg, O5))),
-)
+let card_ground : @ui.Style = @ui.style(w=Full, p=S5, radius=Xl3, bg=Card, clip=true)
 
 ///|
 /// A card with a button in its corner: 20 + 19 round.
@@ -478,23 +481,21 @@ let list_ground : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radiu
 /// the frame after a tap.
 fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
   let id = if key == "" { 0 } else { c.id(key) }
-  c.box(style=list_line, id~, body) |> ignore
+  c.box(style=list_line, id~, fn() {
+    body()
+    // Parts.kt ListRow: clickable over its clip, Smooth(LIST_ROW_CORNER)
+    if id != 0 {
+      @motion.ripple(c, id, @sf.row_corner)
+    }
+  })
+  |> ignore
   id != 0 && hit(c, id)
 }
 
 ///|
-/// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card, the ink at 5% under it while pressed.
+/// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.
 // kept across runs: a value (no field of it changes)
-let list_line : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3,
-  py=S3,
-  gap=S3,
-  radius=Inner,
-  align=ACenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
-)
+let list_line : @ui.Style = @ui.style(row=true, w=Full, px=S3, py=S3, gap=S3, radius=Inner, align=ACenter)
 
 ///|
 /// A row's main words, as wide as the row lets them, cut to one line.
@@ -1016,19 +1017,17 @@ pub fn button(
     t.p.chip
   }
   // (38 high, off the scale; its ground and ink from what it is)
-  c.box(
-    style=button_box,
-    h=Px(38.0),
-    bg=if c.pressed(id) && enabled && !busy { @sf.over(ground, @sf.alpha(ink, 0.12)) } else { ground },
-    id~,
-    fn() {
-      if busy {
-        @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
-      }
-      // Controls.kt:126 (14sp)
-      c.text(label, style=button_words, color=ink) |> ignore
-    },
-  )
+  c.box(style=button_box, h=Px(38.0), bg=ground, id~, fn() {
+    if busy {
+      @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
+    }
+    // Controls.kt:126 (14sp)
+    c.text(label, style=button_words, color=ink) |> ignore
+    // Controls.kt Button: clickable over its capsule
+    if enabled && !busy {
+      @motion.ripple(c, id, 19.0)
+    }
+  })
   |> ignore
   enabled && !busy && hit(c, id)
 }
@@ -1077,19 +1076,17 @@ fn wide_button(
     t.p.text
   }
   // (46 high, off the scale; its ground and ink from what it is)
-  c.box(
-    style=wide_button_box,
-    h=Px(46.0),
-    bg=if c.pressed(id) && enabled && !busy { @sf.over(ground, @sf.alpha(ink, 0.12)) } else { ground },
-    id~,
-    fn() {
-      if busy {
-        @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
-      }
-      // Security.kt:127 (15sp)
-      c.text(label, style=@sf.body.then(@sf.strong).then(@sf.one_line), color=ink) |> ignore
-    },
-  )
+  c.box(style=wide_button_box, h=Px(46.0), bg=ground, id~, fn() {
+    if busy {
+      @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
+    }
+    // Security.kt:127 (15sp)
+    c.text(label, style=@sf.body.then(@sf.strong).then(@sf.one_line), color=ink) |> ignore
+    // Security.kt WideButton: clickable over its capsule
+    if enabled && !busy {
+      @motion.ripple(c, id, 23.0)
+    }
+  })
   |> ignore
   enabled && !busy && hit(c, id)
 }
@@ -1156,6 +1153,10 @@ pub fn pick_row(
       } else if checked {
         @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
       }
+      // Controls.kt PickRow: clickable (not when off or busy) over its clip, Smooth(LIST_ROW_CORNER)
+      if enabled && !busy {
+        @motion.ripple(c, id, @sf.row_corner)
+      }
     })
     |> ignore
   })
@@ -1164,8 +1165,8 @@ pub fn pick_row(
 }
 
 ///|
-/// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, the ink at 5% under it while pressed (not
-/// when off); its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
+/// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, rippled where it is pressed (not when off);
+/// its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
 /// 12 in and rounded concentric with the card, as a ListRow.
 // kept across runs: a value (no field of it changes)
 let pick_room : @ui.Style = @ui.style(w=Full, px=S3)
@@ -1176,7 +1177,7 @@ let pick_line_off : @ui.Style = @ui.style(row=true, w=Full, px=S2, py=S3, gap=S3
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_line : @ui.Style = pick_line_off.then(@ui.style(pressed=@ui.patch(bg=A(Fg, O5))))
+let pick_line : @ui.Style = pick_line_off
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1201,9 +1202,11 @@ fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : S
   let id = c.id(key)
   c.box(style=near_beside, fn() {
     doing_mark(c, false, failed)
-    c.box(style=press_fade, id~, fn() {
+    c.box(id~, fn() {
       // Settings.kt:288 (14sp)
       c.text(label, style=@sf.value.then(@sf.accent)) |> ignore
+      // Controls.kt pressText: rippled round its words, 6 past them on each side and 3 above and under, 8 round
+      @motion.ripple(c, id, press_corner, out_x=press_out, out_y=press_out / 2.0)
     })
     |> ignore
   })
@@ -1212,13 +1215,17 @@ fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : S
 }
 
 ///|
-/// Words to tap, faded while pressed.
-// kept across runs: a value (no field of it changes)
-let press_fade : @ui.Style = @ui.style(pressed=@ui.patch(opacity=O60))
+/// A text button's ground under the finger past its words (Controls.kt pressText: PRESS_OUT on each side, half that
+/// above and under), and its corner (PRESS_CORNER).
+let press_out : Double = 6.0
 
 ///|
+let press_corner : Double = 8.0
+
+///|
+/// Words to tap with room round them, what is tapped (BarSettings.kt 设为当前, 删除: padding(4) inside its clickable).
 // kept across runs: a value (no field of it changes)
-let press_fade_room : @ui.Style = press_fade.then(@ui.style(p=S1))
+let press_room : @ui.Style = @ui.style(p=S1)
 
 ///|
 /// Words that do something when tapped (a link's look: Theme.kt link). True on the frame after a tap.
@@ -1233,10 +1240,17 @@ fn tap_text(
 ) -> Bool {
   let id = c.id(key)
   // `room`: 4 round its words, what it takes (BarSettings.kt's 设为当前, 删除: padding(4) inside what is tapped)
-  let b = c.box(style=if room { press_fade_room } else { press_fade }, id~, fn() {
+  let b = c.box(style=if room { press_room } else { @ui.style() }, id~, fn() {
     // Settings.kt:447 (15sp), Profiles.kt:794, Vault.kt:365 (14sp): the theme's line, 1.4 its size (its size the
     // caller's)
     c.text(label, style=@sf.link.then(@sf.one_line), size~, line=size * 1.4, color?) |> ignore
+    // with room: rippled over it, 6 round (BarSettings.kt: clip(Smooth(6)).clickable); else round its words as
+    // Controls.kt pressText
+    if room {
+      @motion.ripple(c, id, 6.0)
+    } else {
+      @motion.ripple(c, id, press_corner, out_x=press_out, out_y=press_out / 2.0)
+    }
   })
   // `said`: what it says to a screen reader in place of its words (its contentDescription)
   if said != "" {
@@ -1250,15 +1264,11 @@ fn tap_text(
 fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  // (34 round, off the scale; the ink at 8% while pressed, off the scale of opacities)
-  c.box(
-    style=round_button,
-    w=Px(34.0),
-    h=Px(34.0),
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
-    id~,
-    fn() { @sf.icon(c, icon, size~, color=t.p.text) |> ignore },
-  )
+  // (34 round, off the scale; rippled over its circle: NavButton's clip(CircleShape).clickable)
+  c.box(style=round_button, w=Px(34.0), h=Px(34.0), id~, fn() {
+    @sf.icon(c, icon, size~, color=t.p.text) |> ignore
+    @motion.ripple(c, id, 17.0)
+  })
   |> ignore
   hit(c, id)
 }
@@ -1484,8 +1494,8 @@ let status_icon : Double = 14.0
 
 ///|
 /// A choice on a card (Parts.kt PickLine): its label (15) over its line (12, muted), a check (16, the accent) at its
-/// end where it is the one chosen; 4 and 11 in, rounded 10, the ink at 5% under it while pressed. True on the frame
-/// after a tap.
+/// end where it is the one chosen; 4 and 11 in, rounded 10, rippled where it is pressed. True on the frame after a
+/// tap.
 fn pick_line_row(c : @ui.Ctx, key : String, label : String, sub : String, checked : Bool) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
@@ -1503,6 +1513,8 @@ fn pick_line_row(c : @ui.Ctx, key : String, label : String, sub : String, checke
       }
     })
     |> ignore
+    // SettingParts.kt PickLine: clickable over its clip, Smooth(10)
+    @motion.ripple(c, id, 10.0)
   })
   |> ignore
   hit(c, id)
@@ -1518,7 +1530,6 @@ let pick_line_ground : @ui.Style = @ui.style(
   gap=S3,
   align=ACenter,
   radius=@sf.pick_line_r,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|

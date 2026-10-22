@@ -88,6 +88,8 @@ fn station_update_control(c : @ui.Ctx, src : Source, station : String, notice : 
       style=if trouble { update_label_trouble } else { update_label },
     )
     |> ignore
+    // StationUpdate.kt: the control's row clickable
+    @motion.ripple(c, id, 0.0)
   })
   |> ignore
 }
@@ -164,7 +166,6 @@ let update_close : @ui.Style = @ui.style(
   radius=Full,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -183,7 +184,6 @@ let update_now : @ui.Style = @ui.style(
   radius=Full,
   bg=AccentBg,
   align=ACenter,
-  pressed=@ui.patch(bg=Over(AccentBg, A(Fg, O5))),
 )
 
 ///|
@@ -243,7 +243,10 @@ fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : 
             if c.clicked(close) {
               update_notice(src, station, notice, if flag(notice, "dismissible") { "dismiss" } else { "close" })
             }
-            c.box(style=update_close, id=close, fn() { @sf.icon(c, "close", size=14.0, color=@sf.theme().p.muted) |> ignore })
+            c.box(style=update_close, id=close, fn() {
+              @sf.icon(c, "close", size=14.0, color=@sf.theme().p.muted) |> ignore
+              @motion.ripple(c, close, 16.0)
+            })
             |> ignore
           })
           |> ignore
@@ -304,6 +307,10 @@ fn update_now_button(c : @ui.Ctx, src : Source, station : String, notice : Json?
       style=update_now_words,
     )
     |> ignore
+    // StationUpdate.kt: clip(CircleShape).clickable, not while busy
+    if !busy {
+      @motion.ripple(c, id, 14.0)
+    }
   })
   |> ignore
 }

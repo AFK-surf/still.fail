@@ -36,6 +36,8 @@ test "settings: the account, the workspace's rows and how each stands, this devi
   assert_true(t.find("Chrome · macOS") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t.run_for(bar.rest() - t.time())
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -117,6 +119,8 @@ test "the archive: its chats by day; one restored leaves it" {
   assert_true(t.find("周会纪要") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t.run_for(bar.rest() - t.time())
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -156,6 +160,8 @@ test "memory: a station's global memory, its projects, a skill's page" {
   assert_true(t.find("checklist") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t.run_for(bar.rest() - t.time())
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 

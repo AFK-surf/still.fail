@@ -86,12 +86,16 @@ fn end_words(c : @ui.Ctx, words : String, color : Int64, weight? : Int = 400) ->
 fn end_action(c : @ui.Ctx, key : String, label : String, busy? : Bool = false, failed? : String? = None) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(dir=Row, pady=8.0, gap=6.0, align=ACenter, id~, opacity=if c.pressed(id) && !busy { 0.6 } else { 1.0 }, fn() {
+  c.box(dir=Row, pady=8.0, gap=6.0, align=ACenter, id~, fn() {
     if busy || failed is Some(_) {
       doing_mark(c, busy, failed, inline=true)
     }
     c.text(label, size=13.0, weight=500, color=if busy { t.p.muted } else { @sf.link_ink() }, wrap=false, line=18.0)
     |> ignore
+    // StationPermissions.kt RowAction: clip(Smooth(8)).clickable (not while busy)
+    if !busy {
+      @motion.ripple(c, id, 8.0)
+    }
   })
   |> ignore
   !busy && hit(c, id)

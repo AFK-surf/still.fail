@@ -21,12 +21,11 @@ let step_button : @ui.Style = @ui.style(
   bg=Tint,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=TintStrong),
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let step_button_solid : @ui.Style = step_button.then(@ui.style(bg=Fg, pressed=@ui.patch(bg=Over(Fg, A(Bg, O15)))))
+let step_button_solid : @ui.Style = step_button.then(@ui.style(bg=Fg))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -81,7 +80,6 @@ let code_finish : @ui.Style = @ui.style(
   bg=Fg,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=Over(Fg, A(Bg, O15))),
 )
 
 ///|
@@ -99,6 +97,8 @@ fn step_button_of(c : @ui.Ctx, key : String, label : String, solid : Bool, exter
       if external {
         @sf.icon(c, "arrow-up-right", size=step_icon, color=if solid { t.p.bg } else { t.p.text }) |> ignore
       }
+      // LoginCards.kt StepButton: its ripple in its words' colour (ripple(color = ink))
+      @motion.ripple(c, id, 23.0, ink=@sf.alpha(if solid { t.p.bg } else { t.p.text }, 0.1))
     })
     |> ignore
   })
@@ -234,6 +234,8 @@ fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : Str
           }
           c.box(style=code_finish, id=go, fn() {
             c.text(tr("android-settings.login.finishShort"), style=code_finish_words) |> ignore
+            // LoginCards.kt: its ripple in the page's colour (ripple(color = C.bg))
+            @motion.ripple(c, go, 17.0, ink=@sf.alpha(@sf.theme().p.bg, 0.1))
           })
           |> ignore
         }

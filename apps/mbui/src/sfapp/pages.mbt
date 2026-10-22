@@ -104,9 +104,13 @@ fn menu_panel_look(c : @ui.Ctx, _min_w : Double, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// A menu's row in MenuHost's look, `icon` at its end, lit while the finger or the keyboard is on it.
+/// A menu's row in MenuHost's look, `icon` at its end: rippled where a finger presses it (Sheet.kt MenuHost:
+/// clip(Smooth(MENU_ROW)).clickable), lit while the keyboard's focus shows on it.
 fn menu_row_look(c : @ui.Ctx, s : @kit.MenuItemState, icon : String) -> Unit {
-  phone_menu_row(c, s.entry.label, icon~, lit=if s.hot { 1.0 } else { 0.0 }) |> ignore
+  phone_menu_row(c, s.entry.label, icon~, lit=if s.lit && c.focus_shown(s.id) { 1.0 } else { 0.0 }) |> ignore
+  if !s.entry.disabled {
+    @motion.ripple(c, s.id, menu_row)
+  }
 }
 
 ///|
@@ -265,7 +269,6 @@ fn pick_row(
       pady=12.0,
       gap=12.0,
       align=ACenter,
-      bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
       id~,
       fn() {
         match lead {
@@ -296,6 +299,8 @@ fn pick_row(
         if checked {
           @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
         }
+        // Workspaces.kt: clip(Smooth(LIST_ROW_CORNER)).clickable
+        @motion.ripple(c, id, @sf.row_corner)
       },
     )
     |> ignore

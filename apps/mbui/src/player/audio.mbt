@@ -51,12 +51,15 @@ pub fn audio_strip(c : @ui.Ctx, key : String, n : @ui.NativeView, name : String,
           h=Px(38.0),
           radius=19.0,
           bg=t.text,
-          opacity=1.0 - 0.15 * @motion.pressing(c, play),
           align=ACenter,
           justify=JCenter,
           id=if ready { play } else { 0 },
           fn() {
             @sf.icon(c, if s.playing { "pause" } else { "play" }, size=16.0, color=t.bg) |> ignore
+            // VideoViewer.kt: clip(CircleShape).clickable(enabled = ready)
+            if ready {
+              @motion.ripple(c, play, 19.0)
+            }
           },
         )
         |> ignore

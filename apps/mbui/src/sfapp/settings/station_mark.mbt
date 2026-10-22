@@ -343,17 +343,12 @@ fn open_mark_pick(
                 pick(glyph_emoji(key), "glyph:" + key + (if mark_pick.color == "" { "" } else { ":" + mark_pick.color }))
               }
             }
+            // square, as wide as a sixth of the row (Settings.kt: weight(1f).aspectRatio(1f)), rippled over its clip
             c.box(
               w=Fill(1.0),
-              h=Px(56.0),
+              aspect=1.0,
               radius=14.0,
-              bg=if on {
-                t.p.accent_bg
-              } else if c.pressed(id) {
-                @sf.alpha(t.p.text, 0.05)
-              } else {
-                0L
-              },
+              bg=if on { t.p.accent_bg } else { 0L },
               align=ACenter,
               justify=JCenter,
               id~,
@@ -363,6 +358,7 @@ fn open_mark_pick(
                 } else {
                   @sf.station_mark(c, "", "glyph:" + key, 24.0, tint.unwrap_or(if on { t.p.accent } else { t.p.text }))
                 }
+                @motion.ripple(c, id, 14.0)
               },
             )
             |> ignore

@@ -390,9 +390,12 @@ fn nav_button(
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)),
     id~,
-    fn() { @sf.icon(c, icon, size~, color=color.unwrap_or(t.p.text)) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size~, color=color.unwrap_or(t.p.text)) |> ignore
+      // Parts.kt NavButton: clip(CircleShape).clickable
+      @motion.ripple(c, id, 17.0)
+    },
   )
   |> ignore
   c.clicked(id)
@@ -1026,7 +1029,7 @@ fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit
     padx=10.0,
     pady=4.0,
     radius=12.0,
-    bg=if c.pressed(id) { @sf.mix(t.p.chip, 0.9, t.p.text) } else { t.p.chip },
+    bg=t.p.chip,
     id~,
     fn() {
       c.text(
@@ -1038,6 +1041,10 @@ fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit
         line=16.0,
       )
       |> ignore
+      // Home.kt: 归档, clip(RoundedCornerShape(50)).clickable(enabled = !busy)
+      if !busy {
+        @motion.ripple(c, id, 12.0)
+      }
     },
   )
   |> ignore

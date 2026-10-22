@@ -493,6 +493,8 @@ test "read-only: nothing is sent, no draft kept, no file put up" {
   assert_eq(named(calls, "composer.add").length(), 0)
   assert_eq(named(calls, "session.warm").length(), 0)
   assert_true(t.find(read_only_words) is Some(_))
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 

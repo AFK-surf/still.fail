@@ -116,13 +116,18 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
 /// them, 6 round when pressed. True on the frame after a tap.
 fn text_action(c : @ui.Ctx, key : String, label : String) -> Bool {
   let id = c.id(key)
-  c.box(style=text_action_box, id~, fn() { c.text(label, style=text_action_words) |> ignore }) |> ignore
+  c.box(style=text_action_box, id~, fn() {
+    c.text(label, style=text_action_words) |> ignore
+    // Publish.kt TextAction: clip(Smooth(6)).clickable
+    @motion.ripple(c, id, 6.0)
+  })
+  |> ignore
   c.clicked(id)
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let text_action_box : @ui.Style = @ui.style(px=S1, py=S0_5, radius=Md, pressed=@ui.patch(bg=A(Fg, O5)))
+let text_action_box : @ui.Style = @ui.style(px=S1, py=S0_5, radius=Md)
 
 ///|
 // kept across runs: a value (no field of it changes)

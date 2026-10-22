@@ -128,7 +128,7 @@ fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
       w=Px(28.0),
       h=Px(28.0),
       radius=14.0,
-      bg=if c.pressed(id) { @sf.over(t.p.chip, @sf.alpha(t.p.text, 0.08)) } else { t.p.chip },
+      bg=t.p.chip,
       align=ACenter,
       justify=JCenter,
       id~,
@@ -138,6 +138,8 @@ fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
         } else {
           @sf.icon(c, icon, size=14.0, color=t.p.text) |> ignore
         }
+        // History.kt: clip(CircleShape).clickable
+        @motion.ripple(c, id, 14.0)
       },
     )
     |> ignore
@@ -672,7 +674,12 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, user : String, name :
     }
   }
   c.box(style=slack_name_row, fn() {
-    c.box(style=slack_name_ground, id~, fn() { c.text(name, style=slack_name_words) |> ignore }) |> ignore
+    c.box(style=slack_name_ground, id~, fn() {
+      c.text(name, style=slack_name_words) |> ignore
+      // History.kt: clip(Smooth(4)).clickable
+      @motion.ripple(c, id, 4.0)
+    })
+    |> ignore
     @settings.doing_mark(c, busy, if failed_lately(c, key) { Some("") } else { None }, inline=true)
   })
   |> ignore
@@ -685,7 +692,7 @@ let slack_name_row : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
 ///|
 /// Its ground under the finger rounded 4 (Smooth(4)).
 // kept across runs: a value (no field of it changes)
-let slack_name_ground : @ui.Style = @ui.style(radius=Base, pressed=@ui.patch(bg=A(Fg, O5)))
+let slack_name_ground : @ui.Style = @ui.style(radius=Base)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -810,10 +817,11 @@ fn brief(c : @ui.Ctx, key : String, words : String) -> Bool {
     max_h=42.0,
     radius=6.0,
     clip=true,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
     id~,
     fn() {
       c.text(plain_brief(words), size=14.0, color=t.p.text, line=21.0, w=Fill(1.0)) |> ignore
+      // History.kt: clip(Smooth(6)).clickable
+      @motion.ripple(c, id, 6.0)
     },
   )
   |> ignore
@@ -879,7 +887,6 @@ fn history_group(c : @ui.Ctx, src : Source, r : ChatRef, key : String, ik : Stri
       gap=6.0,
       radius=6.0,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id~,
       fn() {
         @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=13.0, color=t.p.subtle)
@@ -901,6 +908,8 @@ fn history_group(c : @ui.Ctx, src : Source, r : ChatRef, key : String, ik : Stri
         if pending > 0 {
           pill(c, fill("android-chat.history.group.pending", [("n", pending.to_string())]), t.p.accent_text)
         }
+        // History.kt: clip(Smooth(6)).clickable
+        @motion.ripple(c, id, 6.0)
       },
     )
     |> ignore
@@ -998,7 +1007,6 @@ fn folding(
       pady=3.0,
       gap=8.0,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id~,
       fn() {
         let ink = if failed { t.p.red } else { t.p.text }
@@ -1017,6 +1025,8 @@ fn folding(
         if meta != "" {
           c.text(meta, size=11.0, color=if failed { t.p.red } else { t.p.subtle }, wrap=false) |> ignore
         }
+        // History.kt: clip(Smooth(6)).clickable
+        @motion.ripple(c, id, 6.0)
       },
     )
     |> ignore
@@ -1246,7 +1256,6 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
       border=1.0,
       border_color=t.p.line,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L },
       id~,
       fn() {
         @sf.maker_mark(c, text(field(s, "maker"), "id"), text(s, "runtime"), 15.0) |> ignore
@@ -1257,6 +1266,8 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
         |> ignore
         quota_chips(c, field(field(a, "account"), "quota"))
         @sf.icon(c, "chevron-down", size=14.0, color=t.p.muted) |> ignore
+        // History.kt: clip(Smooth(10)).clickable
+        @motion.ripple(c, id, 10.0)
       },
     )
     |> ignore

@@ -36,6 +36,8 @@ fn adb_done(t : @ui.Tester) -> Unit {
   }
   t.draw()
   t.run_for(bar.rest() - t.time())
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 

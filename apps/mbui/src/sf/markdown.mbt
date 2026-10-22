@@ -880,7 +880,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           gap=4.0,
           align=ACenter,
           radius=@ui.concentric(block_radius, key_inset),
-          bg=alpha(t.p.canvas, if c.pressed(id) { 1.0 } else { 0.8 }),
+          bg=alpha(t.p.canvas, 0.8),
           id~,
           fn() {
             icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted)
@@ -892,6 +892,8 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
               wrap=false,
             )
             |> ignore
+            // Markdown.kt: clip(Smooth(concentric(12, 4))).clickable
+            @motion.ripple(c, id, @ui.concentric(block_radius, key_inset))
           },
         )
         |> ignore

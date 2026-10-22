@@ -1078,11 +1078,7 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
         w=Fill(1.0),
         h=Px(50.0),
         radius=25.0,
-        bg=if c.pressed(id) {
-          @sf.mix(t.p.text, 0.85, t.p.bg)
-        } else {
-          t.p.text
-        },
+        bg=t.p.text,
         align=ACenter,
         justify=JCenter,
         id~,
@@ -1099,6 +1095,10 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
             wrap=false,
           )
           |> ignore
+          // SignIn.kt: clip(CircleShape).clickable
+          if !busy {
+            @motion.ripple(c, id, 25.0)
+          }
         },
       )
       |> ignore

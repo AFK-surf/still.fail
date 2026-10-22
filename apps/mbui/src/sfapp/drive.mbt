@@ -484,7 +484,7 @@ fn folder_page(
               dv.chosen[key] = shown.map(fn(e) { e.name })
             }
           }
-          c.box(padx=8.0, pady=6.0, radius=6.0, opacity=if c.pressed(id) { 0.6 } else { 1.0 }, id~, fn() {
+          c.box(padx=8.0, pady=6.0, radius=6.0, id~, fn() {
             c.text(
               tr(if all { "android-misc.drive.chooseNone" } else { "android-misc.drive.chooseAll" }),
               size=15.0,
@@ -492,6 +492,8 @@ fn folder_page(
               wrap=false,
             )
             |> ignore
+            // DriveScreen.kt: clip(Smooth(6)).clickable
+            @motion.ripple(c, id, 6.0)
           })
           |> ignore
           if dv_nav_button(c, "drive-chosen-more", "more") {
@@ -519,7 +521,6 @@ fn folder_page(
           radius=17.0,
           align=ACenter,
           justify=JCenter,
-          bg=if c.pressed(rid) { @sf.alpha(t.p.text, 0.08) } else { 0L },
           id=rid,
           fn() {
             if refreshing {
@@ -527,6 +528,8 @@ fn folder_page(
             } else {
               @sf.icon(c, "refresh", size=18.0, color=t.p.text) |> ignore
             }
+            // DriveScreen.kt: clip(CircleShape).clickable
+            @motion.ripple(c, rid, 17.0)
           },
         )
         |> ignore
@@ -638,8 +641,10 @@ fn dv_retry_line(
     if c.clicked(id) {
       retry()
     }
-    c.box(pad=4.0, radius=6.0, opacity=if c.pressed(id) { 0.6 } else { 1.0 }, id~, fn() {
+    c.box(pad=4.0, radius=6.0, id~, fn() {
       c.text(tr("android-misc.drive.retry"), size~, color=@sf.link_ink(), wrap=false) |> ignore
+      // DriveScreen.kt: clip(Smooth(6)).clickable
+      @motion.ripple(c, id, 6.0)
     })
     |> ignore
   })
@@ -1156,9 +1161,12 @@ fn dv_row_key(c : @ui.Ctx, key : String, icon : String) -> Bool {
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
     id~,
-    fn() { @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore
+      // DriveScreen.kt RowKey: clip(CircleShape).clickable
+      @motion.ripple(c, id, 17.0)
+    },
   )
   |> ignore
   c.clicked(id)

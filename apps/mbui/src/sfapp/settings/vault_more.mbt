@@ -532,9 +532,12 @@ fn round_icon(c : @ui.Ctx, key : String, icon : String, tint : Int64, said~ : St
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
     id~,
-    fn() { @sf.icon(c, icon, size=18.0, color=tint) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=18.0, color=tint) |> ignore
+      // RoundIcon: clip(CircleShape).clickable
+      @motion.ripple(c, id, 17.0)
+    },
   )
   // `said`: what it is to a screen reader (RoundIcon's contentDescription)
   c.semantics(b, Button, id~, label=said)

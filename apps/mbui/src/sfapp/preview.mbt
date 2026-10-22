@@ -1529,6 +1529,8 @@ fn note_button(c : @ui.Ctx, key : String, icon : String, label : String, strong 
       @sf.icon(c, icon, size=16.0, color=ink) |> ignore
     }
     c.text(label, style=if strong { note_strong_words } else { note_plain_words }) |> ignore
+    // FilePreview.kt NoteButton: clip(Smooth(12)).clickable
+    @motion.ripple(c, id, 12.0)
   })
   |> ignore
   c.clicked(id)
@@ -1549,13 +1551,11 @@ let note_base : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_strong : @ui.Style = note_base.then(
-  @ui.style(bg=Accent, pressed=@ui.patch(bg=Over(Accent, A(OnAccent, O15)))),
-)
+let note_strong : @ui.Style = note_base.then(@ui.style(bg=Accent))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_plain : @ui.Style = note_base.then(@ui.style(bg=Faint, pressed=@ui.patch(bg=Over(Faint, A(Fg, O5)))))
+let note_plain : @ui.Style = note_base.then(@ui.style(bg=Faint))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2648,10 +2648,16 @@ fn picture_button(
     radius=picture_key,
     align=ACenter,
     justify=JCenter,
-    bg=if held { 0xFFFFFF29L } else if c.pressed(id) && live { @sf.alpha(tint, 0.16) } else { 0L },
+    bg=if held { 0xFFFFFF29L } else { 0L },
     opacity=if enabled { 1.0 } else { 0.35 },
     id=if live { id } else { 0 },
-    fn() { @sf.icon(c, icon, size=18.0, color=if held { dark_text } else { tint }) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=18.0, color=if held { dark_text } else { tint }) |> ignore
+      // PictureButton: clip(Smooth(PICTURE_KEY)).clickable (white at 16% only while held)
+      if live {
+        @motion.ripple(c, id, picture_key)
+      }
+    },
   )
   // named `said` (PictureButton's contentDescription), pressed while `held`
   c.semantics(b, Button, id~, label=said, disabled=!enabled, pressed=held)
