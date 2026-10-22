@@ -164,6 +164,8 @@ private val OPEN_FIELDS = setOf("public_key", "username")
 
 private fun kindName(kind: String?) = if (kind in KINDS) t("android-settings.vault.kind.$kind") else ""
 private fun kindIcon(kind: String?): ImageVector = when (kind) { "ssh_key" -> Icons.Server; "login" -> Icons.User; else -> Icons.Key }
+/** How long a grant lasts, shortest first: one use, an hour, the chat until it is archived. */
+private val SCOPES = listOf("once", "hour", "chat")
 /** The longest an item is granted for, in a word: 仅一次, 1 小时, 直到对话归档. */
 private fun lastsName(lasts: String?) = t("android-settings.vault.lasts.${lasts?.takeIf { it in SCOPES } ?: "chat"}")
 /** An item's longest grant as its editor offers it: its vault's (`default`, the library's setting), or its own. */
@@ -376,9 +378,6 @@ private fun RequestCard(ws: String, view: VaultsView, r: VaultRequest) {
     }
     VaultOptions(ws, r.id, r.lasts, Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp))
 }
-
-/** How long a grant lasts, shortest first: one use, an hour, the chat until it is archived. */
-private val SCOPES = listOf("once", "hour", "chat")
 
 /** The scopes up to `lasts` (the longest an item is granted for; any when it names none). */
 private fun scopesUpTo(lasts: String?): List<String> = SCOPES.take(SCOPES.indexOf(lasts).takeIf { it >= 0 }?.plus(1) ?: SCOPES.size)
