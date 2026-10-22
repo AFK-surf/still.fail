@@ -52,9 +52,10 @@ fn Entry::id(self : Entry) -> String {
 }
 
 ///|
-/// The bar's height (6 + 40 + 8) and the room the list keeps under it; the composer's room at the foot (ChatHost.kt
-/// roomForList: a line of words, the capsule's insets, its toolbar and margins) and the list's under it.
-let chat_bar_h : Double = 54.0
+/// The bar's height (5 + 40 + 5: Home's top bar's, so the two bars' lines meet as the page is swiped back) and the room
+/// the list keeps under it; the composer's room at the foot (ChatHost.kt roomForList: a line of words, the capsule's
+/// insets, its toolbar and margins) and the list's under it.
+let chat_bar_h : Double = 50.0
 
 ///|
 /// The title's line in the bar (Chat.kt BarFrame: a Text with no line height of its own, 16 on the theme's 1.4em).
@@ -1671,8 +1672,8 @@ fn bar_frame(
   on_more? : () -> Unit = fn() {  },
 ) -> Unit {
   let t = @sf.theme()
-  // under the status bar (Chat.kt BarFrame: windowInsetsPadding(statusBars), then 6)
-  c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=status_top() + 6.0, pb=8.0, align=ACenter, fn() {
+  // under the status bar (Chat.kt BarFrame: windowInsetsPadding(statusBars), then 5)
+  c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=status_top() + 5.0, pb=5.0, align=ACenter, fn() {
     let back = c.id("chat-back")
     if c.clicked(back) {
       app.nav.pop() |> ignore

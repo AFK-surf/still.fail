@@ -45,11 +45,11 @@ globalStyle(`${mShareWrite} > button`, { width: "100%" });
 globalStyle(`${mShareWrite} > button:disabled`, { opacity: "0.5", cursor: "default" });
 export const mChatBar = style({
   position: "absolute", top: "0", left: "0", right: "0", zIndex: "3", display: "flex", alignItems: "center",
-  padding: "calc(var(--m-top) + 6px) 16px 8px 4px",
+  padding: "calc(var(--m-top) + 5px) 16px 5px 4px",
 });
 /** A chat's page before its chat is there: what it waits on under its bar (which floats over the page), where its
  *  messages start. */
-export const mChatWaiting = style({ paddingTop: "calc(var(--m-top) + 54px)" });
+export const mChatWaiting = style({ paddingTop: "calc(var(--m-top) + 50px)" });
 export const mChatBack = style({
   display: "grid", placeItems: "center", flex: "none", width: "40px", height: "40px", padding: "0", border: "0",
   borderRadius: "50%", background: "none", color: "var(--m-accent) !important", cursor: "pointer",
