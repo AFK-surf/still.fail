@@ -196,13 +196,42 @@ test "what waits to be decided and is out of view: a bell over the way to the en
 }
 
 ///|
-test "the chat's people at its top as the viewer sees them: the viewer 你 (Parts.kt PeopleStack's shown.display)" {
-  let t = chat_tester("chat")
-  let initials = t.words().filter(fn(w) { w.0 == "你" && w.2 < top_bar_h })
-  assert_true(initials.length() > 0)
-  assert_true(t.words().filter(fn(w) { w.0 == "林" && w.2 < top_bar_h }).length() == 0)
+test "a chat's place: told the core as the list comes to rest (the message at the top, its top's pixels below the list's); opened again there, it is where it was left" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  // scrolled up from its end, let be
+  t.drag(200.0, 300.0, 200.0, 300.0 + place_drag)
+  // to where its fling says it comes to rest
+  t.run_for(t.rest_of("a list") - t.time())
+  t.frame()
+  let told = named(calls, "chat.place")
+  assert_true(told.length() > 0)
+  let p = told[told.length() - 1].params
+  let seq = number(Some(p), "seq")
+  let px = number(Some(p), "offset")
+  assert_true(seq > 0.0)
+  // opened again where the core says it was left (its `at` and `atOffset`, as it was told), the same place told back
+  let again : Array[Made] = []
+  let t2 = fake_core(again, over=fn(name, tp) {
+    match (name, tp.value) {
+      ("chat", Some(Object(m))) => {
+        let v = m.copy()
+        v["at"] = Json::number(seq)
+        v["atOffset"] = Json::number(px)
+        { ..tp, value: Some(Json::object(v)) }
+      }
+      _ => tp
+    }
+  })
+  t2.run_for(@ui.nav_push_ms)
+  let back = named(again, "chat.place")
+  assert_true(back.length() > 0)
+  let q = back[back.length() - 1].params
+  assert_eq(number(Some(q), "seq"), seq)
+  assert_true((number(Some(q), "offset") - px).abs() <= 1.0)
+  ignore(t)
 }
 
 ///|
-/// The chat's top bar, what its people stand in (its words above this).
-let top_bar_h : Double = 60.0
+/// How far the list is dragged down from its end.
+let place_drag : Double = 300.0

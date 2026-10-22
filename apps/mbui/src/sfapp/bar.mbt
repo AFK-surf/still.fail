@@ -924,6 +924,7 @@ fn at(
   w : Double,
   h : Double,
   clip? : Bool = false,
+  opacity? : Double = 1.0,
   bg? : Int64 = 0L,
   radius? : Double = 0.0,
   border? : Double = 0.0,
@@ -943,6 +944,7 @@ fn at(
       tx=x,
       ty=y,
       clip~,
+      opacity~,
       bg~,
       radius~,
       border~,
@@ -1025,31 +1027,53 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
 }
 
 ///|
-/// The bar's shadow (Bar.kt: below the glass and to its sides only, none above its top or under it): a blurred
-/// rounded rectangle 4 lower, seen only outside the glass.
+/// The bar's shadow (Bar.kt): a blurred rounded rectangle 4 lower, outside the glass's outline only (clipOutPath: the
+/// glass frosts nothing of it), none above its top (none in the notch or over the edge the action stands on), and
+/// coming in down its rounded ends, from nothing at its top to whole a radius down (no step where it begins).
 fn bar_shadow(c : @ui.Ctx, w : Double, top : Double, bottom : Double) -> Unit {
   let t = @sf.theme()
   let h = bottom - top
   let color = @sf.alpha(0x000000FFL, if t.dark { 0.45 } else { 0.16 })
-  let cast = fn() {
-    c.box(
-      w=Px(w),
-      h=Px(h),
-      ty=4.0,
-      radius=dmin(rad, h / 2.0),
-      // (Bar.kt: BlurMaskFilter of a CSS deviation of 6)
-      shadow=6.0,
-      shadow_color=color,
-      shadow_y=0.0,
-      fn() {  },
-    )
+  let r = dmin(rad, h / 2.0)
+  // (the room round it its blur reaches into)
+  let room = 40.0
+  let cast = fn(from : Double) {
+    at(c, room, -from, w, h, body=fn() {
+      c.box(
+        w=Px(w),
+        h=Px(h),
+        radius=r,
+        // (Bar.kt: BlurMaskFilter of a CSS deviation of 6)
+        shadow=6.0,
+        shadow_color=color,
+        shadow_y=bar_shadow_y,
+        shadow_out=true,
+        fn() {  },
+      )
+      |> ignore
+    })
     |> ignore
   }
-  // left, right, under
-  at(c, -40.0, top, 40.0, h + 40.0, clip=true, body=fn() { at(c, 40.0, 0.0, w, h, body=cast) |> ignore }) |> ignore
-  at(c, w, top, 40.0, h + 40.0, clip=true, body=fn() { at(c, -w, 0.0, w, h, body=cast) |> ignore }) |> ignore
-  at(c, 0.0, bottom, w, 40.0, clip=true, body=fn() { at(c, 0.0, -h, w, h, body=cast) |> ignore }) |> ignore
+  // its rounded ends' top, in bands, each as far in as the fade is there (Bar.kt's LinearGradient over the radius)
+  for k in 0..<bar_shadow_fade {
+    let y0 = r * k.to_double() / bar_shadow_fade.to_double()
+    let bh = r / bar_shadow_fade.to_double()
+    at(c, -room, top + y0, w + 2.0 * room, bh, clip=true, opacity=(k.to_double() + 0.5) / bar_shadow_fade.to_double(), body=fn() {
+      cast(y0)
+    })
+    |> ignore
+  }
+  // below that, whole
+  at(c, -room, top + r, w + 2.0 * room, h - r + room, clip=true, body=fn() { cast(r) }) |> ignore
 }
+
+///|
+/// How far below the glass its shadow falls (Bar.kt: translate 4).
+let bar_shadow_y : Double = 4.0
+
+///|
+/// The bands its fade down the rounded ends is drawn in.
+let bar_shadow_fade : Int = 8
 
 ///|
 /// A place's look: its icon (28) in `idle`, `lit` over it as far as it is lit (`v`: two pictures, one each colour,

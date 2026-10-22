@@ -90,6 +90,8 @@ struct Node {
   // the shadow's colour and how far down it falls (-1: a third of its blur)
   mut shadow_c : Int64
   mut shadow_y : Double
+  // the shadow only outside the box (what is under it not darkened: a glass it is laid under)
+  mut shadow_out : Bool
   mut clip : Bool
   mut tx : Double
   mut ty : Double
@@ -242,6 +244,7 @@ fn Node::new() -> Node {
     shadow: 0.0,
     shadow_c: 0x0000002EL,
     shadow_y: -1.0,
+    shadow_out: false,
     clip: false,
     tx: 0.0,
     ty: 0.0,
@@ -375,6 +378,7 @@ fn Node::reset_look(self : Node) -> Unit {
   self.shadow = 0.0
   self.shadow_c = 0x0000002EL
   self.shadow_y = -1.0
+  self.shadow_out = false
   self.clip = false
   self.tx = 0.0
   self.ty = 0.0

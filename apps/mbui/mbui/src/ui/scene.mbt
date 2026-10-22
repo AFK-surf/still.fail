@@ -443,9 +443,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     None => ()
   }
   if n.shadow > 0.0 && n.glass is None {
+    let dy = if n.shadow_y >= 0.0 { n.shadow_y } else { n.shadow * 0.35 }
     self.push_inst(
       n.x,
-      n.y + (if n.shadow_y >= 0.0 { n.shadow_y } else { n.shadow * 0.35 }),
+      n.y + dy,
       n.fw,
       n.fh,
       n.radius,
@@ -454,8 +455,9 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       n.shadow,
       n.shadow_c,
       alpha,
-      0.0,
-      0.0,
+      // (only outside the box, which is `dy` above its shadow: kinds above)
+      if n.shadow_out { 1.0 } else { 0.0 },
+      if n.shadow_out { dy } else { 0.0 },
       0.0,
       0.0,
     )
