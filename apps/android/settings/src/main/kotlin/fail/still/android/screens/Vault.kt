@@ -164,6 +164,8 @@ private val OPEN_FIELDS = setOf("public_key", "username")
 
 private fun kindName(kind: String?) = if (kind in KINDS) t("android-settings.vault.kind.$kind") else ""
 private fun kindIcon(kind: String?): ImageVector = when (kind) { "ssh_key" -> Icons.Server; "login" -> Icons.User; else -> Icons.Key }
+/** The longest an item is granted for, in a word: 仅一次, 1 小时, 直到对话归档. */
+private fun lastsName(lasts: String?) = t("android-settings.vault.lasts.${lasts?.takeIf { it in SCOPES } ?: "chat"}")
 private fun modeName(mode: String) = if (mode in setOf("proxy", "env", "ssh")) t("android-settings.vault.mode.$mode") else mode
 private fun fieldName(field: String) = when (field) {
     "value" -> t("android-settings.vault.value")
@@ -368,31 +370,33 @@ private fun RequestCard(ws: String, view: VaultsView, r: VaultRequest) {
             }
         }
     }
-    VaultOptions(ws, r.id, Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp))
+    VaultOptions(ws, r.id, r.lasts, Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp))
 }
 
+/** How long a grant lasts, shortest first: one use, an hour, the chat until it is archived. */
+private val SCOPES = listOf("once", "hour", "chat")
+
+/** The scopes up to `lasts` (the longest an item is granted for; any when it names none). */
+private fun scopesUpTo(lasts: String?): List<String> = SCOPES.take(SCOPES.indexOf(lasts).takeIf { it >= 0 }?.plus(1) ?: SCOPES.size)
+
 /**
- * The three answers to an agent's request, in the decisions' options (Decisions.kt DecisionOptions): once (the one
- * recommended), this chat for an hour, refused. Approving asks the person through the system's prompt (the core's
- * call); the one under way turns where it was tapped.
+ * The answers to an agent's request, in the decisions' options (Decisions.kt DecisionOptions): once, this chat for an
+ * hour, this chat until it is archived, as far as the item allows (`lasts`), the longest recommended; refused.
+ * Approving asks the person through the system's prompt (the core's call); the one under way turns where it was tapped.
  */
 @Composable
-private fun VaultOptions(ws: String, request: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
+private fun VaultOptions(ws: String, request: String, lasts: String?, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val app = LocalApp.current
-    val once = DecisionOption(t("android-settings.vault.approve.once"), t("android-settings.vault.approve.onceDetail"), recommended = true)
-    val hour = DecisionOption(t("android-settings.vault.approve.hour"), t("android-settings.vault.approve.hourDetail"))
+    val scopes = scopesUpTo(lasts)
+    val grants = scopes.map { s -> s to DecisionOption(t("android-settings.vault.approve.$s"), t("android-settings.vault.approve.${s}Detail"), recommended = s == scopes.last()) }
     val deny = DecisionOption(t("android-settings.vault.approve.deny"), t("android-settings.vault.approve.denyDetail"))
     val on = arrayOf("workspace" to ws, "request" to request)
-    val busy = when {
-        app.isDoing("vault.approve", *on, "scope" to "once") -> once.label
-        app.isDoing("vault.approve", *on, "scope" to "hour") -> hour.label
-        app.isDoing("vault.deny", *on) -> deny.label
-        else -> null
-    }
-    DecisionOptions(listOf(once, hour, deny), modifier, enabled = enabled, busy = busy) { o ->
+    val busy = grants.firstOrNull { (s, _) -> app.isDoing("vault.approve", *on, "scope" to s) }?.second?.label
+        ?: deny.label.takeIf { app.isDoing("vault.deny", *on) }
+    DecisionOptions(grants.map { it.second } + deny, modifier, enabled = enabled, busy = busy) { o ->
         if (o == deny) app.vaultAct(t("android-settings.vault.approve.denyWhat")) { app.vaultCall(ws, "deny") { put("request", request) } }
         else {
-            val scope = if (o == once) "once" else "hour"
+            val scope = grants.first { it.second == o }.first
             app.vaultAct(t("android-settings.vault.approve.what")) { app.vaultCall(ws, "approve") { put("request", request); put("scope", scope) } }
         }
     }
@@ -410,14 +414,15 @@ fun VaultApproval(workspace: String, request: String, mine: Boolean, modifier: M
     val topic by rememberTopic<VaultsView>(app.core, Topics.vaults(workspace))
     val view = topic.value
     val running = app.isDoing(setOf("vault.approve", "vault.deny"), "workspace" to workspace, "request" to request)
+    val lasts = view?.requests?.firstOrNull { it.id == request }?.lasts
     Column(modifier) {
         when {
-            view == null || !mine -> VaultOptions(workspace, request, enabled = false)
+            view == null || !mine -> VaultOptions(workspace, request, lasts, enabled = false)
             !view.available -> {
-                VaultOptions(workspace, request, enabled = false)
+                VaultOptions(workspace, request, lasts, enabled = false)
                 Text(t("android-settings.vault.approve.inApp"), fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 6.dp))
             }
-            running || view.requests.any { it.id == request } -> VaultOptions(workspace, request)
+            running || view.requests.any { it.id == request } -> VaultOptions(workspace, request, lasts)
             else -> Text(t("android-settings.vault.approve.decided"), fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle())
         }
     }
@@ -725,6 +730,7 @@ fun VaultItemScreen(current: WorkspaceEntry, vault: String, item: String) {
                     else {
                         Fact(t("web-pages.vault.how"), row.modes.joinToString("、") { howLine(it, row.hosts) })
                         row.env?.ifEmpty { null }?.let { Fact(t("android-settings.vault.env"), it, mono = true) }
+                        Fact(t("android-settings.vault.lasts"), lastsName(row.lasts))
                     }
                 }
             }
@@ -835,6 +841,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
     var mode by remember { mutableStateOf(editing?.item?.modes?.firstOrNull { it == "proxy" || it == "env" } ?: "proxy") }
     var hosts by remember { mutableStateOf(editing?.item?.hosts?.joinToString(", ").orEmpty()) }
     var env by remember { mutableStateOf(editing?.item?.env.orEmpty()) }
+    var lasts by remember { mutableIntStateOf(SCOPES.indexOf(editing?.item?.lasts).takeIf { it >= 0 } ?: SCOPES.lastIndex) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val k = KINDS[kind]
@@ -866,6 +873,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
             putJsonArray("modes") { modes.forEach { add(it) } }
             putJsonArray("hosts") { if (modes == listOf("proxy")) hostList.forEach { add(it) } }
             env.trim().takeIf { it.isNotEmpty() && k != "ssh_key" }?.let { put("env", it) }
+            SCOPES[lasts].takeIf { it != "chat" }?.let { put("lasts", it) }
         }
         app.scope.launch {
             try {
@@ -931,6 +939,10 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
                         if (noHosts && hosts.isNotEmpty()) Text(t("android-settings.vault.hostsNeeded"), fontSize = 12.sp, color = C.red)
                     }
                     Labeled(t("android-settings.vault.env")) { VaultField(env, { env = it.trim() }, t("android-settings.vault.envPlaceholder"), mono = true) }
+                }
+                Labeled(t("android-settings.vault.lasts")) {
+                    Seg(SCOPES.map(::lastsName), lasts, { lasts = it }, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
+                    Text(t("android-settings.vault.lastsNote"), fontSize = 12.sp, lineHeight = 18.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }

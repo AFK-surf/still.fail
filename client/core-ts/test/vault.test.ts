@@ -408,6 +408,20 @@ test("vault calls: an agent's request approved (sealed to its keeper, signed) or
   assert.equal(deny.request, "r_2");
   assert.deepEqual(vaults().requests, []);
   await fails(r.ask("vault.deny", { request: "r_2" }), "vault_no_request");
+
+  // The chat's grant, until it is archived (the station ends it then; 30 days at most); none longer than the item's
+  // `lasts`, which the request says so the approval offers no more.
+  const short = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "Prod", fields: { value: "p_x" } }, listing: { name: "prod", kind: "token", modes: ["proxy"], hosts: ["api.github.com"], lasts: "hour" } });
+  r.st.requests.push(request("r_3"), { ...request("r_4"), item: short.id });
+  r.push("vault-request", request("r_3"));
+  r.push("vault-request", { ...request("r_4"), item: short.id });
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.lasts]), [["r_3", "chat"], ["r_4", "hour"]]);
+  await r.ask("vault.approve", { request: "r_3", scope: "chat" });
+  const chat = r.st.grants[1] as any;
+  assert.deepEqual([chat.request, chat.scope, chat.exp - chat.at], ["r_3", "chat", 30 * 86400]);
+  await fails(r.ask("vault.approve", { request: "r_4", scope: "chat" }), "vault_scope");
   r.core.close();
 });
 

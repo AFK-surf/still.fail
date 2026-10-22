@@ -236,6 +236,7 @@
   "core-misc.vault.notOwner": "Only the vault's owner gives its key to more devices",
   "core-misc.vault.unknown": "No such vault, or not one of yours",
   "core-misc.vault.unknownItem": "No such item",
+  "core-misc.vault.scopeTooLong": "This secret is not granted for that long",
   "core-misc.vault.untrusted": "This item is not signed by a member of its vault",
   "core-misc.vault.noRequest": "That request is not waiting any more",
   "core-misc.vault.reason.open": "Open “{name}”",

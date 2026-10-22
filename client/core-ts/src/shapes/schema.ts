@@ -1375,6 +1375,7 @@ export const SHAPES: Record<string, Shape> = {
     ["vaultName", "String"],
     ["item", "String"],
     ["itemName", opt("String")],
+    ["lasts", opt("String"), { doc: "The longest grant its item allows: `once`, `hour` or `chat`; the approval offers those up to it." }],
     ["session", "String"],
     ["chat", "String"],
     ["station", opt("String"), { doc: "The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`." }],
@@ -1410,6 +1411,7 @@ export const SHAPES: Record<string, Shape> = {
     ["modes", vec("String")],
     ["hosts", vec("String")],
     ["env", opt("String"), { doc: "The variable its listing suggests the command gets it in (`GH_TOKEN`)." }],
+    ["lasts", opt("String"), { doc: "The longest grant its owner gives: `once`, `hour` or `chat` (the chat until it is archived)." }],
     ["lastUse", opt("VaultUse"), { doc: "The last time an agent used it." }],
   ], { doc: "An item of a vault." }),
   VaultUse: struct([

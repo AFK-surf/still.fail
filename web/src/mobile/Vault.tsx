@@ -14,7 +14,7 @@ import { KindIcon } from "../cloud/Vault.tsx";
 import { VaultChoices } from "../VaultApproval.tsx";
 import { stationBase } from "../station.tsx";
 import {
-  ITEM_SECTIONS, KINDS, blankForm, copySecret, listLine, useVaultUses, type Kind, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, SCOPES, blankForm, copySecret, lastsName, listLine, useVaultUses, type Kind, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -332,6 +332,9 @@ function EditorSheet({ vault, first, id, plain = false, kinds = true }: { vault:
           <span className={securityCss.mNote}>{f.kind === "ssh_key" ? t("web-pages.vault.editor.sshNote") : f.mode === "proxy" ? t("web-pages.vault.editor.proxyNote") : t("web-pages.vault.editor.envNote")}</span>
           {f.kind !== "ssh_key" && f.mode === "proxy" && <><span className={css.mLabel}>{t("web-pages.vault.editor.hosts")}</span>{field("hosts", t("web-pages.vault.editor.hostsPlaceholder"))}</>}
           {f.kind !== "ssh_key" && <><span className={css.mLabel}>{t("web-pages.vault.editor.env")}</span>{field("env", t("web-pages.vault.editor.envPlaceholder"), { mono: true })}</>}
+          <span className={css.mLabel}>{t("web-pages.vault.editor.lasts")}</span>
+          <Seg fill options={SCOPES.map(lastsName)} selected={SCOPES.indexOf(f.lasts)} onSelect={(i) => change({ lasts: SCOPES[i]! })} />
+          <span className={securityCss.mNote}>{t("web-pages.vault.editor.lastsNote")}</span>
         </>}
         <div className={css.mTools}>
           {id && <LinkButton label={t("common.delete")} className={partsCss.mRed} onClick={remove} />}
@@ -568,6 +571,7 @@ export function VaultItemScreen() {
           <dl className={css.mFacts}>
             <dt>{t("web-pages.vault.how")}</dt><dd>{row.modes.map((m) => howLine(m, row.hosts)).join("、")}</dd>
             {row.env && <><dt>{t("web-pages.vault.editor.env")}</dt><dd className={css.mMono}>{row.env}</dd></>}
+            <dt>{t("web-pages.vault.editor.lasts")}</dt><dd>{lastsName(row.lasts)}</dd>
           </dl>
         ) : <span className={partsCss.mSubtle}>{t("web-pages.vault.notForAgents")}</span>}
       </div></ListCard>

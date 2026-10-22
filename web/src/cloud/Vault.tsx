@@ -17,7 +17,7 @@ import { AddKinds } from "../VaultAdd.tsx";
 import { stationBase } from "../station.tsx";
 import { VaultChoices } from "../VaultApproval.tsx";
 import {
-  ITEM_SECTIONS, KINDS, blankForm, copySecret, itemPath, listLine, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, SCOPES, blankForm, copySecret, itemPath, lastsName, listLine, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -500,6 +500,10 @@ export function Editor({ workspace, vault, first, id, plain = false, kinds = tru
             <p className={css.note}>{f.kind === "ssh_key" ? t("web-pages.vault.editor.sshNote") : f.mode === "proxy" ? t("web-pages.vault.editor.proxyNote") : t("web-pages.vault.editor.envNote")}</p>
             {f.kind !== "ssh_key" && f.mode === "proxy" && input("hosts", t("web-pages.vault.editor.hosts"), { placeholder: t("web-pages.vault.editor.hostsPlaceholder"), error: problem === "hosts" && f.hosts !== "" ? t("web-pages.vault.editor.hostsNeeded") : undefined })}
             {f.kind !== "ssh_key" && input("env", t("web-pages.vault.editor.env"), { mono: true, placeholder: t("web-pages.vault.editor.envPlaceholder") })}
+            <Field label={t("web-pages.vault.editor.lasts")}>
+              <div><Segmented label={t("web-pages.vault.editor.lasts")} value={f.lasts} onChange={(lasts) => change({ lasts })} options={SCOPES.map((s) => ({ value: s, label: lastsName(s) }))} /></div>
+            </Field>
+            <p className={css.note}>{t("web-pages.vault.editor.lastsNote")}</p>
           </>}
         </div>
       </Dialog>

@@ -5036,6 +5036,8 @@ export interface VaultItemRow {
 	hosts: string[];
 	/** The variable its listing suggests the command gets it in (`GH_TOKEN`). */
 	env?: string;
+	/** The longest grant its owner gives: `once`, `hour` or `chat` (the chat until it is archived). */
+	lasts?: string;
 	/** The last time an agent used it. */
 	lastUse?: VaultUse;
 }
@@ -5069,6 +5071,8 @@ export interface VaultRequest {
 	vaultName: string;
 	item: string;
 	itemName?: string;
+	/** The longest grant its item allows: `once`, `hour` or `chat`; the approval offers those up to it. */
+	lasts?: string;
 	session: string;
 	chat: string;
 	/** The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`. */

@@ -25,8 +25,7 @@ function Command({ text }: { text: string }) {
   </>;
 }
 
-const scopeName = (scope: string | undefined): string =>
-  scope === "hour" ? t("web-pages.vault.approve.hour") : scope === "chat" ? t("web-pages.vault.ask.scopeChat") : t("web-pages.vault.approve.once");
+const scopeName = (scope: string | undefined): string => t(`web-pages.vault.approve.${scope === "hour" || scope === "chat" ? scope : "once"}`);
 
 /** How it ended: 已批准 · 仅本次, 已拒绝, 已过期. */
 function Outcome({ ask }: { ask: Ask }) {

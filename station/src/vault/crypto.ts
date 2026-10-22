@@ -14,14 +14,20 @@ export type Vault = {
   v: 1; ws: string; id: string; seq: number; owner: string; name: string; members: string[]; epoch: number;
   keys: { cert: BoxCert; wrapped: string }[]; recovery?: string; at: number; sig: Sig;
 };
-export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string };
+/// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: any).
+export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope };
 export type Item = {
   v: 1; ws: string; vault: string; id: string; version: number; epoch: number; deleted?: true; ct: string;
   listing?: Listing; at: number; sig: Sig;
 };
 export type Kind = "token" | "ssh_key" | "login";
 export type Mode = "proxy" | "ssh" | "env";
+/// How long a grant lasts: one use, an hour, or the chat until it is archived.
 export type Scope = "once" | "hour" | "chat";
+/// The scopes, shortest first.
+export const SCOPES: Scope[] = ["once", "hour", "chat"];
+/// Whether `listing` lets a grant last as long as `scope`.
+export const allows = (listing: { lasts?: Scope | undefined }, scope: Scope): boolean => SCOPES.indexOf(scope) >= 0 && SCOPES.indexOf(scope) <= SCOPES.indexOf(listing.lasts ?? "chat");
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
   command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
@@ -233,6 +239,7 @@ function listingOk(l: any): string | null {
   if (!Array.isArray(l.modes) || !l.modes.every((m: unknown) => MODES.includes(m as Mode)) || !unique(l.modes)) return "modes are proxy, ssh or env";
   if (!Array.isArray(l.hosts) || l.hosts.length > 64 || !l.hosts.every((h: unknown) => text(h, 253) && HOST.test(h as string))) return "hosts are domain names (*.example.com allowed)";
   if (l.env !== undefined && !(text(l.env, 100) && ENV.test(l.env))) return "env is a variable name";
+  if (l.lasts !== undefined && !SCOPES.includes(l.lasts)) return "lasts is once, hour or chat";
   return null;
 }
 

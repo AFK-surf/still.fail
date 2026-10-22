@@ -5,7 +5,7 @@
 // the owner's decision, the proxy), and that their values stay out of the files agents read. Once security mode is on,
 // nothing is written here but deletions: the owner's app moves each item into their encrypted vault (`vault.migrate`).
 import type { DatabaseSync } from "node:sqlite";
-import type { Kind, Listing, Mode } from "./crypto.ts";
+import { type Kind, type Listing, type Mode, SCOPES } from "./crypto.ts";
 
 /// The id a plain library goes by where a vault's would (requests, the core's topics).
 export const PLAIN = "plain";
@@ -57,6 +57,7 @@ export function plainOk(prev: PlainItem | null, next: PlainItem, owner: string):
     if (!Array.isArray(l.hosts) || !l.hosts.every((h) => isStr(h, 253) && /^(\*\.)?[a-z0-9.-]+$/.test(h))) return "a listing's hosts are host names";
     if (l.modes.includes("proxy") && l.hosts.length === 0) return "given through the proxy, it names its hosts";
     if (l.env !== undefined && !(isStr(l.env, 100) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(l.env))) return "env is a variable's name";
+    if (l.lasts !== undefined && !SCOPES.includes(l.lasts)) return "lasts is once, hour or chat";
   }
   return null;
 }

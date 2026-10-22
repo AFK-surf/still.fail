@@ -4953,6 +4953,8 @@ data class VaultItemRow (
 	val hosts: List<String>,
 	/// The variable its listing suggests the command gets it in (`GH_TOKEN`).
 	val env: String? = null,
+	/// The longest grant its owner gives: `once`, `hour` or `chat` (the chat until it is archived).
+	val lasts: String? = null,
 	/// The last time an agent used it.
 	val lastUse: VaultUse? = null
 )
@@ -4990,6 +4992,8 @@ data class VaultRequest (
 	val vaultName: String,
 	val item: String,
 	val itemName: String? = null,
+	/// The longest grant its item allows: `once`, `hour` or `chat`; the approval offers those up to it.
+	val lasts: String? = null,
 	val session: String,
 	val chat: String,
 	/// The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`.

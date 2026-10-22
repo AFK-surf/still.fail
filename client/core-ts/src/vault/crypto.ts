@@ -21,8 +21,15 @@ export type Vault = {
 };
 export type Kind = "token" | "ssh_key" | "login";
 export type Mode = "proxy" | "ssh" | "env";
+/// How long a grant lasts: one use, an hour, or the chat until it is archived.
 export type Scope = "once" | "hour" | "chat";
-export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string };
+/// The scopes, shortest first.
+export const SCOPES: Scope[] = ["once", "hour", "chat"];
+/// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: any).
+export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope };
+/// Whether `listing` lets a grant last as long as `scope`.
+export const allows = (listing: { lasts?: Scope | undefined } | undefined, scope: Scope): boolean =>
+  SCOPES.indexOf(scope) >= 0 && SCOPES.indexOf(scope) <= SCOPES.indexOf(listing?.lasts ?? "chat");
 export type Item = {
   v: 1; ws: string; vault: string; id: string; version: number; epoch: number; deleted?: true; ct: string; listing?: Listing; at: number; sig: Sig;
 };
