@@ -283,3 +283,7 @@ extern "C" fn c_append(path : Bytes, data : Bytes) -> Int = "mbc_append"
 ///|
 #borrow(path)
 extern "C" fn c_chdir(path : Bytes) -> Int = "mbc_chdir"
+
+///|
+/// A process's slot free again, its end taken
+extern "C" fn c_release(slot : Int) -> Unit = "mbc_release"
