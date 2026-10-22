@@ -1344,13 +1344,12 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
   (src.leave)("chat", chat_params(r))
   (src.leave)("chatJobs", chat_params(r))
-  // what its agents and other chats' wrote each other, read for its sheet
-  match read_chats.get(k) {
-    Some((_, v, _)) =>
-      match v.thread {
-        Some(th) => (src.leave)("chatLetters", letters_params(r, th))
-        None => ()
-      }
+  // what its agents and other chats' wrote each other, read for its sheet: let go if it was (held only once opened)
+  match dui.letters_held.get(k) {
+    Some(th) => {
+      (src.leave)("chatLetters", letters_params(r, th))
+      dui.letters_held.remove(k)
+    }
     None => ()
   }
   near_left(src, r.station)

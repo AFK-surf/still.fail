@@ -49,6 +49,9 @@ priv struct Decide {
   mut jobs_all : Bool
   /// the letters' sheet: the chat opened in it, by its key ("" the list of them)
   mut letters_open : String
+  /// the chats whose letters were read for their sheet (the core's `chatLetters`), by station and session: their
+  /// threads, let go as the chat is (chat.mbt chat_left)
+  letters_held : Map[String, Double]
   /// a job's sheet: what it said (0) or its output (1)
   mut job_tab : Int
   /// the history's tab: its steps (0) or its details (1)
@@ -90,6 +93,7 @@ let dui : Decide = {
   leaving: None,
   jobs_all: false,
   letters_open: "",
+  letters_held: {},
   job_tab: 0,
   history_tab: 0,
   opened: {},
@@ -120,6 +124,7 @@ fn decide_reset() -> Unit {
   dui.leaving = None
   dui.jobs_all = false
   dui.letters_open = ""
+  dui.letters_held.clear()
   dui.job_tab = 0
   dui.history_tab = 0
   dui.opened.clear()

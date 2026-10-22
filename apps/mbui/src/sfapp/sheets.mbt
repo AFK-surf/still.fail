@@ -1863,6 +1863,7 @@ let letters_foot : @ui.Style = @ui.style(h=S8)
 /// written, each drawn as the chat draws a message (Chat.kt SaidAlone).
 fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
   let topic = (src.topic)("chatLetters", letters_params(r, thread))
+  dui.letters_held[r.station + "\u{1}" + r.session] = thread
   let (chat, _, _) = view_of_chat(src, r)
   sheet_frame(c, "letters", c.height * 0.8, draggable=true, fn() {
     sheet_head(c, tr("web-main.letters.title"))
