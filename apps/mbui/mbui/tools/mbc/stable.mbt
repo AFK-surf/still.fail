@@ -194,10 +194,13 @@ fn split_stable(
   }
   tick("decls, externs renamed")
   let data_r : Array[Bytes] = []
+  let data_ids : Array[BSet] = [] // (the identifiers in each, for its unit's declarations)
   for d in data {
     let t = rename(d, names_t).0
-    file_ids.add_all(idents(t))
+    let ids = idents(t)
+    file_ids.add_all(ids)
     data_r.push(t)
+    data_ids.push(ids)
   }
   // by_name: what the declarations, the externs and the directives' groups declare or define: (0 a declaration,
   // 1 an extern, its index)
@@ -883,7 +886,7 @@ fn split_stable(
   for n, _ in layouts {
     layout_names.add(n)
   }
-  {
+  let layout_defs = {
     let buf = @buffer.new()
     let lns = layout_names.sorted()
     for n in lns {
@@ -893,7 +896,7 @@ fn split_stable(
       buf.write_bytes(bint(layouts[n]))
       buf.write_bytes(b";\n")
     }
-    data_r.push(buf.to_bytes())
+    buf.to_bytes()
   }
   stats.push(("layouts_named", layouts.length()))
   let lines_of = fn(ts : Array[Bytes]) {
@@ -918,9 +921,16 @@ fn split_stable(
     buf.to_bytes()
   }
   let declare_only = env_is("MBC_DECLARE_ONLY", "1") != b"0"
-  let unit_text = fn(used : BSet, body : Bytes, texts : Array[Bytes]?) -> Bytes {
+  let unit_text = fn(
+    used : BSet,
+    body : Bytes,
+    texts : Array[Bytes]?,
+    defines : BSet,
+  ) -> Bytes {
     // A unit: the prelude, the declarations and externs `used` needs (in an order of their own), then `body`; with
-    // `texts` (its functions), the structs they need defined, the others declared only.
+    // `texts` (its functions), the structs they need defined, the others declared only. `defines`: the globals the
+    // unit defines (a data unit's), not declared extern in it (an anonymous struct's type, declared twice in one
+    // unit, is two types).
     let need = match texts {
       Some(ts) if declare_only => defined_needed(ts, globals, fields)
       _ => None
@@ -937,7 +947,11 @@ fn split_stable(
       buf.write_bytes(b";\n")
     }
     buf.write_bytes(lines_of(canonical(want_d)))
-    for t in sort_bytes(ints(want_e).map(fn(k) { eitems[k].t })) {
+    for t in sort_bytes(
+        ints(want_e)
+        .filter(fn(k) { eitems[k].declares.inter(defines).size() == 0 })
+        .map(fn(k) { eitems[k].t }),
+      ) {
       buf.write_bytes(t)
     }
     for n in used.inter(layout_names).sorted() {
@@ -980,21 +994,17 @@ fn split_stable(
       b"#endif\n",
     ]),
   )
+  // data.c: the prelude's own definitions (CSPLIT_DEFS), defined once; the globals in units of their own, below
   put(
     b"data.c",
-    cat([
-      unit_head,
-      b"#define CSPLIT_DEFS\n#include \"decls.h\"\n\n",
-      join(data_r, b"\n"),
-      b"\n",
-    ]),
+    cat([unit_head, b"#define CSPLIT_DEFS\n", internal, prelude, b"\n"]),
   )
-  // jobs: (file, of moonbit_init's pieces?, its entries)
-  let jobs : Array[(Bytes, Bool, Array[(Bytes, Int)])] = []
+  // jobs: (file, what its entries are (0 functions, 1 moonbit_init's pieces, 2 globals), its entries)
+  let jobs : Array[(Bytes, Int, Array[(Bytes, Int)])] = []
   // moonbit_init too: with all of decls.h it was compiled again for any type changed anywhere
   if whole_init {
     let (t, used) = init_part(init.text)
-    put(b"init.c", unit_text(used, t, None))
+    put(b"init.c", unit_text(used, t, None, BSet::new()))
   } else {
     let buf = @buffer.new()
     for f in init_calls {
@@ -1008,33 +1018,129 @@ fn split_stable(
       buf.write_bytes(b"();\n")
     }
     buf.write_bytes(b"}\n")
-    put(b"init.c", unit_text(BSet::new(), buf.to_bytes(), Some([])))
+    put(b"init.c", unit_text(BSet::new(), buf.to_bytes(), Some([]), BSet::new()))
     let iu = []
     for u, _ in init_units {
       iu.push(u)
     }
     for u in sort_bytes(iu) {
-      jobs.push((cat([u, b".c"]), true, init_units[u]))
+      jobs.push((cat([u, b".c"]), 1, init_units[u]))
     }
   }
   let ninit = jobs.length()
+  // the globals in units of their own, each of a package's (its globals, and the string literals it alone uses),
+  // a big package's in pieces by its globals' names without their numbers (moonc's numbers move as a program
+  // has more or fewer of them); the literals more than one package uses in pieces of their own by their names
+  // (named by their content); moonc's layout table with the layouts' constants in one. A unit is then the same text
+  // in each test and each build that has the same globals of that package, kept (MBC_STORE): one data.c was made
+  // new by every program and every change
+  let lit = b"moonbit_string_literal_"
+  // (which packages use each literal: its functions, its globals)
+  let lit_users : Map[Bytes, BSet] = Map::new()
+  let note_users = fn(text : Bytes, pkg : Bytes) {
+    let mut p = 0
+    while true {
+      let s = find(text, lit, p)
+      if s < 0 {
+        break
+      }
+      let e = ident_end(text, s)
+      let n = sub(text, s, e)
+      match lit_users.get(n) {
+        Some(u) => u.add(pkg)
+        None => lit_users[n] = BSet::of([pkg])
+      }
+      p = e
+    }
+  }
+  for f in rest {
+    note_users(f.text, package_of(f.name))
+  }
+  note_users(init.text, b" init")
+  for k, n in data_names {
+    if !starts(n, lit) {
+      note_users(data[k], package_of(n))
+    }
+  }
+  // (each global's group, and what places it in its group's pieces)
+  let group_of = fn(k : Int) -> (Bytes, Bytes) {
+    let n = data_names[k]
+    if n == b"moonbit_layout_table_data" {
+      (b" layout", b"")
+    } else if starts(n, lit) {
+      let renamed = names.get_or_default(n, n)
+      match lit_users.get(n) {
+        Some(u) if u.size() == 1 && u.items()[0] != b" init" => (u.items()[0], renamed)
+        _ => (b" strings", renamed)
+      }
+    } else {
+      (package_of(n), digits_stem(n).0)
+    }
+  }
+  let groups = data_names.mapi(fn(k, _) { group_of(k) })
+  let group_size : Map[Bytes, Int] = Map::new()
+  for k, g in groups {
+    group_size[g.0] = group_size.get_or_default(g.0, 0) + clen(data_r[k])
+  }
+  let data_units : Map[Bytes, Array[(Bytes, Int)]] = Map::new()
+  for k, n in data_names {
+    let (g, key) = groups[k]
+    let label = if g == b" layout" {
+      b"layout"
+    } else if g == b" strings" {
+      b"strings"
+    } else {
+      cat([b"p_", unit_label(g)])
+    }
+    let mut pieces = 1
+    while g != b" layout" && pieces * (target / 2) < group_size[g] {
+      pieces *= 2
+    }
+    let unit = if pieces > 1 {
+      cat([
+        b"data_",
+        label,
+        b"_",
+        utf8((crc32(key) % pieces.reinterpret_as_uint()).to_string()),
+      ])
+    } else {
+      cat([b"data_", label])
+    }
+    match data_units.get(unit) {
+      Some(u) => u.push((names.get_or_default(n, n), k))
+      None => data_units[unit] = [(names.get_or_default(n, n), k)]
+    }
+  }
+  if !data_units.contains(b"data_layout") && layout_defs.length() > 0 {
+    data_units[b"data_layout"] = []
+  }
+  let dus = []
+  for u, _ in data_units {
+    dus.push(u)
+  }
+  for u in sort_bytes(dus) {
+    jobs.push((cat([u, b".c"]), 2, data_units[u]))
+  }
+  let nfirst = jobs.length()
   let us = []
   for u, _ in units {
     us.push(u)
   }
   for u in sort_bytes(us) {
-    jobs.push((cat([u, b".c"]), false, units[u]))
+    jobs.push((cat([u, b".c"]), 0, units[u]))
   }
   let ps = match pieces {
     Some(p) => p
     None => []
   }
   let size_of = fn(i : Int) {
-    let (_, is_init, entries) = jobs[i]
+    let (_, kind, entries) = jobs[i]
     let mut n = 0
     for e in entries {
-      n += if is_init {
+      n += if kind == 1 {
         ps[e.1].1.length() + ps[e.1].2.length()
+      } else if kind == 2 {
+        data_r[e.1].length()
       } else {
         rest[e.1].text.length()
       }
@@ -1043,7 +1149,25 @@ fn split_stable(
   }
   tick("kinds, needs, first units")
   let results = run_jobs(jobs.length(), outdir, size_of, fn(i) {
-    let (name, is_init, entries) = jobs[i]
+    let (name, kind, entries) = jobs[i]
+    if kind == 2 {
+      // (globals: in moonc's order, each defined here and declared nowhere else in the unit)
+      let used = BSet::new()
+      let defines = BSet::new()
+      let texts = []
+      for e in entries {
+        texts.push(data_r[e.1])
+        used.add_all(data_ids[e.1])
+        defines.add(e.0)
+      }
+      if name == b"data_layout.c" {
+        texts.push(layout_defs)
+      }
+      let text = unit_text(used, join(texts, b"\n"), None, defines)
+      let ch = if write_if_changed(join_path(outdir, name), text) { 1 } else { 0 }
+      return (clen(text), 0, ch)
+    }
+    let is_init = kind == 1
     let texts : Array[(Bytes, Bytes)] = []
     let used = BSet::new()
     for e in entries {
@@ -1083,6 +1207,7 @@ fn split_stable(
       used,
       join(ordered.map(fn(x) { x.1 }), b"\n"),
       Some(texts.map(fn(x) { x.1 })),
+      BSet::new(),
     )
     let mut load = 0
     for x in texts {
@@ -1095,7 +1220,7 @@ fn split_stable(
   for i, r in results {
     written.push((jobs[i].0, r.0))
     changed += r.2
-    if i >= ninit {
+    if i >= nfirst {
       loads.push(r.1)
     }
   }
