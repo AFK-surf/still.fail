@@ -24,7 +24,8 @@ case "${1:-run}" in
     if [ "$(cd out/node && node -p "require('./node_modules/playwright/package.json').version" 2>/dev/null)" != $PLAYWRIGHT ]; then
       (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i playwright@$PLAYWRIGHT pngjs@7.0.0 >/dev/null)
     fi
-    (cd out/node && npx playwright install --with-deps chromium >/dev/null)
+    # (Chromium alone: its system libraries are the runner's already (a Chrome there), apt not run again)
+    (cd out/node && npx playwright install chromium >/dev/null)
     for n in 1 2; do
       node scripts/render_web.mjs $S $O/controls.dl $O/controls-$n.png | tee $O/run-$n.txt
     done

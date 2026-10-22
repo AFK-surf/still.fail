@@ -173,9 +173,11 @@ case $CMD in
       mac) APP=kitdemo bash scripts/mac.sh build ;;
       windows) APP=kitdemo bash scripts/win.sh build ;;
       web) APP=kitdemo bash scripts/web.sh build
+        # (Chromium alone: the system's libraries it needs are the runner's already, a Chrome there; installing them
+        # again (--with-deps, apt) made this step 18-53 s, and 326-453 s in 3 of 15 runs, 2026-10-22)
         if [ ! -d out/node/node_modules/playwright ]; then
           (mkdir -p out/node && cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i playwright >/dev/null 2>&1 \
-            && npx playwright install --with-deps chromium >/dev/null 2>&1)
+            && npx playwright install chromium >/dev/null 2>&1)
         fi ;;
       android) APP=kitdemo bash scripts/android.sh build ;;
       ios) bash scripts/ios.sh build ;;
