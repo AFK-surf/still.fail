@@ -23,10 +23,192 @@ options(
       "output": "text_android_wbtest.mbt",
       "command": ":embed -i $input -o $output --name text_android_kept",
     },
+    // (the screens: written by scripts/screens-dump.sh from client/fixtures/screens)
+    // screens: begin
+    {
+      "input": "../../../../client/fixtures/screens/blocked.json",
+      "output": "screen_blocked_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_blocked",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat.json",
+      "output": "screen_chat_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-agent.json",
+      "output": "screen_chat_agent_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_agent",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-answering.json",
+      "output": "screen_chat_answering_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_answering",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-attach.json",
+      "output": "screen_chat_attach_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_attach",
+    },
     {
       "input": "../../../../client/fixtures/screens/chat-cards.json",
       "output": "screen_chat_cards_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_chat_cards",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-compose.json",
+      "output": "screen_chat_compose_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_compose",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-failed.json",
+      "output": "screen_chat_failed_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_failed",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-flash.json",
+      "output": "screen_chat_flash_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_flash",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-flash-mine.json",
+      "output": "screen_chat_flash_mine_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_flash_mine",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-info.json",
+      "output": "screen_chat_info_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_info",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-job.json",
+      "output": "screen_chat_job_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_job",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-jobs.json",
+      "output": "screen_chat_jobs_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_jobs",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-link-menu.json",
+      "output": "screen_chat_link_menu_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_link_menu",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-loading.json",
+      "output": "screen_chat_loading_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_loading",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-login.json",
+      "output": "screen_chat_login_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_login",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-md.json",
+      "output": "screen_chat_md_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_md",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-pick.json",
+      "output": "screen_chat_pick_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_pick",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-publish.json",
+      "output": "screen_chat_publish_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_publish",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-quote.json",
+      "output": "screen_chat_quote_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_quote",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-sending.json",
+      "output": "screen_chat_sending_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_sending",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-station-file.json",
+      "output": "screen_chat_station_file_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_station_file",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-station-files.json",
+      "output": "screen_chat_station_files_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_station_files",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-station-ref.json",
+      "output": "screen_chat_station_ref_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_station_ref",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-station-sheet.json",
+      "output": "screen_chat_station_sheet_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_station_sheet",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/chat-update.json",
+      "output": "screen_chat_update_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_update",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/decisions.json",
+      "output": "screen_decisions_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_decisions",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/decisions-idle.json",
+      "output": "screen_decisions_idle_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_decisions_idle",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/decisions-text.json",
+      "output": "screen_decisions_text_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_decisions_text",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/drive.json",
+      "output": "screen_drive_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/drive-chosen.json",
+      "output": "screen_drive_chosen_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive_chosen",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/drive-download.json",
+      "output": "screen_drive_download_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive_download",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/drive-empty.json",
+      "output": "screen_drive_empty_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive_empty",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/drive-entry.json",
+      "output": "screen_drive_entry_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive_entry",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/drive-sub.json",
+      "output": "screen_drive_sub_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive_sub",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/drive-upload.json",
+      "output": "screen_drive_upload_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive_upload",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/files.json",
+      "output": "screen_files_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_files",
     },
     {
       "input": "../../../../client/fixtures/screens/history.json",
@@ -34,9 +216,190 @@ options(
       "command": ":embed -i $input -o $output --name screen_history",
     },
     {
+      "input": "../../../../client/fixtures/screens/history-details.json",
+      "output": "screen_history_details_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_history_details",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/home.json",
+      "output": "screen_home_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_home",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/home-bars.json",
+      "output": "screen_home_bars_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_home_bars",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/home-jobs.json",
+      "output": "screen_home_jobs_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_home_jobs",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/home-sheet.json",
+      "output": "screen_home_sheet_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_home_sheet",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/landing.json",
+      "output": "screen_landing_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_landing",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/landing-invited.json",
+      "output": "screen_landing_invited_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_landing_invited",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/newchat.json",
+      "output": "screen_newchat_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_newchat",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/newchat-model.json",
+      "output": "screen_newchat_model_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_newchat_model",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/newchat-station.json",
+      "output": "screen_newchat_station_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_newchat_station",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/place.json",
+      "output": "screen_place_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_place",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/reader.json",
+      "output": "screen_reader_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_reader",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/reader-bars.json",
+      "output": "screen_reader_bars_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_reader_bars",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/reader-contents.json",
+      "output": "screen_reader_contents_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_reader_contents",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/reader-layout.json",
+      "output": "screen_reader_layout_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_reader_layout",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/reader-md.json",
+      "output": "screen_reader_md_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_reader_md",
+    },
+    {
       "input": "../../../../client/fixtures/screens/settings.json",
       "output": "screen_settings_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_settings",
     },
+    {
+      "input": "../../../../client/fixtures/screens/settings-appearance.json",
+      "output": "screen_settings_appearance_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_appearance",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-archive.json",
+      "output": "screen_settings_archive_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_archive",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-connects.json",
+      "output": "screen_settings_connects_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_connects",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-home.json",
+      "output": "screen_settings_home_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_home",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-home-dark.json",
+      "output": "screen_settings_home_dark_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_home_dark",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-me.json",
+      "output": "screen_settings_me_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_me",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-memory.json",
+      "output": "screen_settings_memory_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_memory",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-memory-doc.json",
+      "output": "screen_settings_memory_doc_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_memory_doc",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-notify-off.json",
+      "output": "screen_settings_notify_off_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_notify_off",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-profile.json",
+      "output": "screen_settings_profile_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_profile",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-profiles.json",
+      "output": "screen_settings_profiles_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_profiles",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-security.json",
+      "output": "screen_settings_security_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_security",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-station.json",
+      "output": "screen_settings_station_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_station",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-stations.json",
+      "output": "screen_settings_stations_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_stations",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-usage.json",
+      "output": "screen_settings_usage_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_usage",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-vault.json",
+      "output": "screen_settings_vault_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_vault",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/settings-workspace.json",
+      "output": "screen_settings_workspace_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_settings_workspace",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/share-in.json",
+      "output": "screen_share_in_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_share_in",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/share-in-files.json",
+      "output": "screen_share_in_files_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_share_in_files",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/share-in-stations.json",
+      "output": "screen_share_in_stations_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_share_in_stations",
+    },
+    // screens: end
   ],
 )

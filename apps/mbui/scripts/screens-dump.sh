@@ -40,4 +40,28 @@ for n in $written; do
   rm -f $A/out/fill-$n.log
 done
 echo "screens-dump: written$written"
+# every screen there embedded in src/sfscreens' tests (its moon.pkg's pre-build, between its `screens:` lines) and
+# listed (screens_list_wbtest.mbt: android_ref_wbtest.mbt's screens)
+P=src/sfscreens/moon.pkg
+L=src/sfscreens/screens_list_wbtest.mbt
+names=$(cd $S && ls *.json | sed 's/\.json$//' | grep -v -x allowed | LC_ALL=C sort)
+{
+  sed -n '1,/\/\/ screens: begin/p' $P
+  for n in $names; do
+    v=screen_$(echo $n | tr '-' '_')
+    printf '    {\n      "input": "../../../../client/fixtures/screens/%s.json",\n      "output": "%s_wbtest.mbt",\n      "command": ":embed -i $input -o $output --name %s",\n    },\n' $n $v $v
+  done
+  sed -n '/\/\/ screens: end/,$p' $P
+} > $P.new && mv $P.new $P
+{
+  echo '// written by scripts/screens-dump.sh: every screen of client/fixtures/screens, its JSON embedded (moon.pkg)'
+  echo
+  echo '///|'
+  echo '/// The screens (their names, as client/fixtures/screens has them, and their JSON).'
+  echo 'fn screens_kept() -> Array[(String, String)] {'
+  echo '  ['
+  for n in $names; do echo "    (\"$n\", screen_$(echo $n | tr '-' '_')),"; done
+  echo '  ]'
+  echo '}'
+} > $L
 exit $fail
