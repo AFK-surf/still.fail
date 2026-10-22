@@ -19,6 +19,9 @@ pub(all) struct Source {
   call_bytes : (String, Json, Bytes, (Result[Json, Json]) -> Unit) -> Unit
   /// a call whose answer has bytes beside it (a part of a drive's file: `drive.read`)
   read_bytes : (String, Json, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
+  /// a call whose answer has bytes beside it and that says how far it has got before it (`station.file` with
+  /// `progress`: `{loaded, total}` each time, then the file): `on_value` each time, then `done`
+  read_going : (String, Json, (Json) -> Unit, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
   /// a call that says how it goes before its answer (`station.preview` with `stream`: the answer's head, then each
   /// piece of its body with its bytes): `on_value(value, bytes)` each time, then `done`; the call's id, for `cancel`
   stream : (String, Json, Bytes?, (Json, Bytes?) -> Unit, (Result[Json, Json]) -> Unit) -> Int

@@ -601,6 +601,8 @@ pub fn fixture(mode : String) -> Source {
         None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
       }
     },
+    // a chat's made-up files, whole: here at once, nothing said of how far they have got
+    read_going: fn(name, params, _on_value, done) { fixture_fetch(name, params, done) },
     stream: fn(name, params, _bytes, on_value, done) {
       // a file's part going up (composer.mbt upload_part): as the station takes it, all of it at once
       if name == "station.upload.part" {

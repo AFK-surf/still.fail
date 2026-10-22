@@ -627,19 +627,42 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
 }
 
 ///|
-/// The centre of the last text node containing `s` (drawn last: what lies over the others, a sheet's).
+/// The centre of the last text node containing `s` (drawn last: what lies over the others, a sheet's). In the order
+/// they are painted (Ctx::paint: a node, then its children; what flies over everything after all the rest), not the
+/// order they were made: a list's rows are made as it is laid out, after what was built over it.
 pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
   ignore(self)
   let c = g()
-  let mut found = None
-  for i in 0..<c.count {
+  let found : Ref[(Double, Double)?] = Ref::new(None)
+  let over : Array[Int] = []
+  fn walk(i : Int, overlay : Bool) -> Unit {
+    if !overlay && c.drawn_entry(i) is Some(e) && e.z == 2 {
+      over.push(i)
+      return
+    }
     let n = c.nodes[i]
     if (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
       n.text.contains(s) {
-      found = Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
+      found.val = Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
+    }
+    let mut k = n.first
+    while k >= 0 {
+      walk(k, false)
+      k = c.nodes[k].next
     }
   }
-  found
+  for i in 0..<c.count {
+    if c.nodes[i].parent < 0 {
+      walk(i, false)
+    }
+  }
+  // (one over everything may hold another: painted after it)
+  let mut j = 0
+  while j < over.length() {
+    walk(over[j], true)
+    j += 1
+  }
+  found.val
 }
 
 ///|

@@ -138,6 +138,18 @@ pub fn stream(
 }
 
 ///|
+/// Calls `name` and hears how it goes, for an answer with bytes beside it (see Client::stream_bytes); the call's id,
+/// for `cancel`.
+pub fn stream_bytes(
+  name : String,
+  params? : Json = Json::object({}),
+  on_value~ : (Json, Bytes?) -> Unit,
+  on_done~ : (Result[(Json, Bytes?), Json]) -> Unit,
+) -> Int {
+  client.stream_bytes(name, params~, on_value~, on_done~)
+}
+
+///|
 /// A streamed call stopped (see Client::cancel).
 pub fn cancel(id : Int) -> Unit {
   client.cancel(id)

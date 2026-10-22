@@ -219,6 +219,10 @@ fn new_chat_on(
     (0.0, 0.0)
   }
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+    // the scene in what is left over the foot, scrolled when it does not fit (NewChat.kt: weight(1f), verticalScroll):
+    // the keyboard up, the choices and the composer stay over it
+    c.box(style=new_scene_room, fn() {
+    c.list("new/scene", 1, new_scene_h, fn(_) {
     c.box(
       w=Fill(1.0),
       pl=30.0,
@@ -305,7 +309,8 @@ fn new_chat_on(
       },
     )
     |> ignore
-    c.spacer()
+    }) |> ignore
+    }) |> ignore
     // at the foot, on the page's paper: what was used up, the choices, the composer
     c.box(w=Fill(1.0), bg=if leaving { 0L } else { t.p.bg }, opacity=1.0 - fade, fn() {
       if !leaving {
@@ -1164,3 +1169,11 @@ let run_picker_saving : Ref[Bool] = { val: false }
 /// The frequent choices in lines, in the middle, 6 apart each way (NewChat.kt: a FlowRow).
 // kept across runs: a value (no field of it changes)
 let frequent_flow : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, justify=JCenter)
+
+///|
+/// The new chat's scene's height as its list guesses it before it is laid out.
+let new_scene_h : Double = 600.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let new_scene_room : @ui.Style = @ui.style(w=Full, h=@sf.grow, clip=true)

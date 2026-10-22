@@ -119,6 +119,25 @@ test "an APK told of: 安装 first, handed to the system's installer once its by
 }
 
 ///|
+test "an APK asked for: 正在读取 till the core says how much has come, then that out of its size over a bar (FileProgress)" {
+  reset()
+  let said : Ref[((Json) -> Unit)?] = Ref::new(None)
+  let src : Source = { ..fixture("chat-preview-apk"), read_going: fn(_, _, on_value, _) { said.val = Some(on_value) } }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(fly_open_ms)
+  t.tap_text("下载")
+  t.frame()
+  // asked of the core, nothing said yet of how far it has got
+  assert_true(t.find("正在读取") is Some(_))
+  assert_true(t.find("下载") is None)
+  (said.val.unwrap())({ "loaded": Json::number(4096.0), "total": Json::number(8192.0) })
+  t.frame()
+  assert_true(t.find("正在读取 4 KB / 8 KB") is Some(_))
+}
+
+///|
 test "an APK without the leave to install apps: the system's page, and said to tap again; a failure later said" {
   let t = preview_tester("apk")
   t.tap_text("安装")

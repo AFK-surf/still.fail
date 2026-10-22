@@ -116,6 +116,26 @@ test "a new chat: 令 raises it; the first message makes the chat and the page b
 }
 
 ///|
+test "a new chat with the keyboard up: the scene scrolls in what is left, the choices and the composer over the keyboard" {
+  let t = tester("home")
+  let (_, y) = bar_places_at()
+  t.tap(195.0, y - 28.0 - 4.0)
+  t.run_for(@ui.nav_rise_ms)
+  t.tap_text("做任何事")
+  // the window laid out over the keyboard, as Android's host has it (adjustResize)
+  let over = 844.0 - kbd_h
+  t.resize(390.0, over)
+  t.frame()
+  let (_, fy, _, fh) = t.rect_of("做任何事").unwrap()
+  assert_true(fy + fh <= over)
+  assert_true(t.find("Opus 5.5 · high") is Some(_))
+}
+
+///|
+/// A phone's keyboard, as tall as most are.
+let kbd_h : Double = 336.0
+
+///|
 /// On the frames' clock to where the sheet rests, as it says (@kit.sheet_rest: its springs and its scrim's fade):
 /// risen from below, a row is tapped where it is.
 fn run_to_sheet_rest(t : @ui.Tester) -> Unit raise {
