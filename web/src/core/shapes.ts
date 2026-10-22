@@ -795,6 +795,8 @@ export interface Creator {
 	email?: string;
 	/** local | cloud | slack | feishu */
 	via: string;
+	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
+	picture?: string;
 	/** As the core names them. */
 	shown?: PersonShown;
 }
@@ -1210,6 +1212,8 @@ export interface Message {
 	authorKind: string;
 	author: string;
 	authorName?: string;
+	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
+	authorPicture?: string;
 	text: string;
 	attachments: Attachment[];
 	quotes: Quote[];
@@ -1404,6 +1408,8 @@ export interface RowMessage {
 	authorKind: string;
 	author: string;
 	authorName?: string;
+	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
+	authorPicture?: string;
 	text: string;
 	createdAt: number;
 	by?: LastBy;
@@ -1759,6 +1765,8 @@ export interface ChatMessage {
 	authorKind: string;
 	author: string;
 	authorName?: string;
+	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
+	authorPicture?: string;
 	text: string;
 	/**
 	 * An agent's or still.fail's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients

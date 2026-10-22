@@ -31,7 +31,9 @@ export type ChatEvent =
 
 export type ChatMessage = { ts: string; user: string; text: string; fromBot: boolean; files?: InboundFile[] };
 
-export type Person = { name: string; email: string };
+/// `picture`: their profile picture's address, where the platform gives one; "" when it gives none, absent when looked up
+/// before pictures were kept.
+export type Person = { name: string; email: string; picture?: string };
 
 /// A platform's event; it must finish keeping it before it resolves: the platform is acknowledged only after.
 export type Handler = (event: ChatEvent) => Promise<void>;

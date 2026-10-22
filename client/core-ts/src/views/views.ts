@@ -220,8 +220,9 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
   else {
     const member = members_.find((x) => typeof get(x, "email") === "string" && x.email.toLowerCase() === author.toLowerCase());
     const name = present.memberName(members_, author) ?? saidName ?? (author === "local" ? t("core-views.local_author") : author);
-    const picture = get(member, "picture");
-    m.by = { name, picture: typeof picture === "string" && picture !== "" ? picture : null };
+    // A Slack person's own picture, as their Slack shows it; else their workspace account's.
+    const picture = str(m.authorPicture) || str(get(member, "picture")) || null;
+    m.by = { name, picture };
   }
   if (kind === "person" || kind === "agent") m.text = present.mentions(str(m.text) ?? "", bots, members_);
   return m;
