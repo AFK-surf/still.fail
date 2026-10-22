@@ -442,8 +442,9 @@ fun IconIn(icon: ImageVector, size: Dp = 18.dp, tint: Color = C.ink, modifier: M
 @Composable
 fun StationMark(emoji: String?, icon: String?, size: Dp, tint: Color, modifier: Modifier = Modifier, none: ImageVector? = null) {
     val glyph = StationIcons.of(icon)
-    val moving = remember(icon) { stationMoving(icon) }
-    val picture = remember(icon) { if (moving == null) stationPicture(icon) else null }
+    val shown = rememberStationPicture(icon)
+    val moving = shown as? android.graphics.drawable.AnimatedImageDrawable
+    val picture = shown as? ImageBitmap
     when {
         glyph != null -> Icon(glyph.icon, null, modifier.size(size), tint = markColor(glyphColor(icon)) ?: tint)
         moving != null -> MovingPicture(moving, modifier.size(size).clip(Smooth(size * 0.24f)))
@@ -475,23 +476,46 @@ private val MARK_DARK = mapOf(
 /** Whether a station has anything to be shown by (StationMark draws nothing for it otherwise). */
 fun hasStationMark(emoji: String?, icon: String?): Boolean = !emoji.isNullOrEmpty() || !icon.isNullOrEmpty()
 
-/** A picture put up as a station's icon (a data URL), decoded; null for none or one that is not. */
-fun stationPicture(icon: String?): ImageBitmap? {
-    if (icon == null || !icon.startsWith("data:image/")) return null
-    return try {
-        val bytes = android.util.Base64.decode(icon.substringAfter("base64,"), android.util.Base64.DEFAULT)
-        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-    } catch (_: IllegalArgumentException) { null }
+/** Whether `icon` is a picture put up: its address (still.fail cloud keeps it: cloud/src/icons.ts), or a data URL. */
+fun isStationPicture(icon: String?): Boolean =
+    icon != null && (icon.startsWith("data:image/") || icon.startsWith("https://") || icon.startsWith("http://"))
+
+/** Pictures put up as icons, by address, once each for the app's life (the core fetches them: `picture`). */
+private val stationPictures = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
+
+/**
+ * A picture put up as a station's icon as it is drawn: an ImageBitmap, or an AnimatedImageDrawable for a GIF that moves;
+ * null for none, one that is not, or one still on its way.
+ */
+@Composable
+private fun rememberStationPicture(icon: String?): Any? {
+    val core = LocalUi.current.core
+    val bytes by androidx.compose.runtime.produceState(remember(icon) { stationBytes(icon) }, icon) {
+        if (value != null || icon == null || !isStationPicture(icon)) return@produceState
+        value = try {
+            core.callBytes("picture", kotlinx.serialization.json.buildJsonObject { put("url", kotlinx.serialization.json.JsonPrimitive(icon)) }).second
+        } catch (_: fail.still.core.CoreException) {
+            null
+        }?.also { stationPictures[icon] = it }
+    }
+    return remember(bytes) { bytes?.let(::stationPictureOf) }
 }
 
-/** A GIF put up as a station's icon, decoded to move; null for any other picture, none, or one that does not move. */
-fun stationMoving(icon: String?): android.graphics.drawable.AnimatedImageDrawable? {
-    if (icon == null || !icon.startsWith("data:image/gif;")) return null
-    return try {
-        val bytes = android.util.Base64.decode(icon.substringAfter("base64,"), android.util.Base64.DEFAULT)
-        android.graphics.ImageDecoder.decodeDrawable(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes))) as? android.graphics.drawable.AnimatedImageDrawable
-    } catch (_: Exception) { null }
+/** The bytes of a picture put up that are here already: a data URL's, or one fetched before. */
+private fun stationBytes(icon: String?): ByteArray? = when {
+    icon == null -> null
+    icon.startsWith("data:image/") -> try { android.util.Base64.decode(icon.substringAfter("base64,"), android.util.Base64.DEFAULT) } catch (_: IllegalArgumentException) { null }
+    else -> stationPictures[icon]
 }
+
+/** A picture's bytes decoded: moving where it is a GIF that moves (AnimatedImageDrawable), else still. */
+private fun stationPictureOf(bytes: ByteArray): Any? = try {
+    when (val d = android.graphics.ImageDecoder.decodeDrawable(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes)))) {
+        is android.graphics.drawable.AnimatedImageDrawable -> d
+        is android.graphics.drawable.BitmapDrawable -> d.bitmap.asImageBitmap()
+        else -> null
+    }
+} catch (_: Exception) { null }
 
 /** An animation filling its box, its middle square shown (as ContentScale.Crop), moving while it is shown. */
 @Composable

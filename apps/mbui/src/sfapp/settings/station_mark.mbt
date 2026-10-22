@@ -117,7 +117,7 @@ fn first_emoji(words : String) -> String? {
 
 ///|
 /// A picture picked as a mark: put up as it is, as a data URL, where it is a PNG, JPEG or WebP small enough to go with
-/// the workspace (46 000 characters), or a GIF (156 000: it may move); None otherwise (made small first:
+/// the workspace (46 000 characters), or a GIF (1 390 000: it may move); None otherwise (made small first:
 /// picture_mark_small).
 fn picture_mark(bytes : Bytes) -> String? {
   let n = bytes.length()
@@ -133,8 +133,8 @@ fn picture_mark(bytes : Bytes) -> String? {
     return None
   }
   let url = "data:image/" + kind + ";base64," + base64_of(bytes)
-  // a GIF may move, and may be larger (cloud/src/directory.ts GIF_BYTES)
-  if url.length() <= (if kind == "gif" { 156000 } else { 46000 }) {
+  // a GIF may move, and may be larger: still.fail cloud keeps it in its bucket (cloud/src/icons.ts, 1 MB)
+  if url.length() <= (if kind == "gif" { 1390000 } else { 46000 }) {
     Some(url)
   } else {
     None
@@ -219,7 +219,9 @@ fn open_mark_pick(
     set(e, i)
   }
   let glyph = glyph_of(icon)
-  let picture = icon.has_prefix("data:image/")
+  let picture = icon.has_prefix("data:image/") ||
+    icon.has_prefix("https://") ||
+    icon.has_prefix("http://")
   mark_pick.emojis = glyph is None && !picture && emoji != ""
   mark_pick.color = match glyph {
     Some((_, col)) => col

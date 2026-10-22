@@ -1,6 +1,6 @@
 // A station where it is named: what its workspace gave it (the settings' stations), else the server icon. Its `icon` comes
 // first: one of still.fail's (glyph:<name>, design/station-icons; glyph:<name>:<colour> in one of MARK_COLORS, else the
-// colour of the words it sits in) or a picture put up (a data URL); else its emoji. A glyph this build does not know shows
+// colour of the words it sits in) or a picture put up (its address, or a data URL); else its emoji. A glyph this build does not know shows
 // the emoji (it is kept beside every glyph, for older clients too).
 import { Server, STATION_ICONS } from "@stillfail/ui/icons.tsx";
 import * as css from "./StationMark.css.ts";
@@ -26,9 +26,9 @@ export function glyphColor(icon: string | null | undefined): MarkColor | undefin
 /** A colour of MARK_COLORS as CSS, for the theme in use. */
 export const markColor = (color: MarkColor | undefined): string | undefined => color && `var(--mark-${color})`;
 
-/** Whether `icon` is a picture put up (a data URL). */
+/** Whether `icon` is a picture put up: its address (still.fail cloud keeps it: cloud/src/icons.ts), or a data URL. */
 export function isPicture(icon: string | null | undefined): icon is string {
-  return !!icon && icon.startsWith("data:image/");
+  return !!icon && (icon.startsWith("data:image/") || icon.startsWith("https://") || icon.startsWith("http://"));
 }
 
 /** A station's mark where stations are listed to pick from: its icon or emoji, else its first letter in a box as large,

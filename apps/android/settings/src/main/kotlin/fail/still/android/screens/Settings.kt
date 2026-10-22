@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import fail.still.android.ui.Seg
 import fail.still.android.ui.hasStationMark
+import fail.still.android.ui.isStationPicture
 import fail.still.android.ui.MARK_COLORS
 import fail.still.android.ui.glyphColor
 import fail.still.android.ui.markColor
@@ -656,7 +657,7 @@ private fun openMarkPick(app: AppState, name: String, emoji: String?, icon: Stri
     }
     val pick = { e: String, i: String -> app.sheet = null; set(e, i) }
     val glyph = StationIcons.of(icon)
-    val picture = icon?.takeIf { it.startsWith("data:image/") }
+    val picture = icon?.takeIf { isStationPicture(it) }
     app.sheet = SheetSpec(0.78f) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
@@ -747,8 +748,8 @@ private fun firstEmoji(text: String): String? {
 /**
  * A picked picture as a station's icon (web/src/stationPick.ts pictureOf): its middle square at 96 px, as a data URL small
  * enough to go with the workspace (WebP, else PNG, else JPEG); null when it can't be read or made small enough. A GIF
- * that moves is put up as it is where it is small enough to (cloud/src/directory.ts GIF_BYTES); a larger one is made
- * a still picture here (the web app draws it again smaller).
+ * that moves is put up as it is, up to 1 MB (still.fail cloud keeps it in its bucket: cloud/src/icons.ts); a larger
+ * one is made a still picture here (the web app draws it again smaller).
  */
 private suspend fun stationPictureOf(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
     if (context.contentResolver.getType(uri) == "image/gif") movingPictureOf(context, uri)?.let { return@withContext it }
@@ -771,7 +772,7 @@ private suspend fun stationPictureOf(context: Context, uri: Uri): String? = with
 
 /** A GIF that moves, as a data URL, where it is small enough to go as it is; null otherwise. */
 private fun movingPictureOf(context: Context, uri: Uri): String? {
-    val most = 117_000 // bytes: 156 000 characters as a data URL
+    val most = 1024 * 1024 // cloud/src/icons.ts ICON_FILE_BYTES
     val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
         val out = java.io.ByteArrayOutputStream()
         val buf = ByteArray(16 * 1024)

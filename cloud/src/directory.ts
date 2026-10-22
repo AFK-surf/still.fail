@@ -18,6 +18,7 @@ import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
 import { langOf, type Lang } from "./i18n.ts";
+import { isIconUrl } from "./icons";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
@@ -669,12 +670,17 @@ export class Directory extends DurableObject<Env> {
     return this.workspace(sub, id);
   }
 
+  /** Fails unless the caller manages the workspace (before a picture it sends is kept: api.ts). */
+  manages(sub: string, id: string): void {
+    this.#role(sub, id, MANAGERS);
+  }
+
   /** A new name, a new emoji, a new icon (null or "" takes either away; a station's, cleanIcon), or several; what is not given stays. */
   updateWorkspace(sub: string, id: string, input: { name?: unknown; emoji?: unknown; icon?: unknown }): WorkspaceView {
     this.#role(sub, id, MANAGERS);
     const name = input.name === undefined ? undefined : cleanName(input.name) ?? fail(400, "invalid_name");
     const emoji = input.emoji === undefined ? undefined : input.emoji === null || input.emoji === "" ? null : cleanEmoji(input.emoji) ?? fail(400, "invalid_emoji");
-    const icon = input.icon === undefined ? undefined : input.icon === null || input.icon === "" ? null : cleanIcon(input.icon) ?? fail(400, "invalid_icon");
+    const icon = input.icon === undefined ? undefined : input.icon === null || input.icon === "" ? null : cleanIcon(input.icon, this.env.PUBLIC_ORIGIN) ?? fail(400, "invalid_icon");
     if (name === undefined && emoji === undefined && icon === undefined) fail(400, "invalid_name");
     if (name !== undefined) this.#run("UPDATE workspaces SET name = ? WHERE id = ?", name, id);
     if (emoji !== undefined) this.#run("UPDATE workspaces SET emoji = ? WHERE id = ?", emoji, id);
@@ -928,7 +934,7 @@ export class Directory extends DurableObject<Env> {
     this.#role(sub, workspace, MANAGERS);
     const name = input.name === undefined ? undefined : cleanName(input.name) ?? fail(400, "invalid_name");
     const emoji = input.emoji === undefined ? undefined : input.emoji === null || input.emoji === "" ? null : cleanEmoji(input.emoji) ?? fail(400, "invalid_emoji");
-    const icon = input.icon === undefined ? undefined : input.icon === null || input.icon === "" ? null : cleanIcon(input.icon) ?? fail(400, "invalid_icon");
+    const icon = input.icon === undefined ? undefined : input.icon === null || input.icon === "" ? null : cleanIcon(input.icon, this.env.PUBLIC_ORIGIN) ?? fail(400, "invalid_icon");
     if (name === undefined && emoji === undefined && icon === undefined) fail(400, "invalid_name");
     if (name !== undefined) this.#run("UPDATE station_members SET name = ? WHERE station = ? AND workspace = ?", name, station, workspace);
     if (emoji !== undefined) this.#run("UPDATE station_members SET emoji = ? WHERE station = ? AND workspace = ?", emoji, station, workspace);
@@ -1565,23 +1571,22 @@ function limitsOf(input: { members?: unknown; stations?: unknown }): { members: 
 
 /**
  * A station's icon: one of still.fail's by its name (`glyph:rocket`, design/station-icons; a name a client does not know
- * falls back to the emoji), which may be given a colour (`glyph:rocket:blue`; the clients know which), or a small picture
- * put up, as a data URL the clients made (96px, a few KB; a GIF that moves, up to GIF_BYTES); else null.
+ * falls back to the emoji), which may be given a colour (`glyph:rocket:blue`; the clients know which), or a picture put
+ * up: kept in the bucket, by its address on `origin` (icons.ts keptIcon; any size up to ICON_FILE_BYTES, a GIF moving),
+ * else (no bucket, or one put up before) a small data URL the clients made (96px, a few KB); else null.
  */
-function cleanIcon(value: unknown): string | null {
+function cleanIcon(value: unknown, origin: string): string | null {
   if (typeof value !== "string") return null;
   if (/^glyph:[a-z0-9-]{1,40}(:[a-z]{1,16})?$/.test(value)) return value;
-  const most = value.startsWith("data:image/gif;") ? GIF_BYTES : ICON_BYTES;
-  return value.length <= most && /^data:image\/(png|webp|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
+  if (isIconUrl(origin, value)) return value;
+  return value.length <= ICON_BYTES && /^data:image\/(png|webp|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
 }
 /** A workspace's emoji and icon as its views carry them: each only when set (clients from before them know neither). */
 function marks(emoji: unknown, icon: unknown): { emoji?: string; icon?: string } {
   return { ...(emoji ? { emoji: emoji as string } : {}), ...(icon ? { icon: icon as string } : {}) };
 }
-/** How long a picture's data URL may be: it goes to every member with the workspace. */
+/** How long a picture's data URL kept in the workspace may be: it goes to every member with the workspace. */
 const ICON_BYTES = 48_000;
-/** A GIF's, which keeps moving: a few seconds of one at 96 px can take most of it (web/src/stationPick.ts movingOf). */
-const GIF_BYTES = 160_000;
 
 /** One emoji, as a person sees one (a flag, a family, a skin tone are one): the first, else null. */
 function cleanEmoji(value: unknown): string | null {

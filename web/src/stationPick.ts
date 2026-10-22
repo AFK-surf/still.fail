@@ -36,9 +36,12 @@ export function firstEmoji(text: string): string | null {
   return one && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(one) ? one : null;
 }
 
-/** How long a picture's data URL may be (cloud/src/directory.ts takes 48 000, and 160 000 for a GIF). */
+/** How long a picture's data URL may be (cloud/src/directory.ts takes 48 000 where it keeps it itself). */
 const MOST = 46_000;
-const MOST_GIF = 156_000;
+/** A GIF's, put up as it is (still.fail cloud keeps it in its bucket: cloud/src/icons.ts ICON_FILE_BYTES, 1 MB). */
+const AS_IS_GIF = 400_000;
+/** A GIF's drawn again (cloud/src/icons.ts ICON_URL_CHARS). */
+const MOST_GIF = 1_390_000;
 const SIDE = 96;
 
 /**
@@ -67,8 +70,8 @@ export async function pictureOf(file: Blob): Promise<string> {
 }
 
 /**
- * A GIF that moves, kept moving: as it is where it is small enough, else its frames drawn again as pictureOf draws one
- * (smaller, then with fewer frames, until it fits). Null for a GIF of one frame (made a picture like any other); too_big
+ * A GIF that moves, kept moving: as it is where it is small enough (AS_IS_GIF), else its frames drawn again as
+ * pictureOf draws one (smaller, then with fewer frames, until it fits). Without ImageDecoder, as it is up to MOST_GIF. Null for a GIF of one frame (made a picture like any other); too_big
  * for one that does not fit even so, or that this browser cannot take apart (no ImageDecoder).
  */
 async function movingOf(file: Blob): Promise<string | null> {
@@ -85,7 +88,7 @@ async function movingOf(file: Blob): Promise<string | null> {
     const count = Math.min(decoder.tracks.selectedTrack?.frameCount ?? 1, 300);
     if (count <= 1) return null;
     const asIs = dataUrl(bytes);
-    if (asIs.length <= MOST_GIF) return asIs;
+    if (asIs.length <= AS_IS_GIF) return asIs;
     for (const side of [SIDE, 72, 48]) {
       const canvas = document.createElement("canvas");
       canvas.width = canvas.height = side;
