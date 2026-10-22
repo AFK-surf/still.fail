@@ -584,3 +584,23 @@ pub fn slider(
     ),
   ).value
 }
+
+///|
+/// Round a sheet's grabber: 8 above and 4 under it, then 4 above and under it (Sheet.kt's two paddings, each a length
+/// of its own: on Android's whole pixels 21 + 11 above the grabber and 11 + 11 under it, not one 12 and one 8).
+// kept across runs: a value (no field of it changes)
+let sheet_grab_outer : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sheet_grab_inner : @ui.Style = @ui.style(w=Full, py=S1, align=ACenter)
+
+///|
+/// The grabber at a sheet's top (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
+pub fn sheet_grab(c : @ui.Ctx) -> Unit {
+  let grabber = sheet_grabber.then(@ui.style(bg=Data(theme().p.line)))
+  c.box(style=sheet_grab_outer, fn() {
+    c.box(style=sheet_grab_inner, fn() { c.box(style=grabber, fn() {  }) |> ignore }) |> ignore
+  })
+  |> ignore
+}

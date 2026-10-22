@@ -111,7 +111,7 @@ fn new_workspace_sheet(c : @ui.Ctx, src : Source) -> Unit {
         None => ""
       }
   }
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   sheet_head(c, tr("android-misc.workspace.new"))
   c.box(style=new_ws_body, fn() {
     c.text(tr("android-misc.workspace.new.text"), style=new_ws_lead) |> ignore

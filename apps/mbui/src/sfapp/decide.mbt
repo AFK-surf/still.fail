@@ -532,7 +532,7 @@ fn sheet_frame(
       if fit_to > 0.0 {
         // the grabber, then what it shows scrolling in the room left over the navigation bar (Sheet.kt: the content's
         // Column(weight(1f).verticalScroll))
-        sheet_grab(c)
+        @sf.sheet_grab(c)
         c.box(style=sheet_scrolled, fn() {
           c.list("sheet-scroll/" + key, 1, fit_to, fn(_) { body() }) |> ignore
         })
@@ -541,14 +541,14 @@ fn sheet_frame(
       } else if fit {
         // laid out at what it needs, kept for the next frame's height
         let shown = c.box(style=sheet_fitted, fn() {
-          sheet_grab(c)
+          @sf.sheet_grab(c)
           body()
           sheet_foot(c)
         })
         @motion.measure(c, shown, fit_key)
       } else {
         // its share: what it shows may fill it (a list scrolling in it)
-        sheet_grab(c)
+        @sf.sheet_grab(c)
         body()
         sheet_foot(c)
       }
@@ -571,30 +571,6 @@ let sheet_scrolled : @ui.Style = @ui.style(w=Full, h=@sf.grow)
 /// Where a draggable sheet settles: half the screen and nearly all of it (Sheet.kt SheetHost: 0.55, 0.94).
 // kept across runs: a table, never written
 let sheet_detents : Array[Double] = [0.55, 0.94]
-
-///|
-/// The grabber's two paddings (Sheet.kt SheetGrab's padding(top 8, bottom 4), then padding(vertical 4)).
-// kept across runs: a value (no field of it changes)
-let grab_outer : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
-
-///|
-// kept across runs: a value (no field of it changes)
-let grab_inner : @ui.Style = @ui.style(w=Full, py=S1, align=ACenter)
-
-///|
-/// The sheet's grabber (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
-fn sheet_grab(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  // (two paddings, as Sheet.kt's two: each a length of its own, on Android's whole pixels 21 + 11 above the grabber and
-  // 11 + 11 under it, not one 12 and one 8)
-  c.box(style=grab_outer, fn() {
-    c.box(style=grab_inner, fn() {
-      c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
 
 ///|
 /// A sheet's head (Sheet.kt SheetHead): its title, 17 bold.

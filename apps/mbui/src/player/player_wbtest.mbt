@@ -40,11 +40,11 @@ test "times and speeds as they are shown" {
 
 ///|
 /// A player over the fake host, playing `name` of a folder of `list`.
-fn tester_with(p : Player, list : Array[String], opened : Array[String], backs : Array[Int]) -> @ui.Tester {
+fn tester_with(p : @kit.Media, list : Array[String], opened : Array[String], backs : Array[Int]) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
       @sf.begin(c) |> ignore
-      p.view(c, list~, fn() { backs.push(1) }, fn(n) { opened.push(n) })
+      view(p, c, list~, fn() { backs.push(1) }, fn(n) { opened.push(n) })
     },
     w=390.0,
     h=844.0,
@@ -52,13 +52,13 @@ fn tester_with(p : Player, list : Array[String], opened : Array[String], backs :
 }
 
 ///|
-fn track(name : String, audio? : Bool = false) -> Track {
+fn track(name : String, audio? : Bool = false) -> @kit.MediaTrack {
   { name, mime: if audio { "audio/mpeg" } else { "video/mp4" }, audio, read: fn(_, _, _) {  } }
 }
 
 ///|
 test "the player: its bar, where it is, its controls; the picture fitted in the middle" {
-  let p = Player::new()
+  let p = player()
   let opened = []
   let backs = []
   let t = tester_with(p, ["E1.mp4", "E2.mp4", "E3.mp4"], opened, backs)
@@ -83,7 +83,7 @@ test "the player: its bar, where it is, its controls; the picture fitted in the 
 
 ///|
 test "the player: a double tap on the right third jumps 15 s on (at most to the end), said a moment" {
-  let p = Player::new()
+  let p = player()
   let t = tester_with(p, [], [], [])
   p.open(track("a.mp4"))
   t.draw()
@@ -92,14 +92,14 @@ test "the player: a double tap on the right third jumps 15 s on (at most to the 
   assert_true(t.find("快进 15 秒") is Some(_))
   // the fake view is 10 s long: to its end
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" 3 10000") }))
-  t.run_for(note_ms)
+  t.run_for(@kit.media_note_ms)
   assert_true(t.find("快进 15 秒") is None)
   t.assert_idle()
 }
 
 ///|
 test "the player: the speed steps through 1× 1.25× 1.5× 2× 0.5× 0.75×; back and the next one" {
-  let p = Player::new()
+  let p = player()
   let opened = []
   let backs = []
   let t = tester_with(p, ["E1.mp4", "E2.mp4"], opened, backs)
@@ -121,12 +121,12 @@ test "the player: the speed steps through 1× 1.25× 1.5× 2× 0.5× 0.75×; bac
 
 ///|
 test "a song: its mark and name in the middle, no sideways key, the controls staying" {
-  let p = Player::new()
+  let p = player()
   let t = tester_with(p, [], [], [])
   p.open(track("曲.mp3", audio=true))
   t.draw()
   // past the time a video's controls go, and their fade
-  t.run_for(rest_ms + shown_ms)
+  t.run_for(@kit.media_rest_ms + @kit.media_shown_ms)
   assert_true(t.find("0:00 / 0:10") is Some(_))
   assert_eq(t.find_last("曲.mp3") is Some(_), true)
   t.assert_idle()
@@ -134,7 +134,7 @@ test "a song: its mark and name in the middle, no sideways key, the controls sta
 
 ///|
 test "a subtitle's words over the picture at their time; the captions key turns them off" {
-  let p = Player::new()
+  let p = player()
   let t = tester_with(p, [], [], [])
   p.open(track("a.mp4"))
   p.set_subtitle(true, [{ from: 0.0, to: 5000.0, text: "第一句" }])

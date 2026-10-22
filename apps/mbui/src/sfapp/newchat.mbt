@@ -718,7 +718,7 @@ fn pick_station_sheet(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let t = @sf.theme()
   let v = new_chat_topic(src, ws).value
   let current = text(field(v, "station"), "station")
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   sheet_head(c, tr("android-chat.new.station.pick"))
   c.box(w=Fill(1.0), h=Fill(1.0), pb=24.0, clip=true, fn() {
     for s in items(v, "stations") {
@@ -862,7 +862,7 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
     run_picker_opened.val = true
     set({ "open": Json::boolean(true) })
   }
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   if sheet_host.accounts {
     c.box(dir=Row, w=Fill(1.0), pl=8.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
       let back = c.id("pick/accounts-back")

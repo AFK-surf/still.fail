@@ -1405,7 +1405,7 @@ fn paper_swatch(c : @ui.Ctx, key : String, chosen : Bool) -> Bool {
 ///|
 /// The bars shown or taken away (a tap on the text, not a drag).
 fn reader_toggle(c : @ui.Ctx, r : TextReading) -> Unit {
-  if cui.moved {
+  if c.press().moved {
     return
   }
   r.chrome = !r.chrome

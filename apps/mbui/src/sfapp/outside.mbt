@@ -252,7 +252,7 @@ fn outside_sheet(c : @ui.Ctx, src : Source, key : String) -> Unit {
     scrim=@sf.sheet_scrim,
     look=@sf.sheet_look(),
     fn() {
-      sheet_grab(c)
+      @sf.sheet_grab(c)
       sheet_head(c, tr("web-main.outside.title"))
       c.capped("outside/" + key, h - outside_top, fn() {
         c.box(style=outside_body, fn() {

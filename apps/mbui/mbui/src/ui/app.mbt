@@ -197,6 +197,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
   // overlay.mbt), before the view builds
   c.focus_frame_start()
+  // the press as this frame sees it (press.mbt): every build of it the same
+  c.press() |> ignore
   // how each native view stands, read before the view builds what it shows of it (a player's time, its first frame)
   views_frame_start()
   // each stream's events since the last frame (a frame decoded, let go, a decoder broken), the frame it shows from now

@@ -229,6 +229,12 @@ pub struct Ctx {
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
   mut held_told : Double
+  /// the press as frames see it (Ctx::press, press.mbt): as the frame it was last worked out in saw it, whether a
+  /// frame saw it down, when one first did
+  mut press_seen : Press
+  mut press_seen_frame : Int
+  mut press_was_down : Bool
+  mut press_seen_at : Double
   /// a tap this frame (a press let go without dragging, not taken by the app: Ctx::tapped_anywhere), and the press
   /// the app took (Ctx::take_press)
   mut tapped : (Double, Double)?
@@ -429,6 +435,10 @@ fn Ctx::new() -> Ctx {
     press_late: false,
     pointer_t: 0.0,
     held_told: -1.0,
+    press_seen: no_press,
+    press_seen_frame: -1,
+    press_was_down: false,
+    press_seen_at: -1.0,
     tapped: None,
     taken_at: -1.0,
     press_y: 0.0,

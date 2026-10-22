@@ -7,7 +7,7 @@
 
 ///|
 /// The row whose menu is open: what it shows, where the finger held it across, the row's top and height (in the
-/// window); the press it opened on (cui.down_frame), so the same press opens it once.
+/// window); the press it opened on (Ctx::press frame), so the same press opens it once.
 priv struct RowMenu {
   mut item : ChatItem?
   mut x : Double
@@ -57,7 +57,8 @@ fn row_has_menu(item : ChatItem) -> Bool {
 ///|
 /// Held long (the row's `held` from this press on): its menu opens, once a press.
 fn row_held(c : @ui.Ctx, id : Int, item : ChatItem) -> Unit {
-  if row_menu_at.at == cui.down_frame || !row_has_menu(item) {
+  let press = c.press()
+  if row_menu_at.at == press.frame || !row_has_menu(item) {
     return
   }
   let (top, h) = match c.rect_of(id) {
@@ -65,11 +66,11 @@ fn row_held(c : @ui.Ctx, id : Int, item : ChatItem) -> Unit {
     None => return
   }
   row_menu_at.item = Some(item)
-  row_menu_at.x = cui.down_x
+  row_menu_at.x = press.x
   row_menu_at.top = top
   row_menu_at.h = h
   row_menu_at.open = true
-  row_menu_at.at = cui.down_frame
+  row_menu_at.at = press.frame
   // felt as it opens, once (Home.kt: HapticFeedbackType.LongPress)
   let at = row_menu_at.at
   c.after_build("haptic/row-held", fn() {
@@ -97,7 +98,7 @@ let felt_holds : Map[String, Int] = {}
 /// Felt as the hold `what` takes the press it is (MessagePick.kt, Links.kt, Preview.kt: HapticFeedbackType.LongPress),
 /// once.
 fn feel_hold(c : @ui.Ctx, what : String) -> Unit {
-  let at = cui.down_frame
+  let at = c.press().frame
   c.after_build("haptic/hold/" + what, fn() {
     if felt_holds.get(what) != Some(at) {
       felt_holds[what] = at
