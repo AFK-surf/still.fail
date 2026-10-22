@@ -28,3 +28,11 @@ test "a picture too large as it is: its middle square at 96, a JPEG small enough
   // and a GIF, which may move
   assert_eq(picture_mark(b"GIF89axyz"), Some("data:image/gif;base64,R0lGODlheHl6"))
 }
+
+///|
+test "上次检查's time as Android's short date and time (a Tester's zone UTC's)" {
+  assert_eq(short_date_time(1790000000000.0), "2026/9/21 14:13")
+  assert_eq(short_date_time(951782400000.0), "2000/2/29 00:00")
+  assert_eq(short_date_time(4102444799000.0), "2099/12/31 23:59")
+  assert_eq(short_date_time(0.0), "1970/1/1 00:00")
+}

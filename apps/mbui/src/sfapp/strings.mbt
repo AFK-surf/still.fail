@@ -156,6 +156,9 @@ let zh : Map[String, String] = {
   "android-misc.notify.allowInSettings": "在系统设置里允许 {app} 发通知",
   "android-misc.notify.channel": "消息",
   "android-misc.bar.place.chats": "对话",
+  // Station's place to a screen reader (Places.kt stationsSaid)
+  "android-chat.home.stations": "Station：{said}",
+  "android-chat.home.stations.trouble": "Station：{said}（{trouble}）",
   "android-misc.bar.place.connects": "连接",
   "android-misc.bar.place.decisions": "奏",
   "android-misc.bar.place.files": "文件",

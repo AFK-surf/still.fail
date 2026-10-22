@@ -590,6 +590,8 @@ fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double, nh
         }
         at_place(rx + px * k - 2.0, ry + py * k - 22.0, fn() {
           let pin = picture_pin(c, n, s.color, 24.0, id~)
+          // what a screen reader says of it (ImageMarks.kt Pins: 标注 n)
+          c.semantics(pin, Button, id~, label=pv_fill("android-chat.marks.pin", [("n", n.to_string())]))
           if marking.note == s.id {
             c.look(pin, @ui.look(scale=pin_open_scale, ox=2.0 / 24.0, oy=22.0 / 24.0))
           }
@@ -861,7 +863,7 @@ fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit) -> Unit {
       c.text(pv("common.cancel"), size=13.0, color=dark_muted, wrap=false) |> ignore
     })
     |> ignore
-    if picture_button(c, "marks/download", "download", dark_muted, true, enabled=ready) {
+    if picture_button(c, "marks/download", "download", dark_muted, true, enabled=ready, said=pv("android-chat.marks.downloadMarked")) {
       go(false)
     }
     if can_draft {
@@ -969,9 +971,9 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
         |> ignore
       }
       c.box(dir=Row, h=Px(44.0), padx=6.0, gap=2.0, radius=picture_bar_corner, bg=glass, align=ACenter, fn() {
-        for x in [(Select, "cursor"), (Rect, "square"), (Arrow, "arrow-up-right"), (Pen, "scribble"), (Words, "text")] {
-          let (tool, icon) = x
-          if picture_button(c, "marks/tool/" + icon, icon, dark_muted, true, held=marking.tool == tool) {
+        for x in [(Select, "cursor", "select"), (Rect, "square", "rect"), (Arrow, "arrow-up-right", "arrow"), (Pen, "scribble", "pen"), (Words, "text", "text")] {
+          let (tool, icon, name) = x
+          if picture_button(c, "marks/tool/" + icon, icon, dark_muted, true, held=marking.tool == tool, said=pv("android-chat.marks.tool." + name)) {
             marks_put_down(c)
             marking.note = -1
             marking.tool = tool
@@ -985,18 +987,18 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
         if c.clicked(swatch) {
           marking.palette = !marking.palette
         }
-        c.box(w=Px(32.0), h=Px(32.0), radius=picture_key, align=ACenter, justify=JCenter, id=swatch, fn() {
+        let swatch_box = c.box(w=Px(32.0), h=Px(32.0), radius=picture_key, align=ACenter, justify=JCenter, id=swatch, fn() {
           mark_swatch(c, marks_shown_color())
         })
-        |> ignore
-        if marking.picked >= 0 && picture_button(c, "marks/remove", "trash", dark_muted, true) {
+        c.semantics(swatch_box, Button, id=swatch, label=pv("android-chat.marks.color"))
+        if marking.picked >= 0 && picture_button(c, "marks/remove", "trash", dark_muted, true, said=pv("common.delete")) {
           marks_remove(marking.picked)
         }
         mark_gap(c)
-        if picture_button(c, "marks/undo", "retry", dark_muted, true, enabled=marking.past.length() > 0) {
+        if picture_button(c, "marks/undo", "retry", dark_muted, true, enabled=marking.past.length() > 0, said=pv("android-chat.marks.undo")) {
           marks_undo()
         }
-        if picture_button(c, "marks/redo", "redo", dark_muted, true, enabled=marking.future.length() > 0) {
+        if picture_button(c, "marks/redo", "redo", dark_muted, true, enabled=marking.future.length() > 0, said=pv("android-chat.marks.redo")) {
           marks_redo()
         }
       })

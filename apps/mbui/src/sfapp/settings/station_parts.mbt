@@ -452,6 +452,28 @@ fn version_call(core : Core, station : String, name : String, params : Array[(St
 }
 
 ///|
+/// A moment (ms since 1970) as Android's short date and time say it in Chinese (DateFormat.SHORT, SHORT: 2026/9/21
+/// 22:13), in the device's local time.
+fn short_date_time(ms : Double) -> String {
+  let day_ms = 86400000.0
+  let local = ms + @ui.utc_offset_min(ms).to_double() * 60000.0
+  let days = (local / day_ms).floor()
+  let minutes = ((local - days * day_ms) / 60000.0).floor().to_int()
+  // the day's date from the days since 1970-01-01 (the proleptic Gregorian calendar: H. Hinnant's civil_from_days)
+  let z = days.to_int() + 719468
+  let era = (if z >= 0 { z } else { z - 146096 }) / 146097
+  let doe = z - era * 146097
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  let mp = (5 * doy + 2) / 153
+  let d = doy - (153 * mp + 2) / 5 + 1
+  let m = if mp < 10 { mp + 3 } else { mp - 9 }
+  let y = yoe + era * 400 + (if m <= 2 { 1 } else { 0 })
+  let two = fn(n : Int) { if n < 10 { "0" + n.to_string() } else { n.to_string() } }
+  "\{y}/\{m}/\{d} \{two(minutes / 60)}:\{two(minutes % 60)}"
+}
+
+///|
 /// The station's versions as a section of its page (Versions.kt Versions): one to a row, the test channel's and the
 /// updating by itself's switches for its managers, then the check (with when it last looked).
 fn station_versions(c : @ui.Ctx, core : Core, station : String, updates : Array[Json], manager : Bool, beta : Bool) -> Array[() -> Unit] {
@@ -478,8 +500,12 @@ fn station_versions(c : @ui.Ctx, core : Core, station : String, updates : Array[
   let checking = versions_state.checking.contains(station)
   let out : Array[() -> Unit] = [
     fn() {
-      // (when it last looked, 上次检查 …, is left out: the app has no clock of the day's time yet)
-      section_header(c, tr("android-misc.versions.title"), start=S6)
+      // when it last looked, beside the title (Versions.kt: 上次检查 and the date and time, short, as the device has them)
+      let at = match field(first, "checkedAt") {
+        Some(Number(n, ..)) if n > 0.0 => fill("android-misc.versions.lastChecked", [("time", short_date_time(n))])
+        _ => ""
+      }
+      section_header(c, tr("android-misc.versions.title"), trailing=at, start=S6)
     },
     fn() {
       list_card(c, fn() {

@@ -109,9 +109,10 @@ test "the archive: its chats by day; one restored leaves it" {
   assert_true(t.find("整理上个月的发票") is Some(_))
   assert_true(t.find("周会纪要") is Some(_))
   assert_true(t.find("昨天") is Some(_))
-  // 还原 at the row's end (its first round button, before 删除)
-  let (_, y) = t.find("整理上个月的发票").unwrap()
-  t.tap(390.0 - 10.0 - 34.0 - 17.0, y)
+  // 还原 at the row's end (its first round button, before 删除), said with the chat's title
+  assert_true(t.query(Button, label="删除「整理上个月的发票」") is Some(_))
+  let (x, y, w, h) = t.query(Button, label="恢复「整理上个月的发票」").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(t.find("整理上个月的发票") is None)
   assert_true(t.find("周会纪要") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
@@ -194,8 +195,11 @@ test "下方栏: a place's \"−\" takes it off its bar (the bars kept as the wo
   let t = settings_tester("bars")
   bars_picked.val = None
   assert_true(t.find("第 1 栏") is Some(_))
-  // Station's "−", at its icon's top right over the first bar's last slot
-  t.tap(345.0, 199.0)
+  // under the title, what the bars are of (BarSettings.kt LargeTitle's small words)
+  assert_true(t.find("此设备") is Some(_))
+  // Station's "−", at its icon's top right over the first bar's last slot, said as what it takes off
+  let (x, y, w, h) = t.query(Button, label="从此栏移除Station").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
   match bars_picked.val {
     Some((sets, _)) => {
       assert_eq(sets[0].length(), 3)

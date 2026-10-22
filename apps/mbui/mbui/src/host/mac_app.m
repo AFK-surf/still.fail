@@ -884,6 +884,12 @@ double mb_host_wall_ms(void) {
   return settled_run() ? 1790000000000.0 + settle_clock : [[NSDate date] timeIntervalSince1970] * 1000.0;
 }
 
+// how far local time is ahead of UTC then, in minutes (@hostapi.utc_offset_min); a settled run's UTC, its day its own
+int32_t mb_host_utc_offset_min(double at_ms) {
+  if (settled_run()) return 0;
+  return (int32_t)([[NSTimeZone localTimeZone] secondsFromGMTForDate:[NSDate dateWithTimeIntervalSince1970:at_ms / 1000.0]] / 60);
+}
+
 int32_t mb_host_set_outside(mb_outside_fn f) {
   outside_cb = f;
   return 1;

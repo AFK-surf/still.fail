@@ -18,6 +18,13 @@ pub fn wall_ms() -> Double {
 }
 
 ///|
+/// How far the local time of day is ahead of UTC at `at_ms` (ms since 1970), in minutes (the machine's zone and its
+/// summer time then): to show a date or a time of day. A Tester's is UTC's, 0.
+pub fn utc_offset_min(at_ms : Double) -> Int {
+  h_utc_offset_min(at_ms)
+}
+
+///|
 /// The time of day, as @ui.wall_ms says it, is `ms` now (and goes on from it with the frames' clock): a run replayed
 /// at the time it was made, a date the test shows.
 pub fn Tester::set_wall(self : Tester, ms : Double) -> Unit {

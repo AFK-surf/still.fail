@@ -27,6 +27,21 @@ let words : Map[String, String] = {
   "android-misc.drive.player.playing": "继续播放",
   "android-chat.video.playFailed": "播放失败",
   "common.opening": "正在打开",
+  // what its keys say to a screen reader (Player.kt Key, SpeedKey)
+  "common.back": "返回",
+  "android-misc.drive.player.prev": "上一个",
+  "android-misc.drive.player.next": "下一个",
+  "android-misc.drive.player.back15": "后退 15 秒",
+  "android-misc.drive.player.forward15": "前进 15 秒",
+  "android-chat.video.play": "播放",
+  "android-chat.video.pause": "暂停",
+  "android-misc.drive.player.speed": "播放速度",
+  "android-misc.drive.player.subtitlesOn": "显示字幕",
+  "android-misc.drive.player.subtitlesOff": "隐藏字幕",
+  "android-misc.drive.player.fill": "铺满",
+  "android-misc.drive.player.fit": "适应",
+  "android-misc.drive.player.full": "全屏",
+  "android-misc.drive.player.unfull": "退出全屏",
 }
 
 ///|
@@ -600,7 +615,7 @@ pub fn Player::view(
       }
       c.box(w=Fill(1.0), padx=8.0, pady=6.0, opacity=shown, fn() {
         c.box(dir=Row, w=Fill(1.0), h=Px(48.0), radius=16.0, bg=glass, pl=4.0, pr=14.0, align=ACenter, fn() {
-          if key_button(c, p.key + "/back", "chevron-left", on) {
+          if key_button(c, p.key + "/back", "chevron-left", on, said=word("common.back")) {
             if p.sideways {
               p.upright()
             } else {
@@ -718,7 +733,7 @@ fn Player::controls(
     let speed_inset = bar_foot + (key_size - speed_h) / 2.0
     c.box(style=keys_row, pr?=if speed_last { Some(speed_inset - bar_side) } else { None }, fn() {
       if list.length() > 1 &&
-        key_button(c, p.key + "/prev", "skip-back", on && prev is Some(_)) {
+        key_button(c, p.key + "/prev", "skip-back", on && prev is Some(_), said=word("android-misc.drive.player.prev")) {
         match prev {
           Some(other) => {
             p.pause_view()
@@ -727,21 +742,21 @@ fn Player::controls(
           None => ()
         }
       }
-      if key_button(c, p.key + "/back15", "back-15", on) {
+      if key_button(c, p.key + "/back15", "back-15", on, said=word("android-misc.drive.player.back15")) {
         p.seek_by(s, -nudge_ms)
         p.wake()
       }
       let playing = phase == Playing || phase == Buffering
-      if key_button(c, p.key + "/play", if playing { "pause" } else { "play" }, on) {
+      if key_button(c, p.key + "/play", if playing { "pause" } else { "play" }, on, said=word(if playing { "android-chat.video.pause" } else { "android-chat.video.play" })) {
         p.play_pause(s)
         p.wake()
       }
-      if key_button(c, p.key + "/forward15", "forward-15", on) {
+      if key_button(c, p.key + "/forward15", "forward-15", on, said=word("android-misc.drive.player.forward15")) {
         p.seek_by(s, nudge_ms)
         p.wake()
       }
       if list.length() > 1 &&
-        key_button(c, p.key + "/next", "skip-forward", on && next is Some(_)) {
+        key_button(c, p.key + "/next", "skip-forward", on && next is Some(_), said=word("android-misc.drive.player.next")) {
         match next {
           Some(other) => {
             p.pause_view()
@@ -763,7 +778,7 @@ fn Player::controls(
         p.wake()
       }
       // Android's SpeedKey (Player.kt:505): 30 high, 44 at least; in the corner concentric with the bar, else Smooth(10)
-      c.box(
+      let speed_key = c.box(
         h=Px(speed_h),
         min_w=44.0,
         radius=if speed_last { @ui.concentric(bar_radius, speed_inset) } else { speed_corner },
@@ -776,21 +791,21 @@ fn Player::controls(
           c.text(speed_label(p.speed), size=12.0, weight=600, color=ink, wrap=false) |> ignore
         },
       )
-      |> ignore
+      c.semantics(speed_key, Button, id=sid, label=word("android-misc.drive.player.speed"), disabled=!on)
       if p.subtitle &&
-        key_button(c, p.key + "/captions", "captions", on, lit=p.subs_on) {
+        key_button(c, p.key + "/captions", "captions", on, lit=p.subs_on, said=word(if p.subs_on { "android-misc.drive.player.subtitlesOff" } else { "android-misc.drive.player.subtitlesOn" })) {
         p.subs_on = !p.subs_on
         p.wake()
       }
       // turned sideways the picture can fill the screen (cropped) or fit in it
       if !audio &&
         p.sideways &&
-        key_button(c, p.key + "/fill", if p.fill { "shrink" } else { "expand" }, on, lit=p.fill) {
+        key_button(c, p.key + "/fill", if p.fill { "shrink" } else { "expand" }, on, lit=p.fill, said=word(if p.fill { "android-misc.drive.player.fit" } else { "android-misc.drive.player.fill" })) {
         p.fill = !p.fill
         p.wake()
       }
       if !audio &&
-        key_button(c, p.key + "/sideways", "landscape", on, lit=p.sideways) {
+        key_button(c, p.key + "/sideways", "landscape", on, lit=p.sideways, said=word(if p.sideways { "android-misc.drive.player.unfull" } else { "android-misc.drive.player.full" })) {
         p.sideways = !p.sideways
         @hostapi.set_sideways(p.sideways)
         p.wake()
@@ -925,10 +940,10 @@ let speed_corner : Double = 10.0
 ///|
 /// A round key on the controls (Player.kt Key): 40, a 20 icon; `lit`, a soft light behind it while what it turns on is
 /// on. True on the frame it was tapped; `on` false, it takes no tap (what is under it does).
-fn key_button(c : @ui.Ctx, key : String, icon : String, on : Bool, lit? : Bool = false) -> Bool {
+fn key_button(c : @ui.Ctx, key : String, icon : String, on : Bool, lit? : Bool = false, said~ : String) -> Bool {
   let id = c.id(key)
   let pressing = if on { @motion.pressing(c, id) } else { 0.0 }
-  c.box(
+  let b = c.box(
     w=Px(key_size),
     h=Px(key_size),
     radius=key_size / 2.0,
@@ -942,7 +957,8 @@ fn key_button(c : @ui.Ctx, key : String, icon : String, on : Bool, lit? : Bool =
     id=if on { id } else { 0 },
     fn() { @sf.icon(c, icon, size=20.0, color=ink) |> ignore },
   )
-  |> ignore
+  // named `said` (Player.kt Key's contentDescription), pressed while `lit`
+  c.semantics(b, Button, id~, label=said, disabled=!on, pressed=lit)
   on && c.clicked(id)
 }
 

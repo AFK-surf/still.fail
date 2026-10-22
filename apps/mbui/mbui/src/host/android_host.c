@@ -1087,6 +1087,15 @@ double mb_host_wall_ms(void) {
   return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
 }
 
+// how far local time is ahead of UTC then, in minutes (@hostapi.utc_offset_min); a run on its own clock's UTC
+int32_t mb_host_utc_offset_min(double at_ms) {
+  if (own_clock) return 0;
+  time_t s = (time_t)(at_ms / 1000.0);
+  struct tm local;
+  if (!localtime_r(&s, &local)) return 0;
+  return (int32_t)(local.tm_gmtoff / 60);
+}
+
 void mb_host_request_frame(void) {
   want_frame = 1;
   JNIEnv *env = env_();

@@ -11,8 +11,8 @@ test "87-device-pages" {
     f.tap("=下方栏")
     f.run_to(@ui.nav_rest())
     f.see("第 1 栏")
-    // Station's "−" (an icon, no words) at its icon's top right
-    f.tap_at(345.0, 199.0)
+    // Station's "−" (an icon, no words) at its icon's top right, under the title and its 此设备
+    f.tap_at(345.0, 226.0)
     f.tap("=添加")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.see("添加到第 1 栏")

@@ -202,7 +202,7 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
               })
               |> ignore
             }
-            if round_action(c, "restore/" + session, "retry") {
+            if round_action(c, "restore/" + session, "retry", label=fill("android-misc.archive.restoreNamed", [("title", title)])) {
               acted = true
               let p : Map[String, Json] = {
                 "station": str(station),
@@ -221,7 +221,7 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
                 done=tr("android-misc.archive.restored"),
               )
             }
-            if flag(v, "deletable") && round_action(c, "delete/" + session, "trash") {
+            if flag(v, "deletable") && round_action(c, "delete/" + session, "trash", label=fill("android-misc.archive.deleteNamed", [("title", title)])) {
               acted = true
               confirm(
                 fill("android-misc.archive.deleteTitle", [("title", title)]),
@@ -258,10 +258,10 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
 
 ///|
 /// A round action of a row (Archive.kt Action): its icon, 16 in a 34 circle. True on the frame after a tap.
-fn round_action(c : @ui.Ctx, key : String, icon : String) -> Bool {
+fn round_action(c : @ui.Ctx, key : String, icon : String, label? : String = "") -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(
+  let b = c.box(
     w=Px(34.0),
     h=Px(34.0),
     radius=17.0,
@@ -271,6 +271,7 @@ fn round_action(c : @ui.Ctx, key : String, icon : String) -> Bool {
     id~,
     fn() { @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore },
   )
-  |> ignore
+  // what it says to a screen reader (Archive.kt Action: its contentDescription)
+  c.semantics(b, Button, id~, label~)
   hit(c, id)
 }

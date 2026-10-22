@@ -249,6 +249,15 @@ fn wall_ms() -> Double {
 }
 
 ///|
+extern "C" fn ffi_utc_offset_min(at_ms : Double) -> Int = "mb_host_utc_offset_min"
+
+///|
+/// How far local time is ahead of UTC at `at_ms`, in minutes (@hostapi.utc_offset_min).
+fn utc_offset_min(at_ms : Double) -> Int {
+  ffi_utc_offset_min(at_ms)
+}
+
+///|
 /// When the input event being delivered happened, on now()'s clock (ms):
 /// a touch's own time, which comes before it is handled (a frame's touches
 /// are handled together); negative when the host doesn't say.

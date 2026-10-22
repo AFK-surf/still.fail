@@ -46,6 +46,11 @@ impl @hostapi.Host for Native with wall_ms(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with utc_offset_min(_, at_ms) {
+  utc_offset_min(at_ms)
+}
+
+///|
 impl @hostapi.Host for Native with event_time(_) {
   event_time()
 }

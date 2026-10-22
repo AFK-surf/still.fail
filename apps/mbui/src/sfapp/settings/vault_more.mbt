@@ -523,10 +523,10 @@ fn fact(c : @ui.Ctx, label : String, value : String, code? : Bool = false) -> Un
 
 ///|
 /// A round icon button (RoundIcon). True on the frame after a tap.
-fn round_icon(c : @ui.Ctx, key : String, icon : String, tint : Int64) -> Bool {
+fn round_icon(c : @ui.Ctx, key : String, icon : String, tint : Int64, said~ : String) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(
+  let b = c.box(
     w=Px(34.0),
     h=Px(34.0),
     radius=17.0,
@@ -536,8 +536,15 @@ fn round_icon(c : @ui.Ctx, key : String, icon : String, tint : Int64) -> Bool {
     id~,
     fn() { @sf.icon(c, icon, size=18.0, color=tint) |> ignore },
   )
-  |> ignore
+  // `said`: what it is to a screen reader (RoundIcon's contentDescription)
+  c.semantics(b, Button, id~, label=said)
   hit(c, id)
+}
+
+///|
+/// What the eye beside a secret says (Vault.kt): 隐藏 while it shows, else 显示.
+fn eye_said(shown : Bool) -> String {
+  tr(if shown { "android-settings.vault.hide" } else { "android-settings.vault.reveal" })
 }
 
 ///|
@@ -554,14 +561,14 @@ fn field_row(c : @ui.Ctx, core : Core, item : String, f : String, value : String
       mono(c, if shown { value } else { "••••••••••••" }, size=14.0, line=20.0, wrap=shown)
     })
     |> ignore
-    if secret && round_icon(c, "field-eye/" + k, "eye", if shown { t.p.accent } else { t.p.muted }) {
+    if secret && round_icon(c, "field-eye/" + k, "eye", if shown { t.p.accent } else { t.p.muted }, said=eye_said(shown)) {
       if shown {
         opened.shown.remove(k)
       } else {
         opened.shown[k] = true
       }
     }
-    if round_icon(c, "field-copy/" + k, "copy", t.p.muted) {
+    if round_icon(c, "field-copy/" + k, "copy", t.p.muted, said=tr("common.copy")) {
       copy_secret(c, core, value, secret)
     }
   })
@@ -700,7 +707,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
           secret=secret && !shown,
         )
         words[part] = r.text
-        if secret && round_icon(c, key(part) + "/eye", "eye", if shown { t.p.accent } else { t.p.subtle }) {
+        if secret && round_icon(c, key(part) + "/eye", "eye", if shown { t.p.accent } else { t.p.subtle }, said=eye_said(shown)) {
           if shown {
             e.reveal.remove(part)
           } else {
