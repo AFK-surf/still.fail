@@ -580,7 +580,9 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// (its ground, border and glass alike): a circle of that radius about the middle of its top, `notch_y` below the edge
 /// (above it when negative), met by the edge through fillets of `notch_fillet` (Bar.kt's notch). `aspect` > 0: its
 /// width over its height, the side not said following the other (CSS's aspect-ratio). Built where the direction is
-/// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap.
+/// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap. `keep`: in a row, as wide
+/// as its content even where the row is short of room, its siblings squeezed instead (as Compose's Row measures what
+/// has no weight whole, a weight(1f, fill = false) sibling given the rest: a bar's title cut short, not its buttons).
 ///
 /// `style` (style.mbt) says how it looks, its state blocks picked by its own state: pressed, hovered, focused by `id`
 /// (as Ctx::pressed, hovered, focus_shown read them), `selected` and `disabled` as said, dark and narrow by the theme
@@ -625,6 +627,7 @@ pub fn Ctx::box(
   notch_r? : Double = 0.0,
   notch_fillet? : Double = 0.0,
   aspect? : Double = 0.0,
+  keep? : Bool = false,
   id? : Int = 0,
   body : () -> Unit,
 ) -> Int {
@@ -655,6 +658,7 @@ pub fn Ctx::box(
   ).unwrap_or(Column)
   n.rtl = self.direction == Rtl
   n.aspect = aspect
+  n.keep = keep
   n.w = first(
     w,
     match st.w {

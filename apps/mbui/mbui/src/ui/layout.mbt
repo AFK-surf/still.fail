@@ -330,7 +330,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         stretch = true
       }
     Auto =>
-      if in_row && !((n.kind == kind_text || n.kind == kind_rich) && !n.wrap) {
+      if in_row && !n.keep && !((n.kind == kind_text || n.kind == kind_rich) && !n.wrap) {
         shrink = 1.0
       }
   }

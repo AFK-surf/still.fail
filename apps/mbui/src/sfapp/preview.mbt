@@ -2876,8 +2876,9 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
       dir=Row,
       h=Px(44.0),
       max_w=c.width - 16.0,
+      // (FilePreview.kt: 12 at its start, PICTURE_BAR_PAD at its end)
       pl=12.0,
-      pr=2.0,
+      pr=6.0,
       gap=4.0,
       align=ACenter,
       radius=14.0,
@@ -2909,7 +2910,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
             if c.clicked(pct) && on {
               z.reset()
             }
-            c.box(h=Px(32.0), min_w=52.0, radius=12.0, align=ACenter, justify=JCenter, id=if on { pct } else { 0 }, fn() {
+            c.box(h=Px(32.0), min_w=52.0, radius=12.0, align=ACenter, justify=JCenter, keep=true, id=if on { pct } else { 0 }, fn() {
               c.text("\{(z.scale * 100.0).round().to_int()}%", size=13.0, color=tint, wrap=false) |> ignore
             })
             |> ignore
