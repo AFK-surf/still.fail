@@ -89,7 +89,7 @@ test "a rounded clip's draw lists printed when asked (MBUI_DL_PRINT=clip-cut or 
 }
 
 ///|
-/// Lines (Ctx::lines, scene.mbt's kind 10) in a window 160 by 160 at scale 2, on white (scripts/lines_check.py reads its
+/// Lines (Ctx::lines, scene.mbt's kind 10) in a window 160 by 160 at scale 2, on white (scripts/chk lines reads its
 /// picture): in its top 40 a line from (20, 20) to (100, 20) 8 wide, and 40 under it a box 88 by 8 rounded 4 at (16,
 /// 56), the same shape drawn as a rounded rect; under them, in a box from (0, 80), a line from (20, 10) to (60, 50) 6
 /// wide, an arc about (120, 40) of radius 20 from 0 through 3π/2 3 wide, and a line from (20, 70) to (140, 70) 4 wide

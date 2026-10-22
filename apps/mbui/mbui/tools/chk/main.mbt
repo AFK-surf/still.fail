@@ -10,6 +10,10 @@
 //                                 (outside.mbt says how)
 //     chk textrec …               a host's run kept as a Tester's test, the kept runs' list checked (textrec.mbt)
 //     chk logwait …               waits for a log's line, a process's end, a path's going (logwait.mbt)
+//     chk lines PNG               a renderer's lines drawn as they are (pictures.mbt)
+//     chk views-round LOG PNG     Android's round page pictured (pictures.mbt)
+//     chk views LOG HOST          a native view put where it was told (contracts.mbt)
+//     chk site LOG HOST           a site's page and a page speaking with the app, step by step (contracts.mbt)
 
 ///|
 fn root() -> String {
@@ -86,6 +90,10 @@ fn main {
     ["outside-kinds", .. rest] => outside_kinds(rest.to_array())
     ["textrec", .. rest] => textrec(rest.to_array())
     ["logwait", .. rest] => logwait(rest.to_array())
+    ["lines", .. rest] => lines(rest.to_array())
+    ["views-round", .. rest] => views_round(rest.to_array())
+    ["views", .. rest] => views(rest.to_array())
+    ["site", .. rest] => site(rest.to_array())
     _ => {
       @sys.eprintln("chk: errs | corner-sl [--check] | outside-kinds [HOST…]")
       2
