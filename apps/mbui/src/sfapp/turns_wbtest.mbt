@@ -119,7 +119,7 @@ test "a decision answered: its options close in their turn after the answer has 
 let test_glide_ms : Double = 500.0
 
 ///|
-test "turns: words sent wait for nothing (a row rising, a list never at rest); what is asked after them waits for their landing" {
+test "turns: words sent wait for nothing (a row before them, a list never at rest); what is asked after them waits for their landing" {
   reset()
   let tu = turns_of("test")
   let phase = Ref::new(0)

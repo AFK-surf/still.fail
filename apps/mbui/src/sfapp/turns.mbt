@@ -1,8 +1,9 @@
 // What changes the height of a chat's list plays one at a time (ListTurns.kt, web/src/listQueue.ts, docs/list-motion.md):
 // words sent flying in from the composer, a message simply coming in, the agent's line coming, messages coming out of
 // its avatar, a decision's options closing, what goes from under a post. Each waits its turn here, in the order they
-// came, but words sent: they fly at once, in the list the frame they are sent (flight.mbt), only what is asked after
-// them waiting till they have landed. A turn is over once its own motion is and the list is where it moved it to (the
+// came, but words sent: they fly at once, in the list the frame they are sent (flight.mbt), and what is asked after
+// them waits till they have landed (the list does not follow its end while they fly: a row come in then would move it
+// at once; an answer out of its avatar under way as they were sent waits for them too: emit_step). A turn is over once its own motion is and the list is where it moved it to (the
 // list's own motion, its glide after what came, at rest: Ctx::list_info's `rest`). What only fades, turns or changes
 // its words is not in it. A row waiting its turn is not in the list yet: its room comes when its turn does.
 //
@@ -193,7 +194,7 @@ fn Turns::started_at(self : Turns, key : String) -> Double {
 ///|
 /// The turn under way, of words sent or messages out of avatars, is over (`at`: when it was declared to end).
 fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Unit {
-  // (words sent landed: what was asked after them goes from here)
+  // (words sent landed: what waits for them goes from here)
   if what == Send && self.sent_at >= 0.0 {
     self.sent_until = dmin(self.sent_until, at + turn_calm_ms)
     c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")

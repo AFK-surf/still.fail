@@ -1,0 +1,17 @@
+# Words sent while the agent's answer to the first comes out of its avatar (emit.mbt): the second words' flight
+# against that motion.
+timeout 30000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 先看一下列表
+wait 500
+tap icon:arrow-up
+wait 400
+tap 发消息
+wait 300
+type 再看一下按钮
+wait 1500
+tap icon:arrow-up
+wait 3500

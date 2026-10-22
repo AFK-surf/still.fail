@@ -85,3 +85,30 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
   assert_true(t.find("先上屏") is Some(_))
   fix_clock.val = None
 }
+
+///|
+test "words sent while an answer comes out of its avatar fly at once; the answer comes in once they have landed" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  t.tap_text("发消息")
+  t.type_text("再看一下按钮")
+  // the answer to the first words taken: its agent's activity folding, the avatar on its way
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  t.run_for(Fold.ms() + 200.0)
+  let sent_at = t.time()
+  tap_send(t)
+  t.draw()
+  match send_flight.val {
+    Some(f) => assert_true(f.placed)
+    None => fail("nothing flies")
+  }
+  // the avatar there before the words have landed: the answer waits for them, the list not moved under them
+  t.run_for(sent_at + Float.ms() - 200.0 + 60.0 - t.time())
+  assert_true(t.find("收到：「看一下列表」") is None)
+  t.run_for(sent_at + flight_ms + 100.0 - t.time())
+  assert_true(send_flight.val is None)
+  t.run_for(Spit.ms())
+  assert_true(t.find("收到：「看一下列表」") is Some(_))
+  emit_restore()
+}
