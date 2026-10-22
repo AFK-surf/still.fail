@@ -69,6 +69,16 @@ pub let key_code_page_up : Int = 15
 pub let key_code_page_down : Int = 16
 
 ///|
+/// Select all, copy, cut: the keys a field takes for them (a shortcut's, the floating text menu's: @hostapi.text_menu).
+pub let key_code_select_all : Int = 12
+
+///|
+pub let key_code_copy : Int = 13
+
+///|
+pub let key_code_cut : Int = 14
+
+///|
 /// Modifiers in a key's `mods`: Shift, Ctrl, Alt (Option), ⌘ (the Windows key, Meta).
 pub let mod_shift_key : Int = 1
 

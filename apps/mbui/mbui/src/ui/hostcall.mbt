@@ -18,6 +18,8 @@ struct FakeHost {
   mut ime_rect : (Double, Double, Double, Double)
   /// how many times the field was said to the host (set_ime)
   mut ime_told : Int
+  /// the floating text menu as the host was last told it (text_menu): shown, where, what it offers
+  mut text_menu : (Bool, Double, Double, Double, Double, Int)
   mut clipboard : String
   /// the last words put there were a secret: taken off this long after (Ctx::copy_secret); -1 not a secret
   mut clipboard_secret : Double
@@ -465,6 +467,14 @@ fn h_set_ime(
       f.ime_told = f.ime_told + 1
     }
     None => @hostapi.set_ime(active, x, y, w, h, text, a, b)
+  }
+}
+
+///|
+fn h_text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.text_menu = (shown, x, y, w, h, can)
+    None => @hostapi.text_menu(shown, x, y, w, h, can)
   }
 }
 

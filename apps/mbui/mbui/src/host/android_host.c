@@ -36,6 +36,7 @@ static struct {
 static JavaVM *vm;
 static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls, notices_cls;
 static jmethodID m_reduce_motion;
+static jmethodID m_text_menu;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
@@ -84,6 +85,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_wake_after = (*env)->GetStaticMethodID(env, host_cls, "wakeAfter", "(D)V");
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
+  m_text_menu = (*env)->GetStaticMethodID(env, host_cls, "textMenu", "(ZDDDDI)V");
   m_clipboard_secret = (*env)->GetStaticMethodID(env, host_cls, "clipboardSecret", "(Ljava/lang/String;D)V");
   m_log = (*env)->GetStaticMethodID(env, host_cls, "log", "(Ljava/lang/String;)V");
   m_bench = (*env)->GetStaticMethodID(env, host_cls, "benchMode", "()I");
@@ -1347,6 +1349,12 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
   (*env)->CallStaticVoidMethod(env, host_cls, m_set_ime, (jboolean)(active != 0), x, y, w, h, s,
                                a, b);
   (*env)->DeleteLocalRef(env, s);
+}
+
+// The system's floating text menu over a field's words, or put away (Host.textMenu: ActionMode.TYPE_FLOATING).
+void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);
 }
 
 void mb_host_clipboard_set(moonbit_string_t s) {

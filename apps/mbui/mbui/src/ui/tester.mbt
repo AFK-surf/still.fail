@@ -189,6 +189,7 @@ pub fn Tester::new(
     ime_text: "",
     ime_sel: (0, 0),
     ime_told: 0,
+    text_menu: (false, 0.0, 0.0, 0.0, 0.0, 0),
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
     clipboard_secret: -1.0,
@@ -680,6 +681,13 @@ pub fn Tester::tap_text(self : Tester, s : String) -> Unit {
 pub fn Tester::ime(self : Tester) -> (Bool, String, Int, Int) {
   let (a, b) = self.fake.ime_sel
   (self.fake.ime_active, self.fake.ime_text, a, b)
+}
+
+///|
+/// The floating text menu as the host was last told it (@hostapi.text_menu): shown, over (x, y, w, h), offering
+/// what `can` says (@hostapi.text_menu_*).
+pub fn Tester::text_menu(self : Tester) -> (Bool, Double, Double, Double, Double, Int) {
+  self.fake.text_menu
 }
 
 ///|

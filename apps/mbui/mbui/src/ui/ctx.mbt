@@ -101,6 +101,19 @@ struct EditorState {
   mut handle_on : Bool
   mut handle_x : Double
   mut handle_y : Double
+  /// Android's: words picked by a finger (a long press, a double tap, all selected from the menu): the selection's two
+  /// handles shown, and where their tips were drawn last (`sel_on` false: not drawn); the word a long press picked
+  /// first, which sliding on widens from
+  mut sel_handles : Bool
+  mut sel_on : Bool
+  mut sel_ax : Double
+  mut sel_ay : Double
+  mut sel_bx : Double
+  mut sel_by : Double
+  mut word_a : Int
+  mut word_b : Int
+  /// Android's: the system's floating text menu asked for over its selection (or its caret)
+  mut menu : Bool
   /// the composing region the input method said with the field's state it sends next (on_text kinds 6 and 5,
   /// Android's): -1 none
   mut comp_a : Int
@@ -231,6 +244,14 @@ pub struct Ctx {
   mut handle_drag : Int
   /// Android's: the field a finger came down on, which a tap gives the focus as it lifts (0 none)
   mut editor_tap : Int
+  /// which handle `handle_drag` is: 1 the caret's, 2 the selection's start, 3 its end
+  mut handle_which : Int
+  /// Android's: the field whose words a long press picked, while that finger is still down (sliding widens them)
+  mut word_drag : Int
+  /// the last tap on a field as it lifted (its id, when, where): a second soon after picks the word there
+  mut last_tap : (Int, Double, Double, Double)
+  /// what the host was last told of the floating text menu (text_menu)
+  mut menu_sig : String
   mut handle_dy : Double
   // persistent widget state
   lists : Map[Int, ListState]
@@ -419,6 +440,10 @@ fn Ctx::new() -> Ctx {
     editor_drag: false,
     handle_drag: 0,
     editor_tap: 0,
+    handle_which: 0,
+    word_drag: 0,
+    last_tap: (0, -1.0e9, 0.0, 0.0),
+    menu_sig: "",
     handle_dy: 0.0,
     lists: Map::new(),
     editors: Map::new(),

@@ -258,6 +258,61 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     }
 
     /** What the clipboard holds, as words, into the focused field (a paste: KEYCODE_PASTE, the keyboard's menu). */
+    // ── the floating text menu (Host.textMenu): the system's text toolbar over a field's words ──
+
+    private android.view.ActionMode textMenu;
+    private final android.graphics.Rect textMenuRect = new android.graphics.Rect();
+    private int textMenuCan;
+
+    /** Shown over (x, y, w, h) in dp with what {@code can} offers, moved there when it is up; or put away. */
+    void textMenu(boolean shown, double x, double y, double w, double h, int can) {
+        if (!shown) {
+            if (textMenu != null) textMenu.finish();
+            textMenu = null;
+            return;
+        }
+        textMenuRect.set((int) Math.floor(x * density), (int) Math.floor(y * density),
+                (int) Math.ceil((x + w) * density), (int) Math.ceil((y + h) * density));
+        textMenuCan = can;
+        if (textMenu != null) {
+            textMenu.invalidate();
+            textMenu.invalidateContentRect();
+            return;
+        }
+        textMenu = startActionMode(new android.view.ActionMode.Callback2() {
+            private void items(android.view.Menu m) {
+                m.clear();
+                if ((textMenuCan & 1) != 0) m.add(0, android.R.id.cut, 0, android.R.string.cut);
+                if ((textMenuCan & 2) != 0) m.add(0, android.R.id.copy, 1, android.R.string.copy);
+                if ((textMenuCan & 4) != 0) m.add(0, android.R.id.paste, 2, android.R.string.paste);
+                if ((textMenuCan & 8) != 0) m.add(0, android.R.id.selectAll, 3, android.R.string.selectAll);
+            }
+
+            @Override public boolean onCreateActionMode(android.view.ActionMode mode, android.view.Menu m) { items(m); return true; }
+
+            @Override public boolean onPrepareActionMode(android.view.ActionMode mode, android.view.Menu m) { items(m); return true; }
+
+            @Override public boolean onActionItemClicked(android.view.ActionMode mode, android.view.MenuItem item) {
+                int id = item.getItemId();
+                // as the input method's own (MBInput.performContextMenuAction): the keys and the paste the field takes
+                if (id == android.R.id.paste) paste();
+                else if (id == android.R.id.selectAll) toGL(() -> Native.key(12, 0));
+                else if (id == android.R.id.copy) toGL(() -> Native.key(13, 0));
+                else if (id == android.R.id.cut) toGL(() -> Native.key(14, 0));
+                mode.finish();
+                return true;
+            }
+
+            @Override public void onDestroyActionMode(android.view.ActionMode mode) {
+                if (textMenu == mode) textMenu = null;
+            }
+
+            @Override public void onGetContentRect(android.view.ActionMode mode, android.view.View v, android.graphics.Rect out) {
+                out.set(textMenuRect);
+            }
+        }, android.view.ActionMode.TYPE_FLOATING);
+    }
+
     void paste() {
         android.content.ClipboardManager cm = (android.content.ClipboardManager)
                 getContext().getSystemService(Context.CLIPBOARD_SERVICE);

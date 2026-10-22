@@ -33,6 +33,7 @@ pub(open) trait Host {
   atlas_generation(Self) -> Int = _
   present(Self, FixedArray[Double], Int, Double, Double, Double) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
+  text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
   log(Self, String) -> Unit = _
@@ -267,6 +268,11 @@ impl Host with present(_, _, _, _, _, _) {
 
 ///|
 impl Host with set_ime(_, _, _, _, _, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with text_menu(_, _, _, _, _, _, _) {
   ()
 }
 
@@ -1086,6 +1092,28 @@ pub fn set_ime(
   sel_end : Int,
 ) -> Unit {
   current.val.set_ime(active, x, y, w, h, text, sel_start, sel_end)
+}
+
+///|
+/// What a field's selected words can have done to them: cut, copy, paste, select all (text_menu's `can`).
+pub let text_menu_cut : Int = 1
+
+///|
+pub let text_menu_copy : Int = 2
+
+///|
+pub let text_menu_paste : Int = 4
+
+///|
+pub let text_menu_select_all : Int = 8
+
+///|
+/// The system's floating menu for a field's words (Android's text toolbar: ActionMode.TYPE_FLOATING) `shown` over the
+/// window's rectangle (`x`, `y`, `w`, `h`: the words picked, or the caret), offering what `can` says (text_menu_*); or
+/// put away. What is chosen comes as the keys and the paste the field already takes (select all, copy, cut: keys 12,
+/// 13, 14; paste: the clipboard's words as text), the menu then gone. A host with none shows nothing.
+pub fn text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit {
+  current.val.text_menu(shown, x, y, w, h, can)
 }
 
 ///|
