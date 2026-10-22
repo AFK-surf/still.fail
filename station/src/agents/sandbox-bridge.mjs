@@ -17,6 +17,7 @@
 //                                            path there (a link to `persist`, storage the sandboxes keep, when given).
 //                                            `dirs`: directories made there. `sync`: what is copied (below).
 //                                            No `program`: only the copying, then it ends (a session's new uploads).
+//                                            `gh`: the station's GitHub login lent to the program (`lendGh`).
 //   node … -e '<this file>' remote            in the sandbox, started by the host side through ssh
 //
 // `sync`: [{path, to?, mode, skip?, push?, back?}]: a file or directory here (`path`) and there (`to`, the same path by
@@ -197,6 +198,21 @@ function placeLink(path, target) {
   symlinkSync(target, path);
 }
 
+/// The station's GitHub login (gh's, on this machine) lent to a program in the sandbox, as its subscriptions' are: its
+/// token, read now, as GH_TOKEN, and git's credentials for github.com from gh there (`gh auth git-credential`, through
+/// GIT_CONFIG_* so nothing is written there). Nothing when gh here is not signed in, or the program has a token already.
+function lendGh(env) {
+  if (env.GH_TOKEN || env.GITHUB_TOKEN) return;
+  const got = spawnSync("gh", ["auth", "token", "-h", "github.com"], { env, encoding: "utf8", timeout: 10_000 });
+  const token = got.status === 0 ? got.stdout.trim() : "";
+  if (token === "") return;
+  env.GH_TOKEN = token;
+  const n = Number(env.GIT_CONFIG_COUNT) || 0;
+  env[`GIT_CONFIG_KEY_${n}`] = "credential.https://github.com.helper";
+  env[`GIT_CONFIG_VALUE_${n}`] = "!gh auth git-credential";
+  env.GIT_CONFIG_COUNT = String(n + 1);
+}
+
 /// Here: makes the sandbox when asked to (its size), then stands in for the program.
 function host(spec) {
   if (spec.create === undefined) return connect(spec);
@@ -229,6 +245,7 @@ function connect(spec) {
   ssh.stdin.on("error", () => {});
   const env = { ...process.env };
   delete env.STILLFAIL_SANDBOX_BRIDGE;
+  if (spec.gh && spec.program !== undefined) lendGh(env);
   const silent = spec.silentMs ?? SILENT_MS;
   const sync = (spec.sync ?? []).map((e) => ({ ...e, to: e.to ?? e.path }));
   const root = spec.root?.path ?? null;
