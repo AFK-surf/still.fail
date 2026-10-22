@@ -201,12 +201,13 @@ export function toEvent(event: Json, botUserId: string, botId: string): ChatEven
   };
 }
 
-/// The name a users.info answer gives a person, and their email.
-function personOf(answer: Json): Person {
+/// The name a users.info answer gives a person, their email and their profile picture (72px, as Slack's own lists
+/// draw it at twice their size).
+export function personOf(answer: Json): Person {
   const u = answer?.user ?? null;
   const p = u?.profile ?? null;
   const name = firstString([p?.display_name, u?.real_name, u?.name], (n) => n !== "") ?? "";
-  return { name, email: text(p?.email).toLowerCase() };
+  return { name, email: text(p?.email).toLowerCase(), picture: text(p?.image_72) };
 }
 
 async function channelNameOf(client: SlackClient, channel: string, token: string): Promise<string | null> {
@@ -659,17 +660,19 @@ export class SlackSurface implements ChatSurface {
     return email === "" ? null : email;
   }
 
-  /// A person as far as already known, without waiting; an unknown one is looked up in the background.
+  /// A person as far as already known, without waiting; an unknown one is looked up in the background, and so is one
+  /// learned before pictures were kept.
   knownPerson(user: string): Person | null {
     if (!this.book) return null;
     const team = this.workspace() ?? "?";
-    return this.book.person(`u:${team}:${user}`, async () => {
+    const fetch = async () => {
       try {
         return personOf(await this.client.api("users.info", [["user", user]], this.botToken));
       } catch {
         return null;
       }
-    });
+    };
+    return this.book.person(`u:${team}:${user}`, fetch, (known) => known.picture === undefined);
   }
 
   /// A channel's name as far as already known (null for DMs or not yet known), without waiting.

@@ -13,7 +13,7 @@ import { toolStatus } from "../src/sessions/chat.ts";
 import { answerOf, answeredBlocks, questionBlocks } from "../src/slack/cards.ts";
 import { NameBook } from "../src/slack/names.ts";
 import { ThreadStatus } from "../src/slack/status.ts";
-import { SlackSurface, toEvent, verifySlackTokens } from "../src/slack/surface.ts";
+import { SlackSurface, personOf, toEvent, verifySlackTokens } from "../src/slack/surface.ts";
 import { SlackClient } from "../src/slack/web.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 import { FakeSlack, bot } from "./slack-fake.ts";
@@ -482,6 +482,30 @@ describe("slack", { concurrency: true }, () => {
       const broken = new NameBook(path);
       assert.equal(broken.person("u:T:U1", async () => null), null);
       await broken.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a person comes with their Slack picture; one kept before pictures were is looked up again, still shown meanwhile", async () => {
+    const answer = (image?: string) => ({ ok: true, user: { name: "ada", profile: { display_name: "Ada", email: "Ada@x", ...(image ? { image_72: image } : {}) } } });
+    assert.deepEqual(personOf(answer("https://avatars.slack-edge.com/ada_72.png")), { name: "Ada", email: "ada@x", picture: "https://avatars.slack-edge.com/ada_72.png" });
+    assert.deepEqual(personOf(answer()), { name: "Ada", email: "ada@x", picture: "" });
+    const dir = mkdtempSync(join(tmpdir(), "nb-"));
+    const path = join(dir, "slack-names.json");
+    try {
+      writeFileSync(path, JSON.stringify({ "u:T:U1": { person: { name: "Ada", email: "ada@x" }, at: 1 } }));
+      const book = new NameBook(path, { learnAfterMs: 20, saveAfterMs: 60, clock: testClock().clock });
+      let asked = 0;
+      const ada = async () => (asked++, personOf(answer("https://p/ada")));
+      const stale = (known: { picture?: string }) => known.picture === undefined;
+      assert.deepEqual(book.person("u:T:U1", ada, stale), { name: "Ada", email: "ada@x" });
+      await settle();
+      assert.equal(asked, 1);
+      assert.equal(book.person("u:T:U1", ada, stale)?.picture, "https://p/ada");
+      await settle();
+      assert.equal(asked, 1, "known with its picture: not asked again");
+      await book.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

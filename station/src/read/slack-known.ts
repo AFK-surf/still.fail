@@ -58,11 +58,12 @@ export function teamName(s: Store, connect: string): string | null {
   return name === "" ? null : name;
 }
 
-/// A Slack person of a connect, as far as known: their name and email.
-export function knownPerson(s: Store, connect: string, user: string): { name: string; email: string } | null {
+/// A Slack person of a connect, as far as known: their name, email and profile picture's address ("" when not known).
+export function knownPerson(s: Store, connect: string, user: string): { name: string; email: string; picture: string } | null {
   const t = teams(s).get(connect);
   const person = book(s, t?.feishu)[`u:${t?.id ?? "?"}:${user}`]?.person;
-  return person && typeof person.name === "string" ? { name: person.name, email: typeof person.email === "string" ? person.email : "" } : null;
+  const said = (v: Json) => (typeof v === "string" ? v : "");
+  return person && typeof person.name === "string" ? { name: person.name, email: said(person.email), picture: said(person.picture) } : null;
 }
 
 /// A channel's name of a connect's Slack, as far as known (null for a direct message, or not known yet).
@@ -82,5 +83,7 @@ export function slackCreator(s: Store, reference: string): Json | null {
   if (colon <= 0 || colon >= rest.length - 1) return null;
   const [connect, user] = [rest.slice(0, colon), rest.slice(colon + 1)];
   const person = knownPerson(s, connect, user);
-  return { id: reference, name: person?.name ? person.name : user, email: person?.email ? person.email : null, via: teams(s).get(connect)?.feishu ? "feishu" : "slack" };
+  const v: Json = { id: reference, name: person?.name ? person.name : user, email: person?.email ? person.email : null, via: teams(s).get(connect)?.feishu ? "feishu" : "slack" };
+  if (person?.picture) v.picture = person.picture;
+  return v;
 }

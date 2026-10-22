@@ -32,6 +32,7 @@ export function merge(entries: unknown[]): Record<string, unknown>[] {
         createdAt: field("at"),
         editedAt: null,
       };
+      if (typeof entry.authorPicture === "string") message.authorPicture = entry.authorPicture;
       if (typeof entry.ending === "string") message.ending = entry.ending;
       if (typeof entry.profile === "string") message.profile = entry.profile;
       if (typeof entry.runtime === "string") message.runtime = entry.runtime;

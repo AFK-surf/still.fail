@@ -272,6 +272,16 @@ test("another_chats_agent_goes_by_that_chats_name_without_the_header_line", () =
   assert.deepEqual([own.text, own.by.name], ["来自 [a](https://x/o/w/s/a)：\n\nhi", "Opus"]);
 });
 
+test("a_slack_persons_message_shows_their_slack_picture_else_their_accounts", () => {
+  const members = [{ email: "ada@x.com", name: "Ada", picture: "https://p/ada" }];
+  const slack = shownMessage({ authorKind: "person", author: "U1", authorName: "Ada L", authorPicture: "https://avatars.slack-edge.com/ada_72.png", text: "hi" }, [], null, [], members, [], undefined);
+  assert.deepEqual(slack.by, { name: "Ada L", picture: "https://avatars.slack-edge.com/ada_72.png" });
+  const page = shownMessage({ authorKind: "person", author: "ada@x.com", text: "hi" }, [], null, [], members, [], undefined);
+  assert.deepEqual(page.by, { name: "Ada", picture: "https://p/ada" });
+  const unknown = shownMessage({ authorKind: "person", author: "U2", authorName: "Bo", text: "hi" }, [], null, [], members, [], undefined);
+  assert.deepEqual(unknown.by, { name: "Bo", picture: null });
+});
+
 test("historical_messages_do_not_follow_the_current_model", () => {
   let message: J = { authorKind: "agent", author: "k", agentIdentity: { model: "gpt-6-sol", effort: "high" } };
   const agents = [{ session: { key: "k", agentText: "GPT-6 Astra", model: "gpt-6-astra", runtime: "claude", maker: { id: "openai", name: "OpenAI" } } }];

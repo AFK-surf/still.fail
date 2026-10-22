@@ -211,14 +211,16 @@ function origin(t: ThreadSummary): Json {
   return { teamName: connect === null ? null : teamName(s, connect), channel: t.thread.channel, channelName: knownChannel(s, connect, t.thread.channel), threadTs: t.thread.threadTs };
 }
 
-type Names = (kind: AuthorKind, author: string) => string | null;
+/// An author's name; `picture`, where given, their picture's address (a Slack person's own, as their Slack shows it).
+type Names = ((kind: AuthorKind, author: string) => string | null) & { picture?: (kind: AuthorKind, author: string) => string | null };
 
-/// Who wrote in a thread, in words: each author asked once.
+/// Who wrote in a thread, in words and pictures: each author asked once.
 export function authorNames(api: Api, thread: number): Names {
   const th = store.getThread(api.store, thread);
   const members = store.threadSessions(api.store, thread);
   const names = new Map<string, string | null>();
-  return (kind, author) => {
+  const pictures = new Map<string, string>();
+  const name = (kind: AuthorKind, author: string): string | null => {
     const key = `${kind}:${author}`;
     if (names.has(key)) return names.get(key)!;
     let name: string | null;
@@ -237,10 +239,22 @@ export function authorNames(api: Api, thread: number): Names {
       const connect = members.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null;
       const person = connect === null ? null : knownPerson(api.store, connect, author);
       name = person?.name ? person.name : null;
+      if (person?.picture) pictures.set(key, person.picture);
     }
     names.set(key, name);
     return name;
   };
+  const picture = (kind: AuthorKind, author: string): string | null => {
+    name(kind, author);
+    return pictures.get(`${kind}:${author}`) ?? null;
+  };
+  return Object.assign(name, { picture });
+}
+
+/// An author's picture where `names` gives one, as `authorPicture`.
+function pictureView(v: Json, names: Names, kind: AuthorKind, author: string) {
+  const picture = names.picture?.(kind, author) ?? null;
+  if (picture !== null) v.authorPicture = picture;
 }
 
 // ---- messages ----
@@ -251,6 +265,7 @@ export function messageView(m: MessageRow, names: Names): Json {
     agentIdentity: m.agentIdentity, seq: m.n, thread: m.thread, ts: m.ts, authorKind: m.authorKind, author: m.author, authorName: names(m.authorKind, m.author),
     text: m.text, attachments: m.attachments, quotes: m.quotes, declared: m.declared, createdAt: m.createdAt, editedAt: m.editedAt,
   };
+  pictureView(v, names, m.authorKind, m.author);
   declaredView(v, m.declared);
   return v;
 }
@@ -412,6 +427,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
         seq: lastView.seq, authorKind: lastView.authorKind, author: lastView.author, authorName: lastView.authorName,
         text: typeof lastView.text === "string" ? takeChars(text, LAST_CHARS) : null, createdAt: lastView.createdAt,
       };
+      if (lastView.authorPicture !== undefined) last.authorPicture = lastView.authorPicture;
     }
     const isMineRow = mine(creator_) || people_.some((p) => mine(p)) || starters.some((x) => mine(x));
     const row: Json = {
@@ -579,6 +595,7 @@ function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[] {
   return entries.map((e) => {
     const v = entryJson(e);
     v.authorName = names(e.authorKind, e.author);
+    pictureView(v, names, e.authorKind, e.author);
     declaredView(v, e.declared);
     // Its card, a post's options from before cards as an options card (EntryRow::card).
     const card = e.card !== undefined ? e.card : e.options !== undefined ? store.optionsCard(e.options) : undefined;

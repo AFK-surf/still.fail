@@ -213,6 +213,10 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
   assert.deepEqual([other.name, other.picture, other.mine], ["阿二", "https://p/b", false]);
   assert.equal(p.lastBy(row("person", "A@x.com"), me, [], members).name, "你");
   assert.equal(p.lastBy(row("person", "U7"), me, ["U7"], members).mine, true);
+  // A Slack person: the picture their Slack shows, over their workspace account's.
+  const slack = row("person", "b@x.com");
+  slack.last.authorPicture = "https://avatars.slack-edge.com/b_72.png";
+  assert.equal(p.lastBy(slack, me, [], members).picture, "https://avatars.slack-edge.com/b_72.png");
 });
 
 test("a_profiles_models_come_by_series", () => {
@@ -438,6 +442,8 @@ test("what_the_clients_show_is_put_in_here", () => {
   let me: J = { id: "a@x.com", email: "a@x.com", name: "A" };
   me = p.person(me, { id: "a@x.com", email: "a@x.com" }, members);
   assert.deepEqual(me.shown, { name: "阿一", display: "你", picture: "https://p/a", mine: true });
+  const fromSlack = p.person({ id: "slack:c:U1", name: "A", email: "a@x.com", via: "slack", picture: "https://avatars.slack-edge.com/a_72.png" }, me, members);
+  assert.equal(fromSlack.shown.picture, "https://avatars.slack-edge.com/a_72.png", "a Slack person's own picture, over their account's");
   let h: J = {
     hostname: "studio", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
     memory: { usedBytes: 8 * GIB, totalBytes: 32 * GIB, swapUsedBytes: null },

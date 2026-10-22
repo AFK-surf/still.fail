@@ -473,7 +473,8 @@ export function person(p: J, me: J, members: J[]): J {
   const mName = str(get(member, "name")) || null;
   const name = id === "local" ? t("core-views.present.local_page") : (mName ?? strOf("name") ?? email ?? id);
   const mine = isViewer(me, id, []) || (email !== null && isViewer(me, email, []));
-  const picture = str(get(member, "picture")) || null;
+  // A Slack person's own picture, as their Slack shows it; else their workspace account's.
+  const picture = strOf("picture") ?? (str(get(member, "picture")) || null);
   return { ...p, shown: { name, display: mine ? t("core-views.present.you") : name, picture, mine } };
 }
 
@@ -521,8 +522,9 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
   const mine = isViewer(me, author, slackUsers);
   const member = members.find((m) => sameEmail(get(m, "email"), author));
   const name = mine ? t("core-views.present.you") : (str(get(member, "name")) || saidName || author);
-  const pic = get(member, "picture");
-  return { kind: "person", id: author, name, picture: typeof pic === "string" && pic !== "" ? pic : null, mine };
+  // A Slack person's own picture, as their Slack shows it; else their workspace account's.
+  const picture = str(last.authorPicture) || str(get(member, "picture")) || null;
+  return { kind: "person", id: author, name, picture, mine };
 }
 
 /// A session's summary with what the clients show of it.

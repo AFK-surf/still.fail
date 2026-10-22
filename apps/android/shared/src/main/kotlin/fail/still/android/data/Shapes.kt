@@ -813,6 +813,8 @@ data class Creator (
 	val email: String? = null,
 	/// local | cloud | slack | feishu
 	val via: String,
+	/// A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say.
+	val picture: String? = null,
 	/// As the core names them.
 	val shown: PersonShown? = null
 )
@@ -1220,6 +1222,8 @@ data class Message (
 	val authorKind: String,
 	val author: String,
 	val authorName: String? = null,
+	/// A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say.
+	val authorPicture: String? = null,
 	val text: String,
 	val attachments: List<Attachment>,
 	val quotes: List<Quote>,
@@ -1418,6 +1422,8 @@ data class RowMessage (
 	val authorKind: String,
 	val author: String,
 	val authorName: String? = null,
+	/// A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say.
+	val authorPicture: String? = null,
 	val text: String,
 	val createdAt: Long,
 	val by: LastBy? = null,
@@ -1756,6 +1762,8 @@ data class ChatMessage (
 	val authorKind: String,
 	val author: String,
 	val authorName: String? = null,
+	/// A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say.
+	val authorPicture: String? = null,
 	val text: String,
 	/// An agent's or still.fail's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients
 	/// draw. Absent for a person's, drawn as they wrote it.
