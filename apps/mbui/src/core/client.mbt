@@ -290,6 +290,24 @@ pub fn Client::stream(
 }
 
 ///|
+/// Calls `name` like `stream`, for a call whose answer comes with bytes beside it (`station.file` with `progress`: how
+/// much of the file has come, then the file): `on_done` gets them with the answer.
+pub fn Client::stream_bytes(
+  self : Client,
+  name : String,
+  params? : Json = Json::object({}),
+  on_value~ : (Json, Bytes?) -> Unit,
+  on_done~ : (Result[(Json, Bytes?), Json]) -> Unit,
+) -> Int {
+  self.stream(name, params~, on_value~, on_done=fn(r) {
+    match r {
+      Ok(j) => on_done(Ok((j, self.beside)))
+      Err(e) => on_done(Err(e))
+    }
+  })
+}
+
+///|
 /// A call that says how it goes (`stream`) stopped in the core: nothing more of it comes, its answer included.
 pub fn Client::cancel(self : Client, id : Int) -> Unit {
   if self.progress.contains(id) {

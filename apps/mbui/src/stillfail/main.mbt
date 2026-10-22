@@ -216,6 +216,32 @@ let core_source : @sfapp.Source = {
       }
     })
   },
+  read_going: fn(name, params, on_value, done) {
+    if read_only && !read_only_calls.contains(name) {
+      done(Err(refused(name)))
+      return
+    }
+    if call_log {
+      @hostapi.log("CALL \{name} \{logged(name, params)}")
+    }
+    @core.stream_bytes(name, params~, on_value=fn(v, _) { on_value(v) }, on_done=fn(r) {
+      match r {
+        Ok((v, bytes)) => {
+          if call_log {
+            @hostapi.log("ANSWER \{name} ok \{logged(name, v)} with \{bytes.map(fn(b) { b.length() }).unwrap_or(0)} bytes")
+          }
+          done(Ok((v, bytes.unwrap_or(Bytes::new(0)))))
+        }
+        Err(e) => {
+          if call_log {
+            @hostapi.log("ANSWER \{name} error \{e.stringify()}")
+          }
+          done(Err(e))
+        }
+      }
+    })
+    |> ignore
+  },
   stream: fn(name, params, bytes, on_value, done) {
     // a read-only run reads a service's pages, never sends it anything to act on
     if read_only && !(name == "station.preview" && @sfapp.text(Some(params), "method") == "GET") {

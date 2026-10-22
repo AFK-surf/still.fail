@@ -53,6 +53,12 @@ pub fn source() -> @sfapp.Source {
         done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
       })
     },
+    read_going: fn(name, params, on_value, done) {
+      @core.stream_bytes(name, params~, on_value=fn(v, _) { on_value(v) }, on_done=fn(r) {
+        done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
+      })
+      |> ignore
+    },
     stream: fn(name, params, bytes, on_value, done) {
       @core.stream(name, params~, bytes~, on_value~, on_done=done)
     },

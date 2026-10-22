@@ -459,6 +459,8 @@ priv struct Viewer {
   mut sniffing : Bool
   mut bytes : Bytes?
   mut fetching : Bool
+  /// how much of it has come while it is read whole, and its whole size where the station says it (FileData.progress)
+  mut got : (Double, Double?)?
   mut error : String?
   /// a file told of (not shown): asked for (to save)
   mut asked : Bool
@@ -668,6 +670,7 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     sniffing: false,
     bytes: None,
     fetching: false,
+    got: None,
     error: None,
     asked: false,
     save_after: false,
@@ -912,14 +915,49 @@ fn Viewer::read_part(
 ///|
 /// The whole of it: a chat's in one `station.file`; a drive's a part (4 MB) at a time, as its reader reads.
 fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Json]) -> Unit) -> Unit {
+  let done = fn(r) {
+    self.got = None
+    done(r)
+  }
   match self.drive {
-    None =>
+    // an image as it comes: grown from its thumbnail, nothing said of how far it has got (as Android's ImageStage)
+    None if self.shown_kind() == Some(KImage) && self.file.size <= big_file =>
       (src.read_bytes)("station.file", Json::object(file_params(self)), fn(r) {
         match r {
           Ok((_, bytes)) => done(Ok(bytes))
           Err(e) => done(Err(e))
         }
       })
+    // what else: how much has come as it comes (ChatFiles.kt fetch: `progress`, the core's `{loaded, total}`)
+    None => {
+      let p = file_params(self)
+      p["progress"] = Json::boolean(true)
+      (src.read_going)(
+        "station.file",
+        Json::object(p),
+        fn(v) {
+          match field(Some(v), "loaded") {
+            Some(Number(n, ..)) =>
+              self.got = Some(
+                (
+                  n,
+                  match field(Some(v), "total") {
+                    Some(Number(t, ..)) => Some(t)
+                    _ => None
+                  },
+                ),
+              )
+            _ => ()
+          }
+        },
+        fn(r) {
+          match r {
+            Ok((_, bytes)) => done(Ok(bytes))
+            Err(e) => done(Err(e))
+          }
+        },
+      )
+    }
     Some(_) => {
       let parts : Array[Bytes] = []
       let got : Ref[Int] = { val: 0 }
@@ -933,6 +971,7 @@ fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Json]) 
               }
               parts.push(bytes)
               got.val += bytes.length()
+              self.got = Some((got.val.to_double(), Some(total.to_double())))
               if bytes.length() == 0 || got.val >= total {
                 let all = Buffer(size_hint=got.val)
                 for b in parts {
@@ -1440,7 +1479,7 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
         v.note(c, fn() { v.facts(c) })
       } else if (v.kind is None && v.sniffed is None) || (v.bytes is None && v.error is None) {
         tap_stage(c, v, stage)
-        v.note(c, fn() { reading_pill(c, pv("common.reading")) })
+        v.note(c, fn() { v.coming_note(c) })
       } else {
         match v.error {
           Some(e) => {
@@ -1480,13 +1519,88 @@ fn Viewer::note(self : Viewer, c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 /// A wait (ui/Waiting.kt WaitPill): a spinner and its words on the chip's ground, round.
 fn reading_pill(c : @ui.Ctx, words : String) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, padx=12.0, pady=6.0, gap=8.0, align=ACenter, bg=t.p.chip, radius=15.0, fn() {
-    @sf.spinner(c, size=12.0) |> ignore
-    c.text(words, size=13.0, color=t.p.muted, line=18.0, wrap=false) |> ignore
+  c.box(style=reading_pill_box, fn() {
+    @sf.spinner(c, size=reading_spinner) |> ignore
+    c.text(words, style=reading_pill_words) |> ignore
   })
   |> ignore
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let reading_pill_box : @ui.Style = @ui.style(row=true, px=S3, py=S1_5, gap=S2, align=ACenter, bg=Neutral, radius=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let reading_pill_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5, wrap=false)
+
+///|
+let reading_spinner : Double = 12.0
+
+///|
+/// What is shown while it comes (FilePreview.kt: FileProgress once the core has said how much has come, Waiting till
+/// then).
+fn Viewer::coming_note(self : Viewer, c : @ui.Ctx) -> Unit {
+  match self.got {
+    Some(got) => file_progress(c, got, self.file.size)
+    None => reading_pill(c, pv("common.reading"))
+  }
+}
+
+///|
+/// How much of a file has come, out of its size, the station's else the one sent with it (FilePreview.kt
+/// FileProgress): "正在读取 **4 MB** / 12 MB" over a bar, on the surface (surface2 dark), 14 round, 14 and 12 in, 220
+/// wide; its size not known, 正在读取 over a bar that sweeps.
+fn file_progress(c : @ui.Ctx, got : (Double, Double?), sent : Double) -> Unit {
+  let t = @sf.theme()
+  let total = match got.1 {
+    Some(n) => Some(n)
+    None => if sent > 0.0 { Some(sent) } else { None }
+  }
+  let part = match total {
+    Some(n) if n > 0.0 => Some(dmin(1.0, got.0 / n))
+    _ => None
+  }
+  c.box(style=file_progress_card, radius=file_progress_corner, bg=if t.dark { surface2_dark } else { t.p.card }, fn() {
+    match total {
+      Some(n) => {
+        // the size so far in bold, where the sentence has it
+        let words = pv("android-chat.file.loading.size")
+        let (before, after) = match words.find("{size}") {
+          Some(i) => (words.view(end_offset=i).to_owned(), words.view(start_offset=i + 6).to_owned())
+          None => (words, "")
+        }
+        c.rich(
+          [
+            @ui.span(before),
+            @ui.span(file_size(got.0), weight=600, color=t.p.text),
+            @ui.span(" / " + file_size(n) + after),
+          ],
+          style=file_progress_words,
+        )
+        |> ignore
+      }
+      None => c.text(pv("common.reading"), style=file_progress_words) |> ignore
+    }
+    @sf.progress(c, part)
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_progress_card : @ui.Style = @ui.style(w=@sf.file_progress_w, px=S3_5, py=S3, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_progress_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, center=true)
+
+///|
+let file_progress_corner : Double = 14.0
+
+///|
+/// Android's C.surface2, dark (Theme.kt), what a file's progress is on
+let surface2_dark : Int64 = 0x2C2D31FFL
 
 ///|
 /// A file told of, not shown (FilePreview.kt Facts and its buttons): its kind's mark, its name, its size and
@@ -1526,8 +1640,9 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx) -> Unit {
     |> ignore
   })
   |> ignore
+  // on its way, asked for: how far it has come
   if v.asked && v.bytes is None && v.error is None {
-    reading_pill(c, pv("common.reading"))
+    v.coming_note(c)
     return
   }
   c.box(w=Px(220.0), gap=8.0, fn() {

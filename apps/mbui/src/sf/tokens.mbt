@@ -609,6 +609,10 @@ pub let mark_pin_size : @ui.TextSize = Exact(11.0, 15.4)
 pub let mark_said_h : @ui.Len = Fixed(26.0)
 
 ///|
+/// How much of a file has come (FilePreview.kt FileProgress): 220 wide.
+pub let file_progress_w : @ui.Len = Fixed(220.0)
+
+///|
 /// A size typed (Preview.kt CustomSize): its fields 72 wide, 10 round.
 pub let custom_field_w : @ui.Len = Fixed(72.0)
 
