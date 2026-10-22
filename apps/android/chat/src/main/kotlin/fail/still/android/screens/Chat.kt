@@ -214,11 +214,12 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     // The chat's own draft, kept as the chat is left and the app closed (Composer.kt → Drafts).
     val draft = rememberDraft(station, of)
     // The bar's height, which the list keeps its top clear of: from the first frame what the bar is laid out as (the
-    // status bar, and its row: 6 + 40 + 8dp), and measured from the bar itself, the loading one's too, so the list's
-    // first frame is not laid out under a bar of no height and pushed down the next.
+    // status bar, and its row: 5 + 40 + 5dp, as tall as Home's top bar, so their lines meet as the page is swiped
+    // back), and measured from the bar itself, the loading one's too, so the list's first frame is not laid out under a
+    // bar of no height and pushed down the next.
     val density = LocalDensity.current
     val statusTop = WindowInsets.statusBars.getTop(density)
-    var topBar by remember { mutableIntStateOf(statusTop + with(density) { 54.dp.roundToPx() }) }
+    var topBar by remember { mutableIntStateOf(statusTop + with(density) { 50.dp.roundToPx() }) }
     if (view == null) {
         // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in
         // place instead of replacing another page. Its composer is there, not sending yet.
@@ -314,7 +315,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
 private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, modifier: Modifier = Modifier.background(C.bg), trailing: @Composable () -> Unit = {}, after: @Composable RowScope.() -> Unit) {
     val app = LocalApp.current
     Column(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = app::pop), contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 22.dp, C.accent) }
             Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
