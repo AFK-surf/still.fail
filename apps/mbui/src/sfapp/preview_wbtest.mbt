@@ -160,9 +160,12 @@ test "a video's timeline dragged: paused, the player told a finger is on it, a s
   // on within that frame: nothing more asked
   t.move(x0 + span * 0.27, mid)
   assert_eq(seeks().length(), 1)
-  // to three quarters: the frame there (700 ms), the head there before the player says it is
+  // to three quarters: the frame there (700 ms), the head and the frame's count there before the player says it is
+  // (it says the seek it is taking up: the first, still)
+  t.set_player(1, position=200.0)
   t.move(x0 + span * 0.75, mid)
   assert_eq(seeks(), ["control 1 3 200", "control 1 3 700"])
+  assert_true(t.find("8 / 10 帧") is Some(_))
   assert_true(
     t
     .drawn_rects()
