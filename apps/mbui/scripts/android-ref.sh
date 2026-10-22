@@ -88,12 +88,18 @@ case "$cmd" in
     # (one run of ScreensRefTest a screen, those named: its `screens` argument)
     mkdir -p $O && $ADB shell am instrument -w -e class fail.still.android.motion.ScreensRefTest -e screens "$(echo $names | tr ' ' ',')" \
       $M.test/androidx.test.runner.AndroidJUnitRunner > $O/instrument.log 2>&1
+    rm -f $O/refs-failed
     if ! grep -q '^OK (' $O/instrument.log; then
       grep -a -E 'FAILURES|Exception|at fail\.still|Error' $O/instrument.log | head -20
       # (what it drew, to see why: out/android-ref/failed/)
       mkdir -p $O/failed && $ADB pull /sdcard/Android/data/$M/files/screens/. $O/failed > /dev/null 2>&1
       $ADB logcat -d -s StillFailCore:* AndroidRuntime:E System.err:W 2>/dev/null | tail -80 > $O/failed/logcat.txt
-      die "Android's screens not drawn ($O/instrument.log)"
+      # the screens Android's test could not draw said (out/android-ref/refs-failed), the others' pictures kept
+      grep -a -o 'Error in screen\[[^]]*\]' $O/instrument.log | sed 's/.*\[//; s/\]$//' | sort -u > $O/refs-failed
+      [ -s $O/refs-failed ] || die "Android's screens not drawn ($O/instrument.log)"
+      echo "android-ref: Android's test did not draw: $(tr '\n' ' ' < $O/refs-failed)"
+      names=$(for n in $names; do grep -qx "$n" $O/refs-failed || echo $n; done)
+      [ -n "$names" ] || die "Android's screens not drawn ($O/instrument.log)"
     fi
     mkdir -p $R
     for n in $names; do
@@ -218,6 +224,11 @@ case "$cmd" in
     if [ "${REFS:-}" = 1 ] || [ ! -f $R/android.json ]; then
       rm -rf $O/kept && mkdir -p $O && { [ -f $R/android.json ] && cp -r $R $O/kept; true; }
       bash "$0" refs $names || exit 1
+      # (those Android's test could not draw: said, failing the run, and left out of what follows)
+      if [ -s $O/refs-failed ]; then
+        fail=1
+        names=$(for n in $names; do grep -qx "$n" $O/refs-failed || echo $n; done)
+      fi
       # held to those kept as android_ref.py compares (a channel a step apart the same: the same picture has come out so
       # on another runner, at circles' edges), the kept ones then left as they are
       if [ -f $O/kept/android.json ] && cmp -s $O/kept/android.json $R/android.json \
