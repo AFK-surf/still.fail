@@ -3,8 +3,10 @@
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -50,7 +52,9 @@ class ChatLettersTest {
         opening.frames(16)
         opening.end()
         rule.onNodeWithText("补充一点", substring = true).assertIsDisplayed()
-        rule.onNodeWithText("「BFT 备份尺寸分析」的 agent").assertExists()
+        // Coming in, by that chat's agent; going out, by this chat's own.
+        rule.onAllNodesWithText("「BFT 备份尺寸分析」的 agent").assertCountEquals(2)
+        rule.onNodeWithText("已替换", substring = true).assertIsDisplayed()
         rule.onNodeWithText("BFT 备份尺寸分析").assertIsDisplayed()
     }
 }
