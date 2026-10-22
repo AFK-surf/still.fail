@@ -7,7 +7,7 @@
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
-pkgs=${*:-mbui/ui mbui/motion mbui/kit mbui/md mbui/kitdemo/gallery mbui/effecttest mbui/effectdemo}
+pkgs=${*:-mbui/ui mbui/motion mbui/kit mbui/kitdemo/gallery mbui/effecttest mbui/effectdemo}
 args=()
 for p in $pkgs; do args+=(-p "$p"); done
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'

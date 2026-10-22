@@ -6,6 +6,8 @@ import {
 import {
   "moonbitlang/core/json",
   "moonbitlang/core/env",
+  "stillfail/sf",
+  "stillfail/sfkept",
 } for "wbtest"
 
 options(

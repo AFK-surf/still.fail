@@ -52,13 +52,28 @@ pub(all) struct Source {
 }
 
 ///|
-/// Bind the client's core once when it starts. Static fixtures have no core; a recorded client binds its replay
-/// of the same operation. The live renderer never interprets Markdown or TeX while an answer is coming.
+/// Bind the client's core once when it starts: Markdown read and code coloured by it (`markdown`, `code.ink`). Static
+/// fixtures have no core (the real core's answers kept instead: src/sfkept); a recorded client binds its replay of the
+/// same operations. The live renderer never interprets Markdown, TeX or code while an answer is coming.
 pub fn use_core_markdown(src : Source) -> Unit {
   @sf.markdown_read.val = Some(fn(words, done) {
     (src.call)("markdown", { "text": Json::string(words) }, fn(answer) {
       match answer {
         Ok(v) => done(field(Some(v), "md"))
+        Err(_) => done(None)
+      }
+    })
+  })
+  @sf.ink_read.val = Some(fn(code, lang, done) {
+    (src.call)("code.ink", { "code": Json::string(code), "lang": Json::string(lang) }, fn(answer) {
+      match answer {
+        Ok(v) =>
+          done(
+            match field(Some(v), "ink") {
+              Some(String(s)) => Some(s)
+              _ => None
+            },
+          )
         Err(_) => done(None)
       }
     })

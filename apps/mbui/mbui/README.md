@@ -41,7 +41,6 @@ src/ui      the framework (MoonBit, target independent)
 src/kit     the components (Radix Primitives' set, docs/components.md): behaviour,
             semantics and a default look from the theme; the time they keep
 src/kitdemo their gallery, light beside dark (APP=kitdemo, MBUI_SCREEN=<page>)
-src/md      a small Markdown parser (blocks, inlines)
 src/text    Unicode text segmentation (target independent, no host calls)
   grapheme.mbt   extended grapheme clusters, UAX #29 (caret, backspace)
   linebreak.mbt  line break opportunities, UAX #14 (wrapping)

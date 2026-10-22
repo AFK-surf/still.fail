@@ -4,7 +4,6 @@ import {
   "mbui/ui",
   "mbui/hostapi",
   "mbui/kit",
-  "mbui/md",
   "mbui/motion",
   "moonbitlang/core/math",
   "moonbitlang/core/json",
@@ -12,7 +11,9 @@ import {
 }
 
 import {
-  "mbui/pixels", "moonbitlang/core/env" } for "wbtest"
+  "mbui/pixels", "moonbitlang/core/env", "stillfail/sfkept" } for "wbtest"
+
+import { "stillfail/sfkept" } for "test"
 
 options(
   targets: { "math_env_js_wbtest.mbt": [ "js" ], "math_env_native_wbtest.mbt": [ "native" ] },

@@ -1,9 +1,9 @@
 // A text of a drive, read (ember apps/android drive/Reader.kt, zdrive's reader in still.fail's look): one column that
 // scrolls, nothing over it until a tap brings the bars (floating over the page, the paper's bar colour at 72%) and
 // takes them away again. The top one says what and where (its chapter) and goes back; the bottom one steps chapters,
-// jumps anywhere along a hairline with a knob, and opens the contents, the search and the type and paper. A
-// hard-wrapped novel is reflowed into paragraphs, Markdown is drawn as Markdown, chapters (第X章, Chapter N, # headings)
-// make the contents (drive_text.mbt). Where it was left is kept on this device (`drive.place`, the drivePlace topic)
+// jumps anywhere along a hairline with a knob, and opens the contents, the search and the type and paper. The core
+// reads the text (drive_text.mbt): a hard-wrapped novel joined into paragraphs, its chapters (第X章, Chapter N,
+// Markdown's headings) the contents, the words searched; a Markdown file is drawn as a chat's Markdown is. Where it was left is kept on this device (`drive.place`, the drivePlace topic)
 // and opened at next time. The layout is the core's prefs (`prefs.reader`), the same on every page that reads.
 
 ///|
@@ -205,7 +205,7 @@ let drive_part : Int = 4 * 1024 * 1024
 fn reader_fetch(src : Source, at : DriveAt, r : TextReading) -> Unit {
   let limit = if r.of >= 0 && r.of < max_novel_bytes { r.of } else { max_novel_bytes }
   if r.got >= limit && r.of >= 0 {
-    reader_build(at, r)
+    reader_build(src, at, r)
     return
   }
   let want = if limit - r.got < drive_part { limit - r.got } else { drive_part }
@@ -229,7 +229,7 @@ fn reader_fetch(src : Source, at : DriveAt, r : TextReading) -> Unit {
         }
         r.of = total
         if bytes.length() == 0 {
-          reader_build(at, r)
+          reader_build(src, at, r)
         } else {
           r.parts.push(bytes)
           r.got += bytes.length()
@@ -242,8 +242,9 @@ fn reader_fetch(src : Source, at : DriveAt, r : TextReading) -> Unit {
 }
 
 ///|
-/// The bytes come: made a text to read.
-fn reader_build(at : DriveAt, r : TextReading) -> Unit {
+/// The bytes come: decoded here, then read by the core as a reader shows it (`reader.book`, the text's UTF-8 beside the
+/// call; the text as joined, `reader.text`, where joining changed it), and made a text to read.
+fn reader_build(src : Source, at : DriveAt, r : TextReading) -> Unit {
   let whole : Array[Byte] = Array(capacity=r.got)
   for p in r.parts {
     for i in 0..<p.length() {
@@ -251,8 +252,33 @@ fn reader_build(at : DriveAt, r : TextReading) -> Unit {
     }
   }
   r.parts.clear()
-  r.novel = Some(build_novel(dv_name(at.path), Bytes::from_array(whole[:]), r.of > r.got))
-  r.ready_n += 1
+  let truncated = r.of > r.got
+  let (decoded, encoding) = @hostapi.decode_text(Bytes::from_array(whole[:]), truncated~)
+  let name = dv_name(at.path)
+  let lower = name.to_lower()
+  let markdown = lower.has_suffix(".md") || lower.has_suffix(".markdown")
+  let ready = fn(text : String, book : Json) {
+    r.novel = Some(novel_of(name, text, book, encoding, truncated, markdown))
+    r.ready_n += 1
+  }
+  (src.call_bytes)(
+    "reader.book",
+    { "markdown": Json::boolean(markdown), "tree": Json::boolean(markdown) },
+    @utf8.encode(decoded),
+    fn(res) {
+      match res {
+        Ok(book) if flag(Some(book), "joined") =>
+          (src.read_bytes)("reader.text", { "id": Json::number(number(Some(book), "id")) }, fn(t) {
+            match t {
+              Ok((_, bytes)) => ready(@utf8.decode_lossy(bytes[:]), book)
+              Err(e) => r.failed = Some(dv_error(e))
+            }
+          })
+        Ok(book) => ready(decoded, book)
+        Err(e) => r.failed = Some(dv_error(e))
+      }
+    },
+  )
 }
 
 ///|
@@ -496,9 +522,9 @@ fn reader_book(
       Some(h) if h > 0.0 => {
         let len = novel.chunks[k].length()
         if off > 0 && len > 0 {
-          let shown = reader_drawn_offset(novel, k, off, prefs.indent, p)
+          let shown = reader_drawn_offset(novel, k, off, prefs.indent)
           Some(
-            h * shown.to_double() / dmax(1.0, reader_drawn_len(novel, k, prefs.indent, p).to_double()) -
+            h * shown.to_double() / dmax(1.0, reader_drawn_len(novel, k, prefs.indent).to_double()) -
             (if lead { 120.0 } else { 0.0 }),
           )
         } else {
@@ -528,9 +554,27 @@ fn reader_book(
       r.matches = []
       r.hit = -1
     } else if @kit.after(c, "reader-search/\{r.typed_n}", true, reader_search_ms) {
-      r.searched = r.query
-      r.matches = search_chunks(novel.chunks, r.query)
+      // the core finds it (`reader.search`: in a Markdown file, its words as drawn), each place where it is in the text
+      let query = r.query
+      r.searched = query
       r.hit = -1
+      (src.call)("reader.search", { "id": Json::number(novel.id.to_double()), "query": Json::string(query) }, fn(res) {
+        if r.searched == query {
+          r.matches = match res {
+            Ok(found) =>
+              items(Some(found), "at").map(fn(j) {
+                let (k, o) = novel.at(
+                  match j {
+                    Number(n, ..) => n.to_int()
+                    _ => 0
+                  },
+                )
+                { chunk: k, start: o, length: query.length() }
+              })
+            Err(_) => []
+          }
+        }
+      })
     }
   }
   let size = prefs.size.to_double()
@@ -603,41 +647,22 @@ fn reader_book(
 }
 
 ///|
-/// A block's text as drawn: its paragraphs indented (or Markdown's own).
-fn reader_drawn_len(novel : Novel, k : Int, indent : Bool, p : PaperInk) -> Int {
+/// A block's text as drawn: its paragraphs indented (Markdown: as long as its source, its share of it at its share of
+/// the height).
+fn reader_drawn_len(novel : Novel, k : Int, indent : Bool) -> Int {
   if novel.markdown {
-    reader_md(novel, k, p).raw_of.length()
+    novel.chunks[k].length()
   } else {
-    render_chunk(novel.chunks[k], indent).length()
+    render_chunk(novel.chunks[k], novel.starts[k], novel.heads, indent).length()
   }
 }
 
 ///|
-fn reader_drawn_offset(novel : Novel, k : Int, raw : Int, indent : Bool, p : PaperInk) -> Int {
+fn reader_drawn_offset(novel : Novel, k : Int, raw : Int, indent : Bool) -> Int {
   if novel.markdown {
-    reader_md(novel, k, p).rendered_index(raw)
+    raw
   } else {
-    render_offset(novel.chunks[k], raw, indent)
-  }
-}
-
-///|
-/// Markdown blocks as drawn, by text and block.
-let reader_mds : Map[String, MdChunk] = Map([])
-
-///|
-fn reader_md(novel : Novel, k : Int, p : PaperInk) -> MdChunk {
-  let key = "\{novel.title}\u{1}\{k}\u{1}\{novel.length}\u{1}\{p.ground}"
-  match reader_mds.get(key) {
-    Some(m) => m
-    None => {
-      if reader_mds.length() > 64 {
-        reader_mds.clear()
-      }
-      let m = render_markdown(novel.chunks[k], p.muted, p.accent, @sf.alpha(p.ink, 0.8))
-      reader_mds[key] = m
-      m
-    }
+    render_offset(novel.chunks[k], novel.starts[k], novel.heads, raw, indent)
   }
 }
 
@@ -664,26 +689,40 @@ fn reader_chunk(
   } else {
     None
   }
-  let (runs, lead) = if novel.markdown {
-    let md = reader_md(novel, k, p)
-    (md.runs, md.leading)
-  } else {
-    ([@ui.plain(render_chunk(raw, prefs.indent))], 0.0)
-  }
-  let runs = if mine.length() == 0 {
-    runs
-  } else {
-    reader_marked(runs, fn(o) { reader_drawn_offset(novel, k, o, prefs.indent, p) }, mine, now, mark, mark_now)
-  }
-  // in the serif face where the layout says so (Reader.kt: FontFamily.Serif; code stays in the code face)
-  let runs = if prefs.face == "serif" { runs.map(fn(x) { { ..x, serif: true } }) } else { runs }
   let id = c.id("chunk/\{k}")
   if c.clicked(id) {
     reader_toggle(c, r)
   }
-  c.box(w=Fill(1.0), pl=margin, pr=margin, pt=lead, id~, fn() {
-    c.rich(runs, key="chunk/\{k}/\{mine.length()}/\{r.hit}", size~, color=p.ink, line~, w=Fill(1.0))
-    |> ignore
+  // in the serif face where the layout says so (Reader.kt: FontFamily.Serif; code stays in the code face)
+  let serif = prefs.face == "serif"
+  c.box(w=Fill(1.0), pl=margin, pr=margin, id~, fn() {
+    if novel.markdown {
+      // as a chat's Markdown is drawn, its headings a document's (as the web's reader), in the reader's size, lines,
+      // face and ink; what was found in bold where it is
+      @sf.markdown_part(
+        c,
+        novel.text,
+        novel.parts[k],
+        "reader/\{r.key}/\{novel.id}/\{k}",
+        apart=k > 0,
+        size~,
+        ink=p.ink,
+        line=prefs.line,
+        serif~,
+        document=true,
+        found=if mine.length() > 0 { [r.searched] } else { [] },
+        on_link=open_link,
+      )
+    } else {
+      let runs = [@ui.plain(render_chunk(raw, novel.starts[k], novel.heads, prefs.indent))]
+      let runs = if mine.length() == 0 {
+        runs
+      } else {
+        reader_marked(runs, fn(o) { reader_drawn_offset(novel, k, o, prefs.indent) }, mine, now, mark, mark_now)
+      }
+      let runs = if serif { runs.map(fn(x) { { ..x, serif: true } }) } else { runs }
+      c.rich(runs, key="chunk/\{k}/\{mine.length()}/\{r.hit}", size~, color=p.ink, line~, w=Fill(1.0)) |> ignore
+    }
   })
   |> ignore
 }

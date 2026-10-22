@@ -1492,16 +1492,17 @@ fn code_ground() -> Int64 {
 }
 
 ///|
-/// Code (a command, a file written or read) in the code face, highlighted by its language (Highlight.kt), wrapping,
-/// kept to 360 high and scrolled within (ToolStep.kt Block).
+/// Code (a command, a file written or read) in the code face, in the colours the core says of its language (`code.ink`),
+/// wrapping, kept to 360 high and scrolled within (ToolStep.kt Block).
 fn code_lines(c : @ui.Ctx, words : String, language? : String = "") -> Unit {
   let t = @sf.theme()
   let n = boxed_n.val
   boxed_n.val += 1
+  let ink = if language == "" { None } else { @sf.code_ink(c, words, language).flatten() }
   c.capped("code/\{n}", 360.0, bg=code_ground(), radius=12.0, padx=12.0, pady=8.0, fn() {
     c.rich(
-      match @sf.highlight(words, language, t.dark) {
-        Some(runs) => runs
+      match ink {
+        Some(ink) => @sf.ink_runs(words, ink, t.dark)
         None => [@ui.span(words, mono=true)]
       },
       size=12.0,

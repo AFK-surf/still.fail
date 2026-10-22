@@ -44,19 +44,29 @@ pub fn source() -> @sfapp.Source {
       let s = @core.subscribe(name, params~)
       { value: s.value, error: s.error, version: s.version }
     },
+    // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
+    // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
+    // here. Any other ask the tape does not have still diverges.
     call: fn(name, params, done) {
-      // These tapes predate the core Markdown call. Its answer is a pure function of the recorded words; kept
-      // from the actual TypeScript core, not parsed by the UI or made up here. Unrecognised asks still diverge.
-      if name == "markdown" {
-        let words = @sfapp.text(Some(params), "text")
-        if kept_markdown.get(words) is Some(md) { done(Ok({ "md": md })); return }
+      match @sfkept.answer(name, params, None) {
+        Some(Ok((v, _))) => done(Ok(v))
+        _ => @core.call(name, params~, on_done=done)
       }
-      @core.call(name, params~, on_done=done)
     },
     call_bytes: fn(name, params, bytes, done) {
-      @core.call(name, params~, bytes=Some(bytes), on_done=done)
+      match @sfkept.answer(name, params, Some(bytes)) {
+        Some(Ok((v, _))) => done(Ok(v))
+        _ => @core.call(name, params~, bytes=Some(bytes), on_done=done)
+      }
     },
     read_bytes: fn(name, params, done) {
+      match @sfkept.answer(name, params, None) {
+        Some(Ok((v, b))) => {
+          done(Ok((v, b.unwrap_or(Bytes::new(0)))))
+          return
+        }
+        _ => ()
+      }
       @core.call_bytes(name, params~, on_done=fn(r) {
         done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
       })
@@ -100,12 +110,6 @@ pub fn source() -> @sfapp.Source {
     leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
     read_only: false,
   }
-}
-
-///|
-let kept_markdown : Map[String, Json] = match (@json.parse(markdown_answers) catch { _ => Json::null() }) {
-  Object(m) => m
-  _ => {}
 }
 
 ///|

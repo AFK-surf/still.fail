@@ -40,7 +40,17 @@ for t in ${TARGETS:-native}; do
       code=1
     done
   fi
-  moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+  out=$(mktemp)
+  moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | tee "$out" | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
+  # (the core's answers a test asked and found not kept, src/sfkept: scripts/kept has the core work them out; KEPT_ASKS:
+  # where it takes them from)
+  asks=$(grep -c 'kept-answers-ask {' "$out")
+  if [ "$asks" != 0 ]; then
+    [ -n "$KEPT_ASKS" ] && grep 'kept-answers-ask {' "$out" >> "$KEPT_ASKS"
+    echo "test.sh: $asks of the core's answers asked and not kept (src/sfkept): scripts/kept keeps them" >&2
+    code=1
+  fi
+  rm -f "$out"
 done
 exit $code

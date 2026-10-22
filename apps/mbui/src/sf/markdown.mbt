@@ -52,12 +52,38 @@ priv struct Md {
   code : (String, String) -> (() -> Unit)?
   /// links to screens and 共享调试 as a chat draws them
   screens : Screens?
+  /// the lines' height over the words' size (0: Markdown.kt's 1.65)
+  line : Double
+  /// the words in the serif face (a reader's layout; code stays in the code face)
+  serif : Bool
+  /// a document's headings, as the web's reader has them (Reader.css.ts): levels 1 to 3 larger than the words (1.5,
+  /// 1.3, 1.12), as far above as they are high and half that below; a message's are at the words' size
+  document : Bool
 }
 
 ///|
-// Standalone files/history ask the same local core as chat messages. Fixtures without a core retain their static
-// Markdown reader; TeX is never interpreted by this renderer.
+/// The core's `markdown` as the live client asks it (sfapp.use_core_markdown): words without a tree of their own (a
+/// file's, a history's) read by the same core as a chat's messages. Nothing here reads Markdown or TeX.
 pub let markdown_read : Ref[((String, (Json?) -> Unit) -> Unit)?] = Ref(None)
+
+///|
+/// A run without a core (the Tester's, the screenshots' app): the real core's answers to its pure calls, kept
+/// (src/sfkept: `markdown`, `code.ink`, `reader.*`), answered at once; None for a call that is not one of those. Bound
+/// once by such a run, never reset.
+pub let kept_call : Ref[((String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?)?] = Ref(None)
+
+///|
+/// `text`'s tree as the real core read it, kept (`kept_call`), if it was.
+fn kept_tree(text : String) -> Json? {
+  match kept_call.val {
+    Some(kept) =>
+      match kept("markdown", { "text": Json::string(text) }, None) {
+        Some(Ok((Object(m), _))) => m.get("md")
+        _ => None
+      }
+    None => None
+  }
+}
 
 ///|
 let markdown_asked : Map[String, Bool] = {}
@@ -97,9 +123,14 @@ fn blocks_of(text : String, tree : Json?) -> Array[MdBlock] {
   if parsed.get(text) is Some(b) && (core_parsed.contains(text) || (!(tree is Some(Array(_))) && markdown_read.val is None)) { return b }
   let b = match tree {
     Some(Array(nodes)) => core_blocks(nodes,text)
-    // A live UI awaits its local core. Only static fixtures without a core use the old Markdown reader.
+    // a live client's words wait for its core
     _ if markdown_read.val is Some(_) => []
-    _ => @md.parse(text).map(old_block)
+    _ =>
+      match kept_tree(text) {
+        Some(Array(nodes)) => core_blocks(nodes,text)
+        // (no core and nothing kept: the words as they are)
+        _ => [Paragraph([Text(text)])]
+      }
   }
   let cost = text.length() + (match tree { Some(j) => j.stringify().length(); None => 0 })
   let old_cost = parsed_cost.get(text).unwrap_or(0)
@@ -352,6 +383,9 @@ pub fn markdown(
     found,
     code,
     screens,
+    line: 0.0,
+    serif: false,
+    document: false,
   }
   if tree is None && !core_parsed.contains(text) && !markdown_asked.contains(text) {
     if markdown_read.val is Some(read) {
@@ -368,11 +402,79 @@ pub fn markdown(
     }
   }
   let blocks = blocks_of(text, tree)
-  c.box(w=Fill(1.0), fn() {
-    c.scope(c.id(if key == "" { "sf-md/" + text } else { key }), fn() {
-      stack(c, md.pieces(blocks, false), true)
-    })
-  })
+  md.column(if key == "" { "sf-md/" + text } else { key }, md.pieces(blocks, false))
+}
+
+///|
+/// Pieces in a column as wide as it is given, their ids scoped by `key`.
+fn Md::column(self : Md, key : String, pieces : Array[Piece]) -> Int {
+  let c = self.c
+  c.box(w=Fill(1.0), fn() { c.scope(c.id(key), fn() { stack(c, pieces, true) }) })
+}
+
+///|
+/// The blocks of the parts drawn lately (`markdown_part`), by their key.
+let parts : Map[String, Array[MdBlock]] = {}
+
+///|
+fn init {
+  @ui.on_reset(fn() { parts.clear() })
+}
+
+///|
+/// A part of a long Markdown text (a reader's block of it): `nodes`, some of the core's tree of `text` (the reader's
+/// `reader.book`), drawn as `markdown` draws a whole one, in a column as wide as it is given. `key` names the part
+/// (its blocks kept by it, the latest few); `apart`: a part after another, as far below it as its first block would
+/// be below a paragraph; `line`: the lines' height over the size (0: Markdown's own); `document`: its headings a
+/// document's (Md's `document`); `found`: words found, in bold wherever they are.
+pub fn markdown_part(
+  c : @ui.Ctx,
+  text : String,
+  nodes : Array[Json],
+  key : String,
+  apart? : Bool = false,
+  size? : Double = 0.0,
+  ink? : Int64 = 0L,
+  line? : Double = 0.0,
+  serif? : Bool = false,
+  document? : Bool = false,
+  found? : Array[String] = [],
+  on_link? : (String) -> Unit = fn(_) {  },
+) -> Unit {
+  let t = theme()
+  let md = {
+    c,
+    size: if size > 0.0 { size } else { t.t.body },
+    ink: if ink != 0L { ink } else { t.p.text },
+    on_link,
+    on_link_hold: None,
+    n: 0,
+    files: fn(_) { None },
+    cell_files: fn(_) { None },
+    found,
+    code: fn(_, _) { None },
+    screens: None,
+    line,
+    serif,
+    document,
+  }
+  let blocks = match parts.get(key) {
+    Some(b) => b
+    None => {
+      if parts.length() >= 64 {
+        parts.clear()
+      }
+      let b = core_blocks(nodes, text)
+      parts[key] = b
+      b
+    }
+  }
+  let pieces = md.pieces(blocks, false)
+  // after another part: as far below it as after a paragraph (whose bottom margin is its size), the larger of the two
+  if apart && pieces.length() > 0 {
+    pieces.insert(0, { top: 0.0, bottom: md.size, draw: fn() {  } })
+  }
+  md.column("sf-md-part/" + key, pieces) |> ignore
 }
 
 ///|
@@ -394,7 +496,9 @@ fn stack(c : @ui.Ctx, ps : Array[Piece], _outer : Bool) -> Unit {
 /// A line of `size`'s words, as Markdown.kt's lh: (size * 1.65f).sp, worked out in Float as Kotlin does (15: 24.75,
 /// 64.97 pixels at 2.625, a line of 65 on Android's whole pixels), not rounded to a half (25: 66).
 fn Md::lh(self : Md, size : Double) -> Double {
-  ignore(self)
+  if self.line > 0.0 {
+    return (size * self.line).round()
+  }
   let k : Float = 1.65
   (Float::from_double(size) * k).to_double()
 }
@@ -431,6 +535,11 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
         Some(ps) => ps
         None => [{ top: m, bottom: m, draw: fn() { self.words(xs, s, 0, ink, task) } }]
       }
+    }
+    Heading(level, xs) if self.document && level <= 3 => {
+      let em = if level == 1 { 1.5 } else if level == 2 { 1.3 } else { 1.12 }
+      let ink = self.ink
+      [{ top: s * em, bottom: s * em / 2.0, draw: fn() { self.words(xs, s * em, 700, ink, None) } }]
     }
     Heading(level, xs) => {
       let (em, margin) = if level == 5 {
@@ -494,7 +603,7 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
         draw: fn() { c.box(h=Px(1.0), bg=web().line, fn() {  }) |> ignore },
       },
     ]
-    // a table (GFM, as mbui's Markdown reads it): a row a line of words, its cells apart by a bar, until the chat
+    // a table (GFM, as the core reads it): a row a line of words, its cells apart by a bar, until the chat
     // page draws its grid
     Table(t) => {
       let out = []
@@ -736,8 +845,9 @@ fn Md::words(
   // bold for a heading's 700; a table's head's 500 (medium) is the paragraph's own weight
   runs_of(xs, runs, weight >= 600, false, false, "", p.accent, titles)
   self.n = self.n + 1
+  let runs = found_weight(runs, self.found)
   c.rich(
-    found_weight(runs, self.found),
+    if self.serif { runs.map(fn(x) { if x.mono { x } else { { ..x, serif: true } } }) } else { runs },
     key="sf-md/p\{self.n}",
     size~,
     wrap~,
@@ -830,7 +940,7 @@ let copied_at : Map[Int, Bool] = {}
 /// A code block as the web phone draws it (Markdown.kt CodeBlock): a quiet
 /// tinted block with no frame; above the code, on a row of its own, its
 /// language and a copy button; the code in the code face, 12 on 18 lines,
-/// highlighted when its language is named, scrolled sideways rather than
+/// in its colours as the core said them (ink.mbt), scrolled sideways rather than
 /// wrapped.
 pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? = None) -> Unit {
   let t = theme()
@@ -900,14 +1010,12 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       },
     )
     |> ignore
-    // highlighted when its language is named (Highlight.kt), scrolled sideways rather than wrapped
+    // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped
     c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
       c.rich(
         match colours {
+          // (the core coloured it as it read the Markdown)
           Some(ink) => core_ink(code, ink, t.dark)
-          // The live client's core has already coloured every Markdown code block. The tokenizer here is only
-          // for old static fixtures with no core; an uncoloured live block remains plain.
-          None if markdown_read.val is None => highlight(code, lang, t.dark).unwrap_or([@ui.span(code, mono=true)])
           None => [@ui.span(code, mono=true)]
         },
         size=12.0,

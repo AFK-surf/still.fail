@@ -2,7 +2,8 @@
 // pages; nothing over it until a tap (or, with a mouse, a move) brings the bars: the way back and the file's name at
 // the top, at the bottom the chapter, a hairline track with a knob to jump anywhere, and 目录 (its chapters: Markdown's
 // headings, a novel's 第X章), 搜索 (in the file, each place marked and stepped through) and 排版 (size, lines, face,
-// paper). A plain-text novel hard-wrapped at a fixed width is joined back into its paragraphs; Markdown is never
+// paper). A plain-text novel hard-wrapped at a fixed width is joined back into its paragraphs, its chapters found and
+// words found in it by the page's core (client/core-ts/src/reader.ts, host.ts readBook); Markdown is never
 // reflowed, and is drawn as a chat's is (the page's Markdown: host.ts). Where it was left is kept (file.ts usePlace) and opened at.
 // On a phone the panels are its sheets (the page's: host.ts). With a mouse it is a desktop's: a toolbar always over the text (the way back,
 // the name, 目录 · 搜索 · 排版 · 夜间), the panels docked at its right, the arrow keys from chapter to chapter.
@@ -13,11 +14,11 @@ import { Progress } from "../waiting.tsx";
 import { fileSize as sizeOf } from "../fileSize.ts";
 import { placeStrokes, strokeLayer } from "../strokes.ts";
 import { t } from "../i18n.ts";
-import { viewerHost } from "./host.ts";
+import { viewerHost, type Chapter, type ReadBook } from "./host.ts";
+import { decodeText } from "./decode.ts";
 import type { Got, ViewerFile } from "./file.ts";
 import { REST_MS, TAP_REST_MS } from "./rest.ts";
 import { useBarOnScroll, ViewerBar, ViewerDownload, ViewerTool } from "./ViewerBar.tsx";
-import { isHeading, search, type Book, type Chapter } from "./text.ts";
 import { LINES, MARGINS, SIZES, type Paper } from "./readerStyle.ts";
 import * as css from "./Reader.css.ts";
 
@@ -26,6 +27,10 @@ const MOST = 32 * 1024 * 1024;
 const SERIF = "\"Songti SC\", \"STSong\", \"Noto Serif CJK SC\", \"Source Han Serif SC\", \"Noto Serif SC\", serif";
 /** The system's own face (PingFang on a Mac, YaHei on Windows), not the app's: a book reads in what the machine reads in. */
 const SANS = "system-ui, -apple-system, \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif";
+
+/** A book as the reader draws it: the core's (host.ts ReadBook), whether it is Markdown, where each of its lines starts
+ *  and which are headings (not indented). */
+interface Book extends ReadBook { markdown: boolean; starts: Int32Array; headSet: ReadonlySet<number> }
 
 type Loaded = { state: "loading"; got: Got | null } | { state: "error"; message: string } | { state: "ready"; book: Book; cut: boolean };
 
@@ -43,17 +48,11 @@ function loadBook(file: ViewerFile, markdown: boolean, onProgress: (got: Got) =>
       const blob = file.blob ? file.blob.slice(0, MOST) : await file.read({ max: MOST, onProgress });
       const bytes = await blob.arrayBuffer();
       const cut = size > MOST;
-      // Decoded, joined and searched for its chapters off the page's thread.
-      const worker = new Worker(new URL("./textWorker.ts", import.meta.url), { type: "module" });
-      try {
-        return await new Promise<{ book: Book; cut: boolean }>((resolve, reject) => {
-          worker.onmessage = (e: MessageEvent<{ book?: Book; error?: string }>) => (e.data.book ? resolve({ book: e.data.book, cut }) : reject(new Error(e.data.error ?? "")));
-          worker.onerror = (e) => reject(new Error(e.message));
-          worker.postMessage({ bytes, markdown, cut }, [bytes]);
-        });
-      } finally {
-        worker.terminate();
-      }
+      // Decoded here (the browser's tables), joined and searched for its chapters by the page's core, off its thread.
+      const read = await viewerHost().readBook(decodeText(new Uint8Array(bytes), cut).text, markdown);
+      const starts: number[] = [0];
+      for (let i = read.text.indexOf("\n"); i >= 0; i = read.text.indexOf("\n", i + 1)) starts.push(i + 1);
+      return { book: { ...read, markdown, starts: Int32Array.from(starts), headSet: new Set(read.heads) }, cut };
     })();
     if (key === null) return kept;
     kept.catch(() => books.delete(key));
@@ -122,7 +121,7 @@ const TextBody = memo(function TextBody({ book }: { book: Book }) {
             const line = lineAt(book, i);
             const words = book.text.slice(line.start + line.lead, line.end);
             if (!words.trim()) return <p key={i} data-line={i} className={css.blank} />;
-            return <p key={i} data-line={i} data-heading={isHeading(words.trim()) || undefined}>{words}</p>;
+            return <p key={i} data-line={i} data-heading={book.headSet.has(line.start) || undefined}>{words}</p>;
           })}
         </div>
       ))}
@@ -148,7 +147,7 @@ interface Acts {
   chapters: () => { title: string; at: number }[];
   current: () => number;
   goChapter: (i: number) => void;
-  find: (query: string) => Found | null;
+  find: (query: string) => Promise<Found | null>;
   show: (found: Found, i: number) => void;
   close: () => void;
 }
@@ -293,7 +292,7 @@ export function Reader({ file, markdown, backLabel, onBack }: { file: ViewerFile
   }, [chapters, book, headings, jump]);
 
   // ── finding ──
-  const find = useCallback((query: string): Found | null => {
+  const find = useCallback(async (query: string): Promise<Found | null> => {
     const c = column.current;
     if (!book || !c || !query) return null;
     const ranges: Range[] = [], offsets: number[] = [];
@@ -313,7 +312,7 @@ export function Reader({ file, markdown, backLabel, onBack }: { file: ViewerFile
         seen += text.length;
       }
     } else {
-      for (const offset of search(book.text, query)) {
+      for (const offset of await viewerHost().searchBook(book.id, query)) {
         const i = lineOf(book, offset);
         const line = lineAt(book, i);
         const p = c.querySelector<HTMLElement>(`[data-line="${i}"]`);
@@ -569,8 +568,9 @@ function Find({ acts, done }: { acts: Acts; done: () => void }) {
   useEffect(() => {
     const q = query.trim();
     if (!q) { setFound(null); return; }
-    const timer = setTimeout(() => setFound(acts.find(q)), 200);
-    return () => clearTimeout(timer);
+    let live = true;
+    const timer = setTimeout(() => void acts.find(q).then((f) => { if (live) setFound(f); }), 200);
+    return () => { live = false; clearTimeout(timer); };
   }, [query, acts]);
   const book = acts.book();
   const snippet = (f: Found, i: number): ReactNode => {

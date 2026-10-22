@@ -1,5 +1,6 @@
-// The core's Markdown tree decoded to this renderer's blocks. Formulas carry only glyph placements; the local
-// Markdown reader is kept for old fixture/static texts without a core tree, and never parses a formula.
+// The core's Markdown tree (client/core-ts/src/markdown.ts) decoded to this renderer's blocks: nothing here reads
+// Markdown. Words are runs of the text the tree was read from; formulas carry only glyph placements; a code block its
+// ink (ink.mbt).
 ///|
 priv enum MdInline {
   Text(String)
@@ -18,7 +19,10 @@ priv struct MdItem { task : Bool?; blocks : Array[MdBlock] }
 ///|
 priv struct MdList { ordered : Bool; start : Int; tight : Bool; items : Array[MdItem] }
 ///|
-priv struct MdTable { align : Array[@md.Align]; head : Array[Array[MdInline]]; rows : Array[Array[Array[MdInline]]] }
+/// How a table's column is aligned (GFM's `:--`, `:-:`, `--:`; none said).
+priv enum MdAlign { Plain; Left; Center; Right }
+///|
+priv struct MdTable { align : Array[MdAlign]; head : Array[Array[MdInline]]; rows : Array[Array[Array[MdInline]]] }
 ///|
 priv enum MdBlock {
   Paragraph(Array[MdInline])
@@ -41,24 +45,6 @@ fn md_plain(xs : Array[MdInline]) -> String {
     }
   }
   out.to_string()
-}
-///|
-fn old_inline(x : @md.Inline) -> MdInline {
-  match x {
-    Text(s) => Text(s); Code(s) => Code(s)
-    Emph(c) => Emph(c.map(old_inline)); Strong(c) => Strong(c.map(old_inline)); Strike(c) => Strike(c.map(old_inline))
-    Link(h,c) => Link(h,c.map(old_inline)); Image(s,a) => Image(s,a)
-    SoftBreak => SoftBreak; HardBreak => HardBreak
-  }
-}
-///|
-fn old_block(x : @md.Block) -> MdBlock {
-  match x {
-    Paragraph(c) => Paragraph(c.map(old_inline)); Heading(l,c) => Heading(l,c.map(old_inline)); Quote(b) => Quote(b.map(old_block))
-    List(l) => List({ ordered:l.ordered, start:l.start, tight:l.tight, items:l.items.map(fn(i) { { task:i.task, blocks:i.blocks.map(old_block) } }) })
-    CodeBlock(l,c) => CodeBlock(l,c,None); Rule => Rule
-    Table(t) => Table({ align:t.align, head:t.head.map(fn(c){c.map(old_inline)}), rows:t.rows.map(fn(r){r.map(fn(c){c.map(old_inline)})}) })
-  }
 }
 ///|
 fn md_words(j : Json, text : String) -> String? {
@@ -130,7 +116,7 @@ fn core_blocks(nodes : Array[Json], text : String) -> Array[MdBlock] {
       }
       "table" => {
         let rows = kids.map(fn(r) { let (_,cells,_) = md_parts(r); cells.map(fn(c) { let (_,k,_) = md_parts(c); core_inlines(k,text) }) })
-        let align = math_array(math_field(a,"align")).map(fn(x) { match math_string(x) { "left" => @md.Left; "center" => @md.Center; "right" => @md.Right; _ => @md.Plain } })
+        let align = math_array(math_field(a,"align")).map(fn(x) { match math_string(x) { "left" => MdAlign::Left; "center" => MdAlign::Center; "right" => MdAlign::Right; _ => MdAlign::Plain } })
         out.push(Table({ align, head:if rows.length()>0 {rows[0]}else{[]}, rows:if rows.length()>1 {rows[1:].to_array()}else{[]} }))
       }
       "hr" => out.push(Rule)
@@ -160,28 +146,34 @@ fn core_item(nodes : Array[Json], text : String) -> Array[MdBlock] {
 }
 
 ///|
-// The core's ink is a scope letter followed by a UTF-16 length (omitted for one). This only assigns colours to
-// already classified runs; it does not interpret the code or its language.
-fn core_ink(code : String, ink : String, dark : Bool) -> Array[@ui.Run] {
-  let scopes : Array[Scope] = [Text,Comment,Punct,Str,Quote,Num,Control,Storage,Func,Var,Constant,TypeName,Property,PropertyQuote,Added,Removed,Hunk]
-  let out = []
-  let mut i = 0
-  let mut at = 0
-  while i < ink.length() && at < code.length() {
-    let k = ink.at(i).to_int() - 97
-    if k < 0 || k >= scopes.length() { break }
-    i += 1
-    let mut n = 0
-    while i < ink.length() {
-      let d = ink.at(i).to_int() - 48
-      if d < 0 || d > 9 { break }
-      n = imin(code.length(), n * 10 + d)
-      i += 1
+/// Where in the text a node of the core's tree first has words of the text (its runs, a code's), or -1 (words of its
+/// own, as an escape's, have none).
+pub fn md_node_at(node : Json) -> Int {
+  match node {
+    Array([Number(a, ..), Number(_, ..)]) => a.to_int()
+    _ => {
+      let (_, kids, a) = md_parts(node)
+      for key in ["code", "content"] {
+        if math_field(a, key) is Array([Number(at, ..), Number(_, ..)]) {
+          return at.to_int()
+        }
+      }
+      for k in kids {
+        let at = md_node_at(k)
+        if at >= 0 {
+          return at
+        }
+      }
+      -1
     }
-    let end = imin(code.length(), at + (if n > 0 { n } else { 1 }))
-    out.push(@ui.span(code.view(start_offset=at,end_offset=end).to_string(),mono=true,color=if dark {scopes[k].dark()}else{scopes[k].light()}))
-    at = end
   }
-  if at < code.length() { out.push(@ui.span(code.view(start_offset=at).to_string(),mono=true,color=if dark {Scope::Text.dark()}else{Scope::Text.light()})) }
-  out
+}
+
+///|
+/// A heading's level (a node of the core's tree that is one), else None.
+pub fn md_node_depth(node : Json) -> Int? {
+  match md_parts(node) {
+    ("h", _, a) => Some(math_number(math_field(a, "depth")).to_int())
+    _ => None
+  }
 }
