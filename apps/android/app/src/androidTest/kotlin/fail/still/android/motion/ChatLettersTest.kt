@@ -1,5 +1,6 @@
-// What a chat's agents and other chats' wrote each other (the core's `chatLetters`): not in the chat at all; its bar
-// has a button for them (the chat's `letters`), which opens them in a sheet, by the other chat, both ways (Letters.kt).
+// What a chat's agents and other chats' wrote each other (the core's `chatLetters`): not in the chat at all; its own
+// sheet ("…") has a row for them (the chat's `letters`), which opens them in a sheet of their own: the chats it wrote
+// with, one opened showing its letters both ways (Letters.kt).
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
@@ -48,7 +49,11 @@ class ChatLettersTest {
         val inChat = h.record("letters-chat")
         inChat.end()
         val opening = h.record("letters-open")
-        opening.frame { rule.onNodeWithContentDescription("agent 往来 · 3 条").performClick() }
+        // From the chat's own sheet ("…"), not a button of the bar's own.
+        rule.onNodeWithContentDescription("对话信息").performClick()
+        h.settle()
+        rule.onNodeWithText("agent 往来").assertIsDisplayed()
+        opening.frame { rule.onNodeWithText("agent 往来").performClick() }
         opening.frames(16)
         opening.end()
         // The chats it wrote with, a row each: the last letter in brief; a tap opens its letters.

@@ -729,7 +729,6 @@ export const stories: Story[] = [
   { id: "app-chat-letters", group: "应用", title: "对话 · agent 往来", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }] },
   { id: "app-chat-letters-open", group: "应用", title: "对话 · agent 往来 · 打开一个对话的", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { click: "text=BFT 备份尺寸分析" }] },
   { id: "phone-chat-letters-info", group: "手机", title: "对话 · agent 往来的入口（对话信息里）", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }] },
-  { id: "phone-chat-letters-agent", group: "手机", title: "对话 · agent 往来的入口（agent 名片里）", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label$="的名片"]' }] },
   { id: "phone-chat-letters", group: "手机", title: "对话 · agent 往来", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }] },
   { id: "phone-chat-letters-open", group: "手机", title: "对话 · agent 往来 · 打开一个对话的", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { click: "text=BFT 备份尺寸分析" }] },
   { id: "app-chat-sent-updating", group: "应用", title: "对话 · station 更新时发出的消息", app: true, demo: sentUpdating },

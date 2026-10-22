@@ -296,11 +296,6 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
             NavButton(Icons.Web, { openJobs(app, station, of) })
             if (alarm != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(11.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(if (alarm == Tone.Fail) C.red else C.warn))
         }
-        // What its agents and other chats' wrote each other, not in the chat: its own sheet (Letters.kt).
-        val letters = view.letters ?: 0L
-        if (letters > 0 && thread != null) Box(Modifier.semantics { contentDescription = t("web-main.letters.open", "n" to letters) }) {
-            NavButton(Icons.Chats, { openLetters(app, Here(station, of, view, agents), thread.id) })
-        }
     }) {
         // The station on its own while the chat has no agent; else on the first agent's tile.
         if (agents.isEmpty()) ChatStationChip(station)

@@ -219,10 +219,6 @@
     "other": "{n} messages"
   },
   "web-main.letters.none": "No agent messages yet",
-  "web-main.letters.open": {
-    "one": "Agent messages · 1",
-    "other": "Agent messages · {n}"
-  },
   "web-main.letters.title": "Agent messages",
   "web-main.outside.title": "Share chats",
   "web-main.outside.lead": "Once sent, agents in this workspace can read the following (after 6 hours unused, it must be shared again):",

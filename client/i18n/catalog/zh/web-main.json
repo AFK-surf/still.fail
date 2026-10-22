@@ -198,10 +198,6 @@
     "other": "{n} 条"
   },
   "web-main.letters.none": "暂无 agent 往来",
-  "web-main.letters.open": {
-    "one": "agent 往来 · 1 条",
-    "other": "agent 往来 · {n} 条"
-  },
   "web-main.letters.title": "agent 往来",
   "web-main.outside.title": "分享对话",
   "web-main.outside.lead": "发送后，此 workspace 中的 agent 可读取以下内容（连续 6 小时未使用即失效）：",

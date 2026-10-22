@@ -555,7 +555,6 @@ function agentCard(app: MobileApp, here: Here, key: string) {
     history: () => openHistory(app, here.station, here.key, key),
     jobs: () => openJobs(app, here),
     station: () => openStationSheet(app, here.station),
-    letters: lettersOf(app, here),
   });
 }
 
