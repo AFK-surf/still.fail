@@ -59,6 +59,7 @@ test "83-profile" {
     f.run_to(@ui.nav_rest())
     // the page gone, its draft dropped (profile.flow.drop) as the frame after takes it away
     f.t.draw()
+    f.see("=Profile")
     f.end()
   })
 }
