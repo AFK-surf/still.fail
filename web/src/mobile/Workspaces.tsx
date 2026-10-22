@@ -32,7 +32,7 @@ function WorkspacesSheet() {
     .filter((a) => a.workspaces.length > 0);
   // Each its mark before its name, its letter where it has none, once any has one (the actions' icons stand there too).
   const anyMarked = byAccount.some((a) => a.workspaces.some(marked));
-  const lead = (w: WorkspaceSummary) => anyMarked ? <span className={css.mMark}><WorkspaceMark w={w} size={20} picture={24} /></span> : undefined;
+  const lead = (w: WorkspaceSummary) => anyMarked ? <span className={css.mMark}><WorkspaceMark w={w} size={20} picture={24} still={w.id !== app.entry.id} /></span> : undefined;
   // What each of the others has waiting, as the core counts it.
   const marks = useWorkspaceMarks(app.entry.id);
   const respond = useAction(async ({ account, invite, join }: { account: Account; invite: PendingInvitation; join: boolean }) => {

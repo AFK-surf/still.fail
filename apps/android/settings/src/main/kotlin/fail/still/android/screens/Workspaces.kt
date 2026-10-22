@@ -281,7 +281,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
 private fun WorkspaceRow(w: WorkspaceSummary, email: String, mark: WorkspaceMark?, lead: Boolean, onClick: () -> Unit) {
     Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (lead) WorkspaceIcon(w)
+        if (lead) WorkspaceIcon(w, still = true)
         Column(Modifier.weight(1f)) {
             Text(w.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -290,10 +290,13 @@ private fun WorkspaceRow(w: WorkspaceSummary, email: String, mark: WorkspaceMark
     }
 }
 
-/** A workspace's mark in the sheet's rows, drawn as a station's is; its first letter, muted, where it has none. */
+/**
+ * A workspace's mark in the sheet's rows, drawn as a station's is; its first letter, muted, where it has none. `still`: a
+ * GIF holds its first frame (the others: only the one in use moves).
+ */
 @Composable
-private fun WorkspaceIcon(w: WorkspaceSummary) = Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-    if (hasStationMark(w.emoji, w.icon)) StationMark(w.emoji, w.icon, 22.dp, C.ink)
+private fun WorkspaceIcon(w: WorkspaceSummary, still: Boolean = false) = Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+    if (hasStationMark(w.emoji, w.icon)) StationMark(w.emoji, w.icon, 22.dp, C.ink, still = still)
     else Text(w.name.trim().take(1).uppercase(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.muted)
 }
 
