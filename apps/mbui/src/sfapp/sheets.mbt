@@ -429,6 +429,30 @@ fn copy_chat_link(c : @ui.Ctx, title : String, link : String) -> Unit {
 let chat_link_most : Int = 120
 
 ///|
+/// How tall the chat's sheet is over the navigation bar (ChatInfo.kt openChatInfo's fit, Android's reckoning of what it
+/// shows): its head, 56 an agent, 40 a thing to do (pin, Slack, Feishu, its sharing, archive, and two always), its
+/// public links' rows, the foot.
+fn chat_info_fit(chat : Json?, view : ChatView?) -> Double {
+  let agents = if chat is Some(_) { items(chat, "agents").length() } else { 1 }
+  let (archived, offline) = match view {
+    Some(v) => (v.archived, v.offline)
+    None => (false, false)
+  }
+  let one = fn(b : Bool) { if b { 1 } else { 0 } }
+  let acts = one(field(chat, "pinned") is Some(True | False)) +
+    one(text(chat, "slackUrl") != "") +
+    one(text(chat, "feishuUrl") != "") +
+    one(field(chat, "xshare") is Some(Object(_))) +
+    one(agents > 0 && chat is Some(_) && !archived && !offline) +
+    2
+  let published = match shown_publish(chat) {
+    Some(_) as p => (one(flag(p, "may")) + items(p, "links").length()) * 40 + 10
+    None => 0
+  }
+  (22 + 84 + agents * 56 + acts * 40 + published + 10 + 30).to_double()
+}
+
+///|
 /// The chat itself, from "…" (ChatInfo.kt openChatInfo): its name (with a way to change it) over who started it, how
 /// many take part and when it was last written in; its agents, each where it stands (a tap opens its card); then what
 /// can be done with it: pin it, copy its link, its sharing, archive it. As tall as what it shows.
@@ -446,8 +470,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
   let slack = text(chat, "slackUrl")
   let feishu = text(chat, "feishuUrl")
   let xshare = field(chat, "xshare")
-  // as tall as what it shows (ChatInfo.kt openChatInfo: SheetSpec(0.55f, fit)), its share until it is laid out
-  sheet_frame(c, "info", c.height * 0.55, fit=true, fn() {
+  sheet_frame(c, "info", c.height * 0.55, fit_to=chat_info_fit(chat, view), fn() {
     let (archived, offline) = match view {
       Some(v) => (v.archived, v.offline)
       None => (false, false)
@@ -789,6 +812,17 @@ fn sheet_button(c : @ui.Ctx, key : String, label : String, primary : Bool, enabl
 // ── an agent's card (AgentSheet.kt) ─────────────────────────────────────
 
 ///|
+/// How tall an agent's card is over the navigation bar (AgentSheet.kt openAgent's fit, Android's reckoning of what it
+/// shows): its head, its latest lines' and figures' room when it has turns, a line a note (not a quota's), 40 a row to
+/// go on from (its station, account, history; its jobs), the foot.
+fn agent_sheet_fit(a : Json?) -> Double {
+  let rows = 3 + (if items(a, "jobs").length() > 0 { 1 } else { 0 })
+  let notes = items(a, "attention").filter(fn(n) { text(Some(n), "kind") != "quota" }).length()
+  let turns = if items(a, "turns").length() > 0 { 72 + 76 } else { 0 }
+  (22 + 52 + turns + (if notes > 0 { 8 + notes * 20 } else { 0 }) + 12 + rows * 40 + 24).to_double()
+}
+
+///|
 /// An agent of the chat in brief (AgentSheet.kt openAgent): what it runs and where it stands (with a stop while it
 /// works), its latest lines, the figures that say most, then where to go on: the station it runs on, its account, its
 /// history, its jobs; and its context by hand (context.mbt).
@@ -800,8 +834,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
   let jobs = items(a, "jobs")
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
-  // as tall as what it shows (AgentSheet.kt: SheetSpec(0.55f, fit)), its share until it is laid out
-  sheet_frame(c, "agent", c.height * 0.55, fit=true, fn() {
+  sheet_frame(c, "agent", c.height * 0.55, fit_to=agent_sheet_fit(a), fn() {
     let s = field(a, "session")
     let status = text(a, "status")
     c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=agent_sheet_foot, fn() {
