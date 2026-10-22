@@ -208,6 +208,10 @@ fn desk_build_start() -> Unit {
   desk.next_drags.clear()
   desk.next_sels.clear()
   desk.selecting = false
+  // a finger drags lists unless this build says otherwise (Ctx::mouse_drags_lists, said each frame): a phone turned
+  // sideways for a film is a desktop's width, its frame saying no; upright again, nothing said it back and no list
+  // could be dragged anywhere after
+  desk.mouse_drags = true
 }
 
 ///|
