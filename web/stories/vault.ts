@@ -70,9 +70,9 @@ function withCard(chat: ChatView, told: CardStory): ChatView {
   if (!last || chat.messages.some((m) => m.card?.vault)) return chat;
   const seq = (chat.messages.at(-1)?.seq ?? 0) + 1;
   const scopes = [
-    { label: "仅本次", detail: "单次有效" },
-    { label: "本对话 1 小时内", detail: "期间无需再次批准" },
-    { label: "本对话直到归档", detail: "归档后失效" },
+    { label: "仅本次", detail: "只给这一条命令用，下次还要再批准" },
+    { label: "本对话 1 小时内", detail: "1 小时内这个对话可以反复使用，不用再批准" },
+    { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
   ].slice(0, told.lasts === "once" ? 1 : told.lasts === "hour" ? 2 : 3);
   const options = [...scopes.map((o, i) => (i === scopes.length - 1 ? { ...o, recommended: true } : o)), { label: "拒绝", detail: "通知 agent 已拒绝" }];
   const command = told.command ?? REQUEST.command!;

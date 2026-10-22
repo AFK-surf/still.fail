@@ -52,9 +52,9 @@ CREATE TABLE IF NOT EXISTS vault_grants (
 
 /// The words of a grant's scope on its card, and what each means.
 const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
-  once: { label: "仅本次", detail: "单次有效" },
-  hour: { label: "本对话 1 小时内", detail: "期间无需再次批准" },
-  chat: { label: "本对话直到归档", detail: "归档后失效" },
+  once: { label: "仅本次", detail: "只给这一条命令用，下次还要再批准" },
+  hour: { label: "本对话 1 小时内", detail: "1 小时内这个对话可以反复使用，不用再批准" },
+  chat: { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
 };
 
 /// How long secret_use waits for the decision before it says the request is waiting: within the minute the agents'
