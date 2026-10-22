@@ -1205,7 +1205,15 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
 ///|
 /// The composer at the chat page's foot (ChatHost.kt HostComposer): its notices, what waits to go, the bar, what went
 /// wrong; ＋'s sheet over the page when open. `v` None while the chat is read the first time (it takes nothing yet).
-fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fresh? = None) -> Unit {
+/// `beside`: a chat's on a wide screen, beside the latest chats' button (ChatHost.kt besideRecent, corners.mbt).
+fn composer(
+  c : @ui.Ctx,
+  src : Source,
+  r : ChatRef,
+  v : ChatView?,
+  fresh? : Fresh? = None,
+  beside? : Bool = false,
+) -> Unit {
   let t = @sf.theme()
   let d = draft_by(c, src, match fresh {
     Some(f) => f.key
@@ -1305,7 +1313,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   let top = capsule_top(v, d)
   // `@` and a few letters: the chats they find, over the capsule (chat_refs.mbt)
   chat_ref_menu(c, src, d, r.station, if fresh is Some(_) { "" } else { r.session }, field_key, locked)
-  c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, pb=10.0, fn() {
+  c.box(w=Fill(1.0), pl=if beside { beside_recent } else { 10.0 }, pr=10.0, pt=8.0, pb=10.0, fn() {
     c.box(w=Fill(1.0), pad=composer_inset, pt=top, id=cap, fn() {
       // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller)
       let ground = c.layer(fn() {

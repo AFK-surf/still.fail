@@ -311,7 +311,8 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         if go_row(c, "go-appearance", tr("android-settings.appearance.title"), value=said) {
           (core.push)(Appearance)
         }
-        if go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core)) {
+        // this device's bottom bars: none on a wide screen (SettingsHome.kt: !LocalWide)
+        if !no_bar.val && go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core)) {
           (core.push)(BarSettings)
         }
         // what this device keeps, in all (SettingsHome.kt: KeptFiles.read's total), once the core has said

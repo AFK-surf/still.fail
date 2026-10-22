@@ -286,8 +286,9 @@ fn home_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, current 
       Header(label) => moving(c, lid, key, keys[i], section_header(c, label))
       Row(item) =>
         moving(c, lid, key, keys[i], chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, key + "\u{1}" + keys[i])))
-      // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom)
-      Foot => c.box(h=Px(nav_foot() + bar_room), fn() {  }) |> ignore
+      // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom); on a wide screen,
+      // whose corners have 奏 and 令 over the list, a little
+      Foot => c.box(h=Px(if has_bar() { nav_foot() + bar_room } else { wide_foot }), fn() {  }) |> ignore
     }
   })
   |> ignore
@@ -359,6 +360,10 @@ fn top_bar(
             app.menu = true
           }
         _ => ()
+      }
+      // the stations at a glance on a wide screen, which has no bottom bar to have them as a place (Home.kt)
+      if corners_on.val {
+        stations_button(c, src, w)
       }
     })
     |> ignore
@@ -835,7 +840,7 @@ fn row_opens_at(item : ChatItem, ry : Double, ty : Double) -> Double? {
 
 ///|
 /// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; tapped, its chat is pushed (at the message its state line
-/// names, tapped there).
+/// names, tapped there), or given to `opened` (the latest chats' panel on a wide screen: corners.mbt).
 fn chat_row(
   c : @ui.Ctx,
   src : Source,
@@ -843,6 +848,7 @@ fn chat_row(
   lead : String,
   lifted? : Double = -1.0,
   found? : Bool = false,
+  opened? : (ChatRef) -> Unit,
 ) -> Int {
   let t = @sf.theme()
   let id = c.id("row/" + item.station + "/" + item.id)
@@ -873,7 +879,11 @@ fn chat_row(
     // a long press is not a tap
     let long = app.held == id && app.held_long
     app.held = 0
-    if !long {
+    if long {
+      unprime(src, r)
+    } else if opened is Some(f) {
+      f(r)
+    } else {
       // on its state line while it names a message (and nothing in it is unread: then at the unread line, as any
       // tap), at that message
       let at = match (c.rect_of(id), c.tapped_anywhere()) {
@@ -884,8 +894,6 @@ fn chat_row(
         Some(seq) => open_chat_at(r, seq)
         None => app.nav.push(Chat(r))
       }
-    } else {
-      unprime(src, r)
     }
   } else if !pressed && app.held == id {
     app.held = 0

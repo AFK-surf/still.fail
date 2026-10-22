@@ -413,12 +413,16 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)
   c.set_clear((t.p.bg >> 8) & 0xFFFFFFL)
-  // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
+  // a desktop's width: the web app's wide frame (wide.mbt); a phone's or a tablet's as wide (an opened foldable, a
+  // phone on its side): Android's, the pages the whole width with the latest chats at a corner (corners.mbt); below
+  // them the phone's pages
   wide_on.val = is_wide(c)
+  corners_on.val = is_corners(c)
   @settings.wide.val = wide_on.val
+  @settings.no_bar.val = corners_on.val
   @settings.status_top.val = status_top()
   @settings.nav_foot.val = nav_foot()
-  @settings.bar_room.val = if wide_on.val { 0.0 } else { bar_room }
+  @settings.bar_room.val = if has_bar() { bar_room } else { 0.0 }
   track_press(c)
   linger_tick(c, src)
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
@@ -536,16 +540,21 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         play_back(c)
         // words picked in a chat, a link's menu: back lets go of them first (pick.mbt)
         pick_back(c)
-        // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in
-        // the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
-        let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
-        bottom_bar(
-          c,
-          src,
-          w,
-          place_of(root),
-          app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
-        )
+        if corners_on.val {
+          // wide, no bottom bar: the latest chats and the new-chat button at the corners (Wide.kt WideCorners)
+          wide_corners(c, src, w)
+        } else {
+          // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed
+          // in the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
+          let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
+          bottom_bar(
+            c,
+            src,
+            w,
+            place_of(root),
+            app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
+          )
+        }
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
         // a visualization over the whole screen (viz.mbt)

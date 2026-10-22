@@ -422,3 +422,28 @@ test "a list at its end stands the same however it got there: to the float, its 
   assert_eq(two, one)
   assert_eq(three, one)
 }
+
+///|
+test "a list dragged again once the frames no longer say a drag is the pointer's own (a desktop's window made narrow)" {
+  // a desktop's width: its frame says the mouse drags no list, each frame it is drawn
+  let rows = rows_view(100)
+  let t = Tester::new(
+    fn(c) {
+      if c.width >= 700.0 {
+        c.mouse_drags_lists(false)
+      }
+      rows(c)
+    },
+    w=900.0,
+    h=800.0,
+  )
+  t.draw()
+  swipe(t, 700.0, -24.0, 12)
+  t.frame()
+  assert_eq(t.list_offset(), 0.0)
+  // narrow: nothing says it any more, the pointer drags the list as a finger does
+  t.resize(400.0, 800.0)
+  swipe(t, 700.0, -24.0, 12)
+  t.frame()
+  assert_true(t.list_offset() > 200.0)
+}

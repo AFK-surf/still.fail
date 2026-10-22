@@ -320,11 +320,19 @@ pub fn set_dark(dark : Bool?) -> Unit {
 }
 
 ///|
-/// The theme for this frame, from the window's width: call at the top of a
+/// Whether the system is a phone's or a tablet's (iOS, Android), whose app is still.fail's Android app at any width
+/// (an opened foldable, a phone on its side): its own theme and pages, never the desktop's.
+pub fn touch_system() -> Bool {
+  let p = @ui.platform()
+  p == 1 || p == 2
+}
+
+///|
+/// The theme for this frame, from the window's width (a phone's or a tablet's always its own): call at the top of a
 /// view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = c.width < narrow_below
+  let narrow = c.width < narrow_below || touch_system()
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark
@@ -481,6 +489,25 @@ pub let code_edge : @ui.Color = A(Fg, Exact(0.18))
 ///|
 /// A column a phone's width at most, in the middle (phone_column): its widest.
 pub let phone_max : @ui.Len = Fixed(420.0)
+
+///|
+/// The latest chats raised on a wide screen (Wide.kt Recent): 340 wide, 560 tall at most.
+pub let recent_w : @ui.Len = Fixed(340.0)
+
+///|
+pub let recent_max_h : @ui.Len = Fixed(560.0)
+
+///|
+/// The button that raises them (Wide.kt Recent): 52 across, as tall as the composer on one line.
+pub let recent_button : @ui.Len = Fixed(52.0)
+
+///|
+/// A bar's round button (Parts.kt NavButton): 34 across.
+pub let nav_button_side : @ui.Len = Fixed(34.0)
+
+///|
+/// A hairline across (0.5: a panel's rule over its foot).
+pub let hairline : @ui.Len = Fixed(0.5)
 
 ///|
 /// The theme as mbui's (its Theme's roles over this frame's palette: wide or narrow, light or dark), with

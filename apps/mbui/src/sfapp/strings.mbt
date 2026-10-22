@@ -219,6 +219,11 @@ let zh : Map[String, String] = {
   "android-settings.vault.approve.decided": "此申请已处理",
   // a face's file not what it says (faces.mbt)
   "android-settings.fonts.damaged": "文件已损坏",
+  // a phone's or a tablet's wide screen (corners.mbt)
+  "android-misc.wide.all": "全部会话",
+  "android-misc.wide.empty": "暂无会话",
+  "android-misc.wide.newChat": "新建对话",
+  "android-misc.wide.recent": "最近会话",
 }
 
 ///|
