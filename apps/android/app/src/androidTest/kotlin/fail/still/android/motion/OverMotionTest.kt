@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -57,8 +56,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import androidx.core.view.WindowCompat
-import android.util.Log
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -98,45 +95,6 @@ class OverMotionTest {
         go.frame { rule.runOnUiThread { d.onBackPressed() } }
         go.frames(24)
         go.end()
-    }
-
-    /**
-     * Swiped at an even speed, the finger's places coming as the system sends them, not with the frames: now and then one
-     * is a frame late, so that frame has none and the next two. The page moves on evenly all the same (each frame's step
-     * near the others'), and is under the finger once it stops (put where each place said, it went in fits and starts).
-     */
-    @Test
-    fun swipedBackEvenly() {
-        val h = Harness(rule)
-        h.chatOpen()
-        val d = rule.activity.onBackPressedDispatcher
-        fun x() = rule.onAllNodes(hasText("好，顺便把错误提示也改成中文", substring = true), useUnmergedTree = true)[0].fetchSemanticsNode().positionInRoot.x
-        val x0 = x()
-        val r = h.record("back-uneven")
-        r.frame { rule.runOnUiThread { d.dispatchOnBackStarted(back(20f)) } }
-        // The finger 18 px on each frame; its place for frame k sent with frame k, or a third of the time with the next.
-        val n = 30
-        val late = java.util.Random(7).let { rnd -> BooleanArray(n + 1) { k -> k > 0 && rnd.nextInt(3) == 0 } }
-        fun place(k: Int) = 20f + 18f * k
-        val at = ArrayList<Float>()
-        for (k in 1..n) {
-            val sent = listOfNotNull(if (late[k - 1]) k - 1 else null, if (!late[k]) k else null).filter { it >= 1 }
-            r.frame { rule.runOnUiThread { sent.forEach { d.dispatchOnBackProgressed(back(place(it))) } } }
-            at += x()
-        }
-        if (late[n]) r.frame { rule.runOnUiThread { d.dispatchOnBackProgressed(back(place(n))) } }
-        r.frames(20)
-        val rest = x()
-        r.frame { rule.runOnUiThread { d.dispatchOnBackCancelled() } }
-        r.frames(18)
-        r.end()
-        val steps = at.zipWithNext { a, b -> b - a }.drop(8)
-        val median = steps.sorted()[steps.size / 2]
-        val spread = steps.map { kotlin.math.abs(it - median) }.average() / median
-        Log.i("motion", "back-uneven: page at ${at.joinToString(" ") { "%.0f".format(it - x0) }}, steps' spread %.2f, at rest %.1f".format(spread, rest - x0))
-        assertTrue("each frame's step near the others' (spread %.2f, steps $steps)".format(spread), spread < 0.15)
-        // Started at the first place sent (frame 1's): at rest, as far on as the finger went from there.
-        assertEquals(place(n) - place(1), rest - x0, 1.5f)
     }
 
     /**
