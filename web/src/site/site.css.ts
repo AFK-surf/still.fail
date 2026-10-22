@@ -145,30 +145,11 @@ export const lede = style({ maxWidth: "30em", margin: "24px 0 0", fontSize: "cla
 export const heroActions = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 20px", marginTop: "36px" });
 export const heroNote = style({ fontSize: vars.textUi, color: DIM });
 
-// The picture: where you are on the left, joined to the machine; the workspace's other machines beside it.
 export const pictureBox = style({ animation: `${fadeUp} .8s .18s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } } });
-export const picture = style({ display: "block", width: "100%", height: "auto", overflow: "visible" });
-/** The picture laid across on a wide screen, down on a narrow one (where across, its words would be too small). */
-export const pictureWide = style({ "@media": { [NARROW]: { display: "none" } } });
-export const pictureNarrow = style({ display: "none", maxWidth: "400px", margin: "0 auto", "@media": { [NARROW]: { display: "block" } } });
-export const end = style({});
-globalStyle(`${end} > rect`, { fill: "var(--s-node)", stroke: ink(14), strokeWidth: 1 });
-globalStyle(`${end} > text`, { fill: "var(--s-muted)", fontSize: vars.textUi, fontWeight: 500 });
-export const machine = style({ filter: `drop-shadow(0 24px 40px color-mix(in srgb, ${ORANGE} 16%, transparent))` });
-globalStyle(`${machine} > rect`, { fill: "var(--s-node)", stroke: ORANGE, strokeWidth: 1.5 });
-export const machineName = style({ fill: FG, fontSize: vars.textTitle, fontWeight: 600 });
-export const machineSub = style({ fill: DIM, fontSize: vars.textMeta });
-export const online = style({ fill: vars.online });
-export const machinePart = style({});
-globalStyle(`${machinePart} > rect`, { fill: ink(5), stroke: "none" });
-globalStyle(`${machinePart} > text`, { fill: "var(--s-muted)", fontSize: vars.textMeta });
-export const other = style({});
-globalStyle(`${other} > rect`, { fill: "var(--s-node)", stroke: ink(14), strokeWidth: 1, strokeDasharray: "4 4" });
-globalStyle(`${other} > text`, { fill: "var(--s-muted)", fontSize: vars.textUi, fontWeight: 500 });
-export const wire = style({ fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 55%, transparent)`, strokeWidth: 1.5 });
-export const wireQuiet = style({ fill: "none", stroke: ink(22), strokeWidth: 1.5, strokeDasharray: "4 5" });
 /** A dot going along a line now and then: none where less motion is asked for. */
 export const pulse = style({ fill: ORANGE, "@media": { [STILL]: { display: "none" } } });
+/** Online: the green of a machine that is there. */
+export const onlineSpot = style({ fill: vars.online });
 
 // ---- The app ----
 
@@ -185,6 +166,11 @@ export const edge = style({
 /** The demo's box (demo/): the app in it, at its size. Its corners cut by a clip, not a rounded overflow: under one,
  *  Chromium ignored the phone bar's glass's clip-path (a frosted layer, mobile/Bar.tsx) set while it was out of view,
  *  and drew the bar as a plain rectangle. */
+/** Each idea of the page (Site.tsx): the first unless the root says the second. */
+export const idea = style({ selectors: {
+  ':root[data-v="2"] &[data-idea="1"]': { display: "none" },
+  ':root:not([data-v="2"]) &[data-idea="2"]': { display: "none" },
+} });
 export const demo = style({
   position: "relative", height: "720px", overflow: "hidden", clipPath: "inset(0 round 19px)", background: vars.canvas,
   "@media": { [NARROW]: { clipPath: "inset(0 round 13px)", height: "620px" }, [PHONE_BOX]: { clipPath: "inset(0 round 36px)" } },
@@ -256,6 +242,108 @@ export const output = style({
   "@media": { [STILL]: { animation: "none", opacity: 1 } },
 });
 export const prompt = style({ color: ORANGE, userSelect: "none" });
+
+// ---- The first idea: the same machine (SameMachine.tsx) ----
+
+export const sameHero = style({ padding: "96px 0 32px", textAlign: "center", "@media": { [NARROW]: { padding: "48px 0 16px" } } });
+export const sameTitle = style({
+  margin: "0", fontSize: "clamp(40px, 5.6vw, 76px)", lineHeight: "1.12", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)",
+  animation: `${fadeUp} .8s .05s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
+});
+export const sameLede = style({ maxWidth: "36em", margin: "22px auto 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance" });
+export const sameActions = style({ marginTop: "32px" });
+
+/** The scene: as tall as its places, the stage held in view while it is scrolled through. */
+export const scene = style({ position: "relative" });
+export const sceneStick = style({
+  position: "sticky", top: "64px", height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", padding: "16px 0 28px",
+});
+export const sceneBar = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" });
+export const places = style({ display: "flex", gap: "6px", margin: "0", padding: "0", listStyle: "none" });
+export const place = style({
+  display: "grid", padding: "8px 14px", borderRadius: vars.rField, color: DIM, fontSize: vars.textUi, transition: "background .25s, color .25s",
+  selectors: { "&[data-at]": { background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}`, color: "var(--s-muted)" } },
+  "@media": { [NARROW]: { selectors: { '&[data-place="desktop"]': { display: "none" } } } },
+});
+globalStyle(`${place} > b`, { fontSize: vars.textTitle, fontWeight: 600, color: "var(--s-muted)" });
+globalStyle(`${place}[data-at] > b`, { color: FG });
+globalStyle(`${place} > span`, { "@media": { [NARROW]: { display: "none" } } });
+export const sameMachine = style({ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: vars.textUi, color: "var(--s-muted)" });
+export const onlineDot = style({ width: "8px", height: "8px", borderRadius: "50%", background: vars.online });
+/** Where the frame stands, centred in what is left of the stage. */
+export const sceneRoom = style({ flex: "1", minHeight: "0", display: "grid", placeItems: "center", marginTop: "20px" });
+/** The frame: its size and corners set as the scene is scrolled (SameMachine.tsx); its shadow outside, its clip inside. */
+export const sceneFrame = style({ position: "relative", boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), 0 0 0 1px ${ink(12)}` });
+export const sceneClip = style({ position: "absolute", inset: "0", background: vars.canvas });
+export const sceneLayer = style({ position: "absolute", inset: "0" });
+export const sceneDemo = style({});
+globalStyle(`${sceneLayer} > ${sceneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
+
+// Slack and Feishu as they look, in their own colours in either theme.
+export const slack = style({
+  display: "grid", gridTemplateColumns: "210px minmax(0, 1fr)", height: "100%", background: "#FFFFFF", color: "#1D1C1D", fontSize: vars.textBody, textAlign: "left",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)" } },
+});
+export const slackSide = style({ display: "flex", flexDirection: "column", gap: "2px", padding: "16px 10px", background: "#3F0E40", color: "#CFC3CF", "@media": { [NARROW]: { display: "none" } } });
+globalStyle(`${slackSide} > span`, { padding: "4px 10px", borderRadius: "6px" }); // own corner: Slack's channel rows
+globalStyle(`${slackSide} > span[data-on]`, { background: "#1164A3", color: "#FFFFFF" });
+export const slackTeam = style({ padding: "4px 10px 14px", color: "#FFFFFF", fontSize: vars.textTitle });
+export const slackMain = style({ display: "flex", flexDirection: "column", minHeight: "0" });
+export const slackHead = style({ display: "flex", alignItems: "baseline", gap: "8px", padding: "14px 20px", borderBottom: "1px solid #E8E8E8" });
+globalStyle(`${slackHead} > b`, { fontSize: vars.textTitle });
+globalStyle(`${slackHead} > span`, { color: "#616061", fontSize: vars.textUi });
+export const slackList = style({ flex: "1", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column", gap: "18px", padding: "18px 20px" });
+export const slackMessage = style({ display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", gap: "10px" });
+globalStyle(`${slackMessage} img`, { width: "36px", height: "36px", borderRadius: "8px", background: "#F4EDE4" }); // own corner: Slack's square faces
+globalStyle(`${slackMessage} p`, { margin: "2px 0 0", lineHeight: "1.5" });
+globalStyle(`${slackMessage} code`, { padding: "0 3px", border: "1px solid #DDDDDD", borderRadius: "3px", background: "#F6F6F6", color: "#C01343", fontFamily: vars.fontMono, fontSize: vars.textMeta });
+export const slackWho = style({ display: "flex", alignItems: "baseline", gap: "6px" });
+globalStyle(`${slackWho} > time`, { color: "#616061", fontSize: vars.textMeta });
+export const slackApp = style({ padding: "0 4px", borderRadius: "3px", background: "#E8E8E8", color: "#616061", fontSize: vars.textCaption, fontWeight: 700 });
+export const slackMention = style({ padding: "0 2px", borderRadius: "3px", background: "#E8F5FA", color: "#1264A3" });
+export const slackCompose = style({ margin: "0 20px 20px", padding: "12px 14px", border: "1px solid #BBBBBB", borderRadius: "8px", color: "#868686" }); // own corner: Slack's composer
+
+export const feishu = style({ display: "flex", flexDirection: "column", height: "100%", background: "#F5F6F7", color: "#1F2329", fontSize: vars.textBody, textAlign: "left" });
+export const feishuHead = style({ display: "flex", alignItems: "baseline", gap: "8px", padding: "14px 20px", background: "#FFFFFF", borderBottom: "1px solid #E5E6EB" });
+globalStyle(`${feishuHead} > b`, { fontSize: vars.textTitle });
+globalStyle(`${feishuHead} > span`, { color: "#8F959E", fontSize: vars.textUi });
+export const feishuList = style({ flex: "1", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column", gap: "16px", padding: "18px 20px" });
+export const feishuMessage = style({ display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", gap: "10px" });
+globalStyle(`${feishuMessage} img`, { width: "36px", height: "36px", borderRadius: "50%", background: "#FFFFFF" });
+globalStyle(`${feishuMessage} code`, { fontFamily: vars.fontMono, fontSize: vars.textMeta });
+export const feishuWho = style({ display: "flex", alignItems: "center", gap: "6px", color: "#646A73", fontSize: vars.textMeta });
+export const feishuBot = style({ padding: "0 4px", borderRadius: "4px", background: "#E1EAFF", color: "#3370FF", fontSize: vars.textCaption });
+export const feishuBubble = style({ display: "inline-block", maxWidth: "36em", margin: "4px 0 0", padding: "9px 12px", borderRadius: "8px", background: "#FFFFFF", lineHeight: "1.55" }); // own corner: Feishu's bubbles
+export const feishuCompose = style({ margin: "0 20px 20px", padding: "12px 14px", borderRadius: "8px", background: "#FFFFFF", color: "#8F959E", boxShadow: "inset 0 0 0 1px #E5E6EB" }); // own corner: Feishu's composer
+
+// ---- The second idea: the distance (Distance.tsx) ----
+
+export const map = style({ display: "block", width: "100%", height: "auto", overflow: "visible" });
+export const mapGrid = style({ stroke: ink(7), strokeWidth: 1 });
+export const mapDegree = style({ fill: "var(--s-faint)", fontFamily: vars.fontMono, fontSize: vars.textCaption, "@media": { [NARROW]: { fontSize: vars.textUi } } });
+export const mapCity = style({});
+globalStyle(`${mapCity} > circle`, { fill: ink(28) });
+globalStyle(`${mapCity} > text`, { fill: DIM, fontSize: vars.textUi, "@media": { [NARROW]: { fontSize: vars.textTitle } } });
+const flow = keyframes({ to: { strokeDashoffset: -28 } });
+export const mapRoute = style({
+  fill: "none", stroke: ORANGE, strokeWidth: 2, strokeDasharray: "6 8", animation: `${flow} 1.2s linear infinite`,
+  "@media": { [STILL]: { animation: "none" } },
+});
+export const mapLink = style({});
+globalStyle(`${mapLink} > rect`, { fill: "var(--s-node)", stroke: ORANGE, strokeWidth: 1.5 });
+export const mapLinkMain = style({ fill: FG, fontSize: vars.textBody, fontWeight: 600, "@media": { [NARROW]: { fontSize: vars.textTitle } } });
+export const mapLinkSub = style({ fill: DIM, fontFamily: vars.fontMono, fontSize: vars.textMeta, "@media": { [NARROW]: { fontSize: vars.textUi } } });
+const breathe = keyframes({ "0%": { opacity: 0.5, transform: "scale(.6)" }, "100%": { opacity: 0, transform: "scale(1.6)" } });
+export const mapHalo = style({
+  fill: `color-mix(in srgb, ${ORANGE} 35%, transparent)`, transformBox: "fill-box", transformOrigin: "center",
+  animation: `${breathe} 2.4s ease-out infinite`, "@media": { [STILL]: { animation: "none", opacity: 0.3 } },
+});
+export const mapSpot = style({ fill: ORANGE, stroke: "var(--s-bg)", strokeWidth: 3 });
+export const mapCard = style({ filter: "drop-shadow(0 12px 24px rgba(0, 0, 0, .12))" });
+globalStyle(`${mapCard} > rect`, { fill: "var(--s-node)", stroke: ink(12), strokeWidth: 1 });
+export const mapCardMain = style({ fill: FG, fontSize: vars.textTitle, fontWeight: 600, "@media": { [NARROW]: { fontSize: vars.textHeading } } });
+export const mapCardSub = style({ fill: DIM, fontSize: vars.textUi, "@media": { [NARROW]: { fontSize: vars.textTitle } } });
+export const demoAfterHeading = style({ marginTop: "40px" });
 
 // ---- Footer ----
 

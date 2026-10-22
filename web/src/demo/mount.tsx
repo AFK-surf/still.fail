@@ -471,18 +471,20 @@ const chatPath = (key: string) => `/w/${ENTRY.id}/s/local/chats/${encodeURICompo
 /** The demo's own width (not the window's) says which app it is: the phone's below this, as mobile/ is for phones. */
 const PHONE_BELOW = 700;
 
-function useDemoWidth(): number {
-  const [width, setWidth] = useState(() => root.clientWidth);
+/** Whether the demo is the phone's app, kept as its width changes (the site's frame changes it as it is scrolled):
+ *  the app is drawn again only when that changes, not at every width. */
+function useDemoPhone(): boolean {
+  const [phone, setPhone] = useState(() => root.clientWidth < PHONE_BELOW);
   useEffect(() => {
-    const observer = new ResizeObserver(() => setWidth(root.clientWidth));
+    const observer = new ResizeObserver(() => setPhone(root.clientWidth < PHONE_BELOW));
     observer.observe(root);
     return () => observer.disconnect();
   }, []);
-  return width;
+  return phone;
 }
 
 function Demo() {
-  return <DemoApp phone={useDemoWidth() < PHONE_BELOW} />;
+  return <DemoApp phone={useDemoPhone()} />;
 }
 
 /** The demo as the phone's app or the desktop's, opened on the chat in view (so switching between them keeps it). */
