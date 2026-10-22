@@ -2,7 +2,7 @@
 // picture encoded only once one is asked for and only a new one (the screen changed) unless a key frame is asked for;
 // the input and the clipboard on this one, in the order they come.
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use windows::Graphics::Capture::GraphicsCaptureSession;
@@ -130,6 +130,9 @@ fn reveal(path: &str) {
     let _ = std::process::Command::new("explorer.exe").raw_arg(format!("/select,\"{path}\"")).spawn();
 }
 
+/// How long a picture may be in the encoder before it is taken as lost.
+const STUCK: Duration = Duration::from_secs(2);
+
 struct View {
     gpu: Gpu,
     capture: Capture,
@@ -151,6 +154,8 @@ struct View {
     pps: Vec<u8>,
     jpeg_size: (u32, u32),
     staging: Option<ID3D11Texture2D>,
+    /// When the picture in the encoder went in.
+    pushed_at: Instant,
 }
 
 fn failed(out: &Out, error: &windows::core::Error, code: &str) -> windows::core::Error {
@@ -183,6 +188,7 @@ impl View {
             pps: Vec::new(),
             jpeg_size: (0, 0),
             staging: None,
+            pushed_at: Instant::now(),
         };
         let encoder = if view.options.jpeg {
             "JPEG, quality 0.8".to_string()
@@ -289,6 +295,15 @@ impl View {
         for encoded in done {
             self.sent(encoded, out);
         }
+        // A picture the encoder never gave back (a driver that dropped it): the view would wait for it for ever. The
+        // encoder is made anew, and the picture owed comes from it as a key frame.
+        if self.encoder.as_ref().is_some_and(|e| e.busy()) && self.pushed_at.elapsed() > STUCK {
+            out.json(4, json!({ "encoder": "gave nothing back; made anew" }));
+            self.encoder = None;
+            self.wanted += 1;
+            self.force_key = true;
+            self.fresh = self.latest.is_some();
+        }
         if self.wanted == 0 || !self.fresh || self.latest.is_none() {
             return Ok(());
         }
@@ -313,6 +328,7 @@ impl View {
         let ts = self.timestamp();
         let key = self.force_key;
         self.encoder.as_mut().unwrap().push(&self.gpu, &texture, ts, key)?;
+        self.pushed_at = Instant::now();
         self.wanted -= 1;
         self.fresh = false;
         self.force_key = false;
