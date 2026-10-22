@@ -3,6 +3,7 @@
 // down with the finger (iOS bounces it so itself; elsewhere it is moved by hand), and a mark in the gap over it turns
 // as it opens; once far enough the mark takes the accent, and letting go then reloads.
 import { useRef, type TouchEvent } from "react";
+import { reload } from "../reloads.ts";
 
 /** How far the finger goes down before letting go reloads. */
 const PULL_READY_PX = 80;
@@ -66,7 +67,7 @@ export function usePullToReload(pane: string) {
       if (at && at.down >= PULL_READY_PX && mark.current) {
         pull.current = null;
         mark.current.setAttribute("data-reloading", "");
-        location.reload();
+        reload("pull");
         return;
       }
       stop();

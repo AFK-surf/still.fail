@@ -10,6 +10,7 @@ import { BUILT_AT } from "./built.ts";
 import { BETA } from "../channel.ts";
 import { applyDelta, type DeltaOp } from "./delta.ts";
 import { captureException } from "../telemetry.ts";
+import { reload } from "../reloads.ts";
 import { t } from "../i18n.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core-ts/src/protocol.ts). */
@@ -497,7 +498,7 @@ export class CoreClient {
     const message = data as { id?: number; ok?: unknown; value?: unknown; bytes?: Uint8Array; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
     // A newer build's core took over: this page is of the older build, so it loads the newer one.
     if (message.retired) {
-      location.reload();
+      reload("retired");
       return;
     }
     // The core this page talked to went with its tab; another tab's worker runs it now: this page asks it again.

@@ -23,6 +23,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
   | `workspace_created` | `first`（登录后自动建的第一个） |
   | `station_added` | `ms`（从生成命令到 station 出现在列表里） |
   | `workspace_opened` | 每次页面加载第一次显示出 workspace（不再是「正在打开 workspace」）时发一次：`ms`（从页面开始加载算）、`kept`（是不是靠本机存的数据打开的；false 是等 still.fail cloud 的 `/v1/me` 回来才打开）、`accounts`（登录的账号数） |
+  | `page_loaded` | 每次页面加载发一次（`web/src/reloads.ts`）：`reason`（页面自己重新加载的原因：`pull` 下拉手机的聊天列表、`update` 点了「有新版本 · 刷新」、`retired` 同一浏览器里别的标签页开了新版、`button` 点了「重新加载」；`none` 不是页面自己重载的，比如浏览器的刷新按钮，或 iOS 回收了后台标签页、看它时重新加载）、`navigation`（浏览器给的 navigate / reload / back_forward）、`follows`（这个标签页里之前有没有页面）；有的话再带 `after_s`（上一个页面开了多久）、`hidden_s`（它已经在后台多久，-1 是还在前台） |
   | `$pageview` | 只在路由变化时发 |
 
 - **URL**：所有事件里的 URL 都把 id 换成占位（`/w/:workspace/s/:station/chats/:thread`），路由里固定的词以外的段一律换成 `:id`（Profile 的 key 带着邮箱，skill 的名字可能是客户名；`pathTemplate`，`test/telemetry-paths.test.ts`），去掉查询串和 `#` 之后的部分；别的域名只留域名。不开 autocapture（它会记元素里的文字），也不开热图、死点击、rage click。

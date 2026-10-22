@@ -13,6 +13,7 @@ import * as css from "./gate.css.ts";
 import { NAME } from "./beta.tsx";
 import { standalone } from "../standalone.ts";
 import { trackNow } from "../telemetry.ts";
+import { reload } from "../reloads.ts";
 import { t } from "../i18n.ts";
 
 export function Avatar({ account, size = 24 }: { account: { name: string; email: string; picture: string }; size?: number }) {
@@ -91,7 +92,7 @@ export function Callback() {
         <>
           <p>{t("web-pages.signIn.slow")}</p>
           <div className={css.ways}>
-            <Button variant="primary" icon={Refresh} onClick={() => location.reload()}>{t("common.reload")}</Button>
+            <Button variant="primary" icon={Refresh} onClick={() => reload("button")}>{t("common.reload")}</Button>
             <Button variant="ghost" onClick={() => location.replace("/")}>{t("web-pages.signIn.restart")}</Button>
           </div>
         </>

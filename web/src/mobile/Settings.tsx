@@ -14,6 +14,7 @@ import { ArrowUpRight, ChevronRight } from "@stillfail/ui/icons.tsx";
 import { useAppearance, useMotionSetting, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { HAS_TELEMETRY, setTelemetry, useTelemetryOn } from "../telemetry.ts";
+import { reload } from "../reloads.ts";
 import { legalPages, legalUrl } from "../pages/About.tsx";
 import { NAME } from "../channel.ts";
 import { useApp } from "./app.tsx";
@@ -112,7 +113,7 @@ export function SettingsScreen() {
         {/* On an Android phone's browser, this channel's app. */}
         {downloadsOffered() && onAndroid() && <GoRow title={t("web-mobile.settings.downloadAndroid")} onClick={() => { location.href = download("android"); }} />}
         {/* An app on the home screen has no browser round it to reload the page: here it can. */}
-        {standalone() && <ListRow onClick={() => location.reload()}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("common.reload")}</span></ListRow>}
+        {standalone() && <ListRow onClick={() => reload("button")}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("common.reload")}</span></ListRow>}
       </ListCard>
       {/* On still.fail's site, in a tab of their own. */}
       <SectionHeader title={t("web-pages.settings.nav.about")} start={24} />

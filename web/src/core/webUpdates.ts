@@ -1,5 +1,6 @@
 // The browser host's update state. Kept outside the views: both web layouts show the same notice, and neither
 // requests deployment metadata. This belongs to the web host, not the shared Rust core or the desktop updater.
+import { reload } from "../reloads.ts";
 declare const __WEB_REVISION__: string | null;
 
 type Release = { revision: string; version: string };
@@ -33,7 +34,7 @@ export class WebUpdates {
     this.#dismissed = this.#available?.revision ?? null;
     this.#publish(null);
   };
-  refresh = (): void => { window.location.reload(); };
+  refresh = (): void => { reload("update"); };
 
   async check(now = Date.now()): Promise<void> {
     if (!this.revision || this.#checking || now - this.#last < EVERY) return;

@@ -12,6 +12,7 @@ import "@fontsource-variable/inter";
 import { CloudApp } from "./cloud/CloudApp.tsx";
 import { nameTitle } from "./cloud/beta.tsx";
 import { startTelemetry } from "./telemetry.ts";
+import { followPageLoads } from "./reloads.ts";
 import { wholeImage } from "./wholeImages.ts";
 import { WindowControls } from "./WindowControls.tsx";
 
@@ -30,6 +31,7 @@ window.stillfailDesktop?.onImageWanted?.(wholeImage);
 // still.fail cloud's web app (sign-in, workspaces; stations over iroh). The data comes from the client core (core/); a
 // station serves no page of its own.
 startTelemetry("cloud");
+followPageLoads();
 nameTitle();
 /** The desktop app's menus and dialogs speak the page's language (apps/desktop/src/main.ts). */
 function SayLanguage() {
