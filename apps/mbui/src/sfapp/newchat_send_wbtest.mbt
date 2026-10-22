@@ -1,0 +1,190 @@
+// A new chat's first words (newchat.mbt send_first, flight.mbt carried): on screen where they were typed from the frame
+// they are sent, while the chat is made and its first view read, as a phone's core answers (a round trip later each);
+// then up into their bubble with the chat's list coming up out of the composer (480 ms after 90, Ease.Arrive), never
+// gone for a frame nor drawn twice apart.
+
+///|
+/// How long the chat made goes unread after the page has become it, as a slow core's first view of it comes.
+let read_late_ms : Double = 100.0
+
+///|
+/// Where words `s` are seen now under the bar (each copy of exactly them, not see-through): (x, y).
+fn seen_words(t : @ui.Tester, s : String) -> Array[(Double, Double)] {
+  t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 && w.2 > 60.0 }).map(fn(w) { (w.1, w.2) })
+}
+
+///|
+/// Where words `s` are seen now: once (copies drawn over each other count as one), else the test fails.
+fn seen_once(t : @ui.Tester, s : String) -> (Double, Double) raise {
+  let at = seen_words(t, s)
+  guard at.length() > 0 else { fail("「\{s}」 not seen at \{t.time()}") }
+  for p in at {
+    if (p.0 - at[0].0).abs() > 0.5 || (p.1 - at[0].1).abs() > 0.5 {
+      fail("「\{s}」 seen twice apart at \{t.time()}: \{at}")
+    }
+  }
+  at[0]
+}
+
+///|
+fn assert_at(was : (Double, Double), now : (Double, Double)) -> Unit raise {
+  if (was.0 - now.0).abs() > 0.5 || (was.1 - now.1).abs() > 0.5 {
+    fail("moved from \{was} to \{now}")
+  }
+}
+
+///|
+/// Home over the made-up chats with the core's answers to `newChat.create` and `chat.send` kept (`held`, by name: what
+/// gives each), and the chat made unread while `unread` says: as a phone's core gives them, a round trip later.
+fn held_core(held : Map[String, () -> Unit], unread : Ref[Bool]) -> @ui.Tester {
+  reset()
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      match name {
+        "newChat.create" | "chat.send" =>
+          (base.call)(name, params, fn(r) { held[name] = fn() { done(r) } })
+        _ => (base.call)(name, params, done)
+      }
+    },
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      let made = match params.get("session") {
+        Some(String(s)) => s.has_prefix("new:")
+        _ => false
+      }
+      if name == "chat" && made && unread.val {
+        { value: None, error: None, version: 0 }
+      } else {
+        t
+      }
+    },
+  }
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+}
+
+///|
+/// 令 tapped, `words` typed in the new chat and sent: where they are seen the frame after (over the field, the field
+/// emptied under them).
+fn new_chat_sent(t : @ui.Tester, words : String) -> (Double, Double) raise {
+  let (_, y) = bar_places_at()
+  t.tap(195.0, y - 28.0 - 4.0)
+  t.run_for(@ui.nav_rise_ms)
+  t.tap_text("做任何事")
+  t.type_text(words)
+  t.draw()
+  tap_send(t)
+  t.draw()
+  let (_, field, _, _) = t.ime()
+  assert_eq(field, "")
+  let at = seen_once(t, words)
+  // (in the composer, at the screen's foot)
+  assert_true(at.1 > 700.0)
+  at
+}
+
+///|
+/// The frames from now till `until` (ms on the test's clock): each where words `s` are seen, and going up only (a
+/// frame's step at most `most`).
+fn up_till(t : @ui.Tester, s : String, until : Double, most : Double) -> (Double, Double) raise {
+  let mut at = seen_once(t, s)
+  while t.time() < until {
+    t.frame()
+    let now = seen_once(t, s)
+    if now.1 > at.1 + 0.5 || at.1 - now.1 > most {
+      fail("「\{s}」 from \{at} to \{now} in a frame at \{t.time()}")
+    }
+    at = now
+  }
+  at
+}
+
+///|
+test "a new chat's first words stay where typed while the chat is made and read, then go up into their bubble" {
+  let held : Map[String, () -> Unit] = {}
+  let unread = Ref(true)
+  let t = held_core(held, unread)
+  let words = "把发布说明写一下"
+  let typed = new_chat_sent(t, words)
+  // the chat made (the core's answer a while after): the message sent to it
+  match held.get("newChat.create") {
+    Some(give) => give()
+    None => fail("no chat asked for")
+  }
+  t.draw()
+  assert_at(typed, seen_once(t, words))
+  assert_true(app.nav.top() is NewChat)
+  // the message in the chat's outbox: the page is the chat, its view not read yet
+  match held.get("chat.send") {
+    Some(give) => give()
+    None => fail("the message not sent")
+  }
+  t.draw()
+  match app.nav.top() {
+    Chat(r) => assert_eq(r.session, "new:1")
+    _ => fail("not the chat")
+  }
+  t.run_for(read_late_ms)
+  assert_at(typed, seen_once(t, words))
+  // read: their row laid out, and from 90 ms after it they go
+  unread.val = false
+  t.draw()
+  assert_at(typed, seen_once(t, words))
+  let placed = t.time()
+  t.run_for(flight_carry_after_ms - 20.0)
+  assert_at(typed, seen_once(t, words))
+  // up with the list, no frame where they are not, nor a jump
+  let landed = up_till(t, words, placed + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
+  assert_true(send_flight.val is None)
+  // in their bubble, under the bar at the list's top
+  assert_true(landed.1 < 200.0)
+  assert_true((landed.0 - typed.0).abs() > 1.0)
+  t.frame()
+  assert_at(landed, seen_once(t, words))
+}
+
+///|
+test "a new chat's first words with the core at once: never gone, up into their bubble with the list" {
+  let t = tester("home")
+  let words = "把发布说明写一下"
+  let typed = new_chat_sent(t, words)
+  let sent = t.time()
+  let landed = up_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 100.0, 120.0)
+  assert_true(send_flight.val is None)
+  assert_true(landed.1 < 200.0)
+  assert_true(landed.1 < typed.1 - 300.0)
+}
+
+///|
+test "a new chat's first words not sent (the chat not made): they leave the screen, back in the field" {
+  let held : Map[String, () -> Unit] = {}
+  let unread = Ref(true)
+  reset()
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      match name {
+        "newChat.create" =>
+          held[name] = fn() {
+            done(Err({ "code": Json::string("unavailable"), "message": Json::string("Studio 离线") }))
+          }
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  ignore(unread)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let words = "把发布说明写一下"
+  new_chat_sent(t, words) |> ignore
+  match held.get("newChat.create") {
+    Some(give) => give()
+    None => fail("no chat asked for")
+  }
+  t.draw()
+  assert_true(send_flight.val is None)
+  assert_true(app.nav.top() is NewChat)
+  let (_, back, _, _) = t.ime()
+  assert_eq(back, words)
+}

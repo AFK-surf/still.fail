@@ -313,7 +313,12 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
             )
           None => None
         }
-        waiting_messages(c, failed)
+        // a chat just made from a new chat (its scene leaving, its first words on their way) is the core's own:
+        // nothing to read from a station, nothing breathing for the frames until the core's view of it comes
+        // (Chat.kt made)
+        if failed is Some(_) || !new_chat_made(c, r) {
+          waiting_messages(c, failed)
+        }
         c.layer(fn() {
           c.spacer()
           composer(c, src, r, None, beside=corners_on.val)
@@ -321,6 +326,10 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
           bar_room_box(c, nav_foot())
         })
         |> ignore
+        // its first words, as typed, till their row is in the list (flight.mbt; their wait for it counted from now)
+        flight_frame(c, draft_key(r))
+        flight_waiting(c, draft_key(r))
+        flight_files(c, draft_key(r))
       }
       Some(v) => {
         messages(c, src, r, v, list)
@@ -431,8 +440,10 @@ fn messages(
   found_marking.val = (rd.found_at, rd.found_words, rd.found_drawn.get())
   found_centre(c, rd, key)
   flash_row.val = None
-  // a new chat's list comes up out of the composer as it becomes this chat (newchat.mbt)
-  c.box(w=Fill(1.0), h=Fill(1.0), ty=new_chat_rise(c, r), fn() {
+  // a new chat's list comes up out of the composer with its first words (flight.mbt flight_carry_shift); not drawn
+  // the build their row is first laid out, where it is not known yet
+  let carry = flight_carry_shift(c, dkey)
+  let list_box = c.box(w=Fill(1.0), h=Fill(1.0), ty=carry.unwrap_or(0.0), fn() {
     c.list(
       key,
       n,
@@ -836,7 +847,10 @@ fn messages(
     emit_flyer(c, ek, em, v)
     chat_bench(c, key, rd, v.more, n)
   })
-  |> ignore
+  // (its row laid out in this build: where the list is to start from is measured now)
+  if carry is None {
+    c.look(list_box, @ui.look(alpha=0.0))
+  }
 }
 
 ///|
@@ -1041,9 +1055,9 @@ fn sent_before(v : ChatView) -> Map[String, Bool] {
 }
 
 ///|
-/// Words sent from chat `rk` (its station and session) are in its list now, before the core has them (LocalSent).
-/// Its key, for what flies there (flight.mbt).
-fn sent_local(rk : String, v : ChatView, words : String, files : Array[Json]) -> String {
+/// Words sent from chat `rk` (its station and session; `v` its view, None for one just made) are in its list now,
+/// before the core has them (LocalSent). Its key, for what flies there (flight.mbt).
+fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json]) -> String {
   local_sent_n.val += 1
   let id = "local:\{local_sent_n.val}"
   reading_of(rk).sending.push({
@@ -1060,7 +1074,11 @@ fn sent_local(rk : String, v : ChatView, words : String, files : Array[Json]) ->
       waits: "",
       uploads: [],
     },
-    before: sent_before(v),
+    // (a chat just made: none)
+    before: match v {
+      Some(v) => sent_before(v)
+      None => Map::new()
+    },
   })
   "o:" + id
 }

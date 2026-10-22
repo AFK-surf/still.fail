@@ -5,8 +5,10 @@
 // composer at its foot is a chat's (composer.mbt), its draft the station's (`new:<station>`). The first message makes
 // the chat (`newChat.create`, the core has it at once under the key it answers, its station makes it behind it) and
 // goes to it (`chat.send` by that key); then the page becomes that chat in place (@ui.Nav::become), its composer and
-// focus kept: the new chat's scene goes up out of view as it fades (140 ms), its choices fade where they are (80 ms),
-// and the chat's list comes up out of the composer (480 ms after 90). Home lists it at once (the core's row).
+// focus kept: the new chat's scene goes up out of view as it fades (140 ms), its choices fade where they are (80 ms).
+// The words sent stay where they were typed from the frame they are sent, and once their row is in the chat's list
+// they go to it with the list coming up out of the composer (flight.mbt: carried, 480 ms after 90). Home lists it at
+// once (the core's row).
 
 ///|
 /// What the page keeps while it is a new chat, and as it becomes its chat.
@@ -18,7 +20,7 @@ priv struct FreshChat {
   mut sent : Bool
   /// a message on its way (the create and the send)
   mut starting : Bool
-  /// the chat it became (its scene leaving over it, its list rising: new_leave, new_rise)
+  /// the chat it became (its scene leaving over it: new_leave)
   mut became : ChatRef?
   /// the scene's look as it left: the view it showed
   mut scene : Json?
@@ -114,6 +116,8 @@ fn new_chat_bar(c : @ui.Ctx) -> Unit {
 fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // on a wide screen in a column in the middle, its composer too (Wide.kt NewChatColumn)
   new_chat_column(c, fn() { new_chat_in(c, src, w) })
+  // the first words sent, where they were typed, while the chat is made (flight.mbt)
+  flight_carry_waiting(c)
 }
 
 ///|
@@ -234,7 +238,7 @@ fn new_chat_on(
     // the keyboard up, the choices and the composer stay over it
     c.box(style=new_scene_room, fn() {
     c.list("new/scene", 1, new_scene_h, fn(_) {
-    c.box(
+    let scene = c.box(
       w=Fill(1.0),
       pl=30.0,
       pr=30.0,
@@ -319,7 +323,10 @@ fn new_chat_on(
         }
       },
     )
-    |> ignore
+    // and a little smaller as it goes, from its middle (NewChat.kt: scale 1 - 0.04 a)
+    if up > 0.0 {
+      c.look(scene, @ui.look(scale=1.0 - 0.04 * up))
+    }
     }) |> ignore
     }) |> ignore
     // at the foot, on the page's paper: what was used up, the choices, the composer
@@ -565,6 +572,10 @@ fn send_first(
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   let taken_text = d.text
   let taken_files = d.files.copy()
+  // the words stay where they were typed, the files where their tiles were, while the chat is made (flight.mbt:
+  // carried; NewChat.kt host.sending)
+  let here : ChatRef = { station, session: "", title: "", station_name }
+  flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
@@ -577,6 +588,7 @@ fn send_first(
   let sig = picked_sig(v)
   let give_back = fn(e : Json) {
     fresh.starting = false
+    flight_carry_gone(d.key)
     if draft_empty(d) {
       d.text = taken_text
       d.put_text = Some(taken_text)
@@ -604,13 +616,15 @@ fn send_first(
         Ok(_) => {
           fresh.sent = true
           fresh.starting = false
-          // the page becomes the chat, in place
+          // the page becomes the chat, in place, its first words in its list from now and going on there
           let r : ChatRef = { station, session: key, title: "", station_name }
+          let rk = station + "\u{1}" + key
+          flight_carry_into(d.key, draft_key(r), rk, sent_local(rk, None, words, files))
           fresh.scene = v
           fresh.became = Some(r)
           became_starts()
           app.nav.become(Chat(r))
-              }
+        }
       }
     })
   }
@@ -642,14 +656,6 @@ let new_leave_ms : Double = 140.0
 let new_fade_ms : Double = 80.0
 
 ///|
-/// The list of the chat a new chat became rising into its place (the words' way up out of the composer), after a
-/// little.
-let new_rise_ms : Double = 480.0
-
-///|
-let new_rise_after_ms : Double = 90.0
-
-///|
 /// Over the chat a new chat became: its scene leaving (140 ms), then nothing.
 fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   match fresh.became {
@@ -672,19 +678,12 @@ fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Un
 }
 
 ///|
-/// How far the list of a chat a new chat became is still below its place (the words' way up out of the composer):
-/// 480 ms on Arrive, after 90.
-fn new_chat_rise(c : @ui.Ctx, r : ChatRef) -> Double {
+/// Whether the page of chat `r` is the one a new chat just became, its first value not read yet (its scene leaving,
+/// its first words on their way): the core's own, nothing breathing over it (Chat.kt made).
+fn new_chat_made(c : @ui.Ctx, r : ChatRef) -> Bool {
   match fresh.became {
-    Some(b) if b == r => {
-      let k = new_rise(c).get()
-      if k <= 0.0 {
-        return 0.0
-      }
-      let rise = dmax(0.0, c.height - nav_foot() - composer_room_of(c) - status_top() - chat_bar_h - 120.0)
-      rise * k
-    }
-    _ => 0.0
+    Some(b) if b == r => new_leave(c).moving() || flight_carried(draft_key(r))
+    _ => false
   }
 }
 
@@ -700,13 +699,7 @@ fn new_fade(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// How far the list of the chat a new chat became is still below its place (1 … 0, Arrive, after a little).
-fn new_rise(c : @ui.Ctx) -> @motion.Anim {
-  @motion.anim(c, "new/rise", 0.0, global=true)
-}
-
-///|
-/// The new chat became the chat: its scene leaves and the chat's list rises, from now.
+/// The new chat became the chat: its scene leaves, from now.
 fn became_starts() -> Unit {
   let c = @ui.current()
   let leave = new_leave(c)
@@ -715,9 +708,6 @@ fn became_starts() -> Unit {
   let fade = new_fade(c)
   fade.snap(0.0)
   fade.animate(1.0, @motion.tween(new_fade_ms, ease=LeaveFade))
-  let rise = new_rise(c)
-  rise.snap(1.0)
-  rise.animate(0.0, @motion.tween(new_rise_ms, ease=Arrive, delay=new_rise_after_ms))
 }
 
 // ── the sheets ─────────────────────────────────────────────────────────

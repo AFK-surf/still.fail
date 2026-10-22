@@ -97,12 +97,12 @@ Android's recordings of these (HomeMotionTest: e2e/tapes/home-*.trace) are repla
 |---|---|---|---|---|---|
 | Words wait as typed | sent, until their row is in the list | the field's words drawn over the field | ≤ 2 s, then given up | chat/ChatHost.kt:520-534, 629-635 | yes (`flight_waiting`) |
 | Words fly into their bubble (open chat) | their row laid out | x on Ease.Flight over the first 80% of 600 ms; y the same 12% late (a curve); their size as typed until they settle; the bubble's ground coming in round them from 24% to 80%; the row's time and the rest coming in as they settle (Ease.Arrive from 24%) | 600 ms linear clock (FLIGHT_MS, FLY .8, SETTLE .24) | chat/ChatHost.kt:112-211, 508-648, 685-693 | yes: the bubble flown over the composer by `fly` (flight.mbt); the words go as one block (the field and the bubble wrap alike), not cut into pieces by line |
-| A new chat's first words | a new chat made | across and up together, Ease.Arrive, 480 ms after 90; the list rises from the composer's top | ARRIVE_MS 480 | chat/ChatHost.kt:145-167, 645 | not yet (new chat is another slice) |
+| A new chat's first words | a new chat made | where typed from the frame sent until their row is laid out; then across and up together, Ease.Arrive, 480 ms after 90; the list rises from the composer's top, cut there | ARRIVE_MS 480 | chat/ChatHost.kt:145-167, 645 | yes (`flight_carry_*`, flight.mbt: the list's box drawn off its place, the bubble across over the composer) |
 | The rows above go up with them | the new row puts them up at once | their offset from where they were, on the words' way up | the flight's `up` | chat/ChatHost.kt:407-420 | yes (`layout(screen=true, drive=up)`) |
 | Files fly from their tiles | sent with files | each from its tile to its place, its crop opening, corners from the composer's to 10 dp | the flight's across/up | chat/ChatHost.kt:650-683 | not yet |
 | The composer is held | words sent | its content as tall as when sent until they are 24% of the way | — | chat/ChatHost.kt:324-333, 644 | yes (the morph's target) |
 | The hint comes back | the words out of the composer's top | the placeholder's alpha | gone at once, back tween(200, Arrive) | chat/ChatHost.kt:470-472, 612-614 | yes, once the words are half way up (not by their bottom against the composer's edge) |
-| A new chat's scene leaves | its chat made | up and out, scale .96, alpha; its choices fade where they are | 140 ms Arrive; choices 80 ms LeaveFade | chat/ChatHost.kt:451-460; chat/NewChat.kt:165-215 | not yet |
+| A new chat's scene leaves | its chat made | up and out, scale .96, alpha; its choices fade where they are | 140 ms Arrive; choices 80 ms LeaveFade | chat/ChatHost.kt:451-460; chat/NewChat.kt:165-215 | yes (`new_chat_leaving`, newchat.mbt) |
 
 ## The composer (chat/Composer.kt)
 

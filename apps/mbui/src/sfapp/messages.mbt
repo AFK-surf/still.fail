@@ -208,7 +208,7 @@ fn said(
                 // (files sent alone: the row comes in where it is, its time with it)
                 Some(f) if f.text != "" => {
                   let at = c.box(fn() { message_time(c, m.ts, m.time) })
-                  c.look(at, @ui.look(alpha=flight_settled(flight_p(c, f))))
+                  c.look(at, @ui.look(alpha=flight_settled_of(c, f)))
                 }
                 _ => message_time(c, m.ts, m.time)
               }
@@ -674,7 +674,7 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   let k = ink()
   // words sent flying here: the bubble's ground comes in round them on their way (flight.mbt)
   let ground = match flying.val {
-    Some(f) if f.placed => flight_ground(flight_p(c, f))
+    Some(f) if f.placed => flight_ground_of(c, f)
     _ => 1.0
   }
   // gone to (a notification's), the bubble takes the accent's ground as it flashes (Chat.kt Bubble: lit)

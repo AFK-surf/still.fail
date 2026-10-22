@@ -456,6 +456,31 @@ fn fixture_stations_way(v : Json?) -> Json? {
 }
 
 ///|
+/// `base` answering `ms` late, as a phone's core across its thread does: each call's answer and each topic's first value
+/// (src/sffilm's MBUI_CORE_MS: what shows meanwhile filmed too). What is due comes as the fixture is next read
+/// (fix_later).
+pub fn round_trip(base : Source, ms : Double) -> Source {
+  let read : Map[String, Bool] = {}
+  {
+    ..base,
+    call: fn(name, params, done) { (base.call)(name, params, fn(r) { fix_later(ms, fn() { done(r) }) }) },
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      let k = name + Json::object(params).stringify()
+      match read.get(k) {
+        Some(true) => t
+        Some(false) => { value: None, error: None, version: -1 }
+        None => {
+          read[k] = false
+          fix_later(ms, fn() { read[k] = true })
+          { value: None, error: None, version: -1 }
+        }
+      }
+    },
+  }
+}
+
+///|
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
   fixture_preview(mode)

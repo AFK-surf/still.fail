@@ -1048,6 +1048,26 @@ fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
 // ── sending ─────────────────────────────────────────────────────────────
 
 ///|
+/// The draft's files that are up, each from its tile in the composer (what flies to the message sent: flight.mbt;
+/// ChatHost.kt sending: those up, each from where its tile is).
+fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[FlyingFile] {
+  let flying : Array[FlyingFile] = []
+  for f in d.files {
+    match (f.done, @motion.measured_rect(c, "composer/tile/\{f.id}")) {
+      (Some(a), Some(from)) if text(Some(a), "path") != "" =>
+        flying.push({
+          path: text(Some(a), "path"),
+          from,
+          picture: if draft_is_picture(f, draft_picture_key(src, r, f)) { draft_picture_key(src, r, f) } else { "" },
+          face: draft_face(c, src, r, d, f),
+        })
+      _ => ()
+    }
+  }
+  flying
+}
+
+///|
 /// Sends what the draft holds (Composer.kt chatSend): emptied at once, the message in the chat's outbox until the
 /// station has it, the list taken to its end; refused before the outbox, the words come back and why is said.
 fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -> Unit {
@@ -1073,19 +1093,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   let taken_comments = d.comments.copy()
   // the words take off from where they were typed, the files from their tiles (flight.mbt; ChatHost.kt sending: those
   // up, each from where its tile is)
-  let flying : Array[FlyingFile] = []
-  for f in d.files {
-    match (f.done, @motion.measured_rect(c, "composer/tile/\{f.id}")) {
-      (Some(a), Some(from)) if text(Some(a), "path") != "" =>
-        flying.push({
-          path: text(Some(a), "path"),
-          from,
-          picture: if draft_is_picture(f, draft_picture_key(src, r, f)) { draft_picture_key(src, r, f) } else { "" },
-          face: draft_face(c, src, r, d, f),
-        })
-      _ => ()
-    }
-  }
+  let flying = draft_flying(c, src, r, d)
   for x in taken_refs {
     match (x.up, @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
       (Some({ done: Some(a), .. }), Some(from)) if x.mode == "file" && text(Some(a), "path") != "" =>
@@ -1095,7 +1103,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   }
   // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
   let rk = r.station + "\u{1}" + r.session
-  let row = sent_local(rk, v, words, files)
+  let row = sent_local(rk, Some(v), words, files)
   flight_start(c, d.key, rk, row, words, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
   ref_field_put(d, "")
   d.files.clear()
