@@ -1604,6 +1604,9 @@ data class ChatItem (
 	/// card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
 	/// no card waiting, or with nothing to say.
 	val stateText: String? = null,
+	/// A message sent here into it did not go (it waits in the chat to be sent again or dropped): `stateText` says
+	/// which (未发送：…), drawn in red, and `tone` is alert. Absent otherwise.
+	val unsent: Boolean? = null,
 	/// The message `stateText` is about (a seq in this chat): the one the agent's state names. Opening the chat from
 	/// the line may go to it. Absent when none, and for a line that asks for a decision (its chat leads to it: `ChatView.asks`).
 	val stateAbout: Long? = null,

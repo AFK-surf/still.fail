@@ -1235,7 +1235,8 @@ export class Views implements Owner {
     return row;
   }
 
-  /// A row whose chat has a message sent here that did not go: marked red, its second line saying which, before
+  /// A row whose chat has a message sent here that did not go: marked red, its second line saying which (`unsent`: drawn
+  /// in red), before
   /// anything its agents do (the message waits in the chat to be sent again or dropped).
   #unsentRow(station: string, row: J): J {
     const thread = typeof row.thread === "number" ? row.thread : null;
@@ -1243,7 +1244,7 @@ export class Views implements Owner {
     if (unsent === undefined) return row;
     const text = format.cleanText(format.plainText(str(unsent.text) ?? ""));
     const { stateAbout: _stateAbout, ...rest } = row;
-    const marked: J = { ...rest, tone: "alert", stateText: t("core-views.unsent", { text: text === "" ? t("core-views.file") : text }) };
+    const marked: J = { ...rest, tone: "alert", unsent: true, stateText: t("core-views.unsent", { text: text === "" ? t("core-views.file") : text }) };
     deepFreeze(marked);
     const pinned = pinnedAt.get(row);
     if (pinned !== undefined) pinnedAt.set(marked, pinned);

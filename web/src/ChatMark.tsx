@@ -70,9 +70,10 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
  * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
  * last message would be. `slot` (every chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; 监控中 a radar before its words;
  * the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's arcs light up in turn, going out)
- * stands in the title's mark's column, centred under it, and what follows starts where the title does.
+ * stands in the title's mark's column, centred under it, and what follows starts where the title does. `alert` (a message
+ * that did not go, the row's `unsent`): in red.
  */
-export function WaitingText({ text, className, slot = false }: { text: string; className: string; slot?: boolean }) {
+export function WaitingText({ text, className, slot = false, alert = false }: { text: string; className: string; slot?: boolean; alert?: boolean }) {
   const need = slot ? /^(?:要你帮忙|需要你处理|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
   const lead = /^(?:奏|Decision)(?: · |$)/.test(text) ? text.split(" · ")[0]! : "";
   const turn = lead !== "" || /^(?:要你帮忙|需要你处理|Needs you:)/.test(text);
@@ -85,7 +86,7 @@ export function WaitingText({ text, className, slot = false }: { text: string; c
     const rest = watch ? text : text.slice(icon[0].length);
     const Moving = watch ? Watch : Wait;
     return (
-      <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-state-line="" aria-label={text}>
+      <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-alert={alert || undefined} data-state-line="" aria-label={text}>
         <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label} data-motion={motion}>
           {need ? <Bell size={14} /> : DONE.test(text) ? <Check size={14} strokeWidth={1.7} /> : watch ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
           {/* What moves, each part on a copy of its own (ChatMark.css.ts leadSlot). */}
@@ -96,7 +97,7 @@ export function WaitingText({ text, className, slot = false }: { text: string; c
     );
   }
   return (
-    <span className={className} data-turn={turn || undefined} data-state-line="">
+    <span className={className} data-turn={turn || undefined} data-alert={alert || undefined} data-state-line="">
       {lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} />
     </span>
   );
