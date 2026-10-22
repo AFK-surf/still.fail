@@ -9,6 +9,12 @@ test "the player of a drive's video: its name, which of the folder's (the song f
   assert_true(t.find("5:12 / 23:24") is Some(_))
   assert_true(t.find("反正也不急") is Some(_))
   assert_true(app.nav.top() is DrivePlay(_))
+  // the subtitle kept on the device as the film's parts are, as played (Player.kt: through DriveCache.played), as
+  // its folder lists it
+  let sub = fix_reads.filter(fn(p) { text(Some(p), "path").has_suffix("第02集.srt") })
+  assert_true(sub.length() > 0)
+  assert_eq(text(Some(sub[0]), "keep"), "played")
+  assert_eq(number(Some(sub[0]), "size"), 2210.0)
   t.assert_idle()
 }
 

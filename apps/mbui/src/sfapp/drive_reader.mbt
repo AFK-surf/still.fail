@@ -112,6 +112,8 @@ priv struct TextReading {
   mut asked : Bool
   mut got : Int
   mut of : Int
+  /// the file as its folder lists it (its mtime, its size): what is read is kept on the device as that (drive_keep)
+  mut listed : (Double, Double)?
   parts : Array[Bytes]
   mut failed : String?
   mut novel : Novel?
@@ -155,6 +157,7 @@ fn reading_for(key : String) -> TextReading {
         asked: false,
         got: 0,
         of: -1,
+        listed: None,
         parts: [],
         failed: None,
         novel: None,
@@ -212,6 +215,10 @@ fn reader_fetch(src : Source, at : DriveAt, r : TextReading) -> Unit {
     "path": Json::string(at.path),
     "offset": Json::number(r.got.to_double()),
     "length": Json::number(want.to_double()),
+  }
+  match r.listed {
+    Some((mtime, size)) => drive_keep(params, "file", mtime, size)
+    None => ()
   }
   (src.read_bytes)("drive.read", Json::object(params), fn(res) {
     match res {
@@ -274,6 +281,7 @@ pub fn reader_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     for e in items(folder, "entries") {
       if text(Some(e), "name") == dv_name(at.path) && !flag(Some(e), "dir") {
         r.of = number(Some(e), "size").to_int()
+        r.listed = Some((number(Some(e), "mtime"), number(Some(e), "size")))
       }
     }
     let known = r.of
@@ -577,7 +585,7 @@ fn reader_book(
       // the whole file kept on the device (keep.mbt), as the drive's 下载 keeps it: a novel cut at 16 MB too
       reader_top_bar(c, p, novel.title, sub, k, download=Some(fn() {
         say(c, fill("android-misc.drive.downloading", [("name", dv_name(at.path))]))
-        download_drive_file(c, src, at.station, at.root.unwrap_or(""), at.path, dv_name(at.path), "")
+        download_drive_file(c, src, at.station, at.root.unwrap_or(""), at.path, dv_name(at.path), "", listed=r.listed)
       }))
     }
     if r.hit >= 0 && r.matches.length() > 0 {

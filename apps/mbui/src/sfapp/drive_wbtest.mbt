@@ -255,6 +255,14 @@ test "a picture goes to the preview, read by drive.read" {
   assert_eq(v.file.name, "首页截图.png")
   assert_true(v.drive is Some(_))
   assert_true(v.bytes is Some(_))
+  // kept on the device as read from its start, as its folder lists it (DriveCache.kt; the core's drive-kept.ts)
+  let asked = fix_reads.filter(fn(p) { text(Some(p), "path").has_suffix("首页截图.png") })
+  assert_true(asked.length() > 0)
+  for p in asked {
+    assert_eq(text(Some(p), "keep"), "file")
+    assert_eq(number(Some(p), "size"), 812345.0)
+    assert_eq(number(Some(p), "mtime"), 1792300000000.0 - 812345.0)
+  }
   // its bars, left alone, go
   t.run_for(rest_ms)
   t.assert_idle()

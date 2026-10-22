@@ -7,6 +7,7 @@ import type { FontsCall } from "../font-files.ts";
 import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
 import { type HeldCall, type ModuleCall, parseModuleCall } from "../module.ts";
+import type { KeepKind } from "../drive-kept.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import * as ops from "../ops.ts";
@@ -68,7 +69,9 @@ export type Call =
   | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean }
   | { kind: "stationPoster"; station: string; key: string; name: string }
   | { kind: "fileOpen"; station: string; key: string; path: string }
-  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean }
+  /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
+  /// is (`mtime`, `size`; neither said, nothing kept).
+  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean; keep: KeepKind | null; mtime: number | null; size: number | null }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
   /// A login's page to open (docs/remote-login.md): a loopback login's callback listened for here first, unless the
@@ -81,6 +84,8 @@ export type Call =
   /// Markdown a client holds itself read by the core (markdown.ts): a file's, a memory's.
   | { kind: "markdown"; text: string }
   | { kind: "cacheClear"; station: string; thread: number }
+  /// What the device keeps of the drives' files let go (drive-kept.ts).
+  | { kind: "driveKeptClear" }
   | { kind: "stationPreview"; station: string; port: number; method: string; path: string; headers: [string, string][]; body: Uint8Array; stream: boolean }
   | { kind: "previewSocket"; station: string; port: number; path: string; headers: [string, string][]; socket: string }
   | { kind: "previewSocketSend"; socket: string; frame: SocketFrame }
@@ -736,8 +741,16 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["length", "u64", "req"],
         ["progress", "bool", "default"],
         ["stream", "bool", "default"],
+        ["keep", S, "opt"],
+        ["mtime", "f64", "opt"],
+        ["size", "f64", "opt"],
       ]);
-      return { kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean };
+      if (p.keep !== null && p.keep !== "file" && p.keep !== "played") throw CoreError.invalid(`keep: ${String(p.keep)}`);
+      const said = p.keep !== null && p.mtime !== null && p.size !== null;
+      return {
+        kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean,
+        keep: said ? (p.keep as KeepKind) : null, mtime: said ? (p.mtime as number) : null, size: said ? (p.size as number) : null,
+      };
     }
     case "drive.upload.part": {
       const p = read(params, [
@@ -809,6 +822,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     }
     case "markdown":
       return { kind: "markdown", text: read(params, [["text", S, "req"]]).text as string };
+    case "drive.kept.clear":
+      return { kind: "driveKeptClear" };
     case "cache.clear": {
       const p = read(params, [
         ["station", S, "req"],

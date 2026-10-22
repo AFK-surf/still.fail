@@ -925,15 +925,18 @@ fn open_bar_pick(_core : Core, i : Int, picked : (String) -> Unit) -> Unit {
 // 存储空间 (what this device keeps)
 
 ///|
-/// What the core keeps of each chat (`cache.usage`), read as the page opens and again after a deletion.
+/// What the core keeps of each chat and of the drives' files (`cache.usage`), read as the page opens and again after a
+/// deletion.
 priv struct Kept {
   mut chats : Array[Json]?
+  /// the bytes of the drives' files kept (drive.read's `keep`)
+  mut drive : Double
   mut asked : Int
   mut read : Int
 }
 
 ///|
-let kept : Kept = { chats: None, asked: 0, read: -1 }
+let kept : Kept = { chats: None, drive: 0.0, asked: 0, read: -1 }
 
 ///|
 /// The chats' kept data asked of the core again.
@@ -951,6 +954,10 @@ fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
           Err(_) => []
         },
       )
+      kept.drive = match r {
+        Ok(v) => number(Some(v), "drive")
+        Err(_) => 0.0
+      }
     })
   })
 }
@@ -985,9 +992,9 @@ fn size_row(c : @ui.Ctx, key : String, title : String, sub : String, size : Doub
 
 ///|
 /// What this device keeps (KeptFilesScreen): by chat, what the core keeps of each (its messages, its transcripts, the
-/// files it keeps), each to delete (`cache.clear`), or everything. (The Android app also lists the files its viewers
-/// keep in its cache, its web pages' cache, update packages and temporary files: this app keeps none of its own on the
-/// disk, its viewers reading through the core into memory.)
+/// files it keeps), each to delete (`cache.clear`); then what is of no chat: the drives' files opened, kept by the
+/// core (`drive.kept.clear`); or everything. (The Android app also lists files of no chat known, its web pages'
+/// cache, update packages, temporary files and the core's own data: this app keeps none of those apart.)
 fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
   let t = @sf.theme()
   kept_read(c, core)
@@ -999,7 +1006,7 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
   match kept.chats {
     None => blocks.push(fn() { waiting_rows(c) })
     Some(chats) => {
-      let total = chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") })
+      let total = chats.fold(init=kept.drive, fn(s, x) { s + number(Some(x), "bytes") })
       blocks.push(fn() {
         section_header(c, tr("android-settings.files.byChat"), trailing=fill("android-settings.files.total", [("size", size_words(total))]), start=S6)
       })
@@ -1028,6 +1035,18 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
           })
         })
       }
+      // what is of no chat: the drives' files opened (KeptFiles.kt 其他, its 文件浏览), to delete when there are some
+      blocks.push(fn() { section_header(c, tr("android-settings.files.other"), start=S6) })
+      blocks.push(fn() {
+        list_card(c, fn() {
+          let drive = kept.drive
+          if size_row(c, if drive > 0.0 { "kept-drive" } else { "" }, tr("android-settings.files.drive"), tr("android-settings.files.drive.sub"), drive) {
+            confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
+              (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked += 1 })
+            })
+          }
+        })
+      })
       if total > 0.0 {
         blocks.push(fn() {
           list_card(c, fn() {
@@ -1042,6 +1061,9 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
                     (core.call)("cache.clear", obj([("station", str(text(Some(x), "station"))), ("thread", Json::number(number(Some(x), "thread")))]), fn(_) {
                       kept.asked += 1
                     })
+                  }
+                  if kept.drive > 0.0 {
+                    (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked += 1 })
                   }
                 },
               )

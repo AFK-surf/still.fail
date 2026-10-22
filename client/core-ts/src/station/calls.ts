@@ -8,6 +8,7 @@ import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { base64, fromBase64 } from "../util.ts";
 import { Beside } from "../protocol.ts";
+import { keptId } from "../drive-kept.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
@@ -25,6 +26,17 @@ function partAnswer(c: { stream: boolean }, said: Record<string, unknown>, bytes
 /// What is kept small on the device (base64 there), its bytes beside `{ type }`.
 function keptBeside(kept: { type: string; bytes: string }): Beside {
   return new Beside({ type: kept.type }, fromBase64(kept.bytes) ?? new Uint8Array());
+}
+
+/// Pieces one after another.
+function joined(pieces: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(pieces.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of pieces) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
 }
 
 /// What a part read says as it comes: with `stream`, each piece of its bytes beside `{ loaded }`; else with `progress`,
@@ -157,13 +169,35 @@ export function install(): void {
       Effect.map(inner.stations.requests.fileOpen(addr, c.key, c.path, ctx), (got) => new Beside({ name: got.name, path: got.path, type: got.type, size: got.size }, got.bytes)),
     );
   };
+  // With `keep`: what is kept of the file as its folder said it is answered as the station would (a stream's bytes in
+  // one piece), not asked of it again; what is read is kept, once it is answered. Read as other than that (changed
+  // on the station since its folder was read), what was kept of it goes and nothing is kept.
   handlers.driveRead = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "driveRead" }>;
     const [heard, sink] = partProgress(c, progress);
-    return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx, heard, sink), (got) => partAnswer(c, { type: got.type, total: got.total, mtime: got.mtime }, got.bytes)),
-    );
+    const id = keptId(c.station, c.root, c.path);
+    const read = (pieces: Uint8Array[] | null) =>
+      Effect.flatMap(parse(c.station), (addr) =>
+        inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx, heard, sink && pieces ? (piece) => (pieces.push(piece), sink(piece)) : sink),
+      );
+    if (c.keep === null || c.mtime === null || c.size === null) return Effect.map(read(null), (got) => partAnswer(c, { type: got.type, total: got.total, mtime: got.mtime }, got.bytes));
+    const [keep, mtime, size] = [c.keep, c.mtime, c.size];
+    return Effect.gen(function* () {
+      const kept = yield* inner.driveKept.read(id, mtime, size, c.offset, c.length);
+      if (kept !== null) {
+        if (sink) sink(kept.bytes);
+        else heard?.(kept.bytes.length);
+        return partAnswer(c, { type: kept.type, total: size, mtime }, kept.bytes);
+      }
+      const pieces: Uint8Array[] = [];
+      const got = yield* read(pieces);
+      const bytes = sink ? joined(pieces) : got.bytes;
+      if (got.total === size && got.mtime === mtime) inner.runner.fork(inner.driveKept.keep(id, keep, mtime, size, got.type, c.offset, bytes));
+      else inner.runner.fork(inner.driveKept.forget(id));
+      return partAnswer(c, { type: got.type, total: got.total, mtime: got.mtime }, got.bytes);
+    });
   };
+  handlers.driveKeptClear = (inner) => Effect.as(inner.driveKept.clear(), null);
   handlers.driveUploadPart = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "driveUploadPart" }>;
     return Effect.flatMap(parse(c.station), (addr) =>
@@ -202,7 +236,7 @@ export function install(): void {
       return null;
     });
   };
-  handlers.cacheUsage = (inner) => Effect.sync(() => ({ chats: inner.data.cacheUsage() }));
+  handlers.cacheUsage = (inner) => Effect.map(inner.driveKept.usage(), (drive) => ({ chats: inner.data.cacheUsage(), drive }));
   handlers.cacheClear = (inner, call) => {
     const c = call as Extract<Call, { kind: "cacheClear" }>;
     return Effect.sync(() => {

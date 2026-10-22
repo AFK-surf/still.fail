@@ -37,6 +37,7 @@ fn fixture_play_read(params : Json, done : (Result[(Json, Bytes), Json]) -> Unit
   if !path.has_prefix(fix_films + "/") {
     return false
   }
+  fix_reads.push(params)
   if path.has_suffix(".srt") {
     let whole = @utf8.encode(fix_srt)
     let offset = number(Some(params), "offset").to_int()

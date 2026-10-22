@@ -334,3 +334,29 @@ test "a subscription signing in: what to do said once, its page's step solid, th
   assert_true(t.find("完成") is Some(_))
   // (and the way to sign in by hand, beside the button, once not signing in: 在机器上手动登录)
 }
+
+///|
+test "本机缓存: the drives' files kept, counted with the chats', let go when asked" {
+  let t = settings_tester("kept")
+  // (what is kept asked of the core as the page is first built: drawn with its answer)
+  t.draw()
+  // under 其他: 文件浏览, 38.5 MB of them; with the chats' 3.1 MB, 41.6 MB in all (KeptFiles.kt)
+  assert_true(t.find("其他") is Some(_))
+  assert_true(t.find("文件浏览") is Some(_))
+  assert_true(t.find("38.5 MB") is Some(_))
+  assert_true(t.find("共 41.6 MB") is Some(_))
+  // tapped, asked first; 删除: let go, read again
+  t.tap_text("文件浏览")
+  sheet_rested(t, "settings-sheet")
+  // (its button: the words 删除 alone, not those that tell what it does)
+  match t.words().iter().find_first(fn(w) { w.0 == "删除" }) {
+    Some((_, x, y, w, h, _)) => t.tap(x + w / 2.0, y + h / 2.0)
+    None => fail("no 删除")
+  }
+  // (asked again once it is let go, drawn with the answer)
+  t.draw()
+  t.draw()
+  assert_true(t.find("38.5 MB") is None)
+  assert_true(t.find("0 B") is Some(_))
+  assert_true(t.find("共 3.1 MB") is Some(_))
+}

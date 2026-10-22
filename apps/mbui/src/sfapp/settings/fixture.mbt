@@ -29,6 +29,8 @@ priv struct SettingsFixture {
   models_added : Array[String]
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away
   mut pairing : Bool
+  /// the bytes of the drives' files kept (`cache.usage`'s `drive`), until let go (`drive.kept.clear`)
+  mut drive_kept : Double
 }
 
 ///|
@@ -46,7 +48,12 @@ let fx : SettingsFixture = {
   resets_used: 0,
   models_added: [],
   pairing: false,
+  drive_kept: fx_drive_kept,
 }
+
+///|
+/// What the drives' files kept come to as a run starts: 38.5 MB.
+let fx_drive_kept : Double = 40370176.0
 
 ///|
 /// A sheet a fixture's mode puts up over its page once it is drawn (mark, add, add-existing, add-command, env), and a
@@ -72,6 +79,7 @@ fn fixture_reset() -> Unit {
   fx_many_models.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
+  fx.drive_kept = fx_drive_kept
   fx.resets_used = 0
   fx.models_added.clear()
   fx.version = 0
@@ -1304,9 +1312,14 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
                 obj([("station", str("ws1/st2")), ("thread", Json::number(3.0)), ("title", str("夜里的构建又失败了")), ("sessions", ["s-c3"]), ("bytes", Json::number(41000.0))]),
               ],
             ),
+            ("drive", Json::number(fx.drive_kept)),
           ]),
         ),
       )
+    "drive.kept.clear" => {
+      fx.drive_kept = 0.0
+      Some(Ok(Json::null()))
+    }
     "machineSessions.list" => Some(Ok(obj([("sessions", [])])))
     "workspace.enroll" =>
       Some(

@@ -266,11 +266,16 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
 }
 
 ///|
+/// What `drive.read` was asked, in order (each its params).
+let fix_reads : Array[Json] = []
+
+///|
 /// A part of a made-up file (`drive.read`): the novel, the Markdown, or a line.
 fn fixture_drive_read(name : String, params : Json) -> Result[(Json, Bytes), Json]? {
   if name != "drive.read" {
     return None
   }
+  fix_reads.push(params)
   let p = Some(params)
   let path = text(p, "path")
   let whole = if path.has_suffix(".md") {

@@ -762,5 +762,6 @@ fn share_drive_file(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Uni
         }
       }
     },
+    listed=Some((e.mtime, e.size)),
   )
 }
