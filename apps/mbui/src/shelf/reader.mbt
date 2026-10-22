@@ -827,7 +827,7 @@ fn sheet(c : @ui.Ctx, src : Source, r : Reading, pp : Paper, shown : Double) -> 
       pt=6.0,
       bg=pp.raised,
       radius=@sf.r_dialog,
-      shadow=28.0,
+      shadow=14.0,
       shadow_y=8.0,
       shadow_color=@sf.alpha(0x13161BFFL, if t.dark { 0.45 } else { 0.1 }),
       clip=true,

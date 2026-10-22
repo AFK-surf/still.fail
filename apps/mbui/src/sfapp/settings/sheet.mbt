@@ -334,7 +334,7 @@ fn menu_overlay(c : @ui.Ctx) -> Unit {
   }
   c.layer(fn() { c.box(w=Fill(1.0), h=Fill(1.0), id=scrim, fn() {  }) |> ignore }) |> ignore
   c.layer(fn() {
-    c.box(w=Px(180.0), tx=dmax(12.0, menu.x), ty=menu.y, radius=14.0, bg=t.p.card, shadow=18.0, shadow_y=6.0, clip=true, fn() {
+    c.box(w=Px(180.0), tx=dmax(12.0, menu.x), ty=menu.y, radius=14.0, bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, fn() {
       for i, label in menu.items {
         let id = c.id("settings-menu/" + i.to_string())
         if hit(c, id) {

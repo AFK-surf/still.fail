@@ -666,7 +666,7 @@ let mark_edge_a : Double = 0.55
 ///|
 /// A mark's pin: 24, round, white, 2 in, a shadow; the accent inside, its number 11 bold in white.
 // kept across runs: a value (no field of it changes)
-let mark_pin : @ui.Style = @ui.style(w=S6, h=S6, radius=Full, bg=OnAccent, p=S0_5, shadow=Base)
+let mark_pin : @ui.Style = @ui.style(w=S6, h=S6, radius=Full, bg=OnAccent, p=S0_5, shadow=@sf.pin_raised.cast())
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -683,7 +683,7 @@ let mark_said : @ui.Style = @ui.style(
   h=@sf.mark_said_h,
   radius=Full,
   bg=@sf.mark_bubble,
-  shadow=Base,
+  shadow=@sf.pin_raised.cast(),
   px=S2_5,
   justify=JCenter,
   clip=true,
@@ -811,7 +811,7 @@ let mark_note : @ui.Style = @ui.style(
   h=S9,
   radius=Full,
   bg=@sf.mark_bubble,
-  shadow=Md,
+  shadow=@sf.bubble_raised.cast(),
   pl=S3,
   pr=S1,
   gap=S1_5,

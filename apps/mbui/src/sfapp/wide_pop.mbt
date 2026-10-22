@@ -53,7 +53,7 @@ fn popover(
       bg=panel_ground(),
       border=1.0,
       border_color=t.p.line,
-      shadow=24.0,
+      shadow=12.0,
       shadow_y=8.0,
       shadow_color=t.p.shadow,
       id~,

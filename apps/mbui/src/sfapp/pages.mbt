@@ -74,7 +74,7 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
     exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
     look=fn(c, _min_w, body) {
-      c.box(w=Px(180.0), radius=14.0, bg=t.p.card, shadow=18.0, shadow_y=6.0, clip=true, body) |> ignore
+      c.box(w=Px(180.0), radius=14.0, bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, body) |> ignore
     },
     item_look=fn(c, s) {
       let icon = match s.entry.kind {

@@ -45,4 +45,34 @@
   "  float rr = min(r, room);\n" \
   "  return mb_sd_corner(p, hs, rr, mb_smoothness(rr, room), band);\n" \
   "}\n" \
+  "// A shadow as Core Animation draws one (CALayer shadowRadius: a Gaussian blur of the shape, sigma its radius): the box\n" \
+  "// of half sides hs about p, its corners r, blurred by sigma; how much of it covers p, 0 … 1. The blur across worked\n" \
+  "// out whole (erf); along, four samples of the Gaussian over where it is not nothing (Evan Wallace's rounded box shadow).\n" \
+  "float mb_erf(float x) {\n" \
+  "  float s = sign(x);\n" \
+  "  float a = abs(x);\n" \
+  "  float t = 1.0 + (0.278393 + (0.230389 + 0.078108 * (a * a)) * a) * a;\n" \
+  "  t = t * t;\n" \
+  "  return s - s / (t * t);\n" \
+  "}\n" \
+  "float mb_shadow_row(float x, float y, float sigma, float r, float2 hs) {\n" \
+  "  float delta = min(hs.y - r - abs(y), 0.0);\n" \
+  "  float curved = hs.x - r + sqrt(max(0.0, r * r - delta * delta));\n" \
+  "  float k = 0.7071067811865476 / sigma;\n" \
+  "  return 0.5 * (mb_erf((x + curved) * k) - mb_erf((x - curved) * k));\n" \
+  "}\n" \
+  "float mb_shadow(float2 p, float2 hs, float r, float sigma) {\n" \
+  "  float rr = min(r, min(hs.x, hs.y));\n" \
+  "  float lo = clamp(-3.0 * sigma, p.y - hs.y, p.y + hs.y);\n" \
+  "  float hi = clamp(3.0 * sigma, p.y - hs.y, p.y + hs.y);\n" \
+  "  float st = (hi - lo) / 4.0;\n" \
+  "  float y = lo + st * 0.5;\n" \
+  "  float v = 0.0;\n" \
+  "  for (int i = 0; i < 4; i++) {\n" \
+  "    float g = exp(-(y * y) / (2.0 * sigma * sigma)) / (2.5066282746310002 * sigma);\n" \
+  "    v += mb_shadow_row(p.x, p.y - y, sigma, rr, hs) * g * st;\n" \
+  "    y += st;\n" \
+  "  }\n" \
+  "  return v;\n" \
+  "}\n" \
   ""

@@ -149,7 +149,7 @@
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
     int kind = int(a_p.y + 0.5);
-    float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);
+    float grow = kind == 2 ? a_p.w * 3.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);
     vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);
     if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);
     // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (v_pos), its clip there
@@ -221,6 +221,36 @@
     float room = min(hs.x, hs.y);
     float rr = min(r, room);
     return mb_sd_corner(p, hs, rr, mb_smoothness(rr, room), band);
+  }
+  // A shadow as Core Animation draws one (CALayer shadowRadius: a Gaussian blur of the shape, sigma its radius): the box
+  // of half sides hs about p, its corners r, blurred by sigma; how much of it covers p, 0 … 1. The blur across worked
+  // out whole (erf); along, four samples of the Gaussian over where it is not nothing (Evan Wallace's rounded box shadow).
+  float mb_erf(float x) {
+    float s = sign(x);
+    float a = abs(x);
+    float t = 1.0 + (0.278393 + (0.230389 + 0.078108 * (a * a)) * a) * a;
+    t = t * t;
+    return s - s / (t * t);
+  }
+  float mb_shadow_row(float x, float y, float sigma, float r, float2 hs) {
+    float delta = min(hs.y - r - abs(y), 0.0);
+    float curved = hs.x - r + sqrt(max(0.0, r * r - delta * delta));
+    float k = 0.7071067811865476 / sigma;
+    return 0.5 * (mb_erf((x + curved) * k) - mb_erf((x - curved) * k));
+  }
+  float mb_shadow(float2 p, float2 hs, float r, float sigma) {
+    float rr = min(r, min(hs.x, hs.y));
+    float lo = clamp(-3.0 * sigma, p.y - hs.y, p.y + hs.y);
+    float hi = clamp(3.0 * sigma, p.y - hs.y, p.y + hs.y);
+    float st = (hi - lo) / 4.0;
+    float y = lo + st * 0.5;
+    float v = 0.0;
+    for (int i = 0; i < 4; i++) {
+      float g = exp(-(y * y) / (2.0 * sigma * sigma)) / (2.5066282746310002 * sigma);
+      v += mb_shadow_row(p.x, p.y - y, sigma, rr, hs) * g * st;
+      y += st;
+    }
+    return v;
   }
   // corner.sl end
   float sd_rr(vec2 p, vec4 r, float rad) {
@@ -332,8 +362,8 @@
       return;
     }
     if (kind == 2) {
-      float b = max(v_p.w, 0.5);
-      float a = 1.0 - smoothstep(-b, b, d);
+      // as Core Animation's: the shape blurred, sigma its radius (corner.sl mb_shadow)
+      float a = mb_shadow(p - c, hs, v_p.x, max(v_p.w, 0.25));
       // glass's: only outside its box (c2.y above it)
       if (v_c2.x > 0.5) {
         float db = mb_sd_box(p - c + vec2(0.0, v_c2.y), hs, v_p.x, band);

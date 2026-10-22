@@ -107,7 +107,9 @@ pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit
       } else {
         Some({ ..glass_sheet(), solid: over(over(t.p.bg, alpha(0x000000FFL, 0.28 * s.t)), alpha(t.p.card, 0.8)) })
       },
-      shadow=24.0,
+      shadow=sheet_raised.sigma,
+      shadow_y=sheet_raised.dy,
+      shadow_color=sheet_raised.color,
       clip=true,
       pb=26.0,
       body,
