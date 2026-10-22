@@ -81,3 +81,27 @@ moonbit_bytes_t sfr_trace_read(moonbit_bytes_t name_b) {
 }
 
 int32_t sfr_trace_found(void) { return found; }
+
+// A flow's steps as a scripted run's (src/sfreplay/emit.mbt, scripts/rerecord.sh): where FLOW_EMIT says (empty: none),
+// and the script written there whole.
+moonbit_bytes_t sfr_emit_path(void) {
+  const char *p = getenv("FLOW_EMIT");
+  int32_t n = p ? (int32_t)strlen(p) : 0;
+  moonbit_bytes_t out = moonbit_make_bytes(n, 0);
+  if (n > 0) memcpy(out, p, (size_t)n);
+  return out;
+}
+
+int32_t sfr_write_file(moonbit_bytes_t path_b, moonbit_bytes_t text_b) {
+  int32_t n = Moonbit_array_length(path_b);
+  char *path = malloc((size_t)n + 1);
+  memcpy(path, path_b, (size_t)n);
+  path[n] = 0;
+  FILE *f = fopen(path, "wb");
+  free(path);
+  if (!f) return 0;
+  size_t len = (size_t)Moonbit_array_length(text_b);
+  size_t put = len > 0 ? fwrite(text_b, 1, len, f) : 0;
+  fclose(f);
+  return put == len;
+}

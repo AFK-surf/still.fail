@@ -143,6 +143,18 @@ fn open_listed(view : ChatsView) -> Unit {
 let bar_h : Double = 50.0
 
 ///|
+/// The lists Home follows, side by side in this order (Home.kt: all, mine, watching), and how long switching from one to
+/// another slides (Home.kt `shift`: tween(240) on FastOutSlowIn).
+// kept across runs: a table, never written
+let home_filters : Array[String] = ["all", "mine", "watching"]
+
+///|
+let home_filter_ms : Double = 240.0
+
+///|
+/// Home (Home.kt HomeScreen): its lists side by side, the one in view slid to when the filter switches, nothing to wait
+/// for once they are read; the top bar over them. The lists other than the one in view are read from when the filter's
+/// menu opens (what switching would show is there by the time one is picked).
 fn home_page(
   c : @ui.Ctx,
   src : Source,
@@ -153,11 +165,47 @@ fn home_page(
   ignore(all)
   search_start(c)
   let filter = filter_of(src, w.id)
-  let (view, error) = chats_of(src, w.id, filter)
+  let at = home_filters.search(filter).unwrap_or(0)
+  let shift = @motion.animate(c, "home-filter/" + w.id, at.to_double(), spec=@motion.tween(home_filter_ms, ease=Standard))
+  let (view, _) = chats_of(src, w.id, filter)
   match view {
     Some(v) => open_listed(v)
     None => ()
   }
+  // the others read once switching to them is in sight
+  if app.menu {
+    for f in home_filters {
+      chats_of(src, w.id, f) |> ignore
+    }
+  }
+  // under the search (search.mbt): the lists up 56 and away, the bar faded (Home.kt `away`)
+  let away = search_away(c)
+  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+    for k, f in home_filters {
+      let off = k.to_double() - shift
+      if off > -1.0 && off < 1.0 {
+        let pane = c.layer(fn() { home_pane(c, src, w, f, f == filter) })
+        if off != 0.0 || away > 0.0 {
+          c.look(pane, { ..@ui.still_look, alpha: 1.0 - away, dx: off * c.width, dy: -search_list_rise * away })
+        }
+      }
+    }
+    let bar = c.layer(fn() {
+      top_bar(c, src, w, view, filter, invited)
+    })
+    if away > 0.0 {
+      c.look(bar, { ..@ui.still_look, alpha: 1.0 - away })
+    }
+    search_page(c, src, w)
+  })
+  |> ignore
+}
+
+///|
+/// One of Home's lists (Home.kt ChatPane): its rows by day under the top bar's room, or why there are none; `current`:
+/// the one in view (whose rows the keys walk, home_rows).
+fn home_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, current : Bool) -> Unit {
+  let (view, error) = chats_of(src, w.id, filter)
   let list : Array[Item] = [Top]
   match view {
     None => {
@@ -210,7 +258,7 @@ fn home_page(
   let key = "home/" + w.id + "/" + filter
   // the rows move as the list changes (ListMotion.kt): by their keys
   match view {
-    Some(v) => note_marks(c, v)
+    Some(v) => if current { note_marks(c, v) }
     None => ()
   }
   let keys = list.map(item_key)
@@ -218,51 +266,39 @@ fn home_page(
   // not growing in (nothing moves the first time)
   let moved = keys.filter(fn(k) { k.has_prefix("h/") || k.has_prefix("r/") })
   let row_keys = moved.map(fn(k) { key + "\u{1}" + k })
-  home_rows.val = row_keys
+  if current {
+    home_rows.val = row_keys
+  }
   let lid = @motion.list_keys(c, key, row_keys, liftable=fn(k) { !k.contains("\u{1}h/") })
-  // under the search (search.mbt): the list up 56 and away, the bar faded (Home.kt `away`)
-  let away = search_away(c)
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    let li = c.list(key, list.length(), 66.0, fn(i) {
-      match list[i] {
-        // under the top bar, the status bar's height and its own (Home.kt padding: topBar + 8)
-        Top => c.box(h=Px(status_top() + bar_h + 8.0), fn() {  }) |> ignore
-        Search => search_field(c)
-        News => changelog_news(c, src)
-        Wait(n, note, error) => waiting(c, n, note, error)
-        Empty =>
-          match view {
-            Some(v) => empty(c, v, filter)
-            None => ()
-          }
-        OpenJobs => open_jobs(c, src, w)
-        Header(label) => moving(c, lid, key, keys[i], section_header(c, label))
-        Row(item) =>
-          moving(c, lid, key, keys[i], chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, key + "\u{1}" + keys[i])))
-        // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom)
-        Foot => c.box(h=Px(nav_foot() + bar_room), fn() {  }) |> ignore
-      }
-    })
-    // the list's first time with its rows: at its first row, the search above it out of view, there once scrolled to
-    // (Home.kt top: as the list first read, which the search comes in over)
-    if !home_placed.contains(key) {
-      home_placed[key] = true
-      if list.search_by(fn(it) { it is Search }) is Some(at) {
-        c.list_scroll_to(key, at + 1, offset=-(status_top() + bar_h + 8.0))
-      }
+  c.list(key, list.length(), 66.0, fn(i) {
+    match list[i] {
+      // under the top bar, the status bar's height and its own (Home.kt padding: topBar + 8)
+      Top => c.box(h=Px(status_top() + bar_h + 8.0), fn() {  }) |> ignore
+      Search => search_field(c)
+      News => changelog_news(c, src)
+      Wait(n, note, error) => waiting(c, n, note, error)
+      Empty =>
+        match view {
+          Some(v) => empty(c, v, filter)
+          None => ()
+        }
+      OpenJobs => open_jobs(c, src, w)
+      Header(label) => moving(c, lid, key, keys[i], section_header(c, label))
+      Row(item) =>
+        moving(c, lid, key, keys[i], chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, key + "\u{1}" + keys[i])))
+      // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom)
+      Foot => c.box(h=Px(nav_foot() + bar_room), fn() {  }) |> ignore
     }
-    if away > 0.0 {
-      c.look(li, { ..@ui.still_look, alpha: 1.0 - away, dy: -search_list_rise * away })
-    }
-    let bar = c.layer(fn() {
-      top_bar(c, src, w, view, filter, invited)
-    })
-    if away > 0.0 {
-      c.look(bar, { ..@ui.still_look, alpha: 1.0 - away })
-    }
-    search_page(c, src, w)
   })
   |> ignore
+  // the list's first time with its rows: at its first row, the search above it out of view, there once scrolled to
+  // (Home.kt top: as the list first read, which the search comes in over)
+  if !home_placed.contains(key) {
+    home_placed[key] = true
+    if list.search_by(fn(it) { it is Search }) is Some(at) {
+      c.list_scroll_to(key, at + 1, offset=-(status_top() + bar_h + 8.0))
+    }
+  }
 }
 
 ///|

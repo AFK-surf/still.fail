@@ -615,6 +615,19 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
             }) {
             copy_chat_link(c, title, link)
           }
+          // relayed to a channel (docs/relay.md, Relay.kt): a chat with an agent to go on there
+          match opt_number(thread, "id") {
+            Some(th) if open && agents.length() > 0 =>
+              if info_row(c, "info/relay", fn() {
+                  @sf.icon(c, "arrow-up-right", size=16.0, color=t.p.text) |> ignore
+                  c.box(style=@sf.full_width, fn() { c.text(tr("web-main.relay.action"), style=info_words) |> ignore })
+                  |> ignore
+                  chevron(c)
+                }) {
+                open_relay(c, src, r, th)
+              }
+            _ => ()
+          }
           match xshare {
             Some(Object(_)) => xshare_row(c, r, opt_number(thread, "id"), xshare)
             _ => ()
