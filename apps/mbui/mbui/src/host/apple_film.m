@@ -1,4 +1,4 @@
-// mbui's film on Apple's systems (film.mbt): a frame's instances drawn by the host's renderer offscreen and read back
+// mbui's film on Apple's systems (src/film): a frame's instances drawn by the host's renderer offscreen and read back
 // (src/host/apple_render.m, mb_render_read), written into an H.264 MP4 by AVFoundation's writer at the frame it is to
 // be; and what a program run from the command line needs besides: its arguments, a line said, a file read or
 // written, the main queue turned for what the host tells there (a picture decoded).

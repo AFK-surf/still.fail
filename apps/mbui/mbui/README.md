@@ -55,6 +55,7 @@ src/host    the platform boundary
   host_native.mbt / host_js.mbt   the same API over C and over JS
   apple_render.m  Metal renderer (macOS and iOS)
   apple_text.m    Core Text shaping and glyph atlas (macOS and iOS)
+  apple_film.m    a film's frames written into an MP4 (AVFoundation; src/film)
   mac_app.m       AppKit window, NSTextInputClient
   ios_app.m       UIKit view, UITextInput (built by scripts/ios.sh)
   win_render.cpp  Direct3D 11 renderer (WARP without a GPU)

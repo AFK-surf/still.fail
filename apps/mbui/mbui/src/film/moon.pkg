@@ -6,6 +6,4 @@ import {
 
 options(
   targets: { "film_native.mbt": [ "native" ], "film_js.mbt": [ "js" ] },
-  "native-stub": [ "film_apple.m" ],
-  link: { "native": { "stub-cc-flags": "-fobjc-arc -O2" } },
 )

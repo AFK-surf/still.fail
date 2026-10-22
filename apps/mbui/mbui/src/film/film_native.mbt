@@ -1,5 +1,6 @@
 // The film on a native host: the drawing is the host's offscreen path (src/host/apple_render.m), the writing and the
-// process's few needs film_apple.m's.
+// process's few needs src/host/apple_film.m's, linked with the host by the film's program (its main imports
+// mbui/host). Apple's systems only: the other hosts have no film.
 
 ///|
 let supported = true
