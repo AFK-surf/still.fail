@@ -166,3 +166,19 @@ int32_t tsys_is_link(moonbit_bytes_t path) {
   return r == 0 && (st.st_mode & S_IFMT) == S_IFLNK;
 #endif
 }
+// stdin whole
+moonbit_bytes_t tsys_read_stdin(void) {
+  size_t cap = 1 << 16, n = 0;
+  char *buf = malloc(cap);
+  size_t got;
+  while ((got = fread(buf + n, 1, cap - n, stdin)) > 0) {
+    n += got;
+    if (n == cap) {
+      cap *= 2;
+      buf = realloc(buf, cap);
+    }
+  }
+  moonbit_bytes_t out = bytes_of(buf, n);
+  free(buf);
+  return out;
+}

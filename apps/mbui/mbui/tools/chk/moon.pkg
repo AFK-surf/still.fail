@@ -1,0 +1,10 @@
+import {
+  "mbctools/re",
+  "mbctools/rjson",
+  "mbctools/sys",
+  "moonbitlang/core/env",
+}
+
+options(
+  "is-main": true,
+)

@@ -176,12 +176,12 @@
   uniform vec4 u_rad[2];
   uniform int u_n;
   out vec4 o;
-  // corner.sl begin (scripts/corner_sl.py: not edited here)
+  // corner.sl begin (scripts/chk corner-sl: not edited here)
   #define float2 vec2
   // mbui's corners (src/ui/smooth.mbt: these are its smoothness, sd_corner and sd_box, number for number), the one copy
   // every renderer draws by: Metal's, Direct3D's and both GLs' shaders take it in as it is (corner_sl.h; web/host.js
   // between its "corner.sl" lines), written in what the four have in common (float2: GLSL's vec2, defined so before it).
-  // Made into those by scripts/corner_sl.py, which CI runs with --check.
+  // Made into those by scripts/chk corner-sl, which CI runs with --check.
   //
   // How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1
   // superellipse(1.5) over r a quarter longer; between, as far as the room goes.

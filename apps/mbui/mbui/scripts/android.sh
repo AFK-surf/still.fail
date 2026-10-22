@@ -120,8 +120,8 @@ case "${1:-build}" in
     if [ "$(cat $OUT/apk-kind 2>/dev/null)" != "$APP_KIND" ]; then rm -rf "${PROJ:?}/app/build"; fi
     echo $APP_KIND > $OUT/apk-kind
     GEN=$("$D/mbc" gen --dir $M src/$PKG 2>$OUT/moon.log) \
-      || { python3 "$D/errs.py" < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
-    python3 "$D/errs.py" < $OUT/moon.log | grep -v '^errors: 0' || true
+      || { "$D/chk" errs < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
+    "$D/chk" errs < $OUT/moon.log | grep -v '^errors: 0' || true
     T1=$(now)
     SO=$PROJ/app/src/main/jniLibs/$ABI/libmbui.so
     mkdir -p $OUT/obj $(dirname $SO)

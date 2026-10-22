@@ -9,5 +9,5 @@ cc -Wall -I "$D/../src/host" "$D/avc_test.c" -o "$D/../out/avc_test" && "$D/../o
 . "$D/env.sh"
 for t in ${TARGETS:-js native}; do
   echo "=== $t"
-  moon check --target $t --output-json 2>&1 | python3 "$D/errs.py"
+  moon check --target $t --output-json 2>&1 | "$D/chk" errs
 done

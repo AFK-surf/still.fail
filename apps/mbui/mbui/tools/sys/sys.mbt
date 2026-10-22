@@ -224,3 +224,102 @@ extern "C" fn c_is_link(path : Bytes) -> Int = "tsys_is_link"
 pub fn is_link(path : String) -> Bool {
   c_is_link(enc(path)) != 0
 }
+
+///|
+extern "C" fn c_read_stdin() -> Bytes = "tsys_read_stdin"
+
+///|
+/// What stdin gives, to its end
+pub fn read_stdin() -> String {
+  dec(c_read_stdin())
+}
+
+///|
+/// fnmatch: * anything (a / too), ? one character, [seq], [!seq]
+pub fn fnmatch(name : String, pat : String) -> Bool {
+  let n = name.to_array()
+  let p = pat.to_array()
+  fn go(i : Int, j : Int) -> Bool {
+    if j == p.length() {
+      return i == n.length()
+    }
+    match p[j] {
+      '*' => {
+        let mut k = i
+        while k <= n.length() {
+          if go(k, j + 1) {
+            return true
+          }
+          k += 1
+        }
+        false
+      }
+      '?' => i < n.length() && go(i + 1, j + 1)
+      '[' => {
+        let mut e = j + 1
+        if e < p.length() && p[e] == '!' {
+          e += 1
+        }
+        if e < p.length() && p[e] == ']' {
+          e += 1
+        }
+        while e < p.length() && p[e] != ']' {
+          e += 1
+        }
+        if e >= p.length() {
+          // (no closing bracket: a [ itself)
+          return i < n.length() && n[i] == '[' && go(i + 1, j + 1)
+        }
+        if i >= n.length() {
+          return false
+        }
+        let neg = p[j + 1] == '!'
+        let mut k = if neg { j + 2 } else { j + 1 }
+        let mut hit = false
+        let mut first = true
+        while k < e || (first && k == e) {
+          first = false
+          if k + 2 < e && p[k + 1] == '-' {
+            if n[i] >= p[k] && n[i] <= p[k + 2] {
+              hit = true
+            }
+            k += 3
+          } else {
+            if k < e && n[i] == p[k] {
+              hit = true
+            }
+            k += 1
+          }
+          if k > e {
+            break
+          }
+        }
+        hit != neg && go(i + 1, e + 1)
+      }
+      c => i < n.length() && n[i] == c && go(i + 1, j + 1)
+    }
+  }
+
+  go(0, 0)
+}
+
+///|
+/// glob.glob(root/pat), relative to root: pat's last part may hold * ? [ ] (a name starting with . only when the
+/// part does), the rest not; sorted
+pub fn glob(root : String, pat : String) -> Array[String] {
+  let dir = dirname(pat)
+  let base = basename(pat)
+  if !(base.contains("*") || base.contains("?") || base.contains("[")) {
+    return if exists(join(root, pat)) { [pat] } else { [] }
+  }
+  let out = []
+  for n in list_dir(if dir == "" { root } else { join(root, dir) }) {
+    if n.has_prefix(".") && !base.has_prefix(".") {
+      continue
+    }
+    if fnmatch(n, base) {
+      out.push(if dir == "" { n } else { dir + "/" + n })
+    }
+  }
+  out
+}

@@ -16,7 +16,7 @@ case "${1:-run}" in
   run)
     rm -rf $O
     render_dl $O/controls.dl
-    moon build --target js --release src/render 2>&1 | python3 "$D/errs.py"
+    moon build --target js --release src/render 2>&1 | "$D/chk" errs
     S=out/render-web
     rm -rf $S && mkdir -p $S
     cp "$(pkg_build render js release)/render.js" web/render.html web/host.js $S/

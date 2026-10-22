@@ -20,7 +20,7 @@ EXE=_build/native/release/build/bench/bench.exe
 build() {
   # as scripts/mac.sh builds (the C split: scripts/mbc; MBC_SPLIT=0 compiles it whole, to compare)
   PATH="$("$D/mbc" shim "$PWD/out/mbc/bin"):$PATH" \
-    moon build --target native --release src/bench 2>&1 | python3 "$D/errs.py" >&2
+    moon build --target native --release src/bench 2>&1 | "$D/chk" errs >&2
   [ -x $EXE ]
 }
 quiet() {
