@@ -26,6 +26,8 @@ case "${1:-run}" in
     ;;
   run)
     $ADB install -r $APK >/dev/null
+    render_uid=$($ADB shell pm list packages -U $APP_ID | tr -d '\r' | sed -n "s/^package:$APP_ID uid:\([0-9]*\)$/\1/p")
+    case "$render_uid" in ""|*[!0-9]*) echo "render_android: the app has no installed uid" >&2; exit 1 ;; esac
     # the screen on and unlocked: the app's surface (and with it its GL thread, where mbui-render runs) is made
     $ADB shell input keyevent KEYCODE_WAKEUP
     $ADB shell wm dismiss-keyguard
@@ -38,8 +40,8 @@ case "${1:-run}" in
       $ADB exec-in "run-as $APP_ID sh -c 'cat > files/$1.dl'" < $O/$1.dl
       $ADB logcat -c
       $ADB shell am start -n $APP_ID/dev.mbui.MainActivity --es env "'MBUI_DL=$F/$1.dl;MBUI_DL_PNG=$F/$1.png'" >/dev/null
-      # the renderer's own line once the picture is written (or the app's end)
-      said=$($ADB logcat -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
+      # Only this renderer's completion or crash; a system app's crash says nothing about this picture.
+      said=$($ADB logcat --uid="$render_uid" -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
       echo "$1: $said"
       case "$said" in
         *"mbui-render: "*"instances"*) ;;
