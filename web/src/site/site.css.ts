@@ -1,7 +1,7 @@
-// The official site's page (Site.tsx): big type, a thin grid and a beam of still.fail's orange, near black by default and
-// light when chosen (the switch in its bar: ThemeSwitch.tsx; the demo's app follows the same data-theme). What moves is
-// CSS (no script runs for it), still for those who ask for less motion.
-import { createVar, globalStyle, keyframes, style } from "@vanilla-extract/css";
+// The official site's page (Site.tsx): quiet type on a light page (dark when chosen: the switch in its bar,
+// ThemeSwitch.tsx; the demo's app follows the same data-theme), still.fail's orange only where things connect. What
+// moves is CSS and the picture's SVG (no script runs for it), still for those who ask for less motion.
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 const NARROW = "screen and (max-width: 860px)";
@@ -15,7 +15,7 @@ const ink = (percent: number) => `color-mix(in srgb, var(--s-ink) ${percent}%, t
 const LINE = ink(9);
 const CARD = ink(3.5);
 
-// The palette, dark (the site's own look, and its default) and light; "system" (no data-theme) follows the system.
+// The palette, light (the default) and dark; "system" (no data-theme) follows the system.
 const DARK = {
   "--s-bg": "#09090B", "--s-fg": "#F4F4F5", "--s-muted": "#A1A1AA", "--s-dim": "#71717A", "--s-faint": "#52525B", "--s-ink": "#FFFFFF",
   "--s-node": "#111114", "--s-primary": "#FAFAFA", "--s-on-primary": "#09090B", "--s-title": "#FFFFFF", "--s-mono": "invert(1)",
@@ -37,24 +37,7 @@ export const wrap = style({ maxWidth: "1160px", margin: "0 auto", padding: "0 24
 
 // ---- Motion ----
 
-const rise = keyframes({ from: { opacity: 0, transform: "translateY(48px) scale(.97)" }, to: { opacity: 1, transform: "none" } });
-/** Comes up into place as it scrolls into view (a scroll-driven animation; where there are none, it is simply there). */
-export const reveal = style({
-  animation: `${rise} linear both`, animationTimeline: "view()", animationRange: "entry 0% cover 28%",
-  "@media": { [STILL]: { animation: "none" } },
-});
-const enter = keyframes({
-  from: { opacity: 0, transform: "perspective(1800px) rotateX(22deg) translateY(60px) scale(.9)" },
-  to: { opacity: 1, transform: "none" },
-});
 const fadeUp = keyframes({ from: { opacity: 0, transform: "translateY(16px)" }, to: { opacity: 1, transform: "none" } });
-const sway = keyframes({ "0%,100%": { transform: "translateX(-50%) rotate(-4deg)" }, "50%": { transform: "translateX(-50%) rotate(4deg)" } });
-
-/** The grid over a section, fading out from where its light comes. */
-const gridLines = {
-  backgroundImage: `linear-gradient(${LINE} 1px, transparent 1px), linear-gradient(90deg, ${LINE} 1px, transparent 1px)`,
-  backgroundSize: "64px 64px",
-};
 
 // While the theme changes (ThemeSwitch.tsx), nothing eases into it: the page changes in one frame.
 globalStyle(":root[data-theme-switching] *, :root[data-theme-switching] *::before, :root[data-theme-switching] *::after", { transition: "none !important" });
@@ -150,67 +133,53 @@ globalStyle(`${button}:hover ${roll} > span + span`, { transitionDelay: ".03s" }
 
 // ---- Hero ----
 
-export const hero = style({
-  position: "relative", paddingTop: "120px", paddingBottom: "110px", textAlign: "center", isolation: "isolate",
-  "@media": { [NARROW]: { paddingTop: "64px", paddingBottom: "72px" } },
+export const hero = style({ padding: "88px 0 72px", "@media": { [NARROW]: { padding: "48px 0 40px" } } });
+/** What it is on the left, the picture of it on the right; one under the other on a narrow screen. */
+export const heroRow = style({
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.08fr)", gap: "56px", alignItems: "center",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px" } },
 });
-export const grid = style({
-  position: "absolute", inset: "0", zIndex: "-1", pointerEvents: "none", ...gridLines,
-  maskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, #000 20%, transparent 72%)",
-  WebkitMaskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, #000 20%, transparent 72%)",
-});
-/** Light falling from the top, swaying a little. */
-export const beam = style({
-  position: "absolute", left: "50%", top: "-160px", width: "1000px", height: "760px", zIndex: "-1", pointerEvents: "none",
-  transformOrigin: "50% 0", transform: "translateX(-50%)", filter: "blur(44px)", opacity: ".75",
-  background: `conic-gradient(from 180deg at 50% 0%, transparent 40%, color-mix(in srgb, ${ORANGE} 60%, transparent) 50%, transparent 60%)`,
-  animation: `${sway} 14s ease-in-out infinite`, "@media": { [STILL]: { animation: "none" } },
-});
-export const title = style({
-  margin: "0 auto", fontSize: "clamp(44px, 8.4vw, 112px)", lineHeight: "1.08", letterSpacing: "-.02em", fontWeight: "800", color: "var(--s-title)",
-  animation: `${fadeUp} .9s .06s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
-});
-// Each half wraps as a whole.
-globalStyle(`${title} > span`, { display: "inline-block" });
-/** The half that says where: in still.fail's orange, glowing. Padded so the clip does not cut what hangs out of a glyph. */
-export const titleLit = style({
-  padding: "0 .04em .08em", margin: "0 -.04em -.08em",
-  backgroundImage: `linear-gradient(180deg, #FFC2A3, ${ORANGE} 70%)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-  filter: `drop-shadow(0 0 48px color-mix(in srgb, ${ORANGE} 45%, transparent))`,
-});
-export const lede = style({
-  maxWidth: "640px", margin: "28px auto 0", fontSize: "clamp(17px, 1.8vw, 21px)", lineHeight: "1.6", color: "var(--s-muted)", textWrap: "balance",
-  animation: `${fadeUp} .9s .16s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
-});
+export const heroWords = style({ animation: `${fadeUp} .8s .05s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } } });
+export const title = style({ margin: "0", fontSize: "clamp(44px, 5.4vw, 80px)", lineHeight: "1.08", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)" });
+export const lede = style({ maxWidth: "30em", margin: "24px 0 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance" });
+export const heroActions = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 20px", marginTop: "36px" });
+export const heroNote = style({ fontSize: vars.textUi, color: DIM });
 
-export const heroActions = style({
-  marginTop: "44px", animation: `${fadeUp} .9s .24s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
-});
+// The picture: where you are on the left, joined to the machine; the workspace's other machines beside it.
+export const pictureBox = style({ animation: `${fadeUp} .8s .18s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } } });
+export const picture = style({ display: "block", width: "100%", height: "auto", overflow: "visible" });
+/** The picture laid across on a wide screen, down on a narrow one (where across, its words would be too small). */
+export const pictureWide = style({ "@media": { [NARROW]: { display: "none" } } });
+export const pictureNarrow = style({ display: "none", maxWidth: "400px", margin: "0 auto", "@media": { [NARROW]: { display: "block" } } });
+export const end = style({});
+globalStyle(`${end} > rect`, { fill: "var(--s-node)", stroke: ink(14), strokeWidth: 1 });
+globalStyle(`${end} > text`, { fill: "var(--s-muted)", fontSize: vars.textUi, fontWeight: 500 });
+export const machine = style({ filter: `drop-shadow(0 24px 40px color-mix(in srgb, ${ORANGE} 16%, transparent))` });
+globalStyle(`${machine} > rect`, { fill: "var(--s-node)", stroke: ORANGE, strokeWidth: 1.5 });
+export const machineName = style({ fill: FG, fontSize: vars.textTitle, fontWeight: 600 });
+export const machineSub = style({ fill: DIM, fontSize: vars.textMeta });
+export const online = style({ fill: vars.online });
+export const machinePart = style({});
+globalStyle(`${machinePart} > rect`, { fill: ink(5), stroke: "none" });
+globalStyle(`${machinePart} > text`, { fill: "var(--s-muted)", fontSize: vars.textMeta });
+export const other = style({});
+globalStyle(`${other} > rect`, { fill: "var(--s-node)", stroke: ink(14), strokeWidth: 1, strokeDasharray: "4 4" });
+globalStyle(`${other} > text`, { fill: "var(--s-muted)", fontSize: vars.textUi, fontWeight: 500 });
+export const wire = style({ fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 55%, transparent)`, strokeWidth: 1.5 });
+export const wireQuiet = style({ fill: "none", stroke: ink(22), strokeWidth: 1.5, strokeDasharray: "4 5" });
+/** A dot going along a line now and then: none where less motion is asked for. */
+export const pulse = style({ fill: ORANGE, "@media": { [STILL]: { display: "none" } } });
 
-/** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
-export const stage = style({
-  position: "relative", margin: "80px auto 0", maxWidth: "1200px", animation: `${enter} 1.4s .3s cubic-bezier(.2,.8,.2,1) both`,
-  "@media": { [NARROW]: { marginTop: "52px" }, [STILL]: { animation: "none" } },
-});
-/** Its glow on the page under it. */
-export const stageGlow = style({
-  position: "absolute", inset: "12% 8% -4%", zIndex: "-1", borderRadius: "40px", filter: "blur(70px)",
-  background: `color-mix(in srgb, ${ORANGE} 40%, transparent)`, opacity: ".45",
-});
-/**
- * The edge the beam is seen through: a hairline of a turning light around the box. The light is the edge's own
- * background, turned by animating the gradient's angle (a registered property), not a huge spinning layer behind it:
- * the browser left parts of that layer unpainted at times, and the beam went missing along the edge.
- */
-const beamAngle = createVar({ syntax: "<angle>", inherits: false, initialValue: "0deg" });
-const turn = keyframes({ to: { vars: { [beamAngle]: "360deg" } } });
+// ---- The app ----
+
+export const stageSection = style({ padding: "24px 0 0" });
 /** Where the demo shows the phone's app (under 700 wide, the box being the page's width less its margins): its box
  *  has a phone's large corners, around its composer's: the capsule's 26px plus the 10px it sits in from the box. */
 const PHONE_BOX = "screen and (max-width: 747px)";
+/** The demo's frame: a hairline round it and a soft shadow under it. */
 export const edge = style({
   position: "relative", padding: "1px", borderRadius: "20px",
-  background: `conic-gradient(from ${beamAngle}, transparent 0 72%, ${ORANGE} 84%, #FFE2D2 89%, transparent 95%), ${ink(14)}`,
-  animation: `${turn} 7s linear infinite`,
+  background: ink(12), boxShadow: "0 40px 90px -40px rgba(0, 0, 0, .35)",
   "@media": { [NARROW]: { borderRadius: "14px" }, [PHONE_BOX]: { borderRadius: "37px" }, [STILL]: { animation: "none" } },
 });
 /** The demo's box (demo/): the app in it, at its size. Its corners cut by a clip, not a rounded overflow: under one,
@@ -224,53 +193,48 @@ export const demo = style({
  *  700 wide, the box being the page's width less its margins), the desktop's elsewhere. */
 export const frameWide = style({ height: "100%", "@media": { [PHONE_BOX]: { display: "none" } } });
 export const framePhone = style({ height: "100%", display: "none", "@media": { [PHONE_BOX]: { display: "block" } } });
-export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "500", whiteSpace: "nowrap" });
+export const caption = style({ margin: "16px 0 0", textAlign: "center", fontSize: vars.textUi, color: DIM });
 
 // ---- Sections ----
 
-export const section = style({ position: "relative", padding: "130px 0", isolation: "isolate", "@media": { [NARROW]: { padding: "80px 0" } } });
-/** A section's light: the grid, fading from its top. */
-export const sectionLight = style({
-  position: "absolute", inset: "0", zIndex: "-1", pointerEvents: "none", ...gridLines,
-  maskImage: "radial-gradient(ellipse 50% 40% at 50% 0%, #000 10%, transparent 70%)",
-  WebkitMaskImage: "radial-gradient(ellipse 50% 40% at 50% 0%, #000 10%, transparent 70%)",
-});
-/** A section's title and a line under it. */
-export const heading = style({ maxWidth: "760px", margin: "0 auto 64px", textAlign: "center", "@media": { [NARROW]: { marginBottom: "40px" } } });
-export const headingTitle = style({ margin: "0", fontSize: "clamp(32px, 4.6vw, 56px)", lineHeight: "1.15", letterSpacing: "-.02em", fontWeight: "750", color: "var(--s-title)" });
-export const headingLede = style({ margin: "16px 0 0", fontSize: "clamp(16px, 1.6vw, 19px)", color: "var(--s-muted)", textWrap: "balance" });
+export const section = style({ padding: "120px 0 0", "@media": { [NARROW]: { padding: "80px 0 0" } } });
+export const headingTitle = style({ margin: "0", fontSize: "clamp(30px, 3.6vw, 44px)", lineHeight: "1.2", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)", textWrap: "balance" });
+/** Words that wrap only as a whole. */
+export const phrase = style({ display: "inline-block" });
+export const headingLede = style({ margin: "14px 0 0", fontSize: "clamp(16px, 1.5vw, 18px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance" });
 
-// What it connects: three cards, side by side, one under another on a narrow screen.
-export const links = style({ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", "@media": { [NARROW]: { gridTemplateColumns: "1fr", maxWidth: "520px", margin: "0 auto" } } });
-export const link = style({ display: "flex", flexDirection: "column", padding: "28px", borderRadius: vars.rCard, background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
-export const linkPicture = style({ marginBottom: "24px" });
-globalStyle(`${linkPicture} > svg`, { display: "block", width: "100%", height: "auto", overflow: "visible" });
-export const linkTitle = style({ margin: "0", fontSize: vars.textHeading, fontWeight: "700", letterSpacing: "-.01em", color: FG });
-export const linkText = style({ margin: "10px 0 0", fontSize: vars.textTitle, lineHeight: "1.65", color: "var(--s-muted)" });
-/** A box in a card's picture: the page's node colour with a hairline, its name muted; the main one lit in orange. */
-export const node = style({});
-globalStyle(`${node} > rect`, { fill: "var(--s-node)", stroke: ink(18), strokeWidth: 1 });
-globalStyle(`${node} > text`, { fill: "var(--s-muted)", fontSize: vars.textUi, fontWeight: 500 });
-globalStyle(`${node}[data-main] > rect`, { stroke: ORANGE, strokeWidth: 1.5, fill: `color-mix(in srgb, ${ORANGE} 10%, var(--s-node))` });
-globalStyle(`${node}[data-main] > text`, { fill: FG, fontWeight: 600 });
-const draw = keyframes({ from: { strokeDashoffset: 1 }, to: { strokeDashoffset: 0 } });
-/** A line between boxes: drawn in as its card comes into view (where there are no scroll-driven animations, there). */
-export const wire = style({
-  fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 70%, transparent)`, strokeWidth: 1.5, strokeDasharray: 1,
-  animation: `${draw} linear both`, animationTimeline: "view()", animationRange: "entry 10% entry 90%",
-  "@media": { [STILL]: { animation: "none" } },
+// What it connects: three, side by side under a rule each; one under another on a narrow screen.
+export const links = style({
+  display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "48px", margin: "56px 0 0", padding: "0", listStyle: "none",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px", marginTop: "40px" } },
 });
+export const link = style({ paddingTop: "24px", borderTop: `1px solid ${ink(14)}` });
+export const linkNumber = style({ display: "block", fontFamily: vars.fontMono, fontSize: vars.textUi, color: ORANGE });
+export const linkTitle = style({ margin: "14px 0 0", fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "-.01em", color: FG });
+export const linkText = style({ margin: "10px 0 0", fontSize: vars.textTitle, lineHeight: "1.7", color: "var(--s-muted)" });
+export const parts = style({ display: "flex", flexWrap: "wrap", gap: "8px", margin: "18px 0 0", padding: "0", listStyle: "none" });
+globalStyle(`${parts} > li`, { padding: "4px 12px", borderRadius: "999px", background: ink(5), color: "var(--s-muted)", fontSize: vars.textUi });
 
-// Installing.
+// What it promises: two panels.
+export const promises = style({ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "20px", "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)" } } });
+export const promise = style({ padding: "40px", borderRadius: vars.rCard, background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}`, "@media": { [NARROW]: { padding: "28px" } } });
+export const promiseTitle = style({ margin: "0", fontSize: "clamp(24px, 2.6vw, 32px)", lineHeight: "1.25", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)" });
+export const promiseText = style({ margin: "12px 0 0", fontSize: vars.textTitle, lineHeight: "1.7", color: "var(--s-muted)" });
+
+// Installing: what to do on the left, the command on the right.
+export const install = style({
+  display: "grid", gridTemplateColumns: "minmax(0, .7fr) minmax(0, 1.3fr)", gap: "48px", alignItems: "center", paddingBottom: "120px",
+  "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "28px", paddingBottom: "80px" } },
+});
+/** The command, in a terminal's colours in either theme. */
 export const terminal = style({
-  position: "relative", maxWidth: "840px", margin: "0 auto", borderRadius: "18px", overflow: "hidden",
-  background: "#0F0F12", color: "#E9E9EA", border: `1px solid ${LINE}`,
-  boxShadow: `0 50px 100px -40px color-mix(in srgb, ${ORANGE} 50%, transparent)`,
-  font: `16px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: vars.textMeta } },
+  borderRadius: vars.rCard, overflow: "hidden", background: "#111114", color: "#E9E9EA",
+  boxShadow: `0 30px 70px -40px rgba(0, 0, 0, .5), inset 0 0 0 1px ${LINE}`,
+  font: `14px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: vars.textMeta } },
 });
-export const terminalBar = style({ display: "flex", gap: "8px", padding: "16px 18px", borderBottom: `1px solid ${LINE}` });
-export const terminalDot = style({ width: "12px", height: "12px", borderRadius: "50%", background: "#2A2A30" });
-export const terminalBody = style({ padding: "24px 28px 30px", overflowX: "auto" });
+export const terminalBody = style({ padding: "26px 28px", overflowX: "auto" });
+/** The command's line: the prompt and the command kept together, scrolled sideways where it is too long. */
+export const command = style({ display: "block", whiteSpace: "nowrap" });
 const type = keyframes({ from: { width: "0" }, to: { width: "var(--chars)" } });
 const blink = keyframes({ "50%": { borderColor: "transparent" } });
 export const typed = style({

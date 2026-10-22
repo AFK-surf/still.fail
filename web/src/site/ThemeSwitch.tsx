@@ -1,4 +1,4 @@
-// The site's theme, in its bar: the system's, light or dark (dark when none was chosen: the site's own look). The
+// The site's theme, in its bar: the system's, light or dark (light when none was chosen). The
 // page's root says which (data-theme, set before the first paint by site/index.html), and the demo's app follows it.
 import { useSyncExternalStore } from "react";
 import { announceAppearance } from "../theme.ts";
@@ -9,7 +9,7 @@ const KEY = "stillfail.site.theme";
 
 function read(): SiteTheme {
   const saved = localStorage.getItem(KEY) ?? localStorage.getItem("ember.site.theme");
-  return saved === "system" || saved === "light" ? saved : "dark";
+  return saved === "system" || saved === "dark" ? saved : "light";
 }
 
 const listeners = new Set<() => void>();
@@ -36,7 +36,7 @@ const CHOICES: { value: SiteTheme; label: string; icon: React.ReactNode }[] = [
 
 export function ThemeSwitch() {
   // Built to HTML as the default; in the browser, what this visitor chose.
-  const theme = useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, read, () => "dark" as SiteTheme);
+  const theme = useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, read, () => "light" as SiteTheme);
   return (
     <div className={css.themeSwitch} role="radiogroup" aria-label="主题">
       {CHOICES.map((c) => (

@@ -51,20 +51,15 @@ function Demo({ mount, frame }: { mount?: (root: HTMLElement) => void; frame?: {
   return <div className={css.demo} id="demo" ref={root} dangerouslySetInnerHTML={{ __html: html }} suppressHydrationWarning />;
 }
 
-// ---- What it connects ----
+// ---- The first screen's picture: where you are, the machine, and the machines beside it ----
 
-/** A box in a picture: a device or a machine, its name in it; `main`: the machine everything goes to, lit. */
-function Node({ x, y, w, h, label, main, round }: { x: number; y: number; w: number; h: number; label: string; main?: boolean; round?: boolean }) {
-  return (
-    <g className={css.node} data-main={main ? "" : undefined}>
-      <rect x={x} y={y} width={w} height={h} rx={round ? h / 2 : 10} />
-      <text x={x + w / 2} y={y + h / 2} dominantBaseline="central" textAnchor="middle">{label}</text>
-    </g>
-  );
-}
-
-/** A line between two boxes, drawn in as it scrolls into view (site.css.ts). */
-const Line = ({ d }: { d: string }) => <path className={css.wire} d={d} pathLength={1} />;
+/** Where you reach the machine from, down the picture's left. */
+const ENDS = ["手机", "网页", "桌面 app", "Slack", "飞书"];
+const END_Y = (i: number) => 52 + i * 76;
+/** The machine: a card in the middle, its name, how it is, what of it you reach. */
+const MACHINE = { x: 220, y: 150, w: 196, h: 140 };
+/** The other machines of the workspace, to its right. */
+const OTHERS = [{ label: "Mini", sub: "macOS", y: 54 }, { label: "Linux 服务器", sub: "x64", y: 328 }];
 
 /** From (x1, y1) to (x2, y2), leaving and arriving level. */
 const across = (x1: number, y1: number, x2: number, y2: number) => {
@@ -72,50 +67,99 @@ const across = (x1: number, y1: number, x2: number, y2: number) => {
   return `M${x1} ${y1} C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}`;
 };
 
-/** You and your machine: wherever you are, to the one machine. */
-function YouPicture() {
-  const from = ["手机", "网页", "Slack", "飞书"];
+/** A place you reach the machine from: a pill with its name. */
+const End = ({ x, y, w, label }: { x: number; y: number; w: number; label: string }) => (
+  <g className={css.end}>
+    <rect x={x} y={y} width={w} height={34} rx={17} />
+    <text x={x + w / 2} y={y + 17} dominantBaseline="central" textAnchor="middle">{label}</text>
+  </g>
+);
+
+/** A line and, now and then, a dot going along it (not where less motion is asked for: site.css.ts). */
+const Wire = ({ d, at }: { d: string; at: number }) => (
+  <g>
+    <path className={css.wire} d={d} />
+    <circle className={css.pulse} r={3}><animateMotion dur="3.2s" begin={`${at * 0.55}s`} repeatCount="indefinite" path={d} /></circle>
+  </g>
+);
+
+/** The machine, its top left at (x, y): its name, how it is, what of it you reach. */
+function Machine({ x, y }: { x: number; y: number }) {
   return (
-    <svg viewBox="0 0 300 150" role="img" aria-label="手机、网页、Slack、飞书都连到你的机器">
-      {from.map((_, i) => <Line key={i} d={across(84, 18 + i * 38, 196, 75)} />)}
-      {from.map((label, i) => <Node key={label} x={8} y={5 + i * 38} w={76} h={26} label={label} round />)}
-      <Node x={196} y={45} w={96} h={60} label="你的机器" main />
+    <g className={css.machine}>
+      <rect x={x} y={y} width={MACHINE.w} height={MACHINE.h} rx={16} />
+      <circle className={css.online} cx={x + 24} cy={y + 30} r={4} />
+      <text className={css.machineName} x={x + 38} y={y + 30} dominantBaseline="central">Studio</text>
+      <text className={css.machineSub} x={x + 20} y={y + 58} dominantBaseline="central">你的 Mac · 在线</text>
+      {["文件", "浏览器", "终端"].map((t, i) => (
+        <g key={t} className={css.machinePart}>
+          <rect x={x + 20 + i * 54} y={y + 86} width={48} height={30} rx={8} />
+          <text x={x + 44 + i * 54} y={y + 101} dominantBaseline="central" textAnchor="middle">{t}</text>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+/** Another machine of the workspace. */
+const Other = ({ x, y, w, label }: { x: number; y: number; w: number; label: string }) => (
+  <g className={css.other}>
+    <rect x={x} y={y} width={w} height={38} rx={10} />
+    <text x={x + w / 2} y={y + 19} dominantBaseline="central" textAnchor="middle">{label}</text>
+  </g>
+);
+
+const LABEL = "手机、网页、桌面 app、Slack、飞书都连到你的机器，它和另外两台机器也连着";
+
+/** Wide: where you are down the left, the machine in the middle, the other machines on the right. */
+function WidePicture() {
+  const into = MACHINE.y + MACHINE.h / 2;
+  return (
+    <svg className={`${css.picture} ${css.pictureWide}`} viewBox="0 0 560 420" role="img" aria-label={LABEL}>
+      {ENDS.map((_, i) => <Wire key={i} at={i} d={across(112, END_Y(i), MACHINE.x, into - 36 + i * 18)} />)}
+      {OTHERS.map((o) => <path key={o.label} className={css.wireQuiet} d={across(MACHINE.x + MACHINE.w, into, 440, o.y + 19)} />)}
+      {ENDS.map((label, i) => <End key={label} x={0} y={END_Y(i) - 17} w={112} label={label} />)}
+      <Machine x={MACHINE.x} y={MACHINE.y} />
+      {OTHERS.map((o) => <Other key={o.label} x={440} y={o.y} w={120} label={o.label} />)}
     </svg>
   );
 }
 
-/** Machines and machines: a few, used as one. */
-function MachinesPicture() {
+/** Down: on a narrow screen, where you are along the top, the machine under it, the other machines below. */
+const DOWN_ENDS = [{ w: 56 }, { w: 56 }, { w: 80 }, { w: 64 }, { w: 52 }];
+function NarrowPicture() {
+  const left = (i: number) => DOWN_ENDS.slice(0, i).reduce((x, e) => x + e.w + 8, 0);
+  const mx = (340 - MACHINE.w) / 2, my = 104;
   return (
-    <svg viewBox="0 0 300 150" role="img" aria-label="Mac、Linux、Windows 三台机器互相连着">
-      <Line d="M150 38 L70 112" />
-      <Line d="M150 38 L230 112" />
-      <Line d="M70 120 L230 120" />
-      <Node x={102} y={8} w={96} h={44} label="Mac" main />
-      <Node x={14} y={98} w={96} h={44} label="Linux" main />
-      <Node x={190} y={98} w={96} h={44} label="Windows" main />
+    <svg className={`${css.picture} ${css.pictureNarrow}`} viewBox="0 0 340 340" role="img" aria-label={LABEL}>
+      {DOWN_ENDS.map((e, i) => (
+        <Wire key={i} at={i} d={`M${left(i) + e.w / 2} 34 C${left(i) + e.w / 2} 70 ${mx + 38 + i * 30} 70 ${mx + 38 + i * 30} ${my}`} />
+      ))}
+      <path className={css.wireQuiet} d={`M${mx + 60} ${my + MACHINE.h} C${mx + 60} ${my + MACHINE.h + 30} 60 ${my + MACHINE.h + 20} 60 300`} />
+      <path className={css.wireQuiet} d={`M${mx + MACHINE.w - 60} ${my + MACHINE.h} C${mx + MACHINE.w - 60} ${my + MACHINE.h + 30} 275 ${my + MACHINE.h + 20} 275 300`} />
+      {DOWN_ENDS.map((e, i) => <End key={i} x={left(i)} y={0} w={e.w} label={ENDS[i]!} />)}
+      <Machine x={mx} y={my} />
+      <Other x={0} y={300} w={120} label="Mini" />
+      <Other x={210} y={300} w={130} label="Linux 服务器" />
     </svg>
   );
 }
 
-/** People and people: one conversation, one machine. */
-function PeoplePicture() {
-  const people = ["林", "陈", "周"];
-  return (
-    <svg viewBox="0 0 300 150" role="img" aria-label="三个人在同一个对话里，用同一台机器">
-      {people.map((_, i) => <Line key={i} d={across(48, 33 + i * 42, 118, 75)} />)}
-      <Line d="M190 75 L206 75" />
-      {people.map((label, i) => <Node key={label} x={14} y={16 + i * 42} w={34} h={34} label={label} round />)}
-      <Node x={118} y={58} w={72} h={34} label="对话" round />
-      <Node x={206} y={45} w={86} h={60} label="你的机器" main />
-    </svg>
-  );
+function ConnectPicture() {
+  return <div className={css.pictureBox}><WidePicture /><NarrowPicture /></div>;
 }
 
+/** What it connects, read down the page. */
 const LINKS = [
-  { title: "你和你的机器", text: "手机、网页、Slack、飞书里都能直接用它，文件、浏览器、桌面都在手边", picture: <YouPicture /> },
-  { title: "机器和机器", text: "几台机器当一台用：订阅和 skill 互相借，任务交给空着的那台去跑", picture: <MachinesPicture /> },
-  { title: "人和人", text: "同事在同一个对话里接着做，用的是同一台机器、同一份上下文", picture: <PeoplePicture /> },
+  { title: "你和你的机器", text: "在手机、网页、桌面 app、Slack 和飞书里直接用它，就像坐在它面前", parts: ["文件", "浏览器和桌面", "命令行登录", "后台任务"] },
+  { title: "机器和机器", text: "几台机器当一台用：订阅和 skill 互相借，任务交给空着的那台去跑", parts: ["借用订阅", "跨机器任务", "端口转发"] },
+  { title: "人和人", text: "同事在同一个对话里接着做，用的是同一台机器、同一份上下文", parts: ["Slack", "飞书", "still.fail 对话"] },
+];
+
+/** What it promises about where things are. */
+const PROMISES = [
+  { title: "数据在你的机器上", text: "对话、文件和记录存在你自己的机器上，云端只管账号和中继" },
+  { title: "设备之间直连", text: "手机、电脑和机器之间点对点连接，连不上时经加密的中继转发" },
 ];
 
 // ---- The rest ----
@@ -150,54 +194,64 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
       </nav>
 
       <header className={css.hero}>
-        <div className={css.grid} /><div className={css.beam} />
-        <div className={css.wrap}>
-          {/* What it is, in a line: the two halves wrap as wholes on a narrow screen. */}
-          <h1 className={css.title}><span>把你的机器</span><span className={css.titleLit}>连到任何地方</span></h1>
-          <p className={css.lede}>在手机、网页、Slack 和飞书里，直接用家里或公司的那台机器做事</p>
-          <div className={`${css.actions} ${css.heroActions}`}>
-            <Button href={APP} kind="primary" large>开始使用</Button>
-          </div>
-          <div className={css.stage}>
-            <div className={css.stageGlow} />
-            <div className={css.edge}>
-              <Demo {...(mountDemo ? { mount: mountDemo } : {})} {...(demo ? { frame: demo } : {})} />
+        <div className={`${css.wrap} ${css.heroRow}`}>
+          <div className={css.heroWords}>
+            <h1 className={css.title}>把你的机器<br />连到任何地方</h1>
+            <p className={css.lede}>在手机、网页、Slack 和飞书里，直接用家里或公司的那台机器做事</p>
+            <div className={css.heroActions}>
+              <Button href={APP} kind="primary" large>开始使用</Button>
+              <span className={css.heroNote}>机器支持 macOS、Linux、Windows</span>
             </div>
           </div>
+          <ConnectPicture />
         </div>
       </header>
 
-      <section className={css.section}>
-        <div className={css.sectionLight} />
+      <section className={css.stageSection}>
         <div className={css.wrap}>
-          <div className={`${css.heading} ${css.reveal}`}>
-            <h2 className={css.headingTitle}>在哪都是同一台机器</h2>
-            <p className={css.headingLede}>数据留在你自己的机器上，设备之间直连，不经过云</p>
+          <div className={css.edge}>
+            <Demo {...(mountDemo ? { mount: mountDemo } : {})} {...(demo ? { frame: demo } : {})} />
           </div>
-          <div className={css.links}>
-            {LINKS.map((l) => (
-              <article key={l.title} className={`${css.link} ${css.reveal}`}>
-                <div className={css.linkPicture}>{l.picture}</div>
+          <p className={css.caption}>真的 still.fail，跑在示例数据上，可以直接点</p>
+        </div>
+      </section>
+
+      <section className={css.section}>
+        <div className={css.wrap}>
+          <h2 className={css.headingTitle}>连起你、你的机器和你的同事</h2>
+          <ol className={css.links}>
+            {LINKS.map((l, i) => (
+              <li key={l.title} className={css.link}>
+                <span className={css.linkNumber}>{String(i + 1).padStart(2, "0")}</span>
                 <h3 className={css.linkTitle}>{l.title}</h3>
                 <p className={css.linkText}>{l.text}</p>
-              </article>
+                <ul className={css.parts}>{l.parts.map((p) => <li key={p}>{p}</li>)}</ul>
+              </li>
             ))}
-          </div>
+          </ol>
+        </div>
+      </section>
+
+      <section className={css.section}>
+        <div className={`${css.wrap} ${css.promises}`}>
+          {PROMISES.map((p) => (
+            <div key={p.title} className={css.promise}>
+              <h3 className={css.promiseTitle}>{p.title}</h3>
+              <p className={css.promiseText}>{p.text}</p>
+            </div>
+          ))}
         </div>
       </section>
 
       <section id="start" className={css.section}>
-        <div className={css.sectionLight} />
-        <div className={css.wrap}>
-          <div className={`${css.heading} ${css.reveal}`}>
-            <h2 className={css.headingTitle}>一条命令接上一台机器</h2>
-            <p className={css.headingLede}>macOS、Linux、Windows 都行，用的是那台机器上已经登录的账号和订阅</p>
+        <div className={`${css.wrap} ${css.install}`}>
+          <div>
+            <h2 className={css.headingTitle}><span className={css.phrase}>一条命令</span><span className={css.phrase}>接上一台机器</span></h2>
+            <p className={css.headingLede}>在要连的机器上运行，用的是它上面已经登录的账号和订阅</p>
           </div>
-          <div className={`${css.terminal} ${css.reveal}`}>
-            <div className={css.terminalBar}><span className={css.terminalDot} /><span className={css.terminalDot} /><span className={css.terminalDot} /></div>
+          <div className={css.terminal}>
             <div className={css.terminalBody}>
-              <span className={css.prompt}>$ </span>
-              <span className={css.typed} style={{ "--chars": `${INSTALL.length}ch`, "--steps": INSTALL.length } as CSSProperties}>{INSTALL}</span>
+              <span className={css.command}><span className={css.prompt}>$ </span><span className={css.typed} style={{ "--chars": `${INSTALL.length}ch`, "--steps": INSTALL.length } as CSSProperties}>{INSTALL}</span></span>
               <span className={css.output} data-at="1">→ 下载 still.fail station · 加入 workspace「Acme」</span>
               <span className={css.output} data-at="2">→ 注册为登录启动的服务</span>
               <span className={css.output} data-at="3" data-ok>✓ station 已上线</span>

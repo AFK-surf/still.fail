@@ -14,9 +14,9 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: dark when none was;
+<!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: light when none was;
      "system" leaves it to the system. The demo's app follows the same data-theme. -->
-<script>try{var t=localStorage.getItem("stillfail.site.theme");if(t===null){t=localStorage.getItem("ember.site.theme");if(t!==null)localStorage.setItem("stillfail.site.theme",t)}if(t!=="system")document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<script>try{var t=localStorage.getItem("stillfail.site.theme");if(t===null){t=localStorage.getItem("ember.site.theme");if(t!==null)localStorage.setItem("stillfail.site.theme",t)}if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
 <!-- What the visitor is on, for the downloads to offer (web/src/site/Site.tsx): mac, android, ios, or desktop (the
      rest). An iPad says it is a Mac, and has a touch screen. A preview can ask for one with ?platform=. -->
 <script>(function(){var u=navigator.userAgent,p=new URLSearchParams(location.search).get("platform");if(!p)p=/Android/i.test(u)?"android":/iPhone|iPad|iPod/.test(u)||/Macintosh/.test(u)&&navigator.maxTouchPoints>1?"ios":/Macintosh/.test(u)?"mac":/Mobi/i.test(u)?"":"desktop";if(p)document.documentElement.dataset.platform=p})()</script>
