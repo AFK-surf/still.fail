@@ -1224,6 +1224,12 @@ data class Message (
 	val authorName: String? = null,
 	/// A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say.
 	val authorPicture: String? = null,
+	/// An agent's: its session's model, for its mark before the session is read. Absent for others, for one on the
+	/// runtime's default model and from a station that does not say.
+	val authorModel: String? = null,
+	/// An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a
+	/// station that does not say.
+	val authorRuntime: String? = null,
 	val text: String,
 	val attachments: List<Attachment>,
 	val quotes: List<Quote>,
@@ -1767,6 +1773,12 @@ data class ChatMessage (
 	val authorName: String? = null,
 	/// A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say.
 	val authorPicture: String? = null,
+	/// An agent's: its session's model, for its mark before the session is read. Absent for others, for one on the
+	/// runtime's default model and from a station that does not say.
+	val authorModel: String? = null,
+	/// An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a
+	/// station that does not say.
+	val authorRuntime: String? = null,
 	val text: String,
 	/// An agent's or still.fail's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients
 	/// draw. Absent for a person's, drawn as they wrote it.

@@ -1214,6 +1214,16 @@ export interface Message {
 	authorName?: string;
 	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
 	authorPicture?: string;
+	/**
+	 * An agent's: its session's model, for its mark before the session is read. Absent for others, for one on the
+	 * runtime's default model and from a station that does not say.
+	 */
+	authorModel?: string;
+	/**
+	 * An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a
+	 * station that does not say.
+	 */
+	authorRuntime?: string;
 	text: string;
 	attachments: Attachment[];
 	quotes: Quote[];
@@ -1784,6 +1794,16 @@ export interface ChatMessage {
 	authorName?: string;
 	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
 	authorPicture?: string;
+	/**
+	 * An agent's: its session's model, for its mark before the session is read. Absent for others, for one on the
+	 * runtime's default model and from a station that does not say.
+	 */
+	authorModel?: string;
+	/**
+	 * An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a
+	 * station that does not say.
+	 */
+	authorRuntime?: string;
 	text: string;
 	/**
 	 * An agent's or still.fail's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients

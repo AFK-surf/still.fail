@@ -588,3 +588,20 @@ test("an archived chat is listed from its file, and anew once it is archived aga
     await r.close();
   }
 });
+
+test("an agent's message comes with its session's model and runtime, for its mark before the session is read", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "codex", title: "a" });
+    r.store.setSessionModel(made.key, "gpt-5.5", null);
+    const id = made.thread.id;
+    r.store.insertMessage(newMessage(id, "1.2", "person", "a@x", "hi"));
+    r.store.insertMessage(newMessage(id, "1.3", "agent", made.key, "done"));
+    const [, page] = await r.ask("GET", `/threads/${id}/entries`);
+    const by = (kind: string) => page.entries.find((e: any) => e.authorKind === kind);
+    assert.deepEqual([by("agent").authorModel, by("agent").authorRuntime], ["gpt-5.5", "codex"]);
+    assert.deepEqual([by("person").authorModel, by("person").authorRuntime], [undefined, undefined]);
+  } finally {
+    await r.close();
+  }
+});

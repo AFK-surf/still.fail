@@ -1124,7 +1124,7 @@ private fun MessageAvatar(m: ChatMessage) {
 @Composable
 internal fun AgentAvatar(maker: Maker?, runtime: String?) {
     Box(Modifier.size(18.dp).clip(CircleShape).background(chatInk().neutral), contentAlignment = Alignment.Center) {
-        if (runtime != null) MakerIcon(maker, runtime, 12.dp) else Mark(12.dp)
+        if (maker != null || runtime != null) MakerIcon(maker, runtime, 12.dp) else Mark(12.dp)
     }
 }
 

@@ -294,6 +294,19 @@ test("historical_messages_do_not_follow_the_current_model", () => {
   assert.equal(message.by.maker.id, "openai");
 });
 
+test("an_agents_mark_is_drawn_from_what_its_message_says_before_its_session_is_read", () => {
+  const message: J = { authorKind: "agent", author: "k", authorName: "Worker", authorModel: "gpt-5.5", authorRuntime: "codex", text: "hi" };
+  const before = shownMessage(message, [], null, [], [], [], undefined);
+  assert.deepEqual([before.by.name, before.by.maker?.id, before.by.runtime], ["Worker", "openai", "codex"]);
+  // Once read, the session says.
+  const agents = [{ session: { key: "k", agentText: "Opus", model: "claude-opus-5-5", runtime: "claude", maker: { id: "anthropic", name: "Anthropic" } } }];
+  const after = shownMessage(message, agents, null, [], [], [], undefined);
+  assert.deepEqual([after.by.maker.id, after.by.runtime], ["anthropic", "claude"]);
+  // From a station that does not say: no mark yet.
+  const old = shownMessage({ authorKind: "agent", author: "k", text: "hi" }, [], null, [], [], [], undefined);
+  assert.deepEqual([old.by.maker, old.by.runtime], [null, null]);
+});
+
 test("a_station_is_down_as_its_link_finds_it_or_as_it_was_last_until_then", () => {
   assert.ok(down({ state: "offline" }));
   assert.ok(!down({ state: "online" }));
