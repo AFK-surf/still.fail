@@ -43,6 +43,8 @@ test "a link held still: its menu (打开链接, 复制链接), the link not fol
   t.release(x + w / 2.0, y + h / 2.0)
   assert_eq(t.opened().length(), 0)
   assert_true(t.find("打开链接") is Some(_))
+  // felt as it opened, once (Links.kt: LongPress)
+  assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // no words picked by the same press
   assert_eq(pk.ts, "")
   t.tap_text("复制链接")

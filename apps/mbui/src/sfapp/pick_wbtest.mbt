@@ -29,6 +29,8 @@ test "held still on a message's words: the word under the finger is picked, the 
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
   assert_eq(pk.b - pk.a, 1)
+  // felt as it picked, once (MessagePick.kt: LongPress)
+  assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   assert_true(t.find("引用") is Some(_))
   assert_true(t.find("复制") is Some(_))
   assert_true(t.find("全选") is Some(_))

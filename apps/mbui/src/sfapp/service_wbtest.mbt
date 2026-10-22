@@ -25,6 +25,18 @@ test "a service's page: its name and station in the bar, where it is, the sizes 
 }
 
 ///|
+test "the sizes' bar held still half a second: folded away, felt once (Preview.kt: LongPress)" {
+  let t = service_tester("service")
+  t.frame()
+  let (x, y) = t.find("自适应").unwrap()
+  t.press_at(x, y)
+  t.run_for(svc_fold_hold_ms + 100.0)
+  t.release(x, y)
+  assert_true(svc_folded.val)
+  assert_eq(t.haptics(), [@ui.Haptic::LongPress])
+}
+
+///|
 test "the page's requests answered from the station through the core: the head, the body, the end; not found said" {
   let t = service_tester("service")
   t.frame()

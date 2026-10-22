@@ -51,7 +51,8 @@ pub(all) struct Overlay {
 /// dismiss it. As it opens the focus goes to `initial_focus` (-1: its first focusable; 0: nowhere, it stays; -2, by
 /// default: the first focusable when it traps, else nowhere); as it goes, back to `return_focus` (0, by default:
 /// what had it as it opened). `inert`: leaving (its exit drawn): it takes no press, focus or key, is not dismissed,
-/// is hidden from the semantics tree, and the focus goes back as though it had gone.
+/// is hidden from the semantics tree, and the focus goes back as though it had gone; its scrim is still drawn (as it
+/// fades), taking nothing.
 pub fn Ctx::overlay(
   self : Ctx,
   key : String,
@@ -116,11 +117,11 @@ pub fn Ctx::overlay(
     self.take_back(fn() { self.dismissals[id] = Back })
   }
   self.with_parent(i, fn() {
-    if modal && !inert {
-      // the ground that takes what the layer does not
-      let b = self.box(w=Fill(1.0), h=Fill(1.0), bg=scrim, id~, fn() {  })
+    if modal && (!inert || scrim != 0L) {
+      // the ground that takes what the layer does not; leaving, its scrim still fading with it, taking nothing
+      let b = self.box(w=Fill(1.0), h=Fill(1.0), bg=scrim, id=if inert { 0 } else { id }, fn() {  })
       self.nodes[b].layer = true
-      self.nodes[b].blocks = true
+      self.nodes[b].blocks = !inert
     }
     if inert {
       // leaving: drawn, never tapped (draw.mbt)

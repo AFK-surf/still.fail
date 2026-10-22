@@ -1398,6 +1398,7 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
   if @kit.after(c, "service/fold-hold", c.pressed(bar) || toolbar_child_pressed(c), svc_fold_hold_ms) {
     p.folded = true
     svc_folded.val = true
+    feel_hold(c, "service/fold")
   }
   let ground = if sized { @sf.mix(t.p.chip, 0.55, t.p.card) } else { t.p.card }
   c.box(w=Fill(1.0), bg=ground, pl=10.0, pr=10.0, pb=10.0, fn() {
