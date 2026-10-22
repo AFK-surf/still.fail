@@ -926,14 +926,15 @@ let told_bars : Ref[Bool?] = Ref(None)
 let told_dark : Ref[Bool?] = Ref(None)
 
 ///|
-/// What a write said (Sheet.kt ToastHost), mbui's toast (@kit.toaster) in still.fail's look: over the foot (90 above
-/// it), in ink, 2.6 s (paused while the pointer is on it), coming in and going out; one said again is a new one.
+/// What a write said (Sheet.kt ToastHost), mbui's toast (@kit.toaster) in still.fail's look: over the foot, clear of
+/// the bar and the action standing over it (bar_room above it), in ink, 2.6 s (paused while the pointer is on it),
+/// coming in and going out; one said again is a new one.
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
   // (above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
   let foot = nav_foot()
-  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=90.0 + foot, look=fn(c, s, _action, _close) {
+  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=bar_room + foot, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
       c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore

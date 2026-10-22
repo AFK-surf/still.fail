@@ -115,8 +115,9 @@ export const mMenu = style({
     "&[data-open]": { opacity: "1", transform: "none", transition: "opacity 200ms, transform 200ms" },
   },
 });
+/** Clear of the bottom bar and the 令 standing 32 over it, as a place's top page keeps its foot (126, below). */
 export const mToast = style({
-  position: "fixed", left: "50%", bottom: "calc(90px + var(--m-foot))", zIndex: "70", maxWidth: "calc(100% - 48px)",
+  position: "fixed", left: "50%", bottom: "calc(126px + var(--m-foot))", zIndex: "70", maxWidth: "calc(100% - 48px)",
   padding: "10px 16px", borderRadius: "18px", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: vars.textUi,
   transform: "translateX(-50%)", opacity: "0", transition: "opacity 200ms", pointerEvents: "none",
   selectors: {
