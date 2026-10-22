@@ -75,7 +75,10 @@ fn menu_under(
 ///|
 /// The menu over the page, while open and as it goes.
 fn link_menu_layer(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
+  // opened by a link held: felt as it opens (Links.kt)
+  if link_menu.open && link_menu.at == cui.down_frame {
+    feel_hold(c, "link")
+  }
   let look = match
     @motion.presence(
       c,
@@ -89,47 +92,22 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
   }
   let shown = @motion.animate(c, "link-menu/scrim", if link_menu.open { 1.0 } else { 0.0 }, spec=@motion.tween(200.0))
   scrim(c, "link-menu-scrim", shown, open=link_menu.open, fn() { link_menu.open = false })
-  // its rows of 45 and the menu's 12 off the line; above the line when it would not fit below
-  let h = link_menu.items.length().to_double() * 45.0
+  // its rows of 45 and its padding (MenuHost's menuHeight), 6 off the line; above the line when it would not fit below
+  let h = menu_height(link_menu.items.length())
   let below = link_menu.bottom + 6.0
   let y = if below + h > c.height - 16.0 { dmax(16.0, link_menu.top - 6.0 - h) } else { below }
   let x = dmax(12.0, dmin(link_menu.x - 90.0, c.width - 12.0 - 180.0))
   c.layer(fn() {
-    let menu = c.box(
-      w=Px(180.0),
-      tx=x,
-      ty=y,
-      radius=14.0,
-      bg=t.p.card,
-      shadow=@sf.menu_raised.sigma,
-      shadow_y=@sf.menu_raised.dy,
-      shadow_color=@sf.menu_raised.color,
-      clip=true,
-      fn() {
-        for i, it in link_menu.items {
-          let id = c.id("link-menu/" + i.to_string())
-          c.box(
-            dir=Row,
-            w=Fill(1.0),
-            padx=16.0,
-            pady=12.0,
-            align=ACenter,
-            justify=JBetween,
-            bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
-            id~,
-            fn() {
-              c.text(it.0, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
-              @sf.icon(c, it.1, size=16.0, color=t.p.text) |> ignore
-            },
-          )
-          |> ignore
-          if c.clicked(id) && link_menu.open {
-            link_menu.open = false
-            (link_menu.pick)(c, i)
-          }
+    let menu = phone_menu(c, tx=x, ty=y, fn() {
+      for i, it in link_menu.items {
+        let id = c.id("link-menu/" + i.to_string())
+        phone_menu_row(c, it.0, icon=it.1, lit=@motion.pressing(c, id), id~) |> ignore
+        if c.clicked(id) && link_menu.open {
+          link_menu.open = false
+          (link_menu.pick)(c, i)
         }
-      },
-    )
+      }
+    })
     c.look(menu, look)
     @motion.leaving(c, menu, link_menu.open)
   })

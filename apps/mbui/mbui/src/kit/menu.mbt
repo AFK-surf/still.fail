@@ -396,15 +396,19 @@ pub fn dropdown_menu(
     Some(e) => Some(@motion.presence(c, key + "/motion", now, enter=e, exit?=exit))
     None => None
   }
-  let built = match moved {
+  let shown = match moved {
     Some(m) => m is Some(_)
     None => p.built
   }
-  // the scrim, if any, in and out over 200 ms
+  // the scrim, if any, in and out over 200 ms: the layer stays until both the panel and it have gone (Android's
+  // MenuHost), fading together
   let dim = if scrim != 0L { animate(c, key + "/scrim", if now { 1.0 } else { 0.0 }, transition=@motion.tween(200.0)) } else { 0.0 }
   let mut chosen = None
-  if built {
+  if shown || dim > 0.0 {
     let o = c.overlay(key, modal=true, anchor=trigger, scrim=faded(scrim, dim), initial_focus=pick(by_key, first_item(c, key, entries), pid), inert=!now, fn() {
+      if !shown {
+        return
+      }
       let out = menu_panel(
         c,
         key,

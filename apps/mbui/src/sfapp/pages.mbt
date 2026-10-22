@@ -55,12 +55,87 @@ fn scrim(
 let chip_list_card : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, clip=true)
 
 ///|
+/// A phone menu's rows' ground menu_pad in from the panel's edge, rounded menu_row (Sheet.kt MenuHost MENU_PAD,
+/// MENU_ROW); their words menu_words_in from the panel's edge.
+let menu_pad : Double = 6.0
+
+///|
+let menu_row : Double = 14.0
+
+///|
+let menu_words_in : Double = 16.0
+
+///|
+/// A phone menu's height of `n` rows of 45 (MenuHost's menuHeight: 45 a row, its padding over and under).
+fn menu_height(n : Int) -> Double {
+  45.0 * n.to_double() + menu_pad * 2.0
+}
+
+///|
+/// A phone menu's panel (Sheet.kt MenuHost) at (`tx`, `ty`): 180 wide, the surface, the menu's shadow, its rows
+/// menu_pad in, its corner concentric round theirs (concentricOut(MENU_ROW, MENU_PAD)).
+fn phone_menu(c : @ui.Ctx, tx? : Double = 0.0, ty? : Double = 0.0, body : () -> Unit) -> Int {
+  let t = @sf.theme()
+  c.box(
+    w=Px(180.0),
+    tx~,
+    ty~,
+    pad=menu_pad,
+    radius=@sf.concentric_out(menu_row, menu_pad),
+    bg=t.p.card,
+    shadow=@sf.menu_raised.sigma,
+    shadow_y=@sf.menu_raised.dy,
+    shadow_color=@sf.menu_raised.color,
+    clip=true,
+    body,
+  )
+}
+
+///|
+/// A phone menu's row (MenuHost): `label` menu_words_in from the panel's edge, 12 over and under, `icon` (16) at its
+/// end ("": its room kept); its ground rounded menu_row, the words' colour at 6% times `lit` (pressed, or the finger
+/// or the keyboard on it).
+fn phone_menu_row(c : @ui.Ctx, label : String, icon~ : String, lit~ : Double, id? : Int = 0) -> Int {
+  let t = @sf.theme()
+  c.box(
+    dir=Row,
+    w=Fill(1.0),
+    padx=menu_words_in - menu_pad,
+    pady=12.0,
+    align=ACenter,
+    justify=JBetween,
+    radius=menu_row,
+    bg=if lit > 0.0 { @sf.alpha(t.p.text, 0.06 * lit) } else { 0L },
+    id~,
+    fn() {
+      c.text(label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+      if icon != "" {
+        @sf.icon(c, icon, size=16.0, color=t.p.text) |> ignore
+      } else {
+        c.box(w=Px(16.0), h=Px(16.0), fn() {  }) |> ignore
+      }
+    },
+  )
+}
+
+///|
+/// A menu's panel in MenuHost's look, for mbui's dropdown menu.
+fn menu_panel_look(c : @ui.Ctx, _min_w : Double, body : () -> Unit) -> Unit {
+  phone_menu(c, body) |> ignore
+}
+
+///|
+/// A menu's row in MenuHost's look, `icon` at its end, lit while the finger or the keyboard is on it.
+fn menu_row_look(c : @ui.Ctx, s : @kit.MenuItemState, icon : String) -> Unit {
+  phone_menu_row(c, s.entry.label, icon~, lit=if s.hot { 1.0 } else { 0.0 }) |> ignore
+}
+
+///|
 /// The filter's menu (Home.kt, in Sheet.kt MenuHost's look), mbui's dropdown menu (@kit.dropdown_menu): 180 wide under
 /// the filter's button, its right edge under the button's: 全部, 我参与的, 监控中 (the one in use checked), 已归档. In: its
 /// opacity 160 ms (Ease.Out), its scale from 90% on the menu's spring, from its top left; out: 120 ms (CSS's ease-out),
 /// back to 90%; the scrim (black at 28%) 200 ms. Drawn until it has gone; the arrows, letters and Escape as a menu's.
 fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let t = @sf.theme()
   let filter = filter_of(src, w.id)
   let entries = ["all", "mine", "watching"].map(fn(f) {
     @kit.menu_radio(f, filter == f, label=tr("android-chat.home.filter." + f))
@@ -80,32 +155,13 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     scrim=0x00000047L,
     enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
     exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
-    look=fn(c, _min_w, body) {
-      c.box(w=Px(180.0), radius=14.0, bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, body) |> ignore
-    },
+    look=menu_panel_look,
     item_look=fn(c, s) {
       let icon = match s.entry.kind {
         @kit.Choice(true) => "check"
         _ => if s.entry.value == "archived" { "archive" } else { "" }
       }
-      c.box(
-        dir=Row,
-        w=Fill(1.0),
-        padx=16.0,
-        pady=12.0,
-        align=ACenter,
-        justify=JBetween,
-        bg=if s.hot { @sf.alpha(t.p.text, 0.06) } else { 0L },
-        fn() {
-          c.text(s.entry.label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
-          if icon != "" {
-            @sf.icon(c, icon, size=16.0, color=t.p.text) |> ignore
-          } else {
-            c.box(w=Px(16.0), h=Px(16.0), fn() {  }) |> ignore
-          }
-        },
-      )
-      |> ignore
+      menu_row_look(c, s, icon)
     },
   )
   app.menu = m.open

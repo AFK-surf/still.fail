@@ -159,6 +159,7 @@ fn reset() -> Unit {
   files_cornered.val = false
   felt_menu.val = -1
   felt_past.clear()
+  felt_holds.clear()
   attention.told = false
   picture_pick.val = None
   bar_glyph.val = None

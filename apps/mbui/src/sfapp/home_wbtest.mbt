@@ -324,3 +324,26 @@ test "under it all the page's own ground, dark too (the host cleared to blue the
     }
   }
 }
+
+///|
+test "the filter's menu as MenuHost: rows of 45, 6 over and under them; going, its scrim fades with it" {
+  let t = tester("home")
+  let scrim = fn() { t.drawn_rects().filter(fn(r) { r.2 == 390.0 && r.3 == 844.0 && (r.4 & 0xFFFFFF00L) == 0L && (r.4 & 0xFFL) > 0L }) }
+  t.tap(390.0 - 16.0 - 17.0, 25.0)
+  t.run_for(@kit.menu_in_ms + 200.0)
+  // under the button (8 down, 34 high) by 6, the rows 6 in (MENU_PAD), 45 each, their words 12 down in them
+  let top = 8.0 + 34.0 + 6.0
+  assert_eq(t.rect_of("我参与的").map(fn(r) { r.1 }), Some(top + 6.0 + 45.0 + 12.0))
+  let watching_row = fn() { t.rect_of("监控中").map(fn(r) { r.1 }) == Some(top + 6.0 + 45.0 * 2.0 + 12.0) }
+  assert_true(watching_row())
+  assert_eq(scrim().length(), 1)
+  // a tap beside it: the menu and its scrim leave together (MenuHost keeps both until both have gone)
+  t.tap(40.0, 700.0)
+  t.run_for(@kit.menu_out_ms)
+  assert_true(watching_row())
+  assert_eq(scrim().length(), 1)
+  // (its scale goes back on the menu's spring: drawn until that has ended too)
+  t.run_for(@motion.menu_spring.duration(1.0, 0.9, 0.0))
+  assert_false(watching_row())
+  assert_eq(scrim().length(), 0)
+}

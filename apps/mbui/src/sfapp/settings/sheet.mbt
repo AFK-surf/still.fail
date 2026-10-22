@@ -286,6 +286,17 @@ priv struct MenuHost {
 }
 
 ///|
+/// Its rows' ground menu_pad in from its edge, rounded menu_row, their words menu_words_in from its edge (MenuHost's
+/// MENU_PAD, MENU_ROW).
+let menu_pad : Double = 6.0
+
+///|
+let menu_row : Double = 14.0
+
+///|
+let menu_words_in : Double = 16.0
+
+///|
 let menu : MenuHost = { items: [], selected: -1, x: 0.0, y: 0.0, pick: fn(_) {  }, up: false }
 
 ///|
@@ -334,7 +345,7 @@ fn menu_overlay(c : @ui.Ctx) -> Unit {
   }
   c.layer(fn() { c.box(w=Fill(1.0), h=Fill(1.0), id=scrim, fn() {  }) |> ignore }) |> ignore
   c.layer(fn() {
-    c.box(w=Px(180.0), tx=dmax(12.0, menu.x), ty=menu.y, radius=14.0, bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, fn() {
+    c.box(w=Px(180.0), tx=dmax(12.0, menu.x), ty=menu.y, pad=menu_pad, radius=@sf.concentric_out(menu_row, menu_pad), bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, fn() {
       for i, label in menu.items {
         let id = c.id("settings-menu/" + i.to_string())
         if hit(c, id) {
@@ -344,10 +355,11 @@ fn menu_overlay(c : @ui.Ctx) -> Unit {
         c.box(
           dir=Row,
           w=Fill(1.0),
-          padx=16.0,
+          padx=menu_words_in - menu_pad,
           pady=12.0,
           align=ACenter,
           justify=JBetween,
+          radius=menu_row,
           bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
           id~,
           fn() {

@@ -88,6 +88,24 @@ let felt_menu : Ref[Int] = Ref(-1)
 let felt_past : Map[String, Bool] = {}
 
 ///|
+/// Each hold's press as last felt (`what` held: a message's words picked, a link's menu, a page's bar folded): once a
+/// press, whichever of a frame's builds saw it.
+let felt_holds : Map[String, Int] = {}
+
+///|
+/// Felt as the hold `what` takes the press it is (MessagePick.kt, Links.kt, Preview.kt: HapticFeedbackType.LongPress),
+/// once.
+fn feel_hold(c : @ui.Ctx, what : String) -> Unit {
+  let at = cui.down_frame
+  c.after_build("haptic/hold/" + what, fn() {
+    if felt_holds.get(what) != Some(at) {
+      felt_holds[what] = at
+      @ui.haptic(LongPress)
+    }
+  })
+}
+
+///|
 /// Whether `item`'s row has its menu open (its ground stays lit meanwhile).
 fn row_menu_open(item : ChatItem) -> Bool {
   match row_menu_at.item {
@@ -99,7 +117,6 @@ fn row_menu_open(item : ChatItem) -> Bool {
 ///|
 /// The row's menu over the list, while open and as it goes (filter_menu's look and motion).
 fn home_row_menu(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
   let item = match row_menu_at.item {
     Some(i) => i
     None => return
@@ -128,9 +145,7 @@ fn home_row_menu(c : @ui.Ctx, src : Source) -> Unit {
     scrim=0x00000047L,
     enter=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
     exit=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
-    look=fn(c, _min_w, body) {
-      c.box(w=Px(180.0), radius=14.0, bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, body) |> ignore
-    },
+    look=menu_panel_look,
     item_look=fn(c, s) {
       let icon = match s.entry.value {
         "pin" => "pin"
@@ -138,20 +153,7 @@ fn home_row_menu(c : @ui.Ctx, src : Source) -> Unit {
         "link" => "copy"
         _ => "archive"
       }
-      c.box(
-        dir=Row,
-        w=Fill(1.0),
-        padx=16.0,
-        pady=12.0,
-        align=ACenter,
-        justify=JBetween,
-        bg=if s.hot { @sf.alpha(t.p.text, 0.06) } else { 0L },
-        fn() {
-          c.text(s.entry.label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
-          @sf.icon(c, icon, size=16.0, color=t.p.text) |> ignore
-        },
-      )
-      |> ignore
+      menu_row_look(c, s, icon)
     },
   )
   row_menu_at.open = m.open
