@@ -14,8 +14,12 @@
 //           holds its words, a loose one's its paragraphs) · ["table", [tr…], {align}] · tr · th · td · hr
 //   inline  b · i · s · ["code", {content}] (words as a run is) · ["a", […], {href, title?}] · ["img", {src, alt?,
 //           title?}] · br
+// Math uses the existing pre/code nodes with `math: true`: $$ fences and $ inline spans. Other clients can still
+// show the TeX as code. Escaped dollars and dollars inside code keep Markdown's usual meaning.
 // Raw HTML is left out, as the web left it out. An address is as written: a client keeps what it may open.
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { mathFromMarkdown } from "mdast-util-math";
+import { math } from "micromark-extension-math";
 import { gfmStrikethroughFromMarkdown } from "mdast-util-gfm-strikethrough";
 import { gfmTableFromMarkdown } from "mdast-util-gfm-table";
 import { gfmTaskListItemFromMarkdown } from "mdast-util-gfm-task-list-item";
@@ -59,8 +63,8 @@ let keptChars = 0;
 /// Parsed afresh (`markdown` keeps it).
 export function parse(text: string): Md {
   const root = fromMarkdown(text, {
-    extensions: [gfmStrikethrough(), gfmTable(), gfmTaskListItem()],
-    mdastExtensions: [gfmStrikethroughFromMarkdown(), gfmTableFromMarkdown(), gfmTaskListItemFromMarkdown()],
+    extensions: [gfmStrikethrough(), gfmTable(), gfmTaskListItem(), math()],
+    mdastExtensions: [gfmStrikethroughFromMarkdown(), gfmTableFromMarkdown(), gfmTaskListItemFromMarkdown(), mathFromMarkdown()],
   }) as Node;
   const defs = new Map<string, Node>();
   collect(root, defs);
@@ -78,8 +82,9 @@ function run(value: string, n: Node, cx: Cx): MdWords {
   const source = cx.source;
   if (n.type === "text") return to - from === value.length && source.startsWith(value, from) ? [from, to] : value;
   let inside = from;
-  if (n.type === "code" && (source[from] === "`" || source[from] === "~")) inside = source.indexOf("\n", from) + 1 || to;
+  if (n.type === "math" || (n.type === "code" && (source[from] === "`" || source[from] === "~"))) inside = source.indexOf("\n", from) + 1 || to;
   else if (n.type === "inlineCode") while (source[inside] === "`") inside++;
+  else if (n.type === "inlineMath") while (source[inside] === "$") inside++;
   const at = source.indexOf(value, inside);
   return at >= 0 && at + value.length <= to ? [at, at + value.length] : value;
 }
@@ -103,9 +108,12 @@ function block(n: Node, cx: Cx): MdNode[] {
     }
     case "heading":
       return [["h", inlines(n.children ?? [], cx), { depth: n.depth ?? 1 }]];
+    case "math":
     case "code": {
       const value = n.value ?? "";
       const code = run(value, n, cx);
+      // Existing code nodes keep TeX readable on clients without a formula renderer.
+      if (n.type === "math") return [["pre", { code, math: true }]];
       if (!n.lang) return [["pre", { code }]];
       const colours = ink(value, n.lang);
       return [["pre", colours === null ? { code, lang: n.lang } : { code, lang: n.lang, ink: colours }]];
@@ -177,6 +185,8 @@ function inline(n: Node, cx: Cx): MdNode[] {
       return [["s", inlines(n.children ?? [], cx)]];
     case "inlineCode":
       return [["code", { content: run(n.value ?? "", n, cx) }]];
+    case "inlineMath":
+      return [["code", { content: run(n.value ?? "", n, cx), math: true }]];
     case "break":
       return [["br"]];
     case "link":

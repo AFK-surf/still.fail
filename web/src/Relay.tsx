@@ -25,7 +25,7 @@ export function openRelay(station: string, thread: number): void {
 
 /** Where the relay dialog is drawn when asked for: mounted once under a scope's pages. */
 export function RelayHost() {
-  const shown = useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => asked);
+  const shown = useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => asked, () => null);
   if (shown === null) return null;
   return <RelayDialog key={`${shown.station}/${shown.thread}`} station={shown.station} thread={shown.thread} onClose={() => { asked = null; tell(); }} />;
 }
