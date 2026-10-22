@@ -409,6 +409,7 @@ public class MainActivity extends Activity {
     public void onWindowFocusChanged(boolean has) {
         super.onWindowFocusChanged(has);
         Host.focused = has;
+        if (has) NativeViews.focused();
         Host.windowFocused(has);
         Host.tellAppState();
     }
