@@ -104,9 +104,9 @@ jobs:
           android=false
           if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
           # check-android-lint: only for a change lint can find anything in (apps/android/lints.sh), or a branch's to
-          # .github/ (its check then runs as if all changed).
+          # .github/ but its mbui-* workflows (its check then runs as if all changed).
           android_lint=false
-          if printf '%s\n' "$changed" | sh apps/android/lints.sh || { [ "$GITHUB_REF" != refs/heads/main ] && has '^\.github/'; }; then
+          if printf '%s\n' "$changed" | sh apps/android/lints.sh || { [ "$GITHUB_REF" != refs/heads/main ] && printf '%s\n' "$changed" | grep '^\.github/' | grep -qv '^\.github/workflows/mbui-'; }; then
             android_lint=true
           fi
           # The desktop app carries the core, a station and the web app. A change to the first two (its shell) is a new
@@ -255,7 +255,7 @@ jobs:
       - name: Full check (station, core)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui-'; then range=all; fi
           # Its guards beside it: the stable release's selection, and (a branch) nothing merged into main taken back by
           # a squash onto a main that moved (scripts/undone.sh), and no `Changelog: none` (scripts/changelog.ts).
           python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
@@ -301,7 +301,7 @@ jobs:
       - name: Full check (ts)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui-'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
 
   # The mbui app's check and tests, on native, on Linux: mbui-check.yml, main's there on its own.
@@ -333,7 +333,7 @@ jobs:
       - name: Full check (browser, ${{ matrix.share }})
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui-'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
 
   # The Android app's check on GitHub's runners (2026-10-17, as asked): on mini1, two or three of them side by side with
@@ -383,7 +383,7 @@ jobs:
       - name: Full check (android, build)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui-'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
 
   check-android-lint:
@@ -431,7 +431,7 @@ jobs:
       - name: Full check (android, lint)
         run: |
           range='${{ needs.plan.outputs.range }}'
-          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv '^\.github/workflows/mbui-'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
 
   # A branch: what main would deploy, built and bundled beside the check (not after it: the build is most of the run);
