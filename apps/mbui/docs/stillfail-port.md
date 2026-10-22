@@ -88,7 +88,7 @@ otherwise Home at the root of a `@ui.Nav` (src/sfapp, Home.kt and its parts):
   with what each has waiting (MarkCounts); one tapped is the one in view (the
   prefs' `workspace`); 登录其他账号.
 - src/sf draws the Android app's own pictures now (src/sf/picture.mbt over
-  drawable_data.mbt, which scripts/drawables.py makes from ember's
+  drawable_data.mbt, which scripts/drawables (tools/drawables) makes from apps/android's
   res/drawable and ui/Icons.kt): the makers' marks, Slack's, still.fail's
   mark, the illustrations and the 314 station glyphs.
 - `APP=sffix` (src/sffix) is the same Home over made-up chats in the core's

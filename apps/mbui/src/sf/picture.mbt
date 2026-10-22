@@ -388,13 +388,13 @@ pub fn drawable(c : @ui.Ctx, name : String, w : Double, tint? : Int64) -> Int {
 let mono_makers : Array[String] = [
   "anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter",
   "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface",
-  "nvidia", "baseten", "dsh",
+  "nvidia", "baseten", "dsh", "cursor", "devin",
 ]
 
 ///|
 /// The mark of the company that made a model (Parts.kt MakerIcon): the core's
 /// `maker` id when there is a mark for it, else its runtime's maker's
-/// (codex: OpenAI's, dsh its own, grok xAI's, else Anthropic's).
+/// (codex: OpenAI's, dsh its own, grok xAI's, Cursor's and Devin's their own, else Anthropic's).
 pub fn maker_mark(
   c : @ui.Ctx,
   maker : String,
@@ -410,6 +410,8 @@ pub fn maker_mark(
       "codex" => "openai"
       "dsh" => "dsh"
       "grok" => "xai"
+      "cursor" => "cursor"
+      "devin" => "devin"
       _ => "anthropic"
     }
   }

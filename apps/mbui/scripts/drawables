@@ -1,0 +1,14 @@
+#!/bin/sh
+# still.fail's pictures as its Android app draws them (tools/drawables, in MoonBit: its main.mbt says what), into
+# src/sf/drawable_data.mbt:  scripts/drawables <repository> > src/sf/drawable_data.mbt
+# Built here only when there is none built from these very sources (by content).
+D=$(cd "$(dirname "$0")" && pwd)
+A=$(cd "$D/.." && pwd)
+T=$A/tools
+B=$T/_build/native/release/build/sftools/drawables/drawables.exe
+src=$(cd "$A" && find tools/drawables tools/moon.mod tools/moon.work mbui/tools/re mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
+if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  (cd "$T" && env -u MOON_CC moon build --target native --release >&2) || { echo "drawables: tools/drawables did not build" >&2; exit 1; }
+  echo "$src" > "$B.src"
+fi
+exec "$B" "$@"
