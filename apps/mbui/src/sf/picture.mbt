@@ -444,7 +444,7 @@ pub fn has_station_mark(emoji : String, icon : String) -> Bool {
 ///|
 /// A station where it is named (Parts.kt StationMark): its `icon` first, a
 /// glyph (glyph:<name>, glyph:<name>:<colour>, in that colour, else `tint`)
-/// or a picture put up (a data URL); else its emoji.
+/// or a picture put up (its address, or a data URL); else its emoji.
 pub fn station_mark(
   c : @ui.Ctx,
   emoji : String,
@@ -499,6 +499,12 @@ pub fn station_mark(
       }
       None => ()
     }
+  }
+  // a picture still.fail cloud keeps (cloud/src/icons.ts), by its address
+  if icon.has_prefix("https://") || icon.has_prefix("http://") {
+    c.image(icon, w=Px(size), h=Px(size), fit=FitCover, radius=size * 0.24, bg=0L)
+    |> ignore
+    return
   }
   if icon.has_prefix("data:image/") {
     match icon.find("base64,") {

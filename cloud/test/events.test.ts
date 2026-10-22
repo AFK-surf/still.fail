@@ -176,18 +176,30 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     await expect(on, { alice: [ws], bob: [ws] }, "station icon in a colour");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.icon, "glyph:dice-3:blue");
-    const picture = "data:image/png;base64,iVBORw0KGgo=";
-    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: picture });
+    // A picture put up is kept in the bucket, the workspace keeping its address; anyone with it gets it, as it was sent.
+    const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { list(o: { prefix: string }): Promise<{ objects: unknown[] }> };
+    const gif = Uint8Array.from([..."GIF89a"].map((c) => c.charCodeAt(0)).concat(Array.from({ length: 600_000 }, (_, i) => i & 255)));
+    const picture = `data:image/gif;base64,${Buffer.from(gif).toString("base64")}`;
+    assert.equal((await h.as(tokens.dave)("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: picture })).status, 404, "one who is not in it");
+    assert.equal((await bucket.list({ prefix: "icons/" })).objects.length, 0, "keeps nothing for one who may not");
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: picture })).status, 200);
     await expect(on, { alice: [ws], bob: [ws] }, "station picture");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
-    assert.equal(seen.icon, picture);
-    // A GIF, which may move, may be larger.
-    const gif = `data:image/gif;base64,R0lGODlh${"A".repeat(100_000)}`;
-    assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: gif })).status, 200);
-    await expect(on, { alice: [ws], bob: [ws] }, "station gif");
-    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
-    assert.equal(seen.icon, gif);
-    for (const bad of [`data:image/gif;base64,${"A".repeat(170_000)}`, "rocket", "glyph:Rocket!", "glyph:rocket:", "glyph:rocket:blue:red", "data:image/svg+xml;base64,PHN2Zz4=", `data:image/png;base64,${"A".repeat(60_000)}`]) {
+    assert.match(seen.icon, new RegExp(`^${h.origin}/v1/icons/[0-9a-f]{32}\\.gif$`));
+    const served = await h.fetch(seen.icon.slice(h.origin.length));
+    assert.equal(served.status, 200);
+    assert.equal(served.headers.get("content-type"), "image/gif");
+    assert.match(served.headers.get("cache-control") ?? "", /immutable/);
+    assert.deepEqual(new Uint8Array(await served.arrayBuffer()), gif);
+    // Its address may be given again (as a client that sends the icon it has does); one of another is not taken.
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: seen.icon })).status, 200);
+    await expect(on, { alice: [ws], bob: [ws] }, "station picture again");
+    assert.equal((await h.fetch("/v1/icons/0123456789abcdef0123456789abcdef.gif")).status, 404);
+    // And the workspace's own.
+    await alice("PATCH", `/v1/workspaces/${w}`, { icon: "data:image/png;base64,iVBORw0KGgo=" });
+    await expect(on, { alice: [ws, list], bob: [ws, list] }, "workspace picture");
+    assert.match(((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).icon, /\/v1\/icons\/[0-9a-f]{32}\.png$/);
+    for (const bad of [`data:image/gif;base64,R0lGODlh${"A".repeat(1_500_000)}`, "data:image/png;base64,R0lGODlh", "https://example.com/v1/icons/0123456789abcdef0123456789abcdef.gif", "rocket", "glyph:Rocket!", "glyph:rocket:", "glyph:rocket:blue:red", "data:image/svg+xml;base64,PHN2Zz4="]) {
       assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: bad })).status, 400, bad.slice(0, 30));
     }
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: "", emoji: "" });

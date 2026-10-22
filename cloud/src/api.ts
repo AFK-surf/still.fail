@@ -17,6 +17,7 @@ import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
 import { receiveTraces } from "./tracing";
+import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
 const STATUS: Record<string, number> = {
@@ -92,8 +93,8 @@ async function body(request: Request, maximum?: number): Promise<Record<string, 
   return readJson(request, maximum);
 }
 
-/** How large a change to a workspace or a station may be: it can carry an icon put up (directory.ts GIF_BYTES). */
-const MARK_BODY = 192 * 1024;
+/** How large a change to a workspace or a station may be: it can carry a picture put up as its icon (icons.ts). */
+const MARK_BODY = ICON_URL_CHARS + 8192;
 
 export async function api(request: Request, env: Env, url: URL): Promise<Response | null> {
   const path = url.pathname;
@@ -183,6 +184,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
   }
 
+  // ── the pictures put up as icons: to anyone with the address (icons.ts) ──
+  if (path.startsWith("/v1/icons/") && method === "GET") return (await serveIcon(env, path.slice("/v1/icons/".length))) ?? reply({ error: "not_found" }, 404);
+
   // ── accounts ────────────────────────────────────────────────────────────
   const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
@@ -222,9 +226,15 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const parts = path.split("/").slice(3).map(decodeURIComponent); // after /v1/workspaces/
   const [ws, kind, target, action] = parts;
   if (!ws || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(ws)) return reply({ error: "not_found" }, 404);
+  // A picture sent as the icon, kept in the bucket once the caller may change the workspace (icons.ts).
+  const icon = async () => {
+    if (typeof input.icon !== "string" || !input.icon.startsWith("data:")) return input.icon;
+    await dir.manages(sub, ws);
+    return keptIcon(env, input.icon);
+  };
   if (!kind) {
     if (method === "GET") return directory(() => dir.workspace(sub, ws));
-    if (method === "PATCH") return directory(() => dir.updateWorkspace(sub, ws, { name: input.name, emoji: input.emoji, icon: input.icon }));
+    if (method === "PATCH") return directory(async () => dir.updateWorkspace(sub, ws, { name: input.name, emoji: input.emoji, icon: await icon() }));
     if (method === "DELETE") return directory(() => dir.deleteWorkspace(sub, ws));
   }
   if (kind === "invitations" && !target && method === "POST") {
@@ -276,7 +286,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   }
   if (kind === "devices" && !target && method === "GET") return directory(() => dir.devices(sub, ws));
   if (kind === "stations" && target && validKeyHex(target)) {
-    if (!action && method === "PATCH") return directory(() => dir.updateStation(sub, ws, target, { name: input.name, emoji: input.emoji, icon: input.icon }));
+    if (!action && method === "PATCH") return directory(async () => dir.updateStation(sub, ws, target, { name: input.name, emoji: input.emoji, icon: await icon() }));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));
   }
   return reply({ error: "not_found" }, 404);
