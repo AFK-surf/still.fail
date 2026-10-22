@@ -362,6 +362,12 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
     assert.deepEqual(secrets.pending(w.state.ws, w.state, { sub: "alice", email: "alice@x.com" }), []);
     assert.match(secrets.grant(w.state, "alice", grantOf(request, w.alice, w.plain, { exp: 1000 + 600 }))!, /granted/);
     assert.deepEqual(notified, [], "told in the tool's answer");
+
+    // Still waiting when the station restarted: its box is gone with the old process, so it is let go, not offered.
+    const lost = requestOf("r_01HZZZZZZZZZZZZZZZZZZZZLOST", newBoxPair().pub, { session: "s1" });
+    db.prepare("INSERT INTO vault_requests (ws, id, session, status, body, thread, card_ts) VALUES (?, ?, ?, ?, ?, NULL, NULL)").run(lost.ws, lost.id, lost.session, lost.status, JSON.stringify(lost));
+    assert.deepEqual(secrets.pending(w.state.ws, w.state, { sub: "alice", email: "alice@x.com" }), []);
+    assert.match(secrets.grant(w.state, "alice", grantOf(lost, w.alice, w.plain, { exp: 1000 + 600 }))!, /the request is expired/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
