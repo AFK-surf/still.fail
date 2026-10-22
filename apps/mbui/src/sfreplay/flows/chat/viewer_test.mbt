@@ -35,6 +35,7 @@ test "96-viewer" {
     f.see("icon:scribble")
     // a box drawn, its note said
     f.drag_at(120.0, 360.0, 140.0, 90.0, steps=ms300)
+    // its note's box: its tick, 完成 (as Android's test finds it: its contentDescription)
     f.see("=完成")
     f.type_text("这里要对齐 201493")
     f.tap("=完成")

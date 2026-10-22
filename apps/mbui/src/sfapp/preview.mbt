@@ -16,6 +16,11 @@
 /// The words this page adds (client/i18n/catalog/zh android-chat.json, common.json).
 // kept across runs: a table, never written
 let pv_zh : Map[String, String] = {
+  // a note on a mark (Notes.kt NoteBox, Card)
+  "android-chat.annotate.write": "添加批注（可选）",
+  "android-chat.annotate.quoteOnly": "只引用",
+  "android-chat.annotate.remove": "删除批注",
+  "android-chat.annotate.done": "完成",
   "android-chat.file.cantPreview": "此文件类型不支持预览",
   "android-chat.file.cut": "文件较大，仅显示前 {size}，完整内容请下载",
   "android-chat.file.cut.rows": "仅显示前 {n} 行，完整内容请下载",
@@ -1709,9 +1714,19 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
   // its size: as sent, else as decoded
   let (nw, nh) = v.natural_size(picture)
   let z = v.zoom
-  z.boxed(c.width, c.height)
+  // the keyboard over the stage, not the stage made shorter for it (FilePreview.kt: the zoom's box is the window's)
+  let ime = c.ime_inset()
+  z.boxed(c.width, c.height + ime)
   z.natural(nw, nh)
   z.step()
+  // lifted while the keyboard is up, as far as keeps what is being written (or the open note's pin, its box under it)
+  // 24 clear of it (FilePreview.kt lift: animateFloatAsState's spring)
+  let below = match marks_writing_bottom(z) {
+    Some(b) => b + marks_keyboard_gap - c.height
+    None => 0.0
+  }
+  let lift = @motion.animate(c, "preview/lift", if ime > 0.0 && below > 0.0 { below } else { 0.0 })
+  let rect = fn() { z.rect().map(fn(r) { (r.0, r.1 - lift, r.2, r.3) }) }
   let (before, after) = v.near(src)
   // (once the frame's builds are over: a step taken further on in this one reads beside the image it comes to)
   c.after_build("pv-near", fn() { v.read_near(src, before, after) })
@@ -1721,7 +1736,7 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
       v.gestures(c, src, stage, z, false, false)
     } else {
       let (px, py, _) = c.pointer()
-      match z.rect() {
+      match rect() {
         Some(r) => {
           // down where the finger went down, then each place it has been seen at, the last where it was let go: a
           // slow frame (down, moved and up in one or two) loses none of it
@@ -1770,7 +1785,7 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
   }
   let width = c.width + slide_gap
   let flying = v.flies
-  match z.rect() {
+  match rect() {
     Some(r) if picture != "" && flying => {
       v.draw_flight(c, v.flight_picture(src, picture), r, v.flying())
       // the picture it lands as, asked for meanwhile out of sight (cut to a point): decoded by the time the flight
@@ -1792,7 +1807,7 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
     _ => ()
   }
   if marking.on {
-    match z.rect() {
+    match rect() {
       Some(r) => marks_draw(c, r, z.nw, z.nh)
       None => ()
     }
@@ -2496,20 +2511,29 @@ fn solid_glass() -> Int64 {
 
 ///|
 /// A button on the viewer's bars (ImageMarks.kt PictureButton): 32 square, its corner 12, an 18 icon; quieter when
-/// it cannot be pressed. True on the frame after it was tapped.
-fn picture_button(c : @ui.Ctx, key : String, icon : String, tint : Int64, on : Bool, enabled? : Bool = true) -> Bool {
+/// it cannot be pressed; `held` (the tool in use) on white at 16%, its icon near white. True on the frame after it was
+/// tapped.
+fn picture_button(
+  c : @ui.Ctx,
+  key : String,
+  icon : String,
+  tint : Int64,
+  on : Bool,
+  enabled? : Bool = true,
+  held? : Bool = false,
+) -> Bool {
   let id = c.id(key)
   let live = on && enabled
   c.box(
     w=Px(32.0),
     h=Px(32.0),
-    radius=12.0,
+    radius=picture_key,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) && live { @sf.alpha(tint, 0.16) } else { 0L },
+    bg=if held { 0xFFFFFF29L } else if c.pressed(id) && live { @sf.alpha(tint, 0.16) } else { 0L },
     opacity=if enabled { 1.0 } else { 0.35 },
     id=if live { id } else { 0 },
-    fn() { @sf.icon(c, icon, size=18.0, color=tint) |> ignore },
+    fn() { @sf.icon(c, icon, size=18.0, color=if held { dark_text } else { tint }) |> ignore },
   )
   |> ignore
   live && c.clicked(id)
@@ -2881,7 +2905,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
       pr=6.0,
       gap=4.0,
       align=ACenter,
-      radius=14.0,
+      radius=picture_bar_corner,
       bg=if dark {
         solid_glass()
       } else if t.dark {

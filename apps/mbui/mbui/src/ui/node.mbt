@@ -148,6 +148,9 @@ struct Node {
   mut in_sideways : Bool
   // as wide as its content in a row, not squeezed where the row is short (Ctx::box `keep`): only its siblings shrink
   mut keep : Bool
+  // what it is called where it shows no words of its own (an icon's button: Compose's contentDescription), found by
+  // them as words are (Ctx::box `label`; a drive's or a test's `=WORDS`)
+  mut label : String
   // layout results, absolute, in logical pixels, kept from frame to frame
   // in the slot (a subtree laid out as last frame is moved, not laid out)
   mut x : Double
@@ -268,6 +271,7 @@ fn Node::new() -> Node {
     sideways: false,
     in_sideways: false,
     keep: false,
+    label: "",
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -329,6 +333,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sideways = false
   self.in_sideways = false
   self.keep = false
+  self.label = ""
   self.rich = None
   self.lines = []
   // (its cut runs go with its layout, kept with it: rl, rl_for)

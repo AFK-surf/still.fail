@@ -301,3 +301,39 @@ test "marking a picture of a long name: the bar's 取消, download and 添加到
   }
   marks_leave()
 }
+
+///|
+test "marking: a box's pin up and right of its corner wherever the marks before it are; its note's box as Notes.kt's, the tools away" {
+  let t = preview_tester("step")
+  marks_start()
+  t.draw()
+  let v = viewer.val.unwrap()
+  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let k = w / v.zoom.nw
+  // a line drawn by hand first, then a box from (100, 100) to (300, 200) in the picture's pixels
+  marking.tool = Pen
+  t.drag(x + 20.0 * k, y + 300.0 * k, x + 200.0 * k, y + 350.0 * k)
+  marking.tool = Rect
+  t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
+  t.draw()
+  // its pin (24 square, 2 left of the corner and 22 over it), its number in its middle
+  let (px, py, pw, ph) = t.rect_of("1").unwrap()
+  assert_true((px + pw / 2.0 - (x + 100.0 * k - 2.0 + 12.0)).abs() < 1.0, msg="the pin's x")
+  assert_true((py + ph / 2.0 - (y + 100.0 * k - 22.0 + 12.0)).abs() < 1.0, msg="the pin's y")
+  // its note open: 框, the field's 添加批注（可选）, the tick; the tools and their cards away
+  assert_eq(marking.note, marking.shapes[1].id)
+  assert_true(t.find("框") is Some(_))
+  assert_true(t.find("添加批注（可选）") is Some(_))
+  t.run_for(note_pop_ms)
+  assert_true(t.find("只引用") is None)
+  t.type_text("这里对齐")
+  let tick = t.locate("icon:check")
+  assert_eq(tick.length(), 1)
+  t.tap(tick[0].0, tick[0].1)
+  t.draw()
+  assert_eq(marking.note, -1)
+  assert_eq(marking.comments.get(marking.shapes[1].id), Some("这里对齐"))
+  // the card says it, what it is under it
+  assert_true(t.find("这里对齐") is Some(_))
+  marks_leave()
+}
