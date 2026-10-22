@@ -60,7 +60,12 @@ export function Demo({ mount, frame, v, className, start }: { mount?: DemoProps[
   return <div className={`${css.demo} ${className ?? ""}`} id="demo" ref={root} dangerouslySetInnerHTML={{ __html: html }} suppressHydrationWarning />;
 }
 
-export interface DemoProps { mountDemo?: (root: HTMLElement, options?: { start?: "chat" | "stations" }) => void; demo?: { wide: string; phone: string } }
+export interface DemoProps {
+  mountDemo?: (root: HTMLElement, options?: { start?: "chat" | "stations" }) => void;
+  /** Another view of the demo once it runs: the phone's app (demo/mount.tsx mountDemoView). */
+  mountDemoView?: (element: HTMLElement) => void;
+  demo?: { wide: string; phone: string };
+}
 
 /** What it promises about where things are. */
 const PROMISES = [
@@ -85,7 +90,7 @@ export function Promises() {
 
 // ---- The rest ----
 
-export function Site({ mountDemo, demo }: DemoProps) {
+export function Site({ mountDemo, mountDemoView, demo }: DemoProps) {
   return (
     <div className={css.page}>
       <nav className={css.nav}>
@@ -114,7 +119,7 @@ export function Site({ mountDemo, demo }: DemoProps) {
         </div>
       </nav>
 
-      <div className={css.idea} data-idea="1"><OneComputer {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
+      <div className={css.idea} data-idea="1"><OneComputer {...(mountDemo ? { mountDemo } : {})} {...(mountDemoView ? { mountDemoView } : {})} {...(demo ? { demo } : {})} /></div>
       <div className={css.idea} data-idea="2"><Distance {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></div>
 
       <section id="start" className={css.section}>

@@ -274,19 +274,25 @@ globalStyle(`${oneWires} path`, {
   fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 60%, transparent)`, strokeWidth: 1.5, strokeDasharray: "5 8",
   animation: `${flowing} 1.4s linear infinite`, "@media": { [STILL]: { animation: "none" } },
 });
-/** A device, as a station is listed in the app (OneComputer.tsx DeviceRow): on the sidebar's ground, lifted off the page. */
-export const oneChip = style({
-  position: "absolute", zIndex: 2, display: "grid", alignItems: "center", overflow: "hidden", padding: "0 4px",
-  borderRadius: vars.rField, background: vars.sidebar, boxShadow: `0 10px 30px -14px rgba(0, 0, 0, .3), inset 0 0 0 1px ${ink(10)}`,
-});
-globalStyle(`${oneChip} > *`, { width: "100%", minWidth: "0" });
-export const oneWindow = style({
-  position: "absolute", zIndex: 1, overflow: "hidden", borderRadius: vars.rCard, background: vars.canvas, transformOrigin: "center",
-  boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), inset 0 0 0 1px ${ink(12)}`,
-});
-/** The app in the window: as large as the window, cut by its corners. */
+/** The computer's window (OneComputer.tsx): placed and stepped back by script; its shadow follows what of it shows. */
+/** The window and the devices flying to it, under one shadow (of what of them shows), so that nothing changes as the
+ *  devices give way to the window's own rows. */
+export const oneLift = style({ position: "absolute", inset: "0", zIndex: 1, pointerEvents: "none", filter: "drop-shadow(0 30px 40px rgba(0, 0, 0, .18))" });
+export const oneWindow = style({ position: "absolute", transformOrigin: "0 0", pointerEvents: "auto" });
+/** What of the window shows: its clip, set by script (the rows, widening to the window). */
+export const oneScreen = style({ position: "absolute", inset: "0", background: vars.canvas });
+/** The app in it: as large as the window. */
 export const oneDemo = style({});
-globalStyle(`${oneWindow} > ${oneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
+globalStyle(`${oneScreen} > ${oneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
+/** The phone, a device among the others (a wide screen's; on a narrow one the window is the phone). */
+export const onePhone = style({
+  position: "absolute", top: "0", left: "0", zIndex: 3, transformOrigin: "0 0", filter: "drop-shadow(0 24px 36px rgba(0, 0, 0, .22))",
+  "@media": { [NARROW]: { display: "none" } },
+});
+export const onePhoneScreen = style({ overflow: "hidden", clipPath: "inset(0 round 44px)", background: vars.canvas });
+/** The devices while they fly: copies of the app's rows (OneComputer.tsx copyOf), placed by script. */
+export const oneCopies = style({ position: "absolute", inset: "0" });
+export const oneCopy = style({ position: "absolute", top: "0", left: "0", transformOrigin: "0 0" });
 
 // ---- The second idea: the distance (Distance.tsx) ----
 
