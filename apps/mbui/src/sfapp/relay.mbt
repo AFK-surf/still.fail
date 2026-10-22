@@ -529,25 +529,18 @@ fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : Re
 }
 
 ///|
-/// A field of the relay sheet (Controls.kt Field): one line.
+/// A field of the relay sheet (Controls.kt Field): mbui's field in its look, one line, its words 15 on 21.
 fn relay_field(c : @ui.Ctx, key : String, field : @ui.Field, placeholder : String) -> Unit {
-  let t = @sf.theme()
-  c.box(style=relay_field_box, fn() {
-    c.editor(
-      key,
-      placeholder~,
-      font_size=15.0,
-      line=21.0,
-      max_lines=1,
-      plain=true,
-      color=t.p.text,
-      placeholder_color=t.p.subtle,
-      caret_color=t.p.accent,
-      enter_sends=false,
-      field~,
-    )
-    |> ignore
-  })
+  @kit.text_field(
+    c,
+    key,
+    placeholder~,
+    enter_sends=false,
+    size=15.0,
+    line=21.0,
+    look=fn(c, s, editor) { c.box(id=s.id, style=relay_field_box, editor) |> ignore },
+    field~,
+  )
   |> ignore
 }
 

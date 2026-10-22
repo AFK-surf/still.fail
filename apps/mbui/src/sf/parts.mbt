@@ -259,6 +259,18 @@ pub fn segmented(
   }
 }
 
+///|
+/// A line to type in, its frame (Controls.kt Field) as a look for mbui's field (@kit.text_field): 12 round, the card's
+/// ground, a line round it, its words 12 by 10 in.
+pub fn field_look(c : @ui.Ctx, s : @kit.FieldState, editor : () -> Unit) -> Unit {
+  c.box(id=s.id, style=field_frame, editor) |> ignore
+}
+
+///|
+/// Controls.kt Field's frame: as wide as where it is, 12 by 10 in, 12 round, the card's ground, a line round it.
+// kept across runs: a value (no field of it changes)
+let field_frame : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5, radius=Xl, bg=Card, border=B1, border_color=Line)
+
 // ---------------------------------------------------------------------------
 // Small panels (docs/ui-panels.md)
 

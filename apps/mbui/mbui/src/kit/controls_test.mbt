@@ -427,6 +427,53 @@ test "text field: typed in, its words the view's to read; Enter hands them on" {
 }
 
 ///|
+test "text field in a look of the view's: its frame round the editor, told when it is written in; Enter not handed on" {
+  let focused = Ref(false)
+  let got = Ref("")
+  let t = @ui.Tester::new(fn(c) {
+    let f = text_field(c, "code", placeholder="Code", enter_sends=false, size=15.0, line=21.0, look=fn(c, s, editor) {
+      focused.val = s.focused
+      c.box(id=s.id, w=s.w, pad=10.0, radius=12.0, border=1.0, editor) |> ignore
+    })
+    got.val = f.text
+  })
+  assert_true(!focused.val)
+  t.tap_text("Code")
+  t.type_text("42")
+  t.draw()
+  assert_true(focused.val)
+  assert_eq(got.val, "42")
+}
+
+///|
+test "toggle group that grows: as wide as where it is, its items equal shares" {
+  let v : Ref[Array[String]] = Ref(["a"])
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Px(300.0), fn() {
+        v.val = toggle_group(
+          c,
+          "g",
+          [item("a", label="A"), item("b", label="Bbbbbb")],
+          v.val,
+          grow=true,
+          label="G",
+          ground=fn(c, _, items) { c.box(dir=Row, w=Fill(1.0), items) |> ignore },
+        ).value
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  let (_, _, gw, _) = t.get(@ui.Group, label="G").rect
+  assert_eq(gw, 300.0)
+  let (_, _, aw, _) = t.get(@ui.Radio, label="A").rect
+  let (_, _, bw, _) = t.get(@ui.Radio, label="Bbbbbb").rect
+  assert_eq(aw, bw)
+}
+
+///|
 test "switch: its knob slides to the side it was turned to by a rest of its own (switch_rest)" {
   let on = Ref(false)
   let t = @ui.Tester::new(fn(c) { on.val = switch(c, "wifi", on.val, label="Wi-Fi").value })

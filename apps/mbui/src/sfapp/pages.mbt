@@ -28,27 +28,6 @@ fn placeholder_page(c : @ui.Ctx, title : String) -> Unit {
 }
 
 ///|
-/// The scrim under a menu or a sheet (black at 28%), which closes it when tapped.
-fn scrim(
-  c : @ui.Ctx,
-  key : String,
-  shown : Double,
-  open? : Bool = true,
-  close : () -> Unit,
-) -> Unit {
-  let id = c.id(key)
-  if c.clicked(id) && open {
-    close()
-  }
-  let l = c.layer(fn() {
-    c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(0x000000FFL, 0.28 * shown), id~, fn() {  })
-    |> ignore
-  })
-  // fading once let go of, only drawn: it takes no tap from the page coming back under it
-  @motion.leaving(c, l, open)
-}
-
-///|
 /// A list card on a sheet (Parts.kt RowsCard): its rows list_pad in, its corner concentric round theirs; its ground the
 /// caller's (the workspace in use: the chips' grey).
 // kept across runs: a value (no field of it changes)

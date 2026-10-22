@@ -108,11 +108,6 @@ let update_dot_center : Double = 3.0
 let update_arrow_keep : Double = 30.0
 
 ///|
-/// What a tap beside the popover lands on: all of the window.
-// kept across runs: a value (no field of it changes)
-let update_scrim : @ui.Style = @ui.style(w=Full, h=Full)
-
-///|
 /// The popover (24 round, raised, a soft shadow): 14 in on the left, 8 on the right, 12 over and 10 under; its rows 8
 /// apart.
 // kept across runs: a value (no field of it changes)
@@ -201,23 +196,20 @@ let update_now_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, co
 let update_progress_room : @ui.Style = @ui.style(w=Full, pr=S1)
 
 ///|
-/// The popover under the control while the core says it is open; a tap beside it closes it.
+/// The popover under the control while the core says it is open, in mbui's layer over the page (modal, its ground
+/// clear: a tap beside it, Esc or back close it, nothing under it taking the tap; the focus in it, back to the control
+/// as it goes).
 fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> Unit {
   if !(notice is Some(Object(_))) || !flag(notice, "open") {
     return
   }
   let trouble = update_trouble(notice)
-  let scrim = c.id("station-update-scrim")
-  if c.clicked(scrim) {
-    update_notice(src, station, notice, "close")
-  }
   // the room (the popover and the 12 round it) right in the window less 12, its top 4 over the control's foot
   // (StationUpdate.kt: gap -4); its arrow at the control's dot, kept 30 from the room's sides
   let room_w = dmin(update_pop_most, c.width - update_pop_margin)
   let room_left = c.width - update_pop_margin - room_w
   let arrow = dmin(dmax(update_anchor.x + update_dot_center - room_left, update_arrow_keep), room_w - update_arrow_keep)
-  c.layer(fn() { c.box(style=update_scrim, id=scrim, fn() {  }) |> ignore }) |> ignore
-  c.layer(fn() {
+  let o = c.overlay("station-update-layer", modal=true, anchor=c.id("station-update"), fn() {
     c.box(style=@ui.style(w=Fixed(room_w), p=S3), tx=room_left, ty=update_anchor.bottom - 4.0, fn() {
       c.box(style=@sf.full_width, fn() {
         // its arrow, from the popover's top edge up toward the control's dot (the layer is the room's inside, 12 in)
@@ -282,7 +274,9 @@ fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : 
     })
     |> ignore
   })
-  |> ignore
+  if o.dismissed is Some(_) {
+    update_notice(src, station, notice, "close")
+  }
 }
 
 ///|

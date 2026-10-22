@@ -157,7 +157,8 @@ fn field_of(key : String) -> @ui.Field {
 }
 
 ///|
-/// A line to type in (Controls.kt Field): on a soft frame, its placeholder until it has words.
+/// A line to type in (Controls.kt Field): mbui's field in its look (@sf.field_look), its placeholder until it has
+/// words, its words 15 on 21 (`secret`: as dots).
 fn field_box(
   c : @ui.Ctx,
   key : String,
@@ -166,40 +167,11 @@ fn field_box(
   secret? : Bool = false,
   field? : @ui.Field,
 ) -> String {
-  let t = @sf.theme()
-  let mut words = ""
-  c.box(
-    w=Fill(1.0),
-    padx=12.0,
-    pady=10.0,
-    radius=12.0,
-    bg=t.p.card,
-    border=1.0,
-    border_color=t.p.line,
-    fn() {
-      let r = c.editor(
-        key,
-        placeholder~,
-        font_size=15.0,
-        max_lines=1,
-        plain=true,
-        line=21.0,
-        color=t.p.text,
-        placeholder_color=t.p.subtle,
-        caret_color=t.p.accent,
-        enter_sends=true,
-        secret~,
-        field=match field {
-          Some(f) => f
-          None => field_of(key)
-        },
-      )
-      ignore(mono)
-      words = r.text
-    },
-  )
-  |> ignore
-  words
+  ignore(mono)
+  @kit.text_field(c, key, placeholder~, secret~, size=15.0, line=21.0, look=@sf.field_look, field=match field {
+    Some(f) => f
+    None => field_of(key)
+  }).text
 }
 
 ///|

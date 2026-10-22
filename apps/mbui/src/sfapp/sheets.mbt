@@ -223,7 +223,8 @@ fn quota_chips(c : @ui.Ctx, quota : Json?, small? : Bool = false) -> Unit {
 }
 
 ///|
-/// A choice of a few (Parts.kt Seg): a track of the ink at 6%, 10 round, the chosen one on a light thumb with a
+/// A choice of a few (Parts.kt Seg): mbui's toggle group (@kit.toggle_group: the arrows move along it, a screen reader
+/// reads its options) in Seg's look: a track of the ink at 6%, 10 round, the chosen one on a light ground with a
 /// hairline round it, its word in the ink (the others muted); `fill`, the options share the width. The one chosen,
 /// after a tap on another.
 fn seg(
@@ -235,49 +236,54 @@ fn seg(
   fill? : Bool = false,
 ) -> Int {
   let t = @sf.theme()
-  let mut sel = chosen
-  for i, _ in labels {
-    if c.clicked(c.id(key + "/" + i.to_string())) && i != sel {
-      sel = i
-    }
-  }
-  c.box(
-    dir=Row,
-    w=if fill { Fill(1.0) } else { Auto },
-    h=Px(height),
-    pad=2.0,
-    radius=10.0,
-    bg=@sf.alpha(t.p.text, 0.06),
-    fn() {
-      for i, l in labels {
-        let on = i == sel
-        c.box(
-          w=if fill { Fill(1.0) } else { Auto },
-          h=Fill(1.0),
-          padx=if fill { 12.0 } else { 10.0 },
-          radius=8.0,
-          align=ACenter,
-          justify=JCenter,
-          bg=if on { if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL } } else { 0L },
-          border=if on { 0.5 } else { 0.0 },
-          border_color=t.p.line,
-          id=c.id(key + "/" + i.to_string()),
-          fn() {
-            c.text(
-              l,
-              size=if fill { 14.0 } else { 13.0 },
-              color=if on { t.p.text } else { t.p.muted },
-              wrap=false,
-            )
-            |> ignore
-          },
-        )
-        |> ignore
-      }
+  let items = labels.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
+  let now = @kit.toggle_group(
+    c,
+    key,
+    items,
+    [chosen.to_string()],
+    grow=fill,
+    look=fn(c, st) {
+      c.box(
+        w=if fill { Fill(1.0) } else { Auto },
+        h=Fill(1.0),
+        padx=if fill { 12.0 } else { 10.0 },
+        radius=8.0,
+        align=ACenter,
+        justify=JCenter,
+        bg=if st.on { if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL } } else { 0L },
+        border=if st.on { 0.5 } else { 0.0 },
+        border_color=t.p.line,
+        fn() {
+          c.text(
+            st.label,
+            size=if fill { 14.0 } else { 13.0 },
+            color=if st.on { t.p.text } else { t.p.muted },
+            wrap=false,
+          )
+          |> ignore
+        },
+      )
+      |> ignore
     },
-  )
-  |> ignore
-  sel
+    ground=fn(c, _, options) {
+      c.box(
+        dir=Row,
+        w=if fill { Fill(1.0) } else { Auto },
+        h=Px(height),
+        pad=2.0,
+        radius=10.0,
+        bg=@sf.alpha(t.p.text, 0.06),
+        options,
+      )
+      |> ignore
+    },
+  ).value
+  // the chosen one tapped again stays chosen
+  match now {
+    [v] => items.search_by(fn(it) { it.value == v }).unwrap_or(chosen)
+    _ => chosen
+  }
 }
 
 ///|
