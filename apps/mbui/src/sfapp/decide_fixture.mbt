@@ -5,7 +5,8 @@
 // "chat-job"; "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
 // other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); the wide
 // frame's "chat-letters-pop" (the chat's "…" open), "chat-jobs-pop" (its services' popover), "chat-letters-side",
-// "chat-jobs-side", "chat-history-side" (what is opened beside it); "home-jobs"
+// "chat-jobs-side", "chat-history-side" (what is opened beside it), "chat-model-pop" (its agent's model control's panel
+// open), "chat-find" (⌘F's bar, a word typed in it); "home-jobs"
 // (Home with the jobs left up a long while at its top); "history-link" (Home, the history there for a link to open at
 // an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
 
@@ -16,7 +17,7 @@ fn decide_mode(mode : String) -> Bool {
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
-    "chat-jobs-side", "chat-history-side",
+    "chat-jobs-side", "chat-history-side", "chat-model-pop", "chat-find",
   ].contains(mode)
 }
 
@@ -602,6 +603,15 @@ pub fn open_fixture(mode : String) -> Unit {
     }
     "chat-jobs-side" => side_open(r, "jobs")
     "chat-history-side" => side_open(r, "history/s-c1")
+    "chat-model-pop" => {
+      side_open(r, "history/s-c1")
+      wide.triple = r.station + "\u{1}session:s-c1"
+    }
+    // (what is typed is looked for as the bar is first drawn)
+    "chat-find" => {
+      wide.find_chat = side_key(r)
+      wide.find_field.set("截图")
+    }
     "chat-letters-open" => {
       dui.letters_open = fix_letters_link
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
