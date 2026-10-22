@@ -112,16 +112,6 @@ fn screen_dump(mode : String, at : Double) -> Json? {
     h=844.0,
     platform=2,
   )
-  // the words on it as its data is first drawn (what Android's test, and the Tester taking its moment, wait for:
-  // src/sfscreens/android_ref_wbtest.mbt to_shows)
-  t.draw()
-  t.finish_all()
-  let first : Array[String] = []
-  for w in t.words() {
-    if w.5 > 0.0 {
-      first.push(w.0.trim(chars=" \n").to_string())
-    }
-  }
   t.run_for(at)
   // (what lies over the pages, a file's viewer, a sheet: not opened by Android's test yet)
   if viewer.val is Some(_) || @settings.sheet_up() {
@@ -138,10 +128,46 @@ fn screen_dump(mode : String, at : Double) -> Json? {
         }
     }
   }
-  // what Android's test waits to see before its moment (ScreensRefTest `shows`): the two longest words drawn then and
-  // as its data first is, their first six characters (a line cut short there all the same)
+  let screen : Json = {
+    "workspace": "ws1",
+    "open": Json::array(open),
+    "at": Json::number(at),
+    "shows": [],
+    "topics": Json::array(topics.map(fn(e) { { "topic": e.0, "value": e.1 } })),
+    "calls": Json::array(calls),
+  }
+  // what Android's test waits to see before its moment (ScreensRefTest `shows`): the screen drawn again from this very
+  // JSON, as the comparison draws it (src/sfscreens/android_ref_wbtest.mbt to_shows): the two longest words there as
+  // its data is first drawn and at its moment, their first six characters (a line cut short there all the same)
+  let json = screen.stringify()
+  let again : Ref[Source?] = Ref::new(None)
+  let t2 = @ui.Tester::new(
+    fn(c) {
+      let s = match again.val {
+        Some(s) => s
+        None => {
+          let s = fixture_json_app(json)
+          again.val = Some(s)
+          s
+        }
+      }
+      view(c, s)
+    },
+    w=390.0,
+    h=844.0,
+    platform=2,
+  )
+  t2.draw()
+  t2.finish_all()
+  let first : Array[String] = []
+  for w in t2.words() {
+    if w.5 > 0.0 {
+      first.push(w.0.trim(chars=" \n").to_string())
+    }
+  }
+  t2.run_for(at)
   let seen : Array[String] = []
-  for w in t.words() {
+  for w in t2.words() {
     let s = w.0.trim(chars=" \n").to_string()
     if w.5 > 0.0 && s.length() >= 4 && !seen.contains(s) && first.contains(s) {
       seen.push(s)
@@ -149,14 +175,11 @@ fn screen_dump(mode : String, at : Double) -> Json? {
   }
   seen.sort_by(fn(a, b) { b.length().compare(a.length()) })
   let shows = seen[:@cmp.minimum(2, seen.length())].to_array().map(fn(s) { Json::string(s.view(end_offset=@cmp.minimum(6, s.length())).to_owned()) })
-  Some({
-    "workspace": "ws1",
-    "open": Json::array(open),
-    "at": Json::number(at),
-    "shows": Json::array(shows),
-    "topics": Json::array(topics.map(fn(e) { { "topic": e.0, "value": e.1 } })),
-    "calls": Json::array(calls),
-  })
+  match screen {
+    Object(m) => m["shows"] = Json::array(shows)
+    _ => ()
+  }
+  Some(screen)
 }
 
 ///|
