@@ -9,7 +9,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "lin@ex",
+    "Pixel "
+  ],
   "topics": [
     {
       "topic": {

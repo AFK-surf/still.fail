@@ -2,7 +2,10 @@
   "workspace": "ws1",
   "open": [],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "安娜邀请 l",
+    "不加入，创建"
+  ],
   "topics": [
     {
       "topic": {

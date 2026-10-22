@@ -6,7 +6,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "MBA · ",
+    "Studio"
+  ],
   "topics": [
     {
       "topic": {

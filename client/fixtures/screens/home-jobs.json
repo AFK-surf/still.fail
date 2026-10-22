@@ -2,7 +2,10 @@
   "workspace": "ws1",
   "open": [],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "Studio",
+    "· 分组的标"
+  ],
   "topics": [
     {
       "topic": {

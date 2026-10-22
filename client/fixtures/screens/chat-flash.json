@@ -8,7 +8,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "fn Lis",
+    "和首页那边的"
+  ],
   "topics": [
     {
       "topic": {

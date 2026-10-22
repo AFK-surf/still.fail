@@ -2,7 +2,10 @@
   "workspace": "ws1",
   "open": [],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "lin@ex",
+    "此账号暂未开"
+  ],
   "topics": [
     {
       "topic": {

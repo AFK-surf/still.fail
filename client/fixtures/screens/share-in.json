@@ -2,7 +2,10 @@
   "workspace": "ws1",
   "open": [],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "列表滑动的十",
+    "youtub"
+  ],
   "topics": [
     {
       "topic": {

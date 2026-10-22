@@ -9,7 +9,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "Apple ",
+    "此机器已长时"
+  ],
   "topics": [
     {
       "topic": {

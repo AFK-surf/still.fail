@@ -6,7 +6,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "任务完成、需",
+    "still."
+  ],
   "topics": [
     {
       "topic": {

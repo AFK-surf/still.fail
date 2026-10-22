@@ -10,7 +10,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "· lin@",
+    "Claude"
+  ],
   "topics": [
     {
       "topic": {

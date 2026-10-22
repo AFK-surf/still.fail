@@ -10,7 +10,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "Apple ",
+    "2 个 ag"
+  ],
   "topics": [
     {
       "topic": {

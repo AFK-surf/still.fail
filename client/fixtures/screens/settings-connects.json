@@ -10,7 +10,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "所有 thr",
+    "每个 thr"
+  ],
   "topics": [
     {
       "topic": {

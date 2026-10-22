@@ -8,7 +8,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "export",
+    "pnpm t"
+  ],
   "topics": [
     {
       "topic": {

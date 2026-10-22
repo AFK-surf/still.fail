@@ -14,7 +14,10 @@
     }
   ],
   "at": 3000,
-  "shows": [],
+  "shows": [
+    "Mac St",
+    "· high"
+  ],
   "topics": [
     {
       "topic": {

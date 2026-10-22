@@ -271,31 +271,6 @@ options(
       "command": ":embed -i $input -o $output --name screen_place",
     },
     {
-      "input": "../../../../client/fixtures/screens/reader.json",
-      "output": "screen_reader_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_reader",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/reader-bars.json",
-      "output": "screen_reader_bars_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_reader_bars",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/reader-contents.json",
-      "output": "screen_reader_contents_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_reader_contents",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/reader-layout.json",
-      "output": "screen_reader_layout_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_reader_layout",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/reader-md.json",
-      "output": "screen_reader_md_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_reader_md",
-    },
-    {
       "input": "../../../../client/fixtures/screens/settings.json",
       "output": "screen_settings_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_settings",
@@ -354,11 +329,6 @@ options(
       "input": "../../../../client/fixtures/screens/settings-profiles.json",
       "output": "screen_settings_profiles_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_settings_profiles",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/settings-security.json",
-      "output": "screen_settings_security_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_settings_security",
     },
     {
       "input": "../../../../client/fixtures/screens/settings-station.json",
