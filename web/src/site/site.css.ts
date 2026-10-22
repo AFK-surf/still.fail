@@ -141,7 +141,7 @@ export const heroRow = style({
 });
 export const heroWords = style({ animation: `${fadeUp} .8s .05s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } } });
 export const title = style({ margin: "0", fontSize: "clamp(44px, 5.4vw, 80px)", lineHeight: "1.08", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)" });
-export const lede = style({ maxWidth: "30em", margin: "24px 0 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance" });
+export const lede = style({ maxWidth: "30em", margin: "24px 0 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance", wordBreak: "keep-all" });
 export const heroActions = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 20px", marginTop: "36px" });
 export const heroNote = style({ fontSize: vars.textUi, color: DIM });
 
@@ -250,7 +250,7 @@ export const sameTitle = style({
   margin: "0", fontSize: "clamp(40px, 5.6vw, 76px)", lineHeight: "1.12", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)",
   animation: `${fadeUp} .8s .05s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
 });
-export const sameLede = style({ maxWidth: "36em", margin: "22px auto 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance" });
+export const sameLede = style({ maxWidth: "36em", margin: "22px auto 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance", wordBreak: "keep-all" });
 export const sameActions = style({ marginTop: "32px" });
 
 /** The scene: as tall as its places, the stage held in view while it is scrolled through. */
