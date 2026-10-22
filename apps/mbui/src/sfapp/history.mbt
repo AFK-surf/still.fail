@@ -50,54 +50,62 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
         copy_chat_link(c, title, link)
       }
     })
-    let a = agent_json(chat.value, key)
-    match a {
-      None => {
-        waiting_messages(
-          c,
-          match chat.error {
-            Some(e) => Some(error_words(e))
-            None => None
-          },
-        )
-        return
-      }
-      Some(_) => ()
-    }
-    let s = field(a, "session")
-    c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, gap=6.0, align=ACenter, fn() {
-      model_mark_big(
-        c,
-        text(field(s, "maker"), "id"),
-        text(s, "runtime"),
-        20.0,
-        state_of_badge(text(a, "badge")),
-        t.p.bg,
-      )
-      c.box(w=Fill(1.0), fn() {
-        c.text(text(s, "agentText"), size=16.0, weight=700, color=t.p.text, wrap=false) |> ignore
-      })
-      |> ignore
-      history_actions(c, src, r, a)
-      dui.history_tab = seg(
-        c,
-        "history/tab",
-        [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
-        dui.history_tab,
-      )
-    })
-    |> ignore
-    history_summary(c, a)
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      if dui.history_tab == 0 {
-        history_steps(c, src, r, key, entry)
-      } else {
-        history_details(c, src, r, key, a)
-      }
-    })
-    |> ignore
+    history_body(c, src, r, key, entry, chat)
     // a Slack user's name tapped: its menu (link_menu.mbt)
     link_menu_layer(c)
+  })
+  |> ignore
+}
+
+///|
+/// What the history's page shows under its bar, and the wide frame's tab for it beside the chat (wide_panel.mbt): the
+/// agent at its head with what can be done to it and the tabs, then its steps or its details.
+fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?, chat : Topic) -> Unit {
+  let t = @sf.theme()
+  let a = agent_json(chat.value, key)
+  match a {
+    None => {
+      waiting_messages(
+        c,
+        match chat.error {
+          Some(e) => Some(error_words(e))
+          None => None
+        },
+      )
+      return
+    }
+    Some(_) => ()
+  }
+  let s = field(a, "session")
+  c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, gap=6.0, align=ACenter, fn() {
+    model_mark_big(
+      c,
+      text(field(s, "maker"), "id"),
+      text(s, "runtime"),
+      20.0,
+      state_of_badge(text(a, "badge")),
+      t.p.bg,
+    )
+    c.box(w=Fill(1.0), fn() {
+      c.text(text(s, "agentText"), size=16.0, weight=700, color=t.p.text, wrap=false) |> ignore
+    })
+    |> ignore
+    history_actions(c, src, r, a)
+    dui.history_tab = seg(
+      c,
+      "history/tab",
+      [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
+      dui.history_tab,
+    )
+  })
+  |> ignore
+  history_summary(c, a)
+  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+    if dui.history_tab == 0 {
+      history_steps(c, src, r, key, entry)
+    } else {
+      history_details(c, src, r, key, a)
+    }
   })
   |> ignore
 }

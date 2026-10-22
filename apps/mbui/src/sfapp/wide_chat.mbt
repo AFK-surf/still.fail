@@ -28,6 +28,24 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
     c.focus_editor(field_key)
   }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+    // what is opened beside it, at its right (wide_panel.mbt)
+    with_side(c, src, r, view, fn() { wide_chat_pane(c, src, w, r, view, list, error) })
+  })
+  |> ignore
+}
+
+///|
+/// The chat itself in the pane, left of its side panel: its messages, its bar over them, the composer at its foot.
+fn wide_chat_pane(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  r : ChatRef,
+  view : ChatView?,
+  list : Array[Entry],
+  error : Json?,
+) -> Unit {
+  c.box(style=side_panel_style, fn() {
     match view {
       None => {
         wide_chat_bar(c, src, w, r, None)
@@ -46,6 +64,7 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
       Some(v) => {
         messages(c, src, r, v, list)
         c.layer(fn() { wide_chat_bar(c, src, w, r, Some(v)) }) |> ignore
+        bar_popovers(c, src, r, v)
         c.layer(fn() {
           c.spacer()
           wide_composer(c, src, r, Some(v))
@@ -83,8 +102,9 @@ fn wide_center(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 /// The chat's bar (ChatPage.tsx header): the title, its station while no agent is in it, its people, its agents (each
-/// its card); at its end 归档 while nothing is left in it, 服务和后台任务 while it has some, "…" (对话信息: the rest of what is
-/// done with the chat, agent 往来 among it, as the web's).
+/// its history beside the chat); at its end 归档 while nothing is left in it, 服务和后台任务 while it has some (a popover),
+/// "…" (a popover: what is done with the chat, agent 往来 among it, as the web's), the side panel's switch while it is
+/// closed.
 fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?) -> Unit {
   let t = @sf.theme()
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
@@ -119,8 +139,9 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
           for i, a in view.agents {
             let id = c.id("bar-agent/" + a.key)
             c.cursor(id, Hand)
+            // its execution history beside the chat (the web's: ChatPage.tsx AgentTile), pressed again in front, closed
             if c.clicked(id) {
-              open_sheet(c, AgentOf(r, a.key))
+              side_toggle(r, "history/" + a.key)
             }
             c.box(id~, fn() {
               if i == 0 {
@@ -150,12 +171,16 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
             }
           }
           let jobs = (src.topic)("chatJobs", chat_params(r))
-          if items(jobs.value, "jobs").length() > 0 && icon_button(c, "chat-jobs", "boxes") {
-            dui.jobs_all = false
-            open_sheet(c, JobsOf(r))
+          // its services and jobs, and what is done with it: each a popover under its button (wide_panel.mbt)
+          if items(jobs.value, "jobs").length() > 0 && icon_button(c, "chat-jobs", "web", label=tr("web-pages.chat.services")) {
+            wide.jobs_open = !wide.jobs_open
           }
-          if view.thread is Some(_) && icon_button(c, "chat-more", "more") {
-            open_sheet(c, Info(r))
+          if view.thread is Some(_) && icon_button(c, "chat-more", "more", label=tr("web-pages.chat.info")) {
+            wide.info_open = !wide.info_open
+          }
+          // the side panel's switch while it is closed: the first agent's history in it
+          if side_tabs(r).length() == 0 && view.agents.length() > 0 && icon_button(c, "chat-panel", "panel-open", label=tr("web-pages.chat.openPanel")) {
+            side_open(r, "history/" + view.agents[0].key)
           }
         })
         |> ignore
@@ -168,12 +193,12 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
 ///|
 /// An icon button of a page's bar (page.css.ts iconBtn): 32 square, the nav's corner, the pointer's ground and ink
 /// on hover. True on the frame after a press.
-fn icon_button(c : @ui.Ctx, key : String, icon : String) -> Bool {
+fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "") -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   c.cursor(id, Hand)
   let hot = c.hovered(id) || c.pressed(id)
-  c.box(
+  let b = c.box(
     w=Px(32.0),
     h=Px(32.0),
     radius=12.0,
@@ -183,7 +208,10 @@ fn icon_button(c : @ui.Ctx, key : String, icon : String) -> Bool {
     id~,
     fn() { @sf.icon(c, icon, size=16.0, color=if hot { t.p.text } else { t.p.muted }) |> ignore },
   )
-  |> ignore
+  // named for a screen reader (the web's aria-label)
+  if label != "" {
+    c.semantics(b, Button, id~, label~)
+  }
   c.clicked(id)
 }
 

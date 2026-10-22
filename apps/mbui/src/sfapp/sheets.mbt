@@ -1154,7 +1154,13 @@ fn group_label(c : @ui.Ctx, label : String) -> Unit {
 ///|
 /// Services, then background jobs (Jobs.kt JobGroups), each group's head with how many are up or alive; a service up
 /// or being started again opens its page (service.mbt), one that did not start (or is over) and any job its sheet.
-fn job_groups(c : @ui.Ctx, r : ChatRef, view : Json?, jobs : Array[Json]) -> Unit {
+fn job_groups(
+  c : @ui.Ctx,
+  r : ChatRef,
+  view : Json?,
+  jobs : Array[Json],
+  pick? : ((String) -> Unit)? = None,
+) -> Unit {
   let services = jobs.filter(fn(j) { flag(Some(j), "service") })
   let plain = jobs.filter(fn(j) { !flag(Some(j), "service") })
   let head = fn(key : String, note : String) {
@@ -1166,9 +1172,12 @@ fn job_groups(c : @ui.Ctx, r : ChatRef, view : Json?, jobs : Array[Json]) -> Uni
       for j in services {
         let id = text(Some(j), "id")
         if job_row(c, "job/" + id, Some(j)) {
-          // up or being started again: its page (Preview.kt); else what it said and its output
+          // up or being started again: its page (Preview.kt); else what it said and its output (picked where it is
+          // shown beside the list: the wide frame's 任务 tab)
           let tone = text(Some(j), "tone")
-          if tone == "up" || tone == "restart" {
+          if pick is Some(f) && tone != "up" && tone != "restart" {
+            f(id)
+          } else if tone == "up" || tone == "restart" {
             close_sheet(c)
             app.nav.push(Service(r.station, id))
           } else {
@@ -1186,7 +1195,10 @@ fn job_groups(c : @ui.Ctx, r : ChatRef, view : Json?, jobs : Array[Json]) -> Uni
         let id = text(Some(j), "id")
         if job_row(c, "job/" + id, Some(j)) {
           dui.job_tab = 0
-          open_sheet(c, JobOf(r, id))
+          match pick {
+            Some(f) => f(id)
+            None => open_sheet(c, JobOf(r, id))
+          }
         }
       }
     })
@@ -1359,173 +1371,182 @@ fn job_sheet(c : @ui.Ctx, src : Source, r : ChatRef, id : String) -> Unit {
         return
       }
     }
-    let service = flag(j, "service")
-    let tab = if service { 1 } else { dui.job_tab }
-    let running = text(j, "state") == "running"
-    c.box(dir=Row, w=Fill(1.0), pl=22.0, pr=22.0, pt=4.0, pb=14.0, gap=12.0, align=AStart, fn() {
-      c.box(pt=8.0, fn() { job_dot(c, text(j, "tone")) }) |> ignore
-      c.box(w=Fill(1.0), fn() {
-        c.text(text(j, "name"), size=16.0, weight=600, color=t.p.text) |> ignore
-        job_meta(c, j, 12.5)
-      })
-      |> ignore
-    })
-    |> ignore
-    c.box(w=Fill(1.0), h=Fill(1.0), pl=18.0, pr=18.0, pb=24.0, gap=14.0, fn() {
-      let command = text(j, "command")
-      if command.trim(chars=" \n").to_string() != "" {
-        c.rich([@ui.span(command, mono=true)], size=11.5, line=17.0, color=t.p.muted, w=Fill(1.0)) |> ignore
-      }
-      if !service {
-        dui.job_tab = seg(
-          c,
-          "job/tab",
-          [tr("android-misc.jobs.notices"), tr("android-misc.jobs.output")],
-          tab,
-          height=34.0,
-          fill=true,
-        )
-      }
-      if tab == 0 {
-        let notices = items(j, "notices")
-        c.box(w=Fill(1.0), gap=12.0, fn() {
-          if notices.length() == 0 {
-            c.box(padx=20.0, pady=8.0, fn() {
-              c.text(tr("android-misc.jobs.noNotices"), size=13.0, color=t.p.muted) |> ignore
-            })
-            |> ignore
-          }
-          for n in notices {
-            c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
-              c.box(w=Px(48.0), fn() {
-                c.text(text(Some(n), "clock"), size=14.0, color=t.p.subtle, wrap=false) |> ignore
-              })
-              |> ignore
-              c.box(w=Fill(1.0), fn() {
-                c.text(text(Some(n), "text"), size=14.0, color=t.p.text) |> ignore
-              })
-              |> ignore
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-        let last = (src.topic)("jobLog", {
-          "station": Json::string(r.station),
-          "job": Json::string(id),
-          "lines": Json::number(1.0),
-        }).value
-        let said = match last {
-          Some(Object(_)) => text(last, "said")
-          _ => text(j, "outputSaid")
-        }
-        if said != "" {
-          c.box(w=Fill(1.0), gap=2.0, fn() {
-            c.text(said, size=11.0, color=t.p.subtle) |> ignore
-            match text(last, "last") {
-              "" => ()
-              l => c.rich([@ui.span(l, mono=true)], size=11.5, color=t.p.muted, wrap=false) |> ignore
-            }
-          })
-          |> ignore
-        }
-      } else {
-        let log = (src.topic)("jobLog", {
-          "station": Json::string(r.station),
-          "job": Json::string(id),
-          "lines": Json::number(300.0),
-        })
-        c.box(
-          w=Fill(1.0),
-          h=Fill(1.0),
-          min_h=120.0,
-          radius=16.0,
-          bg=@sf.alpha(t.p.text, 0.05),
-          clip=true,
-          fn() {
-            match log.value {
-              Some(Object(_)) as v => {
-                let words = match text(v, "text") {
-                  "" => tr("android-misc.jobs.noOutput")
-                  s => s
-                }
-                // in a terminal's colours where the core says them (its `runs`: Jobs.kt termText), else as words
-                let runs = items(v, "runs")
-                let styled = if runs.length() > 0 { Some(term_lines(runs, t.p.text, t.dark)) } else { None }
-                let lines = match styled {
-                  Some(ls) => Array::make(ls.length(), "")
-                  None => words.split("\n").map(fn(l) { l.to_owned() }).to_array()
-                }
-                c.list(
-                  "job-log/" + id,
-                  lines.length(),
-                  17.0,
-                  fn(i) {
-                    c.box(w=Fill(1.0), padx=14.0, pt=if i == 0 { 12.0 } else { 0.0 }, pb=if i ==
-                      lines.length() - 1 {
-                        12.0
-                      } else {
-                        0.0
-                      }, fn() {
-                      let line = match styled {
-                        Some(ls) => ls[i]
-                        None => [@ui.span(lines[i], mono=true)]
-                      }
-                      c.rich(line, size=11.5, line=17.0, color=t.p.text, w=Fill(1.0)) |> ignore
-                    })
-                    |> ignore
-                  },
-                  stick_end=true,
-                )
-                |> ignore
-              }
-              _ =>
-                c.box(padx=14.0, pady=12.0, fn() { @sf.spinner(c, size=12.0) |> ignore }) |> ignore
-            }
-          },
-        )
-        |> ignore
-      }
-      if running {
-        let skey = "job-stop/" + r.station + "/" + id
-        let busy = doing(skey)
-        let sid = c.id("job/stop")
-        if c.clicked(sid) && !busy {
-          act(
-            src,
-            fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]),
-            skey,
-            "job.stop",
-            { "station": Json::string(r.station), "id": Json::string(id) },
-          )
-        }
-        c.box(
-          dir=Row,
-          w=Fill(1.0),
-          h=Px(46.0),
-          radius=23.0,
-          gap=6.0,
-          align=ACenter,
-          justify=JCenter,
-          bg=@sf.alpha(t.p.red, 0.12),
-          id=sid,
-          fn() {
-            if busy {
-              @sf.spinner(c, size=14.0) |> ignore
-            } else {
-              @sf.icon(c, "stop", size=16.0, color=t.p.red) |> ignore
-            }
-            c.text(tr("android-misc.jobs.stop"), size=15.0, weight=500, color=t.p.red, wrap=false)
-            |> ignore
-            // Jobs.kt: clip(Smooth(23)).clickable
-            @motion.ripple(c, sid, 23.0)
-          },
-        )
-        |> ignore
-      }
+    job_detail(c, src, r, id, j)
+  })
+}
+
+///|
+/// A job, what it is, said and wrote (Jobs.kt openJob's body): its dot, name and line, its command, then what it said
+/// or its output (a service's output alone), and stopping it while it runs. In its sheet on a phone, in the side
+/// panel's 任务 tab beside a chat in the wide frame (wide_panel.mbt).
+fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) -> Unit {
+  let t = @sf.theme()
+  let service = flag(j, "service")
+  let tab = if service { 1 } else { dui.job_tab }
+  let running = text(j, "state") == "running"
+  c.box(dir=Row, w=Fill(1.0), pl=22.0, pr=22.0, pt=4.0, pb=14.0, gap=12.0, align=AStart, fn() {
+    c.box(pt=8.0, fn() { job_dot(c, text(j, "tone")) }) |> ignore
+    c.box(w=Fill(1.0), fn() {
+      c.text(text(j, "name"), size=16.0, weight=600, color=t.p.text) |> ignore
+      job_meta(c, j, 12.5)
     })
     |> ignore
   })
+  |> ignore
+  c.box(w=Fill(1.0), h=Fill(1.0), pl=18.0, pr=18.0, pb=24.0, gap=14.0, fn() {
+    let command = text(j, "command")
+    if command.trim(chars=" \n").to_string() != "" {
+      c.rich([@ui.span(command, mono=true)], size=11.5, line=17.0, color=t.p.muted, w=Fill(1.0)) |> ignore
+    }
+    if !service {
+      dui.job_tab = seg(
+        c,
+        "job/tab",
+        [tr("android-misc.jobs.notices"), tr("android-misc.jobs.output")],
+        tab,
+        height=34.0,
+        fill=true,
+      )
+    }
+    if tab == 0 {
+      let notices = items(j, "notices")
+      c.box(w=Fill(1.0), gap=12.0, fn() {
+        if notices.length() == 0 {
+          c.box(padx=20.0, pady=8.0, fn() {
+            c.text(tr("android-misc.jobs.noNotices"), size=13.0, color=t.p.muted) |> ignore
+          })
+          |> ignore
+        }
+        for n in notices {
+          c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
+            c.box(w=Px(48.0), fn() {
+              c.text(text(Some(n), "clock"), size=14.0, color=t.p.subtle, wrap=false) |> ignore
+            })
+            |> ignore
+            c.box(w=Fill(1.0), fn() {
+              c.text(text(Some(n), "text"), size=14.0, color=t.p.text) |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+      let last = (src.topic)("jobLog", {
+        "station": Json::string(r.station),
+        "job": Json::string(id),
+        "lines": Json::number(1.0),
+      }).value
+      let said = match last {
+        Some(Object(_)) => text(last, "said")
+        _ => text(j, "outputSaid")
+      }
+      if said != "" {
+        c.box(w=Fill(1.0), gap=2.0, fn() {
+          c.text(said, size=11.0, color=t.p.subtle) |> ignore
+          match text(last, "last") {
+            "" => ()
+            l => c.rich([@ui.span(l, mono=true)], size=11.5, color=t.p.muted, wrap=false) |> ignore
+          }
+        })
+        |> ignore
+      }
+    } else {
+      let log = (src.topic)("jobLog", {
+        "station": Json::string(r.station),
+        "job": Json::string(id),
+        "lines": Json::number(300.0),
+      })
+      c.box(
+        w=Fill(1.0),
+        h=Fill(1.0),
+        min_h=120.0,
+        radius=16.0,
+        bg=@sf.alpha(t.p.text, 0.05),
+        clip=true,
+        fn() {
+          match log.value {
+            Some(Object(_)) as v => {
+              let words = match text(v, "text") {
+                "" => tr("android-misc.jobs.noOutput")
+                s => s
+              }
+              // in a terminal's colours where the core says them (its `runs`: Jobs.kt termText), else as words
+              let runs = items(v, "runs")
+              let styled = if runs.length() > 0 { Some(term_lines(runs, t.p.text, t.dark)) } else { None }
+              let lines = match styled {
+                Some(ls) => Array::make(ls.length(), "")
+                None => words.split("\n").map(fn(l) { l.to_owned() }).to_array()
+              }
+              c.list(
+                "job-log/" + id,
+                lines.length(),
+                17.0,
+                fn(i) {
+                  c.box(w=Fill(1.0), padx=14.0, pt=if i == 0 { 12.0 } else { 0.0 }, pb=if i ==
+                    lines.length() - 1 {
+                      12.0
+                    } else {
+                      0.0
+                    }, fn() {
+                    let line = match styled {
+                      Some(ls) => ls[i]
+                      None => [@ui.span(lines[i], mono=true)]
+                    }
+                    c.rich(line, size=11.5, line=17.0, color=t.p.text, w=Fill(1.0)) |> ignore
+                  })
+                  |> ignore
+                },
+                stick_end=true,
+              )
+              |> ignore
+            }
+            _ =>
+              c.box(padx=14.0, pady=12.0, fn() { @sf.spinner(c, size=12.0) |> ignore }) |> ignore
+          }
+        },
+      )
+      |> ignore
+    }
+    if running {
+      let skey = "job-stop/" + r.station + "/" + id
+      let busy = doing(skey)
+      let sid = c.id("job/stop")
+      if c.clicked(sid) && !busy {
+        act(
+          src,
+          fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]),
+          skey,
+          "job.stop",
+          { "station": Json::string(r.station), "id": Json::string(id) },
+        )
+      }
+      c.box(
+        dir=Row,
+        w=Fill(1.0),
+        h=Px(46.0),
+        radius=23.0,
+        gap=6.0,
+        align=ACenter,
+        justify=JCenter,
+        bg=@sf.alpha(t.p.red, 0.12),
+        id=sid,
+        fn() {
+          if busy {
+            @sf.spinner(c, size=14.0) |> ignore
+          } else {
+            @sf.icon(c, "stop", size=16.0, color=t.p.red) |> ignore
+          }
+          c.text(tr("android-misc.jobs.stop"), size=15.0, weight=500, color=t.p.red, wrap=false)
+          |> ignore
+          // Jobs.kt: clip(Smooth(23)).clickable
+          @motion.ripple(c, sid, 23.0)
+        },
+      )
+      |> ignore
+    }
+  })
+  |> ignore
 }
 
 ///|
@@ -1831,103 +1852,110 @@ let letters_foot : @ui.Style = @ui.style(h=S8)
 /// them); one opened, back to the list and its title (which opens that chat), then its letters both ways in the order
 /// written, each drawn as the chat draws a message (Chat.kt SaidAlone).
 fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
-  let topic = (src.topic)("chatLetters", letters_params(r, thread))
-  let (chat, _, _) = view_of_chat(src, r)
   sheet_frame(c, "letters", c.height * 0.8, draggable=true, fn() {
     sheet_head(c, tr("web-main.letters.title"))
-    let view = match topic.value {
-      Some(Object(_)) as v => v
-      _ => {
-        waiting_rows(c, 3, topic.error)
-        return
-      }
-    }
-    let chats = items(view, "chats")
-    let whole = flag(view, "whole")
-    // not here yet: its rows to come
-    if chats.length() == 0 && !whole {
+    letters_body(c, src, r, thread)
+  })
+}
+
+///|
+/// What the letters' sheet holds below its head, and the wide frame's agent 往来 tab (wide_panel.mbt): the list of the
+/// chats written with, or the one opened.
+fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
+  let topic = (src.topic)("chatLetters", letters_params(r, thread))
+  let (chat, _, _) = view_of_chat(src, r)
+  let view = match topic.value {
+    Some(Object(_)) as v => v
+    _ => {
       waiting_rows(c, 3, topic.error)
       return
     }
-    let rows : Array[() -> Unit] = []
-    if chats.length() == 0 {
+  }
+  let chats = items(view, "chats")
+  let whole = flag(view, "whole")
+  // not here yet: its rows to come
+  if chats.length() == 0 && !whole {
+    waiting_rows(c, 3, topic.error)
+    return
+  }
+  let rows : Array[() -> Unit] = []
+  if chats.length() == 0 {
+    rows.push(fn() {
+      c.box(style=letters_none_box, fn() { c.text(tr("web-main.letters.none"), style=letters_none) |> ignore })
+      |> ignore
+    })
+  }
+  let opened = chats.iter().find_first(fn(ch) { text(Some(ch), "key") == dui.letters_open })
+  match (opened, chat) {
+    (Some(ch), Some(v)) => {
+      let ch = Some(ch)
+      let link = text(ch, "link")
       rows.push(fn() {
-        c.box(style=letters_none_box, fn() { c.text(tr("web-main.letters.none"), style=letters_none) |> ignore })
+        // back to the list, and its title (which opens that chat)
+        c.box(style=letters_head, fn() {
+          let back = c.id("letters/back")
+          if c.clicked(back) {
+            dui.letters_open = ""
+          }
+          c.box(style=letters_back, id=back, fn() {
+            @sf.icon(c, "chevron-left", size=20.0, color=@sf.theme().p.accent) |> ignore
+          })
+          |> ignore
+          let name = c.id("letters/chat")
+          if link != "" && c.clicked(name) {
+            open_link(link)
+          }
+          c.box(id=name, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
+        })
         |> ignore
       })
-    }
-    let opened = chats.iter().find_first(fn(ch) { text(Some(ch), "key") == dui.letters_open })
-    match (opened, chat) {
-      (Some(ch), Some(v)) => {
-        let ch = Some(ch)
-        let link = text(ch, "link")
+      let here = { station: r.station, session: r.session, view: v }
+      for m in items(ch, "letters") {
+        let message = message_of(m)
         rows.push(fn() {
-          // back to the list, and its title (which opens that chat)
-          c.box(style=letters_head, fn() {
-            let back = c.id("letters/back")
-            if c.clicked(back) {
-              dui.letters_open = ""
-            }
-            c.box(style=letters_back, id=back, fn() {
-              @sf.icon(c, "chevron-left", size=20.0, color=@sf.theme().p.accent) |> ignore
+          c.box(style=letters_said, fn() { said(c, src, here, message, [], decide=false) }) |> ignore
+        })
+      }
+    }
+    _ =>
+      for ch in chats {
+        let ch = Some(ch)
+        let key = text(ch, "key")
+        rows.push(fn() {
+          // a chat it wrote with: its title, how many and when, the last letter in brief under them
+          let id = c.id("letters/row/" + key)
+          if c.clicked(id) {
+            dui.letters_open = key
+          }
+          c.box(style=letters_row, id~, fn() {
+            c.box(style=letters_row_head, fn() {
+              c.box(style=letters_grow, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
+              let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
+              let ago = text(field(field(ch, "time"), "lastActiveAt"), "ago")
+              c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_meta) |> ignore
             })
             |> ignore
-            let name = c.id("letters/chat")
-            if link != "" && c.clicked(name) {
-              open_link(link)
-            }
-            c.box(id=name, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
+            c.text(text(ch, "last"), style=letters_meta) |> ignore
           })
           |> ignore
         })
-        let here = { station: r.station, session: r.session, view: v }
-        for m in items(ch, "letters") {
-          let message = message_of(m)
-          rows.push(fn() {
-            c.box(style=letters_said, fn() { said(c, src, here, message, [], decide=false) }) |> ignore
-          })
-        }
       }
-      _ =>
-        for ch in chats {
-          let ch = Some(ch)
-          let key = text(ch, "key")
-          rows.push(fn() {
-            // a chat it wrote with: its title, how many and when, the last letter in brief under them
-            let id = c.id("letters/row/" + key)
-            if c.clicked(id) {
-              dui.letters_open = key
-            }
-            c.box(style=letters_row, id~, fn() {
-              c.box(style=letters_row_head, fn() {
-                c.box(style=letters_grow, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
-                let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
-                let ago = text(field(field(ch, "time"), "lastActiveAt"), "ago")
-                c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_meta) |> ignore
-              })
-              |> ignore
-              c.text(text(ch, "last"), style=letters_meta) |> ignore
-            })
-            |> ignore
-          })
-        }
-    }
-    // not all of the chat is here yet: older ones may come
-    if !whole {
-      rows.push(fn() { c.box(style=letters_more, fn() { @sf.spinner(c, size=16.0) |> ignore }) |> ignore })
-    }
-    c.list(
-      "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open,
-      rows.length() + 1,
-      60.0,
-      fn(i) {
-        if i < rows.length() {
-          (rows[i])()
-        } else {
-          c.box(style=letters_foot, fn() {  }) |> ignore
-        }
-      },
-    )
-    |> ignore
-  })
+  }
+  // not all of the chat is here yet: older ones may come
+  if !whole {
+    rows.push(fn() { c.box(style=letters_more, fn() { @sf.spinner(c, size=16.0) |> ignore }) |> ignore })
+  }
+  c.list(
+    "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open,
+    rows.length() + 1,
+    60.0,
+    fn(i) {
+      if i < rows.length() {
+        (rows[i])()
+      } else {
+        c.box(style=letters_foot, fn() {  }) |> ignore
+      }
+    },
+  )
+  |> ignore
 }
