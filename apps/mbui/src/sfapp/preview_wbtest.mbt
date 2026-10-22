@@ -279,3 +279,25 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   assert_eq(pv_hidden.val, "")
   t.assert_idle()
 }
+
+///|
+test "marking a picture of a long name: the bar's 取消, download and 添加到对话 whole, the name cut short instead" {
+  let t = preview_tester("step")
+  // the same picture under a long name, opened from the chat (a draft to put it in)
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", { ..a, name: "web-open-2-folded-preview-of-the-chat.png" }, steps=InChat(Some(1.0), "s-c1"))
+  t.run_for(fly_open_ms)
+  marks_start()
+  t.draw()
+  let (px, _, pw, _) = t.rect_of("添加到对话").unwrap()
+  let (cx, _, cw, _) = t.rect_of("取消").unwrap()
+  // the bar 8 in from the window's right, 6 inside it the × (32), 4 before it the pill, its words 12 inside it
+  assert_true(px + pw <= 390.0 - 8.0 - 6.0 - 32.0 - 4.0 - 12.0 + 0.5, msg="添加到对话 inside its ground, clear of ×")
+  assert_true(cw >= 24.0, msg="取消 whole")
+  assert_true(cx + cw <= px, msg="取消 before 添加到对话")
+  match t.rect_of("web-open-2") {
+    Some((nx, _, _, _)) => assert_true(nx < cx)
+    None => ()
+  }
+  marks_leave()
+}

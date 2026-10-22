@@ -775,7 +775,8 @@ fn marks_any() -> Bool {
 /// there is a chat's draft to put it in). True on the frame one of them is tapped: `go(draft)`.
 fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit) -> Unit {
   let ready = !marking.busy && marks_any()
-  c.box(dir=Row, gap=4.0, align=ACenter, fn() {
+  // as wide as they are: the file's name before them cut short instead
+  c.box(dir=Row, gap=4.0, align=ACenter, keep=true, fn() {
     if marking.error != "" {
       c.box(padx=6.0, max_w=140.0, clip=true, fn() {
         c.text(marking.error, size=13.0, color=0xFF7B6BFFL, wrap=false) |> ignore
@@ -786,7 +787,7 @@ fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit) -> Unit {
     if c.clicked(cancel) {
       marks_leave()
     }
-    c.box(h=Px(30.0), padx=10.0, radius=15.0, justify=JCenter, id=cancel, fn() {
+    c.box(h=Px(32.0), padx=10.0, radius=picture_key, justify=JCenter, id=cancel, fn() {
       c.text(pv("common.cancel"), size=13.0, color=dark_muted, wrap=false) |> ignore
     })
     |> ignore
@@ -798,33 +799,45 @@ fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit) -> Unit {
       if ready && c.clicked(put) {
         go(true)
       }
-      c.box(
-        dir=Row,
-        h=Px(30.0),
-        padx=12.0,
-        gap=5.0,
-        radius=15.0,
-        bg=0xE5704AFFL,
-        align=ACenter,
-        opacity=if ready { 1.0 } else { 0.4 },
-        id=if ready { put } else { 0 },
-        fn() {
-          @sf.icon(c, "send", size=12.0, color=0xFFFFFFFFL) |> ignore
-          c.text(
-            pv(if marking.busy { "android-chat.marks.making" } else { "android-chat.preview.put" }),
-            size=13.0,
-            weight=600,
-            color=0xFFFFFFFFL,
-            wrap=false,
-          )
-          |> ignore
-        },
-      )
+      // 4 further from the rest (ImageMarks.kt: padding(start = 4) outside its ground)
+      c.box(style=marks_put_room, fn() {
+        c.box(
+          dir=Row,
+          h=Px(32.0),
+          padx=12.0,
+          gap=5.0,
+          radius=picture_key,
+          bg=0xE5704AFFL,
+          align=ACenter,
+          opacity=if ready { 1.0 } else { 0.4 },
+          id=if ready { put } else { 0 },
+          fn() {
+            @sf.icon(c, "send", size=12.0, color=0xFFFFFFFFL) |> ignore
+            c.text(
+              pv(if marking.busy { "android-chat.marks.making" } else { "android-chat.preview.put" }),
+              size=13.0,
+              weight=600,
+              color=0xFFFFFFFFL,
+              wrap=false,
+            )
+            |> ignore
+          },
+        )
+        |> ignore
+      })
       |> ignore
     }
   })
   |> ignore
 }
+
+///|
+/// The corner of what is on the viewer's bars (ImageMarks.kt PICTURE_KEY).
+let picture_key : Double = 12.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let marks_put_room : @ui.Style = @ui.style(pl=S1)
 
 ///|
 /// The foot while marking (ImageMarks.kt MarksFoot, MarksTools): the note being written in its box, else the notes as
