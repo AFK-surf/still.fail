@@ -19,6 +19,8 @@ import { routes } from "../src/api/routes/sandbox.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { signalGroup } from "../src/ops/group.ts";
 import { Store } from "../src/store/store.ts";
+import { Rig, say, settle } from "./hub-fakes.ts";
+import { sessionKey } from "../src/sessions/hub.ts";
 
 const dirs: string[] = [];
 const cleanups: (() => unknown)[] = [];
@@ -525,4 +527,41 @@ describe("files, never shared", () => {
     await fetchFiles(dir, key, [join(cwd, "chart.svg")]);
     assert.equal(readFileSync(join(cwd, "chart.svg"), "utf8"), "<svg/>");
   });
+});
+
+describe("a message's files from the sandbox", () => {
+  for (const persist of [false, true]) {
+    test(`a file only the session's sandbox has is posted${persist ? ", named by where the data directory's link leads there" : ""}`, async () => {
+      const r = new Rig();
+      fakeSsh(r.dir);
+      const path = process.env.PATH;
+      process.env.PATH = `${r.dir}:${path}`;
+      const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", ...(persist ? { persist: "/mnt/sf/st" } : {}) } }), () => []);
+      try {
+        const m = say("<@UBOT> chart it");
+        await r.accept(m);
+        await settle();
+        const key = sessionKey("cl", "C1", m.threadTs);
+        const workspace = r.session(key).workspace;
+        const fs = `${r.dir}/run-${sandboxName(keyPart(key))}.ws@host/fs`;
+        // Made by the agent there: in the data directory there, which with persist is a link into it.
+        const rel = workspace.slice(r.dir.length + 1);
+        const there = persist ? `${fs}/mnt/sf/st/${rel}` : `${fs}${workspace}`;
+        mkdirSync(there, { recursive: true });
+        if (persist) {
+          mkdirSync(dirname(`${fs}${r.dir}`), { recursive: true });
+          symlinkSync(`${fs}/mnt/sf/st`, `${fs}${r.dir}`);
+        }
+        writeFileSync(join(there, "chart.svg"), "<svg/>");
+        const named = persist ? `/mnt/sf/st/${rel}/chart.svg` : join(workspace, "chart.svg");
+        await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "图在这", files: [named] });
+        assert.deepEqual([r.chat.lastText(), r.chat.files.at(-1)], ["图在这", ["chart.svg"]]);
+        assert.equal(readFileSync(join(workspace, "chart.svg"), "utf8"), "<svg/>");
+      } finally {
+        unplace();
+        process.env.PATH = path;
+        await r.close();
+      }
+    });
+  }
 });

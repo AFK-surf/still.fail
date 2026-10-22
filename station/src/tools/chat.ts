@@ -2,7 +2,8 @@
 // chat_list, chat_read, session_send, session_history, and chat_create (sessions/opened.ts), which came after the Rust.
 // Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
 // hub.rs and compares); what they do is src/sessions/.
-import { chatHistory, chatPost, chatState, mayStage, staged, target } from "../sessions/conversations.ts";
+import { sandboxed } from "../agents/sandbox.ts";
+import { chatHistory, chatPost, chatState, mayStage, fromSandbox, staged, target } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
 import { chatCreate } from "../sessions/opened.ts";
@@ -439,6 +440,12 @@ function afar(hub: Hub, key: string, tool: "chat_read" | "session_history", args
 /// `run` with `args`' files (and with `links` its text's local links) in folders macOS protects copied first
 /// (conversations.ts `staged`), the copies removed after.
 function withStaged(hub: Hub, key: string, args: Args, links: boolean, run: (args: Args) => Promise<string>): Promise<string> {
+  // The session's files in its sandbox, when it runs in one, first brought here (conversations.ts `fromSandbox`).
+  if (sandboxed(hub.config().dataDir)) return fromSandbox(hub, key, args, links).then((here) => stagedRun(hub, key, here, links, run));
+  return stagedRun(hub, key, args, links, run);
+}
+
+function stagedRun(hub: Hub, key: string, args: Args, links: boolean, run: (args: Args) => Promise<string>): Promise<string> {
   // Nothing that could be in such a folder: as it was, not a moment later.
   if (!mayStage(hub, args, links)) return run(args);
   return (async () => {
