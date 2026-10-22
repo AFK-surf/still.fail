@@ -335,7 +335,7 @@ export const MERGED = `CREATE VIEW merged AS
     CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS text,
     CASE WHEN e.n IS NULL THEN m.attachments ELSE e.attachments END AS attachments,
     CASE WHEN e.n IS NULL THEN m.quotes ELSE e.quotes END AS quotes,
-    m.declared, m.client, m.agent_identity, m.at AS created_at, e.at AS edited_at
+    m.declared, m.client, m.agent_identity, m.at AS created_at, e.at AS edited_at, m.letter
   FROM entries m
   LEFT JOIN entries e ON e.thread = m.thread
     AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n)
@@ -403,7 +403,42 @@ export function addClientColumn(db: DatabaseSync): void {
   // What people said lately is looked for on every list of chats (the cards they answered: `answersSince`).
   db.exec("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'");
   // A prior upgrade may have added the table column without rebuilding this view.
-  if (!has(db, "merged", "client") || !has(db, "merged", "agent_identity")) db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${MERGED} COMMIT;`);
+  if (!has(db, "merged", "client") || !has(db, "merged", "agent_identity") || !has(db, "merged", "letter")) db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${MERGED} COMMIT;`);
+}
+
+/// The column letters came with (entries.letter, rows.ts Letter): what two chats' agents write each other, kept apart
+/// from what is said in a chat. Before it, a letter was known by its heading alone (`来自 …：`, by an agent not of the
+/// thread): those are marked once as the column comes, with the chat their heading names. Runs before addClientColumn,
+/// whose `merged` view has the column.
+export function addLetterColumn(db: DatabaseSync): void {
+  if (has(db, "entries", "letter")) return;
+  db.exec("ALTER TABLE entries ADD COLUMN letter TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS entries_letters ON entries (thread, n) WHERE letter IS NOT NULL");
+  const before = db.prepare(
+    `SELECT thread, n, text FROM entries e WHERE kind = 'message' AND author_kind = 'agent' AND (text LIKE '来自 %' OR text LIKE 'From %')
+     AND author NOT IN (SELECT session FROM thread_sessions WHERE thread = e.thread)`,
+  ).all() as { thread: number; n: number; text: string }[];
+  if (before.length === 0) return;
+  const mark = db.prepare("UPDATE entries SET letter = ? WHERE thread = ? AND n = ?");
+  db.exec("BEGIN");
+  try {
+    for (const r of before) mark.run(JSON.stringify({ way: "in", ...headedFrom(r.text) }), r.thread, r.n);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/// The chat a letter's heading names (sessions/messages.ts `header`): `来自 [title](link)：`, Slack's `From <link|title>:`,
+/// or a title alone.
+export function headedFrom(text: string): { title: string; link: string | null } {
+  const head = (text.split("\n", 1)[0] ?? "").replace(/^(来自|From) /, "").replace(/(：|:)\s*$/, "");
+  const md = /^\[(.*)\]\((\S+)\)$/.exec(head);
+  if (md) return { title: md[1]!, link: md[2]! };
+  const slack = /^<([^|>]+)\|(.*)>$/.exec(head);
+  if (slack) return { title: slack[2]!, link: slack[1]! };
+  return { title: head, link: null };
 }
 
 /// add_auto_title_columns: the columns a chat's own name from its agent came with (threads.auto_title…).

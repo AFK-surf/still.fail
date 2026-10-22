@@ -28,8 +28,6 @@ priv enum Entry {
   Empty
   Line
   Said(Message)
-  /// a run of what other chats' agents wrote to it, as its first message has it (the core's `letters`): its line
-  Letters(Message)
   Sent(Elsewhere)
   Newer
   Out(Outgoing)
@@ -45,7 +43,6 @@ fn Entry::id(self : Entry) -> String {
     Empty => "empty"
     Line => "line"
     Said(m) => "m:" + m.ts
-    Letters(m) => "l:" + m.ts
     Sent(e) => "s:" + e.key
     Newer => "newer"
     Out(o) => "o:" + o.id
@@ -86,8 +83,6 @@ priv struct Reading {
   /// the first message when the page before was asked for (once per page)
   mut asked : Double
   mut asked_newer : Double
-  /// the message gone to that the core was asked to show the run of what other chats' agents wrote around (once)
-  mut around_asked : Double
   /// what the core was told of the chat shown, its end seen or not ("" nothing yet)
   mut told : String
   /// the newest message seen whole on this visit (-1 none): read up to there
@@ -169,7 +164,6 @@ fn reading_of(key : String) -> Reading {
         put: false,
         asked: -1.0,
         asked_newer: -1.0,
-        around_asked: -1.0,
         told: "",
         seen_whole: -1.0,
         top_seq: -1.0,
@@ -257,16 +251,7 @@ fn entries_of(v : ChatView) -> Array[Entry] {
       Some(l) if l == m.seq => out.push(Line)
       _ => ()
     }
-    // the first of a run of what other chats' agents wrote to it: the run's line, the message only open
-    match m.letters {
-      Some(l) => {
-        out.push(Letters(m))
-        if l.open {
-          out.push(Said(m))
-        }
-      }
-      None => out.push(Said(m))
-    }
+    out.push(Said(m))
     for e in m.elsewhere {
       out.push(Sent(e))
     }
@@ -418,7 +403,7 @@ fn messages(
   let mut head = ""
   let mut head_at = -1
   for i, e in list {
-    if e is (Said(_) | Letters(_)) {
+    if e is Said(_) {
       head = e.id()
       head_at = i
       break
@@ -703,19 +688,6 @@ fn messages(
                   )
                 })
               }
-            // among what other chats' agents wrote to it, folded: the core asked to show it (their run comes
-            // whole, and this again finds it)
-            Some(thread) if rd.around_asked != target &&
-              v.messages.iter().any(fn(m) { m.letters is Some(l) && !l.open }) => {
-              rd.around_asked = target
-              c.tell("chat.around/" + gk, fn() {
-                (src.call)(
-                  "chat.around",
-                  { "station": Json::string(r.station), "thread": Json::number(thread), "seq": Json::number(target) },
-                  fn(res) { if res is Err(_) { go_tos.remove(gk) } },
-                )
-              })
-            }
             _ => go_tos.remove(gk)
           }
         }
@@ -726,9 +698,14 @@ fn messages(
     // near the top: the page before comes in, once per page
     match (info, v.thread) {
       (Some(i), Some(thread)) if v.more && rd.placed && i.first >= 0 && i.first <= 3 => {
-        let first = match list.iter().find_first(fn(e) { e is Said(_) }) {
-          Some(Said(m)) => m.seq
-          _ => -1.0
+        // by entries, not messages: a page of what the chat does not show (letters, edits) moves it too
+        let first = match v.first_entry {
+          Some(f) => f
+          None =>
+            match list.iter().find_first(fn(e) { e is Said(_) }) {
+              Some(Said(m)) => m.seq
+              _ => -1.0
+            }
         }
         // (asked once the frame's builds are over, from where the last laid the list out)
         if rd.asked != first {
@@ -758,9 +735,13 @@ fn messages(
     // near the end of a window short of the chat's: the page after
     match (info, v.thread) {
       (Some(i), Some(thread)) if v.newer && rd.placed && i.last >= n - 4 => {
-        let last = match v.messages.last() {
-          Some(m) => m.seq
-          None => -1.0
+        let last = match v.last_entry {
+          Some(l) => l
+          None =>
+            match v.messages.last() {
+              Some(m) => m.seq
+              None => -1.0
+            }
         }
         if rd.asked_newer != last {
           c.after_build("newer", fn() {
@@ -1204,7 +1185,6 @@ fn row_keys(
         Out(o) => !local_sent(o)
         // (one out of an avatar comes out of it instead)
         Said(m) => m.said && !emit_goes(em, m.seq)
-        Letters(m) => m.said
         _ => false
       }
       if comes {
@@ -1230,7 +1210,7 @@ fn row_keys(
   if rd.drawn && following {
     for i, e in list {
       let caught = match e {
-        Said(m) | Letters(m) => !m.said
+        Said(m) => !m.said
         Working(a) => !a.started
         Top | Foot => true
         _ => false
@@ -1491,6 +1471,14 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
   (src.leave)("chat", chat_params(r))
   (src.leave)("chatJobs", chat_params(r))
+  // what its agents and other chats' wrote each other, read for its sheet: let go if it was (held only once opened)
+  match dui.letters_held.get(k) {
+    Some(th) => {
+      (src.leave)("chatLetters", letters_params(r, th))
+      dui.letters_held.remove(k)
+    }
+    None => ()
+  }
   near_left(src, r.station)
   read_chats.remove(k)
 }

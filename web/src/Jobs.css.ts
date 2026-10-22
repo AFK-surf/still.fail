@@ -227,4 +227,5 @@ globalStyle(msgWaitingLate, { animation: `${msgWaitingInKeyframes} 0s linear 1s 
  * small pill. */
 globalStyle(`${jobsPanel} :is(${jobRow}, ${jobsAll})`, { borderRadius: "var(--panel-in)", paddingInline: `${TEXT_IN}px` });
 globalStyle(`${jobsPanel} ${jobsAll}`, { paddingLeft: `${TEXT_IN + 20}px` });
-globalStyle(`${jobsPanel} ${jobsClear}`, { height: "24px", padding: `0 ${TEXT_IN}px`, borderRadius: "999px", alignSelf: "center", fontSize: vars.textMeta });
+// As tall as the row beside it, in the panel's corner as it is: at the panel's padding from its side and its foot.
+globalStyle(`${jobsPanel} ${jobsClear}`, { height: "38px", padding: `0 ${TEXT_IN}px`, borderRadius: "var(--panel-in)", alignSelf: "center", fontSize: vars.textMeta });

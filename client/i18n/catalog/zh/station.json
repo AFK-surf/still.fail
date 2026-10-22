@@ -307,6 +307,7 @@
   "station.place.timeout": "无法在 {seconds} 秒内检查 {cwd}。该文件夹受 macOS 保护，{machine} 上可能正在询问是否允许 station 访问：请在那里允许，然后重试。",
   "station.session.fastOpenAiOnly": "Fast 只适用于 OpenAI 订阅",
   "station.session.from": "来自 {from}：",
+  "station.session.to": "发给 {to}：",
   "station.session.openerNotTold": "无法将本轮结果告知创建此对话的 agent：{error}",
   "station.session.opened": "已创建对话：{chat}",
   "station.session.openedBy": "由 {from} 开的 chat：",

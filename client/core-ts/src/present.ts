@@ -122,7 +122,7 @@ export function times(value: unknown, c: Clock): unknown {
   return changed ? map : value;
 }
 
-const NO_TICK = new Set(["live", "thread", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens", "joinable", "memberships", "screens", "screenCard"]);
+const NO_TICK = new Set(["live", "thread", "letters", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens", "joinable", "memberships", "screens", "screenCard"]);
 
 /// Whether a topic shows times in words, sent again each minute while shown.
 export function ticks(topic: Topic): boolean {
@@ -155,6 +155,7 @@ const SHAPED: Record<string, Ty> = {
   shareIn: "ShareInView",
   pick: "PickView",
   chatJobs: "ChatJobsView",
+  chatLetters: "ChatLettersView",
   imageNear: "ImageNear",
   agentCard: "AgentCardView",
   stationNet: { opt: "StationNet" },

@@ -369,6 +369,7 @@ fn chat_info_fit(chat : Json?, view : ChatView?) -> Double {
   }
   let one = fn(b : Bool) { if b { 1 } else { 0 } }
   let acts = one(field(chat, "pinned") is Some(True | False)) +
+    one(number(chat, "letters") > 0.0) +
     one(text(chat, "slackUrl") != "") +
     one(text(chat, "feishuUrl") != "") +
     one(field(chat, "xshare") is Some(Object(_))) +
@@ -384,7 +385,8 @@ fn chat_info_fit(chat : Json?, view : ChatView?) -> Double {
 ///|
 /// The chat itself, from "…" (ChatInfo.kt openChatInfo): its name (with a way to change it) over who started it, how
 /// many take part and when it was last written in; its agents, each where it stands (a tap opens its card); then what
-/// can be done with it: pin it, copy its link, its sharing, archive it. As tall as what it shows.
+/// can be done with it: what its agents and other chats' wrote each other, pin it, copy its link, its sharing, archive
+/// it. As tall as what it shows.
 fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   ignore(w)
   let t = @sf.theme()
@@ -524,8 +526,23 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
         })
         c.box(h=Px(10.0), fn() {  }) |> ignore
       }
-      if open || link != "" || slack != "" || xshare is Some(_) {
+      let letters = number(chat, "letters")
+      if open || link != "" || letters > 0.0 || slack != "" || xshare is Some(_) {
         info_list(c, fn() {
+          // what its agents and other chats' wrote each other, not in the chat: their own sheet (Letters.kt)
+          match opt_number(thread, "id") {
+            Some(th) if letters > 0.0 =>
+              if info_row(c, "info/letters", fn() {
+                  @sf.icon(c, "chats", size=16.0, color=t.p.text) |> ignore
+                  c.box(style=@sf.full_width, fn() { c.text(tr("web-main.letters.title"), style=info_words) |> ignore })
+                  |> ignore
+                  c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta) |> ignore
+                  chevron(c)
+                }) {
+                open_letters(c, r, th)
+              }
+            _ => ()
+          }
           // a station from before pins says nothing of them: its chats are not pinned from here
           match pinned {
             Some(p) if open => {
@@ -1727,4 +1744,190 @@ fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@ui.R
   }
   // (an empty line still one: a run to stand in for its words)
   out.map(fn(l) { if l.length() == 0 { [@ui.span(" ", mono=true)] } else { l } })
+}
+
+///|
+/// Opens the chat's letters' sheet at its list; its letters held (the core's `chatLetters`) until the chat is left.
+fn open_letters(c : @ui.Ctx, r : ChatRef, thread : Double) -> Unit {
+  dui.letters_open = ""
+  dui.letters_held[r.station + "\u{1}" + r.session] = thread
+  open_sheet(c, LettersOf(r, thread))
+}
+
+///|
+/// The params of a chat's letters (the core's `chatLetters` view).
+fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
+  { "station": Json::string(r.station), "thread": Json::number(thread) }
+}
+
+///|
+/// A chat written with, its row in the letters' sheet (Letters.kt): 18 in, 10 over and under, its two lines 2 apart;
+/// pressed a shade.
+// kept across runs: a value (no field of it changes)
+let letters_row : @ui.Style = @ui.style(w=Full, px=S4_5, py=S2_5, gap=S0_5, pressed=@ui.patch(bg=A(Fg, O5)))
+
+///|
+/// Its first line: its title as wide as there is room, how many and when at its end, 8 apart.
+// kept across runs: a value (no field of it changes)
+let letters_row_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+
+///|
+/// What fills a line's room (its title, beside what is at its end).
+// kept across runs: a value (no field of it changes)
+let letters_grow : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+/// A chat's title (15, medium) and what is said in brief of it (13, muted), each on a line.
+// kept across runs: a value (no field of it changes)
+let letters_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let letters_meta : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+
+///|
+/// None: said 18 in, 12 over and under, 15 muted.
+// kept across runs: a value (no field of it changes)
+let letters_none_box : @ui.Style = @ui.style(px=S4_5, py=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let letters_none : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted)
+
+///|
+/// One opened, its head: back (a round 36, pressed a shade), then its title; 6 in at the start, 18 at the end.
+// kept across runs: a value (no field of it changes)
+let letters_head : @ui.Style = @ui.style(row=true, w=Full, pl=S1_5, pr=S4_5, pb=S1_5, gap=S1, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let letters_back : @ui.Style = @ui.style(
+  w=S9,
+  h=S9,
+  radius=Full,
+  align=ACenter,
+  justify=JCenter,
+  pressed=@ui.patch(bg=A(Fg, O5)),
+)
+
+///|
+/// A letter, as the chat draws a message: 14 in, 20 under the one before.
+// kept across runs: a value (no field of it changes)
+let letters_said : @ui.Style = @ui.style(w=Full, px=S3_5, pt=S1, pb=S4)
+
+///|
+/// Older ones on their way: a spinner, 8 under the last.
+// kept across runs: a value (no field of it changes)
+let letters_more : @ui.Style = @ui.style(w=Full, pt=S2, align=ACenter)
+
+///|
+/// Room under the last row, over the sheet's foot (Letters.kt bottom = 30).
+// kept across runs: a value (no field of it changes)
+let letters_foot : @ui.Style = @ui.style(h=S8)
+
+///|
+/// What the chat's agents and other chats' wrote each other, not said in it (Letters.kt openLetters): the chats it
+/// wrote with, a row each, the last written with first (its title, how many and when, the last letter in brief under
+/// them); one opened, back to the list and its title (which opens that chat), then its letters both ways in the order
+/// written, each drawn as the chat draws a message (Chat.kt SaidAlone).
+fn letters_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
+  let topic = (src.topic)("chatLetters", letters_params(r, thread))
+  let (chat, _, _) = view_of_chat(src, r)
+  sheet_frame(c, "letters", c.height * 0.8, draggable=true, fn() {
+    sheet_head(c, tr("web-main.letters.title"))
+    let view = match topic.value {
+      Some(Object(_)) as v => v
+      _ => {
+        waiting_rows(c, 3, topic.error)
+        return
+      }
+    }
+    let chats = items(view, "chats")
+    let whole = flag(view, "whole")
+    // not here yet: its rows to come
+    if chats.length() == 0 && !whole {
+      waiting_rows(c, 3, topic.error)
+      return
+    }
+    let rows : Array[() -> Unit] = []
+    if chats.length() == 0 {
+      rows.push(fn() {
+        c.box(style=letters_none_box, fn() { c.text(tr("web-main.letters.none"), style=letters_none) |> ignore })
+        |> ignore
+      })
+    }
+    let opened = chats.iter().find_first(fn(ch) { text(Some(ch), "key") == dui.letters_open })
+    match (opened, chat) {
+      (Some(ch), Some(v)) => {
+        let ch = Some(ch)
+        let link = text(ch, "link")
+        rows.push(fn() {
+          // back to the list, and its title (which opens that chat)
+          c.box(style=letters_head, fn() {
+            let back = c.id("letters/back")
+            if c.clicked(back) {
+              dui.letters_open = ""
+            }
+            c.box(style=letters_back, id=back, fn() {
+              @sf.icon(c, "chevron-left", size=20.0, color=@sf.theme().p.accent) |> ignore
+            })
+            |> ignore
+            let name = c.id("letters/chat")
+            if link != "" && c.clicked(name) {
+              open_link(link)
+            }
+            c.box(id=name, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
+          })
+          |> ignore
+        })
+        let here = { station: r.station, session: r.session, view: v }
+        for m in items(ch, "letters") {
+          let message = message_of(m)
+          rows.push(fn() {
+            c.box(style=letters_said, fn() { said(c, src, here, message, [], decide=false) }) |> ignore
+          })
+        }
+      }
+      _ =>
+        for ch in chats {
+          let ch = Some(ch)
+          let key = text(ch, "key")
+          rows.push(fn() {
+            // a chat it wrote with: its title, how many and when, the last letter in brief under them
+            let id = c.id("letters/row/" + key)
+            if c.clicked(id) {
+              dui.letters_open = key
+            }
+            c.box(style=letters_row, id~, fn() {
+              c.box(style=letters_row_head, fn() {
+                c.box(style=letters_grow, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
+                let n = fill("web-main.letters.count", [("n", items(ch, "letters").length().to_string())])
+                let ago = text(field(field(ch, "time"), "lastActiveAt"), "ago")
+                c.text(if ago == "" { n } else { n + " · " + ago }, style=letters_meta) |> ignore
+              })
+              |> ignore
+              c.text(text(ch, "last"), style=letters_meta) |> ignore
+            })
+            |> ignore
+          })
+        }
+    }
+    // not all of the chat is here yet: older ones may come
+    if !whole {
+      rows.push(fn() { c.box(style=letters_more, fn() { @sf.spinner(c, size=16.0) |> ignore }) |> ignore })
+    }
+    c.list(
+      "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open,
+      rows.length() + 1,
+      60.0,
+      fn(i) {
+        if i < rows.length() {
+          (rows[i])()
+        } else {
+          c.box(style=letters_foot, fn() {  }) |> ignore
+        }
+      },
+    )
+    |> ignore
+  })
 }

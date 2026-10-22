@@ -276,6 +276,8 @@ object Topics {
         put("topic", "chatJobs"); put("station", station)
         when (of) { is ChatOf.Thread -> put("thread", of.id); is ChatOf.Session -> put("session", of.key) }
     }
+    /** What a chat's agents and other chats' wrote each other, not said in it (Letters.kt). */
+    fun chatLetters(station: String, thread: Long) = buildJsonObject { put("topic", "chatLetters"); put("station", station); put("thread", thread) }
     /** An image of a chat open in the preview: the ones beside it, as the chat's page shows them (the same `of` as its `chat`). */
     fun imageNear(station: String, of: ChatOf, path: String) = buildJsonObject {
         put("topic", "imageNear"); put("station", station)

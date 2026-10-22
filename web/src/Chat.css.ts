@@ -110,9 +110,6 @@ globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit"
 /** A notice's words and what is done at their end (reporting it): the words cut short before it, not it. */
 export const msgSystemLine = style({ display: "flex", alignItems: "baseline", minWidth: "0" });
 export const msgSystemEnd = style({ flex: "none", whiteSpace: "nowrap" });
-/** Other chats' agents' messages folded (Chat.tsx LettersLine): which chat's agent wrote to which and how many, cut
- * short where the line does not fit. */
-export const lettersWho = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** What reporting a notice sends, in its dialog's body: the dialog's own words. */
 export const reportSends = style({ margin: "0", fontSize: vars.textUi, color: vars.muted, textWrap: "pretty" });
 /**

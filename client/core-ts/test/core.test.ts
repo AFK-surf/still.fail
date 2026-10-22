@@ -110,7 +110,6 @@ test("parses_each_call", () => {
   assert.deepEqual(parseCall("chat.discard", { station: "w/s", thread: 7, id: "out-1" }), { kind: "chatDiscard", station: "w/s", thread: 7, id: "out-1" });
   assert.deepEqual(parseCall("chat.older", { station: "w/s", thread: 7 }), { kind: "chatOlder", station: "w/s", thread: 7 });
   assert.deepEqual(parseCall("chat.around", { station: "w/s", thread: 7, seq: 3 }), { kind: "chatAround", station: "w/s", thread: 7, seq: 3 });
-  assert.deepEqual(parseCall("chat.letters", { station: "w/s", thread: 7, seq: 3, open: true }), { kind: "chatLetters", station: "w/s", thread: 7, seq: 3, open: true });
   assert.deepEqual(parseCall("chat.find", { station: "w/s", thread: 7, query: "a b" }), { kind: "chatFind", station: "w/s", thread: 7, query: "a b", bring: false });
   assert.deepEqual(parseCall("history.older", { station: "w/s", key: "ember:c-1" }), { kind: "historyOlder", station: "w/s", key: "ember:c-1" });
   assert.deepEqual(parseCall("station.measure", { station: "w/s" }), { kind: "stationMeasure", station: "w/s" });

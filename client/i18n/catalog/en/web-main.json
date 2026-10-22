@@ -153,8 +153,6 @@
   "web-main.chat.asks.go": "Go to the message awaiting a decision",
   "web-main.chat.copyLink": "Copy chat link",
   "web-main.chat.historyRefTitle": "History: {title}",
-  "web-main.chat.letters.close": "hide messages",
-  "web-main.chat.letters.open": "show messages",
   "web-main.chat.linkCopied": "Copied: paste it into another chat and its agent can read this one",
   "web-main.chat.historyLinkCopied": "Copied: paste it into another chat and its agent can read what this chat's agent did",
   "web-main.chat.copyFailed": "Couldn't copy: {error}",
@@ -214,6 +212,14 @@
   "web-main.find.partial": "Searched only the {held} loaded items of {of}",
   "web-main.find.placeholder": "Find in chat",
   "web-main.find.prev": "Previous",
+  "web-main.letters.back": "All agent messages",
+  "web-main.letters.close": "Close agent messages",
+  "web-main.letters.count": {
+    "one": "1 message",
+    "other": "{n} messages"
+  },
+  "web-main.letters.none": "No agent messages yet",
+  "web-main.letters.title": "Agent messages",
   "web-main.outside.title": "Share chats",
   "web-main.outside.lead": "Once sent, agents in this workspace can read the following (after 6 hours unused, it must be shared again):",
   "web-main.outside.from": "from {name}",

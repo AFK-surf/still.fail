@@ -1,82 +1,49 @@
-// What other chats' agents wrote to a chat (the core's `letters`): a run of it is one pill across the chat (Chat.kt
-// LettersLine, Android's ChatLettersTest), its messages out of the list; tapped, the core is asked to show it whole
-// (`chat.letters`) and the messages come in under the pill; tapped again, folded.
+// What a chat's agents and other chats' wrote each other (the core's `chatLetters`, Android's ChatLettersTest): not in
+// the chat at all; its sheet ("…") has a row for them (the chat's `letters`), which opens them in a sheet of their
+// own: the chats it wrote with, a row each; one opened, its letters both ways, drawn as the chat draws messages.
 
 ///|
-/// The fixture's chat with a run of three letters at its end, then its agent's answer; folded unless `open`.
-fn with_letters(v : Json, open : Bool) -> Json {
-  let ms = match v {
-    Object(m) =>
-      match m.get("messages") {
-        Some(Array(a)) => a.copy()
-        _ => []
+test "letters are not in the chat: from its sheet, the chats written with, one opened shows its letters both ways" {
+  reset()
+  let base = fixture("chat-info")
+  let asked : Array[Map[String, Json]] = []
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      match (name, t.value) {
+        ("chat", Some(v)) => { ..t, value: Some(fix_with_letters(v)) }
+        ("chatLetters", _) => {
+          asked.push(params)
+          { ..t, value: Some(fix_letters()) }
+        }
+        _ => t
       }
-    _ => []
-  }
-  let from : Json = {
-    "name": "BFT 备份尺寸分析",
-    "from": "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e",
-    "maker": { "id": "anthropic", "name": "anthropic" },
-  }
-  let letter = fn(seq : Int, words : String) { msg(seq, "agent", from, words, "刚刚", { "author": "peer/ember:c-9" }) }
-  let run = [
-    letter(200, "用户让精简备份并改用 zstd，改好的两个脚本放好了，麻烦替换一下"),
-    letter(201, "补充一点：系统自带的 tar 能直接解 zstd"),
-    letter(202, "已替换，今晚那份会按新脚本出"),
-  ]
-  let line : Json = { "count": 3, "line": "「BFT 备份尺寸分析」发给 Claude · 3 条", "open": Json::boolean(open) }
-  ms.push(with_fields(run[0], [("letters", line)]))
-  if open {
-    ms.push(run[1])
-    ms.push(run[2])
-  }
-  ms.push(msg(203, "agent", by_agent("anthropic", "claude", "s-c1"), "备份改好了：每份小了一大半", "刚刚", {}))
-  with_fields(v, [("messages", Json::array(ms))])
-}
-
-///|
-test "a run of other chats' agents' messages: one pill; tapped, the core shows it whole, tapped again folds it" {
-  let calls : Array[Made] = []
-  let open = Ref::new(false)
-  let epoch = Ref::new(0)
-  let t = edited_core(
-    calls,
-    "chat",
-    fn(name, v) { if name == "chat" { with_letters(v, open.val) } else { v } },
-    answer=fn(name) {
-      // (the core folds or opens it: the chat's view again)
-      if name == "chat.letters" {
-        open.val = !open.val
-        epoch.val += 1
-      }
-      Json::object({})
     },
-    epoch~,
-  )
-  let pill = "「BFT 备份尺寸分析」发给 Claude · 3 条"
-  for _ in 0..<8 {
-    if t.find(pill) is Some(_) {
-      break
-    }
-    t.wheel(195.0, 400.0, 300.0)
   }
-  assert_true(t.find(pill) is Some(_), msg="the run's line")
-  assert_true(t.find("补充一点") is None, msg="the run folded")
-  assert_true(t.find("备份改好了") is Some(_))
-  t.tap_text(pill)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_fixture("chat-info")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  // the chat's sheet open over it: a row for them, saying how many; none of them in the chat
+  assert_true(t.find("agent 往来") is Some(_), msg="its row in the chat's sheet")
+  assert_true(t.find("4 条") is Some(_))
+  assert_true(t.find("补充一点") is None, msg="not in the chat")
+  t.tap_text("agent 往来")
+  // (the chat's sheet goes, theirs comes up, to where it rests)
+  t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
+  assert_true(asked.length() > 0)
+  let of_chat : Map[String, Json] = { "station": Json::string("ws1/st1"), "thread": Json::number(7.0) }
+  assert_eq(asked[0], of_chat)
+  // the chats written with, a row each: how many and when, the last letter in brief; none of the letters yet
+  assert_true(t.find("BFT 备份尺寸分析") is Some(_))
+  assert_true(t.find("3 条 · 5 分钟前") is Some(_))
+  assert_true(t.find("1 条 · 4 分钟前") is Some(_), msg="the one written with last, first")
+  assert_true(t.find("补充一点：系统自带的") is Some(_))
+  assert_true(t.find("用户让精简备份") is None, msg="its letters once opened")
+  t.tap_text("BFT 备份尺寸分析")
   t.frame()
-  let asked = calls.filter(fn(m) { m.name == "chat.letters" })
-  assert_eq(asked.length(), 1)
-  assert_eq(asked[0].params, { "station": "ws1/st1", "thread": 7, "seq": 200, "open": true })
-  // its messages come in under it, in their turn
-  t.run_for(row_turn_ms + turn_calm_ms)
-  assert_true(t.find(pill) is Some(_))
-  assert_true(t.find("补充一点") is Some(_), msg="the run shown whole")
-  t.tap_text(pill)
-  t.frame()
-  let asked = calls.filter(fn(m) { m.name == "chat.letters" })
-  assert_eq(asked.length(), 2)
-  assert_eq(asked[1].params, { "station": "ws1/st1", "thread": 7, "seq": 200, "open": false })
-  t.run_for(row_turn_ms + turn_calm_ms)
-  assert_true(t.find("补充一点") is None, msg="folded again")
+  assert_true(t.find("用户让精简备份") is Some(_), msg="coming in")
+  assert_true(t.find("已替换") is Some(_), msg="going out")
+  assert_true(t.find("「BFT 备份尺寸分析」的 agent") is Some(_))
 }

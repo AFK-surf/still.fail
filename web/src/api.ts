@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { core, useCall, useTopic, useTopicSelect, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatLettersView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { ChatPublished, PublishPreview } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
@@ -183,6 +183,11 @@ export function useChat(station: string, of: { thread: number } | { session: str
 /** A chat's services and background jobs as its pages show them (the same `of` as its `useChat`). */
 export function useChatJobs(station: string, of: { thread: number } | { session: string }): TopicState<ChatJobsView> {
   return useTopic<ChatJobsView>({ topic: "chatJobs", station, ...of });
+}
+
+/** What a chat's agents and other chats' wrote each other (`chatLetters`, Letters.tsx). */
+export function useChatLetters(station: string, thread: number): TopicState<ChatLettersView> {
+  return useTopic<ChatLettersView>({ topic: "chatLetters", station, thread });
 }
 
 /** A job as it is now (null: none). */
@@ -565,9 +570,6 @@ export function useChatSend(address?: string) {
     place: (thread: number, seq: number | null, offset: number | null = null) => call("chat.place", { station, thread, seq, offset }),
     /** The chat's window about one of its messages (`chat.around`): a page on either side, read where not held. */
     around: (thread: number, seq: number) => call("chat.around", { station, thread, seq }),
-    /** The run of other chats' agents' messages with `seq` in it shown whole (`open`), or folded into its line again
-     *  (`chat.letters`; the core's `letters`). */
-    letters: (thread: number, seq: number, open: boolean) => call("chat.letters", { station, thread, seq, open }),
     /** The chat's messages that have every word of `query` (`chat.find`), oldest first; `bring`: what is not on the
      *  device is read first. */
     find: (thread: number, query: string, bring = false) => call("chat.find", { station, thread, query, bring }) as Promise<ChatFound>,

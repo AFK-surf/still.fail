@@ -40,6 +40,8 @@ export function merge(entries: unknown[]): Record<string, unknown>[] {
       if (typeof entry.runtime === "string") message.runtime = entry.runtime;
       if (Array.isArray(entry.options) && entry.options.length > 0) message.options = entry.options;
       if (isObject(entry.card)) message.card = entry.card;
+      // What two chats' agents wrote each other (views.ts isLetter): which way, and the other chat.
+      if (isObject(entry.letter)) message.letter = entry.letter;
       messages.set(n, message);
     } else if (kind === "edit") {
       const target = entry.target;

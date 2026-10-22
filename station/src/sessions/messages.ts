@@ -52,6 +52,16 @@ export function sender(hub: Hub, key: string): [string, string | null] {
   return [shown, hub.link(key) ?? null];
 }
 
+/// A chat as a letter to it is kept (keptOut): as its session's messages are headed (sender), or by `named` when that
+/// session is gone.
+function chatOf(hub: Hub, key: string, named: string): [string, string | null] {
+  try {
+    return sender(hub, key);
+  } catch {
+    return [named, null];
+  }
+}
+
 /// session_send from session `key`: to a chat of its workspace (or one shared with it to write in), on this station or
 /// another of that workspace (docs/multi-workspace.md).
 export async function sessionSend(hub: Hub, key: string, args: Args): Promise<string> {
@@ -86,6 +96,9 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
       throw new Error(`not sent to ${to}: ${old}. If it timed out, it may have arrived: ask before sending it again`);
     }
     const place = typeof answer?.thread === "string" ? answer.thread : "its chat";
+    // Named as that station says (one from before says only where).
+    const named_ = typeof answer?.title === "string" && answer.title.trim() !== "" ? answer.title : target;
+    keptOut(hub, key, named_, typeof answer?.link === "string" && answer.link !== "" ? answer.link : to, text);
     return `Sent to ${target} on station ${there} (${place}). Its agent answers with session_send to your chat.`;
   }
   const what = named(hub, to, scopeOf(hub, key), true);
@@ -109,6 +122,8 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
   // Kept in the uploads of the session the chat's files are read from (its first agent's).
   const files = paths.length > 0 ? await attach(hub, key, paths, targets[0] ?? key) : [];
   const place = await postFrom(hub, thread, key, title, link, text, targets, files);
+  const [theirTitle, theirLink] = chatOf(hub, thread.thread.home ?? targets[0]!, to);
+  keptOut(hub, key, theirTitle, theirLink, text);
   return `Sent to ${place} (agents there: ${targets.join(", ")}). They answer with session_send to your chat.`;
 }
 
@@ -132,29 +147,51 @@ export async function fromPeer(hub: Hub, peer: string, request: Json, ws: string
   const opened = request?.opened === true && opener !== null && opener.parentStation === peer && opener.parent === from;
   // Not a session of this station: by its station and key, so it is never taken for one.
   const place = await postFrom(hub, thread, `${peer}/${from}`, title, link, text, targets, files, opened);
-  return { thread: place };
+  // How the sender's chat keeps it: this chat by its title and link.
+  const [here, at] = chatOf(hub, thread.thread.home ?? target, target);
+  return { thread: place, title: here, link: at };
 }
 
-/// Posts `text` from `author` in `thread`, headed with where it comes from (as its opening when `opened`), with `given`
-/// files, and hands it to `targets`. Its address.
+/// Records `text` from `author` in `thread`, headed with where it comes from, with `given` files, and hands it to
+/// `targets`. A letter (rows.ts Letter) is kept apart from what is said there and posted nowhere, not even in a Slack
+/// thread: only the first message of a chat an agent opened (`opened`) is said in it. Its address.
 export async function postFrom(hub: Hub, thread: SessionThread, author: string, title: string, link: string | null, text: string, targets: string[], given: Attachment[] = [], opened = false): Promise<string> {
   const row = thread.thread;
   let said = `${header(row.surface, title, link, opened)}\n\n${text}`;
   const files = await keep(given, thumbsDir(hub.config().dataDir));
   const here = { channel: row.channel, threadTs: row.threadTs };
-  const chat = hub.chat(thread.connect);
   let ts: string;
-  try {
-    ts = await chat.post(here, said, files);
-  } catch (error) {
-    // A Slack app that cannot upload: a link to the files in still.fail instead (as chat_post does).
-    const page = targets.length > 0 ? hub.link(targets[0]!) : undefined;
-    if (files.length === 0 || page === undefined || !String((error as Error).message).includes("missing_scope")) throw error;
-    const [sent, kept] = slackWithFiles(said, files, page);
-    ts = await chat.post(here, sent, []);
-    said = kept;
+  if (!opened) {
+    ts = hub.nextTs();
+  } else {
+    const chat = hub.chat(thread.connect);
+    try {
+      ts = await chat.post(here, said, files);
+    } catch (error) {
+      // A Slack app that cannot upload: a link to the files in still.fail instead (as chat_post does).
+      const page = targets.length > 0 ? hub.link(targets[0]!) : undefined;
+      if (files.length === 0 || page === undefined || !String((error as Error).message).includes("missing_scope")) throw error;
+      const [sent, kept] = slackWithFiles(said, files, page);
+      ts = await chat.post(here, sent, []);
+      said = kept;
+    }
   }
-  const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files });
+  const letter = opened ? {} : { letter: { way: "in" as const, title, link } };
+  const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files, ...letter });
   hub.deliver(row.id, n, targets.filter((t) => t !== author), said);
   return threadAddress(row.channel, row.threadTs);
+}
+
+/// What session `key` wrote another chat (named `title`, at `link`), kept in its own chat as a letter going out
+/// (rows.ts Letter): apart from what is said there, delivered to no one. A session without a chat keeps none.
+function keptOut(hub: Hub, key: string, title: string, link: string | null, text: string): void {
+  let own: SessionThread;
+  try {
+    own = sessionThreadOf(hub, key);
+  } catch {
+    return;
+  }
+  const row = own.thread;
+  const said = `${tr(stationLang(), "station.session.to", { to: chatNamed(row.surface, title, link) })}\n\n${text}`;
+  hub.store.insertMessage({ thread: row.id, ts: hub.nextTs(), authorKind: "agent", author: key, text: said, letter: { way: "out", title, link } });
 }

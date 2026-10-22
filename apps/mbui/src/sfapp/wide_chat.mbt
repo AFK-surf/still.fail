@@ -83,7 +83,8 @@ fn wide_center(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 /// The chat's bar (ChatPage.tsx header): the title, its station while no agent is in it, its people, its agents (each
-/// its card); at its end 归档 while nothing is left in it, 服务和后台任务 while it has some, 对话信息.
+/// its card); at its end 归档 while nothing is left in it, 服务和后台任务 while it has some, "…" (对话信息: the rest of what is
+/// done with the chat, agent 往来 among it, as the web's).
 fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?) -> Unit {
   let t = @sf.theme()
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
@@ -153,7 +154,7 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
             dui.jobs_all = false
             open_sheet(c, JobsOf(r))
           }
-          if view.thread is Some(_) && icon_button(c, "chat-more", "info") {
+          if view.thread is Some(_) && icon_button(c, "chat-more", "more") {
             open_sheet(c, Info(r))
           }
         })

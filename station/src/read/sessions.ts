@@ -223,6 +223,8 @@ function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.
   v.unread = t.unread;
   v.people = people(s, t.people);
   v.firstText = t.firstText;
+  // What its agents and other chats' wrote each other (store/rows.ts Letter), shown apart from it: how many.
+  if (t.letters > 0) v.letters = t.letters;
   // A Slack channel's name, as far as known.
   v.channelName = t.thread.surface === store.STILLFAIL_SURFACE ? null : knownChannel(s, t.sessions.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null, t.thread.channel);
   v.creator = creator(s, t.thread.createdBy);
