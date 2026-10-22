@@ -173,6 +173,11 @@ test "profiles, connects, the vault: their lists" {
   let t = settings_tester("profiles")
   assert_true(t.find("Claude 主账号") is Some(_))
   assert_true(t.find("Claude 订阅") is Some(_))
+  // its allowance a line of its own under its words, at the row's start (Profiles.kt)
+  let (nx, ny) = t.find("Claude 主账号").unwrap()
+  let (qx, qy) = t.find("62%").unwrap()
+  assert_true(qy > ny + 20.0)
+  assert_true(qx < nx)
   let t2 = settings_tester("connects")
   assert_true(t2.find("星火助手 · 星火") is Some(_))
   assert_true(t2.find("值班机器人") is Some(_))
@@ -253,3 +258,28 @@ test "settings: the account's page has the accounts on this device on its one ca
 ///|
 /// A row of a settings card, at most (its two lines and its 12 above and below).
 let row_h : Double = 64.0
+
+///|
+test "settings: a station's network not open yet (stationNet's null) waits as grey bars, no arrows over nothing" {
+  reset()
+  let base = fixture("settings")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "stationNet" {
+        { value: Some(Json::null()), error: None, version: 1 }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  open_setting("stations")
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("Studio") is Some(_))
+  // (the line it would be is there, unseen, keeping its room)
+  let shown = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }).length() > 0 }
+  assert_false(shown("↑"))
+  assert_false(shown("↓"))
+}

@@ -29,7 +29,7 @@ fn access_label(kind : String) -> String {
 ///|
 /// A profile's allowance in a line (Parts.kt QuotaChips): a box per window, what is left in it, its mark when there is
 /// more than one.
-fn quota_chips(c : @ui.Ctx, q : Json?) -> Unit {
+fn quota_chips(c : @ui.Ctx, q : Json?, corner? : Double = fill_chip_radius) -> Unit {
   if text(q, "state") != "ok" {
     return
   }
@@ -47,6 +47,7 @@ fn quota_chips(c : @ui.Ctx, q : Json?) -> Unit {
         text(wv, "level"),
         if windows.length() == 1 { "" } else { text(wv, "mark") },
         left.to_string() + "%",
+        corner~,
       )
     }
   })
@@ -250,11 +251,16 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                     )
                   }
                   c.text(line, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+                  // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
+                  if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
+                    // (in its row's corner: concentric with it, the row's 12 in)
+                    c.box(style=quota_line, fn() {
+                      quota_chips(c, field(p, "quota"), corner=@ui.concentric(@sf.row_corner, quota_row_inset))
+                    })
+                    |> ignore
+                  }
                 })
                 |> ignore
-                if usable {
-                  quota_chips(c, field(p, "quota"))
-                }
                 chevron(c)
               }) {
               // an account on several stations: its own page, each station's part under it
@@ -988,3 +994,12 @@ let models_filter_room : @ui.Style = @ui.style(w=Full, px=S6, pb=S2)
 /// A model named by hand: its field and 添加 beside it, 12 apart, at the rows' words, 8 under them.
 // kept across runs: a value (no field of it changes)
 let models_add_row : @ui.Style = @ui.style(row=true, w=Full, px=S6, pb=S2, gap=S3, align=ACenter)
+
+///|
+/// A grouped profile's allowance, a line under its words (Profiles.kt: padding top 6).
+// kept across runs: a value (no field of it changes)
+let quota_line : @ui.Style = @ui.style(pt=S1_5)
+
+///|
+/// How far a list row's words are in from its edges (list_line's 12).
+let quota_row_inset : Double = 12.0
