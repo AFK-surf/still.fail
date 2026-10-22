@@ -77,7 +77,7 @@ fn ask_again(m : Map[String, Json]) -> (String, Json)? {
 /// The kept run `name`'s text asked again (above): how many answers, how many differ, how many skipped.
 fn text_check(name : String) -> (Int, Int, Int) {
   guard kept_run(name) is Some(run) else {
-    @hostapi.log("TEXTCHECK no kept run \"\{name}\" (src/kitdemo/textrec_runs.mbt)")
+    @hostapi.log("TEXTCHECK no kept run \"\{name}\" (src/kitdemo/gallery/textrec_runs.mbt)")
     return (0, 1, 0)
   }
   let mut asked = 0
@@ -122,7 +122,7 @@ let text_checked : Ref[Bool] = Ref(false)
 
 ///|
 /// MBUI_TEXTCHECK=NAME: the check, then the app's end (its code: whether every answer was the same).
-fn text_check_run(c : @ui.Ctx, name : String) -> Unit {
+pub fn text_check_run(c : @ui.Ctx, name : String) -> Unit {
   if !text_checked.val {
     text_checked.val = true
     let (asked, differ, skipped) = text_check(name)

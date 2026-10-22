@@ -18,15 +18,9 @@ for t in ${TARGETS:-native}; do
   # is kept: a build over the last one's objects (mbui-check.yml's native cache) compiles only the units whose
   # functions changed. clang where there is one, as on macOS (MBC_REAL_CC says otherwise). Without ThinLTO unless
   # MBC_LTO says (its link is 30-40 s a test; main's run has it on: mbui-check.yml).)
-  unset MOON_CC
-  mode=
-  if [ $t = native ]; then
-    mode=--release
-    export MBC_REAL_CC=${MBC_REAL_CC:-$(command -v clang || command -v cc)} MBC_LTO=${MBC_LTO:-0}
-    # (a unit the same in several tests, as most of mbui's, sf's and sfapp's are, compiled once: MBC_STORE)
-    export MBC_STORE=${MBC_STORE:-$A/_build/native/release/mbc-store}
-    PATH="$(python3 "$MBUI_DIR/scripts/mbc.py" shim "$A/_build/mbc-bin"):$PATH"
-  fi
+  mode="--target $t"
+  # (mbui's scripts/env.sh native_tests: the C split by mbui's scripts/mbc.py, units kept by content in MBC_STORE)
+  if [ $t = native ]; then native_tests "$A"; mode=$NATIVE; fi
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
   # side: the flows in packages of their own for it, src/sfreplay/flows/*/)
   pkgs=""
@@ -38,7 +32,7 @@ for t in ${TARGETS:-native}; do
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
     for g in src/sfreplay/flows/*/; do pkgs="$pkgs -p stillfail/sfreplay/flows/$(basename "$g")"; done
   fi
-  moon test --target $t $mode $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+  moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
 done
 exit $code

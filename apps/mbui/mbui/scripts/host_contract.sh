@@ -5,22 +5,22 @@
 #   scripts/host_contract.sh HOST record        kitdemo's controls page run on the host, with test/host/controls.drive's
 #        taps (MBUI_DRIVE) and its tape on the log (MBUI_DRAW_LOG=1 MBUI_TEXT_RECORD=1): out/host/HOST/run.log; made a
 #        Tester's test (scripts/textrec_test.py, as ci_HOST) and run there: every frame the same, or it fails.
-#        NAME=HOST_controls keeps the tape as the one committed (src/kitdemo/textrec_HOST_controls*.mbt)
+#        NAME=HOST_controls keeps the tape as the one committed (src/kitdemo/gallery/textrec_HOST_controls*.mbt)
 #   scripts/host_contract.sh HOST text [NAME]   the kept run NAME's text (HOST_controls by default; mac: mini1_controls) asked of the host's
-#        text system again (MBUI_TEXTCHECK, src/kitdemo/textcheck.mbt): each answer the same, or it fails
+#        text system again (MBUI_TEXTCHECK, src/kitdemo/gallery/textcheck.mbt): each answer the same, or it fails
 #   scripts/host_contract.sh HOST marks         (mac, ios, android) test/marks/marks.json drawn by the host onto
-#        test/marks/base.png (@hostapi.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/markscheck.mbt), twice: the two PNGs
+#        test/marks/base.png (@hostapi.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/gallery/markscheck.mbt), twice: the two PNGs
 #        the same to the byte (out/host/HOST/marks.png), and the same as goldens/marks/HOST.png, on what drew it
 #        (goldens/marks/HOST.txt's checked lines: the system's build, its fonts; out/host/HOST/marks.txt this run's)
 #   scripts/host_contract.sh HOST runner        (mac, windows, android) the run's runner says it has done what was
 #        asked (a file in the directory the run names, src/host/done_watch.h): the run told of each as it comes, by the
 #        host's system: `done ok` goes on, `done bad` fails saying why (scripts/done_runner.py the runner)
 #   scripts/host_contract.sh HOST views         a native view placed between pixels (kitdemo's MBUI_VIEWCHECK,
-#        src/kitdemo/viewcheck.mbt): where the host put it (its VIEWAT line, device pixels) is where the app told it
+#        src/kitdemo/gallery/viewcheck.mbt): where the host put it (its VIEWAT line, device pixels) is where the app told it
 #        to (VIEWTOLD), on whole device pixels, and as round, or it fails; on Android the round page pictured too, its
 #        four corners the canvas's ground outside the round and the page inside
 #   scripts/host_contract.sh HOST site          a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK,
-#        src/kitdemo/sitecheck.mbt): a script and its answer, the host's cookies (where it keeps them), an event
+#        src/kitdemo/gallery/sitecheck.mbt): a script and its answer, the host's cookies (where it keeps them), an event
 #        stream's events as they are sent, the page grabbed; each step begun by the page's last, the run ending itself
 #   scripts/host_contract.sh HOST kinds         the kinds of what the host tells done (outside) named as
 #        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/outside_kinds.py)
@@ -258,12 +258,12 @@ case $CMD in
     echo "the run: $(grep -c DRAWHASH $O/run.log) frames, $(grep -c 'INPUT ' $O/run.log) inputs, $(grep -c TEXTREC $O/run.log) text answers"
     "$PY" scripts/textrec_test.py $KEEP $O/run.log $NAME $PAGE - - $PLATFORM
     set -o pipefail
-    { moon test --target js src/kitdemo/textrec_${NAME}_wbtest.mbt 2>&1 || true; } | tr -d '\r' | grep -v '^TDUMP' | tail -20 | tee $O/test.txt
+    { moon_test_native src/kitdemo/gallery/textrec_${NAME}_wbtest.mbt 2>&1 || true; } | tr -d '\r' | grep -v '^TDUMP' | tail -20 | tee $O/test.txt
     if ! grep -q "passed: 1, failed: 0" $O/test.txt; then
       # the first frame as the host drew it (DRAWDUMP) beside a Tester's, over the run cut at that frame: where they part
       awk '/TEXTREC /{print; next} !d && (/INPUT / || /ENV \{/){print} !d && /DRAWHASH /{print; d=1}' $O/run.log > $O/first.log
       "$PY" scripts/textrec_test.py $O/first.log ${NAME}_first $PAGE - - $PLATFORM >/dev/null
-      { moon test --target js src/kitdemo/textrec_${NAME}_first_wbtest.mbt 2>&1 || true; } | tr -d '\r' | sed -n 's/^TDUMP //p' > $O/tester-frame1.txt
+      { moon_test_native src/kitdemo/gallery/textrec_${NAME}_first_wbtest.mbt 2>&1 || true; } | tr -d '\r' | sed -n 's/^TDUMP //p' > $O/tester-frame1.txt
       tr -d '\r' < $O/run.log | sed -n 's/^.*DRAWDUMP //p' > $O/host-frame1.txt
       echo "the first frame, the host's (<) and the Tester's (>):"
       diff $O/host-frame1.txt $O/tester-frame1.txt | head -60 || true
@@ -272,14 +272,14 @@ case $CMD in
     fi
     echo "host contract ($H): the Tester drew every frame the host drew" ;;
   text)
-    # (macOS: the run Mini1 kept, src/kitdemo/textrec_mini1_controls.mbt; the other hosts' are their CI's)
+    # (macOS: the run Mini1 kept, src/kitdemo/gallery/textrec_mini1_controls.mbt; the other hosts' are their CI's)
     DEF=${H}_controls; [ $H = mac ] && DEF=mini1_controls
     NAME=${3:-$DEF}
     code=0
     run "MBUI_TEXTCHECK=$NAME" $O/text.log || code=$?
     tr -d '\r' < $O/text.log | grep -a "TEXTCHECK" | head -40
     if [ $code != 0 ] || ! grep -aq "TEXTCHECK done $NAME: [1-9][0-9]* answers, 0 differ" $O/text.log; then
-      echo "text contract ($H): the host's text is not what $NAME kept. 重录：scripts/host_contract.sh $H build && NAME=$NAME scripts/host_contract.sh $H record（或从 CI 的 host-$H 产物：python3 scripts/textrec_test.py --keep run.log $NAME $PAGE - - $PLATFORM），提交 src/kitdemo/textrec_${NAME}*.mbt、textrec_runs.txt 与 textrec_runs.mbt"
+      echo "text contract ($H): the host's text is not what $NAME kept. 重录：scripts/host_contract.sh $H build && NAME=$NAME scripts/host_contract.sh $H record（或从 CI 的 host-$H 产物：python3 scripts/textrec_test.py --keep run.log $NAME $PAGE - - $PLATFORM），提交 src/kitdemo/gallery/textrec_${NAME}*.mbt、textrec_runs.txt 与 textrec_runs.mbt"
       exit 1
     fi
     echo "text contract ($H): every answer $NAME kept is the host's" ;;
@@ -323,7 +323,7 @@ case $CMD in
       echo "runner contract ($H): the runner's files were not told as they came ($O/done.log)"; tail -20 $O/done.log; exit 1
     fi ;;
   views)
-    # a native view placed between pixels (kitdemo's MBUI_VIEWCHECK, src/kitdemo/viewcheck.mbt): where the host put it
+    # a native view placed between pixels (kitdemo's MBUI_VIEWCHECK, src/kitdemo/gallery/viewcheck.mbt): where the host put it
     # (VIEWAT, in device pixels) is where the app told it to (VIEWTOLD), on whole device pixels: its edges the hole's,
     # none half covered (else that row shows what is under the canvas, a line along a video's picture)
     run "MBUI_DRAW_LOG=1 MBUI_VIEWCHECK=1" $O/views.log || true
@@ -420,7 +420,7 @@ PYEOF
     fi
     ;;
   site)
-    # a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK, src/kitdemo/sitecheck.mbt), each step
+    # a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK, src/kitdemo/gallery/sitecheck.mbt), each step
     # begun by what the page said before it: a script and its answer, the cookies (where the host keeps them), an event
     # stream's events as they are sent (the next sent once the page has the first), what the page shows grabbed, a
     # page of HTML the same; the run ends itself (SITECHECK done)

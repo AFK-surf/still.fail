@@ -1,6 +1,5 @@
 ///|
-/// (the draw lists are printed on the JavaScript target only: scripts/android-ref.sh runs it there)
+/// The process's environment (scripts/android-ref.sh: MBUI_ANDROID_REF, MBUI_ANDROID_WINDOW).
 fn android_ref_env(name : String) -> String {
-  ignore(name)
-  ""
+  @env.get_env_var(name).unwrap_or("")
 }

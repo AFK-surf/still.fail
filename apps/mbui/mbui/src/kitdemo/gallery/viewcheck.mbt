@@ -27,7 +27,7 @@ let view_check_round : Double = 24.0
 let view_check_placed : Ref[Bool] = Ref(false)
 
 ///|
-fn view_check_run(c : @ui.Ctx) -> Unit {
+pub fn view_check_run(c : @ui.Ctx) -> Unit {
   let v = match view_check_view.val {
     Some(v) => v
     None => {

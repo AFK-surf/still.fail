@@ -3,7 +3,8 @@
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
-moon test --target js -p mbui/flex 2>&1 | grep -v '^Warning' > out/flextest.log
+mkdir -p out
+moon_test_native -p mbui/flex 2>&1 | grep -v '^Warning' > out/flextest.log
 python3 - <<'PY'
 import re, collections
 log = open("out/flextest.log").read()

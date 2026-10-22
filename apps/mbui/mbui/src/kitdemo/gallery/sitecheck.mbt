@@ -137,7 +137,7 @@ fn site_check_page_open() -> Unit {
 }
 
 ///|
-fn site_check_run(c : @ui.Ctx) -> Unit {
+pub fn site_check_run(c : @ui.Ctx) -> Unit {
   let v = match site_check_view.val {
     Some(v) => v
     None => {
