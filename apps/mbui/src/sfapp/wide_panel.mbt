@@ -274,7 +274,7 @@ fn side_jobs(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     120.0,
     fn(i) {
       if i == 0 {
-        c.box(style=side_jobs_list, fn() { job_groups(c, r, Some(view), jobs, pick=Some(fn(id) { wide.job_picked = id })) })
+        c.box(style=side_jobs_list, fn() { job_groups(c, r, view, jobs, pick=Some(fn(id) { wide.job_picked = id })) })
         |> ignore
       } else {
         match picked {
@@ -535,7 +535,7 @@ fn jobs_rows(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     job_groups(
       c,
       r,
-      Some(view),
+      view,
       shown,
       pick=Some(fn(id) {
         wide.jobs_open = false
