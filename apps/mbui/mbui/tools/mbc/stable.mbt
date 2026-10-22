@@ -416,6 +416,26 @@ fn split_stable(
     }
     k
   }
+  // a big package in pieces by source file (its #line's), as C is compiled: an edit moves the lines of the functions
+  // after it in its file, and only that file's piece changes. A file bigger than a unit (a generic one's instances:
+  // core's Map for each of the program's types) in pieces of its own by its functions' names
+  let file_key = rest.mapi(fn(k, f) {
+    match line_file(f.text) {
+      Some(path) => {
+        let mut s = path.length()
+        while s > 0 && path[s - 1] != b'/' && path[s - 1] != b'\\' {
+          s -= 1
+        }
+        sub(path, s, path.length())
+      }
+      None => names.get_or_default(f.name, f.name)
+    }
+  })
+  let file_sizes : Map[Bytes, Int] = Map::new()
+  for k, f in rest {
+    let fk = cat([pk[k], b"\x1f", file_key[k]])
+    file_sizes[fk] = file_sizes.get_or_default(fk, 0) + clen(f.text)
+  }
   // each function's unit: unit: [(its name as renamed, its index in rest)] (renamed in its unit's job, below)
   let units : Map[Bytes, Array[(Bytes, Int)]] = Map::new()
   for k, f in rest {
@@ -424,20 +444,9 @@ fn split_stable(
     let unit = if sizes[p] < target / 2 {
       cat([b"s", utf8((crc32(p) % nsmall.reinterpret_as_uint()).to_string())])
     } else {
-      // a big package in pieces by source file (its #line's), as C is compiled: an edit moves the lines of the
-      // functions after it in its file, and only that file's piece changes
       let pieces = pieces_of(sizes[p])
-      let key = match line_file(f.text) {
-        Some(path) => {
-          let mut s = path.length()
-          while s > 0 && path[s - 1] != b'/' && path[s - 1] != b'\\' {
-            s -= 1
-          }
-          sub(path, s, path.length())
-        }
-        None => new
-      }
-      if pieces > 1 {
+      let key = file_key[k]
+      let base = if pieces > 1 {
         cat([
           unit_label(p),
           b"_",
@@ -445,6 +454,17 @@ fn split_stable(
         ])
       } else {
         unit_label(p)
+      }
+      let fsize = file_sizes.get_or_default(cat([p, b"\x1f", key]), 0)
+      if fsize > target {
+        let sub = pieces_of(fsize)
+        cat([
+          base,
+          b"_",
+          utf8((crc32(new) % sub.reinterpret_as_uint()).to_string()),
+        ])
+      } else {
+        base
       }
     }
     match units.get(unit) {
