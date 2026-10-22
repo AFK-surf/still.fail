@@ -36,9 +36,6 @@ test "48-share" {
     f.tap("icon:more")
     f.run_to(@kit.sheet_rest("dv-sheet"))
     f.tap("分享")
-    // the file read through the core (said, not left to the trace the script was written over: one the app outgrew
-    // writes no answers after where it parted)
-    f.answered("drive.read", 1)
     f.run_to(@kit.sheet_rest("dv-sheet"))
     // the file, read through the core, handed to the system's share sheet as it is
     let shared = f.t.shared_out()
