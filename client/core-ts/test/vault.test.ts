@@ -119,6 +119,7 @@ function fakeStation() {
   const plainGrants: unknown[] = [];
   const uses: unknown[] = [];
   const plainLock = { on: false };
+  const plainLasts: { lasts?: string; at?: number } = {};
   const reply = (req: HttpRequest): unknown => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
     if (!path.startsWith("/vault/")) return undefined;
@@ -128,7 +129,10 @@ function fakeStation() {
     const shown = ({ fields: _, ...rest }: any) => rest;
     switch (key) {
       case "GET /vault/plain":
-        return { items: [...plain.values()].map(shown), locked: plainLock.on };
+        return { items: [...plain.values()].map(shown), locked: plainLock.on, ...(plainLasts.lasts ? { lasts: plainLasts.lasts, lastsAt: plainLasts.at } : {}) };
+      case "PUT /vault/plain/lasts":
+        Object.assign(plainLasts, body);
+        return { ok: true };
       case "GET /vault/plain/item":
         return { item: plain.get(new URLSearchParams(query).get("id") ?? "") };
       case "PUT /vault/plain": {
@@ -192,7 +196,7 @@ function fakeStation() {
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, locked, plain, plainGrants, uses, plainLock, reply };
+  return { vaults, items, boxes, requests, grants, denials, locked, plain, plainGrants, plainLasts, uses, plainLock, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
@@ -422,6 +426,21 @@ test("vault calls: an agent's request approved (sealed to its keeper, signed) or
   const chat = r.st.grants[1] as any;
   assert.deepEqual([chat.request, chat.scope, chat.exp - chat.at], ["r_3", "chat", 30 * 86400]);
   await fails(r.ask("vault.approve", { request: "r_4", scope: "chat" }), "vault_scope");
+
+  // The vault's own longest grant, for its items that say none: a new version its owner signs.
+  assert.equal(vaults().vaults[0].lasts, "chat");
+  await r.ask("vault.setLasts", { vault: id, lasts: "once" });
+  const signed = r.st.vaults.get(id)! as any;
+  assert.ok(signedOk(signed, TAG.vault));
+  assert.deepEqual([signed.lasts, signed.seq], ["once", 1]);
+  r.st.requests.push(request("r_5"));
+  r.push("vault-request", request("r_5"));
+  await r.host.time.pass(500);
+  r.take();
+  assert.equal(vaults().vaults[0].lasts, "once");
+  assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.lasts]), [["r_4", "hour"], ["r_5", "once"]], "an item's own goes first");
+  await fails(r.ask("vault.approve", { request: "r_5", scope: "hour" }), "vault_scope");
+  await fails(r.ask("vault.setLasts", { vault: id, lasts: "week" }), "invalid_params");
   r.core.close();
 });
 
@@ -503,6 +522,10 @@ test("the plain library: no security mode, items kept on the station as they are
   r.st.requests.push({ id: "r_p", ws: "ws", vault: "plain", item: put.id, session: "ember:s", chat: "", mode: "proxy", reason: "ci", hosts: ["api.github.com"], box: "", at: 1000, status: "pending" } as Request);
   await r.ask("vault.approve", { request: "r_p", scope: "once" });
   assert.deepEqual(r.st.plainGrants, [{ request: "r_p", scope: "once" }]);
+  // The person's longest grant, told to the station keeping the library.
+  await r.ask("vault.setLasts", { vault: "plain", lasts: "hour" });
+  assert.equal(r.st.plainLasts.lasts, "hour");
+  assert.equal(vaults().vaults[0].lasts, "hour");
   assert.deepEqual(r.st.grants, [], "no signed grant");
   r.st.uses.push({ item: put.id, at: 1000, session: "ember:s", chatTitle: "修 CI", mode: "proxy", command: "gh pr list", hosts: ["api.github.com"], denied: false });
   const used = await r.watch(3, { topic: "vaultUses", workspace: "ws", vault: "plain", item: put.id });

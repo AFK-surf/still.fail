@@ -17,7 +17,7 @@ import { AddKinds } from "../VaultAdd.tsx";
 import { stationBase } from "../station.tsx";
 import { VaultChoices } from "../VaultApproval.tsx";
 import {
-  ITEM_SECTIONS, KINDS, SCOPES, blankForm, copySecret, itemPath, lastsName, listLine, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemPath, lastsChoice, lastsName, listLine, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -174,6 +174,7 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
           </div>
         )}
       </div>
+      {mine && <Lasts entry={entry} v={mine} />}
       {!plain && (view.plainLeft ?? 0) > 0 && <Migrate entry={entry} n={view.plainLeft!} />}
       <ProfileAccounts entry={entry} />
       {view.vaults.length === 0 && !plain && (
@@ -200,6 +201,22 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
       </Dialog>
       {editing && mine && <Editor workspace={entry.id} vault={mine.id} first={{ ...blankForm(), kind: editing }} id={null} plain={plain} kinds={false} onClose={() => setEditing(null)} />}
     </>
+  );
+}
+
+/** The longest an agent's request for the person's secrets is approved for, where a secret does not say its own. */
+function Lasts({ entry, v }: { entry: WorkspaceEntry; v: VaultRow }) {
+  const run = useVaultCall();
+  const setting = useDoing("vault.setLasts", { workspace: entry.id, vault: v.id });
+  const set = (lasts: string) => void run("vault.setLasts", { workspace: entry.id, vault: v.id, lasts }, t("web-pages.vault.lasts.what"));
+  return (
+    <div className={`${pagesCss.card} ${css.lead}`}>
+      <div className={css.state}>{t("web-pages.vault.lasts.title")}</div>
+      <div className={css.actions}>
+        <Segmented label={t("web-pages.vault.lasts.title")} value={v.lasts ?? "chat"} onChange={set} options={SCOPES.map((s) => ({ value: s, label: lastsName(s), disabled: setting }))} />
+      </div>
+      <p className={css.sub}>{t("web-pages.vault.lasts.note")}</p>
+    </div>
   );
 }
 
@@ -501,7 +518,7 @@ export function Editor({ workspace, vault, first, id, plain = false, kinds = tru
             {f.kind !== "ssh_key" && f.mode === "proxy" && input("hosts", t("web-pages.vault.editor.hosts"), { placeholder: t("web-pages.vault.editor.hostsPlaceholder"), error: problem === "hosts" && f.hosts !== "" ? t("web-pages.vault.editor.hostsNeeded") : undefined })}
             {f.kind !== "ssh_key" && input("env", t("web-pages.vault.editor.env"), { mono: true, placeholder: t("web-pages.vault.editor.envPlaceholder") })}
             <Field label={t("web-pages.vault.editor.lasts")}>
-              <div><Segmented label={t("web-pages.vault.editor.lasts")} value={f.lasts} onChange={(lasts) => change({ lasts })} options={SCOPES.map((s) => ({ value: s, label: lastsName(s) }))} /></div>
+              <div><Segmented label={t("web-pages.vault.editor.lasts")} value={f.lasts} onChange={(lasts) => change({ lasts })} options={LASTS.map((l) => ({ value: l, label: lastsChoice(l) }))} /></div>
             </Field>
             <p className={css.note}>{t("web-pages.vault.editor.lastsNote")}</p>
           </>}

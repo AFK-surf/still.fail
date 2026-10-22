@@ -166,6 +166,9 @@ private fun kindName(kind: String?) = if (kind in KINDS) t("android-settings.vau
 private fun kindIcon(kind: String?): ImageVector = when (kind) { "ssh_key" -> Icons.Server; "login" -> Icons.User; else -> Icons.Key }
 /** The longest an item is granted for, in a word: 仅一次, 1 小时, 直到对话归档. */
 private fun lastsName(lasts: String?) = t("android-settings.vault.lasts.${lasts?.takeIf { it in SCOPES } ?: "chat"}")
+/** An item's longest grant as its editor offers it: its vault's (`default`, the library's setting), or its own. */
+private val LASTS = listOf("default") + SCOPES
+private fun lastsChoice(l: String) = if (l == "default") t("android-settings.vault.lasts.default") else lastsName(l)
 private fun modeName(mode: String) = if (mode in setOf("proxy", "env", "ssh")) t("android-settings.vault.mode.$mode") else mode
 private fun fieldName(field: String) = when (field) {
     "value" -> t("android-settings.vault.value")
@@ -330,6 +333,7 @@ private fun Library(ws: String, view: VaultsView) {
         view.requests.forEach { r -> RequestCard(ws, view, r) }
     }
     LibraryState(plain)
+    view.vaults.firstOrNull { it.mine }?.let { DefaultLasts(ws, it) }
     val left = view.plainLeft?.toInt() ?: 0
     if (!plain && left > 0) PlainLeft(ws, left)
     ProfileAccounts(ws)
@@ -483,6 +487,23 @@ private fun LibraryState(plain: Boolean) {
             }
             if (plain) Text(t("web-pages.vault.lib.turnOn"), fontSize = 15.sp, color = C.link, maxLines = 1)
             else IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+        }
+    }
+}
+
+/** The longest an agent's request for the viewer's secrets is approved for, where a secret says none (`vault.setLasts`). */
+@Composable
+private fun DefaultLasts(ws: String, v: VaultRow) {
+    val app = LocalApp.current
+    val now = SCOPES.indexOf(v.lasts).takeIf { it >= 0 } ?: SCOPES.lastIndex
+    val setting = app.isDoing("vault.setLasts", "workspace" to ws, "vault" to v.id)
+    SectionHeader(t("android-settings.vault.lasts.title"), start = 24.dp)
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Seg(SCOPES.map(::lastsName), now, { i ->
+                if (!setting && i != now) app.vaultAct(t("android-settings.vault.lasts.what")) { app.vaultCall(ws, "setLasts") { put("vault", v.id); put("lasts", SCOPES[i]) } }
+            }, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
+            Text(t("android-settings.vault.lasts.note"), fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
         }
     }
 }
@@ -730,7 +751,7 @@ fun VaultItemScreen(current: WorkspaceEntry, vault: String, item: String) {
                     else {
                         Fact(t("web-pages.vault.how"), row.modes.joinToString("、") { howLine(it, row.hosts) })
                         row.env?.ifEmpty { null }?.let { Fact(t("android-settings.vault.env"), it, mono = true) }
-                        Fact(t("android-settings.vault.lasts"), lastsName(row.lasts))
+                        Fact(t("android-settings.vault.lasts"), row.lasts?.let(::lastsName) ?: t("android-settings.vault.lasts.following", "lasts" to lastsName(v.lasts)))
                     }
                 }
             }
@@ -841,7 +862,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
     var mode by remember { mutableStateOf(editing?.item?.modes?.firstOrNull { it == "proxy" || it == "env" } ?: "proxy") }
     var hosts by remember { mutableStateOf(editing?.item?.hosts?.joinToString(", ").orEmpty()) }
     var env by remember { mutableStateOf(editing?.item?.env.orEmpty()) }
-    var lasts by remember { mutableIntStateOf(SCOPES.indexOf(editing?.item?.lasts).takeIf { it >= 0 } ?: SCOPES.lastIndex) }
+    var lasts by remember { mutableIntStateOf(LASTS.indexOf(editing?.item?.lasts).takeIf { it >= 0 } ?: 0) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val k = KINDS[kind]
@@ -873,7 +894,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
             putJsonArray("modes") { modes.forEach { add(it) } }
             putJsonArray("hosts") { if (modes == listOf("proxy")) hostList.forEach { add(it) } }
             env.trim().takeIf { it.isNotEmpty() && k != "ssh_key" }?.let { put("env", it) }
-            SCOPES[lasts].takeIf { it != "chat" }?.let { put("lasts", it) }
+            LASTS[lasts].takeIf { it != "default" }?.let { put("lasts", it) }
         }
         app.scope.launch {
             try {
@@ -941,7 +962,7 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
                     Labeled(t("android-settings.vault.env")) { VaultField(env, { env = it.trim() }, t("android-settings.vault.envPlaceholder"), mono = true) }
                 }
                 Labeled(t("android-settings.vault.lasts")) {
-                    Seg(SCOPES.map(::lastsName), lasts, { lasts = it }, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
+                    Seg(LASTS.map(::lastsChoice), lasts, { lasts = it }, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
                     Text(t("android-settings.vault.lastsNote"), fontSize = 12.sp, lineHeight = 18.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
                 }
             }

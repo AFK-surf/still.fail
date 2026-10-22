@@ -155,7 +155,8 @@ export class Secrets {
       const item = this.#d.plain.item(row.ws, request.item);
       const l = item?.listing;
       const secret = item ? { kind: item.kind, name: item.name, fields: item.fields } : null;
-      const still = grant.exp > now && !ended(request.session) && this.#d.lock(row.ws) === null && l !== undefined && !item!.deleted && l.modes.includes(grant.mode) && allows(l, grant.scope)
+      const still = grant.exp > now && !ended(request.session) && this.#d.lock(row.ws) === null && l !== undefined && !item!.deleted && l.modes.includes(grant.mode)
+        && allows(l.lasts ?? this.#d.plain.lasts(row.ws, item!.owner)?.lasts, grant.scope)
         && grant.hosts.every((h) => l.hosts.includes(h) || (!h.startsWith("*.") && hostAllowed(h, l.hosts))) && secret !== null && valueOf(secret) !== null;
       if (still) this.keeper.restore({ request, grant: { ...grant, secret: "" } as Grant, secret: secret!, uses });
       else this.#d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ?").run(row.ws, row.id);
@@ -272,6 +273,13 @@ export class Secrets {
     }
   }
 
+  /// The longest grant a request's item (listed as `l`) is given for: its own, else its vault's or (the plain library)
+  /// its owner's; null: any.
+  #lastsOf(r: Request, l: Listing): Scope | null {
+    if (l.lasts) return l.lasts;
+    return (r.vault === PLAIN ? (r.owner ? this.#d.plain.lasts(r.ws, r.owner)?.lasts : undefined) : this.#d.vaults.vault(r.ws, r.vault)?.lasts) ?? null;
+  }
+
   /// The listing of a request's item, where it still is.
   #listingOf(r: Request): Listing | undefined {
     return r.vault === PLAIN ? this.#d.plain.item(r.ws, r.item)?.listing : this.#d.vaults.item(r.ws, r.vault, r.item)?.listing;
@@ -359,7 +367,8 @@ export class Secrets {
     const where = stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"];
     const text = [`申请使用「${l.name}」：${r.reason}`, ...(r.command ? [`命令：\`${r.command.replace(/`/g, "'")}\``] : []), `方式：${how}`, ...where].join("\n\n");
     // The scopes the item allows, the longest recommended.
-    const scopes = SCOPES.filter((s) => allows(l, s));
+    const lasts = this.#lastsOf(r, l);
+    const scopes = SCOPES.filter((s) => allows(lasts, s));
     const card = stillfail
       ? {
           type: "options",
@@ -429,7 +438,7 @@ export class Secrets {
     const item = this.#d.plain.item(ws, k.request.item);
     if (item === null || item.deleted || item.listing === undefined) return "the item is gone, or not one agents may ask for";
     const hosts = k.request.mode === "proxy" ? (k.request.hosts ?? item.listing.hosts) : [];
-    const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing }, { kind: item.kind, name: item.name, fields: item.fields });
+    const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing, lasts: this.#lastsOf(k.request, item.listing) }, { kind: item.kind, name: item.name, fields: item.fields });
     if (why !== null) return why;
     this.#settle(k.request, "granted", d.scope as Scope);
     return null;

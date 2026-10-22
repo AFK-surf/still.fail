@@ -150,6 +150,11 @@ test("the keeper takes a grant only as asked, signed by a member of the vault, w
   const r6 = fresh("r_6");
   assert.match(keeper.accept(w.state, w.vault, short, r6, grantOf(r6, w.alice, w.plain, { scope: "chat", exp: 1000 + 600 }))!, /hour at most/);
   assert.equal(keeper.accept(w.state, w.vault, short, r6, grantOf(r6, w.alice, w.plain, { scope: "hour", exp: 1000 + 600 })), null);
+  // An item that says none follows its vault's; one that says its own, its own.
+  const once = { ...w.vault, lasts: "once" as const };
+  const r7 = fresh("r_7");
+  assert.match(keeper.accept(w.state, once, w.item, r7, grantOf(r7, w.alice, w.plain, { scope: "hour", exp: 1000 + 600 }))!, /once at most/);
+  assert.equal(keeper.accept(w.state, once, { ...w.item, listing: { ...w.item.listing!, lasts: "chat" } }, r7, grantOf(r7, w.alice, w.plain, { scope: "hour", exp: 1000 + 600 })), null);
 
   assert.ok(hostAllowed("api.github.com", ["api.github.com"]));
   assert.ok(hostAllowed("a.b.example.com", ["*.example.com"]));
@@ -498,7 +503,19 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
     const [refused] = await grant(secrets, "s2", "chat");
     assert.match(refused!, /hour at most/);
     assert.deepEqual(cards[1]!.options.map((o) => [o.label, !!o.recommended]), [["仅本次", false], ["本对话 1 小时内", true], ["拒绝", false]]);
+    // The owner's longest grant, for the items that say none (the latest word kept); an item's own goes first.
     plain.put({ ...item, version: 2 });
+    assert.equal(plain.setLasts(ws, "bob@x.com", "once", 10), null);
+    assert.equal(plain.setLasts(ws, "bob@x.com", "chat", 5), null);
+    assert.match(plain.setLasts(ws, "bob@x.com", "week", 20)!, /once, hour or chat/);
+    assert.deepEqual(plain.lasts(ws, "bob@x.com"), { lasts: "once", at: 10 });
+    const [refusedOnce] = await grant(secrets, "s2", "hour");
+    assert.match(refusedOnce!, /once at most/);
+    assert.deepEqual(cards[2]!.options.map((o) => o.label), ["仅本次", "拒绝"]);
+    plain.put({ ...item, version: 3, listing: { ...listing, lasts: "chat" } });
+    assert.equal((await grant(secrets, "s2", "hour"))[0], null);
+    assert.equal(plain.setLasts(ws, "bob@x.com", "chat", 30), null);
+    plain.put({ ...item, version: 4 });
     thread = null;
 
     // After a restart a grant for one use, used, stays used; a day later the chat's is still held, its value read again.

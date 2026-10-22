@@ -5036,7 +5036,7 @@ export interface VaultItemRow {
 	hosts: string[];
 	/** The variable its listing suggests the command gets it in (`GH_TOKEN`). */
 	env?: string;
-	/** The longest grant its owner gives: `once`, `hour` or `chat` (the chat until it is archived). */
+	/** The longest grant it is given for, its own: `once`, `hour` or `chat` (none: its vault's, VaultRow `lasts`). */
 	lasts?: string;
 	/** The last time an agent used it. */
 	lastUse?: VaultUse;
@@ -5108,6 +5108,8 @@ export interface VaultRow {
 	missing: number;
 	/** Its key is also sealed to its owner's recovery words. */
 	recoverable: boolean;
+	/** The longest grant of its items that say none (`vault.setLasts`): `once`, `hour` or `chat`. */
+	lasts?: string;
 }
 
 /** An item's uses, the latest first (the `vaultUses` topic). */

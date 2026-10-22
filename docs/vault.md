@@ -103,7 +103,7 @@ sequenceDiagram
 
 - **keeper**：station 里管授权、做代理、做 ssh-agent 的那一块（`station/src/vault/`）。值只在 station 进程的内存里，不写盘，不进日志；加锁库的授权 station 重启就忘（agent 重新申请）。不加锁库的授权把除值以外的部分写进 `vault_grants` 表，重启后从明文库重新读值、照旧可用（值本来就在 station 盘上，多写的只是哪个 chat、哪个条目、什么时候到期）。chat 归档或删除时，它的授权一起作废。没有拆成单独的进程：agent 和 station 是同一个系统用户，拆出去的进程和 station 进程对 agent 来说一样读不到（都要调试权限），多一个进程只多一份打包和交接的麻烦。
 - **工具**：`secret_list`（agent 能看到的条目名和允许的方式，不含值）和 `secret_use`。申请卡片用现有的卡片和奏列表，申请发给条目所在库的成员；`card.assignee` 是库的 owner，或者是这个 chat 的发起人，只要他是库成员。
-- **批准的范围**：「仅本次」「本对话 1 小时内」「本对话直到归档」三档（`once`/`hour`/`chat`）。每个条目设自己的「最长授权」（listing 的 `lasts`，不填就是到 `chat`），卡片只列到这一档，推荐其中最长的一档；station 和 core 都拒绝超出的批准。新条目默认 `chat`。（2026-10-22 pengxiao 定：一小时不够用，chat EMBER/1792660346.250000。）
+- **批准的范围**：「仅本次」「本对话 1 小时内」「本对话直到归档」三档（`once`/`hour`/`chat`）。每个人在「密钥」页设一个「默认最长授权」（加锁库是库本身的 `lasts`，owner 签名、随库复制到各 station；明文库是 station 上每人一条，`PUT vault/plain/lasts {lasts, at}` 发给每个存着明文库的 station，以最晚的 `at` 为准），默认 `chat`；条目可以「跟随默认」（listing 不带 `lasts`，新条目都是这样）或设自己的一档（listing 的 `lasts`）。卡片只列到生效的那一档，推荐其中最长的一档；station 和 core 都拒绝超出的批准。（2026-10-22 pengxiao 定：一小时不够用，chat EMBER/1792660346.250000。）
 
 ### 三种用法
 
@@ -185,7 +185,7 @@ BoxCert = {v: 1, ws, device: <锁里设备的基础公钥 hex>, box: "x25519:<he
 ```
 Vault = {v: 1, ws, id: "v_<ULID>", seq, owner: <sub>, name, members: [<sub>],
          epoch, keys: [{cert: BoxCert, wrapped: seal(cert.box, 库钥匙(32), "stillfail-vault-key/1\0<ws>\0<id>\0<epoch>")}],
-         recovery?: seal(恢复公钥, 库钥匙, 同上上下文), at, sig}
+         recovery?: seal(恢复公钥, 库钥匙, 同上上下文), lasts?: "once"|"hour"|"chat"（默认最长授权）, at, sig}
 ```
 
 - `sig.key` 是锁里 `owner` 的某台 app 设备的 `sign_key`。`owner` 不能变；`seq` 每版加一，station 只收 `seq` 恰好大一的（第一次是 0）。
@@ -200,7 +200,7 @@ Vault = {v: 1, ws, id: "v_<ULID>", seq, owner: <sub>, name, members: [<sub>],
 ```
 Item = {v: 1, ws, vault, id: "i_<ULID>", version, epoch, deleted?: true,
         ct: <base64url(nonce(12)‖ChaCha20-Poly1305(库钥匙, 明文 JSON, 附加数据))>,
-        listing?: {name, kind, modes: ["proxy"|"ssh"|"env"], hosts: [<域名>], env?: <建议的变量名>, lasts?: "once"|"hour"|"chat"},
+        listing?: {name, kind, modes: ["proxy"|"ssh"|"env"], hosts: [<域名>], env?: <建议的变量名>, lasts?: "once"|"hour"|"chat"（不带：跟随库的）},
         at, sig}
 附加数据 = "stillfail-vault-item/1\0<ws>\0<vault>\0<id>\0<version>\0<epoch>"
 明文 = {kind: "token"|"ssh_key"|"login", name, fields: {…}, domains: [], notes}
@@ -241,7 +241,7 @@ core → station（走现有的 admin/工作区路由，按锁认出设备和成
 - 推送（事件流，和其他数据一样，断线续传）：`vault`（一版库，发给它的成员）、`vault-gone` `{id}`（被移出库的人）、`vault-item`（一版条目，发给库的成员）、`vault-box`（证书，发给 workspace 的人）、`vault-request`（申请，状态变了也发，发给库的成员）。
 - 旧 station 回 404，core 记成这台不能放库（`vaults` topic 的 `refused`）。
 
-core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次）、`create {name, station?}`、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope}`（`once`/`hour` 授权一小时，`chat` 到对话归档、最长 30 天；超出条目 `lasts` 的回 `vault_scope`）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
+core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次）、`create {name, station?}`、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope}`（`once`/`hour` 授权一小时，`chat` 到对话归档、最长 30 天；超出生效 `lasts` 的回 `vault_scope`）、`setLasts {vault, lasts}`（默认最长授权：加锁库由 owner 签一个新版本，明文库发给存着它的 station）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
 
 agent → station（MCP 工具，在 `stillfail` 服务器里）：
 

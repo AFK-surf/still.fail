@@ -18,6 +18,8 @@ export type BoxCert = { v: 1; ws: string; device: string; box: string; recovery?
 export type Vault = {
   v: 1; ws: string; id: string; seq: number; owner: string; name: string; members: string[]; epoch: number;
   keys: { cert: BoxCert; wrapped: string }[]; recovery?: string; at: number; sig: Sig;
+  /// The longest grant its items are given for, where an item's listing says none (absent: any).
+  lasts?: Scope;
 };
 export type Kind = "token" | "ssh_key" | "login";
 export type Mode = "proxy" | "ssh" | "env";
@@ -25,11 +27,11 @@ export type Mode = "proxy" | "ssh" | "env";
 export type Scope = "once" | "hour" | "chat";
 /// The scopes, shortest first.
 export const SCOPES: Scope[] = ["once", "hour", "chat"];
-/// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: any).
+/// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: as its vault says).
 export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope };
-/// Whether `listing` lets a grant last as long as `scope`.
-export const allows = (listing: { lasts?: Scope | undefined } | undefined, scope: Scope): boolean =>
-  SCOPES.indexOf(scope) >= 0 && SCOPES.indexOf(scope) <= SCOPES.indexOf(listing?.lasts ?? "chat");
+/// Whether a grant may last as long as `scope` for an item that allows `lasts` at most (none: any).
+export const allows = (lasts: Scope | null | undefined, scope: Scope): boolean =>
+  SCOPES.indexOf(scope) >= 0 && SCOPES.indexOf(scope) <= SCOPES.indexOf(lasts ?? "chat");
 export type Item = {
   v: 1; ws: string; vault: string; id: string; version: number; epoch: number; deleted?: true; ct: string; listing?: Listing; at: number; sig: Sig;
 };

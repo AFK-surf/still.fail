@@ -234,6 +234,7 @@
   "core-misc.vault.noStation": "没有可存放密钥库的 station：需开启安全模式并更新 station",
   "core-misc.vault.noKey": "此设备未获此库授权：请在已授权的设备上授权，或使用恢复码",
   "core-misc.vault.notOwner": "仅库的所有者可授权新设备",
+  "core-misc.vault.notOwnerLasts": "仅库的所有者可设置授权上限",
   "core-misc.vault.unknown": "库不存在，或你不是其成员",
   "core-misc.vault.unknownItem": "条目不存在",
   "core-misc.vault.scopeTooLong": "这个密钥不给这么长的授权",

@@ -5,7 +5,7 @@
 // the owner's decision, the proxy), and that their values stay out of the files agents read. Once security mode is on,
 // nothing is written here but deletions: the owner's app moves each item into their encrypted vault (`vault.migrate`).
 import type { DatabaseSync } from "node:sqlite";
-import { type Kind, type Listing, type Mode, SCOPES } from "./crypto.ts";
+import { type Kind, type Listing, type Mode, type Scope, SCOPES } from "./crypto.ts";
 
 /// The id a plain library goes by where a vault's would (requests, the core's topics).
 export const PLAIN = "plain";
@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS vault_plain (
   version INTEGER NOT NULL,
   body TEXT NOT NULL,
   PRIMARY KEY (ws, id)
+);
+CREATE TABLE IF NOT EXISTS vault_plain_lasts (
+  ws TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  lasts TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (ws, owner)
 );
 `;
 
@@ -78,6 +85,23 @@ export class PlainStore {
   item(ws: string, id: string): PlainItem | null {
     const row = this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND id = ?").get(ws, id) as { body: string } | undefined;
     return row ? JSON.parse(row.body) : null;
+  }
+
+  /// The longest grant `owner`'s items are given for where an item says none, and when they said so (none: any).
+  lasts(ws: string, owner: string): { lasts: Scope; at: number } | null {
+    const row = this.#db.prepare("SELECT lasts, at FROM vault_plain_lasts WHERE ws = ? AND owner = ?").get(ws, owner) as { lasts: Scope; at: number } | undefined;
+    return row ? { lasts: row.lasts, at: row.at } : null;
+  }
+
+  /// `owner`'s longest grant, said at `at` (unix seconds): kept unless what is kept was said later (each station of
+  /// the workspace is told it; the latest word wins wherever it arrives first). Why not, or null.
+  setLasts(ws: string, owner: string, lasts: unknown, at: unknown): string | null {
+    if (!SCOPES.includes(lasts as Scope)) return "lasts is once, hour or chat";
+    if (!Number.isSafeInteger(at)) return "at is unix seconds";
+    this.#db
+      .prepare("INSERT INTO vault_plain_lasts (ws, owner, lasts, at) VALUES (?, ?, ?, ?) ON CONFLICT (ws, owner) DO UPDATE SET lasts = excluded.lasts, at = excluded.at WHERE excluded.at >= vault_plain_lasts.at")
+      .run(ws, owner, lasts as Scope, at as number);
+    return null;
   }
 
   /// A new version, in place of the one before; a deleted one keeps nothing of what it held.

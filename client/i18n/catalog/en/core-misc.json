@@ -234,6 +234,7 @@
   "core-misc.vault.noStation": "No station of this workspace holds vaults: they need the security mode and an update",
   "core-misc.vault.noKey": "This device has no key to this vault yet: add it from another of your devices, or use your recovery words",
   "core-misc.vault.notOwner": "Only the vault's owner gives its key to more devices",
+  "core-misc.vault.notOwnerLasts": "Only the vault's owner sets its longest approval",
   "core-misc.vault.unknown": "No such vault, or not one of yours",
   "core-misc.vault.unknownItem": "No such item",
   "core-misc.vault.scopeTooLong": "This secret is not granted for that long",
