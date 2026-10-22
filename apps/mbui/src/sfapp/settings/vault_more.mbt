@@ -427,6 +427,11 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
               Some(env) if env != "" => fact(c, tr("android-settings.vault.env"), env, code=true)
               _ => ()
             }
+            // its own longest grant, else its vault's (跟随默认 · …)
+            fact(c, tr("android-settings.vault.lasts"), match opt_text(rv, "lasts") {
+              Some(l) if l != "" => lasts_name(l)
+              _ => fill("android-settings.vault.lasts.following", [("lasts", lasts_name(text(vv, "lasts")))])
+            })
           }
         })
       })
@@ -627,6 +632,8 @@ priv struct VaultEditing {
   mut kind : Int
   mut agent : Bool
   mut mode : String
+  /// its longest grant (vault_lasts: 跟随默认 first)
+  mut lasts : Int
   mut error : String
   mut saving : Bool
   /// the fields shown in the clear (by field)
@@ -663,6 +670,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
       Some(m) => m
       None => "proxy"
     },
+    lasts: vault_lasts.search(text(row, "lasts")).unwrap_or(0),
     error: "",
     saving: false,
     reveal: {},
@@ -794,6 +802,11 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
               words["env"] = field_box(c, key("env"), tr("android-settings.vault.envPlaceholder"))
             })
           }
+          // how long a grant of it lasts at most: its vault's, or its own
+          labeled(tr("android-settings.vault.lasts"), fn() {
+            e.lasts = seg(c, key("lasts"), vault_lasts.map(lasts_choice), e.lasts, fill=true, height=34.0)
+            c.box(style=vault_note_room, fn() { c.text(tr("android-settings.vault.lastsNote"), style=vault_note_words) |> ignore }) |> ignore
+          })
         }
       })
       |> ignore
@@ -886,6 +899,10 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
           let env = got("env")
           if env != "" && k != "ssh_key" {
             listing.push(("env", str(env)))
+          }
+          // its own longest grant (none: its vault's)
+          if vault_lasts[e.lasts] != "default" {
+            listing.push(("lasts", str(vault_lasts[e.lasts])))
           }
           params.push(("listing", obj(listing)))
         }
@@ -995,3 +1012,12 @@ fn open_vault_recover(_core : Core, ws : String) -> Unit {
 /// Hosts that name none (Vault.kt hostsNeeded: 12sp, red).
 // kept across runs: a value (no field of it changes)
 let hosts_needed_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
+
+///|
+/// A field's note under it, 4 below (Vault.kt Labeled's: 12/18, muted).
+// kept across runs: a value (no field of it changes)
+let vault_note_room : @ui.Style = @ui.style(w=Full, pt=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let vault_note_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)

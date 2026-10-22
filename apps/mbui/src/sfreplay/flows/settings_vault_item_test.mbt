@@ -32,6 +32,8 @@ test "85-vault-item" {
     f.tap("icon:edit")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.see("限定域名")
+    // 删除这一条 under the fold, past 最长授权 (Vault.kt's editor)
+    f.wheel_at("限定域名", 300.0)
     f.tap("=删除")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.see("删除「e2e-080726」")

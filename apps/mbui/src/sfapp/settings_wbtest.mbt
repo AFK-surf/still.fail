@@ -470,3 +470,21 @@ test "本机缓存: a chat's files opened, each let go by its bin; those of no c
   assert_true(t.find("季度报告.pdf") is None)
   assert_true(t.find("1 个 · 12 MB") is Some(_))
 }
+
+///|
+test "a secret's longest grant: on its page its own or its vault's, in its editor 跟随默认 or one of its own" {
+  // its page: none of its own, its vault's (Vault.kt: 跟随默认 · …)
+  let t = settings_tester("vault-item:v1#it1")
+  t.draw()
+  assert_true(t.find("最长授权") is Some(_))
+  assert_true(t.find("跟随默认 · 直到对话归档") is Some(_))
+  // its editor, agents let ask for it: 跟随默认 first, each of its own, what it means under them
+  let e = settings_tester("vault", shows="settings-vault-editor")
+  sheet_rested(e, "settings-sheet")
+  assert_true(e.find("跟随默认") is None)
+  e.tap_text("允许 agent 申请")
+  e.draw()
+  assert_true(e.find("跟随默认") is Some(_))
+  assert_true(e.find("仅一次") is Some(_))
+  assert_true(e.find("批准这个密钥的申请时") is Some(_))
+}
