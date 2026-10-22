@@ -25,7 +25,7 @@ jobs:
   # into kept in the Actions cache by content (MBC_STORE: main's written, a branch reads them): 667 tests, ~170 s a
   # part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the app's beta (mbui.yml),
   # which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in
-  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's. On main
+  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the replay's. On main
   # the same with ThinLTO too, as the apps are built (what only inlining across units shows, undefined behaviour), a
   # runner a part: no macOS runner (a test's program is the same C on any system; the Apple toolchain builds the apps,
   # mbui.yml).
@@ -53,8 +53,10 @@ jobs:
         with: { node-version-file: .node-version, package-manager-cache: false }
       # (from the Actions cache the moonbit workflow fills, never downloaded here)
       - uses: ./.github/actions/mbui-moonbit
+      # (in the replay part's job, the shorter since its flows are one package: with the app's tests it took that job
+      # over 3 minutes on a change to sfapp, 24 s of 207, run 39832413991)
       - name: The mbui app's check (detlint, then native type-checked)
-        if: matrix.part == 'app' && !matrix.lto
+        if: matrix.part == 'replay' && !matrix.lto
         run: moon version && bash apps/mbui/scripts/check.sh
       - uses: actions/cache/restore@v4
         id: store
