@@ -209,8 +209,9 @@ export type Platform = {
   hasFolderPermissions: boolean;
   /// Spotlight's index of the machine's files, asked with `mdfind` (macOS's): the search finds files through it.
   hasSpotlight: boolean;
-  /// The machine's display seen and driven from a client (docs/remote-screens.md; macOS's ScreenCaptureKit).
-  hasDesktopScreen: boolean;
+  /// What shows the machine's display to a client and drives it (docs/remote-screens.md): still.fail Helper (macOS),
+  /// stillfail-screen (Windows), or nothing.
+  desktopScreen: "helper" | "screen" | null;
   /// Unix domain sockets at a path: how the station and its modules talk (docs/station-modules.md).
   hasUnixSockets: boolean;
 };

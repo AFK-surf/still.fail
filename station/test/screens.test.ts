@@ -4,6 +4,7 @@
 // fake helper (its grants, its view protocol); the clipboard both ways and files dropped (only for a view that drives,
 // within bounds, of the types a source carries). Nothing here captures a screen: side/screen-desktop.test.ts does.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import net from "node:net";
@@ -20,6 +21,8 @@ import { Desktop, TO_HELPER, helperClip, helperMessage } from "../src/screens/de
 import { dropFolder } from "../src/drive/drive.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
+import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
+import { KEYS, WinInput } from "../src/screens/win-input.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
@@ -436,7 +439,7 @@ test("the list: GET /screens with each source's access; an old station's 404; `s
   assert.equal(answer.status, 200);
   assert.deepEqual(JSON.parse((answer.body as Buffer).toString()).screens[1], {
     id: "desktop", kind: "desktop", title: "studio", width: 0, height: 0, viewers: [], controlledBy: [],
-    access: { capture: false, control: false, message: "目前仅支持查看 macOS station 的本机屏幕" },
+    access: { capture: false, control: false, message: "目前仅支持查看 macOS 和 Windows station 的本机屏幕" },
   });
   // What a station without screens (one from before) answers.
   assert.equal((await ask(new Admin({ names: new Map(), read: async () => "{}" } as any), "en")).status, 404);
@@ -452,8 +455,8 @@ test("the list: GET /screens with each source's access; an old station's 404; `s
       if (m) return JSON.parse(m[1]!);
     }
   };
-  assert.equal((await told(zh)).screens[1].access.message, "目前仅支持查看 macOS station 的本机屏幕");
-  assert.equal((await told(en)).screens[1].access.message, "Only macOS stations' own screens can be viewed for now");
+  assert.equal((await told(zh)).screens[1].access.message, "目前仅支持查看 macOS 和 Windows station 的本机屏幕");
+  assert.equal((await told(en)).screens[1].access.message, "Only macOS and Windows stations' own screens can be viewed for now");
   await zh.return!();
   await en.return!();
 });
@@ -489,6 +492,139 @@ test("input as macOS posts it: buttons, click counts, drags, keys by their place
   assert.equal(parseInput({ t: "key", kind: "down", key: "x".repeat(65), code: "KeyX" }), null);
 });
 
+
+test("input as Windows posts it: buttons, a wheel in its units, keys by their scan code, modifiers pressed round a key", () => {
+  const win = new WinInput();
+  const at = (x: number, y: number, kind: "down" | "up" | "move", buttons: number) => ({ t: "pointer" as const, kind, x, y, buttons });
+  assert.deepEqual(win.ops(at(0.5, 0.5, "down", 1)), [{ op: "mouse", type: "down", x: 0.5, y: 0.5, button: 0 }]);
+  assert.deepEqual(win.ops(at(0.6, 0.5, "move", 1)), [{ op: "mouse", type: "move", x: 0.6, y: 0.5, button: 0 }]);
+  assert.deepEqual(win.ops(at(0.6, 0.5, "up", 0)), [{ op: "mouse", type: "up", x: 0.6, y: 0.5, button: 0 }]);
+  // The right button, then the middle one while it is held, and the right one let go.
+  assert.equal((win.ops(at(0.2, 0.2, "down", 2))[0] as any).button, 2);
+  assert.equal((win.ops(at(0.2, 0.2, "down", 6))[0] as any).button, 1);
+  assert.equal((win.ops(at(0.2, 0.2, "up", 4))[0] as any).button, 2);
+  // A page's notch (100 pixels down) is Windows' (120 up); a trackpad's small ones add up to whole units.
+  assert.deepEqual(win.ops({ t: "wheel", x: 0.1, y: 0.9, dx: 0, dy: 100 }), [{ op: "wheel", x: 0.1, y: 0.9, dx: 0, dy: -120 }]);
+  assert.deepEqual(win.ops({ t: "wheel", x: 0.1, y: 0.9, dx: 0.5, dy: 0 }), []);
+  assert.deepEqual(win.ops({ t: "wheel", x: 0.1, y: 0.9, dx: 0.5, dy: 0 }), [{ op: "wheel", x: 0.1, y: 0.9, dx: 1, dy: 0 }]);
+  // Ctrl+C as a keyboard gives it: Ctrl down first, so nothing pressed round C.
+  assert.deepEqual(win.ops({ t: "key", kind: "down", key: "Control", code: "ControlLeft", mods: 2 }), [{ op: "key", scan: 0x1d, ext: false, vk: 0, down: true }]);
+  assert.deepEqual(win.ops({ t: "key", kind: "down", key: "c", code: "KeyC", mods: 2 }), [{ op: "key", scan: KEYS.KeyC!.scan, ext: false, vk: 0, down: true }]);
+  win.ops({ t: "key", kind: "up", key: "c", code: "KeyC", mods: 2 });
+  win.ops({ t: "key", kind: "up", key: "Control", code: "ControlLeft", mods: 0 });
+  // A phone's keys row (⌃ held for the next key, no Ctrl of its own): Ctrl and Shift pressed round it.
+  assert.deepEqual(win.ops({ t: "key", kind: "down", key: "V", code: "KeyV", mods: 2 | 8 }), [
+    { op: "key", scan: 0x1d, ext: false, vk: 0, down: true },
+    { op: "key", scan: 0x2a, ext: false, vk: 0, down: true },
+    { op: "key", scan: 0x2f, ext: false, vk: 0, down: true },
+    { op: "key", scan: 0x2a, ext: false, vk: 0, down: false },
+    { op: "key", scan: 0x1d, ext: false, vk: 0, down: false },
+  ]);
+  // E0 keys, and one Windows says by its virtual key.
+  assert.deepEqual(win.ops({ t: "key", kind: "up", key: "ArrowUp", code: "ArrowUp", mods: 0 }), [{ op: "key", scan: 0x48, ext: true, vk: 0, down: false }]);
+  assert.deepEqual(win.ops({ t: "key", kind: "down", key: "Meta", code: "MetaLeft", mods: 4 }), [{ op: "key", scan: 0x5b, ext: true, vk: 0, down: true }]);
+  assert.deepEqual(win.ops({ t: "key", kind: "down", key: "Pause", code: "Pause", mods: 0 }), [{ op: "key", scan: 0, ext: false, vk: 0x13, down: true }]);
+  // A key of no known place types what it says; not with ctrl or the Windows key, and not on its up.
+  assert.deepEqual(win.ops({ t: "key", kind: "down", key: "é", code: "", mods: 8 }), [{ op: "text", text: "é" }]);
+  assert.deepEqual(win.ops({ t: "key", kind: "up", key: "é", code: "", mods: 0 }), []);
+  assert.deepEqual(win.ops({ t: "key", kind: "down", key: "é", code: "", mods: 2 }), []);
+  assert.deepEqual(win.ops({ t: "text", text: "你好" }), [{ op: "text", text: "你好" }]);
+});
+
+/// stillfail-screen as native/screen's is, as a process (node running this): `status` says a display; `view` answers
+/// its request with its info (or, asked for a 1-pixel view, that it cannot capture), each next with a frame (the first
+/// with its config), and notes the request and each input in its log, a JSON line each.
+const FAKE_SCREEN = `
+const fs = require("node:fs");
+const [mode, log] = process.argv.slice(2);
+if (mode === "status") { console.log(JSON.stringify({ ok: true, display: { id: 1, width: 2560, height: 1600 }, capture: true })); process.exit(0); }
+const out = (kind, payload) => { const head = Buffer.alloc(5); head[0] = kind; head.writeUInt32BE(payload.length, 1); process.stdout.write(Buffer.concat([head, payload])); };
+let carry = Buffer.alloc(0), request = null, n = 0;
+process.stdin.on("data", (chunk) => {
+  carry = Buffer.concat([carry, chunk]);
+  if (request === null) {
+    const at = carry.indexOf(10); if (at < 0) return;
+    request = JSON.parse(carry.subarray(0, at)); carry = carry.subarray(at + 1);
+    fs.appendFileSync(log, JSON.stringify(request) + "\\n");
+    if (request.maxWidth === 1) { out(1, Buffer.from(JSON.stringify({ error: "no display to capture", code: "display" }))); return process.exit(0); }
+    out(1, Buffer.from(JSON.stringify({ width: 1280, height: 800, encoder: "fake" })));
+  }
+  while (carry.length >= 5) {
+    const length = carry.readUInt32BE(1); if (carry.length < 5 + length) return;
+    const kind = carry[0], payload = carry.subarray(5, 5 + length); carry = carry.subarray(5 + length);
+    if (kind === 1) {
+      n++;
+      if (n === 1) { const c = Buffer.alloc(8); c.writeUInt32BE(1280, 0); c.writeUInt32BE(800, 4); out(2, Buffer.concat([c, Buffer.from([1, 66, 0, 31])])); }
+      const f = Buffer.alloc(9); f[0] = n === 1 ? 1 : 0; f.writeBigUInt64BE(BigInt(n * 1000), 1); out(3, Buffer.concat([f, Buffer.from([0, 0, 0, 1, n])]));
+    } else if (kind === 3) fs.appendFileSync(log, payload.toString() + "\\n");
+  }
+});
+process.stdin.on("end", () => process.exit(0));
+`;
+
+test("Windows' desktop: a stillfail-screen process a view, asked for each frame, input as Windows posts it; its size as it says", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sf-winscreen-"));
+  const script = join(dir, "fake-screen.cjs");
+  const log = join(dir, "log");
+  writeFileSync(script, FAKE_SCREEN);
+  writeFileSync(log, "");
+  const started: string[][] = [];
+  const start = (_binary: string, args: string[]) => (started.push(args), spawn(process.execPath, [script, args[0]!, log], { stdio: ["pipe", "pipe", "inherit"] }));
+  const none = new WindowsDesktop({ binary: null, changed: () => {} });
+  assert.equal(none.access().unsupported, "helper");
+  await assert.rejects(none.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] }), (e: ScreenRefused) => e.status === 501 && e.key === "station.screen.noHelper");
+  let changed = 0;
+  const desktop = new WindowsDesktop({ binary: "stillfail-screen.exe", changed: () => changed++, start, title: () => "PC" });
+  assert.deepEqual(desktop.access(), { capture: true, control: true });
+  assert.deepEqual(desktop.clipboard(), ["text", "png"]);
+  await desktop.refresh(true);
+  assert.deepEqual(started, [["status"]]);
+  assert.deepEqual(desktop.size(), { width: 2560, height: 1600 });
+  assert.equal(changed, 1);
+  // Looked at a moment ago: not asked again.
+  await desktop.refresh();
+  assert.equal(started.length, 1);
+  await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: [] }), (e: ScreenRefused) => e.status === 415);
+  const view = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264", "jpeg"] });
+  assert.deepEqual(started.at(-1), ["view"]);
+  assert.deepEqual(await view.next(), { key: true, ts: 1000, data: new Uint8Array([0, 0, 0, 1, 1]), config: { codec: "h264", width: 1280, height: 800, description: new Uint8Array([1, 66, 0, 31]) } });
+  await view.input({ t: "key", kind: "down", key: "c", code: "KeyC", mods: 0 });
+  await view.input({ t: "pointer", kind: "down", x: 0.25, y: 0.5, buttons: 1 });
+  // Its input is had before the next frame is answered (it reads in order).
+  assert.deepEqual(await view.next(), { key: false, ts: 2000, data: new Uint8Array([0, 0, 0, 1, 2]) });
+  const lines = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.deepEqual(lines, [
+    { codec: "h264", maxWidth: 1280, maxHeight: 800 },
+    { op: "key", scan: 0x2e, ext: false, vk: 0, down: true },
+    { op: "mouse", type: "down", x: 0.25, y: 0.5, button: 0 },
+  ]);
+  // Closed: a pending frame is none.
+  const pending = view.next();
+  view.close();
+  assert.equal(await pending, null);
+  // One that cannot capture says why.
+  await assert.rejects(desktop.open({ maxWidth: 1, maxHeight: 1, codecs: ["jpeg"] }), (e: ScreenRefused) => e.status === 503 && /no display to capture/.test(e.message));
+  await desktop.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+// The real one, where it is built (a Windows machine with a display): a JPEG view of the main display.
+const realScreen = WINDOWS ? screenBinary() : null;
+test("Windows' desktop, for real: stillfail-screen gives a picture of the display", { skip: realScreen === null }, async () => {
+  const desktop = new WindowsDesktop({ binary: realScreen, changed: () => {} });
+  await desktop.refresh(true);
+  assert.ok(desktop.size().width > 0);
+  const view = await desktop.open({ maxWidth: 640, maxHeight: 640, codecs: ["jpeg"] });
+  const first = (await view.next())!;
+  assert.equal(first.config?.codec, "jpeg");
+  assert.ok(first.config!.width <= 640 && first.config!.height <= 640);
+  assert.deepEqual([...first.data.subarray(0, 2)], [0xff, 0xd8]);
+  // A key frame asked for: the same picture again when the screen did not change.
+  view.keyframe();
+  assert.ok((await view.next())!.key);
+  view.close();
+  await desktop.close();
+});
 
 /// still.fail Helper as native/helper's is, in this process: started by `launch` (the station's `open`) with its socket
 /// and token; `status` as `status` is, `permissions.show` noted (its window then up), `quit` noted, `screen.view`

@@ -185,6 +185,8 @@ const PARTS: Record<string, Part> = {
   // On Windows with stillfail-station-w.exe beside it: the launcher as the logon task runs it, with no window.
   launcher: withHidden(stationCrate("station/native/launcher", exe("stillfail-station"), exe("stillfail-station"))),
   runner: { ...stationCrate("station/native/runner", exe("stillfail-runner"), exe("stillfail-runner")), targets: STATION_BINS, env: "STILLFAIL_RUNNER" },
+  // Windows' display as the station's desktop screen (docs/remote-screens.md), what still.fail Helper is on macOS.
+  screen: { ...stationCrate("station/native/screen", () => "stillfail-screen.exe", "stillfail-screen.exe"), targets: ["win32-x64"], env: "STILLFAIL_SCREEN" },
   // For the station's tests: the Rust station's cold storage as a command (test/cold-compat.test.ts), and a member's
   // client asking a station over iroh (tools/load: test/e2e.sh, compare.sh). This machine's only.
   "archive-rs": {

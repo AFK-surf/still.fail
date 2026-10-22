@@ -389,7 +389,7 @@ if [ $full = 1 ]; then
     remembered "tests: media" "media client/core-ts station/src scripts/native.ts" after station after core after media-core after media-test sh -c 'cd media/service && node --test --test-timeout=120000 test/*.test.ts && cd ../core && pnpm test && cd ../test && pnpm test'
   fi
   # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).
-  for crate in launcher runner mesh; do
+  for crate in launcher runner mesh screen; do
     also='^$'; [ $crate = mesh ] && also='^vendor/'
     if part station && { touches "^station/native/$crate/" || touches "$also"; }; then
       inputs="station/native/$crate"; [ $crate = mesh ] && inputs="$inputs vendor"; [ $crate = launcher ] && inputs="$inputs .node-version"
