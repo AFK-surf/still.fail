@@ -50,8 +50,9 @@ pub fn view_check_run(c : @ui.Ctx) -> Unit {
     c.native(p, h=Px(200.0), content=Some((12.0, 10.4375, 366.0, 120.25)), radius=view_check_round) |> ignore
   })
   |> ignore
-  // (each the host has, open: a view it has not is not here)
-  let open = [v, p].iter().all(fn(x) { !x.here() || x.state() != 0 })
+  // (each the host has, open as its host says: a page's content ready to be drawn, not loaded only (Android's
+  // WebView: a picture taken once it had loaded showed its ground, white); a view it has not is not here)
+  let open = [v, p].iter().all(fn(x) { !x.here() || (x.state() != 0 && x.host_done()) })
   if @kit.after(c, "viewcheck", open, view_check_ms) {
     if @ui.env("MBUI_VIEWCHECK") == "hold" {
       // (left as it is, for its picture: the contract ends the app)

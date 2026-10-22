@@ -678,8 +678,10 @@ fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
     }
   }
   outside_end(kind, id)
-  // an answer brought (what was picked, read, drawn, grabbed): read as the next frame builds
+  // an answer brought (what was picked, read, drawn, grabbed; a view the host is done opening): read as the next
+  // frame builds
   if kind == outside_pick ||
+    (kind == outside_view && state != 0) ||
     kind == outside_gallery ||
     kind == outside_marks ||
     kind == outside_grab ||
