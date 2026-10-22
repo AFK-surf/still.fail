@@ -14,7 +14,7 @@ import { "moonbitlang/core/env" } for "wbtest"
 options(
   targets: { "math_env_js_wbtest.mbt": [ "js" ], "math_env_native_wbtest.mbt": [ "native" ] },
   "pre-build": [
-    { "input": "../../../../client/fixtures/math.json", "output": "math_fixture_wbtest.mbt", "command": ":embed -i $input -o $output --name math_fixture" },
-    { "input": "../../screens/math-mac.textrec", "output": "math_text_wbtest.mbt", "command": ":embed -i $input -o $output --name math_text" },
+    { "input": "math.json", "output": "math_fixture_wbtest.mbt", "command": ":embed -i $input -o $output --name math_fixture" },
+    { "input": "math-mac.textrec", "output": "math_text_wbtest.mbt", "command": ":embed -i $input -o $output --name math_text" },
   ],
 )

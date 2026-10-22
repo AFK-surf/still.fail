@@ -322,7 +322,7 @@ if part ts; then
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
   if touches "$ts_core|^client/math/|^apps/mbui/src/sf/math_font\\.mbt$"; then prep core deps client/core-ts; step "shared math alphabet" after core node client/core-ts/scripts/math-font.ts --check; fi
-  if touches "$ts_core|^client/fixtures/math\\.json$"; then prep core deps client/core-ts; step "shared math fixture" after core node client/core-ts/scripts/math-fixture.ts --check; fi
+  if touches "$ts_core|^client/fixtures/math\\.json$|^apps/mbui/src/sf/math\\.json$"; then prep core deps client/core-ts; step "shared math fixture" after core node client/core-ts/scripts/math-fixture.ts --check; fi
   if touches "$ts_core|^apps/mbui/(e2e/traces/|src/sfreplay/markdown_answers\\.mbt$)"; then prep core deps client/core-ts; step "replay Markdown answers" after core node client/core-ts/scripts/replay-markdown.ts --check; fi
   # What makes the views writes only on what it made, never on what it was given (docs/core-ts.md「谁能改什么」).
   if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi

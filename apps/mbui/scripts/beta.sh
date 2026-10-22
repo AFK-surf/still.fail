@@ -178,9 +178,9 @@ build() {
   [ -z "$posthog" ] || rm -rf "$posthog"
   [ $r = 0 ] || exit $r
   apk=$WORK/android/app/build/outputs/apk/release/app-release.apk
-  badging=$("$BT/aapt2" dump badging "$apk" | head -1)
+  badging=$("$BT/aapt2" dump badging "$apk" | sed -n '1p')
   echo "$badging" | grep -q "name='fail.still.mbui' versionCode='$n' " || { echo "beta: not this build's APK: $badging" >&2; exit 1; }
-  cert=$("$BT/apksigner" verify --print-certs "$apk" | grep 'certificate SHA-256 digest' | head -1 | sed 's/.*: //')
+  cert=$("$BT/apksigner" verify --print-certs "$apk" | sed -n '/certificate SHA-256 digest/{s/.*: //;p;}' | sed -n '1p')
   name=android/stillfail-mbui-$n.apk
   cp "$apk" "$RELEASE_DIR/android/$name"
   sum=$(shasum -a 256 "$apk" | cut -d' ' -f1)

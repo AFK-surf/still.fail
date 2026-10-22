@@ -280,7 +280,9 @@ export function chatView(chat: DemoChat, runs?: Runs): ChatView {
   // A chat the visitor started is theirs.
   const creator = chat.people[0] ?? { id: "local", name: "你", via: "local", shown: { name: "你", display: "你", mine: true } };
   return {
-    me: { id: "local" }, title: chat.title, people: chat.people, agents: [agent], messages: chat.messages,
+    me: { id: "local" }, title: chat.title, people: chat.people, agents: [agent],
+    // The real core supplies parsed prose with the chat. The demo must do the same before a row is laid out.
+    messages: chat.messages.map((m) => m.authorKind === "agent" ? { ...m, md: markdown(m.text) } : m),
     more: false, outbox: chat.outbox, link: { state: "online" }, offline: false,
     thread: {
       id: chat.thread, surface: "ember", channel: "EMBER", threadTs: `${created / 1000}`, createdAt: created, createdBy: creator.id,

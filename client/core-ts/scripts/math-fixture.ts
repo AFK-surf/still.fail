@@ -21,8 +21,13 @@ $$
 Invalid $\unknowncommand{x}$ stays readable. Code: \`$x$\`.
 `.replaceAll("\\`", "`");
 const content = JSON.stringify({ text, md: markdown(text) }, null, 2) + "\n";
-const target = new URL("../../fixtures/math.json", import.meta.url);
-if (process.argv.includes("--check")) {
-  if (readFileSync(target, "utf8") !== content) throw new Error("The math fixture is stale; run scripts/math-fixture.ts");
-} else writeFileSync(target, content);
+// Native builds copy just the MoonBit module's sources into a platform-specific directory.
+// Keep its test input inside those sources, checked against the same core answer.
+const targets = ["../../fixtures/math.json", "../../../apps/mbui/src/sf/math.json"];
+for (const path of targets) {
+  const target = new URL(path, import.meta.url);
+  if (process.argv.includes("--check")) {
+    if (readFileSync(target, "utf8") !== content) throw new Error(`The math fixture at ${path} is stale; run scripts/math-fixture.ts`);
+  } else writeFileSync(target, content);
+}
 console.log("Shared formula fixture matches the core");
