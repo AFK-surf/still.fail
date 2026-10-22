@@ -79,7 +79,7 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
   // in the wide frame, the web's head (wide_history.mbt)
   if wide_on.val {
     wide_history_head(c, src, r, key, a)
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() { history_steps(c, src, r, key, entry) }) |> ignore
+    c.box(style=wh_fill, fn() { history_steps(c, src, r, key, entry) }) |> ignore
     return
   }
   let s = field(a, "session")

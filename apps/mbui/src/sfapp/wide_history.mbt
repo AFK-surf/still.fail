@@ -398,3 +398,8 @@ let wh_link_box : @ui.Style = @ui.style(row=true, align=ACenter)
 ///|
 // kept across runs: a value (no field of it changes)
 let wh_link_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+
+///|
+/// The steps under the head: the rest of the panel.
+// kept across runs: a value (no field of it changes)
+let wh_fill : @ui.Style = @ui.style(w=Full, h=Full)
