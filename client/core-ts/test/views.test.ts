@@ -1287,7 +1287,7 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   const appended: J[] = merge([entry(41, "新的")]);
   appended[0].mine = false;
   appended[0].system = false;
-  assert.deepEqual(plain(delta), plain([{ path: ["messages"], append: appended }]));
+  assert.deepEqual(plain(delta), plain([{ path: ["lastEntry"], set: 41 }, { path: ["messages"], append: appended }]));
   u.value = applyOps(u.value, delta);
   t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, { n: 42, kind: "edit", target: 41, text: "新的（改）", attachments: [], quotes: [], at: 42 }], last: 42 }));
   await t.read(u, 1);
