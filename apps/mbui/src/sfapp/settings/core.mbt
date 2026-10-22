@@ -33,7 +33,7 @@ pub(all) struct Core {
   /// a toast (Sheet.kt ToastHost)
   say : (String) -> Unit
   /// a person's picture by its URL: an image's key once it is here, "" until then
-  picture : (String) -> String
+  picture : (String, Int) -> String
   /// notifications turned on here: the system asked to allow them (Notices.kt rememberNotificationAsk)
   notify_ask : () -> Unit
   /// this device's push registration as the core now wants it (Push.sync): what `notify.set` answered (`push`), or

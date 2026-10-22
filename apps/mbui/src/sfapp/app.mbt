@@ -409,7 +409,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   appearance(src)
   faces(src)
   // pictures put up by their address come as the core gives them (a GIF among them moves)
-  @sf.picture_of.val = fn(url) { (src.picture)(url) }
+  @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
   let t = @sf.begin(c)
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)
@@ -803,7 +803,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       app.toast = words
       app.toast_n += 1
     },
-    picture: fn(url) { (src.picture)(url) },
+    picture: fn(url, frame) { (src.picture)(url, frame) },
     now: src.now,
     notify_ask: fn() { ask_from_switch() },
     push_sync: fn(wanted) { if !src.read_only { push_sync(src, wanted) } },

@@ -31,8 +31,9 @@ pub(all) struct Source {
   sign_in : () -> Unit
   /// whether a sign-in is under way
   signing_in : () -> Bool
-  /// a person's picture by its URL: an image's src once it is here, "" until then (the core's `picture`)
-  picture : (String) -> String
+  /// a picture by its URL (a person's, a station's icon) as it is put up in frame `frame` (Ctx::frame_no): an
+  /// image's src once it is here, "" until then (the core's `picture`: core_pictures.mbt)
+  picture : (String, Int) -> String
   /// what the core said when it stopped, if it did
   fatal : () -> String?
   /// a file of a chat as its messages show it (`station.file`, an image's thumbnail): by its station, the session

@@ -1200,10 +1200,14 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
   }
   let faces = fn() {
     let shown = if people.length() > 3 { people[:3].to_array() } else { people }
+    let starter = fn(p : Person) { people.length() > 1 && p.id == item.creator }
     c.box(dir=Row, align=ACenter, fn() {
       for i, p in shown {
-        let starter = people.length() > 1 && p.id == item.creator
-        face(c, src, p, face_size, starter, -3.0 * i.to_double())
+        let f = face(c, src, p, face_size, starter(p), -3.0 * i.to_double())
+        // the one who started the chat over the rest (RowPicture.kt Faces: zIndex(1f))
+        if starter(p) {
+          c.put_over(f)
+        }
       }
       if people.length() > shown.length() {
         c.box(tx=-3.0 * (shown.length() - 1).to_double() + 3.0, fn() {
@@ -1241,13 +1245,6 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
 }
 
 ///|
-/// The people's colours (Parts.kt AVATAR).
-// kept across runs: a table, never written
-let avatar_colors : Array[Int64] = [
-  0x5B7BB2FFL, 0x2F8F5BFFL, 0xB9471FFFL, 0x8A6BB0FFL, 0x3F8C99FFL, 0xB0842FFFL,
-]
-
-///|
 fn lower(s : String) -> String {
   let sb = StringBuilder()
   for ch in s {
@@ -1258,92 +1255,26 @@ fn lower(s : String) -> String {
 }
 
 ///|
-/// A person's colour, by their email or id (Parts.kt avatarColor).
-pub fn avatar_color(id : String) -> Int64 {
-  let n = avatar_colors.length()
-  let h = java_hash(lower(id)) % n
-  avatar_colors[if h < 0 { h + n } else { h }]
-}
-
-///|
-/// The first letter of a name, as a lettered picture shows it.
-fn initial(name : String) -> String {
-  for ch in name {
-    let k = ch.to_int()
-    if k == 32 || k == 9 || k == 10 {
-      continue
-    }
-    return if k >= 97 && k <= 122 {
-      (k - 32).unsafe_to_char().to_string()
-    } else {
-      ch.to_string()
-    }
-  }
-  "?"
-}
-
-///|
 /// A person, round (RowPicture.kt Face, Parts.kt Avatar): their account's picture once it is here, their initial on
-/// their colour until then; ringed in ink when they started the chat, else in the page's ground.
-fn face(
-  c : @ui.Ctx,
-  src : Source,
-  p : Person,
-  size : Double,
-  starter : Bool,
-  dx : Double,
-) -> Unit {
+/// their colour until then; ringed 1.5 over their edge, in ink when they started the chat, else in the page's ground
+/// (the starter's ring asked 4 wider is held to the face's own size by its Box, as Compose's `size` takes the
+/// constraints it is given).
+fn face(c : @ui.Ctx, src : Source, p : Person, size : Double, starter : Bool, dx : Double) -> Int {
   let t = @sf.theme()
-  let picture = if p.picture != "" { (src.picture)(p.picture) } else { "" }
-  c.box(
-    w=Px(size),
-    h=Px(size),
-    radius=size / 2.0,
-    bg=avatar_color(if p.email != "" { p.email } else { p.id }),
-    align=ACenter,
-    justify=JCenter,
-    tx=dx,
-    fn() {
-      if picture != "" {
-        c.image(picture, w=Px(size), h=Px(size), radius=size / 2.0, bg=0L) |> ignore
-      } else {
-        c.text(
-          initial(p.name),
-          size=size * 0.5,
-          weight=600,
-          color=0xFFFFFFFFL,
-          wrap=false,
-          line=size * 0.5,
-        )
-        |> ignore
-      }
-      c.layer(fn() {
-        if starter {
-          c.box(
-            w=Px(size + 4.0),
-            h=Px(size + 4.0),
-            radius=size / 2.0 + 2.0,
-            border=1.5,
-            border_color=t.p.text,
-            tx=-2.0,
-            ty=-2.0,
-            fn() {  },
-          )
-          |> ignore
-        } else {
-          c.box(
-            w=Px(size),
-            h=Px(size),
-            radius=size / 2.0,
-            border=1.5,
-            border_color=t.p.bg,
-            fn() {  },
-          )
-          |> ignore
-        }
-      })
+  let picture = if p.picture != "" { (src.picture)(p.picture, c.frame_no) } else { "" }
+  c.box(w=Px(size), h=Px(size), tx=dx, fn() {
+    @sf.avatar(c, if p.email != "" { p.email } else { p.id }, p.name, picture, size)
+    c.layer(fn() {
+      c.box(
+        w=Px(size),
+        h=Px(size),
+        radius=size / 2.0,
+        border=1.5,
+        border_color=if starter { t.p.text } else { t.p.bg },
+        fn() {  },
+      )
       |> ignore
-    },
-  )
-  |> ignore
+    })
+    |> ignore
+  })
 }

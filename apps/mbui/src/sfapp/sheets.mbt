@@ -525,7 +525,8 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
         if people.length() > 0 {
           let shown = if people.length() > 5 { people[:5].to_array() } else { people }
           c.box(w=Px(19.0 + 14.0 * (shown.length() - 1).to_double()), fn() {
-            people_stack(c, src, shown, 16.0)
+            // ringed in the sheet's ground (ChatInfo.kt: C.surface)
+            people_stack(c, src, shown, 16.0, ring=t.p.card)
           })
           |> ignore
         }

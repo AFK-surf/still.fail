@@ -110,12 +110,11 @@ test "state leads, in either language" {
 }
 
 ///|
-test "a person's colour as Java's hashCode picks it" {
+test "Java's hashCode" {
   assert_eq(java_hash("a"), 97)
   assert_eq(java_hash("ab"), 97 * 31 + 98)
   // wraps as Java's int does
   assert_eq(java_hash("polygenelubricants"), -2147483648)
-  assert_eq(avatar_color("A"), avatar_color("a"))
 }
 
 ///|

@@ -69,30 +69,17 @@ fn logged(name : String, v : Json) -> String {
 }
 
 ///|
-/// People's pictures as the core gives them (`picture`): asked once each, kept as images.
-let pictures : Map[String, String] = {}
-
-///|
-fn picture(url : String) -> String {
-  match pictures.get(url) {
-    Some(key) => key
-    None => {
-      pictures[url] = ""
-      let params : Map[String, Json] = { "url": Json::string(url) }
-      @core.call_bytes("picture", params=Json::object(params), on_done=fn(r) {
-        match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            let key = "mem:picture/\{@ui.stable_hash(url)}/\{url.length()}"
-            @ui.add_image(key, bytes)
-            pictures[url] = key
-          }
-          _ => ()
-        }
-      })
-      ""
+/// Pictures by their address as the core gives them (`picture`): kept as images, one that could not be had asked
+/// again when it is put up anew (@sfapp.core_pictures).
+let picture : (String, Int) -> String = @sfapp.core_pictures(fn(url, done) {
+  let params : Map[String, Json] = { "url": Json::string(url) }
+  @core.call_bytes("picture", params=Json::object(params), on_done=fn(r) {
+    match r {
+      Ok((_, bytes)) => done(bytes)
+      Err(_) => done(None)
     }
-  }
-}
+  })
+})
 
 ///|
 /// Chats' images as their messages show them (`station.file` with `thumb`: the station's thumbnail where it keeps one),
