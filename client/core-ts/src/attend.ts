@@ -269,13 +269,20 @@ export class Attend {
     if (started.length > 0) out.agents = agents.map((a) => (started.includes(a) ? { ...a, started: true } : a));
     out.unreadLine = unreadLine(visit.read, visit.at);
     // Read only on a page in front (shown and focused): a window left open on the chat behind others, or on another
-    // screen, is not being looked at.
+    // screen, is not being looked at. Read up to its newest while its end shows, and up to a message shown whole
+    // (`seen`) whether the end does or not: a message seen whole is read.
     const short = value.newer === true;
-    if (!short && shown.some((f) => f.visible && f.focused && f.chat?.end === true) && newest > known) {
+    let upTo = 0;
+    for (const f of shown) {
+      if (!f.visible || !f.focused || f.chat === null) continue;
+      if (!short && f.chat.end === true) upTo = Math.max(upTo, newest);
+      if (typeof f.chat.seen === "number") upTo = Math.max(upTo, Math.min(f.chat.seen, newest));
+    }
+    if (upTo > known) {
       const sent = this.#reads.get(key) ?? 0;
-      if (sent < newest) {
-        this.#reads.set(key, newest);
-        due.push({ read: { thread, seq: newest } });
+      if (sent < upTo) {
+        this.#reads.set(key, upTo);
+        due.push({ read: { thread, seq: upTo } });
       }
     }
     return { due, value: out };

@@ -329,3 +329,64 @@ test "left short of its end, a chat opens again where it was left, though the co
   assert_true((readings.get(k).unwrap().top_off - left_off).abs() < 0.5)
   assert_true(!readings.get(k).unwrap().at_end)
 }
+
+///|
+/// The last `client.focus {chat}` of `calls`: whether its end shows, and the newest message it said was seen whole
+/// (-1 none).
+fn focus_seen(calls : Array[Made]) -> (Bool, Double) {
+  let told = named(calls, "client.focus").filter(fn(m) { field(Some(m.params), "chat") is Some(Object(_)) })
+  match told.last() {
+    Some(m) => {
+      let chat = field(Some(m.params), "chat")
+      (
+        field(chat, "end") == Some(Json::boolean(true)),
+        match field(chat, "seen") {
+          Some(Number(n, ..)) => n
+          _ => -1.0
+        },
+      )
+    }
+    None => (false, -1.0)
+  }
+}
+
+///|
+/// How far the list is dragged down from its end to leave its last message short of whole.
+let seen_drag : Double = 160.0
+
+///|
+test "opened short of its end, the core is told the messages shown whole: read up to there, the end not seen" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  // at its end: the end seen, and its newest shown whole
+  let (end, newest) = focus_seen(calls)
+  assert_true(end)
+  assert_true(newest > 0.0)
+  // scrolled up from its end, let be: the place it is at
+  t.drag(200.0, 300.0, 200.0, 300.0 + seen_drag)
+  t.run_for(t.rest_of("a list") - t.time())
+  t.frame()
+  let told = named(calls, "chat.place")
+  let p = told[told.length() - 1].params
+  let seq = number(Some(p), "seq")
+  let px = number(Some(p), "offset")
+  // opened again there (the core's `at`): the messages in view shown whole, the end not
+  let again : Array[Made] = []
+  let t2 = fake_core(again, over=fn(name, tp) {
+    match (name, tp.value) {
+      ("chat", Some(Object(m))) => {
+        let v = m.copy()
+        v["at"] = Json::number(seq)
+        v["atOffset"] = Json::number(px)
+        { ..tp, value: Some(Json::object(v)) }
+      }
+      _ => tp
+    }
+  })
+  t2.run_for(@ui.nav_push_ms)
+  let (end2, seen) = focus_seen(again)
+  assert_true(!end2)
+  assert_true(seen >= 0.0)
+  assert_true(seen < newest)
+  ignore(t)
+}

@@ -90,6 +90,8 @@ priv struct Reading {
   mut around_asked : Double
   /// what the core was told of the chat shown, its end seen or not ("" nothing yet)
   mut told : String
+  /// the newest message seen whole on this visit (-1 none): read up to there
+  mut seen_whole : Double
   /// where the reader is: the message at the top of what shows (-1 none), and whether at the chat's end
   mut top_seq : Double
   /// how far that message's top is below the list's (points: above it, less than 0)
@@ -167,6 +169,7 @@ fn reading_of(key : String) -> Reading {
         asked_newer: -1.0,
         around_asked: -1.0,
         told: "",
+        seen_whole: -1.0,
         top_seq: -1.0,
         top_off: 0.0,
         at_end: true,
@@ -771,6 +774,26 @@ fn messages(
       None => false
     }
     rd.at_end = seen
+    // the last message wholly in view, between the bar and the composer, while it is not short of the chat's end:
+    // read up to there (a message shown whole on a page in front is read), its end seen or not
+    match (info, c.list_place(key)) {
+      (Some(i), Some((first, past, _))) if i.first >= 0 && !v.newer => {
+        let top = status_top() + chat_bar_h
+        let foot = i.height - composer_room_for(c, draft_key(r), Some(v))
+        let mut y = -past
+        let mut k = first
+        while k <= i.last && k < n {
+          let h = c.list_row_height(key, k).unwrap_or(0.0)
+          match list[k] {
+            Said(m) if y >= top - 0.5 && y + h <= foot + 0.5 && m.seq > rd.seen_whole => rd.seen_whole = m.seq
+            _ => ()
+          }
+          y = y + h
+          k = k + 1
+        }
+      }
+      _ => ()
+    }
     rd.top_seq = match info {
       Some(i) if i.first >= 0 => {
         let mut k = i.first
@@ -805,7 +828,7 @@ fn messages(
     }
     // (told once the frame's builds are over, as the last says it: a build let go of, the frame built again, read the
     // list from before its layout)
-    c.after_build("focus", fn() { tell_focus(src, r, v, rd, seen) })
+    c.after_build("focus", fn() { tell_focus(src, r, v, rd, seen, rd.seen_whole) })
     // the way to the newest: away from the end by more than a corner of the screen, or short of the chat's end (not
     // before the list is first laid out: until then nothing is in view, and the end is not far, only not known)
     let away = match info {
@@ -1239,18 +1262,33 @@ fn at_end_asked() -> Bool {
 }
 
 ///|
-/// Tells the core the chat shows, its end seen or not (Chat.kt: `client.focus` with `chat`), as that changes; it
-/// marks what is read and where the unread line goes. Never with Source.readonly.
-fn tell_focus(src : Source, r : ChatRef, v : ChatView, rd : Reading, seen : Bool) -> Unit {
+/// Tells the core the chat shows, its end seen or not (Chat.kt: `client.focus` with `chat`), and the last message seen
+/// whole (`seen`), as either changes; it marks what is read and where the unread line goes. Never with
+/// Source.readonly.
+fn tell_focus(
+  src : Source,
+  r : ChatRef,
+  v : ChatView,
+  rd : Reading,
+  seen : Bool,
+  whole : Double,
+) -> Unit {
   if src.read_only {
     return
   }
-  let said = "\{seen}"
+  let said = "\{seen} \{whole}"
   if rd.told == said {
     return
   }
   rd.told = said
-  (src.call)("client.focus", { "chat": focus_chat(r, v, Some(seen)) }, fn(_) {  })
+  let chat = focus_chat(r, v, Some(seen))
+  if whole >= 0.0 {
+    match chat {
+      Object(o) => o["seen"] = Json::number(whole)
+      _ => ()
+    }
+  }
+  (src.call)("client.focus", { "chat": chat }, fn(_) {  })
 }
 
 ///|
