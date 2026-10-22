@@ -554,9 +554,40 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   scroll_page(c, "me", [
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("android-settings.me.title")) },
+    // the accounts on this device, on one card (Me.kt): the one in view first, with who it is, then the others; each
+    // signed out of by itself (with one account it is just 退出登录), and another can be added
     fn() {
-      card(c, fn() {
-        c.box(dir=Row, w=Fill(1.0), gap=14.0, align=ACenter, fn() {
+      let sign_out = fn(a : Json) {
+        let sub = text(Some(a), "sub")
+        let email = text(Some(a), "email")
+        if is_doing(core, ["auth.signOut"], [("account", sub)]) {
+          spinner(c, inline=true)
+        } else if tap_text(
+            c,
+            "sign-out/" + sub,
+            if accounts.length() > 1 {
+              tr("android-settings.me.signOut")
+            } else {
+              tr("android-settings.me.signOutOnly")
+            },
+            color=t.p.red,
+          ) {
+          (core.home)()
+          act(
+            core,
+            tr("android-settings.me.signOutWhat"),
+            "auth.signOut",
+            obj([("account", str(sub))]),
+            done=if accounts.length() > 1 {
+              fill("android-settings.me.signedOut", [("email", email)])
+            } else {
+              ""
+            },
+          )
+        }
+      }
+      list_card(c, fn() {
+        list_row(c, fn() {
           avatar(c, core, here.email, me_name, 46.0, picture=here.picture)
           c.box(w=Fill(1.0), fn() {
             c.text(me_name, size=16.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
@@ -564,46 +595,21 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             |> ignore
           })
           |> ignore
+          for a in accounts {
+            if text(Some(a), "sub") == here.sub {
+              sign_out(a)
+            }
+          }
         })
         |> ignore
-      })
-      |> ignore
-    },
-    fn() { section_header(c, tr("android-settings.me.accounts"), start=S6) },
-    fn() {
-      list_card(c, fn() {
         for a in accounts {
-          let sub = text(Some(a), "sub")
-          let email = text(Some(a), "email")
-          list_row(c, fn() {
-            row_title(c, email)
-            if is_doing(core, ["auth.signOut"], [("account", sub)]) {
-              spinner(c, inline=true)
-            } else if tap_text(
-                c,
-                "sign-out/" + sub,
-                if accounts.length() > 1 {
-                  tr("android-settings.me.signOut")
-                } else {
-                  tr("android-settings.me.signOutOnly")
-                },
-                color=t.p.red,
-              ) {
-              (core.home)()
-              act(
-                core,
-                tr("android-settings.me.signOutWhat"),
-                "auth.signOut",
-                obj([("account", str(sub))]),
-                done=if accounts.length() > 1 {
-                  fill("android-settings.me.signedOut", [("email", email)])
-                } else {
-                  ""
-                },
-              )
-            }
-          })
-          |> ignore
+          if text(Some(a), "sub") != here.sub {
+            list_row(c, fn() {
+              row_title(c, text(Some(a), "email"))
+              sign_out(a)
+            })
+            |> ignore
+          }
         }
         if list_row(c, key="add-account", fn() {
             c.text(tr("android-settings.me.addAccount"), size=15.0, color=t.p.accent, wrap=false, w=Fill(1.0), line=21.0)

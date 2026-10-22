@@ -194,3 +194,15 @@ test "what waits to be decided and is out of view: a bell over the way to the en
   // the next tap goes to the next one's
   assert_eq(ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
 }
+
+///|
+test "the chat's people at its top as the viewer sees them: the viewer 你 (Parts.kt PeopleStack's shown.display)" {
+  let t = chat_tester("chat")
+  let initials = t.words().filter(fn(w) { w.0 == "你" && w.2 < top_bar_h })
+  assert_true(initials.length() > 0)
+  assert_true(t.words().filter(fn(w) { w.0 == "林" && w.2 < top_bar_h }).length() == 0)
+}
+
+///|
+/// The chat's top bar, what its people stand in (its words above this).
+let top_bar_h : Double = 60.0

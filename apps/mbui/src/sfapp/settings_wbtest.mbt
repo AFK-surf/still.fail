@@ -238,3 +238,18 @@ test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed
   t.tap_text("在飞书中打开")
   assert_eq(t.opened(), ["https://open.feishu.cn/page/launcher?code=made-up"])
 }
+
+///|
+test "settings: the account's page has the accounts on this device on its one card (Me.kt): 退出登录 beside who it is" {
+  let t = settings_tester("me")
+  assert_true(t.find("此设备上的账号") is None)
+  let (_, name_y) = t.find("lin@example.com · Google").unwrap()
+  let (_, out_y) = t.find("退出登录").unwrap()
+  // on the account's own row, not on one of its own below it
+  assert_true((out_y - name_y).abs() < row_h)
+  assert_true(t.find("登录另一个账号") is Some(_))
+}
+
+///|
+/// A row of a settings card, at most (its two lines and its 12 above and below).
+let row_h : Double = 64.0

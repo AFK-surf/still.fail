@@ -1806,7 +1806,14 @@ fn people_stack(c : @ui.Ctx, src : Source, people : Array[Person], size : Double
             c,
             src,
             if p.email != "" { p.email } else { p.id },
-            if p.name != "" { p.name } else { p.email },
+            // (as the viewer sees them: 你 for the viewer, Parts.kt PeopleStack's shown.display)
+            if p.display != "" {
+              p.display
+            } else if p.name != "" {
+              p.name
+            } else {
+              p.email
+            },
             p.picture,
             size,
           )

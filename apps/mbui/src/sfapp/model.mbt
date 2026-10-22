@@ -65,6 +65,9 @@ pub(all) struct Person {
   id : String
   email : String
   name : String
+  /// how the viewer sees them (PersonShown.display: 你 for the viewer), where a chat shows its people (PeopleStack); a
+  /// row of the list names them (RowPicture.kt Face: shown.name)
+  display : String
   picture : String
   mine : Bool
 }
@@ -139,6 +142,7 @@ fn person_of(p : Json) -> Person {
     id: text(Some(p), "id"),
     email: text(Some(p), "email"),
     name: text(shown, "name"),
+    display: text(shown, "display"),
     picture: text(shown, "picture"),
     mine: flag(shown, "mine"),
   }
