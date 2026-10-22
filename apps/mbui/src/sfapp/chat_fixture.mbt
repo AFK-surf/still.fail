@@ -270,6 +270,19 @@ fn small_chat(title : String, session : String) -> Json {
 }
 
 ///|
+/// A chat just made from a new chat (`new:N`, newChat.create): no title yet, nothing said in it.
+fn made_chat(session : String) -> Json {
+  match small_chat("", session) {
+    Object(m) => {
+      let o = m.copy()
+      o["messages"] = Json::array([])
+      Json::object(o)
+    }
+    v => v
+  }
+}
+
+///|
 /// Thousands of messages, of the kinds a long chat has: short words back and forth, an agent's Markdown now and then.
 fn long_chat(n : Int) -> Json {
   let claude = by_agent("anthropic", "claude", "s-c1")
@@ -404,6 +417,9 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
           }
         })
         Some(with_cards(f, with_sent(base, session), session))
+      } else if session.has_prefix("new:") {
+        // one just made from a new chat (newChat.create): nothing in it but what is sent to it
+        Some(with_sent(made_chat(session), session))
       } else {
         // its row's title
         let mut title = ""

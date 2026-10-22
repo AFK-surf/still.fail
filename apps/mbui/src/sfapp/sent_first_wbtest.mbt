@@ -138,3 +138,19 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   }
   emit_restore()
 }
+
+///|
+test "words sent are seen every frame from the field to their bubble: not gone the frame their row is laid out" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  t.type_text("先上屏")
+  t.draw()
+  tap_send(t)
+  let sent = t.time()
+  while t.time() < sent + flight_ms + 50.0 {
+    t.frame()
+    seen_once(t, "先上屏") |> ignore
+  }
+  assert_true(send_flight.val is None)
+}
