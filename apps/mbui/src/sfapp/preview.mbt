@@ -2300,7 +2300,10 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
   }
   let on = v.bars_shown()
   let dur = n.duration()
-  let pos = n.position()
+  // where it is: while a finger is on the timeline, where the finger sent it (VideoViewer.kt go: `time` is the target
+  // at once), not where the player says (in scrubbing it says the seek it is taking up, behind the finger and back and
+  // forth as they come); else the player's
+  let pos = if v.scrubbing && v.scrub_to >= 0.0 { v.scrub_to } else { n.position() }
   // the file's own frames (VideoViewer.kt frameStarts: when each starts, read from the file as the system reads it), so
   // a step is to the very next frame it has, whatever its rate; without them (none to read, a host that reads none) a
   // 60th of a second
