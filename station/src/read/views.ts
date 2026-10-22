@@ -18,7 +18,7 @@ import * as store from "./store.ts";
 
 export { makeStore, openStore } from "./store.ts";
 import { knownChannel, knownPerson, slackCreator, teamName } from "./slack-known.ts";
-import { type AuthorKind, type EntryRow, type Json, type MessageRow, type Store, type ThreadRow, type ThreadSummary, STILLFAIL_SURFACE, takeChars } from "./store.ts";
+import { type AuthorKind, type EntryRow, type Json, type MessageRow, type SessionRow, type Store, type ThreadRow, type ThreadSummary, STILLFAIL_SURFACE, takeChars } from "./store.ts";
 
 /// How much of a chat's last message the sidebar gets.
 const LAST_CHARS = 200;
@@ -589,13 +589,23 @@ function entryJson(e: EntryRow): Json {
   return v;
 }
 
-/// Entries with their authors' names.
+/// Entries with their authors' names; an agent's also with its session's model and runtime (`authorModel`,
+/// `authorRuntime`), so its mark is drawn before the client has read the session.
 function entryViews(api: Api, thread: number, entries: EntryRow[]): Json[] {
   const names = authorNames(api, thread);
+  const sessions = new Map<string, SessionRow | null>();
   return entries.map((e) => {
     const v = entryJson(e);
     v.authorName = names(e.authorKind, e.author);
     pictureView(v, names, e.authorKind, e.author);
+    if (e.authorKind === "agent") {
+      if (!sessions.has(e.author)) sessions.set(e.author, store.getSession(api.store, e.author));
+      const session = sessions.get(e.author)!;
+      if (session !== null) {
+        if (session.model !== null) v.authorModel = session.model;
+        v.authorRuntime = session.runtime;
+      }
+    }
     declaredView(v, e.declared);
     // Its card, a post's options from before cards as an options card (EntryRow::card).
     const card = e.card !== undefined ? e.card : e.options !== undefined ? store.optionsCard(e.options) : undefined;

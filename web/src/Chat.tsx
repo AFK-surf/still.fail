@@ -1282,7 +1282,7 @@ export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | n
   return (
     <AgentHover agent={agent}>
       <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
-        {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
+        {maker || runtime ? <ModelLogo maker={maker} runtime={runtime ?? "claude"} size={12} /> : <Mark size={12} />}
         {/* What it said went to Slack, not here: Slack's mark on its corner. */}
         {slack && <span className={css.msgAvatarSlack}><ElsewhereLogo kind={slack === "feishu" ? "feishu" : "slack"} size={9} /></span>}
       </span>

@@ -261,11 +261,13 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
       m.text = rest;
       m.by = { name: title, from: link, maker: model !== null ? present.maker(model) : null };
     } else {
+      // Before its session is read: the model and runtime the station gave with the message.
+      const said = str(m.authorModel);
       m.by = {
         name: model !== null ? format.agentLabel(model, str(get(identity, "effort"))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
         agent: agent ? author : null,
-        maker: model !== null ? present.maker(model) : session !== undefined ? (session.maker ?? null) : null,
-        runtime: get(session, "runtime") ?? null,
+        maker: model !== null ? present.maker(model) : session !== undefined ? (session.maker ?? null) : present.maker(said),
+        runtime: get(session, "runtime") ?? str(m.authorRuntime) ?? null,
       };
     }
   } else if (kind === "ember" || kind === "stillfail") m.by = { name: brandName() };
