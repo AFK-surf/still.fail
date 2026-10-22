@@ -63,6 +63,10 @@ src/host    the platform boundary
 web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
 src/demo    the demo: a chat screen with 10,000 messages
 src/bench   a headless benchmark after nanoui's hill-climb (bench/README.md)
+src/film    a scripted run of an app filmed offscreen, straight into an MP4: the
+            run in a Tester of this host's text and pictures, each frame drawn
+            by this host's renderer (macOS; an app's film program: still.fail's
+            src/sffilm, its scripts/film.sh)
 src/textdiff  the corpus drawn by mbui and by the platform's own text
             drawing, side by side (scripts/textdiff.sh)
 ```

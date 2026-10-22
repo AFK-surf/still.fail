@@ -147,6 +147,59 @@ struct FakeHost {
   /// them, by image
   pixels_of_src : Map[String, FixedArray[Byte]]
   pixels_of : Map[Int, FixedArray[Byte]]
+  /// a real host asked in its place for what is drawn by (Tester::new's `live`), and its pictures, by the fake's ids
+  live : Live?
+  live_images : Map[Int, Int]
+}
+
+///|
+/// A real host a Tester asks in place of its fake for what it draws by (Tester::new's `live`): its text (fonts'
+/// metrics, shaping, the glyphs and their places in its atlas, its words), the faces given to it, its pictures,
+/// decoded there (their sizes, their pixels). Only a program with the platform's host has one: a film's
+/// (mbui/src/film, `@hostapi.host()` asked before the Tester is made), whose frames that host's renderer draws as
+/// they are. A test never does. `turn`: the host given a moment for what it was asked (its main queue turned: a
+/// picture's decode told).
+pub(all) struct Live {
+  host : &@hostapi.Host
+  turn : () -> Unit
+}
+
+///|
+/// The real host the Tester asks in place of its fake (Tester::new's `live`), None in a test.
+fn live_of() -> Live? {
+  match fake.val {
+    Some(f) => f.live
+    None => None
+  }
+}
+
+///|
+/// The most turns a live host is given to decode a picture (Live::turn): what it has not decoded by then failed.
+let live_turns_most = 3000
+
+///|
+/// A picture asked of the live host (its id there `mine`), decoded there: the fake's image of its sizes (failed if it
+/// did not decode), the host's kept by it (Tester::live_image); the answer recorded as a host's is.
+fn live_image(f : FakeHost, l : Live, mine : Int, head : Json) -> Int {
+  let info = FixedArray::make(4, 0.0)
+  let mut st = l.host.image_info(mine, info)
+  let mut turns = 0
+  while st == 0 && turns < live_turns_most {
+    (l.turn)()
+    st = l.host.image_info(mine, info)
+    turns = turns + 1
+  }
+  let id = if st == 1 {
+    fake_image_sized(f, info[0], info[1], info[2], info[3])
+  } else {
+    fake_image_sized(f, 0.0, 0.0, 0.0, 0.0)
+  }
+  f.live_images[id] = mine
+  rec_image_asked(id, head)
+  if st == 1 {
+    rec_image_ready(id, info)
+  }
+  id
 }
 
 ///|
@@ -282,6 +335,11 @@ fn h_font_metrics(
   style : Int,
   out : FixedArray[Double],
 ) -> Unit {
+  if live_of() is Some(l) {
+    l.host.font_metrics(size, weight, style, out)
+    rec_metrics(size, weight, style, out)
+    return
+  }
   match fake.val {
     Some(_) if kept_metrics(size, weight, style, out) => ()
     Some(_) => {
@@ -307,6 +365,11 @@ fn h_shape(
   style : Int,
   out : FixedArray[Double],
 ) -> Int {
+  if live_of() is Some(l) {
+    let k = l.host.shape(text, size, weight, style, out)
+    rec_shape(text, size, weight, style, out, k)
+    return k
+  }
   match fake.val {
     Some(_) if kept_shape(text, size, weight, style, out) is Some(k) => k
     Some(f) => {
@@ -357,6 +420,11 @@ fn h_shape(
 ///|
 /// The key of `text` drawn as one piece (a word of a joining script).
 fn h_text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
+  if live_of() is Some(l) {
+    let k = l.host.text_key(text, size, weight, style)
+    rec_key(text, size, weight, style, k)
+    return k
+  }
   match fake.val {
     Some(_) if kept_key(text, size, weight, style) is Some(k) => k
     Some(_) => text.at(0).to_int()
@@ -370,6 +438,11 @@ fn h_text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
 
 ///|
 fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
+  if live_of() is Some(l) {
+    l.host.glyph(key, out)
+    rec_glyph(key, out)
+    return
+  }
   match fake.val {
     Some(_) if kept_glyph(key, out) => ()
     Some(_) => {
@@ -393,6 +466,7 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
 /// A face's file given to the host (faces.mbt); a Tester's fake host takes any (its words measured as ever).
 fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
   match fake.val {
+    Some({ live: Some(l), .. }) => l.host.face_add(face, path, weight)
     Some(_) => true
     None => @hostapi.face_add(face, path, weight)
   }
@@ -401,6 +475,7 @@ fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
 ///|
 fn h_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
   match fake.val {
+    Some({ live: Some(l), .. }) => l.host.face_add_bytes(face, data, weight)
     Some(_) => data.length() > 0
     None => @hostapi.face_add_bytes(face, data, weight)
   }
@@ -409,6 +484,7 @@ fn h_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
 ///|
 fn h_face_clear(face : Int) -> Unit {
   match fake.val {
+    Some({ live: Some(l), .. }) => l.host.face_clear(face)
     Some(_) => ()
     None => @hostapi.face_clear(face)
   }
@@ -417,6 +493,7 @@ fn h_face_clear(face : Int) -> Unit {
 ///|
 fn h_atlas_generation() -> Int {
   match fake.val {
+    Some({ live: Some(l), .. }) => l.host.atlas_generation()
     Some(_) => 0
     None => @hostapi.atlas_generation()
   }
@@ -510,6 +587,14 @@ fn h_clipboard_secret(s : String, clear_ms : Double) -> Unit {
 fn h_word_at(text : String, off : Int) -> (Int, Int) {
   let head : Json = [Json::string(text), Json::number(off.to_double())]
   match fake.val {
+    Some({ live: Some(l), .. }) => {
+      let (s, e) = l.host.word_at(text, off)
+      if text_recording() {
+        let line : Json = { "wa": head, "r": [Json::number(s.to_double()), Json::number(e.to_double())] }
+        text_say("wa|" + head.stringify(), line)
+      }
+      (s, e)
+    }
     // under a Tester over a host's kept text: the host's word, as it said it (a word it did not say: the test is told,
     // Tester::text_missing, and gets none of its own made up in its place); with no kept text: this one's own
     Some(_) =>
@@ -732,6 +817,10 @@ fn h_log(s : String) -> Unit {
 fn h_image_load(src : String, max_px : Int) -> Int {
   let head : Json = [Json::string(src), Json::number(max_px.to_double())]
   let id = match fake.val {
+    Some({ live: Some(l), .. } as f) => {
+      f.image_loads.push((src, max_px))
+      live_image(f, l, l.host.image_load(src, max_px), { "is": head })
+    }
     Some(f) => {
       f.image_loads.push((src, max_px))
       // as the host decoded it, when kept with the text; else as the test made it up (Tester::new's images)
@@ -777,6 +866,10 @@ fn h_image_load_bytes(data : Bytes, max_px : Int, src : String) -> Int {
     Json::number(max_px.to_double()),
   ]
   let id = match fake.val {
+    Some({ live: Some(l), .. } as f) => {
+      f.image_loads.push(("bytes:\{data.length()}", max_px))
+      live_image(f, l, l.host.image_load_bytes(data, max_px), { "ib": head })
+    }
     Some(f) => {
       f.image_loads.push(("bytes:\{data.length()}", max_px))
       // as the host decoded these bytes, when kept with the text; else a made-up 400 × 300
@@ -826,6 +919,7 @@ fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
 /// made them (Tester::add_pixels), else every pixel a mid grey, opaque.
 fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
   match fake.val {
+    Some({ live: Some(l), .. } as f) if f.live_images.get(id) is Some(mine) => l.host.image_pixels(mine, out)
     Some(f) =>
       match f.images.get(id) {
         Some(im) if im.state == 1 => {
@@ -849,6 +943,16 @@ fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
 fn h_image_free(id : Int) -> Unit {
   outside_end(outside_image, id)
   match fake.val {
+    Some({ live: Some(l), .. } as f) => {
+      f.images.remove(id)
+      match f.live_images.get(id) {
+        Some(mine) => {
+          f.live_images.remove(id)
+          l.host.image_free(mine)
+        }
+        None => ()
+      }
+    }
     Some(f) => f.images.remove(id)
     None => @hostapi.image_free(id)
   }

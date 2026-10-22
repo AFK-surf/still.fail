@@ -930,6 +930,13 @@ pub fn set_host(h : &Host) -> Unit {
 }
 
 ///|
+/// Who answers now: the platform's in a program with mbui/host, asked before a Tester gives its fake (a film's,
+/// mbui/src/film: its text and pictures the platform's, Tester::new's `live`).
+pub fn host() -> &Host {
+  current.val
+}
+
+///|
 /// The desktop's window as the app wants it, said before `run`: its first size (`w` by `h`; MBUI_WIN=<w>x<h> still
 /// has the last word) and its least (`min_w` by `min_h`), and with `inset` no title bar of the system's: the app's own
 /// top row is it (macOS: the window's buttons in it, 16 in and centred on its first 44; the app drags the window by
