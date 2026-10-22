@@ -247,7 +247,10 @@ case "$cmd" in
     # (nothing compared after it: the run fails for the text to be committed, and the next compares over it; the job
     # has 10 minutes, and recording, the draw lists again, drawing and comparing them took more: 39773993975)
     if [ "${TEXT:-}" = 1 ]; then
-      bash "$0" text || exit 1
+      # (the screens with no section of their own yet, where there are such: a new screen's alone, not every screen's
+      # again; recording chat-cards alone took 3 minutes, 39854585955)
+      lacking=$(for n in $names; do grep -q "^# $n " "$A/screens/text-android.textrec" || echo $n; done)
+      bash "$0" text ${lacking:-$names} || exit 1
       echo "android-ref: the Android text recorded anew: commit this run's screens/text-android.textrec (its artifact) in the PR"
       exit 1
     fi

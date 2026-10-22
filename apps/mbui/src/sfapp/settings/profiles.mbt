@@ -28,8 +28,8 @@ fn access_label(kind : String) -> String {
 
 ///|
 /// A profile's allowance in a line (Parts.kt QuotaChips): a box per window, what is left in it, its mark when there is
-/// more than one.
-fn quota_chips(c : @ui.Ctx, q : Json?, corner? : Double = fill_chip_radius) -> Unit {
+/// more than one; `small`, a lower line (a chat's agents, an execution's notes).
+pub fn quota_chips(c : @ui.Ctx, q : Json?, corner? : Double = fill_chip_radius, small? : Bool = false) -> Unit {
   if text(q, "state") != "ok" {
     return
   }
@@ -47,6 +47,7 @@ fn quota_chips(c : @ui.Ctx, q : Json?, corner? : Double = fill_chip_radius) -> U
         text(wv, "level"),
         if windows.length() == 1 { "" } else { text(wv, "mark") },
         left.to_string() + "%",
+        small~,
         corner~,
       )
     }
