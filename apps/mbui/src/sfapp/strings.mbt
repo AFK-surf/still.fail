@@ -16,6 +16,8 @@ let zh : Map[String, String] = {
   "android-misc.screen.title": "屏幕",
   "android-misc.adb.title": "共享调试",
   "android-chat.annotate.copied": "已复制",
+  "web-main.chat.linkCopied": "已复制：粘贴到另一个会话后，该会话的 agent 即可读取此会话",
+  "android-misc.core.restarted": "核心已重启，请重试",
   "android-chat.annotate.selectAll": "全选",
   "android-chat.archive": "归档",
   "android-chat.archived": "已归档",

@@ -171,16 +171,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
               ("stations", count(lock, "protected").to_string()),
             ]),
           )
-          if flag(me, "waiting") {
-            // this device waits to be approved: its code, as its approver sees it, and how it comes in (the
-            // waiting page in the chats' place: 发送批准请求)
-            note(c, tr("web-pages.security.waitingTitle") + " · " + tr("mbui.security.waitingWhere"))
-            c.box(dir=Row, gap=8.0, align=ACenter, fn() {
-              c.text(tr("web-pages.security.thisDevice"), size=13.0, color=t.p.muted, line=18.0, wrap=false) |> ignore
-              mono(c, text(me, "code"), size=13.0, weight=600)
-            })
-            |> ignore
-          } else if !signs {
+          if !signs && !flag(me, "waiting") && !flag(me, "unsigned") {
             note(
               c,
               tr(
@@ -196,6 +187,20 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
       })
     },
   ]
+  // not confirmed yet, or in the lock without signing (let in before it kept a key): asked for here, the code typed
+  // here (Security.kt PairSteps)
+  if flag(me, "waiting") || flag(me, "unsigned") {
+    blocks.append([
+      fn() {
+        section_header(
+          c,
+          tr(if flag(me, "unsigned") { "web-pages.security.upgradeTitle" } else { "web-pages.security.waitingTitle" }),
+          start=S6,
+        )
+      },
+      fn() { list_card(c, fn() { body(c, fn() { pair_steps(c, core, here.workspace) }) }) },
+    ])
+  }
   if requests.length() > 0 {
     blocks.append([
       fn() { section_header(c, tr("web-pages.security.waiting") + " · " + requests.length().to_string(), start=S6) },

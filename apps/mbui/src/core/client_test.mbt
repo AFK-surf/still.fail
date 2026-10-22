@@ -153,7 +153,8 @@ test "a fatal fails the calls in flight; restarted asks every subscription again
   c.receive("{\"fatal\":\"boom\"}") |> ignore
   assert_eq(c.fatal, Some("boom"))
   assert_eq(errs.length(), 1)
-  assert_eq(errs[0].stringify(), "{\"code\":\"fatal\",\"message\":\"boom\"}")
+  // (in the app's words, as StillFailCore.kt fails them; the core's own reason kept in `fatal`)
+  assert_eq(errs[0].stringify(), "{\"code\":\"core_restarted\",\"message\":\"" + restarted_text.val + "\"}")
   sent.clear()
   c.restarted()
   assert_eq(c.fatal, None)
@@ -283,4 +284,16 @@ test "what is asked of the core is awaited until answered or first read" {
   assert_eq(waits.length(), 0)
   c.restarted()
   assert_eq(waits.length(), 1)
+}
+
+///|
+test "a core started anew is told again where the app's attention is (client.focus, as told last)" {
+  let sent : Array[String] = []
+  let c = Client::new(fn(m) { sent.push(m) })
+  c.call("client.focus", params={ "visible": true, "focused": true, "workspace": "ws1" }) |> ignore
+  sent.clear()
+  c.restarted()
+  assert_eq(sent.length(), 1)
+  assert_true(sent[0].contains("client.focus"))
+  assert_true(sent[0].contains("\"visible\":true"))
 }

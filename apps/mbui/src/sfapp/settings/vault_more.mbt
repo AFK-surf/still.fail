@@ -771,6 +771,12 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
               labeled(tr("android-settings.vault.hosts"), fn() {
                 fill_once(c, "hosts", join(strings(row, "hosts"), ", "))
                 words["hosts"] = field_box(c, key("hosts"), "api.github.com, uploads.github.com")
+                // words typed that name no host (only commas and spaces): said, in red (Vault.kt hostsNeeded)
+                let typed = words.get("hosts").unwrap_or("")
+                let named = typed.replace_all(old=",", new=" ").replace_all(old="\n", new=" ").split(" ").any(fn(h) { h != "" })
+                if typed != "" && !named {
+                  c.text(tr("android-settings.vault.hostsNeeded"), style=hosts_needed_words) |> ignore
+                }
               })
             }
             labeled(tr("android-settings.vault.env"), fn() {
@@ -974,3 +980,8 @@ fn open_vault_recover(_core : Core, ws : String) -> Unit {
     |> ignore
   })
 }
+
+///|
+/// Hosts that name none (Vault.kt hostsNeeded: 12sp, red).
+// kept across runs: a value (no field of it changes)
+let hosts_needed_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
