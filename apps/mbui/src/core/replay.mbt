@@ -490,16 +490,57 @@ pub fn Replay::step_taken(self : Replay, line : String) -> Bool {
 
 ///|
 /// The bytes the run sent beside its first call `name` whose params' `key` is `value` (a part of a file going up:
-/// `station.upload.part`, `name`, `e2e-photo.jpg`), as the trace keeps them: what a test hands the app again (shared
+/// `station.upload.part`, `name`, `e2e-photo.jpg`; or a file of a `composer.add`'s, its run of the bytes beside it),
+/// as the trace keeps them: what a test hands the app again (shared
 /// in, a picture marked) for it to send the same. None where the trace has none (over scripts/trace make's MAX_BYTES).
 pub fn Replay::sent_bytes(self : Replay, name : String, key : String, value : String) -> Bytes? {
   for e in self.evs {
     if e.out && e.msg is Object(m) && name_of(m) == name {
       match m.get("params") {
         Some(Object(p)) if p.get(key) == Some(Json::string(value)) => return e.bytes
+        Some(Object(p)) =>
+          match handed_part(p, e.bytes, fn(v) { v == value }, key) {
+            Some(b) => return Some(b)
+            None => ()
+          }
         _ => ()
       }
     }
+  }
+  None
+}
+
+///|
+/// A file handed to the core whole beside a call (`composer.add`'s `files`, each `blob.hostBytes: [start, length]` of
+/// the bytes beside it) whose `key` passes `ok`: its bytes.
+fn handed_part(p : Map[String, Json], bytes : Bytes?, ok : (String) -> Bool, key : String) -> Bytes? {
+  let all = match bytes {
+    Some(b) => b
+    None => return None
+  }
+  match p.get("files") {
+    Some(Array(files)) =>
+      for f in files {
+        match f {
+          Object(o) =>
+            match (o.get(key), o.get("blob")) {
+              (Some(String(v)), Some(Object(b))) if ok(v) =>
+                match b.get("hostBytes") {
+                  Some(Array([Number(start, ..), Number(len, ..)])) => {
+                    let s = start.to_int()
+                    let n = len.to_int()
+                    if s >= 0 && n >= 0 && s + n <= all.length() {
+                      return Some(Bytes::makei(n, fn(i) { all[s + i] }))
+                    }
+                  }
+                  _ => ()
+                }
+              _ => ()
+            }
+          _ => ()
+        }
+      }
+    _ => ()
   }
   None
 }
@@ -514,7 +555,11 @@ pub fn Replay::sent_bytes_from(self : Replay, name : String, key : String, prefi
         Some(Object(p)) =>
           match p.get(key) {
             Some(String(v)) if v.has_prefix(prefix) => return e.bytes
-            _ => ()
+            _ =>
+              match handed_part(p, e.bytes, fn(v) { v.has_prefix(prefix) }, key) {
+                Some(b) => return Some(b)
+                None => ()
+              }
           }
         _ => ()
       }

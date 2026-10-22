@@ -22,6 +22,7 @@ fn fake_core(
   now? : Double = 0.0,
   over? : (String, Topic) -> Topic = fn(_, t) { t },
   made? : Ref[Source?] = Ref(None),
+  ups? : Map[String, Json] = Map::new(),
 ) -> @ui.Tester {
   reset()
   // the drafts the fake core has named (its `draft.put`)
@@ -59,7 +60,13 @@ fn fake_core(
       calls.push({ name, params, bytes, done, heard: Some(on_value) })
       0
     },
-    topic: fn(name, params) { over(name, (base.topic)(name, params)) },
+    // the draft's files in the core's composer, as the test moves them on (`ups`: going_up, upped)
+    topic: fn(name, params) {
+      if name == "composer" {
+        return { value: Some({ "files": Json::array(ups.values().collect()) }), error: None, version: 0 }
+      }
+      over(name, (base.topic)(name, params))
+    },
     now: fn() { now },
     read_only,
   }
@@ -74,6 +81,45 @@ fn fake_core(
 ///|
 fn named(calls : Array[Made], name : String) -> Array[Made] {
   calls.filter(fn(m) { m.name == name })
+}
+
+///|
+/// The file a `composer.add` hands the core (the one each of these calls has).
+fn handed(m : Made) -> Json? {
+  match field(Some(m.params), "files") {
+    Some(Array([one, ..])) => Some(one)
+    _ => None
+  }
+}
+
+///|
+/// The core says the file `m` handed over has `sent` bytes up.
+fn going_up(ups : Map[String, Json], m : Made, sent : Int) -> Unit {
+  let f = handed(m)
+  ups[text(f, "id")] = {
+    "id": Json::string(text(f, "id")),
+    "name": Json::string(text(f, "name")),
+    "size": Json::number(number(f, "size")),
+    "sent": Json::number(sent.to_double()),
+  }
+}
+
+///|
+/// The core says the file `m` handed over is up, at the station's `path` (its uploads' by default).
+fn upped(ups : Map[String, Json], m : Made, path? : String = "") -> Unit {
+  let f = handed(m)
+  let name = text(f, "name")
+  ups[text(f, "id")] = {
+    "id": Json::string(text(f, "id")),
+    "name": Json::string(name),
+    "size": Json::number(number(f, "size")),
+    "sent": Json::number(number(f, "size")),
+    "done": {
+      "name": Json::string(name),
+      "path": Json::string(if path == "" { "uploads/u/" + name } else { path }),
+      "size": Json::number(number(f, "size")),
+    },
+  }
 }
 
 ///|
@@ -181,9 +227,9 @@ test "a long paste goes up by the same id and name whatever the clocks say: from
     t.run_for(run.1)
     t.tap_text("发消息")
     t.type_text(long)
-    let parts = named(calls, "station.upload.part")
-    assert_eq(parts.length(), 1)
-    let p = Some(parts[0].params)
+    let adds = named(calls, "composer.add")
+    assert_eq(adds.length(), 1)
+    let p = handed(adds[0])
     ids.push((text(p, "id"), text(p, "name")))
   }
   assert_eq(ids[0], ids[1])
@@ -212,16 +258,16 @@ test "an upload's id is the same in every run and on js and native: written out,
 test "the same paste in the next message is another upload: the core names the next draft anew" {
   let long = "第一行要点\n" + String::make(6000, 'x')
   let calls : Array[Made] = []
-  let t = fake_core(calls)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, ups~)
   let up = fn() {
     t.tap_text("发消息")
     t.type_text(long)
-    let parts = named(calls, "station.upload.part")
-    let p = Some(parts[parts.length() - 1].params)
-    (parts[parts.length() - 1].done)(
-      Ok({ "file": { "name": Json::string(text(p, "name")), "path": "uploads/u/p.txt", "size": 6016 } }),
-    )
+    let adds = named(calls, "composer.add")
+    let last = adds[adds.length() - 1]
+    upped(ups, last, path="uploads/u/p.txt")
     t.draw()
+    let p = handed(last)
     (text(p, "id"), text(p, "name"))
   }
   let first = up()
@@ -235,7 +281,7 @@ test "the same paste in the next message is another upload: the core names the n
 }
 
 ///|
-test "a file going up keeps the id it was given as it went in, whatever comes to the chat meanwhile" {
+test "a file going up keeps the id it was given as it went in, whatever comes to the chat meanwhile: handed over once" {
   let calls : Array[Made] = []
   // a message comes to the chat between the file's two parts
   let came = Ref(false)
@@ -266,19 +312,18 @@ test "a file going up keeps the id it was given as it went in, whatever comes to
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   let d = drafts.get(draft_key(r)).unwrap()
   let before = d.id
-  // two parts' worth
-  let bytes = Bytes::make(part_size + 10, b'x')
+  let bytes = Bytes::make(1000, b'x')
   add_file(made.val.unwrap(), d, r.station, "big.bin", bytes, None)
-  let first = named(calls, "station.upload.part")
+  let first = named(calls, "composer.add")
   assert_eq(first.length(), 1)
+  let id = d.files[0].core_id
   came.val = true
   t.draw()
   assert_eq(d.id, before)
-  (first[0].done)(Ok({ "have": Json::number(part_size.to_double()) }))
-  let parts = named(calls, "station.upload.part")
-  assert_eq(parts.length(), 2)
-  assert_eq(text(Some(parts[1].params), "id"), text(Some(parts[0].params), "id"))
-  assert_eq(text(Some(parts[1].params), "name"), text(Some(parts[0].params), "name"))
+  // the core sends it up: nothing more is handed over, its id as it was
+  assert_eq(named(calls, "composer.add").length(), 1)
+  assert_eq(d.files[0].core_id, id)
+  assert_eq(text(handed(first[0]), "id"), id)
 }
 
 ///|
@@ -295,7 +340,7 @@ test "the same file twice in a draft is two uploads, and again after it was sent
   let named_as = d.id
   assert_true(named_as != "")
   let bytes = b"the same bytes"
-  let ids = fn() { named(calls, "station.upload.part").map(fn(m) { text(Some(m.params), "id") }) }
+  let ids = fn() { named(calls, "composer.add").map(fn(m) { text(handed(m), "id") }) }
   add_file(src, d, r.station, "a.txt", bytes, None)
   add_file(src, d, r.station, "a.txt", bytes, None)
   // sent: the draft emptied, kept so, named anew; the same file put in again
@@ -320,15 +365,17 @@ test "the same file twice in a draft is two uploads, and again after it was sent
 test "a draft emptied, not sent: the core names the next, and the same file put in again is another upload" {
   let calls : Array[Made] = []
   let made : Ref[Source?] = Ref(None)
-  let _t = fake_core(calls, made~)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, made~, ups~)
   let src = made.val.unwrap()
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   let d = drafts.get(draft_key(r)).unwrap()
   let bytes = b"the same bytes"
   add_file(src, d, r.station, "a.txt", bytes, None)
-  let first = named(calls, "station.upload.part")[0]
+  let first = named(calls, "composer.add")[0]
   // up: the draft holds it, kept so (draft.put with the file: the same draft, its name kept)
-  (first.done)(Ok({ "file": { "name": "a.txt", "path": "uploads/u/a.txt", "size": 14 } }))
+  upped(ups, first)
+  t.draw()
   save_draft(src, d)
   let named_as = d.id
   assert_true(named_as != "")
@@ -338,15 +385,16 @@ test "a draft emptied, not sent: the core names the next, and the same file put 
   assert_true(d.id != named_as)
   assert_eq(named(calls, "chat.send").length(), 0)
   add_file(src, d, r.station, "a.txt", bytes, None)
-  let parts = named(calls, "station.upload.part")
-  assert_eq(parts.length(), 2)
-  assert_true(text(Some(parts[1].params), "id") != text(Some(first.params), "id"))
+  let adds = named(calls, "composer.add")
+  assert_eq(adds.length(), 2)
+  assert_true(text(handed(adds[1]), "id") != text(handed(first), "id"))
 }
 
 ///|
 test "a long paste goes as a text file, up to the station, and with the message" {
   let calls : Array[Made] = []
-  let t = fake_core(calls)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, ups~)
   t.tap_text("发消息")
   let long = "第一行要点\n" + String::make(6000, 'x')
   t.type_text(long)
@@ -355,14 +403,15 @@ test "a long paste goes as a text file, up to the station, and with the message"
   assert_eq(words, "")
   assert_true(t.find("第一行要点") is Some(_))
   assert_true(t.find("正在上传") is Some(_))
-  let parts = named(calls, "station.upload.part")
-  assert_eq(parts.length(), 1)
-  let p = Some(parts[0].params)
+  let adds = named(calls, "composer.add")
+  assert_eq(adds.length(), 1)
+  let p = handed(adds[0])
   assert_true(text(p, "name").has_prefix("pasted-text-"))
   assert_true(text(p, "name").has_suffix(".txt"))
-  assert_eq(parts[0].bytes.unwrap().length(), 6016)
+  // handed to the core whole, beside the call, which sends it up
+  assert_eq(adds[0].bytes.unwrap().length(), 6016)
   // up: so many characters, and it can be put back
-  (parts[0].done)(Ok({ "file": { "name": Json::string(text(p, "name")), "path": "uploads/u1/p.txt", "size": 6016 } }))
+  upped(ups, adds[0], path="uploads/u1/p.txt")
   t.draw()
   assert_true(t.find("\{long.length()} 字符") is Some(_))
   assert_true(t.find("展开到输入框") is Some(_))
@@ -441,7 +490,7 @@ test "read-only: nothing is sent, no draft kept, no file put up" {
   t.run_for(draft_keep_ms)
   assert_eq(named(calls, "chat.send").length(), 0)
   assert_eq(named(calls, "draft.put").length(), 0)
-  assert_eq(named(calls, "station.upload.part").length(), 0)
+  assert_eq(named(calls, "composer.add").length(), 0)
   assert_eq(named(calls, "session.warm").length(), 0)
   assert_true(t.find(read_only_words) is Some(_))
   t.assert_idle()

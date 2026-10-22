@@ -552,6 +552,7 @@ fn send_first(
   }
   let words = with_link_words(d.text.trim(chars=" \n\t").to_owned(), d)
   let files = up_files(d)
+  let uploads = up_uploads(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   let taken_text = d.text
   let taken_files = d.files.copy()
@@ -584,6 +585,9 @@ fn send_first(
       "text": Json::string(words),
       "attachments": Json::array(files),
       "quotes": Json::array(quotes),
+    }
+    if uploads.length() > 0 {
+      params["uploads"] = Json::array(uploads)
     }
     (src.call)("chat.send", Json::object(params), fn(res) {
       match res {

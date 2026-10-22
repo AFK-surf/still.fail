@@ -20,37 +20,28 @@ fn png_head() -> Bytes {
 }
 
 ///|
-test "a file going up says how far it has gone while a part goes, not only once each part is in" {
+test "a file goes to the core whole, named by its content, and says how far the core has sent it up" {
   let calls : Array[Made] = []
   let made : Ref[Source?] = Ref(None)
-  let t = fake_core(calls, made~)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, made~, ups~)
   let d = the_draft()
-  // two parts' worth
-  let bytes = Bytes::make(part_size + 10, b'x')
+  let bytes = Bytes::make(1000, b'x')
   add_file(made.val.unwrap(), d, "ws1/st1", "大文件.bin", bytes, None)
   t.draw()
-  let parts = named(calls, "station.upload.part")
-  assert_eq(parts.length(), 1)
-  // asked to say how it goes (Calls.kt: progress = true)
-  assert_true(field(Some(parts[0].params), "progress") is Some(True))
-  // a quarter of the first part gone: so much of the whole
-  match parts[0].heard {
-    Some(heard) => heard({ "sent": Json::number((part_size / 4).to_double()) }, None)
-    None => fail("the part was not streamed")
-  }
+  let adds = named(calls, "composer.add")
+  assert_eq(adds.length(), 1)
+  // its bytes beside the call, all of them; its content's SHA-256 with it (a station that has it copies its own)
+  let blob = field(handed(adds[0]), "blob")
+  assert_eq(field(blob, "hostBytes"), Some([0, 1000]))
+  assert_eq(text(blob, "sha256"), @zip.sha256(bytes))
+  assert_eq(adds[0].bytes.map(fn(b) { b.length() }), Some(1000))
+  assert_eq(text(Some(adds[0].params), "key"), "mbui:ws1/st1:s-c1")
+  // a quarter of it up: so much
+  going_up(ups, adds[0], 250)
   t.draw()
-  assert_true(t.dump().contains("正在上传 24%"))
-  // the part in: from there, and the next part's going said from where the first ended
-  (parts[0].done)(Ok({ "have": Json::number(part_size.to_double()) }))
-  let next = named(calls, "station.upload.part")
-  assert_eq(next.length(), 2)
-  match next[1].heard {
-    Some(heard) => heard({ "sent": Json::number(5.0) }, None)
-    None => fail("the part was not streamed")
-  }
-  t.draw()
-  assert_true(t.dump().contains("正在上传 99%"))
-  (next[1].done)(Ok({ "file": { "name": "大文件.bin", "path": "uploads/u/大文件.bin", "size": part_size + 10 } }))
+  assert_true(t.dump().contains("正在上传 25%"))
+  upped(ups, adds[0])
   t.draw()
   assert_true(t.dump().contains("正在上传") == false)
   t.run_for(composer_morph_ms)
@@ -58,10 +49,90 @@ test "a file going up says how far it has gone while a part goes, not only once 
 }
 
 ///|
-test "a picture waiting in the composer, tapped, opens in the viewer from the bytes picked" {
+test "sent while a file is going up: the message names it (uploads) and the core sends it once it is up" {
   let calls : Array[Made] = []
   let made : Ref[Source?] = Ref(None)
   let t = fake_core(calls, made~)
+  let d = the_draft()
+  add_file(made.val.unwrap(), d, "ws1/st1", "报告.pdf", b"%PDF-1.7", None)
+  t.draw()
+  t.tap_text("发消息")
+  t.type_text("附上报告")
+  // still going up, and the message can go
+  assert_true(t.find("正在上传") is Some(_))
+  assert_true(draft_ready(d, false))
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  assert_eq(field(Some(sent[0].params), "attachments"), Some([]))
+  match field(Some(sent[0].params), "uploads") {
+    Some(Array([u])) => {
+      assert_eq(text(Some(u), "id"), text(handed(named(calls, "composer.add")[0]), "id"))
+      assert_eq(text(Some(u), "name"), "报告.pdf")
+      assert_eq(number(Some(u), "size"), 8.0)
+    }
+    _ => fail("the file going up was not named")
+  }
+  t.run_for(flight_wait_ms + composer_morph_ms)
+  t.assert_idle()
+}
+
+///|
+test "a file that failed going up in the core: the message waits for it; tapped, it goes again (composer.retry)" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, made~, ups~)
+  let d = the_draft()
+  add_file(made.val.unwrap(), d, "ws1/st1", "报告.pdf", b"%PDF-1.7", None)
+  let add = named(calls, "composer.add")[0]
+  let id = text(handed(add), "id")
+  ups[id] = { "id": Json::string(id), "name": "报告.pdf", "size": 8, "error": "station 没有回应" }
+  t.draw()
+  t.tap_text("发消息")
+  t.type_text("附上报告")
+  assert_true(t.find("station 没有回应") is Some(_))
+  // never left out unsaid: nothing goes until it is sent again or taken out
+  assert_false(draft_ready(d, false))
+  let again = t.query(Button, label="重试上传").unwrap().rect
+  t.tap(again.0 + again.2 / 2.0, again.1 + again.3 / 2.0)
+  let retried = named(calls, "composer.retry")
+  assert_eq(retried.length(), 1)
+  assert_eq(text(Some(retried[0].params), "id"), id)
+  assert_eq(text(Some(retried[0].params), "key"), "mbui:ws1/st1:s-c1")
+  // going again: what failed not said meanwhile, and the message can go
+  ups.remove(id)
+  t.draw()
+  assert_true(t.find("station 没有回应") is None)
+  assert_true(draft_ready(d, false))
+  upped(ups, add)
+  t.draw()
+  t.run_for(composer_morph_ms)
+  t.assert_idle()
+}
+
+///|
+test "a file taken out while it goes up: the core lets go of it (composer.remove)" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let t = fake_core(calls, made~)
+  let d = the_draft()
+  add_file(made.val.unwrap(), d, "ws1/st1", "报告.pdf", b"%PDF-1.7", None)
+  t.draw()
+  t.run_for(composer_morph_ms)
+  take_out(made.val.unwrap(), d, d.files[0])
+  let removed = named(calls, "composer.remove")
+  assert_eq(removed.length(), 1)
+  assert_eq(text(Some(removed[0].params), "id"), text(handed(named(calls, "composer.add")[0]), "id"))
+  assert_eq(d.files.length(), 0)
+}
+
+///|
+test "a picture waiting in the composer, tapped, opens in the viewer from the bytes picked" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, made~, ups~)
   let d = the_draft()
   let bytes = png_head()
   add_file(made.val.unwrap(), d, "ws1/st1", "照片.png", bytes, None)
@@ -91,7 +162,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   t.back()
   t.run_for(preview_rest() - t.time())
   assert_true(viewer.val is None)
-  (named(calls, "station.upload.part")[0].done)(Ok({ "file": { "name": "照片.png", "path": "uploads/u/照片.png", "size": 29 } }))
+  upped(ups, named(calls, "composer.add")[0])
   t.draw()
   t.assert_idle()
 }
@@ -117,15 +188,15 @@ test "a link shared into the draft, tapped, opens" {
 test "the draft's files and its station files are one row, in the order they were put in, every card a file's mark" {
   let calls : Array[Made] = []
   let made : Ref[Source?] = Ref(None)
-  let t = fake_core(calls, made~)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, made~, ups~)
   let src = made.val.unwrap()
   let d = the_draft()
   add_file(src, d, "ws1/st1", "第一份.txt", b"one", None)
   draft_refs[d.key] = [draft_ref("ws1/st1", "Studio", "/Users/lin/文档", "第二份.md", "第二份.md", false, size=12.0)]
   add_file(src, d, "ws1/st1", "第三份.pdf", b"three", None)
-  for p in named(calls, "station.upload.part") {
-    let n = text(Some(p.params), "name")
-    (p.done)(Ok({ "file": { "name": Json::string(n), "path": Json::string("uploads/u/" + n), "size": 5 } }))
+  for p in named(calls, "composer.add") {
+    upped(ups, p)
   }
   t.draw()
   t.run_for(composer_morph_ms)
@@ -210,15 +281,15 @@ test "an archived chat's restore failing says why under it, in red; tapped again
 ///|
 test "the composer's buttons say what they are: 添加到消息, 发送; a pasted text's remove 删除粘贴片段" {
   let calls : Array[Made] = []
-  let t = fake_core(calls)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, ups~)
   t.tap_text("发消息")
   t.type_text("第一行要点\n" + String::make(6000, 'x'))
   let labels = t.semantics().filter(fn(s) { s.role == @ui.Role::Button }).map(fn(s) { s.label })
   assert_true(labels.contains("添加到消息"))
   assert_true(labels.contains("发送"))
   assert_true(labels.contains("删除粘贴片段"))
-  let paste = named(calls, "station.upload.part")[0]
-  (paste.done)(Ok({ "file": { "name": "p.txt", "path": "uploads/u/p.txt", "size": 6006 } }))
+  upped(ups, named(calls, "composer.add")[0], path="uploads/u/p.txt")
   t.draw()
   t.run_for(draft_keep_ms)
   t.assert_idle()

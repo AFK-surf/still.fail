@@ -8,7 +8,12 @@ test "96-viewer" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("viewer"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
     // (what the host drew of the marks, as the run's gave it: the PNG it sent up)
-    let marked = match f.r.sent_bytes_from("station.upload.part", "name", "e2e-photo-标注-") {
+    // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
+    let handed = match f.r.sent_bytes_from("composer.add", "name", "e2e-photo-标注-") {
+      Some(b) => Some(b)
+      None => f.r.sent_bytes_from("station.upload.part", "name", "e2e-photo-标注-")
+    }
+    let marked = match handed {
       Some(b) => b
       None => fail("flow: the trace has no marked picture's bytes")
     }

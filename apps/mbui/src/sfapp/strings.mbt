@@ -188,6 +188,7 @@ let zh : Map[String, String] = {
   "common.reading": "正在读取",
   "common.retry": "重试",
   "common.uploading": "正在上传",
+  "web-main.composer.retryUpload": "重试上传",
   "web-main.composer.expandPaste": "展开到输入框",
   "web-main.composer.pasteAttachment": "{count} 字符",
   "web-main.composer.pasteUploading": "正在上传",

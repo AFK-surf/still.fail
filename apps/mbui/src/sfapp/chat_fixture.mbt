@@ -588,6 +588,11 @@ let fix_clock : Ref[(() -> Double)?] = { val: None }
 let fix_drafts : Map[String, Json] = {}
 
 ///|
+/// The fixture core's composers' files (`composer.add`), by the composer's key: each up as soon as it is added, as the
+/// station takes it whole.
+let fix_composers : Map[String, Array[Json]] = {}
+
+///|
 /// The chats of the viewer's other workspace (个人, its station ws2/st9) that a reference may name (`chat.outsideRefs`):
 /// their keys, titles, and whether the viewer may share them.
 // kept across runs: a table, never written
@@ -826,6 +831,37 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         }
         _ => Some(Err({ "code": "invalid_params", "message": "draft.put" }))
       }
+    // a file handed over: up at once, at the station's uploads (as station.upload.part's last part answers)
+    "composer.add" => {
+      let key = text(p, "key")
+      let list = fix_composers.get(key).unwrap_or([])
+      for one in items(p, "files") {
+        let o = Some(one)
+        let id = text(o, "id")
+        let name = text(o, "name")
+        list.push({
+          "id": Json::string(id),
+          "name": Json::string(name),
+          "size": Json::number(number(o, "size")),
+          "sent": Json::number(number(o, "size")),
+          "done": {
+            "name": Json::string(name),
+            "path": Json::string("uploads/" + id + "/" + name),
+            "size": Json::number(number(o, "size")),
+          },
+        })
+      }
+      fix_composers[key] = list
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "composer.remove" => {
+      let key = text(p, "key")
+      fix_composers[key] = fix_composers.get(key).unwrap_or([]).filter(fn(x) { text(Some(x), "id") != text(p, "id") })
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "composer.retry" => Some(Ok(Json::object({})))
     "station.upload.part" => {
       let name = text(p, "name")
       let id = text(p, "id")

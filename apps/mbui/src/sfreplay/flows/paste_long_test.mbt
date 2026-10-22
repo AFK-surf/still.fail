@@ -1,5 +1,5 @@
 // 09-paste-long (e2e/traces/paste-long.trace): a long paste (5000 characters or more) becomes a text file in the
-// draft, put up at once (station.upload.part), not words in the field; then sent with the message.
+// draft, handed to the core at once (composer.add), not words in the field; then sent with the message.
 
 ///|
 test "09-paste-long" {

@@ -22,7 +22,9 @@
 //     Loopback.kt, where the app keeps itself running while it listens), not the shell
 //   picked.read {file, start, end} → bytes; picked.hash {file} → {sha256}; picked.release {file} — a file picked in
 //     the app, read a part at a time as it goes up (`composer.add` with `blob: {hostFile, size, type}`) and named by
-//     its content first (a station that has it already copies its own), answered by the app (Kotlin: PickedFiles.kt)
+//     its content first (a station that has it already copies its own), answered by the app (Kotlin: PickedFiles.kt).
+//     Or held whole by the app and handed over with the call, its bytes beside it (`blob: {hostBytes: [start,
+//     length], type, sha256}`: mbui's app, whose picked files are read whole), read from those as it goes up
 //   reset {} — the connections kept for requests are taken for gone
 //   iroh.bind {relayUrls, lookup, relayOnly, alpns: [hex]} + key → {id}; iroh.connect {id, addr, additional: [hex]} +
 //     alpn → {id}; iroh.accept {id} → {id, alpn: hex} (the next connection coming, its handshake done; {end} once the
@@ -404,13 +406,25 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
     },
     receive(client: number, json: string, bytes?: Uint8Array): void {
       // A file picked in the app: read from there as it goes up, as the desktop's page's is (file-port.ts).
-      if (json.includes('"hostFile"')) {
+      if (json.includes('"hostFile"') || json.includes('"hostBytes"')) {
         let raw: unknown;
         try { raw = JSON.parse(json); } catch { raw = null; }
         const files = (raw as { call?: unknown; params?: { files?: unknown } } | null)?.params?.files;
         if ((raw as { call?: unknown } | null)?.call === "composer.add" && Array.isArray(files)) {
+          let held = false;
           for (const f of files) {
-            const b = (f as { blob?: unknown } | null)?.blob as { hostFile?: unknown; size?: unknown; type?: unknown } | undefined;
+            const b = (f as { blob?: unknown } | null)?.blob as { hostFile?: unknown; hostBytes?: unknown; size?: unknown; type?: unknown; sha256?: unknown } | undefined;
+            // Handed over whole beside the call: read from those bytes, named by what the app worked out.
+            const at = b?.hostBytes;
+            if (bytes && Array.isArray(at) && at.length === 2 && Number.isSafeInteger(at[0]) && Number.isSafeInteger(at[1]) && at[0] >= 0 && at[1] >= 0 && at[0] + at[1] <= bytes.length) {
+              const part = bytes.subarray(at[0], at[0] + at[1]);
+              const sha = typeof b?.sha256 === "string" && /^[0-9a-f]{64}$/.test(b.sha256) ? b.sha256 : null;
+              (f as { blob: unknown }).blob = new FileSource(at[1], typeof b?.type === "string" ? b.type : "",
+                (start, end) => Promise.resolve(part.slice(start, end).buffer as ArrayBuffer), () => {},
+                sha ? () => Promise.resolve(sha) : undefined);
+              held = true;
+              continue;
+            }
             if (!b || !Number.isSafeInteger(b.hostFile) || !Number.isSafeInteger(b.size) || (b.size as number) < 0) continue;
             const file = b.hostFile as number;
             (f as { blob: unknown }).blob = new FileSource(b.size as number, typeof b.type === "string" ? b.type : "",
@@ -424,7 +438,7 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
                 return typeof sha === "string" && /^[0-9a-f]{64}$/.test(sha) ? sha : null;
               }), () => null)));
           }
-          later((core) => core.receiveRaw(client, raw, bytes));
+          later((core) => core.receiveRaw(client, raw, held ? undefined : bytes));
           return;
         }
       }
