@@ -68,3 +68,4 @@ class AddedMembers(val joined: List<String>, val added: List<String>, val alread
 
 /** A person of a Slack workspace a station's connects are in, by their email there (GET /slack/people). */
 @Serializable data class SlackPerson(val email: String, val name: String = "", val image: String? = null, val guest: Boolean = false, val team: String? = null)
+// (CI probe: lint's shares run; dropped before the merge)
