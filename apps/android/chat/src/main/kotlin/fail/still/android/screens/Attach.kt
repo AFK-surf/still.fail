@@ -1,8 +1,9 @@
-// ＋ in a composer: the gallery's recent photos across the top, a tap putting one in the message (most of what goes to
-// an agent is a screenshot just taken), the camera before them; under them the system's photo picker, its file picker
-// and (where there is one) Station 文件. The recent photos need the gallery's permission, asked for from the strip's
-// last tile (on Android 14 and later the photos chosen there may be all it gets: the tile then chooses more); without
-// it the strip is the camera and that tile. The phone's web cannot read a gallery: there ＋ is a menu (mobile/Chat.tsx).
+// ＋ in a composer: the gallery's recent photos and videos across the top, a tap putting one in the message (most of
+// what goes to an agent is a screenshot just taken), the camera before them; under them the system's photo picker
+// (photos and videos), its file picker and (where there is one) Station 文件. The recent ones need the gallery's
+// permission, asked for from the strip's last tile (on Android 14 and later the ones chosen there may be all it gets,
+// and one granted the photos before videos were asked for has only them: the tile then asks for more); without it the
+// strip is the camera and that tile. The phone's web cannot read a gallery: there ＋ is a menu (mobile/Chat.tsx).
 package fail.still.android.screens
 
 import android.Manifest
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import fail.still.android.ui.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -47,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -72,7 +75,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** What ＋ offers: the system's camera, photo and file pickers, a recent photo of the gallery's put in, and asking for the gallery. */
+/** What ＋ offers: the system's camera, photo (and video) and file pickers, a recent one of the gallery's put in, and asking for the gallery. */
 class Attach(
     val camera: () -> Unit,
     val photos: () -> Unit,
@@ -83,21 +86,29 @@ class Attach(
     val answered: MutableIntState = mutableIntStateOf(0),
 )
 
-/** How much of the gallery the app may read: all of it, the photos chosen for it (Android 14 and later), or none. */
+/**
+ * How much of the gallery the app may read: all of it (photos and videos), some (the ones chosen for it on Android 14
+ * and later, or the photos alone), or none.
+ */
 enum class PhotoAccess { All, Some, None }
 
 fun photoAccess(context: Context): PhotoAccess {
     fun has(p: String) = ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
+    if (Build.VERSION.SDK_INT < 33) return if (has(Manifest.permission.READ_EXTERNAL_STORAGE)) PhotoAccess.All else PhotoAccess.None
+    val photos = has(Manifest.permission.READ_MEDIA_IMAGES)
     return when {
-        has(if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE) -> PhotoAccess.All
+        photos && has(Manifest.permission.READ_MEDIA_VIDEO) -> PhotoAccess.All
+        photos || has(Manifest.permission.READ_MEDIA_VIDEO) -> PhotoAccess.Some
         Build.VERSION.SDK_INT >= 34 && has(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) -> PhotoAccess.Some
         else -> PhotoAccess.None
     }
 }
 
 private val galleryAsk: Array<String> get() = when {
-    Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-    Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+    Build.VERSION.SDK_INT >= 34 -> arrayOf(
+        Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+    )
+    Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
     else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 }
 
@@ -117,7 +128,7 @@ fun AttachLaunchers(onPicked: (Picked) -> Unit): Attach {
     return remember {
         Attach(
             camera = { camera.launch(null) },
-            photos = { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            photos = { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
             files = { files.launch(arrayOf("*/*")) },
             recent = { uri -> scope.launch { readPicked(context, uri)?.let(onPicked) } },
             askPhotos = {
@@ -136,7 +147,7 @@ fun AttachLaunchers(onPicked: (Picked) -> Unit): Attach {
 
 private const val ASKED = "attach.gallery.asked"
 private const val RECENT = 30
-/** A recent photo's tile, for the tests. */
+/** A recent photo's or video's tile, for the tests. */
 const val RECENT_TAG = "attach-recent"
 private val TILE_W = 92.dp
 private val TILE_H = 122.dp
@@ -170,14 +181,16 @@ private fun RecentPhotos(app: AppState, attach: Attach) {
     val context = LocalContext.current
     // Read again on each answer of the gallery's, and as the sheet opens (allowed meanwhile in the system's settings).
     val access = remember(attach.answered.intValue) { photoAccess(context) }
-    var photos by remember { mutableStateOf(emptyList<Uri>()) }
+    var photos by remember { mutableStateOf(emptyList<GalleryItem>()) }
     LaunchedEffect(access, attach.answered.intValue) { photos = if (access == PhotoAccess.None) emptyList() else recentPhotos(context) }
     LazyRow(
         Modifier.fillMaxWidth(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         item(key = "camera") { Tile({ app.sheet = null; attach.camera() }) { IconIn(Icons.Camera, 24.dp) } }
-        items(photos, key = { it.toString() }) { uri -> Tile({ app.sheet = null; attach.recent(uri) }, Modifier.testTag(RECENT_TAG)) { Thumbnail(uri) } }
+        items(photos, key = { it.uri.toString() }) { item ->
+            Tile({ app.sheet = null; attach.recent(item.uri) }, Modifier.testTag(RECENT_TAG)) { Thumbnail(item.uri, item.video) }
+        }
         if (access != PhotoAccess.All) item(key = "ask") {
             val words = if (access == PhotoAccess.Some) t("android-chat.attach.recent.more") else t("android-chat.attach.recent.allow")
             Tile(attach.askPhotos) { Words(Icons.Photo, words) }
@@ -198,37 +211,58 @@ private fun Words(icon: ImageVector, words: String) {
     }
 }
 
+/** A photo's picture, or a video's with a play mark in its corner. */
 @Composable
-private fun Thumbnail(uri: Uri) {
+private fun Thumbnail(uri: Uri, video: Boolean) {
     val context = LocalContext.current
     val picture by produceState<ImageBitmap?>(null, uri) { value = thumbnail(context, uri) }
     picture?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+    if (video) Box(Modifier.fillMaxSize().padding(6.dp), contentAlignment = Alignment.BottomStart) {
+        Box(Modifier.size(22.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+            IconIn(Icons.Play, 14.dp, Color.White)
+        }
+    }
 }
 
 private suspend fun thumbnail(context: Context, uri: Uri): ImageBitmap? = withContext(Dispatchers.IO) {
     try { context.contentResolver.loadThumbnail(uri, Size(276, 366), null).asImageBitmap() } catch (_: Exception) { null }
 }
 
+/** One of the strip's: a photo or a video of the gallery's. */
+class GalleryItem(val uri: Uri, val video: Boolean)
+
 /**
- * The gallery's latest photos, as many as it lets the app read. Not as the gallery sorts them: what it says of when a
- * photo came may be wrong (written in milliseconds, or ahead of now, by an app saving a picture or a phone maker's own
- * gallery and cloud), and that put old photos ahead of every screenshot since. Each photo's times are read (added,
- * changed, taken) and the latest believable one of them ranks it (`latest`).
+ * The gallery's latest photos and videos, as many as it lets the app read (a phone that allowed only photos gives only
+ * them). Not as the gallery sorts them: what it says of when one came may be wrong (written in milliseconds, or ahead
+ * of now, by an app saving a picture or a phone maker's own gallery and cloud), and that put old photos ahead of every
+ * screenshot since. Each one's times are read (added, changed, taken) and the latest believable one of them ranks it
+ * (`latest`).
  */
-private suspend fun recentPhotos(context: Context): List<Uri> = withContext(Dispatchers.IO) {
-    val from = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-    val columns = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media.DATE_MODIFIED, MediaStore.Images.Media.DATE_TAKEN)
+private suspend fun recentPhotos(context: Context): List<GalleryItem> = withContext(Dispatchers.IO) {
+    val from = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+    val type = MediaStore.Files.FileColumns.MEDIA_TYPE
+    val columns = arrayOf(MediaStore.Files.FileColumns._ID, MediaStore.Files.FileColumns.DATE_ADDED,
+        MediaStore.Files.FileColumns.DATE_MODIFIED, MediaStore.Files.FileColumns.DATE_TAKEN, type)
+    val visual = "$type IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
     val photos = try {
-        context.contentResolver.query(from, columns, null, null, null)?.use { c ->
+        context.contentResolver.query(from, columns, visual, null, null)?.use { c ->
             fun at(i: Int) = if (c.isNull(i)) null else c.getLong(i)
-            buildList { while (c.moveToNext()) add(GalleryPhoto(c.getLong(0), at(1), at(2), at(3)?.let { it / 1000 })) }
+            buildList {
+                while (c.moveToNext()) add(GalleryPhoto(c.getLong(0), at(1), at(2), at(3)?.let { it / 1000 },
+                    video = c.getInt(4) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO))
+            }
         } ?: emptyList()
     } catch (_: SecurityException) { emptyList() }
-    latest(photos, System.currentTimeMillis() / 1000, RECENT).map { ContentUris.withAppendedId(from, it) }
+    val videos = photos.filter { it.video }.mapTo(HashSet()) { it.id }
+    latest(photos, System.currentTimeMillis() / 1000, RECENT).map { id ->
+        val video = id in videos
+        val collection = if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        GalleryItem(ContentUris.withAppendedId(collection, id), video)
+    }
 }
 
-/** A photo of the gallery's and what it says of when, each in seconds (as it says them: perhaps wrong). */
-class GalleryPhoto(val id: Long, val added: Long?, val modified: Long?, val taken: Long?)
+/** A photo (or `video`) of the gallery's and what it says of when, each in seconds (as it says them: perhaps wrong). */
+class GalleryPhoto(val id: Long, val added: Long?, val modified: Long?, val taken: Long?, val video: Boolean = false)
 
 /**
  * The ids of the `n` photos latest at `now` (seconds), newest first: each by the latest of its times that can be

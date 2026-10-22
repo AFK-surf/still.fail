@@ -98,9 +98,9 @@ class AttachTest {
 
     private fun grant() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
-            context.packageName, if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE,
-        )
+        val gallery = if (Build.VERSION.SDK_INT >= 33) listOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+            else listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        gallery.forEach { InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(context.packageName, it) }
         assertEquals(PhotoAccess.All, photoAccess(context))
     }
 
