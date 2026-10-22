@@ -18,6 +18,7 @@ import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 
+import java.util.ArrayDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -29,7 +30,8 @@ import javax.microedition.khronos.opengles.GL10;
  * display's vsync (Choreographer), one per vsync at most, each told that
  * vsync's time, as Compose's frames are: a frame asked for while touches are
  * handled (the input phase of a vsync) is drawn at that vsync, one asked for
- * by a frame (an animation) at the next.
+ * by a frame (an animation) at the next; the system's back, said in a vsync's
+ * animation phase, is drawn by the next (back()).
  */
 public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private static boolean started;  // MoonBit's main runs once per process
@@ -94,6 +96,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     private void shotFrame(float w, float h) {
         double t = shotClock;
+        takeBacks(Long.MAX_VALUE);
         Native.frame(w, h, density, t);
         Script.frameDrawn();
         if (shotTaken) return;
@@ -163,9 +166,45 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         double now = v != 0 ? v / 1e6 : System.nanoTime() / 1e6;
         if (now < lastFrame) now = lastFrame;
         lastFrame = now;
+        // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
+        boolean later = takeBacks(v != 0 ? v : System.nanoTime());
         boolean more = Native.frame(w, h, density, now);
-        if (more) wantFrame();
+        if (more || later) wantFrame();
         Script.frameDrawn();
+    }
+
+    // ---- the system's back ----
+
+    /** What the system's back said (main thread), each with when (System.nanoTime) and its kind, x, progress, edge. */
+    private final ArrayDeque<double[]> backs = new ArrayDeque<>();
+
+    /**
+     * The system's back (MainActivity's OnBackAnimationCallback, main thread), x in dp: drawn by the first frame whose
+     * vsync is later than when it was said. Its gesture's steps come from the system's spring (BackProgressAnimator)
+     * in a vsync's animation phase, as that vsync's frame (asked for in the same phase: vsync, below) may already be
+     * drawing on the GL thread. Handed to the GL thread at once, a step went into that frame or the next as the two
+     * threads raced: a frame got none, the next two, and the page following the finger stood still for a frame and
+     * jumped two. A finger's touches come in the vsync's input phase, before its frame is asked for, and do not race.
+     */
+    void back(int kind, float x, float progress, int edge) {
+        synchronized (backs) {
+            backs.add(new double[] {System.nanoTime(), kind, x, progress, edge});
+        }
+        wantFrame();
+    }
+
+    /** Hands MoonBit the backs said before {@code before} (ns), in order (GL thread); whether any is left for later. */
+    private boolean takeBacks(long before) {
+        while (true) {
+            double[] b;
+            synchronized (backs) {
+                b = backs.peek();
+                if (b == null) return false;
+                if (b[0] >= before) return true;
+                backs.poll();
+            }
+            Native.back((int) b[1], (float) b[2], (float) b[3], (int) b[4]);
+        }
     }
 
     // ---- vsync ----
