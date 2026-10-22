@@ -865,7 +865,11 @@ test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_lette
   subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
   subscribe(core, ui, 2, { topic: "chatLetters", station: "ws/st", thread: 7 });
   await host.settle();
+  const emitted = host.takeEmitted();
+  const toPage = emitted.filter(([, m]) => (m as J).id === 2).map(([, m]) => m);
+  for (const e of emitted) host.emitted.push(e);
   apply(host, values);
+  assert.ok(v(values, 2), JSON.stringify(toPage).slice(0, 2000));
   const chat = v(values, 1);
   assert.deepEqual(chat.messages.map((m: J) => m.seq), [1, 4, 7, 8]);
   assert.equal(chat.letters, 4);

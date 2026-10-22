@@ -1540,7 +1540,7 @@ export class Views implements Owner {
     const letters = merge(arr(get(held.ok, "entries"))).flatMap((m) => {
       if (!isLetter(m, keys)) return [];
       const l = letterWay(m);
-      const shown = shownMessage({ ...m, text: letterWords(str(m.text) ?? "") }, agents, viewer, [], members_, [], thread.creator);
+      const shown: J = { ...shownMessage({ ...m, text: letterWords(str(m.text) ?? "") }, agents, viewer, [], members_, [], thread.creator), waiting: false };
       // Coming in: by the agent of the chat it came from, named by that chat.
       if (l.way === "in") shown.by = { name: t("core-views.letters.their", { chat: l.title }), from: l.link, maker: get(shown.by, "maker") ?? null };
       return [{ message: shown, ...l }];
