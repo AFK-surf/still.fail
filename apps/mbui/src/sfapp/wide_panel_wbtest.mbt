@@ -18,7 +18,8 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   assert_true(t.find("4 条") is Some(_))
   assert_true(t.find("参与") is Some(_), msg="its facts")
   t.tap_text("agent 往来")
-  t.frame()
+  // (the popover goes as a popover does: gone once its going is over)
+  t.run_for(@kit.presence_out_ms)
   // beside the chat, at its right: the chats written with
   let (x, _) = t.find("接手监督 mbui").unwrap()
   assert_true(x > 800.0, msg="at the pane's right")
