@@ -14,6 +14,7 @@
 //     chk views-round LOG PNG     Android's round page pictured (pictures.mbt)
 //     chk views LOG HOST          a native view put where it was told (contracts.mbt)
 //     chk site LOG HOST           a site's page and a page speaking with the app, step by step (contracts.mbt)
+//     chk cache-prune [--dry-run] the Actions caches a newer one of the same kind replaced, deleted (cache_prune.mbt)
 
 ///|
 fn root() -> String {
@@ -94,6 +95,7 @@ fn main {
     ["views-round", .. rest] => views_round(rest.to_array())
     ["views", .. rest] => views(rest.to_array())
     ["site", .. rest] => site(rest.to_array())
+    ["cache-prune", .. rest] => cache_prune(rest.to_array())
     _ => {
       @sys.eprintln("chk: errs | corner-sl [--check] | outside-kinds [HOST…]")
       2

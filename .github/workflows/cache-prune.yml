@@ -1,11 +1,11 @@
-# The Actions caches a newer one of the same kind replaced, deleted (.github/cache_prune.py): the build caches saved
-# each commit or run otherwise fill the repository's 10 GB, and GitHub then evicts what is read seldom and needed
-# (WARP, the emulator's images, MoonBit), which the jobs that need them fail without. After the workflows that save
-# them, and each half hour.
+# The Actions caches a newer one of the same kind replaced, deleted (scripts/chk cache-prune, mbui's tools/chk/
+# cache_prune.mbt): the build caches saved each commit, run or content otherwise fill the repository's 10 GB, and GitHub
+# then evicts what is read seldom and needed (WARP, the emulator's images, MoonBit), which the jobs that need them fail
+# without. After the workflows that save them, and each half hour.
 name: cache-prune
 on:
   workflow_run:
-    workflows: [mbui, mbui-ios, mbui-windows, pipeline]
+    workflows: [mbui, mbui-ios, mbui-windows, mbui-check, mbui-android-ref, pipeline]
     types: [completed]
   schedule:
     - cron: "7,37 * * * *"
@@ -25,8 +25,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-        with: { sparse-checkout: .github/cache_prune.py, sparse-checkout-cone-mode: false }
-      - run: python3 .github/cache_prune.py
+        with:
+          sparse-checkout: |
+            .github/actions
+            apps/mbui/mbui/tools
+            apps/mbui/mbui/scripts
+      - uses: ./.github/actions/mbui-moonbit
+      - run: sh apps/mbui/mbui/scripts/chk cache-prune
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
