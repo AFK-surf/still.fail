@@ -70,7 +70,7 @@ import fail.still.android.ui.Field
  */
 fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread, first: ChatView? = null) {
     val publish = shownPublish(first?.publish)
-    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.feishuUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 2) * 40 +
+    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.feishuUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + (if (first?.agents?.isNotEmpty() == true && first.archived != true && !first.offline) 1 else 0) + 2) * 40 +
         (if (publish != null) ((if (publish.may) 1 else 0) + publish.links.size) * 40 + 10 else 0)
     app.sheet = SheetSpec(0.55f, fit = (22 + 84 + rows + 10 + 30).dp) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
@@ -146,6 +146,12 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                         IconIn(Icons.Copy, 16.dp, C.ink)
                         Text(t("web-main.chat.copyLink"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                     }
+                }
+                // Relayed to a channel (docs/relay.md, Relay.kt): a chat with an agent to go on there.
+                if (open && view!!.agents.isNotEmpty()) InfoRow(onClick = { openRelay(app, station, about.id) }) {
+                    IconIn(Icons.ArrowUpRight, 16.dp, C.ink)
+                    Text(t("web-main.relay.action"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
                 view?.xshare?.let { share -> ShareRow(app, station, about.id, share) }
                 view?.slackUrl?.let { url ->

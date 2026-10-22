@@ -428,6 +428,18 @@ class StationApi(private val core: StillFailCore, val station: String) {
         decode(ChatPublished.serializer(), op("chat.publish") { put("thread", thread); put("upto", upto); putJsonArray("files") { files.forEach { add(JsonPrimitive(it)) } } })
     /** Revokes one of the chat's public snapshots: its link opens nothing any more. */
     suspend fun unpublish(thread: Long, id: String) { op("chat.unpublish") { put("thread", thread); put("id", id) } }
+    /** Where the chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in. */
+    suspend fun relayPlaces(thread: Long): List<RelayConnect> = decode(RelayPlaces.serializer(), op("chat.relayPlaces") { put("thread", thread) }).connects
+    /**
+     * The chat relayed to a connect's channel or group (`connect`, `channel`), or to the Slack thread of a message's `link`,
+     * with the person's note; its agent goes on there too. Where it went, as people say it ("#cue-dev").
+     */
+    suspend fun relay(thread: Long, connect: String?, channel: String?, link: String?, note: String): String =
+        decode(Relayed.serializer(), op("chat.relay") {
+            put("thread", thread)
+            if (link != null) put("link", link) else { put("connect", connect); put("channel", channel) }
+            if (note.isNotBlank()) put("note", note)
+        }).place
     /** Shares this station's chat `id` with one workspace more (`workspace`), telling its station `prefer` first. */
     suspend fun shareInto(id: String, workspace: String, prefer: String?) {
         op("chat.xshareAdd") { put("id", id); put("workspace", workspace); prefer?.let { put("prefer", it) } }
@@ -810,6 +822,20 @@ data class OutsideRef(val station: String, val id: String, val title: String, va
 
 @kotlinx.serialization.Serializable
 private class OutsideRefs(val chats: List<OutsideRef> = emptyList())
+
+/** A channel or group a connect's bot is in (docs/relay.md): `kind` channel (Slack), topics (a Feishu topic group), group. */
+@kotlinx.serialization.Serializable
+data class RelayPlace(val id: String, val name: String, val kind: String, val private: Boolean = false)
+
+/** A connect a chat can be relayed through (`kind` slack, feishu or lark), with its places; none, and why, when they could not be read. */
+@kotlinx.serialization.Serializable
+data class RelayConnect(val id: String, val kind: String, val name: String, val team: String? = null, val places: List<RelayPlace> = emptyList(), val error: String? = null)
+
+@kotlinx.serialization.Serializable
+private class RelayPlaces(val connects: List<RelayConnect> = emptyList())
+
+@kotlinx.serialization.Serializable
+private class Relayed(val place: String = "")
 
 /** A folder zipped on the station (`drive.zip`): read as any file of the drive is, by its root and path. */
 @kotlinx.serialization.Serializable

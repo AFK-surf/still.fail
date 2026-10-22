@@ -1102,6 +1102,7 @@ export const stories: Story[] = [
   { id: "phone-chat-history-turns", group: "手机", title: "执行历史 · 一轮一轮", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "历史" }], demo: historyTurns },
   { id: "phone-chat-history-steps", group: "手机", title: "执行历史 · 展开的一组", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "历史" }, { text: "读取 Win11 上 pnpm shot 的输出 · 共 8 项" }], demo: historyTurns },
   { id: "phone-chat-info", group: "手机", title: "对话信息", app: true, phone: true, steps: [{ click: '[aria-label="对话信息"]' }] },
+  { id: "phone-chat-relay", group: "手机", title: "对话 · 接力到频道", app: true, phone: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { text: "接力到频道…" }, { text: "#cue-dev" }] },
   { id: "phone-files", group: "手机", title: "文件", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="文件"]' }] },
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
   { id: "phone-profile-kinds", group: "手机", title: "Profile · 各类账号（分组带标记）", app: true, phone: true, demo: everyKind, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
