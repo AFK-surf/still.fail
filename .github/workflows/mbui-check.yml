@@ -41,6 +41,11 @@ jobs:
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
       MBC_LTO: ${{ matrix.lto && 'thin' || '0' }}
+      # ThinLTO's cache (lld's: each unit's code as the last links made it, taken again for a unit whose summary and
+      # imports are the same; lld prunes what was not used for a week): the ThinLTO replay part's links were 529 s of
+      # its 4 cores' ~240, five programs ~100 s each, each made again from nothing (2026-10-22, 39727676590); with it
+      # the part was 62 s, the app's ThinLTO part 75 s (39729537519; units and cache ~54 MB in the Actions cache)
+      MBC_LTO_CACHE: ${{ github.workspace }}/.ci/lto
       CACHE_PREFIX: mbui-linux-store-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-
     steps:
       - uses: actions/checkout@v5
@@ -54,7 +59,9 @@ jobs:
       - uses: actions/cache/restore@v4
         id: store
         with:
-          path: ${{ env.MBC_STORE }}
+          path: |
+            ${{ env.MBC_STORE }}
+            .ci/lto
           key: ${{ env.CACHE_PREFIX }}${{ github.sha }}
           restore-keys: ${{ env.CACHE_PREFIX }}
       - name: The mbui app's tests and the flows seen again (native, ${{ matrix.part }}${{ matrix.lto && ', ThinLTO' || '' }})
@@ -68,12 +75,14 @@ jobs:
         run: |
           S=$MBC_STORE
           [ ! -d $S ] || { find $S -name '*.lock' -delete; find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +; }
-          c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | sha256sum | cut -c1-16)
+          c=$( { (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort); ls .ci/lto 2>/dev/null; } | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$c" >> "$GITHUB_ENV"
       - if: always() && github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.store.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.MBC_STORE }}
+          path: |
+            ${{ env.MBC_STORE }}
+            .ci/lto
           key: ${{ env.BUILD_KEY }}
       # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
       - name: What failed
