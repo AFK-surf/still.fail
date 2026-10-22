@@ -394,7 +394,7 @@ final class Streams {
         private final HandlerThread thread;
         private final Handler handler;
         /** The decoder there is and its number (the feed's), null and 0 when none. */
-        private MediaCodec codec;
+        private Dec codec;
         private int gen;
         private Surface surface;
         /** Surfaces done with, let go once no decoder draws on them (the next stop, or now when none does). */
@@ -403,6 +403,7 @@ final class Streams {
         private int lengthSize;
         private int width, height;
         private boolean released;
+        private static final boolean scripted = "script".equals(System.getenv("MBUI_STREAM_CODEC"));
         /** The SurfaceTexture it draws on and its number (GL thread sets them; its frames arrive on this thread). */
         private volatile SurfaceTexture st;
         private int surfaceNo;
@@ -479,7 +480,7 @@ final class Streams {
                 return;
             }
             if (g != gen || codec == null) return;
-            MediaCodec c = codec;
+            Dec c = codec;
             switch (w[0]) {
                 case "stop":
                     stopCodec();
@@ -489,7 +490,7 @@ final class Streams {
                     int index = Integer.parseInt(w[2]);
                     double ts = Double.parseDouble(w[3]);
                     try {
-                        ByteBuffer buffer = c.getInputBuffer(index);
+                        ByteBuffer buffer = c.input(index);
                         byte[] b = annexB(data, lengthSize);
                         if (buffer == null || b == null || buffer.capacity() < b.length) {
                             stream.say("c rej " + g + " " + index + " " + num(ts));
@@ -498,7 +499,7 @@ final class Streams {
                         buffer.clear();
                         buffer.put(b);
                         if (failInput != null && failInput.equals(String.valueOf(++inputCalls))) throw new IllegalStateException("MBUI_STREAM_FAIL_INPUT: input " + inputCalls);
-                        c.queueInputBuffer(index, 0, b.length, (long) ts, w[4].equals("1") ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0);
+                        c.queue(index, b.length, (long) ts, w[4].equals("1") ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0);
                     } catch (Exception e) {
                         Host.log("stream " + stream.id + ": the H.264 decoder failed: " + e);
                         stream.say("c err " + g);
@@ -507,7 +508,7 @@ final class Streams {
                 }
                 case "empty":
                     try {
-                        c.queueInputBuffer(Integer.parseInt(w[2]), 0, 0, (long) Double.parseDouble(w[3]), 0);
+                        c.queue(Integer.parseInt(w[2]), 0, (long) Double.parseDouble(w[3]), 0);
                     } catch (Exception e) {
                         Host.log("stream " + stream.id + ": the H.264 decoder failed: " + e);
                         stream.say("c err " + g);
@@ -515,14 +516,14 @@ final class Streams {
                     break;
                 case "release":
                     try {
-                        c.releaseOutputBuffer(Integer.parseInt(w[2]), true);
+                        c.release(Integer.parseInt(w[2]), true);
                     } catch (Exception e) {
                         stream.say("c lost " + g + " " + w[3]);
                     }
                     break;
                 case "discard":
                     try {
-                        c.releaseOutputBuffer(Integer.parseInt(w[2]), false);
+                        c.release(Integer.parseInt(w[2]), false);
                     } catch (Exception ignored) {
                     }
                     break;
@@ -539,6 +540,19 @@ final class Streams {
                 stream.say("c nostart " + g);
                 return;
             }
+            if (scripted) {
+                // (the scripted decoder: what it says in an order of its own, a frame drawn for each it is told to show)
+                if (failStart != null && failStart.equals(String.valueOf(++startCalls))) {
+                    Host.log("stream " + stream.id + ": no H.264 decoder: java.lang.IllegalStateException: MBUI_STREAM_FAIL_START: start " + startCalls);
+                    stream.say("c nostart " + g);
+                    return;
+                }
+                ScriptDec d = new ScriptDec(g, st, surface, width, height);
+                codec = d;
+                stream.say("c up " + g);
+                d.begin();
+                return;
+            }
             MediaCodec made = null;
             try {
                 MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, Math.max(width, 16), Math.max(height, 16));
@@ -553,7 +567,7 @@ final class Streams {
                 made.setCallback(callback(g), handler);
                 made.configure(format, surface, null, 0);
                 made.start();
-                codec = made;
+                codec = new RealDec(made);
                 stream.say("c up " + g);
             } catch (Exception e) {
                 Host.log("stream " + stream.id + ": no H.264 decoder: " + e);
@@ -568,17 +582,96 @@ final class Streams {
         }
 
         private void stopCodec() {
-            if (codec != null) {
+            if (codec != null) codec.stop();
+            codec = null;
+        }
+
+        /** What is asked of a decoder: MediaCodec's (RealDec), or the scripted one's (ScriptDec). */
+        interface Dec {
+            ByteBuffer input(int index);
+
+            void queue(int index, int size, long ts, int flags);
+
+            void release(int index, boolean render);
+
+            void stop();
+        }
+
+        static final class RealDec implements Dec {
+            final MediaCodec c;
+
+            RealDec(MediaCodec c) {
+                this.c = c;
+            }
+
+            public ByteBuffer input(int index) {
+                return c.getInputBuffer(index);
+            }
+
+            public void queue(int index, int size, long ts, int flags) {
+                c.queueInputBuffer(index, 0, size, ts, flags);
+            }
+
+            public void release(int index, boolean render) {
+                c.releaseOutputBuffer(index, render);
+            }
+
+            public void stop() {
                 try {
-                    codec.stop();
+                    c.stop();
                 } catch (Exception ignored) {
                 }
                 try {
-                    codec.release();
+                    c.release();
                 } catch (Exception ignored) {
                 }
             }
-            codec = null;
+        }
+
+        /**
+         * MBUI_STREAM_CODEC=script (android-streams.sh's, the check CI holds to): a decoder whose callbacks come in an
+         * order of its own, not the system's: four input buffers free as it starts; a frame queued comes out at once
+         * in the output buffer of its number, its input buffer free again; one released is drawn onto the surface
+         * (a Canvas: its frame-available, as a decoder's). What the check then holds is this host's own: the commands
+         * done, the callbacks said on, the SurfaceTexture latched and copied, JNI, the injected failures. The system's
+         * MediaCodec, whose start has a deadline a busy emulator misses, is the smoke run's (REAL=1), which holds nothing.
+         */
+        final class ScriptDec implements Dec {
+            final int g;
+            final ByteBuffer[] in = new ByteBuffer[4];
+            final SurfaceTexture t;
+            final Surface s;
+
+            ScriptDec(int g, SurfaceTexture t, Surface s, int w, int h) {
+                this.g = g;
+                this.t = t;
+                this.s = s;
+                if (t != null) t.setDefaultBufferSize(Math.max(w, 16), Math.max(h, 16));
+                for (int i = 0; i < in.length; i++) in[i] = ByteBuffer.allocate(Math.max(w * h, 1 << 20));
+            }
+
+            void begin() {
+                for (int i = 0; i < in.length; i++) stream.say("c in " + g + " " + i);
+            }
+
+            public ByteBuffer input(int index) {
+                return index >= 0 && index < in.length ? in[index] : null;
+            }
+
+            public void queue(int index, int size, long ts, int flags) {
+                if (size > 0) stream.say("c out " + g + " " + index + " " + ts + " 1");
+                stream.say("c in " + g + " " + index);
+            }
+
+            public void release(int index, boolean render) {
+                if (!render) return;
+                android.graphics.Canvas cv = s.lockCanvas(null);
+                cv.drawColor(0xFF000000 | (index * 0x403020));
+                s.unlockCanvasAndPost(cv);
+            }
+
+            public void stop() {
+            }
         }
 
         /** Decoder `g`'s callbacks: what it said, said on. */

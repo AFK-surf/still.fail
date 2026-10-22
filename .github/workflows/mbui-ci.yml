@@ -177,10 +177,17 @@ jobs:
       - name: "The streams (scripts/android-streams.sh: plain, reopen, away, anew, thrown)"
         if: (success() || failure()) && steps.emu.outcome == 'success'
         run: APP=streamdemo scripts/android.sh build && APP=streamdemo bash scripts/android-streams.sh
+      # (the same over the system's MediaCodec: a smoke run for people, not a gate. Its start has Codec2's deadline,
+      # which this emulator, busy drawing each launch on the runner's CPU, misses now and then: no H.264 decoder)
+      - name: "The streams over the system's decoder (REAL=1, not a gate)"
+        if: (success() || failure()) && steps.emu.outcome == 'success'
+        continue-on-error: true
+        run: REAL=1 APP=streamdemo bash scripts/android-streams.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-devices
           path: |
             apps/mbui/mbui/out/android/streams/
+            apps/mbui/mbui/out/android/streams-real/
             apps/mbui/mbui/out/android/keyboard/
