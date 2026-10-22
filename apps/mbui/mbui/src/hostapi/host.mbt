@@ -152,6 +152,7 @@ pub(open) trait Host {
   dv_ime_inset(Self) -> Double = _
   dv_keep_awake(Self, Int) -> Unit = _
   dv_haptic(Self, Int) -> Unit = _
+  dv_ime_action(Self, Int) -> Unit = _
   ncall_call(Self, String, String) -> Int = _
   ncall_state(Self, Int) -> Int = _
   ncall_result(Self, Int) -> String = _
@@ -860,6 +861,11 @@ impl Host with dv_keep_awake(_, _) {
 
 ///|
 impl Host with dv_haptic(_, _) {
+  ()
+}
+
+///|
+impl Host with dv_ime_action(_, _) {
   ()
 }
 
@@ -1832,6 +1838,11 @@ fn dv_keep_awake(on : Int) -> Unit {
 ///|
 fn dv_haptic(kind : Int) -> Unit {
   current.val.dv_haptic(kind)
+}
+
+///|
+fn dv_ime_action(kind : Int) -> Unit {
+  current.val.dv_ime_action(kind)
 }
 
 ///|

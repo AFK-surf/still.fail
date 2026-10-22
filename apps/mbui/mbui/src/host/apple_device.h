@@ -265,6 +265,19 @@ void mb_host_keep_awake(int32_t on) {
 }
 
 // device.mbt's haptic_*: long press, context click, a handle moved, confirm, reject, a key tapped.
+// the input method's action for the field about to type (hostapi ime_action: 0 none, 1 search): iOS's return key
+// (ios_app.m returnKeyType), the keyboard told again as it changes; nothing on a Mac
+static int32_t ime_action_kind;
+void mb_host_ime_action(int32_t kind) {
+  ime_action_kind = kind;
+#if TARGET_OS_IOS
+  dispatch_async(dispatch_get_main_queue(), ^{
+    // (ios_app.m's view, declared before it includes this)
+    if (the_view && the_view.isFirstResponder) [the_view reloadInputViews];
+  });
+#endif
+}
+
 void mb_host_haptic(int32_t kind) {
 #if TARGET_OS_IPHONE
   switch (kind) {

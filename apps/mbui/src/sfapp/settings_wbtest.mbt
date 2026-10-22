@@ -283,3 +283,16 @@ test "settings: a station's network not open yet (stationNet's null) waits as gr
   assert_false(shown("↑"))
   assert_false(shown("↓"))
 }
+
+///|
+test "a subscription signing in: what to do said once, its page's step solid, then the code with 完成 in its field (Profiles.kt LoginSteps)" {
+  let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login")
+  assert_true(t.find("在打开的页面用 still.fail 要使用的 Claude 账号登录，并同意授权") is Some(_))
+  assert_true(t.find("打开授权页面") is Some(_))
+  // nothing typed: no 完成 yet
+  assert_true(t.find("完成") is None)
+  t.tap_text("粘贴授权码")
+  t.type_text("abc-123")
+  assert_true(t.find("完成") is Some(_))
+  // (and the way to sign in by hand, beside the button, once not signing in: 在机器上手动登录)
+}

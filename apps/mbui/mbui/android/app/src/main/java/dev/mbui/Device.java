@@ -336,6 +336,23 @@ final class Device {
         });
     }
 
+    /**
+     * The input method's action for the field about to type (hostapi ime_action: 0 none, 1 search), read as the view
+     * makes its input connection (MBView); another than before, the input method is started again with it.
+     */
+    static volatile int imeAction;
+
+    static void imeAction(int kind) {
+        if (kind == imeAction) return;
+        imeAction = kind;
+        Host.main.post(() -> {
+            MBView v = Host.view;
+            if (v == null) return;
+            InputMethodManager imm = (InputMethodManager) v.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.restartInput(v);
+        });
+    }
+
     /** device.mbt's haptic_* as the constants Compose's AndroidHapticFeedback performs for them. */
     static void haptic(int kind) {
         int constant;

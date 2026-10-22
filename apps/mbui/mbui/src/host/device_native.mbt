@@ -36,3 +36,6 @@ extern "C" fn dv_keep_awake(on : Int) -> Unit = "mb_host_keep_awake"
 
 ///|
 extern "C" fn dv_haptic(kind : Int) -> Unit = "mb_host_haptic"
+
+///|
+extern "C" fn dv_ime_action(kind : Int) -> Unit = "mb_host_ime_action"

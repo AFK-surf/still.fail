@@ -136,6 +136,22 @@ pub fn haptic(kind : Int) -> Unit {
 }
 
 ///|
+/// What the input method's action key does for the field it is about to type in (`ime_action_*`): Android's
+/// EditorInfo action (IME_ACTION_SEARCH: its Enter a search key, the field one line); nothing elsewhere yet. Said
+/// before the field takes the keyboard; Enter comes as a key, as any.
+pub fn ime_action(kind : Int) -> Unit {
+  dv_ime_action(kind)
+}
+
+///|
+/// No action of the input method's own: its Enter a key the field decides on (a new line, or what sends).
+pub let ime_action_none : Int = 0
+
+///|
+/// A search field's (Compose's ImeAction.Search).
+pub let ime_action_search : Int = 1
+
+///|
 /// A long press taking something (Android LONG_PRESS, Compose's HapticFeedbackType.LongPress).
 pub let haptic_long_press : Int = 0
 

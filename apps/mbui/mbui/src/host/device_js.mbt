@@ -56,3 +56,7 @@ extern "js" fn dv_keep_awake(on : Int) -> Unit =
 ///|
 extern "js" fn dv_haptic(kind : Int) -> Unit =
   #|(k) => globalThis.__mbhost && globalThis.__mbhost.haptic && globalThis.__mbhost.haptic(k)
+
+///|
+extern "js" fn dv_ime_action(kind : Int) -> Unit =
+  #|(k) => globalThis.__mbhost && globalThis.__mbhost.imeAction && globalThis.__mbhost.imeAction(k)

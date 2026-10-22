@@ -347,6 +347,12 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE;
         out.imeOptions = EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_ENTER_ACTION
                 | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        if (Device.imeAction == 1) {
+            // a search field's (hostapi ime_action): one line, its Enter the keyboard's search key, which comes as Enter
+            // (performEditorAction)
+            out.inputType = InputType.TYPE_CLASS_TEXT;
+            out.imeOptions = EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        }
         out.initialSelStart = Host.selStart;
         out.initialSelEnd = Host.selEnd;
         input = new MBInput(this);

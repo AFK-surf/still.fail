@@ -913,7 +913,8 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Arr
             // (OpenCode's has no command to run by hand)
             let command = text(p, "loginCommand")
             if command != "" {
-              if tap_text(c, "login-manual", tr("android-settings.login.manual"), color=t.p.muted, size=13.0) {
+              // (Profiles.kt: 在机器上手动登录, a link of 14 beside the button)
+              if tap_text(c, "login-manual", tr("android-settings.login.manualShort"), size=14.0) {
                 login_state.manual[k] = !login_state.manual.get(k).unwrap_or(false)
               }
               if login_state.manual.get(k).unwrap_or(false) {
@@ -927,87 +928,6 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Arr
       |> ignore
     },
   ]
-}
-
-///|
-/// What the person does in the browser for a sign-in under way (LoginSteps): open the page and paste the code back
-/// (Claude), or copy the code and open the page (Codex, Grok, OpenCode). The page is handed to `open_link`: the
-/// system's browser.
-fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : String, send : (String) -> Unit) -> Unit {
-  let t = @sf.theme()
-  let state = text(job, "state")
-  let url = text(job, "url")
-  let user_code = text(job, "userCode")
-  if job is None || state == "starting" {
-    wait_line(c, fill("android-settings.login.making", [("provider", provider)]))
-  } else if state == "verifying" {
-    wait_line(c, tr("android-settings.login.finishing"))
-  } else if state == "done" {
-    wait_line(c, tr("android-settings.login.adding"))
-  } else if state == "needs_approval" && url != "" && user_code != "" {
-    c.box(w=Fill(1.0), padx=14.0, pady=10.0, radius=12.0, bg=t.p.chip, align=ACenter, fn() {
-      mono(c, user_code, size=22.0, line=28.0)
-    })
-    |> ignore
-    // OpenCode's and Kimi's pages have the code in their address: only compared there, not copied
-    let filled = provider == "OpenCode" || provider == "Kimi"
-    let copied = login_state.copied.get(k).unwrap_or(false)
-    if wide_button(
-        c,
-        "login-open",
-        tr(
-          if filled {
-            "android-settings.login.openPage"
-          } else if copied {
-            "android-settings.login.reopen"
-          } else {
-            "android-settings.login.copyOpen"
-          },
-        ),
-        true,
-      ) {
-      if !filled {
-        c.copy_text(user_code)
-        login_state.copied[k] = true
-      }
-      (core.open_link)(url)
-    }
-    c.text(
-      match provider {
-        "OpenCode" => tr("android-settings.login.opencodeNote")
-        "Kimi" => tr("android-settings.login.kimiNote")
-        "Grok" => tr("android-settings.login.grokNote")
-        _ => fill("android-settings.login.codexNote", [("app", "still.fail")])
-      },
-      size=13.0,
-      color=t.p.muted,
-      w=Fill(1.0),
-      line=18.0,
-    )
-    |> ignore
-  } else if state == "needs_code" && url != "" {
-    c.text("1. " + fill("web-pages.profiles.step1", [("name", "still.fail")]), size=13.0, color=t.p.text, w=Fill(1.0), line=18.0)
-    |> ignore
-    if wide_button(c, "login-open", tr("android-settings.login.openPage"), true) {
-      (core.open_link)(url)
-    }
-    c.box(w=Fill(1.0), pt=4.0, fn() {
-      c.text(tr("android-settings.login.step2"), size=13.0, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
-    })
-    |> ignore
-    let key = "login-code/" + k
-    let code = field_box(c, key, tr("android-settings.login.pasteCode"), secret=true).trim(chars=" \n").to_owned()
-    match login_state.error.get(k) {
-      Some(e) => c.text(e, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
-      None => ()
-    }
-    if wide_button(c, "login-finish", tr("android-settings.login.finish"), true, enabled=code != "") {
-      login_state.error.remove(k)
-      field_of(key).set("")
-      c.blur()
-      send(code)
-    }
-  }
 }
 
 ///|
