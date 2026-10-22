@@ -1453,6 +1453,39 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
 }
 
 ///|
+/// What shows of the first text node containing `s` (x, y, w, h): where it is drawn (drawn_of), cut by each box
+/// holding it that clips, where that box is drawn (a clip moves with its own look and its holders', not with what it
+/// holds); nothing shows when w or h is 0.
+pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
+  ignore(self)
+  let c = g()
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
+      let (x, y) = c.drawn_at(i)
+      let mut x0 = x
+      let mut y0 = y
+      let mut x1 = x + n.fw
+      let mut y1 = y + n.fh
+      let mut p = n.parent
+      while p >= 0 {
+        let a = c.nodes[p]
+        if a.clip {
+          let (ax, ay) = c.drawn_at(p)
+          x0 = dmax(x0, ax)
+          y0 = dmax(y0, ay)
+          x1 = dmin(x1, ax + a.fw)
+          y1 = dmin(y1, ay + a.fh)
+        }
+        p = a.parent
+      }
+      return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
+    }
+  }
+  None
+}
+
+///|
 /// How the node keyed `what` (its id's key, as built: c.id(what)), else the first text node containing `what` (`=WORDS`:
 /// whose words are WORDS exactly, as Tester::locate takes it), was drawn in the last frame over how it is laid out: its
 /// scale across and down and its opacity, its own look's and all its ancestors' together (a card shrunk to 90% as it

@@ -1,0 +1,10 @@
+# A row archived from its menu (Slack 里问的报销流程, over 把旧的截图都换成新的, a row with its own 归档): it goes, the
+# rows under it close over its room, whole, and 已归档 is said over the bar.
+timeout 20000
+until 整理发布清单
+wait 600
+hold 600 Slack 里问的报销流程
+until =复制会话链接
+wait 500
+tap =归档
+wait 2500

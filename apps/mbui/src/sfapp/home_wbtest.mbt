@@ -93,6 +93,34 @@ test "归档 at a row's start archives its chat" {
 }
 
 ///|
+test "a row archived: an archivable row under it closes over it whole, its swipe's clip moving with it" {
+  // (Home.kt: the list's animateItem moves the whole of SwipeToArchive. Filmed on a phone: the 归档 rows under one
+  // archived gone a moment, then coming up cut off below, the row moved inside a clip left where it is laid out)
+  // (the list at its top: the rows under one gone come up; scrolled to its end, the rows over it would come down)
+  let t = tester("home")
+  let under = "把旧的截图都换成新的"
+  let (_, y_was, _, h) = t.rect_of(under).unwrap()
+  hold_row(t, "Slack 里问的报销流程")
+  // the menu's last item, a row (45) under 复制会话链接
+  let (lx, ly) = t.find("复制会话链接").unwrap()
+  t.tap(lx, ly + 45.0)
+  assert_true(t.find("Slack 里问的报销流程") is None)
+  // laid out a row up at once, drawn where it was, all of it
+  let (_, y_now, _, _) = t.rect_of(under).unwrap()
+  assert_true(y_now < y_was - 1.0, msg="\{y_now} \{y_was}")
+  let (_, d0) = t.drawn_of(under).unwrap()
+  assert_true((d0 - y_was).abs() < 0.5, msg="drawn at \{d0}, was at \{y_was}")
+  let (_, _, _, s0) = t.shown_of(under).unwrap()
+  assert_true((s0 - h).abs() < 0.5, msg="\{s0} of \{h} shown where it was")
+  // on its way up, all of it still
+  t.run_for(@motion.row_spring.duration(y_was - y_now, 0.0, 0.0) / 2.0)
+  let (_, d1) = t.drawn_of(under).unwrap()
+  assert_true(d1 < y_was - 1.0 && d1 > y_now + 1.0, msg="drawn at \{d1}, from \{y_was} to \{y_now}")
+  let (_, _, _, s1) = t.shown_of(under).unwrap()
+  assert_true((s1 - h).abs() < 0.5, msg="\{s1} of \{h} shown on its way")
+}
+
+///|
 test "the list while it is read: no rows, the shapes" {
   let t = tester("loading")
   t.frame()
