@@ -2,8 +2,8 @@
 // uploads, messages, adding a session to a chat, archiving, deleting, stopping, evicting, warming, a session's settings,
 // clearing a chat's ended jobs, stopping a job. What is only written to the store is routes/marks.ts's; the reads are
 // routes/chats.ts's and routes/sessions.ts's (GET /sessions/:key/files among them).
-import { randomBytes } from "node:crypto";
-import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes, type Hash } from "node:crypto";
+import { appendFileSync, constants as fsConstants, copyFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { clean, fileName as nameOf, inside } from "../../ops/paths.ts";
 import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
@@ -118,7 +118,51 @@ function saveUpload(body: Buffer, dir: string, name: string, lang: Request["lang
   const { safe, path } = uploadPath(dir, name);
   if (body.length > MAX_UPLOAD) throw new Refused(413, tr(lang, "station.files.tooLarge"));
   writeFileSync(path, body, { flag: "wx" });
+  known(dir, createHash("sha256").update(body).digest("hex"), path);
   return { name: safe, path, size: body.length };
+}
+
+/// What the uploads hold, by their content (SHA-256, hex), for each station's uploads folder: a file sent again (the
+/// same picture to another chat) is copied from where it is kept now, and nothing of it comes again. Each where it is
+/// now (a message takes it into its chat's uploads: `moved`), with its size and when it last changed, so one changed or
+/// gone since is not taken for it. In memory only: one sent before the station started comes again.
+const contents = new Map<string, Map<string, { path: string; size: number; mtimeMs: number }>>();
+const CONTENTS_KEEP = 1000;
+/// Uploads in parts named as their parts come, by id (one whose first part came before the station started is not).
+const naming = new Map<string, Hash>();
+const NAMING_KEEP = 100;
+
+/// `path`, a whole upload in the uploads folder `dir`, is `sha256`.
+function known(dir: string, sha256: string, path: string): void {
+  const st = statSync(path, { throwIfNoEntry: false });
+  if (!st) return;
+  const key = clean(dir);
+  let held = contents.get(key);
+  if (!held) contents.set(key, (held = new Map()));
+  held.delete(sha256);
+  held.set(sha256, { path, size: st.size, mtimeMs: st.mtimeMs });
+  for (const old of held.keys()) {
+    if (held.size <= CONTENTS_KEEP) break;
+    held.delete(old);
+  }
+}
+
+/// An upload of `dir` moved (into a chat's uploads, as a message takes it): known there now.
+export function movedUpload(dir: string, from: string, to: string): void {
+  for (const e of contents.get(clean(dir))?.values() ?? []) if (e.path === from) e.path = to;
+}
+
+/// Where `dir`'s uploads keep a file of `size` bytes that is `sha256`, unchanged since: null when none is.
+function kept(dir: string, sha256: string, size: number): string | null {
+  const held = contents.get(clean(dir));
+  const e = held?.get(sha256);
+  if (!held || !e) return null;
+  const st = statSync(e.path, { throwIfNoEntry: false });
+  if (!st?.isFile() || st.size !== size || e.size !== size || st.mtimeMs !== e.mtimeMs) {
+    held.delete(sha256);
+    return null;
+  }
+  return e.path;
 }
 
 /// Uploads in parts that are whole, by their id: a part asked again after its file was put together gets the file.
@@ -128,19 +172,33 @@ const ASSEMBLED_KEEP_MS = 3600_000;
 /// POST /uploads/parts?id=&name=&size=&offset=: a part of a file at `offset`, added to what came of it before (kept as
 /// `.part-<id>` in the uploads). The answer is how much of it is here (`have`), and the file once it is whole. A part
 /// that does not start where the file ends adds nothing: the caller goes on from `have` (one asked again after a lost
-/// answer, or after a broken connection, is answered as the first was).
-export function savePart(body: Buffer, dir: string, q: { id: string; name: string; size: number; offset: number }, lang: Request["lang"]): { have: number; file?: Attachment } {
+/// answer, or after a broken connection, is answered as the first was). With `sha256` and no bytes, before its first
+/// part: a file the uploads hold already (sent before) is copied from there and answered whole, and nothing comes.
+export function savePart(body: Buffer, dir: string, q: { id: string; name: string; size: number; offset: number; sha256?: string | undefined }, lang: Request["lang"]): { have: number; file?: Attachment } {
   const now = wall.now();
   for (const [k, v] of assembled) if (now - v.at > ASSEMBLED_KEEP_MS) assembled.delete(k);
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(q.id)) throw new Refused(400, "invalid upload id");
   if (!Number.isSafeInteger(q.size) || q.size < 0 || !Number.isSafeInteger(q.offset) || q.offset < 0 || q.offset > q.size) throw new Refused(400, "invalid upload size or offset");
   if (q.size > MAX_PARTS_UPLOAD) throw new Refused(413, tr(lang, "station.files.tooLargeParts"));
   if (body.length > MAX_PART || q.offset + body.length > q.size) throw new Refused(413, "upload part too large");
+  if (q.sha256 !== undefined && !/^[0-9a-f]{64}$/.test(q.sha256)) throw new Refused(400, "invalid sha256");
   const done = assembled.get(q.id);
   if (done !== undefined) return { have: q.size, file: done.file };
   mkdirSync(dir, { recursive: true });
   const part = join(dir, `${PART_PREFIX}${q.id}`);
   const have = statSync(part, { throwIfNoEntry: false })?.size ?? 0;
+  if (q.sha256 !== undefined && q.offset === 0 && body.length === 0 && have === 0) {
+    const from = kept(dir, q.sha256, q.size);
+    if (from !== null) {
+      const { safe, path } = uploadPath(dir, q.name);
+      // A copy of its own (a clone where the disk makes one): the chat it goes to may change it, the other not.
+      copyFileSync(from, path, fsConstants.COPYFILE_FICLONE);
+      known(dir, q.sha256, path);
+      const file = { name: safe, path, size: q.size };
+      assembled.set(q.id, { at: now, file });
+      return { have: q.size, file };
+    }
+  }
   if (have > q.size) {
     rmSync(part, { force: true });
     throw new Refused(400, "invalid upload size");
@@ -155,11 +213,25 @@ export function savePart(body: Buffer, dir: string, q: { id: string; name: strin
     }
   }
   // Only what follows the file's end is added: none of a part asked again, the rest of one that overlaps it.
-  if (q.offset <= have && q.offset + body.length > have) appendFileSync(part, body.subarray(have - q.offset));
+  if (q.offset <= have && q.offset + body.length > have) {
+    const added = body.subarray(have - q.offset);
+    if (have === 0) {
+      naming.set(q.id, createHash("sha256"));
+      for (const old of naming.keys()) {
+        if (naming.size <= NAMING_KEEP) break;
+        naming.delete(old);
+      }
+    }
+    appendFileSync(part, added);
+    naming.get(q.id)?.update(added);
+  }
   const got = statSync(part, { throwIfNoEntry: false })?.size ?? 0;
   if (got < q.size) return { have: got };
   const { safe, path } = uploadPath(dir, q.name);
   renameSync(part, path);
+  const named = naming.get(q.id);
+  naming.delete(q.id);
+  if (named) known(dir, named.digest("hex"), path);
   const file = { name: safe, path, size: q.size };
   assembled.set(q.id, { at: now, file });
   return { have: q.size, file };
@@ -248,6 +320,7 @@ export const routes = (tools: Tools): Route[] => {
         if (exists(path)) {
           mkdirSync(first.dir, { recursive: true });
           renameSync(path, into);
+          movedUpload(stagedDir, path, into);
         }
         path = into;
       }
@@ -392,7 +465,7 @@ export const routes = (tools: Tools): Route[] => {
             const v = param(r, name);
             return v === undefined || !/^[0-9]+$/.test(v) ? -1 : Number(v);
           };
-          return ok(savePart(r.body, dir, { id: param(r, "id") ?? "", name: param(r, "name") ?? "file", size: num("size"), offset: num("offset") }, r.lang));
+          return ok(savePart(r.body, dir, { id: param(r, "id") ?? "", name: param(r, "name") ?? "file", size: num("size"), offset: num("offset"), sha256: param(r, "sha256") }, r.lang));
         }),
     },
     // A session: deleted (DELETE); its ended jobs cleared.

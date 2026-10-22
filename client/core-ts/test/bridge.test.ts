@@ -132,7 +132,8 @@ test("a_file_picked_in_the_app_is_read_from_there_as_it_goes_up", async () => {
   core.receive(client, JSON.stringify({ id: 2, call: "composer.add", params: { key: "phone-1", station: "ws/st", files: [{ id: "f1", name: "a.txt", size: 3, blob: { hostFile: 7, size: 3, type: "text/plain" } }] } }));
   // No such station here: it fails once its first part is read from the app.
   await until(() => states.get(1)?.files?.[0]?.error !== undefined);
-  assert.ok(native.calls.includes("picked.read"));
+  // Named first (the station may have it already), read from the app as it goes.
+  assert.ok(native.calls.indexOf("picked.hash") >= 0 && native.calls.indexOf("picked.hash") < native.calls.indexOf("picked.read"));
   assert.ok(native.picked.has(7), "a failed upload keeps its file, to go again");
   core.receive(client, JSON.stringify({ id: 3, call: "composer.remove", params: { key: "phone-1", id: "f1" } }));
   await until(() => !native.picked.has(7));

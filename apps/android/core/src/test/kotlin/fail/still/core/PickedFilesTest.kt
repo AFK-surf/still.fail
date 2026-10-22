@@ -21,6 +21,8 @@ class PickedFilesTest {
         // Asked from elsewhere (the station has more than was read here): skipped to there.
         assertArrayEquals(bytes.copyOfRange(7, 10), PickedFiles.answer("picked.read", """{"file":$file,"start":7,"end":10}""").second)
         assertEquals(3, opened)
+        // Named by its content, as a station names what it keeps.
+        assertEquals("""{"sha256":"1f825aa2f0020ef7cf91dfa30da4668d791c5d4824fc8e41354b89ec05795ab3"}""", PickedFiles.answer("picked.hash", """{"file":$file}""").first)
         assertNull(PickedFiles.answer("picked.release", """{"file":$file}""").second)
         try {
             PickedFiles.answer("picked.read", """{"file":$file,"start":0,"end":4}""")

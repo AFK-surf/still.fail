@@ -73,6 +73,7 @@ test("a_late_empty_alias_subscription_is_told_of_the_existing_draft", async () =
 test("upload_progress_does_not_outrank_a_later_edit_on_the_other_name", async () => {
   const t = await setup();
   const gate = Deferred.makeUnsafe<J, CoreError>();
+  (t.core.inner.stations.requests as J).uploadName = () => Promise.resolve(null);
   (t.core.inner.stations.requests as J).uploadPart = () => Deferred.await(gate);
   try {
     t.composer.add(t.old, "ws/st", [{ id: "slow", name: "a.txt", size: 1, blob: new Blob(["a"]) }]);

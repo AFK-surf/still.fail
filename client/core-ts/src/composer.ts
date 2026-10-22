@@ -489,6 +489,14 @@ export class Composers {
       let saved: J;
       // Nothing yet, out of its size: said at once.
       went(0);
+      // Named first: a station that has it already (sent before) copies its own, and nothing more goes. Only one here
+      // (another station's would be read across for it).
+      const local = f.blob;
+      const named = local && f.size > 0 ? yield* Effect.promise(() => inner.stations.requests.uploadName(local, f.size)) : null;
+      if (named) {
+        const had = yield* Effect.orElseSucceed(inner.stations.requests.uploadHave(addr, { id, name: f.name, size: f.size, sha256: named }, null), () => null);
+        if (had !== null) { saved = had; went(f.size); }
+      }
       while (saved === undefined) {
         if (!blob) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name })));
         const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => blob.slice(have, have + PART).arrayBuffer(), catch: asCoreError }));

@@ -1,5 +1,6 @@
 // The bridge's shell in JavaScript (hosts/bridge.ts), over Node and the station's addon: what the Android app's shell
 // (apps/android/core: Hermes in C++, its IO in Rust) does, here to test the JS end of the bridge in Node.
+import { hex, sha256 } from "../src/util.ts";
 import { Effect, Exit, Scope } from "effect";
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { NodeHost } from "../src/hosts/node.ts";
@@ -194,6 +195,11 @@ export class NodeShell implements Native {
         const file = this.picked.get(a.file);
         if (!file) throw new Error("no such file");
         return done({}, file.slice(a.start, a.end));
+      }
+      case "picked.hash": {
+        const file = this.picked.get(a.file);
+        if (!file) throw new Error("no such file");
+        return done({ sha256: hex(sha256(file)) });
       }
       case "picked.release":
         this.picked.delete(a.file);
