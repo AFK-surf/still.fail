@@ -137,6 +137,13 @@ import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.floating
 import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
+import fail.still.core.PickedFiles
+import fail.still.android.data.ComposerFile
+import fail.still.android.data.ComposerView
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import fail.still.android.data.errorText
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CoroutineScope
@@ -184,6 +191,8 @@ class Pending(val id: Long, val name: String, val size: Long, val preview: Image
     var error by mutableStateOf<String?>(null)
     /** Failed going up: sends it up again, from what was picked (null: it cannot be, as one too big). */
     var retry by mutableStateOf<(() -> Unit)?>(null)
+    /** Its id in the core, which sends it up (`composer.add`): a message sent before it is up names it (`uploads`). */
+    internal var coreId: String? = null
     /** A file of a station's named by its path (StationFiles.kt), or a link shared in (share/): it goes as words, nothing goes up. */
     val named get() = ref?.mode == "path" || link != null
 }
@@ -226,7 +235,25 @@ class Draft {
     var locked by mutableStateOf(false)
     /** A file that did not go up: it is sent again or taken out first, never left out of the message unsaid. */
     val failed get() = files.any { it.error != null && !it.named }
-    val ready get() = (text.isNotBlank() || files.any { it.done != null || it.named } || quotes.isNotEmpty()) && !uploading && !failed && !starting && !locked
+    /** A file going up outside the core (a station's file switched to one, StationFiles.kt): sending waits for it here. */
+    private val goingHere get() = files.any { it.done == null && it.error == null && !it.named && it.coreId == null }
+    /** Sent while a file is still going up, the message waits for it in the outbox (`uploads`), as the web's does. */
+    val ready get() = (text.isNotBlank() || files.any { it.done != null || it.coreId != null || it.named } || quotes.isNotEmpty()) && !goingHere && !failed && !starting && !locked
+    /**
+     * Where its files go up in the core: a composer of their own there (`composer.add`), by a key no chat has, so nothing
+     * of it is kept; this draft keeps what is written.
+     */
+    internal val uploadKey = "phone-${System.nanoTime()}"
+    /** The core its files go up through, once one has. */
+    internal var core: StillFailCore? = null
+
+    /** A file taken out: one going up stops (the core lets go of it). */
+    fun takeOut(f: Pending) {
+        files.remove(f)
+        val id = f.coreId ?: return
+        val core = core ?: return
+        if (f.done == null) Drafts.tell(core, "composer.remove", buildJsonObject { put("key", uploadKey); put("id", id) })
+    }
     /** The text box has the focus (the menu of chats shows only then). */
     var focused by mutableStateOf(false)
     /** Where an `@` was put away (its menu closed by picking a chat): not offered again. */
@@ -282,7 +309,13 @@ class Draft {
 }
 
 /** What a draft held when it was sent: `text` as it goes (trimmed), `written` as it was typed. */
-class Taken(val text: String, val files: List<Pending>, val quotes: List<DraftQuote>, val written: String, val named: List<Pending> = emptyList())
+class Taken(val text: String, val files: List<Pending>, val quotes: List<DraftQuote>, val written: String, val named: List<Pending> = emptyList()) {
+    /** The files up, as the message takes them. */
+    val attachments get() = files.mapNotNull { it.done }
+    /** Those still going up: the message waits for them in the outbox (the core sends it once they are). */
+    val uploads get() = files.filter { it.done == null && it.error == null && it.coreId != null }
+        .map { ComposerFile(it.coreId!!, it.name, it.size, width = it.width?.toLong(), height = it.height?.toLong()) }
+}
 
 @Serializable
 private class KeptQuote(val author: String, val text: String, val comment: String = "", val ts: String? = null, val role: String = "person", val file: String? = null)
@@ -341,6 +374,11 @@ object Drafts {
                 ?.takeIf { it !is JsonNull }?.let { runCatching { decode(DraftView.serializer(), it) }.getOrNull() } ?: return@launch
             d.replace(kept)
         }
+    }
+
+    /** A composer call nobody waits on (a file taken out): its failure changes nothing here. */
+    internal fun tell(core: StillFailCore, name: String, params: kotlinx.serialization.json.JsonObject) {
+        scope.launch { try { core.call(name, params) } catch (_: CoreException) {} }
     }
 
     internal fun save(key: String, d: Draft) {
@@ -668,32 +706,78 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
     val p = Pending(System.nanoTime(), picked.name, picked.size, picked.preview, picked.bytes.takeIf { picked.preview != null && it.isNotEmpty() }, picked.width, picked.height, pasted)
     draft.files += p
     if (picked.size > MAX_FILE || (picked.bytes.isEmpty() && picked.open == null && picked.size > 0)) { p.error = t("android-chat.file.tooBig"); return }
-    sendUp(draft, station, picked, scope, p)
-}
-
-/** `p` going up, from what was picked; failed, it can go again from there (`Pending.retry`). */
-private fun AppState.sendUp(draft: Draft, station: String, picked: Picked, scope: CoroutineScope, p: Pending) {
-    p.error = null; p.sent = null; p.retry = null
+    // The core sends it up, reading it from here a part at a time (PickedFiles); a message sent before it is up waits for it.
+    val id = "p${p.id}"
+    p.coreId = id
+    draft.core = core
+    val file = PickedFiles.hold(picked.size, picked.source())
+    val type = java.net.URLConnection.guessContentTypeFromName(picked.name) ?: ""
     scope.launch {
         try {
-            p.done = api(station).upload(picked.name, picked.size, picked.source(), picked.width?.toLong(), picked.height?.toLong()) { p.sent = it }
-            p.done?.let { a -> picked.preview?.let { FileData.keepSent(station, a.path, it) } }
-            draft.save()
+            core.call("composer.add", buildJsonObject {
+                put("key", draft.uploadKey); put("station", station)
+                putJsonArray("files") {
+                    addJsonObject {
+                        put("id", id); put("name", picked.name); put("size", picked.size)
+                        putJsonObject("blob") { put("hostFile", file); put("size", picked.size); put("type", type) }
+                    }
+                }
+            })
         } catch (e: CoreException) {
+            PickedFiles.release(file)
             p.error = e.message
-        } catch (_: java.io.IOException) {
-            p.error = t("android-chat.file.uploadFailed")
+            return@launch
         }
-        if (p.error != null) p.retry = { sendUp(draft, station, picked, scope, p) }
+        follow(draft, station, picked, p)
+    }
+}
+
+/**
+ * What the core says of `p` as it goes up (its composer's topic), until it is up, has failed, or has left the draft
+ * (taken out, or sent: the outbox follows it then). Failed, it can go again from what was kept (`composer.retry`).
+ */
+private suspend fun AppState.follow(draft: Draft, station: String, picked: Picked, p: Pending) {
+    val id = p.coreId ?: return
+    var seen = false
+    core.topic(buildJsonObject { put("topic", "composer"); put("key", draft.uploadKey) }).first { state ->
+        if (p !in draft.files) return@first true
+        val view = state.value?.let { runCatching { decode(ComposerView.serializer(), it) }.getOrNull() } ?: return@first false
+        val f = view.files.firstOrNull { it.id == id } ?: return@first seen
+        seen = true
+        f.sent?.let { p.sent = it }
+        val done = f.done
+        val error = f.error
+        when {
+            done != null -> {
+                p.done = if (done.width == null && picked.width != null && picked.height != null) done.copy(width = picked.width.toLong(), height = picked.height.toLong()) else done
+                picked.preview?.let { FileData.keepSent(station, done.path, it) }
+                draft.save()
+                true
+            }
+            error != null -> {
+                p.error = error
+                p.retry = {
+                    p.error = null; p.sent = null; p.retry = null
+                    scope.launch {
+                        try { core.call("composer.retry", buildJsonObject { put("key", draft.uploadKey); put("id", id) }) }
+                        catch (e: CoreException) { p.error = e.message; return@launch }
+                        follow(draft, station, picked, p)
+                    }
+                }
+                true
+            }
+            else -> false
+        }
     }
 }
 
 /** What a file going up says: how far it has gone, once that is known. */
-internal fun uploadingText(f: Pending): String {
-    val sent = f.sent
-    return if (sent == null || f.size <= 0) t("common.uploading")
-    else t("android-chat.file.uploading.part", "percent" to (sent * 100 / f.size).toInt(), "size" to fileSize(f.size))
-}
+internal fun uploadingText(f: Pending): String = uploadingText(f.sent, f.size)
+
+/** The same, of `sent` bytes of `size` (a message's file going up before it is sent). */
+internal fun uploadingText(sent: Long?, size: Long): String =
+    if (sent == null || size <= 0) t("common.uploading")
+    else t("android-chat.file.uploading.part", "percent" to (sent * 100 / size).toInt(), "size" to fileSize(size))
 
 // ── the composer ───────────────────────────────────────────────────────
 
@@ -737,7 +821,7 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
     // A picture's remove button sits over its corner (PictureRemoveOut beyond it): the gap after it room for that too.
     if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = beyond, end = beyond + PictureRemoveOut, top = beyond), horizontalArrangement = Arrangement.spacedBy(6.dp + PictureRemoveOut)) {
         draft.files.forEach { f ->
-            val remove = { draft.files.remove(f); Unit }
+            val remove = { draft.takeOut(f) }
             val picture = draftPictureOf(f, station, session)
             if (picture != null) Box {
                 Box(Modifier.draftPicture(f, station).sendTile(host, f.id).size(56.dp).clip(InComposerFiles).background(C.chip)) {
@@ -767,8 +851,8 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
             } else if (f.pasted != null) Box(Modifier.sendTile(host, f.id)) {
                 val pasted = f.pasted
                 PastedCard(f, pasted, onRemove = remove,
-                    onRetry = if (f.error != null && station != null) ({ draft.files.remove(f); pasteAsFile(app, draft, station, pasted.text) }) else null,
-                    onRestore = if (pasted.restorable && !draft.starting) ({ draft.files.remove(f); draft.text = if (draft.text.isEmpty()) pasted.text else "${draft.text}\n${pasted.text}"; draft.focus++ }) else null)
+                    onRetry = if (f.error != null && station != null) ({ draft.takeOut(f); pasteAsFile(app, draft, station, pasted.text) }) else null,
+                    onRestore = if (pasted.restorable && !draft.starting) ({ draft.takeOut(f); draft.text = if (draft.text.isEmpty()) pasted.text else "${draft.text}\n${pasted.text}"; draft.focus++ }) else null)
             } else if (f.link != null) Box(Modifier.sendTile(host, f.id)) {
                 LinkCard(f.link, onRemove = remove)
             } else if (f.ref != null && station != null) Box(Modifier.sendTile(host, f.id)) {
@@ -1189,8 +1273,8 @@ private fun AppState.chatSend(host: Host, api: StationApi, of: ChatOf, view: Cha
         // Sent from the app's scope: the page may move on before the station answers.
         app.scope.launch {
             try {
-                if (to != null) api.send(to, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
-                else if (key != null) api.sendIn(key, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                if (to != null) api.send(to, taken.text, taken.attachments, taken.quotes.map { it.sent() }, taken.uploads)
+                else if (key != null) api.sendIn(key, taken.text, taken.attachments, taken.quotes.map { it.sent() }, taken.uploads)
                 else host.notSent()
             } catch (e: CoreException) { refused(e) }
         }

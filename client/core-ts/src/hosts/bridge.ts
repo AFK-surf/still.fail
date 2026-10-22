@@ -20,6 +20,8 @@
 //     headers: [[name, value]]} + the body, or {end}; listen.respond {id, request, status, headers} + body;
 //     listen.close {id} — a login's loopback listener (docs/remote-login.md), answered by the app (Kotlin:
 //     Loopback.kt, where the app keeps itself running while it listens), not the shell
+//   picked.read {file, start, end} → bytes; picked.release {file} — a file picked in the app, read a part at a time as
+//     it goes up (`composer.add` with `blob: {hostFile, size, type}`), answered by the app (Kotlin: PickedFiles.kt)
 //   reset {} — the connections kept for requests are taken for gone
 //   iroh.bind {relayUrls, lookup, relayOnly, alpns: [hex]} + key → {id}; iroh.connect {id, addr, additional: [hex]} +
 //     alpn → {id}; iroh.accept {id} → {id, alpn: hex} (the next connection coming, its handshake done; {end} once the
@@ -35,6 +37,7 @@
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go).
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
+import { FileSource } from "../file-source.ts";
 import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
@@ -399,6 +402,27 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
       return id;
     },
     receive(client: number, json: string, bytes?: Uint8Array): void {
+      // A file picked in the app: read from there as it goes up, as the desktop's page's is (file-port.ts).
+      if (json.includes('"hostFile"')) {
+        let raw: unknown;
+        try { raw = JSON.parse(json); } catch { raw = null; }
+        const files = (raw as { call?: unknown; params?: { files?: unknown } } | null)?.params?.files;
+        if ((raw as { call?: unknown } | null)?.call === "composer.add" && Array.isArray(files)) {
+          for (const f of files) {
+            const b = (f as { blob?: unknown } | null)?.blob as { hostFile?: unknown; size?: unknown; type?: unknown } | undefined;
+            if (!b || !Number.isSafeInteger(b.hostFile) || !Number.isSafeInteger(b.size) || (b.size as number) < 0) continue;
+            const file = b.hostFile as number;
+            (f as { blob: unknown }).blob = new FileSource(b.size as number, typeof b.type === "string" ? b.type : "",
+              (start, end) => Effect.runPromise(Effect.map(bridge.call("picked.read", { file, start, end }), (a) => {
+                const got = a.bytes ?? new Uint8Array(0);
+                return (got.buffer as ArrayBuffer).slice(got.byteOffset, got.byteOffset + got.byteLength);
+              })),
+              () => { Effect.runFork(Effect.ignore(bridge.call("picked.release", { file }))); });
+          }
+          later((core) => core.receiveRaw(client, raw, bytes));
+          return;
+        }
+      }
       later((core) => core.receiveJson(client, json, bytes));
     },
     disconnect(client: number): void {

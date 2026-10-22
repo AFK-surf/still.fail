@@ -68,6 +68,17 @@ data class PickFolder(val name: String, val path: String, val unreadable: Boolea
 @kotlinx.serialization.Serializable
 data class DriveCrumb(val name: String, val path: String)
 
+/** Files still going up that a message waits for (`uploads`: each by its id in the core, its name, size and picture's size). */
+private fun kotlinx.serialization.json.JsonObjectBuilder.putUploads(uploads: List<ComposerFile>) {
+    if (uploads.isEmpty()) return
+    putJsonArray("uploads") {
+        for (u in uploads) add(buildJsonObject {
+            put("id", u.id); put("name", u.name); put("size", u.size)
+            if (u.width != null && u.height != null) { put("width", u.width); put("height", u.height) }
+        })
+    }
+}
+
 class StationApi(private val core: StillFailCore, val station: String) {
     private val ops = StationOperations { name, params -> core.call(name, JsonObject(params + ("station" to JsonPrimitive(station)))) }
     private suspend fun op(name: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}): JsonElement =
@@ -76,12 +87,16 @@ class StationApi(private val core: StillFailCore, val station: String) {
     private suspend fun chat(call: String, thread: Long, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}) =
         core.call(call, buildJsonObject { put("station", station); put("thread", thread); fill() })
 
-    /** Sends to the chat: the message shows at once from the view's outbox, and leaves it once the station has it. */
-    suspend fun send(thread: Long, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList()) {
+    /**
+     * Sends to the chat: the message shows at once from the view's outbox, and leaves it once the station has it.
+     * `uploads`: files the core is still sending up (`composer.add`), which the message waits for in the outbox.
+     */
+    suspend fun send(thread: Long, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList(), uploads: List<ComposerFile> = emptyList()) {
         chat("chat.send", thread) {
             put("text", text)
             put("attachments", StillFailJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
             put("quotes", StillFailJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
+            putUploads(uploads)
         }
     }
 
@@ -380,11 +395,12 @@ class StationApi(private val core: StillFailCore, val station: String) {
         op("decision.answer") { put("thread", thread); put("seq", seq); put("option", option) }
     }
     /** Answers a card with the chat composer's text, attachments and quotes, also quoting the post that asked. */
-    suspend fun replyDecision(thread: Long, seq: Long, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList()) {
+    suspend fun replyDecision(thread: Long, seq: Long, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList(), uploads: List<ComposerFile> = emptyList()) {
         op("decision.reply") {
             put("thread", thread); put("seq", seq); put("text", text)
             put("attachments", StillFailJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
             put("quotes", StillFailJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
+            putUploads(uploads)
         }
     }
     /** Sets a decision aside on this device (待定): last on the decisions page, still pending; nothing is sent. */
@@ -677,11 +693,12 @@ class StationApi(private val core: StillFailCore, val station: String) {
     // ── a chat itself (web/src/api.ts → rename; chats made here, by their key) ──
 
     /** Sends to a chat by its key (one made here, made by its station or not): it waits in the chat until it can go. */
-    suspend fun sendIn(session: String, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList()) {
+    suspend fun sendIn(session: String, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList(), uploads: List<ComposerFile> = emptyList()) {
         op("chat.send") {
             put("session", session); put("text", text)
             put("attachments", StillFailJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
             put("quotes", StillFailJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
+            putUploads(uploads)
         }
     }
     /** A failed message of such a chat, by its key: sent again, or dropped. */

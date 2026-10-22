@@ -267,7 +267,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                 try {
                     val key = ensure()
                     // The message waits in the new chat (its outbox) until its station has made it; then it goes.
-                    app.api(view.station).sendIn(key, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                    app.api(view.station).sendIn(key, taken.text, taken.attachments, taken.quotes.map { it.sent() }, taken.uploads)
                     sent = true
                     // The new item's page, by the key the core gave it: this page becomes it, its composer kept.
                     host.madeChat()

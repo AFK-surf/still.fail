@@ -441,7 +441,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
             go(0) { local.gone.add(item.key) }
             app.scope.launch {
                 try {
-                    app.api(item.station).replyDecision(item.thread, item.seq, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                    app.api(item.station).replyDecision(item.thread, item.seq, taken.text, taken.attachments, taken.quotes.map { it.sent() }, taken.uploads)
                 } catch (e: CoreException) {
                     local.undo(item.key)
                     if (e.code == "invalid_params" && replyDraft.empty) replyDraft.restore(taken)

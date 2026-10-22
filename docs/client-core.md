@@ -112,6 +112,13 @@ It releases the page's file on success or removal, keeps failed uploads' sources
 for the outbox's retry, and fails outstanding reads when the port closes.
 Only local file IO lives in this adapter: draft state,
 station requests, progress, errors and sending stay in the shared core.
+Android does the same through its engine (`src/hosts/bridge.ts`): the app holds
+the picked file (PickedFiles.kt) and sends `blob: { hostFile, size, type }`; the
+core reads it with `picked.read {file, start, end}` and lets it go with
+`picked.release {file}`, calls answered by the app rather than the shell. Its
+files go up in a composer of their own (a key no chat has), so a message sent
+before they are up names them in `uploads` and waits in the outbox, as the web's
+does. `composer.retry {key, id}` sends a failed one up again from what was kept.
 
 UI → core:
 

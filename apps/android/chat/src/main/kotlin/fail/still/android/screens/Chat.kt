@@ -1513,6 +1513,8 @@ private fun Out(ctx: Here, o: Outgoing) {
             QuoteCards(o.quotes, null, Alignment.End)
             if (o.text.isNotEmpty()) Bubble(o.text, Modifier)
             Files(ctx, o.attachments, mine = true)
+            // Still going up: it is sent once they are (the core sends it), as the web's says.
+            o.uploads?.forEach { u -> FileCard(u.name, u.size, if (failed) o.error ?: t("android-chat.file.failed") else uploadingText(u.sent, u.size), busy = !failed) }
         }
         // Said briefly (a tap says why); sending it again or dropping it right beside.
         if (failed) Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1536,7 +1538,7 @@ private fun Out(ctx: Here, o: Outgoing) {
             // another sent soon after it says so for both.
             val flight = LocalFlight.current
             val host = LocalFlightHost.current
-            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { UnderWay(o.waits ?: t("android-chat.chat.sending")) }
+            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { UnderWay(o.waits ?: if (o.uploads.isNullOrEmpty()) t("android-chat.chat.sending") else t("common.uploading")) }
         }
     }
 }

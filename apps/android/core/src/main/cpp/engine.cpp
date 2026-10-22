@@ -4,7 +4,8 @@
 // still.fail cloud's socket, files and core.db, TCP, iroh) and whose answers come back as tasks; what the core says to
 // the app goes to Kotlin (HermesEngine.kt) through JNI. The calls only the app can do go to Kotlin instead of the shell,
 // answered through `complete`: what is kept sealed (`secure.*`: the Keystore, and the prompt for the person;
-// SecureStore.kt) and a login's loopback listener (`listen.*`: Loopback.kt, the app kept running while it listens). A
+// SecureStore.kt), a login's loopback listener (`listen.*`: Loopback.kt, the app kept running while it listens) and a
+// picked file's parts as it goes up (`picked.*`: PickedFiles.kt). A
 // JS error that escapes, or a bug the core reports, ends the
 // core as a panic ended the Rust one: `{"fatal": …}`, and the app starts another.
 #include <jni.h>
@@ -205,7 +206,7 @@ class Engine {
     if (e->ExceptionCheck()) e->ExceptionClear();
   }
 
-  /// A call only the app does (`secure.*`, `listen.*`), to Kotlin (Engine.kt `onApp`): it answers on its own threads,
+  /// A call only the app does (`secure.*`, `listen.*`, `picked.*`), to Kotlin (Engine.kt `onApp`): it answers on its own threads,
   /// through HermesNative.complete.
   void toApp(uint64_t id, const std::string& op, const std::string& json, const uint8_t* data, size_t size, bool hasBytes) {
     JNIEnv* e = env();
@@ -268,7 +269,7 @@ class Engine {
       std::string op = a[1].asString(rt).utf8(rt);
       std::string json = a[2].asString(rt).utf8(rt);
       bool hasBytes = n > 3 && a[3].isObject() && a[3].asObject(rt).isArrayBuffer(rt);
-      if (op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0) {
+      if (op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0 || op.rfind("picked.", 0) == 0) {
         if (hasBytes) {
           jsi::ArrayBuffer b = a[3].asObject(rt).getArrayBuffer(rt);
           toApp(id, op, json, b.data(rt), b.size(rt), true);

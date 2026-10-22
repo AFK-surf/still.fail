@@ -31,7 +31,12 @@ import fail.still.android.screens.PhotoAccess
 import fail.still.android.screens.RECENT_TAG
 import fail.still.android.screens.photoAccess
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
@@ -73,10 +78,22 @@ class AttachTest {
         screenshots(context)
         grant()
         val h = open(false)
+        // The core sends the picked file up (composer.add): up at once, as its composer then says.
         h.fake.answer = { name, params ->
-            if (name != "station.upload.part") JsonNull
-            else buildJsonObject {
-                put("file", buildJsonObject { put("name", params["name"]!!.jsonPrimitive.content); put("path", "uploads/" + params["name"]!!.jsonPrimitive.content); put("size", params["size"]!!.jsonPrimitive.long) })
+            if (name != "composer.add") JsonNull
+            else {
+                val f = params["files"]!!.jsonArray[0].jsonObject
+                val file = f["name"]!!.jsonPrimitive.content
+                h.fake.set(buildJsonObject { put("topic", "composer"); put("key", params["key"]!!.jsonPrimitive.content) }, buildJsonObject {
+                    put("text", ""); put("rev", 0); putJsonArray("quotes") {}; put("uploading", false); put("ready", true); put("starting", false); put("version", 1)
+                    putJsonArray("files") {
+                        addJsonObject {
+                            put("id", f["id"]!!); put("name", file); put("size", f["size"]!!)
+                            putJsonObject("done") { put("name", file); put("path", "uploads/$file"); put("size", f["size"]!!.jsonPrimitive.long) }
+                        }
+                    }
+                })
+                buildJsonObject { put("version", 1) }
             }
         }
         plus(h)
@@ -85,7 +102,7 @@ class AttachTest {
         rule.onAllNodesWithTag(RECENT_TAG).onFirst().performSemanticsAction(SemanticsActions.OnClick)
         Thread.sleep(800); h.settle()
         rule.runOnIdle { assertEquals(null, h.app.sheet) }
-        assertEquals("Screenshot_attach_5.png", h.fake.calls.last { it.first == "station.upload.part" }.second["name"]!!.jsonPrimitive.content)
+        assertEquals("Screenshot_attach_5.png", h.fake.calls.last { it.first == "composer.add" }.second["files"]!!.jsonArray[0].jsonObject["name"]!!.jsonPrimitive.content)
         picture(h, "attach-light-picked")
     }
 
