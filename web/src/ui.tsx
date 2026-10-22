@@ -18,6 +18,7 @@ import * as chatCss from "./styles/chat.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import { t } from "./i18n.ts";
 import { MONO } from "./modelMarks.ts";
+import { reload } from "./reloads.ts";
 
 export * from "@stillfail/ui/parts.tsx";
 export * from "@stillfail/ui/waiting.tsx";
@@ -126,7 +127,7 @@ export function Splash({ label, now = false, children }: { label?: string; now?:
       <Mark size={56} className="splash-mark" />
       {label && <p className={css.splashLabel} data-now={now || undefined}>{label}</p>}
       {children}
-      {stuck && <button type="button" className={css.splashReload} onClick={() => location.reload()}><Refresh size={14} />{t("common.reload")}</button>}
+      {stuck && <button type="button" className={css.splashReload} onClick={() => reload("button")}><Refresh size={14} />{t("common.reload")}</button>}
     </div>
   );
 }
