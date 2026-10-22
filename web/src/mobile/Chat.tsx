@@ -18,7 +18,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
 import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -30,6 +30,7 @@ import { PENDING } from "../lastChat.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
+import { useRelay } from "../Relay.tsx";
 import { openHistory } from "./History.tsx";
 import { AgentSince, openAgent } from "./AgentSheet.tsx";
 import { HOLD, usePick } from "./pick.tsx";
@@ -691,7 +692,7 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
  */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
   const publish = shownPublish(here.view);
-  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.feishuUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 2) * 41
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.feishuUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + (relayable(here.view) ? 1 : 0) + 2) * 41
     + (publish ? ((publish.may ? 1 : 0) + publish.links.length) * 41 + 10 : 0);
   // As tall as what it shows: its name and line, its agents, its rows.
   app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
@@ -760,6 +761,12 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             <InfoRow onClick={() => { app.sheet(null); chatPage.find(draftKeyOf(here.station, here.key)); }}>
               <Search size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.find")}</span>
             </InfoRow>
+            {/* Relayed to a channel (docs/relay.md): a chat with an agent to go on there. */}
+            {relayable(view) && (
+              <InfoRow onClick={() => app.sheet({ height: 0.9, content: () => <RelaySheet station={here.station} thread={thread.id} /> })}>
+                <ArrowUpRight size={16} /><span className={partsCss.mGrow}>{t("web-main.relay.action")}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+              </InfoRow>
+            )}
             {view.xshare && <ShareRow here={here} thread={thread} share={view.xshare} />}
             {view.slackUrl && <a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
             {view.feishuUrl && <a className={listsCss.mInfoRow} href={view.feishuUrl} target="_blank" rel="noopener"><SlackMark kind="feishu" size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openFeishu")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
@@ -767,6 +774,29 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           </InfoList>
         )}
         {publish && <PublishList here={here} thread={thread} publish={publish} />}
+      </div>
+    </>
+  );
+}
+
+/** Whether the chat can be relayed to a channel: open, with an agent to go on there. */
+const relayable = (view: ChatView) => !view.archived && !view.offline && view.agents.length > 0 && view.thread != null;
+
+/**
+ * Relays the chat to a channel (the phone's; the wide screen's is Relay.tsx RelayDialog, picking the same way): the
+ * search (or a Slack link), the places by connect, the note, 「接力」; done, the sheet goes and a toast says where.
+ */
+function RelaySheet({ station, thread }: { station: string; thread: number }) {
+  const app = useApp();
+  const relay = useRelay(station, thread, app.toast, () => app.sheet(null), false);
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-main.relay.title")} />
+      <div className={`${sheetsCss.mSheetScroll} ${css.mPublishBody}`}>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-main.relay.lead")}</p>
+        {relay.body}
+        <Button primary label={t("web-main.relay.go")} busy={relay.busy} enabled={relay.ready} onClick={relay.go} />
       </div>
     </>
   );

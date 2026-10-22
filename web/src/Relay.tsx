@@ -1,7 +1,8 @@
 // A chat relayed to a channel (docs/relay.md): from its title bar, ⌘K or its row's menu, a dialog lists the channels
 // and groups the station's connects' bots are in, by connect (Slack, Feishu, Lark), found by typing; one picked, with
 // a note if wanted, 接力 has the station start the conversation there and the chat's agent go on in it too. A Slack
-// message's link typed (pasted) into the search offers that message's thread instead.
+// message's link typed (pasted) into the search offers that message's thread instead. The phone's sheet
+// (mobile/Chat.tsx RelaySheet) picks the same way (useRelay).
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { stationApi, useStationCall, type RelayConnect, type RelayPlace } from "./api.ts";
 import { Button, Dialog, ElsewhereLogo, WaitLine } from "./ui.tsx";
@@ -40,10 +41,14 @@ const slackLink = (typed: string) => /^https?:\/\/[^/\s]+\/archives\/[A-Z0-9]+\/
 
 const platform = (c: RelayConnect) => (c.kind === "slack" ? "Slack" : c.kind === "lark" ? "Lark" : t("web-pages.connect.feishu.name"));
 
-function RelayDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
+/**
+ * The picking itself, the same on the wide screen's dialog and the phone's sheet: the search (or a Slack link), the
+ * places by connect, the note; `go` relays to what was picked, said by `say`, then `onDone`. `focus`: the search is
+ * focused as it opens (not on a phone, where that brings up the keyboard over the list).
+ */
+export function useRelay(station: string, thread: number, say: (text: string) => void, onDone: () => void, focus = true) {
   const call = useStationCall(station);
   const api = stationApi(call);
-  const toast = useToast();
   const [read, setRead] = useState<Read>({ reading: true });
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<{ connect: string; place: RelayPlace } | null>(null);
@@ -63,8 +68,8 @@ function RelayDialog({ station, thread, onClose }: { station: string; thread: nu
     if (to === null) return;
     setBusy(true);
     api.relay(thread, to, note).then(
-      (done) => { toast(t("web-main.relay.done", { place: done.place })); onClose(); },
-      (e: unknown) => { setBusy(false); toast(t("web-main.act.failed", { what: t("web-main.relay.verb"), error: failure(e) })); },
+      (done) => { say(t("web-main.relay.done", { place: done.place })); onDone(); },
+      (e: unknown) => { setBusy(false); say(t("web-main.act.failed", { what: t("web-main.relay.verb"), error: failure(e) })); },
     );
   };
   let list;
@@ -102,20 +107,28 @@ function RelayDialog({ station, thread, onClose }: { station: string; thread: nu
       </div>
     );
   }
+  const body = (
+    <div className={css.body}>
+      <input className={controlsCss.input} type="search" autoFocus={focus} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("web-main.relay.searchOrLink")} aria-label={t("web-main.relay.search")} />
+      {list}
+      <label className={css.noteField}>
+        <span className={css.noteLabel}>{t("web-main.relay.note")}</span>
+        <input className={controlsCss.input} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} placeholder={t("web-main.relay.notePlaceholder")} />
+      </label>
+    </div>
+  );
+  return { body, ready: picked !== null || link !== null, busy, go };
+}
+
+function RelayDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
+  const relay = useRelay(station, thread, useToast(), onClose);
   return (
     <Dialog open onClose={onClose} title={t("web-main.relay.title")} description={t("web-main.relay.lead")}
       footer={<>
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
-        <Button variant="primary" busy={busy} disabled={picked === null && link === null} onClick={go}>{t("web-main.relay.go")}</Button>
+        <Button variant="primary" busy={relay.busy} disabled={!relay.ready} onClick={relay.go}>{t("web-main.relay.go")}</Button>
       </>}>
-      <div className={css.body}>
-        <input className={controlsCss.input} type="search" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("web-main.relay.searchOrLink")} aria-label={t("web-main.relay.search")} />
-        {list}
-        <label className={css.noteField}>
-          <span className={css.noteLabel}>{t("web-main.relay.note")}</span>
-          <input className={controlsCss.input} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} placeholder={t("web-main.relay.notePlaceholder")} />
-        </label>
-      </div>
+      {relay.body}
     </Dialog>
   );
 }
