@@ -38,6 +38,10 @@ struct ListState {
   mut glide_l0 : Double
   mut glide_rest : Double
   mut glide_left : Double
+  // a row followed from its top (Ctx::list_follow_from: still.fail's newest message, kept in view from its top as
+  // Follow.kt's anchor), `follow_margin` under the view's top; -1 none. The reader's scroll lets it go
+  mut follow_item : Int
+  mut follow_margin : Double
   // the frame it was last built in (one not built is shown by nothing: at rest)
   mut built : Int
   // the last scroll to a row asked of it (Ctx::list_scroll_to): the frame, the row and the offset (asked again as the

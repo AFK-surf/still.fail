@@ -511,8 +511,9 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   // said while its agent's activity shows: out of its avatar once it has folded and hopped (emit.mbt)
   t.run_for(Fold.ms() + Float.ms())
   assert_true(t.find("收到：「测试一下」") is Some(_))
-  // (its avatar home: what comes out of avatars is over, the next words sent go in their turn after it)
-  t.run_for(Spit.ms() + Return.ms())
+  // (its avatar home: what comes out of avatars is over, its turn too (two frames on), the next words sent go in
+  // their turn after it)
+  t.run_for(Spit.ms() + Return.ms() + turn_calm_ms)
   // words with 失败 in them fail first
   t.tap_text("发消息")
   t.type_text("这条会失败")

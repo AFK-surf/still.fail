@@ -111,6 +111,8 @@ test "a reference to another chat is its chip, and opens that chat" {
 ///|
 test "while the chat is read: its bar, the messages to come, the composer" {
   let t = chat_tester("chat-loading")
+  // (what it shows not come: it slid in once it had waited the most a page opening waits, App.kt LOCAL_MS)
+  t.run_for(page_local_ms)
   assert_true(t.find("发消息") is Some(_))
   assert_true(t.find("整理发布清单") is None)
 }

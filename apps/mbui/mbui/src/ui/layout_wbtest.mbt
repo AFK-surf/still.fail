@@ -788,6 +788,8 @@ test "a list's running sums are its rows' heights added up" {
     glide_l0: 0.0,
     glide_rest: -1.0,
     glide_left: 0.0,
+    follow_item: -1,
+    follow_margin: 0.0,
     built: -1,
     scroll_asked: (-1, 0, 0.0),
     fling: 0,

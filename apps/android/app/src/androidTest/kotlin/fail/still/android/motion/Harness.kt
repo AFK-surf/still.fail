@@ -5,6 +5,13 @@
 //   <name>/settled.png   the page once everything has come to rest
 //   <name>/strip.png     the frames in a grid, each with its time and how far it is from the settled page
 //   <name>/diff.csv      frame, ms, share of pixels unlike the settled page, their mean difference
+//   <name>/tape.json     what the mbui app (apps/mbui) replays to be compared with it (its src/sfapp/tape.mbt): the
+//                        pages launched, the theme, the window, its system bars, the wall clock as it began; every
+//                        topic's value as it starts; then, by the
+//                        recording's ms, each value set, each call with its answer, each tap, each page pushed; and
+//                        each frame's words
+//                        where they were drawn (each text node of the semantics: its top left in the root, as moved
+//                        and scaled by the layers over it, its size, and whether any of it shows), in dp
 // A motion that ends precisely has its difference fall smoothly to 0; one that snaps at the end drops to 0 at once
 // (the largest drop between two frames is logged, tag "motion").
 package fail.still.android.motion
@@ -39,7 +46,21 @@ import fail.still.android.data.Topics
 import fail.still.android.data.I18n
 import fail.still.android.ui.KeyboardAt
 import fail.still.android.ui.StillFailTheme
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performSemanticsAction
+import fail.still.android.data.ChatOf
 import java.io.File
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.io.FileOutputStream
 import kotlin.math.abs
 import fail.still.android.ui.LocalUi
@@ -50,6 +71,11 @@ typealias MotionRule = AndroidComposeTestRule<ActivityScenarioRule<ComponentActi
 class Harness(val rule: MotionRule) {
     val fake = FakeCore()
     lateinit var app: AppState
+        private set
+    /** The pages it was launched with, and its theme (a recording's tape says them). */
+    var launched: List<Screen> = emptyList()
+        private set
+    var dark = false
         private set
 
     init {
@@ -64,6 +90,8 @@ class Harness(val rule: MotionRule) {
      * system's own).
      */
     fun launch(stack: List<Screen>, dark: Boolean = false, uris: UriHandler? = null, keyboard: WindowInsets? = null, kept: PrefsView = PrefsView()) {
+        launched = stack
+        this.dark = dark
         fake.put(Topics.accounts, listOf(Fixtures.account))
         fake.put(Topics.workspaces, Fixtures.workspaces)
         fake.put(Topics.stations(Fixtures.WS), listOf(Fixtures.station))
@@ -118,9 +146,82 @@ class Recording(private val h: Harness, val name: String, private val region: Re
     private val times = ArrayList<Long>()
     private var t = 0L
 
+    /** The tape (tape.json): what happened, by ms, and each frame's words. */
+    private val events = java.util.Collections.synchronizedList(ArrayList<JsonObject>())
+    private val texts = ArrayList<JsonObject>()
+    private val start = h.fake.snapshot()
+    /** The wall clock as it began (what the app's times are worked out from: an agent's `since`, a message's "刚刚"). */
+    private val wall = System.currentTimeMillis()
+
     init {
         h.rule.mainClock.autoAdvance = false
+        h.fake.heard = { e -> events += JsonObject(e + ("t" to JsonPrimitive(t))) }
         shot()
+    }
+
+    /** The words of `text` tapped (as its semantics' click), told to the tape. */
+    fun tap(text: String) {
+        events += buildJsonObject { put("t", t); put("tap", text) }
+        h.rule.onNode(hasText(text)).performSemanticsAction(SemanticsActions.OnClick)
+    }
+
+    /** The page `s` pushed over what shows (as a tap on a row does), told to the tape. */
+    fun push(s: Screen) {
+        events += buildJsonObject { put("t", t); put("push", screenJson(s)) }
+        h.rule.runOnUiThread { h.app.push(s) }
+    }
+
+    /** What is described as `description` (an icon's button) tapped, told to the tape. */
+    fun tapDescribed(description: String) {
+        events += buildJsonObject { put("t", t); put("tapDescribed", description) }
+        h.rule.onNode(hasContentDescription(description)).performSemanticsAction(SemanticsActions.OnClick)
+    }
+
+    /** The words drawn now: each text node, in dp. */
+    private fun words(): JsonObject {
+        val d = h.rule.density.density
+        val nodes = ArrayList<JsonObject>()
+        fun walk(n: SemanticsNode) {
+            val words = n.config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text }.orEmpty()
+            if (words.isNotEmpty()) {
+                val at = n.positionInRoot
+                val b = n.boundsInRoot
+                nodes += buildJsonObject {
+                    put("text", words)
+                    put("x", at.x / d); put("y", at.y / d); put("w", n.size.width / d); put("h", n.size.height / d)
+                    put("shown", b.width > 0f && b.height > 0f)
+                }
+            }
+            n.children.forEach { walk(it) }
+        }
+        walk(h.rule.onRoot(useUnmergedTree = true).fetchSemanticsNode())
+        return buildJsonObject { put("t", t); put("words", JsonArray(nodes)) }
+    }
+
+    /** tape.json (see the file's head). */
+    private fun tape() {
+        val root = h.rule.onRoot().fetchSemanticsNode()
+        val d = h.rule.density.density
+        val out = buildJsonObject {
+            put("name", name)
+            put("launched", JsonArray(h.launched.map { screenJson(it) }))
+            put("dark", h.dark)
+            put("window", buildJsonObject { put("w", root.size.width / d); put("h", root.size.height / d) })
+            // the system bars over the window (edge to edge: the app pads its pages by them)
+            var top = 0f
+            var bottom = 0f
+            h.rule.runOnUiThread {
+                h.rule.activity.window.decorView.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.systemBars())?.let {
+                    top = it.top / d; bottom = it.bottom / d
+                }
+            }
+            put("bars", buildJsonObject { put("top", top); put("bottom", bottom) })
+            put("wall", wall)
+            put("topics", JsonArray(start.map { (topic, value) -> buildJsonObject { put("topic", topic); put("value", value) } }))
+            put("events", JsonArray(synchronized(events) { events.toList() }))
+            put("frames", JsonArray(texts))
+        }
+        File(dir, "tape.json").writeText(out.toString())
     }
 
     /** The window as drawn (PixelCopy; an emulator's GPU now and then misses one, or the window is busy a moment: asked again). */
@@ -144,6 +245,7 @@ class Recording(private val h: Harness, val name: String, private val region: Re
         FileOutputStream(File(dir, "f%03d.jpg".format(small.size))).use { full.compress(Bitmap.CompressFormat.JPEG, 90, it) }
         small += Bitmap.createScaledBitmap(full, full.width / SCALE, full.height / SCALE, true)
         times += t
+        texts += words()
     }
 
     /** One frame on (after `before`, done at the frame's start: data arriving, a tap), pictured. */
@@ -164,6 +266,8 @@ class Recording(private val h: Harness, val name: String, private val region: Re
 
     /** Lets it come to rest and writes what it saw. Answers the largest drop, between two frames, of the share unlike the settled page. */
     fun end(): Float {
+        h.fake.heard = null
+        tape()
         lastFull?.let { l -> FileOutputStream(File(dir, "last.png")).use { l.compress(Bitmap.CompressFormat.PNG, 100, it) } }
         h.settle(2000)
         val settledFull = capture()
@@ -223,4 +327,13 @@ class Recording(private val h: Harness, val name: String, private val region: Re
     }
 
     private companion object { const val SCALE = 3 }
+}
+
+/** A page as a tape says it (tape.json `launched`): a chat by its station and thread or session, else its name. */
+private fun screenJson(s: Screen): JsonElement = when (s) {
+    is Screen.Chat -> buildJsonObject {
+        put("chat", s.station)
+        when (val of = s.of) { is ChatOf.Thread -> put("thread", of.id); is ChatOf.Session -> put("session", of.key) }
+    }
+    else -> JsonPrimitive(s::class.simpleName ?: s.toString())
 }

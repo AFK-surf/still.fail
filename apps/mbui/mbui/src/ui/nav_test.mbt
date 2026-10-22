@@ -248,3 +248,54 @@ test "a push whose end is a hair past one of the display's frames is run to its 
   assert_true(t.find("title 0") is None)
   t.assert_idle()
 }
+
+///|
+/// The stack's view, its pushes waiting for what the page shows (`ready`) at most `most` ms.
+fn nav_wait_view(nav : @ui.Nav[Int], ready : Ref[Bool], most : Double) -> (@ui.Ctx) -> Unit {
+  let page = nav_view(nav)
+  fn(c) {
+    nav.comes_when(fn() { ready.val }, most)
+    page(c)
+  }
+}
+
+///|
+/// How long a push waits for its page in these tests.
+let test_page_wait_ms : Double = 100.0
+
+///|
+test "a page pushed waits for what it shows: the slide starts as it comes, from then" {
+  let nav = @ui.Nav::new(0)
+  let ready = Ref::new(false)
+  let t = @ui.Tester::new(nav_wait_view(nav, ready, test_page_wait_ms))
+  t.tap_text("open 1")
+  let pushed = t.time()
+  // not come yet: nothing moves, the page under it as it was
+  t.run_for(test_page_wait_ms / 2.0)
+  assert_true(t.rect_of("title 1") is None || t.rect_of("title 1").unwrap().0 > 1.0)
+  assert_eq(t.rect_of("title 0").unwrap().0, 0.0)
+  // it comes: the slide from that moment, over in its 300 ms
+  ready.val = true
+  t.draw()
+  let came = t.time()
+  assert_true(came < pushed + test_page_wait_ms)
+  assert_eq(@ui.nav_rest(), came + @ui.nav_push_ms)
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
+test "a page pushed whose data never comes slides in once it has waited the most" {
+  let nav = @ui.Nav::new(0)
+  let ready = Ref::new(false)
+  let t = @ui.Tester::new(nav_wait_view(nav, ready, test_page_wait_ms))
+  t.tap_text("open 1")
+  let pushed = t.time()
+  // (held from the frame after the one it was pushed in: at rest by the latest its slide could end)
+  t.draw()
+  assert_eq(@ui.nav_rest(), pushed + test_page_wait_ms + @ui.nav_push_ms)
+  t.run_for(test_page_wait_ms + @ui.nav_push_ms)
+  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  t.assert_idle()
+}

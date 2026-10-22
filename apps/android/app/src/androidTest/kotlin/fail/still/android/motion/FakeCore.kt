@@ -35,6 +35,12 @@ class FakeCore {
     /** How long (ms, on the system's clock) a topic's first value takes to come once subscribed, where not at once. */
     val lags = ConcurrentHashMap<JsonObject, Long>()
 
+    /** Told each topic's value as it is set, and each call with its answer, as they happen (a recording's tape: Harness.kt). */
+    @Volatile var heard: ((JsonObject) -> Unit)? = null
+
+    /** Every topic's value now (a tape's start). */
+    fun snapshot(): List<Pair<JsonObject, JsonElement>> = values.entries.map { it.key to it.value }
+
     /** Each call the app made: its name and params. */
     val calls = CopyOnWriteArrayList<Pair<String, JsonObject>>()
     /** The bytes each of [calls] carried beside its params (an upload's part), null for one with none; in `answer`, the last is its call's. */
@@ -68,7 +74,10 @@ class FakeCore {
             val value = values[topic.jsonObject] ?: return
             // As long as the real core takes to answer it (reading the device's database), off this thread.
             val lag = lags[topic.jsonObject]
-            if (lag == null) reply(valueOf(id, value)) else Thread { Thread.sleep(lag); if (subs[id] == topic.jsonObject) reply(valueOf(id, value)) }.start()
+            // (when the app heard it, told to a tape: a topic subscribed while it records comes then)
+            val told = { heard?.invoke(buildJsonObject { put("answered", topic) }) }
+            if (lag == null) { reply(valueOf(id, value)); told() }
+            else Thread { Thread.sleep(lag); if (subs[id] == topic.jsonObject) { reply(valueOf(id, value)); told() } }.start()
             return
         }
         if (m["unsubscribe"] != null) { subs.remove(id); return }
@@ -112,6 +121,10 @@ class FakeCore {
         } catch (e: CoreException) {
             buildJsonObject { put("id", id); put("error", buildJsonObject { put("code", e.code); put("message", e.message) }) }
         }
+        heard?.invoke(buildJsonObject {
+            put("call", name); put("params", params)
+            out["ok"]?.let { put("ok", it) }; out["error"]?.let { put("error", it) }
+        })
         replyBytes(out.toString(), beside)
     }
 
@@ -120,6 +133,7 @@ class FakeCore {
     /** A topic's value from now on; those subscribed to it hear it at once. */
     fun set(topic: JsonObject, value: JsonElement) {
         values[topic] = value
+        heard?.invoke(buildJsonObject { put("set", topic); put("value", value) })
         val to = reply ?: return
         subs.filterValues { it == topic }.keys.forEach { to(valueOf(it, value), null) }
     }

@@ -512,6 +512,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         preview(c, src)
         viz_full_layer(c, src)
       } else {
+        // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
+        app.nav.comes_when(fn() { page_ready(src, app.nav.top()) }, page_local_ms)
         c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
         |> ignore
         // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
@@ -1237,4 +1239,21 @@ fn init {
   @ui.on_message(@hostapi.system_channel, fn(json, _) { system_said(json) })
   // what the phone has for 共享调试, as its host says by itself (the app's Android: AdbShare.java)
   @ui.on_message("native:adb.phone", fn(json, _) { @settings.adb_phone_said(json) })
+}
+
+///|
+/// How long a page opening waits for what the core has on the device (App.kt LOCAL_MS, web motion.ts): never for a
+/// station.
+let page_local_ms : Double = 100.0
+
+///|
+/// Whether the core has answered (a value or why not) for what page `p` shows as it opens (App.kt opening): a chat,
+/// an agent's history; any other page is not waited for.
+fn page_ready(src : Source, p : Page) -> Bool {
+  let answered = fn(t : Topic) { t.value is Some(_) || t.error is Some(_) }
+  match p {
+    Chat(r) => answered((src.topic)("chat", chat_params(r)))
+    History(r, key, _) => answered((src.topic)("chat", chat_params(r))) && answered((src.topic)("history", history_params(r, key)))
+    _ => true
+  }
 }

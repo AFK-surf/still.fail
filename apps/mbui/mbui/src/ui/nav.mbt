@@ -63,6 +63,11 @@ struct Nav[P] {
   /// what its motion is said to move by (Ctx::moving), and the frame it was told to move in
   mover : Mover
   mut asked : Int
+  // a page pushed waiting for what it shows (Nav::comes_when): since when (-1: not asked of this push), and whether
+  // its wait is over; while it waits its slide is held (t0 -2)
+  mut wait_from : Double
+  mut waited : Bool
+  mut held_most : Double
 }
 
 ///|
@@ -86,6 +91,9 @@ pub fn[P] Nav::new(root : P, on_leave? : (P) -> Unit = fn(_) {  }) -> Nav[P] {
     on_leave,
     mover: Mover::new(),
     asked: -1,
+    wait_from: -1.0,
+    waited: false,
+    held_most: 0.0,
   }
 }
 
@@ -130,6 +138,8 @@ fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Curv
   // told in a frame, it starts there, at its time (its end known as it is told); told between frames, at the next
   // frame that builds it (Ctx::nav)
   self.t0 = if in_frame.val { g().now } else { -1.0 }
+  self.wait_from = -1.0
+  self.waited = false
   // said once, as it sets out: frames until it is there
   self.asked = g().frame_no
   g().moving(self.mover, self as &Moving, what="a stack's slide")
@@ -143,6 +153,10 @@ impl[P] Moving for Nav[P] with rest_at(self, now, frame) {
   ignore(now)
   if self.mode != 1 && self.mode != 2 && self.mode != 4 {
     -1.0
+  } else if self.t0 == nav_held {
+    // held for what its page shows (its coming, or the most it waits, a wake, starts it): at rest by the latest its
+    // slide could end, said again as it starts
+    self.wait_from + self.held_most + self.dur
   } else if self.t0 >= 0.0 {
     self.t0 + self.dur
   } else if frame <= self.asked {
@@ -202,6 +216,44 @@ pub let nav_let_go_ms : Double = 280.0
 
 ///|
 pub let nav_let_go_min_ms : Double = 120.0
+
+///|
+/// A slide held (Nav::comes_when): its start, until it goes.
+let nav_held : Double = -2.0
+
+///|
+/// The page just pushed slides in once it has what it shows (`ready`, asked while it waits: the core has answered for it), `most` ms at most
+/// after it was pushed (still.fail's App.kt: a page opening waits LOCAL_MS for what the core has on the device, never
+/// for a station), not first as its loading look swapped for it a frame or two later: till then nothing moves, the
+/// page under it as it was. Asked each frame its stack is built, before Ctx::nav; its slide starts at the moment it
+/// goes (its readiness come, or the most it waits), its wait from when it was pushed. A push already sliding (asked
+/// later than the frame after it) is not held.
+pub fn[P] Nav::comes_when(self : Nav[P], ready : () -> Bool, most : Double) -> Unit {
+  if self.mode != 1 || self.p0 != 1.0 || self.waited {
+    return
+  }
+  let c = g()
+  if self.wait_from < 0.0 {
+    // (pushed as the frame before was built, after this was asked in it: drawn there where it starts, nothing moved
+    // yet; asked later than that, it slides on)
+    if self.t0 >= 0.0 && c.frame_no > self.asked + 1 {
+      self.waited = true
+      return
+    }
+    self.wait_from = if self.t0 >= 0.0 { self.t0 } else { c.now }
+  }
+  if c.now >= self.wait_from + most || ready() {
+    self.waited = true
+    if self.t0 == nav_held {
+      self.t0 = c.now
+      c.moving(self.mover, self as &Moving, what="a stack's slide")
+    }
+    return
+  }
+  self.t0 = nav_held
+  self.held_most = most
+  c.wake_at_time(self.wait_from + most)
+}
 
 ///|
 /// Pushes `page`: it slides in over the one on top.
@@ -343,7 +395,14 @@ pub fn[P] Ctx::nav(
     (nav.on_leave)(e.page)
   }
   nav.gone.clear()
-  if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
+  if nav.t0 == nav_held {
+    // held for what the page pushed shows (Nav::comes_when): where it was, not moving yet; at rest by the latest its
+    // slide could end (nav_rest)
+    let r = nav.rest_at(self.now, self.frame_no)
+    if r > self.nav_rest {
+      self.nav_rest = r
+    }
+  } else if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
     if nav.t0 < 0.0 {
       // it starts now: said to move again (not built in the frame it was to start in, it had been let be)
       nav.t0 = self.now

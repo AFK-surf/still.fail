@@ -76,7 +76,7 @@ class TurnsMotionTest {
         rule.onAllNodes(hasSetTextAction())[0].performClick().performTextReplacement(text)
         h.keyboard()
         val r = h.record("answered-by-writing")
-        r.frame { rule.onNode(hasContentDescription("发送")).performSemanticsAction(SemanticsActions.OnClick) }
+        r.frame { r.tapDescribed("发送") }
         r.frames(8)
         // The station has it: the decision answered by it, the agent starting on it, at once.
         val answered = Fixtures.talk + card(resolved = true) + Fixtures.mine(6, text, later(), said = true)
@@ -109,7 +109,7 @@ class TurnsMotionTest {
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
         h.settle()
         val r = h.record("answered-by-picking")
-        r.frame { rule.onNode(hasText(text)).performSemanticsAction(SemanticsActions.OnClick) }
+        r.frame { r.tap(text) }
         h.deliver()
         r.frames(20)
         // The station has it, the agent starting on it.

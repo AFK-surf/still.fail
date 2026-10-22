@@ -18,7 +18,7 @@ priv enum TurnFor {
   Change(String)
   Send
   Emits
-} derive(Eq)
+} derive(Eq, Show)
 
 ///|
 /// A turn asked for: what for, how long its motion takes (inf: till said over), and whether it goes after the others
@@ -95,8 +95,17 @@ fn turns_of(key : String) -> Turns {
 let emits_turn : String = "\u{1}emits"
 
 ///|
+/// How close to a frame's time a turn's start counts as in it (sums of declared lengths in ms round off).
+let turn_slack_ms : Double = 0.001
+
+///|
 /// How far on a frame is owed to a turn whose time came after the frame's step (Moving::rest_at): the next one.
 let turn_owed_ms : Double = 1.0
+
+///|
+/// How long after its motion a turn holds the next (ListTurns.kt: the list looked at from two frames on, still in
+/// both, at 60 frames a second), and how much later than the others asked with it one going after them is asked.
+let turn_calm_ms : Double = 2.0 * 1000.0 / 60.0
 
 ///|
 /// The most a turn holds the next one back, whatever it does (one whose motion never ends: ListTurns.kt MOST_MS).
@@ -107,7 +116,8 @@ fn Turns::ask(self : Turns, c : @ui.Ctx, what : TurnFor, ms : Double, after? : B
   self.asked_n = self.asked_n + 1
   // (said once as it is asked, from the moment it is: frames until its turn is played, Moving below)
   let at = self.moment(c)
-  self.asks.push({ what, ms, after, at, n: self.asked_n })
+  // (one going after the others asked with it asked a couple of frames on: ListTurns.kt take's `after`)
+  self.asks.push({ what, ms, after, at: if after { at + turn_calm_ms } else { at }, n: self.asked_n })
 }
 
 ///|
@@ -181,7 +191,7 @@ fn Turns::started_at(self : Turns, key : String) -> Double {
 fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Unit {
   if self.on == Some(what) && self.open {
     self.open = false
-    self.until = dmin(self.until, at)
+    self.until = dmin(self.until, at + turn_calm_ms)
     c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
   }
   // (one asked and not come yet, over before it came: it goes)
@@ -235,13 +245,15 @@ fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
     }
     let a = self.asks[i]
     let at = self.free_at(a)
-    if at > self.now {
+    // (its time come, to a rounding: the ends added up in ms can land a hair past the frame they are due in)
+    if at > self.now + turn_slack_ms {
       return
     }
+    let at = dmin(at, self.now)
     self.asks.remove(i) |> ignore
     self.on = Some(a.what)
     self.open = a.ms == @double.infinity
-    self.until = at + (if self.open { turn_most_ms } else { a.ms })
+    self.until = at + (if self.open { turn_most_ms } else { a.ms }) + turn_calm_ms
     match a.what {
       Admit(k) => {
         self.waiting.remove(k) |> ignore
@@ -275,7 +287,7 @@ impl @ui.Moving for Turns with rest_at(self, now, frame) {
     // step; the next frame, a moment on, starts it from when it came)
     Some(i) => {
       let at = self.free_at(self.asks[i])
-      if at <= now {
+      if at <= now + turn_slack_ms {
         now + turn_owed_ms
       } else {
         at
