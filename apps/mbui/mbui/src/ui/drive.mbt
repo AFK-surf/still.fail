@@ -393,6 +393,8 @@ fn on_screen_nodes(
     let hit = match icon {
       Some(k) => n.kind == kind_image && n.text.contains(k)
       None =>
+        // a box by what it is called (its label, whole), as Compose's test finds a node by its contentDescription
+        (n.kind == kind_box && n.label != "" && field is None && n.label == exact.unwrap_or(what)) ||
         (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
         (match field {
           // a field by the words in it (`field:WORDS`), not its placeholder

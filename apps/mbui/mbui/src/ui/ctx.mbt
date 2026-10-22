@@ -583,6 +583,8 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap. `keep`: in a row, as wide
 /// as its content even where the row is short of room, its siblings squeezed instead (as Compose's Row measures what
 /// has no weight whole, a weight(1f, fill = false) sibling given the rest: a bar's title cut short, not its buttons).
+/// `label`: what it is called where it shows no words (an icon's button, as Compose's contentDescription), found by
+/// them whole as words are (a drive's `=WORDS`, Tester::locate).
 ///
 /// `style` (style.mbt) says how it looks, its state blocks picked by its own state: pressed, hovered, focused by `id`
 /// (as Ctx::pressed, hovered, focus_shown read them), `selected` and `disabled` as said, dark and narrow by the theme
@@ -628,6 +630,7 @@ pub fn Ctx::box(
   notch_fillet? : Double = 0.0,
   aspect? : Double = 0.0,
   keep? : Bool = false,
+  label? : String = "",
   id? : Int = 0,
   body : () -> Unit,
 ) -> Int {
@@ -659,6 +662,7 @@ pub fn Ctx::box(
   n.rtl = self.direction == Rtl
   n.aspect = aspect
   n.keep = keep
+  n.label = label
   n.w = first(
     w,
     match st.w {
