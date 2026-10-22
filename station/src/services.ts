@@ -22,6 +22,7 @@ import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
+import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
 import { Packages } from "./modules/packages.ts";
@@ -124,7 +125,7 @@ export class Helper extends Context.Service<Helper, HelperApp | null>()("stillfa
     Helper,
     Effect.gen(function* () {
       const { data } = yield* Paths;
-      const app = platform.hasDesktopScreen ? helperApp() : null;
+      const app = platform.desktopScreen === "helper" ? helperApp() : null;
       return app === null ? null : new HelperApp({ app, dir: join(data, "helper") });
     }),
   );
@@ -150,9 +151,13 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
     Effect.gen(function* () {
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub({ drop: () => dropFolder(homedir()) })), (hub) => Effect.sync(() => hub.close()));
       const helper = yield* Helper;
-      const desktop: Desktop = new Desktop({ supported: platform.hasDesktopScreen, helper, grants: yield* Grants, changed: () => hub.changed() });
+      // Windows': stillfail-screen, a process a view; macOS's: still.fail Helper, with its grants.
+      const desktop: Desktop | WindowsDesktop =
+        platform.desktopScreen === "screen"
+          ? new WindowsDesktop({ binary: screenBinary(), changed: () => hub.changed() })
+          : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed() });
       // Back after it ended by itself: the desktop asks again for a grant still missing.
-      helper?.onBack(() => void desktop.helperBack());
+      if (desktop instanceof Desktop) helper?.onBack(() => void desktop.helperBack());
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const remove = hub.add(desktop);

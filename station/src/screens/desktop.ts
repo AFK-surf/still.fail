@@ -1,6 +1,8 @@
 // This machine's display as a screen source (`desktop`, docs/remote-screens.md): on macOS, still.fail Helper
 // (helper/app.ts) captures the main display with ScreenCaptureKit, encodes H.264 with VideoToolbox (or a JPEG a
-// picture, for a view that takes no H.264) and posts input with CGEvent, a view a connection to it; elsewhere the desktop says it is not supported, and opens nothing.
+// picture, for a view that takes no H.264) and posts input with CGEvent, a view a connection to it. Windows' is
+// win-desktop.ts (its views are this file's HelperView too); elsewhere the desktop says it is not supported, and opens
+// nothing.
 //
 // macOS grants Screen Recording and Accessibility to the helper app. Opening the desktop while one is missing puts the
 // helper's window up on this Mac (once an attempt, the system's own prompt not asked: it would fight the window): a
@@ -10,7 +12,6 @@
 //
 // A view a person drives carries the Mac's clipboard both ways (text, PNG): the helper sets NSPasteboard and pastes with
 // ⌘V, and, while the view watches it, looks at its changeCount every half a second and says what was copied.
-import type net from "node:net";
 import { hostname } from "node:os";
 import type { HelperApp } from "../helper/app.ts";
 import { HelperGrants } from "../helper/grants.ts";
@@ -23,7 +24,7 @@ export type { HelperStatus } from "../helper/grants.ts";
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
 
 export type DesktopOptions = {
-  /// Whether this machine's display can be seen at all (platform.hasDesktopScreen).
+  /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
   supported: boolean;
   /// still.fail Helper, null when the release has none.
   helper: HelperApp | null;
@@ -203,11 +204,19 @@ export function helperMessage(kind: number, payload: Buffer = Buffer.alloc(0)): 
   return Buffer.concat([head, payload]);
 }
 
+/// What carries a view's messages to and from the helper: its socket (macOS), or a process's pipes (Windows'
+/// stillfail-screen, win-desktop.ts).
+export type HelperPipe = { write(data: Buffer): unknown; destroy(): unknown; on(event: "data", listener: (chunk: Buffer) => void): unknown; on(event: "error" | "close", listener: () => void): unknown };
+
+/// How a view's input is posted on the machine: the ops its helper takes for one person's event (mac-input.ts,
+/// win-input.ts), at `now` (ms).
+export type InputOps = { ops(event: ScreenInput, now: number): object[] };
+
 /// One view: a connection to the helper, asked for each frame.
-class HelperView implements ScreenView {
+export class HelperView implements ScreenView {
   readonly ready: Promise<{ width: number; height: number }>;
-  readonly #socket: net.Socket;
-  readonly #input = new MacInput();
+  readonly #socket: HelperPipe;
+  readonly #input: InputOps;
   #carry: Buffer = Buffer.alloc(0);
   #waiting: ((frame: Frame | null) => void)[] = [];
   #config: FrameConfig | undefined;
@@ -219,15 +228,16 @@ class HelperView implements ScreenView {
 
   readonly #codec: Codec;
 
-  constructor(codec: Codec, socket: net.Socket, gone: () => void) {
+  constructor(codec: Codec, socket: HelperPipe, gone: () => void, input: InputOps = new MacInput()) {
     this.#codec = codec;
     this.#socket = socket;
+    this.#input = input;
     this.#gone = gone;
     this.ready = new Promise((resolve, reject) => (this.#settle = { resolve, reject }));
     socket.on("data", (chunk: Buffer) => this.#heard(chunk));
     socket.on("error", () => this.close());
     socket.on("close", () => {
-      this.#settle.reject(new Error("still.fail Helper ended the view"));
+      this.#settle.reject(new Error("the screen's helper ended the view"));
       this.close();
     });
   }

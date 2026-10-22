@@ -12,7 +12,9 @@
 #                                                          the desktop app and services written by older releases run)
 #   stillfail/station/{main.js, read/worker.js, search/worker.js, skills/, mesh.node, stillfail-runner, package.json}
 #                                                         (and on darwin-arm64 "still.fail Helper.app": the station's
-#                                                          macOS app for what macOS grants, docs/station-ts-native.md §4)
+#                                                          macOS app for what macOS grants, docs/station-ts-native.md §4;
+#                                                          on win32-x64 stillfail-screen.exe: the desktop's screen,
+#                                                          docs/remote-screens.md)
 #   stillfail/NODE_VERSION                                (the version of the Node it runs on: .node-version's)
 #   stillfail/dist/admin/posthog.json                     (only the PostHog key the station reports errors with, when
 #                                                          $STILLFAIL_POSTHOG names one: scripts/posthog-key.ts; the
@@ -39,6 +41,7 @@ launcher="$(native launcher)"
 mesh="$(native mesh)"
 runner="$(native runner)"
 helper=; [ "$platform" = darwin-arm64 ] && helper="$(native helper)"
+screen=; [ "$platform" = win32-x64 ] && screen="$(native screen)"
 (cd "$root/station" && pnpm run build >&2)
 app="$out/stillfail"
 rm -rf "$app"
@@ -57,6 +60,7 @@ cp "$launcher" "$app/mesh/target/release/stillfail-station$x"
 [ "$platform" = win32-x64 ] && cp "$(dirname "$launcher")/stillfail-station-w.exe" "$app/mesh/target/release/"
 cp "$mesh" "$runner" "$app/station/"
 [ -z "$helper" ] || cp -R "$helper" "$app/station/"
+[ -z "$screen" ] || cp "$screen" "$app/station/"
 # macOS asks "find devices on local networks?" (the mesh's mDNS) for the launcher: Node and everything it starts are
 # its. Ad hoc, the grant was its hash's: each new launcher asked again, and every Node it started while unanswered put
 # up one more. The station release job signs the native parts ($STILLFAIL_SIGN_STATION: .github/sign-station.sh), so

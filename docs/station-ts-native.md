@@ -131,3 +131,12 @@ station 在 macOS 上要系统授权的事都放在这个 app 里：本机屏幕
 - station（`src/helper/app.ts`）先把它拷到 `<data>/helper/`（不在别的 app 里面：桌面 app 里 station 在 still.fail.app 内部；代码变了才重拷，并让旧的退出），再用 `open -n -g --env …` 交给 LaunchServices 启动，这样它自己就是 TCC 的“负责进程”。之后在 `<data>/helper/helper.sock` 上一个连接一个请求：先一行 `{token, op, …}`（token 在 `<data>/helper/token`，0600，station 交接后的新进程照样连得上），op 有 `hello`、`status`、`permissions.show`（`grants` 指定窗口里的几行）、`screen.view`（之后这个连接收发画面消息）、`files.*`（保护文件夹的列表、读写等，字节在连接上流式传，`Files.swift` 开头写协议）、`restart`、`quit`，协议写在 `main.swift` 开头。没人连 30 分钟它自己退出，station 停止时让它退出，要用时再起。
 - 授权后：窗口关闭时如果期间有新授权，它用同一个 socket 和 token 重新启动自己；打开画面时发现“授权了但本进程还没生效”也会先重启，station 等它回来再开一次。文件夹的授权（文件与文件夹）只能由 macOS 自己的弹框给：窗口里点「允许」时 helper 去打开那个文件夹，macOS 就问一次，允许后立刻生效、不用重启；helper 没授权时从不碰那个文件夹（否则弹框没人点会一直卡住调用）。窗口看到授权变化会在 `watch` 连接上告诉 station（`{event: "grants"}`）。
 - macOS 授权后自己的「退出并重新打开」会不带参数启动它：它从 app 旁边（`<data>/helper/`）读 `helper.sock` 和 `token`，照样服务。一个目录只跑一个（旁边的 `helper.lock`，自己重启时新进程等旧的放锁）。station 用一条一直开着的 `watch` 连接盯着它：它不是被要求退出却结束了（macOS 没重新打开、崩溃），station 等 3 秒看它自己回不回来，不回来就再启动；回来后如果还缺授权，再弹授权窗口（只剩缺的那几行）。
+
+## 5. stillfail-screen（`station/native/screen`，可执行文件 `stillfail-screen.exe`，只有 Windows）
+
+Windows 上本机屏幕（[remote-screens.md](remote-screens.md) 的 `desktop`）由它采集和操控，相当于 macOS 上的 still.fail Helper，但不需要授权：station 作为登录时的计划任务跑在用户自己的会话里，那里的屏幕本来就能采集、能输入。
+
+- Rust 写（`windows` crate）：Windows.Graphics.Capture 采主显示器（带鼠标指针，Windows 11 上不显示黄框；Windows 11 24H2 起用 DirtyRegions 跳过没变化的帧），D3D11 视频处理器在 GPU 上缩放并转成 NV12，Media Foundation 编 H.264（优先用接受 D3D11 纹理的硬件编码器，比如 NVIDIA、Intel、AMD 的 MFT，异步模式；没有就用微软的软件编码器），低延迟、没有 B 帧，优先 constrained baseline；不收 H.264 的画面（agent 的截图）用 WIC 编 JPEG。输入用 `SendInput`：键盘按扫描码发（与键盘布局无关，键码表在 `src/screens/win-input.ts`），文字按 Unicode 发。剪贴板支持文本和 PNG（另放一份 DIB，给不认 PNG 的程序用）；其他程序占着剪贴板时会重试一会儿。
+- `scripts/native.ts` 的 part `screen`（win32-x64），和 runner 一样在 Mac 上用 cargo-zigbuild 交叉编译成 MinGW 的 exe；`station-bundle.sh` 把它放在 `station/` 里 `mesh.node` 旁边，桌面 app 跟着带上。
+- station（`src/screens/win-desktop.ts`）每开一个画面就起一个 `stillfail-screen view` 进程：stdin 先写一行请求 `{codec, maxWidth, maxHeight}`，之后双向传的消息和 helper 的 `screen.view` 连接上的一样（`desktop.ts` 的 `HelperView` 两边共用；消息格式写在 `src/main.rs` 开头），stdin 关掉进程就退出。显示器尺寸由 `stillfail-screen status` 给出。进程自己退出时（显示器拔掉或主显示器换了、显卡驱动重启、崩溃），station 会再起一个，画面从关键帧和 config 接着放，用户无感；一分钟内超过三次就结束这个画面。编码器 2 秒没吐回一帧就重建。
+- 采不到的：登录界面和 UAC 的安全桌面（Windows 不让任何程序采）；以管理员身份运行的窗口收不到输入（UIPI）。

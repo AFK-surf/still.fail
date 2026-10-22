@@ -30,7 +30,7 @@ env:
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
   # Linux check's mesh addon is built on a branch that changed it). ffmpeg, all three, on a branch that changed
   # scripts/ffmpeg.ts: nothing on a branch runs it, but its build there is the evidence for the merge.
-  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 window-controls:win32-x64 notify-permission:darwin-arm64 notify-permission:win32-x64 helper:darwin-arm64 ffmpeg:darwin-arm64 ffmpeg:linux-x64 ffmpeg:linux-arm64
+  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 screen:win32-x64 window-controls:win32-x64 notify-permission:darwin-arm64 notify-permission:win32-x64 helper:darwin-arm64 ffmpeg:darwin-arm64 ffmpeg:linux-x64 ffmpeg:linux-arm64
 jobs:
   # What can runs on mini1; what needs Linux (the Linux check) and the small jobs (plan, the API's deploy, put, the
   # changelog, timing) on GitHub's own runners, free for a public repository, not on Blacksmith's (2026-10-15, as asked).

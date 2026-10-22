@@ -563,5 +563,5 @@ export const unix: Platform = {
   hasFolderPermissions: MACOS,
   hasSpotlight: MACOS,
   hasUnixSockets: true,
-  hasDesktopScreen: MACOS,
+  desktopScreen: MACOS ? "helper" : null,
 };

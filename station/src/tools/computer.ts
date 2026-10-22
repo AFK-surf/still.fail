@@ -45,7 +45,7 @@ export const COMPUTER = {
       dx: { type: "number", description: "scroll: pixels to the right (negative: left)" },
       dy: { type: "number", description: "scroll: pixels down (negative: up)" },
       text: { type: "string", description: "type: the text, as if typed (a newline presses Enter)" },
-      key: { type: "string", description: "key: a key or a combination, e.g. Enter, Escape, Tab, ArrowDown, PageDown, F5, a, cmd+c, ctrl+shift+t, cmd+Left" },
+      key: { type: "string", description: "key: a key or a combination, e.g. Enter, Escape, Tab, ArrowDown, PageDown, F5, a, ctrl+shift+t, cmd+c and cmd+Left on a Mac (on Windows cmd is the Windows key: ctrl+c there)" },
       mods: { type: "array", items: { type: "string", enum: ["cmd", "ctrl", "alt", "shift"] }, description: "key: modifiers held besides those in key" },
       ms: { type: "number", description: "wait: how long (ms, at most 30000) before the screenshot" },
       wait: { type: "number", description: "After an action: ms before its screenshot (default 500)" },

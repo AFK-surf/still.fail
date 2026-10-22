@@ -43,7 +43,7 @@ export function screenTools(hub: ScreenHub, base: () => string | null): Tool[] {
     {
       ...SCREEN,
       run: async (_session, args) => {
-        // The desktop's grants as macOS has them now.
+        // The desktop as it is now (its size; on macOS its grants).
         await hub.refresh();
         return described(hub, base(), typeof args.id === "string" && args.id !== "" ? args.id : undefined);
       },

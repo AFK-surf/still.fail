@@ -87,9 +87,9 @@ JPEG frames are all key frames and their config has no `description`.
   then rather than at QUIC's idle timeout, half a minute on (station/src/mesh/superseded.ts). Another live client
   with the same key (a tab of Chrome on Android) answers and keeps its own.
 
-### The desktop (station/src/screens/desktop.ts, station/native/helper)
+### The desktop (station/src/screens/desktop.ts, station/native/helper; Windows: win-desktop.ts, station/native/screen)
 
-macOS only (elsewhere it is listed with `access` saying it is not supported, and opens nothing). still.fail Helper
+macOS and Windows (elsewhere it is listed with `access` saying it is not supported, and opens nothing). On macOS still.fail Helper
 (`still.fail Helper.app`, bundle id `fail.still.helper`, beside `mesh.node` in the release; docs/station-ts-native.md
 §4) does it: ScreenCaptureKit captures the main display scaled into `maxWidth`×`maxHeight`; VideoToolbox encodes H.264
 on the hardware encoder with low-latency rate control (constrained baseline, no reordering, AVCC with the avcC as
@@ -106,6 +106,24 @@ grant is missing puts the helper's window up on that Mac (as Cue's Computer Use 
 grant, Allow opens the System Settings pane with a panel holding the app to drag into its list. The 503 and the list's
 `access` say what is missing and that the window is up (`asking`), or that opening the screen puts it up. The system's
 own prompt is not used (it would fight the window).
+
+On Windows stillfail-screen (`stillfail-screen.exe`, beside `mesh.node` in the release; docs/station-ts-native.md §5)
+does it, with nothing to grant: the station runs in its person's session (the logon task), where the display can be
+captured and driven. A view is a process of its own (`stillfail-screen view`, the helper's messages on its standard
+input and output, ended as its input is). One that ends by itself (the display went or another became the main one, the
+graphics driver started again, a crash) is started again and the view goes on from a key frame with its config; past
+three times a minute the view ends. Windows.Graphics.Capture captures the main display (the cursor drawn in, no
+yellow border on Windows 11; a picture where nothing changed, by its dirty regions on 11 24H2 on, is not a new one); the
+GPU's video processor scales it into `maxWidth`×`maxHeight` as NV12; Media Foundation encodes H.264 on the hardware
+encoder (its MFT given the D3D11 textures; Microsoft's software encoder where there is none) with low latency
+(constrained baseline, no B-frames, the parameter sets taken out of band into the avcC), a key frame on request; a view
+without H.264 gets WIC's JPEGs. SendInput posts the input: the pointer in the virtual desktop's absolute units, a page's
+wheel pixels as Windows' units (120 a notch, about a page's 100 pixels), keys by their `code` as the key's scan code
+(station/src/screens/win-input.ts; Windows counts double clicks and keeps the modifiers itself, and a key that comes with
+modifiers not pressed before it, as a phone's keys row sends it, has them pressed round it; the Meta key is the Windows
+key), text as Unicode. Opening a view wakes a display gone to sleep (a pointer nudge) and keeps it on while it is open
+(`SetThreadExecutionState`). What Windows keeps from any app in the session is not had: the sign-in and UAC's secure
+desktop are not captured, and windows of apps run as administrator take no input.
 
 The same app opens the drive's folders macOS protects (`files.*`, docs/drive.md): its window then shows only the rows
 asked for (`permissions.show {grants}`), a folder's row asking macOS's own prompt (the only way a folder is granted).
@@ -145,8 +163,9 @@ asks; a person's own ask (the station's page) puts it up again however lately it
 ### Clipboard and files
 
 While a person drives a screen, its clipboard goes both ways. The desktop: the helper sets NSPasteboard (text, or PNG
-with a TIFF beside it) and, to paste, posts ⌘V after the input before it; while a view that drives it is open it looks
-at NSPasteboard's changeCount every half a second (nothing else is read until it changes, and what the view set is not
+with a TIFF beside it; on Windows the clipboard, text or PNG with a bitmap beside it, opened again for a moment while
+another app holds it) and, to paste, posts ⌘V (Ctrl+V) after the input before it; while a view that drives it is open it looks
+at NSPasteboard's changeCount (the clipboard's sequence number) every half a second (nothing else is read until it changes, and what the view set is not
 said back) and sends what was copied: text first, else a picture as PNG; what is past its bound is not sent. A tab of
 the station's browser: text only. The view's own CDP session adds a binding (`Runtime.addBinding`, no `Runtime.enable`)
 and a script that calls it with what the page copies (a copy or cut, as the page set it or as it was selected;
