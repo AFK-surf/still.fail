@@ -53,8 +53,20 @@ try {
     }
   };
 
-  // Still: what moves by script (its springs, not among the page's animations) at its end: settled.
-  const steady = (page) => settle(page, 0);
+  // Still: what moves by script (its springs, not among the page's animations) at its end: settled. Its steps in the page
+  // itself, on the clock Playwright puts there (what page.clock.runFor asks of it), not two round trips each: the page
+  // held still (the demo ended, its time fixed), nothing it waits for comes in real time meanwhile. The four looks of
+  // a story were a third of the stories' time on CI's runners, 161-237 s of a share's pages, 29-54 s so (2026-10-23).
+  // (Not so for a step's settling: what a step brings comes in real time too, a fetch, a picture decoded.)
+  const steady = (page) => page.evaluate(async (still) => {
+    const clock = globalThis.__pwClock.controller;
+    for (let t = 0; t < still; t += 100) {
+      const going = document.getAnimations().filter((a) => (a.playState === 'running' || a.pending) && a.effect?.getTiming().iterations !== Infinity);
+      for (const a of going) a.finish();
+      await Promise.all(going.map((a) => a.finished.catch(() => {})));
+      await clock.runFor(100);
+    }
+  }, still_ms);
 
   const wrong = [];
   /** A page with the story in it, taken to its state by its steps; whether it got there. */
