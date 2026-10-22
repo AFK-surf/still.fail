@@ -453,6 +453,21 @@ const letters: DemoExtension = {
     return { ...(value as ChatView), letters: 4 };
   },
 };
+/** The chat's services and background jobs (the `chatJobs` view): a web service up and a task that ended, so the title
+ *  bar's button for them is there (it is not while there are none). */
+const someJobs: DemoExtension = {
+  topic: (t) => {
+    if (t.topic !== "chatJobs") return undefined;
+    const now = Date.now();
+    return {
+      jobs: [
+        { id: "j1", name: "dev server", state: "running", port: 5173, startedAt: now - 20 * 60_000, tone: "up", service: true, open: true, current: true, word: "运行中", meta: [{ text: ":5173" }], age: "20 分钟" },
+        { id: "j2", name: "pnpm test", state: "exited", exitCode: 0, startedAt: now - 9 * 60_000, endedAt: now - 7 * 60_000, tone: "off", ended: true, word: "已结束", meta: [{ text: "2 分钟" }], age: "9 分钟前" },
+      ],
+      servicesNote: "1 个运行中", jobsNote: "", current: 1, ended: 1, clear: ["c1"], allText: "全部 2 个", clearText: "清除已结束的", hiddenText: "",
+    };
+  },
+};
 /** A message sent while the chat's station updates: it waits for the update to finish, saying so under it
  *  (`Outgoing.waits`), and the chat's head says the station is updating. */
 const sentUpdating: DemoExtension = {
@@ -989,7 +1004,7 @@ export const stories: Story[] = [
   // ── small panels (docs/ui-panels.md) ──
   { id: "panel-filter", group: "小面板", title: "筛选菜单", app: true, steps: [{ click: '[aria-label^="筛选会话"]' }] },
   { id: "panel-chat-info", group: "小面板", title: "对话信息", app: true, steps: [{ click: '[aria-label="对话信息"]' }] },
-  { id: "panel-jobs", group: "小面板", title: "服务和后台任务", app: true, steps: [{ click: '[aria-label="服务和后台任务"]' }] },
+  { id: "panel-jobs", group: "小面板", title: "服务和后台任务", app: true, demo: someJobs, steps: [{ click: '[aria-label="服务和后台任务"]' }] },
   { id: "panel-workspace", group: "小面板", title: "workspace 菜单", app: true, steps: [{ click: '[aria-label="新建 workspace、添加账号"]' }] },
   { id: "panel-rail-menu", group: "小面板", title: "侧边条右键菜单", app: true, steps: [{ rightClick: '[aria-label="文件"]' }] },
   { id: "panel-rail-adder", group: "小面板", title: "侧边条自定义", app: true, steps: [{ rightClick: '[aria-label="文件"]' }, { text: "自定义侧边条" }] },
