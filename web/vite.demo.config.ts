@@ -15,7 +15,6 @@ const betaHead: Plugin = {
   transformIndexHtml: (html) => html
     .replaceAll("<title>still.fail", "<title>youdid.wtf")
     .replaceAll('content="still.fail', 'content="youdid.wtf')
-    .replaceAll("？still.fail 让", "？youdid.wtf 让")
     .replaceAll("https://still.fail/og-image.png", "https://youdid.wtf/og-image.png")
     .replaceAll('href="/favicon-32.png"', 'href="/favicon-beta-32.png"')
     .replaceAll('href="/apple-touch-icon.png"', 'href="/apple-touch-icon-beta.png"'),

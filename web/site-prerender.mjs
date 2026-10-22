@@ -19,8 +19,10 @@ Object.assign(globalThis, {
   addEventListener: noop,
   removeEventListener: noop,
   // A document with no body: what the app would put on the page (the sidebar's buddy) is drawn in place (brand.tsx).
-  document: { documentElement: { dataset: { theme: "dark" }, hasAttribute: () => false }, body: null, getElementById: () => null, querySelector: () => null, addEventListener: noop, removeEventListener: noop },
+  document: { documentElement: { dataset: { theme: "dark" }, hasAttribute: () => false }, body: null, getElementById: () => null, getElementsByTagName: () => [], querySelector: () => null, addEventListener: noop, removeEventListener: noop },
 });
+// Node's own navigator says nothing of the system, where the math typesetter (MathJax, as it loads) reads appVersion.
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: { userAgent: "", appVersion: "", platform: "", language: "zh-CN", languages: ["zh-CN"] } });
 
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));
 const { render } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);

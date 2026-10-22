@@ -167,97 +167,30 @@ export const beam = style({
   animation: `${sway} 14s ease-in-out infinite`, "@media": { [STILL]: { animation: "none" } },
 });
 export const title = style({
-  margin: "0 auto", fontSize: "clamp(64px, 15vw, 232px)", lineHeight: ".92", letterSpacing: "-.06em", fontWeight: "800",
-  animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
-  // Script opens the page with the Chinese and brings the English in itself (motion.ts).
-  selectors: { ":root[data-motion] &": { animation: "none" } },
+  margin: "0 auto", fontSize: "clamp(44px, 8.4vw, 112px)", lineHeight: "1.08", letterSpacing: "-.02em", fontWeight: "800", color: "var(--s-title)",
+  animation: `${fadeUp} .9s .06s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
 });
-/** The title and, over it, the intro. */
-export const titleStage = style({ position: "relative" });
-/**
- * The intro: the two lines in Chinese, large, over where the title will be. Never seen: it only lays out where each
- * character stands while large; the characters on the dots are the ones drawn there (motion.ts).
- */
-export const intro = style({
-  position: "absolute", inset: "0", display: "none", visibility: "hidden", flexDirection: "column", alignItems: "center", justifyContent: "center",
-  fontSize: "clamp(56px, 12.5vw, 196px)", fontWeight: "900", lineHeight: "1.08", letterSpacing: ".02em", pointerEvents: "none",
-  selectors: { ":root[data-motion] &": { display: "flex" } },
-});
-export const introLine = style({
-  display: "block", whiteSpace: "nowrap", color: "var(--s-title)",
-  selectors: {
-    [`:root:not([data-host="youdid.wtf"]) &[data-line="still.fail"], :root[data-host="youdid.wtf"] &[data-line="youdid.wtf"]`]: {
-      color: ORANGE, textShadow: `0 0 60px color-mix(in srgb, ${ORANGE} 55%, transparent)`,
-    },
-  },
-});
-export const introChar = style({ display: "inline-block", opacity: 0 });
-/**
- * A line of the title that is a domain. The one the page was opened on (data-host on the root; still.fail otherwise) is
- * lit, warm orange and glowing; the other sits dim behind it. Padded, so what hangs out of a letter (y, f) is not cut
- * off by the text clip, and pulled back by as much.
- */
-const lit = {
+// Each half wraps as a whole.
+globalStyle(`${title} > span`, { display: "inline-block" });
+/** The half that says where: in still.fail's orange, glowing. Padded so the clip does not cut what hangs out of a glyph. */
+export const titleLit = style({
+  padding: "0 .04em .08em", margin: "0 -.04em -.08em",
   backgroundImage: `linear-gradient(180deg, #FFC2A3, ${ORANGE} 70%)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-};
-const LIT = `:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"], :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"]`;
-export const titleDomain = style({
-  display: "inline-block", color: "color-mix(in srgb, var(--s-title) 16%, var(--s-bg))",
-  selectors: {
-    [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"], :root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: {
-      filter: `drop-shadow(0 0 48px color-mix(in srgb, ${ORANGE} 45%, transparent))`,
-    },
-  },
+  filter: `drop-shadow(0 0 48px color-mix(in srgb, ${ORANGE} 45%, transparent))`,
 });
-/** The English of a line, painted on its own (so that it can be brought in apart from the Chinese on its dot). */
-export const word = style({
-  // Unseen until the opening brings it in, when script plays one.
-  selectors: { ":root[data-motion] &": { opacity: 0 } },
-});
-globalStyle(`:is(${LIT}) ${word}`, lit);
-/**
- * A domain's dot and what the domain says in Chinese, written upright on it (above, and below when it goes on), lit
- * with its line. Its own colour, not the line's text clip, which does not reach positioned boxes.
- */
-export const dot = style({
-  position: "relative", display: "inline-block", width: "0",
-  color: "color-mix(in srgb, var(--s-title) 30%, var(--s-bg))", WebkitTextFillColor: "currentColor",
-  selectors: {
-    [`:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"] &, :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"] &`]: { color: ORANGE },
-  },
-});
-/** Where the words stand, in the title's em: just clear of the dot's top, or of the baseline under it. */
-export const dotSay = style({
-  position: "absolute", left: "-.12em", transform: "translateX(-50%)", pointerEvents: "none",
-  selectors: { "&[data-at=above]": { bottom: ".22em" }, "&[data-at=below]": { top: ".06em" } },
-});
-export const dotWords = style({
-  display: "block", writingMode: "vertical-rl", textOrientation: "upright",
-  fontSize: "max(.1em, 8px)", fontWeight: "600", lineHeight: "1", whiteSpace: "nowrap",
-});
-
-/** A character of those words: they land one at a time (motion.ts), unseen till then when script will move them. */
-/**
- * A character of those words: a box of its own size, the glyph centred in it, so that the glyph can fly in at another
- * size and place (motion.ts) and end exactly where it rests, the same element drawn the same way.
- */
-export const dotChar = style({ position: "relative", display: "inline-block", inlineSize: "1em", blockSize: "1em", marginInlineEnd: ".12em", verticalAlign: "top" });
-export const dotGlyph = style({
-  position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center", whiteSpace: "nowrap",
-  selectors: { ":root[data-motion] &": { opacity: 0 } },
+export const lede = style({
+  maxWidth: "640px", margin: "28px auto 0", fontSize: "clamp(17px, 1.8vw, 21px)", lineHeight: "1.6", color: "var(--s-muted)", textWrap: "balance",
+  animation: `${fadeUp} .9s .16s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
 });
 
 export const heroActions = style({
-  marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both`,
-  // With the opening, held until the title has landed (motion.ts), not for a time guessed at.
-  selectors: { ":root[data-motion] &": { animationDelay: "0s", animationPlayState: "paused" }, ":root[data-motion][data-opened] &": { animationPlayState: "running" } },
+  marginTop: "44px", animation: `${fadeUp} .9s .24s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
 });
 
 /** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
 export const stage = style({
   position: "relative", margin: "80px auto 0", maxWidth: "1200px", animation: `${enter} 1.4s .3s cubic-bezier(.2,.8,.2,1) both`,
   "@media": { [NARROW]: { marginTop: "52px" }, [STILL]: { animation: "none" } },
-  selectors: { ":root[data-motion] &": { animationDelay: ".1s", animationPlayState: "paused" }, ":root[data-motion][data-opened] &": { animationPlayState: "running" } },
 });
 /** Its glow on the page under it. */
 export const stageGlow = style({
@@ -302,6 +235,32 @@ export const sectionLight = style({
   maskImage: "radial-gradient(ellipse 50% 40% at 50% 0%, #000 10%, transparent 70%)",
   WebkitMaskImage: "radial-gradient(ellipse 50% 40% at 50% 0%, #000 10%, transparent 70%)",
 });
+/** A section's title and a line under it. */
+export const heading = style({ maxWidth: "760px", margin: "0 auto 64px", textAlign: "center", "@media": { [NARROW]: { marginBottom: "40px" } } });
+export const headingTitle = style({ margin: "0", fontSize: "clamp(32px, 4.6vw, 56px)", lineHeight: "1.15", letterSpacing: "-.02em", fontWeight: "750", color: "var(--s-title)" });
+export const headingLede = style({ margin: "16px 0 0", fontSize: "clamp(16px, 1.6vw, 19px)", color: "var(--s-muted)", textWrap: "balance" });
+
+// What it connects: three cards, side by side, one under another on a narrow screen.
+export const links = style({ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", "@media": { [NARROW]: { gridTemplateColumns: "1fr", maxWidth: "520px", margin: "0 auto" } } });
+export const link = style({ display: "flex", flexDirection: "column", padding: "28px", borderRadius: vars.rCard, background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
+export const linkPicture = style({ marginBottom: "24px" });
+globalStyle(`${linkPicture} > svg`, { display: "block", width: "100%", height: "auto", overflow: "visible" });
+export const linkTitle = style({ margin: "0", fontSize: vars.textHeading, fontWeight: "700", letterSpacing: "-.01em", color: FG });
+export const linkText = style({ margin: "10px 0 0", fontSize: vars.textTitle, lineHeight: "1.65", color: "var(--s-muted)" });
+/** A box in a card's picture: the page's node colour with a hairline, its name muted; the main one lit in orange. */
+export const node = style({});
+globalStyle(`${node} > rect`, { fill: "var(--s-node)", stroke: ink(18), strokeWidth: 1 });
+globalStyle(`${node} > text`, { fill: "var(--s-muted)", fontSize: vars.textUi, fontWeight: 500 });
+globalStyle(`${node}[data-main] > rect`, { stroke: ORANGE, strokeWidth: 1.5, fill: `color-mix(in srgb, ${ORANGE} 10%, var(--s-node))` });
+globalStyle(`${node}[data-main] > text`, { fill: FG, fontWeight: 600 });
+const draw = keyframes({ from: { strokeDashoffset: 1 }, to: { strokeDashoffset: 0 } });
+/** A line between boxes: drawn in as its card comes into view (where there are no scroll-driven animations, there). */
+export const wire = style({
+  fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 70%, transparent)`, strokeWidth: 1.5, strokeDasharray: 1,
+  animation: `${draw} linear both`, animationTimeline: "view()", animationRange: "entry 10% entry 90%",
+  "@media": { [STILL]: { animation: "none" } },
+});
+
 // Installing.
 export const terminal = style({
   position: "relative", maxWidth: "840px", margin: "0 auto", borderRadius: "18px", overflow: "hidden",

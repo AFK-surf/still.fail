@@ -2,7 +2,7 @@
 
 <h1 align="center">still.fail</h1>
 
-<p align="center"><b>团队聊天里的 coding agent，运行在你自己的机器上</b></p>
+<p align="center"><b>把你的机器连到任何地方</b></p>
 
 <p align="center">
 <a href="https://still.fail">官网</a> ·
@@ -18,16 +18,15 @@
 <img alt="Clients: web, macOS, Windows, Android" src="https://img.shields.io/badge/clients-web%20·%20macOS%20·%20Windows%20·%20Android-555">
 </p>
 
-still.fail 把 Slack thread、飞书群聊或它自己 app 里的对话，变成一个持久的 coding agent 会话。agent 运行在 **station** 上：一台由你选定的机器，使用那台机器上已登录的 runtime（Claude Code、Codex、DeepSeek Harness 或 Grok Build）。消息之间，agent 的工作目录、历史和后台任务都会保留；需要有人做决定时，问题会进入那个人的「奏」列表。
+still.fail 把你选定的机器连到你在的任何地方。每台机器运行一个 **station**，你在网页版、桌面版、安卓 app、Slack thread 或飞书群聊里使用它：它的文件、浏览器和桌面，以及那台机器上已登录的 runtime（Claude Code、Codex、DeepSeek Harness 或 Grok Build），消息之间它们的工作目录、历史和后台任务都会保留。同一 workspace 的 station 合起来用，对话存在 station 上：客户端点对点连接 station。
 
 ## 功能
 
+- **随时随地用你的机器。** 浏览和分享它的文件，查看并操作它的浏览器或桌面，在 app 的卡片里完成命令行工具的登录，或者通过 adb 把自己的安卓手机借给 station。
+- **几台机器合起来用。** station 支持 macOS、Linux 和 Windows，使用那台机器上已登录的 runtime 和订阅。同一 workspace 的 station 互相协作：agent 可以在其他 station 上运行任务、开对话，station 之间可以借用 Profile 和 skill。
 - **就在团队聊天的地方。** 在 Slack thread 或飞书（Lark）群里 @ 机器人，或在网页版、桌面版、安卓 app 里新建对话。同一个对话里的人和同一个 agent 协作。
 - **会话一直在。** 每个对话保留自己的工作目录、历史和记忆。构建、监控、网页预览以任务和服务的形式在一轮结束后继续运行，结束时回到对话里报告。
-- **决定交给该做决定的人。** agent 需要输入时，以一个问题（可附带可点选的选项）结束这一轮；问题出现在被指派人每台设备的「奏」列表和通知里。
-- **你的机器，你的账号。** station 支持 macOS、Linux 和 Windows，使用那台机器上已登录的 runtime 和订阅。同一 workspace 的 station 互相协作：agent 可以在其他 station 上运行任务、开对话，station 之间可以借用 Profile 和 skill。
 - **点对点。** 客户端经 [iroh](https://github.com/n0-computer/iroh) 连接 station，局域网内直连，否则经中继。对话存在 station 上，不存在 cloud。
-- **随时随地使用 station 所在的机器。** 浏览和分享它的文件，查看并操作它的浏览器或桌面，在 app 的卡片里完成命令行工具的登录，或者通过 adb 把自己的安卓手机借给 station。
 - **安全模式。** 可选：成员、设备和 station 必须由受信任设备签名批准，仅凭 cloud 无法授予访问权限。开启后，密钥库加密保存 agent 要用的凭据，经人批准才交给 agent 使用。
 
 ## 工作原理
