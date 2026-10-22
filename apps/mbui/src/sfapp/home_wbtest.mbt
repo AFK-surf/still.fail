@@ -133,6 +133,8 @@ test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档),
   let t = wide_tester(calls, w=390.0, h=844.0)
   hold_row(t, "夜里的构建又失败了")
   assert_eq(app.nav.depth(), 1)
+  // felt as it opened, once
+  assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   assert_true(t.find("重命名") is Some(_))
   assert_true(t.find("复制会话链接") is Some(_))
   // just below the row
@@ -188,6 +190,8 @@ test "a row with nothing left in it, swiped left past a third: archived (chat.ar
   // across a little: let go short of a third, nothing archived
   t.drag(300.0, y, 260.0, y)
   assert_eq(named(calls, "chat.archive").length(), 0)
+  // (short of the line: nothing felt)
+  assert_eq(t.haptics(), [])
   // down first: the list's (it scrolls), nothing archived either
   t.drag(300.0, y, 290.0, y + 120.0)
   assert_eq(named(calls, "chat.archive").length(), 0)
@@ -195,4 +199,59 @@ test "a row with nothing left in it, swiped left past a third: archived (chat.ar
   // across past a third of the row
   t.drag(340.0, y, 120.0, y)
   assert_eq(named(calls, "chat.archive").length(), 1)
+  // its line felt as it was passed, once (Home.kt: TextHandleMove)
+  assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])
+}
+
+///|
+test "a row's state line tapped while it names a message opens the chat there; its title, or with something unread, not" {
+  let item = chat_item({
+    "id": "c5",
+    "session": "s-c5",
+    "title": "盯着 CI，绿了告诉我",
+    "station": "ws1/st2",
+    "stateText": "监控中：每 5 分钟看一次主干的构建",
+    "stateAbout": 12,
+  })
+  // the row at 100: its title's line, then its state line
+  assert_eq(row_opens_at(item, 100.0, 100.0 + chat_line_top + 1.0), Some(12.0))
+  assert_eq(row_opens_at(item, 100.0, 100.0 + chat_line_top - 1.0), None)
+  assert_eq(row_opens_at({ ..item, unread: true }, 100.0, 100.0 + chat_line_top + 1.0), None)
+  assert_eq(row_opens_at({ ..item, state_about: None }, 100.0, 100.0 + chat_line_top + 1.0), None)
+  // in Home: tapped on its line, its chat
+  let t = tester("home")
+  t.tap_text("监控中：每 5 分钟看一次主干的构建")
+  match app.nav.top() {
+    Chat(r) => assert_eq(r.session, "s-c5")
+    _ => fail("not its chat")
+  }
+}
+
+///|
+test "a row's state line in red while a message of the viewer's in it did not go (Home.kt StateLine alert)" {
+  reset()
+  // (the theme as the frame has it)
+  let red = Ref(0L)
+  let muted = Ref(0L)
+  let t = @ui.Tester::new(
+    fn(c) {
+      red.val = @sf.theme().p.red
+      state_line(c, "有一条消息没发出去", alert=true)
+    },
+    w=390.0,
+    h=40.0,
+  )
+  t.draw()
+  assert_true(t.drawn_glyphs().length() > 0)
+  assert_true(t.drawn_glyphs().iter().all(fn(g) { g.2 == red.val }))
+  let t2 = @ui.Tester::new(
+    fn(c) {
+      muted.val = @sf.theme().p.muted
+      state_line(c, "有一条消息没发出去")
+    },
+    w=390.0,
+    h=40.0,
+  )
+  t2.draw()
+  assert_true(t2.drawn_glyphs().iter().all(fn(g) { g.2 == muted.val }))
 }

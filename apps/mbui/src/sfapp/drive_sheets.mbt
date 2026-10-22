@@ -123,7 +123,7 @@ fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace, page : String) -> Unit {
     RootHeld(station, r) =>
       dv_sheet_frame(c, r.name, dv_fit(1), closing~, fn() {
         let t = @sf.theme()
-        if dv_pick_row(c, "held/stop", tr("android-misc.drive.roots.stop"), icon="close", color=t.p.accent) {
+        if dv_pick_row(c, "held/stop", tr("android-misc.drive.roots.stop"), icon="close", color=@sf.link_ink()) {
           dv_unshare(c, src, station, station_of(station), r)
         }
       })
@@ -233,7 +233,8 @@ fn entry_sheet(
         "entry/remove",
         tr(if can.trash { "web-pages.drive.toTrash" } else { "android-misc.drive.remove" }),
         icon="trash",
-        color=t.p.accent,
+        color=@sf.link_ink(),
+        icon_color=t.p.accent,
       ) {
       done()
       dv_close(c)
@@ -290,7 +291,8 @@ fn chosen_sheet(
           picked.length(),
         ),
         icon="trash",
-        color=t.p.accent,
+        color=@sf.link_ink(),
+        icon_color=t.p.accent,
       ) {
       dv_close(c)
       done()
@@ -445,7 +447,7 @@ fn roots_sheet(c : @ui.Ctx, src : Source, station : String, s : DvStation?, clos
         dv_unshare(c, src, station, s, r)
       }
     }
-    if dv_pick_row(c, "roots/add", tr("android-misc.drive.roots.add"), icon="plus", color=t.p.accent) {
+    if dv_pick_row(c, "roots/add", tr("android-misc.drive.roots.add"), icon="plus", color=@sf.link_ink()) {
       dv_open_picker(c, station, roots.map(fn(r) { r.path }))
     }
   })

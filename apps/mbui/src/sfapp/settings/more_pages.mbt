@@ -521,7 +521,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
             }
           }
           if list_row(c, key=if busy { "" } else { "policy-add/" + archive.to_string() }, fn() {
-              row_title(c, tr("web-pages.archivePolicy.add"), color=t.p.accent)
+              row_title(c, tr("web-pages.archivePolicy.add"), color=@sf.link_ink())
             }) {
             add(archive)
           }
@@ -665,7 +665,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
         if is_made && i == cur {
           c.box(pl=8.0, fn() {
             c.box(padx=7.0, pady=1.0, radius=9.0, bg=t.p.accent_bg, fn() {
-              c.text(tr("android-misc.bar.current"), size=11.0, weight=600, color=t.p.accent, wrap=false) |> ignore
+              c.text(tr("android-misc.bar.current"), size=11.0, weight=600, color=@sf.link_ink(), wrap=false) |> ignore
             })
             |> ignore
           })
@@ -703,7 +703,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
       list_card(c, fn() {
         if list_row(c, key="bar-new", fn() {
             @sf.icon(c, "plus", size=20.0, color=t.p.accent) |> ignore
-            row_title(c, tr("android-misc.bar.new"), color=t.p.accent)
+            row_title(c, tr("android-misc.bar.new"), color=@sf.link_ink())
           }) {
           bar_adding.val = true
           pick_for(made.length())
@@ -1166,7 +1166,7 @@ fn change_item(c : @ui.Ctx, e : Json?) -> Unit {
         let fresh = text(lv, "kind") == "new"
         c.box(dir=Row, w=Fill(1.0), gap=6.0, fn() {
           c.box(padx=6.0, radius=6.0, bg=if fresh { t.p.accent_bg } else { t.p.chip }, fn() {
-            c.text(label, size=13.0, color=if fresh { t.p.accent } else { t.p.muted }, wrap=false, line=19.0) |> ignore
+            c.text(label, size=13.0, color=if fresh { t.p.accent_text } else { t.p.muted }, wrap=false, line=19.0) |> ignore
           })
           |> ignore
           c.text(text(lv, "text"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
@@ -1177,7 +1177,7 @@ fn change_item(c : @ui.Ctx, e : Json?) -> Unit {
     c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
       c.text(text(e, "versionName"), size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
       if text(e, "note") != "" {
-        c.text(text(e, "note"), size=13.0, color=if field(e, "has") is Some(False) { t.p.accent } else { t.p.muted }, wrap=false, line=18.0)
+        c.text(text(e, "note"), size=13.0, color=if field(e, "has") is Some(False) { t.p.accent_text } else { t.p.muted }, wrap=false, line=18.0)
         |> ignore
       }
     })

@@ -174,7 +174,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
             wrap_title=false,
           )
           if plain {
-            c.text(tr("web-pages.vault.lib.turnOn"), size=15.0, color=t.p.accent, wrap=false) |> ignore
+            c.text(tr("web-pages.vault.lib.turnOn"), size=15.0, color=@sf.link_ink(), wrap=false) |> ignore
           } else {
             chevron(c)
           }
@@ -581,7 +581,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
         if flag(rv, "open") &&
           list_row(c, key="vault-lock/" + text(rv, "id"), fn() {
             c.box(w=Px(18.0), fn() {  }) |> ignore
-            row_title(c, tr("android-settings.vault.lock"), color=t.p.accent)
+            row_title(c, tr("android-settings.vault.lock"), color=@sf.link_ink())
           }) {
           (core.call)("vault.lock", obj([("workspace", str(ws))]), fn(_) {  })
         }

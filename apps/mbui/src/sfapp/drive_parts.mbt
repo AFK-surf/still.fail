@@ -312,12 +312,15 @@ fn dv_pick_row(
   sub? : String = "",
   icon? : String = "",
   color? : Int64 = 0L,
+  icon_color? : Int64 = 0L,
   checked? : Bool = false,
   mark? : String = "",
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   let ink = if color == 0L { t.p.text } else { color }
+  // (its icon in its words' colour, or one of its own: a link's row's in the accent, PickRow `leading`)
+  let icon_ink = if icon_color == 0L { ink } else { icon_color }
   c.box(w=Fill(1.0), pl=12.0, pr=12.0, fn() {
     c.box(
       dir=Row,
@@ -330,7 +333,7 @@ fn dv_pick_row(
       id~,
       fn() {
         if icon != "" {
-          @sf.icon(c, icon, size=20.0, color=ink) |> ignore
+          @sf.icon(c, icon, size=20.0, color=icon_ink) |> ignore
         }
         c.box(w=Fill(1.0), fn() {
           c.box(dir=Row, gap=6.0, align=ACenter, fn() {

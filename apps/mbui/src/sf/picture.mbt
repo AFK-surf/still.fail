@@ -394,7 +394,7 @@ let mono_makers : Array[String] = [
 ///|
 /// The mark of the company that made a model (Parts.kt MakerIcon): the core's
 /// `maker` id when there is a mark for it, else its runtime's maker's
-/// (codex: OpenAI's, dsh its own, else Anthropic's).
+/// (codex: OpenAI's, dsh its own, grok xAI's, else Anthropic's).
 pub fn maker_mark(
   c : @ui.Ctx,
   maker : String,
@@ -409,6 +409,7 @@ pub fn maker_mark(
     match runtime {
       "codex" => "openai"
       "dsh" => "dsh"
+      "grok" => "xai"
       _ => "anthropic"
     }
   }

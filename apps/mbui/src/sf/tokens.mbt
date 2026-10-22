@@ -231,8 +231,9 @@ let narrow_light : Palette = {
   canvas: 0xFFFFFFFFL,
   raised: 0xFFFFFFFFL,
   text: 0x24272BFFL,
-  muted: 0x7A7D83FFL,
-  subtle: 0xA6A8ACFFL,
+  // the greys and the red Android's (Theme.kt Light), what the app on a phone matches, not the narrow web's
+  muted: 0x626469FFL,
+  subtle: 0x7C7E81FFL,
   line: 0xE7E3DCFFL,
   accent: 0xE5704AFFL,
   accent_text: 0xB9471FFFL,
@@ -240,7 +241,7 @@ let narrow_light : Palette = {
   green: 0x2F8F5BFFL,
   green_ink: 0x287A4DFFL,
   warn_ink: 0x98691EFFL,
-  red: 0xC9412EFFL,
+  red: 0xBF3E2CFFL,
   // its placeholders in its bubbles' grey, a step darker than the page
   neutral_bg: 0xE8E4DCFFL,
   card: 0xFFFFFFFFL,
@@ -257,7 +258,8 @@ let narrow_dark : Palette = {
   raised: 0x2A2C31FFL,
   text: 0xECECEDFFL,
   muted: 0x9A9DA3FFL,
-  subtle: 0x6E7177FFL,
+  // Android's (Theme.kt Dark)
+  subtle: 0x84888FFFL,
   line: 0x34353AFFL,
   accent: 0xEF7A55FFL,
   accent_text: 0xF6A383FFL,
@@ -331,6 +333,17 @@ pub fn begin(c : @ui.Ctx) -> Theme {
   }
   current.val = { dark, narrow, p, t: if narrow { narrow_type } else { wide_type } }
   current.val
+}
+
+///|
+/// A link's ink (Android's C.link, Theme.kt): the accent's darker ink on paper, the accent itself in the dark.
+pub fn link_ink() -> Int64 {
+  let t = theme()
+  if t.dark {
+    t.p.accent
+  } else {
+    t.p.accent_text
+  }
 }
 
 ///|

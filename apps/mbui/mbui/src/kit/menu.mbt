@@ -86,11 +86,14 @@ pub(all) struct Menu {
 }
 
 ///|
-/// What a menu item's look is given: the entry, lit (the focus is on it), its submenu open.
+/// What a menu item's look is given: the entry, lit (the focus is on it), its submenu open; `hot`: lit for the person
+/// to see, the pointer over it (a finger on it) or the keyboard's focus shown on it, not the focus a menu opened by a
+/// touch puts on its first item (Android's menus light an item only while it is pressed).
 pub(all) struct MenuItemState {
   entry : Entry
   lit : Bool
   open : Bool
+  hot : Bool
 }
 
 ///|
@@ -203,7 +206,12 @@ fn menu_panel(
               }
               let on = sub == n && e.kind is Sub(_)
               let row = c.box(id=if e.disabled { 0 } else { iid }, fn() {
-                item_look(c, { entry: e, lit: c.has_focus(iid) || (on && !mine), open: on })
+                item_look(c, {
+                  entry: e,
+                  lit: c.has_focus(iid) || (on && !mine),
+                  open: on,
+                  hot: (c.has_focus(iid) && (c.focus_shown(iid) || r.hovered)) || (on && !mine),
+                })
               })
               let actions = pick(e.disabled, [], [@ui.Activate])
               match e.kind {

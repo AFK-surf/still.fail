@@ -467,7 +467,7 @@ fn token_fields(c : @ui.Ctx, core : Core, station : String, form : String, maske
         c.text(
           fill("android-settings.tokens.verified", [("team", text(v, "team")), ("bot", text(v, "botName"))]),
           size=12.0,
-          color=t.p.green,
+          color=t.p.green_ink,
           w=Fill(1.0),
           line=17.0,
         )
@@ -668,7 +668,7 @@ fn connect_run_page(c : @ui.Ctx, core : Core, station : String, id : String) -> 
     c.box(w=Fill(1.0), h=Fill(1.0), padx=18.0, fn() {
       if models.length() == 0 {
         c.box(w=Fill(1.0), pt=8.0, fn() {
-          c.text(fill("android-settings.run.noModels", [("runtime", runtime_label(runtime))]), size=13.0, color=warn, w=Fill(1.0), line=18.0)
+          c.text(fill("android-settings.run.noModels", [("runtime", runtime_label(runtime))]), size=13.0, color=@sf.theme().p.warn_ink, w=Fill(1.0), line=18.0)
           |> ignore
         })
         |> ignore
@@ -1020,7 +1020,7 @@ fn new_connect_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               }
               c.text(tr("android-settings.connect.model"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
               if models.length() == 0 {
-                c.text(tr("android-settings.flow.noModels"), size=13.0, color=warn, w=Fill(1.0), line=18.0) |> ignore
+                c.text(tr("android-settings.flow.noModels"), size=13.0, color=@sf.theme().p.warn_ink, w=Fill(1.0), line=18.0) |> ignore
               } else {
                 c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, fn() {
                   for m in models {

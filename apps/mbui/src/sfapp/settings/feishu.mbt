@@ -263,7 +263,7 @@ fn feishu_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Uni
           "" => "••••••••"
           s => s
         })
-        c.text(tr("web-mobile.connects.feishu.replaceShort"), size=14.0, color=if t.dark { t.p.accent } else { t.p.accent_text }, wrap=false) |> ignore
+        c.text(tr("web-mobile.connects.feishu.replaceShort"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
       }) {
       open_feishu_secret(core, station, cv)
     }

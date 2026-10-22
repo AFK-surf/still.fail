@@ -285,9 +285,9 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
               } else if joining {
                 spinner(c)
               } else if can_join {
-                c.text(tr("web-pages.security.join"), size=14.0, color=t.p.accent, wrap=false) |> ignore
+                c.text(tr("web-pages.security.join"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
               } else {
-                c.text(tr("web-pages.security.unprotected"), size=13.0, color=warn, wrap=false) |> ignore
+                c.text(tr("web-pages.security.unprotected"), size=13.0, color=t.p.warn_ink, wrap=false) |> ignore
               }
             }) {
             join_station(core, ws, id, text(sv, "name"))
@@ -357,7 +357,7 @@ fn device_row(c : @ui.Ctx, core : Core, ws : String, d : Json, can_renew : Bool)
       if renewing {
         spinner(c)
       } else if renew {
-        c.text(tr("web-pages.security.renew"), size=14.0, color=t.p.accent, wrap=false) |> ignore
+        c.text(tr("web-pages.security.renew"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
       }
     }) {
     lock_call(core, ws, "renew", tr("web-pages.security.renew"), [("device", id)], done=tr("web-pages.security.renewed"))

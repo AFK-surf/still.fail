@@ -670,9 +670,11 @@ fn layout_text(
   let mut last_break = -1
   let mut w_max = 0.0
   fn finish(start : Int, end : Int) {
-    // width without trailing spaces
+    // width without trailing spaces, but for the words whole on one line: their spaces at the end are theirs, as
+    // Android measures a line that needs no breaking (BoringLayout: "当前延迟 " then its figure, a space between)
+    let whole = n > 0 && start == 0 && end == n && !is_nl(s.cu[n - 1])
     let mut e = end
-    while e > start && (s.cu[e - 1] == 32 || is_nl(s.cu[e - 1])) {
+    while e > start && ((s.cu[e - 1] == 32 && !whole) || is_nl(s.cu[e - 1])) {
       e = e - 1
     }
     let lw = if e > start { xs[e - 1] + s.adv[e - 1] } else { 0.0 }

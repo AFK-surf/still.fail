@@ -157,6 +157,8 @@ fn init {
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
   files_cornered.val = false
+  felt_menu.val = -1
+  felt_past.clear()
   attention.told = false
   picture_pick.val = None
   bar_glyph.val = None

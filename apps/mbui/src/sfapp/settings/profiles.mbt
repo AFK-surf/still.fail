@@ -333,7 +333,7 @@ fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
           Some(Object(_)) as tr_ => {
             c.text(text(tr_, "title") + " · " + text(tr_, "detail"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
             |> ignore
-            c.text(tr("android-settings.profile.seeFix"), size=13.0, color=t.p.accent, wrap=false, line=18.0) |> ignore
+            c.text(tr("android-settings.profile.seeFix"), size=13.0, color=@sf.link_ink(), wrap=false, line=18.0) |> ignore
           }
           _ => {
             let trouble = quota_trouble(field(pv, "quota"))
@@ -464,8 +464,10 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         }
         if !copy {
           blocks.append(profile_workspaces(c, core, address, pv))
-          blocks.append(profile_run(c, core, address, pv))
+          // its Fast before its models, what a new message does to a command after them (Profiles.kt)
+          blocks.append(profile_run(c, core, address, pv, true))
           blocks.append(models_section(c, core, address, pv))
+          blocks.append(profile_run(c, core, address, pv, false))
         }
         blocks.append([
           fn() { section_header(c, tr("android-settings.profile.users"), start=S6) },
@@ -589,7 +591,7 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
           c.text(
             tr(if refreshing { "android-settings.quota.checking" } else { "android-settings.quota.check" }),
             size=14.0,
-            color=if refreshing { t.p.muted } else { t.p.accent },
+            color=if refreshing { t.p.muted } else { @sf.link_ink() },
             wrap=false,
           )
           |> ignore
@@ -864,7 +866,7 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?, bare? 
           c.text(
             tr(if checking { "android-settings.refreshing" } else { "android-settings.models.refresh" }),
             size=14.0,
-            color=if checking { t.p.muted } else { t.p.accent },
+            color=if checking { t.p.muted } else { @sf.link_ink() },
             wrap=false,
           )
           |> ignore

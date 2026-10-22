@@ -488,7 +488,7 @@ fn folder_page(
             c.text(
               tr(if all { "android-misc.drive.chooseNone" } else { "android-misc.drive.chooseAll" }),
               size=15.0,
-              color=t.p.accent,
+              color=@sf.link_ink(),
               wrap=false,
             )
             |> ignore
@@ -639,7 +639,7 @@ fn dv_retry_line(
       retry()
     }
     c.box(pad=4.0, radius=6.0, opacity=if c.pressed(id) { 0.6 } else { 1.0 }, id~, fn() {
-      c.text(tr("android-misc.drive.retry"), size~, color=t.p.accent, wrap=false) |> ignore
+      c.text(tr("android-misc.drive.retry"), size~, color=@sf.link_ink(), wrap=false) |> ignore
     })
     |> ignore
   })
@@ -1079,12 +1079,12 @@ fn upload_row(
                 dv_pump(src)
               }
               c.box(id=rid, fn() {
-                c.text(tr("android-misc.drive.exists.replace"), size=12.0, weight=600, color=t.p.accent, wrap=false, line=16.0)
+                c.text(tr("android-misc.drive.exists.replace"), size=12.0, weight=600, color=@sf.link_ink(), wrap=false, line=16.0)
                 |> ignore
               })
               |> ignore
               c.box(id=bid, fn() {
-                c.text(tr("android-misc.drive.exists.both"), size=12.0, weight=600, color=t.p.accent, wrap=false, line=16.0)
+                c.text(tr("android-misc.drive.exists.both"), size=12.0, weight=600, color=@sf.link_ink(), wrap=false, line=16.0)
                 |> ignore
               })
               |> ignore

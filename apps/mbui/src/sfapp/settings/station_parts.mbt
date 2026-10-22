@@ -36,7 +36,7 @@ fn station_screens(c : @ui.Ctx, core : Core, address : String) -> Array[() -> Un
                 c.text(
                   text(v, "line"),
                   size=13.0,
-                  color=if has(v, "access") { warn } else { t.p.muted },
+                  color=if has(v, "access") { t.p.warn_ink } else { t.p.muted },
                   w=Fill(1.0),
                   line=18.0,
                 )
@@ -90,7 +90,7 @@ fn end_action(c : @ui.Ctx, key : String, label : String, busy? : Bool = false, f
     if busy || failed is Some(_) {
       doing_mark(c, busy, failed, inline=true)
     }
-    c.text(label, size=13.0, weight=500, color=if busy { t.p.muted } else { t.p.accent }, wrap=false, line=18.0)
+    c.text(label, size=13.0, weight=500, color=if busy { t.p.muted } else { @sf.link_ink() }, wrap=false, line=18.0)
     |> ignore
   })
   |> ignore
@@ -614,7 +614,7 @@ fn version_row(c : @ui.Ctx, v : Json?, manager : Bool, busy : Bool, update : () 
   let latest_words = fn(version : String) {
     c.box(dir=Row, gap=3.0, align=ACenter, fn() {
       @sf.icon(c, "arrow-right", size=18.0, color=t.p.accent) |> ignore
-      c.text(version, size=13.0, weight=500, color=t.p.accent, wrap=false, line=18.0) |> ignore
+      c.text(version, size=13.0, weight=500, color=t.p.accent_text, wrap=false, line=18.0) |> ignore
     })
     |> ignore
   }
@@ -626,7 +626,7 @@ fn version_row(c : @ui.Ctx, v : Json?, manager : Bool, busy : Bool, update : () 
           c.text(shown, size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
           if text(v, "channel") == "beta" {
             c.box(padx=6.0, pady=1.0, radius=9.0, bg=t.p.accent_bg, fn() {
-              c.text(tr("android-misc.versions.beta"), size=11.0, weight=500, color=t.p.accent, wrap=false, line=15.0)
+              c.text(tr("android-misc.versions.beta"), size=11.0, weight=500, color=t.p.accent_text, wrap=false, line=15.0)
               |> ignore
             })
             |> ignore
@@ -648,7 +648,7 @@ fn version_row(c : @ui.Ctx, v : Json?, manager : Bool, busy : Bool, update : () 
                 },
                 size=13.0,
                 weight=500,
-                color=t.p.accent,
+                color=t.p.accent_text,
                 wrap=false,
                 line=18.0,
               )
