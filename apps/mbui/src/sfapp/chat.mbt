@@ -110,6 +110,11 @@ priv struct Reading {
   mut played : Int
   mut ticked : Int
   fresh : Map[String, Bool]
+  /// rows asked a turn to come in (turns.mbt: Chat.kt admitted); each row's rise in, by key, while it rises
+  admitted : Map[String, Bool]
+  rises : Map[String, @motion.Anim]
+  /// when the list's own motion is at rest, as last laid out (ListInfo's `rest`): a turn waits for it
+  mut list_rest : Double
   /// the outbox entries messages were sent from here as, by seq (their rows go on being those: Chat.kt sentAs)
   sent : Map[Double, String]
   /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220): Lingering
@@ -162,6 +167,9 @@ fn reading_of(key : String) -> Reading {
         played: -10,
         ticked: -10,
         fresh: {},
+        admitted: {},
+        rises: {},
+        list_rest: -1.0,
         sent: {},
         linger: {},
         running: {},
@@ -338,9 +346,9 @@ fn messages(
   } else {
     read
   }
-  let list = with_lingering(rd, read)
-  let keys = row_keys(c, rd, v, list, key)
   let dkey = draft_key(r)
+  let turns = turns_of(ek)
+  let (list, keys) = row_keys(c, rd, v, with_lingering(rd, read), key, turns, em, flight_of(dkey))
   flight_frame(c, dkey)
   let flight = flight_of(dkey)
   // half a second after it was put in place (shown), what comes at its end may glide: asked each frame it is drawn
@@ -412,7 +420,9 @@ fn messages(
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
               open.snap(0.0)
-              open.animate(1.0, @motion.tween(220.0, ease=Out))
+              // from when its turn came (turns.mbt), else now
+              let at = turns.started_at(keys[i])
+              open.animate(1.0, @motion.tween(working_turn_ms, ease=Out), start_at?=if at >= 0.0 { Some(at) } else { None })
             }
             let leaving = match rd.linger.get(a.key) {
               Some(l) => l.leaving
@@ -494,8 +504,23 @@ fn messages(
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
               if !emitted {
-                @motion.entering(c, ri, mk, @motion.trans(fade=0.0, dy=14.0, spec=@motion.tween(320.0)))
+                // from when its turn came (turns.mbt), else now
+                let a = @motion.Anim::new(0.0)
+                let at = turns.started_at(keys[i])
+                a.animate(1.0, @motion.tween(row_turn_ms, ease=Standard), start_at?=if at >= 0.0 { Some(at) } else { None })
+                rd.rises[keys[i]] = a
               }
+            }
+            match rd.rises.get(keys[i]) {
+              Some(a) => {
+                let p = a.get()
+                if !a.moving() && p >= 1.0 {
+                  rd.rises.remove(keys[i]) |> ignore
+                } else {
+                  c.look(ri, @ui.look(alpha=p, dy=rise_dy * (1.0 - p)))
+                }
+              }
+              None => ()
             }
           }
         }
@@ -704,6 +729,11 @@ fn messages(
 pub let out_leave_ms : Double = 200.0
 
 ///|
+/// How far a row new to the list comes up as it fades in (Chat.kt rise: 14, over its turn's 320 ms, the standard
+/// curve).
+let rise_dy : Double = 14.0
+
+///|
 /// How long after a chat is put in place what comes at its end glides after it (Follow.kt).
 let glide_after_place_ms : Double = 500.0
 
@@ -775,6 +805,9 @@ fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool
   let em = emits_of(rk)
   if shown && !played {
     rd.played = frame
+    // what changes the list's height, one at a time (turns.mbt): each whose turn has come starts
+    let turns = turns_of(rk)
+    turns.step(c, rd.list_rest)
     let playing = em.current is Some(_) || em.queue.length() > 0
     em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && app_in_front()
     let showing : Map[String, Bool] = {}
@@ -785,7 +818,7 @@ fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool
       showing[k] = true
     }
     emit_take(c, em, v, showing)
-    emit_step(c, em)
+    emit_step(c, em, turns)
   }
   if lingered {
     return
@@ -851,15 +884,21 @@ fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
 }
 
 ///|
-/// The rows' keys, as they move (a message sent from here keeps its outbox row's: Chat.kt sentAs), and which are
-/// new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt arrived, caught).
+/// The rows in the list and their keys, as they move (a message sent from here keeps its outbox row's: Chat.kt
+/// sentAs), and which are new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt
+/// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) comes in its turn
+/// among what changes the list's height (turns.mbt, Chat.kt newcomers), kept out of the list till then; so are the
+/// words sent from here (`flight`) till theirs.
 fn row_keys(
   c : @ui.Ctx,
   rd : Reading,
   v : ChatView,
-  list : Array[Entry],
+  all : Array[Entry],
   key : String,
-) -> Array[String] {
+  turns : Turns,
+  em : Emits,
+  flight : SendFlight?,
+) -> (Array[Entry], Array[String]) {
   for o in v.outbox {
     if o.seq >= 0.0 {
       rd.sent[o.seq] = o.id
@@ -870,7 +909,7 @@ fn row_keys(
       rd.sent[m.seq] = m.outgoing
     }
   }
-  let keys = list.map(fn(e) {
+  let all_keys = all.map(fn(e) {
     match e {
       Said(m) =>
         match rd.sent.get(m.seq) {
@@ -880,9 +919,60 @@ fn row_keys(
       _ => e.id()
     }
   })
-  let following = match c.list_info(key) {
+  let info = c.list_info(key)
+  let following = match info {
     Some(i) => i.at_end || i.gliding
     None => true
+  }
+  rd.list_rest = match info {
+    Some(i) => i.rest
+    None => -1.0
+  }
+  // words sent from here (a flight's): their row, the first of this device's own not there when they were sent
+  let sent_row = fn(e : Entry, k : String) {
+    match flight {
+      Some(f) =>
+        !f.before.contains(k) &&
+        (match e {
+          Out(_) => true
+          Said(m) => m.mine && !m.system
+          _ => false
+        })
+      None => false
+    }
+  }
+  if rd.drawn && following {
+    for i, e in all {
+      let k = all_keys[i]
+      if rd.known.contains(k) || rd.admitted.contains(k) || sent_row(e, k) {
+        continue
+      }
+      let comes = match e {
+        Working(a) => a.started
+        Out(_) => true
+        // (one out of an avatar comes out of it instead)
+        Said(m) => m.said && !emit_goes(em, m.seq)
+        _ => false
+      }
+      if comes {
+        rd.admitted[k] = true
+        match e {
+          // (after what closes under a post as its agent starts)
+          Working(_) => turns.admit(c, k, working_turn_ms, after=true)
+          _ => turns.admit(c, k, row_turn_ms)
+        }
+      }
+    }
+  }
+  let list : Array[Entry] = []
+  let keys : Array[String] = []
+  for i, e in all {
+    let k = all_keys[i]
+    if turns.waiting.contains(k) || (turns.send_waiting && sent_row(e, k)) {
+      continue
+    }
+    list.push(e)
+    keys.push(k)
   }
   if rd.drawn && following {
     for i, e in list {
@@ -901,7 +991,7 @@ fn row_keys(
     rd.known[k] = true
   }
   rd.drawn = true
-  keys
+  (list, keys)
 }
 
 ///|

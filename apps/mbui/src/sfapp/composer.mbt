@@ -960,7 +960,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
       _ => ()
     }
   }
-  flight_start(c, d.key, words, v, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
+  flight_start(c, d.key, r.station + "\u{1}" + r.session, words, v, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()

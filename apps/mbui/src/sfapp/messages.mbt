@@ -243,9 +243,18 @@ fn said(
       if !decide {
         return
       }
-      decision_under(c, src, here, m)
+      // answered (or let go), what is under it for that closes in one turn among what changes the list's height
+      // (turns.mbt), its options and 忽略 together, after the answer has come in (Chat.kt SaidRow: CLOSE_TURN_MS)
+      let turns = turns_of(here.station + "\u{1}" + here.session)
+      let resolved = match m.decision {
+        Some(d) => d.resolved || d.dismissed
+        None => false
+      }
+      let asking = turns.in_turn(c, "ask/" + m.ts, !resolved, close_turn_ms)
+      let asked_at = turns.started_at("ask/" + m.ts)
+      decision_under(c, src, here, m, asking~, asked_at~)
       // letting go what it asks (Chat.kt AskDismiss)
-      ask_dismiss(c, src, here, m)
+      ask_dismiss(c, src, here, m, asking, asked_at, turns)
     })
     // coming out of its agent's avatar (emit.mbt): from 35% at its corner, unrolling from its top
     if emit_goes(em, m.seq) {
@@ -1083,7 +1092,17 @@ pub let options_scale : Double = 0.9
 /// (200 ms, CSS's ease-out: fading, to 90%, the one picked as it was while the rest step back, their room closing on
 /// the rows' spring a little late) and how it went comes in a quiet line in their place (fading in once they have
 /// gone, its room opening on the same spring).
-fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
+///
+/// `asking`: what is under it shows as asking still (in a chat, till its turn to close comes: Turns::in_turn, from
+/// `asked_at`); by default while it is not settled.
+fn decision_under(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  m : Message,
+  asking? : Bool,
+  asked_at? : Double = -1.0,
+) -> Unit {
   let k = ink()
   let quiet = fn(words : String) {
     c.box(pt=2.0, fn() { c.text(words, size=13.0, color=k.subtle, line=19.0) |> ignore })
@@ -1147,6 +1166,8 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     }
   }
   let key = here.station + "/" + m.ts
+  let open = asking.unwrap_or(!resolved)
+  let start_at = if asked_at >= 0.0 { Some(asked_at) } else { None }
   let busy = answering(here.station, m, options)
   let chosen = if resolved {
     match m.decision {
@@ -1159,9 +1180,10 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
   under_post(
     c,
     "options/" + key,
-    !resolved,
+    open,
     exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
     close=close_gap,
+    start_at?,
     fn() {
       // (who decides over the options as the message's column has them: 4 apart)
       c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
@@ -1197,14 +1219,16 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
       |> ignore
     },
   )
+  // (in their place once they close: in the same turn)
   let outcome = match m.decision {
-    Some({ text: Some(words), .. }) if resolved => Some(words)
+    Some({ text: Some(words), .. }) if resolved && !open => Some(words)
     _ => None
   }
   under_post(
     c,
     "outcome/" + key,
     outcome is Some(_),
+    start_at?,
     enter=@motion.trans(
       fade=0.0,
       spec=@motion.Snap(0.0),

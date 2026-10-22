@@ -17,6 +17,9 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   // the station has it: in the chat, its agent at work
   clock.val = clock.val + fix_deliver_ms
   t.draw()
+  // (the station answers fix_answer_ms after it took them: that time passes on the page too, the words sent landed
+  // and the agent's line come in their turns meanwhile)
+  t.run_for(fix_answer_ms)
   t
 }
 

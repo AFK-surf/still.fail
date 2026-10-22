@@ -935,6 +935,10 @@ fn seeded_outbox(mode : String) -> Array[Json] {
 let fix_decided : Map[Int, Json] = {}
 
 ///|
+/// The answers given here, by the card's seq: the viewer's message the core posts with each (said as the chat shows).
+let fix_replied : Map[Int, String] = {}
+
+///|
 /// The chat `v` with what was answered here in it.
 fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
@@ -964,6 +968,12 @@ fn with_cards(f : Fixture, v : Json, session : String) -> Json {
           }
           _ => ()
         }
+      }
+      // each answer's message, after the rest
+      for seq, label in fix_replied {
+        all.push(
+          msg(100 + seq, "person", by_person("林"), label, "刚刚", { "mine": true, "said": true, "createdAt": Json::number(1.0e9) }),
+        )
       }
       o["messages"] = Json::array(all)
       // what waits to be decided: the cards still not answered
@@ -1000,6 +1010,7 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         return Some(Err({ "code": "unavailable", "message": "Studio 没有回应" }))
       }
       fix_decided[seq] = decided_json(label)
+      fix_replied[seq] = label
       f.version += 1
       Some(Ok(Json::object({})))
     }
