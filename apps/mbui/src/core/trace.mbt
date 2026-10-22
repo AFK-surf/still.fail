@@ -8,7 +8,7 @@
 //                                     the last thing before it, in or out: replay.mbt), the bytes beside it if any (a
 //                                     part going up: a test gives the same again, Replay::sent_bytes)
 //   {"in":MSG,"w":WALL,"b":"HEX"}     what came, the wall clock (wall_ms) as it came, the bytes beside it if any
-//   …,"bn":N                          bytes over trace_bytes_max: their length alone (as scripts/trace.py keeps them),
+//   …,"bn":N                          bytes over trace_bytes_max: their length alone (as scripts/trace make keeps them),
 //                                     not written out in hex as they come (a drive's 4 MB part: seconds of the run's
 //                                     UI thread, its next ask that much later)
 

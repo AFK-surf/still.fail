@@ -5,7 +5,7 @@
 ///|
 test "98-reader" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_reader, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("reader"), seed~)
     // (put in the lent folder before the app starts: a live run's step, the trace has what came of it)
     f.before("drive-gb 105609")
     f.open_page(@sfapp.Page::Files)

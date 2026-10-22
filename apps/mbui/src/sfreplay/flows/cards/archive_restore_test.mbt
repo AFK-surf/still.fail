@@ -4,7 +4,7 @@
 ///|
 test "36-archive-restore" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_archive_restore, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("archive-restore"), seed~)
     f.see("端到端测试")
     // (a live run's step beside the app, the trace has what came of it)
     f.peer("peer archive 要归档的对话 083209 post:归档前的回复 083209")

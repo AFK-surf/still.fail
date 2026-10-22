@@ -6,7 +6,7 @@
 ///|
 test "94-station-file-sent" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_station_file_sent, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("station-file-sent"), seed~)
     f.tap("端到端测试")
     f.run_to(@ui.nav_rest())
     f.see("=studio")

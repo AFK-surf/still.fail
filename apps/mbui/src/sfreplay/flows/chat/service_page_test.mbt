@@ -7,7 +7,7 @@
 ///|
 test "47-service-page" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_service_page, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("service-page"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")

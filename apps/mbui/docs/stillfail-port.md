@@ -1003,9 +1003,9 @@ the drive flows' folder in the test station's home (e2e-<tag>: a text, a novel o
 file), a run's own, which flow 15 lends through the app.
 
 A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
-every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace.py
-out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace and src/sfreplay/trace_NAME.mbt (a sign-in's tokens put
-as "-"). The flow is then a test in one of src/sfreplay/flows' packages, its steps written as a Tester's (src/sfreplay/steps.mbt:
+every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace make
+out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace (a sign-in's tokens put as
+"-"), which the test reads as it runs (`@sfreplay.trace("NAME")`). The flow is then a test in one of src/sfreplay/flows' packages, its steps written as a Tester's (src/sfreplay/steps.mbt:
 `tap`, `see`, `gone`, `type_text`…, ending in `end`) over the app with that conversation as its core
 (src/core/replay.mbt): an input draws only the frames it causes; what the core said comes at a frame's start, each
 message once what it came after has been asked again; a step that looks looks then, waiting for nothing; time goes on
@@ -1018,7 +1018,7 @@ core for its workspace's `status` (the stations' glyph asleep, as Places.kt). A 
 kept in e2e/flows that it needs before it) has the test write its steps as a scripted run (FLOW_EMIT,
 src/sfreplay/emit.mbt: `tap` a `tap`, `see` an `until`, `peer` what alice's other device does), runs them against a
 local still.fail of its own under the old trace's mark and station directory, makes the run's conversation the trace
-again, says which of the app's asks are more or fewer (scripts/tracediff.py), and runs the test over it. The app
+again, says which of the app's asks are more or fewer (scripts/trace diff), and runs the test over it. The app
 asking one more thing (a subscription the page now makes) is one command, not a flow fetched back from history.
 Only a few flows stay end to end, as smoke (the whole chain: sign-in, send and
 the agent's answer; parts going up; the preview's native views reading through the core; the system's notice; a

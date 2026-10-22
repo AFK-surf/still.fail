@@ -4,7 +4,7 @@
 ///|
 test "85-vault-item" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_vault_item, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-vault-item"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
     f.tap("密钥")

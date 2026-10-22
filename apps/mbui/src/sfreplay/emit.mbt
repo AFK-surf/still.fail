@@ -1,6 +1,6 @@
 // A flow's steps as a scripted run's (src/ui/drive.mbt's), written for scripts/rerecord.sh: the test run once with
 // FLOW_EMIT=<file>, its first order's steps go there as a .drive the app runs against a live backend, and that run's
-// conversation becomes the test's trace again (trace.py). Each step says its line (Flow::*); what only a live run
+// conversation becomes the test's trace again (scripts/trace make). Each step says its line (Flow::*); what only a live run
 // needs (alice's other device, a page before the first frame) is a step of its own that the Tester skips (Flow::peer,
 // Flow::before, Flow::open_page). Time is the host's there: a step waits as drive's do, so run_for and run_to say
 // nothing, but where a step must land inside a motion (a tap on what a sheet going down only draws), run_for says

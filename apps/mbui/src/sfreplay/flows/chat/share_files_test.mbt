@@ -6,7 +6,7 @@
 ///|
 test "93-share-files" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_share_files, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("share-files"), seed~)
     f.share_files(["e2e-photo.jpg", "e2e-doc.pdf"])
     // the sheet raised over the app as it starts
     f.see("发到")

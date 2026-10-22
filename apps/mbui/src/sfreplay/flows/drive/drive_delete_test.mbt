@@ -5,7 +5,7 @@
 ///|
 test "20-drive-delete" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_drive_delete, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("drive-delete"), seed~)
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-082940")
     f.run_to(@ui.nav_rest())

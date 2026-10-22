@@ -6,7 +6,7 @@
 ///|
 test "51-sheets-sinking" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_sheets_sinking, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("sheets-sinking"), seed~)
     f.see("端到端测试")
     f.tap("=Dev")
     f.run_to(@kit.sheet_rest("sheet"))

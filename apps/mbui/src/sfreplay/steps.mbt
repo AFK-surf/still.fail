@@ -968,7 +968,7 @@ pub fn Flow::share_files(self : Flow, names : Array[String]) -> Unit raise {
   for n in names {
     match self.r.sent_bytes("station.upload.part", "name", n) {
       Some(b) => files.push((n, b))
-      None => fail("flow: the trace has none of " + n + "'s bytes (over trace.py's MAX_BYTES?)")
+      None => fail("flow: the trace has none of " + n + "'s bytes (over scripts/trace make's MAX_BYTES?)")
     }
   }
   self.t.share_in("", files~)

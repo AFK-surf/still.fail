@@ -4,7 +4,7 @@
 ///|
 test "35-station-rename" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_station_rename, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("station-rename"), seed~)
     f.see("端到端测试")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)

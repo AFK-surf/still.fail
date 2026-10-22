@@ -206,7 +206,7 @@ run_flow() {
   # (an earlier run's word of what it did, not this one's: e2e/runner-do.sh)
   rm -rf $OUT/$name/done
   local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
-  # (a starting point's run: the trace says which, scripts/trace.py keeps it as its first line)
+  # (a starting point's run: the trace says which, scripts/trace make keeps it as its first line)
   [ -n "${E2E_START:-}" ] && printf 'CORETRACE {"start":"%s"}\n' "$E2E_START" >> $log
   # (and the starting point's drive folder under this run's tag, a step on the trace: the restored station holds the
   # starting point's own)

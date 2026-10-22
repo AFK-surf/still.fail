@@ -4,7 +4,7 @@
 ///|
 test "06-draft" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_draft, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("draft"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")

@@ -5,7 +5,7 @@
 ///|
 test "60-wide-send" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_wide_send, seed~, w=1280.0, h=800.0)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("wide-send"), seed~, w=1280.0, h=800.0)
     f.see("新建对话")
     f.tap("端到端测试")
     f.see("按空格输入")

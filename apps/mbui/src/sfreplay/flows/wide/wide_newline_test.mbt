@@ -4,7 +4,7 @@
 ///|
 test "61-wide-newline" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_wide_newline, seed~, w=1280.0, h=800.0)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("wide-newline"), seed~, w=1280.0, h=800.0)
     f.tap("端到端测试")
     f.see("按空格输入")
     f.tap("按空格输入")

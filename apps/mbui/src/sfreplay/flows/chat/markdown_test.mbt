@@ -5,7 +5,7 @@
 ///|
 test "74-markdown" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_markdown, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("markdown"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")

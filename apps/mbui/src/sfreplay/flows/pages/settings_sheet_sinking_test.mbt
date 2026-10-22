@@ -5,7 +5,7 @@
 ///|
 test "53-settings-sheet-sinking" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_sheet_sinking, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-sheet-sinking"), seed~)
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
     f.tap("=Station")

@@ -6,8 +6,15 @@ import {
   "mbui/kit",
   "mbui/motion",
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
 }
 
 options(
-  targets: { "emit_js.mbt": [ "js" ], "emit_native.mbt": [ "native" ] },
+  targets: {
+    "emit_js.mbt": [ "js" ],
+    "emit_native.mbt": [ "native" ],
+    "trace_js.mbt": [ "js" ],
+    "trace_native.mbt": [ "native" ],
+  },
+  "native-stub": [ "trace_files.c" ],
 )

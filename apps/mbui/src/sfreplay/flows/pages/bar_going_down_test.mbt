@@ -4,7 +4,7 @@
 ///|
 test "54-bar-going-down" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_bar_going_down, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("bar-going-down"), seed~)
     f.see("端到端测试")
     f.tap("端到端测试")
     // halfway into the push (the bar going down with it, as long): the bar still over the composer, tapped there

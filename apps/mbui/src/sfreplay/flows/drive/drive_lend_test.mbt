@@ -5,7 +5,7 @@
 ///|
 test "15-drive-lend" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_drive_lend, seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("drive-lend"), seed~)
     f.open_page(@sfapp.Page::Files)
     f.see("主目录")
     f.tap("icon:plus")
