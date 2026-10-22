@@ -193,7 +193,7 @@ fn station_agent_env(c : @ui.Ctx, core : Core, address : String, env : Array[Jso
         if manager {
           let on = [("station", address)]
           if list_row(c, key="env-edit", fn() {
-              row_title(c, tr("android-settings.env.edit"), color=t.p.accent)
+              row_title(c, tr("android-settings.env.edit"), color=@sf.link_ink())
               // saved (the sheet gone): a spinner until the station has them
               doing_mark(c, is_doing(core, ["agentEnv.form.save"], on), failed_of(core, ["agentEnv.form.save"], on))
             }) {

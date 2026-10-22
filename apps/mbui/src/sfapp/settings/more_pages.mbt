@@ -672,7 +672,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
           |> ignore
         }
         c.spacer()
-        if is_made && i != cur && tap_text(c, "bar-use/" + i.to_string(), tr("android-misc.bar.use"), size=13.0) {
+        if is_made && i != cur && tap_text(c, "bar-use/" + i.to_string(), tr("android-misc.bar.use"), size=13.0, room=true) {
           save_bars(core, made, i)
         }
         if sets.length() > 1 {
@@ -684,6 +684,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
                 color=t.p.red,
                 size=13.0,
                 said=fill("android-misc.bar.deleteNamed", [("n", (i + 1).to_string())]),
+                room=true,
               ) {
               if !is_made {
                 bar_adding.val = false
@@ -730,7 +731,8 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
 fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool, add : () -> Unit) -> Unit {
   let t = @sf.theme()
   c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, fn() {
-    c.box(dir=Row, w=Fill(1.0), padx=4.0, pady=8.0, radius=20.0, bg=t.p.card, fn() {
+    // 6 in (BarCard: padding(6))
+    c.box(dir=Row, w=Fill(1.0), pad=6.0, radius=20.0, bg=t.p.card, fn() {
       for j, key in set {
         let id = c.id("bar-slot/" + i.to_string() + "/" + key)
         if hit(c, id) {
@@ -754,8 +756,9 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
                 let (now, ncur) = (core.bars)()
                 save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
               }
-              // at the icon's top right, 8 above the slot (BarSettings.kt: TopCenter, offset 16, -8)
-              let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=-8.0, align=ACenter, justify=JCenter, id=rid, fn() {
+              // at the icon's top right: 8 over the top of what the slot holds, 12 under the slot's own top
+              // (BarSettings.kt: TopCenter of the slot's padded content, offset 16, -8)
+              let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=4.0, align=ACenter, justify=JCenter, id=rid, fn() {
                 @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
               })
               c.semantics(minus, Button, id=rid, label=fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))]))

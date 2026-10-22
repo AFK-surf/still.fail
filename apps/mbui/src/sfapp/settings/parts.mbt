@@ -1263,10 +1263,23 @@ fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : S
 let press_fade : @ui.Style = @ui.style(pressed=@ui.patch(opacity=O60))
 
 ///|
+// kept across runs: a value (no field of it changes)
+let press_fade_room : @ui.Style = press_fade.then(@ui.style(p=S1))
+
+///|
 /// Words that do something when tapped (a link's look: Theme.kt link). True on the frame after a tap.
-fn tap_text(c : @ui.Ctx, key : String, label : String, color? : Int64, size? : Double = 15.0, said? : String = "") -> Bool {
+fn tap_text(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  color? : Int64,
+  size? : Double = 15.0,
+  said? : String = "",
+  room? : Bool = false,
+) -> Bool {
   let id = c.id(key)
-  let b = c.box(style=press_fade, id~, fn() {
+  // `room`: 4 round its words, what it takes (BarSettings.kt's 设为当前, 删除: padding(4) inside what is tapped)
+  let b = c.box(style=if room { press_fade_room } else { press_fade }, id~, fn() {
     // Settings.kt:447 (15sp), Profiles.kt:794, Vault.kt:365 (14sp): the theme's line, 1.4 its size (its size the
     // caller's)
     c.text(label, style=@sf.link.then(@sf.one_line), size~, line=size * 1.4, color?) |> ignore
@@ -1514,3 +1527,46 @@ let status_sm : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
 ///|
 /// A state's lead as an icon, as tall as the words (StatusText.kt: 14).
 let status_icon : Double = 14.0
+
+///|
+/// A choice on a card (Parts.kt PickLine): its label (15) over its line (12, muted), a check (16, the accent) at its
+/// end where it is the one chosen; 4 and 11 in, rounded 10, the ink at 5% under it while pressed. True on the frame
+/// after a tap.
+fn pick_line_row(c : @ui.Ctx, key : String, label : String, sub : String, checked : Bool) -> Bool {
+  let t = @sf.theme()
+  let id = c.id(key)
+  c.box(style=pick_line_ground, id~, fn() {
+    c.box(style=@sf.full_width, fn() {
+      c.text(label, style=row_title_words) |> ignore
+      if sub != "" {
+        c.text(sub, style=@sf.caption.then(@sf.full_words)) |> ignore
+      }
+    })
+    |> ignore
+    c.box(style=check_room, fn() {
+      if checked {
+        @sf.icon(c, "check", size=16.0, color=t.p.accent) |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+  hit(c, id)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_line_ground : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  px=S1,
+  py=@sf.pick_line_y,
+  gap=S3,
+  align=ACenter,
+  radius=@sf.pick_line_r,
+  pressed=@ui.patch(bg=A(Fg, O5)),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let check_room : @ui.Style = @ui.style(w=@sf.check_room_w, align=ACenter)

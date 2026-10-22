@@ -91,3 +91,13 @@ test "secrets left in plain text from before security mode: how many, 加密 enc
   t.tap(x, y)
   assert_true(t.find("2 条密钥尚未加密") is None)
 }
+
+///|
+test "密钥: 默认最长授权 over the profiles' keys, its note and its three choices (Vault.kt DefaultLasts)" {
+  let t = settings_tester("vault")
+  shown_on_page(t, "默认最长授权")
+  assert_true(t.find("默认最长授权") is Some(_))
+  for words in ["仅一次", "1 小时", "直到对话归档", "每次使用都要你批准一次"] {
+    assert_true(t.find(words) is Some(_), msg=words)
+  }
+}

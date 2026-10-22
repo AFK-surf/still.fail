@@ -79,8 +79,11 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           }
           blocks.push(fn() {
             c.box(w=Fill(1.0), padx=24.0, pady=6.0, gap=4.0, fn() {
+              // how it is counted, under what was counted (nothing counted: the empty place says it already)
               let lines = strings(v, "notes")
-              lines.push(text(v, "basis"))
+              if !flag(v, "empty") {
+                lines.push(text(v, "basis"))
+              }
               for l in lines {
                 if l != "" {
                   c.text(l, size=12.0, color=t.p.subtle, w=Fill(1.0), line=17.0) |> ignore

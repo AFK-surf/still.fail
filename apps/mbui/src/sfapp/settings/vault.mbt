@@ -183,6 +183,11 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
       }
     })
   })
+  // the longest an agent's request for the viewer's secrets is approved for, where a secret says none
+  match vaults.iter().find_first(fn(r) { flag(Some(r), "mine") }) {
+    Some(mine) => blocks.append(default_lasts(c, core, ws, mine))
+    None => ()
+  }
   // locked, the viewer's secrets saved before it still in plain text: encrypted into their vault
   let left = number(v, "plainLeft").to_int()
   if !plain && left > 0 {
@@ -669,3 +674,49 @@ let plain_left_column : @ui.Style = @ui.style(w=Full, gap=S3)
 ///|
 // kept across runs: a value (no field of it changes)
 let plain_left_body : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, color=Muted, w=Full)
+
+///|
+/// How long a grant lasts, shortest first: one use, an hour, the chat until it is archived (Vault.kt SCOPES).
+// kept across runs: a table, never written
+let vault_scopes : Array[String] = ["once", "hour", "chat"]
+
+///|
+/// The longest an agent's request for the viewer's secrets is approved for, where a secret says none (Vault.kt
+/// DefaultLasts, `vault.setLasts`): a note, then 仅一次, 1 小时, 直到对话归档 each with what it means, the one set
+/// checked (the chat's when none is).
+fn default_lasts(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() -> Unit] {
+  let id = text(Some(row), "id")
+  let now = match vault_scopes.search(text(Some(row), "lasts")) {
+    Some(i) => i
+    None => vault_scopes.length() - 1
+  }
+  [
+    fn() { section_header(c, tr("android-settings.vault.lasts.title"), start=S6) },
+    fn() {
+      card(c, fn() {
+        c.box(style=lasts_note_room, fn() {
+          c.text(tr("android-settings.vault.lasts.note"), style=row_sub_lines) |> ignore
+        })
+        |> ignore
+        for i, s in vault_scopes {
+          if pick_line_row(
+              c,
+              "vault-lasts/" + s,
+              tr("android-settings.vault.lasts." + s),
+              tr("android-settings.vault.lasts." + s + "Detail"),
+              i == now,
+            ) &&
+            i != now {
+            vault_act(core, ws, "setLasts", [("vault", str(id)), ("lasts", str(s))], tr("android-settings.vault.lasts.what"))
+          }
+        }
+      })
+      |> ignore
+    },
+  ]
+}
+
+///|
+/// Under the note, 4 before the first choice (Vault.kt DefaultLasts).
+// kept across runs: a value (no field of it changes)
+let lasts_note_room : @ui.Style = @ui.style(w=Full, pb=S1)

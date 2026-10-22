@@ -245,7 +245,7 @@ fn vault_devices(c : @ui.Ctx, core : Core, ws : String, vaults : Array[Json]) ->
           if giving {
             spinner(c)
           } else if give {
-            c.text(tr("android-settings.vault.giveKey"), size=14.0, color=@sf.theme().p.accent, wrap=false) |> ignore
+            c.text(tr("android-settings.vault.giveKey"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
           }
         }) {
         vault_act(core, ws, "addDevice", [("vault", str(id))], tr("android-settings.vault.giveKey"), done=tr("android-settings.vault.gaveKey"))
