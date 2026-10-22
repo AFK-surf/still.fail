@@ -98,8 +98,8 @@ pub(all) struct GroupState {
 ///|
 /// A toggle group (see the file's head) of `items`, those of `value` pressed (its id `key`'s), named `label` for the
 /// semantics tree; `orientation` the arrows that move along it, round unless not `wrap`; one pressed at most sliding
-/// a thumb (`thumb` its look, given its width and height) to it when `slide`. What is pressed now, and what happened to
-/// the group (`changed`; `clicked` when an item was).
+/// a thumb (`thumb` its look, given its width and height) to it when `slide`; `grow`: as wide as where it is, the
+/// items sharing its width. What is pressed now, and what happened to the group (`changed`; `clicked` when an item was).
 pub fn toggle_group(
   c : @ui.Ctx,
   key : String,
@@ -111,6 +111,7 @@ pub fn toggle_group(
   disabled? : Bool = false,
   label? : String = "",
   slide? : Bool = false,
+  grow? : Bool = false,
   look? : (@ui.Ctx, ToggleState) -> Unit,
   thumb? : (@ui.Ctx, Double, Double) -> Unit = group_thumb_look,
   ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit = group_look,
@@ -126,7 +127,7 @@ pub fn toggle_group(
     None => 0
   }
   let vertical = orientation == Vertical
-  let gi = c.box(fn() {
+  let gi = c.box(style=if grow { group_item_grow } else { group_item_own }, fn() {
     c.roving(key, orientation~, wrap~, current~, fn() {
       ground(c, { vertical, disabled }, fn() {
         // the thumb behind the items, laid out over the one pressed (Ctx::cover)
@@ -163,7 +164,9 @@ pub fn toggle_group(
             first: k == 0,
             last: k == items.length() - 1,
           }
-          let i = c.box(id=if off { 0 } else { iid }, fn() { look(c, st) })
+          let i = c.box(style=if grow { group_item_grow } else { group_item_own }, id=if off { 0 } else { iid }, fn() {
+            look(c, st)
+          })
           nodes.push(i)
           if multiple {
             c.semantics(i, Button, id=iid, label=it.label, pressed=on, disabled=off, actions=pick(off, [], [Activate]))
@@ -288,3 +291,13 @@ pub fn group_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
   )
   |> ignore
 }
+
+///|
+/// A group and its items as wide as what their looks draw, or (`grow`) the group as wide as where it is and each item
+/// an equal share of it.
+// kept across runs: a value (no field of it changes)
+let group_item_own : @ui.Style = @ui.style()
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_item_grow : @ui.Style = @ui.style(w=Full)

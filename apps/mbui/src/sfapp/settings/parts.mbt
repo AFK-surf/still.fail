@@ -660,8 +660,10 @@ fn tone_dot(tone : String) -> String {
 }
 
 ///|
-/// A segmented choice (Parts.kt Seg): a track the ink at 6%, a light thumb (a hairline round it) sliding to the one
-/// chosen. `fill`: as wide as where it is, each option an equal share. Answers the one chosen (a tap's, this frame).
+/// A segmented choice (Parts.kt Seg): mbui's sliding toggle group (@kit.toggle_group: the arrows move along it, a
+/// screen reader reads its options) in Seg's look: a track the ink at 6%, a light thumb (a hairline round it) sliding to
+/// the one chosen. `fill`: as wide as where it is, each option an equal share. Answers the one chosen (a tap's, this
+/// frame).
 fn seg(
   c : @ui.Ctx,
   key : String,
@@ -677,76 +679,74 @@ fn seg(
   let fill = fill && !pill
   let height = if pill { 36.0 } else { height }
   let radius = if pill { 18.0 } else { radius }
-  let base = c.id(key)
-  let mut picked = selected
-  for i, _ in options {
-    if hit(c, base + i + 1) {
-      picked = i
-    }
-  }
   let inset = 2.0
   let thumb = if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL }
-  let track = fn() {
-    c.box(
-      style=if fill { seg_track_full } else { seg_track },
-      h=Px(height),
-      radius~,
-      bg=@sf.alpha(t.p.text, 0.06),
-      id=base,
-      fn() {
-        // the thumb behind the options, laid out over the one chosen in the frame they are (Ctx::cover): to another
-        // on its spring, placed at once the first time (as Seg's first placement jumps)
-        let holder = c.layer(fn() {  })
-        let items : Array[Int] = []
-        for i, label in options {
-          let id = base + i + 1
-          let item = c.box(
-            style=if pill {
-              seg_pill_option
-            } else if fill {
-              seg_full_option
-            } else {
-              seg_option
-            },
-            id~,
-            fn() {
-              // Parts.kt:424 (14sp filling, else 13sp)
-              c.text(
-                label,
-                style=@ui.text_style(
-                  size=if fill { Base } else { Sm },
-                  color=if i == picked { Fg } else { Muted },
-                  wrap=false,
-                ),
-              )
-              |> ignore
-            },
-          )
-          items.push(item)
-        }
-        c.cover(key + "/thumb", holder, items, picked, fn(c, w, h) {
-          c.box(
-            w=Px(w),
-            h=Px(h),
-            radius=@ui.concentric(radius, inset),
-            bg=thumb,
-            border=0.5,
-            border_color=t.p.line,
-            fn() {  },
+  let items = options.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
+  let now = @kit.toggle_group(
+    c,
+    key,
+    items,
+    [selected.to_string()],
+    slide=true,
+    grow=fill,
+    look=fn(c, st) {
+      c.box(
+        style=if pill {
+          seg_pill_option
+        } else if fill {
+          seg_full_option
+        } else {
+          seg_option
+        },
+        fn() {
+          // Parts.kt:424 (14sp filling, else 13sp)
+          c.text(
+            st.label,
+            style=@ui.text_style(size=if fill { Base } else { Sm }, color=if st.on { Fg } else { Muted }, wrap=false),
           )
           |> ignore
-        })
-      },
-    )
-    |> ignore
+        },
+      )
+      |> ignore
+    },
+    // the thumb behind the options, over the one chosen: to another on its spring, placed at once the first time (as
+    // Seg's first placement jumps)
+    thumb=fn(c, w, h) {
+      c.box(
+        w=Px(w),
+        h=Px(h),
+        radius=@ui.concentric(radius, inset),
+        bg=thumb,
+        border=0.5,
+        border_color=t.p.line,
+        fn() {  },
+      )
+      |> ignore
+    },
+    ground=fn(c, _, options) {
+      let track = fn() {
+        c.box(
+          style=if fill { seg_track_full } else { seg_track },
+          h=Px(height),
+          radius~,
+          bg=@sf.alpha(t.p.text, 0.06),
+          options,
+        )
+        |> ignore
+      }
+      // (in a row, as wide as its options: not stretched to its parent's width)
+      if pill {
+        c.box(style=seg_pill_line, fn() { track() }) |> ignore
+      } else {
+        track()
+      }
+    },
+  ).value
+  // the chosen one tapped again stays chosen
+  match now {
+    [v] => items.search_by(fn(it) { it.value == v }).unwrap_or(selected)
+    _ => selected
   }
-  // (in a row, as wide as its options: not stretched to its parent's width)
-  if pill {
-    c.box(style=seg_pill_line, fn() { track() }) |> ignore
-  } else {
-    track()
-  }
-  picked
 }
 
 ///|

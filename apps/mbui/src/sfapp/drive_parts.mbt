@@ -360,36 +360,9 @@ fn dv_pick_row(
 }
 
 ///|
-/// A line to type in, on a soft frame (Controls.kt Field): 12 corners, the card's ground, a line round it.
+/// A line to type in (Controls.kt Field): mbui's field in its look (@sf.field_look), its words 15 on 21.
 fn dv_field(c : @ui.Ctx, key : String, placeholder : String, field : @ui.Field) -> String {
-  let t = @sf.theme()
-  let mut words = ""
-  c.box(
-    w=Fill(1.0),
-    radius=12.0,
-    bg=t.p.card,
-    border=1.0,
-    border_color=t.p.line,
-    padx=12.0,
-    pady=10.0,
-    fn() {
-      let res = c.editor(
-        key,
-        placeholder~,
-        font_size=15.0,
-        line=21.0,
-        max_lines=1,
-        plain=true,
-        color=t.p.text,
-        placeholder_color=t.p.subtle,
-        caret_color=t.p.accent,
-        field~,
-      )
-      words = res.text
-    },
-  )
-  |> ignore
-  words
+  @kit.text_field(c, key, placeholder~, size=15.0, line=21.0, look=@sf.field_look, field~).text
 }
 
 // ── sheets ───────────────────────────────────────────────────────────────
