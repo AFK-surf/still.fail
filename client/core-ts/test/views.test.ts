@@ -478,7 +478,7 @@ test("a_chat_with_a_message_that_did_not_go_is_marked_on_its_row_until_it_goes",
   assert.deepEqual([of().tone, of().stateText], [undefined, undefined], "on its way, nothing to say");
   t.views.local.outboxState("ws/st", 7, id, "Office-VM-1 离线");
   await t.read(chats, 1);
-  assert.deepEqual([of().tone, of().stateText], ["alert", "未发送：开始吧 第二行"]);
+  assert.deepEqual([of().tone, of().stateText, of().unsent], ["alert", "未发送：开始吧 第二行", true]);
   t.views.local.outboxState("ws/st", 7, id, null);
   await t.read(chats, 1);
   assert.deepEqual([of().tone, of().stateText], [undefined, undefined], "sent again");

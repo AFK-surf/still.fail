@@ -141,7 +141,8 @@ export const mLastText = style({
   minWidth: "0", fontSize: vars.textMeta, lineHeight: "20px", color: "var(--m-muted)", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
   // Its turn (something waits on the viewer, ../ChatMark.tsx WaitingText): in ink.
-  selectors: { "&[data-turn]": { color: "var(--m-ink)" } },
+  // A message that did not go (its row's `unsent`): in red.
+  selectors: { "&[data-turn]": { color: "var(--m-ink)" }, "&[data-alert]": { color: "var(--m-red)" } },
 });
 globalStyle(`${mHomeWorkspace} svg`, { flex: "none", color: "var(--m-muted)" });
 globalStyle(`${mEmpty} p`, { fontSize: vars.textMeta, color: "var(--m-muted)" });

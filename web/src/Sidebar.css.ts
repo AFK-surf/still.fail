@@ -217,7 +217,8 @@ export const navSessionMeta = style({
 export const navSessionLast = style({
   flex: 1, ...ellipsis, fontSize: vars.textMeta, color: vars.muted,
   // Its turn (something waits on the viewer, ChatMark.tsx WaitingText): in ink.
-  selectors: { "&[data-turn]": { color: vars.text } },
+  // A message that did not go (its row's `unsent`): in red.
+  selectors: { "&[data-turn]": { color: vars.text }, "&[data-alert]": { color: vars.red } },
 });
 /** When is rarely what one looks for in the list: it shows on hover (and keyboard focus), giving its room to the message otherwise. */
 export const navTime = style({

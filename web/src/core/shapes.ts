@@ -1605,6 +1605,11 @@ export interface ChatItem {
 	 */
 	stateText?: string;
 	/**
+	 * A message sent here into it did not go (it waits in the chat to be sent again or dropped): `stateText` says
+	 * which (未发送：…), drawn in red, and `tone` is alert. Absent otherwise.
+	 */
+	unsent?: boolean;
+	/**
 	 * The message `stateText` is about (a seq in this chat): the one the agent's state names. Opening the chat from
 	 * the line may go to it. Absent when none, and for a line that asks for a decision (its chat leads to it: `ChatView.asks`).
 	 */

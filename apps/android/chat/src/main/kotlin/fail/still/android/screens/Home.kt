@@ -599,7 +599,7 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                                 Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) {
                     // Where it stands (奏 · …, 在等：…, 做完了), from a station that says; else what was said last.
                     val state = item.stateText ?: item.decision?.text
-                    if (state != null) StateLine(state, Modifier.fillMaxWidth().onGloballyPositioned { onStateLine(it.boundsInRoot()) }) else item.last?.let { LastMessage(item) }
+                    if (state != null) StateLine(state, item.unsent == true, Modifier.fillMaxWidth().onGloballyPositioned { onStateLine(it.boundsInRoot()) }) else item.last?.let { LastMessage(item) }
                 }
                 if (held) Text(item.time?.get("lastActiveAt")?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
                 else RowAside(item, lead, Modifier.alpha(dim))
@@ -670,9 +670,10 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
  * Where the chat stands, in its last message's place (the core's `stateText`): a decision waiting for the viewer
  * (奏 · …) in ink with its 奏 bold; anything else in the secondary colour. A lead said as an icon (要你帮忙 a bell, in
  * ink; 在等 an open arc and dots, 监控中 a radar before its words, 做完了 a check) sits where the title's mark does, what follows where the title starts.
+ * `alert` (a message that did not go, the row's `unsent`): in red.
  */
 @Composable
-private fun StateLine(state: String, modifier: Modifier = Modifier) {
+private fun StateLine(state: String, alert: Boolean = false, modifier: Modifier = Modifier) {
     val need = needLead.find(state)
     val done = if (need == null) fail.still.android.ui.doneLead.find(state) else null
     val wait = if (need == null && done == null) fail.still.android.ui.waitLead.find(state) else null
@@ -703,7 +704,7 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
         else append(state)
     }
     Text(
-        text, modifier, fontSize = 14.sp, lineHeight = 20.sp, color = if (lead != null) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        text, modifier, fontSize = 14.sp, lineHeight = 20.sp, color = if (alert) C.red else if (lead != null) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
         style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),
