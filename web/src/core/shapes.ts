@@ -1746,6 +1746,18 @@ export interface ChatSentElsewhere {
 }
 
 /**
+ * A run of messages other chats' agents wrote to a chat, folded into a line (core views.ts `lettersFolded`), so they
+ * do not bury what people and the chat's own agents say.
+ */
+export interface Letters {
+	count: number;
+	/** Who wrote them to whom and how many, in words: 「X」发给 Opus 5.5 · 3 条. */
+	line: string;
+	/** Shown whole: `chat.letters` {station, thread, seq, open} opens it or folds it again. */
+	open: boolean;
+}
+
+/**
  * A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said
  * it, and whether its agents have yet to take it.
  */
@@ -1836,6 +1848,12 @@ export interface ChatMessage {
 	 * words never do).
 	 */
 	placed?: string[];
+	/**
+	 * In a chat's page: the first of a run of messages other chats' agents wrote to it (session_send), with nothing
+	 * else said between: the run is one line on it. Folded, it shows the line alone and the rest of the run is not in the
+	 * list; open (`chat.letters`), the line over it and the rest after it. Absent on every other message.
+	 */
+	letters?: Letters;
 }
 
 /** A snapshot of a chat its station keeps for anyone with its link (`chat.publish` answers one too). */

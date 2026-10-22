@@ -550,6 +550,9 @@ export function useChatSend(address?: string) {
     place: (thread: number, seq: number | null, offset: number | null = null) => call("chat.place", { station, thread, seq, offset }),
     /** The chat's window about one of its messages (`chat.around`): a page on either side, read where not held. */
     around: (thread: number, seq: number) => call("chat.around", { station, thread, seq }),
+    /** The run of other chats' agents' messages with `seq` in it shown whole (`open`), or folded into its line again
+     *  (`chat.letters`; the core's `letters`). */
+    letters: (thread: number, seq: number, open: boolean) => call("chat.letters", { station, thread, seq, open }),
     /** The chat's messages that have every word of `query` (`chat.find`), oldest first; `bring`: what is not on the
      *  device is read first. */
     find: (thread: number, query: string, bring = false) => call("chat.find", { station, thread, query, bring }) as Promise<ChatFound>,

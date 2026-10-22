@@ -1732,6 +1732,17 @@ data class ChatSentElsewhere (
 	val time: Map<String, Stamp>? = null
 )
 
+/// A run of messages other chats' agents wrote to a chat, folded into a line (core views.ts `lettersFolded`), so they
+/// do not bury what people and the chat's own agents say.
+@Serializable
+data class Letters (
+	val count: Long,
+	/// Who wrote them to whom and how many, in words: 「X」发给 Opus 5.5 · 3 条.
+	val line: String,
+	/// Shown whole: `chat.letters` {station, thread, seq, open} opens it or folds it again.
+	val open: Boolean
+)
+
 /// A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said
 /// it, and whether its agents have yet to take it.
 @Serializable
@@ -1801,7 +1812,11 @@ data class ChatMessage (
 	/// In a chat's page: the names of the files its text places (`![](shot.png)`, `[the report](report.pdf)`), in the
 	/// order it names them, drawn where it names them; the rest go below it. Absent when it places none (a person's
 	/// words never do).
-	val placed: List<String>? = null
+	val placed: List<String>? = null,
+	/// In a chat's page: the first of a run of messages other chats' agents wrote to it (session_send), with nothing
+	/// else said between: the run is one line on it. Folded, it shows the line alone and the rest of the run is not in the
+	/// list; open (`chat.letters`), the line over it and the rest after it. Absent on every other message.
+	val letters: Letters? = null
 )
 
 /// A snapshot of a chat its station keeps for anyone with its link (`chat.publish` answers one too).

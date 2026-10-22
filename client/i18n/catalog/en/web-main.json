@@ -153,6 +153,8 @@
   "web-main.chat.asks.go": "Go to the message awaiting a decision",
   "web-main.chat.copyLink": "Copy chat link",
   "web-main.chat.historyRefTitle": "History: {title}",
+  "web-main.chat.letters.close": "hide messages",
+  "web-main.chat.letters.open": "show messages",
   "web-main.chat.linkCopied": "Copied: paste it into another chat and its agent can read this one",
   "web-main.chat.historyLinkCopied": "Copied: paste it into another chat and its agent can read what this chat's agent did",
   "web-main.chat.copyFailed": "Couldn't copy: {error}",

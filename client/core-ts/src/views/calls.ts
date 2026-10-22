@@ -367,5 +367,9 @@ export class ViewCalls {
       });
     };
     hooks.updateNoticeOpen = (_inner, station, open) => views.updateNoticeOpen(station, open);
+    handlers.chatLetters = (_inner, call) => {
+      const c = call as Of<"chatLetters">;
+      return Effect.try({ try: () => (StationAddr.parse(c.station), views.lettersOpen(c.station, c.thread, c.seq, c.open), null), catch: asCoreError });
+    };
   }
 }

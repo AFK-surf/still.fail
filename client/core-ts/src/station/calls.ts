@@ -79,6 +79,8 @@ export function install(): void {
   };
   handlers.chatAround = (inner, call) => {
     const c = call as Extract<Call, { kind: "chatAround" }>;
+    // To be shown: among what other chats' agents wrote to it, their run shown whole (views.ts lettersFolded).
+    inner.views?.lettersOpen(c.station, c.thread, c.seq, true);
     return Effect.andThen(parse(c.station), Effect.as(inner.stationTopics.around(c.station, c.thread, c.seq), null));
   };
   handlers.chatFind = (inner, call) => {

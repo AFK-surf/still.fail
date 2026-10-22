@@ -24,7 +24,7 @@ import {
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
+  LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addQueueColumns, addSizeColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
@@ -713,7 +713,7 @@ export class Store {
       return {
         sessions: this.threadSessions(t.id),
         last: this.lastEntry(t.id),
-        lastMessage: this.lastMessage(t.id),
+        lastMessage: this.#lastSaid(t.id),
         read,
         unread: this.#unreadCount(viewer, t.id, read),
         people: this.#threadPeople(t.id, t.surface),
@@ -733,7 +733,18 @@ export class Store {
     return r ? toMessage(r) : null;
   }
 
-  /// Messages after the viewer's read position that are not the viewer's own (nor of a Slack user they are).
+  /// The thread's latest message that is not a letter (rows.ts isLetter), for lists: what they show and sort by.
+  #lastSaid(thread: number): MessageRow | null {
+    if (this.#isArchived(thread)) {
+      const keys = new Set(this.threadSessions(thread).map((m) => m.session));
+      return mergeEntries(this.#archivedEntries(thread)).findLast((m) => !isLetter(m, keys)) ?? null;
+    }
+    const r = this.#one(`SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread, thread);
+    return r ? toMessage(r) : null;
+  }
+
+  /// Messages after the viewer's read position that are not the viewer's own (nor of a Slack user they are), nor
+  /// letters (rows.ts isLetter).
   unreadCount(viewer: string, thread: number): number {
     return this.#unreadCount(viewer, thread, this.readPosition(viewer, thread));
   }
@@ -1653,12 +1664,13 @@ export class Store {
     const selves = [viewer];
     if (slack) selves.push(...this.slackIdentities(viewer));
     if (this.#isArchived(thread)) {
-      return mergeEntries(this.#archivedEntries(thread)).filter((m) => m.n > read && !(m.authorKind === "person" && selves.includes(m.author))).length;
+      const keys = new Set(this.threadSessions(thread).map((m) => m.session));
+      return mergeEntries(this.#archivedEntries(thread)).filter((m) => m.n > read && !isLetter(m, keys) && !(m.authorKind === "person" && selves.includes(m.author))).length;
     }
     return this.#one(
       `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
-       AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?)))`,
-      thread, read, JSON.stringify(selves),
+       AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?))) AND NOT ${LETTER_SQL}`,
+      thread, read, JSON.stringify(selves), thread,
     ).c;
   }
 

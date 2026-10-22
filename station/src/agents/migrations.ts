@@ -66,6 +66,7 @@ export const NOTES: [number, string][] = [
   [59, "The station no longer guesses that a login waits for a code its page gives: where the screen says so (copy the code and paste it below, enter the verification code), call login {id, paste: true} before posting its card, and the card gets a field where the person enters it. Never type that code yourself."],
   [60, "A sixth runtime, Devin (runtime devin, on a Devin account): chat_create takes runtime \"devin\"."],
   [61, "Stations queue other stations' tasks themselves: station_task start on a busy one answers queue (place, why) and the task starts by itself when there is room; just start it, end waiting as usual. prepare takes screen: true for tasks that open windows (one at a time). You are told when something you run uses much memory; only a machine about to run out has the largest stopped. See the stillfail-jobs skill."],
+  [62, "Messages agents send a chat with session_send now show there folded into one line people may open: send one when you have something to tell or ask, said whole, never an acknowledgement (its answer says it arrived) or step-by-step progress; tell people what they must hear in your own chat."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
