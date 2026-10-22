@@ -3,6 +3,10 @@ import { globalStyle, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 
+/** Long formulas scroll within the message on a phone. Room above and below keeps accents and limits unclipped. */
+export const mathBlock = style({ maxWidth: "100%", overflowX: "auto", margin: "0 0 8px", padding: "2px 0" });
+globalStyle(`${mathBlock} .katex-display`, { margin: "0", padding: "8px 0", minWidth: "max-content" });
+
 /** A message's file placed in its text: on a line of its own, a little apart from the text around it. */
 export const inlineFile = style({ display: "flex", margin: "8px 0" });
 globalStyle(`${inlineFile}:first-child`, { marginTop: 0 });

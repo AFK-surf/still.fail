@@ -4,7 +4,7 @@
 // says (`ink`, client/core-ts/src/highlight.ts: vitesse light and dark, as every client paints them), with their
 // language named and a copy button.
 import { Check, Copy } from "@stillfail/ui/icons.tsx";
-import { Fragment, isValidElement, memo, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
+import { Fragment, isValidElement, lazy, memo, Suspense, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import type { Attachment } from "./core/shapes.ts";
 import type { Md, MdNode } from "./core/md.ts";
 import { inlineFile, inlineFiles } from "./Prose.css.ts";
@@ -23,6 +23,9 @@ import { Tip } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
+
+// KaTeX and its CSS/fonts are fetched only when a formula is drawn. A failed load leaves the TeX readable.
+const Formula = lazy(() => import("./Math.tsx").catch(() => ({ default: memo(({ text }: { text: string; display?: boolean }) => <>{text}</>) })));
 
 /** A block of code as markdown shows one: in the colours the core says of its language (`ink`: the core's tree's own, or
  * read by the core's highlighter here), with a copy button. */
@@ -199,6 +202,7 @@ function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
     }
     case "pre": {
       const code = wordsOf(a.code, cx.source);
+      if (a.math === true) return <div key={key} className={css.mathBlock}><Suspense fallback={code}><Formula text={code} display /></Suspense></div>;
       const language = str(a.lang);
       // A mermaid block is a chart, drawn (Viz.tsx); anything else is code.
       return language?.toLowerCase() === "mermaid" && code.trim() ? <Mermaid key={key} code={code} /> : <Code key={key} text={code} language={language} ink={str(a.ink) ?? null} />;
@@ -234,6 +238,7 @@ function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
     case "br": return <br key={key} />;
     case "code": {
       const content = wordsOf(a.content, cx.source);
+      if (a.math === true) return <Suspense key={key} fallback={content}><Formula text={content} /></Suspense>;
       return <Fragment key={key}>{inlineCode(content, <code>{content}</code>, content)}</Fragment>;
     }
     case "a": {

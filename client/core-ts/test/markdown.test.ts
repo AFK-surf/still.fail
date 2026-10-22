@@ -57,6 +57,30 @@ test("markdown_is_read_once_while_it_is_kept", () => {
   assert.deepEqual(markdown(text), parse(text));
 });
 
+test("math_is_code_with_a_rendering_hint_and_keeps_its_source_runs", () => {
+  const text = "预测 $p_7 = p_1 + r$。\n\n$$\n\\frac{y_7-y_1}{y_1}\n$$";
+  assert.deepEqual(read(text), [
+    ["p", ["预测 ", ["code", { content: "p_7 = p_1 + r", math: true }], "。"]],
+    ["pre", { code: "\\frac{y_7-y_1}{y_1}", math: true }],
+  ]);
+  assert.equal(plainOf(parse(text), text), "预测 p_7 = p_1 + r。\n\n\\frac{y_7-y_1}{y_1}");
+  assert.deepEqual(parse("中 $x$"), [["p", [[0, 2], ["code", { content: [3, 4], math: true }]]]]);
+  // A dollar inside TeX must not be mistaken for the opening delimiter.
+  assert.deepEqual(read("值 $$ $ $$"), [["p", ["值 ", ["code", { content: "$", math: true }]]]]);
+  assert.deepEqual(read("$$\n\\sum_{i=1}^n x_i\n$$"), [["pre", { code: "\\sum_{i=1}^n x_i", math: true }]]);
+});
+
+test("math_leaves_escaped_dollars_code_and_unmatched_inline_delimiters_alone", () => {
+  assert.deepEqual(read("费用 \\$5 和 \\$10；未完 $x"), [["p", ["费用 $5 和 $10；未完 $x"]]]);
+  assert.deepEqual(read("`$x$`\n\n```tex\n$$x$$\n```"), [
+    ["p", [["code", { content: "$x$" }]]],
+    ["pre", { code: "$$x$$", lang: "tex" }],
+  ]);
+  assert.deepEqual(read("| 预测 |\n|---|\n| $x^2$ |"), [
+    ["table", [["tr", [["th", ["预测"]]]], ["tr", [["td", [["code", { content: "x^2", math: true }]]]]]], { align: [null] }],
+  ]);
+});
+
 test("markdown_words_without_marks", () => {
   const text = "# 题\n\n**一** `二`\n\n```\n三\n```";
   assert.equal(plainOf(parse(text), text), "题\n\n一 二\n\n三");
