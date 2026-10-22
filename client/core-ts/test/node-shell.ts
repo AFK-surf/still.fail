@@ -18,6 +18,8 @@ export class NodeShell implements Native {
   readonly calls: string[] = [];
   /// The addon's endpoints bound, in order (a test reads where one listens).
   readonly bound: J[] = [];
+  /// Files picked in the app (`picked.*`, answered by the app on a phone), by the number the page gave each.
+  readonly picked = new Map<number, Uint8Array>();
 
   constructor(dataDir: string) {
     this.host = new NodeHost(dataDir, "http://unused", false, () => {});
@@ -187,6 +189,14 @@ export class NodeShell implements Native {
       }
       case "istream.reset":
         await this.#handles.get(a.id).reset?.(a.code);
+        return done({});
+      case "picked.read": {
+        const file = this.picked.get(a.file);
+        if (!file) throw new Error("no such file");
+        return done({}, file.slice(a.start, a.end));
+      }
+      case "picked.release":
+        this.picked.delete(a.file);
         return done({});
       default:
         throw new Error(`no operation ${op}`);

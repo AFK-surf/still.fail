@@ -9,8 +9,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * Where the calls the app does are done (`secure.*`, `listen.*`): off the engine's thread (the Keystore is slow; a prompt
- * waits on the person; a listener waits on the browser).
+ * Where the calls the app does are done (`secure.*`, `listen.*`, `picked.*`): off the engine's thread (the Keystore is
+ * slow; a prompt waits on the person; a listener waits on the browser; a picked file is read from its disk).
  */
 private val sealedScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -37,7 +37,7 @@ internal interface HermesListener {
     fun onFrame(json: ByteArray, bytes: ByteArray)
     /**
      * A call the app does, not the shell (client/core-ts hosts/bridge.ts): `secure.*` (SecureStore.kt), `listen.*`
-     * (Loopback.kt); its JSON as UTF-8, and the bytes it carries (null: none). Answered later, on another thread, through
+     * (Loopback.kt), `picked.*` (PickedFiles.kt); its JSON as UTF-8, and the bytes it carries (null: none). Answered later, on another thread, through
      * [HermesNative.complete].
      */
     fun onApp(id: Long, op: String, json: ByteArray, bytes: ByteArray?)
@@ -105,7 +105,11 @@ internal fun hermesEngines(
                     sealedScope.launch {
                         val answer = try {
                             val text = String(json, Charsets.UTF_8)
-                            Result.success(if (op.startsWith("listen.")) loopback.answer(op, text, bytes) else sealed.answer(op, text, bytes))
+                            Result.success(when {
+                                op.startsWith("listen.") -> loopback.answer(op, text, bytes)
+                                op.startsWith("picked.") -> PickedFiles.answer(op, text)
+                                else -> sealed.answer(op, text, bytes)
+                            })
                         } catch (e: Throwable) {
                             Result.failure(e)
                         }
