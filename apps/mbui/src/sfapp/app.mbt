@@ -346,6 +346,7 @@ fn reset() -> Unit {
   pv_frames.clear()
   fix_fetches.clear()
   pv_frames_n.val = 0
+  pv_first.clear()
   pv_hidden.val = ""
   pv_read.clear()
   pv_strip.leaving = None

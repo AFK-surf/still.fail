@@ -1042,10 +1042,15 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
       note_thumb(c, thumb, open, 10.0, letterbox~)
       // the frame the viewer was left at, once it has been closed back into here; else its first as the station makes
-      // it (ChatFiles.kt ChatVideo: the station's poster); else the black alone
+      // it (ChatFiles.kt ChatVideo: the station's poster), or as drawn here where the station made none and it is
+      // small; else the black alone
       let still = match pv_frames.get(thumb) {
         Some((k, _)) => k
-        None => (src.poster)(here.station, owner_of(here, a), base_name(a.path))
+        None =>
+          match (src.poster)(here.station, owner_of(here, a), base_name(a.path)) {
+            "!" => first_frame(c, src, here.station, owner_of(here, a), a, thumb)
+            k => k
+          }
       }
       c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=0x000000FFL, id=open, opacity=thumb_shows(thumb), fn() {
         if still != "" && still != "!" {

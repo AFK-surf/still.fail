@@ -324,6 +324,50 @@ test "a video closed before its first frame shows: back into its thumbnail with 
 }
 
 ///|
+/// A chat's video of `size` bytes the station made no poster of, alone on a page.
+fn posterless(size : Double) -> @ui.Tester {
+  reset()
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, _) { "!" } }
+  let a : Attachment = {
+    name: "录屏.mp4",
+    path: "uploads/fx/录屏.mp4",
+    size,
+    width: 1280.0,
+    height: 720.0,
+    thumbhash: "",
+    owner: "s-c1",
+  }
+  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
+  let t = @ui.Tester::new(fn(c) { file_item(c, src, here, a, 300.0) }, w=390.0, h=844.0)
+  t.draw()
+  t
+}
+
+///|
+test "a small video the station made no poster of: its first frame drawn in the chat, by a player of it out of sight" {
+  let t = posterless(big_file / 8.0)
+  // a player of it opened, never placed (no hole), its frame at 0 asked for
+  assert_true(t.views().iter().any(fn(l) { l.has_prefix("open 1 1 ") }))
+  assert_true(t.views().contains("control 1 21 0"))
+  assert_eq(t.holes().length(), 0)
+  // grabbed: in the box, covering it; the player let go
+  assert_true(
+    t.view_said("{\"still\":{\"view\":1},\"b\":\"\{hex_bytes(fixture_file_png("演示录屏.mp4"))}\"}"),
+  )
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
+  assert_true(t.views().contains("close 1"))
+  assert_true(t.drawn_images().iter().any(fn(i) { (i[2] - 300.0).abs() < 0.5 }))
+}
+
+///|
+test "a big video the station made no poster of: the black alone, nothing read for its frame" {
+  let t = posterless(big_file * 2.0)
+  assert_true(!t.views().iter().any(fn(l) { l.has_prefix("open ") }))
+  assert_eq(t.drawn_images().length(), 0)
+}
+
+///|
 test "a PDF's pages, drawn by the host" {
   let t = preview_tester("pdf")
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("pdf ") }))
