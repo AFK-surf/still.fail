@@ -137,6 +137,24 @@ test("a_hidden_tab_does_not_stop_animation_in_another_visible_tab", async () => 
   assert.equal(v.messages[1].said, true);
 });
 
+test("a_message_shown_whole_on_a_page_in_front_is_read_its_end_shown_or_not", async () => {
+  const host = new FakeHost();
+  const attend = await run(Attend.load(host));
+  const v = chat(1, false, [[1, 0, false], [2, 0, false], [3, 0, false], [4, 0, false]]);
+  // up to 3 shown whole, the end not: read up to 3
+  attend.focus(1, focus({ visible: true, focused: true, chat: { station: "ws/st", thread: 7, end: false, seen: 3 } }));
+  assert.deepEqual(attend.chat("ws/st", null, v).due, [{ read: { thread: 7, seq: 3 } }]);
+  assert.deepEqual(attend.chat("ws/st", null, v).due, []);
+  // not in front: no further
+  attend.focus(1, focus({ focused: false, chat: { station: "ws/st", thread: 7, end: false, seen: 4 } }));
+  assert.deepEqual(attend.chat("ws/st", null, chat(3, false, [[1, 0, false], [2, 0, false], [3, 0, false], [4, 0, false]])).due, []);
+  attend.focus(1, focus({ focused: true }));
+  assert.deepEqual(attend.chat("ws/st", null, chat(3, false, [[1, 0, false], [2, 0, false], [3, 0, false], [4, 0, false]])).due, [{ read: { thread: 7, seq: 4 } }]);
+  // a seen past what the chat has: up to its newest; one under what is read: nothing
+  attend.focus(1, focus({ chat: { station: "ws/st", thread: 7, end: false, seen: 2 } }));
+  assert.deepEqual(attend.chat("ws/st", null, chat(4, false, [[1, 0, false], [2, 0, false], [3, 0, false], [4, 0, false]])).due, []);
+});
+
 test("a_chat_is_read_while_its_end_shows_on_a_page_in_front", async () => {
   const host = new FakeHost();
   const attend = await run(Attend.load(host));

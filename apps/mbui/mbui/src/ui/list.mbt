@@ -849,6 +849,8 @@ pub(all) struct ListInfo {
   /// how far the last row's bottom is below the view's (1e9 when the last
   /// row was not laid out)
   below : Double
+  /// the view's height (what of the rows shows at once)
+  height : Double
   /// gliding to its end (list_to_end)
   gliding : Bool
   /// a row followed from its top (Ctx::list_follow_from), not let go by the reader since
@@ -870,6 +872,7 @@ pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
         last: st.vis_last,
         at_end: st.at_end,
         below: st.below,
+        height: st.vp_h,
         gliding: st.glide,
         following_row: st.follow_item >= 0,
         rest: st.own_rest(),

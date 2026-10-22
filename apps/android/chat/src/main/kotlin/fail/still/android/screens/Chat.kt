@@ -896,6 +896,21 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val lastRowKey = rememberUpdatedState(rows.lastOrNull()?.id)
     val lastLaidOut by remember(list) { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.key == lastRowKey.value } }
     val seen = !short && endInView(list) && lastLaidOut && follow.placed && resumed.isAtLeast(Lifecycle.State.RESUMED)
+    // The newest message shown whole between the bar and the composer (the list's padding), the most of this visit:
+    // read up to there, its end shown or not (client/core-ts/src/attend.ts `seen`).
+    val wholeNow by remember(list) {
+        derivedStateOf {
+            val info = list.layoutInfo
+            val bottom = info.viewportEndOffset - info.afterContentPadding
+            info.visibleItemsInfo.filter { it.offset >= 0 && it.offset + it.size <= bottom }
+                .mapNotNull { (rowsNow.getOrNull(it.index) as? Entry.Said)?.m?.seq }.maxOrNull()
+        }
+    }
+    var seenWhole by remember(station, thread?.id) { mutableStateOf<Long?>(null) }
+    LaunchedEffect(wholeNow, follow.placed, resumed) {
+        val w = wholeNow ?: return@LaunchedEffect
+        if (follow.placed && resumed.isAtLeast(Lifecycle.State.RESUMED) && (seenWhole ?: -1L) < w) seenWhole = w
+    }
     // Only what is watched comes out of an avatar: the page in front, the reader at the end; else all shows at once.
     val watched = follow.on && resumed.isAtLeast(Lifecycle.State.RESUMED)
     SideEffect { motion.watched = watched; motion.start() }
@@ -905,9 +920,10 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // which notices are left out follow there (client/core-ts/src/attend.ts).
     val session = (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
     val shownAs = { end: Boolean? -> buildJsonObject {
-        put("station", station); put("thread", thread?.id); put("session", session); end?.let { put("end", it) }
+        put("station", station); put("thread", thread?.id); put("session", session)
+        end?.let { put("end", it); seenWhole?.let { w -> put("seen", w) } }
     } }
-    LaunchedEffect(station, thread?.id, session, seen) { app.core.focus(buildJsonObject { put("chat", shownAs(seen)) }) }
+    LaunchedEffect(station, thread?.id, session, seen, seenWhole) { app.core.focus(buildJsonObject { put("chat", shownAs(seen)) }) }
     DisposableEffect(station, thread?.id, session) { onDispose { app.core.focus(buildJsonObject { put("left", shownAs(null)) }) } }
 
     // A new chat's first words on their way (ChatHost.kt): the list comes up after them, out of the composer's top edge.

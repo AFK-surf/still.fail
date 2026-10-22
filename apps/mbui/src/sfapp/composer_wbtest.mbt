@@ -652,19 +652,22 @@ test "at its end, rows that come: the core told the end is not in view while the
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let base = fixture("chat")
-  // what the page tells the core of the chat shown: its `end` each time
+  // what the page tells the core of the chat shown: its `end` each time, and each time what it says
   let ends : Array[Bool] = []
+  let told : Array[String] = []
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
       if name == "client.focus" {
         match field(Some(params), "chat") {
-          Some(chat) =>
+          Some(chat) => {
+            told.push(chat.stringify())
             match field(Some(chat), "end") {
               Some(True) => ends.push(true)
               Some(False) => ends.push(false)
               _ => ()
             }
+          }
           None => ()
         }
       }
@@ -696,9 +699,9 @@ test "at its end, rows that come: the core told the end is not in view while the
   assert_true(ends.contains(false))
   assert_eq(ends[ends.length() - 1], true)
   let mut k = 1
-  while k < ends.length() {
-    // (each said as it changes)
-    assert_true(ends[k] != ends[k - 1])
+  while k < told.length() {
+    // (each said as it changes: the end, or the message seen whole)
+    assert_true(told[k] != told[k - 1])
     k += 1
   }
   fix_clock.val = None
