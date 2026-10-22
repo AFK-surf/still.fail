@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Whether a renderer draws lines (scene.mbt's kind 10) as they are: the picture of src/kitdemo/dl_print_wbtest.mbt's
+# Whether a renderer draws lines (scene.mbt's kind 10) as they are: the picture of src/kitdemo/gallery/dl_print_wbtest.mbt's
 # lines_shown (160 by 160 at scale 2, on white) drawn by it. Its horizontal line is the same as the rounded rect of the
 # same shape drawn 40 under it (each pixel's channels within TOL), its slanted line and its arc are inked along their
 # middles and not off them, its half drawn line ends halfway, and its box turned 30° clockwise about its top left is

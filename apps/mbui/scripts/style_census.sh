@@ -7,7 +7,7 @@
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
-out=$(moon test --target js src/sfapp/style_census_wbtest.mbt ${UPDATE:+--update} 2>&1)
+out=$(moon_test_native src/sfapp/style_census_wbtest.mbt ${UPDATE:+--update} 2>&1)
 code=$?
 echo "$out" | sed -n 's/^census \([a-z]*\) \([0-9]*\): .*/\1 \2/p'
 echo

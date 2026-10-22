@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """A real host's run (MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1: TEXTREC, DRAWHASH, INPUT and ENV lines on its log) made a test of
 whether a Tester over the host's kept text draws, frame for frame, what the host drew (the host's contract,
-docs/determinism.md): the run kept as src/kitdemo/textrec_NAME.mbt, its test src/kitdemo/textrec_NAME_wbtest.mbt, and
-src/kitdemo/textrec_runs.mbt naming every kept run (what MBUI_TEXTCHECK=NAME asks the host's text system again: the
-text's contract, src/kitdemo/textcheck.mbt).
+docs/determinism.md): the run kept as src/kitdemo/gallery/textrec_NAME.mbt, its test src/kitdemo/gallery/textrec_NAME_wbtest.mbt, and
+src/kitdemo/gallery/textrec_runs.mbt naming every kept run (what MBUI_TEXTCHECK=NAME asks the host's text system again: the
+text's contract, src/kitdemo/gallery/textcheck.mbt).
 
   scripts/textrec_test.py [--keep] LOG NAME PAGE W H [PLATFORM]    --keep: listed in textrec_runs.txt (to be committed)
   scripts/textrec_test.py --runs        textrec_runs.mbt made again from textrec_runs.txt
@@ -18,14 +18,14 @@ import re
 import os
 import sys
 
-KIT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "kitdemo")
+KIT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "kitdemo", "gallery")
 
 
 RUNS_LIST = os.path.join(KIT, "textrec_runs.txt")
 
 
 def kept_names():
-    """The runs kept in the repository: src/kitdemo/textrec_runs.txt, a name a line (an explicit list, not whatever
+    """The runs kept in the repository: src/kitdemo/gallery/textrec_runs.txt, a name a line (an explicit list, not whatever
     textrec_*.mbt a working directory happens to hold: a CI run's own ci_HOST, another machine's leftovers)."""
     if not os.path.exists(RUNS_LIST):
         return []
@@ -43,7 +43,7 @@ def runs_text(names):
 
 
 def runs_file(add=None):
-    """src/kitdemo/textrec_runs.mbt from the list, `add` put in the list first (a run kept to be committed)."""
+    """src/kitdemo/gallery/textrec_runs.mbt from the list, `add` put in the list first (a run kept to be committed)."""
     names = kept_names()
     if add and add not in names:
         names = sorted(names + [add])
@@ -58,14 +58,14 @@ def check():
     faults = []
     names = kept_names()
     if open(os.path.join(KIT, "textrec_runs.mbt"), encoding="utf-8").read() != runs_text(names):
-        faults.append("src/kitdemo/textrec_runs.mbt is not what textrec_runs.txt makes (scripts/textrec_test.py --runs)")
+        faults.append("src/kitdemo/gallery/textrec_runs.mbt is not what textrec_runs.txt makes (scripts/textrec_test.py --runs)")
     for n in names:
         for f in (f"textrec_{n}.mbt", f"textrec_{n}_wbtest.mbt"):
             if not os.path.exists(os.path.join(KIT, f)):
-                faults.append(f"textrec_runs.txt lists {n}, but src/kitdemo/{f} is not there")
+                faults.append(f"textrec_runs.txt lists {n}, but src/kitdemo/gallery/{f} is not there")
     try:
         import subprocess
-        tracked = subprocess.run(["git", "ls-files", "src/kitdemo/textrec_*.mbt"], cwd=os.path.join(KIT, "..", ".."),
+        tracked = subprocess.run(["git", "ls-files", "src/kitdemo/gallery/textrec_*.mbt"], cwd=os.path.join(KIT, "..", ".."),
                                  capture_output=True, text=True, check=True).stdout.split()
         for f in tracked:
             b = os.path.basename(f)

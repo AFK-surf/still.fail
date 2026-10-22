@@ -28,3 +28,24 @@ pkg_build() {
 gallery_pictures() {
   [ -f out/pictures/big4.heic ] || swift "$(dirname "${BASH_SOURCE[0]}")/test_images.swift" --gallery out/pictures
 }
+
+# The native tests built as the apps are: --release, moonc's C split and compiled in parallel by scripts/mbc.py (its
+# shim moon's cc on PATH), the units made of the same inputs (by content) kept in MBC_STORE and compiled once for every
+# test that has them. `native_tests [DIR]` (the module's directory, the current one by default) sets that up; then
+# `moon test $NATIVE …`. clang where there is one (MBC_REAL_CC says otherwise; Windows: the cl on PATH); without ThinLTO
+# unless MBC_LTO says.
+native_tests() {
+  local root=${1:-$PWD}
+  unset MOON_CC
+  if [ "$(uname -s | cut -c1-5)" != MINGW ] && [ "$(uname -s | cut -c1-4)" != MSYS ]; then
+    export MBC_REAL_CC=${MBC_REAL_CC:-$(command -v clang || command -v cc)}
+  fi
+  export MBC_LTO=${MBC_LTO:-0}
+  export MBC_STORE=${MBC_STORE:-$root/_build/native/release/mbc-store}
+  PATH="$(python3 "$(dirname "${BASH_SOURCE[0]}")/mbc.py" shim "$root/_build/mbc-bin"):$PATH"
+  NATIVE="--target native --release"
+}
+
+# `moon_test_native ARGS…`: `moon test ARGS…` on native as native_tests sets it up, in the current module's directory
+# (in a subshell: nothing else of the script's environment changed).
+moon_test_native() { ( native_tests "$PWD"; moon test $NATIVE "$@" ); }

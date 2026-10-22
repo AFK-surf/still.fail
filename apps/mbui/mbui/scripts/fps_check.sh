@@ -9,7 +9,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$D/.."
 code=0
 for fps in ${FPS:-60 120 24 7}; do
-  out=$(MBUI_TEST_FPS=$fps moon test --target js -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/md -p mbui/kitdemo -p mbui/effectdemo 2>&1 | grep -v '^TDUMP')
+  out=$(MBUI_TEST_FPS=$fps moon_test_native -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/md -p mbui/kitdemo/gallery -p mbui/effectdemo 2>&1 | grep -v '^TDUMP')
   st=$?
   echo "$fps fps: $(echo "$out" | grep -a '^Total tests' | tail -1)"
   if [ $st != 0 ]; then

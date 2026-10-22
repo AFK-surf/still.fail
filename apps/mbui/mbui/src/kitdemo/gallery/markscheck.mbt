@@ -72,7 +72,7 @@ fn marks_base64(data : Bytes) -> String {
 
 ///|
 /// MBUI_MARKS: the drawing asked for, then, once the host has made it, the PNG on the log and the app's end.
-fn marks_run(c : @ui.Ctx, marks : String, image : String) -> Unit {
+pub fn marks_run(c : @ui.Ctx, marks : String, image : String) -> Unit {
   if !marks_started.val {
     marks_started.val = true
     match @hostapi.draw_marks(marks_bytes_of(image), @hostapi.from_base64(marks)) {
