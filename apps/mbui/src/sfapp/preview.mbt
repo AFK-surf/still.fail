@@ -364,6 +364,91 @@ let pv_frames_n : Ref[Int] = { val: 0 }
 let kept_frame_side : Double = 640.0
 
 ///|
+/// A chat's video the station made no poster of (one from before posters, or with neither QuickLook nor ffmpeg), small
+/// enough to read for it (ChatFiles.kt ChatVideo: BIG_FILE): its first frame drawn here. A player of it made out of
+/// sight (never placed), its frame at 0 grabbed, then let go; what it read kept with the chat by the core, as the
+/// viewer's reads are. By the thumbnail's id: the player while it grabs, and the frame's image ("" while it comes,
+/// "!" none to be had).
+priv struct FirstFrame {
+  mut view : @ui.NativeView?
+  mut picture : String
+}
+
+///|
+let pv_first : Map[String, FirstFrame] = Map([])
+
+///|
+/// The first frame of chat video `a` (on `station`, kept by session `key`; `id` its thumbnail's), drawn here where the
+/// station made no poster: an image's key once here, "" while it comes or where it is too big to read for it, "!"
+/// when it could not be.
+fn first_frame(c : @ui.Ctx, src : Source, station : String, key : String, a : Attachment, id : String) -> String {
+  match pv_first.get(id) {
+    Some(f) => {
+      match f.view {
+        Some(n) => {
+          let got = match n.grabbed() {
+            Some(png) => Some(png)
+            // (no player here, or one that cannot read it: none to be had)
+            None => if n.state() == -1 && !n.grabbing() { Some(b"") } else { None }
+          }
+          match got {
+            Some(png) => {
+              f.view = None
+              if png.length() > 0 {
+                let k = "mem:pv-first/\{@ui.stable_hash(id)}/\{id.length()}/\{a.name}"
+                @ui.add_image(k, png)
+                f.picture = k
+              } else {
+                f.picture = "!"
+              }
+              c.tell("pv-first-close/" + id, fn() { n.close() })
+            }
+            None => ()
+          }
+        }
+        None => ()
+      }
+      f.picture
+    }
+    None => {
+      if a.size <= 0.0 || a.size > big_file {
+        return ""
+      }
+      let f : FirstFrame = { view: None, picture: "" }
+      pv_first[id] = f
+      let (_, mime, _) = preview_kind(a.name)
+      let n = @ui.NativeView::video(mime, fn(offset, length, answer) {
+        let p : Map[String, Json] = {
+          "station": Json::string(station),
+          "key": Json::string(key),
+          "name": Json::string(base_name(a.path)),
+          "offset": Json::number(offset),
+          "length": Json::number(length.to_double()),
+        }
+        chat_keep(p, a.size)
+        (src.read_bytes)("station.file.part", Json::object(p), fn(r) {
+          match r {
+            Ok((j, bytes)) =>
+              answer(bytes, match field(Some(j), "total") {
+                Some(Number(t, ..)) => t
+                _ => -1.0
+              })
+            Err(_) => answer(b"", -2.0)
+          }
+        })
+      })
+      if !n.here() {
+        f.picture = "!"
+        return "!"
+      }
+      f.view = Some(n)
+      c.tell("pv-first/" + id, fn() { n.grab_frame(0.0) })
+      ""
+    }
+  }
+}
+
+///|
 /// The thumbnail hidden while the viewer is its picture (one picture on the screen, never two), by its file's id.
 let pv_hidden : Ref[String] = { val: "" }
 
@@ -2246,7 +2331,12 @@ fn Viewer::still(self : Viewer, src : Source) -> String {
     None => ()
   }
   match (src.poster)(self.station, self.key, self.name) {
-    "!" => ""
+    // none made by the station: the first frame the chat drew of it, if it did
+    "!" =>
+      match pv_first.get(self.id()) {
+        Some(f) if f.picture != "!" => f.picture
+        _ => ""
+      }
     k => k
   }
 }
