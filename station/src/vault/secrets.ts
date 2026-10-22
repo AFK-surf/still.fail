@@ -10,6 +10,7 @@ import { threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Hub } from "../sessions/hub.ts";
+import { hold } from "../updates/holds.ts";
 import { type Deny, type Grant, type Listing, type Mode, type Request, type Scope, TAG, signedOk, signerOf } from "./crypto.ts";
 import { type Held, Keeper } from "./keeper.ts";
 import { PLAIN, type PlainStore } from "./plain.ts";
@@ -415,9 +416,11 @@ export class Secrets {
     const env = a.env ?? listing?.env;
     // The station's environment, without what would let the command act as the station or its agents' accounts.
     const base = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !/^(STILLFAIL_|EMBER_|ANTHROPIC_|CLAUDE_|OPENAI_|CODEX_)/.test(e[0])));
+    // The station does not update itself meanwhile: the proxy or ssh-agent the command uses is this process's.
+    const letGo = hold();
     const ran = await runWith(held, { command: a.command, cwd: a.cwd, ...(env ? { env } : {}), timeoutMs: Math.min(a.timeoutMs ?? RUN_MS, 3600_000) }, this.proxy, base, (detail) =>
       this.#audit(held.request, "use", detail),
-    );
+    ).finally(letGo);
     this.#audit(held.request, "run", a.command.slice(0, 500));
     return said(ran);
   }
