@@ -41,6 +41,11 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
       Some(found) => found
       None => continue
     }
+    // in a list that lies in the container: the list's rows scroll under its edges, so where one is from the
+    // container's corner is not fixed (a sheet's content scrolling in it, cut by its foot)
+    if c.list_between(i, p) {
+      continue
+    }
     // the container's own ground drawn on (the same fill, no edge: a grouped row's square patch over its rounded
     // corners): its shape, not something in its corner
     let gn = c.nodes[ground]
@@ -167,6 +172,19 @@ fn Ctx::centred_in(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
   }
   (y, x)
 }
+///|
+/// Whether a list lies between node `i` and its ancestor `p` (`i` one of its rows' or in one).
+fn Ctx::list_between(self : Ctx, i : Int, p : Int) -> Bool {
+  let mut q = self.nodes[i].parent
+  while q >= 0 && q != p {
+    if self.nodes[q].kind == kind_list {
+      return true
+    }
+    q = self.nodes[q].parent
+  }
+  false
+}
+
 ///|
 /// The rounded container node `i` lies in, as the corner rule sees it: the nearest round it that shows (a ground, an
 /// edge, glass, or what it cuts) with a corner of 6 or more, its own or one laid under it as a layer of the same size

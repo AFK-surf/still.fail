@@ -187,25 +187,39 @@ test "a call is drawn by what it is" {
 }
 
 ///|
-/// What is left under a fitted sheet's last row (`last` its words): the sheet's bottom less the rest of the row (44
-/// high at least, its words centred: Android InfoRow) and the card's INFO_PAD (6) under it: the sheet's own padding.
-fn fitted_foot(t : @ui.Tester, last : String) -> Double raise {
-  sheet_rested(t, "decide-sheet")
-  let (_, sy, _, sh) = t.get(@ui.Dialog).rect
-  let (_, ty, _, th) = t.rect_of(last).unwrap()
-  sy + sh - (ty + th) - (dmax(44.0, th + 8.0) - th) / 2.0 - 6.0
-}
-
-///|
-test "a fitted sheet is as tall as what it shows: under its last card its padding as Android's (30 the chat's, 24 the agent's)" {
+test "the chat's sheet and an agent's card as tall as Android reckons what they show (ChatInfo.kt, AgentSheet.kt fit)" {
+  // an agent with turns, a job, a note besides a quota's: its head 22 + 52, its lines and figures 72 + 76, the note 8 +
+  // 20, 12, four rows of 40, the foot 24
+  let a : Json = {
+    "jobs": [{ "id": "j" }],
+    "turns": [{ "text": "3 步" }],
+    "attention": [{ "kind": "quota" }, { "kind": "failed" }],
+  }
+  assert_eq(agent_sheet_fit(Some(a)), 446.0)
+  // two agents (56 each), 置顶 and Slack and archive and the two always (40 each), its public links (may, two: 40 each
+  // and 10), the head 22 + 84 and the foot 10 + 30
+  let chat : Json = {
+    "agents": [{ "id": 1 }, { "id": 2 }],
+    "pinned": true,
+    "slackUrl": "https://slack.example/x",
+    "publish": { "may": true, "links": [{ "id": "a" }, { "id": "b" }] },
+  }
+  assert_eq(chat_info_fit(Some(chat), None), 588.0)
+  // the sheets drawn that tall over the navigation bar, at rest
   let calls : Array[Made] = []
-  let t = decide_core(calls, "chat-info")
-  // (its last card the public links': the last of them, Publish.kt PublishList)
-  let foot = fitted_foot(t, "2 天前 · Bob")
-  assert_true((foot - chat_info_foot).abs() < 0.5, msg="under the chat's sheet: \{foot}")
-  let t = decide_core(calls, "chat-agent")
-  let foot = fitted_foot(t, "服务在线：web · 在盯着：CI")
-  assert_true((foot - agent_sheet_foot).abs() < 0.5, msg="under the agent's sheet: \{foot}")
+  for mode in ["chat-info", "chat-agent"] {
+    let t = decide_core(calls, mode)
+    sheet_rested(t, "decide-sheet")
+    let (_, _, _, sh) = t.get(@ui.Dialog).rect
+    let chat = (fixture(mode).topic)("chat", chat_params({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" })).value
+    let want = if mode == "chat-info" {
+      let (view, _, _) = view_of_chat(fixture(mode), { station: "ws1/st1", session: "s-c1", title: "", station_name: "" })
+      chat_info_fit(chat, view)
+    } else {
+      agent_sheet_fit(agent_json(chat, "s-c1"))
+    }
+    assert_true((sh - want - nav_foot()).abs() < 0.5, msg="\{mode}: \{sh} for \{want}")
+  }
 }
 
 ///|
