@@ -799,6 +799,26 @@ priv struct Strip {
 let pv_strip : Strip = { leaving: None, pinned: None, near: Map([]) }
 
 ///|
+/// The images beside one asked of the core (`imageNear`), each by its params: let go with the chat they are of
+/// (chat_left), as they hold its thread there.
+let near_asked : Map[String, Map[String, Json]] = {}
+
+///|
+/// The images beside those of `station`'s chats let go (a chat of it left).
+fn near_left(src : Source, station : String) -> Unit {
+  let gone = []
+  near_asked.each(fn(k, p) {
+    if p.get("station") == Some(Json::string(station)) {
+      gone.push(k)
+      (src.leave)("imageNear", p)
+    }
+  })
+  for k in gone {
+    near_asked.remove(k)
+  }
+}
+
+///|
 /// The viewer gone at once (the one open and the one going), what it holds let go (its player stopped, its page and
 /// PDF closed).
 fn close_now() -> Unit {
@@ -2037,6 +2057,7 @@ fn Viewer::near(self : Viewer, src : Source) -> (Viewer?, Viewer?) {
         Some(th) => p["thread"] = Json::number(th)
         None => p["session"] = Json::string(session)
       }
+      near_asked[Json::object(p).stringify()] = p
       let told = (src.topic)("imageNear", p).value
       let side = fn(k : String) -> Viewer? {
         match field(told, k) {

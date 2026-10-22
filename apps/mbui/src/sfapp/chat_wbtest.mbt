@@ -14,8 +14,9 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
   // its people in the bar lettered as it calls them: the viewer 「你」, not their name (Parts.kt PeopleStack)
-  assert_true(t.find("你") is Some((_, y)) && y < 100.0)
-  assert_true(t.find("林") is None)
+  let bar = t.words().filter(fn(w) { w.2 < 100.0 }).map(fn(w) { w.0 })
+  assert_true(bar.contains("你"))
+  assert_true(!bar.contains("林"))
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   assert_true(y < 844.0 - 110.0 && y > 500.0)
@@ -262,5 +263,28 @@ test "a long title has what is left beside what follows it, which keeps its own 
   assert_eq(ax, 390.0 - 16.0 - 34.0 - 8.0 - 60.0)
   // the title cut to what is left, 8 before it
   assert_true(tx + tw <= ax - 8.0 + 0.5)
-  assert_true(t.drawlist().contains("…"))
+  assert_true(t.lines_of("端到端")[0].has_suffix("…"))
+}
+
+///|
+test "a chat left lets go of all that holds its thread at the core: its view and its jobs (Chat.kt's rememberTopic)" {
+  reset()
+  let base = fixture("chat")
+  let left : Array[(String, String)] = []
+  let src : Source = {
+    ..base,
+    leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
+  }
+  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(left, [])
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  let held = Json::object(chat_params(r)).stringify()
+  // (else the core keeps the thread's window as first read: the chat opened again where it was first opened, not
+  // where it was left)
+  assert_true(left.contains(("chat", held)))
+  assert_true(left.contains(("chatJobs", held)))
 }
