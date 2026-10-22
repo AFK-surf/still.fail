@@ -10,9 +10,11 @@
 // (A list of the kinds by name, as .github/cache_prune.py had, missed each new one: on 2026-10-22 mbui-apk-<sha>,
 // android-lint-main-<sha>, android-build-main-<sha> and the mbui-linux-store-… ones were 4 GB of the 22.)
 // setup-gradle's parts of a Gradle home (gradle-transforms-v1-<hash>, gradle-dependencies-v1-…: by their content,
-// each read as a home that names it is restored) are deleted when read 30 minutes or more before the last read of a
-// part of their kind on their ref: the homes in use read theirs each run, the others are read no more (a day's were
-// 6 GB on 2026-10-22, when the rule was a day since they were read; at worst a job's Gradle starts cold).
+// each read as a home that names it is restored) are deleted when read 30 minutes or more before the earliest last
+// read of the homes kept on their ref (each job's newest): a part one of them names is read each time it is (a day's
+// were 6 GB on 2026-10-22, when the rule was a day since they were read). Measured against the last read of a part
+// of their kind instead, those of a job run less often went: check-android's home then named parts no longer there,
+// its Gradle cold (2026-10-22, 39752751241).
 
 ///|
 struct Cache {
@@ -162,7 +164,10 @@ fn cache_prune(args : Array[String]) -> Int {
     })
   }
   caches.sort_by(fn(a, b) { b.created.compare(a.created) })
-  // each kind of part's last read on a ref: the parts a home in use names are read with it, each run
+  // the homes kept (each job's newest) on each ref, and the earliest of their last reads: a part one of them names is
+  // read with it, so read since then (less a while); each kind of part's last read too, for a ref with no home
+  let homes_read : Map[String, Double] = Map([])
+  let home_seen : Map[String, Bool] = Map([])
   let last_read : Map[String, Double] = Map([])
   for c in caches {
     if is_gradle_part(c.key) {
@@ -170,13 +175,26 @@ fn cache_prune(args : Array[String]) -> Int {
       if last_read.get(s).unwrap_or(0.0) < c.accessed {
         last_read[s] = c.accessed
       }
+    } else if c.key.has_prefix("gradle-home-") {
+      let slot = kind_of(c.key).unwrap_or(c.key) + "\n" + c.ref_
+      if !home_seen.contains(slot) {
+        home_seen[slot] = true
+        match homes_read.get(c.ref_) {
+          Some(t) if t <= c.accessed => ()
+          _ => homes_read[c.ref_] = c.accessed
+        }
+      }
     }
   }
   let newest : Map[String, Bool] = Map([])
   let gone : Array[Cache] = []
   for c in caches {
     if is_gradle_part(c.key) {
-      if last_read.get(part_slot(c)).unwrap_or(c.accessed) - c.accessed > stale_parts_s {
+      let since = match homes_read.get(c.ref_) {
+        Some(t) => t
+        None => last_read.get(part_slot(c)).unwrap_or(c.accessed)
+      }
+      if since - c.accessed > stale_parts_s {
         gone.push(c)
       }
       continue
