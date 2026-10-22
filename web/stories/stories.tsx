@@ -426,23 +426,24 @@ const letters: DemoExtension = {
     const start = Date.now() - 6 * 60_000;
     const at = (i: number) => start + i * 50_000;
     const link = "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e";
-    const theirs = { name: "「BFT 备份尺寸分析」的 agent", from: link, maker: ANTHROPIC };
+    const theirs = (chat: string, from: string) => ({ name: `「${chat}」的 agent`, from, maker: ANTHROPIC });
+    const mbui = "https://app.still.fail/o/w/s/ember%3Ac-06ffb79643";
     const ours = { name: "Opus 5.5", maker: ANTHROPIC, runtime: "claude" as const };
-    const letter = (i: number, way: "in" | "out", text: string): ChatMessage => ({
+    const letter = (i: number, way: "in" | "out", text: string, by = theirs("BFT 备份尺寸分析", link)): ChatMessage => ({
       seq: 100 + i, thread: Number(t.thread), ts: `${at(i) / 1000}`, attachments: [], quotes: [], createdAt: at(i), waiting: false, time: { createdAt: stamp(at(i)) },
-      authorKind: "agent", author: way === "in" ? "peer/ember:c-9" : "ember:c-1", text, md: markdown(text), mine: false, system: false, by: way === "in" ? theirs : ours, way,
+      authorKind: "agent", author: way === "in" ? "peer/ember:c-9" : "ember:c-1", text, md: markdown(text), mine: false, system: false, by: way === "in" ? by : ours, way,
     });
     return {
       title: "备份改成 zstd",
       whole: true,
       chats: [
+        { title: "接手监督 mbui", link: mbui, letters: [
+          letter(3, "in", "测试版 **4521** 已出，你这边的 #1108 等它跑完再合", theirs("接手监督 mbui", mbui)),
+        ] },
         { title: "BFT 备份尺寸分析", link, letters: [
           letter(0, "in", "用户让精简备份并改用 zstd。我没有 host2 的权限，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下"),
           letter(1, "out", "已替换，**今晚 02:00** 那份会按新脚本出"),
           letter(2, "in", "补充一点：macOS 自带的 `/usr/bin/tar` 能直接解 zstd，guest 里不用另装"),
-        ] },
-        { title: "接手监督 mbui", link: "https://app.still.fail/o/w/s/ember%3Ac-06ffb79643", letters: [
-          letter(3, "in", "测试版 **4521** 已出，你这边的 #1108 等它跑完再合"),
         ] },
       ],
     };

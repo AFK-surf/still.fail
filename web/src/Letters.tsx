@@ -16,7 +16,8 @@ export function Letters({ station, thread, keeper }: { station: string; thread: 
   if (!view || (view.chats.length === 0 && !view.whole)) return <Waiting shape="messages" fill />;
   if (view.chats.length === 0) return <Empty><p>{t("web-main.letters.none")}</p></Empty>;
   return (
-    <div className={`${css.letters} ${chatCss.chatMessages}`}>
+    // Narrow wherever it shows (a tab beside the chat, a sheet): each name in line with its picture, as the phone's chat.
+    <div className={`${css.letters} ${chatCss.chatMessages} ${chatCss.inlineHeads}`}>
       {view.chats.map((c) => (
         <section key={c.link ?? c.title} className={css.lettersChat} aria-label={c.title}>
           <div className={css.lettersHead}>
