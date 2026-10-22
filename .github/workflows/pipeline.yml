@@ -391,12 +391,20 @@ jobs:
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' && needs.plan.outputs.android_lint == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # (in three, side by side: each module's lint is one long task, chat's 23 s, settings' 19 s, shared's 15 s on
+    # Studio, together 228-331 s on one runner, 2026-10-22)
+    name: check-android-lint (${{ matrix.modules }})
+    strategy:
+      fail-fast: false
+      matrix:
+        modules: [chat, settings-app, shared-drive-core]
     # Its lint (apps/android/lint.xml: only checks that are errors), for a change lint reads (plan: android_lint). Not
     # waited for by what releases (put, changelog): the longest part of a run (4 of its 5 minutes, 2026-10-18), and an
     # error it finds fails the run and holds deployed/beta (done), so the next run lints it again until it is fixed.
     env:
       STILLFAIL_CHECK_PART: android
       STILLFAIL_ANDROID: lint
+      STILLFAIL_LINT_MODULES: ${{ matrix.modules }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -424,8 +432,10 @@ jobs:
             apps/android/settings/build
             apps/android/chat/build
             apps/android/drive/build
-          key: android-lint-${{ github.ref_name }}-${{ github.sha }}
+          key: android-lint-${{ matrix.modules }}-${{ github.ref_name }}-${{ github.sha }}
           restore-keys: |
+            android-lint-${{ matrix.modules }}-${{ github.ref_name }}-
+            android-lint-${{ matrix.modules }}-main-
             android-lint-${{ github.ref_name }}-
             android-lint-main-
       - name: Full check (android, lint)

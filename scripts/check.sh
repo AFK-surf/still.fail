@@ -419,10 +419,13 @@ if [ $full = 1 ]; then
       # Lint only for a change it can find anything in (apps/android/lints.sh): not the core's or the shell's alone.
       build=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}"
       lint=""
-      if printf '%s\n' "$changed" | sh apps/android/lints.sh; then lint=":app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug"; fi
+      # (STILLFAIL_LINT_MODULES: only these modules', joined by - (CI's lint in shares side by side); unset, all six)
+      if printf '%s\n' "$changed" | sh apps/android/lints.sh; then
+        for m in $(echo "${STILLFAIL_LINT_MODULES:-app-core-shared-settings-chat-drive}" | tr - ' '); do lint="$lint :$m:lintDebug"; done
+      fi
       case "${STILLFAIL_ANDROID:-}" in
         build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=$build ;;
-        lint) what="Android: lint"; tasks=$lint ;;
+        lint) what="Android: lint${STILLFAIL_LINT_MODULES:+ ($STILLFAIL_LINT_MODULES)}"; tasks=$lint ;;
         *) what="Android${lint:+ (and lint)}${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks="$build $lint" ;;
       esac
       if [ -z "$lint" ] && [ "${STILLFAIL_ANDROID:-}" = lint ]; then step "Android: lint (nothing it reads changed)" true
