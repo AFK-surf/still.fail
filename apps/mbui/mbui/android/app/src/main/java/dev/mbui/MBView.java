@@ -284,7 +284,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                 m.clear();
                 if ((textMenuCan & 1) != 0) m.add(0, android.R.id.cut, 0, android.R.string.cut);
                 if ((textMenuCan & 2) != 0) m.add(0, android.R.id.copy, 1, android.R.string.copy);
-                if ((textMenuCan & 4) != 0) m.add(0, android.R.id.paste, 2, android.R.string.paste);
+                // nothing on the clipboard: no 粘贴 (as Compose's text toolbar offers it only then)
+                if ((textMenuCan & 4) != 0 && clipHasText()) m.add(0, android.R.id.paste, 2, android.R.string.paste);
                 if ((textMenuCan & 8) != 0) m.add(0, android.R.id.selectAll, 3, android.R.string.selectAll);
             }
 
@@ -311,6 +312,13 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                 out.set(textMenuRect);
             }
         }, android.view.ActionMode.TYPE_FLOATING);
+    }
+
+    /** Whether the clipboard holds something to paste (ClipboardManager.hasPrimaryClip). */
+    private boolean clipHasText() {
+        android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        return cm != null && cm.hasPrimaryClip();
     }
 
     void paste() {
