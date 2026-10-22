@@ -110,12 +110,12 @@ jobs:
           if [ "${{ steps.what.outputs.refs }}" = 1 ] || [ "${{ steps.text.outputs.lacks }}" = 1 ] || [ -n "$need" ]; then
             echo "on=1" >> "$GITHUB_OUTPUT"; else echo "on=0" >> "$GITHUB_OUTPUT"; fi
       # the screens a few at a time, an emulator each (Android's pictures, the text, the mbui app's pictures: each of
-      # those for six screens fits a job's ten minutes)
+      # those for three screens fits a job's ten minutes: Android's taken twice where they are new)
       - name: The screens shared out
         id: shards
         run: |
           names=$(cd client/fixtures/screens && ls *.json | sed 's/\.json$//' | grep -v -x allowed | LC_ALL=C sort)
-          echo "shards=$(echo $names | tr ' ' '\n' | paste -d' ' - - - - - - | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+          echo "shards=$(echo $names | tr ' ' '\n' | paste -d' ' - - - | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
       - name: The screens compared, every picture kept (no emulator)
         if: steps.emu.outputs.on == '0'
         run: bash apps/mbui/scripts/android-ref.sh ci

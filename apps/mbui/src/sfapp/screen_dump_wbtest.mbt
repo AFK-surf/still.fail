@@ -128,11 +128,22 @@ fn screen_dump(mode : String, at : Double) -> Json? {
         }
     }
   }
+  // what Android's test waits to see before its moment (ScreensRefTest `shows`): the two longest words drawn, their
+  // first six characters (a line cut short there all the same)
+  let seen : Array[String] = []
+  for w in t.words() {
+    let s = w.0.trim(chars=" \n").to_string()
+    if w.5 > 0.0 && s.length() >= 4 && !seen.contains(s) {
+      seen.push(s)
+    }
+  }
+  seen.sort_by(fn(a, b) { b.length().compare(a.length()) })
+  let shows = seen[:@cmp.minimum(2, seen.length())].to_array().map(fn(s) { Json::string(s.view(end_offset=@cmp.minimum(6, s.length())).to_owned()) })
   Some({
     "workspace": "ws1",
     "open": Json::array(open),
     "at": Json::number(at),
-    "shows": [],
+    "shows": Json::array(shows),
     "topics": Json::array(topics.map(fn(e) { { "topic": e.0, "value": e.1 } })),
     "calls": Json::array(calls),
   })
