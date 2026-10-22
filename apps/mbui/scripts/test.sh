@@ -23,15 +23,22 @@ for t in ${TARGETS:-native}; do
   if [ $t = native ]; then native_tests "$A"; mode=$NATIVE; fi
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
   # side: the flows in packages of their own for it, src/sfreplay/flows/*/)
+  # (each part in two halves, app-a app-b replay-a replay-b, CI's jobs side by side: a test program, its C split
+  # and compiled, is most of a part's time; app is both of app's, replay both of replay's. replay's halves: the core
+  # and sfreplay with every other flow, the other flows)
+  parts=" ${PARTS:-app replay} "
+  parts=${parts// app / app-a app-b }
+  parts=${parts// replay / replay-a replay-b }
   pkgs=""
-  if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
-    pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
-    pkgs="$pkgs -p stillfail/sfscreens"
-  fi
-  if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
-    pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
-    for g in src/sfreplay/flows/*/; do pkgs="$pkgs -p stillfail/sfreplay/flows/$(basename "$g")"; done
-  fi
+  if [[ $parts = *" app-a "* ]]; then pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings"; fi
+  if [[ $parts = *" app-b "* ]]; then pkgs="$pkgs -p stillfail/gallery -p stillfail/player -p stillfail/sfscreens"; fi
+  if [[ $parts = *" replay-a "* ]]; then pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"; fi
+  k=0
+  for g in src/sfreplay/flows/*/; do
+    half=$([ $((k % 2)) = 1 ] && echo a || echo b)
+    [[ $parts = *" replay-$half "* ]] && pkgs="$pkgs -p stillfail/sfreplay/flows/$(basename "$g")"
+    k=$((k + 1))
+  done
   moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
 done
