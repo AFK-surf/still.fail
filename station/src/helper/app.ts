@@ -22,7 +22,8 @@ import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeF
 import net from "node:net";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { wall } from "../ops/fibers.ts";
+import { Clock, Duration, Effect } from "effect";
+import { liveClock } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 
 export const HELPER_APP = "still.fail Helper.app";
@@ -77,19 +78,24 @@ export class HelperApp {
   readonly dir: string;
   readonly socket: string;
   readonly #launch: Launch;
+  /// How long the app is given to answer, to come back, and how often it is asked meanwhile (a TestClock in tests).
+  readonly #clock: Clock.Clock;
   #token: string | null;
   #starting: Promise<void> | null = null;
   #watch: net.Socket | null = null;
+  /// The watching connection being opened: whoever else wants the app watched meanwhile waits for it.
+  #opening: Promise<void> | null = null;
   #quitting = false;
   #revivals: number[] = [];
   readonly #backs = new Set<() => void>();
   readonly #listeners = new Set<(event: Record<string, unknown>) => void>();
 
-  constructor(options: { app: string; dir: string; launch?: Launch; onBack?: () => void }) {
+  constructor(options: { app: string; dir: string; launch?: Launch; onBack?: () => void; clock?: Clock.Clock }) {
     this.app = options.app;
     this.dir = options.dir;
     this.socket = join(options.dir, "helper.sock");
     this.#launch = options.launch ?? openApp;
+    this.#clock = options.clock ?? liveClock;
     if (options.onBack) this.#backs.add(options.onBack);
     try {
       this.#token = readFileSync(join(options.dir, "token"), "utf8").trim() || null;
@@ -132,12 +138,12 @@ export class HelperApp {
 
   /// Until the app answering is not process `pid` (it started itself again, for a grant), at most `ms`.
   async restarted(pid: number, ms = START_MS): Promise<void> {
-    const until = wall.now() + ms;
+    const until = this.#clock.currentTimeMillisUnsafe() + ms;
     for (;;) {
       const now = await this.pid();
       if (now !== null && now !== pid) return;
-      if (wall.now() > until) throw new Error("still.fail Helper did not start again");
-      await wall.sleep(100);
+      if (this.#clock.currentTimeMillisUnsafe() > until) throw new Error("still.fail Helper did not start again");
+      await this.#sleep(100);
     }
   }
 
@@ -150,10 +156,22 @@ export class HelperApp {
     return this.#starting;
   }
 
-  /// The app watched: its end (not asked for) starts it again.
-  async #watching() {
-    if (this.#watch !== null) return;
+  /// The app watched: its end (not asked for) starts it again. One connection at a time: the app coming back opened it
+  /// from the revival and from a request's `ensure` at once, and the second, never `#watch`, outlived `quit` (a test's
+  /// process never ended) and started its own revival as it closed (the app started twice, its window put up twice).
+  #watching(): Promise<void> {
+    if (this.#watch !== null) return Promise.resolve();
+    this.#opening ??= this.#openWatch().finally(() => (this.#opening = null));
+    return this.#opening;
+  }
+
+  async #openWatch() {
     const socket = await this.#dial();
+    // The station stopped while it opened: nothing to watch for.
+    if (this.#quitting) {
+      socket.destroy();
+      return;
+    }
     this.#watch = socket;
     socket.on("error", () => {});
     // Read (its answer, then what it tells): a socket not read never hears that the other end went.
@@ -184,7 +202,7 @@ export class HelperApp {
 
   /// The app ended by itself: back by itself in a moment, or started again.
   async #revive() {
-    const now = wall.now();
+    const now = this.#clock.currentTimeMillisUnsafe();
     this.#revivals = [...this.#revivals.filter((t) => now - t < REVIVALS_MS), now];
     if (this.#revivals.length > REVIVALS) {
       log.warn("helper", "still.fail Helper keeps ending; not started again until it is needed");
@@ -222,11 +240,15 @@ export class HelperApp {
 
   /// Until it answers again (started, or starting itself again for a grant), at most `ms`.
   async back(ms = START_MS): Promise<void> {
-    const until = wall.now() + ms;
+    const until = this.#clock.currentTimeMillisUnsafe() + ms;
     while (!(await this.#hello())) {
-      if (wall.now() > until) throw new Error("still.fail Helper did not start");
-      await wall.sleep(100);
+      if (this.#clock.currentTimeMillisUnsafe() > until) throw new Error("still.fail Helper did not start");
+      await this.#sleep(100);
     }
+  }
+
+  #sleep(ms: number): Promise<void> {
+    return Effect.runPromise(this.#clock.sleep(Duration.millis(ms)));
   }
 
   async #hello(): Promise<boolean> {
@@ -279,6 +301,8 @@ export class HelperApp {
   /// The station stopping: the app ends too (started again when next needed).
   async quit() {
     this.#quitting = true;
+    // One being opened is let go as it opens (`#openWatch`).
+    await this.#opening?.catch(() => {});
     if (await this.#hello()) await this.#ask({ op: "quit" }).catch(() => {});
     this.#watch?.destroy();
     this.#watch = null;
