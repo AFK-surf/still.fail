@@ -12,6 +12,7 @@ import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { hostname } from "node:os";
 import { fileURLToPath } from "node:url";
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
@@ -87,18 +88,18 @@ export class WindowsDesktop implements ScreenSource {
   refresh(force = false): Promise<void> {
     const binary = this.#o.binary;
     if (binary === null) return Promise.resolve();
-    if (!force && Date.now() - this.#looked < FRESH_MS) return Promise.resolve();
+    if (!force && wall.now() - this.#looked < FRESH_MS) return Promise.resolve();
     this.#looking ??= new Promise<void>((resolve) => {
       const child = (this.#o.start ?? start)(binary, ["status"]);
       let said = "";
-      const timer = setTimeout(() => child.kill(), 10_000);
+      const unarm = wall.after(10_000, () => child.kill());
       child.stdout!.setEncoding("utf8").on("data", (chunk: string) => (said += chunk));
       let finished = false;
       const done = (error?: Error) => {
         if (finished) return;
         finished = true;
-        clearTimeout(timer);
-        this.#looked = Date.now();
+        unarm();
+        this.#looked = wall.now();
         this.#looking = null;
         try {
           if (error) throw error;
@@ -171,9 +172,9 @@ export function childPipe(child: ChildProcess): HelperPipe {
     write: (data) => child.stdin!.write(data),
     destroy() {
       child.stdin!.end();
-      setTimeout(() => {
+      wall.after(2_000, () => {
         if (child.exitCode === null && child.signalCode === null) child.kill();
-      }, 2_000).unref();
+      });
     },
     on: (event: string, listener: (...args: any[]) => void) => events.on(event, listener),
   };
