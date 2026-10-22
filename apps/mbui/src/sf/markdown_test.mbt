@@ -49,3 +49,47 @@ test "a message's Markdown: its blocks, their margins collapsed, links and copy"
   assert_eq(t.clipboard(), "moon test")
   assert_true(t.rect_of("已复制") is Some(_))
 }
+
+///|
+test "a table's cell of only the message's images: them side by side, 160 wide at most, not their names" {
+  let drawn : Array[(String, Double)] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      drawn.clear()
+      c.column(w=Fill(1.0), pad=16.0, fn() {
+        @sf.markdown(
+          c,
+          "| 网页 | 手机网页 |\n|---|---|\n| ![](web%2Dfolded.png) | ![](phone.png) |\n",
+          cell_files=fn(name) {
+            // a wide one and a tall one
+            let r = if name == "web-folded.png" { 2.0 } else { 0.5 }
+            Some((r, fn(w) { drawn.push((name, w)) }))
+          },
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=844.0,
+  )
+  t.draw()
+  assert_eq(drawn, [("web-folded.png", 160.0), ("phone.png", 120.0)])
+  assert_true(t.find("web") is None)
+  assert_true(t.find("网页") is Some(_))
+}
+
+///|
+test "an image the app cannot draw reads as its file's name, decoded" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.markdown(c, "见 ![](web%2Dfolded%2D2%2Epng)") |> ignore
+    },
+    w=390.0,
+    h=844.0,
+  )
+  t.draw()
+  assert_true(t.find("web-folded-2.png") is Some(_))
+}
