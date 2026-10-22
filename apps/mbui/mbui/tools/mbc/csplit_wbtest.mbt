@@ -75,6 +75,9 @@ let items_src : String =
   #|
   #|void moonbit_init() {
   #|  _M0G2 = _M0FP1a3add(1, 2);
+  #|  goto join_2;
+  #|  _M0G2 = -100;
+  #|  join_2:;
   #|}
   #|
   #|int main(int argc, char** argv) {
@@ -464,6 +467,25 @@ fn prog_init(n : Int, b_value : Int) -> String {
     #|}
     #|
   )
+}
+
+///|
+test "init jumps stay after the values they use" {
+  let src =
+    #|void moonbit_init() {
+    #|  int32_t value_1;
+    #|  value_1 = 7;
+    #|  goto join_2;
+    #|  value_1 = -100;
+    #|  join_2:;
+    #|  _M0FP11a1x = value_1;
+    #|}
+  let pieces = init_pieces(utf8(src)).unwrap()
+  assert_eq(pieces.length(), 1)
+  assert_eq(str(strip(pieces[0].1)), "int32_t value_1;")
+  assert_true(has(str(pieces[0].2), "value_1 = 7;\n  goto join_2;"))
+  assert_true(init_decl(b"goto join_2;") is None)
+  assert_true(init_decl(b"return value_1;") is None)
 }
 
 ///|

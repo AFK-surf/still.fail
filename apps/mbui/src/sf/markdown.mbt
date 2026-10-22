@@ -55,36 +55,68 @@ priv struct Md {
 }
 
 ///|
-let parsed : Map[String, Array[@md.Block]] = {}
+// Standalone files/history ask the same local core as chat messages. Fixtures without a core retain their static
+// Markdown reader; TeX is never interpreted by this renderer.
+pub let markdown_read : Ref[((String, (Json?) -> Unit) -> Unit)?] = Ref(None)
 
 ///|
-/// The texts parsed lately, oldest first: past `parsed_most` the oldest half
-/// is let go (a long chat scrolled through does not keep every message).
+let markdown_asked : Map[String, Bool] = {}
+
+///|
+fn init {
+  @ui.on_reset(fn() {
+    parsed.clear(); parsed_order.clear(); parsed_cost.clear(); parsed_used.val = 0
+    core_parsed.clear(); markdown_asked.clear(); markdown_read.val = None
+  })
+}
+
+///|
+let parsed : Map[String, Array[MdBlock]] = {}
+
+///|
+/// The texts parsed lately, oldest first; the drawing data counts toward the budget too.
 let parsed_order : Array[String] = []
+
+///|
+let core_parsed : Map[String, Bool] = {}
 
 ///|
 let parsed_most : Int = 4096
 
 ///|
-fn blocks_of(text : String) -> Array[@md.Block] {
-  match parsed.get(text) {
-    Some(b) => b
-    None => {
-      if parsed_order.length() >= parsed_most {
-        let half = parsed_most / 2
-        for i in 0..<half {
-          parsed.remove(parsed_order[i])
-        }
-        let rest = parsed_order[half:].to_array()
-        parsed_order.clear()
-        parsed_order.append(rest)
-      }
-      let b = @md.parse(text)
-      parsed[text] = b
-      parsed_order.push(text)
-      b
-    }
+let parsed_cost : Map[String, Int] = {}
+
+///|
+let parsed_used : Ref[Int] = Ref(0)
+
+///|
+let parsed_budget : Int = 4000000
+
+///|
+fn blocks_of(text : String, tree : Json?) -> Array[MdBlock] {
+  if parsed.get(text) is Some(b) && (core_parsed.contains(text) || (!(tree is Some(Array(_))) && markdown_read.val is None)) { return b }
+  let b = match tree {
+    Some(Array(nodes)) => core_blocks(nodes,text)
+    // A live UI awaits its local core. Only static fixtures without a core use the old Markdown reader.
+    _ if markdown_read.val is Some(_) => []
+    _ => @md.parse(text).map(old_block)
   }
+  let cost = text.length() + (match tree { Some(j) => j.stringify().length(); None => 0 })
+  let old_cost = parsed_cost.get(text).unwrap_or(0)
+  parsed_used.val -= old_cost
+  // One unusually large visible message can stand alone; it never pins all the older drawings beside it.
+  while parsed_order.length() > 0 && (parsed_order.length() >= parsed_most || parsed_used.val + cost > parsed_budget) {
+    let old = parsed_order[0]
+    parsed_order.remove(0) |> ignore
+    if old != text { parsed_used.val -= parsed_cost.get(old).unwrap_or(0) }
+    parsed.remove(old); parsed_cost.remove(old); core_parsed.remove(old); markdown_asked.remove(old)
+  }
+  if !parsed.contains(text) { parsed_order.push(text) }
+  parsed[text] = b
+  parsed_cost[text] = cost
+  parsed_used.val += cost
+  if tree is Some(Array(_)) { core_parsed[text] = true }
+  b
 }
 
 ///|
@@ -359,7 +391,7 @@ pub(all) struct Screens {
 ///|
 /// A paragraph of only a link with a card (Markdown.kt screenAlone): its
 /// address, and its words unless it is bare.
-fn screen_alone(xs : Array[@md.Inline]) -> (String, String?)? {
+fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
   let parts = xs.filter(fn(x) {
     match x {
       Text(t) => t.trim(chars=" \n\t").to_string() != ""
@@ -370,7 +402,7 @@ fn screen_alone(xs : Array[@md.Inline]) -> (String, String?)? {
   guard parts.length() == 1 else { return None }
   match parts[0] {
     Link(href, c) if is_card_link(href) => {
-      let words = @md.plain(c)
+      let words = md_plain(c)
       Some((href, if is_bare_link(words, href) { None } else { Some(words) }))
     }
     _ => None
@@ -381,11 +413,11 @@ fn screen_alone(xs : Array[@md.Inline]) -> (String, String?)? {
 /// The links with cards written bare among these words (Markdown.kt
 /// bareScreens), which read as their titles; not within an image, nor a
 /// link's own words.
-fn bare_screens(xs : Array[@md.Inline], out : Array[String]) -> Unit {
+fn bare_screens(xs : Array[MdInline], out : Array[String]) -> Unit {
   for x in xs {
     match x {
       Link(href, c) =>
-        if is_card_link(href) && is_bare_link(@md.plain(c), href) && !out.contains(href) {
+        if is_card_link(href) && is_bare_link(md_plain(c), href) && !out.contains(href) {
           out.push(href)
         }
       Emph(c) | Strong(c) | Strike(c) => bare_screens(c, out)
@@ -413,6 +445,7 @@ pub fn markdown(
   c : @ui.Ctx,
   text : String,
   key? : String = "",
+  tree? : Json? = None,
   size? : Double = 0.0,
   ink? : Int64 = 0L,
   on_link? : (String) -> Unit = fn(_) {  },
@@ -437,7 +470,21 @@ pub fn markdown(
     code,
     screens,
   }
-  let blocks = blocks_of(text)
+  if tree is None && !core_parsed.contains(text) && !markdown_asked.contains(text) {
+    if markdown_read.val is Some(read) {
+      markdown_asked[text] = true
+      c.tell("markdown/" + text, fn() { read(text, fn(value) {
+        // Only publish content with its parsed hit regions. Showing raw Markdown first made a visible link
+        // accept a tap on the unparsed paragraph before the core's answer supplied its link target.
+        let ready = match value {
+          Some(Array(_)) => value
+          _ => Some(Json::array([["p", [Json::string(text)]]]))
+        }
+        blocks_of(text,ready) |> ignore
+      }) })
+    }
+  }
+  let blocks = blocks_of(text, tree)
   c.box(w=Fill(1.0), fn() {
     c.scope(c.id(if key == "" { "sf-md/" + text } else { key }), fn() {
       stack(c, md.pieces(blocks, false), true)
@@ -470,7 +517,7 @@ fn Md::lh(self : Md, size : Double) -> Double {
 }
 
 ///|
-fn Md::pieces(self : Md, blocks : Array[@md.Block], tight : Bool) -> Array[Piece] {
+fn Md::pieces(self : Md, blocks : Array[MdBlock], tight : Bool) -> Array[Piece] {
   let out = []
   for b in blocks {
     for p in self.piece(b, tight, None) {
@@ -481,7 +528,7 @@ fn Md::pieces(self : Md, blocks : Array[@md.Block], tight : Bool) -> Array[Piece
 }
 
 ///|
-fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piece] {
+fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece] {
   let s = self.size
   let c = self.c
   match b {
@@ -545,12 +592,17 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
         },
       ]
     }
-    CodeBlock(lang, code) =>
+    CodeBlock(lang, code, colours) =>
       match (self.code)(lang, code) {
         // (drawn another way: 4 under it, as Markdown.kt's chart)
         Some(draw) => [{ top: 0.0, bottom: 4.0, draw }]
-        None => [{ top: 0.0, bottom: 8.0, draw: fn() { code_block(c, code, lang) } }]
+        None => [{ top: 0.0, bottom: 8.0, draw: fn() { code_block(c, code, lang, colours~) } }]
       }
+    MathBlock(source, drawing) => [{ top: 0.0, bottom: 8.0, draw: fn() {
+      c.sideways("sf-math/" + source, fn() {
+        self.words([Formula(source, drawing)], s, 0, self.ink, None, wrap=false)
+      }) |> ignore
+    } }]
     Table(t) => [{ top: 0.0, bottom: 8.0, draw: fn() { self.table(t) } }]
     Rule => [
       {
@@ -563,8 +615,8 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
     // page draws its grid
     Table(t) => {
       let out = []
-      let row = fn(cells : Array[Array[@md.Inline]]) {
-        let xs : Array[@md.Inline] = []
+      let row = fn(cells : Array[Array[MdInline]]) {
+        let xs : Array[MdInline] = []
         for k, cell in cells {
           if k > 0 {
             xs.push(Text(" | "))
@@ -593,11 +645,11 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
 /// None when it names none of them.
 fn Md::placed(
   self : Md,
-  xs : Array[@md.Inline],
+  xs : Array[MdInline],
   margin : Double,
   task : Bool?,
 ) -> Array[Piece]? {
-  let file_of = fn(x : @md.Inline) -> (() -> Unit)? {
+  let file_of = fn(x : MdInline) -> (() -> Unit)? {
     match x {
       Link(href, _) => (self.files)(file_name_of(href))
       Image(src, _) => (self.files)(file_name_of(src))
@@ -626,7 +678,7 @@ fn Md::placed(
     return None
   }
   let out : Array[Piece] = []
-  let mut run : Array[@md.Inline] = []
+  let mut run : Array[MdInline] = []
   let s = self.size
   let ink = self.ink
   let flush = fn() {
@@ -663,7 +715,7 @@ fn Md::placed(
 
 ///|
 /// Items with their markers in the list's 20 of indent.
-fn Md::list(self : Md, l : @md.ListBlock, depth : Int) -> Piece {
+fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
   let c = self.c
   let s = self.size
   let ink = self.ink
@@ -776,11 +828,12 @@ fn task_box(c : @ui.Ctx, done : Bool, line : Double) -> Unit {
 /// A block's words as one paragraph of runs.
 fn Md::words(
   self : Md,
-  xs : Array[@md.Inline],
+  xs : Array[MdInline],
   size : Double,
   weight : Int,
   ink : Int64,
   _task : Bool?,
+  wrap? : Bool = true,
 ) -> Unit {
   let c = self.c
   let p = theme().p
@@ -804,6 +857,7 @@ fn Md::words(
     found_weight(runs, self.found),
     key="sf-md/p\{self.n}",
     size~,
+    wrap~,
     weight=if weight > 0 { weight } else { 400 },
     color=ink,
     line=self.lh(size),
@@ -830,7 +884,7 @@ fn is_web_address(s : String) -> Bool {
 ///|
 /// Inlines as runs, the styles they are within carried down.
 fn runs_of(
-  xs : Array[@md.Inline],
+  xs : Array[MdInline],
   out : Array[@ui.Run],
   bold : Bool,
   italic : Bool,
@@ -842,6 +896,10 @@ fn runs_of(
   for x in xs {
     match x {
       Text(s) => out.push(@ui.span(s, bold~, italic~, strike~, link~))
+      Formula(s, d) => {
+        let drawing = math_inline(d)
+        out.push(@ui.span(s, drawing~, code=drawing is None, bold~, italic~, strike~, link~))
+      }
       Code(s) =>
         out.push(
           @ui.span(
@@ -857,13 +915,13 @@ fn runs_of(
       Strong(c) => runs_of(c, out, true, italic, strike, link, accent, titles)
       Strike(c) => runs_of(c, out, bold, italic, true, link, accent, titles)
       // a bare link to a screen or a station's 共享调试: its title, leading where it does
-      Link(href, c) if link == "" && titles.get(href) is Some(title) && is_bare_link(@md.plain(c), href) =>
+      Link(href, c) if link == "" && titles.get(href) is Some(title) && is_bare_link(md_plain(c), href) =>
         out.push(@ui.span(title, bold~, italic~, strike~, link=href))
       Link(href, c) if link == "" && is_chat_link(href) => {
         // a reference to another chat: `@` a little lighter, its title, in
         // the accent
         out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=alpha(accent, 0.7)))
-        out.push(@ui.span(@md.plain(c), bold~, italic~, strike~, link=href, color=accent))
+        out.push(@ui.span(md_plain(c), bold~, italic~, strike~, link=href, color=accent))
       }
       Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles)
       Image(src, alt) => {
@@ -891,7 +949,7 @@ let copied_at : Map[Int, Bool] = {}
 /// language and a copy button; the code in the code face, 12 on 18 lines,
 /// highlighted when its language is named, scrolled sideways rather than
 /// wrapped.
-pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
+pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? = None) -> Unit {
   let t = theme()
   let w = web()
   let id = c.id("sf-code/" + code)
@@ -960,8 +1018,11 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
     // highlighted when its language is named (Highlight.kt), scrolled sideways rather than wrapped
     c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
       c.rich(
-        match highlight(code, lang, t.dark) {
-          Some(runs) => runs
+        match colours {
+          Some(ink) => core_ink(code, ink, t.dark)
+          // The live client's core has already coloured every Markdown code block. The tokenizer here is only
+          // for old static fixtures with no core; an uncoloured live block remains plain.
+          None if markdown_read.val is None => highlight(code, lang, t.dark).unwrap_or([@ui.span(code, mono=true)])
           None => [@ui.span(code, mono=true)]
         },
         size=12.0,
@@ -1026,7 +1087,7 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
 /// 12 and 7 in, middle-aligned, at least 4em wide. Columns are as wide as their content until the message is full (the
 /// browser's automatic layout), then share what is left by how much more they would take; past what their words
 /// allow, it scrolls sideways within the message.
-fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
+fn Md::table(self : Md, t : MdTable) -> Unit {
   let c = self.c
   let cols = t.head.length()
   if cols == 0 {
@@ -1056,7 +1117,7 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
           let w = cell_images_width(images)
           (w, w)
         }
-        None => cell_widths(@md.plain(row[k]), size, weight)
+        None => cell_widths(md_plain(row[k]), size, weight)
       }
       if lo + 24.0 > mins[k] {
         mins[k] = lo + 24.0
@@ -1163,7 +1224,7 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
 ///|
 /// A cell of only the message's images (`| ![](before.png) | ![](after.png) |`, Markdown.kt cellImages): each one's
 /// proportion and drawing; None for any other cell, drawn as words.
-fn Md::cell_images(self : Md, cell : Array[@md.Inline]) -> Array[(Double, (Double) -> Unit)]? {
+fn Md::cell_images(self : Md, cell : Array[MdInline]) -> Array[(Double, (Double) -> Unit)]? {
   let out = []
   for x in cell {
     match x {

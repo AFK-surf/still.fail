@@ -12,7 +12,7 @@ let shapes_made : Map[String, Array[@ui.Shape]] = {}
 
 ///|
 /// Every Tester starts as the app does (mbui's on_reset): the images made here gone with its own, nothing waited on or
-/// copied, the theme the first frame's. (markdown.mbt's `parsed` stays: what a text parses to is the text's alone.)
+/// copied, the theme the first frame's.
 fn init {
   @ui.on_reset(fn() {
     made.clear()

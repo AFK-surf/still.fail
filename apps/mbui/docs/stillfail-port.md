@@ -1002,6 +1002,13 @@ MBUI_OPEN_PAGE=files until the bottom bar reaches it). Before the flows, `script
 the drive flows' folder in the test station's home (e2e-<tag>: a text, a novel of made-up chapters, a folder with a
 file), a run's own, which flow 15 lends through the app.
 
+The live client renders the local core's Markdown tree, including code colours and formula drawings. Older tapes
+predate the pure `markdown` operation: `client/core-ts/scripts/replay-markdown.ts` generates its answers from the
+tapes' own words using the real core. Regenerate `src/sfreplay/markdown_answers.mbt` with that script after adding
+or changing tapes or the core parser; the check script verifies it. This adds no backend messages or elapsed time
+to the recordings. Formula glyphs are packaged once from `client/math/font.json`; messages carry only glyph IDs,
+positions, rules and any native text (see `client/math/README.md`).
+
 A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
 every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace make
 out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace (a sign-in's tokens put as

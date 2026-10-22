@@ -1448,6 +1448,16 @@ fn link_key(argv : Array[Bytes], deps : Array[Bytes], out : Bytes) -> Bytes {
 }
 
 ///|
+/// Hundreds of split objects exceed Windows' process command-line limit. CL reads the same arguments from a
+/// response file. Keep them on one line: /link applies only to the rest of its line in a CL command file.
+fn msvc_link_command(argv : Array[Bytes], rsp : Bytes) -> Array[Bytes] {
+  if !write_file(rsp, cat([list2cmdline(argv[1:].to_array()), b"\n"])) {
+    fatal("cannot write link response file \{str(rsp)}")
+  }
+  [argv[0], cat([b"@", rsp])]
+}
+
+///|
 /// Runs the link unless it made `out` of the same inputs already (then only its mtime moves on, for make-like tools
 /// after it): its exit code
 fn link(argv : Array[Bytes], out : Bytes, deps : Array[Bytes], stamp : Bytes?) -> Int {
@@ -1465,7 +1475,15 @@ fn link(argv : Array[Bytes], out : Bytes, deps : Array[Bytes], stamp : Bytes?) -
   }
   let _ = c_remove(st)
   let t0 = now_s()
-  let code = run_inherit(argv)
+  let rsp = if is_msvc(argv) { Some(tmp_path("link.rsp")) } else { None }
+  let command = match rsp {
+    Some(p) => msvc_link_command(argv, p)
+    None => argv
+  }
+  let code = run_inherit(command)
+  if rsp is Some(p) {
+    let _ = c_remove(p)
+  }
   log("linked \{str(basename(out))} in \{secs(t0)} s")
   if code == 0 && is_file(out) {
     let _ = write_file(st, link_key(argv, deps, out))

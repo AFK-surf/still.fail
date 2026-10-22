@@ -470,6 +470,11 @@ fn drop_line_directives(t : Bytes) -> Bytes {
 fn init_decl(t : BytesView) -> Bytes? {
   let n = t.length()
   let i0 = lskip(t, 0)
+  // A jump/return followed by a local-looking name has the same two-word shape as a declaration. It must stay
+  // among the statements: hoisting a goto to the declarations skips the initialisation before its label.
+  if word_at(t, i0, b"goto") >= 0 || word_at(t, i0, b"return") >= 0 {
+    return None
+  }
   for use_const in [true, false] {
     let mut i = i0
     if use_const {

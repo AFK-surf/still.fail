@@ -185,6 +185,8 @@ case "$cmd" in
     [ "$have" = "$want" ] || die "the emulator's system is not the references': this one is $have, they were taken on $want (make them again: the refs job)"
     [ -n "${RENDER_APK:-}" ] && { $ADB install -r "$RENDER_APK" > /dev/null || die "mbui-render not installed"; }
     RID=dev.mbui.demo
+    render_uid=$($ADB shell pm list packages -U $RID | tr -d '\r' | sed -n "s/^package:$RID uid:\([0-9]*\)$/\1/p")
+    case "$render_uid" in ""|*[!0-9]*) die "mbui-render has no installed uid" ;; esac
     F=/data/user/0/$RID/files
     $ADB shell input keyevent KEYCODE_WAKEUP
     $ADB shell wm dismiss-keyguard
@@ -197,8 +199,8 @@ case "$cmd" in
       $ADB exec-in "run-as $RID sh -c 'cat > files/$n.dl'" < $O/dl/$n.dl
       $ADB logcat -c
       $ADB shell am start -n $RID/dev.mbui.MainActivity --es env "'MBUI_DL=$F/$n.dl;MBUI_DL_PNG=$F/$n.png'" > /dev/null
-      # the renderer's own line once the picture is written (or the app's end)
-      said=$($ADB logcat -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
+      # Only this renderer's completion or crash; a system app's crash says nothing about this picture.
+      said=$($ADB logcat --uid="$render_uid" -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
       case "$said" in
         *"mbui-render: "*"instances"*) ;;
         *) echo "$said"; $ADB logcat -d -t 200 | tail -40; die "$n: not drawn" ;;

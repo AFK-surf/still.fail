@@ -36,6 +36,19 @@ pub(all) struct Run {
   underline : Bool
   /// where it leads ("" nowhere): tapped, the paragraph's on_link hears it
   link : String
+  /// A positioned inline drawing; text is still its copyable, accessible alternative.
+  drawing : InlineDrawing?
+} derive(Eq, Debug)
+
+///|
+/// A drawing within text, measured in em. Its paths are already laid out, from its top left, y down. Words outside
+/// its alphabet use the host's serif face: (words, x, baseline, size), also in em. It has no parser or markup.
+pub(all) struct InlineDrawing {
+  width : Double
+  height : Double
+  baseline : Double
+  paths : Array[Array[(Array[Double], Bool)]]
+  words : Array[(String, Double, Double, Double)]
 } derive(Eq, Debug)
 
 ///|
@@ -53,6 +66,7 @@ pub fn span(
   strike? : Bool = false,
   underline? : Bool = false,
   link? : String = "",
+  drawing? : InlineDrawing? = None,
 ) -> Run {
   {
     text,
@@ -67,6 +81,7 @@ pub fn span(
     strike,
     underline,
     link,
+    drawing,
   }
 }
 
@@ -153,6 +168,8 @@ pub struct RichLayout {
   /// and with its share of the line's leading
   run_lasc : Array[Double]
   run_ldesc : Array[Double]
+  /// Inline drawings scaled once when laid out, never rescaled for each painted frame.
+  drawings : Array[InlineDrawing?]
   starts : Array[Int]
   lens : Array[Int]
   adv : Array[Double]
@@ -240,6 +257,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
   let run_d = []
   let run_lasc = []
   let run_ldesc = []
+  let drawings = []
   let starts = []
   let lens = []
   let adv = []
@@ -250,6 +268,36 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
   let mut off = 0
   for k, run in r.runs {
     let size = r.run_size(run)
+    match run.drawing {
+      Some(d) => {
+        run_start.push(off)
+        run_size.push(size)
+        run_a.push(d.baseline * size)
+        run_d.push((d.height - d.baseline) * size)
+        run_lasc.push(dmax(base_asc, d.baseline * size))
+        run_ldesc.push(dmax(base_desc, (d.height - d.baseline) * size))
+        run_c0.push(starts.length())
+        starts.push(off)
+        lens.push(run.text.length())
+        adv.push(d.width * size)
+        pre.push(0.0)
+        keys.push(-2)
+        cu.push(0xFFFC)
+        run_of.push(k)
+        run_c1.push(starts.length())
+        sb.write_string(run.text)
+        off = off + run.text.length()
+        drawings.push(Some({
+          width: d.width * size,
+          height: d.height * size,
+          baseline: d.baseline * size,
+          paths: d.paths.map(fn(path) { path.map(fn(p) { (p.0.map(fn(v) { v * size }), p.1) }) }),
+          words: d.words.map(fn(w) { (w.0, w.1 * size, w.2 * size, w.3 * size) }),
+        }))
+        continue
+      }
+      None => drawings.push(None)
+    }
     let weight = r.run_weight(run)
     let style = run_style(run) | r.faces
     let s = shape(run.text, size, weight, style~, spacing=r.spacing)
@@ -320,6 +368,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     run_d,
     run_lasc,
     run_ldesc,
+    drawings,
     starts,
     lens,
     adv,
@@ -818,7 +867,7 @@ fn cut_rich(r : Rich, lay : RichLayout, w : Double) -> Rich {
     }
     off = off + n
   }
-  runs.push({ ..last, text: "…", link: "" })
+  runs.push({ ..last, text: "…", link: "", drawing: None })
   { ..r, runs }
 }
 
@@ -909,6 +958,24 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   }
   for c in 0..<lay.starts.length() {
     let key = lay.keys[c]
+    if key == -2 {
+      match lay.drawings[lay.run_of[c]] {
+        Some(d) => {
+          let l = lay.line_of[c]
+          let x = ox + lay.xs[c]
+          let y = oy + lay.line_y[l] + lay.line_base[l] - d.baseline
+          if y > cy1 || y + d.height < cy0 { continue }
+          let color = colors[lay.run_of[c]]
+          for path in d.paths { self.emit_shape(x, y, path, true, 0.0, false, color, alpha) }
+          for word in d.words {
+            let tl = layout_text(word.0, word.3, 400, 100000.0, false, style=@hostapi.style_serif)
+            self.emit_text(tl, x + word.1, y + word.2 - tl.ascent, color, alpha)
+          }
+        }
+        None => ()
+      }
+      continue
+    }
     if key < 0 {
       continue
     }

@@ -44,7 +44,15 @@ pub fn source() -> @sfapp.Source {
       let s = @core.subscribe(name, params~)
       { value: s.value, error: s.error, version: s.version }
     },
-    call: fn(name, params, done) { @core.call(name, params~, on_done=done) },
+    call: fn(name, params, done) {
+      // These tapes predate the core Markdown call. Its answer is a pure function of the recorded words; kept
+      // from the actual TypeScript core, not parsed by the UI or made up here. Unrecognised asks still diverge.
+      if name == "markdown" {
+        let words = @sfapp.text(Some(params), "text")
+        if kept_markdown.get(words) is Some(md) { done(Ok({ "md": md })); return }
+      }
+      @core.call(name, params~, on_done=done)
+    },
     call_bytes: fn(name, params, bytes, done) {
       @core.call(name, params~, bytes=Some(bytes), on_done=done)
     },
@@ -86,6 +94,12 @@ pub fn source() -> @sfapp.Source {
 }
 
 ///|
+let kept_markdown : Map[String, Json] = match (@json.parse(markdown_answers) catch { _ => Json::null() }) {
+  Object(m) => m
+  _ => {}
+}
+
+///|
 let the_source : @sfapp.Source = source()
 
 ///|
@@ -104,6 +118,7 @@ fn init {
 pub fn app(c : @ui.Ctx) -> Unit {
   if !started.val {
     started.val = true
+    @sfapp.use_core_markdown(the_source)
     @sfcore.begin()
   }
   @sfcore.frame(@core.subscribe("accounts"))

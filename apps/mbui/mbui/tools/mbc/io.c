@@ -447,9 +447,14 @@ int32_t mbc_spawn(moonbit_bytes_t words, moonbit_bytes_t cmdline, moonbit_bytes_
     si.hStdError = f;
   }
   BOOL ok = CreateProcessA(NULL, cl, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+  DWORD error = ok ? 0 : GetLastError();
   free(cl);
   if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
-  if (!ok) return -1;
+  if (!ok) {
+    fprintf(stderr, "mbc: CreateProcess failed (%lu), command length %d\n", (unsigned long)error,
+            (int)Moonbit_array_length(cmdline));
+    return -1;
+  }
   CloseHandle(pi.hThread);
   slots[s] = pi.hProcess;
 #else

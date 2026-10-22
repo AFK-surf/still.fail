@@ -378,6 +378,7 @@ fn main {
   }
   // crash reports and the bar's timing, where the host has them (reports.mbt: Android)
   reports_start()
+  @sfapp.use_core_markdown(core_source)
   // the faces the app carries (code's JetBrains Mono, as Android's): before its first frame
   @sf.give_faces()
   @sfapp.desktop_window()

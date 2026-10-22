@@ -762,6 +762,7 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
       @sf.markdown(
         c,
         m.text,
+        tree=m.md,
         key="md/" + m.ts,
         size=15.0,
         ink=ink().text,

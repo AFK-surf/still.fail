@@ -5,7 +5,9 @@ import { markdown } from "./styles/conversation.css.ts";
 
 /** Long formulas scroll within the message on a phone. Room above and below keeps accents and limits unclipped. */
 export const mathBlock = style({ maxWidth: "100%", overflowX: "auto", margin: "0 0 8px", padding: "2px 0" });
-globalStyle(`${mathBlock} .katex-display`, { margin: "0", padding: "8px 0", minWidth: "max-content" });
+export const formula = style({ display: "inline-block", position: "relative", flexShrink: 0, maxWidth: "none" });
+export const formulaSource = style({ position: "absolute", inset: 0, color: "transparent", overflow: "hidden", whiteSpace: "pre", userSelect: "all" });
+globalStyle(`${formula} svg`, { display: "block", pointerEvents: "none", overflow: "visible" });
 
 /** A message's file placed in its text: on a line of its own, a little apart from the text around it. */
 export const inlineFile = style({ display: "flex", margin: "8px 0" });
