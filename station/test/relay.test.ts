@@ -8,12 +8,12 @@ import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { relay, relayPlaces } from "../src/sessions/relay.ts";
 import { SlackSurface } from "../src/slack/surface.ts";
 import { SlackClient } from "../src/slack/web.ts";
-import { Rig, message, settle } from "./hub-fakes.ts";
+import { Rig, message, settle, testClock, type Setup } from "./hub-fakes.ts";
 import { FakeSlack } from "./slack-fake.ts";
 
 /// A rig whose Claude connect's bot is in #cue-dev and #design, and starts conversations as Slack would.
-function relayRig() {
-  const r = new Rig({ link: true });
+function relayRig(setup: Setup = {}) {
+  const r = new Rig({ link: true, ...setup });
   const begun: [string, string][] = [];
   const places: Place[] = [
     { id: "C2", name: "design", kind: "channel", private: true },
@@ -45,6 +45,21 @@ test("a chat's places: the connects that can start a conversation, each bot's ch
   Object.assign(r.gptChat, { places: async () => { throw new Error("missing_scope"); }, begin: async () => { throw new Error("no"); } });
   const again = await relayPlaces(r.hub, thread);
   assert.deepEqual(again.map((c) => [c.id, c.places.length, c.error ?? null]), [["cl", 2, null], ["gpt", 0, "missing_scope"]]);
+  await r.close();
+});
+
+test("a chat's places: those relayed to before come first, the latest first, the rest by name", async () => {
+  const time = testClock();
+  const { r } = relayRig({ clock: time.clock });
+  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  const order = async () => (await relayPlaces(r.hub, thread))[0]!.places.map((p) => [p.id, p.used ?? null]);
+  assert.deepEqual(await order(), [["C1", null], ["C2", null]]);
+  await relay(r.hub, thread, "Ada", { connect: "cl", channel: "C2" }, "");
+  const first = r.store.now();
+  assert.deepEqual(await order(), [["C2", first], ["C1", null]]);
+  await time.adjust(1000);
+  await relay(r.hub, thread, "Ada", { connect: "cl", channel: "C1" }, "");
+  assert.deepEqual(await order(), [["C1", first + 1000], ["C2", first]]);
   await r.close();
 });
 

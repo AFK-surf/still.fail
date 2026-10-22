@@ -1051,6 +1051,16 @@ export class Store {
     });
   }
 
+  /// When a chat was last relayed to each of a connect's channels and groups (by their ids).
+  relayedTo(connect: string): Map<string, number> {
+    return new Map(this.#all("SELECT channel, at FROM relayed_to WHERE connect = ?", connect).map((r) => [r.channel as string, r.at as number]));
+  }
+
+  /// A chat was relayed to a connect's channel or group now.
+  noteRelayed(connect: string, channel: string): void {
+    this.#run("INSERT INTO relayed_to (connect, channel, at) VALUES (?1, ?2, ?3) ON CONFLICT (connect, channel) DO UPDATE SET at = ?3", connect, channel, this.now());
+  }
+
   /// Chats kept instead of offered for archiving. Null selects every viewer, for automatic archiving.
   keptChats(viewer: string | null): Set<number> {
     return new Set(this.#all("SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer).map((r) => r.thread));

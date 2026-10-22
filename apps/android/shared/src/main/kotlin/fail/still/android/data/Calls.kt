@@ -840,9 +840,9 @@ data class OutsideRef(val station: String, val id: String, val title: String, va
 @kotlinx.serialization.Serializable
 private class OutsideRefs(val chats: List<OutsideRef> = emptyList())
 
-/** A channel or group a connect's bot is in (docs/relay.md): `kind` channel (Slack), topics (a Feishu topic group), group. */
+/** A channel or group a connect's bot is in (docs/relay.md): `kind` channel (Slack), topics (a Feishu topic group), group; `used` when a chat was last relayed there (ms), if ever. */
 @kotlinx.serialization.Serializable
-data class RelayPlace(val id: String, val name: String, val kind: String, val private: Boolean = false)
+data class RelayPlace(val id: String, val name: String, val kind: String, val private: Boolean = false, val used: Long? = null)
 
 /** A connect a chat can be relayed through (`kind` slack, feishu or lark), with its places; none, and why, when they could not be read. */
 @kotlinx.serialization.Serializable

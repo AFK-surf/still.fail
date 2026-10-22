@@ -752,5 +752,11 @@
   "web-main.relay.done": "已接力到 {place}",
   "web-main.relay.searchOrLink": "搜索频道或群，或粘贴 Slack 消息链接",
   "web-main.relay.thread": "接力到这个 Slack thread",
-  "web-main.relay.kind.thread": "已有 thread · agent 先读之前的消息"
+  "web-main.relay.kind.thread": "已有 thread · agent 先读之前的消息",
+  "web-main.relay.recent": "最近接力过",
+  "web-main.relay.showAll": "显示全部 {count} 个",
+  "web-main.relay.workspaces": "在哪个 workspace 里找",
+  "web-main.relay.allWorkspaces": "全部",
+  "web-main.relay.change": "更换",
+  "web-main.relay.goTo": "接力到 {place}"
 }
