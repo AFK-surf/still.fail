@@ -1,11 +1,11 @@
 // An agent's message coming out of its activity's avatar (ember apps/android chat/screens/ChatMotion.kt; web
 // useEmissions), one at a time: the activity folds to its avatar (Fold), the avatar hops to where the message goes
-// (Float: up, slowing, then falling ever faster, stretched, stopping dead there), landing where the message's own
-// avatar is, flattened by the fall and springing back (Spit), and the avatar goes on down to where the activity now
-// is, which unfolds again (Return). The message does not wait for it: it is in the list (rising in as any other)
-// from the frame it comes, on screen first; the avatar flies to it there. With motion reduced, each pose at once.
-// Messages no one watches have none of it: arriving while the page is not in front or the reader has scrolled up, and
-// all still waiting when that happens. Only drawn: the flying avatar is a picture over the list.
+// (Float: up, slowing, then falling ever faster, stretched, stopping dead there), the message comes out of it as it
+// lands, the avatar flattened by the fall and springing back (Spit), and the avatar goes on down to where the activity
+// now is, which unfolds again (Return). Until its turn a message waits out of the list. With motion reduced, each pose
+// at once. Messages no one watches just appear: arriving while the page is not in front or the reader has scrolled up,
+// and all still waiting when that happens. Only drawn: the message is laid out (and tapped) where it is from the
+// frame it comes into the list; the flying avatar is a picture over the list.
 
 ///|
 priv enum Pose {
@@ -130,6 +130,19 @@ fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Bool]) 
 /// Whether the message comes (or came) out of an avatar: it never rises in as others do.
 fn emit_goes(e : Emits, seq : Double) -> Bool {
   e.decided.get(seq_s(seq)) == Some(true)
+}
+
+///|
+/// Waiting its turn (or its avatar still on its way to it): not in the list yet.
+fn emit_held(e : Emits, seq : Double) -> Bool {
+  let k = seq_s(seq)
+  if e.decided.get(k) != Some(true) || e.done.contains(k) {
+    return false
+  }
+  match e.current {
+    Some(t) if t.seq == seq && (t.pose == Spit || t.pose == Return) => false
+    _ => true
+  }
 }
 
 ///|
@@ -454,6 +467,26 @@ fn emit_flyer(c : @ui.Ctx, key : String, e : Emits, v : ChatView) -> Unit {
       @motion.log_frame(c, "emit/" + seq_s(t.seq), "pose=\{t.pose} x=\{x} y=\{y} sx=\{sx} sy=\{sy} u=\{u} from=\{fy} to=\{ly}")
     }
     None => ()
+  }
+}
+
+///|
+/// A message coming out of its avatar (Chat.kt emitOut, 380 ms): its column from 35% about 12 in and down, unrolling
+/// from its top, both on Ease.Out over the whole; its opacity in by 35% of the time.
+fn emit_out(c : @ui.Ctx, i : Int, e : Emits, seq : Double) -> Unit {
+  if !emit_emitting(e, seq) {
+    return
+  }
+  let t = e.current.unwrap()
+  let u = emit_clock(c, t)
+  let k = @motion.Ease::Out.at(u)
+  match @motion.measured_rect(c, "emit-col/" + seq_s(seq)) {
+    Some((_, _, cw, ch)) => {
+      let s = 0.35 + 0.65 * k
+      c.look(i, @ui.look(alpha=if u < 0.35 { @motion.Ease::Out.at(u / 0.35) } else { 1.0 }, scale=s, ox=if cw > 0.0 { 12.0 / cw } else { 0.0 }, oy=if ch > 0.0 { 12.0 / ch } else { 0.0 }))
+      c.cut_to_top(i, ch * k)
+    }
+    None => c.look(i, @ui.look(alpha=0.0))
   }
 }
 

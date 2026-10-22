@@ -122,8 +122,11 @@ priv struct Reading {
   mut played : Int
   mut ticked : Int
   fresh : Map[String, Bool]
-  /// each row's rise in, by key, while it rises
+  /// rows asked a turn to come in (turns.mbt: Chat.kt admitted); each row's rise in, by key, while it rises
+  admitted : Map[String, Bool]
   rises : Map[String, @motion.Anim]
+  /// when the list's own motion is at rest, as last laid out (ListInfo's `rest`): a turn waits for it
+  mut list_rest : Double
   /// what was sent from here and is not in the core's view yet: in the list from the frame it was sent (sent_local)
   sending : Array[LocalSent]
   /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
@@ -188,8 +191,10 @@ fn reading_of(key : String) -> Reading {
         played: -10,
         ticked: -10,
         fresh: {},
-        sending: [],
+        admitted: {},
         rises: {},
+        list_rest: -1.0,
+        sending: [],
         newest: "",
         following_row: false,
         follow_key: "",
@@ -375,15 +380,26 @@ fn messages(
 ) -> Unit {
   let key = list_key(r)
   let rd = reading_of(r.station + "\u{1}" + r.session)
-  // an agent's messages said while its activity shows: its avatar flies to each, one at a time, the message in the
-  // list from when it came (emit.mbt, ChatMotion.kt)
+  // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
+  // wait out of the list (emit.mbt, ChatMotion.kt)
   // (taken and played on, before the page is built, by linger_tick)
   let ek = r.station + "\u{1}" + r.session
   let em = emits_of(ek)
   rd.shown_frame = c.frame_number()
   chat_tick(c, ek, rd, v, shown=true)
+  let read = if em.queue.length() > 0 || em.current is Some(_) {
+    read.filter(fn(e) {
+      match e {
+        Said(m) => !emit_held(em, m.seq)
+        _ => true
+      }
+    })
+  } else {
+    read
+  }
   let dkey = draft_key(r)
-  let (list, keys) = row_keys(c, rd, v, with_lingering(rd, read), key, flight_of(dkey))
+  let turns = turns_of(ek)
+  let (list, keys) = row_keys(c, rd, v, with_lingering(rd, read), key, turns, em, flight_of(dkey))
   follow_newest(c, rd, list, keys, key)
   flight_frame(c, dkey)
   let flight = flight_of(dkey)
@@ -456,7 +472,9 @@ fn messages(
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
               open.snap(0.0)
-              open.animate(1.0, @motion.tween(working_turn_ms, ease=Out))
+              // from when its turn came (turns.mbt), else now
+              let at = turns.started_at(keys[i])
+              open.animate(1.0, @motion.tween(working_turn_ms, ease=Out), start_at?=if at >= 0.0 { Some(at) } else { None })
             }
             let leaving = match rd.linger.get(a.key) {
               Some(l) => l.leaving
@@ -517,20 +535,29 @@ fn messages(
                 )
               _ => ()
             }
-            // what is new to the list while it is followed rises in from the frame it came (Chat.kt rise: 14 up and
-            // from nothing, 320 ms on the standard curve); what leaves the chat from the outbox fades (200 ms), not
-            // what was sent from here and is now the core's (sent_local: its row goes on as the core's)
+            // what is new to the list while it is followed rises in (Chat.kt rise: 14 up and from nothing, 320 ms
+            // on the standard curve); what leaves the chat from the outbox fades (200 ms), not what was sent from here
+            // and is now the core's (LocalSent: its row goes on as the core's)
             let mk = key + "\u{1}" + keys[i]
             match e {
               Out(o) if !local_sent(o) =>
                 @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(out_leave_ms)))
               _ => @motion.keyed(c, ri, mk)
             }
+            // (one out of an avatar does not rise in as well)
+            let emitted = match e {
+              Said(m) => emit_goes(em, m.seq)
+              _ => false
+            }
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
-              let a = @motion.Anim::new(0.0)
-              a.animate(1.0, @motion.tween(row_turn_ms, ease=Standard))
-              rd.rises[keys[i]] = a
+              if !emitted {
+                // from when its turn came (turns.mbt), else now
+                let a = @motion.Anim::new(0.0)
+                let at = turns.started_at(keys[i])
+                a.animate(1.0, @motion.tween(row_turn_ms, ease=Standard), start_at?=if at >= 0.0 { Some(at) } else { None })
+                rd.rises[keys[i]] = a
+              }
             }
             match rd.rises.get(keys[i]) {
               Some(a) => {
@@ -900,7 +927,7 @@ fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool
     rd.played = frame
     // what changes the list's height, one at a time (turns.mbt): each whose turn has come starts
     let turns = turns_of(rk)
-    turns.step(c)
+    turns.step(c, rd.list_rest)
     let playing = em.current is Some(_) || em.queue.length() > 0
     em.watched = (rd.at_end || rd.following_row || (playing && !rd.jump)) && !v.newer && app_in_front()
     let showing : Map[String, Bool] = {}
@@ -1049,14 +1076,17 @@ fn sent_local_gone(rk : String, key : String) -> Unit {
 ///|
 /// The rows in the list and their keys, as they move (a message sent from here keeps its outbox row's: Chat.kt
 /// sentAs), and which are new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt
-/// arrived, caught). Everything is in the list the frame it comes, what was sent from here before the core has it
-/// (LocalSent).
+/// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) comes in its turn
+/// among what changes the list's height (turns.mbt, Chat.kt newcomers), kept out of the list till then. What was sent
+/// from here never waits: in the list the frame it is sent, before the core has it (LocalSent).
 fn row_keys(
   c : @ui.Ctx,
   rd : Reading,
   v : ChatView,
   all : Array[Entry],
   key : String,
+  turns : Turns,
+  em : Emits,
   flight : SendFlight?,
 ) -> (Array[Entry], Array[String]) {
   for o in v.outbox {
@@ -1080,7 +1110,8 @@ fn row_keys(
     }
   })
   // what was sent from here: the core's row once it has it (the first of this device's own not there when it was
-  // sent, each taken once), going on as that row (drawn already: it does not rise in; words flying there go on to it)
+  // sent, each taken once), going on as that row (drawn already: it does not rise in, nor wait a turn; words flying
+  // there go on to it)
   let taken : Map[String, Bool] = {}
   let still : Array[LocalSent] = []
   for l in rd.sending {
@@ -1137,24 +1168,63 @@ fn row_keys(
     Some(i) => i.following_row
     None => false
   }
+  rd.list_rest = match info {
+    Some(i) => i.rest
+    None => -1.0
+  }
   if rd.drawn && following {
     for i, e in all {
+      let k = all_keys[i]
+      if rd.known.contains(k) || rd.admitted.contains(k) {
+        continue
+      }
+      let comes = match e {
+        Working(a) => a.started
+        // (what was sent from here is in the list at once)
+        Out(o) => !local_sent(o)
+        // (one out of an avatar comes out of it instead)
+        Said(m) => m.said && !emit_goes(em, m.seq)
+        Letters(m) => m.said
+        _ => false
+      }
+      if comes {
+        rd.admitted[k] = true
+        match e {
+          // (after what closes under a post as its agent starts)
+          Working(_) => turns.admit(c, k, working_turn_ms, after=true)
+          _ => turns.admit(c, k, row_turn_ms)
+        }
+      }
+    }
+  }
+  let list : Array[Entry] = []
+  let keys : Array[String] = []
+  for i, e in all {
+    let k = all_keys[i]
+    if turns.waiting.contains(k) {
+      continue
+    }
+    list.push(e)
+    keys.push(k)
+  }
+  if rd.drawn && following {
+    for i, e in list {
       let caught = match e {
         Said(m) | Letters(m) => !m.said
         Working(a) => !a.started
         Top | Foot => true
         _ => false
       }
-      if !rd.known.contains(all_keys[i]) && !caught {
-        rd.fresh[all_keys[i]] = true
+      if !rd.known.contains(keys[i]) && !caught {
+        rd.fresh[keys[i]] = true
       }
     }
   }
-  for k in all_keys {
+  for k in keys {
     rd.known[k] = true
   }
   rd.drawn = true
-  (all, all_keys)
+  (list, keys)
 }
 
 ///|

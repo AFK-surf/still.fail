@@ -1150,7 +1150,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
   let rk = r.station + "\u{1}" + r.session
   let row = sent_local(rk, v, words, files)
-  flight_start(c, d.key, row, words, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
+  flight_start(c, d.key, rk, row, words, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
