@@ -1821,12 +1821,14 @@ const NETWORK_EVERY_MS = 3_000;
 /**
  * The computer's network, told to the pages as it becomes another (Wi-Fi to another, to a cable, back after none): the
  * core's connections were on the old one and may be dead with nothing said (web/src/core/client.ts networkChanged).
- * A page has no event for it (`online` is only after none at all), so this looks at the machine's addresses.
+ * A page has no event for it (`online` is only after none at all), so this looks at the machine's addresses, and at
+ * whether the system takes it for online (`net.isOnline`): a Wi-Fi still joined while nothing went through it kept its
+ * addresses, and the core heard nothing of the network coming back.
  */
 function followNetwork(): void {
   const addresses = () => Object.values(networkInterfaces()).flat()
     .filter((a) => a && !a.internal && !(a.family === "IPv6" && a.address.startsWith("fe80:")))
-    .map((a) => a!.address).sort().join(" ");
+    .map((a) => a!.address).sort().join(" ") + (net.isOnline() ? "" : " offline");
   let last = addresses();
   setInterval(() => {
     const now = addresses();

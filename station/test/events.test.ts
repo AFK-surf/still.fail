@@ -206,6 +206,37 @@ test("a stream that comes back after its link went is told what was told meanwhi
   await late.close();
 });
 
+test("a stream read afresh is told where the log is, so the next goes on from there though nothing was told", async () => {
+  const time = testClock();
+  const { events, change } = setup(time.clock);
+  const open = async (since?: string) => {
+    const answer = await events.open(viewer("a@x"), "zh", false, [], [], since ?? null);
+    return { resumed: (answer.headers as Record<string, string>)["stillfail-resumed"] === "1", ...reader(answer.body as AsyncIterable<Buffer>) };
+  };
+  // Something told before it, to a stream gone since: the new one is not told it, and goes on from after it.
+  const before = await open();
+  change({ type: "session", key: "s1" });
+  await settle();
+  await before.close();
+  const first = await open();
+  await settle();
+  const at = first.got.map((e) => /^id: ([0-9a-f]+\.\d+)\n\n$/.exec(e.raw)?.[1]).find((id) => id !== undefined);
+  assert.ok(at, JSON.stringify(first.got));
+  assert.deepEqual(first.got.filter((e) => e.event).map((e) => e.event), []);
+  // A quiet station: nothing else came on it before its link went.
+  await first.close();
+  change({ type: "session", key: "s2" });
+  await settle();
+  const back = await open(at);
+  await settle();
+  assert.equal(back.resumed, true);
+  // What was told after it (s2), and not what was told before it (s1).
+  assert.deepEqual(back.got.filter((e) => e.event === "session").map((e) => e.data.key), ["s2"]);
+  // Resumed, it is told no position of its own: what comes on it says where it is.
+  assert.equal(back.got.filter((e) => /^id: [^\n]+\n\n$/.test(e.raw)).length, 0);
+  await back.close();
+});
+
 test("streams opened while the sidebar could not be read are ended once it reads, and read the station again", async () => {
   const { events, rows, change } = setup(testClock().clock);
   const all = rows["a@x"]!;

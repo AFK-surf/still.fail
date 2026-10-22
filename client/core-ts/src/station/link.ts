@@ -45,9 +45,14 @@ export const STREAM_IDLE_MS = 40_000;
 /// A stream silent past one keepalive (and a little) may be on a link that is gone.
 export const STREAM_QUIET_MS = 30_000;
 /// A stream that ended before the station's first keepalive could have come on it (25 s) did not show the link can hold
-/// one: such streams in a row wait RECONNECT_MS doubling up to RECONNECT_MAX_MS, as a station not reached does. On a weak
-/// link each opened at once again two seconds later, and each read the chats shown and the station's screens again.
+/// one. Such streams in a row that the station was read afresh for, and that heard nothing to go on from (a station from
+/// before telling a stream where its log is, a quiet one), wait RECONNECT_MS doubling up to RECONNECT_MAX_MS, as a
+/// station not reached does: on a weak link each opened again two seconds later, and each read the whole station again
+/// (some dozen reads). Those that can go on from where they were (each then reads only what the chats shown missed) wait
+/// up to BRIEF_MAX_MS, and the station answering cuts that short: 60 s of 正在重连 after the link was good again, the
+/// agent's replies unshown, cost more than such a reading.
 export const STREAM_HELD_MS = 25_000;
+export const BRIEF_MAX_MS = 8_000;
 
 /// The steps in flight and the phase of a session at work, as its stream says them.
 export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number | null; usage: unknown; loaded: boolean };
@@ -181,6 +186,14 @@ export class Links {
     Deferred.doneUnsafe(back, Effect.void);
   }
 
+  /// The device's network is back (still.fail cloud reached again after it was not): every station with no stream open
+  /// tries now. A station not reached for some ten minutes waits OFFLINE_RETRY_MS between tries, and a computer whose
+  /// Wi-Fi stayed joined while nothing went through it says nothing of its network changing: it showed the station down
+  /// that long after the network was good.
+  networkBack(): void {
+    for (const link of this.#links.values()) if (link.heard === null) this.cameOnline(link.address);
+  }
+
   /// The station answered a request: it is reached, and its stream waiting to be tried again (for as long as
   /// OFFLINE_RETRY_MS) is tried now. A person's message went through and what it brought was read, while what the
   /// agent said after it stayed unsaid until the wait was over.
@@ -290,8 +303,11 @@ export class Links {
     if (!link) return;
     const state = value.state;
     if ((state === "online" || state === "offline") && this.#core.data.record("link", address) !== state) this.#core.data.put("link", address, state);
+    const was = link.state.state;
     link.state = value;
     this.#told.changed(address, "link");
+    // Reached again: what was to go to it while it was not goes now.
+    if (state === "online" && was !== "online") this.#core.viewCalls?.stationBack(address);
   }
 
   /// Down, and tried again now, until the try ends: one found offline is still taken for down (views.ts `down`), what
@@ -371,8 +387,9 @@ export class Links {
       /// How the stream before this one ended: why, how long it lasted, what came on it (over the link, and as read).
       let previous: { why: string; lasted: number; bytes: number; read: number; events: number } | null = null;
       let misses = 0;
-      /// Streams in a row that ended before STREAM_HELD_MS.
+      /// Streams in a row that ended before STREAM_HELD_MS; of those, the ones read afresh that heard nothing to go on from.
       let brief = 0;
+      let costly = 0;
       let reached = false;
       for (;;) {
         // Replaced before it opened: its successor asks instead.
@@ -448,11 +465,28 @@ export class Links {
             if (link.cursor.restored) span.set("stillfail.restored", true);
             span.end();
             let snapshotted = !handing && !resumed;
+            const sinceBefore = link.cursor.since;
             if (snapshotted) self.#told.afresh(address, span.context);
             // Told what changed while it was away, or handed over from a stream still heard (nothing was away).
             else self.#told.goesOn(address, { away: !handing, restored: link.cursor.restored });
             link.cursor.restored = false;
             handing = false;
+            // Its way's pings say how the link is while the stream is quiet: every way missing DEAD_PINGS in a row shows
+            // it coming back at once, not STREAM_IDLE_MS later; one answering again, or anything coming on the stream,
+            // shows it reached. The stream itself stays: it goes on if the link does.
+            const health = self.#requests.wire.healthChange?.bind(self.#requests.wire);
+            if (health)
+              yield* Effect.forkScoped(
+                Effect.gen(function* () {
+                  let up = true;
+                  for (;;) {
+                    up = yield* health(link.addr, up);
+                    if (link.generation !== generation) return;
+                    if (up && link.state.state === "reconnecting") self.setLink(address, { state: "online" });
+                    else if (!up && link.state.state === "online") self.setLink(address, { state: "reconnecting", message: t("station.core.streamIdle") });
+                  }
+                }),
+              );
             const parser = new SseParser();
             const openedAt = core.host.nowMs();
             // What came on it, for the span of the stream after it.
@@ -487,8 +521,14 @@ export class Links {
               heard = core.host.nowMs();
               link.heard = heard;
               read += chunk.length;
+              if (link.state.state === "reconnecting") self.setLink(address, { state: "online" });
               for (const [name, data, id] of parser.feed(chunk)) {
                 events++;
+                // Where the station's log is: nothing to tell, the next stream goes on from it.
+                if (name === "") {
+                  if (id !== undefined) link.cursor.heard(id);
+                  continue;
+                }
                 // Not all that was missed could be told: read again (once for this stream).
                 if (name === "missed") {
                   if (!snapshotted) self.#told.afresh(address, null);
@@ -504,7 +544,12 @@ export class Links {
             link.heard = null;
             const woke = why === GONE || why === NETWORK || why === t("station.core.replaced");
             const lasted = core.host.nowMs() - openedAt;
-            if (!woke) brief = lasted < STREAM_HELD_MS ? brief + 1 : 0;
+            // Brief, and the next would read the whole station again: one read afresh that heard nothing to go on from.
+            const afresh = snapshotted && link.cursor.since === sinceBefore;
+            if (!woke) {
+              brief = lasted < STREAM_HELD_MS ? brief + 1 : 0;
+              costly = lasted < STREAM_HELD_MS && afresh ? costly + 1 : 0;
+            }
             // Another way to the station is up (the requests moved to it, or one beside the way gone answers): the station
             // is reached, and the stream opens again there, going on from its last event, the station still shown as
             // reached. Shown as coming back each time, a phone on its station's LAN showed 正在重连 every minute or so as
@@ -531,13 +576,18 @@ export class Links {
         const comingBack = reached && misses < MISSES;
         const offline = !answered && (misses >= LONG_MISSES || (!comingBack && self.#cloudSaysOffline(address)));
         const backoff = (n: number) => Math.min(RECONNECT_MS * 2 ** Math.min(Math.max(n - 1, 0), 8), RECONNECT_MAX_MS);
-        const wait = offline ? OFFLINE_RETRY_MS : Math.max(answered ? RECONNECT_MS : backoff(misses), backoff(brief));
-        // The station answering a request, or the cloud saying it is back, is no news while its streams open but do not
-        // hold: those reads are what each stream opened brought (the chats shown, its screens), and opened one at once
-        // again. The UI coming back or the network changing is, and the stream is tried as the first again.
-        const back = brief > 1 ? Effect.never : Deferred.await(self.#backOf(address));
+        const held = costly > 0 ? backoff(costly) : Math.min(backoff(brief), BRIEF_MAX_MS);
+        const wait = offline ? OFFLINE_RETRY_MS : Math.max(answered ? RECONNECT_MS : backoff(misses), held);
+        // The station answering a request, or the cloud saying it is back, is no news while streams that each read the
+        // whole station open but do not hold: those reads are what each brought, and opened one at once again. Where the
+        // next goes on from where it was, it is: the link is good again. The UI coming back or the network changing
+        // always is, and the stream is tried as the first again.
+        // Its pings answering again after they went unanswered (mesh.ts `healthChange`) is the link good again too.
+        const change = self.#requests.wire.healthChange?.bind(self.#requests.wire);
+        const pinged = change ? Effect.flatMap(change(link.addr, true), () => change(link.addr, false)) : Effect.never;
+        const back = costly > 1 ? Effect.never : Effect.raceFirst(Deferred.await(self.#backOf(address)), Effect.asVoid(pinged));
         const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(null)), Effect.raceFirst(core.wakes.next.pipe(Effect.as("wake" as const)), back.pipe(Effect.as("back" as const))));
-        if (woken === "wake") brief = 0;
+        if (woken === "wake") brief = costly = 0;
         if (woken !== null) self.#retrying(address);
       }
     });

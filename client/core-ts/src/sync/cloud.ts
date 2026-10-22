@@ -534,13 +534,20 @@ export class CloudSync {
       });
     // One connection of the socket: open, read until it ends; what it ends as.
     type Ended = { failed: CoreError } | { ended: string; again: boolean };
+    // Whether a try to open the socket failed: one that opens after it says the device's network is back.
+    let down = false;
     const connection = (wait: { ms: number }): Effect.Effect<Ended> =>
       Effect.scoped(
         Effect.gen(function* () {
           const scope = yield* Effect.scope;
           const waiting = core.status.begin(CLOUD, t("core-misc.status.connect"), true);
           const opened = yield* Effect.result(openIn(scope).pipe(Effect.ensuring(Effect.sync(() => waiting.end()))));
-          if (opened._tag === "Failure") return { failed: opened.failure } as Ended;
+          if (opened._tag === "Failure") {
+            down = true;
+            return { failed: opened.failure } as Ended;
+          }
+          if (down) core.stations?.networkBack();
+          down = false;
           let socket = opened.success;
           let frames = socket.frames;
           const openedAt = core.host.nowMs();

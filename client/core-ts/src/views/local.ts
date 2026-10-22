@@ -35,6 +35,8 @@ export type Pending = {
   listed: boolean;
   /// Asked for, not answered yet (a restart asks again).
   making: boolean;
+  /// Not asked for: its station was down as it was to be (asked once the station is reached again).
+  unsent?: boolean;
 };
 
 /// An agent's first messages, sent before it has a chat.
@@ -175,6 +177,7 @@ export class Local {
     if (!chat || chat.made) return null;
     chat.failed = null;
     chat.making = true;
+    chat.unsent = undefined;
     for (const m of chat.queue) {
       m.state = "sending";
       m.error = null;
@@ -216,11 +219,13 @@ export class Local {
     return !!chat && chat.made === null && chat.failed !== null;
   }
 
-  pendingFailed(key: string, error: string): void {
+  /// `unsent`: it was not asked for (its station down), and is once the station is reached again.
+  pendingFailed(key: string, error: string, unsent = false): void {
     const chat = this.#pending.get(key);
     if (chat && !chat.made) {
       chat.failed = error;
       chat.making = false;
+      chat.unsent = unsent || undefined;
       for (const m of chat.queue) {
         m.state = "failed";
         m.error = error;
@@ -420,6 +425,18 @@ export class Local {
     return this.#outbox.get(join([station, thread])) ?? [];
   }
 
+  /// A station's messages that failed as it was not reached, oldest first in each chat; and its chats asked for here and
+  /// not asked of it, its having been down: what goes once it is reached again.
+  unreached(station: string): { messages: [number, string][]; chats: string[] } {
+    const messages: [number, string][] = [];
+    for (const [s, thread, list] of this.outboxes()) {
+      if (s !== station) continue;
+      for (const m of list) if (m.state === "failed" && m.unreached === true && m.final !== true) messages.push([thread, String(m.id)]);
+    }
+    const chats = [...this.#pending].filter(([, c]) => c.station === station && c.made === null && !c.making && c.unsent === true).map(([k]) => k);
+    return { messages, chats };
+  }
+
   /// Every chat with something in its outbox: what a restart sends again.
   outboxes(): [string, number, J[]][] {
     return [...this.#outbox].map(([k, list]) => {
@@ -480,8 +497,9 @@ export class Local {
 
   /// Marks an outgoing message `sending` again, or `failed` with the error's message (`final`: refused as it is, not to
   /// be sent again).
-  outboxState(station: string, thread: number, id: string, failed: string | null, final = false): void {
-    const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed, final: failed !== null && final ? true : undefined } : m));
+  /// `unreached`: it failed as its station was not reached (sent again once it is: its idempotency key makes it go once).
+  outboxState(station: string, thread: number, id: string, failed: string | null, final = false, unreached = false): void {
+    const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed, final: failed !== null && final ? true : undefined, unreached: failed !== null && unreached ? true : undefined } : m));
     this.#outboxPut(station, thread, list);
     this.onChange({ kind: "outbox", station, thread });
   }

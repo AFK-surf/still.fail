@@ -43,6 +43,7 @@
   "core-misc.call.no_new_session": "The station's reply has no new session",
   "core-misc.call.no_option": "No such option",
   "core-misc.call.no_outbox": "No such pending message",
+  "core-misc.call.waitingStation": "The station can't be reached right now; this goes once it can",
   "core-misc.call.push_unavailable": "{brand} cloud can't push yet",
   "core-misc.call.refused_for_good": "The station refused this message as it is; sending it again won't change that",
   "core-misc.call.reply_in_chat": "Reply to this card in the chat",

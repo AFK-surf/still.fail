@@ -121,8 +121,10 @@ export function stationHost(answers: Answers) {
     return jsonResponse(404, { error: "no" });
   };
   // How its events stream answers: opens, fails (the station is not reached), hangs (a try that takes long), or a
-  // status of its own; `resumes`: one asked `since` an event says it was told first what came after it.
-  const gate: { stream: "open" | "fail" | "hang" | number; resumes: boolean } = { stream: "open", resumes: false };
+  // status of its own; `resumes`: one asked `since` an event says it was told first what came after it; `marks`: one
+  // not resumed is told where the log is, an id alone (station/src/api/events.ts).
+  const gate: { stream: "open" | "fail" | "hang" | number; resumes: boolean; marks: boolean } = { stream: "open", resumes: false, marks: false };
+  let marked = 0;
   host.onFetchStream((req) =>
     Effect.gen(function* () {
       if (gate.stream === "fail") return yield* Effect.fail(new HostError("连不上"));
@@ -140,9 +142,11 @@ export function stationHost(answers: Answers) {
       // It opens as the station's does (a reader of zstd starts once it has 18 bytes), and asked compressed, each chunk
       // goes as it comes.
       Queue.offerUnsafe(queue, new TextEncoder().encode("retry: 3000\n\n"));
+      const resumed = gate.resumes && path.includes("since=");
+      if (gate.marks && !resumed) Queue.offerUnsafe(queue, new TextEncoder().encode(`id: abcdef.${++marked}\n\n`));
       const compress = asksCompressed(req) ? zstdBlocks() : null;
       const body: Pull<Uint8Array> = { take: Effect.map(Queue.take(queue), (c) => (c && compress ? compress(c) : c)) };
-      const headers: [string, string][] = [...(gate.resumes && path.includes("since=") ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
+      const headers: [string, string][] = [...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
       return { status: 200, headers, body };
     }),
   );

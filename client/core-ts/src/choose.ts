@@ -225,6 +225,12 @@ export class Choose implements Owner {
     return [all.filter((s) => s.online === true), all.length > 0];
   }
 
+  /// The scope's stations as listed, up or not.
+  #listed(scope: string): J[] {
+    const v = this.#env.store.value({ topic: "stations", scope });
+    return v !== undefined && "ok" in v ? arr(v.ok) : [];
+  }
+
   #newChat(scope: string): J {
     const kept = this.#kept(scope);
     const view: J = { kept, any: false, efforts: [], accounts: [], pickAccount: false, waiting: false, frequent: [] };
@@ -235,8 +241,19 @@ export class Choose implements Owner {
     }
     const [online, any] = found;
     view.any = any;
-    const station = structuredClone(online.find((s) => s.id === kept) ?? online[0]);
-    view.stations = online;
+    let station = structuredClone(online.find((s) => s.id === kept) ?? online[0]);
+    // None up, the one it was last written to down meanwhile (the network went as a person wrote): it stays, said to be
+    // down (`down`), what was written in it and what it runs as they were; what is sent waits for it (views/calls.ts
+    // `stationBack`). The page went to "no station" under a person's draft as the network went.
+    view.down = false;
+    if (station === undefined && kept !== "") {
+      const held = this.#listed(scope).find((s) => s.id === kept);
+      if (held !== undefined) {
+        station = structuredClone(held);
+        view.down = true;
+      }
+    }
+    view.stations = view.down ? [...online, station] : online;
     if (station === undefined) return view;
     const id = typeof station.id === "string" ? station.id : "";
     const name = typeof station.name === "string" ? station.name : "";

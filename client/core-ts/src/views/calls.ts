@@ -33,6 +33,9 @@ const request = (name: string, params: unknown) =>
 const settle = <A>(r: { _tag: "Success"; success: A } | { _tag: "Failure"; failure: CoreError }): Effect.Effect<A, CoreError> =>
   r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(r.failure);
 
+/// Whether a request failed for its station not being reached (the network, the link), not for what it asked.
+const unreachedCode = (error: CoreError) => error.code === "host" || error.code === "mesh" || error.code === "timeout";
+
 const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
 
 /// What goes out of a message written here, with the key that makes it go once however often it is sent.
@@ -111,7 +114,8 @@ export class ViewCalls {
       }
       // A 400 is the station refusing the message as it is (a file it does not have: one that went up to another
       // station): sent again, it would be refused again.
-      this.#local.outboxState(station, thread, id, result.failure.message, result.failure.status === 400);
+      // Not reached (no answer at all): sent again once its station is (`stationBack`).
+      this.#local.outboxState(station, thread, id, result.failure.message, result.failure.status === 400, result.failure.status === undefined && unreachedCode(result.failure));
       return yield* Effect.fail(result.failure);
     });
   }
@@ -121,6 +125,13 @@ export class ViewCalls {
     const tried = this.#local.pendingTry(key);
     if (tried === null) return;
     const [station, ask] = tried;
+    // Its station down as it was asked for: asked once it is reached again (`stationBack`), not tried and failed. Not
+    // after it was asked: a station may have made it whose answer did not come, and a chat is not made once whatever
+    // the times it is asked.
+    if (!this.#inner.stations.reachable(station)) {
+      this.#local.pendingFailed(key, t("core-misc.call.waitingStation"), true);
+      return;
+    }
     this.#inner.runner.fork(
       Effect.gen({ self: this }, function* () {
         const made = yield* Effect.result(
@@ -173,6 +184,17 @@ export class ViewCalls {
         for (const [id] of this.#local.firstMade(station, key, made.success)) yield* Effect.ignore(this.deliver(station, made.success, id, null));
       }),
     );
+  }
+
+  /// The station is reached again: its messages that failed as it was not go now, each chat's in order, and the chats
+  /// asked for here while it was down are asked for.
+  stationBack(station: string): void {
+    const { messages, chats } = this.#local.unreached(station);
+    for (const key of chats) this.makeChat(key);
+    for (const [thread, id] of messages) {
+      this.#local.outboxState(station, thread, id, null);
+      this.#inner.runner.fork(Effect.ignore(this.deliver(station, thread, id, null, true)));
+    }
   }
 
   /// What was on its way when the core last stopped goes on: messages sent and not answered, chats asked for.

@@ -81,6 +81,9 @@ export interface StationWire {
   /// Whether a way to the station is up now (one open that answered when last asked): a stream gone with its way opens
   /// again on another, the station not taken for coming back (never, for a wire with one way).
   standing?(station: StationAddr): boolean;
+  /// Succeeds once whether the way to the station answers its pings (every TICK_MS) is no longer `was`: false once each
+  /// way missed DEAD_PINGS in a row, true once one answers again (never, for a wire that does not ping).
+  healthChange?(station: StationAddr, was: boolean): Effect.Effect<boolean>;
   /// How the connection to the station runs now; null where there is none of its own.
   net?(station: StationAddr): LinkNet | null;
   /// Measures the ways to the station now.

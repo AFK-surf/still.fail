@@ -22,7 +22,7 @@ import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
-import { settle } from "./hub-fakes.ts";
+import { settle, testClock } from "./hub-fakes.ts";
 import { memoryMesh, vanish } from "./memory-mesh.ts";
 import { Superseded } from "../src/mesh/superseded.ts";
 
@@ -775,40 +775,57 @@ test("a view the station opens itself (an agent's) shows who has it, driving or 
   await person.served;
 });
 
-const waitFor = async (what: () => boolean) => {
-  while (!what()) await new Promise((r) => setTimeout(r, 20));
-};
+/// Moves `time` on 100 ms each time the station waits on it, until `done`: its time passes only while it waits, so
+/// what it does between its waits (asking the helper over its socket) comes first however slow the machine is.
+async function passing(time: ReturnType<typeof testClock>, done: () => boolean) {
+  let seen = time.asked();
+  for (let i = 0; i < 2_000 && !done(); i++) {
+    if (time.asked() > seen) {
+      seen = time.asked();
+      await time.adjust(100);
+    } else await new Promise((r) => setImmediate(r));
+  }
+  assert.ok(done(), "never came to pass");
+}
 
 test("the helper watched: ended by itself it is started again, once, its window up again for a grant still missing", { skip: WINDOWS }, async () => {
   const { app, dir } = helperRelease();
   const fake = new FakeHelperApp({ capture: false, control: false, display, responsible: responsible(dir) });
+  const time = testClock();
+  // Each time it is back: what the desktop does then, followed to its end before the helper goes again (a request of
+  // it still under way as the helper went would start it, as it should).
   let backs = 0;
-  const helper: HelperApp = new HelperApp({ app, dir, launch: fake.launch, onBack: () => (backs++, void desktop.helperBack()) });
+  let backing: Promise<void> = Promise.resolve();
+  const helper: HelperApp = new HelperApp({ app, dir, launch: fake.launch, clock: time.clock, onBack: () => (backs++, (backing = desktop.helperBack())) });
   const desktop: Desktop = new Desktop({ supported: true, helper, changed: () => {}, lang: () => "en" });
+  const back = async (n: number) => {
+    await passing(time, () => backs === n);
+    await backing;
+  };
   await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] }));
   assert.deepEqual([fake.launches, fake.shown.length, fake.watching], [1, 1, 1]);
   // One grant taken, then macOS quits it to reopen it, and does not: the station starts it, and asks for the other.
   fake.status = { ...fake.status, capture: true };
   fake.asking = false;
   fake.crash();
-  await waitFor(() => backs === 1 && fake.shown.length === 2);
-  assert.deepEqual([fake.launches, fake.watching], [2, 2]);
+  await back(1);
+  assert.deepEqual([fake.launches, fake.watching, fake.shown.length], [2, 2, 2]);
   // macOS reopened it itself this time: the station takes it as it is, a second one not started.
   fake.crash();
   await fake.reopen();
-  await waitFor(() => backs === 2 && fake.shown.length === 3);
-  assert.deepEqual([fake.launches, fake.watching], [2, 3]);
+  await back(2);
+  assert.deepEqual([fake.launches, fake.watching, fake.shown.length], [2, 3, 3]);
   // All granted: back once more, no window.
   fake.status = { ...fake.status, control: true };
   fake.crash();
   await fake.reopen();
-  await waitFor(() => backs === 3);
-  await settle();
+  await back(3);
   assert.equal(fake.shown.length, 3, "up again only while a grant was missing");
   // Asked to end with the station: not started again.
   await desktop.close();
   await settle();
-  await new Promise((r) => setTimeout(r, 50));
+  await time.adjust(60_000);
+  await settle();
   assert.equal(fake.launches, 2);
   fake.close();
 });

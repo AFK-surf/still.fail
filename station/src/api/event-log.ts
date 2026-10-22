@@ -88,6 +88,11 @@ export class EventLog<To> {
     return n === null ? [] : this.#kept.filter((e) => e.n > n && e.text !== "");
   }
 
+  /// Where the log is now (`<run>.<n>`): a stream told all that is appended from now on can go on from it.
+  at(): string {
+    return `${this.run}.${this.#seq}`;
+  }
+
   /// Lets go of all that is kept (nobody followed for long): nothing before now can be gone on from.
   clear(): void {
     this.#kept = [];
