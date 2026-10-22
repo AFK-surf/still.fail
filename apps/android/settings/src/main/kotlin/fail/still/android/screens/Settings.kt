@@ -746,9 +746,12 @@ private fun firstEmoji(text: String): String? {
 
 /**
  * A picked picture as a station's icon (web/src/stationPick.ts pictureOf): its middle square at 96 px, as a data URL small
- * enough to go with the workspace (WebP, else PNG, else JPEG); null when it can't be read or made small enough.
+ * enough to go with the workspace (WebP, else PNG, else JPEG); null when it can't be read or made small enough. A GIF
+ * that moves is put up as it is where it is small enough to (cloud/src/directory.ts GIF_BYTES); a larger one is made
+ * a still picture here (the web app draws it again smaller).
  */
 private suspend fun stationPictureOf(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
+    if (context.contentResolver.getType(uri) == "image/gif") movingPictureOf(context, uri)?.let { return@withContext it }
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
     var sample = 1
@@ -764,6 +767,21 @@ private suspend fun stationPictureOf(context: Context, uri: Uri): String? = with
         icon.compress(format, quality, out)
         "data:image/$type;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
     }?.takeIf { it.length <= 46_000 }
+}
+
+/** A GIF that moves, as a data URL, where it is small enough to go as it is; null otherwise. */
+private fun movingPictureOf(context: Context, uri: Uri): String? {
+    val most = 117_000 // bytes: 156 000 characters as a data URL
+    val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(16 * 1024)
+        while (out.size() <= most) { val n = input.read(buf); if (n < 0) break; out.write(buf, 0, n) }
+        out.toByteArray().takeIf { it.size <= most }
+    } ?: return null
+    val moves = try {
+        android.graphics.ImageDecoder.decodeDrawable(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes))) is android.graphics.drawable.AnimatedImageDrawable
+    } catch (_: Exception) { false }
+    return if (moves) "data:image/gif;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP) else null
 }
 
 /** A station's own actions: its name, its icon, and removing it from the workspace. */

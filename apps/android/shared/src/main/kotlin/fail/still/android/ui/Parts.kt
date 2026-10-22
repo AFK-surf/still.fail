@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -440,9 +442,11 @@ fun IconIn(icon: ImageVector, size: Dp = 18.dp, tint: Color = C.ink, modifier: M
 @Composable
 fun StationMark(emoji: String?, icon: String?, size: Dp, tint: Color, modifier: Modifier = Modifier, none: ImageVector? = null) {
     val glyph = StationIcons.of(icon)
-    val picture = remember(icon) { stationPicture(icon) }
+    val moving = remember(icon) { stationMoving(icon) }
+    val picture = remember(icon) { if (moving == null) stationPicture(icon) else null }
     when {
         glyph != null -> Icon(glyph.icon, null, modifier.size(size), tint = markColor(glyphColor(icon)) ?: tint)
+        moving != null -> MovingPicture(moving, modifier.size(size).clip(Smooth(size * 0.24f)))
         picture != null -> Image(picture, null, modifier.size(size).clip(Smooth(size * 0.24f)), contentScale = ContentScale.Crop)
         emoji != null -> Text(emoji, fontSize = (size.value * 0.9f).sp, lineHeight = size.value.sp, modifier = modifier)
         none != null -> Icon(none, null, modifier.size(size), tint = tint)
@@ -478,6 +482,42 @@ fun stationPicture(icon: String?): ImageBitmap? {
         val bytes = android.util.Base64.decode(icon.substringAfter("base64,"), android.util.Base64.DEFAULT)
         android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
     } catch (_: IllegalArgumentException) { null }
+}
+
+/** A GIF put up as a station's icon, decoded to move; null for any other picture, none, or one that does not move. */
+fun stationMoving(icon: String?): android.graphics.drawable.AnimatedImageDrawable? {
+    if (icon == null || !icon.startsWith("data:image/gif;")) return null
+    return try {
+        val bytes = android.util.Base64.decode(icon.substringAfter("base64,"), android.util.Base64.DEFAULT)
+        android.graphics.ImageDecoder.decodeDrawable(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes))) as? android.graphics.drawable.AnimatedImageDrawable
+    } catch (_: Exception) { null }
+}
+
+/** An animation filling its box, its middle square shown (as ContentScale.Crop), moving while it is shown. */
+@Composable
+private fun MovingPicture(drawable: android.graphics.drawable.AnimatedImageDrawable, modifier: Modifier) {
+    // The drawable asks to be drawn again for each frame; drawing reads `frame`, so each ask redraws it.
+    var frame by remember(drawable) { mutableStateOf(0) }
+    androidx.compose.runtime.DisposableEffect(drawable) {
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        drawable.callback = object : android.graphics.drawable.Drawable.Callback {
+            override fun invalidateDrawable(who: android.graphics.drawable.Drawable) { frame++ }
+            override fun scheduleDrawable(who: android.graphics.drawable.Drawable, what: Runnable, `when`: Long) { main.postAtTime(what, `when`) }
+            override fun unscheduleDrawable(who: android.graphics.drawable.Drawable, what: Runnable) { main.removeCallbacks(what) }
+        }
+        drawable.start()
+        onDispose { drawable.stop(); drawable.callback = null }
+    }
+    Canvas(modifier) {
+        if (frame < 0) return@Canvas
+        val w = drawable.intrinsicWidth.coerceAtLeast(1).toFloat()
+        val h = drawable.intrinsicHeight.coerceAtLeast(1).toFloat()
+        val scale = maxOf(size.width / w, size.height / h)
+        val left = ((size.width - w * scale) / 2).roundToInt()
+        val top = ((size.height - h * scale) / 2).roundToInt()
+        drawable.setBounds(left, top, left + (w * scale).roundToInt(), top + (h * scale).roundToInt())
+        drawIntoCanvas { drawable.draw(it.nativeCanvas) }
+    }
 }
 
 // ── navigation ─────────────────────────────────────────────────────────
