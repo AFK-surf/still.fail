@@ -1,20 +1,54 @@
 // The first idea: your devices, joined into one computer. Scrolled through, the devices first stand apart, each joined
 // to every other; then the real app comes in on its station page and each machine goes into its own row there, all
 // of them one list in one window; last, the same app on a phone.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { StationMark } from "../StationMark.tsx";
+import { NavItem, NavLine, navFill } from "../SidebarList.tsx";
+import { MeterChip } from "../components.tsx";
+import { netOf, stationViews } from "../demo/station.ts";
+import type { Meter } from "../core/shapes.ts";
+import { t } from "../i18n.ts";
+import * as railCss from "../Rail.css.ts";
+import * as stationCss from "../cloud/StationPage.css.ts";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
 
-/** The devices: the workspace's machines (the demo's stations: demo/station.ts stationViews, the same names and
- *  icons) and the phone they are used from. */
+/** The devices: the workspace's machines (the demo's stations, demo/station.ts stationViews, by name) and the phone
+ *  they are used from. */
 const DEVICES = [
-  { key: "phone", name: "手机", kind: "Android", icon: "glyph:phone:pink", station: false },
-  { key: "laptop", name: "笔记本", kind: "MacBook Pro", icon: "glyph:laptop:purple", station: true },
-  { key: "studio", name: "Studio", kind: "Mac Studio", icon: "glyph:desktop:orange", station: true },
-  { key: "mini", name: "Mini", kind: "Mac mini", icon: "glyph:mini:blue", station: true },
-  { key: "server", name: "服务器", kind: "Linux", icon: "glyph:database:green", station: true },
+  { key: "phone", name: "手机", station: false },
+  { key: "laptop", name: "笔记本", station: true },
+  { key: "studio", name: "Studio", station: true },
+  { key: "mini", name: "Mini", station: true },
+  { key: "server", name: "服务器", station: true },
 ];
+type Listed = ReturnType<typeof stationViews>[number];
+
+/**
+ * A device as the app lists it (cloud/StationPage.tsx StationRow, with the same parts and the demo's figures): its
+ * mark, name and whether it works, its CPU, memory and disk, how it is reached. So that it is seen to go into its
+ * row, it looks as that row does; the phone, not a station, as such a row would.
+ */
+function DeviceRow({ name, view }: { name: string; view: Listed | undefined }) {
+  if (!view) {
+    return (
+      <NavItem mark={<StationMark icon="glyph:phone:pink" size={16} />} title={name} end={<span className={railCss.dot} data-online />}>
+        <NavLine><span className={navFill}>Android · 正在使用</span></NavLine>
+      </NavItem>
+    );
+  }
+  const net = netOf(view.station);
+  const running = view.overview.counts.running;
+  return (
+    <NavItem mark={<StationMark icon={view.icon} size={16} />} title={view.name}
+      end={<><span className={railCss.dot} data-online />{running > 0 && <span className={stationCss.busy}>{t("web-pages.stations.page.runningShort", { n: running })}</span>}</>}>
+      <span className={stationCss.rowMeters}>
+        {(view.host.meters as unknown as Meter[]).map((m) => <MeterChip key={m.label} meter={m} brief bare />)}
+      </span>
+      <NavLine><span className={navFill}>{net.path}{" · "}<span className={stationCss.low} data-level={net.rtt.level}>{net.rtt.text}</span></span></NavLine>
+    </NavItem>
+  );
+}
 
 /** What the steps say, in order. */
 const STEPS = [
@@ -32,12 +66,12 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const mix = (a: Box, b: Box, t: number): Box => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), w: lerp(a.w, b.w, t), h: lerp(a.h, b.h, t) });
 
 /** The devices apart: where each stands, as centres in a design box, fitted into the room. */
-function apart(room: { w: number; h: number }, narrow: boolean): Box[] {
-  const design = narrow ? { w: 360, h: 520 } : { w: 1000, h: 540 };
+function apart(room: { w: number; h: number }, narrow: boolean, size?: { w: number; h: number }): Box[] {
+  const design = narrow ? { w: 360, h: 540 } : { w: 1000, h: 540 };
   const at = narrow
-    ? [[95, 70], [265, 150], [110, 250], [255, 350], [120, 450]]
+    ? [[150, 40], [210, 150], [150, 260], [210, 370], [150, 480]]
     : [[150, 360], [330, 110], [520, 320], [720, 110], [860, 400]];
-  const chip = narrow ? { w: 150, h: 52 } : { w: 196, h: 60 };
+  const chip = narrow ? { w: 280, h: 84 } : size ?? { w: 272, h: 84 };
   const s = Math.min(room.w / design.w, room.h / design.h, 1.15);
   // Near the words above, not lost in the middle of a tall room.
   const ox = (room.w - design.w * s) / 2, oy = Math.min((room.h - design.h * s) / 2, 32);
@@ -63,9 +97,14 @@ function rowsIn(win: HTMLElement, room: HTMLElement): (Box | undefined)[] {
   const at = room.getBoundingClientRect();
   return DEVICES.map((d) => {
     if (!d.station) return undefined;
-    const name = [...win.querySelectorAll("a, [role=link], [role=button]")].find((el) => el.textContent?.trim().startsWith(d.name));
-    if (!name) return undefined;
-    const r = name.getBoundingClientRect();
+    // Its name where the app writes it, then out to its row: a link or button (the computer's list), or a card as
+    // wide as the window (the phone's).
+    const words = [...win.querySelectorAll("span, b, div")].find((el) => el.childElementCount === 0 && el.textContent?.trim() === d.name);
+    let row: Element | null = words ?? null;
+    const wide = win.getBoundingClientRect().width * 0.85;
+    while (row && row !== win && !row.matches("a, button, [role=link], [role=button]") && row.getBoundingClientRect().width < wide) row = row.parentElement;
+    if (!row || row === win) return undefined;
+    const r = row.getBoundingClientRect();
     return r.width > 0 ? { x: r.left - at.left, y: r.top - at.top, w: r.width, h: r.height } : undefined;
   });
 }
@@ -77,6 +116,7 @@ export function OneComputer(props: DemoProps) {
   const chips = useRef<(HTMLDivElement | null)[]>([]);
   const lines = useRef<SVGGElement>(null);
   const [step, setStep] = useState(0);
+  const views = useMemo(() => stationViews(), []);
 
   useEffect(() => {
     const el = scene.current, space = room.current, box = win.current, wires = lines.current;
@@ -94,34 +134,37 @@ export function OneComputer(props: DemoProps) {
       const i = Math.min(Math.floor(x), steps.length - 2);
       const t = ease(clamp((x - i - 0.3) / 0.4));
       const from = steps[i]!, to = steps[i + 1]!;
-      // In the window, each machine goes to its row in the app's list (the phone, not one of them, to the window's
-      // corner); the rows are read where the window will stand, as it stands there at full size.
+      // In the window, each machine goes to its row in the app's list; the rows are read where the window stands (it
+      // stands there, at its size, before it is seen).
       const rows = rowsIn(box, space);
       const layout = (s: number) => {
-        if (s === 0) return { chips: apart(size, narrow), win: windowAt(size, false), shown: 0 };
+        const row = rows.find((r) => r);
+        if (s === 0) return { chips: apart(size, narrow, row && { w: row.w, h: row.h }), win: windowAt(size, false), shown: 0 };
         const w = windowAt(size, s === 2);
         const fallback = inWindow(w, s === 2);
-        return { chips: DEVICES.map((_, k) => (s === 1 && rows[k]) || fallback[k]!), win: w, shown: 1 };
+        return { chips: DEVICES.map((_, k) => rows[k] ?? fallback[k]!), win: w, shown: 1 };
       };
       const a = layout(from), b = layout(to);
-      // The window comes in where it will stand, from a little smaller; from the first step to the phone (a narrow
-      // screen) it comes in as the phone's.
-      const winA = from === 0 ? b.win : a.win;
-      const w = mix(winA, b.win, from === 0 ? 1 : t);
-      const shown = lerp(a.shown, b.shown, t);
-      const grow = from === 0 ? lerp(0.94, 1, t) : 1;
+      // Coming together: the devices fly to their rows first, over a window not there yet; then the window comes in
+      // under them, the app's rows exactly where they are; then they give way to the rows. Nothing seen through
+      // anything while it moves.
+      const joining = from === 0;
+      const move = joining ? ease(clamp(t / 0.7)) : t;
+      const shown = joining ? lerp(a.shown, b.shown, clamp((t - 0.6) / 0.3)) : lerp(a.shown, b.shown, t);
+      const w = joining ? b.win : mix(a.win, b.win, t);
       Object.assign(box.style, {
-        left: `${w.x}px`, top: `${w.y}px`, width: `${w.w}px`, height: `${w.h}px`, opacity: `${shown}`,
-        transform: `scale(${grow})`, visibility: shown > 0 ? "visible" : "hidden",
+        left: `${w.x}px`, top: `${w.y}px`, width: `${w.w}px`, height: `${w.h}px`, opacity: `${shown}`, visibility: shown > 0 ? "visible" : "hidden",
       });
-      const placed = a.chips.map((c, k) => mix(c, b.chips[k]!, t));
+      const placed = a.chips.map((c, k) => mix(c, b.chips[k]!, move));
       placed.forEach((c, k) => {
         const node = chips.current[k];
         if (!node) return;
-        Object.assign(node.style, { left: `${c.x}px`, top: `${c.y}px`, width: `${c.w}px`, height: `${c.h}px` });
-        // Once in, the app's own row is what shows: the device fades into it as it lands.
-        // The phone, not one of the machines, goes as the window comes; the machines as they reach their rows.
-        node.style.opacity = `${DEVICES[k]!.station ? 1 - clamp((shown - 0.55) / 0.35) : 1 - clamp(shown / 0.4)}`;
+        // As wide as its row, as tall as what it says (the row's own height).
+        Object.assign(node.style, { left: `${c.x}px`, top: `${c.y}px`, width: `${c.w}px` });
+        // The phone, not one of the machines, goes on its way; the machines once the window is under them.
+        const gone = joining ? (DEVICES[k]!.station ? clamp((t - 0.88) / 0.12) : clamp(t / 0.5)) : 1;
+        node.style.opacity = `${1 - gone}`;
+        node.style.visibility = gone < 1 ? "visible" : "hidden";
       });
       // Every device joined to every other while they stand apart.
       const centre = (c: Box) => [c.x + c.w / 2, c.y + c.h / 2] as const;
@@ -131,7 +174,7 @@ export function OneComputer(props: DemoProps) {
         const [x1, y1] = centre(placed[p]!), [x2, y2] = centre(placed[q]!);
         paths[n++]?.setAttribute("d", `M${x1} ${y1} L${x2} ${y2}`);
       }
-      wires.style.opacity = `${1 - shown}`;
+      wires.style.opacity = `${joining ? 1 - move : 0}`;
       setStep(t < 0.5 ? from : to);
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
@@ -168,8 +211,7 @@ export function OneComputer(props: DemoProps) {
             </div>
             {DEVICES.map((d, k) => (
               <div key={d.key} className={css.oneChip} ref={(node) => { chips.current[k] = node; }}>
-                <StationMark icon={d.icon} size={20} />
-                <span><b>{d.name}</b><small>{d.kind}</small></span>
+                <DeviceRow name={d.name} view={views.find((v) => v.name === d.name)} />
               </div>
             ))}
           </div>

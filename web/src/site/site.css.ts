@@ -274,14 +274,12 @@ globalStyle(`${oneWires} path`, {
   fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 60%, transparent)`, strokeWidth: 1.5, strokeDasharray: "5 8",
   animation: `${flowing} 1.4s linear infinite`, "@media": { [STILL]: { animation: "none" } },
 });
-/** A device, as a station is listed in the app: its mark, its name and what it is. */
+/** A device, as a station is listed in the app (OneComputer.tsx DeviceRow): on the sidebar's ground, lifted off the page. */
 export const oneChip = style({
-  position: "absolute", zIndex: 2, display: "flex", alignItems: "center", gap: "10px", padding: "0 10px", overflow: "hidden",
-  borderRadius: vars.rField, background: "var(--s-node)", boxShadow: `0 8px 24px -12px rgba(0, 0, 0, .25), inset 0 0 0 1px ${ink(12)}`,
+  position: "absolute", zIndex: 2, display: "grid", alignItems: "center", overflow: "hidden", padding: "0 4px",
+  borderRadius: vars.rField, background: vars.sidebar, boxShadow: `0 10px 30px -14px rgba(0, 0, 0, .3), inset 0 0 0 1px ${ink(10)}`,
 });
-globalStyle(`${oneChip} > span`, { display: "grid", minWidth: "0", whiteSpace: "nowrap" });
-globalStyle(`${oneChip} b`, { fontSize: vars.textBody, fontWeight: 600, color: FG });
-globalStyle(`${oneChip} small`, { fontSize: vars.textMeta, color: DIM });
+globalStyle(`${oneChip} > *`, { width: "100%", minWidth: "0" });
 export const oneWindow = style({
   position: "absolute", zIndex: 1, overflow: "hidden", borderRadius: vars.rCard, background: vars.canvas, transformOrigin: "center",
   boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), inset 0 0 0 1px ${ink(12)}`,
