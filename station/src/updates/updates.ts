@@ -47,6 +47,7 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { platform as machine } from "../platform/index.ts";
+import { holding, onLetGo } from "./holds.ts";
 import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
 import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
 import {
@@ -257,6 +258,7 @@ export class Updates {
   private started = false;
   private tick: Fiber.Fiber<unknown, unknown> | null = null;
   private unlisten: (() => void) | null = null;
+  private unhold: (() => void) | null = null;
   private lastSetting = "";
   /// The update of the station followed now: what ends following it.
   private following: (() => void) | null = null;
@@ -348,6 +350,10 @@ export class Updates {
       this.changed();
       this.schedule();
     });
+    // What held an update back (holds.ts) let go: one that waited goes ahead.
+    this.unhold = onLetGo(() => {
+      if (!this.closed) this.autoUpdate("what held the update back ended");
+    });
     this.started = true;
     this.followStarted();
     this.schedule();
@@ -358,6 +364,7 @@ export class Updates {
     if (this.closed) return;
     this.closed = true;
     this.unlisten?.();
+    this.unhold?.();
     this.following?.();
     this.following = null;
     await this.fibers.close();
@@ -621,9 +628,10 @@ export class Updates {
 
   /// The version the station updates itself to now, when it does: it updates itself, can be updated from here, is not
   /// updating, and its channel's latest is newer (not an older stable one back from the beta) and not one it already
-  /// went for. Running turns are not waited for: the update hands them over (or, restarting, to the next start).
+  /// went for. Running turns are not waited for: the update hands them over (or, restarting, to the next start). What
+  /// is not handed over is (holds.ts: a command run with a vault grant, whose proxy would go with this process).
   toUpdateTo(): string | null {
-    if (!this.auto()) return null;
+    if (!this.auto() || holding() > 0) return null;
     const item = this.items.station;
     if (item.note !== null || item.updating !== null || item.channel !== this.channel() || this.runtimeUpdating() !== null) return null;
     if (item.latest === null) return null;

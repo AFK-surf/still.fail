@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
 import { type Env, type Found, howToInstall, howToUpdate, findCommand, ownNode, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
+import { hold } from "../src/updates/holds.ts";
 import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
 import { WINDOWS, platform as machine } from "../src/platform/index.ts";
 import { windowsUpdateScript } from "../src/platform/windows.ts";
@@ -378,6 +379,21 @@ describe("updates", { concurrency: true }, () => {
     updates.stationWith("0.1.1310");
     // A turn running (a Slack one too): it is handed over, not waited for.
     updates.countRunning(() => 1);
+    assert.equal(updates.toUpdateTo(), "0.1.1310");
+  });
+
+  test("an automatic update waits for a command run with a vault grant, whose proxy would go with this process", async (t) => {
+    const dir = temp();
+    const updates = installed(dir, "1300", null);
+    t.after(() => updates.close());
+    new ConfigFile(dir).update((raw) => (raw.autoUpdate = true));
+    updates.stationWith("0.1.1310");
+    const first = hold(), second = hold();
+    assert.equal(updates.toUpdateTo(), null);
+    first();
+    first();
+    assert.equal(updates.toUpdateTo(), null, "one still runs (letting go twice is once)");
+    second();
     assert.equal(updates.toUpdateTo(), "0.1.1310");
   });
 
