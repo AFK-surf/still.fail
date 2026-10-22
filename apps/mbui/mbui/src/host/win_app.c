@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "win.h"
 #include "post.h"
 #include "done_watch.h"
@@ -575,6 +576,14 @@ double mb_host_wall_ms(void) {
   u.LowPart = ft.dwLowDateTime;
   u.HighPart = ft.dwHighDateTime;
   return (double)(u.QuadPart - 116444736000000000ULL) / 10000.0;
+}
+
+// how far local time is ahead of UTC then, in minutes (@hostapi.utc_offset_min)
+int32_t mb_host_utc_offset_min(double at_ms) {
+  __time64_t s = (__time64_t)(at_ms / 1000.0);
+  struct tm local, utc;
+  if (_localtime64_s(&local, &s) != 0 || _gmtime64_s(&utc, &s) != 0) return 0;
+  return (int32_t)((_mkgmtime64(&local) - _mkgmtime64(&utc)) / 60);
 }
 
 double mb_host_event_time(void) { return -1; }

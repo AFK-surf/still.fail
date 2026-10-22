@@ -742,9 +742,9 @@ fn paper_glass(p : PaperInk) -> Int64 {
 
 ///|
 /// A round key on a bar: 40 across, a 20 icon in the paper's ink.
-fn reader_icon(c : @ui.Ctx, key : String, icon : String, p : PaperInk) -> Bool {
+fn reader_icon(c : @ui.Ctx, key : String, icon : String, p : PaperInk, said~ : String) -> Bool {
   let id = c.id(key)
-  c.box(
+  let b = c.box(
     w=Px(40.0),
     h=Px(40.0),
     radius=20.0,
@@ -754,7 +754,8 @@ fn reader_icon(c : @ui.Ctx, key : String, icon : String, p : PaperInk) -> Bool {
     id~,
     fn() { @sf.icon(c, icon, size=20.0, color=p.ink) |> ignore },
   )
-  |> ignore
+  // named `said` (Reader.kt BarIcon's contentDescription)
+  c.semantics(b, Button, id~, label=said)
   c.clicked(id)
 }
 
@@ -784,13 +785,13 @@ fn reader_top_bar(
       id=c.id("reader-top"),
       fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), align=ACenter, fn() {
-          if reader_icon(c, "reader-back", "chevron-left", p) {
+          if reader_icon(c, "reader-back", "chevron-left", p, said=tr("common.back")) {
             app.nav.pop() |> ignore
           }
           match download {
             Some(f) => {
               c.spacer()
-              if reader_icon(c, "reader-download", "download", p) {
+              if reader_icon(c, "reader-download", "download", p, said=tr("android-misc.drive.download")) {
                 f()
               }
             }
@@ -856,13 +857,13 @@ fn found_pill(c : @ui.Ctx, r : TextReading, novel : Novel, p : PaperInk) -> Unit
           |> ignore
         })
         |> ignore
-        if reader_icon(c, "found-prev", "chevron-left", p) {
+        if reader_icon(c, "found-prev", "chevron-left", p, said=tr("android-misc.drive.reader.prevHit")) {
           step(-1)
         }
-        if reader_icon(c, "found-next", "chevron-right", p) {
+        if reader_icon(c, "found-next", "chevron-right", p, said=tr("android-misc.drive.reader.nextHit")) {
           step(1)
         }
-        if reader_icon(c, "found-close", "close", p) {
+        if reader_icon(c, "found-close", "close", p, said=tr("common.close")) {
           r.query = ""
           r.searched = ""
           r.matches = []
@@ -1292,14 +1293,14 @@ fn reader_stepper(
   let t = @sf.theme()
   reader_setting(c, label, fn() {
     c.box(dir=Row, gap=8.0, align=ACenter, fn() {
-      if reader_step_key(c, key + "/less", "minus", less) {
+      if reader_step_key(c, key + "/less", "minus", less, said=fill("android-misc.drive.reader.less", [("what", label)])) {
         step(-1)
       }
       c.box(w=Px(48.0), align=ACenter, fn() {
         c.text(value, size=17.0, weight=600, color=t.p.text, wrap=false) |> ignore
       })
       |> ignore
-      if reader_step_key(c, key + "/more", "plus", more) {
+      if reader_step_key(c, key + "/more", "plus", more, said=fill("android-misc.drive.reader.more", [("what", label)])) {
         step(1)
       }
     })
@@ -1308,10 +1309,10 @@ fn reader_stepper(
 }
 
 ///|
-fn reader_step_key(c : @ui.Ctx, key : String, icon : String, on : Bool) -> Bool {
+fn reader_step_key(c : @ui.Ctx, key : String, icon : String, on : Bool, said~ : String) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(
+  let b = c.box(
     w=Px(40.0),
     h=Px(40.0),
     radius=20.0,
@@ -1323,7 +1324,8 @@ fn reader_step_key(c : @ui.Ctx, key : String, icon : String, on : Bool) -> Bool 
       @sf.icon(c, icon, size=18.0, color=if on { t.p.text } else { t.p.subtle }) |> ignore
     },
   )
-  |> ignore
+  // named `said` (Reader.kt StepKey's contentDescription), off at its end
+  c.semantics(b, Button, id~, label=said, disabled=!on)
   on && c.clicked(id)
 }
 

@@ -654,7 +654,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
   }
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("android-misc.bar.title")) },
+    fn() { large_title(c, tr("android-misc.bar.title"), small=tr("android-misc.bar.small")) },
     fn() { page_note(c, tr("android-misc.bar.note")) },
   ]
   for i, set in sets {
@@ -677,7 +677,14 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
         }
         if sets.length() > 1 {
           c.box(pl=10.0, fn() {
-            if tap_text(c, "bar-delete/" + i.to_string(), tr("android-misc.bar.delete"), color=t.p.red, size=13.0) {
+            if tap_text(
+                c,
+                "bar-delete/" + i.to_string(),
+                tr("android-misc.bar.delete"),
+                color=t.p.red,
+                size=13.0,
+                said=fill("android-misc.bar.deleteNamed", [("n", (i + 1).to_string())]),
+              ) {
               if !is_made {
                 bar_adding.val = false
               } else {
@@ -748,10 +755,10 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
                 save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
               }
               // at the icon's top right, 8 above the slot (BarSettings.kt: TopCenter, offset 16, -8)
-              c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=-8.0, align=ACenter, justify=JCenter, id=rid, fn() {
+              let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=-8.0, align=ACenter, justify=JCenter, id=rid, fn() {
                 @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
               })
-              |> ignore
+              c.semantics(minus, Button, id=rid, label=fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))]))
             })
             |> ignore
           }

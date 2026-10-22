@@ -887,6 +887,11 @@ fn place_label(place : String) -> String {
 let bar_glyph : Ref[@sf.GlyphCounts?] = Ref(None)
 
 ///|
+/// What Station's place says to a screen reader as the bar last read it (Places.kt stationsSaid: the stations in the
+/// core's words, what is wrong with them), "" before or when the core said nothing of them.
+let bar_stations_said : Ref[String] = Ref("")
+
+///|
 /// A place's icon (Places.kt placeIcon; Station's is the stations' glyph of their state once read, bar_glyph).
 fn place_icon(place : String) -> String {
   match place {
@@ -1183,14 +1188,23 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), asleep while the core reaches
   // nothing at all
   let g = field(chats.value, "glyph")
+  let status = (src.topic)("status", { "workspace": Json::string(ws.id) }).value
+  let asleep = text(status, "state") == "trouble"
   bar_glyph.val = Some({
     online: count(g, "online"),
     dim: count(g, "dim"),
     failing: count(g, "failing"),
     working: count(g, "working"),
     connecting: count(g, "connecting"),
-    asleep: text((src.topic)("status", { "workspace": Json::string(ws.id) }).value, "state") == "trouble",
+    asleep,
   })
+  // in words: asleep, what the core cannot reach says it; else the stations (the core's), and what is wrong with them
+  let said = if asleep { text(status, "text") } else { text(g, "label") }
+  bar_stations_said.val = match field(chats.value, "trouble") {
+    _ if said == "" => ""
+    Some(Object(_)) as trouble => fill("android-chat.home.stations.trouble", [("said", said), ("trouble", text(trouble, "text"))])
+    _ => fill("android-chat.home.stations", [("said", said)])
+  }
   let m = bar
   // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, it moves from
   // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
@@ -1637,10 +1651,11 @@ fn place_at(
     if glass != 0 {
       c.presses_to(glass)
     }
-    c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
+    let face = c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
       place_face(c, key, idle, lit, tint, dots.get(key).unwrap_or(0L))
     })
-    |> ignore
+    // what a screen reader says of it (Bar.kt Place: its label; Station's, the stations in words)
+    c.semantics(face, Tab, label=if key == "stations" && bar_stations_said.val != "" { bar_stations_said.val } else { place_label(key) })
   })
 }
 

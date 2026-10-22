@@ -18,6 +18,7 @@ pub(open) trait Host {
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
   wall_ms(Self) -> Double = _
+  utc_offset_min(Self, Double) -> Int = _
   event_time(Self) -> Double = _
   platform(Self) -> Int = _
   request_frame(Self) -> Unit = _
@@ -192,6 +193,11 @@ impl Host with now(_) {
 ///|
 impl Host with wall_ms(_) {
   0.0
+}
+
+///|
+impl Host with utc_offset_min(_, _) {
+  0
 }
 
 ///|
@@ -957,6 +963,13 @@ pub fn now() -> Double {
 /// A run to a declared moment (a scripted shot) has its own: from a fixed day, on with its frames' clock.
 pub fn wall_ms() -> Double {
   current.val.wall_ms()
+}
+
+///|
+/// How far the machine's local time is ahead of UTC at `at_ms` (ms since 1970), in minutes (its zone and summer time):
+/// for a date or a time of day shown only. A run to a declared moment (a scripted shot) has 0, as its wall_ms is its own.
+pub fn utc_offset_min(at_ms : Double) -> Int {
+  current.val.utc_offset_min(at_ms)
 }
 
 ///|

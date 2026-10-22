@@ -1264,14 +1264,17 @@ let press_fade : @ui.Style = @ui.style(pressed=@ui.patch(opacity=O60))
 
 ///|
 /// Words that do something when tapped (a link's look: Theme.kt link). True on the frame after a tap.
-fn tap_text(c : @ui.Ctx, key : String, label : String, color? : Int64, size? : Double = 15.0) -> Bool {
+fn tap_text(c : @ui.Ctx, key : String, label : String, color? : Int64, size? : Double = 15.0, said? : String = "") -> Bool {
   let id = c.id(key)
-  c.box(style=press_fade, id~, fn() {
+  let b = c.box(style=press_fade, id~, fn() {
     // Settings.kt:447 (15sp), Profiles.kt:794, Vault.kt:365 (14sp): the theme's line, 1.4 its size (its size the
     // caller's)
     c.text(label, style=@sf.link.then(@sf.one_line), size~, line=size * 1.4, color?) |> ignore
   })
-  |> ignore
+  // `said`: what it says to a screen reader in place of its words (its contentDescription)
+  if said != "" {
+    c.semantics(b, Button, id~, label=said)
+  }
   hit(c, id)
 }
 

@@ -16,6 +16,17 @@
 /// The words this page adds (client/i18n/catalog/zh android-chat.json, common.json).
 // kept across runs: a table, never written
 let pv_zh : Map[String, String] = {
+  // what a marking's buttons say to a screen reader (ImageMarks.kt)
+  "android-chat.marks.downloadMarked": "下载标注后的图片",
+  "android-chat.marks.undo": "撤销",
+  "android-chat.marks.redo": "重做",
+  "android-chat.marks.color": "颜色",
+  "android-chat.marks.pin": "标注 {n}",
+  "android-chat.marks.tool.select": "选择",
+  "android-chat.marks.tool.rect": "框",
+  "android-chat.marks.tool.arrow": "箭头",
+  "android-chat.marks.tool.pen": "画笔",
+  "android-chat.marks.tool.text": "文字",
   // a note on a mark (Notes.kt NoteBox, Card)
   "android-chat.annotate.write": "添加批注（可选）",
   "android-chat.annotate.quoteOnly": "只引用",
@@ -2439,13 +2450,13 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
         timeline(c, v, n, dur, pos)
         c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
           c.box(dir=Row, gap=2.0, fn() {
-            if picture_button(c, "preview/prev", "chevron-left", dark_muted, on) {
+            if picture_button(c, "preview/prev", "chevron-left", dark_muted, on, said=pv("android-chat.video.prev")) {
               n.seek(start_of(at - 1))
               n.pause()
               step_log(at - 1, frames)
               v.wake(tap_rest_ms)
             }
-            if picture_button(c, "preview/play", if n.playing() { "pause" } else { "play" }, dark_muted, on) {
+            if picture_button(c, "preview/play", if n.playing() { "pause" } else { "play" }, dark_muted, on, said=pv(if n.playing() { "android-chat.video.pause" } else { "android-chat.video.play" })) {
               if n.playing() {
                 n.pause()
               } else {
@@ -2453,7 +2464,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
               }
               v.wake(tap_rest_ms)
             }
-            if picture_button(c, "preview/next", "chevron-right", dark_muted, on) {
+            if picture_button(c, "preview/next", "chevron-right", dark_muted, on, said=pv("android-chat.video.next")) {
               n.seek(start_of(at + 1))
               n.pause()
               step_log(at + 1, frames)
@@ -2523,14 +2534,14 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
           )
           |> ignore
           // 保存此帧: paused, the frame showing grabbed at its own size (VideoViewer.kt, MediaMetadataRetriever)
-          if picture_button(c, "preview/save-frame", "camera", dark_muted, on, enabled=!n.playing() && n.state() == 1 && !v.grabbing) {
+          if picture_button(c, "preview/save-frame", "camera", dark_muted, on, enabled=!n.playing() && n.state() == 1 && !v.grabbing, said=pv("android-chat.video.saveFrame")) {
             v.grabbing = true
             v.grab_frame = at
             n.grab_frame(start_of(at))
             v.wake(tap_rest_ms)
           }
           // 横屏: the phone turned for it (and back as the viewer closes)
-          if picture_button(c, "preview/landscape", "landscape", if v.turned { dark_text } else { dark_muted }, on) {
+          if picture_button(c, "preview/landscape", "landscape", if v.turned { dark_text } else { dark_muted }, on, said=pv(if v.turned { "android-chat.video.landscape.exit" } else { "android-chat.video.landscape" })) {
             v.turned = !v.turned
             @hostapi.set_sideways(v.turned)
             v.wake(tap_rest_ms)
@@ -2636,10 +2647,11 @@ fn picture_button(
   on : Bool,
   enabled? : Bool = true,
   held? : Bool = false,
+  said~ : String,
 ) -> Bool {
   let id = c.id(key)
   let live = on && enabled
-  c.box(
+  let b = c.box(
     w=Px(32.0),
     h=Px(32.0),
     radius=picture_key,
@@ -2650,7 +2662,8 @@ fn picture_button(
     id=if live { id } else { 0 },
     fn() { @sf.icon(c, icon, size=18.0, color=if held { dark_text } else { tint }) |> ignore },
   )
-  |> ignore
+  // named `said` (PictureButton's contentDescription), pressed while `held`
+  c.semantics(b, Button, id~, label=said, disabled=!enabled, pressed=held)
   live && c.clicked(id)
 }
 
@@ -3042,7 +3055,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
           Some(KImage) if marking.on => marks_actions(c, v.draft_key() != "", fn(draft) { v.finish_marks(c, draft) })
           Some(KImage) if !v.coming() => {
             let z = v.zoom
-            if picture_button(c, "preview/zoom-out", "minus", tint, on, enabled=z.scale > z.min_scale() + 0.0001) {
+            if picture_button(c, "preview/zoom-out", "minus", tint, on, enabled=z.scale > z.min_scale() + 0.0001, said=pv("android-chat.file.zoomOut")) {
               z.zoom_to(z.scale / 1.25, z.bw / 2.0, z.bh / 2.0, true)
               v.wake(tap_rest_ms)
             }
@@ -3054,12 +3067,12 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
               c.text("\{(z.scale * 100.0).round().to_int()}%", size=13.0, color=tint, wrap=false) |> ignore
             })
             |> ignore
-            if picture_button(c, "preview/zoom-in", "plus", tint, on, enabled=z.scale < max_scale - 0.0001) {
+            if picture_button(c, "preview/zoom-in", "plus", tint, on, enabled=z.scale < max_scale - 0.0001, said=pv("android-chat.file.zoomIn")) {
               z.zoom_to(z.scale * 1.25, z.bw / 2.0, z.bh / 2.0, true)
               v.wake(tap_rest_ms)
             }
             // 标注图片: once its whole picture is here (ImageMarks.kt)
-            if v.bytes is Some(_) && picture_button(c, "preview/mark", "edit", tint, on) {
+            if v.bytes is Some(_) && picture_button(c, "preview/mark", "edit", tint, on, said=pv("android-chat.file.mark")) {
               marks_start()
             }
           }
@@ -3087,11 +3100,11 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
         }
         if !v.coming() && !marking.on {
           let saving = v.bytes is Some(_) || (v.told_of() && !v.asked)
-          if picture_button(c, "preview/download", "download", tint, on && saving) {
+          if picture_button(c, "preview/download", "download", tint, on && saving, said=pv("android-chat.file.download")) {
             v.ask_save(c)
           }
         }
-        if picture_button(c, "preview/close", "close", tint, on || true) {
+        if picture_button(c, "preview/close", "close", tint, on || true, said=pv("common.close")) {
           v.shut(c)
         }
       },

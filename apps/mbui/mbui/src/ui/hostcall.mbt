@@ -200,6 +200,15 @@ fn h_wall_ms() -> Double {
 }
 
 ///|
+/// How far local time is ahead of UTC at `at_ms`, in minutes: a Tester's is UTC's (0).
+fn h_utc_offset_min(at_ms : Double) -> Int {
+  match fake.val {
+    Some(_) => 0
+    None => @hostapi.utc_offset_min(at_ms)
+  }
+}
+
+///|
 /// When the input event being handled happened (the host's, else now).
 fn h_event_time() -> Double {
   match fake.val {

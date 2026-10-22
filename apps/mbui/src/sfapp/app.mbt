@@ -163,6 +163,7 @@ fn reset() -> Unit {
   attention.told = false
   picture_pick.val = None
   bar_glyph.val = None
+  bar_stations_said.val = ""
   attention.visible = false
   attention.focused = false
   attention.workspace = ""

@@ -60,8 +60,8 @@
 {"step":"now tap =下方栏","acted":true,"w":1792609929549.937}
 {"step":"wait 300","w":1792609929591.721}
 {"step":"now until 第 1 栏","w":1792609929920.028}
-{"step":"tapxy 345 199","w":1792609929920.097}
-{"step":"tapxy 345 199","acted":true,"w":1792609929920.127}
+{"step":"tapxy 345 226","w":1792609929920.097}
+{"step":"tapxy 345 226","acted":true,"w":1792609929920.127}
 {"out":{"id":23,"call":"prefs.set","params":{"barsBy":{"01M5FY1BMWAA22GSZHSE6SRTC0":{"sets":[["chats","files","profiles"],["decisions","usage","connects","archive"]],"current":0}}}},"w":1792609929935.937}
 {"step":"answered prefs.set","w":1792609929936.471}
 {"in":{"id":23,"ok":null},"w":1792609929952.338}

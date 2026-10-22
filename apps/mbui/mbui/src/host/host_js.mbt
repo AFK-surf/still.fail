@@ -150,6 +150,16 @@ fn wall_ms() -> Double {
 }
 
 ///|
+extern "js" fn js_utc_offset_min(at_ms : Double) -> Int =
+  #|(ms) => (globalThis.__mbhost && globalThis.__mbhost.utcOffsetMin) ? globalThis.__mbhost.utcOffsetMin(ms) : -new Date(ms).getTimezoneOffset()
+
+///|
+/// How far local time is ahead of UTC at `at_ms`, in minutes (@hostapi.utc_offset_min).
+fn utc_offset_min(at_ms : Double) -> Int {
+  js_utc_offset_min(at_ms)
+}
+
+///|
 /// When the input event being delivered happened, on now()'s clock (ms);
 /// negative when the host doesn't say.
 fn event_time() -> Double {

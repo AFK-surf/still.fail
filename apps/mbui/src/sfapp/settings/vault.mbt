@@ -64,7 +64,7 @@ fn vault_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     fn() {
       if usable {
         top_back(c, core, tr("android-settings.title"), trailing=fn() {
-          if round_icon(c, "vault-add", "plus", @sf.theme().p.text) {
+          if round_icon(c, "vault-add", "plus", @sf.theme().p.text, said=tr("android-settings.vault.add")) {
             open_vault_add(core, here)
           }
         })

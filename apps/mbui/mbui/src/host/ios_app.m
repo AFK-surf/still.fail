@@ -598,6 +598,11 @@ double mb_host_now(void) { return mb_now_ms(); }
 // The time of day (host_native.mbt's wall_ms).
 double mb_host_wall_ms(void) { return [[NSDate date] timeIntervalSince1970] * 1000.0; }
 
+// how far local time is ahead of UTC then, in minutes (@hostapi.utc_offset_min)
+int32_t mb_host_utc_offset_min(double at_ms) {
+  return (int32_t)([[NSTimeZone localTimeZone] secondsFromGMTForDate:[NSDate dateWithTimeIntervalSince1970:at_ms / 1000.0]] / 60);
+}
+
 double mb_host_event_time(void) { return event_time; }
 
 int32_t mb_host_platform(void) { return 1; }
