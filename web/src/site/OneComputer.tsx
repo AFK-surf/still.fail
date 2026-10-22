@@ -1,29 +1,26 @@
 // The first idea: your devices, joined into one computer. Scrolled through, the devices first stand apart, each joined
-// to every other; then they go into one window, as its list of devices, and the window shows what is on all of them
-// together (conversations, files, subscriptions, tasks), each line saying which device it is on; last, the same window
-// on a phone.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+// to every other; then the real app comes in on its station page and each machine goes into its own row there, all
+// of them one list in one window; last, the same app on a phone.
+import { useEffect, useRef, useState } from "react";
+import { StationMark } from "../StationMark.tsx";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
 
-const ICON = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
-
-/** The devices, each with what it is and the colour that marks what is on it. */
-const DEVICES: { key: string; name: string; kind: string; color: string; icon: ReactNode }[] = [
-  { key: "phone", name: "手机", kind: "Android", color: "#71717A", icon: <svg {...ICON}><rect x="7" y="3" width="10" height="18" rx="2.5" /><path d="M11 18h2" /></svg> },
-  { key: "laptop", name: "笔记本", kind: "MacBook", color: "#8B5CF6", icon: <svg {...ICON}><rect x="5" y="5" width="14" height="10" rx="1.5" /><path d="M3 19h18" /></svg> },
-  { key: "studio", name: "Studio", kind: "Mac Studio", color: "#E5704A", icon: <svg {...ICON}><rect x="4" y="9" width="16" height="9" rx="2.5" /><path d="M8 15h2" /></svg> },
-  { key: "mini", name: "Mini", kind: "Mac mini", color: "#3B82F6", icon: <svg {...ICON}><rect x="4" y="11" width="16" height="6" rx="2" /><path d="M8 14h1" /></svg> },
-  { key: "server", name: "服务器", kind: "Linux", color: "#16A34A", icon: <svg {...ICON}><rect x="5" y="4" width="14" height="7" rx="1.5" /><rect x="5" y="13" width="14" height="7" rx="1.5" /><path d="M8 7.5h1M8 16.5h1" /></svg> },
+/** The devices: the workspace's machines (the demo's stations: demo/station.ts stationViews, the same names and
+ *  icons) and the phone they are used from. */
+const DEVICES = [
+  { key: "phone", name: "手机", kind: "Android", icon: "glyph:phone:pink", station: false },
+  { key: "laptop", name: "笔记本", kind: "MacBook Pro", icon: "glyph:laptop:purple", station: true },
+  { key: "studio", name: "Studio", kind: "Mac Studio", icon: "glyph:desktop:orange", station: true },
+  { key: "mini", name: "Mini", kind: "Mac mini", icon: "glyph:mini:blue", station: true },
+  { key: "server", name: "服务器", kind: "Linux", icon: "glyph:database:green", station: true },
 ];
-const color = (key: string) => DEVICES.find((d) => d.key === key)!.color;
-const nameOf = (key: string) => DEVICES.find((d) => d.key === key)!.name;
 
 /** What the steps say, in order. */
 const STEPS = [
   { title: "设备之间点对点连接", text: "手机、笔记本、台式机和服务器两两直连，无法直连时经加密中继转发" },
-  { title: "用起来像一台电脑", text: "一个界面里是所有设备上的对话、文件、订阅和任务" },
-  { title: "在手机上也是全部", text: "从任何一台设备打开，看到的都是所有设备" },
+  { title: "用起来像一台电脑", text: "所有设备在同一个 still.fail 里，每台的文件、订阅和任务都能用" },
+  { title: "在手机上也一样", text: "从任何一台设备打开，看到的都是所有设备" },
 ];
 
 // ---- Where things are at each step ----
@@ -61,6 +58,18 @@ function inWindow(win: Box, phone: boolean): Box[] {
   return DEVICES.map((_, i) => ({ x: win.x + 12 + i * (w + gap), y: win.y + 56, w, h: 40 }));
 }
 
+/** Where each machine's row is in the app's station list (the live demo), in the room; none before the app is there. */
+function rowsIn(win: HTMLElement, room: HTMLElement): (Box | undefined)[] {
+  const at = room.getBoundingClientRect();
+  return DEVICES.map((d) => {
+    if (!d.station) return undefined;
+    const name = [...win.querySelectorAll("a, [role=link], [role=button]")].find((el) => el.textContent?.trim().startsWith(d.name));
+    if (!name) return undefined;
+    const r = name.getBoundingClientRect();
+    return r.width > 0 ? { x: r.left - at.left, y: r.top - at.top, w: r.width, h: r.height } : undefined;
+  });
+}
+
 export function OneComputer(props: DemoProps) {
   const scene = useRef<HTMLElement>(null);
   const room = useRef<HTMLDivElement>(null);
@@ -85,10 +94,14 @@ export function OneComputer(props: DemoProps) {
       const i = Math.min(Math.floor(x), steps.length - 2);
       const t = ease(clamp((x - i - 0.3) / 0.4));
       const from = steps[i]!, to = steps[i + 1]!;
+      // In the window, each machine goes to its row in the app's list (the phone, not one of them, to the window's
+      // corner); the rows are read where the window will stand, as it stands there at full size.
+      const rows = rowsIn(box, space);
       const layout = (s: number) => {
         if (s === 0) return { chips: apart(size, narrow), win: windowAt(size, false), shown: 0 };
         const w = windowAt(size, s === 2);
-        return { chips: inWindow(w, s === 2), win: w, shown: 1 };
+        const fallback = inWindow(w, s === 2);
+        return { chips: DEVICES.map((_, k) => (s === 1 && rows[k]) || fallback[k]!), win: w, shown: 1 };
       };
       const a = layout(from), b = layout(to);
       // The window comes in where it will stand, from a little smaller; from the first step to the phone (a narrow
@@ -106,8 +119,9 @@ export function OneComputer(props: DemoProps) {
         const node = chips.current[k];
         if (!node) return;
         Object.assign(node.style, { left: `${c.x}px`, top: `${c.y}px`, width: `${c.w}px`, height: `${c.h}px` });
-        // On the phone's window only their marks show.
-        node.style.setProperty("--words", `${clamp((c.w - 90) / 60)}`);
+        // Once in, the app's own row is what shows: the device fades into it as it lands.
+        // The phone, not one of the machines, goes as the window comes; the machines as they reach their rows.
+        node.style.opacity = `${DEVICES[k]!.station ? 1 - clamp((shown - 0.55) / 0.35) : 1 - clamp(shown / 0.4)}`;
       });
       // Every device joined to every other while they stand apart.
       const centre = (c: Box) => [c.x + c.w / 2, c.y + c.h / 2] as const;
@@ -149,10 +163,12 @@ export function OneComputer(props: DemoProps) {
           </div>
           <div className={css.oneRoom} ref={room}>
             <svg className={css.oneWires} aria-hidden><g ref={lines}>{Array.from({ length: pairs }, (_, i) => <path key={i} />)}</g></svg>
-            <div className={css.oneWindow} ref={win}><AllDevices /></div>
+            <div className={css.oneWindow} ref={win}>
+              <Demo v="1" start="stations" className={css.oneDemo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
+            </div>
             {DEVICES.map((d, k) => (
               <div key={d.key} className={css.oneChip} ref={(node) => { chips.current[k] = node; }}>
-                <i style={{ background: d.color }}>{d.icon}</i>
+                <StationMark icon={d.icon} size={20} />
                 <span><b>{d.name}</b><small>{d.kind}</small></span>
               </div>
             ))}
@@ -160,47 +176,6 @@ export function OneComputer(props: DemoProps) {
         </div>
       </section>
 
-      <section className={css.section}>
-        <div className={css.wrap}>
-          <h2 className={css.headingTitle}>试用 still.fail</h2>
-          <p className={css.headingLede}>以下为使用示例数据的 still.fail</p>
-          <div className={`${css.edge} ${css.demoAfterHeading}`}>
-            <Demo v="1" {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
-          </div>
-        </div>
-      </section>
     </>
-  );
-}
-
-// ---- The window: what is on all the devices, together ----
-
-const PANELS: { title: string; rows: { text: string; on: string; note?: string }[] }[] = [
-  { title: "对话", rows: [{ text: "登录页手机适配", on: "studio" }, { text: "排查 API 变慢", on: "server" }, { text: "每周依赖升级", on: "mini" }] },
-  { title: "文件", rows: [{ text: "Projects/still.fail", on: "studio" }, { text: "Desktop/设计稿", on: "laptop" }, { text: "/var/log/api", on: "server" }] },
-  { title: "订阅", rows: [{ text: "Claude Max", on: "studio", note: "所有设备可用" }, { text: "ChatGPT Pro", on: "mini", note: "所有设备可用" }] },
-  { title: "任务", rows: [{ text: "pnpm test", on: "studio", note: "运行中" }, { text: "数据库备份", on: "server", note: "运行中" }, { text: "构建 Android", on: "mini", note: "运行中" }] },
-];
-
-function AllDevices() {
-  return (
-    <div className={css.all}>
-      <div className={css.allHead}><b>所有设备</b><span>5 台在线</span></div>
-      <div className={css.allSide} />
-      <div className={css.allMain}>
-        {PANELS.map((p) => (
-          <div key={p.title} className={css.allPanel}>
-            <b className={css.allTitle}>{p.title}</b>
-            {p.rows.map((r) => (
-              <div key={r.text} className={css.allRow}>
-                <span className={css.allText}>{r.text}</span>
-                {r.note && <span className={css.allNote}>{r.note}</span>}
-                <span className={css.allOn}><i style={{ background: color(r.on) }} />{nameOf(r.on)}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }

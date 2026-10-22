@@ -96,9 +96,10 @@ function demoValueOf(topic: Topic): unknown {
     case "history": return chat ? historyView(chat) : null;
     case "agentCard": return chat ? agentCardView(chat) : null;
     case "host": return station.host();
-    case "stationNet": return station.NET;
+    case "stationNet": return start === "stations" && typeof topic.station === "string" ? station.netOf(topic.station) : station.NET;
     case "connects": return station.connects();
-    case "stations": return [station.stationView()];
+    // The site's page that shows the workspace's machines together has them all; elsewhere the chats' one.
+    case "stations": return start === "stations" ? station.stationViews() : [station.stationView()];
     case "archive": return station.archive(topic.q, topic.limit);
     case "profiles": return station.profiles();
     case "usage": return station.usage(topic.days ?? 7);
@@ -494,7 +495,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
   return (
     <ToastProvider>
       <Tooltip.Provider delayDuration={400}>
-        <MemoryRouter key={phone ? "phone" : "wide"} initialEntries={[`/w/${ENTRY.id}`, chatPath(key)]} initialIndex={1}>
+        <MemoryRouter key={phone ? "phone" : "wide"} initialEntries={start === "stations" ? [`/w/${ENTRY.id}/settings/stations`] : [`/w/${ENTRY.id}`, chatPath(key)]} initialIndex={start === "stations" ? 0 : 1}>
           <Director />
           <GoKeeper />
           <Routes><Route path="/w/:ws/*" element={phone ? <MobileWorkspace entry={ENTRY} /> : <WorkspaceShell entry={ENTRY} />} /></Routes>
@@ -515,9 +516,14 @@ export function endDemo(): void {
   story.end();
 }
 
-export function mountDemo(element: HTMLElement): void {
+/** Where the demo opens: on its chat, the story played (the default); or on the stations' page, as the page that shows
+ *  all of the workspace's machines together, no story played. */
+let start: "chat" | "stations" = "chat";
+
+export function mountDemo(element: HTMLElement, options: { start?: "chat" | "stations" } = {}): void {
   if (mounted) return;
   mounted = true;
+  start = options.start ?? "chat";
   root = element;
   // What the page was built with (its opening frame, as HTML) gives way to the demo itself.
   root.replaceChildren();
@@ -566,7 +572,7 @@ export function mountDemo(element: HTMLElement): void {
   }, true);
 
   // Played once the demo is seen: most of it in view.
-  new IntersectionObserver((entries, observer) => {
+  if (start === "chat") new IntersectionObserver((entries, observer) => {
     if (!entries.some((e) => e.isIntersecting)) return;
     observer.disconnect();
     void story.play();

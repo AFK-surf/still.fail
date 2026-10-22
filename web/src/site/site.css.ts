@@ -274,40 +274,21 @@ globalStyle(`${oneWires} path`, {
   fill: "none", stroke: `color-mix(in srgb, ${ORANGE} 60%, transparent)`, strokeWidth: 1.5, strokeDasharray: "5 8",
   animation: `${flowing} 1.4s linear infinite`, "@media": { [STILL]: { animation: "none" } },
 });
-/** A device: its mark in its colour, its name and what it is; its words fade where it is too small for them. */
+/** A device, as a station is listed in the app: its mark, its name and what it is. */
 export const oneChip = style({
   position: "absolute", zIndex: 2, display: "flex", alignItems: "center", gap: "10px", padding: "0 10px", overflow: "hidden",
   borderRadius: vars.rField, background: "var(--s-node)", boxShadow: `0 8px 24px -12px rgba(0, 0, 0, .25), inset 0 0 0 1px ${ink(12)}`,
 });
-globalStyle(`${oneChip} > i`, { flex: "none", display: "grid", placeItems: "center", width: "30px", height: "30px", borderRadius: "8px", color: "#FFFFFF" }); // own corner: a device's mark
-globalStyle(`${oneChip} > span`, { display: "grid", minWidth: "0", opacity: "var(--words, 1)", whiteSpace: "nowrap" });
+globalStyle(`${oneChip} > span`, { display: "grid", minWidth: "0", whiteSpace: "nowrap" });
 globalStyle(`${oneChip} b`, { fontSize: vars.textBody, fontWeight: 600, color: FG });
 globalStyle(`${oneChip} small`, { fontSize: vars.textMeta, color: DIM });
 export const oneWindow = style({
-  position: "absolute", zIndex: 1, overflow: "hidden", borderRadius: vars.rCard, background: "var(--s-node)", transformOrigin: "center", containerType: "size",
+  position: "absolute", zIndex: 1, overflow: "hidden", borderRadius: vars.rCard, background: vars.canvas, transformOrigin: "center",
   boxShadow: `0 40px 90px -40px rgba(0, 0, 0, .35), inset 0 0 0 1px ${ink(12)}`,
 });
-/** What is on all the devices (the window is its container): a sidebar the devices land in, and a panel each for conversations, files, subscriptions and
- *  tasks; as wide as a phone, the devices along the top and the panels one under another. */
-export const all = style({
-  display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gridTemplateRows: "48px minmax(0, 1fr)", height: "100%",
-  "@container": { "(max-width: 600px)": { gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: "48px 52px minmax(0, 1fr)" } },
-});
-export const allHead = style({ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: "8px", padding: "14px 18px", borderBottom: `1px solid ${LINE}` });
-globalStyle(`${allHead} > b`, { fontSize: vars.textTitle, color: FG });
-globalStyle(`${allHead} > span`, { fontSize: vars.textUi, color: DIM });
-export const allSide = style({ borderRight: `1px solid ${LINE}`, background: CARD, "@container": { "(max-width: 600px)": { borderRight: "0", borderBottom: `1px solid ${LINE}` } } });
-export const allMain = style({
-  display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", alignContent: "start", gap: "14px", padding: "18px", overflow: "hidden",
-  "@container": { "(max-width: 600px)": { gridTemplateColumns: "minmax(0, 1fr)", padding: "14px" } },
-});
-export const allPanel = style({ display: "grid", alignContent: "start", gap: "2px", padding: "12px", borderRadius: vars.rField, boxShadow: `inset 0 0 0 1px ${LINE}` });
-export const allTitle = style({ marginBottom: "6px", fontSize: vars.textUi, fontWeight: 600, color: DIM });
-export const allRow = style({ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: vars.textBody, color: FG });
-export const allText = style({ flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const allNote = style({ fontSize: vars.textMeta, color: DIM, whiteSpace: "nowrap" });
-export const allOn = style({ display: "inline-flex", alignItems: "center", gap: "6px", padding: "2px 8px", borderRadius: "999px", background: ink(5), fontSize: vars.textMeta, color: "var(--s-muted)", whiteSpace: "nowrap" });
-globalStyle(`${allOn} > i`, { width: "7px", height: "7px", borderRadius: "50%" });
+/** The app in the window: as large as the window, cut by its corners. */
+export const oneDemo = style({});
+globalStyle(`${oneWindow} > ${oneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
 
 // ---- The second idea: the distance (Distance.tsx) ----
 

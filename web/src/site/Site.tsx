@@ -51,16 +51,16 @@ const showing = (v: string) => (document.documentElement.dataset.v ?? "1") === v
  * HTML, it holds the demo's opening frame (`frame`, desktop and phone), which the demo replaces as it mounts; React
  * leaves what is in it alone.
  */
-export function Demo({ mount, frame, v, className }: { mount?: (root: HTMLElement) => void; frame?: { wide: string; phone: string }; v: string; className?: string }) {
+export function Demo({ mount, frame, v, className, start }: { mount?: DemoProps["mountDemo"]; frame?: { wide: string; phone: string }; v: string; className?: string; start?: "chat" | "stations" }) {
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (root.current && mount && showing(v)) mount(root.current);
-  }, [mount, v]);
+    if (root.current && mount && showing(v)) mount(root.current, start ? { start } : {});
+  }, [mount, v, start]);
   const html = frame ? `<div class="${css.frameWide}">${frame.wide}</div><div class="${css.framePhone}">${frame.phone}</div>` : "";
   return <div className={`${css.demo} ${className ?? ""}`} id="demo" ref={root} dangerouslySetInnerHTML={{ __html: html }} suppressHydrationWarning />;
 }
 
-export interface DemoProps { mountDemo?: (root: HTMLElement) => void; demo?: { wide: string; phone: string } }
+export interface DemoProps { mountDemo?: (root: HTMLElement, options?: { start?: "chat" | "stations" }) => void; demo?: { wide: string; phone: string } }
 
 /** What it promises about where things are. */
 const PROMISES = [
