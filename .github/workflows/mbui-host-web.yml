@@ -9,7 +9,7 @@ on:
   pull_request:
     paths: &paths
       - "apps/mbui/mbui/src/ui/native.mbt"
-      - "apps/mbui/mbui/src/kitdemo/viewcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/web/**"
       - "apps/mbui/mbui/src/host/host_js.mbt"
       - "apps/mbui/mbui/src/host/textref_js.mbt"
@@ -18,8 +18,8 @@ on:
       - "apps/mbui/mbui/scripts/host_contract.sh"
       - "apps/mbui/mbui/scripts/textrec_test.py"
       - "apps/mbui/mbui/test/host/**"
-      - "apps/mbui/mbui/src/kitdemo/textcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/textrec_web_*"
+      - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/textrec_web_*"
       - "apps/mbui/mbui/src/host/stream*"
       - "apps/mbui/mbui/src/ui/stream*"
       - "apps/mbui/mbui/src/streamdemo/**"

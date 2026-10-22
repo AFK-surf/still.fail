@@ -65,7 +65,7 @@ PY
   [ -z "$t" ] || [ -z "$tag" ] || [ "$tag" = "$t" ] || die "$n was recorded with the mark $t, the others before it $tag: rerecord them apart"
   [ -n "$t" ] && tag=$t; [ -n "$s" ] && station=$s
   echo "rerecord: $n ← $test (trace $trace, mark ${t:-none of its own}${s:+, station $s})"
-  FLOW_EMIT="$TMP/$idx-$n.drive" moon test --target js "$test" > "$TMP/$idx-$n.test.log" 2>&1
+  FLOW_EMIT="$TMP/$idx-$n.drive" moon_test_native "$test" > "$TMP/$idx-$n.test.log" 2>&1
   [ -s "$TMP/$idx-$n.drive" ] || { grep -a 'Error\]\|error:\|failed\|^flow:' "$TMP/$idx-$n.test.log" | head -20 | cut -c1-300; die "$test wrote no script"; }
   # (from a starting point (E2E_START), the app's core already made: the first start's `migrate`, which a test over a
   # first start's trace waits for, is not asked again)
@@ -127,7 +127,7 @@ for x in $tests; do
   cp "$mbt" "$TMP/$(basename "$mbt").old"
   python3 scripts/trace.py "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"
   python3 scripts/tracediff.py "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
-  if moon test --target js "$test" > "$TMP/$name.after.log" 2>&1; then echo "  $test: passes"; else
+  if moon_test_native "$test" > "$TMP/$name.after.log" 2>&1; then echo "  $test: passes"; else
     echo "  $test: fails over the new trace ($TMP/$name.after.log):"; grep -a '^flow:\|assert_idle' "$TMP/$name.after.log" | head -5 | cut -c1-300; code=1
     # (the new trace is the run's; the test does not hold over it: the old one back, said)
     cp "$TMP/$(basename "$trace").old" "$trace"

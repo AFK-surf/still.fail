@@ -62,6 +62,7 @@
       "scripts/ios.sh": 1,
       "scripts/shots.sh": 1
     },
+    "host-import": {},
     "frame-wait": {},
     "at-rest-wait": {},
     "frame-count": {},
@@ -98,12 +99,12 @@
       "src/kit/switch.mbt": 8,
       "src/kit/toast.mbt": 32,
       "src/kit/toggle.mbt": 39,
-      "src/kitdemo/controls.mbt": 12,
-      "src/kitdemo/disclosure.mbt": 8,
-      "src/kitdemo/foundation.mbt": 22,
-      "src/kitdemo/main.mbt": 11,
-      "src/kitdemo/menus.mbt": 12,
-      "src/kitdemo/overlays.mbt": 14,
+      "src/kitdemo/gallery/controls.mbt": 12,
+      "src/kitdemo/gallery/disclosure.mbt": 8,
+      "src/kitdemo/gallery/foundation.mbt": 22,
+      "src/kitdemo/gallery/gallery.mbt": 11,
+      "src/kitdemo/gallery/menus.mbt": 12,
+      "src/kitdemo/gallery/overlays.mbt": 14,
       "src/motion/layer.mbt": 3,
       "src/textdiff/main.mbt": 5,
       "src/ui/code_field.mbt": 1,
@@ -136,12 +137,12 @@
       "src/kit/switch.mbt": 2,
       "src/kit/toast.mbt": 9,
       "src/kit/toggle.mbt": 8,
-      "src/kitdemo/controls.mbt": 11,
-      "src/kitdemo/disclosure.mbt": 11,
-      "src/kitdemo/foundation.mbt": 13,
-      "src/kitdemo/main.mbt": 6,
-      "src/kitdemo/menus.mbt": 11,
-      "src/kitdemo/overlays.mbt": 16,
+      "src/kitdemo/gallery/controls.mbt": 11,
+      "src/kitdemo/gallery/disclosure.mbt": 11,
+      "src/kitdemo/gallery/foundation.mbt": 13,
+      "src/kitdemo/gallery/gallery.mbt": 6,
+      "src/kitdemo/gallery/menus.mbt": 11,
+      "src/kitdemo/gallery/overlays.mbt": 16,
       "src/motion/layer.mbt": 2,
       "src/textdiff/main.mbt": 4,
       "src/ui/code_field.mbt": 5,
@@ -156,9 +157,12 @@
       "src/webdemo/main.mbt": 12
     },
     "style-exact": {},
-    "build-effect": {},
-    "unsettled-ok": {},
-    "host-import": {}
+    "build-effect": {
+      "src/kitdemo/gallery/markscheck.mbt": 3,
+      "src/kitdemo/gallery/textcheck.mbt": 1,
+      "src/kitdemo/gallery/viewcheck.mbt": 1
+    },
+    "unsettled-ok": {}
   },
   "excused": {
     "frame-request": {},
@@ -167,6 +171,7 @@
     "script-wait": {},
     "page-settle": {},
     "device-shot": {},
+    "host-import": {},
     "frame-wait": {
       "src/ui/fx_test.mbt": 1
     },
@@ -187,7 +192,6 @@
     "box-loose": {},
     "style-exact": {},
     "build-effect": {},
-    "unsettled-ok": {},
-    "host-import": {}
+    "unsettled-ok": {}
   }
 }

@@ -32,7 +32,7 @@ case "${1:-test}" in
     exit $fail ;;
   test)
     F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
-    moon test --target js -p stillfail/sfscreens ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+    moon_test_native -p stillfail/sfscreens ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
     exit ${PIPESTATUS[0]} ;;
   *) sed -n 2,10p "$0"; exit 2 ;;
 esac

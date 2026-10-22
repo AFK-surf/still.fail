@@ -1,16 +1,16 @@
 #!/bin/bash
 # The draw list the renderer's references are of (kitdemo's controls page over mini1's kept text,
-# src/kitdemo/dl_print_wbtest.mbt), as a Tester prints it: into $1 (default out/render/controls.dl). Sourced by the
+# src/kitdemo/gallery/dl_print_wbtest.mbt), as a Tester prints it: into $1 (default out/render/controls.dl). Sourced by the
 # hosts' render scripts (scripts/render_android.sh, render_windows.sh, render_web.sh) from the repository's root.
 render_dl() {
   local out=${1:-out/render/controls.dl}
   mkdir -p "$(dirname "$out")"
-  MBUI_DL_PRINT=1 moon test --target js src/kitdemo/dl_print_wbtest.mbt 2>/dev/null |
+  MBUI_DL_PRINT=1 moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$out"
   [ -s "$out" ] || { echo "render_dl: no draw list"; return 1; }
-  # and lines' (src/kitdemo/dl_print_wbtest.mbt lines_shown) beside it, lines.dl: no reference, its picture checked by
+  # and lines' (src/kitdemo/gallery/dl_print_wbtest.mbt lines_shown) beside it, lines.dl: no reference, its picture checked by
   # scripts/lines_check.py
-  MBUI_DL_PRINT=lines moon test --target js src/kitdemo/dl_print_wbtest.mbt 2>/dev/null |
+  MBUI_DL_PRINT=lines moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/lines.dl"
   [ -s "$(dirname "$out")/lines.dl" ] || { echo "render_dl: no lines draw list"; return 1; }
 }

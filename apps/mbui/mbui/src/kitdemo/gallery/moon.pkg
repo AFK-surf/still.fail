@@ -1,0 +1,16 @@
+import {
+  "mbui/hostapi",
+  "mbui/ui",
+  "mbui/kit",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "moonbitlang/core/env",
+} for "wbtest"
+
+options(
+  targets: { "dl_print_js_wbtest.mbt": [ "js" ], "dl_print_native_wbtest.mbt": [ "native" ] },
+  "native-stub": [ "read_file.c" ],
+)

@@ -2,14 +2,11 @@ import {
   "mbui/host",
   "mbui/hostapi",
   "mbui/ui",
-  "mbui/kit",
-  "moonbitlang/core/json",
-  "moonbitlang/core/encoding/utf8",
+  "mbui/kitdemo/gallery",
 }
 
 options(
   "is-main": true,
-  targets: { "dl_print_wbtest.mbt": [ "js" ] },
   link: {
     "js": { "format": "iife" },
     "native": {

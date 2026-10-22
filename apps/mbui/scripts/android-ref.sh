@@ -36,6 +36,8 @@ O=$A/out/android-ref
 SDK=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}
 ADB=${ADB:-$SDK/platform-tools/adb -s emulator-${EMU_PORT:-5554}}
 MBUI_DIR=${MBUI_DIR:-$A/mbui}
+# (moon_test_native: the screens' draw lists printed by a native test)
+. "$MBUI_DIR/scripts/env.sh"
 PKG=${MBUI_PKG:-fail.still.mbui.debug}
 M=fail.still.android.motion
 die() { echo "android-ref: $*" >&2; exit 1; }
@@ -122,7 +124,7 @@ case "$cmd" in
     # this emulator gives the app (its screen between the bars android.json says, in its density's points)
     [ -f $R/android.json ] || die "no references ($R/android.json): scripts/android-ref.sh refs first"
     win=$(machine | python3 -c 'import json,sys; m=json.load(sys.stdin); b=json.load(open(sys.argv[1]))["bars"]; w,h=map(int,m["size"].split("x")); s=int(m["density"])/160; print(w/s, (h-b["top"]-b["bottom"])/s, s)' $R/android.json)
-    (cd $A && MBUI_ANDROID_REF=moments MBUI_ANDROID_WINDOW="$win" moon test --target js -p stillfail/sfscreens 2>&1) > $O/text/moments.txt \
+    (cd $A && MBUI_ANDROID_REF=moments MBUI_ANDROID_WINDOW="$win" moon_test_native -p stillfail/sfscreens 2>&1) > $O/text/moments.txt \
       || { grep -a -E "failed|FAILED" $O/text/moments.txt | head -10; die "the screens' moments not found (src/sfscreens/android_ref_wbtest.mbt)"; }
     for n in $names; do
       json=$(python3 -c 'import json,sys,base64; print(base64.b64encode(json.dumps(json.load(open(sys.argv[1])),ensure_ascii=False,separators=(",",":")).encode()).decode())' $S/$n.json)
@@ -149,7 +151,7 @@ case "$cmd" in
     # system (android.json). A picture of that key is the same picture: drawn once, kept (PICS, the Actions cache).
     [ -f $R/android.json ] || die "no references ($R/android.json): scripts/android-ref.sh refs first"
     rm -rf $O/dl && mkdir -p $O/dl
-    (cd $A && MBUI_ANDROID_REF=1 moon test --target js -p stillfail/sfscreens 2>&1) > $O/dl/print.txt \
+    (cd $A && MBUI_ANDROID_REF=1 moon_test_native -p stillfail/sfscreens 2>&1) > $O/dl/print.txt \
       || { grep -a -E "failed|FAILED|lacks|no Android text" $O/dl/print.txt | head -20; die "the screens' draw lists not drawn (src/sfscreens/android_ref_wbtest.mbt)"; }
     code=$(render_code) && [ -n "$code" ] || die "what draws the pictures not read"
     for n in $names; do

@@ -160,11 +160,11 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   MBUI_DRIVE: an emulator's `adb input swipe` is not to be had), its tape on the log (MBUI_DRAW_LOG=1
   MBUI_TEXT_RECORD=1), made a Tester's test by scripts/textrec_test.py and run in the same job: every frame's hash the
   same, or it fails with the first frame as the host drew it (MBUI_DRAW_DUMP=1) beside the Tester's. `text` gives
-  kitdemo MBUI_TEXTCHECK=NAME (src/kitdemo/textcheck.mbt): every metrics, shaping, whole-word key and glyph box of the
+  kitdemo MBUI_TEXTCHECK=NAME (src/kitdemo/gallery/textcheck.mbt): every metrics, shaping, whole-word key and glyph box of the
   kept run NAME asked of the host again, in the order the run first asked them (so the host hands out glyph keys and
   atlas places in the same order), each answer written as the log writes it (its JSON) and compared to the kept one
   to the character; what differs is listed, and the run fails saying how to record it again. A kept run is
-  `src/kitdemo/textrec_NAME.mbt` (its data, built into kitdemo so a host can ask it again) and
+  `src/kitdemo/gallery/textrec_NAME.mbt` (its data, built into kitdemo so a host can ask it again) and
   `textrec_NAME_wbtest.mbt` (its replay, in CI's test job with every kept run); `textrec_runs.txt` lists the runs kept (an explicit list: what a working directory happens to hold, a CI run's own `ci_HOST`, is never listed), `textrec_runs.mbt` is made from it, and CI checks the two and the runs git keeps agree (`scripts/textrec_test.py --check`).
 
   | host | where | host's contract | text's contract | kept run |
@@ -179,7 +179,7 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   run). The system's settings a run is drawn by (motion and transparency reduced, dark, the window's inset) are on
   its tape (ENV lines, #50) and given again by `replay_frames`: each host's run is recorded as its machine is set
   (Windows' runner has "Show animations" off: its run is drawn with motion reduced, and so is its replay). The kitdemo pages' own
-  state, which a kept run's test starts from, is put back by `reset` (src/kitdemo/reset.mbt); detlint's `globals` has src/kitdemo among its roots, so a global it misses fails.
+  state, which a kept run's test starts from, is put back by `reset` (src/kitdemo/gallery/reset.mbt); detlint's `globals` has src/kitdemo among its roots, so a global it misses fails.
 - **The marks' contract** (`scripts/host_contract.sh HOST marks`, in the same workflows as a step of its own, run
   when the host's marks code, src/hostapi/marks.mbt, test/marks or the reference change): `@hostapi.draw_marks` draws
   test/marks/marks.json (a box, an arrow, two hand-drawn lines, words, three numbered pins) onto test/marks/base.png
@@ -195,7 +195,7 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   whole device pixels by one rule (src/ui/native.mbt `device_px`), so their edges meet on the same pixel row: put
   between pixels, the row its edge half covers would show what is under the canvas (a line along a video's picture).
   **The native views' contract** (`scripts/host_contract.sh HOST views`, a step of each host's workflow): kitdemo's
-  MBUI_VIEWCHECK places a video's view between pixels (src/kitdemo/viewcheck.mbt); where the app told the host to
+  MBUI_VIEWCHECK places a video's view between pixels (src/kitdemo/gallery/viewcheck.mbt); where the app told the host to
   put it (VIEWTOLD, device pixels) is where the host says it put it (VIEWAT, each host's own: its views' code), on
   whole device pixels, or it fails.
 

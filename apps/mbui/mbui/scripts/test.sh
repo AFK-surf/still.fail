@@ -7,9 +7,9 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
-moon test --target js -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/md -p mbui/dmath -p mbui/zip ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+moon_test_native -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/md -p mbui/dmath -p mbui/zip ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
 code=${PIPESTATUS[0]}
-moon test --target native -p mbui/text 2>&1 | grep -v "$F" | tail -8
+moon_test_native -p mbui/text 2>&1 | grep -v "$F" | tail -8
 [ ${PIPESTATUS[0]} = 0 ] || code=1
 if [ "${TEXTDIFF:-1}" != 0 ]; then
   bash "$D/textdiff.sh" mac web 2>&1 | grep -v '^  '
