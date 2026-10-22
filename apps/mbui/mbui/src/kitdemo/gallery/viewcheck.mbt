@@ -14,12 +14,6 @@ let view_check_view : Ref[@ui.NativeView?] = Ref(None)
 let view_check_page : Ref[@ui.NativeView?] = Ref(None)
 
 ///|
-/// How long the views are left placed once each the host has is open (ready, or failed: a video with no bytes), before
-/// the run ends: the host's placing done by then (Android's, on its main thread, after the frame that told it; a
-/// page's on Windows, once its WebView2 is made).
-let view_check_ms : Double = 500.0
-
-///|
 /// The page's corners' radius (points): a phone's screen's, as a page laid out as one shows (still.fail's preview).
 let view_check_round : Double = 24.0
 
@@ -53,7 +47,9 @@ pub fn view_check_run(c : @ui.Ctx) -> Unit {
   // (each the host has, open as its host says: a page's content ready to be drawn, not loaded only (Android's
   // WebView: a picture taken once it had loaded showed its ground, white); a view it has not is not here)
   let open = [v, p].iter().all(fn(x) { !x.here() || (x.state() != 0 && x.host_done()) })
-  if @kit.after(c, "viewcheck", open, view_check_ms) {
+  // (a host places a view as the frame that told it is painted: Android on its main thread, where the app's exit
+  // comes after it; its picture waits for its own word that the view, placed and done, is on the display: VIEWDRAWN)
+  if open {
     if @ui.env("MBUI_VIEWCHECK") == "hold" {
       // (left as it is, for its picture: the contract ends the app)
       if !view_check_placed.val {

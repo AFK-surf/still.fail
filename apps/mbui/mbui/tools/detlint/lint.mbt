@@ -11,6 +11,8 @@ priv struct Config {
   queries : Array[String]
   globals_roots : Array[String]
   flows : Array[String]
+  // the hosts' own sources (Java, Objective-C, C, C++, the web's host.js): host-delay
+  hosts : Array[String]
   scripts : Array[String]
   skip : Array[String]
   // the token files: where a style's numbers are said (style-literal does not count them there)
@@ -49,6 +51,7 @@ fn Config::new(d : @rjson.Value) -> Config {
     queries: strs(m.get("queries"), query_default),
     globals_roots: strs(sect(d, "globals").get("roots"), []),
     flows: strs(d.get("flows"), []),
+    hosts: strs(d.get("hosts"), []),
     scripts: strs(d.get("scripts"), []),
     skip: strs(d.get("skip"), []),
     style_tokens: strs(sect(d, "style").get("tokens"), []),

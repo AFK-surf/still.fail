@@ -60,6 +60,17 @@ let script_waits : Array[@re.Regex] = [
 let page_settle : @re.Regex = rx("\\b__mb\\w*\\.(?:settled|unsettled)\\b")
 
 ///|
+/// a host doing something a fixed time later: Android's Handler, Apple's GCD and a selector's delay, Windows' timers
+let host_delays : Array[@re.Regex] = [
+  rx("\\bpostDelayed\\("),
+  rx("\\bdispatch_after\\("),
+  rx("afterDelay:"),
+  rx("\\bSetTimer\\("),
+  rx("\\bCreateTimerQueueTimer\\("),
+  rx("\\bsetTimeout\\("),
+]
+
+///|
 /// a test's end without its idle check: Tester::settle's, a replay's Flow::end's (an argument, not a declaration)
 let unsettled_ok : @re.Regex = rx("\\bunsettled_ok\\s*=")
 
@@ -173,7 +184,7 @@ fn has_any_suffix(n : String, sufs : Array[String]) -> Bool {
 }
 
 ///|
-/// What detlint reads a file as: 0 nothing, 1 a package's moon.pkg, 2 MoonBit, 3 a flow, 4 a script
+/// What detlint reads a file as: 0 nothing, 1 a package's moon.pkg, 2 MoonBit, 3 a flow, 4 a script, 5 a host's source
 fn kind_of(rel : String, cfg : Config) -> Int {
   let n = @sys.basename(rel)
   if matches(rel, cfg.skip) {
@@ -186,6 +197,8 @@ fn kind_of(rel : String, cfg : Config) -> Int {
     3
   } else if matches(rel, cfg.scripts) {
     4
+  } else if matches(rel, cfg.hosts) {
+    5
   } else {
     0
   }
@@ -270,7 +283,11 @@ fn lint_sources(files : Array[(String, String)], cfg : Config) -> Array[Finding]
         lint_lines(rel, src, "page-settle", [page_settle], findings, comment)
         lint_lines(rel, src, "device-shot", device_shots, findings, comment)
         lint_lines(rel, src, "at-rest-wait", [shot_rest, drive_rest_text], findings, comment)
+        if matches(rel, cfg.hosts) {
+          lint_lines(rel, src, "host-delay", host_delays, findings, "//")
+        }
       }
+      5 => lint_lines(rel, src, "host-delay", host_delays, findings, "//")
       _ => ()
     }
   }
