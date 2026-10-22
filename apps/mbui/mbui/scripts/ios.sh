@@ -107,8 +107,8 @@ case "${1:-build}" in
       LIBS=$!
     fi
     GEN=$("$D/mbc" gen --target-dir $OUT/_build src/$PKG 2>$OUT/moon.log) \
-      || { python3 "$D/errs.py" < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
-    python3 "$D/errs.py" < $OUT/moon.log | grep -v '^errors: 0' || true
+      || { "$D/chk" errs < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
+    "$D/chk" errs < $OUT/moon.log | grep -v '^errors: 0' || true
     R=$MOON_HOME/lib/runtime
     EXTRA=
     for f in apple_render apple_text apple_image apple_listen apple_browser_login apple_views apple_stream ios_app; do

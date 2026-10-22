@@ -20,7 +20,7 @@ case "${1:-build}" in
     # PATH that moon uses for every C step, all but that one passed through; MBC_SPLIT=0 compiles it whole)
     rm -f out/mbc.log
     PATH="$("$D/mbc" shim "$PWD/out/mbc/bin"):$PATH" MBC_LOG=$PWD/out/mbc.log \
-      /usr/bin/time -p moon build --target native $FLAG src/$PKG 2>&1 | python3 "$D/errs.py"
+      /usr/bin/time -p moon build --target native $FLAG src/$PKG 2>&1 | "$D/chk" errs
     cat out/mbc.log 2>/dev/null || true
     ls -la $EXE ;;
   run)

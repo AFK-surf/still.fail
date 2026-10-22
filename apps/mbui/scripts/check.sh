@@ -12,5 +12,5 @@ python3 "$D/fontassets.py" --check || exit 1
 cd "$A"
 for t in ${TARGETS:-js native}; do
   echo "=== $t"
-  moon check --target $t --output-json 2>&1 | python3 "$MBUI_DIR/scripts/errs.py"
+  moon check --target $t --output-json 2>&1 | "$MBUI_DIR/scripts/chk" errs
 done

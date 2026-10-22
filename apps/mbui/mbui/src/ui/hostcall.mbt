@@ -601,7 +601,7 @@ let outside_native = 10
 ///|
 /// Every kind above, by its name: each its own number (outside_kinds_wbtest.mbt), the hosts' named the same
 /// (Native.java's OUTSIDE_*, apple.h's, win.h's and android_host.c's MB_OUTSIDE_*, web/host.js's OUTSIDE_*), every
-/// `outside_*` here in it: scripts/outside_kinds.py, host_contract.sh HOST kinds
+/// `outside_*` here in it: scripts/chk outside-kinds, host_contract.sh HOST kinds
 fn outside_kinds() -> Array[(String, Int)] {
   [
     ("image", outside_image),

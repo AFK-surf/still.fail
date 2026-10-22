@@ -23,7 +23,7 @@
 #        src/kitdemo/gallery/sitecheck.mbt): a script and its answer, the host's cookies (where it keeps them), an event
 #        stream's events as they are sent, the page grabbed; each step begun by the page's last, the run ending itself
 #   scripts/host_contract.sh HOST kinds         the kinds of what the host tells done (outside) named as
-#        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/outside_kinds.py)
+#        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/chk outside-kinds)
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -498,6 +498,6 @@ open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
       exit 1
     fi ;;
   kinds)
-    "$PY" scripts/outside_kinds.py $H ;;
+    scripts/chk outside-kinds $H ;;
   *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds; ios: free, done)" >&2; exit 1 ;;
 esac
