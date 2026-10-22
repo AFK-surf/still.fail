@@ -16,7 +16,7 @@ on:
       - "apps/mbui/mbui/scripts/done_runner.py"
       - "apps/mbui/mbui/scripts/win.sh"
       - "apps/mbui/mbui/scripts/host_contract.sh"
-      - "apps/mbui/mbui/scripts/textrec_test.py"
+      - "apps/mbui/mbui/tools/chk/textrec.mbt"
       - "apps/mbui/mbui/test/host/**"
       - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/textrec_windows_*"

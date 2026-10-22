@@ -16,7 +16,7 @@ on:
       - "apps/mbui/mbui/scripts/web.sh"
       - "apps/mbui/mbui/scripts/host-web.mjs"
       - "apps/mbui/mbui/scripts/host_contract.sh"
-      - "apps/mbui/mbui/scripts/textrec_test.py"
+      - "apps/mbui/mbui/tools/chk/textrec.mbt"
       - "apps/mbui/mbui/test/host/**"
       - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/textrec_web_*"

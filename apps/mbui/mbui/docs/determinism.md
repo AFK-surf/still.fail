@@ -158,14 +158,14 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
 - **The host's and the text's contracts, host by host** (`scripts/host_contract.sh HOST build|record|text`):
   `record` runs kitdemo's controls page on the host with test/host/controls.drive's four taps (the app's own script,
   MBUI_DRIVE: an emulator's `adb input swipe` is not to be had), its tape on the log (MBUI_DRAW_LOG=1
-  MBUI_TEXT_RECORD=1), made a Tester's test by scripts/textrec_test.py and run in the same job: every frame's hash the
+  MBUI_TEXT_RECORD=1), made a Tester's test by scripts/chk textrec and run in the same job: every frame's hash the
   same, or it fails with the first frame as the host drew it (MBUI_DRAW_DUMP=1) beside the Tester's. `text` gives
   kitdemo MBUI_TEXTCHECK=NAME (src/kitdemo/gallery/textcheck.mbt): every metrics, shaping, whole-word key and glyph box of the
   kept run NAME asked of the host again, in the order the run first asked them (so the host hands out glyph keys and
   atlas places in the same order), each answer written as the log writes it (its JSON) and compared to the kept one
   to the character; what differs is listed, and the run fails saying how to record it again. A kept run is
   `src/kitdemo/gallery/textrec_NAME.mbt` (its data, built into kitdemo so a host can ask it again) and
-  `textrec_NAME_wbtest.mbt` (its replay, in CI's test job with every kept run); `textrec_runs.txt` lists the runs kept (an explicit list: what a working directory happens to hold, a CI run's own `ci_HOST`, is never listed), `textrec_runs.mbt` is made from it, and CI checks the two and the runs git keeps agree (`scripts/textrec_test.py --check`).
+  `textrec_NAME_wbtest.mbt` (its replay, in CI's test job with every kept run); `textrec_runs.txt` lists the runs kept (an explicit list: what a working directory happens to hold, a CI run's own `ci_HOST`, is never listed), `textrec_runs.mbt` is made from it, and CI checks the two and the runs git keeps agree (`scripts/chk textrec --check`).
 
   | host | where | host's contract | text's contract | kept run |
   |---|---|---|---|---|

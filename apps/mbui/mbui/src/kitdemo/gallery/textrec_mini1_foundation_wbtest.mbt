@@ -1,4 +1,4 @@
-// A Tester over mini1_foundation's kept text and frames (textrec_mini1_foundation.mbt), made by scripts/textrec_test.py.
+// A Tester over mini1_foundation's kept text and frames (textrec_mini1_foundation.mbt), made by scripts/chk textrec.
 
 ///|
 test "the foundation page under a Tester over mini1_foundation's kept text draws, frame for frame, what it drew" {

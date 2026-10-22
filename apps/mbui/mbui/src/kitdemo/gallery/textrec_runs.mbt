@@ -1,5 +1,5 @@
 // Every run kept in this package (textrec_NAME.mbt, listed in textrec_runs.txt), by its name: what
-// MBUI_TEXTCHECK=NAME asks the host's text system again (textcheck.mbt). Made by scripts/textrec_test.py: not
+// MBUI_TEXTCHECK=NAME asks the host's text system again (textcheck.mbt). Made by scripts/chk textrec: not
 // edited by hand.
 
 ///|

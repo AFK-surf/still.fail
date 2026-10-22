@@ -323,3 +323,18 @@ pub fn glob(root : String, pat : String) -> Array[String] {
   }
   out
 }
+
+///|
+#borrow(cmd)
+extern "C" fn c_run_out(cmd : Bytes) -> Bytes = "tsys_run_out"
+
+///|
+/// A shell command's stdout, None when it could not be run or did not end with 0
+pub fn run_out(cmd : String) -> String? {
+  let b = c_run_out(enc(cmd))
+  if c_ok() == 0 {
+    None
+  } else {
+    Some(dec(b))
+  }
+}

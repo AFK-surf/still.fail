@@ -1,5 +1,5 @@
 // Kept from a real host's run (windows_controls: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=controls MBUI_WIN=960x720, platform 3),
-// made by scripts/textrec_test.py: not edited by hand.
+// made by scripts/chk textrec: not edited by hand.
 
 ///|
 let run_windows_controls : String =

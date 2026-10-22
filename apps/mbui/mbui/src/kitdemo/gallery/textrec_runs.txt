@@ -1,4 +1,4 @@
-# The runs kept in src/kitdemo (textrec_NAME.mbt), a name a line: scripts/textrec_test.py --keep adds one.
+# The runs kept in src/kitdemo (textrec_NAME.mbt), a name a line: scripts/chk textrec --keep adds one.
 android_controls
 drive_controls
 ios_controls

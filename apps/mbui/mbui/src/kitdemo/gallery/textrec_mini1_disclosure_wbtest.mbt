@@ -1,4 +1,4 @@
-// A Tester over mini1_disclosure's kept text and frames (textrec_mini1_disclosure.mbt), made by scripts/textrec_test.py.
+// A Tester over mini1_disclosure's kept text and frames (textrec_mini1_disclosure.mbt), made by scripts/chk textrec.
 
 ///|
 test "the disclosure page under a Tester over mini1_disclosure's kept text draws, frame for frame, what it drew" {
