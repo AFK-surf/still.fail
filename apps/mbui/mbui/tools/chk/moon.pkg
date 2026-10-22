@@ -3,8 +3,10 @@ import {
   "mbctools/rjson",
   "mbctools/sys",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
 }
 
 options(
   "is-main": true,
+  "native-stub": [ "events.c" ],
 )

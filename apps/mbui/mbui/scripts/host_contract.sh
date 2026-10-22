@@ -160,10 +160,10 @@ run() {
       pid=${pid##*: }
       [[ $pid =~ ^[0-9]+$ ]] || { echo "host_contract: the app did not start"; tail -20 "$2"; return 1; }
       # the app's own named end, or its process gone without it (a crash); then its exit (the drive's and the check's
-      # own, @hostapi.exit), so that its log is all written (scripts/logwait.py: kqueue's events, no time)
-      "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done" --pid $pid \
+      # own, @hostapi.exit), so that its log is all written (scripts/chk logwait: kqueue's events, no time)
+      scripts/chk logwait --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done" --pid $pid \
         || { echo "host_contract: the app ($pid) ended, or hung, saying nothing of its end"; tail -20 "$2"; return 1; }
-      "$PY" scripts/logwait.py --pid $pid ;;
+      scripts/chk logwait --pid $pid ;;
   esac
 }
 
@@ -184,7 +184,7 @@ case $CMD in
     # (iOS) the simulator others use too (still.fail's iOS smoke, mbui-ios.yml; the iOS host's own runs): taken by its
     # lock, the same as theirs (a directory made at once, `mkdir`), its owner said in it: who, and `pid N`, the process
     # that holds it as long as it is used (on CI the runner's worker of the job: it ends with the run). Held, this
-    # waits for that process's end (scripts/logwait.py: kqueue's, no time; a line every few minutes saying whose it
+    # waits for that process's end (scripts/chk logwait: kqueue's, no time; a line every few minutes saying whose it
     # is, the job's own timeout the limit), or, an owner that says no pid, for the lock's going. An owner whose process
     # is gone is left over and taken over; one that says no pid, after an hour at the last.
     while ! mkdir "$IOS_LOCK" 2>/dev/null; do
@@ -199,11 +199,11 @@ case $CMD in
       elif [ -n "$opid" ]; then
         echo "host_contract: $MBUI_IOS_DEVICE is ${who:-another run}'s (pid $opid): waiting for its end"
         # (a line again every five minutes: whose it still is)
-        "$PY" scripts/logwait.py --pid "$opid" --deadline 300 >/dev/null || true
+        scripts/chk logwait --pid "$opid" --deadline 300 >/dev/null || true
       else
         echo "host_contract: $MBUI_IOS_DEVICE is ${who:-another run}'s ($IOS_LOCK, its process not said): waiting for it to go"
         # (an owner that says no process: the lock's own going, a line again every five minutes)
-        "$PY" scripts/logwait.py --gone "$IOS_LOCK" --deadline 300 >/dev/null || true
+        scripts/chk logwait --gone "$IOS_LOCK" --deadline 300 >/dev/null || true
       fi
     done
     # the process that holds it: on CI the job's runner worker (ends with the run), by hand the shell that runs this

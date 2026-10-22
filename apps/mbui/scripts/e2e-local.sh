@@ -229,8 +229,8 @@ stop() {
     local pid=$(cat $RUN/$1.pid)
     # its process group: it and what it started (pnpm → tsx → node → workerd; the launcher → node → runner)
     kill -TERM -- -$pid 2>/dev/null || true
-    # (its end as the system tells it, mbui's scripts/logwait.py --pid: kqueue's; 5 s at most, then killed)
-    python3 "$MBUI_DIR/scripts/logwait.py" --pid $pid --deadline 5 > /dev/null 2>&1
+    # (its end as the system tells it, mbui's scripts/chk logwait --pid: kqueue's; 5 s at most, then killed)
+    "$MBUI_DIR/scripts/chk" logwait --pid $pid --deadline 5 > /dev/null 2>&1
     kill -9 -- -$pid 2>/dev/null || true
   fi
   rm -f $RUN/$1.pid

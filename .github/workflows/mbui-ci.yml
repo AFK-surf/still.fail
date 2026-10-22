@@ -31,8 +31,6 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: The steps' network is none (a connection out fails at once)
         run: if curl -fsS --max-time 5 -o /dev/null https://github.com; then echo "reached github.com"; exit 1; fi
-      - name: "What the scripts wait with, on Linux's events (scripts/logwait_test.py: inotify, a pidfd)"
-        run: python3 scripts/logwait_test.py
       - uses: ./.github/actions/mbui-moonbit
       - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (tools/detlint, docs/detlint.md)"
         run: scripts/detlint
@@ -42,6 +40,8 @@ jobs:
         run: scripts/chk corner-sl --check
       - name: "The kept runs: textrec_runs.mbt is what textrec_runs.txt makes, and lists every run git keeps (scripts/chk textrec --check)"
         run: scripts/chk textrec --check
+      - name: "What the scripts wait with, on Linux's events (scripts/logwait_test.sh, chk logwait: inotify, a pidfd)"
+        run: bash scripts/logwait_test.sh
       - name: Check
         run: moon version --all && moon check --target native --output-json 2>&1 | scripts/chk errs
       - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"

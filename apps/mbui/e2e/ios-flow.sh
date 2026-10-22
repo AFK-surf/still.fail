@@ -27,17 +27,17 @@ RAW=$LOG.raw
 : > $RAW
 : > $RAW.stdout
 xcrun simctl terminate $IOS_DEV $PKG >/dev/null 2>&1
-# (waits are on events, not times: mbui's scripts/logwait.py, kqueue's)
-LW="$ROOT/mbui/scripts/logwait.py"
+# (waits are on events, not times: mbui's scripts/chk logwait, kqueue's)
+LW="$ROOT/mbui/scripts/chk"
 xcrun simctl io $IOS_DEV recordVideo --codec h264 --force $OUT/$NAME.mp4 >/dev/null 2>$OUT/record.log &
 REC=$!
-python3 "$LW" --log $OUT/record.log --line 'Recording started' --deadline 30 >/dev/null || echo "the screen's recording did not start" >> $LOG
+"$LW" logwait --log $OUT/record.log --line 'Recording started' --deadline 30 >/dev/null || echo "the screen's recording did not start" >> $LOG
 # the app up as its log says ("ios: launched"), then its pid as `simctl launch` says it (which itself can sit on for
 # minutes after the app is up on a loaded Mac, so its end is not waited for)
 xcrun simctl launch --stdout=$RAW.stdout --stderr=$RAW $IOS_DEV $PKG >>$LOG 2>&1 &
 pid=
-if python3 "$LW" --log $RAW --line '^ios: launched' --deadline 120 >/dev/null; then
-  pid=$(python3 "$LW" --log $LOG --line "^$PKG: [0-9]+" --deadline 120 | sed "s/^$PKG: //")
+if "$LW" logwait --log $RAW --line '^ios: launched' --deadline 120 >/dev/null; then
+  pid=$("$LW" logwait --log $LOG --line "^$PKG: [0-9]+" --deadline 120 | sed "s/^$PKG: //")
 fi
 [ -n "$pid" ] || echo "the app did not start" >> $LOG
 if [ -n "$pid" ]; then
@@ -49,7 +49,7 @@ if [ -n "$pid" ]; then
     esac
   done &
   FOLLOW=$!
-  python3 "$LW" --pid $pid --deadline ${E2E_FLOW_TIMEOUT:-300} >/dev/null 2>&1
+  "$LW" logwait --pid $pid --deadline ${E2E_FLOW_TIMEOUT:-300} >/dev/null 2>&1
   [ $? = 2 ] && echo "the flow's time is up" >> $LOG
   kill $FOLLOW 2>/dev/null
   # (pkill takes a regex: "+1" as it is matched no tail, and every flow left its tail behind, 235 on Mini1 by

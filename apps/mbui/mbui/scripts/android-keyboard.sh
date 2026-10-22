@@ -33,7 +33,7 @@ log_from_now() {
 
 # until a line matching $2 (or the app's end) is on $1's log: that line, or nothing
 wait_line() {
-  python3 "$D/logwait.py" --log $O/$1.log --line "$2|$END" --deadline 60
+  "$D/chk" logwait --log $O/$1.log --line "$2|$END" --deadline 60
 }
 
 pass() { echo "PASS $1${2:+ ($2)}"; }
