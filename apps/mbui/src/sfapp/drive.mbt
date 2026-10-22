@@ -100,8 +100,7 @@ fn files_top_bar(c : @ui.Ctx) -> Unit {
         app.nav.push(Settings)
       }
       c.box(w=Fill(1.0), h=Px(34.0), justify=JCenter, fn() {
-        c.text(tr("android-misc.bar.place.files"), size=24.0, weight=700, color=t.p.text, wrap=false, line=30.0)
-        |> ignore
+        top_bar_title(c, tr("android-misc.bar.place.files")) |> ignore
       })
       |> ignore
     })

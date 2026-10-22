@@ -26,6 +26,7 @@ fn reset_row_menu() -> Unit {
   row_menu_at.item = None
   row_menu_at.open = false
   row_menu_at.at = -1
+  swiped_off.clear()
 }
 
 ///|
@@ -227,6 +228,10 @@ fn archive_from_row(
 }
 
 ///|
+/// The rows swiped off to be archived, by their swipe's key, until they have gone off (then archived).
+let swiped_off : Map[String, Bool] = {}
+
+///|
 /// Let go past this share of its width (or flung left), a swiped row is archived.
 let archive_at : Double = 0.35
 
@@ -249,18 +254,28 @@ let swipe_fill_ms : Double = 140.0
 /// right edge (filled in ink once letting go would archive it); let go past `archive_at` of its width or flung left,
 /// it goes off to the left and is archived, else it springs back. Archiving refused, it comes back; one keeping watch
 /// springs back and asks first, as its menu's 归档. Across first it is the swipe (the row's tap and hold let go); up
-/// or down first it is the list's (mbui's claim by way: whichever's way the finger goes past the slop first). `row` draws the row moved across by so much.
+/// or down first it is the list's (mbui's claim by way: whichever's way the finger goes past the slop first). `row` draws the row moved across by so much;
+/// `unghost` says whether it leaves the list without a copy (swiped off), or with one again (its archiving refused).
 /// Its answer is the box holding it all, what moves as the list changes (Home.kt: the list's `animateItem` over the
 /// whole of SwipeToArchive): the row moved alone would be cut by its swipe's clip where it is laid out.
-fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row : (Double) -> Int) -> Int {
+fn swipe_to_archive(
+  c : @ui.Ctx,
+  src : Source,
+  item : ChatItem,
+  busy : Bool,
+  row : (Double) -> Int,
+  unghost? : (Bool) -> Unit = fn(_) {  },
+) -> Int {
   let t = @sf.theme()
-  let key = "swipe/" + item.station + "/" + item.id
+  let key = "swipe/" + row_name(item)
   let id = c.id(key)
   let width = dmax(c.width, 1.0)
   let off = @motion.anim(c, key, 0.0, global=true)
   let back = fn(v : Double) { off.animate(0.0, @motion.move_spring, velocity=v) }
+  let going = swiped_off.contains(key)
   match c.drag_of(id) {
-    Some(d) => {
+    // (gone off already: nothing more to swipe)
+    Some(d) if !going => {
       let (dx, _) = d.take_move()
       if dx != 0.0 {
         off.snap(dclamp(off.get() + dx, -width, 0.0))
@@ -276,15 +291,25 @@ fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row
             back(v)
             archive_from_row(src, item)
           } else {
+            // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
+            swiped_off[key] = true
+            unghost(true)
             off.animate(-width, @motion.tween(swipe_off_ms, ease=Standard), velocity=v)
-            archive_from_row(src, item, failed=fn() { back(0.0) })
           }
         } else {
           back(v)
         }
       }
     }
-    None => ()
+    _ => ()
+  }
+  // gone off: archived (Home.kt SwipeToArchive: the call once the row has gone); refused, it comes back
+  if going && off.get() <= -width + 0.5 && !off.running {
+    swiped_off.remove(key)
+    archive_from_row(src, item, failed=fn() {
+      unghost(false)
+      back(0.0)
+    })
   }
   let at = off.get()
   // past the line letting go archives at: felt as it is passed (Home.kt SwipeToArchive: TextHandleMove)

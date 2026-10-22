@@ -45,7 +45,8 @@ TEXT_PAD = 2
 
 def texts(path, top=0):
     """A screen's lines (texts.json), in the screen's pixels: the mbui app's in points, with the window's scale, put
-    `top` rows down (where its window lies on the screen: {"scale", "lines"}); Android's in the screen's pixels already
+    `top` rows down (where its window lies on the screen, none for one edge to edge: {"scale", "edge", "lines"});
+    Android's in the screen's pixels already
     (a list)."""
     if not os.path.exists(path):
         return None
@@ -53,6 +54,9 @@ def texts(path, top=0):
     if not isinstance(d, dict):
         return d
     scale = d["scale"]
+    # (a window edge to edge, under the system's bars: on the screen from its top)
+    if d.get("edge"):
+        top = 0
     return [{"t": l["t"], "x0": l["x0"] * scale, "x1": l["x1"] * scale, "b": l["b"] * scale + top,
              "top": l["top"] * scale + top, "bot": l["bot"] * scale + top} for l in d["lines"]]
 
@@ -300,6 +304,10 @@ def main():
 
 def place(picture, out, width, height, top):
     w, h, rows = load(picture)
+    # a window edge to edge (the app drawn under the system's bars, as a run that had their message lays it out): the
+    # whole screen, from its top
+    if w == width and h == height:
+        top = 0
     if w != width or top + h > height:
         sys.exit(f"android_ref: {picture} is {w}×{h}: not a window {width} wide that fits {height} from {top} down")
     blank = bytes(3 * width)

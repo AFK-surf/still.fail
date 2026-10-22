@@ -208,7 +208,7 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
 }
 
 ///|
-test "a row with nothing left in it, swiped left past a third: archived (chat.archive); a short swipe archives nothing" {
+test "a row with nothing left in it, swiped left past a third: off, then archived (chat.archive); a short swipe archives nothing" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0)
   t.scroll_to(12)
@@ -223,8 +223,10 @@ test "a row with nothing left in it, swiped left past a third: archived (chat.ar
   t.drag(300.0, y, 290.0, y + 120.0)
   assert_eq(named(calls, "chat.archive").length(), 0)
   let (_, y) = t.find("把旧的截图都换成新的").unwrap()
-  // across past a third of the row
+  // across past a third of the row: it goes off, then is archived (Home.kt: the call once it has gone)
   t.drag(340.0, y, 120.0, y)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  t.run_for(swipe_off_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
   // its line felt as it was passed, once (Home.kt: TextHandleMove)
   assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])

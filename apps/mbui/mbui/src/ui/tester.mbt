@@ -272,13 +272,15 @@ pub fn Tester::new(
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
   }
-  if run is Some(r) {
-    env_before_frames(f, r)
-  }
   fake.val = Some(f)
   // (what the app asks of its host directly, the fake's too: fake_host.mbt)
   @hostapi.set_host(f)
   reset_globals()
+  // (after the globals are put back: what came from outside before the run's first frame, posted here, would be lost
+  // with them, and the first frame drawn without it: the system's bars round an edge-to-edge window)
+  if run is Some(r) {
+    env_before_frames(f, r)
+  }
   // (the words drawn kept a line at a time, for Tester::text_runs)
   text_runs.on = true
   match text {

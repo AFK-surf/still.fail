@@ -8,7 +8,9 @@
 //     "topics": [{"topic": {"topic": NAME, …params}, "value": …}],
 //     "events": [{"t": ms, "set": {"topic": …}, "value": …} | {"t": ms, "answered": {"topic": …}}
 //                | {"t": ms, "call": NAME, "params": …, "ok": … | "error": …}
-//                | {"t": ms, "tap": WORDS} | {"t": ms, "tapDescribed": WORDS}],
+//                | {"t": ms, "tap": WORDS} | {"t": ms, "tapDescribed": WORDS} | {"t": ms, "tapAt": {"x": dp, "y": dp}}
+//                | {"t": ms, "finger": "down" | "move" | "up", "x": dp, "y": dp} | {"t": ms, "listTop": true}
+//                | {"t": ms, "back": true}],
 //     "frames": [{"t": ms, "words": [{"text": …, "x": dp, "y": dp, "w": dp, "h": dp, "shown": bool}]}] }
 
 ///|
@@ -180,7 +182,9 @@ let tape_slack : Double = 2.0
 /// The tape replayed here (`json`: its tape.json), frame by frame at its moments: each of Android's frames compared
 /// with this app's at the same moment. What differs, in order: a frame's words not drawn here, or drawn more than
 /// tape_slack away (each word once, at the first frame it differs, with where).
-pub fn tape_differences(json : String) -> Array[String] {
+///
+/// `trace`: words whose place in each frame, Android's and here, is said too (one line a frame: TRACE …).
+pub fn tape_differences(json : String, trace? : Array[String] = []) -> Array[String] {
   reset()
   let tape = tape_read(json)
   let moment = Ref::new(-1.0)
@@ -196,8 +200,10 @@ pub fn tape_differences(json : String) -> Array[String] {
   // each word's frames that differ: from, to, how many, how many not drawn here, the worst offset (here less Android's)
   let runs : Map[String, TapeRun] = {}
   let order : Array[String] = []
-  // what the person did: taps, pages pushed
-  let taps = tape.events.filter(fn(e) { field(Some(e), "tap") is Some(_) || field(Some(e), "push") is Some(_) })
+  // what the person did: taps (by their words or where they were), a finger's down, moves and up, pages pushed, back
+  let taps = tape.events.filter(fn(e) {
+    ["tap", "tapAt", "finger", "listTop", "push", "back"].iter().any(fn(k) { field(Some(e), k) is Some(_) })
+  })
   let mut next_tap = 0
   for f in tape.frames {
     let (ft, words) = f
@@ -210,9 +216,24 @@ pub fn tape_differences(json : String) -> Array[String] {
         t.run_for(t0 + et - t.time())
       }
       moment.val = et
-      match field(Some(e), "push") {
-        Some(p) => tape_open_one(p)
-        None =>
+      match (field(Some(e), "push"), field(Some(e), "tapAt"), field(Some(e), "finger"), field(Some(e), "back")) {
+        (Some(p), _, _, _) => tape_open_one(p)
+        (_, Some(at), _, _) => t.tap(number(Some(at), "x"), number(Some(at), "y"))
+        (_, _, Some(String(kind)), _) => {
+          let (x, y) = (number(Some(e), "x"), number(Some(e), "y"))
+          match kind {
+            "down" => t.press_at(x, y)
+            "move" => t.move(x, y)
+            _ => t.release(x, y)
+          }
+        }
+        (_, _, _, Some(_)) => t.back()
+        // the list in view at its top
+        _ if field(Some(e), "listTop") is Some(_) => {
+          t.scroll_to(0)
+          t.draw()
+        }
+        _ =>
           match tape_word_at(t, text(Some(e), "tap")) {
             Some((x, y)) => t.tap(x, y)
             None => out.push("\{et} ms: no \"\{text(Some(e), "tap")}\" to tap")
@@ -224,9 +245,18 @@ pub fn tape_differences(json : String) -> Array[String] {
       t.run_for(t0 + ft - t.time())
     }
     let here = t.words()
+    for want in trace {
+      let a = words.filter(fn(w) { w.text == want }).map(fn(w) { "\{w.x.round()},\{w.y.round()}" })
+      let h = here.filter(fn(h) { h.0 == want }).map(fn(h) { "\{h.1.round()},\{h.2.round()} a\{(h.5 * 100.0).round() / 100.0}" })
+      out.push("TRACE \{ft} \{want}: android \{a} here \{h}")
+    }
     for w in words {
       // (a time counted on the wall clock, which Android's test does not stop: 8s there is 1s here)
       if tape_counted(w.text) {
+        continue
+      }
+      // (off the window: not seen there, nor compared; a list's panes side by side, a page slid away)
+      if w.x + w.w <= 0.0 || w.x >= tape.w || w.y + w.h <= 0.0 || w.y >= tape.h {
         continue
       }
       let mut best : (Double, Double)? = None

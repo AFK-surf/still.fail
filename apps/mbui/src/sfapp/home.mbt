@@ -284,8 +284,18 @@ fn home_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, current 
         }
       OpenJobs => open_jobs(c, src, w)
       Header(label) => moving(c, lid, key, keys[i], section_header(c, label))
-      Row(item) =>
-        moving(c, lid, key, keys[i], chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, key + "\u{1}" + keys[i])))
+      Row(item) => {
+        let name = key + "\u{1}" + keys[i]
+        moving(
+          c,
+          lid,
+          key,
+          keys[i],
+          chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, name), unghost=fn(off) {
+            @motion.list_unghost(c, lid, name, off~)
+          }),
+        )
+      }
       // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom); on a wide screen,
       // whose corners have 奏 and 令 over the list, a little
       Foot => c.box(h=Px(if has_bar() { nav_foot() + bar_room } else { wide_foot }), fn() {  }) |> ignore
@@ -329,8 +339,7 @@ fn top_bar(
         // the name as long as there is room for it
         let room = c.width - 16.0 * 2.0 - 34.0 * 2.0 - 10.0 * 2.0 - 6.0 * 2.0 - 16.0 - 10.0
         c.box(max_w=dmax(room, 40.0), fn() {
-          c.text(w.name, size=24.0, weight=700, color=t.p.text, wrap=false, line=30.0)
-          |> ignore
+          top_bar_title(c, w.name) |> ignore
         })
         |> ignore
         let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
@@ -370,6 +379,12 @@ fn top_bar(
     c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })
   |> ignore
+}
+
+///|
+/// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, on one line.
+fn top_bar_title(c : @ui.Ctx, s : String) -> Int {
+  c.text(s, size=24.0, weight=700, color=@sf.theme().p.text, wrap=false, line=30.0)
 }
 
 ///|
@@ -434,17 +449,17 @@ fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay
   let fresh : Map[String, ChatItem] = {}
   for d in days {
     for item in d.items {
-      fresh[item.station + "/" + item.id] = item
+      fresh[row_name(item)] = item
     }
   }
   let held : Map[String, Bool] = {}
   let out : Array[(String, Array[ChatItem])] = shown.map(fn(d) {
     let items : Array[ChatItem] = []
     for item in d.items {
-      match fresh.get(item.station + "/" + item.id) {
+      match fresh.get(row_name(item)) {
         Some(now) => {
           items.push(now)
-          held[item.station + "/" + item.id] = true
+          held[row_name(item)] = true
         }
         None => ()
       }
@@ -453,7 +468,7 @@ fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay
   })
   for di, d in days {
     for i, item in d.items {
-      if held.contains(item.station + "/" + item.id) {
+      if held.contains(row_name(item)) {
         continue
       }
       let into = match out.search_by(fn(o) { o.0 == d.label }) {
@@ -485,7 +500,14 @@ fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay
 }
 
 ///|
-/// An item's key in the list (ListMotion.kt rowKey, dayKey): a row by its station and chat, a day by its heading.
+/// A row's name in the list, kept as it changes (ListMotion.kt rowKey): its station and chat, a chat asked for here by
+/// its `clientKey` before and after its station makes it.
+fn row_name(item : ChatItem) -> String {
+  item.station + "/" + (if item.client_key != "" { item.client_key } else { item.id })
+}
+
+///|
+/// An item's key in the list (ListMotion.kt rowKey, dayKey): a row by its name, a day by its heading.
 fn item_key(it : Item) -> String {
   match it {
     Top => "top"
@@ -495,7 +517,7 @@ fn item_key(it : Item) -> String {
     Empty => "empty"
     OpenJobs => "open-jobs"
     Header(label) => "h/" + label
-    Row(item) => "r/" + item.station + "/" + item.id
+    Row(item) => "r/" + row_name(item)
     Foot => "foot"
   }
 }
@@ -547,7 +569,7 @@ let marks_seen : Map[String, String] = {}
 fn note_marks(c : @ui.Ctx, v : ChatsView) -> Unit {
   for d in v.days {
     for item in d.items {
-      let k = item.station + "/" + item.id
+      let k = row_name(item)
       let tone = row_tone(item)
       match marks_seen.get(k) {
         None => marks_seen[k] = tone
@@ -857,9 +879,10 @@ fn chat_row(
   lifted? : Double = -1.0,
   found? : Bool = false,
   opened? : (ChatRef) -> Unit,
+  unghost? : (Bool) -> Unit = fn(_) {  },
 ) -> Int {
   let t = @sf.theme()
-  let id = c.id("row/" + item.station + "/" + item.id)
+  let id = c.id("row/" + row_name(item))
   // a chat the search found (Search.kt: ChatRowBody alone, a tap its chat): not held, archived nor swiped
   let pressed = c.pressed(id) && !found
   let r : ChatRef = {
@@ -877,7 +900,7 @@ fn chat_row(
     }
   }
   // held hold_ms (a frame asked for when it will have been)
-  let held = @kit.after(c, "row-hold/" + item.station + "/" + item.id, pressed && app.held == id, hold_ms)
+  let held = @kit.after(c, "row-hold/" + row_name(item), pressed && app.held == id, hold_ms)
   if held {
     app.held_long = true
     // held long: what can be done to the chat (home_menu.mbt)
@@ -942,7 +965,7 @@ fn chat_row(
           c.box(dir=Row, w=Fill(1.0), h=Px(chat_title_h), gap=8.0, align=ACenter, fn() {
             let tone = row_tone(item)
             if tone != "" {
-              chat_mark(c, tone, pop=item.station + "/" + item.id)
+              chat_mark(c, tone, pop=row_name(item))
             }
             c.box(w=Fill(1.0), opacity=dim, fn() {
               c.text(
@@ -1015,7 +1038,7 @@ fn chat_row(
     )
   }
   if archivable {
-    swipe_to_archive(c, src, item, busy, row)
+    swipe_to_archive(c, src, item, busy, row, unghost~)
   } else {
     row(0.0)
   }
@@ -1026,7 +1049,7 @@ fn chat_row(
 /// while its pin or archive is under way.
 fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit {
   let t = @sf.theme()
-  let id = c.id("archive/" + item.station + "/" + item.id)
+  let id = c.id("archive/" + row_name(item))
   if c.clicked(id) && !busy {
     archive_from_row(src, item)
   }

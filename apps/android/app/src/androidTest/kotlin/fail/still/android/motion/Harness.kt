@@ -8,8 +8,9 @@
 //   <name>/tape.json     what the mbui app (apps/mbui) replays to be compared with it (its src/sfapp/tape.mbt): the
 //                        pages launched, the theme, the window, its system bars, the wall clock as it began; every
 //                        topic's value as it starts; then, by the
-//                        recording's ms, each value set, each call with its answer, each tap, each page pushed; and
-//                        each frame's words
+//                        recording's ms, each value set, each call with its answer, each tap (by its words, or where
+//                        it was), each finger's down, move and up, a list put at its top, each page pushed, each
+//                        back; and each frame's words
 //                        where they were drawn (each text node of the semantics: its top left in the root, as moved
 //                        and scaled by the layers over it, its size, and whether any of it shows), in dp
 // A motion that ends precisely has its difference fall smoothly to 0; one that snaps at the end drops to 0 at once
@@ -34,6 +35,10 @@ import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.geometry.Offset
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
 import fail.still.android.AppState
@@ -175,6 +180,45 @@ class Recording(private val h: Harness, val name: String, private val region: Re
     fun tapDescribed(description: String) {
         events += buildJsonObject { put("t", t); put("tapDescribed", description) }
         h.rule.onNode(hasContentDescription(description)).performSemanticsAction(SemanticsActions.OnClick)
+    }
+
+    /** A finger put down and lifted at once at `at` (px in the root), told to the tape (in dp). */
+    fun tapAt(at: Offset) {
+        val d = h.rule.density.density
+        events += buildJsonObject { put("t", t); put("tapAt", buildJsonObject { put("x", at.x / d); put("y", at.y / d) }) }
+        h.rule.onRoot().performTouchInput { down(at); up() }
+    }
+
+    /** A finger `down`, moved (`move`) or lifted (`up`) at `at` (px in the root), told to the tape (in dp). */
+    fun finger(kind: String, at: Offset) {
+        val d = h.rule.density.density
+        events += buildJsonObject { put("t", t); put("finger", kind); put("x", at.x / d); put("y", at.y / d) }
+        h.rule.onRoot().performTouchInput {
+            when (kind) {
+                "down" -> down(at)
+                "move" -> moveTo(at, delayMillis = 0)
+                else -> up()
+            }
+        }
+    }
+
+    /**
+     * The list in view (of those side by side, the one on the screen) at its top, as its semantics' ScrollToIndex 0 has
+     * it (not dragged there: a finger held at a list's top stretches it, and the stretch never lets the paused clock's
+     * page come to idle), told to the tape.
+     */
+    fun listTop() {
+        events += buildJsonObject { put("t", t); put("listTop", true) }
+        val w = h.rule.onRoot().fetchSemanticsNode().size.width
+        val lists = h.rule.onAllNodes(hasScrollToIndexAction())
+        val at = lists.fetchSemanticsNodes().indexOfFirst { it.boundsInRoot.left >= 0f && it.boundsInRoot.left < w }
+        lists[at].performScrollToIndex(0)
+    }
+
+    /** The system's back (the back gesture let go, or its key), told to the tape. */
+    fun back() {
+        events += buildJsonObject { put("t", t); put("back", true) }
+        h.rule.runOnUiThread { h.rule.activity.onBackPressedDispatcher.onBackPressed() }
     }
 
     /** The words drawn now: each text node, in dp. */

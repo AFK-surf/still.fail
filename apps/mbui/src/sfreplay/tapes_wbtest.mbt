@@ -7,6 +7,9 @@
 let tapes : Array[String] = [
   "answered-by-picking", "chat-open", "activity-pushed", "caught-up", "emit-one", "emit-stream", "emit-two", "emit-two-agents",
   "follow-glide", "one-stops-first",
+  // the chats list (HomeMotionTest)
+  "home-news-up", "home-row-gone", "home-row-new", "home-made-chat", "home-mark", "home-days", "home-day-gone", "home-filter",
+  "home-swipe", "home-search", "home-back-changed",
 ]
 
 ///|

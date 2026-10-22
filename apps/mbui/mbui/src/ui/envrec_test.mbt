@@ -67,3 +67,22 @@ test "the settings a run began with (an ENV line before its first frame) draw a 
   }
   assert_true(u.find("inset") is Some(_))
 }
+
+///|
+/// A page drawn round the system's bars: its words say how tall the top one is.
+fn bars_view(c : @ui.Ctx) -> Unit {
+  c.text("top \{@ui.system_bars().top}", wrap=false) |> ignore
+}
+
+///|
+test "what came from outside before a run's first frame (the system's bars) draws a Tester's first frame of it" {
+  let t = @ui.Tester::new(bars_view)
+  t.start_tape()
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":24,\"bottom\":16,\"left\":0,\"right\":0}}")
+  let begun = t.time()
+  t.frame()
+  let tape = t.tape()
+  // made at the run's first frame with the run: that frame already round the bars, as the run's was
+  let u = @ui.Tester::new(bars_view, time=begun, run=tape)
+  assert_true(u.find("top 24") is Some(_), msg="\{u.drawn_text()}")
+}
