@@ -47,6 +47,11 @@ test "29-glass" {
       f.see(words)
       f.gone("正在发送")
     }
+    // (what came with them in the list in its turn: turns.mbt, one at a time)
+    let turns = f.t.rest_of("a chat's list turns")
+    if turns > f.t.time() && turns < @double.infinity {
+      f.run_to(turns)
+    }
     // the first ran on under the top bar's glass
     assert_true(under_glass(f, top=true))
     f.wheel(-500.0)

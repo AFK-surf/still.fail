@@ -256,14 +256,23 @@ fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 
 ///|
 /// The poses played on, a frame at a time (ChatMotion.play): each to its end, then the next; the next waiting starts
-/// once none plays. Not watched, all of it at once.
-fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
+/// once none plays. They take one turn among what changes the list's height (`turns`, ChatMotion.start): the first
+/// waiting starts as it comes, from then, and it is over once none is left. Not watched, all of it at once.
+fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns) -> Unit {
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
+    turns.over(c, Emits, turns.moment(c))
     return
   }
   if e.current is None {
-    emit_next(c, e, "")
+    if e.queue.length() == 0 {
+      return
+    }
+    if !turns.emitting() {
+      turns.emits(c)
+      return
+    }
+    emit_next(c, e, "", at=turns.started_at(emits_turn))
   }
   // a pose's end reached: the next pose, from its own beginning in this frame
   let was = e.current
@@ -302,6 +311,10 @@ fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
       Return => {
         e.done[seq_s(t.seq)] = true
         emit_next(c, e, t.agent, at~)
+        // none left: their turn is over where this one was declared to end
+        if e.current is None {
+          turns.over(c, Emits, at)
+        }
       }
     }
   }

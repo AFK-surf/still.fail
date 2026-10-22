@@ -17,9 +17,10 @@
 
 ///|
 priv struct SendFlight {
-  /// the chat it was sent in (its draft's key), its words, and where they were: their first line's top left, the
-  /// field's room
+  /// the chat it was sent in (its draft's key; its list's turns', turns.mbt), its words, and where they were: their
+  /// first line's top left, the field's room
   chat : String
+  turns : String
   text : String
   from_x : Double
   from_y : Double
@@ -83,6 +84,7 @@ let flight_settle : Double = 0.24
 fn flight_start(
   c : @ui.Ctx,
   chat : String,
+  turns : String,
   words : String,
   v : ChatView,
   room : Double,
@@ -107,6 +109,7 @@ fn flight_start(
       // the field's words as laid out (scrolled to its last lines when there were more than it holds), its room
       send_flight.val = Some({
         chat,
+        turns,
         text: words,
         from_x: x,
         from_y: y,
@@ -123,6 +126,8 @@ fn flight_start(
         way: @motion.Anim::new(0.0),
       })
       composer_hold(chat, room, flight_wait_ms)
+      // their turn among what changes the list's height, till they have landed (turns.mbt: their row kept out till it)
+      turns_of(turns).send(c)
     }
     None => ()
   }
@@ -172,9 +177,14 @@ fn flight_ground(p : Double) -> Double {
 fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
   match flight_of(chat) {
     Some(f) => {
-      let waited = @kit.after(c, "flight/wait", !f.placed, flight_wait_ms)
-      if (!f.placed && waited) || (f.placed && !f.way.moving()) {
+      let turns = turns_of(f.turns)
+      // (its wait counted from its turn: till then its row is kept out of the list)
+      let waited = @kit.after(c, "flight/wait", !f.placed && !turns.send_waiting, flight_wait_ms)
+      let landed = f.placed && !f.way.moving()
+      if (!f.placed && waited) || landed {
         send_flight.val = None
+        // their turn over: where they were declared to land (or now, never having set out)
+        turns.over(c, Send, if landed { f.way.ends() } else { turns.moment(c) })
       }
     }
     // (none: the wait starts again from nothing for the next words)

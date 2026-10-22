@@ -197,6 +197,28 @@ impl Moving for ListState with rest_at(self, now, frame) {
 }
 
 ///|
+/// When the list is at rest by itself (ListInfo's `rest`).
+fn ListState::own_rest(self : ListState) -> Double {
+  if self.held || (self.glide && self.glide_t0 == @double.infinity) {
+    return @double.infinity
+  }
+  let mut t = -1.0
+  if self.fling != 0 && self.vel != 0.0 {
+    t = dmax(t, self.fling_rest())
+  }
+  if self.over_state == 2 {
+    t = dmax(t, self.back_rest())
+  }
+  if self.ease != 0.0 {
+    t = dmax(t, self.ease_t0 + ease_end(self.ease))
+  }
+  if self.glide {
+    t = dmax(t, self.glide_rest)
+  }
+  t
+}
+
+///|
 /// Until when the list is scrolled, its scroll bar shown before it fades: its last scroll, the end of its fling or of
 /// its overscroll going back while one goes on.
 fn ListState::shown_until(self : ListState) -> Double {
@@ -792,6 +814,10 @@ pub(all) struct ListInfo {
   below : Double
   /// gliding to its end (list_to_end)
   gliding : Bool
+  /// when it is at rest by itself, on the frames' clock: its fling, its overscroll going back, a wheel's ease and its
+  /// glide over (its scroll bar's fading aside); inf while a finger holds it or a glide's way is not known yet (it
+  /// sets out at its next layout); -1 at rest
+  rest : Double
 }
 
 ///|
@@ -806,6 +832,7 @@ pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
         at_end: st.at_end,
         below: st.below,
         gliding: st.glide,
+        rest: st.own_rest(),
       })
     None => None
   }

@@ -503,11 +503,16 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.draw()
   assert_true(t.find("正在发送") is None)
   assert_true(t.find("测试一下") is Some(_))
+  // (the station answers fix_answer_ms later: that time passes on the page too, the words landed and the agent's line
+  // come in their turns meanwhile)
+  t.run_for(fix_answer_ms)
   clock.val = clock.val + fix_answer_ms
   t.draw()
   // said while its agent's activity shows: out of its avatar once it has folded and hopped (emit.mbt)
   t.run_for(Fold.ms() + Float.ms())
   assert_true(t.find("收到：「测试一下」") is Some(_))
+  // (its avatar home: what comes out of avatars is over, the next words sent go in their turn after it)
+  t.run_for(Spit.ms() + Return.ms())
   // words with 失败 in them fail first
   t.tap_text("发消息")
   t.type_text("这条会失败")
@@ -626,6 +631,8 @@ test "at its end, rows that come: the core told the end is not in view while the
   // its row, then the agent's answer: each comes at the end, the list gliding to it (list_to_end, the frame it comes)
   clock.val = clock.val + fix_deliver_ms
   t.draw()
+  // (the station answers fix_answer_ms later: that time passes on the page too)
+  t.run_for(fix_answer_ms)
   clock.val = clock.val + fix_answer_ms
   t.draw()
   t.run_for(Fold.ms() + Float.ms())

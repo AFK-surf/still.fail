@@ -29,6 +29,17 @@ fn options_gone_ms() -> Double {
 }
 
 ///|
+/// When the first row's card's options start to close, once answered: their turn after the answer's coming in (and
+/// the list after it), declared once the answer is in the list and the list has set out after it (two frames on).
+fn close_turn_start(t : @ui.Tester) -> Double raise {
+  t.draw()
+  t.draw()
+  let at = turns_of("ws1/st1\u{1}s-c1").start_of("ask/ts8")
+  assert_true(at < @double.infinity)
+  at
+}
+
+///|
 /// `words` tapped where it is, as two inputs (the press, the lift), each drawn.
 fn tap_now(t : @ui.Tester, words : String) -> Unit {
   let (x, y) = t.find(words).unwrap()
@@ -55,9 +66,11 @@ test "an option answered: the options go, how it went comes in their place, the 
   scroll_to_words(t, "把首页和聊天页的截图都更新")
   tap_now(t, "把首页和聊天页的截图都更新")
   assert_eq(named(calls, "decision.answer").length(), 1)
+  // they close in their turn, after the answer has come in (turns.mbt): its rise and the list after it
+  let at = close_turn_start(t)
   // half way through their fade: the options still drawn as they go (only drawn: a tap on them answers nothing), 忽略
   // going with them
-  t.run_for(options_out_ms / 2.0)
+  t.run_for(at + options_out_ms / 2.0 - t.time())
   assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
   tap_now(t, "这次只改列表，截图下次再说")
   assert_eq(named(calls, "decision.answer").length(), 1)
@@ -77,8 +90,9 @@ test "the options' room closes on the rows' spring, a little late, and the line 
   let (_, _, _, h0) = t.rect_of("你 选择了").unwrap_or((0.0, 0.0, 0.0, -1.0))
   assert_eq(h0, -1.0)
   tap_now(t, "把首页和聊天页的截图都更新")
-  // within their fade the options still are
-  t.run_for(options_out_ms / 2.0)
+  // within their fade the options still are (from their turn: close_turn_start)
+  let at = close_turn_start(t)
+  t.run_for(at + options_out_ms / 2.0 - t.time())
   assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
   // once they have faded, the line is
   t.run_for(options_out_ms)

@@ -694,13 +694,15 @@ pub fn lifted(c : @ui.Ctx, list : Int, key : String) -> Double {
 /// Something shown or hidden as `shown` says (Motion's AnimatePresence, Compose's AnimatedVisibility): coming by
 /// `enter`, going by `exit` (by default the way it came), turned back mid-way from where it is. Its look while it
 /// shows (for @ui.Ctx::look), None once it has gone (then it need not be built). The first time it is as it is,
-/// without motion. While it goes it is only drawn: build it under `leaving`.
+/// without motion. While it goes it is only drawn: build it under `leaving`. `start_at`: when what changed it happened
+/// (the frames' clock), its motion from then rather than from this frame.
 pub fn presence(
   c : @ui.Ctx,
   key : String,
   shown : Bool,
   enter? : Trans = trans(fade=0.0),
   exit? : Trans,
+  start_at? : Double,
 ) -> @ui.Look? {
   let out = match exit {
     Some(t) => t
@@ -710,8 +712,20 @@ pub fn presence(
   let f = anim(c, key + "\u{1}fade", to)
   let m = anim(c, key + "\u{1}move", to)
   let t = if shown { enter } else { out }
-  f.follow(to, t.fade_spec)
-  m.follow(to, t.spec)
+  match start_at {
+    Some(at) => {
+      if f.target != to {
+        f.animate(to, t.fade_spec, start_at=at)
+      }
+      if m.target != to {
+        m.animate(to, t.spec, start_at=at)
+      }
+    }
+    None => {
+      f.follow(to, t.fade_spec)
+      m.follow(to, t.spec)
+    }
+  }
   if !shown && f.value <= 0.0 && m.value <= 0.0 {
     return None
   }

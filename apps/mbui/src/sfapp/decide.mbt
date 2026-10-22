@@ -286,7 +286,8 @@ pub fn under_rest() -> Double {
 /// shrinkVertically from its top): coming by `enter` (None: there at once, EnterTransition.None) as its room opens by
 /// `open`, going by `exit` as its room closes by `close`; turned back mid-way from where it is; the first time as it
 /// is. Its room is laid out (`@motion.reveal`, as the Android app's shrinkVertically lays it out, so what is under it
-/// in the chat closes up); what is in it is only drawn while it goes (a tap is what is under it's).
+/// in the chat closes up); what is in it is only drawn while it goes (a tap is what is under it's). `start_at`: when
+/// it was changed in its turn (Turns::in_turn), its motion from then.
 fn under_post(
   c : @ui.Ctx,
   key : String,
@@ -295,21 +296,25 @@ fn under_post(
   open? : @motion.Spec = archive_tween,
   exit~ : @motion.Trans,
   close? : @motion.Spec = archive_tween,
+  start_at? : Double,
   body : () -> Unit,
 ) -> Unit {
   let to = if shown { 1.0 } else { 0.0 }
   let h = @motion.anim(c, "under/" + key, to, global=true)
   let look = match enter {
-    Some(e) => @motion.presence(c, "under-look/" + key, shown, enter=e, exit=exit)
+    Some(e) => @motion.presence(c, "under-look/" + key, shown, enter=e, exit~, start_at?)
     None => {
       // there at once as it comes; going, by `exit`
       if shown {
         h.snap(1.0)
       }
-      @motion.presence(c, "under-look/" + key, shown, enter=@motion.trans(spec=@motion.Snap(0.0)), exit=exit)
+      @motion.presence(c, "under-look/" + key, shown, enter=@motion.trans(spec=@motion.Snap(0.0)), exit~, start_at?)
     }
   }
-  h.follow(to, if shown { open } else { close })
+  match start_at {
+    Some(at) if h.target() != to => h.animate(to, if shown { open } else { close }, start_at=at)
+    _ => h.follow(to, if shown { open } else { close })
+  }
   under_ends[key] = h
   let share = h.get()
   let look = match look {
@@ -360,8 +365,17 @@ fn answering(station : String, m : Message, options : Array[Choice]) -> String? 
 ///|
 /// 忽略 under a post that asks what no one has decided (Chat.kt AskDismiss): gone at once, back if letting it go
 /// failed (`decision.dismiss`). It goes as the archive buttons go (280 ms, ArchiveEase: fading, to 85% from its top
-/// left, its room closing), and with the options once the card is answered.
-fn ask_dismiss(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
+/// left, its room closing), in its turn among what changes the list's height (`turns`), and with the options once the
+/// card is answered (`asking`, from `asked_at`).
+fn ask_dismiss(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  m : Message,
+  asking : Bool,
+  asked_at : Double,
+  turns : Turns,
+) -> Unit {
   let answered = match m.decision {
     Some(d) => d.resolved || d.dismissed
     None => false
@@ -370,7 +384,11 @@ fn ask_dismiss(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     return
   }
   let k = seq_key(here.station, m.thread, m.seq)
-  let shown = m.asked && !answered && !dui.gone.contains(k)
+  // (answered, it goes with the options, in their turn; let go here, in a turn of its own)
+  let mine = turns.in_turn(c, "dismiss/" + k, (m.asked || answered) && !dui.gone.contains(k), dismiss_turn_ms)
+  let shown = asking && mine
+  let own_at = turns.started_at("dismiss/" + k)
+  let at = if !asking { asked_at } else { own_at }
   let t = @sf.theme()
   let id = c.id("ask-dismiss/" + m.ts)
   if shown && c.clicked(id) {
@@ -393,6 +411,7 @@ fn ask_dismiss(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     "dismiss/" + k,
     shown,
     exit=@motion.trans(fade=0.0, scale=archive_scale, ox=0.0, oy=0.0, spec=archive_tween),
+    start_at?=if at >= 0.0 { Some(at) } else { None },
     fn() {
       c.box(pt=6.0, fn() {
         c.box(id=if shown { id } else { 0 }, fn() {
