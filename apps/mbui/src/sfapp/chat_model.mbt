@@ -249,6 +249,18 @@ pub(all) struct Message {
   outgoing : String
   /// a failure still.fail says that the viewer may send to the still.fail team (`chat.report`)
   reportable : Bool
+  /// the first of a run of what other chats' agents wrote to the chat: the run's line (the core's `letters`)
+  letters : Letters?
+}
+
+///|
+/// A run of messages other chats' agents wrote to a chat, folded into a line (core views.ts `lettersFolded`), so they
+/// do not bury what people and the chat's own agents say: who wrote them to whom and how many, in words (「X」发给
+/// Opus 5.5 · 3 条), and whether it is shown whole (`chat.letters` opens it or folds it again).
+pub(all) struct Letters {
+  count : Int
+  line : String
+  open : Bool
 }
 
 ///|
@@ -310,6 +322,10 @@ fn message_of(m : Json) -> Message {
     said: flag(s, "said"),
     outgoing: text(s, "outgoing"),
     reportable: flag(s, "reportable"),
+    letters: match field(s, "letters") {
+      Some(Object(_)) as l => Some({ count: number(l, "count").to_int(), line: text(l, "line"), open: flag(l, "open") })
+      _ => None
+    },
   }
 }
 

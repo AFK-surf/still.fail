@@ -90,6 +90,7 @@ fn entry_view(c : @ui.Ctx, src : Source, here : Here, e : Entry, list : Array[En
       |> ignore
     Line => unread_line(c)
     Said(m) => said(c, src, here, m, list)
+    Letters(m) => letters_line(c, src, here, m)
     Sent(s) => sent_elsewhere(c, src, here, s)
     Out(o) => outgoing(c, src, here, o)
     Working(a) => activity(c, src, here, a)
@@ -372,10 +373,8 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
     } else {
       0xFFF0EFFFL
     }
-  } else if t.dark {
-    0xFFFFFF0DL
   } else {
-    0x26211711L
+    notice_ground(t.dark)
   }
   let color = if failed {
     if t.dark {
@@ -409,78 +408,124 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
     _ => None
   }
   let report = m.reportable && to_install is None && colon is None
-  c.box(w=Fill(1.0), gap=4.0, align=ACenter, fn() {
-    c.box(
-      max_w=c.width - 28.0,
-      padx=14.0,
-      pady=6.0,
-      radius=if open { 16.0 } else { 18.0 },
-      bg=ground,
-      id~,
-      fn() {
-        match colon {
-          Some(at) =>
-            c.rich(
-              [
-                @ui.span(said.view(end_offset=at).to_owned()),
-                @ui.span(said.view(start_offset=at).to_owned(), underline=true, link="profile"),
-              ],
-              key="notice-profile/" + m.ts,
-              style=if open { system_words_open } else { system_words },
-              color~,
-              link_color=color,
-              on_link=fn(_) { app.nav.push(Setting(@settings.Route::Profile(station, m.profile))) },
-            )
-            |> ignore
-          None =>
-            c.box(dir=Row, align=if report { AEnd } else { ACenter }, fn() {
-              // cut short where it does not fit, the word that acts on it after
-              c.box(fn() {
-                if open {
-                  @sf.markdown(c, said, key="notice/" + m.ts, size=15.0, ink=color) |> ignore
-                } else {
-                  c.text(plain_words(if to_install is Some(_) { said } else { first }), size=15.0, color~, wrap=false, line=24.75)
-                  |> ignore
-                }
-              })
-              |> ignore
-              match to_install {
-                Some(i) => notice_action(c, "notice-install/" + m.ts, i.action, color, doing(install_key(station, i)), fn() {
-                    install_runtime(src, station, i)
-                  })
-                None =>
-                  if report {
-                    let key = "chat.report/" + station + "/" + m.thread.to_string() + "/" + m.seq.to_string()
-                    let action = tr("common.report.action")
-                    notice_action(c, "notice-report/" + m.ts, action, color, doing(key), fn() {
-                      @settings.confirm(tr("common.report.title"), tr("common.report.lead") + "\n\n" + tr("common.report.sends"), action, fn() {
-                        act(
-                          src,
-                          action,
-                          key,
-                          "chat.report",
-                          { "station": Json::string(station), "thread": Json::number(m.thread), "seq": Json::number(m.seq) },
-                          ok=fn(v) {
-                            let number = match field(Some(v), "number") {
-                              Some(Number(n, ..)) => n.to_int().to_string()
-                              _ => "?"
-                            }
-                            toast_later(fill(if flag(Some(v), "duplicate") { "common.report.again" } else { "common.report.done" }, [("number", number)]))
-                          },
-                        )
-                      })
-                    })
-                  }
+  c.box(style=notice_across, fn() {
+    notice_pill(c, id, ground, open, fn() {
+      match colon {
+        Some(at) =>
+          c.rich(
+            [
+              @ui.span(said.view(end_offset=at).to_owned()),
+              @ui.span(said.view(start_offset=at).to_owned(), underline=true, link="profile"),
+            ],
+            key="notice-profile/" + m.ts,
+            style=if open { system_words_open } else { system_words },
+            color~,
+            link_color=color,
+            on_link=fn(_) { app.nav.push(Setting(@settings.Route::Profile(station, m.profile))) },
+          )
+          |> ignore
+        None =>
+          c.box(dir=Row, align=if report { AEnd } else { ACenter }, fn() {
+            // cut short where it does not fit, the word that acts on it after
+            c.box(fn() {
+              if open {
+                @sf.markdown(c, said, key="notice/" + m.ts, size=15.0, ink=color) |> ignore
+              } else {
+                pill_words(c, plain_words(if to_install is Some(_) { said } else { first }), color)
               }
             })
             |> ignore
-        }
-      },
-    )
-    |> ignore
+            match to_install {
+              Some(i) => notice_action(c, "notice-install/" + m.ts, i.action, color, doing(install_key(station, i)), fn() {
+                  install_runtime(src, station, i)
+                })
+              None =>
+                if report {
+                  let key = "chat.report/" + station + "/" + m.thread.to_string() + "/" + m.seq.to_string()
+                  let action = tr("common.report.action")
+                  notice_action(c, "notice-report/" + m.ts, action, color, doing(key), fn() {
+                    @settings.confirm(tr("common.report.title"), tr("common.report.lead") + "\n\n" + tr("common.report.sends"), action, fn() {
+                      act(
+                        src,
+                        action,
+                        key,
+                        "chat.report",
+                        { "station": Json::string(station), "thread": Json::number(m.thread), "seq": Json::number(m.seq) },
+                        ok=fn(v) {
+                          let number = match field(Some(v), "number") {
+                            Some(Number(n, ..)) => n.to_int().to_string()
+                            _ => "?"
+                          }
+                          toast_later(fill(if flag(Some(v), "duplicate") { "common.report.again" } else { "common.report.done" }, [("number", number)]))
+                        },
+                      )
+                    })
+                  })
+                }
+            }
+          })
+          |> ignore
+      }
+    })
     if open {
       message_time(c, m.ts, m.time)
     }
+  })
+  |> ignore
+}
+
+///|
+/// A notice's pill (Chat.kt SystemNotice, LettersLine): as wide as its words, 14 and 6 in, round at its ends.
+fn notice_pill(c : @ui.Ctx, id : Int, ground : Int64, open : Bool, body : () -> Unit) -> Unit {
+  c.box(max_w=c.width - 28.0, padx=14.0, pady=6.0, radius=if open { 16.0 } else { 18.0 }, bg=ground, id~, body)
+  |> ignore
+}
+
+///|
+/// A notice's line of words (15 on a message's line), cut short where it does not fit.
+fn pill_words(c : @ui.Ctx, words : String, color : Int64) -> Unit {
+  c.text(words, size=15.0, color~, wrap=false, line=24.75) |> ignore
+}
+
+///|
+/// A notice's ground, what it says not a failure: the words' colour faint (Chat.kt SystemNotice, LettersLine).
+fn notice_ground(dark : Bool) -> Int64 {
+  if dark {
+    0xFFFFFF0DL
+  } else {
+    0x26211711L
+  }
+}
+
+///|
+/// A notice across the chat, in its middle, its time 4 under it once opened.
+// kept across runs: a value (no field of it changes)
+let notice_across : @ui.Style = @ui.style(w=Full, gap=S1, align=ACenter)
+
+///|
+/// What other chats' agents wrote to this one, a run of it with nothing else said between (Chat.kt LettersLine, the
+/// core's `letters` on its first message): a pill across the chat as still.fail's notices are, saying which chat's
+/// agent wrote to which and how many, cut short where it does not fit. A tap shows the run whole under it, or folds it
+/// again (`chat.letters`).
+fn letters_line(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
+  guard m.letters is Some(letters) else { return }
+  let id = c.id("letters/" + m.ts)
+  if c.clicked(id) {
+    act(
+      src,
+      tr(if letters.open { "web-main.chat.letters.close" } else { "web-main.chat.letters.open" }),
+      "",
+      "chat.letters",
+      {
+        "station": Json::string(here.station),
+        "thread": Json::number(m.thread),
+        "seq": Json::number(m.seq),
+        "open": Json::boolean(!letters.open),
+      },
+    )
+  }
+  c.box(style=notice_across, fn() {
+    notice_pill(c, id, notice_ground(@sf.theme().dark), false, fn() { pill_words(c, letters.line, ink().text) })
   })
   |> ignore
 }

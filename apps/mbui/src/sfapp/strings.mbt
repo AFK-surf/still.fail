@@ -160,6 +160,9 @@ let zh : Map[String, String] = {
   "web-main.composer.pasteUploading": "正在上传",
   "web-main.composer.pastedText": "粘贴的文字",
   "web-main.composer.removePaste": "删除粘贴片段",
+  // what other chats' agents wrote, its line tapped (Chat.kt LettersLine)
+  "web-main.chat.letters.close": "收起消息",
+  "web-main.chat.letters.open": "展开消息",
   "web-main.composer.retryPaste": "重试上传",
   "web-pages.chat.files": "Station 文件",
   "web-main.outside.title": "分享对话",
