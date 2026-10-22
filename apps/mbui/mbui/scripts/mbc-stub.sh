@@ -1,5 +1,5 @@
 #!/bin/sh
-# The C compiler and archiver `scripts/mbc.py gen` gives moon (MOON_CC, MOON_AR): moonc's steps run as they would,
+# The C compiler and archiver `scripts/mbc gen` gives moon (MOON_CC, MOON_AR): moonc's steps run as they would,
 # the C compiler's and the archiver's only leave an empty file where their output would be. Only the C that moonc
 # generates is wanted (the Android and iOS builds compile it with their own compiler); moon's compile of it for
 # this machine is the slowest step of its build and of no use to them.

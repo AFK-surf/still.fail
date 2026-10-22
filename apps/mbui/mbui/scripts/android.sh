@@ -1,5 +1,5 @@
 #!/bin/bash
-# Android: build libmbui.so from the C that moon generates (split and compiled in parallel: scripts/mbc.py) plus the
+# Android: build libmbui.so from the C that moon generates (split and compiled in parallel: scripts/mbc) plus the
 # runtime and src/host/android_host.c, package it with Gradle, and run it on an
 # emulator of our own (AVD mbui-avd, port 5580). APP=demo|textdiff picks the app (still.fail's apps: its
 # apps/mbui/scripts/android.sh, these scripts on its module);
@@ -58,11 +58,11 @@ sync() {
   mkdir -p $M/src
   cp -p moon.mod $M/
   # a workspace's other members where they are (by absolute path: the copy is elsewhere)
-  if [ -f moon.work ]; then python3 "$D/mbc.py" work moon.work $M/moon.work; fi
+  if [ -f moon.work ]; then "$D/mbc" work moon.work $M/moon.work; fi
   # exactly src/: a file gone from it goes from the copy too (then the copy's own files, after)
   if command -v rsync >/dev/null; then rsync -a --delete src/ $M/src/; else rm -rf $M/src && cp -rp src $M/src; fi
   [ ! -f src/photos/pictures/android.mbt ] || cp -p src/photos/pictures/android.mbt $M/src/photos/pictures_native.mbt
-  # only moonc's C of the copy is used (scripts/mbc.py gen): moon compiles and links nothing of it, so the apps'
+  # only moonc's C of the copy is used (scripts/mbc gen): moon compiles and links nothing of it, so the apps'
   # macOS link flags (the core's Apple shell among them) stay as they are
 }
 
@@ -98,9 +98,9 @@ secs() { python3 -c "print(f'{$2-$1:.1f}')"; }
 
 case "${1:-build}" in
   build)
-    # The C that moonc generates, without moon's compile of it for this machine (scripts/mbc.py gen: 2 s where moon's
+    # The C that moonc generates, without moon's compile of it for this machine (scripts/mbc gen: 2 s where moon's
     # own build took a minute), compiled split into units, all at once, with the runtime, the host and the core's C
-    # (scripts/mbc.py compile: an object whose inputs did not change is kept); the core's parts alongside; then Gradle
+    # (scripts/mbc compile: an object whose inputs did not change is kept); the core's parts alongside; then Gradle
     # (its daemon and build cache: android/gradle.properties). MBC_SPLIT=0 compiles the C whole, as one unit.
     T0=$(now)
     sync
@@ -119,7 +119,7 @@ case "${1:-build}" in
     # build of an app without the core after one with it would still pack them: built anew when that changes.
     if [ "$(cat $OUT/apk-kind 2>/dev/null)" != "$APP_KIND" ]; then rm -rf "${PROJ:?}/app/build"; fi
     echo $APP_KIND > $OUT/apk-kind
-    GEN=$(python3 "$D/mbc.py" gen --dir $M src/$PKG 2>$OUT/moon.log) \
+    GEN=$("$D/mbc" gen --dir $M src/$PKG 2>$OUT/moon.log) \
       || { python3 "$D/errs.py" < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
     python3 "$D/errs.py" < $OUT/moon.log | grep -v '^errors: 0' || true
     T1=$(now)
@@ -127,16 +127,16 @@ case "${1:-build}" in
     mkdir -p $OUT/obj $(dirname $SO)
     R=$MOON_HOME/lib/runtime
     EXTRA="--extra=$ROOT/src/host/android_host.c $APP_EXTRA"
-    python3 "$D/mbc.py" compile "--cc=$CC" "--cflags=$CFLAGS" --gen-flags=-Dmain=mbui_main --obj=$OUT/obj \
+    "$D/mbc" compile "--cc=$CC" "--cflags=$CFLAGS" --gen-flags=-Dmain=mbui_main --obj=$OUT/obj \
       --link-flags=$OUT/link-flags.txt \
       --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
       $EXTRA "$GEN" > $OUT/objs.txt
     T2=$(now)
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
     T3=$(now)
-    # (ThinLTO's backends run here: scripts/mbc.py's link flags), unless the same command made libmbui.so of the same
-    # objects and the core's .so files already (scripts/mbc.py link: by content)
-    python3 "$D/mbc.py" link --out=$SO --dep=$jni -- $CC -shared -o $SO $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) \
+    # (ThinLTO's backends run here: scripts/mbc's link flags), unless the same command made libmbui.so of the same
+    # objects and the core's .so files already (scripts/mbc link: by content)
+    "$D/mbc" link --out=$SO --dep=$jni -- $CC -shared -o $SO $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) \
       $APP_LINK -lGLESv3 -llog -lz -lm -Wl,--no-undefined
     T4=$(now)
     echo "libmbui.so $(size $SO) bytes in $(secs $T0 $T4) s"

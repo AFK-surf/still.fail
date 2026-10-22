@@ -48,6 +48,14 @@ yet and you can add one, add it.
   rerun it green and move on, do not call it "偶发", do not add retries or waits. Find what came in uncontrolled and
   route it through what is recorded and given again (docs/determinism.md rule 1), or take it out of the run.
 
+## Tools are MoonBit, not Python
+
+> 删掉所有你妈的 py，怎么这么喜欢 py
+
+- A build, CI or check tool is a MoonBit program (native, in `tools/`, run through a script that builds it when it is
+  not built: `scripts/mbc`), or shell when it only runs other programs. No new Python; a Python script that needs a
+  change is rewritten instead (those left are going one by one).
+
 ## Before a PR
 
 - Run what CI runs for what you touched (`scripts/test.sh`, the `moon test` packages of the repository's `.github/workflows/mbui-ci.yml`,

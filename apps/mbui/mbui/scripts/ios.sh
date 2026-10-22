@@ -1,6 +1,6 @@
 #!/bin/bash
 # The iOS app (the simulator's; a device's with MBUI_IOS_SDK=iphoneos): built from the C that `moon build --target native` generates (split and compiled in parallel:
-# scripts/mbc.py), plus the MoonBit runtime and the Objective-C host, then installed and launched on a simulator of our
+# scripts/mbc), plus the MoonBit runtime and the Objective-C host, then installed and launched on a simulator of our
 # own. APP=demo picks the app (src/<APP>).
 #   scripts/ios.sh build | run [SCRIPT] | log [N] | stop | shot NAME | device | pid | delete
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (simctl's SIMCTL_CHILD_*); its log (stderr: the host's
@@ -97,8 +97,8 @@ app_pid() {
 case "${1:-build}" in
   build)
     T0=$(python3 -c 'import time;print(time.time())')
-    # the C that moonc generates (scripts/mbc.py gen: moon's own compile of it for macOS left out), compiled split
-    # into units with the runtime and the Objective-C host, all at once (scripts/mbc.py compile)
+    # the C that moonc generates (scripts/mbc gen: moon's own compile of it for macOS left out), compiled split
+    # into units with the runtime and the Objective-C host, all at once (scripts/mbc compile)
     mkdir -p $OUT/obj
     rm -rf $APPDIR && mkdir -p $APPDIR
     LIBS=
@@ -106,7 +106,7 @@ case "${1:-build}" in
       app_libs > $OUT/app-libs.log 2>&1 &
       LIBS=$!
     fi
-    GEN=$(python3 "$D/mbc.py" gen --target-dir $OUT/_build src/$PKG 2>$OUT/moon.log) \
+    GEN=$("$D/mbc" gen --target-dir $OUT/_build src/$PKG 2>$OUT/moon.log) \
       || { python3 "$D/errs.py" < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
     python3 "$D/errs.py" < $OUT/moon.log | grep -v '^errors: 0' || true
     R=$MOON_HOME/lib/runtime
@@ -114,12 +114,12 @@ case "${1:-build}" in
     for f in apple_render apple_text apple_image apple_listen apple_browser_login apple_views apple_stream ios_app; do
       EXTRA="$EXTRA --extra=$ROOT/src/host/$f.m"
     done
-    python3 "$D/mbc.py" compile "--cc=$CC" "--cflags=$CFLAGS" --objc-flags=-fobjc-arc --obj=$OUT/obj \
+    "$D/mbc" compile "--cc=$CC" "--cflags=$CFLAGS" --objc-flags=-fobjc-arc --obj=$OUT/obj \
       --link-flags=$OUT/link-flags.txt \
       --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
       $EXTRA $APP_EXTRA "$GEN" > $OUT/objs.txt
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
-    python3 "$D/mbc.py" link --out=$APPDIR/mbui --stamp=$OUT/mbui.mbc-link -- $CC $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) -o $APPDIR/mbui -framework UIKit -framework Metal -framework QuartzCore \
+    "$D/mbc" link --out=$APPDIR/mbui --stamp=$OUT/mbui.mbc-link -- $CC $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) -o $APPDIR/mbui -framework UIKit -framework Metal -framework QuartzCore \
       -framework CoreText -framework CoreGraphics -framework ImageIO -framework Foundation \
       -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit -framework PhotosUI \
       -framework UniformTypeIdentifiers -lm $APP_LINK
