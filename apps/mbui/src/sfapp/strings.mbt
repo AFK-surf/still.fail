@@ -41,6 +41,7 @@ let zh : Map[String, String] = {
   "common.report.lead": "仅在你认为这是 still.fail 本身的问题时上报。网络、代理、账号额度或模型服务的问题，请先自行排查。",
   "common.report.sends": "将发送此报错、出错这一轮的原因、agent 和 station 的版本、agent 环境变量的名称（不含值）、此对话相关的 station 日志，以及你的名字和邮箱。",
   "android-misc.link.cantOpen": "无法打开此链接",
+  "android-misc.reader.back": "执行历史",
   "android-misc.screen.title": "屏幕",
   "android-misc.adb.title": "共享调试",
   "android-chat.annotate.copied": "已复制",

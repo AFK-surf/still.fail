@@ -1277,14 +1277,15 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
 }
 
 ///|
-/// An entry opened in full (History.kt's reader): the line it was under, then all its words as Markdown.
+/// An entry opened in full (History.kt's reader, Sheet.kt ReaderHost): back to 执行历史, the line it was under, then
+/// all its words as Markdown, 20 from the sides, 12 between.
 fn words_page(c : @ui.Ctx, src : Source, head : String, words : String) -> Unit {
   ignore(src)
   let t = @sf.theme()
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    page_bar(c, "words", tr("common.back"), "", fn() {  })
+    page_bar(c, "words", tr("android-misc.reader.back"), "", fn() {  })
     c.list("words/" + head + "/" + words.length().to_string(), 2, 200.0, fn(i) {
-      c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=if i == 1 { 30.0 } else { 8.0 }, fn() {
+      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=if i == 1 { 30.0 } else { 12.0 }, fn() {
         if i == 0 {
           if head != "" {
             c.text(head, size=13.0, color=t.p.muted) |> ignore

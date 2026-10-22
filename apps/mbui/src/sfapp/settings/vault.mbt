@@ -35,7 +35,10 @@ fn agent_line(listed : Bool, modes : Array[String], hosts : Array[String]) -> St
   }
   let parts = [tr("android-settings.vault.agentCan")]
   parts.append(modes.map(mode_name))
-  parts.push(join(hosts, ", "))
+  // (no hosts, none said: an env's)
+  if hosts.length() > 0 {
+    parts.push(join(hosts, ", "))
+  }
   join(parts, " · ")
 }
 
@@ -682,6 +685,29 @@ let plain_left_body : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, col
 /// How long a grant lasts, shortest first: one use, an hour, the chat until it is archived (Vault.kt SCOPES).
 // kept across runs: a table, never written
 let vault_scopes : Array[String] = ["once", "hour", "chat"]
+
+///|
+/// The longest an item is granted for, in a word: 仅一次, 1 小时, 直到对话归档 (Vault.kt lastsName: the chat's when
+/// it says none it knows).
+fn lasts_name(lasts : String) -> String {
+  tr("android-settings.vault.lasts." + (if vault_scopes.contains(lasts) { lasts } else { "chat" }))
+}
+
+///|
+/// An item's longest grant as its editor offers it: its vault's (`default`, the library's setting), or its own
+/// (Vault.kt LASTS).
+// kept across runs: a table, never written
+let vault_lasts : Array[String] = ["default", "once", "hour", "chat"]
+
+///|
+/// An item's longest grant as its editor names it (Vault.kt lastsChoice).
+fn lasts_choice(lasts : String) -> String {
+  if lasts == "default" {
+    tr("android-settings.vault.lasts.default")
+  } else {
+    lasts_name(lasts)
+  }
+}
 
 ///|
 /// The longest an agent's request for the viewer's secrets is approved for, where a secret says none (Vault.kt
