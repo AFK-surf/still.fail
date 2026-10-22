@@ -684,7 +684,7 @@ fn size_uncached(
 /// item side by side in its pool's `f` (item k's at k * ITEM): read pass
 /// after pass over the items, they are kept together, not as an object
 /// each, which its node and box would also be reached through.
-const ITEM : Int = 21
+const ITEM : Int = 25
 
 ///|
 const BASIS : Int = 0
@@ -757,6 +757,20 @@ const SHRINK : Int = 19
 const PB_MAIN : Int = 20
 
 ///|
+/// Its margins at the start and the end of the main axis, and of the cross
+/// axis.
+const MAR_MAIN_START : Int = 21
+
+///|
+const MAR_MAIN_END : Int = 22
+
+///|
+const MAR_CROSS_START : Int = 23
+
+///|
+const MAR_CROSS_END : Int = 24
+
+///|
 /// An item's flags, in its pool's `flags`: its auto margins,
 const AUTO_L : Int = 1
 
@@ -794,15 +808,15 @@ priv struct Line {
 
 ///|
 /// Per depth of containers being laid out (each lays out its children,
-/// one level down, before it is done): its items (node, box, alignment, and
-/// their numbers, flags and lines), and the lines in use and made so far to
-/// take them from.
+/// one level down, before it is done): its items (which of the container's
+/// children each is, its alignment, numbers, flags and line), and the lines
+/// in use and made so far to take them from. (It holds no node or box: one
+/// put in an array and taken out again is counted in and out each time.)
 priv struct Pool {
-  // the items in use (count of them: the rest is what is left from before,
-  // or no_node and no_box once a container is done with them)
+  // the items in use (count of them: the rest is what is left from before)
   mut count : Int
-  mut nodes : Array[Node]
-  mut boxes : Array[Box]
+  // where in flow_children(container) each is
+  mut at : Array[Int]
   mut aligns : Array[Align]
   mut f : Array[Double]
   mut flags : Array[Int]
@@ -818,15 +832,15 @@ let pools : Array[Pool] = []
 let depth : Ref[Int] = { val: 0 }
 
 ///|
-/// The next item of pool `p`, for `node`, its box and alignment: its index.
+/// The next item of the pool, child `at` of flow_children(container), with
+/// its alignment: its index.
 /// (Its numbers are not cleared: each is set before it is read.)
-fn Pool::add(self : Pool, node : Node, b : Box, al : Align) -> Int {
+fn Pool::add(self : Pool, at : Int, al : Align) -> Int {
   let k = self.count
   if k >= self.flags.length() {
     self.grow()
   }
-  self.nodes.unsafe_set(k, node)
-  self.boxes.unsafe_set(k, b)
+  self.at.unsafe_set(k, at)
   self.aligns.unsafe_set(k, al)
   self.count = k + 1
   k
@@ -845,31 +859,33 @@ fn Pool::grow(self : Pool) -> Unit {
   }
   let flags = Array::make(n, 0)
   let line_of = Array::make(n, 0)
-  let nodes = Array::make(n, no_node)
-  let boxes = Array::make(n, no_box)
+  let at = Array::make(n, 0)
   let aligns : Array[Align] = Array::make(n, Auto)
   for i in 0..<k {
     flags[i] = self.flags[i]
     line_of[i] = self.line_of[i]
-    nodes[i] = self.nodes[i]
-    boxes[i] = self.boxes[i]
+    at[i] = self.at[i]
     aligns[i] = self.aligns[i]
   }
   self.f = f
   self.flags = flags
   self.line_of = line_of
-  self.nodes = nodes
-  self.boxes = boxes
+  self.at = at
   self.aligns = aligns
 }
 
 ///|
-/// What a pool's places hold when no container is using them, so that it
-/// keeps nothing of a tree alive.
-let no_node : Node = Node::new()
+/// The box of a node that has none yet.
+let no_box : Box = box_of(Style::new(), undef, undef)
 
 ///|
-let no_box : Box = box_of(Style::new(), undef, undef)
+/// The box set up for an item of the container being laid out.
+fn item_box(n : Node) -> Box {
+  match n.box_memo {
+    Some(b) => b
+    None => no_box
+  }
+}
 
 ///|
 fn Pool::line(self : Pool, start : Int, end : Int) -> Unit {
@@ -954,8 +970,7 @@ fn layout_flex(
   if d >= pools.length() {
     pools.push({
       count: 0,
-      nodes: [],
-      boxes: [],
+      at: [],
       aligns: [],
       f: [],
       flags: [],
@@ -980,14 +995,10 @@ fn layout_flex(
     h0 == pre.unsafe_get(2)
   let mut fh = 0.0
   let fw = if fast {
-    for c in flow {
+    for j, c in flow {
       let cs = c.style
       if cs.position == Absolute {
         continue
-      }
-      let cb = match c.box_memo {
-        Some(cb) => cb
-        None => no_box
       }
       // (pool.add written out: called from here too, it is not inlined
       // where every container's items are set up)
@@ -995,17 +1006,16 @@ fn layout_flex(
       if k >= pool.flags.length() {
         pool.grow()
       }
-      pool.nodes.unsafe_set(k, c)
-      pool.boxes.unsafe_set(k, cb)
+      pool.at.unsafe_set(k, j)
       pool.aligns.unsafe_set(k, Auto)
       pool.count = k + 1
       let i = k * ITEM
-      let j = 3 + k * 4
+      let p = 3 + k * 4
       let f = pool.f
-      f.unsafe_set(i + MAIN, pre.unsafe_get(j))
-      f.unsafe_set(i + CROSS, pre.unsafe_get(j + 1))
-      f.unsafe_set(i + MAIN_POS, pre.unsafe_get(j + 2))
-      f.unsafe_set(i + CROSS_POS, pre.unsafe_get(j + 3))
+      f.unsafe_set(i + MAIN, pre.unsafe_get(p))
+      f.unsafe_set(i + CROSS, pre.unsafe_get(p + 1))
+      f.unsafe_set(i + MAIN_POS, pre.unsafe_get(p + 2))
+      f.unsafe_set(i + CROSS_POS, pre.unsafe_get(p + 3))
       pool.flags.unsafe_set(
         k,
         if cs.position == Relative &&
@@ -1030,7 +1040,7 @@ fn layout_flex(
     // that height is known)
     let mut cross_by_height = false
     let mut any_baseline = false
-    for c in flow {
+    for j, c in flow {
       let cs = c.style
       if cs.position == Absolute {
         absolute_seen.val = true
@@ -1069,7 +1079,7 @@ fn layout_flex(
       } else {
         cs.margin_left_k == LEN_AUTO || cs.margin_right_k == LEN_AUTO
       }
-      let k = pool.add(c, cb, al)
+      let k = pool.add(j, al)
       let f = pool.f
       let i = k * ITEM
       let stretch = al == Stretch && !known(cross_style) && !auto_cross_margin
@@ -1116,6 +1126,10 @@ fn layout_flex(
       f.unsafe_set(i + MAX_CROSS, if row { cb.max_h } else { cb.max_w })
       f.unsafe_set(i + MARGIN_MAIN, margin_main)
       f.unsafe_set(i + MARGIN_CROSS, margin_cross)
+      f.unsafe_set(i + MAR_MAIN_START, if row { cb.mar_l } else { cb.mar_t })
+      f.unsafe_set(i + MAR_MAIN_END, if row { cb.mar_r } else { cb.mar_b })
+      f.unsafe_set(i + MAR_CROSS_START, if row { cb.mar_t } else { cb.mar_l })
+      f.unsafe_set(i + MAR_CROSS_END, if row { cb.mar_b } else { cb.mar_r })
       f.unsafe_set(i + CROSS_STYLE, cross_style)
       f.unsafe_set(i + ASCENT, 0.0)
       f.unsafe_set(i + GROW, cs.grow)
@@ -1176,8 +1190,7 @@ fn layout_flex(
     let f = pool.f
     let flags = pool.flags
     let count = pool.count
-    let nodes = pool.nodes
-    let boxes = pool.boxes
+    let at = pool.at
     let aligns = pool.aligns
     // lines
     let lines = pool.lines
@@ -1282,9 +1295,9 @@ fn layout_flex(
         }
         let main = f.unsafe_get(i + MAIN)
         let cw = if row {
-          size_node(nodes.unsafe_get(k), main, kc, main, ac, cb_w, cb_h, false)
+          size_node(flow.unsafe_get(at.unsafe_get(k)), main, kc, main, ac, cb_w, cb_h, false)
         } else {
-          size_node(nodes.unsafe_get(k), kc, main, ac, main, cb_w, cb_h, false)
+          size_node(flow.unsafe_get(at.unsafe_get(k)), kc, main, ac, main, cb_w, cb_h, false)
         }
         let ch = out_h.val
         f.unsafe_set(
@@ -1318,12 +1331,12 @@ fn layout_flex(
           }
           let iw = f.unsafe_get(i + MAIN)
           let ih = f.unsafe_get(i + CROSS)
-          let n = nodes.unsafe_get(k)
+          let n = flow.unsafe_get(at.unsafe_get(k))
           let rw = size_node(n, iw, ih, iw, ih, cb_w, cb_h, true)
           let rh = out_h.val
           n.width = rw
           n.height = rh
-          let ascent = node_baseline(n) + boxes.unsafe_get(k).mar_t
+          let ascent = node_baseline(n) + f.unsafe_get(i + MAR_CROSS_START)
           f.unsafe_set(i + ASCENT, ascent)
           asc = fmax(asc, ascent)
           desc = fmax(desc, f.unsafe_get(i + CROSS) + f.unsafe_get(i + MARGIN_CROSS) - ascent)
@@ -1440,10 +1453,9 @@ fn layout_flex(
       let mut p = lead
       for k in ln.start..<ln.end {
         let i = k * ITEM
-        let ib = boxes.unsafe_get(k)
         let fl = flags.unsafe_get(k)
-        let m_start = if row { ib.mar_l } else { ib.mar_t }
-        let m_end = if row { ib.mar_r } else { ib.mar_b }
+        let m_start = f.unsafe_get(i + MAR_MAIN_START)
+        let m_end = f.unsafe_get(i + MAR_MAIN_END)
         let ms = m_start + (if (fl & a_start_bit) != 0 { per_auto } else { 0.0 })
         let me = m_end + (if (fl & a_end_bit) != 0 { per_auto } else { 0.0 })
         let main = f.unsafe_get(i + MAIN)
@@ -1454,8 +1466,8 @@ fn layout_flex(
         }
         p = p + ms + main + me + gap_main + between
         // cross axis within the line
-        let c_start = if row { ib.mar_t } else { ib.mar_l }
-        let c_end = if row { ib.mar_b } else { ib.mar_r }
+        let c_start = f.unsafe_get(i + MAR_CROSS_START)
+        let c_end = f.unsafe_get(i + MAR_CROSS_END)
         let ca_start = (fl & ca_start_bit) != 0
         let ca_end = (fl & ca_end_bit) != 0
         let cross = f.unsafe_get(i + CROSS)
@@ -1484,7 +1496,7 @@ fn layout_flex(
         f.unsafe_set(i + CROSS_POS, cross_pos)
         // (for baselines only, which reuse does not take: measuring may
         // write them too)
-        nodes.unsafe_get(k).line = pool.line_of.unsafe_get(k)
+        flow.unsafe_get(at.unsafe_get(k)).line = pool.line_of.unsafe_get(k)
       }
     }
     let fw = if row { main_size + pbw } else { cross_size + pbw }
@@ -1531,15 +1543,14 @@ fn layout_flex(
   }
   if perform {
     let count = pool.count
-    let nodes = pool.nodes
-    let boxes = pool.boxes
+    let at = pool.at
     let f = pool.f
     let flags = pool.flags
     let ox = b.bor_l + b.pad_l
     let oy = b.bor_t + b.pad_t
     for k in 0..<count {
       let i = k * ITEM
-      let n = nodes.unsafe_get(k)
+      let n = flow.unsafe_get(at.unsafe_get(k))
       let iw = if row { f.unsafe_get(i + MAIN) } else { f.unsafe_get(i + CROSS) }
       let ih = if row { f.unsafe_get(i + CROSS) } else { f.unsafe_get(i + MAIN) }
       if !reusing.val &&
@@ -1551,7 +1562,7 @@ fn layout_flex(
         // to (its box the one set up above, its caches already started in
         // this compute, nothing kept for a compute that reuses), without
         // the calls
-        let ib = boxes.unsafe_get(k)
+        let ib = item_box(n)
         let w = clamp_size(iw, ib.min_w, ib.max_w)
         let h = clamp_size(ih, ib.min_h, ib.max_h)
         let ipbw = ib.pbw()
@@ -1597,11 +1608,6 @@ fn layout_flex(
         zero(c)
       }
     }
-  }
-  // (nothing of this tree kept by the pool)
-  for k in 0..<pool.count {
-    pool.nodes.unsafe_set(k, no_node)
-    pool.boxes.unsafe_set(k, no_box)
   }
   pool.count = 0
   depth.val = d
