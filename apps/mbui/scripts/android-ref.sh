@@ -85,13 +85,9 @@ case "$cmd" in
     [ -n "${ANDROID_TEST_APK:-}" ] && { $ADB install -r -t "$ANDROID_TEST_APK" > /dev/null || die "Android's tests not installed"; }
     demo
     $ADB shell rm -rf /sdcard/Android/data/$M/files/screens
-    filter=""
-    # (a screen's test is its name in camel case: chat-cards → ScreensRefTest#chatCards)
-    for n in $names; do
-      t=$(python3 -c 'import sys; w=sys.argv[1].split("-"); print(w[0]+"".join(x[:1].upper()+x[1:] for x in w[1:]))' "$n")
-      filter="${filter:+$filter,}fail.still.android.motion.ScreensRefTest#$t"
-    done
-    mkdir -p $O && $ADB shell am instrument -w -e class "$filter" $M.test/androidx.test.runner.AndroidJUnitRunner > $O/instrument.log 2>&1
+    # (one run of ScreensRefTest a screen, those named: its `screens` argument)
+    mkdir -p $O && $ADB shell am instrument -w -e class fail.still.android.motion.ScreensRefTest -e screens "$(echo $names | tr ' ' ',')" \
+      $M.test/androidx.test.runner.AndroidJUnitRunner > $O/instrument.log 2>&1
     if ! grep -q '^OK (' $O/instrument.log; then
       grep -a -E 'FAILURES|Exception|at fail\.still|Error' $O/instrument.log | head -20
       # (what it drew, to see why: out/android-ref/failed/)

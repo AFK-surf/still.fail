@@ -1,0 +1,1365 @@
+{
+  "workspace": "ws1",
+  "open": [
+    {
+      "page": "files"
+    },
+    {
+      "page": "drive",
+      "station": "ws1/st1",
+      "root": "/Users/lin/文档",
+      "path": ""
+    },
+    {
+      "page": "drive",
+      "station": "ws1/st1",
+      "root": "/Users/lin/文档",
+      "path": "设计稿"
+    }
+  ],
+  "at": 3000,
+  "shows": [],
+  "topics": [
+    {
+      "topic": {
+        "topic": "prefs"
+      },
+      "value": {
+        "onlyMine": false,
+        "onlyWatching": false,
+        "onlyDecisions": false,
+        "listFilter": {},
+        "appearance": "light",
+        "rowPicture": "auto",
+        "absoluteTime": false,
+        "keys": {},
+        "workspace": "ws1",
+        "lastChat": {},
+        "openChat": {},
+        "chatTabs": {},
+        "dropFiles": {},
+        "driveViews": {},
+        "filesTabs": {},
+        "driveFavorites": {},
+        "resume": {},
+        "stationUpdatesDismissed": {},
+        "device": {
+          "app": "",
+          "phone": false,
+          "handoff": false
+        },
+        "reader": {
+          "size": 0,
+          "line": 0,
+          "margin": 0,
+          "face": "sans",
+          "indent": false,
+          "paper": "follow"
+        },
+        "rails": {},
+        "bars": {
+          "sets": [],
+          "current": 0
+        },
+        "barsBy": {},
+        "fonts": {},
+        "faces": {
+          "ui": {
+            "id": "",
+            "name": "",
+            "mono": false,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "text": {
+            "id": "",
+            "name": "",
+            "mono": false,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "code": {
+            "id": "",
+            "name": "",
+            "mono": true,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "list": [
+            {
+              "id": "inter",
+              "name": "Inter",
+              "mono": false,
+              "family": "SF Inter",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/inter/1/var.ttf.gz",
+                  "bytes": 457818,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/inter/1/preview.ttf",
+              "bytes": 457818
+            },
+            {
+              "id": "noto-sans-sc",
+              "name": "思源黑体",
+              "mono": false,
+              "family": "SF 思源黑体",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/noto-sans-sc/1/var.ttf.gz",
+                  "bytes": 11276563,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/noto-sans-sc/1/preview.ttf",
+              "bytes": 11276563
+            },
+            {
+              "id": "noto-serif-sc",
+              "name": "思源宋体",
+              "mono": false,
+              "family": "SF 思源宋体",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/noto-serif-sc/1/var.ttf.gz",
+                  "bytes": 15454579,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/noto-serif-sc/1/preview.ttf",
+              "bytes": 15454579
+            },
+            {
+              "id": "lxgw-wenkai",
+              "name": "霞鹜文楷",
+              "mono": false,
+              "family": "SF 霞鹜文楷",
+              "files": [
+                {
+                  "weight": 400,
+                  "url": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/400.ttf.gz",
+                  "bytes": 13088456,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                },
+                {
+                  "weight": 500,
+                  "url": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/500.ttf.gz",
+                  "bytes": 13088456,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/preview.ttf",
+              "bytes": 26176912
+            },
+            {
+              "id": "jetbrains-mono",
+              "name": "JetBrains Mono",
+              "mono": true,
+              "family": "SF JetBrains Mono",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/jetbrains-mono/1/var.ttf.gz",
+                  "bytes": 90579,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/jetbrains-mono/1/preview.ttf",
+              "bytes": 90579
+            },
+            {
+              "id": "fira-code",
+              "name": "Fira Code",
+              "mono": true,
+              "family": "SF Fira Code",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/fira-code/1/var.ttf.gz",
+                  "bytes": 137151,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/fira-code/1/preview.ttf",
+              "bytes": 137151
+            },
+            {
+              "id": "maple-mono",
+              "name": "Maple Mono",
+              "mono": true,
+              "family": "SF Maple Mono",
+              "files": [
+                {
+                  "weight": 400,
+                  "url": "https://app.still.fail/releases/fonts/maple-mono/1/400.ttf.gz",
+                  "bytes": 8395338,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                },
+                {
+                  "weight": 600,
+                  "url": "https://app.still.fail/releases/fonts/maple-mono/1/600.ttf.gz",
+                  "bytes": 8395338,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/maple-mono/1/preview.ttf",
+              "bytes": 16790677
+            }
+          ]
+        }
+      }
+    },
+    {
+      "topic": {
+        "topic": "accounts"
+      },
+      "value": [
+        {
+          "sub": "u1",
+          "email": "lin@example.com",
+          "name": "林"
+        }
+      ]
+    },
+    {
+      "topic": {
+        "topic": "workspaces"
+      },
+      "value": [
+        {
+          "account": {
+            "sub": "u1",
+            "email": "lin@example.com",
+            "name": "林"
+          },
+          "workspaces": [
+            {
+              "id": "ws1",
+              "name": "星火工作室",
+              "stations": 2,
+              "members": 3
+            },
+            {
+              "id": "ws2",
+              "name": "个人",
+              "stations": 1,
+              "members": 1
+            }
+          ],
+          "invitations": [],
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "topic": {
+        "topic": "stations",
+        "scope": "ws1"
+      },
+      "value": [
+        {
+          "station": "ws1/st1",
+          "id": "st1",
+          "name": "Studio",
+          "icon": "glyph:desktop",
+          "summary": "Apple M2 Max · 2 个 agent 在工作",
+          "online": true,
+          "reconnecting": false,
+          "link": {
+            "state": ""
+          },
+          "runtimes": [],
+          "models": [],
+          "overview": {
+            "viewer": {
+              "via": "mesh",
+              "role": "owner"
+            },
+            "connects": [],
+            "profiles": [],
+            "processes": [],
+            "counts": {
+              "sessions": 0,
+              "running": 0,
+              "warm": 0
+            },
+            "slackUsers": [],
+            "slackTeams": [],
+            "slackApps": [],
+            "logins": [],
+            "machineLogins": [],
+            "sharing": false,
+            "consoleSignIn": false,
+            "apiProviders": [],
+            "updates": [],
+            "processesText": "",
+            "agentEnv": [],
+            "drive": {
+              "roots": [
+                {
+                  "path": "/Users/lin/文档",
+                  "name": "文档",
+                  "state": "ok"
+                },
+                {
+                  "path": "/Volumes/备份盘",
+                  "name": "备份盘",
+                  "state": "missing"
+                }
+              ],
+              "anywhere": true,
+              "home": "/Users/lin",
+              "trash": true,
+              "watch": true,
+              "zip": true
+            }
+          },
+          "betaOffered": false,
+          "host": {
+            "hostname": "",
+            "os": "",
+            "arch": "",
+            "cpus": 0,
+            "cpuModel": "",
+            "load": 0,
+            "uptimeSec": 0,
+            "memory": {
+              "totalBytes": 0,
+              "usedBytes": 0
+            },
+            "disk": {
+              "path": "",
+              "totalBytes": 0,
+              "freeBytes": 0
+            },
+            "emberRssBytes": 0,
+            "checkedAt": 0,
+            "summary": "",
+            "line": "",
+            "facts": [],
+            "meters": [
+              {
+                "label": "",
+                "short": "CPU",
+                "percent": 0,
+                "left": 72,
+                "level": "ok",
+                "value": "",
+                "remaining": "空闲 72%",
+                "big": "",
+                "unit": "",
+                "title": "",
+                "total": ""
+              },
+              {
+                "label": "",
+                "short": "内存",
+                "percent": 0,
+                "left": 18,
+                "level": "amber",
+                "value": "",
+                "remaining": "剩 11.5 G",
+                "big": "",
+                "unit": "",
+                "title": "",
+                "total": ""
+              },
+              {
+                "label": "",
+                "short": "磁盘",
+                "percent": 0,
+                "left": 41,
+                "level": "ok",
+                "value": "",
+                "remaining": "剩 380 G",
+                "big": "",
+                "unit": "",
+                "title": "",
+                "total": ""
+              }
+            ],
+            "identity": "",
+            "details": [],
+            "usage": "",
+            "emberText": ""
+          },
+          "way": {
+            "path": "直连",
+            "via": "direct"
+          },
+          "joined": false
+        },
+        {
+          "station": "ws1/st2",
+          "id": "st2",
+          "name": "MBA",
+          "icon": "glyph:laptop:teal",
+          "summary": "",
+          "online": false,
+          "reconnecting": false,
+          "link": {
+            "state": ""
+          },
+          "runtimes": [],
+          "models": [],
+          "overview": {
+            "viewer": {
+              "via": "mesh",
+              "role": "owner"
+            },
+            "connects": [],
+            "profiles": [],
+            "processes": [],
+            "counts": {
+              "sessions": 0,
+              "running": 0,
+              "warm": 0
+            },
+            "slackUsers": [],
+            "slackTeams": [],
+            "slackApps": [],
+            "logins": [],
+            "machineLogins": [],
+            "sharing": false,
+            "consoleSignIn": false,
+            "apiProviders": [],
+            "updates": [],
+            "processesText": "",
+            "agentEnv": [],
+            "drive": {
+              "roots": [
+                {
+                  "path": "/Users/lin/照片",
+                  "name": "照片",
+                  "state": "ok"
+                }
+              ]
+            }
+          },
+          "betaOffered": false,
+          "joined": false
+        }
+      ]
+    },
+    {
+      "topic": {
+        "topic": "workspace",
+        "workspace": "ws1"
+      },
+      "value": {
+        "id": "ws1",
+        "name": "星火工作室",
+        "manager": true,
+        "role": "owner"
+      }
+    },
+    {
+      "topic": {
+        "topic": "drive",
+        "station": "ws1/st1",
+        "root": "/Users/lin/文档",
+        "path": ""
+      },
+      "value": {
+        "path": "",
+        "entries": [
+          {
+            "name": "设计稿",
+            "dir": true,
+            "size": 0,
+            "mtime": 1792300000000,
+            "type": "",
+            "kind": "folder",
+            "sizeText": "",
+            "timeText": "10/12"
+          },
+          {
+            "name": "会议记录",
+            "dir": true,
+            "size": 0,
+            "mtime": 1792300000000,
+            "type": "",
+            "kind": "folder",
+            "sizeText": "",
+            "timeText": "昨天"
+          },
+          {
+            "name": "长篇小说.txt",
+            "dir": false,
+            "size": 16905,
+            "mtime": 1792299983095,
+            "type": "",
+            "kind": "text",
+            "sizeText": "17 KB",
+            "timeText": "14:05"
+          },
+          {
+            "name": "发布清单.md",
+            "dir": false,
+            "size": 4210,
+            "mtime": 1792299995790,
+            "type": "",
+            "kind": "markdown",
+            "sizeText": "4 KB",
+            "timeText": "09:30"
+          },
+          {
+            "name": "首页截图.png",
+            "dir": false,
+            "size": 812345,
+            "mtime": 1792299187655,
+            "type": "",
+            "kind": "image",
+            "sizeText": "793 KB",
+            "timeText": "10/16"
+          },
+          {
+            "name": "演示录屏.mp4",
+            "dir": false,
+            "size": 48211000,
+            "mtime": 1792251789000,
+            "type": "",
+            "kind": "video",
+            "sizeText": "46.0 MB",
+            "timeText": "10/02"
+          },
+          {
+            "name": "季度数据.csv",
+            "dir": false,
+            "size": 23110,
+            "mtime": 1792299976890,
+            "type": "",
+            "kind": "csv",
+            "sizeText": "23 KB",
+            "timeText": "9/27"
+          },
+          {
+            "name": "合同草稿.pdf",
+            "dir": false,
+            "size": 1260000,
+            "mtime": 1792298740000,
+            "type": "",
+            "kind": "pdf",
+            "sizeText": "1.2 MB",
+            "timeText": "2025/12/30"
+          },
+          {
+            "name": ".草稿缓存",
+            "dir": false,
+            "size": 120,
+            "mtime": 1792299999880,
+            "type": "",
+            "kind": "other",
+            "sizeText": "120 B",
+            "timeText": "10/18"
+          }
+        ],
+        "truncated": false,
+        "folders": 2,
+        "files": 7,
+        "countText": "2 个文件夹 · 7 个文件"
+      }
+    },
+    {
+      "topic": {
+        "topic": "drive",
+        "station": "ws1/st1",
+        "root": "/Users/lin/文档",
+        "path": "设计稿"
+      },
+      "value": {
+        "path": "设计稿",
+        "entries": [
+          {
+            "name": "旧版",
+            "dir": true,
+            "size": 0,
+            "mtime": 1792300000000,
+            "type": "",
+            "kind": "folder",
+            "sizeText": "",
+            "timeText": "8/03"
+          },
+          {
+            "name": "图标.png",
+            "dir": false,
+            "size": 30211,
+            "mtime": 1792299969789,
+            "type": "",
+            "kind": "image",
+            "sizeText": "30 KB",
+            "timeText": "10/12"
+          },
+          {
+            "name": "配色说明.md",
+            "dir": false,
+            "size": 1880,
+            "mtime": 1792299998120,
+            "type": "",
+            "kind": "markdown",
+            "sizeText": "2 KB",
+            "timeText": "10/12"
+          }
+        ],
+        "truncated": false,
+        "folders": 1,
+        "files": 2,
+        "countText": "1 个文件夹 · 2 个文件"
+      }
+    },
+    {
+      "topic": {
+        "topic": "workspaceMarks",
+        "workspace": "ws1"
+      },
+      "value": {
+        "workspaces": {
+          "ws1": {
+            "alert": 1,
+            "unread": 2,
+            "wait": 1,
+            "decisions": 2,
+            "tone": "alert",
+            "badge": 0,
+            "items": []
+          },
+          "ws2": {
+            "alert": 0,
+            "unread": 2,
+            "tone": "done",
+            "badge": 0,
+            "items": []
+          }
+        },
+        "others": "done",
+        "badge": 0,
+        "badgeCounts": "",
+        "badgeKinds": {
+          "on": false,
+          "wait": false,
+          "failed": false,
+          "done": false,
+          "message": false
+        }
+      }
+    },
+    {
+      "topic": {
+        "topic": "chats",
+        "scope": "ws1",
+        "mine": false
+      },
+      "value": {
+        "me": {
+          "email": "lin@example.com"
+        },
+        "stations": [
+          {
+            "station": "",
+            "id": "ws1/st1",
+            "name": "Studio",
+            "state": ""
+          },
+          {
+            "station": "",
+            "id": "ws1/st2",
+            "name": "MBA",
+            "state": ""
+          }
+        ],
+        "loading": false,
+        "days": [
+          {
+            "daysAgo": 0,
+            "at": 0,
+            "label": "今天",
+            "items": [
+              {
+                "id": "c1",
+                "session": "s-c1",
+                "thread": 2,
+                "title": "整理发布清单",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "codex",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "openai · codex",
+                    "maker": {
+                      "id": "openai",
+                      "name": "openai"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "正在核对第三项：安装包的签名",
+                  "createdAt": 0,
+                  "preview": "正在核对第三项：安装包的签名"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "state": "run",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "2 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "tone": "busy"
+              },
+              {
+                "id": "c2",
+                "session": "s-c2",
+                "thread": 2,
+                "title": "首页的列表改成按天分组",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": true,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "8 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "people": [
+                  {
+                    "id": "lin@example.com",
+                    "name": "林",
+                    "email": "lin@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "林",
+                      "display": "你",
+                      "mine": true
+                    }
+                  },
+                  {
+                    "id": "ana@example.com",
+                    "name": "Ana",
+                    "email": "ana@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "Ana",
+                      "display": "Ana",
+                      "mine": false
+                    }
+                  }
+                ],
+                "creator": {
+                  "id": "lin@example.com",
+                  "name": "林",
+                  "via": "cloud"
+                },
+                "decision": {
+                  "seq": 3,
+                  "options": [],
+                  "text": "奏 · 分组的标题用相对日期还是具体日期？"
+                },
+                "tone": "wait"
+              },
+              {
+                "id": "c3",
+                "session": "s-c3",
+                "thread": 2,
+                "title": "夜里的构建又失败了",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": true,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st2",
+                "stationName": "MBA",
+                "stationIcon": "glyph:laptop:teal",
+                "state": "failed",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "15 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "stateText": "要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？",
+                "tone": "alert"
+              },
+              {
+                "id": "c4",
+                "session": "s-c4",
+                "thread": 2,
+                "title": "给设置页加一个深色模式开关",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "deepseek · dsh",
+                    "maker": {
+                      "id": "deepseek",
+                      "name": "deepseek"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": true,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "40 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "stateText": "做完了：开关和三处颜色都改好了",
+                "tone": "done"
+              },
+              {
+                "id": "c5",
+                "session": "s-c5",
+                "thread": 2,
+                "title": "盯着 CI，绿了告诉我",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st2",
+                "stationName": "MBA",
+                "stationIcon": "glyph:laptop:teal",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "1 小时前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "watch": {
+                  "text": "监控中：主干构建",
+                  "ask": "它会在归档里继续盯着。"
+                },
+                "stateText": "监控中：每 5 分钟看一次主干的构建"
+              }
+            ]
+          },
+          {
+            "daysAgo": 1,
+            "at": 0,
+            "label": "昨天",
+            "items": [
+              {
+                "id": "c6",
+                "session": "s-c6",
+                "thread": 2,
+                "title": "和 Ana 一起看新版的引导页",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "Ana：第二屏的插画可以再小一点",
+                  "createdAt": 0,
+                  "preview": "Ana：第二屏的插画可以再小一点"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "昨天 21:14",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "people": [
+                  {
+                    "id": "ana@example.com",
+                    "name": "Ana",
+                    "email": "ana@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "Ana",
+                      "display": "Ana",
+                      "mine": false
+                    }
+                  },
+                  {
+                    "id": "lin@example.com",
+                    "name": "林",
+                    "email": "lin@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "林",
+                      "display": "你",
+                      "mine": true
+                    }
+                  },
+                  {
+                    "id": "zhou@example.com",
+                    "name": "周",
+                    "email": "zhou@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "周",
+                      "display": "周",
+                      "mine": false
+                    }
+                  }
+                ],
+                "creator": {
+                  "id": "ana@example.com",
+                  "name": "Ana",
+                  "via": "cloud"
+                },
+                "tone": "other"
+              },
+              {
+                "id": "c7",
+                "session": "s-c7",
+                "thread": 2,
+                "title": "Slack 里问的报销流程",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "已经把三个步骤整理成一页文档",
+                  "createdAt": 0,
+                  "preview": "已经把三个步骤整理成一页文档"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "connect": "slack-1",
+                "station": "ws1/st2",
+                "stationName": "MBA",
+                "stationIcon": "glyph:laptop:teal",
+                "originText": "Slack · 星火 · #行政",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "昨天 18:02",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              {
+                "id": "c8",
+                "session": "s-c8",
+                "thread": 2,
+                "title": "把旧的截图都换成新的",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "昨天 10:30",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "settled": true,
+                "archivable": true,
+                "stateText": "做完了"
+              }
+            ]
+          },
+          {
+            "daysAgo": 4,
+            "at": 0,
+            "label": "星期三",
+            "items": [
+              {
+                "id": "c9",
+                "session": "s-c9",
+                "thread": 2,
+                "title": "迁移数据库的演练",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "codex",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "openai · codex",
+                    "maker": {
+                      "id": "openai",
+                      "name": "openai"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "deepseek · dsh",
+                    "maker": {
+                      "id": "deepseek",
+                      "name": "deepseek"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "qwen · dsh",
+                    "maker": {
+                      "id": "qwen",
+                      "name": "qwen"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "kimi · dsh",
+                    "maker": {
+                      "id": "kimi",
+                      "name": "kimi"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "演练到第二步时 MBA 断开了",
+                  "createdAt": 0,
+                  "preview": "演练到第二步时 MBA 断开了"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st2",
+                "stationName": "MBA",
+                "stationIcon": "glyph:laptop:teal",
+                "offline": "MBA 离线",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "星期三",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              {
+                "id": "c10",
+                "session": "s-c10",
+                "thread": 3,
+                "title": "周报的模板",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "gemini · dsh",
+                    "maker": {
+                      "id": "gemini",
+                      "name": "gemini"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "模板放在共享文件夹的第一层",
+                  "createdAt": 0,
+                  "preview": "模板放在共享文件夹的第一层"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "星期三",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "trouble": null,
+        "members": null,
+        "leading": "agents",
+        "glyph": {
+          "online": 1,
+          "dim": 1,
+          "connecting": 0,
+          "failing": 0,
+          "working": 0,
+          "summary": "",
+          "label": "1 台在线"
+        },
+        "note": {
+          "reading": false,
+          "text": null,
+          "failing": [],
+          "empty": false
+        }
+      }
+    },
+    {
+      "topic": {
+        "topic": "status",
+        "workspace": "ws1"
+      },
+      "value": {
+        "items": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "lockPrompts"
+      },
+      "value": {
+        "pairing": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "drivePlace",
+        "station": "ws1/st1",
+        "root": "/Users/lin/文档",
+        "path": "长篇小说.txt"
+      },
+      "value": {
+        "at": 2400,
+        "of": 5635,
+        "changed": 1
+      }
+    },
+    {
+      "topic": {
+        "topic": "drivePlace",
+        "station": "ws1/st1",
+        "root": "/Users/lin/文档",
+        "path": "发布清单.md"
+      },
+      "value": null
+    },
+    {
+      "topic": {
+        "topic": "drivePlace",
+        "station": "ws1/st1",
+        "root": "/Users/lin/文档",
+        "path": "设计稿/配色说明.md"
+      },
+      "value": null
+    },
+    {
+      "topic": {
+        "topic": "notify"
+      },
+      "value": {
+        "on": true,
+        "asked": true,
+        "push": false,
+        "kinds": {
+          "wait": false,
+          "failed": false,
+          "done": "",
+          "message": false
+        },
+        "preview": false,
+        "permission": "",
+        "show": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "notify",
+        "workspace": "ws1"
+      },
+      "value": {
+        "on": true,
+        "asked": true,
+        "push": false,
+        "kinds": {
+          "wait": false,
+          "failed": false,
+          "done": "",
+          "message": false
+        },
+        "preview": false,
+        "permission": "",
+        "show": []
+      }
+    }
+  ],
+  "calls": [
+    {
+      "call": "client.focus",
+      "params": {
+        "visible": true,
+        "focused": true,
+        "workspace": "ws1"
+      },
+      "ok": {}
+    }
+  ]
+}

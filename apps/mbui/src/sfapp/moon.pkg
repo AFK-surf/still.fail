@@ -14,3 +14,11 @@ import {
   "mbui/zip",
   "stillfail/sfapp/settings",
 }
+
+import {
+  "moonbitlang/core/env",
+} for "wbtest"
+
+options(
+  targets: { "screen_dump_env_js_wbtest.mbt": [ "js" ], "screen_dump_env_native_wbtest.mbt": [ "native" ] },
+)

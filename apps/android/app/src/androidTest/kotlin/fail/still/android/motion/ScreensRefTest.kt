@@ -50,8 +50,26 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
 
-class ScreensRefTest {
+/**
+ * One run a screen (`name`: client/fixtures/screens/NAME.json): every screen there, or those the instrumentation's
+ * `screens` argument names (scripts/android-ref.sh refs: `-e screens a,b`).
+ */
+@RunWith(Parameterized::class)
+class ScreensRefTest(private val name: String) {
+    companion object {
+        @JvmStatic
+        @Parameterized.Parameters(name = "{0}")
+        fun names(): List<String> {
+            val asked = InstrumentationRegistry.getArguments().getString("screens")
+            if (!asked.isNullOrBlank()) return asked.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            val context = InstrumentationRegistry.getInstrumentation().context
+            return context.assets.list("screens").orEmpty().filter { it.endsWith(".json") && it != "allowed.json" }.map { it.removeSuffix(".json") }.sorted()
+        }
+    }
+
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
 
     /**
@@ -202,18 +220,50 @@ class ScreensRefTest {
         }.toString()
     }
 
-    /** A page the screen's file opens: `{"page": "chat" | "history" | "settings", …}`. */
+    /**
+     * A page the screen's file opens (apps/mbui src/sfapp/screen_dump_wbtest.mbt page_json, the mbui app's page as
+     * this app's): `{"page": "chat" | "history" | "settings" | "me" | …, …}`.
+     */
     private fun page(p: JsonObject): Screen {
         val s = { k: String -> p[k]!!.jsonPrimitive.content }
+        // ("" or none: every station's)
+        val opt = { k: String -> p[k]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() } }
         return when (s("page")) {
             "chat" -> Screen.Chat(s("station"), ChatOf.Session(s("session")))
             "history" -> Screen.History(s("station"), ChatOf.Session(s("session")), s("key"))
+            "new" -> Screen.NewChat
+            "decisions" -> Screen.Decisions
             "settings" -> Screen.Settings
+            "me" -> Screen.Me
+            "appearance" -> Screen.Appearance
+            "fonts" -> Screen.Fonts
+            "workspace" -> Screen.Workspace
+            "security" -> Screen.Security
+            "vault" -> Screen.Vault
+            "stations" -> Screen.Stations
+            "station" -> Screen.Station(s("station"))
+            "profiles" -> Screen.Profiles(opt("station"))
+            "profile" -> Screen.Profile(s("station"), s("profile"))
+            "pick-models" -> Screen.PickModels(s("station"), s("profile"))
+            "connects" -> Screen.Connects(opt("station"))
+            "connect" -> Screen.Connect(s("station"), s("connect"))
+            "new-profile" -> Screen.NewProfile(s("station"))
+            "new-connect" -> Screen.NewConnect(s("station"))
+            "memories" -> Screen.Memories
+            "memory" -> Screen.Memory(s("station"))
+            "memory-doc" -> Screen.MemoryDoc(s("station"), opt("skill"), p["at"]?.jsonPrimitive?.content?.toDouble()?.toInt() ?: 0)
+            "usage" -> Screen.Usage
+            "archive" -> Screen.Archive
+            "auto-decisions" -> Screen.AutomaticDecisions
+            "bar-settings" -> Screen.BarSettings
+            "kept-files" -> Screen.KeptFiles
+            "changelog" -> Screen.Changelog
+            "files" -> Screen.Files
+            "drive" -> Screen.Drive(s("station"), opt("root"), s("path"))
+            "drive-read" -> Screen.DriveRead(s("station"), s("root"), s("path"))
             else -> error("no page ${s("page")}")
         }
     }
 
-    @Test fun chatCards() = ref("chat-cards")
-    @Test fun history() = ref("history")
-    @Test fun settings() = ref("settings")
+    @Test fun screen() = ref(name)
 }
