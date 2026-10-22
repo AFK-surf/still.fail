@@ -1,3 +1,9 @@
+/** A page's Blob: false wherever there is none (Hermes on Android, whose picked files are FileSources). */
+export function isBlob(v: unknown): v is Blob {
+  const B = (globalThis as { Blob?: typeof Blob }).Blob;
+  return typeof B === "function" && v instanceof B;
+}
+
 /** A selected file read in parts by the core; its host owns the bytes until the upload ends. */
 export class FileSource {
   readonly size: number;
