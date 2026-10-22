@@ -35,6 +35,117 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
 }
 
 ///|
+/// Whether a row of Home's list moves now: its place, its coming in, its passing over others, a copy of one gone.
+fn home_moving(t : @ui.Tester) -> Array[String] {
+  t.moving().filter(fn(m) { m.contains("a row lifted") || (m.contains("home/") && m.contains("\u{1}")) })
+}
+
+///|
+test "Home: back from a chat to the list changed meanwhile, the list drawn as it is: nothing in it moves" {
+  // (Home.kt: the list composed anew as it is come back to, its ListMotion new: nothing moves the first time)
+  reset()
+  let clock = Ref::new(0.0)
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("home-motion")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.tap_text("整理发布清单")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("搜索全部内容") is None)
+  // while the chat shows: news in 盯着 CI, which goes to the top; a new chat
+  clock.val = 3601.0
+  t.frame()
+  t.back()
+  let end = t.time() + @ui.nav_push_ms + 600.0
+  while t.time() < end {
+    assert_eq(home_moving(t), [])
+    for words in ["盯着 CI，绿了告诉我", "看一下新的崩溃报告", "整理发布清单"] {
+      let (_, y, _, _) = t.rect_of(words).unwrap()
+      let (_, dy) = t.drawn_of(words).unwrap()
+      assert_true((dy - y).abs() < 0.5, msg="\{words}: drawn at \{dy}, laid out at \{y}")
+    }
+    t.frame()
+  }
+  fix_clock.val = None
+}
+
+///|
+test "Home: a new chat its station makes keeps its row (its clientKey): it neither leaves nor comes in" {
+  reset()
+  let made = Ref::new(false)
+  let base = fixture("home")
+  let src = {
+    ..base,
+    topic: fn(name, params) {
+      let tv = (base.topic)(name, params)
+      match (name, tv.value) {
+        ("chats", Some(Object(v))) => {
+          let row : Map[String, Json] = {
+            "id": Json::string(if made.val { "c20" } else { "k-20" }),
+            "clientKey": "k-20",
+            "session": Json::string(if made.val { "s-c20" } else { "k-20" }),
+            "title": "新会话的第一句",
+            "agents": [],
+            "unread": false,
+            "mine": true,
+            "lastActiveAt": 0,
+            "station": "ws1/st1",
+            "stationName": "Studio",
+          }
+          if !made.val {
+            row["pending"] = Json::boolean(true)
+          }
+          let days = match v.get("days") {
+            Some(Array(d)) => d.copy()
+            _ => []
+          }
+          let first = match days[0] {
+            Object(d) => d
+            _ => abort("no day")
+          }
+          let rows = match first.get("items") {
+            Some(Array(r)) => r.copy()
+            _ => []
+          }
+          rows.insert(0, Json::object(row))
+          let day = first.copy()
+          day["items"] = Json::array(rows)
+          days[0] = Json::object(day)
+          let out = v.copy()
+          out["days"] = Json::array(days)
+          { value: Some(Json::object(out)), error: tv.error, version: tv.version * 2 + (if made.val { 1 } else { 0 }) }
+        }
+        _ => tv
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  assert_true(t.find("新会话的第一句") is Some(_))
+  made.val = true
+  // (the frame the list changes in: a row leaving or coming would be set going there)
+  t.frame()
+  assert_eq(home_moving(t), [])
+  assert_true(t.find("新会话的第一句") is Some(_))
+}
+
+///|
+test "Home: a row swiped off is archived once it has gone, and leaves no copy of it behind" {
+  let t = tester("home")
+  t.scroll_to(12)
+  t.draw()
+  let (x, y, _, h) = t.rect_of("把旧的截图都换成新的").unwrap()
+  ignore(x)
+  t.drag(300.0, y + h / 2.0, 300.0 - 390.0 * 0.6, y + h / 2.0, steps=12)
+  // going off: not archived yet
+  t.run_for(swipe_off_ms / 2.0)
+  assert_true(t.find("把旧的截图都换成新的") is Some(_))
+  t.run_for(swipe_off_ms)
+  t.frame()
+  assert_true(t.find("把旧的截图都换成新的") is None)
+  // gone with no copy fading where it was; the rows under it close over the room
+  assert_true(t.moving().iter().all(fn(m) { !m.contains("c8 leaving") }), msg="\{t.moving()}")
+}
+
+///|
 test "words sent fly from the field into their bubble" {
   // the fixture's own station takes what is sent: the outbox at once, the message after
   reset()

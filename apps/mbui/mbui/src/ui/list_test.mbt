@@ -398,6 +398,18 @@ test "list: a list not built (a page over it) is at rest, its scroll bar too; sh
 }
 
 ///|
+test "list: on Android a list scrolled draws no scroll bar, and is at rest once its scroll is (Compose's LazyColumn)" {
+  let t = @ui.Tester::new(boxes(fn() { 200 }, varied), w=300.0, h=400.0, platform=2)
+  t.move(100.0, 100.0)
+  t.wheel(100.0, 100.0, -300.0)
+  t.frame()
+  assert_true(t.drawn_shapes().iter().all(fn(s) { !(s.0 == 300.0 - 8.0 && s.2 == 5.0) }), msg="\{t.drawn_shapes()}")
+  t.run_for(@ui.wheel_ease_ms * 10.0)
+  assert_true(t.ctx().list_rest("list") <= t.time())
+  t.assert_idle()
+}
+
+///|
 test "list: what is built from how it stood is built again once a scroll of one frame moved it" {
   // a way back to the end shown while the list is away from it, read from list_info as a view does
   let away : Array[Bool] = [false]

@@ -1894,8 +1894,7 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
         app.nav.push(Settings)
       }
       c.box(w=Fill(1.0), h=Px(34.0), justify=JCenter, fn() {
-        c.text(place_label(place), size=24.0, weight=700, color=t.p.text, wrap=false, line=30.0)
-        |> ignore
+        top_bar_title(c, place_label(place)) |> ignore
       })
       |> ignore
       match actions {
