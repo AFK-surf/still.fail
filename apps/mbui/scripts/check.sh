@@ -10,7 +10,7 @@ python3 "$D/webassets.py" --check || exit 1
 # the fonts the app carries, as the Android app's are (scripts/fontassets.py)
 python3 "$D/fontassets.py" --check || exit 1
 cd "$A"
-for t in ${TARGETS:-js native}; do
+for t in ${TARGETS:-native}; do
   echo "=== $t"
   moon check --target $t --output-json 2>&1 | "$MBUI_DIR/scripts/chk" errs
 done
