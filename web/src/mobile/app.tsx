@@ -242,7 +242,11 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
       setTimeout(() => setTimeout(go));
     },
     // Back through the pages opened here; from the first one (opened by a link), to the list.
-    pop: () => afterBack(() => (now.current.pages.length > 1 ? backPage(() => now.current.navigate(-1)) : now.current.navigate(home, { replace: true }))),
+    pop: () => afterBack(() => {
+      const toList = () => now.current.navigate(home, { replace: true });
+      if (now.current.pages.length > 1) backPage(() => now.current.navigate(-1), toList);
+      else toList();
+    }),
     // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
     // The wait for a closing sheet's back is inside the crossfade, which starts a frame later: a sheet closed in the same
     // tap (another workspace from the workspace sheet) starts its back in between, and replacing before that back lands
