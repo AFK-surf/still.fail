@@ -49,7 +49,7 @@ import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
 import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, cursorEmail, devinEmail, grokEmail, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
-import { checkQuota, machineUsage } from "./quota.ts";
+import { checkQuota, lentCodexUsage, machineUsage } from "./quota.ts";
 
 export { checkConfig } from "./check.ts";
 export type { LoginJob, MachineLogin, ProfileCheck, ProfileQuota };
@@ -278,6 +278,14 @@ export class Accounts {
   /// How a profile is doing, for the pool: its last check and allowance.
   health(id: string): ProfileHealth {
     return { check: this.checks.get(id) ?? null, quota: this.quotas.get(id) ?? null };
+  }
+
+  /// How a profile is doing, told to a station borrowing it: its allowance asked again first when older than a round
+  /// (the rounds run only while someone follows this station, and the borrower is not someone).
+  async lentHealth(id: string): Promise<ProfileHealth> {
+    const q = this.quotas.get(id);
+    if (q === undefined || this.background.now() - q.checkedAt >= QUOTA_EVERY_MS) await this.refreshQuota(id).catch(() => null);
+    return this.health(id);
   }
 
   /// The machine login's current Claude token, renewed when about to run out (the Claude driver's `machineToken`).
@@ -873,7 +881,9 @@ export class Accounts {
     try {
       const got = await this.deps.shared!.status(profile);
       check = isObject(got.check) ? (got.check as ProfileCheck) : { state: "unknown", detail: "", models: null, checkedAt: 0 };
-      if (isObject(got.quota)) {
+      // Unless what the borrowed login read here is newer.
+      const mine = this.quotas.get(profile.id);
+      if (isObject(got.quota) && !(mine !== undefined && Number(got.quota.checkedAt ?? 0) < mine.checkedAt)) {
         this.quotas.set(profile.id, got.quota as ProfileQuota);
         this.deps.store.setProfileQuota(profile.id, got.quota);
       }
@@ -913,8 +923,18 @@ export class Accounts {
   private async askQuota(id: string): Promise<ProfileQuota | null> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
-    // Another station's subscription: its allowance comes with its host's check.
+    // Another station's subscription: a Codex one's is read with the login its host lent while that is good; otherwise
+    // (none lent yet, run out, refused) it comes with its host's check.
     if (borrowed(profile) && accessKind(profile) === "subscription" && this.deps.shared) {
+      const now = this.background.now();
+      const own = profile.runtime === "codex" ? await lentCodexUsage(profile.home, now, this.urls).catch(() => null) : null;
+      if (own?.state === "ok") {
+        const read = { ...own, checkedAt: now };
+        this.quotas.set(id, read);
+        this.deps.store.setProfileQuota(id, read);
+        this.changed();
+        return read;
+      }
       await this.checkBorrowed(profile, stationLang()).catch(() => {});
       return this.quotas.get(id) ?? null;
     }

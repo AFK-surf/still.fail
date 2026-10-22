@@ -78,8 +78,9 @@ export type SharingDeps = {
   claudeToken: (profile: Json, rejected?: string) => Promise<MachineToken>;
   /// Whether a Codex app-server runs on a profile here now (its login must not be renewed under it).
   codexRunning: (profileId: string) => boolean;
-  /// A profile's check and allowance as this station has them (for the stations borrowing it).
-  status: (profileId: string) => { check: Json; quota: Json };
+  /// A profile's check and allowance as this station has them, its allowance asked again when old (for the stations
+  /// borrowing it).
+  status: (profileId: string) => Promise<{ check: Json; quota: Json }>;
   /// Something the overview shows changed.
   changed: () => void;
   /// A host that had not answered answers again: what is borrowed from it is checked again.
