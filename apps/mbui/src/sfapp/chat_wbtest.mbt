@@ -288,3 +288,44 @@ test "a chat left lets go of all that holds its thread at the core: its view and
   assert_true(left.contains(("chat", held)))
   assert_true(left.contains(("chatJobs", held)))
 }
+
+///|
+test "left short of its end, a chat opens again where it was left, though the core still says where it first opened (Chat.kt kept)" {
+  reset()
+  let base = fixture("chat")
+  let place : Ref[Map[String, Json]?] = Ref(None)
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "chat.place" {
+        match params {
+          Object(p) => place.val = Some(p)
+          _ => ()
+        }
+      }
+      (base.call)(name, params, done)
+    },
+  }
+  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.draw()
+  open_chat(r)
+  t.run_for(@ui.nav_push_ms)
+  t.move(195.0, 400.0)
+  t.wheel(195.0, 400.0, -900.0)
+  t.run_for(@ui.nav_push_ms)
+  let k = "ws1/st1\u{1}s-c1"
+  let left_at = readings.get(k).unwrap().top_seq
+  let left_off = readings.get(k).unwrap().top_off
+  assert_true(left_at > 0.0 && !readings.get(k).unwrap().at_end)
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  // told where it was left
+  assert_eq(place.val.map(fn(p) { p.get("seq") }), Some(Some(Json::number(left_at))))
+  open_chat(r)
+  t.run_for(@ui.nav_push_ms)
+  // opened there, not at its end where the core's view, kept a minute after the page left it, still opens it
+  assert_eq(readings.get(k).unwrap().top_seq, left_at)
+  assert_true((readings.get(k).unwrap().top_off - left_off).abs() < 0.5)
+  assert_true(!readings.get(k).unwrap().at_end)
+}
