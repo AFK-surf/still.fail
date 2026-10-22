@@ -155,8 +155,14 @@ void tsys_exit(int32_t code) { exit(code); }
 // whether path is a symbolic link itself
 int32_t tsys_is_link(moonbit_bytes_t path) {
   char *p = cstr(path);
+#if defined(_WIN32)
+  DWORD a = GetFileAttributesA(p);
+  free(p);
+  return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
   struct stat st;
   int r = lstat(p, &st);
   free(p);
   return r == 0 && (st.st_mode & S_IFMT) == S_IFLNK;
+#endif
 }
