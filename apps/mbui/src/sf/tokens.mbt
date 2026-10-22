@@ -500,6 +500,10 @@ pub fn ui_theme() -> @ui.Theme {
     leading: leading_scale,
     radii,
     link: if t.dark { base.accent } else { base.accent_text },
+    // on a phone the greys Android's (Theme.kt C.muted, C.subtle: the narrow palette's), not mbui's own narrow theme's
+    // lighter ones: what a style's Muted and Subtle say there
+    muted: if t.narrow { t.p.muted } else { base.muted },
+    subtle: if t.narrow { t.p.subtle } else { base.subtle },
     // a line of words that say none 1.4 of their size, as the web's root (`line-height: 1.4`) and Android's (Theme.kt
     // WebType: 1.4.em)
     text_line: 1.4,
@@ -686,3 +690,14 @@ pub let face_status_most : @ui.Len = Fixed(140.0)
 /// A Slack app's icon as it is in its look (SlackApp.kt AppLook: 72 square), off the scale.
 pub let app_icon_side : @ui.Len = Fixed(72.0)
 
+
+///|
+/// A choice's line on a card (Parts.kt PickLine): 11 over and under (as files_gap), rounded 10 (as custom_field_r),
+/// its check in a room 18 wide at its end.
+pub let pick_line_y : @ui.Space = files_gap
+
+///|
+pub let pick_line_r : @ui.Radius = custom_field_r
+
+///|
+pub let check_room_w : @ui.Len = Fixed(18.0)
