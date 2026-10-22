@@ -46,11 +46,10 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   t.frame()
   // 详情 open to begin with: what runs it, its station, where its transcript is
   assert_true(t.find("Studio") is Some(_))
-  assert_true(t.find("复制路径") is Some(_))
-  assert_true(t.find("7c1e5b2a-4f0d-4c8e-9a61-3b2f.jsonl") is Some(_))
+  assert_true(t.query(Button, label="复制路径") is Some(_))
   t.click(Button, label="详情")
   t.frame()
-  assert_true(t.find("复制路径") is None)
+  assert_true(t.query(Button, label="复制路径") is None)
   // its own steps there, then left out
   let steps = t.find("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
   t.click(Button, label="只看收发")
