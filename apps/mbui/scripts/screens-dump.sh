@@ -10,8 +10,9 @@ cd "$A"
 S=$(cd "$A/../../client/fixtures/screens" && pwd)
 modes=${*:-$(sed -n 's/^test "\([^"]*\)" {.*/\1/p' src/sfscreens/screens_wbtest.mbt)}
 # not yet drawn by Android's test: the reader (the text's bytes, which a screen's JSON does not answer with) and the
-# security page (its state followed off the main thread there: "addObserver must be called on the main thread")
-skip=" reader reader-bars reader-contents reader-layout reader-md settings-security "
+# security page (its state followed off the main thread there: "addObserver must be called on the main thread"); a
+# chat flashing a message gone to (the going there is no page a screen's JSON opens)
+skip=" reader reader-bars reader-contents reader-layout reader-md settings-security chat-flash chat-flash-mine "
 modes=$(for m in $modes; do echo "$skip" | grep -q " $m " || echo $m; done)
 mkdir -p $A/out
 out=$(mktemp -d)

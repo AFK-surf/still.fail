@@ -66,16 +66,6 @@ options(
       "command": ":embed -i $input -o $output --name screen_chat_failed",
     },
     {
-      "input": "../../../../client/fixtures/screens/chat-flash.json",
-      "output": "screen_chat_flash_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_chat_flash",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/chat-flash-mine.json",
-      "output": "screen_chat_flash_mine_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_chat_flash_mine",
-    },
-    {
       "input": "../../../../client/fixtures/screens/chat-info.json",
       "output": "screen_chat_info_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_chat_info",

@@ -12,8 +12,6 @@ fn screens_kept() -> Array[(String, String)] {
     ("chat-cards", screen_chat_cards),
     ("chat-compose", screen_chat_compose),
     ("chat-failed", screen_chat_failed),
-    ("chat-flash", screen_chat_flash),
-    ("chat-flash-mine", screen_chat_flash_mine),
     ("chat-info", screen_chat_info),
     ("chat-job", screen_chat_job),
     ("chat-jobs", screen_chat_jobs),
