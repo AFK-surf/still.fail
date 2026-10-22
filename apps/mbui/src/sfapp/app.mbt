@@ -209,6 +209,7 @@ fn reset() -> Unit {
   read_views.clear()
   read_chats.clear()
   readings.clear()
+  kept_places.clear()
   left_pages.clear()
   playing.clear()
   play_srcs.clear()

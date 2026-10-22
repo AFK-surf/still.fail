@@ -214,6 +214,20 @@ fn reading_of(key : String) -> Reading {
 let read_chats : Map[String, (Int, ChatView, Array[Entry])] = {}
 
 ///|
+/// Where a chat was left this run (AppState.places, Chat.kt leave): the message at the top of what showed (its seq) and
+/// how far its top was below the list's (points); and, left at its end, the newest message then (else -1). It opens
+/// there again before where the core says (`at`): the chat's view can outlive its page (opened again before the core
+/// lets it go, a minute after: store.ts EVICT_AFTER_MS) and still say where it was opened the first time.
+priv struct KeptPlace {
+  top : Double
+  offset : Double
+  bottom : Double
+}
+
+///|
+let kept_places : Map[String, KeptPlace] = {}
+
+///|
 fn chat_params(r : ChatRef) -> Map[String, Json] {
   { "station": Json::string(r.station), "session": Json::string(r.session) }
 }
@@ -573,22 +587,41 @@ fn messages(
     let mut put_now = false
     if rd.placed && !rd.put && !at_end_asked() {
       rd.put = true
+      // where it was left here this run (Chat.kt kept): unless at its end with nothing new since, then at its end
+      let newest = match v.messages.last() {
+        Some(m) => m.seq
+        None => -1.0
+      }
+      let kept = kept_places.get(r.station + "\u{1}" + r.session)
+      let left_at_end = match kept {
+        Some(p) => p.bottom >= 0.0 && p.bottom == newest
+        None => false
+      }
+      let opened_at = if left_at_end { None } else { v.at }
       let mut line = -1
       let mut at = -1
+      let mut was = -1
       for i, e in list {
         match e {
           Line => line = i
-          Said(m) =>
-            match v.at {
+          Said(m) => {
+            match opened_at {
               Some(a) if at < 0 && m.seq >= a => at = i
               _ => ()
             }
+            match kept {
+              Some(p) if !left_at_end && m.seq == p.top => was = i
+              _ => ()
+            }
+          }
           _ => ()
         }
       }
-      put_now = line >= 0 || at >= 0
+      put_now = line >= 0 || was >= 0 || at >= 0
       if line >= 0 {
         c.list_scroll_to(key, line, offset=-(status_top() + chat_bar_h + 14.0 + 85.0))
+      } else if was >= 0 {
+        c.list_scroll_to(key, was, offset=-kept.unwrap().offset)
       } else if at >= 0 {
         // where it was left: that message's top as far below the list's as it was (atOffset, the screen's pixels);
         // else its top under the bar
@@ -1241,6 +1274,21 @@ fn focus_chat(r : ChatRef, v : ChatView, end : Bool?) -> Json {
 /// Where the chat is, told the core (`chat.place`, Chat.kt leave): the message at the top and how far its top is below
 /// the list's (in the screen's pixels, as Android's app tells it), none at its end; told again only where that moved.
 fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit {
+  // kept here too, for opening it again this run (Chat.kt leave: app.places)
+  if rd.top_seq >= 0.0 {
+    kept_places[r.station + "\u{1}" + r.session] = {
+      top: rd.top_seq,
+      offset: rd.top_off,
+      bottom: if rd.at_end {
+        match v.messages.last() {
+          Some(m) => m.seq
+          None => -1.0
+        }
+      } else {
+        -1.0
+      },
+    }
+  }
   guard v.thread is Some(th) && !src.read_only else { return }
   let scale = rd.scale
   let place : Map[String, Json] = { "station": Json::string(r.station), "thread": Json::number(th) }
