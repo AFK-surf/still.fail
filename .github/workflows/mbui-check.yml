@@ -25,9 +25,7 @@ jobs:
   # into kept in the Actions cache by content (MBC_STORE: main's written, a branch reads them): 667 tests, ~170 s a
   # part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the app's beta (mbui.yml),
   # which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in
-  # apps/mbui/mbui. Its tests in shares (scripts/test.sh's PARTS: app's in two, replay's in three) on a runner
-  # each, the check with the first's: a share's test programs split and compiled on four cores of their own (a part on
-  # one took 110-180 s, with ThinLTO 260-430 s; replay's halves with ThinLTO 193-198 s, 2026-10-22). On main
+  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's. On main
   # the same with ThinLTO too, as the apps are built (what only inlining across units shows, undefined behaviour), a
   # runner a part: no macOS runner (a test's program is the same C on any system; the Apple toolchain builds the apps,
   # mbui.yml).
@@ -38,14 +36,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [app-1of2, app-2of2, replay-1of3, replay-2of3, replay-3of3]
+        part: [app, replay]
         lto: ${{ github.ref == 'refs/heads/main' && fromJSON('[false, true]') || fromJSON('[false]') }}
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
       MBC_LTO: ${{ matrix.lto && 'thin' || '0' }}
       CACHE_PREFIX: mbui-linux-store-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-
-      # (the whole part's, as it was kept before the halves: what a half has of it)
-      PART_PREFIX: mbui-linux-store-${{ matrix.lto && 'lto-' || '' }}${{ startsWith(matrix.part, 'app') && 'app' || 'replay' }}-
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -53,16 +49,14 @@ jobs:
       # (from the Actions cache the moonbit workflow fills, never downloaded here)
       - uses: ./.github/actions/mbui-moonbit
       - name: The mbui app's check (detlint, then native type-checked)
-        if: matrix.part == 'app-1of2' && !matrix.lto
+        if: matrix.part == 'app' && !matrix.lto
         run: moon version && bash apps/mbui/scripts/check.sh
       - uses: actions/cache/restore@v4
         id: store
         with:
           path: ${{ env.MBC_STORE }}
           key: ${{ env.CACHE_PREFIX }}${{ github.sha }}
-          restore-keys: |
-            ${{ env.CACHE_PREFIX }}
-            ${{ env.PART_PREFIX }}
+          restore-keys: ${{ env.CACHE_PREFIX }}
       - name: The mbui app's tests and the flows seen again (native, ${{ matrix.part }}${{ matrix.lto && ', ThinLTO' || '' }})
         run: |
           set -o pipefail

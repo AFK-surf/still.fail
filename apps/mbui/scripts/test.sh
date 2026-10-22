@@ -23,28 +23,15 @@ for t in ${TARGETS:-native}; do
   if [ $t = native ]; then native_tests "$A"; mode=$NATIVE; fi
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
   # side: the flows in packages of their own for it, src/sfreplay/flows/*/)
-  # (a part in shares, CI's jobs side by side: PARTS words app, replay (all of it) or app-KofN, replay-KofN (its K-th of
-  # N, every N-th of its test packages from the K-th): a test program, its C split and compiled, is most of a part's
-  # time. replay's: the core with sfreplay, then each flow, src/sfreplay/flows/*/)
-  app_pkgs=(stillfail/sf stillfail/sfapp stillfail/sfapp/settings stillfail/gallery stillfail/player stillfail/sfscreens)
-  replay_pkgs=("stillfail/core stillfail/sfreplay")
-  for g in src/sfreplay/flows/*/; do replay_pkgs+=("stillfail/sfreplay/flows/$(basename "$g")"); done
   pkgs=""
-  for w in ${PARTS:-app replay}; do
-    case $w in
-      app) w=app-1of1 ;;
-      replay) w=replay-1of1 ;;
-    esac
-    part=${w%%-*}; k=${w#*-}; n=${k#*of}; k=${k%of*}
-    case $part in
-      app) list=("${app_pkgs[@]}") ;;
-      replay) list=("${replay_pkgs[@]}") ;;
-      *) echo "test.sh: no part $w" >&2; exit 2 ;;
-    esac
-    for i in "${!list[@]}"; do
-      if [ $((i % n)) = $((k - 1)) ]; then for p in ${list[$i]}; do pkgs="$pkgs -p $p"; done; fi
-    done
-  done
+  if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
+    pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
+    pkgs="$pkgs -p stillfail/sfscreens"
+  fi
+  if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
+    pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
+    for g in src/sfreplay/flows/*/; do pkgs="$pkgs -p stillfail/sfreplay/flows/$(basename "$g")"; done
+  fi
   moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
 done

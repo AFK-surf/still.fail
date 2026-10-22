@@ -24,6 +24,10 @@ jobs:
   demo:
     runs-on: windows-latest
     timeout-minutes: 10
+    # (the units mbc compiles kept by content, MBC_STORE: restored on every run, saved by main's alone; without them
+    # each run compiled the demo, textdiff and webdemo whole, 193 s on average and 466 s at most, 2026-10-22)
+    env:
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -37,6 +41,11 @@ jobs:
       # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
       # key, installed as before.
       - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ci/mbc-store
+          key: mbui-windows-demo-${{ github.sha }}
+          restore-keys: mbui-windows-demo-
       - name: Build
         run: |
           moon version --all
@@ -64,6 +73,11 @@ jobs:
           done
           grep -q "no WebView2 runtime" out/webviews/webviews-none.log || { echo "webviews-none.log: the runtime was found"; exit 1; }
           grep -q "SHOT .* ok" out/webviews/webviews-none.log
+      - if: always() && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/mbc-store
+          key: mbui-windows-demo-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
