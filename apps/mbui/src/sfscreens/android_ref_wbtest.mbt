@@ -142,7 +142,7 @@ fn android_screen(name : String, json : String) -> @ui.Tester raise {
 
 ///|
 /// The words the Tester drew, a line at a time (Tester::text_runs: in points), with the window's scale and whether it
-/// lies under the system's bars: what android_ref.py holds to Android's lines by where they stand (MBUI/NAME.texts.json).
+/// lies under the system's bars: what androidref holds to Android's lines by where they stand (MBUI/NAME.texts.json).
 fn text_runs_json(t : @ui.Tester, scale : Double) -> Json {
   let lines : Array[Json] = t
     .text_runs()

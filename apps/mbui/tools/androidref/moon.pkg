@@ -1,0 +1,11 @@
+import {
+  "mbctools/sys",
+  "mbctools/png",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+options(
+  "is-main": true,
+)

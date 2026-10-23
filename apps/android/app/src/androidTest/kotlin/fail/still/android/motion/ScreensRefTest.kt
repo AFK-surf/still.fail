@@ -143,6 +143,12 @@ class ScreensRefTest(private val name: String) {
         // screen's chat had read, run 39913595300)
         (fail.still.android.screens.Drafts::class.java.getDeclaredField("open").apply { isAccessible = true }.get(null) as HashMap<*, *>).clear()
         activity.getSharedPreferences("drafts", Context.MODE_PRIVATE).edit().clear().commit()
+        // and what each topic was last shown as (Topics.kt `latest`: kept while something follows it, and an earlier
+        // screen's followers can outlive it): each screen's topics are its own JSON's, a chat none says is loading
+        // (chat-loading drew the chat an earlier screen had, 39926112139)
+        rule.runOnUiThread {
+            (Class.forName("fail.still.android.data.TopicsKt").getDeclaredField("latest").apply { isAccessible = true }.get(null) as HashMap<*, *>).clear()
+        }
         val prefs = activity.getSharedPreferences("screens-ref", Context.MODE_PRIVATE)
         prefs.edit().clear().putBoolean("notifyAsked", true).putString("workspace", screen["workspace"]!!.jsonPrimitive.content)
             .putString("theme", if (dark) "dark" else "light").commit()

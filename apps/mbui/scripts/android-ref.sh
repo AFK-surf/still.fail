@@ -5,7 +5,7 @@
 # (client/fixtures/screens/android/, with android.json: the emulator's system they were taken on); the mbui app's are
 # not taken of the app running: each screen is drawn in a Tester over the Android host's text (src/sfscreens/
 # android_ref_wbtest.mbt), its draw list drawn offscreen by mbui-render on the same emulator, and compared with
-# Android's pixel by pixel (scripts/android_ref.py), the regions allowed.json lets differ left out.
+# Android's pixel by pixel (scripts/androidref: tools/androidref), the regions allowed.json lets differ left out.
 #
 #   scripts/android-ref.sh refs [NAME…]      Android's pictures taken anew (its app and test APKs installed: ANDROID_APK,
 #                                            ANDROID_TEST_APK), into client/fixtures/screens/android/ with android.json
@@ -46,15 +46,16 @@ die() { echo "android-ref: $*" >&2; exit 1; }
 # the mbui pictures kept by their keys (lists): the Actions cache's in CI
 PICS=${PICS:-$A/out/android-ref-pics}
 # What draws a draw list into the pictures compared, by its files' contents: mbui's renderer and what it reads of the
-# draw list, its Android host and text, how its app is built, and this script and android_ref.py (how the window is put
-# on the screen); the sources alone (an app build puts its .so beside them). Another of these, every screen drawn anew.
+# draw list, its Android host and text, how its app is built, and this script (the window's picture kept as drawn:
+# androidref puts it where it lies on the screen); the sources alone (an app build puts its .so beside them). Another of
+# these, every screen drawn anew.
 render_code() {
   (cd $ROOT && find apps/mbui/mbui/src/render apps/mbui/mbui/src/host/android_host.c apps/mbui/mbui/src/host/corner* \
     apps/mbui/mbui/src/ui/drawlist.mbt apps/mbui/mbui/src/ui/scene.mbt apps/mbui/mbui/src/ui/line.mbt \
     apps/mbui/mbui/src/ui/smooth.mbt apps/mbui/mbui/android/app/src/main/java apps/mbui/mbui/android/app/src/main/res \
     apps/mbui/mbui/android/app/src/main/AndroidManifest.xml apps/mbui/mbui/android/apk.json \
     apps/mbui/mbui/android/apk.lock apps/mbui/mbui/tools/apk/main.mbt apps/mbui/mbui/scripts/android.sh \
-    apps/mbui/mbui/scripts/render_android_hook.sh apps/mbui/scripts/android-ref.sh apps/mbui/scripts/android_ref.py \
+    apps/mbui/mbui/scripts/render_android_hook.sh apps/mbui/scripts/android-ref.sh \
     -type f | LC_ALL=C sort | xargs shasum -a 256) || die "what draws the pictures not read"
 }
 # The screens of NAMEs whose Android pictures are taken anew (ci, REFS=1): in a pull request, of the screens main has
@@ -183,7 +184,7 @@ case "$cmd" in
     for n in $names; do
       awk -v n="$n" '$0 == "DLEND " n {p=0} p {print} $0 == "DLBEGIN " n {p=1}' $O/dl/print.txt > $O/dl/$n.dl
       [ -s $O/dl/$n.dl ] || die "$n: no draw list"
-      # (the words it drew, a line at a time: compared with Android's by where they stand, android_ref.py)
+      # (the words it drew, a line at a time: compared with Android's by where they stand, androidref)
       sed -n "s/^TEXTRUNS $n //p" $O/dl/print.txt > $O/dl/$n.texts.json
       [ -s $O/dl/$n.texts.json ] || die "$n: no words' lines"
       { cat $O/dl/$n.dl; echo "$code"; cat $R/android.json; } | shasum -a 256 | cut -c1-32 > $O/dl/$n.key
@@ -216,30 +217,35 @@ case "$cmd" in
     F=/data/user/0/$RID/files
     $ADB shell input keyevent KEYCODE_WAKEUP
     $ADB shell wm dismiss-keyguard
-    size=$($ADB shell wm size | sed 's/.*: //' | tr -d '\r')
-    top=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["bars"]["top"])' $R/android.json)
+    # every draw list put there, then drawn in one run of mbui-render (MBUI_DL_LIST: an app's start for each took
+    # most of a screen's 7 s, 39928707799), each its window's picture (androidref puts it where the window lies)
+    $ADB shell am force-stop $RID
+    $ADB shell run-as $RID mkdir -p files
+    : > $O/lists.txt
     for n in $draw; do
-      $ADB shell am force-stop $RID
-      $ADB shell run-as $RID mkdir -p files
       $ADB shell run-as $RID rm -f files/$n.png
       $ADB exec-in "run-as $RID sh -c 'cat > files/$n.dl'" < $O/dl/$n.dl
-      $ADB logcat -c
-      $ADB shell am start -n $RID/dev.mbui.MainActivity --es env "'MBUI_DL=$F/$n.dl;MBUI_DL_PNG=$F/$n.png'" > /dev/null
-      # Only this renderer's completion or crash; a system app's crash says nothing about this picture.
-      said=$($ADB logcat --uid="$render_uid" -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
-      case "$said" in
-        *"mbui-render: "*"instances"*) ;;
-        *) echo "$said"; $ADB logcat -d -t 200 | tail -40; die "$n: not drawn" ;;
-      esac
-      $ADB exec-out run-as $RID cat files/$n.png > $O/mbui/$n.window.png
-      python3 "$D/android_ref.py" place $O/mbui/$n.window.png $O/mbui/$n.png ${size%x*} ${size#*x} $top || exit 1
+      echo "$F/$n.dl $F/$n.png" >> $O/lists.txt
+    done
+    $ADB exec-in "run-as $RID sh -c 'cat > files/lists.txt'" < $O/lists.txt
+    $ADB logcat -c
+    $ADB shell am start -n $RID/dev.mbui.MainActivity --es env "'MBUI_DL_LIST=$F/lists.txt'" > /dev/null
+    # Only this renderer's end or crash; a system app's crash says nothing about these pictures.
+    said=$($ADB logcat --uid="$render_uid" -v brief -e 'mbui-render: [0-9]+ of [0-9]+ drawn|FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
+    asked=$(echo $draw | wc -w | tr -d ' ')
+    case "$said" in
+      *"mbui-render: $asked of $asked drawn"*) ;;
+      *) echo "$said"; $ADB logcat -d -t 200 | tail -40; die "not every screen drawn ($asked asked)" ;;
+    esac
+    for n in $draw; do
+      $ADB exec-out run-as $RID cat files/$n.png > $O/mbui/$n.png
       cp $O/mbui/$n.png "$PICS/$(cat $O/dl/$n.key)-$n.png"
-      echo "$n: drawn ($said)"
+      echo "$n: drawn ($($ADB logcat -d --uid="$render_uid" -v brief -e "mbui-render: $F/$n.png: " | grep -v '^-----' | tail -1 | sed 's/.*mbui-render: //'))"
     done
     $ADB shell am force-stop $RID
     ;;
   compare)
-    python3 "$D/android_ref.py" "$R" "$O/mbui" "$O" "$S/allowed.json" $names
+    bash "$D/androidref" "$R" "$O/mbui" "$O" "$S/allowed.json" $names
     ;;
   plan)
     # the screens whose Android pictures a CI run takes (ci, REFS=1): those with none yet, REFS_MOST of them; else in a
@@ -282,22 +288,22 @@ case "$cmd" in
         fail=1
         names=$(for n in $names; do grep -qx "$n" $O/refs-failed || echo $n; done)
       fi
-      # held to those kept as android_ref.py compares (a channel a step apart the same: the same picture has come out so
+      # held to those kept as androidref compares (a channel a step apart the same: the same picture has come out so
       # on another runner, at circles' edges), the kept ones then left as they are
       if [ -f $O/kept/android.json ] && cmp -s $O/kept/android.json $R/android.json \
-        && python3 "$D/android_ref.py" "$O/kept" "$R" "$O/kept-diff" /nonexistent $names > /dev/null; then
+        && bash "$D/androidref" "$O/kept" "$R" "$O/kept-diff" /nonexistent $names > /dev/null; then
         (cd $ROOT && git checkout -- client/fixtures/screens/android)
         # (said for the job: pictures taken over this code, these screens and this emulator are the ones kept)
         echo same > $O/refs-same
       else
         echo "android-ref: Android's pictures are not the ones kept: commit this run's (its artifact's client/fixtures/screens/android) in the PR"
-        [ -f $O/kept/android.json ] && python3 "$D/android_ref.py" "$O/kept" "$R" "$O/kept-diff" /nonexistent $names | grep '^| [a-z]'
+        [ -f $O/kept/android.json ] && bash "$D/androidref" "$O/kept" "$R" "$O/kept-diff" /nonexistent $names | grep '^| [a-z]'
         fail=1
         # new ones taken again, to be references (one that differs from itself is none: the run says where); those the
         # same as kept need not be, the kept ones having been so
         rm -rf $O/again && cp -r $R $O/again
         bash "$0" refs $names > /dev/null || exit 1
-        python3 "$D/android_ref.py" "$O/again" "$R" "$O/again-diff" /nonexistent $names | grep '^| [a-z]' \
+        bash "$D/androidref" "$O/again" "$R" "$O/again-diff" /nonexistent $names | grep '^| [a-z]' \
           | sed 's/^/android-ref: Android twice: /'
       fi
       # (every screen compared after, those taken anew and the rest; one Android's test could not draw left out)

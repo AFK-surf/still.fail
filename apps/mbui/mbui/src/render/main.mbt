@@ -2,6 +2,9 @@
 // window, no clock: the picture of a screen a Tester drew, as this host draws it.
 //
 //   MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
+//   MBUI_DL_LIST=<lists> mbui-render        each line of <lists> "<list.dl> <out.png>", drawn one after another in this
+//                                           one run (an app's start for each took most of a screen's 7 s on Android's
+//                                           emulator: apps/mbui/scripts/android-ref.sh), then "mbui-render: N of M drawn"
 //
 // Each glyph is made again by what the list says it is (its words shaped in its font, the cluster it is), each image
 // decoded again from its source (or, handed over as bytes, from <list.dl>.img<N> beside it), and their instances given
@@ -114,22 +117,50 @@ fn main {
     return
   }
   // (a tool's arguments, from the process: not an app's reads of where it runs)
+  let lists = arg("MBUI_DL_LIST")
+  if lists != "" {
+    let made : Ref[(Double, Double, Double)?] = Ref(None)
+    let mut asked = 0
+    let mut drawn = 0
+    for line in read_text(lists).split("\n") {
+      let parts = line.trim(chars=" \r").split(" ").filter(fn(p) { p != "" }).map(fn(p) { p.to_string() }).collect()
+      if parts.length() != 2 {
+        continue
+      }
+      asked += 1
+      if render(parts[0], parts[1], made) {
+        drawn += 1
+      }
+    }
+    say("mbui-render: \{drawn} of \{asked} drawn")
+    return
+  }
   let path = arg("MBUI_DL")
   let out = arg("MBUI_DL_PNG")
   if path == "" || out == "" {
     say("mbui-render: MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png>")
     return
   }
+  render(path, out, Ref(None)) |> ignore
+}
+
+///|
+/// The draw list at `path` drawn into the PNG `out`, what was drawn said; the offscreen made again only for a window
+/// of another size or scale than the one `made` before (one run, many lists).
+fn render(path : String, out : String, made : Ref[(Double, Double, Double)?]) -> Bool {
   let dl = parse(read_text(path))
   if dl.version != 3 && dl.version != 4 && dl.version != 5 {
     say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3, 4 or 5 (scene.mbt's instances, \{inst_size} numbers each)")
-    return
+    return false
   }
   if dl.w <= 0.0 || dl.inst.is_empty() {
     say("mbui-render: \{path}: no window or nothing drawn")
-    return
+    return false
   }
-  init_offscreen(dl.w, dl.h, dl.scale)
+  if made.val != Some((dl.w, dl.h, dl.scale)) {
+    init_offscreen(dl.w, dl.h, dl.scale)
+    made.val = Some((dl.w, dl.h, dl.scale))
+  }
   // each glyph made again: its atlas place here, by the list's
   let shaped = FixedArray::make(4096, 0.0)
   let g = FixedArray::make(8, 0.0)
@@ -209,9 +240,10 @@ fn main {
   draw(inst, n, r, gg, b)
   if !snapshot(out) {
     say("mbui-render: \{out}: not written")
-    return
+    return false
   }
   say(
     "mbui-render: \{out}: \{n} instances, \{dl.glyphs.length()} glyphs (\{unknown} not known here, \{resized} another size here), \{dl.images.length()} images",
   )
+  true
 }
