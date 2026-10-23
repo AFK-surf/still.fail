@@ -70,7 +70,7 @@ stops the core and prints timings and the process's memory footprint.
 
 ## The engine (apple_core.mm)
 
-- Android's engine (`apps/android/core/src/main/cpp/engine.cpp`) without JNI, as `bench/hermes-host` is: one thread,
+- The app's engine (`apps/mbui/engine/engine.cpp`) as Apple's host has it, as `bench/hermes-host` is: one thread,
   `still.fail core`, with an 8 MB stack (the core's parsers recurse); a queue of tasks (`mb_core_send`, the shell's
   answers, the host's own) and the timers, under one lock and condition variable; after each task or timer the
   microtasks drained (`withMicrotaskQueue`). The runtime is `makeHermesRuntime` with the Android app's configuration
@@ -183,22 +183,23 @@ What differs from macOS:
 
 ## Android
 
-Built (`APP=coredemo scripts/android.sh build`): the core runs in ember's own engine, as still.fail's Android app runs
-it, not in one of ours.
+Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engine, the one Windows' app runs too.
 
-- **Engine**: ember's `apps/android/core/src/main/cpp/engine.cpp`, prebuilt (`node scripts/native.ts path engine
-  android-arm64` in the ember checkout: `libstillfail_hermes.so`, `libjsi.so`, `libc++_shared.so`), on the shell
-  `libstillfail_shell.so` (`... path shell android-arm64`). Hermes itself (`libhermes.so`) and `libfbjni.so` come
-  from React Native 0.81.4's `hermes-android` and fbjni 0.7.0's AARs (Gradle's cache, else Maven Central). All go
-  into `out/android/apk/jniLibs`, which Gradle packs; nothing is committed.
+- **Engine**: `apps/mbui/engine/engine.cpp` (its C API `engine.h`), prebuilt for Android with the NDK's CMake
+  (`apps/mbui/engine/android`; `node scripts/native.ts path engine android-arm64` in the ember checkout:
+  `libstillfail_hermes.so`, `libjsi.so`, `libc++_shared.so`), on the shell `libstillfail_shell.so` (`... path shell
+  android-arm64`). Hermes itself (`libhermes.so`, and its headers for the engine's build) and `libfbjni.so` come from
+  React Native 0.81.4's `hermes-android` and fbjni 0.7.0's AARs (Gradle's cache, else Maven Central). All go into
+  `out/android/apk/jniLibs`, which Gradle packs; nothing is committed. (Until 2026-10-23 the engine was still.fail's
+  Kotlin app's, JNI and all, built in its tree: that app is frozen, and nothing here reads it.)
 - **Script**: `scripts/core.sh hermes` makes `out/core/core.hbc` as ember's `hermes-bundle.ts` does (esbuild, Babel's
   class transform, hermesc 0.81.4 to bytecode) from `core/hermes.ts` (still.fail alone) or, for coredemo by default,
   `core/media-hermes.ts` (with the media module). It goes into the APK's assets.
-- **Host** (`src/host/android_core.c`, included by `src/coredemo/android_engine.c`): calls the engine's
-  `Java_fail_still_core_HermesNative_*` entry points as C functions (none looks at its `this`), with a
-  `dev.mbui.CoreHost` (android/) as the listener the engine calls back on its thread: `onBytes`/`onFrame` (a message,
-  or one with bytes) go straight through core_native.c into mbui's queue (`mb_post`), which asks for the frame that
-  takes them. Timers are the engine's (CLOCK_BOOTTIME).
+- **Host** (`src/host/android_core.c`, included by `src/coredemo/android_engine.c`): starts the engine through its C
+  API (`sf_engine_start`, os `android`); what the core says (a message, or one with bytes) comes back on the core's
+  thread straight through core_native.c into mbui's queue (`mb_post`), which asks for the frame that takes it, and
+  the calls only the app does go to a `dev.mbui.CoreHost` (android/), which answers through `sf_engine_complete`.
+  Timers are the engine's (CLOCK_BOOTTIME on Android).
 - **`secure.*`**: CoreHost seals each value with AES-GCM under one Android Keystore key (alias
   `dev.mbui.core.secure`), a file per value in `<files>/core/secure`, the value's name as associated data.
   `secure.ask` and `user: true` (biometrics) answer `"unsupported"`. `MBUI_SECURE_TEST=1` makes coredemo round-trip
