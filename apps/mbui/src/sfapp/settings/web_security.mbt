@@ -170,7 +170,7 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
                   c.box(style=sec_code, fn() { mono(c, text(rv, "code"), style=sec_code_words) }) |> ignore
                   if signs &&
                     @sf.button(c, tr("web-pages.security.check"), key="request/" + text(rv, "device"), tone=Primary) {
-                    confirm_device(core, ws, r)
+                    confirm_dialog(core, ws, r)
                   }
                 })
                 |> ignore
@@ -251,7 +251,7 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
       c.box(style=sec_actions, fn() {
         let off = is_doing(core, ["lock.disable"], [("workspace", ws)])
         if @sf.button(c, tr("web-pages.security.turnOff"), key="lock-off", tone=Danger, busy=off) {
-          turn_off(core, ws, here.name)
+          turn_off_dialog(core, ws, here.name)
         }
       })
       |> ignore
@@ -337,7 +337,7 @@ fn sec_station_row(c : @ui.Ctx, core : Core, ws : String, sv : Json?, can : Bool
       c.text(tr("web-pages.security.protected"), style=sec_row_meta) |> ignore
     } else if can {
       if @sf.button(c, tr("web-pages.security.join"), key="lock-station/" + id, tone=Ghost, busy=joining) {
-        join_station(core, ws, id, text(sv, "name"))
+        join_dialog(core, ws, id, text(sv, "name"))
       }
     } else {
       c.text(tr("web-pages.security.unprotected"), style=sec_warn) |> ignore
@@ -345,6 +345,169 @@ fn sec_station_row(c : @ui.Ctx, core : Core, ws : String, sv : Json?, can : Bool
   })
   |> ignore
 }
+
+///|
+/// A waiting device, confirmed once its code is the one on its screen (Security.tsx ConfirmDevice): who and what it
+/// is, its code large, 拒绝 and 确认; gone once answered on another device.
+fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
+  let rv = Some(r)
+  let device = text(rv, "device")
+  let code = text(rv, "code")
+  let who = match text(rv, "name") {
+    "" => text(rv, "email")
+    n => n
+  }
+  open_dialog(
+    "lock-confirm/" + device,
+    fill("web-pages.security.confirmTitle", [("name", who)]),
+    description=fill("web-pages.security.confirmBody", [
+      ("device", device_name(text(rv, "kind"), text(rv, "label"))),
+      ("name", who),
+    ]),
+    fn(c, shut) {
+      let lock = (core.topic)("lock", { "workspace": str(ws) }).value
+      if lock is Some(_) && !items(lock, "requests").iter().any(fn(x) { text(Some(x), "device") == device }) {
+        shut()
+      }
+      c.box(style=sec_big_code_box, fn() { mono(c, code, style=sec_big_code, center=true) }) |> ignore
+      let says = if text(rv, "kind") == "web" {
+        "web-pages.security.confirmWeb"
+      } else {
+        "web-pages.security.confirmApp"
+      }
+      c.text(tr(says), style=sec_note_centred) |> ignore
+    },
+    fn(c, shut) {
+      if @sf.button(c, tr("web-pages.security.deny"), key="lock-deny", tone=Ghost) {
+        shut()
+        lock_call(core, ws, "deny", tr("web-pages.security.denyDevice"), [("device", device)])
+      }
+      if @sf.button(c, tr("web-pages.security.confirm"), key="lock-confirm", tone=Primary) {
+        shut()
+        lock_call(
+          core,
+          ws,
+          "confirm",
+          tr("web-pages.security.confirmDevice"),
+          [("device", device), ("code", code)],
+          done=tr("web-pages.security.confirmed"),
+        )
+      }
+    },
+  )
+}
+
+///|
+/// A station of the workspace not in the lock, taken in once its owner says it is theirs (Security.tsx's join dialog).
+fn join_dialog(core : Core, ws : String, station : String, name : String) -> Unit {
+  open_dialog(
+    "lock-join/" + station,
+    fill("web-pages.security.joinTitle", [("name", name)]),
+    description=tr("web-pages.security.joinBody"),
+    fn(_, _) {  },
+    fn(c, shut) {
+      if @sf.button(c, tr("common.cancel"), key="join-cancel", tone=Ghost) {
+        shut()
+      }
+      if @sf.button(c, tr("web-pages.security.join"), key="join-go", tone=Primary) {
+        shut()
+        lock_call(
+          core,
+          ws,
+          "joinStation",
+          tr("web-pages.security.join"),
+          [("station", station)],
+          done=fill("web-pages.security.joined", [("name", name)]),
+        )
+      }
+    },
+  )
+}
+
+///|
+/// 关闭安全模式？ (Security.tsx TurnOff): what turning it off gives up, a line each, and the workspace's name typed
+/// before it can go (`lock.disable`, Enter too); written in as it opens.
+fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
+  let key = "lock-off/" + (desk_dialogs.val + 1).to_string()
+  let named = fn() { field_of(key).text().trim(chars=" \t\n").to_owned() == name.trim(chars=" \t\n").to_owned() }
+  let typed_in = Ref(false)
+  let go = fn(c : @ui.Ctx, shut : () -> Unit) {
+    c.blur()
+    shut()
+    act(core, tr("web-pages.security.turnOff"), "lock.disable", obj([("workspace", str(ws))]))
+  }
+  open_dialog(
+    key,
+    tr("web-pages.security.turnOffTitle"),
+    description=tr("web-pages.security.turnOffBody"),
+    fn(c, shut) {
+      c.box(style=sec_points, fn() {
+        sec_off_point(c, "server", tr("web-pages.security.nowRisk"))
+        sec_off_point(c, "devices", tr("web-pages.security.turnOffApproval"))
+        sec_off_point(c, "key", tr("web-pages.security.turnOffVault"))
+      })
+      |> ignore
+      @sf.field(c, fill("web-pages.security.turnOffType", [("name", name)]), fn() {
+        if @sf.input(c, key, field=field_of(key)).submitted && named() {
+          go(c, shut)
+        }
+      })
+      if !typed_in.val {
+        typed_in.val = true
+        c.focus_editor(key)
+      }
+    },
+    fn(c, shut) {
+      if @sf.button(c, tr("common.cancel"), key="off-cancel", tone=Ghost) {
+        c.blur()
+        shut()
+      }
+      if @sf.button(c, tr("web-pages.security.turnOff"), key="off-go", tone=DangerSolid, disabled=!named()) {
+        go(c, shut)
+      }
+    },
+  )
+}
+
+///|
+/// One thing turning it off gives up (Security.css.ts point): its icon, muted, beside a line of it.
+fn sec_off_point(c : @ui.Ctx, icon : String, words : String) -> Unit {
+  let t = @sf.theme()
+  c.box(style=sec_point_line, fn() {
+    c.box(style=sec_point_icon, fn() { @sf.icon(c, icon, size=sec_point_glyph, color=t.p.muted) |> ignore }) |> ignore
+    c.box(style=sec_point_words, fn() { c.text(words, style=sec_point_text) |> ignore }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A device's code large (Security.css.ts bigCode: the display size, a line 1.3 of it, 6 apart, 600, 6 over and under).
+// kept across runs: a value (no field of it changes)
+let sec_big_code_box : @ui.Style = @ui.style(w=Full, my=S1_5)
+
+///|
+let sec_big_size : Double = 28.0
+
+///|
+let sec_big_line : Double = 36.4
+
+///|
+let sec_big_tracking : Double = 6.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_big_code : @ui.TextStyle = @ui.text_style(
+  size=Exact(sec_big_size, sec_big_line), // det-ok(style-literal, style-exact): the web's display size (28, its line 1.3 of it), off the scale
+  weight=Semibold,
+  color=Fg,
+  tracking=Exact(sec_big_tracking), // det-ok(style-literal, style-exact): bigCode's letters 6 apart, a code read aloud
+  wrap=false,
+)
+
+///|
+/// A note under it, in the middle (Security.css.ts note, centred).
+// kept across runs: a value (no field of it changes)
+let sec_note_centred : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full, center=true)
 
 ///|
 /// The sizes: what it changes, its marks 18 in a column of 20; a device's mark 16.

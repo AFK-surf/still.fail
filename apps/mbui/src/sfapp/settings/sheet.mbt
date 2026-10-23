@@ -65,6 +65,8 @@ pub fn close() -> Unit {
 /// The sheet, over everything the app shows: call after the pages each frame.
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
   menu_overlay(c)
+  // the desktop pages' dialogs (desk_page.mbt)
+  desk_dialog_overlay(c)
   // the wide frame's question, while it is asked and as it goes
   match asked.val {
     Some(a) => {

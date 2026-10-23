@@ -265,11 +265,15 @@
     "builtin-hash": {},
     "hash-order": {},
     "globals": {},
-    "style-literal": {},
+    "style-literal": {
+      "src/sfapp/settings/web_security.mbt": 2
+    },
     "box-loose": {
       "src/sf/nav_bar.mbt": 1
     },
-    "style-exact": {},
+    "style-exact": {
+      "src/sfapp/settings/web_security.mbt": 2
+    },
     "build-effect": {},
     "unsettled-ok": {},
     "host-delay": {},

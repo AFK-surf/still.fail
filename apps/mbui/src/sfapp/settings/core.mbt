@@ -556,6 +556,9 @@ pub fn reset() -> Unit {
   doc_picked.clear()
   close_sheet()
   asking.val = None
+  desk_dialog.val = None
+  desk_dialog_last.val = None
+  desk_dialogs.val = 0
   asked.val = None
   sheet.last = None
   sheet.was_up = false

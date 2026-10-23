@@ -1240,6 +1240,52 @@ let field_error : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Dang
 let field_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
 
 ///|
+/// A line to type in (controls.css.ts input, a one-line one: a pill as the buttons beside it are, 36 high at least,
+/// 16 in, a line of the strong grey, the field's hover grey pointed at or written in, on the canvas, its words 14, the
+/// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own.
+/// What is in it now, and whether Enter was pressed in it.
+pub fn input(
+  c : @ui.Ctx,
+  key : String,
+  placeholder? : String = "",
+  secret? : Bool = false,
+  disabled? : Bool = false,
+  field? : @ui.Field,
+) -> @kit.Field {
+  @kit.text_field(c, key, placeholder~, secret~, disabled~, size=input_size, line=input_line, field?, look=fn(c, s, editor) {
+    c.box(id=s.id, style=if s.hovered || s.focused { input_box_hot } else { input_box }, editor) |> ignore
+  })
+}
+
+///|
+/// What is typed in: as what is read (global.css.ts --text-input), on the line of a list's words.
+let input_size : Double = 14.0
+
+///|
+let input_line : Double = 20.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let input_box : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  min_h=S9,
+  px=S4,
+  py=S1_5,
+  radius=Full,
+  bg=Surface,
+  border=B1,
+  border_color=Border,
+  align=ACenter,
+  disabled=@ui.patch(opacity=O55),
+)
+
+///|
+/// Pointed at or written in: the field's hover grey round it.
+// kept across runs: a value (no field of it changes)
+let input_box_hot : @ui.Style = input_box.then(@ui.style(border_color=FieldHover))
+
+///|
 /// A dropdown of choices (parts.tsx Select: mbui's, @kit.select: its options under it, the arrows, letters and Enter
 /// as a select's): a pill as a one-line field is (parts.css.ts select: 36 high at least, 16 in, a line of the strong
 /// grey, the field's hover grey under the pointer, on the canvas, its words 14 cut short, the placeholder subtle), a
