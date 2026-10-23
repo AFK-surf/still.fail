@@ -10,6 +10,9 @@
 #   MBUI_APP_MOD     that module's directory (APP is its src/<APP>; out/ and _build/ are its own); default this repo
 #   MBUI_IOS_ID      the app's bundle id (default dev.mbui.demo); MBUI_IOS_PLIST its Info.plist (default ios/Info.plist)
 #   MBUI_IOS_BUILD   the build's number: its CFBundleVersion (@hostapi.app_version) and version 0.1.<it>
+#   MBUI_IOS_SHARE_PLIST  its share extension's Info.plist (src/host/ios_share.m built as PlugIns/Share.appex: what
+#     another app shares kept for the app in the app group the two share, group.<its id>, MBUIAppGroup in both
+#     Info.plists; both signed with that group, a device's by its packer, whose profile must have it)
 #   MBUI_IOS_ASSETS  its asset catalog (an .xcassets: AppIcon its icon, the colours its Info.plist names), compiled into
 #     the app (actool), what that adds to the Info.plist with it
 #   MBUI_IOS_DEVICE  the simulator's name (default ios-mbui-sf, Mini1's: Studio's simulators open no app): one of our
@@ -122,11 +125,23 @@ case "${1:-build}" in
       --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
       $EXTRA $APP_EXTRA "$GEN" > $OUT/objs.txt
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
+    # what the app is signed with: the app's own (APP_ENTITLEMENTS), with a share extension the app group the two
+    # share; the simulator reads them from the binary itself (its __TEXT,__entitlements, as Xcode puts them there), a
+    # device from the signature
+    ENT=$APP_ENTITLEMENTS EXT= SECT=
+    if [ -n "${MBUI_IOS_SHARE_PLIST:-}" ]; then
+      ENT=$OUT/app.entitlements
+      if [ -n "$APP_ENTITLEMENTS" ]; then cp "$APP_ENTITLEMENTS" $ENT; else plutil -create xml1 $ENT; fi
+      /usr/libexec/PlistBuddy -c "Delete :com.apple.security.application-groups" $ENT > /dev/null 2>&1 || true
+      /usr/libexec/PlistBuddy -c "Add :com.apple.security.application-groups array" \
+        -c "Add :com.apple.security.application-groups:0 string group.$BID" $ENT
+    fi
+    [ -z "$ENT" ] || [ $IOS_SDK != iphonesimulator ] || SECT="-Wl,-sectcreate,__TEXT,__entitlements,$ENT"
     "$D/mbc" link --out=$APPDIR/mbui --stamp=$OUT/mbui.mbc-link -- $CC $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) -o $APPDIR/mbui -framework UIKit -framework Metal -framework QuartzCore \
       -framework CoreText -framework CoreGraphics -framework ImageIO -framework Foundation \
       -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit -framework Photos -framework PhotosUI \
       -framework SafariServices -framework UserNotifications -framework Network -framework UniformTypeIdentifiers \
-      -lm $APP_LINK
+      -lm $SECT $APP_LINK
     cp ${MBUI_IOS_PLIST:-$ROOT/ios/Info.plist} $APPDIR/Info.plist
     plutil -replace CFBundleIdentifier -string $BID $APPDIR/Info.plist
     if [ -n "${MBUI_IOS_BUILD:-}" ]; then
@@ -139,16 +154,34 @@ case "${1:-build}" in
         "$MBUI_IOS_ASSETS" > $OUT/actool.log 2>&1 || { cat $OUT/actool.log; exit 1; }
       /usr/libexec/PlistBuddy -c "Merge $OUT/assets-info.plist" $APPDIR/Info.plist > /dev/null
     fi
+    if [ -n "${MBUI_IOS_SHARE_PLIST:-}" ]; then
+      # the share extension: its own small program (NSExtensionMain its entry), its Info.plist the app's id and
+      # version, the app group both name; both signed with that group (the app's other entitlements with it)
+      EXT=$APPDIR/PlugIns/Share.appex
+      mkdir -p $EXT
+      $CC -fobjc-arc -O2 -fapplication-extension -Wl,-e,_NSExtensionMain -Wl,-application_extension $SECT \
+        $ROOT/src/host/ios_share.m -o $EXT/Share -framework Foundation -framework UIKit -framework UniformTypeIdentifiers \
+        -framework ImageIO || exit 1
+      cp $MBUI_IOS_SHARE_PLIST $EXT/Info.plist
+      plutil -replace CFBundleIdentifier -string $BID.share $EXT/Info.plist
+      for k in CFBundleVersion CFBundleShortVersionString; do
+        plutil -replace $k -string "$(/usr/libexec/PlistBuddy -c "Print :$k" $APPDIR/Info.plist)" $EXT/Info.plist
+      done
+      for p in $APPDIR/Info.plist $EXT/Info.plist; do plutil -replace MBUIAppGroup -string group.$BID $p; done
+    fi
     if [ $IOS_SDK = iphoneos ]; then
-      plutil -replace CFBundleSupportedPlatforms -json '["iPhoneOS"]' $APPDIR/Info.plist
-      plutil -replace DTPlatformName -string iphoneos $APPDIR/Info.plist
-      plutil -replace DTSDKName -string "iphoneos$(xcrun --sdk iphoneos --show-sdk-version)" $APPDIR/Info.plist
+      for p in $APPDIR/Info.plist ${EXT:+$EXT/Info.plist}; do
+        plutil -replace CFBundleSupportedPlatforms -json '["iPhoneOS"]' $p
+        plutil -replace DTPlatformName -string iphoneos $p
+        plutil -replace DTSDKName -string "iphoneos$(xcrun --sdk iphoneos --show-sdk-version)" $p
+      done
     fi
     if type app_bundle >/dev/null 2>&1; then app_bundle || exit 1; fi
     # what the app carries signed first, then the app (ad hoc: the simulator asks no more; a device's: the packer's)
     if [ $IOS_SDK = iphonesimulator ]; then
       for f in $APPDIR/Frameworks/*; do [ -e "$f" ] && codesign -s - --force "$f" >/dev/null 2>&1; done
-      codesign -s - --force ${APP_ENTITLEMENTS:+--entitlements $APP_ENTITLEMENTS} $APPDIR >/dev/null 2>&1
+      [ -z "${EXT:-}" ] || codesign -s - --force --entitlements $ENT $EXT >/dev/null 2>&1
+      codesign -s - --force ${ENT:+--entitlements $ENT} $APPDIR >/dev/null 2>&1
     fi
     T1=$(python3 -c 'import time;print(time.time())')
     echo "built $APPDIR ($BID) in $(python3 -c "print(round($T1-$T0,2))") s; binary $(stat -f %z $APPDIR/mbui) bytes"

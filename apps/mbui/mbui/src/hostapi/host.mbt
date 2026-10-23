@@ -1279,7 +1279,8 @@ pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool 
 
 ///|
 /// What another app shared into this one since last asked (Android's ACTION_SEND of text or files, ACTION_SEND_MULTIPLE
-/// of files; MBUI_SHARE_FILES, paths split by |, on macOS for scripted runs), as JSON text `{"text","title","files"}`,
+/// of files; iOS's share extension, what it kept taken as the app comes to the front: src/host/ios_share.m;
+/// MBUI_SHARE_FILES, paths split by |, on macOS and iOS for scripted runs), as JSON text `{"text","title","files"}`,
 /// `files` each `{"name","type","size"}` (absent when none); "" when nothing was.
 pub fn shared_in() -> String {
   current.val.shared_in()

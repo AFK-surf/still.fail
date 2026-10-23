@@ -107,6 +107,8 @@ static int frames_drawn;
 // now (its motion followed frame by frame: the controller's), and whether it is moving.
 static double ime_over(void);
 static BOOL ime_moving(void);
+// whether the share extension's inbox is to be looked into (shared_in, below)
+static BOOL share_look;
 
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
 
@@ -1017,6 +1019,9 @@ static void watch_shown(void) {
   }];
   [nc addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:NSOperationQueue.mainQueue
               usingBlock:^(NSNotification *n) {
+    // (what was shared meanwhile: the inbox looked into again, shared_in)
+    share_look = YES;
+    [the_view requestFrame];
     if (!hidden_at) return;
     double away = (clock_gettime_nsec_np(CLOCK_MONOTONIC) - hidden_at) / 1e6;
     hidden_at = 0;
@@ -1087,7 +1092,7 @@ int32_t mb_host_system_dark(void) {
 }
 
 // Sharing out (@hostapi.share): the system's share sheet over the app, the words or the file (kept in a folder of the app's
-// own in its temporary directory). Nothing comes in (shared_in ""): that is a share extension's, not made yet.
+// own in its temporary directory). What comes in is the share extension's (shared_in, below).
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
   (void)mime;
   if (!the_controller) return 0;
@@ -1108,8 +1113,84 @@ int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_stri
   say([NSString stringWithFormat:@"share: %s to the system's share sheet", n > 0 ? "a file" : "words"]);
   return 1;
 }
-moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
-moonbit_bytes_t mb_host_shared_in_file(int32_t i) { (void)i; return moonbit_make_bytes(0, 0); }
+
+// What another app shared (@hostapi.shared_in): what the app's share extension kept for it (ios_share.m: the inbox in
+// the app group's container its Info.plist names, MBUIAppGroup; share-inbox/<when>/share.json and its files), the
+// oldest first, looked for as the app starts and each time it comes to the front, taken whole and let go from the
+// inbox; MBUI_SHARE_FILES (paths split by |, MBUI_SHARE_TEXT its words) for scripted runs, as on macOS.
+static NSMutableArray<NSData *> *shared_files;
+static BOOL share_look = YES;
+
+static NSURL *share_inbox(void) {
+  NSString *group = NSBundle.mainBundle.infoDictionary[@"MBUIAppGroup"];
+  if (![group isKindOfClass:NSString.class] || !group.length) return nil;
+  NSURL *box = [NSFileManager.defaultManager containerURLForSecurityApplicationGroupIdentifier:group];
+  return [box URLByAppendingPathComponent:@"share-inbox" isDirectory:YES];
+}
+
+static moonbit_string_t shared_said(NSDictionary *said) {
+  NSData *j = [NSJSONSerialization dataWithJSONObject:said options:0 error:nil];
+  return j ? mb_string_from_ns([[NSString alloc] initWithData:j encoding:NSUTF8StringEncoding]) : moonbit_make_string_raw(0);
+}
+
+moonbit_string_t mb_host_shared_in(void) {
+  static int env_taken;
+  const char *given = getenv("MBUI_SHARE_FILES");
+  if (!env_taken && given && *given) {
+    env_taken = 1;
+    shared_files = [NSMutableArray new];
+    NSMutableArray *files = [NSMutableArray new];
+    for (NSString *p in [@(given) componentsSeparatedByString:@"|"]) {
+      NSData *d = p.length ? [NSData dataWithContentsOfFile:p] : nil;
+      if (!d) continue;
+      [shared_files addObject:d];
+      [files addObject:@{@"name" : p.lastPathComponent, @"type" : @"", @"size" : @(d.length)}];
+    }
+    const char *words = getenv("MBUI_SHARE_TEXT");
+    if (files.count) {
+      say([NSString stringWithFormat:@"shared in: %lu files", (unsigned long)files.count]);
+      return shared_said(@{@"text" : words ? @(words) : @"", @"files" : files});
+    }
+  }
+  if (!share_look) return moonbit_make_string_raw(0);
+  NSURL *inbox = share_inbox();
+  NSArray<NSURL *> *kept = inbox ? [NSFileManager.defaultManager contentsOfDirectoryAtURL:inbox includingPropertiesForKeys:nil options:0 error:nil] : nil;
+  kept = [kept sortedArrayUsingComparator:^NSComparisonResult(NSURL *a, NSURL *b) { return [a.lastPathComponent compare:b.lastPathComponent options:NSNumericSearch]; }];
+  for (NSURL *dir in kept) {
+    NSData *j = [NSData dataWithContentsOfURL:[dir URLByAppendingPathComponent:@"share.json"]];
+    // (one being written still: share.json comes last)
+    if (!j) continue;
+    NSDictionary *said = [NSJSONSerialization JSONObjectWithData:j options:0 error:nil];
+    shared_files = [NSMutableArray new];
+    NSMutableArray *files = [NSMutableArray new];
+    for (NSDictionary *f in [said isKindOfClass:NSDictionary.class] ? said[@"files"] : nil) {
+      if (![f isKindOfClass:NSDictionary.class] || ![f[@"path"] isKindOfClass:NSString.class]) continue;
+      NSData *d = [NSData dataWithContentsOfURL:[dir URLByAppendingPathComponent:f[@"path"]]];
+      if (!d) continue;
+      [shared_files addObject:d];
+      [files addObject:@{@"name" : f[@"name"] ?: @"file", @"type" : f[@"type"] ?: @"", @"size" : @(d.length)}];
+    }
+    [NSFileManager.defaultManager removeItemAtURL:dir error:nil];
+    NSString *text = [said[@"text"] isKindOfClass:NSString.class] ? said[@"text"] : @"";
+    if (!text.length && !files.count) continue;
+    NSMutableDictionary *out = [@{@"text" : text} mutableCopy];
+    if (files.count) out[@"files"] = files;
+    if ([said[@"title"] isKindOfClass:NSString.class]) out[@"title"] = said[@"title"];
+    say([NSString stringWithFormat:@"shared in: %lu characters, %lu files", (unsigned long)text.length, (unsigned long)files.count]);
+    return shared_said(out);
+  }
+  share_look = NO;
+  return moonbit_make_string_raw(0);
+}
+
+moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
+  if (i < 0 || i >= (int32_t)shared_files.count) return moonbit_make_bytes(0, 0);
+  NSData *d = shared_files[i];
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)d.length, 0);
+  if (d.length) memcpy(out, d.bytes, d.length);
+  shared_files[i] = [NSData data];
+  return out;
+}
 
 // Updates (@hostapi.app_version, update_install, update_state): the build (its Info.plist's CFBundleVersion, the
 // build's number as Android's versionCode is: scripts/ios.sh), which the app shows and tells; it does not update

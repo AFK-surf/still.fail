@@ -1296,8 +1296,13 @@ The app on iOS is Android's, as on an Android phone (2026-10-23):
 - Scripted runs (src/ui/drive.mbt): the keyboard's calls on the view, the paste, the app's picture, notifications
   tapped; the log on stderr (`simctl launch --stderr`).
 
-Not yet, against Android: a share extension (sharing in), a signed build for a device and TestFlight (they need the
-Apple developer account), updates (the App Store's, not the app's).
+- Sharing in (the person's choice, 2026-10-23: an iOS share extension cannot open its app): the share sheet's still.fail
+  mbui (ios/Share-Info.plist; mbui's src/host/ios_share.m, PlugIns/Share.appex) keeps what is shared in the app group
+  the two share and says to open the app; the app takes it as it next comes to the front (`@hostapi.shared_in`) and
+  shows the same 发到 sheet as Android's, over itself (not over the app it came from).
+
+Not yet, against Android: a signed build for a device and TestFlight (they need the Apple developer account, its
+profiles the app group too), updates (the App Store's, not the app's).
 
 ## What the hosts need (platform)
 

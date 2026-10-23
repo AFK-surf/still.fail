@@ -1,10 +1,11 @@
 // Sharing (ember apps/android app/share/ShareActivity.kt, ShareSheet.kt; drive/DriveScreen.kt hand; docs/share-in.md).
 //
 // In: what another app shares into still.fail (Android's share sheet: ACTION_SEND of a link, some text or files,
-// ACTION_SEND_MULTIPLE of files, @ui.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs, the host's
-// MBUI_SHARE_FILES on macOS) opens one sheet: what is shared at its top (its title, the
-// app's subject or its first line; a link's mark or text's), 发到 the chats it can go to (the core's `shareIn` view: the
-// one a thing from the same site went to last first, saying so; 搜索 from six chats), 新 chat last (then which station,
+// ACTION_SEND_MULTIPLE of files, iOS's share extension's as the app next comes to the front, @ui.shared_in;
+// MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs, the host's MBUI_SHARE_FILES on macOS and iOS) opens one
+// sheet: what is shared at its top (its title, the app's subject or its first line; a link's mark or text's), 发到
+// the chats it can go to (the core's `shareIn` view: the one a thing from the same site went to last first, saying so;
+// 搜索 from six chats), 新 chat last (then which station,
 // when there are more). A tap puts what is shared in that chat's composer (`shareIn.open`: a link as a card among its
 // files, the words after what is written) and opens the chat there (or a new chat on that station), where it is added
 // to and sent. Files (which the Android app does not take in) head the sheet as the composer shows them (pictures as
