@@ -1003,7 +1003,7 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
     return
   }
   // a pinch is what holds a page's own (a picture's zoom): no list scrolls by it
-  if mods & wheel_mod_pinch != 0 {
+  if (mods & wheel_mod_pinch) != 0 {
     return
   }
   if target != 0 {
