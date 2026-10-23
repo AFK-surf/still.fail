@@ -301,7 +301,7 @@ fn said(
       }
       if mine && c.clicked(name) {
         if wide_on.val {
-          side_toggle(ref_of(here), "history/" + m.by.agent)
+          side_toggle(ref_of(here), m.by.agent)
         } else {
           open_sheet(c, AgentOf(ref_of(here), m.by.agent))
         }
@@ -2221,7 +2221,7 @@ fn sent_elsewhere_wide(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) ->
   if mine {
     c.cursor(name, Hand)
     if c.clicked(name) {
-      side_toggle(ref_of(here), "history/" + s.by.agent)
+      side_toggle(ref_of(here), s.by.agent)
     }
   }
   let place_link = match s.place {
@@ -2688,7 +2688,7 @@ fn activity(
   let wide = wide_on.val
   if c.clicked(id) {
     if wide {
-      side_toggle(ref_of(here), "history/" + a.key)
+      side_toggle(ref_of(here), a.key)
     } else {
       app.nav.push(History(ref_of(here), a.key, None))
     }

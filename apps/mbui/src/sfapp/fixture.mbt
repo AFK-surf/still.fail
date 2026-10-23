@@ -26,6 +26,112 @@ priv struct Fixture {
   /// "home-motion": how far the list's changes have gone (a chat with news to the top, a new chat, one archived,
   /// a mark come)
   mut step : Int
+  /// each chat's side panel's tabs as kept on this device (the prefs' `chatTabs`, by `<station>:<session>` and
+  /// `new:<workspace>`), changed by `chat.tabs.*` as the core's chat-tabs.ts changes them (its answers kept, src/sfkept);
+  /// those its view shows after the last change, as the core said with it
+  chat_tabs : Map[String, Json]
+  tabs_shown : Map[String, Json]
+}
+
+///|
+/// The tabs kept to begin with: the new chat's Station 文件 (newchat-files), and what the first row's chat has open
+/// beside it on the wide frame's screenshots (its agent's history, its services and jobs, agent 往来).
+fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
+  let kept = fn(tab : String) -> Json { { "tabs": [Json::string(tab)], "active": Json::string(tab) } }
+  match mode {
+    "newchat-files" => { "new:ws1": kept("files") }
+    "chat-letters-side" => { "ws1/st1:s-c1": kept("letters") }
+    "chat-jobs-side" => { "ws1/st1:s-c1": kept("jobs") }
+    "chat-history-side" | "chat-model-pop" => { "ws1/st1:s-c1": kept("s-c1") }
+    _ => {}
+  }
+}
+
+///|
+/// What the core is asked of a chat's tabs (chat-tabs.ts: what is kept for `key`, the agents of `chat`, its view, as
+/// far as their tabs go, whether it has a chat yet, its session; the `change`, when one is made), as kept.
+fn fixture_tabs_ask(f : Fixture, key : String, chat : Json?, change : Json?) -> Json {
+  let (station, rest) = match key.find(":") {
+    Some(i) => (key.view(end_offset=i).to_string(), key.view(start_offset=i + 1).to_string())
+    None => ("", "")
+  }
+  let agents = items(chat, "agents").map(fn(a) {
+    let jobs = items(Some(a), "jobs").map(fn(j) { Json::object({ "id": Json::string(text(Some(j), "id")) }) })
+    Json::object({
+      "session": { "key": Json::string(text(field(Some(a), "session"), "key")) },
+      "jobs": Json::array(jobs),
+    })
+  })
+  let ask : Map[String, Json] = {
+    "kept": f.chat_tabs.get(key).unwrap_or(Json::null()),
+    "agents": Json::array(agents),
+    "noChat": Json::boolean(flag(chat, "noChat")),
+    "session": if station.contains("/") && chat is Some(_) { Json::string(rest) } else { Json::null() },
+  }
+  match change {
+    Some(c) => ask["change"] = c
+    None => ()
+  }
+  Json::object(ask)
+}
+
+///|
+/// A chat's view with its side panel's tabs, as the core makes them of what is kept for it (the view's `tabs`).
+fn fixture_with_tabs(f : Fixture, params : Map[String, Json], value : Json?) -> Json? {
+  match value {
+    Some(Object(m)) => {
+      let key = text(Some(Json::object(params)), "station") + ":" + text(Some(Json::object(params)), "session")
+      let m = m.copy()
+      match f.tabs_shown.get(key) {
+        Some(tabs) => m["tabs"] = tabs
+        None =>
+          match fixture_kept("chat.tabs", fixture_tabs_ask(f, key, value, None), None) {
+            Some(Ok((tabs, _))) => m["tabs"] = tabs
+            _ => ()
+          }
+      }
+      Some(Json::object(m))
+    }
+    _ => value
+  }
+}
+
+///|
+/// `chat.tabs.open / close / front / clear` (`chat`: its key, `tab`, `auto`): what is kept for the chat changed as the
+/// core changes it (nothing, where it says nothing changes).
+fn fixture_tabs_call(f : Fixture, name : String, params : Json) -> Result[Json, Json] {
+  let key = text(Some(params), "chat")
+  let chat = match key.find(":") {
+    Some(i) if key.view(end_offset=i).contains("/") =>
+      fixture_topic_inner(f, "chat", {
+        "station": Json::string(key.view(end_offset=i).to_string()),
+        "session": Json::string(key.view(start_offset=i + 1).to_string()),
+      })
+    _ => None
+  }
+  let change : Json = {
+    "action": Json::string(name.view(start_offset="chat.tabs.".length()).to_string()),
+    "tab": match field(Some(params), "tab") {
+      Some(String(t)) => Json::string(t)
+      _ => Json::null()
+    },
+    "auto": Json::boolean(!(field(Some(params), "auto") is Some(False))),
+  }
+  match fixture_kept("chat.tabs", fixture_tabs_ask(f, key, chat, Some(change)), None) {
+    Some(Ok((r, _))) => {
+      match (field(Some(r), "next"), field(Some(r), "tabs")) {
+        (Some(Object(_) as next), Some(tabs)) => {
+          f.chat_tabs[key] = next
+          f.tabs_shown[key] = tabs
+          f.version += 1
+        }
+        _ => ()
+      }
+      Ok(Json::null())
+    }
+    Some(Err(e)) => Err(e)
+    None => Err({ "code": "not_kept", "message": "the core's answers are not bound (src/sfkept)" })
+  }
 }
 
 ///|
@@ -354,6 +460,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
   // `stationNet` view of its own (the made-up stations say both as `net`)
   let value = match name {
     "stations" => fixture_stations_way(value)
+    "chat" => fixture_with_tabs(f, params, value)
     "stationNet" => {
       let address = text(Some(Json::object(params)), "station")
       let ws = match address.find("/") {
@@ -427,11 +534,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
       }
       Some({
         "workspace": Json::string(f.workspace),
-        "chatTabs": if f.mode == "newchat-files" {
-          { "new:ws1": { "tabs": ["files"], "active": "files" } }
-        } else {
-          {}
-        },
+        "chatTabs": Json::object(f.chat_tabs),
         "listFilter": Json::object(lf),
         "appearance": Json::string(f.appearance),
         "fonts": fixture_fonts(f.fonts),
@@ -574,6 +677,8 @@ pub fn fixture(mode : String) -> Source {
     version: 1,
     older: 0,
     step: 0,
+    chat_tabs: fixture_chat_tabs(mode),
+    tabs_shown: {},
   }
   if f.mode == "home-motion" {
     // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
@@ -635,6 +740,8 @@ pub fn fixture(mode : String) -> Source {
         }
         // a screen's preview's frame taken (chat-screens): the fixture sends no other
         "screen.ack" => done(Ok(Json::object({})))
+        "chat.tabs.open" | "chat.tabs.close" | "chat.tabs.front" | "chat.tabs.clear" =>
+          done(fixture_tabs_call(f, name, params))
         "keys.set" => {
           let r = fixture_keys_set(f.keys, params)
           f.version += 1

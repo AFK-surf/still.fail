@@ -425,6 +425,18 @@ pub(all) struct ChatView {
   station_update : Json?
   /// the viewer's email, as the chat knows them (`me`): whose a card is to decide
   me : String
+  /// its side panel's tabs, as the core keeps them for it on this device (`tabs`, client/core-ts/src/chat-tabs.ts)
+  tabs : ChatTabs
+}
+
+///|
+/// A chat's side panel's tabs (the chat view's `tabs`): those open, in order (an agent's history by its session's key,
+/// `jobs`, `files`, `letters`, the web's `service:<job>` and `file:[…]`), the one in front, and whether they are the
+/// ones the chat opens by itself (its agent with no chat yet: its history), not opened by anyone.
+pub(all) struct ChatTabs {
+  open : Array[String]
+  shown : String?
+  auto : Bool
 }
 
 ///|
@@ -475,6 +487,11 @@ pub fn chat_view(v : Json) -> ChatView {
     me: text(field(s, "me"), "email"),
     pending: flag(s, "pending"),
     key: text(s, "key"),
+    tabs: {
+      open: items(field(s, "tabs"), "open").filter_map(fn(t) { if t is String(k) { Some(k) } else { None } }),
+      shown: opt_text(field(s, "tabs"), "shown"),
+      auto: flag(field(s, "tabs"), "auto"),
+    },
   }
 }
 

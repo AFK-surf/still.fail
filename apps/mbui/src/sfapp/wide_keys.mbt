@@ -56,12 +56,9 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if pk.ts != "" {
       pick_clear()
     } else {
-      // the chat's side panel closed (keymap.ts panel.close)
+      // the chat's side panel closed, all its tabs (keymap.ts panel.close)
       match app.nav.top() {
-        Chat(r) =>
-          for tab in side_tabs(r) {
-            side_close(r, tab)
-          }
+        Chat(r) if side_now(r).0.length() > 0 => side_change(r, "clear", None)
         _ => ()
       }
     }

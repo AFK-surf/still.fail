@@ -79,35 +79,18 @@ fn new_chat_page_wide(
 }
 
 ///|
-/// Whether the workspace's new chat has its 文件 tab open (NewChat.tsx: prefs `chatTabs` by `new:<workspace>`, read
-/// once, then as it is opened and closed here).
+/// Whether the workspace's new chat has its 文件 tab open (NewChat.tsx: what the core keeps for it on this device, the
+/// prefs' `chatTabs` by `new:<workspace>`).
 fn new_files_open(src : Source, ws : String) -> Bool {
-  let k = "new:" + ws
-  match wide.tabs.get(k) {
-    Some(tabs) => tabs.contains("files")
-    None => {
-      let kept = field(field((src.topic)("prefs", {}).value, "chatTabs"), k)
-      let open = match field(kept, "tabs") {
-        Some(Array(a)) => a.contains(Json::string("files"))
-        _ => false
-      }
-      wide.tabs[k] = if open { ["files"] } else { [] }
-      open
-    }
-  }
+  let kept = field(field((src.topic)("prefs", {}).value, "chatTabs"), "new:" + ws)
+  items(kept, "tabs").contains(Json::string("files"))
 }
 
 ///|
-/// The workspace's new chat's 文件 tab opened or closed, kept by the core on this device.
+/// The workspace's new chat's 文件 tab opened or closed, kept by the core on this device (`chat.tabs.*`).
 fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
-  wide.tabs["new:" + ws] = if on { ["files"] } else { [] }
-  let entry : Map[String, Json] = { "tabs": Json::array(if on { [Json::string("files")] } else { [] }) }
-  if on {
-    entry["active"] = Json::string("files")
-  }
-  let tabs : Map[String, Json] = {}
-  tabs["new:" + ws] = Json::object(entry)
-  (src.call)("prefs.set", { "chatTabs": Json::object(tabs) }, fn(_) {  })
+  let call = if on { "chat.tabs.open" } else { "chat.tabs.close" }
+  (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, fn(_) {  })
 }
 
 ///|

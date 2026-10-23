@@ -678,11 +678,12 @@ fn send_first(
           if wide_on.val {
             fresh.room = @motion.measured(c, "new/composer").unwrap_or(0.0)
             composer_page_starts(c, draft_key(r))
-            // its files open beside it stay open beside the chat (NewChat.tsx onSent: keepTabs)
-            if new_files_open(src, workspace_of(station)) {
-              wide.tabs[side_key(r)] = ["files"]
-              wide.front[side_key(r)] = "files"
-              keep_tabs(r)
+            // made here, the chat opens without its agent's history beside it; the files open beside the page stay
+            // open beside the chat (NewChat.tsx onSent)
+            let files = new_files_open(src, workspace_of(station))
+            side_change(r, "clear", None)
+            if files {
+              side_change(r, "open", Some("files"))
             }
           }
           app.nav.become(Chat(r))

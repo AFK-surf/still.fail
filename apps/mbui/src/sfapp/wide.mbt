@@ -38,9 +38,6 @@ priv struct Wide {
   mut keys_open : Bool
   /// the chat last opened here by the frame (the core's last chat taken once per workspace)
   mut landed : String
-  /// beside each chat, by its station and session (wide_panel.mbt): the side panel's tabs, the one in front
-  tabs : Map[String, Array[String]]
-  front : Map[String, String]
   /// the chat's "…" open (what is done with it), its services' popover open
   mut info_open : Bool
   mut jobs_open : Bool
@@ -106,8 +103,6 @@ let wide : Wide = {
   attention_open: false,
   keys_open: false,
   landed: "",
-  tabs: {},
-  front: {},
   info_open: false,
   jobs_open: false,
   job_picked: "",
@@ -195,8 +190,6 @@ fn wide_reset() -> Unit {
   wide.attention_open = false
   wide.keys_open = false
   wide.landed = ""
-  wide.tabs.clear()
-  wide.front.clear()
   wide.info_open = false
   wide.jobs_open = false
   wide.job_picked = ""
