@@ -30,6 +30,8 @@ test "43-notify-off" {
     f.run_to_rest("a list's")
     f.see("=通知")
     f.tap("=通知")
+    // switched on again: as the core has it once it answered (its switch says so at once, before), for the runs after
+    f.answered("notify.set", 2)
     f.end()
   })
 }
