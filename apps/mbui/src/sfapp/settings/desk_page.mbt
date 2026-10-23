@@ -165,3 +165,95 @@ fn desk_choice(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_choice_row : @ui.Style = @ui.style(row=true, w=Full)
+
+///|
+/// A list's filter on the wide page (components.tsx MineFilter, not compact; History.css.ts mineFilterBtn,
+/// mineFilterWide): a 32 high button 8 in, the field's line round it, 12 over what it filters; its funnel 16 and what
+/// it shows in the muted ink, the words' under the pointer or while open, the accent's on its ground while it narrows;
+/// pressed, its menu of choices under it (all or the viewer's, the shown checked), at its end. `of`: what it filters
+/// (`connects`), as its words name it.
+fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool) -> Unit) -> Unit {
+  let t = @sf.theme()
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let open = mine_filter_open.get(key).unwrap_or(false)
+  if c.clicked(id) {
+    mine_filter_open[key] = !open
+  }
+  let named = if mine { tr("web-main.filter." + of + ".mine") } else { tr("web-main.filter.all") }
+  let lit = c.hovered(id) || open
+  let ink = if mine {
+    t.p.accent_text
+  } else if lit {
+    t.p.text
+  } else {
+    t.p.muted
+  }
+  let b = c.box(style=if mine { mine_filter_on } else { mine_filter_box }, selected=open, id~, fn() {
+    @sf.icon(c, "filter", size=mine_filter_icon, color=ink) |> ignore
+    c.text(named, style=if mine { mine_filter_on_words } else if lit { mine_filter_lit_words } else { mine_filter_words })
+    |> ignore
+  })
+  c.semantics(b, Button, id~, label=fill("web-main.filter." + of + ".named", [("named", named)]), expanded=open)
+  let entries = [
+    @kit.menu_radio("all", !mine, label=tr("web-main.filter." + of + ".all")),
+    @kit.menu_radio("mine", mine, label=tr("web-main.filter." + of + ".mine")),
+  ]
+  let m = @sf.menu(c, key + "/menu", open, id, entries, {}, mine_filter_menu_w)
+  if open && !m.open {
+    mine_filter_open[key] = false
+  }
+  match m.chosen {
+    Some(v) => {
+      mine_filter_open[key] = false
+      if (v == "mine") != mine {
+        set(v == "mine")
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// Which filter's menu is open, by its key.
+// kept across runs: said again by each press; core.mbt's reset empties it
+let mine_filter_open : Map[String, Bool] = {}
+
+///|
+let mine_filter_icon : Double = 16.0
+
+///|
+/// A menu of choices (controls.css.ts chooserMenu: 220 wide at least).
+let mine_filter_menu_w : Double = 220.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_box : @ui.Style = @ui.style(
+  row=true,
+  h=S8,
+  min_w=S8,
+  px=S2,
+  gap=S1_5,
+  align=ACenter,
+  radius=Xl,
+  border=B1,
+  border_color=Line,
+  hovered=@ui.patch(bg=Hover),
+  selected=@ui.patch(bg=Hover),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_on : @ui.Style = mine_filter_box.then(@ui.style(bg=AccentBg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_lit_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=Fg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let mine_filter_on_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=AccentText))

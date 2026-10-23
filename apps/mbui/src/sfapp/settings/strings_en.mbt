@@ -5,6 +5,8 @@
 /// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is "en".
 // kept across runs: a table, never written
 let en : Map[String, String] = {
+  "web-main.filter.connects.all": "All connects",
+  "web-main.filter.connects.named": "Filter connects: {named}",
   "web-pages.notifications.sample.title": "Sample chat",
   "web-pages.notifications.sample.wait": "Waiting for you · A or B?",
   "web-pages.notifications.sample.failed": "Something went wrong · the agent couldn't start",

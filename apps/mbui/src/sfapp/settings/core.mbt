@@ -541,6 +541,8 @@ pub fn reset() -> Unit {
   opening_lock.val = false
   memories.clear()
   connects_mine.val = false
+  waiting_menu.val = ""
+  mine_filter_open.clear()
   usage_state.days = 7
   usage_state.day = ""
   usage_state.list = -1

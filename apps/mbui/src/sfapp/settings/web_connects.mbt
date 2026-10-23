@@ -85,13 +85,7 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       } else {
         blocks.push(fn() {
           c.box(style=cn_filter_room, fn() {
-            filter_chip(
-              c,
-              "connects-filter",
-              [tr("web-main.filter.all"), tr("web-main.filter.connects.mine")],
-              if mine { 1 } else { 0 },
-              fn(i) { connects_mine.val = i == 1 },
-            )
+            mine_filter(c, "connects-filter", "connects", mine, fn(v) { connects_mine.val = v })
           })
           |> ignore
         })
@@ -100,11 +94,15 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         blocks.push(fn() {
           c.box(style=cn_quiet_room, fn() { c.text(tr("web-pages.connects.waiting"), style=cn_quiet) |> ignore })
           |> ignore
-          list_card(c, fn() {
-            for w in waiting {
-              cn_waiting_app(c, core, w.0, w.1)
-            }
+          c.box(style=cn_list_room, fn() {
+            c.box(style=desk_list, fn() {
+              for w in waiting {
+                cn_waiting_app(c, core, w.0, w.1)
+              }
+            })
+            |> ignore
           })
+          |> ignore
         })
       }
       if !first {
@@ -124,13 +122,17 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           })
         } else {
           blocks.push(fn() {
-            list_card(c, fn() {
-              for x in shown {
-                let xv = Some(x)
-                let address = text(xv, "station")
-                cn_row(c, core, address, text(xv, "stationName"), station_of(address), field(xv, "connect"))
-              }
+            c.box(style=cn_list_room, fn() {
+              c.box(style=desk_list, fn() {
+                for x in shown {
+                  let xv = Some(x)
+                  let address = text(xv, "station")
+                  cn_row(c, core, address, text(xv, "stationName"), station_of(address), field(xv, "connect"))
+                }
+              })
+              |> ignore
             })
+            |> ignore
           })
           // what the list still waits on: a row's shape for a station not read yet, each failure said
           if note_waits(wait) {
@@ -148,7 +150,12 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 /// its end its station's tag, who added it, how it is (being deleted: a ring), its dot. Pressed, its page.
 fn cn_row(c : @ui.Ctx, core : Core, station : String, station_name : String, s : Json?, cv : Json?) -> Unit {
   let id = text(cv, "id")
-  if list_row(c, key="connect/" + station + "/" + id, fn() {
+  let rid = c.id("connect/" + station + "/" + id)
+  c.cursor(rid, Hand)
+  if hit(c, rid) {
+    (core.push)(Connect(station, id))
+  }
+  c.box(style=desk_list_link, id=rid, fn() {
       cn_avatar(c, core, cv)
       c.box(style=cn_text, fn() {
         c.box(style=cn_title_line, fn() {
@@ -181,9 +188,8 @@ fn cn_row(c : @ui.Ctx, core : Core, station : String, station_name : String, s :
       let on = [("station", station), ("id", id)]
       doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
       @sf.status_dot(c, text(cv, "presence"))
-    }) {
-    (core.push)(Connect(station, id))
-  }
+    })
+  |> ignore
 }
 
 ///|
@@ -255,7 +261,7 @@ fn cn_waiting_app(c : @ui.Ctx, core : Core, a : Json, s : Json) -> Unit {
   } else {
     tr("web-pages.connects.needsToken")
   }
-  list_row(c, fn() {
+  c.box(style=desk_list_row, fn() {
     c.box(style=cn_kind_box, fn() { @sf.slack_mark(c, cn_waiting_mark) |> ignore }) |> ignore
     c.box(style=cn_text, fn() {
       c.box(style=cn_title_line, fn() {
@@ -285,42 +291,40 @@ fn cn_waiting_app(c : @ui.Ctx, core : Core, a : Json, s : Json) -> Unit {
       c.text(tr("web-pages.connects.stationOffline"), style=cn_meta) |> ignore
     }
     doing_mark(c, dropping, failed_of(core, ["slack.dropApp"], on))
+    // dropped from under ⋯ (Menu), asked again first (Confirm); it stays in Slack
     if online && !dropping {
       let mid = c.id("waiting-more/" + app_id)
       c.cursor(mid, Hand)
-      if hit(c, mid) {
-        match c.rect_of(mid) {
-          Some(r) => {
-            menu.items = [tr("web-pages.connects.removeHere")]
-            menu.selected = -1
-            menu.x = r.0 + r.2 - 180.0
-            menu.y = r.1 + r.3 + 4.0
-            menu.pick = fn(_) {
-              confirm(
-                fill("web-pages.settings.stations.removeConfirm", [("name", text(av, "name"))]),
-                fill("web-pages.connects.removeBody", [("name", "still.fail")]),
-                tr("android-settings.members.remove"),
-                danger=true,
-                fn() {
-                  act(
-                    core,
-                    tr("android-settings.waiting.removeWhat"),
-                    "slack.dropApp",
-                    obj([("station", str(station)), ("appId", str(app_id))]),
-                    done=tr("android-settings.members.removed"),
-                  )
-                },
-              )
-            }
-            menu.up = true
-          }
-          None => ()
-        }
+      let open = waiting_menu.val == app_id
+      if c.clicked(mid) {
+        waiting_menu.val = if open { "" } else { app_id }
       }
       let b = c.box(style=cn_more, id=mid, fn() {
         @sf.icon(c, "more", size=cn_more_icon, color=@sf.theme().p.muted) |> ignore
       })
-      c.semantics(b, Button, id=mid, label=tr("web-pages.connects.removeHere"))
+      c.semantics(b, Button, id=mid, label=tr("web-pages.connects.removeHere"), expanded=open)
+      let m = @sf.menu(c, "waiting-menu/" + app_id, open, mid, [@kit.menu_item("remove", label=tr("web-pages.connects.removeHere"))], {}, @sf.menu_w, along=End)
+      if open && !m.open {
+        waiting_menu.val = ""
+      }
+      if m.chosen is Some(_) {
+        waiting_menu.val = ""
+        confirm(
+          fill("web-pages.settings.stations.removeConfirm", [("name", text(av, "name"))]),
+          fill("web-pages.connects.removeBody", [("name", "still.fail")]),
+          tr("android-settings.members.remove"),
+          danger=true,
+          fn() {
+            act(
+              core,
+              tr("android-settings.waiting.removeWhat"),
+              "slack.dropApp",
+              obj([("station", str(station)), ("appId", str(app_id))]),
+              done=tr("android-settings.members.removed"),
+            )
+          },
+        )
+      }
     }
   })
   |> ignore
@@ -358,12 +362,22 @@ let cn_kind_box : @ui.Style = @ui.style(w=S5, h=S5, align=ACenter, justify=JCent
 let cn_filter_room : @ui.Style = @ui.style(w=Full, px=S4, pt=S2, pb=S3, align=AStart)
 
 ///|
+/// The lists at the column's edges (their rows reaching 12 past them: desk_list).
+// kept across runs: a value (no field of it changes)
+let cn_list_room : @ui.Style = @ui.style(w=Full, px=S4)
+
+///|
+/// The ⋯ menu open, by the waiting app's id ("" none).
+// kept across runs: said again by each press; core.mbt's reset empties it
+let waiting_menu : Ref[String] = Ref("")
+
+///|
 // kept across runs: a value (no field of it changes)
 let cn_quiet_room : @ui.Style = @ui.style(w=Full, px=S4, pb=S1_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_quiet : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Muted, wrap=false)
+let cn_quiet : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -371,11 +385,11 @@ let cn_none_room : @ui.Style = @ui.style(w=Full, px=S4)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_error : @ui.TextStyle = @ui.text_style(size=Lg, color=Danger, w=Full)
+let cn_error : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_note : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, w=Full)
+let cn_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
 
 ///|
 /// A row's words (listRowText: 2 apart, as wide as the row lets them; its title in 500, how it runs muted).
@@ -388,11 +402,11 @@ let cn_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false)
+let cn_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_sub : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, wrap=false)
+let cn_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
 
 ///|
 /// Its Slack workspace after its name (connectTeam: 8 after it, its mark 4 from its name, the meta's 12 muted).
@@ -401,7 +415,7 @@ let cn_team : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let cn_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// Its station and who added it (connectFacts: 10 apart).
@@ -414,7 +428,7 @@ let cn_tag : @ui.Style = @ui.style(row=true, px=S2, py=SPx, gap=S1, align=ACente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_tag_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Muted, wrap=false)
+let cn_tag_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -422,11 +436,11 @@ let cn_owner_box : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_owner_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let cn_owner_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
 
 ///|
 /// ⋯ (an icon button: 32, its corner 12).

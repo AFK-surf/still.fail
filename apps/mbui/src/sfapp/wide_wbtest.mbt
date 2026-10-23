@@ -1189,24 +1189,25 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
   assert_true(t.find("MBA · 离线") is None, msg="no station's heading")
   assert_true(t.query(Button, label="说明") is Some(_), msg="what a connect is")
   assert_true(t.query(Button, label="添加连接") is Some(_))
-  // the filter under the title: its menu, 我的 picked
-  let (fx, fy, fw, fh) = t.query(Button, label="全部").unwrap().rect
+  // the filter under the title (MineFilter): its menu, 我的 picked
+  let (fx, fy, fw, fh) = t.query(Button, label="筛选连接：全部").unwrap().rect
   let (_, hy, _, _) = t.query(Button, label="添加连接").unwrap().rect
   assert_true(fy > hy, msg="under the head")
   t.tap(fx + fw / 2.0, fy + fh / 2.0)
   t.frame()
-  let (mx, my) = t.find("我的").unwrap()
+  assert_true(t.find("全部连接") is Some(_), msg="its menu: " + t.words().map(fn(w) { w.0 }).join("|"))
+  let (mx, my) = t.find_last("我的").unwrap()
   t.tap(mx, my)
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.query(Button, label="我的") is Some(_), msg="the filter says it")
+  assert_true(t.query(Button, label="筛选连接：我的") is Some(_), msg="the filter says it")
   // back to 全部; a row pressed: its page
-  let (gx, gy, gw, gh) = t.query(Button, label="我的").unwrap().rect
+  let (gx, gy, gw, gh) = t.query(Button, label="筛选连接：我的").unwrap().rect
   t.tap(gx + gw / 2.0, gy + gh / 2.0)
   t.frame()
-  let (ax, ay) = t.find_last("全部").unwrap()
+  let (ax, ay) = t.find("全部连接").unwrap()
   t.tap(ax, ay)
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.query(Button, label="全部") is Some(_))
+  assert_true(t.query(Button, label="筛选连接：全部") is Some(_))
   let (rx, ry) = t.find("星火助手").unwrap()
   t.tap(rx, ry)
   t.run_for(@ui.nav_push_ms)
