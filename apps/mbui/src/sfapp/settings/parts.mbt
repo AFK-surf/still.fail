@@ -1240,9 +1240,10 @@ fn wide_button(
 }
 
 ///|
-/// WideButton: a capsule as wide as where it is, its words in its middle.
+/// WideButton: a capsule as wide as where it is, its words in its middle, 20 from its ends however narrow it is
+/// (Security.kt WideButton: padding(horizontal = 20.dp)).
 // kept across runs: a value (no field of it changes)
-let wide_button_box : @ui.Style = @ui.style(row=true, w=Full, radius=Full, gap=S2, align=ACenter, justify=JCenter)
+let wide_button_box : @ui.Style = @ui.style(row=true, w=Full, px=S5, radius=Full, gap=S2, align=ACenter, justify=JCenter)
 
 ///|
 /// A row of a picking sheet (Controls.kt PickRow): what, a line under it, a check on the one chosen; `mark` before

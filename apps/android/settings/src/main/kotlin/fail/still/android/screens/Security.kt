@@ -119,15 +119,18 @@ internal fun WideButton(label: String, primary: Boolean, modifier: Modifier = Mo
     // `danger`: red, and faded red (not grey) until it can be pressed, so it reads as the same button.
     // The secondary one a shade of ink, not the chip colour: on a sheet's frosted paper the chip all but disappears.
     val ground = if (!primary) C.ink.copy(alpha = 0.08f) else if (danger) (if (enabled) C.red else C.red.copy(alpha = 0.4f)) else if (!enabled) C.line else C.ink
+    // Its words in the middle, 20 from its ends however wide it is (as the smaller Button's 16 on its 38): wrapped round
+    // them, they touched the capsule's ends (2026-10-23).
     Row(
-        modifier.height(46.dp).clip(Smooth(23.dp)).background(ground).clickable(enabled = on, onClick = onClick),
+        modifier.height(46.dp).clip(Smooth(23.dp)).background(ground).clickable(enabled = on, onClick = onClick).padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
         val ink = if (primary && danger) Color.White else if (primary) C.bg else C.ink
         // A solid one's spinner in its words' colour.
         BusyIcon(busy, solid = if (primary) ink else null)
         if (busy) Spacer(Modifier.width(8.dp))
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ink)    }
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ink)
+    }
 }
 
 /** The page's main action along the bottom of the screen, as wide as it; the page scrolls above it. */
