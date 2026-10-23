@@ -113,6 +113,27 @@ test "wide: ⌘K's switcher narrows to what is typed and Enter opens it; Esc clo
 }
 
 ///|
+test "wide: ⌘K over a chat lists what can be done only as the core finds it for the words (commands.find), Enter runs the first" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  // words that name no command: only the chats
+  t.type_text("发布")
+  t.frame()
+  assert_true(named(calls, "commands.find").length() > 0)
+  assert_true(t.find("⌘,") is None)
+  // 设置: the core's 设置 first, with its keys, then the chats it names
+  t.clear()
+  t.type_text("设置")
+  t.frame()
+  assert_true(t.find("⌘,") is Some(_))
+  assert_true(t.find("给设置页加一个深色模式开关") is Some(_))
+  t.enter()
+  assert_true(t.find("搜索全部内容和操作") is None)
+  assert_true(t.find("返回会话") is Some(_))
+}
+
+///|
 test "wide: settings from the rail's gear, its list in the sidebar; back to the chats" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
@@ -791,10 +812,10 @@ test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys 
   assert_eq(field(Some(set[0].params), "action"), Some(Json::string("chat.switch")))
   t.frame()
   assert_true(t.find("⌘J") is Some(_))
-  assert_false(wide.switcher)
+  assert_false(@sfdesk.switcher_open())
   t.key(@ui.key_of_char('j'), mods=@ui.mod_cmd)
   t.frame()
-  assert_true(wide.switcher, msg="⌘J opens it now")
+  assert_true(@sfdesk.switcher_open(), msg="⌘J opens it now")
   // 版本
   t.key(@ui.key_escape)
   app.nav.replace(Setting(@settings.Route::Version))

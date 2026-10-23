@@ -1,7 +1,8 @@
 // The real core's answers to its pure calls, kept for the app's runs without a core: the Tester's tests (src/sf,
 // src/sfapp with its screens), the screenshots' app (src/sffix), the design system's (src/sfkit), and the replays of tapes
 // older than a call (src/sfreplay). `markdown` (a text's tree), `code.ink` (what each piece of a code is), `reader.book`,
-// `reader.text` and `reader.search` (a text as the drive's reader shows it) answer the same for the same words, so the
+// `reader.text` and `reader.search` (a text as the drive's reader shows it), `commands.find` (what ⌘K lists of what is
+// offered) answer the same for the same words, so the
 // TypeScript core's answers are kept here (kept.mbt, made by client/core-ts/scripts/kept-answers.ts) and nothing in the
 // app reads Markdown or code itself. An answer asked and not kept is said on the run's output (`kept-answers-ask {…}`):
 // scripts/test.sh fails on it, and scripts/kept has the core work it out and keeps it.
@@ -132,6 +133,14 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
           Some(Ok((Json::object(out), None)))
         }
         _ => not_kept({ "call": "reader.book", "markdown": Json::boolean(markdown), "text": Json::string(text) })
+      }
+    }
+    // what ⌘K lists of what the app offers (the made-up core says in which language: `lang`), by what is asked as said
+    "commands.find" => {
+      let key = params.stringify()
+      match kept("commands.find").get(key) {
+        Some(found) => Some(Ok((found, None)))
+        None => not_kept({ "call": "commands.find", "key": Json::string(key) })
       }
     }
     "reader.text" =>

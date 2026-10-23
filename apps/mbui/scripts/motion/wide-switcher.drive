@@ -1,0 +1,23 @@
+# ⌘K (Switcher.tsx ChatSwitcher, sfdesk/switcher.mbt): MBUI_WIN=1280x800 over the made-up chat. Opened with nothing
+# typed (the latest chats, what can be done), 发布 typed (the chats it finds), ↓; cleared, 设置 typed (the commands and
+# pages named so), ↓ twice; Esc.
+timeout 20000
+until 按空格输入
+wait 600
+key cmd+k
+wait 1200
+type 发布
+wait 1200
+key down
+wait 800
+clear
+wait 300
+type 设置
+wait 1200
+key down
+wait 500
+key down
+wait 800
+key esc
+wait 800
+exit

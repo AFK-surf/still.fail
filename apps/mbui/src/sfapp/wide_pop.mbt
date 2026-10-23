@@ -14,7 +14,11 @@ fn wide_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   rail_adder(c, src, w)
   wide_filter_menu(c, src, w)
   attention_panel(c, src, w)
-  switcher(c, src, w)
+  // ⌘K (sfdesk/switcher.mbt): what the frame can do now offered to it, and where it opens a chat found
+  @sfdesk.switcher(c, src, w.id, switcher_offered(c, src), {
+    chat: open_row,
+    message: fn(r, seq, words) { open_chat_found(r, seq, words) },
+  })
   keys_dialog(c, src)
 }
 

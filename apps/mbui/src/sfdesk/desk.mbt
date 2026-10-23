@@ -7,4 +7,5 @@
 pub fn reset() -> Unit {
   context_reset()
   fcols_reset()
+  switcher_reset()
 }

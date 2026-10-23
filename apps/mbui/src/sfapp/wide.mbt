@@ -34,9 +34,6 @@ priv struct Wide {
   /// the lists' filter menu open, 待处理's panel open
   mut filter_open : Bool
   mut attention_open : Bool
-  /// ⌘K's panel open, what is typed in it, the row chosen
-  mut switcher : Bool
-  mut chosen : Int
   /// 快捷键一览 (⌘/) open
   mut keys_open : Bool
   /// the chat last opened here by the frame (the core's last chat taken once per workspace)
@@ -107,8 +104,6 @@ let wide : Wide = {
   renaming: "",
   filter_open: false,
   attention_open: false,
-  switcher: false,
-  chosen: 0,
   keys_open: false,
   landed: "",
   tabs: {},
@@ -198,9 +193,6 @@ fn wide_reset() -> Unit {
   wide.renaming = ""
   wide.filter_open = false
   wide.attention_open = false
-  wide.switcher = false
-  sw_reset()
-  wide.chosen = 0
   wide.keys_open = false
   wide.landed = ""
   wide.tabs.clear()

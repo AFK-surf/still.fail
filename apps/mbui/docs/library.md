@@ -46,7 +46,7 @@ missing here is ported from the web's file (its structure, its states, its value
 | `viewer/media.css.ts` | `media.mbt` | the controls' bar, timeline, keys and speed, also the app's video viewer's (`sfapp/preview.mbt`) |
 | `viewer/names.ts` | `names.mbt` | |
 
-Besides the web's: the Markdown of messages (`markdown.mbt`, `md_core.mbt`: the core's tree drawn), code's colours
+Besides the web's `web/ui`: what a search found as its rows show it (`marked.mbt`: the web's `Marked.tsx`, the words found marked, `found_line`; a row's meta, `join_meta`; each kind's icon, `kind_icon`), the Markdown of messages (`markdown.mbt`, `md_core.mbt`: the core's tree drawn), code's colours
 (`ink.mbt`), formulas (`math.mbt`), the station glyph (`glyph.mbt`), Android's drawables (`picture.mbt`), the phone's
 page bar (`nav_bar.mbt`), the fonts (`faces.mbt`), a linear gradient's ground (`gradient.mbt`: a small picture of it stretched over
 the box, for the notifications page's preview screen, until mbui's renderer fills gradients itself).

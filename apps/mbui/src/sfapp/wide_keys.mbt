@@ -10,13 +10,7 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   let pressed = fn(action : String) { @settings.action_pressed(c, prefs, action) }
   if pressed("chat.switch") {
-    if wide.switcher {
-      c.blur()
-    }
-    wide.switcher = !wide.switcher
-    wide.chosen = 0
-    switcher_query.val = ""
-    switcher_field.set("")
+    @sfdesk.switcher_toggle(c)
     wide.menu = None
     wide.attention_open = false
   }
@@ -44,14 +38,9 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
     if rail_ws.editing {
       rail_ws.editing = false
-    } else if wide.switcher && sw.kind != "" {
-      // one kind's list: back to all of them
-      sw.kind = ""
-      wide.chosen = 0
-    } else if wide.switcher {
-      // (its field let go: the keyboard goes nowhere until another is pressed)
-      wide.switcher = false
-      c.blur()
+    } else if @sfdesk.switcher_escape(c) {
+      // ⌘K's: one kind's list back to all of them, else closed
+      ()
     } else if wide.find_chat != "" {
       find_forget()
       c.blur()
@@ -80,7 +69,7 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // ↑ / ↓ with the cursor in an empty composer: the chat above or below, as the list shows them now (Chat.tsx
   // useComposerText goToNeighbour)
   match app.nav.top() {
-    Chat(r) if c.editor_focused(field_key) && !wide.switcher =>
+    Chat(r) if c.editor_focused(field_key) && !@sfdesk.switcher_open() =>
       match drafts.get(draft_key(r)) {
         Some(d) if d.text == "" => {
           if c.key_pressed(@ui.key_code_up, in_field=true) {
@@ -94,7 +83,7 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     _ => ()
   }
   // Space with no field focused: back to the composer (回到输入框)
-  if !c.field_focused() && pressed("composer.focus") && !wide.switcher {
+  if !c.field_focused() && pressed("composer.focus") && !@sfdesk.switcher_open() {
     if app.nav.top() is Chat(_) {
       focus_composer.val = true
     }
@@ -289,161 +278,8 @@ fn copy_transcripts(c : @ui.Ctx, src : Source, station : String, keys : Array[St
 }
 
 ///|
-/// What ⌘K's field holds.
-let switcher_query : Ref[String] = Ref("")
-
-///|
-/// The switcher's words, and a row's title being renamed in place (their fields show them).
-let switcher_field : @ui.Field = @ui.Field::new()
-
-///|
+/// A row's title being renamed in place (its field shows it).
 let side_rename_field : @ui.Field = @ui.Field::new()
-
-///|
-/// ⌘K (Switcher.tsx ChatSwitcher): over a scrim, 14% down the window, 560 wide at most: a field (搜索全部内容和操作), the
-/// list of what the words find and what can be done (wide_switcher.mbt), ↑ / ↓ to choose, Enter or a press to open;
-/// Esc (in one kind's list: back to all of them) or a press outside closes it.
-fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  if !wide.switcher {
-    sw_reset()
-    return
-  }
-  let t = @sf.theme()
-  let query = switcher_query.val.trim(chars=" ").to_string()
-  let lines = sw_lines(c, src, w, query)
-  let picks : Array[Int] = []
-  // each line's place among those chosen (-1 a heading's)
-  let pick_of : Array[Int] = []
-  for i, l in lines {
-    if sw_pickable(l) {
-      pick_of.push(picks.length())
-      picks.push(i)
-    } else {
-      pick_of.push(-1)
-    }
-  }
-  if wide.chosen >= picks.length() {
-    wide.chosen = dmax(0.0, (picks.length() - 1).to_double()).to_int()
-  }
-  let mut keyed = false
-  if c.key_pressed(@ui.key_code_down, in_field=true) && wide.chosen < picks.length() - 1 {
-    wide.chosen += 1
-    keyed = true
-  }
-  if c.key_pressed(@ui.key_code_up, in_field=true) && wide.chosen > 0 {
-    wide.chosen -= 1
-    keyed = true
-  }
-  // the list as tall as its lines (as much as the panel holds), scrolled to the line the keys chose
-  let est = lines.fold(init=0.0, fn(h, l) { h + sw_line_h(l) })
-  let list_h = dmin(dmin(480.0, c.height * 0.72) - sw_panel_rest, est)
-  if keyed {
-    match picks.get(wide.chosen) {
-      Some(k) => c.list_scroll_to("switcher/list", if k > sw_lead { k - sw_lead } else { 0 })
-      None => ()
-    }
-  }
-  let words = match sw.kept {
-    Some(v) => v.words
-    None => []
-  }
-  let width = dmin(560.0, c.width - 32.0)
-  let panel = c.id("switcher")
-  // mbui's layer over the page (modal: its scrim takes the presses outside, Tab stays in it; Esc, back or a press
-  // outside dismiss it), the panel 14% down the window in its middle
-  let o = c.overlay("switcher-layer", modal=true, scrim=t.p.overlay, initial_focus=0, fn() {
-    let i = c.box(
-      w=Px(width),
-      max_h=dmin(480.0, c.height * 0.72),
-      pad=12.0,
-      gap=4.0,
-      radius=31.0,
-      bg=@sf.panel_ground(),
-      border=1.0,
-      border_color=t.p.line,
-      shadow=32.0,
-      shadow_y=24.0,
-      shadow_color=t.p.shadow,
-      clip=true,
-      id=panel,
-      fn() {
-        c.box(dir=Row, w=Fill(1.0), h=Px(48.0), padx=10.0, gap=10.0, align=ACenter, fn() {
-          let res = c.editor(
-            "switcher/field",
-            placeholder=tr("web-main.switcher.search"),
-            font_size=16.0,
-            line=24.0,
-            max_lines=1,
-            plain=true,
-            color=t.p.text,
-            placeholder_color=t.p.subtle,
-            caret_color=t.p.accent,
-            enter_sends=true,
-            field=switcher_field,
-          )
-          if !res.focused && !c.field_focused() {
-            c.focus_editor("switcher/field")
-          }
-          if res.text != switcher_query.val {
-            switcher_query.val = res.text
-            wide.chosen = 0
-          }
-          match res.submitted {
-            Some(typed) => {
-              switcher_field.set(typed)
-              match picks.get(wide.chosen) {
-                Some(k) => sw_go(c, lines[k], words)
-                None => ()
-              }
-            }
-            None => ()
-          }
-        })
-        |> ignore
-        if picks.length() == 0 {
-          c.box(style=sw_head, fn() {
-            c.text(
-              tr(if query == "" { "web-main.switcher.none" } else { "web-main.switcher.noMatch" }),
-              style=sw_title_muted,
-            )
-            |> ignore
-          })
-          |> ignore
-        }
-        c.list(
-          "switcher/list",
-          lines.length(),
-          sw_row_est,
-          fn(i) {
-            let line = lines[i]
-            let key = "switcher/row/" + sw_key(line)
-            let k = pick_of[i]
-            if k >= 0 {
-              let id = c.id(key)
-              c.cursor(id, Hand)
-              if c.clicked(id) {
-                sw_go(c, line, words)
-              }
-              if c.hovered(id) {
-                wide.chosen = k
-              }
-              sw_line(c, key, line, k == wide.chosen)
-            } else {
-              sw_line(c, key, line, false)
-            }
-          },
-          h=Px(list_h),
-        )
-        |> ignore
-      },
-    )
-    c.place_by_size(i, fn(pw, _) { ((c.width - pw) / 2.0, c.height * 0.14) })
-  })
-  if o.dismissed is Some(_) {
-    wide.switcher = false
-    c.blur()
-  }
-}
 
 ///|
 /// ⌘/ (Shortcuts.tsx ShortcutsDialog): every shortcut, by where it works (the core's keymap, then those of one place,
@@ -604,3 +440,107 @@ let rename_for : Ref[String] = Ref("")
 ///|
 let rename_seen : Ref[Bool] = Ref(false)
 
+
+///|
+/// What ⌘K offers of what the frame can do now (Switcher.tsx offered: the keys' actions it answers, and its own): the
+/// open chat's (find, its services), the app's (a new chat, the sidebar, settings, the shortcuts), settings' pages (only
+/// found by typing). The core names the keys' actions and finds what was typed among them (sfdesk/switcher.mbt).
+fn switcher_offered(c : @ui.Ctx, src : Source) -> Array[@sfdesk.Offered] {
+  // an action's first keys as shown (as kept on this device: settings' 快捷键)
+  let prefs = (src.topic)("prefs", {}).value
+  let keys = fn(action : String) { @settings.key_label(prefs, action) }
+  let all : Array[@sfdesk.Offered] = []
+  match app.nav.top() {
+    Chat(r) => {
+      all.push({
+        id: "chat.find",
+        group: "",
+        label: "",
+        words: "",
+        icon: "search",
+        keys: keys("chat.find"),
+        typed: false,
+        run: fn() { find_open(c, r) },
+      })
+      all.push({
+        id: "chat.jobs",
+        group: "",
+        label: "",
+        words: "",
+        icon: "web",
+        keys: keys("chat.jobs"),
+        typed: false,
+        run: fn() { wide.jobs_open = true },
+      })
+    }
+    _ => ()
+  }
+  all.push({
+    id: "chat.new",
+    group: "",
+    label: "",
+    words: "",
+    icon: "compose",
+    keys: keys("chat.new"),
+    typed: false,
+    run: new_chat_wide,
+  })
+  all.push({
+    id: "sidebar.toggle",
+    group: "",
+    label: "",
+    words: "",
+    icon: "panel-open",
+    keys: keys("sidebar.toggle"),
+    typed: false,
+    run: fn() { wide.folded = !wide.folded },
+  })
+  all.push({
+    id: "settings",
+    group: "",
+    label: "",
+    words: "",
+    icon: "settings",
+    keys: keys("settings"),
+    typed: false,
+    run: open_settings,
+  })
+  all.push({
+    id: "shortcuts",
+    group: "",
+    label: "",
+    words: "",
+    icon: "command",
+    keys: keys("shortcuts"),
+    typed: false,
+    run: fn() { wide.keys_open = true },
+  })
+  let pages : Array[(String, @settings.Route, String)] = [
+    ("appearance", @settings.Route::Appearance, tr("web-pages.settings.nav.appearance")),
+    ("notifications", @settings.Route::Notifications, tr("web-pages.settings.nav.notifications")),
+    ("permissions", @settings.Route::Permissions, tr("web-pages.settings.nav.permissions")),
+    ("archive", @settings.Route::Archiving, tr("web-pages.archiving.title")),
+    ("memory", @settings.Route::Memories, tr("web-pages.settings.nav.memory")),
+    ("security", @settings.Route::Security, tr("web-pages.security.title")),
+    ("vault", @settings.Route::Vault, tr("web-pages.vault.title")),
+    ("changelog", @settings.Route::Changelog, tr("web-pages.settings.nav.changelog")),
+    ("about", @settings.Route::About, tr("web-pages.settings.nav.about")),
+  ]
+  for p in pages {
+    let (key, route, label) = p
+    all.push({
+      id: "settings." + key,
+      group: "settings",
+      label,
+      words: "",
+      icon: "settings",
+      keys: "",
+      typed: true,
+      run: fn() {
+        open_settings()
+        app.nav.replace(Setting(route))
+      },
+    })
+  }
+  all
+}
