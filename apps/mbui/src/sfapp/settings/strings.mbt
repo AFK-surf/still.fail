@@ -5,6 +5,7 @@
 ///|
 // kept across runs: a table, never written
 let zh : Map[String, String] = {
+  "web-pages.settings.usage.lead": "各台 station 上的 agent 调用模型所用的 token，按 API 价格折算为费用，可按成员、对话、账号和模型分别查看。workspace 中的所有人都能查看。",
   "web-pages.settings.workspace.youAreShort": "{role} · {email}",
   "web-pages.settings.workspace.stationsCount": "{n} 台 station",
   "web-pages.settings.workspace.members": "成员",

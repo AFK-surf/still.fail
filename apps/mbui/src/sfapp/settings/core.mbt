@@ -543,7 +543,7 @@ pub fn reset() -> Unit {
   connects_mine.val = false
   usage_state.days = 7
   usage_state.day = ""
-  usage_state.list = 0
+  usage_state.list = -1
   usage_state.all = false
   chosen.clear()
   builtin_open.clear()

@@ -4,6 +4,7 @@
 ///|
 /// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is "en".
 let en : Map[String, String] = {
+  "web-pages.settings.usage.lead": "Tokens used by agents on each station, priced at API rates, by person, chat, account and model. Visible to everyone in the workspace.",
   "web-pages.settings.workspace.youAreShort": "{role} · {email}",
   "web-pages.settings.workspace.stationsCount": "{n} stations",
   "web-pages.settings.workspace.stationsCount.one": "1 station",
