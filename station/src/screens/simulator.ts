@@ -11,6 +11,7 @@ import { type FSWatcher, existsSync, readdirSync, watch } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { HelperApp } from "../helper/app.ts";
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
@@ -76,7 +77,8 @@ export class Simulators {
   readonly #watchers = new Map<string, FSWatcher>();
   #looking: Promise<void> | null = null;
   #again = false;
-  #soon: ReturnType<typeof setTimeout> | null = null;
+  /// Calls off the look armed after a change on disk.
+  #soon: (() => void) | null = null;
   #closed = false;
   #said = false;
 
@@ -183,17 +185,18 @@ export class Simulators {
 
   /// Something changed on disk: looked at once it settles (a boot rewrites device.plist a few times).
   #changed() {
-    if (this.#soon !== null) clearTimeout(this.#soon);
-    this.#soon = setTimeout(() => {
+    // CoreSimulator's own writes, waited on in the machine's time.
+    this.#soon?.();
+    this.#soon = wall.after(300, () => {
       this.#soon = null;
       void this.refresh();
-    }, 300);
+    });
   }
 
   /// The station stopping: nothing followed, every source gone.
   close() {
     this.#closed = true;
-    if (this.#soon !== null) clearTimeout(this.#soon);
+    this.#soon?.();
     for (const w of this.#watchers.values()) w.close();
     this.#watchers.clear();
     for (const listed of this.#listed.values()) {
