@@ -1,7 +1,10 @@
 // A stack of pages, as still.fail's Android app moves between them
 // (app/App.kt Pages): a page pushed comes in whole from the right as the one
 // under it goes out whole to the left, side by side, 300 ms on the standard
-// curve (.4, 0, .2, 1), nothing fading; back, the other way. Swiped back
+// curve (.4, 0, .2, 1), nothing fading; back, the other way. A page the
+// stack says comes from the left (`from_left`: still.fail's settings, its
+// gear at the top left) comes in from there, the one under it going out to
+// the right, and goes back that way. Swiped back
 // (from the left edge with a finger or a mouse here, or the system's back
 // gesture where there is one, Android's predictive back), the page follows
 // the finger and the one under it comes along beside it, edge to edge; let
@@ -45,8 +48,9 @@ struct Nav[P] {
   mut leaving : NavPage[P]?
   // pages gone, to forget at the next frame
   gone : Array[NavPage[P]]
-  // how far the top page is off to the right, in its widths (0 in place);
-  // the one under it is edge to edge with it, at p - 1
+  // how far the top page is off to its side, in its widths (0 in place):
+  // the right, or the left for one from the left (from_left); the one under
+  // it is edge to edge with it, at p - 1 (1 - p)
   mut p : Double
   mut p0 : Double
   mut p1 : Double
@@ -60,6 +64,8 @@ struct Nav[P] {
   mut vel : Double
   track : Tracker
   on_leave : (P) -> Unit
+  // the pages that come in from the left and go back that way
+  from_left : (P) -> Bool
   /// what its motion is said to move by (Ctx::moving), and the frame it was told to move in
   mover : Mover
   mut asked : Int
@@ -72,8 +78,14 @@ struct Nav[P] {
 
 ///|
 /// A stack of pages, `root` at the bottom. `on_leave` is told of each page
-/// that leaves it for good (popped, once it has slid away).
-pub fn[P] Nav::new(root : P, on_leave? : (P) -> Unit = fn(_) {  }) -> Nav[P] {
+/// that leaves it for good (popped, once it has slid away); a page
+/// `from_left` says yes to slides in from the left and back out that way
+/// (App.kt transition: Settings), swiped back too.
+pub fn[P] Nav::new(
+  root : P,
+  on_leave? : (P) -> Unit = fn(_) {  },
+  from_left? : (P) -> Bool = fn(_) { false },
+) -> Nav[P] {
   {
     pages: [nav_page(root)],
     mode: 0,
@@ -89,6 +101,7 @@ pub fn[P] Nav::new(root : P, on_leave? : (P) -> Unit = fn(_) {  }) -> Nav[P] {
     vel: 0.0,
     track: Tracker::new(),
     on_leave,
+    from_left,
     mover: Mover::new(),
     asked: -1,
     wait_from: -1.0,
@@ -439,6 +452,8 @@ pub fn[P] Ctx::nav(
   let p = nav.p
   // a page that rose goes up and down over the one under it, which stays
   let rising = top.rise
+  // the side the top page is off to (one from the left goes back left, the page under it coming from the right)
+  let way = if (nav.from_left)(top.page) { -1.0 } else { 1.0 }
   // back as it was before the stack, for when neither its top page nor it takes it
   let before = self.back_next
   let before_node = self.back_node_next
@@ -446,14 +461,14 @@ pub fn[P] Ctx::nav(
   let leaving = nav.leaving is Some(_)
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
     match under {
-      Some(e) => self.nav_layer(e, if rising { 0.0 } else { p - 1.0 }, 0.0, bg, page)
+      Some(e) => self.nav_layer(e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page)
       None => ()
     }
     // what the top page takes back for (a sheet, a menu, a step of its own, a stack in it) goes back before the stack
     // does, as Android's BackHandler in a page is asked before the pages' own; the page under it, one leaving, take none
     self.back_next = None
     self.back_node_next = -1
-    self.nav_layer(top, if rising { 0.0 } else { p }, if rising { p * self.height } else { 0.0 }, bg, page)
+    self.nav_layer(top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page)
   })
   if self.back_next is Some(_) && !leaving {
     ()

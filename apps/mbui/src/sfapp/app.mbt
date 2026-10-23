@@ -91,7 +91,9 @@ let left_pages : Array[Page] = []
 
 ///|
 fn new_nav() -> @ui.Nav[Page] {
-  @ui.Nav::new(Home, on_leave=fn(p) {
+  // settings are to the left of the list, as the gear is at its top left: they come in from the left and go back
+  // that way (App.kt transition, swipe)
+  @ui.Nav::new(Home, from_left=fn(p) { p is Settings }, on_leave=fn(p) {
     left_pages.push(p)
     match p {
       Setting(r) => @settings.left(r)

@@ -18,6 +18,41 @@ fn settings_tester(page : String, mode? : String = "settings", shows? : String =
 }
 
 ///|
+test "settings come in from the left, as the gear is at the list's top left, and go back that way" {
+  reset()
+  let t = @ui.Tester::new(fn(c) { view(c, fixture("settings")) }, w=390.0, h=844.0)
+  t.draw()
+  // the gear's (App.kt transition: Settings slide in from the left, the list out to the right), once the core has
+  // said what they show
+  open_setting("home")
+  t.draw()
+  t.draw()
+  let end = @ui.nav_rest()
+  assert_true(end - t.time() <= @ui.nav_push_ms)
+  // from a page's width to the left of where they stand, rightwards
+  let x0 = t.find("lin@example.com").unwrap().0
+  t.run_for(end - @ui.nav_push_ms / 2.0 - t.time())
+  let x1 = t.find("lin@example.com").unwrap().0
+  t.run_for(end - t.time())
+  let x = t.find("lin@example.com").unwrap().0
+  assert_eq((x - x0).round(), 390.0)
+  assert_true(x0 < x1 && x1 < x)
+  // a page under them comes from the right as any does
+  t.tap_text("lin@example.com")
+  nav_rested(t)
+  t.back()
+  nav_rested(t)
+  // back to the list: out to the left again
+  t.back()
+  t.draw()
+  let end = @ui.nav_rest()
+  t.run_for(end - @ui.nav_push_ms / 2.0 - t.time())
+  assert_true(t.find("lin@example.com").unwrap().0 < x - 195.0)
+  t.run_for(end - t.time())
+  assert_true(t.find("lin@example.com") is None)
+}
+
+///|
 test "settings: the account, the workspace's rows and how each stands, this device's" {
   let t = settings_tester("home")
   assert_true(t.find("设置") is Some(_))
@@ -466,6 +501,28 @@ test "本机缓存: the drives' files kept, counted with the chats', let go when
   assert_true(t.find("38.5 MB") is None)
   assert_true(t.find("0 B") is Some(_))
   assert_true(t.find("共 19.2 MB") is Some(_))
+}
+
+///|
+test "本机缓存 with many chats: only the rows in view laid out, one card all the same, the last one reached" {
+  let t = settings_tester("kept", shows="settings-kept-many")
+  t.draw()
+  // a block each: of 203 rows a screen's (one block of them all was built whole each frame, every row's words with it)
+  let built = fn() { t.words().filter(fn(w) { w.0.has_prefix("测试会话 ") }).length() }
+  assert_true(t.find("测试会话 1") is Some(_))
+  assert_true(built() > 0 && built() < 20)
+  // one card: its corners where it begins and ends only, as any (the pieces' patches its own ground)
+  assert_eq(t.corner_faults(), [])
+  t.scroll_to_end()
+  t.draw()
+  assert_true(t.find("测试会话 200") is Some(_))
+  assert_true(built() < 20)
+  assert_eq(t.corner_faults(), [])
+  // the last row taps as any
+  t.tap_text("测试会话 200")
+  nav_rested(t)
+  assert_true(t.find("测试会话 200") is Some(_))
+  assert_true(t.find("消息记录") is Some(_))
 }
 
 ///|

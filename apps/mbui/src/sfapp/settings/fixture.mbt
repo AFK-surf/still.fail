@@ -101,6 +101,7 @@ let fx_connect_step : Ref[String] = Ref("team")
 fn fixture_reset() -> Unit {
   fx.names.clear()
   fx_many_models.val = false
+  fx_many_kept.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
   fx.drive_kept = fx_drive_kept
@@ -176,6 +177,8 @@ pub fn fixture_page(mode : String) -> String {
       fx_many_models.val = true
       run_list["session:s-c1"] = "model"
     }
+    // 本机缓存 with many chats kept (a card of 200 rows)
+    "settings-kept-many" => fx_many_kept.val = true
     // the run's accounts listed (run_more.mbt account_list)
     "settings-run-accounts" => run_list["session:s-c1"] = "account"
     // the fonts page at code's faces
@@ -207,7 +210,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-completion" => "completion"
     "settings-policy" => "policy:ws1/st1"
     "settings-bars" => "bars"
-    "settings-kept" => "kept"
+    "settings-kept" | "settings-kept-many" => "kept"
     "settings-changelog" => "changelog"
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
@@ -1333,7 +1336,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           obj([
             (
               "chats",
-              [
+              Json::array([
                 // a PDF opened, 5 minutes ago; a video, 12 of its 48 MB come
                 obj([
                   ("station", str("ws1/st1")),
@@ -1353,7 +1356,9 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
                 ]),
                 obj([("station", str("ws1/st1")), ("thread", Json::number(4.0)), ("title", str("给设置页加一个深色模式开关")), ("sessions", ["s-c4"]), ("bytes", Json::number(860000.0))]),
                 obj([("station", str("ws1/st2")), ("thread", Json::number(3.0)), ("title", str("夜里的构建又失败了")), ("sessions", ["s-c3"]), ("bytes", Json::number(41000.0))]),
-              ],
+                ] +
+                fx_kept_many(),
+              ),
             ),
             ("drive", Json::number(fx.drive_kept)),
             // one of a chat no longer kept here, 3 days ago
@@ -1599,6 +1604,27 @@ fn fx_profile_flow() -> Json {
 ///|
 /// Whether the run's models are many (MBUI_FIXTURE=settings-run-models).
 let fx_many_models : Ref[Bool] = Ref(false)
+
+///|
+/// Whether many chats are kept (MBUI_FIXTURE=settings-kept-many): 200 more after the three, each with a few KB.
+let fx_many_kept : Ref[Bool] = Ref(false)
+
+///|
+/// The chats kept after the three when many are (fx_many_kept): 测试会话 1 to 200.
+fn fx_kept_many() -> Array[Json] {
+  if !fx_many_kept.val {
+    return []
+  }
+  Array::makei(200, fn(i) -> Json {
+    obj([
+      ("station", str("ws1/st2")),
+      ("thread", Json::number((100 + i).to_double())),
+      ("title", str("测试会话 \{i + 1}")),
+      ("sessions", Json::array([str("s-m\{i}")])),
+      ("bytes", Json::number((4096 * (i + 1)).to_double())),
+    ])
+  })
+}
 
 ///|
 /// A chat's agent as it runs and as it is to run (`pick` of `session:<key>`, MBUI_FIXTURE=settings-run): its effort
