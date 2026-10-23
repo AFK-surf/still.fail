@@ -327,8 +327,7 @@ fn top_bar(
   invited : Bool,
 ) -> Unit {
   let t = @sf.theme()
-  // frosted glass over the list (the page's paper at 70% over a 24px blur), a hairline under it
-  top_frost()
+  // frosted glass over the list (the page's paper at 70% over a 24px blur), no line under it
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
@@ -392,7 +391,6 @@ fn top_bar(
       }
     })
     |> ignore
-    c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })
   |> ignore
 }

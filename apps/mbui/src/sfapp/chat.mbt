@@ -327,7 +327,6 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       None => {
         // until the core has it, already a chat's page: its bar (no title yet), the messages to come breathing
         bar_frame(c, "", fn() {  }, fn() {  }, false)
-        c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
         let failed = match error {
           Some(e) =>
             Some(
@@ -1958,7 +1957,7 @@ fn bar_frame(
 ///|
 /// The chat's bar (Chat.kt ChatBar): its title from the left, then its people, then its agents' marks (the first's
 /// tile carrying the station it runs on); its services and jobs, its archive while nothing is left in it, and "…".
-/// Frosted glass over the messages, a hairline under it.
+/// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
@@ -1979,7 +1978,6 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
   let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
   let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
-  top_frost()
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
@@ -2066,7 +2064,6 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
       v.thread is Some(_),
       on_more=fn() { open_sheet(c, Info(r)) },
     )
-    c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })
   |> ignore
 }

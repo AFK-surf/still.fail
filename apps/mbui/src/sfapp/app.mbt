@@ -160,7 +160,6 @@ fn init {
 fn reset() -> Unit {
   @sf.set_language(None)
   files_cornered.val = false
-  top_frost_built.val = false
   felt_menu.val = -1
   felt_past.clear()
   felt_holds.clear()

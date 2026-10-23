@@ -118,7 +118,7 @@ test "half open on its back half: the messages over the fold, under it the compo
 }
 
 ///|
-test "its outer screen (compact, the status bar down its right side): the phone's pages beside it, its bar under it" {
+test "its outer screen (compact, the status bar down its right side): the phone's pages beside it" {
   let t = duo_chat(
     466.0,
     678.0,
@@ -135,8 +135,6 @@ test "its outer screen (compact, the status bar down its right side): the phone'
       assert_true(x + ww <= 466.0 - 84.0 + 0.5, msg="\{s} ends at \{x + ww}")
     }
   }
-  // the chat's bar carried under it (its hairline across)
-  assert_true(top_frost_built.val)
   let (_, y) = t.find("发消息").unwrap()
   assert_true(y > 678.0 - 110.0, msg="the composer's words at \{y}")
 }

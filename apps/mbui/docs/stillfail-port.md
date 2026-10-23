@@ -1283,7 +1283,7 @@ The app on iOS is Android's, as on an Android phone (2026-10-23):
   27.1): half open with the fold across the view, a chat's page across it, its messages over the fold, its composer
   and the latest chats under it (src/sfapp/tabletop.mbt).
 - From side to side too: the safe area's sides said as `bars` (an iPhone Duo's outer screen has its status bar down
-  its right side), the pages beside them and a top bar's hairline carried under them (src/sfapp/sides.mbt).
+  its right side), the pages beside them on the page's paper (src/sfapp/sides.mbt).
 - The keyboard as Android's: the view keeps its size, the keyboard's top followed frame by frame as the system moves
   it (UIKeyboardLayoutGuide's motion read off a mark's presentation layer), the app laid out above it; the keyboard
   asked for plain text, no capitals or curly quotes of its own, its return key a new line (a search field's its search

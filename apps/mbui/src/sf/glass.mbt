@@ -5,7 +5,7 @@
 
 ///|
 /// A bar at the top of a page over the list running under it (Glass.kt glass, TopGlassBar; mGlass): the page's paper
-/// at 70% over a 24px blur. Its hairline (0.5, the line's colour) is the bar's to draw along its foot.
+/// at 70% over a 24px blur, no line along its foot: the frost alone sets it off (2026-10-24, asked).
 pub fn glass_bar() -> @ui.Glass {
   let t = theme()
   @ui.Glass::frosted(blur=24.0, tint=alpha(t.p.bg, 0.7), solid=t.p.bg)
