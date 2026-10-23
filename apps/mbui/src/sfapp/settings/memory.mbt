@@ -81,6 +81,10 @@ fn skill_line(k : Json?) -> String {
 ///|
 /// Every station's memory, a row each (MemoriesScreen): one offline says so.
 fn memories_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  // the desktop's: the web's (web_memory.mbt)
+  if wide.val {
+    return memories_page_wide(c, core, here)
+  }
   let t = @sf.theme()
   let topic = stations_of(core, here)
   scroll_page(c, "memories", [
@@ -147,29 +151,6 @@ fn skill_tag(k : Json?, names : Map[String, String]) -> String {
 /// is in it. True on the frame after a tap.
 fn memory_row(c : @ui.Ctx, key : String, title : String, sub : String, value : String, tag? : String = "", open? : Bool = false) -> Bool {
   let t = @sf.theme()
-  // the wide frame's as the web's (Memory.tsx MemoryRow, Memory.css.ts: a list's row, its title in 500 with its tags 8
-  // after it in the meta's subtle, what it is under it and its size at its end in the meta's muted, a chevron 14)
-  if wide.val {
-    return list_row(c, key~, fn() {
-      c.box(style=memory_row_text, fn() {
-        c.box(style=memory_row_title_line, fn() {
-          c.text(title, style=memory_row_title) |> ignore
-          if tag != "" {
-            c.text(tag, style=memory_row_tag) |> ignore
-          }
-        })
-        |> ignore
-        if sub != "" {
-          c.text(sub, style=memory_row_sub) |> ignore
-        }
-      })
-      |> ignore
-      if value != "" {
-        c.text(value, style=memory_row_value) |> ignore
-      }
-      @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=memory_chevron, color=t.p.subtle) |> ignore
-    })
-  }
   list_row(c, key~, fn() {
     c.box(w=Fill(1.0), fn() {
       c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
@@ -195,36 +176,16 @@ fn memory_row(c : @ui.Ctx, key : String, title : String, sub : String, value : S
 let memory_chevron : Double = 14.0
 
 ///|
-// kept across runs: a value (no field of it changes)
-let memory_row_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let memory_row_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let memory_row_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let memory_row_tag : @ui.TextStyle = @ui.text_style(size=Sm, color=Subtle, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let memory_row_sub : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let memory_row_value : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
-
-///|
 /// Whether the built-in skills are folded open, by station.
 let builtin_open : Map[String, Bool] = Map::new()
 
 ///|
 /// A station's memory (MemoryScreen).
 fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
+  // the desktop's: the web's (web_memory.mbt)
+  if wide.val {
+    return memory_page_wide(c, core, here, address)
+  }
   let t = @sf.theme()
   let stations = match stations_of(core, here).value {
     Some(Array(a)) => a
