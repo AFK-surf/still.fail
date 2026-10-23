@@ -1,35 +1,38 @@
-// The preview beside a folder's list on the files' page (⌘⇧P, as Finder's preview pane: ember web/src/pages/
-// DrivePane.tsx, Drive.tsx usePreviewShown): the row chosen shown there as it is chosen (a picture whole, the start of
-// a text, Markdown rendered, code as it is), with what it is, where (its station, its path), its size and its time;
-// what plays (a video, a song) or needs a page of its own (a PDF) says how to open it; a folder says so too. Under it
-// 打开, 下载, 复制路径. Shown or not is kept on the device (prefs `driveViews.preview`: shown).
+// The preview beside a folder's list (⌘⇧P, as Finder's preview pane: ember web/src/pages/DrivePane.tsx, Drive.tsx
+// usePreviewShown): the file chosen shown there as it is chosen (a picture whole, the start of a text, Markdown
+// rendered, code as it is), with what it is, where (its station, its path) and its size and time; what plays (a video,
+// a song) or needs a page of its own (a PDF) says how to open it. Several chosen, or a folder, say so. The files' page
+// and a chat's 文件 tab both have it; shown or not is kept on the device (prefs `driveViews`: `preview`, `tabPreview`).
 
 ///|
-/// Whether the preview shows beside the list (prefs `driveViews.preview`, as chosen here until the prefs say).
-fn files_previewing(src : Source) -> Bool {
-  match wide.files_preview {
-    Some(on) => on
-    None => text(field((src.topic)("prefs", {}).value, "driveViews"), "preview") == "shown"
-  }
+/// Whether the preview shows beside a folder's list (`place`: the files' page's, `page`, or a chat's 文件 tab's, `tab`).
+pub fn preview_shown(src : Source, place : String) -> Bool {
+  text(field((src.topic)("prefs", {}).value, "driveViews"), if place == "page" { "preview" } else { "tabPreview" }) ==
+  "shown"
 }
 
 ///|
-/// The preview shown or not (`prefs.set {driveViews: {preview}}`).
-fn files_set_preview(src : Source, on : Bool) -> Unit {
-  wide.files_preview = Some(on)
-  (src.call)(
-    "prefs.set",
-    { "driveViews": { "preview": if on { Json::string("shown") } else { Json::null() } } },
-    fn(_) {  },
-  )
+/// The preview shown or not (`prefs.set {driveViews: {preview | tabPreview}}`).
+pub fn set_preview_shown(src : Source, place : String, on : Bool) -> Unit {
+  let o : Map[String, Json] = {}
+  o[if place == "page" { "preview" } else { "tabPreview" }] = if on { Json::string("shown") } else { Json::null() }
+  (src.call)("prefs.set", { "driveViews": Json::object(o) }, fn(_) {  })
 }
 
 ///|
-/// A picture is shown whole up to this size (DrivePane.tsx MOST_PICTURE); past it, as the others are, by how to open it.
+/// What the preview shows (Previewed): one file (the folder it is in, its entry), several chosen, or nothing.
+pub(all) enum Previewed {
+  One(DriveAt, DvEntry)
+  Many(Int)
+  Nothing
+}
+
+///|
+/// A picture is shown whole up to this size (MOST_PICTURE); past it, as the others are, by how to open it.
 let fpane_most_picture : Double = 32.0 * 1024.0 * 1024.0
 
 ///|
-/// The start of a text shown (DrivePane.tsx TEXT_PART).
+/// The start of a text shown (TEXT_PART).
 let fpane_text_part : Int = 64 * 1024
 
 ///|
@@ -46,37 +49,11 @@ priv struct FPane {
 let fpane : FPane = { key: "", picture: "", text: None, failed: false }
 
 ///|
-fn fpane_reset() -> Unit {
+fn pane_reset() -> Unit {
   fpane.key = ""
   fpane.picture = ""
   fpane.text = None
   fpane.failed = false
-}
-
-///|
-/// The row chosen, when it is in this side's folder or under it: the folder it is in and its entry as listed there.
-fn fpane_chosen(src : Source, at : DriveAt, root : String) -> (String, DvEntry, Array[DvEntry])? {
-  let parts = files_chosen_now().split("\u{1}").map(fn(p) { p.to_string() }).collect()
-  if parts.length() != 3 || parts[0] != at.station || parts[1] != root {
-    return None
-  }
-  let full = parts[2]
-  let dir = match full.rev_find("/") {
-    Some(i) => full.view(end_offset=i).to_string()
-    None => ""
-  }
-  if at.path != "" && dir != at.path && !dir.has_prefix(at.path + "/") {
-    return None
-  }
-  let name = dv_name(full)
-  match files_entries(src, at.station, root, dir) {
-    (Some(list), _) =>
-      match list.iter().find_first(fn(e) { e.name == name }) {
-        Some(e) => Some((dir, e, list))
-        None => None
-      }
-    _ => None
-  }
 }
 
 ///|
@@ -101,7 +78,7 @@ fn fpane_read(src : Source, station : String, root : String, path : String, e : 
   if fpane.key == key {
     return
   }
-  fpane_reset()
+  pane_reset()
   fpane.key = key
   if way == "" {
     return
@@ -158,31 +135,44 @@ fn fpane_read(src : Source, station : String, root : String, path : String, e : 
 }
 
 ///|
-/// The preview beside a side's list (DrivePane): the row chosen in it, else what to do to see one.
-fn files_preview_pane(c : @ui.Ctx, src : Source, st : DvStation, at : DriveAt, root : String, below? : Bool = false) -> Unit {
-  // (under the list in a chat's 文件 tab: as wide as it, at most half the window high)
-  c.box(style=if below { files_bar_rule } else { files_column_rule }, fn() {  }) |> ignore
+/// The preview (DrivePane): beside the list (`below`: under it, a chat's 文件 tab's), what is chosen shown, else what
+/// to do to see one; 打开, 下载, 复制路径 under what the file is.
+pub fn drive_pane(
+  c : @ui.Ctx,
+  src : Source,
+  shown : Previewed,
+  station_name : String,
+  on_open : () -> Unit,
+  on_save : () -> Unit,
+  on_copy_path : (String) -> Unit,
+  below? : Bool = false,
+) -> Unit {
+  c.box(style=if below { fpane_rule_below } else { fpane_rule }, fn() {  }) |> ignore
   c.box(style=if below { fpane_below } else { fpane_box }, fn() {
-    match fpane_chosen(src, at, root) {
-      None => c.text(tr("web-pages.files.previewNone"), style=fpane_none) |> ignore
-      Some((dir, e, shown)) => {
-        let path = dv_join(dir, e.name)
+    match shown {
+      Nothing => c.box(style=fpane_none_at, fn() { c.text(@sf.t("web-pages.files.previewNone"), style=fpane_none) |> ignore }) |> ignore
+      Many(n) =>
+        c.box(style=fpane_none_at, fn() {
+          c.text(@sf.t("web-pages.files.previewMany", args=[("n", n.to_string())]), style=fpane_none) |> ignore
+        })
+        |> ignore
+      One(at, e) => {
+        let root = at.root.unwrap_or("")
+        let path = dv_join(at.path, e.name)
         let abs = dv_absolute(root, path)
-        let in_place : DriveAt = { station: at.station, root: Some(root), path: dir }
         let way = fpane_way(e)
         fpane_read(src, at.station, root, path, e, way)
-        let open = fn() { drive_open(c, src, in_place, root, e, shown) }
-        fpane_body(c, e, way, open, room=c.height * (if below { fpane_below_tall } else { fpane_most_tall }), fixed=below)
+        fpane_body(c, e, way, on_open, room=c.height * (if below { fpane_below_tall } else { fpane_most_tall }), fixed=below)
         c.box(style=fpane_about, fn() {
           c.text(e.name, style=fpane_name) |> ignore
           // what it is, as a grid of two columns: what is said, then its value
           let facts : Array[(String, String)] = []
           if !e.dir {
-            facts.push((tr("web-pages.files.size"), e.size_text))
+            facts.push((@sf.t("web-pages.files.size"), e.size_text))
           }
-          facts.push((tr("web-pages.files.modified"), e.time_text))
-          facts.push(("Station", st.name))
-          facts.push((tr("web-pages.files.where"), abs))
+          facts.push((@sf.t("web-pages.files.modified"), e.time_text))
+          facts.push(("Station", station_name))
+          facts.push((@sf.t("web-pages.files.where"), abs))
           c.box(style=fpane_facts, fn() {
             c.box(style=fpane_facts_column, fn() {
               for f in facts {
@@ -203,16 +193,15 @@ fn files_preview_pane(c : @ui.Ctx, src : Source, st : DvStation, at : DriveAt, r
           })
           |> ignore
           c.box(style=fpane_actions, fn() {
-            if @sf.button(c, tr("web-pages.drive.open"), key="files/preview/open") {
-              open()
+            if @sf.button(c, @sf.t("web-pages.drive.open"), key="files/preview/open") {
+              on_open()
             }
-            if !e.dir && @sf.button(c, tr("web-pages.drive.download"), key="files/preview/download", tone=Ghost, icon="download") {
-              say(c, fill("android-misc.drive.downloading", [("name", e.name)]))
-              download_drive_file(c, src, at.station, root, path, e.name, e.mime, listed=Some((e.mtime, e.size)))
+            if !e.dir &&
+              @sf.button(c, @sf.t("web-pages.drive.download"), key="files/preview/download", tone=Ghost, icon="download") {
+              on_save()
             }
-            if @sf.button(c, tr("web-pages.drive.copyPath"), key="files/preview/copy", tone=Ghost, icon="copy") {
-              c.copy_text(abs)
-              say(c, tr("web-pages.drive.pathCopied"))
+            if @sf.button(c, @sf.t("web-pages.drive.copyPath"), key="files/preview/copy", tone=Ghost, icon="copy") {
+              on_copy_path(abs)
             }
           })
           |> ignore
@@ -230,7 +219,7 @@ fn files_preview_pane(c : @ui.Ctx, src : Source, st : DvStation, at : DriveAt, r
 fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ : Double, fixed? : Bool = false) -> Unit {
   let t = @sf.theme()
   if fpane.failed {
-    c.box(style=fpane_body_box, fn() { c.text(tr("web-pages.files.previewFailed"), style=fpane_none) |> ignore })
+    c.box(style=fpane_body_box, fn() { c.text(@sf.t("web-pages.files.previewFailed"), style=fpane_none) |> ignore })
     |> ignore
     return
   }
@@ -260,7 +249,7 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
                 c.box(style=fpane_prose, fn() {
                   @sf.markdown(c, words, key="files/preview/md", size=12.0, ink=t.p.text, document=true) |> ignore
                   if cut {
-                    c.text(tr("web-pages.files.previewMore"), style=fpane_more) |> ignore
+                    c.text(@sf.t("web-pages.files.previewMore"), style=fpane_more) |> ignore
                   }
                 })
                 |> ignore
@@ -273,7 +262,7 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
                   if i < blocks.length() {
                     c.rich([@ui.span(blocks[i], mono=true)], style=fpane_code_words) |> ignore
                   } else {
-                    c.text(tr("web-pages.files.previewMore"), style=fpane_more) |> ignore
+                    c.text(@sf.t("web-pages.files.previewMore"), style=fpane_more) |> ignore
                   }
                 })
                 |> ignore
@@ -291,11 +280,11 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
         open()
       }
       let words = if e.kind == "video" || e.kind == "audio" {
-        tr("web-pages.files.previewPlay")
+        @sf.t("web-pages.files.previewPlay")
       } else if e.dir {
-        tr("web-pages.files.previewFolder")
+        @sf.t("web-pages.files.previewFolder")
       } else {
-        tr("web-pages.files.previewOpen")
+        @sf.t("web-pages.files.previewOpen")
       }
       let b = c.box(style=fpane_mark, id~, fn() {
         @sf.icon(c, dv_kind_icon(if e.dir { "folder" } else { e.kind }), size=fpane_mark_icon, color=t.p.muted) |> ignore
@@ -344,6 +333,19 @@ let fpane_mark_icon : Double = 56.0
 ///|
 // kept across runs: a value (no field of it changes)
 let fpane_box : @ui.Style = @ui.style(w=Fixed(fpane_w), h=Full, p=S3, gap=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fpane_none_at : @ui.Style = @ui.style(w=Full, py=S6)
+
+///|
+/// The line between it and the list (its left edge's; under a list, its top's).
+// kept across runs: a value (no field of it changes)
+let fpane_rule : @ui.Style = @ui.style(w=SPx, h=Full, bg=Line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fpane_rule_below : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
 
 ///|
 // kept across runs: a value (no field of it changes)

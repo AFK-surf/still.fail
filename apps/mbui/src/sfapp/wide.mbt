@@ -77,17 +77,11 @@ priv struct Wide {
   mut rail_drag : (String, Double, Double)?
   /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
   place_pick : Map[String, @settings.Route]
-  /// the files' page (wide_files.mbt): its way chosen here, the 个人收藏 kept here (by workspace), what is opened in
-  /// its sidebar and its tree, each station's places, the folders open in columns (by where the columns start), the
-  /// row chosen
-  mut files_view : String?
-  favs_set : Map[String, String]
+  /// the files' page (wide_files.mbt): what is opened in its sidebar, each station's places
   files_open : Map[String, Bool]
   files_places : Map[String, Array[Json]]
-  files_cols : Map[String, String]
-  mut files_chosen : String
-  /// the preview beside the list shown or not, as chosen here until the prefs say (wide_files_pane.mbt)
-  mut files_preview : Bool?
+  /// the sides the pointer is down in (a press there puts it in front once)
+  files_down : Map[String, Bool]
   /// the files' tabs kept here (by workspace), until the prefs say
   tabs_set : Map[String, String]
 }
@@ -128,13 +122,9 @@ let wide : Wide = {
   rail_menu: None,
   rail_drag: None,
   place_pick: {},
-  files_view: None,
-  favs_set: {},
   files_open: {},
   files_places: {},
-  files_cols: {},
-  files_chosen: "",
-  files_preview: None,
+  files_down: {},
   tabs_set: {},
 }
 
@@ -210,14 +200,9 @@ fn wide_reset() -> Unit {
   wide.rail_drag = None
   rail_ws_reset()
   wide.place_pick.clear()
-  wide.files_view = None
-  wide.favs_set.clear()
   wide.files_open.clear()
   wide.files_places.clear()
-  wide.files_cols.clear()
-  wide.files_chosen = ""
-  wide.files_preview = None
-  fpane_reset()
+  wide.files_down.clear()
   fdrag_reset()
   ftab_reset()
   wide.tabs_set.clear()

@@ -788,27 +788,6 @@ fn draft_unquote(src : Source, d : Draft, q : DraftQuote) -> Unit {
 // ── files ──────────────────────────────────────────────────────────────
 
 ///|
-/// An upload's id: 32 hex digits (the Android app's UUID without its dashes), from what goes up and where, never
-/// from a clock: `what` (where it goes, its name, its bytes' hash) and `n` (its place among what goes up there: a
-/// draft's files, a folder's uploads). The same upload made over any run, recorded or replayed, has the same id.
-fn upload_id(what : String, n : Int) -> String {
-  let seed = "\{what}/\{n}"
-  let hex = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-  ]
-  let out = StringBuilder::new()
-  // two FNV-1a (@ui.stable_hash: the same in every run and on js and native), 16 digits each
-  for half in [@ui.stable_hash(seed), @ui.stable_hash(seed + "\u{1}")] {
-    let mut h = half
-    for _ in 0..<16 {
-      out.write_char(hex[(h & 15L).to_int()])
-      h = h >> 4
-    }
-  }
-  out.to_string()
-}
-
-///|
 /// The pictures of images sent from here, as they were picked (ChatFiles.kt FileData.sentOf): by station and the name
 /// it keeps the file under once up, or by the upload's id from when it starts going up (a message sent before it is up
 /// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
@@ -1122,17 +1101,6 @@ fn up_uploads(d : Draft) -> Array[Json] {
     Some(Json::object(u))
   })
 }
-
-///|
-/// What a file going up is known by for its id (upload_id): the station, its name, its size and its bytes' hash.
-fn file_seed(station : String, name : String, bytes : Bytes) -> String {
-  "\{station}\u{1}\{name}\u{1}\{bytes.length()}\u{1}\{@ui.stable_hash_bytes(bytes)}"
-}
-
-
-///|
-/// What a read-only run says it does not do.
-let read_only_words : String = "只读运行：不发送，不上传，不保存草稿"
 
 ///|
 /// One part of a file up from `have` (Calls.kt upload): said as it goes (`progress`: how much of the part has gone,

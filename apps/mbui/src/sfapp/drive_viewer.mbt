@@ -129,10 +129,6 @@ fn drive_params(station : String, root : String, path : String) -> Map[String, J
 let subtitle_limit : Int = 4 * 1024 * 1024
 
 ///|
-/// The part of a file read at most (Calls.kt DRIVE_PART).
-let drive_part : Int = 4 * 1024 * 1024
-
-///|
 /// A file of a drive read whole (`drive.read`, drive_part a part), `limit` bytes at most (below 0: all of it), how much
 /// has come told as it comes (from the size its folder lists, before the first part); kept as `keep` (drive_keep) as
 /// its folder lists it (`listed`: its mtime, its size).

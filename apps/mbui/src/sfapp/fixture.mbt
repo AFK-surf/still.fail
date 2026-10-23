@@ -459,6 +459,8 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
   // a station's network as the core gives it: how this device reaches it (`way`) in the list, its figures in the
   // `stationNet` view of its own (the made-up stations say both as `net`)
   let value = match name {
+    "stations" if params.get("drive") is Some(True) =>
+      fix_browse_with_drive(f, fixture_stations_way(value), text(Some(Json::object(params)), "here"))
     "stations" => fixture_stations_way(value)
     "chat" => fixture_with_tabs(f, params, value)
     "stationNet" => {
@@ -532,7 +534,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
       for k, v in f.filters {
         lf[k] = Json::string(v)
       }
-      Some({
+      let o : Map[String, Json] = {
         "workspace": Json::string(f.workspace),
         "chatTabs": Json::object(f.chat_tabs),
         "listFilter": Json::object(lf),
@@ -541,9 +543,13 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
         "faces": fixture_faces(f.fonts),
         "keys": fixture_keys(f.keys),
         "keymap": fixture_keymap(f.keys),
-      })
+      }
+      // the drive's ways, the files' page's tabs and favourites (browse_fixture.mbt)
+      fix_browse_prefs_into(o)
+      Some(Json::object(o))
     }
     "fonts" => Some(fixture_fonts_topic(f))
+    "driveBrowse" | "filesTabs" => fix_browse_topic(f, name, params)
     "job" | "previewLoad" => fixture_service_topic(f, name, params)
     "shareIn" => fixture_share_topic(params)
     "imageNear" => fixture_image_near(params)
@@ -719,6 +725,14 @@ pub fn fixture(mode : String) -> Source {
         }
         None => ()
       }
+      // the drive browsed (browse_fixture.mbt)
+      match fixture_browse_call(f, name, params) {
+        Some(r) => {
+          done(r)
+          return
+        }
+        None => ()
+      }
       // the faces' files (fonts_fixture.mbt)
       if fixture_fonts_call(f, name, params, done) {
         return
@@ -766,6 +780,8 @@ pub fn fixture(mode : String) -> Source {
               }
             _ => ()
           }
+          // the drive's ways, the files' page's tabs, its favourites
+          fix_browse_prefs_set(params) |> ignore
           // a place's face (null: back to the app's own)
           match field(Some(params), "fonts") {
             Some(Object(m)) =>

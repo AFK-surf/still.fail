@@ -842,6 +842,18 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
 }
 
 ///|
+/// Its words from `from` to `to` picked (UTF-16, in its words: the anchor at `from`, the caret at `to`), as a name
+/// changed in place picks it but its extension.
+pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
+  let st = self.st
+  st.anchor = imin(imax(from, 0), st.text.length())
+  st.caret = imin(imax(to, 0), st.text.length())
+  st.pref_x = -1.0
+  st.blink_again = true
+  field_written()
+}
+
+///|
 /// Its words given up (sent): what the input method was composing put in first, then none left in it.
 pub fn Field::take(self : Field) -> String {
   let st = self.st

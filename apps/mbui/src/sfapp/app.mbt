@@ -45,6 +45,9 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
+  // what the desk's files and the drive's pages ask of the app: its drag (until it is the desk's), its file preview
+  @sfdesk.desk_drag.val = Some(files_desk_drag())
+  @sfbase.drive_viewer.val = open_file
   home_rows.val = []
   steadies.clear()
   sheet_host.kind = NoSheet
@@ -160,6 +163,8 @@ fn reset() -> Unit {
   wide_reset()
   // the library's viewers: the texts read, the films played, a desktop's player's 选集 and the pointer it last saw
   @sf.viewer_reset()
+  // the menu open (@sf.menu_of, context_items)
+  @sf.parts_reset()
   badge_told.val = -1
   // the menu bar given (menu_bar.mbt)
   menu_bar_given.val = ""
@@ -168,6 +173,7 @@ fn reset() -> Unit {
   kept_chats.clear()
   fixture_pictures.clear()
   fix_threads.clear()
+  fix_browse_reset()
   fix_ctx.val = None
   fix_clock.val = None
   fix_serial.val = 0
@@ -226,8 +232,6 @@ fn reset() -> Unit {
   viewer_awake_env.val = -1
   src_now.val = fn() { 0.0 }
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
-  dv_fetches.clear()
-  keepings.clear()
   // the wide frame's keys (wide_keys.mbt)
   focus_composer.val = false
   rename_for.val = ""
@@ -894,13 +898,6 @@ fn toast(c : @ui.Ctx) -> Unit {
 ///|
 /// How long a toast stays (paused while the pointer is on it): the library's (toast.tsx).
 pub let toast_ms : Double = @sf.toast_ms
-
-///|
-fn say(c : @ui.Ctx, words : String) -> Unit {
-  ignore(c)
-  app.toast = words
-  app.toast_n += 1
-}
 
 ///|
 /// The app starting, or waiting for what every page needs (Parts.kt Splash): still.fail's mark floating; what it

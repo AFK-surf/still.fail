@@ -257,7 +257,6 @@ fn fdrag_frame(c : @ui.Ctx, src : Source, w : Workspace, outside? : Bool = true)
       if (px - x0).abs() > fdrag_slop || (py - y0).abs() > fdrag_slop {
         fdrag.item = Some(item)
         fdrag.press = None
-        wide.files_chosen = item.station + "\u{1}" + item.root + "\u{1}" + item.path
       }
     (_, Some(item)) if !down => {
       match fdrag_at(c, px, py) {
@@ -323,9 +322,9 @@ fn fdrag_put_up(src : Source, into : DriveAt, files : Array[@hostapi.Picked]) ->
   let send = fn() {
     for f in up {
       let dir = dv_join(into.path, dv_parent(f.name))
-      dv.serial += 1
-      dv.uploads.push({
-        serial: dv.serial,
+      ups.serial += 1
+      ups.uploads.push({
+        serial: ups.serial,
         station: into.station,
         root,
         dir,
@@ -360,14 +359,7 @@ fn fdrag_put_up(src : Source, into : DriveAt, files : Array[@hostapi.Picked]) ->
 fn fdrag_drop(c : @ui.Ctx, src : Source, w : Workspace, item : FDragged, t : FTarget, mods : Int) -> Unit {
   match t.into {
     None => {
-      let favs = files_favs(src, w.id)
-      if !favs.iter().any(fn(f) { f.station == item.station && f.root == item.abs && f.path == "" }) {
-        let kept : Array[Fav] = [{ station: item.station, root: item.abs, path: "", name: item.name }]
-        for f in favs {
-          kept.push(f)
-        }
-        files_keep_favs(src, w.id, kept)
-      }
+      @sfdesk.favorite_add(src, w.id, { station: item.station, root: item.abs, path: "", name: item.name })
     }
     Some(into) => {
       let move = fdrag_effect(item, into.station, mods) == "move"
@@ -489,8 +481,8 @@ fn fdrag_transfer(
     (dv_parent(item.path) == into.path || into.path == item.path || into.path.has_prefix(item.path + "/")) {
     return true
   }
-  let entries = match files_entries(src, into.station, into_root, into.path) {
-    (Some(list), _) => list
+  let entries = match @sfdesk.drive_folder(src, into.station, into_root, into.path) {
+    (Some(v), _) => items(Some(v), "entries").map(dv_entry)
     // (one that cannot be read: no names there to ask about)
     (None, Some(_)) => []
     (None, None) => return false
@@ -613,16 +605,16 @@ fn files_clash_dialog(c : @ui.Ctx) -> Unit {
       match (asking, now) {
         (Some(a), Some(n)) => {
           c.box(style=fclash_facts, fn() {
-            c.box(style=fpane_facts_column, fn() {
-              c.text(tr("web-pages.files.coming"), style=fpane_fact_said) |> ignore
-              c.text(tr("web-pages.files.there"), style=fpane_fact_said) |> ignore
+            c.box(style=fclash_said_column, fn() {
+              c.text(tr("web-pages.files.coming"), style=fclash_said) |> ignore
+              c.text(tr("web-pages.files.there"), style=fclash_said) |> ignore
             })
             |> ignore
-            c.box(style=fpane_values_column, fn() {
+            c.box(style=fclash_values_column, fn() {
               let coming = if n.dir { tr("web-pages.files.folder") } else { @sf.file_size(n.size) }
-              c.text(coming + " · " + n.station, style=fpane_fact_value) |> ignore
+              c.text(coming + " · " + n.station, style=fclash_value) |> ignore
               let there = if n.there.dir { tr("web-pages.files.folder") } else { n.there.size_text }
-              c.text(there + " · " + n.there.time_text, style=fpane_fact_value) |> ignore
+              c.text(there + " · " + n.there.time_text, style=fclash_value) |> ignore
             })
             |> ignore
           })
@@ -693,7 +685,7 @@ fn fdrag_ghost(c : @ui.Ctx, page : Int) -> Unit {
 ///|
 /// A file's kind by its name, for its mark while it is carried (the folder's listing said it; this is only the picture).
 fn dv_kind_of(name : String) -> String {
-  match dv_ext(name) {
+  match fix_ext(name) {
     "md" | "markdown" => "markdown"
     "txt" | "log" => "text"
     "png" | "jpg" | "jpeg" | "gif" | "webp" | "heic" => "image"
@@ -703,25 +695,6 @@ fn dv_kind_of(name : String) -> String {
     "csv" => "csv"
     _ => "other"
   }
-}
-
-///|
-/// What is held over the folder shown (Drive.css.ts drop): over the list, where it goes, in words.
-fn fdrag_over_pane(c : @ui.Ctx, lit : String, name : String) -> Unit {
-  let t = @sf.theme()
-  c.layer(fn() {
-    c.box(style=fdrag_pane_drop, fn() {
-      @sf.icon(c, if lit == "upload" { "upload" } else { "move" }, size=fdrag_drop_icon, color=t.p.text) |> ignore
-      let key = match lit {
-        "copy" => "web-pages.files.copyHere"
-        "move" => "web-pages.files.moveHere"
-        _ => "web-pages.drive.dropHere"
-      }
-      c.text(fill(key, [("name", name)]), style=fdrag_drop_words) |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -768,10 +741,6 @@ let fclash_w : Double = 420.0
 let fdrag_ghost_off : Double = 12.0
 
 ///|
-/// The drop's mark over the list (22).
-let fdrag_drop_icon : Double = 22.0
-
-///|
 // kept across runs: a value (no field of it changes)
 let fclash_foot : @ui.Style = @ui.style(row=true, w=Full, pt=S2, gap=S2, justify=JEnd)
 
@@ -792,25 +761,6 @@ let fdrag_ghost_place : @ui.Style = @ui.style(w=Full, h=Full, align=AStart)
 /// The picture carried: a chip on the raised ground, its shadow under it.
 // kept across runs: a value (no field of it changes)
 let fdrag_ghost_chip : @ui.Style = @ui.style(row=true, h=S8, px=S3, gap=S2, align=ACenter, radius=Lg, bg=Raised, shadow=Lg, opacity=O90)
-
-///|
-/// Over the list (drop: the canvas at 82% over it, ringed 2 in the accent at 60%, its words in the middle, 8 apart).
-// kept across runs: a value (no field of it changes)
-let fdrag_pane_drop : @ui.Style = @ui.style(
-  w=Full,
-  h=Full,
-  gap=S2,
-  align=ACenter,
-  justify=JCenter,
-  radius=Xl3,
-  bg=A(Bg, O80),
-  border=B2,
-  border_color=A(Accent, O60),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let fdrag_drop_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
 
 ///|
 /// A folder's row of the sidebar (drop: the nav row's corner), ringed in the accent on its ground while over it.
@@ -842,17 +792,6 @@ let fdrag_keep : @ui.Style = @ui.style(w=Full, radius=Xl)
 ///|
 // kept across runs: a value (no field of it changes)
 let fdrag_keep_on : @ui.Style = fdrag_keep.then(@ui.style(border=B1, border_color=Accent))
-
-///|
-/// A folder's row (entry's data-drop: the accent's ground, ringed 1 in it), a column (its ground).
-// kept across runs: a value (no field of it changes)
-let files_row_drop : @ui.Style = files_row_style.then(@ui.style(bg=AccentBg, border=B1, border_color=Accent))
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_column_drop : @ui.Style = @ui.style(bg=AccentBg)
-
-// ── the transfers (Transfers.tsx TransfersButton, TransferRow) ─────────
 
 ///|
 /// The person's transfers into the workspace's stations (the `driveTransfers` topic), newest first.
@@ -979,81 +918,9 @@ fn files_transfer_row(c : @ui.Ctx, src : Source, x : Json) -> Unit {
 }
 
 ///|
-/// A file going up into the folder shown (Drive.tsx UploadRow): its mark, its name, how far (a thin bar, sent of its
-/// size); its name taken there (替换, 保留两者), or why it failed (重试); × lets it go.
-fn files_upload_row(c : @ui.Ctx, src : Source, u : DvUpload, entries : Array[DvEntry]) -> Unit {
-  let t = @sf.theme()
-  let k = "files/up/\{u.serial}"
-  c.box(style=files_row_style, fn() {
-    @sf.icon(c, "upload", size=files_icon, color=t.p.muted) |> ignore
-    c.text(u.name, style=place_name) |> ignore
-    match u.state {
-      "taken" =>
-        c.box(style=fupload_ask, fn() {
-          c.text(tr("web-pages.drive.taken"), style=files_cell_words) |> ignore
-          if @sf.button(c, tr("web-pages.drive.replace"), key=k + "/replace", tone=Ghost) {
-            u.replace = true
-            u.state = "waiting"
-            dv_pump(src)
-          }
-          if @sf.button(c, tr("web-pages.drive.keepBoth"), key=k + "/both", tone=Ghost) {
-            let others = dv.uploads.filter(fn(x) { x.serial != u.serial && x.dir == u.dir })
-            u.name = dv_free_name(u.name, entries.map(fn(e) { e.name }) + others.map(fn(x) { x.name }))
-            u.state = "waiting"
-            dv_pump(src)
-          }
-        })
-        |> ignore
-      "failed" => c.text(fill("web-pages.drive.uploadFailed", [("error", u.error)]), style=fupload_failed) |> ignore
-      _ => {
-        let size = u.bytes.length()
-        c.box(style=fupload_cell, fn() {
-          fdrag_bar(c, fupload_bar, fupload_bar_done, if size > 0 { u.sent.to_double() / size.to_double() } else { 0.0 })
-          c.text(
-            fill("web-pages.drive.uploading", [("sent", @sf.file_size(u.sent.to_double())), ("size", @sf.file_size(size.to_double()))]),
-            style=files_cell_words,
-          )
-          |> ignore
-        })
-        |> ignore
-      }
-    }
-    if u.state == "failed" && icon_button(c, k + "/retry", "retry", label=tr("web-pages.drive.retry")) {
-      u.state = "waiting"
-      u.error = ""
-      u.sent = 0
-      dv_pump(src)
-    }
-    if icon_button(c, k + "/cancel", "close", label=tr("common.cancel")) {
-      dv.uploads.retain(fn(x) { x.serial != u.serial })
-      if u.state == "going" {
-        dv.pumping = false
-        dv_pump(src)
-      }
-    }
-  })
-  |> ignore
-}
-
-///|
-/// How far something has got, a bar `bar` filled from its start by `done` (0 … 1).
-fn fdrag_bar(c : @ui.Ctx, bar : @ui.Style, done : @ui.Style, part : Double) -> Unit {
-  let p = dmax(0.0, dmin(1.0, part))
-  let rest = 1.0 - p
-  c.box(style=bar, fn() {
-    c.box(style=done.then(@ui.style(w=Grow(p))), fn() {  }) |> ignore
-    c.box(style=@ui.style(w=Grow(rest)), fn() {  }) |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// The transfers' list (transfers: 360 wide).
 let ftransfers_w : Double = 360.0
 
-///|
-/// A file's bar going up (progress: 2 high, as wide as the size's and the time's columns less the words).
-let fupload_bar_w : Double = 96.0
 
 ///|
 /// The chip (transfersChip: 28 high, 10 in, the neutral ground, its words muted; going: the accent's; failed: red's).
@@ -1134,26 +1001,10 @@ let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wra
 // kept across runs: a value (no field of it changes)
 let ftransfer_actions : @ui.Style = @ui.style(row=true, gap=SPx, align=ACenter)
 
-///|
-/// A file going up: its bar and how far (progressCell: 10 apart), what to do with a name taken (ask), why it failed.
-// kept across runs: a value (no field of it changes)
-let fupload_cell : @ui.Style = @ui.style(row=true, gap=S2_5, align=ACenter)
 
-///|
-// kept across runs: a value (no field of it changes)
-let fupload_bar : @ui.Style = @ui.style(row=true, w=Fixed(fupload_bar_w), h=SPx, radius=Sm, bg=A(Fg, O10), clip=true)
 
-///|
-// kept across runs: a value (no field of it changes)
-let fupload_bar_done : @ui.Style = @ui.style(h=Full, bg=Accent)
 
-///|
-// kept across runs: a value (no field of it changes)
-let fupload_ask : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
 
-///|
-// kept across runs: a value (no field of it changes)
-let fupload_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
 
 ///|
 /// 本机 by this machine's station (here: a capsule on the accent's ground, its words 11 in the accent's ink).
@@ -1163,3 +1014,58 @@ let files_here_chip : @ui.Style = @ui.style(px=S1_25, radius=Full, bg=AccentBg)
 ///|
 // kept across runs: a value (no field of it changes)
 let files_here_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=AccentText, wrap=false)
+
+///|
+/// The clash's facts (DrivePane.css.ts facts: two columns, 4 by 12 between; what is said muted).
+// kept across runs: a value (no field of it changes)
+let fclash_said_column : @ui.Style = @ui.style(gap=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fclash_values_column : @ui.Style = @ui.style(w=@sf.grow, gap=S1, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fclash_said : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fclash_value : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+
+///|
+/// The files' page's drag, as the desk's folders take it (src/sfdesk/drive_views.mbt DeskDrag): a row pressed, where it
+/// can be let go, whether a row is what is dragged.
+fn files_desk_drag() -> @sfdesk.DeskDrag {
+  {
+    press: fn(c, src, at, e) {
+      let root = at.root.unwrap_or("")
+      let path = dv_join(at.path, e.name)
+      fdrag_press(c, {
+        station: at.station,
+        station_name: @sfdesk.station_name(src, at.station),
+        root,
+        path,
+        abs: dv_absolute(root, path),
+        name: e.name,
+        size: e.size,
+        dir: e.dir,
+      })
+    },
+    target: fn(c, id, key, into, name, write, transfers, depth) {
+      fdrag_target(c, id, key, Some(into), name, write, transfers, depth)
+    },
+    carried: fn(station, root, path) { fdrag_carried(station, root, path) },
+  }
+}
+
+///|
+/// How far something has got, a bar `bar` filled from its start by `done` (0 … 1).
+fn fdrag_bar(c : @ui.Ctx, bar : @ui.Style, done : @ui.Style, part : Double) -> Unit {
+  let p = dmax(0.0, dmin(1.0, part))
+  let rest = 1.0 - p
+  c.box(style=bar, fn() {
+    c.box(style=done.then(@ui.style(w=Grow(p))), fn() {  }) |> ignore
+    c.box(style=@ui.style(w=Grow(rest)), fn() {  }) |> ignore
+  })
+  |> ignore
+}

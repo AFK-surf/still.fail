@@ -420,6 +420,8 @@ pub(all) enum Color {
   Neutral
   Hover
   Selected
+  /// a list's row under the pointer, the way to what is open beside it (still.fail's --list)
+  ListGround
   Focus
   Scrim
   Link

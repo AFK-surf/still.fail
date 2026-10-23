@@ -11,7 +11,8 @@ test "17-drive-read" {
     f.tap("=e2e-082940")
     f.run_to(@ui.nav_rest())
     f.tap("小说-e2e.txt")
-    f.run_to(@ui.nav_rest())
+    // (the reader in, its push over: a live run taps its text only then)
+    f.run_for(@ui.nav_push_ms)
     // a tap on the text: the bars
     f.tap_at(195.0, 420.0)
     f.run_for(@sf.reader_bars_ms)

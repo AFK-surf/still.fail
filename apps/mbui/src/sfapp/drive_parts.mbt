@@ -30,24 +30,6 @@ priv enum DvSheet {
 }
 
 ///|
-/// A file going up into a folder of a drive (DriveScreen.kt DriveUpload): its row in the folder's list until it is
-/// there.
-priv struct DvUpload {
-  serial : Int
-  station : String
-  root : String
-  dir : String
-  mut name : String
-  bytes : Bytes
-  mut sent : Int
-  /// waiting | going | taken | failed
-  mut state : String
-  mut error : String
-  mut replace : Bool
-  mut id : String
-}
-
-///|
 /// The drive's state while the app runs.
 priv struct DriveUi {
   mut sheet : DvSheet
@@ -59,9 +41,6 @@ priv struct DriveUi {
   mut building : String
   /// what is chosen in a folder (by its page's key), by name
   chosen : Map[String, Array[String]]
-  uploads : Array[DvUpload]
-  mut serial : Int
-  mut pumping : Bool
   /// what is under way on an entry ("remove|<station>|<root>|<path>"), and what failed a moment ago (its words: shown
   /// on its row for dv_failed_ms)
   busy : Map[String, Bool]
@@ -74,9 +53,6 @@ priv struct DriveUi {
   /// the views chosen here, before the prefs say
   mut sort_set : String?
   mut hidden_set : Bool?
-  /// a file being picked to go up, and where to
-  mut picking : @ui.Pick?
-  mut picking_for : DriveAt
   /// what is asked for in an Ask sheet, the folder picker's place and filter
   mut asked : String
   mut picker_at : String?
@@ -99,9 +75,6 @@ let dv : DriveUi = {
   sheet_on: "",
   building: "",
   chosen: {},
-  uploads: [],
-  serial: 0,
-  pumping: false,
   busy: {},
   failed: {},
   refreshing: {},
@@ -109,8 +82,6 @@ let dv : DriveUi = {
   held_done: false,
   sort_set: None,
   hidden_set: None,
-  picking: None,
-  picking_for: { station: "", root: None, path: "" },
   asked: "",
   picker_at: None,
   picker: None,
@@ -130,9 +101,6 @@ fn dv_reset() -> Unit {
   dv.sheet_on = ""
   dv.building = ""
   dv.chosen.clear()
-  dv.uploads.clear()
-  dv.serial = 0
-  dv.pumping = false
   dv.busy.clear()
   dv.failed.clear()
   dv.refreshing.clear()
@@ -140,8 +108,6 @@ fn dv_reset() -> Unit {
   dv.held_done = false
   dv.sort_set = None
   dv.hidden_set = None
-  dv.picking = None
-  dv.picking_for = { station: "", root: None, path: "" }
   dv.asked = ""
   // (a new one: an editor knows its Field by the build it was last given in, and a run started again counts builds
   // from the start)
@@ -452,30 +418,33 @@ fn dv_card_row(
   let card = dv_surface()
   c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=if last { 10.0 } else { 0.0 }, fn() {
     c.box(w=Fill(1.0), fn() {
+      // the card's ground: rounded where it ends (its first row's top, its last's bottom), square between rows; the
+      // rounded part only where the card has its corners (so what is in a row between is in no corner of it)
       c.layer(fn() {
-        c.box(
-          w=Fill(1.0),
-          h=Fill(1.0),
-          radius=if first || last { 16.0 } else { 0.0 },
-          bg=card,
-          fn() {  },
-        )
+        c.box(style=dv_card_whole, fn() {
+          if !first {
+            c.box(style=dv_card_corner_room, fn() {  }) |> ignore
+          }
+          c.box(w=Fill(1.0), h=Fill(1.0), radius=if first || last { @sf.drive_card_corner } else { 0.0 }, bg=card, fn() {  })
+          |> ignore
+          if !last {
+            c.box(style=dv_card_corner_room, fn() {  }) |> ignore
+          }
+        })
         |> ignore
       })
       |> ignore
-      // the corners the card does not have here: squared again
-      if first != last || (!first && !last) {
-        if !first {
-          c.layer(fn() { c.box(w=Fill(1.0), h=Px(16.0), bg=card, fn() {  }) |> ignore })
-          |> ignore
-        }
-        if !last {
-          c.layer(fn() {
-            c.spacer()
-            c.box(w=Fill(1.0), h=Px(16.0), bg=card, fn() {  }) |> ignore
-          })
-          |> ignore
-        }
+      // between rows, the card goes on square to the row's edge
+      if !first {
+        c.layer(fn() { c.box(w=Fill(1.0), h=Px(@sf.drive_card_corner * 2.0), bg=card, fn() {  }) |> ignore })
+        |> ignore
+      }
+      if !last {
+        c.layer(fn() {
+          c.spacer()
+          c.box(w=Fill(1.0), h=Px(@sf.drive_card_corner * 2.0), bg=card, fn() {  }) |> ignore
+        })
+        |> ignore
       }
       let room = match (first, last) {
         (true, true) => dv_row_room_only
@@ -484,10 +453,11 @@ fn dv_card_row(
         (false, false) => dv_row_room
       }
       c.box(style=room, fn() {
-        c.box(style=dv_row_ground, bg?=ground, id~, fn() {
+        // (at the card's ends concentric in its corner, as it is list_pad in)
+        c.box(style=if first || last { dv_row_ground_end } else { dv_row_ground }, bg?=ground, id~, fn() {
           body()
           if id != 0 {
-            @motion.ripple(c, id, @sf.row_corner)
+            @motion.ripple(c, id, if first || last { @sf.inner_corner(@sf.drive_card_corner, @sf.list_pad) } else { @sf.row_corner })
           }
         })
         |> ignore
@@ -521,6 +491,19 @@ let dv_row_room_only : @ui.Style = @ui.style(w=Full, p=S2)
 /// A card's row's own ground (pressed, chosen): rounded LIST_ROW_CORNER, concentric with the card's.
 // kept across runs: a value (no field of it changes)
 let dv_row_ground : @ui.Style = @ui.style(w=Full, radius=Xl2)
+
+///|
+/// The card's ground as tall as its row; where the card goes on past it, its corner's room.
+// kept across runs: a value (no field of it changes)
+let dv_card_whole : @ui.Style = @ui.style(w=Full, h=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_card_corner_room : @ui.Style = @ui.style(w=Full, h=Fixed(@sf.drive_card_corner))
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_row_ground_end : @ui.Style = @ui.style(w=Full, radius=@sf.drive_row_end_radius)
 
 ///|
 /// A row held (a long press, 400 ms as the system's): true on the frame the hold acts, once; the tap that ends it is
@@ -578,14 +561,6 @@ fn dv_act(c : @ui.Ctx, what : String, done? : String = "") -> (Result[Json, Json
           fill("android-misc.act.failed", [("what", what), ("error", dv_error(e))]),
         )
     }
-  }
-}
-
-///|
-fn dv_error(e : Json) -> String {
-  match text(Some(e), "message") {
-    "" => tr("android-misc.failed")
-    m => m
   }
 }
 

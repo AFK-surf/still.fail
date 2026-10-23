@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply as applyDelta } from "../src/delta.ts";
-import { arrange } from "../src/drive-browse.ts";
+import { arrange, Browsing } from "../src/drive-browse.ts";
 import { collate } from "../src/hosts/collate.ts";
 import type { CoreMessage } from "../src/protocol.ts";
 import { call, subscribe } from "./helpers.ts";
@@ -240,4 +240,60 @@ test("a new folder's name and a copy kept beside another; the renames a drag int
   const moved = await ask("drive.moves", { items: [{ station: ST, root: ROOT, abs: "/Users/a/b", name: "b" }, { station: ST, root: ROOT, abs: "/Users/a/A", name: "A" }], into: { station: ST, root: ROOT, path: "A" } });
   assert.deepEqual(moved, { moves: [{ root: ROOT, from: "b", to: "A/b" }] }, "not into itself");
   core.close();
+});
+
+test("a snapshot given to a new browsing answers each act as the one it was taken of", () => {
+  const folders: Record<string, { name: string; dir: boolean; size: number; mtime: number; kind: string }[]> = {
+    "": [{ name: "b", dir: true, size: 0, mtime: 2, kind: "folder" }, { name: "A", dir: true, size: 0, mtime: 1, kind: "folder" }, { name: "c.txt", dir: false, size: 3, mtime: 5, kind: "text" }],
+    A: [{ name: "x.txt", dir: false, size: 1, mtime: 1, kind: "text" }, { name: "y.txt", dir: false, size: 2, mtime: 2, kind: "text" }],
+    b: [],
+  };
+  // A device of its own for each browsing: the same prefs and folders, the same time and ids, as they go.
+  const device = () => {
+    let prefs: Record<string, any> = {};
+    let n = 0;
+    let now = 1000;
+    return {
+      prefs: () => prefs,
+      setPrefs: (patch: Record<string, any>) => {
+        const next = { ...prefs };
+        for (const [k, v] of Object.entries(patch)) next[k] = { ...(prefs[k] ?? {}), ...v };
+        prefs = next;
+      },
+      entries: (_s: string, _r: string, path: string) => folders[path] ?? null,
+      stations: () => [{ station: ST, name: "Studio", home: ROOT }],
+      now: () => (now += 300),
+      newId: () => `t${n++}`,
+      invalid: (what: string) => new Error(what),
+      changed: () => {},
+    };
+  };
+  const live = new Browsing(device());
+  const at = (view: string, path = "") => ({ owner: "page", place: "p1", view, station: ST, root: ROOT, path });
+  const acts: [string, Record<string, unknown>][] = [
+    ["drive.browse", { ...at("columns"), act: "at" }],
+    ["drive.browse", { ...at("columns"), act: "press", folder: "", name: "A" }],
+    ["drive.browse", { ...at("columns", "A"), act: "key", key: "ArrowRight" }],
+    ["drive.browse", { ...at("columns", "A"), act: "type", letter: "y" }],
+    ["drive.browse", { ...at("columns", "A"), act: "width", width: 300 }],
+    ["drive.browse", { ...at("tree"), act: "tree", folder: "A" }],
+    ["drive.browse", { ...at("tree"), act: "press", folder: "A", name: "x.txt", shift: true }],
+    ["drive.browse", { ...at("list"), act: "opened", name: "c.txt" }],
+    ["drive.browse", { ...at("list"), act: "key", key: "mod+shift+Period" }],
+    ["drive.arrange", { by: "time" }],
+    ["files.tabs", { workspace: "ws", act: "arrive", pane: { station: ST, root: ROOT, path: "" } }],
+    ["files.tabs", { workspace: "ws", act: "open", pane: { station: ST, root: ROOT, path: "A" } }],
+    ["drive.browse", { ...at("list"), act: "key", key: "ArrowDown" }],
+  ];
+  // Each act answered by the live one, and by one made from a snapshot of the one before it (on a device of its own,
+  // gone through the same acts), and the same after it.
+  const other = device();
+  let restored = new Browsing(other);
+  for (const [name, params] of acts) {
+    restored = new Browsing(other, JSON.parse(JSON.stringify(restored.snapshot())));
+    assert.deepEqual(restored.call(name, params), live.call(name, params), `${name} ${JSON.stringify(params)}`);
+    assert.deepEqual(restored.snapshot(), live.snapshot());
+    for (const view of ["columns", "tree", "list"]) assert.deepEqual(restored.view(at(view, "A")), live.view(at(view, "A")));
+    assert.deepEqual(restored.tabsView("ws"), live.tabsView("ws"));
+  }
 });

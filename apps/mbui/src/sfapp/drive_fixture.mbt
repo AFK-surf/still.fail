@@ -61,8 +61,17 @@ fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
 }
 
 ///|
+/// A made-up file's extension, lower case (what its kind is made up from).
+fn fix_ext(name : String) -> String {
+  match name.rev_find(".") {
+    Some(i) if i > 0 => name.view(start_offset=i + 1).to_owned().to_lower()
+    _ => ""
+  }
+}
+
+///|
 fn fix_kind(name : String) -> String {
-  match dv_ext(name) {
+  match fix_ext(name) {
     "md" => "markdown"
     "txt" | "log" => "text"
     "png" | "jpg" | "jpeg" | "heic" => "image"
@@ -429,9 +438,9 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       }
       if mode == "drive-upload" {
         let up = fn(name : String, size : Int, sent : Int, state : String, error : String) {
-          dv.serial += 1
-          dv.uploads.push({
-            serial: dv.serial,
+          ups.serial += 1
+          ups.uploads.push({
+            serial: ups.serial,
             station: "ws1/st1",
             root: fix_docs,
             dir: "",
@@ -447,7 +456,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         up("旅行照片.zip", 6291456, 2621440, "going", "")
         up("长篇小说.txt", 2048, 0, "taken", "")
         up("会议录音.m4a", 3145728, 0, "failed", "station 已离线")
-        dv.pumping = true
+        ups.pumping = true
       }
     }
     "drive-sub" => {

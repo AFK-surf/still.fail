@@ -548,29 +548,34 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
     Drive(at) => assert_eq(at.root, Some(fix_docs))
     _ => fail("no folder open")
   }
-  assert_true(t.query(Button, label="分栏") is Some(_))
+  assert_true(t.query(Radio, label="分栏") is Some(_))
   // in columns a folder pressed opens beside its column
   t.tap_text("设计稿")
   assert_true(t.find("配色说明.md") is Some(_), msg="设计稿 beside")
-  // a list: a click chooses, a double click goes in
-  t.click(Button, label="列表")
-  assert_eq(wide.files_view, Some("list"))
-  assert_true(named(calls, "prefs.set").length() > 0)
-  t.tap_text("会议记录")
+  // (the columns open to the folder shown: the page's, as the web's address is)
   match app.nav.top() {
-    Drive(at) => assert_eq(at.path, "")
+    Drive(at) => assert_eq(at.path, "设计稿")
+    _ => fail("no folder open")
+  }
+  // a list (of 设计稿): a click chooses, a double click goes in
+  t.click(Radio, label="列表")
+  assert_eq(text(fix_browse.prefs.get("driveViews").map(fn(m) { Json::object(m) }), "page"), "list")
+  assert_true(named(calls, "prefs.set").length() > 0)
+  t.tap_text("旧版")
+  match app.nav.top() {
+    Drive(at) => assert_eq(at.path, "设计稿")
     _ => fail("left the folder")
   }
-  t.tap_text("会议记录")
+  t.tap_text("旧版")
   match app.nav.top() {
-    Drive(at) => assert_eq(at.path, "会议记录")
+    Drive(at) => assert_eq(at.path, "设计稿/旧版")
     _ => fail("no folder open")
   }
   // 收藏: in the sidebar's 个人收藏 then
   let before = named(calls, "prefs.set").length()
-  t.click(Button, label="把「会议记录」加入个人收藏")
+  t.click(Button, label="把「旧版」加入个人收藏")
   assert_eq(named(calls, "prefs.set").length(), before + 1)
-  assert_true(t.query(Button, label="从个人收藏移除「会议记录」") is Some(_))
+  assert_true(t.query(Button, label="从个人收藏移除「旧版」") is Some(_))
 }
 
 ///|
@@ -593,7 +598,7 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
   assert_true(t.query(Button, label="取消分栏") is Some(_))
   // in a list (in columns a half's room holds one column: a folder pressed is beside it, in its place), the other
   // side's 会议记录 pressed twice: that side in front, gone into
-  t.click(Button, label="列表")
+  t.click(Radio, label="列表")
   t.frame()
   let rows = t.locate("会议记录")
   assert_eq(rows.length(), 2)
@@ -740,7 +745,7 @@ test "wide: files going up are rows of the folder (Drive.tsx UploadRow): how far
   // (what the mode opens: 文档 with a file going up, one taken, one failed)
   app.nav.replace(Home)
   open_drive_fixture("drive-upload")
-  wide.files_view = Some("list")
+  fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("旅行照片.zip") is Some(_))
   assert_true(t.find("2.5 MB / 6.0 MB") is Some(_), msg="how far")
@@ -898,7 +903,7 @@ test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its star
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.run_for(@ui.nav_push_ms)
-  t.click(Button, label="列表")
+  t.click(Radio, label="列表")
   t.frame()
   assert_true(t.find("选中一个文件来预览") is None)
   t.click(Button, label="显示预览 ⌘⇧P")
@@ -950,12 +955,27 @@ test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its star
 }
 
 ///|
+/// A folder of the files' page's tree (at Studio's 文档) opened, as its disclosure opens it (the made-up core told).
+fn files_tree_open(path : String) -> Unit {
+  fix_browse_do(None, "", "drive.browse", {
+    "act": "tree",
+    "owner": "page",
+    "station": "ws1/st1",
+    "root": Json::string(fix_docs),
+    "path": "",
+    "folder": Json::string(path),
+    "open": true,
+  })
+  |> ignore
+}
+
+///|
 /// The files' page at Studio's 文档 in a list (or as `view` says), its calls kept in `calls`.
 fn files_dragging(calls : Array[Made], view? : String = "list") -> @ui.Tester {
   let t = wide_tester(calls)
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
-  wide.files_view = Some(view)
+  fix_browse_prefs_set({ "driveViews": { "page": Json::string(view) } }) |> ignore
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -1023,7 +1043,7 @@ test "wide: 文件 moved onto a folder that has its name: asked first (跳过, �
   let t = files_dragging(calls, view="tree")
   // 会议记录 and 设计稿 › 旧版 opened in place: each has a 说明.txt
   for open in ["会议记录", "设计稿", "设计稿/旧版"] {
-    wide.files_open["tree/ws1/st1/" + fix_docs + "/" + open] = true
+    files_tree_open(open)
   }
   t.frame()
   let notes = t.locate("说明.txt")
@@ -1415,4 +1435,49 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   assert_true(near(new[0].2, y3) && new[0].5 > 0.99, msg="\{new}")
   t.frame()
   assert_eq(word("读了 src/ui/list.mbt").length(), 0)
+}
+
+///|
+/// Whether the row named `name` is chosen (its semantics' selected).
+fn files_row_chosen(t : @ui.Tester, name : String) -> Bool {
+  match t.query(Button, label=name) {
+    Some(n) => n.selected == Some(true)
+    None => false
+  }
+}
+
+///|
+test "wide: 文件's rows as the core says them (driveBrowse, drive.browse): a press chooses, the arrows move it, a right click chooses that one and opens its menu; a list's head orders it" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls, view="columns")
+  // a folder pressed in columns: chosen, open beside
+  t.tap_text("会议记录")
+  t.frame()
+  assert_true(files_row_chosen(t, "会议记录"))
+  assert_true(t.find("说明.txt") is Some(_), msg="会议记录 beside")
+  // ↓: the next in its column
+  t.key(@ui.key_code_down)
+  t.frame()
+  t.frame()
+  assert_true(files_row_chosen(t, "设计稿"), msg="moved down")
+  assert_false(files_row_chosen(t, "会议记录"))
+  // a right click: that one chosen, its menu at the pointer
+  let (x, y) = t.find("发布清单.md").unwrap()
+  t.right_click(x, y)
+  t.frame()
+  t.frame()
+  assert_true(t.find("重命名") is Some(_), msg="its menu")
+  t.key(@ui.key_escape)
+  t.frame()
+  // (the menu gone: the page's rows to be asked of again)
+  assert_true(files_row_chosen(t, "发布清单.md"), msg="chosen by its right click")
+  assert_false(files_row_chosen(t, "设计稿"))
+  // a list: its heads, 大小 pressed orders it by size
+  t.click(Radio, label="列表")
+  t.frame()
+  let before = named(calls, "drive.arrange").length()
+  t.tap_text("大小")
+  t.frame()
+  assert_eq(named(calls, "drive.arrange").length(), before + 1)
+  assert_eq(text(Some(named(calls, "drive.arrange")[before].params), "by"), "size")
 }

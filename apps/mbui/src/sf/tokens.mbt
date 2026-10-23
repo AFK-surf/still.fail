@@ -514,6 +514,13 @@ pub let card_foot_radius : @ui.Radius = rounded(around(card_pad, 19.0))
 pub let list_card_radius : @ui.Radius = surface(list_pad, row_corner).radius()
 
 ///|
+/// A drive's card (its corner 16, DriveScreen.kt) and a row's ground at its ends: concentric in it, list_pad in.
+pub let drive_card_corner : Double = 16.0
+
+///|
+pub let drive_row_end_radius : @ui.Radius = rounded(inner_corner(drive_card_corner, list_pad))
+
+///|
 /// A card with a Seg (rounded 10) in its top corners: concentric with it (Usage.kt:204 concentricOut(10, CARD_PAD)):
 /// worked out as Android does, no step of the scale.
 pub let seg_card_radius : @ui.Radius = surface(card_pad, 10.0).radius()

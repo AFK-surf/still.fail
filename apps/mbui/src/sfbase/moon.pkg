@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/json",
   "mbui/ui",
+  "mbui/hostapi",
   "stillfail/sf",
   "stillfail/sfapp/settings",
 }

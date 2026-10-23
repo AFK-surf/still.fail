@@ -639,6 +639,7 @@ pub fn menu_row(
   icon_name : String,
   chooser : Bool,
   end : ((@ui.Ctx, @kit.MenuItemState) -> Unit)?,
+  danger? : Bool = false,
 ) -> Unit {
   let t = theme()
   let checked = match s.entry.kind {
@@ -667,9 +668,10 @@ pub fn menu_row(
         // 奏 its word (Rail.css.ts zouSmall)
         c.text("奏", style=menu_zou) |> ignore
       } else if icon_name != "" {
-        icon(c, icon_name, size=14.0, color=t.p.muted) |> ignore
+        icon(c, icon_name, size=14.0, color=if danger { t.p.red } else { t.p.muted }) |> ignore
       }
-      c.text(s.entry.label, style=menu_words) |> ignore
+      // (a danger's in red, its icon with it: menuItem[data-danger])
+      c.text(s.entry.label, style=if danger { menu_words_danger } else { menu_words }) |> ignore
       // what stands at its end (a ＋): pushed there
       match end {
         Some(f) => {
@@ -699,6 +701,10 @@ let menu_check : @ui.Style = @ui.style(w=S3_5, align=ACenter)
 /// A menu item's words: as long as they are (the menu as wide as its longest, controls.css.ts menuList).
 // kept across runs: a value (no field of it changes)
 let menu_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L5, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let menu_words_danger : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, leading=L5, wrap=false)
 
 ///|
 /// A heading among a menu's items (controls.css.ts menuLabel): 6 over, 4 under, 10 in; 12, muted.
@@ -732,6 +738,7 @@ pub fn menu(
   offset? : Double = 6.0,
   at? : (Double, Double, Double, Double),
   row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit,
+  danger? : Array[String] = [],
 ) -> @kit.Menu {
   // (a menu of choices: each chosen or not, checked before its words)
   let chooser = entries.iter().any(fn(e) { e.kind is Choice(_) })
@@ -749,11 +756,134 @@ pub fn menu(
     enter=pop_in,
     exit=pop_out,
     look=fn(c, w, body) { panel(c, min_w=w, body) |> ignore },
-    item_look=fn(c, s) { menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), chooser, row_end) },
+    item_look=fn(c, s) {
+      menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), chooser, row_end, danger=danger.contains(s.entry.value))
+    },
     heading_look=fn(c, label) {
       c.box(style=menu_heading, fn() { c.text(label, style=menu_heading_words) |> ignore }) |> ignore
     },
   )
+}
+
+///|
+/// What a menu holds (parts.tsx MenuItem): its words, its icon, in red (`danger`: what cannot be undone), not to be
+/// chosen now (`disabled`); what choosing it does.
+pub(all) struct MenuItem {
+  label : String
+  icon : String
+  danger : Bool
+  disabled : Bool
+  select : () -> Unit
+}
+
+///|
+pub fn menu_item_of(
+  label : String,
+  select : () -> Unit,
+  icon? : String = "",
+  danger? : Bool = false,
+  disabled? : Bool = false,
+) -> MenuItem {
+  { label, icon, danger, disabled, select }
+}
+
+///|
+/// The menu open now (one at a time, as Radix's are), by its key, and where a right click opened it.
+let menu_open : Ref[String] = Ref("")
+
+///|
+let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// No menu open (the app begun again).
+pub fn parts_reset() -> Unit {
+  menu_open.val = ""
+  menu_open_at.val = (0.0, 0.0)
+}
+
+///|
+/// `items` drawn as a menu (None: a line between), open while `key` is the one open; chosen, closed and what it does
+/// done once the frame is built. Whether it is open.
+fn menu_items(
+  c : @ui.Ctx,
+  key : String,
+  trigger : Int,
+  items : Array[MenuItem?],
+  side? : @ui.Side = Bottom,
+  along? : @ui.Along = Start,
+  offset? : Double = 6.0,
+  at? : (Double, Double, Double, Double),
+) -> Bool {
+  let open = menu_open.val == key
+  let entries : Array[@kit.Entry] = []
+  let icons : Map[String, String] = {}
+  let danger : Array[String] = []
+  for i, x in items {
+    match x {
+      None => entries.push(@kit.menu_separator())
+      Some(item) => {
+        let v = i.to_string()
+        entries.push(@kit.menu_item(v, label=item.label, disabled=item.disabled))
+        if item.icon != "" {
+          icons[v] = item.icon
+        }
+        if item.danger {
+          danger.push(v)
+        }
+      }
+    }
+  }
+  let m = menu(c, key, open, trigger, entries, icons, menu_w, side~, along~, offset~, at?, danger~)
+  if open && !m.open {
+    menu_open.val = ""
+  }
+  match m.chosen {
+    Some(v) => {
+      menu_open.val = ""
+      let i = v.iter().fold(init=0, fn(n, ch) { n * 10 + (ch.to_int() - 48) })
+      match items.get(i) {
+        Some(Some(item)) => c.tell(key + "/chosen", item.select)
+        _ => ()
+      }
+    }
+    None => ()
+  }
+  m.open
+}
+
+///|
+/// A menu behind ⋯ (parts.tsx Menu): an icon button (`label`, the app's word for 更多) that opens `items` under it,
+/// along its end, 4 below. Whether it is open.
+pub fn menu_of(c : @ui.Ctx, key : String, items : Array[MenuItem?], label~ : String, size? : Double = 32.0) -> Bool {
+  let open = menu_open.val == key
+  if icon_button(c, "more", key=key + "/more", size~, on=open, label~) {
+    menu_open.val = if open { "" } else { key }
+  }
+  menu_items(c, key, c.id(key + "/more"), items, along=End, offset=4.0)
+}
+
+///|
+/// A right click's menu (Radix's ContextMenu, Drive.tsx MenuContent): opened at the pointer by `menu_open_here`, then
+/// drawn there while it is open. Whether it is open.
+pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Bool {
+  if menu_open.val != key {
+    return false
+  }
+  let (x, y) = menu_open_at.val
+  menu_items(c, key, 0, items, offset=0.0, at=(x, y, 0.0, 0.0))
+}
+
+///|
+/// The menu `key` opened at (`x`, `y`): a right click there.
+pub fn menu_open_here(key : String, x : Double, y : Double) -> Unit {
+  menu_open.val = key
+  menu_open_at.val = (x, y)
+}
+
+///|
+/// Whether the menu `key` is open now.
+pub fn menu_is_open(key : String) -> Bool {
+  menu_open.val == key
 }
 
 ///|

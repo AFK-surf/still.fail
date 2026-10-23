@@ -7,84 +7,6 @@
 // pressed opens beside its column.
 
 ///|
-/// How the page shows a folder (prefs `driveViews.page`, as chosen here until the prefs say): columns where never chosen.
-fn files_view(src : Source) -> String {
-  match wide.files_view {
-    Some(v) => v
-    None =>
-      match text(field((src.topic)("prefs", {}).value, "driveViews"), "page") {
-        "tree" => "tree"
-        "list" => "list"
-        _ => "columns"
-      }
-  }
-}
-
-///|
-/// Another way chosen (`prefs.set {driveViews: {page}}`).
-fn files_set_view(src : Source, v : String) -> Unit {
-  wide.files_view = Some(v)
-  (src.call)("prefs.set", { "driveViews": { "page": if v == "columns" { Json::null() } else { Json::string(v) } } }, fn(
-    _,
-  ) {
-    ()
-  })
-}
-
-///|
-/// A folder kept at hand (Favorite): its station, its root, where in it, its name.
-priv struct Fav {
-  station : String
-  root : String
-  path : String
-  name : String
-}
-
-///|
-/// The workspace's 个人收藏 (prefs `driveFavorites[workspace]`, a JSON list), as chosen here until the prefs say.
-fn files_favs(src : Source, ws : String) -> Array[Fav] {
-  let raw = match wide.favs_set.get(ws) {
-    Some(r) => r
-    None => text(field(field((src.topic)("prefs", {}).value, "driveFavorites"), ws), "")
-  }
-  let out : Array[Fav] = []
-  let parsed = @json.parse(raw) catch { _ => Json::null() }
-  match parsed {
-    Array(list) =>
-      for f in list {
-        let f = Some(f)
-        if text(f, "station") != "" && text(f, "root") != "" {
-          out.push({ station: text(f, "station"), root: text(f, "root"), path: text(f, "path"), name: text(f, "name") })
-        }
-      }
-    _ => ()
-  }
-  out
-}
-
-///|
-/// The 个人收藏 kept (40 at most).
-fn files_keep_favs(src : Source, ws : String, list : Array[Fav]) -> Unit {
-  let kept = (if list.length() > 40 { list[:40].to_owned() } else { list }).map(fn(f) {
-    Json::object({
-      "station": Json::string(f.station),
-      "root": Json::string(f.root),
-      "path": Json::string(f.path),
-      "name": Json::string(f.name),
-    })
-  })
-  let raw = Json::array(kept).stringify()
-  wide.favs_set[ws] = raw
-  (src.call)("prefs.set", { "driveFavorites": Json::object(Map::from_array([(ws, Json::string(raw))])) }, fn(_) {  })
-}
-
-///|
-/// Whether `at` (its root said) is among the 个人收藏.
-fn files_is_fav(favs : Array[Fav], station : String, root : String, path : String) -> Bool {
-  favs.iter().any(fn(f) { f.station == station && f.root == root && f.path == path })
-}
-
-///|
 /// Where a station's drive starts for its viewer: its home for one who browses everywhere, else the first folder it
 /// pins.
 fn files_start(s : DvStation) -> String? {
@@ -105,7 +27,6 @@ fn files_go(at : DriveAt) -> Unit {
     ftab_go(at.station, at.root.unwrap_or(""), at.path)
     return
   }
-  wide.files_chosen = ""
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -161,7 +82,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       // what is dragged moved on or let go (the sidebar's drops as the folder's)
       fdrag_frame(c, src, w)
       // 个人收藏 (a folder dragged onto it kept there)
-      let favs = files_favs(src, w.id)
+      let favs = @sfdesk.favorites(src, w.id)
       let kid = c.id("files/keep")
       let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
       c.box(style=if keeping { fdrag_keep_on } else { fdrag_keep }, id=kid, fn() {
@@ -181,7 +102,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             let into : DriveAt = { station: f.station, root: Some(f.root), path: f.path }
             fdrag_side_row(c, "fav/" + f.station + "/" + f.root + "/" + f.path, into, f.name, files_writes(src, w, st), st.transfers, fn() {
               if c.clicked(rid) {
-                files_keep_favs(src, w.id, favs.filter(fn(x) { !(x.station == f.station && x.root == f.root && x.path == f.path) }))
+                @sfdesk.favorite_remove(src, w.id, f.station, f.root, f.path)
               } else if nav_row(c, "files/fav/" + f.station + "/" + f.root + "/" + f.path, lit(f.station, f.root, f.path), fn() {
                   @sf.icon(c, "folder", size=files_icon, color=t.p.muted) |> ignore
                   c.text(f.name, style=place_name) |> ignore
@@ -621,17 +542,23 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
   if c.key_pressed(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
     fgo_open()
   }
-  // ⌘⇧P: the preview beside the list, shown or not
-  let previewing = files_previewing(src)
-  if c.key_pressed(@ui.key_of_char('p'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
-    files_set_preview(src, !previewing)
+  // the folder in front, as the folder's own parts take it (src/sfdesk/drive.mbt)
+  let front_of = fn(i : Int, p : DriveAt) -> @sfdesk.FolderOf {
+    let ps = stations.iter().find_first(fn(x) { x.station == p.station }).unwrap_or(st)
+    {
+      key: "page/\{i}",
+      ws: w.id,
+      st: ps,
+      rights: dv_rights(src, w.id, Some(ps)),
+      at: p,
+      front: i == tab.front,
+      room: 0.0,
+      go: fn(to, _) { files_go(to) },
+      open_in: None,
+      go_to: Some(fn() { fgo_open() }),
+      manage: Some(fn() { dv_open(c, View(p, can.manage && p.path == "")) }),
+    }
   }
-  let (name, _) = files_pane_parts(here, stations)
-  let favs = files_favs(src, w.id)
-  let faved = files_is_fav(favs, at.station, root, at.path)
-  let abs = if at.path == "" { root } else { root + "/" + at.path }
-  let pinned = st.roots.iter().any(fn(r) { r.path == abs })
-  let key = folder_key(at.station, root, at.path)
   let page = c.id("files-page")
   c.box(style=files_page_box, id=page, fn() {
     // the bar (Files.tsx's): the tabs, the folder's ways and what can be done to it, then the tabs' own
@@ -645,75 +572,7 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
       } else {
         c.box(style=files_tabs_none, fn() {  }) |> ignore
       }
-      c.box(style=files_views, fn() {
-        for v in [("columns", "view-columns"), ("tree", "view-tree"), ("list", "list")] {
-          let (way, icon) = v
-          let on = files_view(src) == way
-          let vid = c.id("files/view/" + way)
-          c.cursor(vid, Hand)
-          if c.clicked(vid) && !on {
-            files_set_view(src, way)
-          }
-          let b = c.box(style=if on { files_view_on } else { files_view_off }, id=vid, fn() {
-            @sf.icon(c, icon, size=files_icon, color=if on { t.p.text } else { t.p.muted }) |> ignore
-          })
-          c.semantics(b, Button, id=vid, label=tr("web-pages.drive.view." + way))
-        }
-      })
-      |> ignore
-      if files_lit_button(
-          c,
-          "files/preview",
-          if previewing { "panel-close" } else { "panel-open" },
-          tr(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
-          previewing,
-        ) {
-        files_set_preview(src, !previewing)
-      }
-      if can.write && icon_button(c, "files/upload", "upload", label=tr("web-pages.drive.upload")) {
-        dv_upload(c, here)
-      }
-      if can.write && icon_button(c, "files/mkdir", "folder-plus", label=tr("web-pages.drive.mkdir")) {
-        dv_new_folder(c, src, here)
-      }
-      if icon_button(c, "files/refresh", "refresh", label=tr("web-pages.drive.refresh")) && !dv.refreshing.contains(key) {
-        dv.refreshing[key] = true
-        (src.call)(
-          "drive.refresh",
-          { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(at.path) },
-          fn(r) {
-            dv.refreshing.remove(key)
-            (dv_act(c, tr("web-pages.drive.refreshWhat")))(r)
-          },
-        )
-      }
-      let fav_label = fill(if faved { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, [("name", name)])
-      if files_lit_button(c, "files/fav", "star", fav_label, faved) {
-        if faved {
-          files_keep_favs(src, w.id, favs.filter(fn(f) { !(f.station == at.station && f.root == root && f.path == at.path) }))
-        } else {
-          let kept : Array[Fav] = [{ station: at.station, root, path: at.path, name }]
-          for f in favs {
-            kept.push(f)
-          }
-          files_keep_favs(src, w.id, kept)
-        }
-      }
-      if st.anywhere && can.manage &&
-        files_lit_button(c, "files/pin", "pin", tr(if pinned { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), pinned) {
-        let roots = st.roots.map(fn(r) { r.path }).filter(fn(p) { p != abs })
-        if !pinned {
-          roots.push(abs)
-        }
-        (src.call)(
-          "drive.setRoots",
-          { "station": Json::string(at.station), "roots": Json::array(roots.map(fn(p) { Json::string(p) })) },
-          dv_act(c, tr("android-misc.drive.roots.what")),
-        )
-      }
-      if icon_button(c, "files/more", "more", label=tr("android-misc.drive.view")) {
-        dv_open(c, View(here, can.manage && at.path == ""))
-      }
+      @sfdesk.folder_actions(c, src, front_of(tab.front, here))
       c.box(style=files_bar_sep, fn() {  }) |> ignore
       // the transfers (Files.tsx: past the folder's own, before the tabs')
       files_transfers(c, src, w.id)
@@ -740,7 +599,7 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
           }
           // (each side's ids its own: the same folder can be on both)
           c.scope(i, fn() {
-            folder_pane(c, src, w, stations, pane, split_on, fn() {
+            folder_pane(c, src, w, stations, front_of(i, pane), split_on, fn() {
               if !front {
                 show(files_fronted(tabs, i))
               }
@@ -1233,11 +1092,12 @@ fn folder_pane(
   src : Source,
   w : Workspace,
   stations : Array[DvStation],
-  at : DriveAt,
+  f : @sfdesk.FolderOf,
   split_on : Bool,
   front_it : () -> Unit,
 ) -> Unit {
   let t = @sf.theme()
+  let at = f.at
   let st = match stations.iter().find_first(fn(x) { x.station == at.station }) {
     Some(v) => v
     None => {
@@ -1299,40 +1159,26 @@ fn folder_pane(
     }
   })
   |> ignore
-  let previewing = files_previewing(src)
   let total = c.width - rail_w - (if wide.folded { 0.0 } else { wide.side_w })
-  let side = if split_on { total / 2.0 - files_body_in_half } else { total - files_body_in }
-  let room = if previewing { side - fpane_w } else { side }
-  let write = dv_rights(src, w.id, Some(st)).write
-  // the list, the preview beside it (⌘⇧P) under the head; what is dropped where no folder of it takes it goes into the
-  // folder shown
+  let room = if split_on { total / 2.0 - files_body_in_half } else { total - files_body_in }
+  // the folder's own (src/sfdesk/drive.mbt FolderView), what is pressed in it putting this side in front first
   c.box(style=if split_on { files_pane_half } else { files_pane }, fn() {
-    let lid = c.id("files/list/" + at.station + "/" + root + "/" + at.path)
-    let lit = fdrag_target(c, lid, "pane/" + at.station + "/" + root + "/" + at.path, Some(at), name, write, st.transfers, 0)
-    c.box(style=files_pane_list, id=lid, fn() {
-      match files_view(src) {
-        "list" => files_list(c, src, at, root, at.path, 0, false, front_it, write~, transfers=st.transfers)
-        "tree" => files_list(c, src, at, root, at.path, 0, true, front_it, write~, transfers=st.transfers)
-        _ => {
-          // (in columns the files going up over them, as the web's)
-          c.box(style=files_uploads_over, fn() {
-            for u in dv.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == at.path }) {
-              files_upload_row(c, src, u, files_entries(src, at.station, root, at.path).0.unwrap_or([]))
-            }
-          })
-          |> ignore
-          files_columns(c, src, at, root, room, front_it, write~, transfers=st.transfers)
-        }
-      }
-      match lit {
-        Some(l) => fdrag_over_pane(c, l, name)
-        None => ()
-      }
-    })
-    |> ignore
-    if previewing {
-      files_preview_pane(c, src, st, at, root)
+    let pid = c.id("files/side/" + f.key)
+    // (a press anywhere in it, as the web's side takes the pointer going down first)
+    let (px, py, down) = c.pointer()
+    let inside = match c.rect_of(pid) {
+      Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
+      None => false
     }
+    if down && !wide.files_down.contains(f.key) && inside {
+      front_it()
+    }
+    if down {
+      wide.files_down[f.key] = true
+    } else {
+      wide.files_down.remove(f.key)
+    }
+    c.box(style=files_side_box, id=pid, fn() { @sfdesk.folder_view(c, src, { ..f, room, }) }) |> ignore
   })
   |> ignore
 }
@@ -1351,329 +1197,8 @@ fn files_lit_button(c : @ui.Ctx, key : String, icon : String, label : String, on
 }
 
 ///|
-/// A folder's entries in the order shown (the device's order, hidden ones as it says).
-fn files_entries(src : Source, station : String, root : String, path : String) -> (Array[DvEntry]?, String?) {
-  let topic = (src.topic)("drive", {
-    "station": Json::string(station),
-    "root": Json::string(root),
-    "path": Json::string(path),
-  })
-  let (sort, hidden) = dv_views(src)
-  match topic.value {
-    Some(v) => (Some(dv_arranged(items(Some(v), "entries").map(dv_entry), sort, hidden)), None)
-    None =>
-      (
-        None,
-        match topic.error {
-          Some(e) => Some(dv_error(e))
-          None => None
-        },
-      )
-  }
-}
-
-///|
-/// A folder's rows (a list), or with its folders opened in place under them (`tree`), in by a step a depth.
-fn files_list(
-  c : @ui.Ctx,
-  src : Source,
-  at : DriveAt,
-  root : String,
-  path : String,
-  depth : Int,
-  tree : Bool,
-  front_it : () -> Unit,
-  write? : Bool = false,
-  transfers? : Bool = false,
-  compact? : Bool = false,
-) -> Unit {
-  let (entries, error) = files_entries(src, at.station, root, path)
-  // the files going up into it (UploadRow), over its rows (not a chat's 文件 tab's)
-  if depth == 0 && !compact {
-    for u in dv.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == path }) {
-      files_upload_row(c, src, u, entries.unwrap_or([]))
-    }
-  }
-  match (entries, error) {
-    (None, Some(e)) => c.text(e, style=place_trouble) |> ignore
-    (None, None) => c.box(style=files_note_box, fn() { c.text(tr("web-pages.files.reading"), style=place_meta) |> ignore }) |> ignore
-    (Some([]), _) =>
-      c.box(style=files_note_box, fn() { c.text(tr("web-pages.drive.emptyFolder"), style=place_meta) |> ignore }) |> ignore
-    (Some(list), _) => {
-      // a list's heads (ListView): its order by a press on one, the one it is in marked
-      if !tree && depth == 0 && !compact {
-        files_heads(c, src)
-      }
-      for e in list {
-        let full = dv_join(path, e.name)
-        let okey = files_owner() + "tree/" + at.station + "/" + root + "/" + full
-        let open = tree && e.dir && wide.files_open.contains(okey)
-        wide_row(
-          c,
-          src,
-          at,
-          root,
-          path,
-          e,
-          list,
-          depth,
-          if tree && e.dir { Some(open) } else { None },
-          front_it,
-          fn() {
-            if open {
-              wide.files_open.remove(okey)
-            } else {
-              wide.files_open[okey] = true
-            }
-          },
-          write~,
-          transfers~,
-          compact~,
-        )
-        if open {
-          files_list(c, src, at, root, full, depth + 1, true, front_it, write~, transfers~, compact~)
-        }
-      }
-    }
-  }
-}
-
-///|
-/// A list's heads (DriveViews.tsx ListView): 名称, 大小, 修改时间 over their columns; a press orders the folder by it
-/// (`driveViews.sort`), the order it is in marked.
-fn files_heads(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
-  let (sort, _) = dv_views(src)
-  let head = fn(key : String, words : String, style : @ui.Style) {
-    let id = c.id("files/head/" + key)
-    c.cursor(id, Hand)
-    if c.clicked(id) && sort != key {
-      dv_set_view(src, "sort", if key == "name" { None } else { Some(key) })
-    }
-    let b = c.box(style~, id~, fn() {
-      c.text(words, style=files_head_words) |> ignore
-      if sort == key {
-        @sf.icon(c, "chevron-down", size=files_close_icon, color=t.p.muted) |> ignore
-      }
-    })
-    c.semantics(b, Button, id~, label=words)
-  }
-  c.box(style=files_heads_row, fn() {
-    c.box(style=files_head_mark, fn() {  }) |> ignore
-    head("name", tr("web-pages.drive.sortBy.nameHead"), files_head_name)
-    head("size", tr("web-pages.drive.sortBy.sizeHead"), files_head_size)
-    head("time", tr("web-pages.drive.sortBy.timeHead"), files_head_time)
-    c.box(style=files_row_end, fn() {  }) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The folder in columns (ColumnsView): a column a folder, from the one open to the one opened in it (and so on), as
-/// many as the pane holds, the last ones; a folder pressed opens beside its column, the columns after it let go.
-fn files_columns(
-  c : @ui.Ctx,
-  src : Source,
-  at : DriveAt,
-  root : String,
-  pane : Double,
-  front_it : () -> Unit,
-  write? : Bool = false,
-  transfers? : Bool = false,
-  halves? : Bool = false,
-) -> Unit {
-  let ckey = files_owner() + at.station + "\u{1}" + root + "\u{1}" + at.path
-  let open = wide.files_cols.get(ckey).unwrap_or("")
-  let parts = if open == "" { [] } else { open.split("/").map(fn(p) { p.to_string() }).collect() }
-  let paths = [at.path]
-  let mut so_far = at.path
-  for p in parts {
-    so_far = dv_join(so_far, p)
-    paths.push(so_far)
-  }
-  // the last ones the pane holds (each as wide as it is set, an edge after it)
-  // (a chat's 文件 tab: two at a time, the one open and the one before it, halves of it)
-  let widths = paths.map(fn(p) {
-    if halves {
-      pane / 2.0 - @sfdesk.fcols_edge_w
-    } else {
-      @sfdesk.fcols_width(src, at.station + "\u{1}" + root + "\u{1}" + p)
-    }
-  })
-  let mut from = paths.length() - 1
-  let mut used = widths[from] + @sfdesk.fcols_edge_w
-  while from > 0 && used + widths[from - 1] + @sfdesk.fcols_edge_w <= pane {
-    from -= 1
-    used += widths[from] + @sfdesk.fcols_edge_w
-  }
-  c.box(style=files_columns_row, fn() {
-    for i in from..<paths.length() {
-      let path = paths[i]
-      let next = parts.get(i)
-      let wkey = at.station + "\u{1}" + root + "\u{1}" + path
-      // a column takes what is dropped on it into its folder
-      let cid = c.id("files/column/" + at.station + "/" + root + "/" + path)
-      let into : DriveAt = { station: at.station, root: Some(root), path }
-      let lit = fdrag_target(c, cid, "column/" + at.station + "/" + root + "/" + path, Some(into), dv_name(dv_absolute(root, path)), write, transfers, 1)
-      let sized = files_column.then(@ui.style(w=Fixed(widths[i])))
-      c.box(style=if lit is Some(_) { sized.then(files_column_drop) } else { sized }, id=cid, fn() {
-        let (entries, error) = files_entries(src, at.station, root, path)
-        match (entries, error) {
-          (None, Some(e)) => c.text(e, style=place_trouble) |> ignore
-          (None, None) =>
-            c.box(style=files_note_box, fn() { c.text(tr("web-pages.files.reading"), style=place_meta) |> ignore })
-            |> ignore
-          (Some([]), _) =>
-            c.box(style=files_note_box, fn() { c.text(tr("web-pages.drive.emptyFolder"), style=place_meta) |> ignore })
-            |> ignore
-          (Some(list), _) =>
-            for e in list {
-              let along = next == Some(e.name)
-              wide_row(c, src, at, root, path, e, list, 0, None, front_it, fn() {  }, along~, column=true, compact=halves, write~, transfers~, open_beside=fn() {
-                // (what is opened under the column's folder: its way down from where the columns start)
-                let below = if at.path == "" {
-                  dv_join(path, e.name)
-                } else {
-                  dv_join(path, e.name).view(start_offset=at.path.length() + 1).to_string()
-                }
-                wide.files_cols[ckey] = below
-              })
-            }
-        }
-      })
-      |> ignore
-      let names = files_entries(src, at.station, root, path).0.unwrap_or([]).map(fn(e) { (e.name, e.dir) })
-      if halves {
-        c.box(style=@sfdesk.fcols_edge, fn() {  }) |> ignore
-      } else {
-        @sfdesk.files_column_edge(c, src, wkey, cid, widths[i], names)
-      }
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A row (DriveRow): its kind's mark (a folder's disclosure before it in a tree), its name; chosen by a click, opened by
-/// a double click (a folder gone into; in columns, a folder pressed opens beside); `along` the folder open beside.
-fn wide_row(
-  c : @ui.Ctx,
-  src : Source,
-  at : DriveAt,
-  root : String,
-  dir : String,
-  e : DvEntry,
-  shown : Array[DvEntry],
-  depth : Int,
-  disclosure : Bool?,
-  front_it : () -> Unit,
-  toggle : () -> Unit,
-  along? : Bool = false,
-  column? : Bool = false,
-  open_beside? : () -> Unit = fn() {  },
-  write? : Bool = false,
-  transfers? : Bool = false,
-  compact? : Bool = false,
-) -> Unit {
-  let t = @sf.theme()
-  let rkey = at.station + "\u{1}" + root + "\u{1}" + dv_join(dir, e.name)
-  let id = c.id("files/row/" + files_owner() + rkey)
-  let did = c.id("files/row-open/" + files_owner() + rkey)
-  c.cursor(id, Hand)
-  let chosen = files_chosen_now() == rkey
-  let in_place : DriveAt = { station: at.station, root: Some(root), path: dir }
-  // pressed, it may be dragged (wide_files_drag.mbt): what it carries
-  let full = dv_join(dir, e.name)
-  if c.pressed(id) {
-    let ws = at.station.split("/").next().map(fn(v) { v.to_string() }).unwrap_or("")
-    let station_name = match dv_stations(src, ws).0 {
-      Some(l) =>
-        match l.iter().find_first(fn(s) { s.station == at.station }) {
-          Some(s) => s.name
-          None => ""
-        }
-      None => ""
-    }
-    fdrag_press(c, {
-      station: at.station,
-      station_name,
-      root,
-      path: full,
-      abs: dv_absolute(root, full),
-      name: e.name,
-      size: e.size,
-      dir: e.dir,
-    })
-  }
-  // a folder takes what is dropped on it
-  let lit = if e.dir {
-    fdrag_target(c, id, "row/" + rkey, Some({ station: at.station, root: Some(root), path: full }), e.name, write, transfers, 2)
-  } else {
-    None
-  }
-  // (a press in the side not in front puts it in front first)
-  if c.clicked(did) || c.double_clicked(id) || c.clicked(id) || c.right_clicked(id) is Some(_) {
-    front_it()
-  }
-  // its menu (the drive's sheet of an entry: open, share, rename, move, delete…) from a right click, chosen
-  match c.right_clicked(id) {
-    Some((mx, my)) => {
-      files_choose(rkey)
-      if ftab.building {
-        // a chat's 文件 tab: its own menu (添加到消息, 复制路径, 下载, pin)
-        ftab_menu_at(at.station, root, full, e, mx, my)
-      } else {
-        dv_open(c, Entry(in_place, e, shown.map(fn(x) { x.name })))
-      }
-    }
-    None => ()
-  }
-  if c.clicked(did) {
-    toggle()
-  } else if c.double_clicked(id) {
-    if ftab.building && e.dir {
-      ftab_go(at.station, root, full)
-    } else {
-      drive_open(c, src, in_place, root, e, shown)
-    }
-  } else if c.clicked(id) {
-    files_choose(rkey)
-    if column && e.dir {
-      open_beside()
-    }
-  }
-  c.box(style=if lit is Some(_) { files_row_drop } else if chosen || along { files_row_on } else { files_row_style }, id~, fn() {
-    if depth > 0 {
-      c.box(style=@ui.style(w=Fixed(files_indent * depth.to_double())), fn() {  }) |> ignore
-    }
-    match disclosure {
-      Some(open) =>
-        c.box(style=files_disclosure, id=did, fn() {
-          @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=files_icon, color=t.p.subtle) |> ignore
-        })
-        |> ignore
-      None => ()
-    }
-    @sf.icon(c, dv_kind_icon(if e.dir { "folder" } else { e.kind }), size=files_icon, color=t.p.muted) |> ignore
-    c.text(e.name, style=place_name) |> ignore
-    if column && e.dir {
-      @sf.icon(c, "chevron-right", size=files_icon, color=t.p.subtle) |> ignore
-    }
-    // a list's and a tree's: its size and when it changed, in their columns (a chat's 文件 tab: its size alone)
-    if compact && !e.dir {
-      c.box(style=files_size_cell, fn() { c.text(e.size_text, style=files_cell_words) |> ignore }) |> ignore
-    } else if !column && !compact {
-      c.box(style=files_size_cell, fn() { c.text(e.size_text, style=files_cell_words) |> ignore }) |> ignore
-      c.box(style=files_time_cell, fn() { c.text(e.time_text, style=files_cell_words) |> ignore }) |> ignore
-      c.box(style=files_row_end, fn() {  }) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A tree's step in (16).
-let files_indent : Double = 16.0
+// kept across runs: a value (no field of it changes)
+let files_side_box : @ui.Style = @ui.style(w=Full, h=Full)
 
 ///|
 /// A row's mark (16, as the web's rows) and the folder's room in from the pane's sides (32 before it, 40 after: the
@@ -1710,19 +1235,6 @@ let files_page_box : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
 /// The bar: 45 high, what is on it at its end, 12 in, a line under it.
 // kept across runs: a value (no field of it changes)
 let files_bar : @ui.Style = @ui.style(row=true, w=Full, h=S11, px=S3, gap=S1, align=ACenter, justify=JEnd)
-
-///|
-/// The three ways side by side on a ground of their own (Drive.css.ts views), the one shown raised.
-// kept across runs: a value (no field of it changes)
-let files_views : @ui.Style = @ui.style(row=true, p=S0_5, gap=SPx, radius=Xl, bg=Hover)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_view_off : @ui.Style = @ui.style(w=S7, h=S7, radius=Lg, align=ACenter, justify=JCenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_view_on : @ui.Style = files_view_off.then(@ui.style(bg=Bg))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1879,71 +1391,13 @@ let files_head_half : @ui.Style = @ui.style(w=Full, px=S6, pt=S3, pb=S3, gap=S1_
 let files_pane_half : @ui.Style = @ui.style(row=true, w=Full, h=Full, px=S4, clip=true)
 
 ///|
-/// Files going up over the columns, in as a column's rows are.
-// kept across runs: a value (no field of it changes)
-let files_uploads_over : @ui.Style = @ui.style(w=Full, px=S1)
-
-///|
-/// A side's list, the preview beside it (wide_files_pane.mbt) in from the side's edge as the list is.
-// kept across runs: a value (no field of it changes)
-let files_pane_list : @ui.Style = @ui.style(w=@sf.grow, h=Full, clip=true)
-
-///|
-/// A list's columns (ListView): its size's (96) and its time's (116), right-aligned, and the room after them for its
-/// row's menu (64).
-// kept across runs: a value (no field of it changes)
-let files_size_cell : @ui.Style = @ui.style(row=true, w=S24, justify=JEnd)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_time_cell : @ui.Style = @ui.style(row=true, w=S28, justify=JEnd)
-
-///|
 // kept across runs: a value (no field of it changes)
 let files_row_end : @ui.Style = @ui.style(w=S16)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_cell_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
-
-///|
-/// The heads: a row 32 high, their words small and muted, each over its column.
-// kept across runs: a value (no field of it changes)
-let files_heads_row : @ui.Style = @ui.style(row=true, w=Full, h=S8, px=S2, gap=S2, align=ACenter)
-
-///|
-/// (over a row's mark: as wide as it)
-// kept across runs: a value (no field of it changes)
-let files_head_mark : @ui.Style = @ui.style(w=S4)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_head_name : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_head_size : @ui.Style = @ui.style(row=true, w=S24, gap=S1, align=ACenter, justify=JEnd)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_head_time : @ui.Style = @ui.style(row=true, w=S28, gap=S1, align=ACenter, justify=JEnd)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_head_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 /// The line under the bar (Files.css.ts: the pane's line across it).
 // kept across runs: a value (no field of it changes)
 let files_bar_rule : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_columns_row : @ui.Style = @ui.style(row=true, w=Full, h=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_column : @ui.Style = @ui.style(w=Fixed(@sfdesk.files_column_w), h=Full, px=S1, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1962,10 +1416,6 @@ let files_row_style : @ui.Style = @ui.style(
   radius=Lg,
   hovered=@ui.patch(bg=Hover),
 )
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_row_on : @ui.Style = files_row_style.then(@ui.style(bg=Selected))
 
 ///|
 // kept across runs: a value (no field of it changes)
