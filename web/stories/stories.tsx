@@ -898,6 +898,8 @@ export const stories: Story[] = [
 
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
+  { id: "phone-settings", group: "设置", title: "手机 · 设置（账号、workspace 两张卡，各组带图标）", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }] },
+  { id: "phone-settings-about", group: "设置", title: "手机 · 关于（更新日志、使用统计、条款）", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "关于" }] },
   { id: "phone-settings-appearance", group: "设置", title: "手机 · 外观", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }] },
   { id: "settings-appearance-fonts", group: "设置", title: "外观 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }] },
   { id: "settings-appearance-fonts-text", group: "设置", title: "外观 · 字体 · 正文，指着思源宋体（预览里先试）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }, { click: '[aria-label="字体"] button:has-text("正文")' }, { hover: 'button[aria-pressed]:has-text("思源宋体")' }] },

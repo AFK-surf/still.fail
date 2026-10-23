@@ -22,11 +22,9 @@ test "settings: the account, the workspace's rows and how each stands, this devi
   let t = settings_tester("home")
   assert_true(t.find("设置") is Some(_))
   assert_true(t.find("lin@example.com") is Some(_))
-  // the workspace's heading: its name and the viewer's role
+  // the workspace's card: its name, the viewer's role and its people (3 members, an email added and an invitation out)
   assert_true(t.find("星火工作室") is Some(_))
-  assert_true(t.find("Workspace") is Some(_))
-  // 3 members, an email added and an invitation out
-  assert_true(t.find("3 人") is Some(_))
+  assert_true(t.find("Owner · 3 人 · 2 人待加入") is Some(_))
   assert_true(t.find("1/2 在线") is Some(_))
   assert_true(t.find("外观") is Some(_))
   // a tap on the account's card: the account
@@ -42,16 +40,29 @@ test "settings: the account, the workspace's rows and how each stands, this devi
 }
 
 ///|
-test "settings: the version row says the build, as Android's versionName (0.1.<build>); the line alone where the host has none" {
-  for case in [(4566, "still.fail mbui 0.1.4566"), (0, "still.fail mbui 0.1")] {
+test "settings: 关于 says the build, as Android's versionName (0.1.<build>), its page the app's name before it; the line alone where the host has none" {
+  for case in [(4566, "0.1.4566"), (0, "0.1")] {
     reset()
     let src = fixture("settings")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=1600.0, app_version=case.0)
     open_setting("home")
     t.draw()
     t.run_for(@ui.nav_push_ms)
+    assert_true(t.find("关于") is Some(_))
     assert_true(t.find(case.1) is Some(_))
+    t.tap_text("关于")
+    t.run_for(@ui.nav_push_ms)
+    assert_true(t.find("still.fail mbui " + case.1) is Some(_))
+    assert_true(t.find("更新日志") is Some(_))
   }
+}
+
+///|
+test "settings: the workspace's card opens its page" {
+  let t = settings_tester("home")
+  t.tap_text("星火工作室")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("zhou@example.com") is Some(_))
 }
 
 ///|

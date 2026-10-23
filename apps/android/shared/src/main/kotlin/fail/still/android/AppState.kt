@@ -136,6 +136,8 @@ sealed interface Screen {
     data class KeptChat(val station: String?, val thread: Long?) : Screen { override val id = "kept-files/${station ?: ""}/${thread ?: ""}" }
     /** What changed in still.fail (screens/Changelog.kt). */
     data object Changelog : Screen { override val id = "changelog" }
+    /** About this app, from settings (screens/SettingsHome.kt AboutScreen): this build, what changed, the terms. */
+    data object About : Screen { override val id = "about" }
     /** Every station's connects, profiles and memory, from settings. */
     /** Every station's connects, or (from a station's page) that station's only. */
     data class Connects(val station: String? = null) : Screen { override val id = "connects" + (station?.let { "/$it" } ?: "") }

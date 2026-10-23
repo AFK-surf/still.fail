@@ -426,6 +426,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.KeptFiles -> fail.still.android.screens.KeptFilesScreen()
                     is Screen.KeptChat -> fail.still.android.screens.KeptChatScreen(screen.station, screen.thread)
                     Screen.Changelog -> fail.still.android.screens.ChangelogScreen()
+                    Screen.About -> fail.still.android.screens.AboutScreen()
                     is Screen.Connects -> fail.still.android.screens.ConnectsScreen(current, screen.station)
                     is Screen.Profiles -> fail.still.android.screens.ProfilesScreen(current, screen.station)
                     is Screen.ProfileAccount -> fail.still.android.screens.ProfileAccountScreen(current, screen.key)

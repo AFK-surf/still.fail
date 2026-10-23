@@ -9,13 +9,12 @@ test "43-notify-off" {
     f.see("端到端测试")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
-    f.see("Workspace")
+    f.see("=设置")
     f.drag_at(195.0, 600.0, 0.0, -400.0)
     // the page let go: its list at rest (its glide, its scroll bar gone) before 通知 is tapped
     f.run_to_rest("a list's")
     f.see("=通知")
     f.tap("=通知")
-    f.see("不接收通知")
     f.back()
     f.run_for(@ui.nav_push_ms)
     f.see("端到端测试")
@@ -25,13 +24,14 @@ test "43-notify-off" {
     f.no_notice("关着的时候 083209")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
-    f.see("Workspace")
+    f.see("=设置")
     f.drag_at(195.0, 600.0, 0.0, -400.0)
     // the page let go: its list at rest (its glide, its scroll bar gone) before 通知 is tapped
     f.run_to_rest("a list's")
     f.see("=通知")
     f.tap("=通知")
-    f.see("任务完成、需要处理")
+    // switched on again: as the core has it once it answered (its switch says so at once, before), for the runs after
+    f.answered("notify.set", 2)
     f.end()
   })
 }

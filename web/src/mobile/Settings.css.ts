@@ -2,6 +2,24 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mMe = style({ display: "flex", alignItems: "center", gap: "14px" });
+/** A settings row's icon, before its name (Android's RowIcon). */
+export const mRowIcon = style({ flex: "none", color: "var(--m-muted)" });
+/**
+ * The workspace's mark on its card, as the account's picture is on its own (Android's WorkspaceTile): its first letter,
+ * muted, on the chips' ground (the wide screen's rail, Rail.css.ts); one of still.fail's icons or an emoji there too; a
+ * picture put up fills it. In the card's corners (its padding from its edges, 14 above and under): concentric with the
+ * card's corner (lists.css.ts mCard, 20).
+ */
+export const mWorkspace = style({
+  display: "grid", placeItems: "center", flex: "none", width: "46px", height: "46px", overflow: "hidden",
+  borderRadius: `calc(20px * ${vars.cornerScale} - 14px)`, // own corner: concentric with its card's (mCard 20, 14 in)
+  cornerShape: vars.cornerShape, background: "var(--m-chip)",
+  color: "var(--m-muted)", fontSize: vars.textHeading, fontWeight: "600", lineHeight: "1",
+  selectors: {
+    "&[data-marked]": { color: "var(--m-ink)" },
+    "&[data-picture]": { background: "none" },
+  },
+});
 /** How things stand, at a row's end before its chevron. */
 export const mValue = style({
   display: "inline-flex", alignItems: "center", gap: "6px", flex: "none", maxWidth: "60%", overflow: "hidden",

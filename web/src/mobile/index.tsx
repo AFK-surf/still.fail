@@ -26,7 +26,7 @@ import { Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
 import { NewProfileScreen, PickModelsScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
-import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
+import { AboutScreen, AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
 import { FontScreen } from "./Fonts.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
@@ -61,6 +61,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/bar" element={<BarSettingsScreen />} />
       <Route path="settings/language" element={<LanguageScreen />} />
       <Route path="settings/changelog" element={<ChangelogScreen />} />
+      <Route path="settings/about" element={<AboutScreen />} />
       <Route path="settings/workspace" element={<WorkspaceScreen />} />
       <Route path="settings/security" element={<SecurityScreen />} />
       <Route path="settings/security/open" element={<SecurityOpenScreen />} />

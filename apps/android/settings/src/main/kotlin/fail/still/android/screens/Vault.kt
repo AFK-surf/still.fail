@@ -215,7 +215,7 @@ fun VaultSettingsRow(ws: String) {
         v.vaults.isNotEmpty() -> t("android-settings.vault.items", "n" to v.vaults.sumOf { it.items.toInt() })
         else -> t("android-settings.vault.off")
     }
-    GoRow(t("android-settings.vault.title"), value, bad = waiting > 0) { app.push(Screen.Vault) }
+    GoRow(t("android-settings.vault.title"), value, bad = waiting > 0, icon = Icons.Key) { app.push(Screen.Vault) }
 }
 
 // ── the page ───────────────────────────────────────────────────────────

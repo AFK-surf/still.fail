@@ -597,8 +597,8 @@ fn chevron(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// A row that opens a page (SettingParts.kt GoRow): its name, how things stand at its end (`bad` in red; `dot`, a red
-/// dot before it), a chevron. True on the frame after a tap.
+/// A row that opens a page (SettingParts.kt GoRow): its icon (settings' rows: `icon`, design/icons' name), its name, how
+/// things stand at its end (`bad` in red; `dot`, a red dot before it), a chevron. True on the frame after a tap.
 fn go_row(
   c : @ui.Ctx,
   key : String,
@@ -606,9 +606,13 @@ fn go_row(
   value? : String = "",
   bad? : Bool = false,
   dot? : Bool = false,
+  icon? : String = "",
   lead? : () -> Unit,
 ) -> Bool {
   list_row(c, key~, fn() {
+    if icon != "" {
+      row_icon(c, icon)
+    }
     match lead {
       Some(f) => f()
       None => ()
@@ -626,6 +630,13 @@ fn go_row(
     }
     chevron(c)
   })
+}
+
+///|
+/// A settings row's icon, before its name (SettingParts.kt RowIcon): the line art in the muted ink.
+fn row_icon(c : @ui.Ctx, name : String) -> Unit {
+  let t = @sf.theme()
+  @sf.icon(c, name, size=@sf.row_icon, color=t.p.muted) |> ignore
 }
 
 ///|

@@ -1,5 +1,5 @@
 // 87-device-pages (e2e/traces/settings-device-pages.trace): 下方栏: Station's "−" on the first bar, 用量 added from its
-// sheet (prefs.set barsBy); 本机缓存 (cache.usage); 更新日志; 用量 → 价目表.
+// sheet (prefs.set barsBy); 本机缓存 (cache.usage); 关于 → 更新日志; 用量 → 价目表.
 
 ///|
 test "87-device-pages" {
@@ -7,7 +7,7 @@ test "87-device-pages" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-device-pages"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
-    f.wheel_at("Workspace", 500.0)
+    f.wheel_at("=设置", 500.0)
     f.tap("=下方栏")
     f.run_to(@ui.nav_rest())
     f.see("第 1 栏")
@@ -26,7 +26,11 @@ test "87-device-pages" {
     f.see("chat #1")
     f.back()
     f.run_to(@ui.nav_rest())
+    f.tap("=关于")
+    f.run_to(@ui.nav_rest())
     f.tap("=更新日志")
+    f.run_to(@ui.nav_rest())
+    f.back()
     f.run_to(@ui.nav_rest())
     f.back()
     f.run_to(@ui.nav_rest())

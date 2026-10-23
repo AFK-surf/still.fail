@@ -129,6 +129,35 @@ pub let list_pad : Double = 8.0
 pub let row_corner : Double = 18.0
 
 ///|
+/// A settings row's icon, before its name (SettingParts.kt ROW_ICON).
+pub let row_icon : Double = 22.0
+
+///|
+/// The account's picture and the workspace's mark, each on its card atop settings (SettingsHome.kt): 46.
+pub let identity_mark : Double = 46.0
+
+///|
+/// The workspace's mark's square (SettingsHome.kt WorkspaceTile): the account's picture's size beside it, card_pad from
+/// its card's edges, so in its corners: concentric with the card's (22, 20 in: 6, Md), what it holds in its middle.
+pub let workspace_tile : @ui.Style = @ui.style(
+  w=Fixed(identity_mark),
+  h=Fixed(identity_mark),
+  radius=Md,
+  align=ACenter,
+  justify=JCenter,
+  clip=true,
+)
+
+///|
+/// A mark of the workspace's own (one of still.fail's icons, an emoji) in its square: 26.
+pub let workspace_tile_mark : Double = 26.0
+
+///|
+/// A workspace's first letter in its square, where it has no mark: 22 on a line of 22 (Xl3, L7: SettingsHome.kt's
+/// lineHeight, near the account's initial beside it, half its picture), semibold, muted (Rail.css.ts workspaceItem).
+pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Xl3, leading=L7, weight=Semibold, color=Muted, wrap=false)
+
+///|
 /// A chip whose ground fills from the left (an allowance's, a machine's load, a download's: Parts.kt FILL_CHIP_CORNER):
 /// near a capsule's on its 20 (a small one's 16 a capsule); in a list row's corner, 12 in, the row's corner is
 /// concentric round it (concentric_out(8.4, 12) = row_corner).

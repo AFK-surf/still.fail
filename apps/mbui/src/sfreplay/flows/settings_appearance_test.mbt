@@ -8,7 +8,7 @@ test "33-settings-appearance" {
     f.see("端到端测试")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
-    f.see("Workspace")
+    f.see("=设置")
     f.see("外观")
     f.tap("外观")
     f.run_for(@ui.nav_push_ms)
@@ -21,7 +21,7 @@ test "33-settings-appearance" {
     f.run_for(@ui.cover_slide_ms)
     f.back()
     f.run_for(@ui.nav_push_ms)
-    f.see("Workspace")
+    f.see("=设置")
     f.end()
   })
 }
