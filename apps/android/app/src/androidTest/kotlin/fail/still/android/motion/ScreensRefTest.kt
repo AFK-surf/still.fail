@@ -22,7 +22,11 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onAllNodesWithText
@@ -132,7 +136,11 @@ class ScreensRefTest(private val name: String) {
                 ?: calls.firstOrNull { it["call"]?.jsonPrimitive?.content == call }
             said?.get("ok") ?: JsonNull
         }
-        val dark = screen["dark"]?.jsonPrimitive?.content == "true"
+        // dark as the screen says, or as its core's prefs have it (`appearance`: settings-home-dark's), as the mbui app
+        // draws it from them
+        val prefsSaid = screen["topics"]?.jsonArray.orEmpty().map { it.jsonObject }
+            .firstOrNull { it["topic"]?.jsonObject?.get("topic")?.jsonPrimitive?.content == "prefs" }?.get("value") as? JsonObject
+        val dark = screen["dark"]?.jsonPrimitive?.content == "true" || (prefsSaid?.get("appearance") as? kotlinx.serialization.json.JsonPrimitive)?.content == "dark"
         val activity = rule.activity
         // the app's drafts outlive a screen (Composer.kt Drafts: each chat's, kept by the process as it was first read):
         // each screen's read anew from its own JSON's `draft.get` (chat-compose's text was the empty one an earlier
@@ -269,6 +277,18 @@ class ScreensRefTest(private val name: String) {
         // the agent's mark in the bar, "<agent> · <station>"
         "chat-agent" to { _ -> rule.onAllNodes(hasContentDescription(" · Studio", substring = true)).onFirst().performClick() },
         "home-sheet" to { app -> rule.runOnUiThread { openWorkspaces(app) } },
+        // the bar drawn up into the panel of the other bars: a finger set on the bar beside its ball, drawn up past
+        // where the panel snaps open (Bar.kt OPENS)
+        "home-bars" to { _ ->
+            rule.onRoot().performTouchInput {
+                down(Offset(width * 0.3f, height - 38.dp.toPx()))
+                for (i in 1..12) moveBy(Offset(0f, -20.dp.toPx()))
+                up()
+            }
+        },
+        // the new chat's choosers over its composer: where it runs (the station's name), what it runs on
+        "newchat-station" to { _ -> rule.onAllNodes(hasText("Studio") and hasClickAction()).onFirst().performClick() },
+        "newchat-model" to { _ -> rule.onAllNodes(hasText("Opus 5.5", substring = true) and hasClickAction()).onFirst().performClick() },
         // the reading's group (h2) and its second step, the change's group (h4) and its first, as the mbui fixture has
         // them open (a step's row says what it was said to do, else its tool's name)
         "history" to { _ ->

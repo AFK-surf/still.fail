@@ -209,7 +209,7 @@ fn screen_dump(mode : String, at : Double) -> Result[Json, String] {
 // kept across runs: a list, never written
 let android_opens : Array[String] = [
   "chat-info", "chat-jobs", "chat-job", "chat-agent", "home-sheet", "history-details", "place", "history",
-  "drive-chosen", "drive-entry", "chat-pick",
+  "drive-chosen", "drive-entry", "chat-pick", "home-bars", "newchat-station", "newchat-model",
 ]
 
 ///|
