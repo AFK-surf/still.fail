@@ -224,6 +224,41 @@ test "a keyed node moved by its layout is drawn from where it was, then goes the
 }
 
 ///|
+test "a keyed node driven to its place, moved again on the way, goes on from where it is drawn" {
+  let above = Ref::new(40.0)
+  let drive = Ref::new(-1.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
+      let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.layout(c, i, "driven", listed=false, drive=drive.val)
+    })
+    |> ignore
+  })
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  // put up by 40: drawn where it was, half way there as the app's progress goes
+  above.val = 0.0
+  drive.val = 0.0
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  drive.val = 0.5
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 20.0)
+  // its place moves down 10 on the way (what is over it grown back a little): drawn where it was, not put by the move
+  // as if it began there
+  above.val = 10.0
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 20.0)
+  // the rest of its way to its new place by what is left of the progress
+  drive.val = 0.75
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 15.0)
+  drive.val = 1.0
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 10.0)
+}
+
+///|
 test "layout_rest: a keyed node's move ends when its spring says, the same whenever asked; -1 at rest" {
   let before = Ref::new(true)
   let t = @ui.Tester::new(fn(c) {
