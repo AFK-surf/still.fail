@@ -15,6 +15,7 @@ import * as css from "./Preview.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import { t } from "../i18n.ts";
+import { StationNamedAt } from "../StationNamed.tsx";
 import { Waiting } from "@stillfail/ui/waiting.tsx";
 
 export function PreviewScreen() {
@@ -33,14 +34,14 @@ export function PreviewScreen() {
   if (file) {
     return (
       <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
-        <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={file.name} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+        <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={file.name} sub={<span className={barsCss.mNavbarNote}><StationNamedAt station={station.address} name={station.name} /></span>} />
         <StationPreview station={station.address} file={file} name={file.name} service={service} alone restarting={null} draftKey={draftKeyOf(station.address, chat)} />
       </div>
     );
   }
   return (
     <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
-      <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={job?.name ?? t("web-mobile.preview.service")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={job?.name ?? t("web-mobile.preview.service")} sub={<span className={barsCss.mNavbarNote}><StationNamedAt station={station.address} name={station.name} /></span>} />
       {/* Not read yet: the room it will fill, saying so (no blank page meanwhile). */}
       {!error && !job && <Waiting fill shape="cards" count={1} />}
       {error && !job && <p className={homeCss.mNote}>{t("web-mobile.preview.notFound", { error })}</p>}

@@ -5,7 +5,8 @@
 // - what has a size on its way (a file, an update): `Progress`.
 // Words (a pill, a line) come only after a moment (LATER_MS), so what is there at once shows none; what failed says so
 // at once, in red.
-import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useContext, type HTMLAttributes, type ReactNode } from "react";
+import { Words } from "./words.tsx";
 import { t } from "./i18n.ts";
 import * as css from "./waiting.css.ts";
 import * as spinnerCss from "./styles/spinner.css.ts";
@@ -21,6 +22,13 @@ export const Spinner = forwardRef<HTMLSpanElement, { inline?: boolean; className
   },
 );
 
+/** Words the app wrote, drawn as it says (./words.tsx). */
+function Said({ text }: { text: string }) {
+  const W = useContext(Words);
+  // One run of words in its line (a pill or a line lays its parts out with gaps between them).
+  return <span><W text={text} /></span>;
+}
+
 /**
  * What is waited on (a spinner before it), or with `error` what is wrong (in red, at once): a grey capsule. `over`: over
  * a picture (a player buffering, a screen connecting), frosted, in the middle of what holds it (positioned).
@@ -29,7 +37,7 @@ export function WaitPill({ text, error = false, over = false, className, why }: 
   const cls = `${css.pill}${over ? ` ${css.pillOver}` : ""}${className ? ` ${className}` : ""}`;
   return (
     <span className={cls} data-error={error || undefined} role="status" aria-live="polite" title={why ?? undefined}>
-      {!error && <Spinner inline />}{text}
+      {!error && <Spinner inline />}<Said text={text} />
     </span>
   );
 }
@@ -38,7 +46,7 @@ export function WaitPill({ text, error = false, over = false, className, why }: 
 export function WaitLine({ text = t("common.reading"), error = false, className }: { text?: string; error?: boolean; className?: string }) {
   return (
     <div className={className ? `${css.line} ${className}` : css.line} data-error={error || undefined} role="status" aria-live="polite">
-      {!error && <Spinner inline />}{text}
+      {!error && <Spinner inline />}<Said text={text} />
     </div>
   );
 }

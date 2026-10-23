@@ -73,7 +73,7 @@ export function ProfilesScreen() {
       {/* A station's own (?station=): its stations read first; the workspace's list waits on its own (WorkspaceList). */}
       {!stations ? (only ? <Waiting shape="cards" count={2} text={t("common.readingStations")} /> : null) : stations.filter(() => !!one).map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
-          {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} mark={(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={14} />} />}
+          {!one && <SectionHeader title={<StationInWords station={s.station} text={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} size={14} />} start={24} />}
           {!s.overview || s.overview.profiles.length === 0 ? (
             <ListCard>
               <ListRow>{!s.overview && s.online ? <WaitLine />
@@ -372,7 +372,7 @@ export function ProfileScreen() {
   if (!p) {
     return (
       <div className={pagesCss.mScreen}>
-        <NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" />
+        <NavBar back={station.name ? <StationNamedAt station={station.address} name={station.name} /> : "Station"} onBack={app.pop} title="Profile" />
         {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill shape="cards" error={overview.error?.message} />}
       </div>
     );
@@ -455,7 +455,7 @@ function ProfilePage({ p }: { p: Profile }) {
   );
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
+      <NavBar back={station.name ? <StationNamedAt station={station.address} name={station.name} /> : "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
         trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         {/* Where it stands, on the account's one card: a subscription's heads its sign-in, a key's its key. */}
@@ -1016,7 +1016,7 @@ export function NewProfileScreen() {
   const job = pending?.job ?? null;
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={d && d.step !== "pick" ? t("common.back") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      <NavBar back={d && d.step !== "pick" ? t("common.back") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}><StationNamedAt station={station.address} name={station.name} /></span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {!d ? <Waiting shape="cards" count={2} text={t("web-pages.profiles.loading")} /> : d.step === "pick" ? (
           <>
@@ -1132,7 +1132,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
   };
   return (
     <>
-      <SectionHeader title={t("web-mobile.profiles.machineLogins", { station: station.name || t("web-main.machine.this") })} start={inForm ? 6 : 24} />
+      <SectionHeader title={<StationInWords station={station.address} text={t("web-mobile.profiles.machineLogins", { station: station.name || t("web-main.machine.this") })} />} start={inForm ? 6 : 24} />
       <ListCard>
         {offers.map((l) => {
           const blocked = l.quota?.state === "blocked";

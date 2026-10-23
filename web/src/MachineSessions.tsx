@@ -99,7 +99,7 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
           <Preview runtime={looking.runtime} id={looking.id} models={models} />
         </Dialog>
       ) : (
-        <Dialog open={open} wide onClose={close} title={t("web-main.machine.title", { name: name || t("web-main.machine.this") })}
+        <Dialog open={open} wide onClose={close} title={<StationInWords station={here} text={t("web-main.machine.title", { name: name || t("web-main.machine.this") })} />}
           description={t("web-main.machine.description")}>
           <ul className={css.list}>
             {sessions.map((s) => (

@@ -10,7 +10,7 @@ import { useDoing } from "../doing.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { Button, Dialog, Field, IconButton, MobileBack, Section, Time, Spinner, Waiting } from "../ui.tsx";import { t } from "../i18n.ts";
-import { StationNamedAt } from "../StationNamed.tsx";
+import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -143,7 +143,7 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
         <div className={pagesCss.card}><p className={css.sub}>{t("web-pages.security.webRisk")}</p></div>
       </Section>
       {lock.owner && lock.signs && <div><Button variant="danger" busy={turningOff} onClick={() => setOff(true)}>{t("web-pages.security.turnOff")}</Button></div>}
-      <Dialog open={joining !== null} onClose={() => setJoining(null)} title={joining ? t("web-pages.security.joinTitle", { name: joining.name }) : ""} description={t("web-pages.security.joinBody")}
+      <Dialog open={joining !== null} onClose={() => setJoining(null)} title={joining ? <StationInWords station={`${entry.id}/${joining.id}`} text={t("web-pages.security.joinTitle", { name: joining.name })} /> : ""} description={t("web-pages.security.joinBody")}
         footer={joining && <><Button variant="ghost" onClick={() => setJoining(null)}>{t("common.cancel")}</Button><Button variant="primary" onClick={() => { const s = joining; setJoining(null); act(call("lock.joinStation", { workspace: entry.id, station: s.id }), t("web-pages.security.join"), t("web-pages.security.joined", { name: s.name })); }}>{t("web-pages.security.join")}</Button></>}>
         <span />
       </Dialog>

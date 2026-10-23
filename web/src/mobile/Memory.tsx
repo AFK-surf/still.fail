@@ -23,7 +23,7 @@ import * as barsCss from "./styles/bars.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import { t } from "../i18n.ts";
 import { StationMark } from "../StationMark.tsx";
-import { StationNamed } from "../StationNamed.tsx";
+import { StationNamed, StationNamedAt } from "../StationNamed.tsx";
 
 /** A row that opens a page: its name (and whose), a line under it, how much is in it. */
 function MemoryRow({ title, sub, value, tags, open, onClick }: { title: string; sub?: string | undefined; value?: string | undefined; tags?: React.ReactNode; open?: boolean; onClick: () => void }) {
@@ -53,7 +53,7 @@ export function MemoryScreen() {
   const parts = memory && memoryParts(memory);
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={station.name} onBack={app.pop} title={t("web-mobile.settings.memory")} sub={<span className={barsCss.mNavbarNote}>{t("web-mobile.memory.sub")}</span>} />
+      <NavBar back={<StationNamedAt station={station.address} name={station.name} />} onBack={app.pop} title={t("web-mobile.settings.memory")} sub={<span className={barsCss.mNavbarNote}>{t("web-mobile.memory.sub")}</span>} />
       {!memory || !parts ? <Waiting fill shape="cards" error={error ? MEMORY_TEXT.failed(error) : undefined} /> : (
         <div className={pagesCss.mScroll} style={{ paddingTop: 4 }}>
           <SectionHeader title={t("web-mobile.memory.global")} trailing={[t("web-main.memory.global.when"), memory.global.size].filter(Boolean).join(" · ")} start={24} />

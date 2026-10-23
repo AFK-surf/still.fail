@@ -339,7 +339,7 @@ function ShareSection({ profile }: { profile: Profile }) {
         <Button variant="ghost" disabled={sharing} onClick={() => setPicking(true)}>{t("web-pages.profiles.share.change")}</Button>
       </div>
       </div>}
-      <Dialog open={moveOpen} onClose={() => setMoveOpen(false)} title={t("web-pages.profiles.share.moveTitle")} description={t("web-pages.profiles.share.moveLead", { station: station.name })}>
+      <Dialog open={moveOpen} onClose={() => setMoveOpen(false)} title={t("web-pages.profiles.share.moveTitle")} description={<StationInWords station={station.address} text={t("web-pages.profiles.share.moveLead", { station: station.name })} />}>
         <ul className={pagesCss.list}>
           {targets.map((x) => (
             <li key={x.id}>

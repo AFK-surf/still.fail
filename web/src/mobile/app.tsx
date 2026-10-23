@@ -11,6 +11,8 @@
 // from there takes the place of the one open.
 import { transitionTo } from "../ui.tsx";
 import { said, ToastTo } from "@stillfail/ui/toast.tsx";
+import { Words } from "@stillfail/ui/words.tsx";
+import { StationWordsIn } from "../StationNamed.tsx";
 import { afterBack, useBackClose } from "@stillfail/ui/backClose.ts";
 import { backPage } from "../backPage.ts";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -347,6 +349,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
   const below = pages.at(-2)?.key;
   return (
     <Context.Provider value={app}>
+      <StationWordsIn scope={entry.id}>
       {over}
       {/* What shared parts say (../toast.tsx useToast, useAct) shows as the phone's own toast. */}
       <ToastTo show={showToast}>
@@ -405,6 +408,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
           <ToastHost toast={toast} />
         </div>
       </ToastTo>
+      </StationWordsIn>
     </Context.Provider>
   );
 }
@@ -603,7 +607,7 @@ export function SheetGrab() {
   );
 }
 
-export function SheetHead({ title, trailing }: { title: string; trailing?: ReactNode }) {
+export function SheetHead({ title, trailing }: { title: ReactNode; trailing?: ReactNode }) {
   return <div className={css.mSheetHead}><b>{title}</b>{trailing}</div>;
 }
 
@@ -649,7 +653,8 @@ function ToastHost({ toast }: { toast: { text: string; n: number } | null }) {
     const timer = setTimeout(() => setShown((t) => (t?.n === toast.n ? null : t)), 2600);
     return () => clearTimeout(timer);
   }, [toast]);
-  return <div className={css.mToast} data-open={shown ? true : undefined} role="status">{shown?.text}</div>;
+  const W = useContext(Words);
+  return <div className={css.mToast} data-open={shown ? true : undefined} role="status">{shown && <span><W text={shown.text} /></span>}</div>;
 }
 
 /** The reader comes in from the side over everything; ‹ returns to where it was opened. */

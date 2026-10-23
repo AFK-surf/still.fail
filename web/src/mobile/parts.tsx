@@ -190,7 +190,7 @@ export function DoingMark({ calls, on, inline = false, onColor = false }: { call
   return running ? <Spinner inline={inline} className={onColor ? partsCss.mSpinOnColor : undefined} /> : error !== undefined ? <FailedMark error={error} size={inline ? 12 : 14} /> : null;
 }
 
-export function NavBack({ label, onClick }: { label: string; onClick: () => void }) {
+export function NavBack({ label, onClick }: { label: ReactNode; onClick: () => void }) {
   // A place's top page (the bottom bar under it) has nowhere to go back to: its room kept, nothing drawn in it.
   if (useRootPage()) return <span className={css.mNavBack} aria-hidden="true" style={{ visibility: "hidden" }}><ChevronLeft size={22} /></span>;
   return <button type="button" className={css.mNavBack} onClick={onClick}><ChevronLeft size={22} /><span className={css.mNavBackWord}>{label}</span></button>;
@@ -202,7 +202,7 @@ export function NavButton({ icon: I, onClick, iconSize = 18, label }: { icon: Ic
 }
 
 /** A page's compact bar: back, a centred title, and one action. No line under it: the page's paper runs on. */
-export function NavBar({ back, onBack, title, sub, trailing }: { back: string; onBack: () => void; title: string; sub?: ReactNode; trailing?: ReactNode }) {
+export function NavBar({ back, onBack, title, sub, trailing }: { back: ReactNode; onBack: () => void; title: string; sub?: ReactNode; trailing?: ReactNode }) {
   return (
     <header className={css.mNavbar}>
       <span className={css.mNavbarBack}><NavBack label={back} onClick={onBack} /></span>
@@ -279,7 +279,7 @@ export function LargeTitle({ small, big }: { small: string; big: string }) {
 // ── lists and cards ────────────────────────────────────────────────────
 
 /** A section's title; `mark`: what it holds at a glance (a vendor's mark), before it. */
-export function SectionHeader({ title, trailing, start = 20, mark }: { title: string; trailing?: string | undefined; start?: number; mark?: ReactNode }) {
+export function SectionHeader({ title, trailing, start = 20, mark }: { title: ReactNode; trailing?: string | undefined; start?: number; mark?: ReactNode }) {
   return (
     <div className={css.mSection} style={{ paddingLeft: start }}>
       {mark && <span className={css.mSectionMark} aria-hidden="true">{mark}</span>}<b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}
