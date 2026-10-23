@@ -1,5 +1,5 @@
 // The real core's answers to its pure calls, kept for the app's runs without a core: the Tester's tests (src/sf,
-// src/sfapp, src/sfscreens), the screenshots' app (src/sffix), the design system's (src/sfkit), and the replays of tapes
+// src/sfapp with its screens), the screenshots' app (src/sffix), the design system's (src/sfkit), and the replays of tapes
 // older than a call (src/sfreplay). `markdown` (a text's tree), `code.ink` (what each piece of a code is), `reader.book`,
 // `reader.text` and `reader.search` (a text as the drive's reader shows it) answer the same for the same words, so the
 // TypeScript core's answers are kept here (kept.mbt, made by client/core-ts/scripts/kept-answers.ts) and nothing in the

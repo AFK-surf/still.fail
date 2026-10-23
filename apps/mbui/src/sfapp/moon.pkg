@@ -19,3 +19,13 @@ import {
 }
 
 import { "stillfail/sfkept" } for "wbtest"
+
+options(
+  "pre-build": [
+    {
+      "input": "../../screens/text-mac.textrec",
+      "output": "text_mac_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name text_mac_kept",
+    },
+  ],
+)

@@ -808,7 +808,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
 }
 
 ///|
-/// The app as src/sffix starts it for `mode`, for a Tester made next (src/sfscreens): the app as at the start (reset:
+/// The app as src/sffix starts it for `mode`, for a Tester made next (screens_wbtest.mbt): the app as at the start (reset:
 /// whatever ran before in the process), the made-up source of the mode and what it opens before the first frame
 /// (open_fixture_mode). The Tester keeps it as it starts (reset by hand).
 pub fn fixture_app(mode : String) -> Source {
