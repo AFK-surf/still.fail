@@ -187,7 +187,7 @@ const levels = {
 };
 /** The bars on a small tile, coloured as the round trip is. */
 export const netMark = style({
-  display: "inline-grid", placeItems: "center", width: "24px", height: "24px", borderRadius: "4px",
+  display: "inline-grid", placeItems: "center", width: "24px", height: "24px", borderRadius: "999px",
   background: `color-mix(in srgb, ${vars.text} 8%, transparent)`, color: vars.muted, selectors: levels,
 });
 export const netTime = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums", letterSpacing: "0.04em" });
