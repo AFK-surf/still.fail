@@ -154,3 +154,16 @@ test("bracket math respects code, escaped delimiters, TeX escapes and missing cl
   assert.deepEqual(read(String.raw`\(x\]`), [["p", ["(x]"]]]);
   assert.deepEqual(read("\\(x\\) 与 \\(y\\)"), [["p", [["code", { content: "x", math: true }], " 与 ", ["code", { content: "y", math: true }]]]]);
 });
+
+test("unclosed display math cannot consume text outside its quote or list", () => {
+  assert.deepEqual(read("> \\[\n> x\n\n# 正文标题\n\\]"), [
+    ["quote", [["p", ["[\nx"]]]], ["h", ["正文标题"], { depth: 1 }], ["p", ["]"]],
+  ]);
+  assert.deepEqual(read("- \\[\n  x\n\n正文\n\\]"), [
+    ["list", [["li", ["[\nx"]]]], ["p", ["正文\n]"]],
+  ]);
+  // Without a blank line, ordinary Markdown may continue the paragraph lazily,
+  // but a closing delimiter outside the container must not complete a formula.
+  assert.deepEqual(read("> \\[\n> x\n\\]"), [["quote", [["p", ["[\nx\n]"]]]]]);
+  assert.deepEqual(read("- \\[\n  x\n\\]"), [["list", [["li", ["[\nx\n]"]]]]]);
+});

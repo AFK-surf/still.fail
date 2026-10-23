@@ -34,11 +34,15 @@ function bracket(open: number, close: number, block: boolean): Construct {
           effects.enter("lineEnding");
           effects.consume(code);
           effects.exit("lineEnding");
-          return data;
+          return lineStart;
         }
         if (code === 92) return effects.check({ tokenize: ending }, end, slash)(code);
         effects.enter("mathTextData");
         return content(code);
+      }
+      function lineStart(code: number | null): State | undefined {
+        // A lazy line has left the quote/list containing this display formula.
+        return block && self.parser.lazy[self.now().line] ? nok(code) : data(code);
       }
       function content(code: number | null): State | undefined {
         if (code === null || code <= -3 || code === 92) {
