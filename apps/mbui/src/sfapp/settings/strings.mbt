@@ -5,6 +5,17 @@
 ///|
 // kept across runs: a table, never written
 let zh : Map[String, String] = {
+  "web-pages.notifications.sample.title": "示例对话",
+  "web-pages.notifications.sample.wait": "待你决定 · 选 A 还是 B？",
+  "web-pages.notifications.sample.failed": "出错 · agent 启动失败",
+  "web-pages.notifications.sample.done": "Claude: 已合并到 main",
+  "web-pages.notifications.sample.message": "小李: 这个我来看一下",
+  "web-pages.notifications.hidden.wait": "待你决定",
+  "web-pages.notifications.hidden.failed": "出错",
+  "web-pages.notifications.hidden.done": "已完成",
+  "web-pages.notifications.hidden.message": "有新消息",
+  "web-pages.notifications.now": "刚刚",
+  "web-pages.notifications.previewLabel": "通知预览",
   "web-pages.settings.memory.lead": "每台 station 上所有会话共用的记忆：全局记忆用于跨项目内容，项目记忆每个项目一份。记忆保存在各台 station 上，彼此不同步。",
   "web-pages.automaticDecisions.choosePoint": "选择决策点，分别设置各 station 使用的模型",
   "web-pages.automaticDecisions.completionNote": "agent 标记完成后，异步判断此 chat 是否还有后续事项，若无则推荐归档",

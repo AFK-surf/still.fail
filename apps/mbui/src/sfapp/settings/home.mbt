@@ -25,7 +25,7 @@ pub fn page(
   // the wide frame's words as the web's settings pages size them (their rows 13, what is under them 12, a section's
   // title 14): the scale's body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them,
   // and Xl2 (Android's back, 17, which these pages never say) the web's body for a section's title
-  if wide.val {
+  if wide.val && !desk_ported(route) {
     let t = c.theme()
     c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body, xl2: wide_heading } }, fn() {
       route_page(c, core, here, route)
@@ -33,6 +33,13 @@ pub fn page(
   } else {
     route_page(c, core, here, route)
   }
+}
+
+///|
+/// The desktop's pages ported from the web's onto the library's parts (desk_page.mbt): their words in the library's
+/// sizes, as the web's, not the wide scale taken down for the pages still made of the phone's parts.
+fn desk_ported(route : Route) -> Bool {
+  route is Notifications
 }
 
 ///|
@@ -86,7 +93,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Shortcuts => shortcuts_page(c, core)
     Version => version_page(c, core)
     LocalStation => local_station_page(c, core)
-    Notifications => notify_page(c, core)
+    Notifications => notify_page(c, core, here)
     Permissions => permissions_page(c, core)
     Archiving => archiving_page(c, core, here)
     StationArchiving(s) => station_archiving_page(c, core, here, s)

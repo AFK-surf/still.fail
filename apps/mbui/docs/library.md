@@ -41,4 +41,5 @@ missing here is ported from the web's file (its structure, its states, its value
 
 Besides the web's: the Markdown of messages (`markdown.mbt`, `md_core.mbt`: the core's tree drawn), code's colours
 (`ink.mbt`), formulas (`math.mbt`), the station glyph (`glyph.mbt`), Android's drawables (`picture.mbt`), the phone's
-page bar (`nav_bar.mbt`), the fonts (`faces.mbt`).
+page bar (`nav_bar.mbt`), the fonts (`faces.mbt`), a linear gradient's ground (`gradient.mbt`: a small picture of it stretched over
+the box, for the notifications page's preview screen, until mbui's renderer fills gradients itself).

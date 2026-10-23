@@ -5,6 +5,17 @@
 /// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is "en".
 // kept across runs: a table, never written
 let en : Map[String, String] = {
+  "web-pages.notifications.sample.title": "Sample chat",
+  "web-pages.notifications.sample.wait": "Waiting for you · A or B?",
+  "web-pages.notifications.sample.failed": "Something went wrong · the agent couldn't start",
+  "web-pages.notifications.sample.done": "Claude: merged into main",
+  "web-pages.notifications.sample.message": "Sam: I'll take a look",
+  "web-pages.notifications.hidden.wait": "Waiting for you",
+  "web-pages.notifications.hidden.failed": "Something went wrong",
+  "web-pages.notifications.hidden.done": "Done",
+  "web-pages.notifications.hidden.message": "New message",
+  "web-pages.notifications.now": "now",
+  "web-pages.notifications.previewLabel": "Notification preview",
   "web-pages.settings.memory.lead": "Memory shared by all chats on a station: global memory spans projects, and each project has its own. Each station keeps its own memory; nothing syncs between stations.",
   "web-pages.automaticDecisions.choosePoint": "Choose a decision point, then configure each station’s model",
   "web-pages.automaticDecisions.completionNote": "After an agent marks a chat done, check in the background whether anything remains, and suggest archiving if not",
