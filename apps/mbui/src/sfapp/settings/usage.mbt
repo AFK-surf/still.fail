@@ -74,7 +74,14 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           } else if flag(v, "empty") {
             blocks.push(fn() { place_empty(c, tr("android-misc.usage.none"), note=tr("android-misc.usage.note")) })
           } else {
-            blocks.push(fn() { card(c, fn() { usage_days(c, v) }) |> ignore })
+            // (the wide frame's on the page, as the web's: no card)
+            blocks.push(fn() {
+              if wide.val {
+                inset(c, fn() { usage_days(c, v) })
+              } else {
+                card(c, fn() { usage_days(c, v) }) |> ignore
+              }
+            })
             blocks.push(fn() { usage_lists(c, core, v) })
           }
           blocks.push(fn() {
@@ -105,12 +112,16 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 fn usage_tiles(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let t = @sf.theme()
   let tiles = items(v, "tiles")
-  c.box(w=Fill(1.0), padx=12.0, pb=10.0, gap=10.0, fn() {
+  // (the wide frame's all in a row, as the web's, at the column's edge)
+  let per = if wide.val { 4 } else { 2 }
+  c.box(style=if wide.val { usage_tiles_wide } else { usage_tiles_box }, fn() {
     let mut i = 0
     while i < tiles.length() {
       let pair = [tiles[i]]
-      if i + 1 < tiles.length() {
-        pair.push(tiles[i + 1])
+      for j in 1..<per {
+        if i + j < tiles.length() {
+          pair.push(tiles[i + j])
+        }
       }
       let first = i == 0
       c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
@@ -140,16 +151,25 @@ fn usage_tiles(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
           })
           |> ignore
         }
-        if pair.length() == 1 {
+        for _ in pair.length()..<per {
           c.box(w=Fill(1.0), fn() {  }) |> ignore
         }
       })
       |> ignore
-      i += 2
+      i += per
     }
   })
   |> ignore
 }
+
+///|
+/// The totals' room: 12 in on a phone, 16 in the wide frame (the column's edge); 10 under them.
+// kept across runs: a value (no field of it changes)
+let usage_tiles_box : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5, gap=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_tiles_wide : @ui.Style = @ui.style(w=Full, px=S4, pb=S5, gap=S2_5)
 
 ///|
 /// Each day's cost as a bar on the scale's lines, split by who it was for (Usage.kt Days): the day tapped (the last at
@@ -465,8 +485,9 @@ fn usage_lists(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let at = if usage_state.list < lists.length() { usage_state.list } else { 0 }
   let list = Some(lists[at])
   let kind = text(list, "key")
-  // (its Seg, rounded 10, in its top corners: the card's corner taken from it, concentric: Usage.kt:204)
-  card(c, corner=@sf.seg_card_radius, fn() {
+  // (its Seg, rounded 10, in its top corners: the card's corner taken from it, concentric: Usage.kt:204; the wide
+  // frame's on the page, as the web's)
+  let body = fn() {
     let picked = seg(c, "usage-lists", lists.map(fn(l) { text(Some(l), "title") }), at, fill=true)
     if picked != at {
       usage_state.list = picked
@@ -501,8 +522,12 @@ fn usage_lists(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
       })
       |> ignore
     }
-  })
-  |> ignore
+  }
+  if wide.val {
+    inset(c, body)
+  } else {
+    card(c, corner=@sf.seg_card_radius, body) |> ignore
+  }
 }
 
 ///|

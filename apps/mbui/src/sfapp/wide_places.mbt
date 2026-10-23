@@ -140,8 +140,12 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
               let m = Some(m)
               let level = text(m, "level")
               c.box(style=if level == "" || level == "ok" { meter_chip } else { meter_chip_low }, fn() {
+                // (MeterChip brief: what is left, its unit's first letter)
+                let unit = text(m, "unit")
+                let brief = text(m, "big") +
+                  (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
                 c.text(text(m, "short"), style=place_meta) |> ignore
-                c.text(text(m, "remaining"), style=meter_value) |> ignore
+                c.text(if text(m, "big") == "" { text(m, "remaining") } else { brief }, style=meter_value) |> ignore
               })
               |> ignore
             }
@@ -343,7 +347,7 @@ let place_dot_off : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=Faint)
 /// Its meters in a line (rowMeters), a chip each (MeterChip brief bare): its name muted and what is left, on a ground;
 /// one running low with its level's edge.
 // kept across runs: a value (no field of it changes)
-let place_meters : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let place_meters : @ui.Style = @ui.style(row=true, w=Full, gap=S1, align=ACenter, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)

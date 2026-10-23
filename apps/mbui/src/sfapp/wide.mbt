@@ -664,10 +664,13 @@ fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
     if @ui.window_inset() {
       c.window_drag(head)
     }
-    c.box(w=Fill(1.0), pl=side, pr=side, pt=40.0, pb=12.0, id=head, fn() {
-      c.text(place_label(place), size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
-    })
-    |> ignore
+    // (a place across the pane has its page's own head, its title and what it does: settings' place_page)
+    if !place_bare(place) {
+      c.box(w=Fill(1.0), pl=side, pr=side, pt=40.0, pb=12.0, id=head, fn() {
+        c.text(place_label(place), size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
+      })
+      |> ignore
+    }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       match @settings.route_of(place) {
         Some(r) => {

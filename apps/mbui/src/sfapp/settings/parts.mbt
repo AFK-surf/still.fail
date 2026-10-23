@@ -289,6 +289,36 @@ fn place_page(
 ) -> Unit {
   c.box(style=page_fill, fn() {
     let under_bar = top_room() > 0.0
+    // the wide frame's place (连接, 用量: across the pane): the web's head, its title and at its end what it does, its
+    // primary one a pill named as what it adds
+    if wide.val && at_root.val && !under_bar {
+      match frame_core.val {
+        Some(core) =>
+          wide_head(c, core, "", title, trailing=fn() {
+            match actions {
+              Some(a) => a()
+              None => ()
+            }
+            match primary {
+              Some((key, run)) => {
+                let label = match key {
+                  "add-station" => tr("android-misc.bar.action.stations")
+                  "add-profile" => tr("android-misc.bar.action.profiles")
+                  "add-connect" => tr("android-misc.bar.action.connects")
+                  _ => ""
+                }
+                if wide_button(c, key, label, false) {
+                  run()
+                }
+              }
+              None => ()
+            }
+          })
+        None => ()
+      }
+      c.box(style=root_body, fn() { body() }) |> ignore
+      return
+    }
     match (actions, primary) {
       // (at the root its actions in the app's top bar over it; in the wide frame, which has no such bar, at the end of
       // a row of their own over what it shows; its primary one is the bar's notch's)
