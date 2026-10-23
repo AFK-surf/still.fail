@@ -49,6 +49,8 @@ final class CoreHost {
     /** Off the core's thread: the Keystore takes its time. */
     private static final ExecutorService calls = Executors.newSingleThreadExecutor();
     private static final ExecutorService listenCalls = Executors.newSingleThreadExecutor();
+    /** A picked file's parts as they go up: a thread of their own (reading a video through takes a while). */
+    private static final ExecutorService pickedCalls = Executors.newSingleThreadExecutor();
 
     private final String dataDir;
     /** The engine's handle once its start returned (a call can come before); 0 until then. */
@@ -81,6 +83,34 @@ final class CoreHost {
     }
 
     void onApp(long id, String op, byte[] json, byte[] bytes) {
+        if (op.startsWith("picked.")) {
+            // a file picked too big to be read whole (mbui's Picks.Held), read a part at a time as it goes up
+            // (`composer.add` with `blob: {hostFile}`; still.fail's Android app's PickedFiles.kt)
+            pickedCalls.execute(() -> {
+                try {
+                    JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
+                    int file = a.getInt("file");
+                    switch (op) {
+                        case "picked.read":
+                            answer(id, "{}", null, Picks.read(file, a.getLong("start"), a.getLong("end")));
+                            break;
+                        case "picked.hash":
+                            answer(id, "{\"sha256\":\"" + Picks.hash(file) + "\"}", null, null);
+                            break;
+                        case "picked.release":
+                            Picks.release(file);
+                            answer(id, "{}", null, null);
+                            break;
+                        default:
+                            answer(id, null, "unsupported", null);
+                    }
+                } catch (Throwable e) {
+                    if (tracing()) Host.log("core app call " + op + " -> error " + errorText(e));
+                    answer(id, null, op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), null);
+                }
+            });
+            return;
+        }
         if (op.startsWith("listen.")) {
             // A thread of their own, not the Keystore's: none of them waits (a listen.next is answered as a request
             // comes, from the listener's thread).

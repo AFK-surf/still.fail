@@ -911,6 +911,7 @@ int32_t mb_host_pick_state(int32_t pid) { return -1; }
 int32_t mb_host_pick_count(int32_t pid) { return 0; }
 moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
+moonbit_string_t mb_host_pick_info(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
 void mb_host_pick_end(int32_t pid) {}
 
 // The gallery (gallery.mbt): none on this host; no photo of it picked.

@@ -646,6 +646,74 @@ fn sent_picture(station : String, a : Attachment) -> String? {
 }
 
 ///|
+/// A file the host holds, too big to be read whole (a video: @hostapi.Picked.held), into the draft: the core sends it
+/// up, reading it from the host a part at a time as it goes (`composer.add` with `blob: {hostFile, size, type}`:
+/// still.fail's Android app's PickedFiles.kt), named by its content first where the host can say it; its tile the
+/// host's picture of it (a video's still).
+fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked) -> Unit {
+  let id = next_pending.val
+  next_pending.val += 1
+  let size = f.size.to_int64()
+  let p : Pending = {
+    id,
+    name: f.name,
+    size: f.size.to_int(),
+    image: f.src,
+    width: 0,
+    height: 0,
+    pasted: None,
+    local: None,
+    done: None,
+    sent: 0,
+    error: None,
+    core_id: "",
+    retry: false,
+    retrying: false,
+  }
+  d.files.push(p)
+  if size > max_file.to_int64() {
+    p.error = Some(tr("android-chat.file.tooBig"))
+    return
+  }
+  if src.read_only {
+    p.error = Some(read_only_words)
+    return
+  }
+  let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{size}", d.files.length() - 1)
+  p.core_id = cid
+  let one : Map[String, Json] = {
+    "id": Json::string(cid),
+    "name": Json::string(f.name),
+    "size": Json::number(f.size),
+    "blob": Json::object({
+      "hostFile": Json::number(f.held.to_double()),
+      "size": Json::number(f.size),
+      "type": Json::string(file_type(f.name)),
+    }),
+  }
+  (src.call)(
+    "composer.add",
+    Json::object({
+      "key": Json::string(upload_key(d)),
+      "station": Json::string(station),
+      "files": Json::array([Json::object(one)]),
+    }),
+    fn(res) {
+      match res {
+        Err(e) if p.done is None =>
+          p.error = Some(
+            match text(Some(e), "message") {
+              "" => tr("android-chat.file.uploadFailed")
+              m => m
+            },
+          )
+        _ => ()
+      }
+    },
+  )
+}
+
+///|
 /// A file picked or pasted, into the draft and up to the station at once (Composer.kt upload): over 1 GB it is
 /// refused where it shows; on a read-only run it goes nowhere.
 fn add_file(src : Source, d : Draft, station : String, name : String, bytes : Bytes, pasted : String?) -> Unit {
@@ -758,6 +826,14 @@ fn file_type(name : String) -> String {
     "image/webp"
   } else if ends(".heic") {
     "image/heic"
+  } else if ends(".mp4") || ends(".m4v") {
+    "video/mp4"
+  } else if ends(".mov") {
+    "video/quicktime"
+  } else if ends(".webm") {
+    "video/webm"
+  } else if ends(".3gp") {
+    "video/3gpp"
   } else if ends(".pdf") {
     "application/pdf"
   } else if ends(".txt") {
@@ -1313,7 +1389,11 @@ fn composer(
           cui.picking = None
           if cui.picking_for == d.key {
             for f in files {
-              add_file(src, d, r.station, f.name, f.bytes, None)
+              if f.held != 0 {
+                add_held_file(src, d, r.station, f)
+              } else {
+                add_file(src, d, r.station, f.name, f.bytes, None)
+              }
             }
           }
         }
@@ -2304,7 +2384,8 @@ fn attach_sheet(
   let t = @sf.theme()
   let ask = fn(kind : @hostapi.PickKind) {
     cui.attach = false
-    match @ui.pick(kind) {
+    // (a big file, a video, held by the host and read a part at a time as it goes up: add_held_file)
+    match @ui.pick(kind, hold=true) {
       Some(p) => {
         cui.picking = Some(p)
         cui.picking_for = d.key

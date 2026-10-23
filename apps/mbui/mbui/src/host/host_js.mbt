@@ -550,6 +550,11 @@ fn pk_bytes(_id : Int, _i : Int) -> Bytes {
 }
 
 ///|
+fn pk_info(_id : Int, _i : Int) -> String {
+  ""
+}
+
+///|
 fn pk_end(_id : Int) -> Unit {
 
 }

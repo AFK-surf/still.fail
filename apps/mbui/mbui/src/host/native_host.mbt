@@ -506,6 +506,11 @@ impl @hostapi.Host for Native with pk_bytes(_, id, i) {
 }
 
 ///|
+impl @hostapi.Host for Native with pk_info(_, id, i) {
+  pk_info(id, i)
+}
+
+///|
 impl @hostapi.Host for Native with pk_end(_, id) {
   pk_end(id)
 }

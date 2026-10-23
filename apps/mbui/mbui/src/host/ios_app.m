@@ -1528,6 +1528,7 @@ static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
 @end
 
 int32_t mb_host_pick_start(int32_t kind) {
+  kind &= 15;  // (16: a big file may be held: none is here, each read whole)
   if (kind < 0 || kind > 2) return 0;
   // (no camera: the simulator's, an iPod's)
   if (kind == 0 && !getenv("MBUI_PICK_FILES") && ![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera]) return 0;
@@ -1584,6 +1585,9 @@ moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) {
   NSArray *names = picks[@(pid)][@"names"];
   return mb_string_from_ns(i >= 0 && i < (int32_t)names.count ? names[i] : @"");
 }
+
+// every file read whole here (none held: pick.mbt's Picked.held)
+moonbit_string_t mb_host_pick_info(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
 
 moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) {
   NSArray<NSData *> *datas = picks[@(pid)][@"datas"];
