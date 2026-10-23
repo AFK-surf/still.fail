@@ -1,6 +1,6 @@
-// A screen as the core's JSON gives it (client/fixtures/screens/NAME.json): what each topic says, the answers to the
-// calls, and the pages it opens. The same file still.fail's Android app draws the screen from
-// (apps/android ScreensRefTest), so the two are compared over one set of made-up data (scripts/android-ref.sh).
+// A screen as the core's JSON gives it: what each topic says, the answers to the calls, and the pages it opens (src/sffix
+// MBUI_FIXTURE=json; once also what still.fail's Android app in Kotlin drew a screen from, to compare the two, until it
+// was frozen on 2026-10-23).
 //   { "workspace": "ws1",
 //     "open": [{"page": "chat", "station": …, "session": …} | {"page": "history", …, "key": …} | {"page": "settings"}],
 //     "at": 3000, "shows": ["words on the screen then"],
@@ -67,8 +67,8 @@ pub fn fixture_json(json : String) -> Source {
 }
 
 ///|
-/// The app as src/sffix starts it over a screen's JSON (MBUI_FIXTURE=json), for a Tester made next
-/// (src/sfscreens/android_ref_wbtest.mbt): the app as at the start (whatever ran before in the process reset), then the
+/// The app as src/sffix starts it over a screen's JSON (MBUI_FIXTURE=json), for a Tester made next: the app as at the
+/// start (whatever ran before in the process reset), then the
 /// screen's source and its pages.
 pub fn fixture_json_app(json : String) -> Source {
   reset()

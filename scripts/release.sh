@@ -130,8 +130,8 @@ for platform in $platforms; do
       # beta app is mbui's (apps/mbui) in the place of the one in Kotlin (apps/android): the same package, signed with
       # the same key, so an installed beta updates to it, its files and sign-ins taken as they are (apps/mbui's
       # CoreHost); built as apps/mbui's own beta is (scripts/beta.sh: MoonBit, the engine and shell prebuilt), warm in
-      # a cache of its own. The stable app stays the Kotlin one until it is said otherwise (2026-10-23: the beta first;
-      # apk.json's `stable` variant is mbui's for then).
+      # a cache of its own. The stable app is the Kotlin one frozen at 0.1.4520 (2026-10-23, as asked: the Kotlin app no
+      # longer built or checked) until it is said to become mbui's (apk.json's `stable` variant): none released here.
       if [ -n "$beta" ]; then
         mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-beta}
         MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
@@ -141,8 +141,8 @@ for platform in $platforms; do
           bash "$root/apps/mbui/scripts/beta.sh" build
         apk="$out/mbui/android/app-beta.apk"
       else
-        ORG_GRADLE_PROJECT_stillfailBuild=$build python3 "$root/apps/android/build.py" --release --tasks :app:assembleRelease
-        apk="$root/apps/android/app/build/outputs/apk/release/app-release.apk"
+        echo "release.sh: the stable Android app is frozen at 0.1.4520 (the Kotlin app, 2026-10-23): not released" >&2
+        exit 1
       fi
       # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
       # and passed over, until 2026-10-20)

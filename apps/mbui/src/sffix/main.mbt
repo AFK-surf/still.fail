@@ -18,8 +18,8 @@ fn main {
     @sf.set_dark(Some(true))
   }
   let mode = @ui.env("MBUI_FIXTURE")
-  // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: client/fixtures/screens, the file still.fail's
-  // Android app draws it from too; scripts/android-ref.sh), its pages opened as it says
+  // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: src/sfapp/fixture_json.mbt), its pages opened
+  // as it says
   let src = if mode == "json" {
     @sfapp.fixture_json(@hostapi.env_text("MBUI_FIXTURE_JSON"))
   } else {

@@ -2,7 +2,7 @@
 # The checks for what changed. Two kinds:
 #   quick: what a commit or push touches, in seconds (icons, TypeScript); the git hooks (.githooks) run it, on
 #          whoever commits or pushes, so merging stays quick.
-#   full:  that, the tests, cloud's tests, the core's tests, the web against the real iroh wasm, Rust and Android:
+#   full:  that, the tests, cloud's tests, the core's tests, the web against the real iroh wasm, Rust:
 #          minutes. Run before a deploy (~/bin/ember-deploy on studio runs it on what the deploy carries).
 #
 #   sh scripts/check.sh commit        quick, on what is staged (pre-commit)
@@ -10,11 +10,12 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core, android) runs only those parts of it: ts the icons, the clients'
+# STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core) runs only those parts of it: ts the icons, the clients'
 # types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
 # browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
 # or "motion <i>/<n>" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
-# (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO); android the app.
+# (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO). (The Android app
+# in Kotlin, apps/android, frozen since 2026-10-23: no part checks it.)
 # Unset: all of them.
 #
 # The steps run side by side, each as soon as what it needs is there (a directory's node_modules: `prep`); each one's
@@ -230,23 +231,9 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
-  # The phone's corners are Smooth (ui/Corners.kt: the web's superellipse), not RoundedCornerShape, in what a change adds
-  # (a capsule's 50%, or a line that says why with "own corner:", aside).
-  if touches '^apps/android/'; then
-    added 'apps/android/*.kt' | grep 'RoundedCornerShape(' | grep -vE 'RoundedCornerShape\(50\)|own corner:' > "$tmp/android-corners" || true
-    step "phone corners smooth (in what this adds)" sh -c "! grep . '$tmp/android-corners'"
-    # Its lazy lists are ui/ListKeys.kt's, whose keys cannot crash it (a key used twice is told and keyed apart).
-    step "phone lists keyed safely" sh -c "! git grep -nE 'androidx\\.compose\\.foundation\\.lazy\\.(\\*|LazyColumn|LazyRow)\\b' -- 'apps/android/**/src/main/**' ':!apps/android/shared/src/main/kotlin/fail/still/android/ui/ListKeys.kt'"
-  fi
-  # The pages' modules keep their order themselves (docs/client-core.md: :settings, :chat on it, :drive on both); in
-  # :app, the remote screens (remote/) and the share sheet (share/) are on none of the drive, and the remote screens on
-  # no page either. What they share is in :shared.
-  if touches '^apps/android/app/'; then
-    k=apps/android/app/src/main/kotlin/fail/still/android
-    step "phone packages one way" sh -c "! git grep -n 'fail\\.still\\.android\\.drive\\.' -- $k/remote $k/share && ! git grep -n 'fail\\.still\\.android\\.screens\\.' -- $k/remote"
-  fi
-  if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then
-    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/android'
+  # (the Android app in Kotlin frozen since 2026-10-23: its own checks gone, this one on the mbui app's code in its place)
+  if touches '^(web/src|web/ui|apps/desktop/src|apps/mbui/src)/'; then
+    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/mbui/src'
   fi
   # The design system (web/ui, @stillfail/ui) stands on its own: nothing of the app's (web/src: its core, station,
   # cloud, preferences), so the share page and anything else can draw with it. The app gives it what it needs (words,
@@ -405,36 +392,6 @@ if [ $full = 1 ]; then
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then remembered "Rust: client" "client vendor" heavy cargo_test client --workspace -q; else later "Rust: client"; fi
-  fi
-  # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed. Built as build 1, not the
-  # commits' count: a number new each commit is in its BuildConfig and manifest, and with it everything was compiled and
-  # linted anew, where the build CI keeps of it (pipeline.yml) leaves all but what changed up to date.
-  # What it is built from, and so what runs it: apps/android/carries.sh. STILLFAIL_CHECK_APK=1 (a branch's CI)
-  # makes the debug app in the same Gradle run, as evidence it builds: one build, not a second job doing it again;
-  # only for a change to how it is put together (its Gradle files, manifests, resources, prebuilt parts), as code that
-  # compiles packs the same way: dexing its libraries anew took ~2 of a check's 5 minutes on CI's four cores (2026-10-17).
-  if [ -n "${STILLFAIL_CHECK_APK:-}" ] && ! touches '^apps/android/(.*\.gradle\.kts|gradle/|gradle\.properties|.*/AndroidManifest\.xml|.*/res/|.*/jniLibs/)|^client/(shell|engine)/|^scripts/native\.ts$'; then STILLFAIL_CHECK_APK=; fi
-  if part android && printf '%s\n' "$changed" | sh apps/android/carries.sh; then
-    sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
-    if [ -d "$sdk/platforms" ]; then
-      # STILLFAIL_ANDROID=build (its Kotlin, its instrumented tests' Kotlin too, so a part they use moved or hidden is
-      # caught here and not when someone next runs them; unit tests and the debug app) or lint: one share of it (CI's two jobs side
-      # by side, lint the longest part); unset, all of it.
-      # Lint only for a change it can find anything in (apps/android/lints.sh): not the core's or the shell's alone.
-      build=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}"
-      lint=""
-      if printf '%s\n' "$changed" | sh apps/android/lints.sh; then lint=":app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug"; fi
-      case "${STILLFAIL_ANDROID:-}" in
-        build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=$build ;;
-        lint) what="Android: lint"; tasks=$lint ;;
-        *) what="Android${lint:+ (and lint)}${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks="$build $lint" ;;
-      esac
-      if [ -z "$lint" ] && [ "${STILLFAIL_ANDROID:-}" = lint ]; then step "Android: lint (nothing it reads changed)" true
-      else
-        # shellcheck disable=SC2086 # the tasks are words
-        remembered "$what" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks $tasks
-      fi
-    else later "Android"; fi
   fi
 fi
 
