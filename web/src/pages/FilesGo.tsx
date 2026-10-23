@@ -2,11 +2,12 @@
 // station's button at its start: the same folder there when it has one, else its home; ⌥ in a new tab), and a folder
 // by its path (⌘⇧G, as Finder's 前往文件夹): `mba:~/Projects` names the station before the colon, `~` its home, a path
 // without a slash in front is under the folder shown; Tab completes a folder's name, as a terminal does.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DropdownMenu } from "radix-ui";
-import { useStations } from "../api.ts";
+import { useDriveStations } from "../api.ts";
 import { useGo } from "../go.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
+import { useCall } from "../core/react.ts";
 import type { StationView } from "../core/shapes.ts";
 import { stationBase } from "../station.tsx";
 import { useThisMachineAddress } from "../thisMachine.ts";
@@ -14,14 +15,15 @@ import { Dialog } from "../ui.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { ChevronDown, Folder, Monitor, Server } from "@stillfail/ui/icons.tsx";
 import { absoluteOf, childOf, drive, drivePath } from "../drive/useDrive.ts";
-import { resolveTyped } from "../drive/goto.ts";
 import { useFilesActions } from "./Files.tsx";
 import type { Pane } from "../drive/tabs.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./FilesGo.css.ts";
 import { t } from "../i18n.ts";
 
-const withDrive = (views: readonly StationView[] | undefined) => (views ?? []).filter((s) => s.overview?.drive);
+/** A folder typed by its path, worked out (`files.go`): the station, the folder it names, the folder it is in and what is
+ * typed of its last part. */
+interface Typed { station: string; abs: string; parent: string; partial: string }
 
 /** Where to open `station` from the folder `abs` of another one: the same folder when it has one, else its home (or the
  * first folder it pins, for a read-only member); null when it has neither. `same`: it had the same folder. */
@@ -39,7 +41,7 @@ async function sameOrHome(s: StationView, abs: string): Promise<{ root: string; 
 /** The station's button before a folder's trail: the workspace's stations, the one shown checked. */
 export function StationSwitch({ station, abs }: { station: string; abs: string }) {
   const scope = station.split("/")[0] ?? "";
-  const views = withDrive(useStations(scope).value);
+  const views = useDriveStations(scope).value ?? [];
   const here = useThisMachineAddress();
   const go = useGo();
   const toast = useToast();
@@ -87,13 +89,23 @@ export function StationSwitch({ station, abs }: { station: string; abs: string }
 
 /** ⌘⇧G: a folder by its path, of any station of the workspace. */
 export function GoTo({ scope, here, onClose }: { scope: string; here: Pane; onClose: () => void }) {
-  const views = withDrive(useStations(scope).value);
+  const known = useDriveStations(scope).value;
+  const views = known ?? [];
   const go = useGo();
+  const call = useCall();
   const from = { station: here.station, abs: absoluteOf(here.root, here.path) };
   const [typed, setTyped] = useState("");
   const [at, setAt] = useState(0);
   const [folders, setFolders] = useState<{ station: string; parent: string; names: string[] } | null>(null);
-  const resolved = useMemo(() => resolveTyped(typed, views, from), [typed, views, from.station, from.abs]); // eslint-disable-line react-hooks/exhaustive-deps
+  // What is typed, worked out by the core as it changes (the last answer for what is typed now).
+  const resolve = (text: string) => call("files.go", { workspace: scope, typed: text, ...from }) as Promise<Typed | null>;
+  const [resolvedFor, setResolved] = useState<{ typed: string; resolved: Typed | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    resolve(typed).then((r) => { if (live) setResolved({ typed, resolved: r }); }, () => undefined);
+    return () => { live = false; };
+  }, [typed, known, from.station, from.abs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const resolved = resolvedFor?.resolved ?? null;
   const named = views.find((v) => v.station === resolved?.station);
   // The folders where the last part is being typed, read as the way to it changes.
   const asked = useRef("");
@@ -133,7 +145,14 @@ export function GoTo({ scope, here, onClose }: { scope: string; here: Pane; onCl
           if (e.key === "ArrowDown") { e.preventDefault(); setAt((n) => Math.min(rows.length - 1, n + 1)); }
           else if (e.key === "ArrowUp") { e.preventDefault(); setAt((n) => Math.max(0, n - 1)); }
           else if (e.key === "Tab" && chosen) { e.preventDefault(); setTyped(chosen.complete); setAt(0); }
-          else if (e.key === "Enter") { e.preventDefault(); open(chosen && rows.length > 0 && resolved?.partial ? chosen.target : resolved ? { station: resolved.station, abs: resolved.abs } : chosen?.target ?? null); }
+          else if (e.key === "Enter") {
+            e.preventDefault();
+            // As typed now, whatever came back for what was typed before.
+            const now = typed;
+            const enter = (r: Typed | null) => open(chosen && rows.length > 0 && r?.partial ? chosen.target : r ? { station: r.station, abs: r.abs } : chosen?.target ?? null);
+            if (resolvedFor?.typed === now) enter(resolved);
+            else resolve(now).then(enter, () => undefined);
+          }
         }} />
       {resolved && named && <p className={css.goWhere}>{named.name} › {resolved.abs}</p>}
       {rows.length > 0 && (

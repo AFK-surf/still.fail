@@ -2758,6 +2758,52 @@ export interface DraftView {
 	id?: string;
 }
 
+/** What a folder's entries are ordered by (folders first). */
+export type DriveSortBy = "name" | "time" | "size" | "kind";
+
+/** How the files are ordered and whether hidden ones show: one for every place, on this device (the prefs' `driveViews`). */
+export interface DriveArrangement {
+	by: DriveSortBy;
+	/** The other way: the oldest, the smallest first, names Z to A. */
+	down: boolean;
+	/** Hidden files (a name starting with `.`) shown. */
+	hidden: boolean;
+}
+
+/** What is chosen in a place of a drive. */
+export interface DriveChosen {
+	/** The folder they are in, relative to the root. */
+	folder: string;
+	names: string[];
+	/** The one ⇧ chooses from. */
+	anchor?: string;
+	/** The one the keys move from (focused). */
+	lead?: string;
+}
+
+/**
+ * A folder of a station's drive as a place on this device shows it (the `driveBrowse` topic): its order, what is
+ * chosen, a tree's folders open, its columns' widths.
+ */
+export interface DriveBrowseView {
+	arrangement: DriveArrangement;
+	/**
+	 * Each folder the place shows (its path relative to the root), its entries' names in the order shown: the folder,
+	 * and in columns those before it, in a tree those open under it; one not read yet is not here.
+	 */
+	folders: Record<string, string[]>;
+	chosen: DriveChosen;
+	/** The folders a tree has open under the folder shown (relative to the root). */
+	open: string[];
+	/** The columns dragged to a width of their own, by folder (the rest as every column is). */
+	widths: Record<string, number>;
+	/**
+	 * The keys that do something now (`ArrowDown`, `mod+a`, `mod+shift+Period`…: `drive.browse`'s `key`); the rest are
+	 * the page's. Letters typed go to `type`.
+	 */
+	keys: string[];
+}
+
 /** What opens an entry of the drive. */
 export type DriveKind = "folder" | "video" | "audio" | "image" | "markdown" | "text" | "code" | "csv" | "html" | "pdf" | "subtitle" | "other";
 
@@ -2893,6 +2939,30 @@ export interface DriveTransfersView {
 	loaded: boolean;
 	/** The viewer's own, newest first. */
 	transfers: DriveTransferShown[];
+}
+
+/** A side of a tab of the files' page: a folder of a station. */
+export interface FilesPane {
+	station: string;
+	root: string;
+	path: string;
+}
+
+export interface FilesTab {
+	id: string;
+	/** One, or two side by side. */
+	panes: FilesPane[];
+	/** The side in front. */
+	front: number;
+}
+
+/** The files' page's tabs in a workspace, on this device (the `filesTabs` topic; none before any). */
+export interface FilesTabsView {
+	tabs: FilesTab[];
+	/** The tab shown. */
+	current: string;
+	/** The side in front of the tab shown: what the page's address says. */
+	front: FilesPane;
 }
 
 export interface FlowChoice {
@@ -4523,7 +4593,7 @@ export interface PrefsView {
 	driveViews?: Record<string, string>;
 	/**
 	 * The files' page's tabs on this device, by workspace: what each shows (one folder, or two side by side), which
-	 * is in front, kept as the page writes it (JSON).
+	 * is in front, kept as `files.tabs` writes it (JSON; the `filesTabs` topic reads it).
 	 */
 	filesTabs?: Record<string, string>;
 	/**

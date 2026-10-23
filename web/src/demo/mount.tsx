@@ -17,7 +17,7 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, CoreError, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
-import type { ChatItem, ChatMessage, ChatView, ComposerLink, SearchView, ShareInView } from "../core/shapes.ts";
+import type { ChatItem, ChatMessage, ChatView, ComposerLink, DriveFolder, SearchView, ShareInView, StationView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY, STATION } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
@@ -34,6 +34,7 @@ import { inkKept } from "../../../client/core-ts/src/highlight.ts";
 import { bookAnswer, keepBook, keptBook, searchBook } from "../../../client/core-ts/src/reader.ts";
 import { find as findCommands } from "../../../client/core-ts/src/commands.ts";
 import { openOf } from "../../../client/core-ts/src/search-open.ts";
+import { Browsing, CALLS as BROWSE_CALLS, withDrive } from "../../../client/core-ts/src/drive-browse.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
 let root: HTMLElement;
@@ -84,8 +85,26 @@ function extendedValueOf(topic: Topic): unknown {
   for (const e of extensions) { const v = e.topic?.(topic); if (v !== undefined) return v; }
   let value = demoValueOf(topic);
   for (const e of extensions) { const v = e.then?.(topic, value); if (v !== undefined) value = v; }
+  // Those with a drive, this machine's first, as the core gives them.
+  if (topic.topic === "stations" && topic.drive && Array.isArray(value)) return withDrive(value as StationView[], topic.here ?? null);
   return value;
 }
+
+/** How the station's files are browsed here: as the core does it (drive-browse.ts), on what the demo has. */
+const browsing = new Browsing({
+  prefs: () => prefs,
+  setPrefs: (patch) => void answer("prefs.set", patch),
+  entries: (at, root, path) => {
+    const folder = extendedValueOf({ topic: "drive", station: at, root, path }) as DriveFolder | null;
+    return folder && !(folder instanceof CoreError) ? folder.entries : null;
+  },
+  stations: (scope) => ((extendedValueOf({ topic: "stations", scope }) ?? []) as StationView[])
+    .flatMap((s) => (s.overview?.drive ? [{ station: s.station, name: s.name, home: s.overview.drive.home ?? null }] : [])),
+  now: () => Date.now(),
+  newId: () => Math.random().toString(36).slice(2, 10),
+  invalid: (what) => new Error(what),
+  changed: () => { setTimeout(publish, 0); },
+});
 
 function demoValueOf(topic: Topic): unknown {
   const chat = "key" in topic ? chats.find((c) => c.key === topic.key) : "session" in topic ? chats.find((c) => c.key === topic.session) : undefined;
@@ -114,6 +133,8 @@ function demoValueOf(topic: Topic): unknown {
     case "decisions": return station.decisions(chats);
     case "drive": return station.driveFolder(topic.root, topic.path);
     case "drivePlace": return null;
+    case "driveBrowse": return browsing.view(topic);
+    case "filesTabs": return browsing.tabsView(topic.workspace);
     // A station's screens: none here (the stories add theirs).
     case "screens": return null;
     // What the core puts together of them (client/core-ts/src/choose.ts), as a new chat and a model control start.
@@ -299,6 +320,7 @@ const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
 function answer(name: string, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void = () => undefined, signal: AbortSignal = new AbortController().signal): unknown {
   for (const e of extensions) { const v = e.stream?.(name, params, emit, signal); if (v !== undefined) return v; }
   for (const e of extensions) { const v = e.call?.(name, params); if (v !== undefined) return v; }
+  if (BROWSE_CALLS.includes(name)) return browsing.call(name, params);
   if (name === "markdown") return { md: markdown(String(params.text ?? "")) };
   if (name === "code.ink") return { ink: inkKept(String(params.code ?? ""), String(params.lang ?? "")) };
   if (name === "reader.book") {

@@ -52,7 +52,8 @@ export type Topic =
   | { topic: "adminRelays"; account: string; range?: "day" | "week" }
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean; watching?: boolean }
-  | { topic: "stations"; scope: string }
+  // With `drive`: those with a drive, this machine's (`here`) first.
+  | { topic: "stations"; scope: string; drive?: boolean; here?: string }
   // This device's connection to a station with every figure: sampled while subscribed, so only where they are drawn
   // (the list says only how it is reached, `way`).
   | { topic: "stationNet"; station: string }
@@ -112,6 +113,11 @@ export type Topic =
   | { topic: "drive"; station: string; root: string; path: string }
   // Where a file of a drive was left on this device (a text's offset, a video's time in ms): null before.
   | { topic: "drivePlace"; station: string; root: string; path: string }
+  // A folder of a drive as a place on this device shows it: its order, what is chosen, a tree's folders open, its
+  // columns' widths, the keys that act (client/core-ts/src/views/browse.ts; `place` the page's own name for it).
+  | { topic: "driveBrowse"; owner: string; place: string; view: string; station: string; root: string; path: string; write?: boolean }
+  // The files' page's tabs on this device: null before any.
+  | { topic: "filesTabs"; workspace: string }
   // How its person likes it on this device, and what the device is (prefs.ts).
   | { topic: "prefs" }
   // What people set going on this device and the core has not finished: each call that changes something, until it

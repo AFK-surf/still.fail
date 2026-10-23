@@ -8,6 +8,7 @@ import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
 import { type HeldCall, type ModuleCall, parseModuleCall } from "../module.ts";
 import type { KeepKind } from "../drive-kept.ts";
+import { CALLS as BROWSE_CALLS } from "../drive-browse.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import * as keymap from "../keymap.ts";
@@ -140,6 +141,9 @@ export type Call =
   /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
   | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
   | { kind: "driveTransfer"; action: "start" | "cancel" | "retry"; params: Record<string, unknown> }
+  /// A station's files as they are browsed (views/browse.ts): `drive.browse` and the rest of drive-browse.ts's CALLS,
+  /// with what each takes.
+  | { kind: "browse"; name: string; params: Record<string, unknown> }
   /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
   | { kind: "module"; name: string; call: HeldCall };
 
@@ -328,6 +332,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
   if (name === "drive.transfer" || name === "drive.transfer.cancel" || name === "drive.transfer.retry") {
     return { kind: "driveTransfer", action: name === "drive.transfer" ? "start" : name === "drive.transfer.cancel" ? "cancel" : "retry", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
+  // A station's files as they are browsed (views/browse.ts): their params read there.
+  if (BROWSE_CALLS.includes(name)) return { kind: "browse", name, params: isObject(params) ? (params as Record<string, unknown>) : {} };
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };

@@ -132,6 +132,11 @@ export function useStations(scope: string): TopicState<StationView[]> {
   return useTopic<StationView[]>({ topic: "stations", scope });
 }
 
+/** The workspace's stations with a drive, this machine's (`here`) first, then as the workspace lists them. */
+export function useDriveStations(scope: string, here: string | null = null): TopicState<StationView[]> {
+  return useTopic<StationView[]>({ topic: "stations", scope, drive: true, ...(here ? { here } : {}) });
+}
+
 /** The stations 添加 station offers to add to a workspace as they are: those of the viewer's other workspaces whose home
  * workspace they manage, not in this one yet (client/core-ts/src/views/memberships.ts). */
 export function useJoinable(workspace: string): TopicState<JoinableView> {

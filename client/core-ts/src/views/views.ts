@@ -27,6 +27,7 @@ import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
 import { markdown } from "../markdown.ts";
+import { withDrive } from "../drive-browse.ts";
 import { near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
@@ -911,8 +912,12 @@ export class Views implements Owner {
         }
         return { ok: found };
       }
-      case "stations":
-        return this.#stationsView(view.scope as string);
+      case "stations": {
+        // Asked with `drive`: those with a drive, this machine's (`here`) first (drive-browse.ts withDrive).
+        const stations = this.#stationsView(view.scope as string);
+        if (view.drive !== true || stations === undefined || !("ok" in stations)) return stations;
+        return { ok: withDrive(stations.ok as J[], typeof view.here === "string" ? view.here : null) };
+      }
       case "profiles": {
         const stations = this.#stationsView(view.scope as string);
         if (stations === undefined || !("ok" in stations)) return stations;

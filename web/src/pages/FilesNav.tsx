@@ -6,7 +6,7 @@
 // dragged onto 个人收藏 is kept there.
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { useLocation } from "react-router";
-import { useStations } from "../api.ts";
+import { useDriveStations, useStations } from "../api.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import type { StationView } from "../core/shapes.ts";
 import { stationBase } from "../station.tsx";
@@ -146,10 +146,9 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
   const here = useThisMachineAddress();
   const add = useAddFolder(scope);
   const fav = useFavorites(scope);
-  const withDrive = views.filter((s) => driveOf(s));
-  // This machine first, then as the workspace lists them.
-  const stations = [...withDrive].sort((a, b) => (a.station === here ? -1 : b.station === here ? 1 : 0));
-  const pinned = withDrive.flatMap((s) => driveOf(s)!.roots.map((r) => ({ s, r })));
+  // Those with a drive, this machine's first, then as the workspace lists them.
+  const stations = useDriveStations(scope, here).value ?? [];
+  const pinned = views.flatMap((s) => (driveOf(s)?.roots ?? []).map((r) => ({ s, r })));
   const [keeping, setKeeping] = useState(false);
   // A folder dragged onto 个人收藏: kept there.
   const keepDrop = {
@@ -166,7 +165,7 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
     <>
       <NavTop top={top} action={add.can && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.drive.addRoot")} onClick={add.start} />} />
       <NavList>
-        {withDrive.length === 0 && <p className={css.empty}>{t("web-main.rail.filesNone")}</p>}
+        {stations.length === 0 && <p className={css.empty}>{t("web-main.rail.filesNone")}</p>}
         <div className={css.keep} data-over={keeping || undefined} {...keepDrop}>
           <NavSection title={t("web-pages.files.favorites")}>
             {fav.list.length === 0 && <p className={css.hint}><Star {...ICON} />{t("web-pages.files.favoritesHint")}</p>}

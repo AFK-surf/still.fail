@@ -183,6 +183,8 @@ const SHAPED: Record<string, Ty> = {
   vaults: "VaultsView",
   vaultItems: "VaultItemsView",
   driveTransfers: "DriveTransfersView",
+  driveBrowse: "DriveBrowseView",
+  filesTabs: { opt: "FilesTabsView" },
   vaultUses: "VaultUsesView",
   joinable: "JoinableView",
   memberships: "MembershipsView",

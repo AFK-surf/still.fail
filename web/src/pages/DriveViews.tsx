@@ -2,13 +2,14 @@
 // for each place on this device (prefs' `driveViews`): columns (the default: a column a folder, from where it is to
 // the one open, as Finder's), a tree (folders opened in place, several at once), or a list (one folder). Each row is
 // the same (DriveRow): chosen by a press, opened by a double click, dragged, its menu on a right click; the place says
-// what a row does (`rowOf`, ../drive/browse.ts) and in what order a folder's entries go (`arranged`). Each keeps what a
-// local file browser does as folders are gone into and left (../drive/kept.ts): how far it was scrolled, a tree's
-// folders open.
+// what a row does (`rowOf`, ../drive/browse.ts) and in what order a folder's entries go (`arranged`, as the core says).
+// Each keeps what a local file browser does as folders are gone into and left: how far it was scrolled
+// (../drive/kept.ts), a tree's folders open and a column's width (the core's, through the place: `Shown`).
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import type { DriveEntry } from "../core/shapes.ts";
 import { joinPath, useFolder, type At } from "../drive/model.ts";
-import { forgetColumnWidths, keepColumnWidth, toggleTree, useColumnWidth, useKeptScroll, useTree, type Owner } from "../drive/kept.ts";
+import { useKeptScroll, type Owner } from "../drive/kept.ts";
+import type { Drawing } from "../drive/browse.ts";
 import type { Dragged } from "../drive/drag.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { ViewColumns, ViewTree, List } from "@stillfail/ui/icons.tsx";
@@ -51,11 +52,10 @@ export interface RowProps {
 }
 export type RowOf = (at: At, entry: DriveEntry) => RowProps;
 
-/** The ways a place shows a folder's rows, the same for each view. */
-export interface Shown {
+/** The ways a place shows a folder's rows, the same for each view: with what the core says of the place (`Drawing`: a
+ * folder's entries in the order shown, hidden ones left out unless asked; a tree's folders open; the columns' widths). */
+export interface Shown extends Drawing {
   rowOf: RowOf;
-  /** A folder's entries in the order shown (hidden ones left out unless asked). */
-  arranged: (entries: readonly DriveEntry[]) => DriveEntry[];
   /** What goes into a folder dropped on where its rows are (not on one of them). */
   dropOn?: ((at: At) => DropTarget | undefined) | undefined;
   /** A press where there is no row: nothing chosen. */
@@ -109,19 +109,18 @@ export function ViewSwitch({ value, onChange }: { value: DriveView; onChange: (v
 
 /** A folder and, under each of its folders opened, that one's, in by a step each: opened and closed in place (its
  * disclosure, → and ←), those open kept for when the folder is shown again. */
-export function TreeView({ owner, at, shown, compact = false, empty }: { owner: Owner; at: At; shown: Shown; compact?: boolean; empty?: ReactNode }) {
-  const open = useTree(owner, at);
-  return <TreeFolder at={at} depth={0} open={open} toggle={(path) => toggleTree(owner, at, path)} shown={shown} compact={compact} empty={empty} />;
+export function TreeView({ at, shown, compact = false, empty }: { at: At; shown: Shown; compact?: boolean; empty?: ReactNode }) {
+  return <TreeFolder at={at} depth={0} open={shown.open} toggle={shown.toggle} shown={shown} compact={compact} empty={empty} />;
 }
 
 function TreeFolder({ at, depth, open, toggle, shown, compact, empty }: {
   at: At; depth: number; open: ReadonlySet<string>; toggle: (path: string) => void; shown: Shown; compact: boolean; empty?: ReactNode;
 }) {
   const folder = useFolder(at.station, at.root, at.path);
-  const entries = shown.arranged(folder.value?.entries ?? []);
+  const entries = shown.arranged(at, folder.value?.entries ?? []);
   const note = (words: string, error = false) => <p className={`${css.treeNote} ${error ? css.treeError : shellCss.muted}`} style={{ "--depth": depth } as CSSProperties}>{words}</p>;
   if (folder.error) return note(folder.error.message, true);
-  if (!folder.value) return <div className={css.treeNote} style={{ "--depth": depth } as CSSProperties}><WaitLine /></div>;
+  if (!folder.value || !entries) return <div className={css.treeNote} style={{ "--depth": depth } as CSSProperties}><WaitLine /></div>;
   if (!entries.length) return depth === 0 && empty ? <>{empty}</> : note(t("web-pages.drive.emptyFolder"));
   return (
     <>
@@ -170,7 +169,7 @@ export function ColumnsView({ owner, at, open, shown, empty }: { owner: Owner; a
   useEffect(() => setAll(null), [kept]);
   const [dragging, setDragging] = useState<Dragging>(null);
   const setEvery = (px: number) => {
-    forgetColumnWidths(owner);
+    shown.forgetWidths();
     setAll(px);
     setPrefs({ driveViews: { column: px === COLUMN ? null : String(px) } });
   };
@@ -189,10 +188,10 @@ function Column({ owner, at, next, shown, empty, every, dragging, onDrag, onEver
   every: number; dragging: Dragging; onDrag: (d: Dragging) => void; onEvery: (px: number) => void;
 }) {
   const folder = useFolder(at.station, at.root, at.path);
-  const entries = shown.arranged(folder.value?.entries ?? []);
-  const scroller = useKeptScroll<HTMLDivElement>(owner, at, "columns", folder.value !== undefined || folder.error !== null);
+  const entries = shown.arranged(at, folder.value?.entries ?? []);
+  const scroller = useKeptScroll<HTMLDivElement>(owner, at, "columns", (folder.value !== undefined && entries !== undefined) || folder.error !== null);
   const zone = useDropZone(shown.dropOn?.(at));
-  const own = useColumnWidth(owner, at);
+  const own = shown.widthOf(at.path);
   const width = dragging && (dragging.path === null || dragging.path === at.path) ? dragging.px : own ?? every;
   // As wide as its longest name needs (narrower too), its rows as they are drawn.
   const fit = () => {
@@ -204,19 +203,19 @@ function Column({ owner, at, next, shown, empty, every, dragging, onDrag, onEver
       range.selectNodeContents(name);
       need = Math.max(need, range.getBoundingClientRect().width - name.clientWidth);
     }
-    if (need !== -Infinity) keepColumnWidth(owner, at, clampColumn(width + Math.ceil(need) + 1));
+    if (need !== -Infinity) shown.keepWidth(at.path, clampColumn(width + Math.ceil(need) + 1));
   };
   return (
     <div className={css.columnBox} style={{ width }}>
       <div ref={scroller} className={css.column} data-drop={zone.over || undefined} {...zone.props} onClick={(e) => { if (e.target === e.currentTarget) shown.clear(); }}>
         {folder.error ? <p className={`${css.treeNote} ${css.treeError}`}>{folder.error.message}</p>
-          : !folder.value ? <div className={css.treeNote}><WaitLine /></div>
+          : !folder.value || !entries ? <div className={css.treeNote}><WaitLine /></div>
           : !entries.length ? (empty ?? <p className={`${css.treeNote} ${shellCss.muted}`}>{t("web-pages.drive.emptyFolder")}</p>)
           : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={shown.rowOf(at, e)} compact column along={e.name === next} />)}
       </div>
       <ColumnEdge width={width} dragging={dragging !== null && (dragging.path === null || dragging.path === at.path)}
         onMove={(px, every) => onDrag({ path: every ? null : at.path, px })}
-        onDone={(px, every) => { if (every) onEvery(px); else keepColumnWidth(owner, at, px); onDrag(null); }}
+        onDone={(px, every) => { if (every) onEvery(px); else shown.keepWidth(at.path, px); onDrag(null); }}
         onFit={fit} />
     </div>
   );
