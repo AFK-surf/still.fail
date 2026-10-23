@@ -891,11 +891,21 @@ pub fn section(
   body : () -> Unit,
   note? : String = "",
   actions? : () -> Unit,
+  title_after? : () -> Unit,
 ) -> Unit {
   c.box(style=section_box, fn() {
     c.box(style=section_head, fn() {
       c.box(style=section_words, fn() {
-        c.text(title, style=section_title) |> ignore
+        // what the title holds after its words (its title a node: a count, a mark), 8 after them in a line
+        match title_after {
+          Some(f) =>
+            c.box(style=section_title_line, fn() {
+              c.text(title, style=section_title) |> ignore
+              f()
+            })
+            |> ignore
+          None => c.text(title, style=section_title) |> ignore
+        }
         if note != "" {
           c.box(style=section_note_box, pt=section_note_gap, fn() { c.text(note, style=section_note) |> ignore })
           |> ignore
@@ -924,6 +934,10 @@ let section_head : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, ali
 ///|
 // kept across runs: a value (no field of it changes)
 let section_words : @ui.Style = @ui.style(w=Grow(1.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
