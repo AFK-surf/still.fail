@@ -3,8 +3,9 @@
 // now (a key's action some page answers, updating, a settings page), those whose name, id or other words have what was
 // typed, by part, in the parts' order. The core names what every client offers alike (the keys' actions, updating,
 // relaying a chat) and which are worth a key alone; a client says which it can do now and names what is its own (its
-// settings pages), and does what is picked. Nothing here reads more than it is given (the words too: `say`), so the
-// web's demo answers with it as the core does.
+// settings pages), and does what is picked. Nothing here reads more than it is given (the words too: `say`) and the
+// keymap's actions, so the web's demo answers with it as the core does.
+import { ACTIONS } from "./keymap.ts";
 
 /// Its own isObject (the web's demo takes this file alone, and the web checks it more strictly than util.ts is written for).
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -24,20 +25,15 @@ export type Offer = { id: string; label?: string | undefined; group?: string | u
 /// found by typing (one of many alike, or rarely wanted).
 type Named = { group: Group; label: (o: Offer, t: Say) => string; words?: string; typed?: true };
 
-/// A key's action, named as the list of shortcuts names it.
-const action = (group: Group, id: string): Named => ({ group, label: (_o, t) => t(`web-main.keymap.${id}`) });
+/// The keys' actions never listed, however they are offered: ⌘K itself, Esc (which closes the list), and the moves
+/// only worth a key (back, forward, the chat above or below, the composer, the latest message).
+export const UNLISTED = new Set(["chat.switch", "panel.close", "nav.back", "nav.forward", "chat.prev", "chat.next", "composer.focus", "chat.latest"]);
+
+/// The keys' actions (keymap.ts), each in its part and named as the list of shortcuts names it, but those never listed.
+const actions = Object.fromEntries(Object.entries(ACTIONS).filter(([id]) => !UNLISTED.has(id)).map(([id, spec]): [string, Named] => [id, { group: spec.group, label: (_o, t) => t(`web-main.keymap.${id}`) }]));
 
 const NAMED: Record<string, Named> = {
-  "chat.new": action("global", "chat.new"),
-  "sidebar.toggle": action("global", "sidebar.toggle"),
-  "settings": action("global", "settings"),
-  "shortcuts": action("global", "shortcuts"),
-  "composer.file": action("chat", "composer.file"),
-  "chat.stop": action("chat", "chat.stop"),
-  "chat.history": action("chat", "chat.history"),
-  "chat.jobs": action("chat", "chat.jobs"),
-  "chat.find": action("chat", "chat.find"),
-  "chat.archive": action("chat", "chat.archive"),
+  ...actions,
   "chat.relay": { group: "chat", words: "relay slack feishu lark channel thread 接力 jieli 频道", label: (_o, t) => t("web-main.relay.action") },
   // The page to a newer build of it, the desktop app to its newer build, looking for one now (its version page).
   "update.page": { group: "update", words: "update refresh", label: (_o, t) => t("web-main.webUpdate.foundRefresh") },
@@ -48,10 +44,6 @@ const NAMED: Record<string, Named> = {
     label: (o, t) => (o.station ? `${t("web-main.stationUpdate.updateAction")} · ${o.station}` : t("web-main.stationUpdate.updateAction")),
   },
 };
-
-/// The keys' actions never listed, however they are offered: ⌘K itself, Esc (which closes the list), and the moves
-/// only worth a key (back, forward, the chat above or below, the composer, the latest message).
-export const UNLISTED = new Set(["chat.switch", "panel.close", "nav.back", "nav.forward", "chat.prev", "chat.next", "composer.focus", "chat.latest"]);
 
 /// A command as the list shows it.
 export type Found = { id: string; label: string };
