@@ -82,7 +82,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const channel = url.searchParams.get("channel") === "beta" || (onBeta && url.searchParams.get("channel") !== "stable") ? "beta" : "stable";
     if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
     if (path === "/install.ps1") return new Response(windowsInstallScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
-    const release = /^\/releases\/(.+)$/.exec(path)?.[1];
+    // The beta Android apps built from #1194 (4608) until #1263 ask their feed's beta twice (their feed android/beta,
+    // to which a beta's core adds /beta): theirs is the beta feed, for them to update to a build that asks it right.
+    const asked = /^\/releases\/(.+)$/.exec(path)?.[1];
+    const release = asked === "android/beta/beta/latest.json" ? "android/beta/latest.json" : asked;
     const type = release ? releaseType(release) : null;
     if (release && type) {
       return serveRelease(request, env.RELEASES, release, type);
