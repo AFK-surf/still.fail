@@ -22,11 +22,12 @@ pub fn page(
   root_top.val = if root { top } else { 0.0 }
   left_core.val = Some(core)
   fixture_sheet(core, here)
-  // the wide frame's words as the web's settings pages size them (their rows 13, what is under them 12): the scale's
-  // body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them
+  // the wide frame's words as the web's settings pages size them (their rows 13, what is under them 12, a section's
+  // title 14): the scale's body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them,
+  // and Xl2 (Android's back, 17, which these pages never say) the web's body for a section's title
   if wide.val {
     let t = c.theme()
-    c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body } }, fn() {
+    c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body, xl2: wide_heading } }, fn() {
       route_page(c, core, here, route)
     })
   } else {
@@ -40,6 +41,10 @@ let wide_body : (Double, Double) = (13.0, 20.0)
 
 ///|
 let wide_small : (Double, Double) = (12.0, 18.0)
+
+///|
+/// A section's title in the wide frame (the web's text-body: 14 on 22).
+let wide_heading : (Double, Double) = (14.0, 22.0)
 
 ///|
 fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
@@ -70,7 +75,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     ConnectRun(a, id) => connect_run_page(c, core, a, id)
     SlackApp(a, id) => slack_app_page(c, core, a, id)
     VaultItem(v, item) => vault_item_page(c, core, here, v, item)
-    AutoDecisions => decisions_page(c, core)
+    AutoDecisions => decisions_page(c, core, here)
     AutoCompletion => completion_page(c, core, here)
     AutoPolicy(s) => policy_page(c, core, here, s)
     BarSettings => bars_page(c, core)
@@ -459,6 +464,10 @@ fn workspace_tile(c : @ui.Ctx, name : String, emoji : String, icon : String) -> 
 /// changelog; whether it reports; the terms and privacy policy on the web.
 fn about_page(c : @ui.Ctx, core : Core) -> Unit {
   let t = @sf.theme()
+  if wide.val {
+    about_page_wide(c, core)
+    return
+  }
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("web-pages.settings.nav.about")) },
@@ -515,6 +524,67 @@ fn about_page(c : @ui.Ctx, core : Core) -> Unit {
   blocks.push(fn() { gap(c, 30.0) })
   scroll_page(c, "about", blocks)
 }
+
+///|
+/// 关于 in the wide frame, as the web's (pages/About.tsx): 隐私, whether this device reports, on a card; 条款与政策,
+/// the terms and the privacy policy as a list's rows, the arrow out. (This build and the changelog have pages of their
+/// own in the sidebar: 版本, 更新日志.)
+fn about_page_wide(c : @ui.Ctx, core : Core) -> Unit {
+  let t = @sf.theme()
+  let blocks : Array[() -> Unit] = [
+    fn() { top_back(c, core, tr("android-settings.title")) },
+    fn() { large_title(c, tr("web-pages.settings.nav.about")) },
+  ]
+  match (core.reporting)() {
+    Some(on) => {
+      blocks.push(fn() { section_header(c, tr("web-pages.about.privacy")) })
+      blocks.push(fn() {
+        list_card(c, boxed=true, fn() {
+          if list_row(c, key="reporting", fn() {
+              c.box(style=about_switch_words, fn() {
+                c.text(tr("android-settings.telemetry.title"), style=about_row_title) |> ignore
+                c.text(fill("android-settings.telemetry.note", [("app", "still.fail")]), style=about_row_note) |> ignore
+              })
+              |> ignore
+              switch(c, "reporting", on)
+            }) {
+            (core.set_reporting)(!on)
+          }
+        })
+      })
+    }
+    None => ()
+  }
+  blocks.push(fn() { section_header(c, tr("web-pages.about.legal")) })
+  blocks.push(fn() {
+    list_card(c, fn() {
+      for l in [("terms", "android-settings.legal.terms"), ("privacy", "android-settings.legal.privacy")] {
+        if list_row(c, key="go-" + l.0, fn() {
+            c.text(tr(l.1), style=about_row_title) |> ignore
+            @sf.icon(c, "arrow-up-right", size=about_out_icon, color=t.p.muted) |> ignore
+          }) {
+          (core.open_link)(legal_url(l.0))
+        }
+      }
+    })
+  })
+  scroll_page(c, "about", blocks)
+}
+
+///|
+let about_out_icon : Double = 16.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let about_switch_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let about_row_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let about_row_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
 
 ///|
 /// Notifications as switched here, until the core has answered (AppState.useNotify's `notify` meanwhile).

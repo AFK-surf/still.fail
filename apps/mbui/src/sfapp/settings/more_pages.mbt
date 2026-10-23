@@ -9,15 +9,34 @@
 
 ///|
 /// The automatic decisions (AutomaticDecisionsScreen): its rules, each a row to its page (one: completion).
-fn decisions_page(c : @ui.Ctx, core : Core) -> Unit {
+fn decisions_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   scroll_page(c, "auto-decisions", [
     fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-pages.automaticDecisions.title")) },
+    fn() { large_title(c, tr("web-pages.automaticDecisions.title"), about=tr("web-pages.automaticDecisions.choosePoint")) },
     fn() {
       list_card(c, fn() {
         if list_row(c, key="auto-completion", fn() {
+            // the wide frame's as the web's (AutomaticDecisions.tsx): what it does under its name, how many stations
+            // have it on at its end
             if wide.val {
-              row_lines(c, tr("web-pages.automaticDecisions.completion"), tr("web-pages.automaticDecisions.completionShort"))
+              row_lines(c, tr("web-pages.automaticDecisions.completion"), tr("web-pages.automaticDecisions.completionNote"))
+              match stations_of(core, here).value {
+                Some(Array(a)) => {
+                  let on = a.filter(fn(s) {
+                      flag(field(field(field(field(Some(s), "overview"), "automaticDecisions"), "settings"), "completion"), "enabled")
+                    }).length()
+                  c.text(
+                    if on > 0 {
+                      fill("web-pages.automaticDecisions.stationsOn", [("n", on.to_string())])
+                    } else {
+                      tr("web-pages.automaticDecisions.off")
+                    },
+                    style=wide_meta,
+                  )
+                  |> ignore
+                }
+                _ => ()
+              }
             } else {
               c.box(w=Fill(1.0), gap=5.0, fn() {
                 c.text(tr("web-pages.automaticDecisions.completion"), size=15.0, color=@sf.theme().p.text, w=Fill(1.0), line=21.0)
@@ -49,7 +68,7 @@ fn completion_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let topic = stations_of(core, here)
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("web-pages.automaticDecisions.title")) },
-    fn() { large_title(c, tr("web-pages.automaticDecisions.completion")) },
+    fn() { large_title(c, tr("web-pages.automaticDecisions.completion"), about=tr("web-pages.automaticDecisions.completionNote")) },
   ]
   match topic.value {
     Some(Array(a)) => {
@@ -284,7 +303,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
   let policy = field(view, "policy")
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("web-pages.automaticDecisions.completion")) },
-    fn() { large_title(c, tr("web-pages.archivePolicy.title")) },
+    fn() { large_title(c, tr("web-pages.archivePolicy.title"), about=tr("web-pages.archivePolicy.textLead")) },
   ]
   if policy is Some(Object(_)) && flag(view, "canEdit") {
     let form = match policy_forms.get(station) {

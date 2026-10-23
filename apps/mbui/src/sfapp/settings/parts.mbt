@@ -32,7 +32,9 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
       if i == blocks.length() {
         gap(c, 80.0)
       } else {
+        block_at.val = i
         c.box(style=@sf.full_width, pl=side, pr=side, fn() { (blocks[i])() }) |> ignore
+        block_at.val = -1
       }
     })
     |> ignore
@@ -73,6 +75,7 @@ fn wide_head(
   about? : String = "",
 ) -> Unit {
   let t = @sf.theme()
+  head_block.val = block_at.val
   // (inside a block of the page, which stands in already)
   let side = if inside { 16.0 } else { wide_side(c) + 16.0 }
   c.box(style=if wide_deep.val { wide_head_deep } else { wide_head_top }, pl=side, pr=side, fn() {
@@ -108,6 +111,16 @@ fn wide_head(
   })
   |> ignore
 }
+
+///|
+/// Which of a wide page's blocks is being laid out (-1: none, outside its list), and which drew its head (-1: a head
+/// over the list): a section's head right under the page's knows it is the first (section_header).
+// kept across runs: said again by every block and head as it is laid out (scroll_page, wide_head)
+let block_at : Ref[Int] = Ref(-1)
+
+///|
+// kept across runs: said again by every head as it is laid out (wide_head)
+let head_block : Ref[Int] = Ref(-1)
 
 ///|
 /// The wide frame's head: on a page under another (back over its title) 20 down, else 40; 12 under it.
@@ -232,10 +245,11 @@ fn nav_bar(
   sub? : () -> Unit,
   trailing? : () -> Unit,
   on_back? : () -> Unit,
+  about? : String = "",
 ) -> Unit {
   if wide.val {
     ignore(sub)
-    wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back)
+    wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back, about~)
     return
   }
   if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val) {
@@ -429,12 +443,12 @@ let root_body : @ui.Style = page_fill.then(@ui.style(pt=S2))
 ///|
 /// A page's large title (Parts.kt LargeTitle): `small`'s line over the big word when it is said, the word after `lead`
 /// when there is one (a workspace's mark). (LargeTitle's letterSpacing -0.6sp: mbui's words have no spacing.)
-fn large_title(c : @ui.Ctx, big : String, small? : String = "", lead? : () -> Unit) -> Unit {
+fn large_title(c : @ui.Ctx, big : String, small? : String = "", lead? : () -> Unit, about? : String = "") -> Unit {
   if wide.val {
     ignore(lead)
     match frame_core.val {
       Some(core) =>
-        wide_head(c, core, top_label.val, big, trailing?=top_trailing.val, inside=true, on_back?=top_on_back.val)
+        wide_head(c, core, top_label.val, big, trailing?=top_trailing.val, inside=true, on_back?=top_on_back.val, about~)
       None => ()
     }
     top_trailing.val = None
@@ -474,19 +488,35 @@ fn section_header(
   start? : @ui.Space = S5,
   mark? : (() -> Unit)? = None,
 ) -> Unit {
-  // the wide frame's (page.css.ts sectionHead): 13 in 600 at the column's edge, 28 over it
+  // the wide frame's (ui Section, parts.css.ts sectionHead: its title 14 on 22 in 600 at the column's edge, 28 over
+  // it; what it holds said 3 under it in the meta's 12 muted, as the web's Section's description)
   if wide.val {
-    c.box(style=wide_section_line, fn() {
-      match mark {
-        Some(m) => m()
-        None => ()
-      }
-      c.text(title, style=wide_section_title) |> ignore
-      c.spacer()
-      if trailing != "" {
-        c.text(trailing, style=wide_meta) |> ignore
-      }
-    })
+    // right under the page's head: 28 under it in all (its 12 and 16), as the web's first section is (the page's head's
+    // margin and the sections' own between them, not over the first)
+    let first = block_at.val >= 0 && block_at.val == head_block.val + 1
+    // (with what it holds said here, 10 under that, as the web's head is over its section)
+    let said = trailing != ""
+    c.box(
+      style=match (first, said) {
+        (true, true) => wide_section_first_said
+        (true, false) => wide_section_first
+        (false, true) => wide_section_said
+        (false, false) => wide_section_box
+      },
+      fn() {
+        c.box(style=wide_section_line, fn() {
+          match mark {
+            Some(m) => m()
+            None => ()
+          }
+          c.text(title, style=wide_section_title) |> ignore
+        })
+        |> ignore
+        if said {
+          c.text(trailing, style=wide_section_sub) |> ignore
+        }
+      },
+    )
     |> ignore
     return
   }
@@ -524,14 +554,34 @@ let section_line : @ui.Style = @ui.style(row=true, w=Full, pl=S5, pr=S5, pt=S3_5
 let section_marked : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
 
 ///|
-/// The wide frame's section head: in a line, 16 in as the title is, 28 over it, 2 under (its note, or what it holds,
-/// 10 under it then).
+/// The wide frame's section head: 16 in as the title is, 28 over it, 2 under (its note, or what it holds, 10 under it
+/// then); its mark and title in a line, what it holds 2 under them.
 // kept across runs: a value (no field of it changes)
-let wide_section_line : @ui.Style = @ui.style(row=true, w=Full, px=S4, pt=S7, pb=S0_5, gap=S2, align=ACenter)
+let wide_section_box : @ui.Style = @ui.style(w=Full, px=S4, pt=S7, pb=S0_5, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
+let wide_section_first : @ui.Style = wide_section_box.then(@ui.style(pt=S4))
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_section_said : @ui.Style = wide_section_box.then(@ui.style(pb=S2_5))
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_section_first_said : @ui.Style = wide_section_first.then(@ui.style(pb=S2_5))
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_section_line : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_section_sub : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
