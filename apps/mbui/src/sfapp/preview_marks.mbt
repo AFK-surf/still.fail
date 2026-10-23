@@ -845,7 +845,8 @@ fn marks_any() -> Bool {
 ///|
 /// In the top bar while marking (ImageMarks.kt MarksActions): why it failed, 取消, 下载标注后的图片, 添加到对话 (when
 /// there is a chat's draft to put it in). True on the frame one of them is tapped: `go(draft)`.
-fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit) -> Unit {
+/// `ink`: what its words and icons are drawn in (a desktop's bar is the page's, preview_desk.mbt).
+fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : Int64 = dark_muted) -> Unit {
   let ready = !marking.busy && marks_any()
   // as wide as they are: the file's name before them cut short instead
   c.box(dir=Row, gap=4.0, align=ACenter, keep=true, fn() {
@@ -860,10 +861,10 @@ fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit) -> Unit {
       marks_leave()
     }
     c.box(h=Px(32.0), padx=10.0, radius=picture_key, justify=JCenter, id=cancel, fn() {
-      c.text(pv("common.cancel"), size=13.0, color=dark_muted, wrap=false) |> ignore
+      c.text(pv("common.cancel"), size=13.0, color=ink, wrap=false) |> ignore
     })
     |> ignore
-    if picture_button(c, "marks/download", "download", dark_muted, true, enabled=ready, said=pv("android-chat.marks.downloadMarked")) {
+    if picture_button(c, "marks/download", "download", ink, true, enabled=ready, said=pv("android-chat.marks.downloadMarked")) {
       go(false)
     }
     if can_draft {

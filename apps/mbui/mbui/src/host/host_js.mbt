@@ -281,6 +281,12 @@ fn clipboard_set(s : String) -> Unit {
 }
 
 ///|
+/// A picture on the clipboard (@hostapi.clipboard_set_image): a page's runs put none.
+fn clipboard_set_image(data : Bytes) -> Unit {
+  ignore(data)
+}
+
+///|
 /// A secret on the clipboard (see host_native.mbt): a page's as any words.
 fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   ignore(clear_ms)
@@ -950,6 +956,17 @@ fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? :
 /// Whether the window's buttons are in the app's top row (see host_native.mbt): never in a browser.
 fn window_inset() -> Bool {
   false
+}
+
+///|
+/// The window filling the screen (see host_native.mbt): a browser's page has none of its own.
+fn full_screen() -> Bool {
+  false
+}
+
+///|
+fn set_full_screen(on : Bool) -> Unit {
+  ignore(on)
 }
 
 ///|

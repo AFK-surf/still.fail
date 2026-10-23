@@ -134,6 +134,9 @@ pub struct Media {
   /// where the timeline is dragged to (ms); -1: it is not
   priv mut scrub : Double
   priv mut pinned : MediaStatus?
+  /// how loud (0 … 1), and its sound off, kept for what it plays next
+  priv mut volume : Double
+  priv mut muted : Bool
 }
 
 ///|
@@ -188,6 +191,8 @@ pub fn Media::new(
     tap_waiting: false,
     scrub: -1.0,
     pinned: None,
+    volume: 1.0,
+    muted: false,
   }
 }
 
@@ -198,6 +203,9 @@ pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> U
   let n = @ui.NativeView::video(track.mime, track.read)
   if self.speed != 1.0 {
     n.rate(self.speed)
+  }
+  if self.muted || self.volume < 1.0 {
+    n.volume(if self.muted { 0.0 } else { self.volume })
   }
   if start > 0.0 {
     n.seek(start)
@@ -440,6 +448,33 @@ pub fn Media::step_speed(self : Media) -> Unit {
   self.speed = self.speeds[(i + 1) % self.speeds.length()]
   match self.view {
     Some(n) => n.rate(self.speed)
+    None => ()
+  }
+}
+
+///|
+/// How loud it plays (0 … 1), whether its sound is off.
+pub fn Media::volume(self : Media) -> (Double, Bool) {
+  (self.volume, self.muted)
+}
+
+///|
+/// As loud as `volume` (0 … 1), its sound on again (none at 0).
+pub fn Media::set_volume(self : Media, volume : Double) -> Unit {
+  self.volume = if volume < 0.0 { 0.0 } else if volume > 1.0 { 1.0 } else { volume }
+  self.muted = self.volume == 0.0
+  match self.view {
+    Some(n) => n.volume(self.volume)
+    None => ()
+  }
+}
+
+///|
+/// Its sound off, or on again as loud as it was.
+pub fn Media::toggle_mute(self : Media) -> Unit {
+  self.muted = !self.muted
+  match self.view {
+    Some(n) => n.volume(if self.muted { 0.0 } else { self.volume })
     None => ()
   }
 }

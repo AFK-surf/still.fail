@@ -976,6 +976,12 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   UIPasteboard.generalPasteboard.string = mb_ns_from_string(s);
 }
 
+// A picture on the clipboard (@hostapi.clipboard_set_image): the image the bytes are, as other apps paste one.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  UIImage *img = [UIImage imageWithData:[NSData dataWithBytes:data length:Moonbit_array_length(data)]];
+  if (img) UIPasteboard.generalPasteboard.image = img;
+}
+
 // A secret on the clipboard (@hostapi.clipboard_set_secret, as Android's sensitive clip cleared later): kept to this
 // device (not handed to the person's other devices' universal clipboard), and gone from it `clear_ms` later.
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
@@ -1502,6 +1508,9 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
   (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
 }
 int32_t mb_host_window_inset(void) { return 0; }
+// A window filling the screen (@hostapi.full_screen): not one of this host's.
+int32_t mb_host_full_screen(void) { return 0; }
+void mb_host_set_full_screen(int32_t on) { (void)on; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
 void mb_host_set_badge(int32_t n) { (void)n; }

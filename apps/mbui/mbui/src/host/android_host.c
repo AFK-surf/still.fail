@@ -1399,6 +1399,10 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
   (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);
 }
 
+// A picture on the clipboard (@hostapi.clipboard_set_image): none here (Android's clipboard takes a picture only as a
+// content URI another app can read).
+void mb_host_clipboard_image(moonbit_bytes_t data) { (void)data; }
+
 void mb_host_clipboard_set(moonbit_string_t s) {
   JNIEnv *env = env_();
   jstring j = jstr(env, s);
@@ -2090,6 +2094,9 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
   (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
 }
 int32_t mb_host_window_inset(void) { return 0; }
+// A window filling the screen (@hostapi.full_screen): not one of this host's.
+int32_t mb_host_full_screen(void) { return 0; }
+void mb_host_set_full_screen(int32_t on) { (void)on; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
 void mb_host_set_badge(int32_t n) { (void)n; }

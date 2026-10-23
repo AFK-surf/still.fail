@@ -13,6 +13,8 @@
 pub(open) trait Host {
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
+  full_screen(Self) -> Bool = _
+  set_full_screen(Self, Bool) -> Unit = _
   window_drag(Self) -> Unit = _
   set_cursor(Self, Int) -> Unit = _
   set_badge(Self, Int) -> Unit = _
@@ -46,6 +48,7 @@ pub(open) trait Host {
   text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
+  clipboard_set_image(Self, Bytes) -> Unit = _
   log(Self, String) -> Unit = _
   bench_mode(Self) -> Int = _
   set_outside(Self, FuncRef[(Int, Int, Int) -> Unit]) -> Bool = _
@@ -185,6 +188,16 @@ impl Host with window_setup(_, _, _, _, _, _) {
 ///|
 impl Host with window_inset(_) {
   false
+}
+
+///|
+impl Host with full_screen(_) {
+  false
+}
+
+///|
+impl Host with set_full_screen(_, _) {
+  ()
 }
 
 ///|
@@ -349,6 +362,11 @@ impl Host with clipboard_set(_, _) {
 
 ///|
 impl Host with clipboard_set_secret(_, _, _) {
+  ()
+}
+
+///|
+impl Host with clipboard_set_image(_, _) {
   ()
 }
 
@@ -1037,6 +1055,19 @@ pub fn window_inset() -> Bool {
 }
 
 ///|
+/// Whether the desktop's window fills the screen now (macOS's full screen). False where there is no such window.
+pub fn full_screen() -> Bool {
+  current.val.full_screen()
+}
+
+///|
+/// The desktop's window made to fill the screen, or back as it was (macOS's full screen, as its green button does).
+/// Nothing where there is no window to size.
+pub fn set_full_screen(on : Bool) -> Unit {
+  current.val.set_full_screen(on)
+}
+
+///|
 /// The press under way moves the window (a press on the app's own top row, @ui's Ctx::window_drag): the host's from
 /// here, as its title bar's would be.
 pub fn window_drag() -> Unit {
@@ -1299,6 +1330,13 @@ pub fn clipboard_set(s : String) -> Unit {
 /// off `clear_ms` later unless something else was copied meanwhile (0: kept). Elsewhere as clipboard_set.
 pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   current.val.clipboard_set_secret(s, clear_ms)
+}
+
+///|
+/// A picture put on the system's clipboard (an image file's bytes: PNG, JPEG…), as a picture other apps paste. A host
+/// with no such clipboard (a browser's page, Android) puts nothing.
+pub fn clipboard_set_image(data : Bytes) -> Unit {
+  current.val.clipboard_set_image(data)
 }
 
 ///|

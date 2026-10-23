@@ -1198,6 +1198,8 @@ final class NativeViews {
                 case 4: player.setPlaybackParameters(new PlaybackParameters((float) value)); break;
                 // a finger along its timeline: its seeks one after another, each shown (Media3's scrubbing mode)
                 case 9: player.setScrubbingModeEnabled(value > 0); break;
+                // how loud, 0 to 1 (NativeView::volume)
+                case 10: player.setVolume((float) Math.max(0, Math.min(1, value))); break;
                 case 20: readFrames(); break;
                 case 21: grab(value); break;
                 case 22: grabShown(value); break;

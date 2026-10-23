@@ -378,8 +378,9 @@ fn main_page(
     // 文件: a folder under its bar, as the web's (wide_files.mbt)
     Files => files_landing(c, src, w)
     Drive(at) => wide_folder(c, src, w, at)
-    // a station's screen is over the whole window (app.mbt signed_in), not in the pane
-    Screen(_) => ()
+    // a station's screen, a drive's text read, a film played are over the whole window (app.mbt signed_in), not in
+    // the pane
+    Screen(_) | DriveRead(_) | DrivePlay(_) => ()
     _ => page_view(c, src, w, all, invited, page)
   }
 }

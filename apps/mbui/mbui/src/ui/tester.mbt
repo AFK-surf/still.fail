@@ -74,6 +74,8 @@ fn reset_globals() -> Unit {
   native_nodes.clear()
   picture_at.clear()
   wheels.clear()
+  wheels_x.clear()
+  wheel_mods.clear()
   captures.clear()
   drags.clear()
   sideways.clear()
@@ -206,6 +208,7 @@ pub fn Tester::new(
     dock_kept: "",
     mods: 0,
     clipboard_secret: -1.0,
+    clipboard_image: -1,
     back_on: false,
     platform,
     reduce_transparency: false,
@@ -227,6 +230,7 @@ pub fn Tester::new(
     opened: [],
     dark,
     inset: window_inset,
+    full: false,
     font_scale: 1.0,
     a11y: false,
     a11y_said: "",
@@ -780,6 +784,16 @@ pub fn Tester::hold_words(self : Tester) -> (String, String, String)? {
 /// The packages the app handed to the system's installer (@ui.install_package), oldest first.
 pub fn Tester::installs(self : Tester) -> Array[String] {
   self.fake.installs.copy()
+}
+
+///|
+/// The picture last put on the clipboard (Ctx::copy_image): its bytes' length, None when none was.
+pub fn Tester::clipboard_image(self : Tester) -> Int? {
+  if self.fake.clipboard_image < 0 {
+    None
+  } else {
+    Some(self.fake.clipboard_image)
+  }
 }
 
 ///|
@@ -1657,6 +1671,13 @@ pub fn Tester::leave(self : Tester) -> Unit {
 /// notch (eased in over the next frames). One frame drawn, not settled.
 pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, phase : Int) -> Unit {
   finger_wheel(x, y, 0.0, dy, phase)
+  self.draw()
+}
+
+///|
+/// The wheel turned both ways (`dx`, `dy`) at (x, y) with `mods` held (wheel_mod_*: ⌘ to zoom a picture, a pinch).
+pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> Unit {
+  finger_wheel(x, y, dx, dy, mods * 16)
   self.draw()
 }
 

@@ -21,6 +21,16 @@ impl @hostapi.Host for Native with window_inset(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with full_screen(_) {
+  full_screen()
+}
+
+///|
+impl @hostapi.Host for Native with set_full_screen(_, on) {
+  set_full_screen(on)
+}
+
+///|
 impl @hostapi.Host for Native with window_drag(_) {
   window_drag()
 }
@@ -178,6 +188,11 @@ impl @hostapi.Host for Native with text_menu(_, shown, x, y, w, h, can) {
 ///|
 impl @hostapi.Host for Native with clipboard_set(_, s) {
   clipboard_set(s)
+}
+
+///|
+impl @hostapi.Host for Native with clipboard_set_image(_, data) {
+  clipboard_set_image(data)
 }
 
 ///|

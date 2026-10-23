@@ -336,6 +336,14 @@ priv struct Viewer {
   /// it was then
   mut leaving_grab : Bool
   mut left_at : Double
+  /// a desktop's mouse: where it was last frame (its moves wake the bars, preview_desk.mbt), once seen
+  mut mouse_x : Double
+  mut mouse_y : Double
+  mut mouse_seen : Bool
+  /// a desktop's song: played in the player a drive's is (play_desk.mbt), not the phone's strip
+  mut media : @kit.Media?
+  /// a desktop's image put on the clipboard: how many times (its check shown a while after each)
+  mut copied : Int
 }
 
 ///|
@@ -644,6 +652,11 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     grabbing: false,
     grab_frame: 0,
     turned: false,
+    mouse_x: 0.0,
+    mouse_y: 0.0,
+    mouse_seen: false,
+    media: None,
+    copied: 0,
   }
   v.bytes = kept_read(v.id())
   v
@@ -757,11 +770,20 @@ fn leaving_done() -> Unit {
 ///|
 /// What a viewer holds of the host's, let go.
 fn Viewer::let_go(self : Viewer) -> Unit {
+  // read in a desktop's reader (reader_desk.mbt): what it read let go with it
+  reader_ui.remove("chat\n" + self.id())
   if self.turned {
     @hostapi.set_sideways(false)
   }
   match self.video {
     Some(n) => n.close()
+    None => ()
+  }
+  match self.media {
+    Some(m) => {
+      m.close()
+      desk_listing.remove(m.key())
+    }
     None => ()
   }
   match self.page {
@@ -805,6 +827,10 @@ fn Viewer::told_of(self : Viewer) -> Bool {
 
 ///|
 fn Viewer::dark(self : Viewer) -> Bool {
+  // a desktop's: on the page's own canvas whatever it shows (FilePreview.css.ts fp)
+  if wide_on.val {
+    return false
+  }
   match self.shown_kind() {
     Some(KImage) | Some(KVideo) => true
     _ => false
@@ -991,6 +1017,33 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     return
   }
   match v.shown_kind() {
+    // a desktop's song: in the player a drive's plays in (play_desk.mbt), read through the core a part at a time
+    Some(KAudio) if wide_on.val => {
+      if v.media is None {
+        let m = @player.player(key="preview-song")
+        m.open({
+          name: v.file.name,
+          mime: v.mime,
+          audio: true,
+          read: fn(offset, length, answer) {
+            v.read_part(src, offset, length, "played", fn(r) {
+              match r {
+                Ok((answer_json, bytes)) =>
+                  answer(bytes, match field(Some(answer_json), "total") {
+                    Some(Number(t, ..)) => t
+                    _ => -1.0
+                  })
+                Err(_) => answer(b"", -2.0)
+              }
+            })
+          },
+        })
+        v.media = Some(m)
+      }
+      if !v.asked {
+        return
+      }
+    }
     Some(KVideo) | Some(KAudio) => {
       if v.video is None {
         let n = @ui.NativeView::video(v.mime, fn(offset, length, answer) {
@@ -1036,7 +1089,10 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
         }
         _ => ()
       }
-      return
+      // played as it comes: read whole only once asked to be saved (a desktop's bar has 下载 for it)
+      if !v.asked {
+        return
+      }
     }
     _ => ()
   }
@@ -1185,7 +1241,7 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     })
     |> ignore
     if !marking.on {
-      c.layer(fn() { v.side_buttons(c, src, shown) }) |> ignore
+      c.layer(fn() { if wide_on.val { v.desk_steps(c, src, shown) } else { v.side_buttons(c, src, shown) } }) |> ignore
     } else {
       c.layer(fn() {
         c.spacer()
@@ -1197,7 +1253,7 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
       })
       |> ignore
     }
-    c.layer(fn() { v.bar(c, src, shown) }) |> ignore
+    c.layer(fn() { if wide_on.val { v.desk_bar(c, src, shown) } else { v.bar(c, src, shown) } }) |> ignore
     match kind {
       Some(KVideo) =>
         c.layer(fn() {
@@ -1452,13 +1508,20 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
   match kind {
     Some(KImage) if v.file.size <= big_file => v.image_stage(c, src, stage)
     Some(KVideo) => v.video_stage(c, src, stage)
+    Some(KAudio) if wide_on.val => v.desk_song(c, src)
     Some(KAudio) => v.audio_stage(c, stage)
     _ =>
-      if v.told_of() {
-        v.note(c, fn() { v.facts(c) })
+      if v.desk_reads() {
+        // a desktop's: a text and Markdown read in the reader, as a drive's are (reader_desk.mbt)
+        match v.bytes {
+          Some(b) => v.desk_read(c, src, b)
+          None => ()
+        }
+      } else if v.told_of() {
+        v.note(c, fn() { if wide_on.val { v.desk_facts(c) } else { v.facts(c) } })
       } else if (v.kind is None && v.sniffed is None) || (v.bytes is None && v.error is None) {
         tap_stage(c, v, stage)
-        v.note(c, fn() { v.coming_note(c) })
+        v.note(c, fn() { if wide_on.val { v.desk_coming(c) } else { v.coming_note(c) } })
       } else {
         match v.error {
           Some(e) => {
@@ -1926,8 +1989,13 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
       })
       |> ignore
     }
-    Some((x, y, w, h)) if picture != "" =>
+    Some((x, y, w, h)) if picture != "" => {
+      // a desktop's: on the canvas with the web's shadow round it (preview_desk.mbt)
+      if wide_on.val {
+        desk_image_ground(c, x + sx, y, w, h)
+      }
       c.picture(picture, x=x + sx, y~, w~, h~, max_px=4096) |> ignore
+    }
     // its size not sent with it: a small decode, out of sight, says it
     _ if picture != "" =>
       c.box(w=Px(1.0), h=Px(1.0), opacity=0.01, fn() {
@@ -2304,22 +2372,50 @@ fn Viewer::gestures(
   if !c.pressed(stage) {
     v.pinched = false
   }
+  // a desktop's mouse: a click round an image (not on it) closes it, one on it does nothing until a second makes it a
+  // double click (FilePreview.tsx ImageViewer onClick, useZoom onDoubleClick); the bars are the mouse's moves' (a
+  // finger's tap, on a wide touch screen too, shows or hides them)
+  let desk = desk_mouse()
+  let on_picture = match z.rect() {
+    Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
+    None => false
+  }
   if c.clicked(stage) && v.moved <= 8.0 && !pinched {
-    if at - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
+    if desk && !on_picture && !marking.on && v.shown_kind() == Some(KImage) {
+      v.shut(c)
+    } else if at - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
       // the second of two: zoom (and the first's toggle undone)
       v.tap_at = -1.0e9
-      v.toggle()
+      if !desk {
+        v.toggle()
+      }
       z.double_tap(px, py)
     } else {
       v.tap_at = at
       v.tap_x = px
       v.tap_y = py
-      v.toggle()
+      if !desk {
+        v.toggle()
+      }
     }
   }
-  let dy = @ui.wheel(c, stage)
-  if dy != 0.0 && z.nw > 0.0 {
-    z.zoom_to(z.scale * @dmath.pow(1.0015, -dy), px, py, false)
+  // the wheel: a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round the pointer
+  // (FilePreview.tsx useZoom onWheel: a pinch's small steps finer than a wheel's notches); a phone's zooms
+  let (wx, wy, mods) = @ui.wheel_of(c, stage)
+  if desk && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
+    if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd)) != 0 {
+      let fine = (mods & @ui.wheel_mod_ctrl) != 0 && wy.abs() < desk_pinch_step
+      z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { desk_pinch_rate } else { desk_wheel_rate })), px, py, false)
+    } else if !z.zoomed() {
+      // (fitted, it is all in view: nothing to pan, and it stays fitted as the window changes)
+      ()
+    } else if (mods & @ui.wheel_mod_shift) != 0 && wx == 0.0 {
+      z.pan(-wy, 0.0)
+    } else {
+      z.pan(-wx, -wy)
+    }
+  } else if !desk && wy != 0.0 && z.nw > 0.0 {
+    z.zoom_to(z.scale * @dmath.pow(1.0015, -wy), px, py, false)
   }
 }
 
@@ -2505,27 +2601,39 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
   if c.pressed(controls) {
     v.wake(tap_rest_ms)
   }
-  c.box(w=Fill(1.0), pad=8.0, opacity=if on { shown } else { 0.0 }, fn() {
+  // a desktop's in the page's colours over the canvas, as wide as 1080 allows less 16 either side, 16 off the foot
+  // (media.css.ts vvBar: the raised ground at 72%, solid here over the player's view), no 横屏; a phone's on the dark
+  // tint, 8 round it
+  let desk = wide_on.val
+  let p = @sf.theme().p
+  let tint = if desk { p.muted } else { dark_muted }
+  let strong = if desk { p.text } else { dark_text }
+  let ground = if desk { @sf.over(p.canvas, @sf.alpha(p.raised, desk_video_share)) } else { solid_glass() }
+  let side = if desk { (c.width - dmin(desk_video_most, c.width - 2.0 * desk_video_in)) / 2.0 } else { 8.0 }
+  let (above, below) = if desk { (desk_video_in, desk_video_in) } else { (8.0, 8.0) }
+  let (inner_x, inner_b) = if desk { (desk_video_pad, desk_video_pad) } else { (4.0, 4.0) }
+  let rate_ground = if desk { @sf.alpha(p.text, desk_rate_share) } else { 0xFFFFFF1AL }
+  c.box(w=Fill(1.0), pl=side, pr=side, pt=above, pb=below, opacity=if on { shown } else { 0.0 }, fn() {
     c.box(
       w=Fill(1.0),
-      pl=4.0,
-      pr=4.0,
+      pl=inner_x,
+      pr=inner_x,
       pt=2.0,
-      pb=4.0,
+      pb=inner_b,
       radius=16.0,
-      bg=solid_glass(),
+      bg=ground,
       id=if on { controls } else { 0 },
       fn() {
         timeline(c, v, n, first, last, now, frame_of)
         c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
           c.box(dir=Row, gap=2.0, fn() {
-            if picture_button(c, "preview/prev", "chevron-left", dark_muted, on, said=pv("android-chat.video.prev")) {
+            if picture_button(c, "preview/prev", "chevron-left", tint, on, said=pv("android-chat.video.prev")) {
               n.seek(start_of(at - 1))
               n.pause()
               step_log(at - 1, frames)
               v.wake(tap_rest_ms)
             }
-            if picture_button(c, "preview/play", if n.playing() { "pause" } else { "play" }, dark_muted, on, said=pv(if n.playing() { "android-chat.video.pause" } else { "android-chat.video.play" })) {
+            if picture_button(c, "preview/play", if n.playing() { "pause" } else { "play" }, tint, on, said=pv(if n.playing() { "android-chat.video.pause" } else { "android-chat.video.play" })) {
               if n.playing() {
                 n.pause()
               } else {
@@ -2533,7 +2641,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
               }
               v.wake(tap_rest_ms)
             }
-            if picture_button(c, "preview/next", "chevron-right", dark_muted, on, said=pv("android-chat.video.next")) {
+            if picture_button(c, "preview/next", "chevron-right", tint, on, said=pv("android-chat.video.next")) {
               n.seek(start_of(at + 1))
               n.pause()
               step_log(at + 1, frames)
@@ -2547,9 +2655,9 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
               let parts = words.split("{at}").map(fn(s) { s.to_owned() }).to_array()
               c.rich(
                 [
-                  @ui.span(parts.get(0).unwrap_or(""), color=dark_muted, mono=true),
-                  @ui.span("\{at + 1}", color=dark_text, weight=600, mono=true),
-                  @ui.span(parts.get(1).unwrap_or(""), color=dark_muted, mono=true),
+                  @ui.span(parts.get(0).unwrap_or(""), color=tint, mono=true),
+                  @ui.span("\{at + 1}", color=strong, weight=600, mono=true),
+                  @ui.span(parts.get(1).unwrap_or(""), color=tint, mono=true),
                 ],
                 size=12.0,
                 wrap=false,
@@ -2558,7 +2666,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
             } else if n.state() == 0 || !read {
               c.box(dir=Row, gap=8.0, align=ACenter, fn() {
                 @sf.spinner(c, size=12.0) |> ignore
-                c.text(pv(if read { "common.reading" } else { "android-chat.video.reading" }), size=13.0, color=dark_muted, wrap=false)
+                c.text(pv(if read { "common.reading" } else { "android-chat.video.reading" }), size=13.0, color=tint, wrap=false)
                 |> ignore
               })
               |> ignore
@@ -2592,25 +2700,25 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
             min_w=46.0,
             padx=8.0,
             radius=10.0,
-            bg=0xFFFFFF1AL,
+            bg=rate_ground,
             align=ACenter,
             justify=JCenter,
             id=rate_id,
             fn() {
-              c.rich([@ui.span(r + "×", weight=600, mono=true)], size=12.0, color=dark_text, wrap=false)
+              c.rich([@ui.span(r + "×", weight=600, mono=true)], size=12.0, color=strong, wrap=false)
               |> ignore
             },
           )
           |> ignore
           // 保存此帧: paused, the frame showing grabbed at its own size (VideoViewer.kt, MediaMetadataRetriever)
-          if picture_button(c, "preview/save-frame", "camera", dark_muted, on, enabled=!n.playing() && n.state() == 1 && !v.grabbing, said=pv("android-chat.video.saveFrame")) {
+          if picture_button(c, "preview/save-frame", "camera", tint, on, enabled=!n.playing() && n.state() == 1 && !v.grabbing, said=pv("android-chat.video.saveFrame")) {
             v.grabbing = true
             v.grab_frame = at
             n.grab_frame(start_of(at))
             v.wake(tap_rest_ms)
           }
           // 横屏: the phone turned for it (and back as the viewer closes)
-          if picture_button(c, "preview/landscape", "landscape", if v.turned { dark_text } else { dark_muted }, on, said=pv(if v.turned { "android-chat.video.landscape.exit" } else { "android-chat.video.landscape" })) {
+          if !desk && picture_button(c, "preview/landscape", "landscape", if v.turned { dark_text } else { dark_muted }, on, said=pv(if v.turned { "android-chat.video.landscape.exit" } else { "android-chat.video.landscape" })) {
             v.turned = !v.turned
             @hostapi.set_sideways(v.turned)
             v.wake(tap_rest_ms)
@@ -2664,6 +2772,9 @@ fn timeline(
 ) -> Unit {
   let id = c.id("preview/timeline")
   let span = last - first
+  // a desktop's in the page's words (media.css.ts vvTrack: the words at 20%, played the words), a phone's in white
+  let p = @sf.theme().p
+  let (track, played) = if wide_on.val { (@sf.alpha(p.text, desk_track_share), p.text) } else { (0xFFFFFF33L, dark_text) }
   // the time under the finger, on the track (inside the box's 6 each side)
   let under = fn() -> Double? {
     match c.rect_of(id) {
@@ -2723,9 +2834,9 @@ fn timeline(
   let part = if span > 0.0 { dmax(0.0, dmin(1.0, (at - first) / span)) } else { 0.0 }
   c.box(w=Fill(1.0), h=Px(22.0), padx=6.0, justify=JCenter, id~, fn() {
     // what has played, then the rest (Fill shares the row: one alone would fill it)
-    c.box(dir=Row, w=Fill(1.0), h=Px(4.0), radius=2.0, bg=0xFFFFFF33L, fn() {
+    c.box(dir=Row, w=Fill(1.0), h=Px(4.0), radius=2.0, bg=track, fn() {
       if part > 0.0 {
-        c.box(w=Fill(part), h=Px(4.0), radius=2.0, bg=dark_text, fn() {  }) |> ignore
+        c.box(w=Fill(part), h=Px(4.0), radius=2.0, bg=played, fn() {  }) |> ignore
       }
       if part < 1.0 {
         c.box(w=Fill(1.0 - part), h=Px(4.0), fn() {  }) |> ignore
@@ -2739,7 +2850,7 @@ fn timeline(
         if part > 0.0 {
           c.box(w=Fill(part), fn() {  }) |> ignore
         }
-        c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=dark_text, fn() {  }) |> ignore
+        c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=played, fn() {  }) |> ignore
         if part < 1.0 {
           c.box(w=Fill(1.0 - part), fn() {  }) |> ignore
         }
@@ -2852,17 +2963,24 @@ fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> Unit
     return
   }
   tap_stage(c, v, stage)
-  let w = c.width - 24.0
+  // 60 under the status bar, 12 over the navigation bar, round them and between them (FilePreview.kt
+  // contentPadding); a desktop's as the web's (preview_desk.mbt: 76 down, as wide as 1000 less 56 allows, 20 apart)
+  let desk = wide_on.val
+  let w = if desk { desk_pdf_width(c.width) } else { c.width - 24.0 }
+  let side = (c.width - w) / 2.0
+  let gap = if desk { desk_pdf_gap } else { 12.0 }
+  let top = if desk { desk_page_top } else { 60.0 + status_top() }
+  let foot = if desk { desk_pdf_foot } else { 12.0 + nav_foot() }
+  let none = 0.0
   c.list("preview/pdf/" + v.file.path, pdf.pages + 2, 400.0, fn(i) {
-    // 60 under the status bar, 12 over the navigation bar (FilePreview.kt contentPadding)
     if i == 0 {
-      c.box(w=Fill(1.0), h=Px(60.0 + status_top()), fn() {  }) |> ignore
+      c.box(w=Fill(1.0), h=Px(top), fn() {  }) |> ignore
     } else if i == pdf.pages + 1 {
-      c.box(w=Fill(1.0), h=Px(12.0 + nav_foot()), fn() {  }) |> ignore
+      c.box(w=Fill(1.0), h=Px(foot), fn() {  }) |> ignore
     } else {
       let (pw, ph) = pdf.sizes[i - 1]
       let h = if pw > 0.0 { w * ph / pw } else { w * 1.294 }
-      c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=if i < pdf.pages { 12.0 } else { 0.0 }, fn() {
+      c.box(w=Fill(1.0), pl=side, pr=side, pb=if i < pdf.pages { gap } else { none }, fn() {
         c.box(w=Px(w), h=Px(h), bg=0xFFFFFFFFL, shadow=@sf.page_raised.sigma, shadow_y=@sf.page_raised.dy, shadow_color=@sf.page_raised.color, fn() {
           c.image(pdf.page_src(i - 1), w=Px(w), h=Px(h), fit=FitFill, bg=t.p.neutral_bg) |> ignore
         })
@@ -2909,7 +3027,9 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
         p
       }
     }
-    c.box(w=Fill(1.0), h=Fill(1.0), pt=60.0 + status_top(), fn() {
+    // under the bar: 60 under the status bar, a desktop's 76 (FilePreview.css.ts fpPageFrame)
+    let top = if wide_on.val { desk_page_top } else { 60.0 + status_top() }
+    c.box(w=Fill(1.0), h=Fill(1.0), pt=top, fn() {
       if page.here() && !v.closing {
         c.native(page) |> ignore
       } else if !page.here() {
@@ -2959,19 +3079,27 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
   let markdown = kind == KMarkdown && !v.source
   let code = !markdown && (kind != KText && kind != KCsv)
   let count = if markdown { 1 } else { chunks }
+  // a desktop's as the web's (FilePreview.css.ts fpCode 64 and the block's 16 down, 32 in, 12 on 1.6; fpPlain 76 down,
+  // 32 in, 12 on 1.65), a phone's as the Android app's
+  let desk = wide_on.val
+  let top = status_top() + (if markdown { 64.0 } else if code { 80.0 } else if desk { desk_page_top } else { 60.0 })
+  let foot = if markdown { 64.0 } else if desk { desk_text_foot } else { 48.0 }
+  let size = if desk { desk_code_size } else { 12.5 }
+  let line = if desk && code { desk_code_line } else if desk { desk_plain_line } else if code { 20.0 } else { 20.6 }
+  let side = if desk { desk_text_side } else { 16.0 }
   c.list("preview/text/" + v.file.path + (if v.source { "/source" } else { "" }), count + 3, 400.0, fn(i) {
     if i == 0 {
       if cut {
         c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=8.0, pb=8.0, bg=@sf.alpha(t.p.red, 0.0), fn() {  })
         |> ignore
       }
-      c.box(w=Fill(1.0), h=Px(status_top() + (if markdown { 64.0 } else if code { 80.0 } else { 60.0 })), fn() {  })
+      c.box(w=Fill(1.0), h=Px(top), fn() {  })
       |> ignore
       if cut {
         cut_line(c, pv_fill("android-chat.file.cut", [("size", file_size(show_limit.to_double()))]))
       }
     } else if i == count + 1 {
-      c.box(w=Fill(1.0), h=Px(if markdown { 64.0 } else { 48.0 }), fn() {  }) |> ignore
+      c.box(w=Fill(1.0), h=Px(foot), fn() {  }) |> ignore
     } else if i == count + 2 {
       ()
     } else if markdown {
@@ -2998,9 +3126,9 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
       let words = fn() {
         c.rich(
           if colored.length() > 0 { runs } else { [@ui.span(sb.to_string(), mono=true)] },
-          size=12.5,
+          size~,
           color=t.p.text,
-          line=if code { 20.0 } else { 20.6 },
+          line~,
           wrap=!code,
         )
         |> ignore
@@ -3009,7 +3137,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
         // scrolled across, its rows as one (FilePreview.kt: the code in a horizontalScroll, 32 in from its sides)
         c.sideways("preview/code/" + v.file.path, across=true, padx=32.0, words) |> ignore
       } else {
-        c.box(w=Fill(1.0), pl=16.0, pr=16.0, words) |> ignore
+        c.box(w=Fill(1.0), pl=side, pr=side, words) |> ignore
       }
     }
   })
@@ -3077,15 +3205,18 @@ fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool) ->
     dmax(48.0, dmin(420.0, most + 32.0))
   })
   let number = "\{body_n}".length().to_double() * 8.4 + 36.0
+  // a desktop's in the page's 13 (FilePreview.css.ts fpTable), 68 down to its head; a phone's in 15
+  let size = if wide_on.val { desk_cell_size } else { 15.0 }
+  let top = if wide_on.val { desk_table_top } else { 60.0 + status_top() }
   let cell = fn(s : String, w : Double, weight : Int, color : Int64) {
     c.box(w=Px(w), padx=16.0, pady=8.0, clip=true, fn() {
-      c.text(s, size=15.0, weight~, color~, wrap=false) |> ignore
+      c.text(s, size~, weight~, color~, wrap=false) |> ignore
     })
     |> ignore
   }
   c.list("preview/csv/" + v.file.path, body_n + 3, 37.0, fn(i) {
     if i == 0 {
-      c.box(w=Fill(1.0), h=Px(60.0 + status_top()), fn() {  }) |> ignore
+      c.box(w=Fill(1.0), h=Px(top), fn() {  }) |> ignore
     } else if i == 1 {
       c.box(dir=Row, bg=ink().canvas, border=0.0, fn() {
         c.box(w=Px(number), fn() {  }) |> ignore
@@ -3104,7 +3235,7 @@ fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool) ->
       let r = rows[i - 1]
       c.box(dir=Row, fn() {
         c.box(w=Px(number), pl=20.0, pr=16.0, pt=8.0, pb=8.0, align=AEnd, fn() {
-          c.text("\{i - 1}", size=15.0, color=t.p.muted, wrap=false) |> ignore
+          c.text("\{i - 1}", size~, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
         for j, _ in head {

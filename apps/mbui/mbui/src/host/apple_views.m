@@ -1155,6 +1155,8 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
       v.speed = value;
       if (v.player.rate > 0) v.player.rate = (float)value;
       break;
+    // how loud, 0 to 1 (NativeView::volume)
+    case 10: v.player.volume = (float)fmax(0.0, fmin(1.0, value)); break;
     case 20: [v readFrames]; break;
     case 21: [v grabAt:value]; break;
     case 22: [v grabShown:value]; break;

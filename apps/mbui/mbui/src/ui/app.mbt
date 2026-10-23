@@ -981,6 +981,9 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   took_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+  // what was held with it, above its phase (wheel_mod_*: ⇧ ⌃ ⌥ ⌘, and a trackpad's pinch as a wheel with ⌃ held)
+  let mods = phase / 16
+  let phase = phase % 16
   let c = g()
   let mut target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
   // over what scrolls sideways: its sideways part moves it, the rest goes to the list it lies in
@@ -992,9 +995,15 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
     target = outer_scroll(c, x, y)
   }
   if captures.contains(target) {
-    // a box that takes the pointer keeps the wheel (native.mbt `wheel`)
+    // a box that takes the pointer keeps the wheel (native.mbt `wheel`, `wheel_of`)
     wheels[target] = wheels.get(target).unwrap_or(0.0) + dy
+    wheels_x[target] = wheels_x.get(target).unwrap_or(0.0) + dx
+    wheel_mods[target] = mods
     h_request_frame()
+    return
+  }
+  // a pinch is what holds a page's own (a picture's zoom): no list scrolls by it
+  if (mods & wheel_mod_pinch) != 0 {
     return
   }
   if target != 0 {

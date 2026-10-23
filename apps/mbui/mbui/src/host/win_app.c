@@ -290,8 +290,10 @@ static void wheel(WPARAM wp, LPARAM lp, int horizontal) {
   // a notch is WHEEL_DELTA; a line 100/3 points, as a browser scrolls (100 a notch of three lines), eased in by the
   // app (phase 4)
   double d = GET_WHEEL_DELTA_WPARAM(wp) / (double)WHEEL_DELTA * lines * (100.0 / 3.0);
-  if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 4);
-  else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4);
+  // what is held with it, above the phase (ui's wheel_mod_*: a precision touchpad's pinch comes as Ctrl and the wheel)
+  int mods = (GetKeyState(VK_SHIFT) < 0 ? 1 : 0) | (GetKeyState(VK_CONTROL) < 0 ? 2 : 0) | (GetKeyState(VK_MENU) < 0 ? 4 : 0);
+  if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 4 | (mods << 4));
+  else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4 | (mods << 4));
 }
 
 static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
@@ -666,6 +668,29 @@ void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   mb_host_clipboard_set(s);
 }
 
+// A picture on the clipboard (@hostapi.clipboard_set_image): a PNG's bytes under the "PNG" format other programs paste
+// (Office, browsers, Paint.NET); what is not a PNG is put nowhere.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  int n = Moonbit_array_length(data);
+  static const unsigned char sig[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+  if (n < 8 || memcmp(data, sig, 8) != 0) return;
+  UINT png = RegisterClipboardFormatW(L"PNG");
+  HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, (size_t)n);
+  if (!png || !h) {
+    if (h) GlobalFree(h);
+    return;
+  }
+  memcpy(GlobalLock(h), data, (size_t)n);
+  GlobalUnlock(h);
+  if (!OpenClipboard(hwnd)) {
+    GlobalFree(h);
+    return;
+  }
+  EmptyClipboard();
+  if (!SetClipboardData(png, h)) GlobalFree(h);
+  CloseClipboard();
+}
+
 
 void mb_host_log(moonbit_string_t s) {
   int n = Moonbit_array_length(s);
@@ -866,6 +891,9 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
 
 // The system's title bar holds the window's buttons: none in the app's top row.
 int32_t mb_host_window_inset(void) { return 0; }
+// A window filling the screen (@hostapi.full_screen): not one of this host's.
+int32_t mb_host_full_screen(void) { return 0; }
+void mb_host_set_full_screen(int32_t on) { (void)on; }
 
 // The press under way moves the window (the app's top row), as the title bar's would.
 void mb_host_window_drag(void) {

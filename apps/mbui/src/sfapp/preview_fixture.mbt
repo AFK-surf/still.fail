@@ -261,11 +261,13 @@ let fixture_csv : String =
   #|"设置, 外观",web,0.66,否
 
 ///|
-/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it.
+/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it, the first of the two.
 fn fixture_image_near(params : Map[String, Json]) -> Json? {
   match params.get("path") {
     Some(String("uploads/fx/界面草图.png")) =>
       Some({
+        "index": 0,
+        "count": 2,
         "after": {
           "name": "第二版.png",
           "path": "uploads/fx/第二版.png",
@@ -277,6 +279,8 @@ fn fixture_image_near(params : Map[String, Json]) -> Json? {
       })
     Some(String("uploads/fx/第二版.png")) =>
       Some({
+        "index": 1,
+        "count": 2,
         "before": {
           "name": "界面草图.png",
           "path": "uploads/fx/界面草图.png",

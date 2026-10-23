@@ -359,6 +359,16 @@ impl @hostapi.Host for FakeHost with window_inset(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with full_screen(_) {
+  full_screen()
+}
+
+///|
+impl @hostapi.Host for FakeHost with set_full_screen(_, on) {
+  h_set_full_screen(on)
+}
+
+///|
 impl @hostapi.Host for FakeHost with env(_, a0) {
   h_env(a0)
 }
@@ -370,6 +380,11 @@ impl @hostapi.Host for FakeHost with app_version(_) {
 ///|
 impl @hostapi.Host for FakeHost with clipboard_set_secret(_, s, clear_ms) {
   h_clipboard_secret(s, clear_ms)
+}
+
+///|
+impl @hostapi.Host for FakeHost with clipboard_set_image(_, data) {
+  h_clipboard_image(data)
 }
 
 ///|
