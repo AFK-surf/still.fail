@@ -5,6 +5,14 @@
 /// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is "en".
 // kept across runs: a table, never written
 let en : Map[String, String] = {
+  "web-pages.security.lead": "Who can access this workspace's stations and run commands on them",
+  "web-pages.security.onLead": "Adding members, devices or stations requires approval from a trusted device; even if still.fail's servers were compromised, they couldn't reach your stations",
+  "web-pages.security.thenSafe": "Even if the servers were compromised, an attacker couldn't reach your stations; at worst, you can't connect for a while",
+  "web-pages.security.signsHere": "Approved on this device",
+  "web-pages.security.check": "Verify",
+  "web-pages.security.viewer": "Viewer",
+  "web-pages.security.upgradeTitle": "Make this device a trusted device",
+  "web-pages.roles.member": "Member",
   "web-main.filter.connects.all": "All connects",
   "web-main.filter.connects.named": "Filter connects: {named}",
   "web-pages.notifications.sample.title": "Sample chat",
