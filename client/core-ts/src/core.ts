@@ -251,7 +251,7 @@ export class Core {
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
       handlers.commandsFind = (_i, call) => {
         const c = call as Extract<Call, { kind: "commandsFind" }>;
-        return Effect.sync(() => commands.find(c.query, c.offered));
+        return Effect.sync(() => commands.find(c.query, c.offered, t));
       };
       const fontFiles = new FontFiles(inner.host, inner.store, () => get(inner.data.get({ topic: "prefs" }), "fonts"));
       inner.router.owners.push(fontFiles);

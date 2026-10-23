@@ -2,9 +2,12 @@
 // now (a key's action some page answers, updating, a settings page), those whose name, id or other words have what was
 // typed, by part, in the parts' order. The core names what every client offers alike (the keys' actions, updating,
 // relaying a chat) and which are worth a key alone; a client says which it can do now and names what is its own (its
-// settings pages), and does what is picked.
-import { t } from "./i18n.ts";
+// settings pages), and does what is picked. Nothing here reads more than it is given (the words too: `say`), so the
+// web's demo answers with it as the core does.
 import { isObject } from "./util.ts";
+
+/// The words of a key in the person's language (i18n.ts `t`).
+export type Say = (key: string, args?: Record<string, string>) => string;
 
 /// The parts of what can be done, in the list's order: this chat's, updates, the app's, settings' pages.
 export const GROUPS = ["chat", "update", "global", "settings"] as const;
@@ -16,10 +19,10 @@ export type Offer = { id: string; label?: string; group?: string; words?: string
 
 /// One the core names: its part, its name, its other words (its name in English, as an id is), and whether it is only
 /// found by typing (one of many alike, or rarely wanted).
-type Named = { group: Group; label: (o: Offer) => string; words?: string; typed?: true };
+type Named = { group: Group; label: (o: Offer, t: Say) => string; words?: string; typed?: true };
 
 /// A key's action, named as the list of shortcuts names it.
-const action = (group: Group, id: string): Named => ({ group, label: () => t(`web-main.keymap.${id}`) });
+const action = (group: Group, id: string): Named => ({ group, label: (_o, t) => t(`web-main.keymap.${id}`) });
 
 const NAMED: Record<string, Named> = {
   "chat.new": action("global", "chat.new"),
@@ -32,14 +35,14 @@ const NAMED: Record<string, Named> = {
   "chat.jobs": action("chat", "chat.jobs"),
   "chat.find": action("chat", "chat.find"),
   "chat.archive": action("chat", "chat.archive"),
-  "chat.relay": { group: "chat", words: "relay slack feishu lark channel thread 接力 jieli 频道", label: () => t("web-main.relay.action") },
+  "chat.relay": { group: "chat", words: "relay slack feishu lark channel thread 接力 jieli 频道", label: (_o, t) => t("web-main.relay.action") },
   // The page to a newer build of it, the desktop app to its newer build, looking for one now (its version page).
-  "update.page": { group: "update", words: "update refresh", label: () => t("web-main.webUpdate.foundRefresh") },
-  "update.app": { group: "update", words: "update", label: (o) => t("web-pages.version.updateTo", { version: o.version ?? "" }) },
-  "update.check": { group: "update", words: "check update", typed: true, label: () => t("web-pages.version.check") },
+  "update.page": { group: "update", words: "update refresh", label: (_o, t) => t("web-main.webUpdate.foundRefresh") },
+  "update.app": { group: "update", words: "update", label: (o, t) => t("web-pages.version.updateTo", { version: o.version ?? "" }) },
+  "update.check": { group: "update", words: "check update", typed: true, label: (_o, t) => t("web-pages.version.check") },
   "update.station": {
     group: "update", words: "update station",
-    label: (o) => (o.station ? `${t("web-main.stationUpdate.updateAction")} · ${o.station}` : t("web-main.stationUpdate.updateAction")),
+    label: (o, t) => (o.station ? `${t("web-main.stationUpdate.updateAction")} · ${o.station}` : t("web-main.stationUpdate.updateAction")),
   },
 };
 
@@ -65,7 +68,7 @@ function offerOf(raw: unknown): Offer | null {
 
 /// What of `offered` the list shows for `query`: those whose name (or id, "chat.archive", or other words) has it, with
 /// nothing typed all but those only found by typing; by part (GROUPS), each in the order offered, each once.
-export function find(query: string, offered: readonly unknown[]): { groups: FoundGroup[] } {
+export function find(query: string, offered: readonly unknown[], t: Say): { groups: FoundGroup[] } {
   const q = query.trim().toLowerCase();
   const seen = new Set<string>();
   const all: { group: Group; id: string; label: string; words: string; typed: boolean }[] = [];
@@ -74,7 +77,7 @@ export function find(query: string, offered: readonly unknown[]): { groups: Foun
     if (o === null || UNLISTED.has(o.id) || seen.has(o.id)) continue;
     const named = NAMED[o.id];
     const group = named?.group ?? o.group;
-    const label = named ? named.label(o) : o.label;
+    const label = named ? named.label(o, t) : o.label;
     if (!isGroup(group) || label === undefined || label === "") continue;
     seen.add(o.id);
     all.push({ group, id: o.id, label, words: (named ? named.words : o.words) ?? "", typed: named ? named.typed === true : o.typed === true });

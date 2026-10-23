@@ -2,7 +2,8 @@
 // typed, named by the core where it knows them, by part.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { find } from "../src/commands.ts";
+import { find as findWith } from "../src/commands.ts";
+import { t } from "../src/i18n.ts";
 import { answers, call, cloudCore } from "./helpers.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -18,6 +19,7 @@ const offered = [
   { id: "drive/st", group: "settings", label: "文件 · studio", words: "文件 files drive studio", typed: true },
 ];
 
+const find = (query: string, offered: readonly unknown[]) => findWith(query, offered, t);
 const shown = (r: ReturnType<typeof find>) => r.groups.map((g) => [g.group, g.title, g.commands.map((c) => c.id)]);
 
 test("with_nothing_typed_the_list_offers_what_can_be_done_by_part_but_what_only_typing_finds", () => {

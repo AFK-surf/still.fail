@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import "@fontsource-variable/inter";
 import { setPageRoot } from "../brand.tsx";
+import { t } from "../i18n.ts";
 import { withoutDownloads } from "../downloads.ts";
 import { Tooltip } from "radix-ui";
 import { ToastProvider } from "@stillfail/ui/toast.tsx";
@@ -27,6 +28,8 @@ import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
 import { inkKept } from "../../../client/core-ts/src/highlight.ts";
 import { bookAnswer, keepBook, keptBook, searchBook } from "../../../client/core-ts/src/reader.ts";
+import { find as findCommands } from "../../../client/core-ts/src/commands.ts";
+import { openOf } from "../../../client/core-ts/src/search-open.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
 let root: HTMLElement;
@@ -211,7 +214,11 @@ function searchView(query: string, kind: string | null): SearchView {
       { kind: "member", key: "m1", station: "", stationName: "", title: `${q} 组 · 林`, ...said(`lin@example.com`), email: "lin@example.com" },
     ] },
   ];
-  const shown = kind ? groups.filter((g) => g.kind === kind) : groups;
+  // Each says where it opens, as the core says it (search-open.ts).
+  const shown = (kind ? groups.filter((g) => g.kind === kind) : groups).map((g) => ({ ...g, items: g.items.map((i) => {
+    const open = openOf(i);
+    return open ? { ...i, open } : i;
+  }) }));
   return {
     items: kind && kind !== "chat" ? [] : items.slice(0, kind ? 50 : 8), chatsMore: !kind && items.length > 8, words: [q],
     groups: kind === "chat" ? [] : shown.map((g) => ({ ...g, more: !kind && g.more })), wait, note: "MacBook Air 离线，其上的内容未搜索",
@@ -338,6 +345,8 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
   // Its chats are whole, never a window short of their end: nothing to move along, nowhere to keep a place.
   if (name === "chat.newer" || name === "chat.latest" || name === "chat.place" || name === "chat.around") return name === "chat.newer" ? { more: false } : null;
   if (name === "chat.find") return { words: [], hits: [], held: 0, of: 0, whole: true };
+  // ⌘K's commands, found as the core finds them (client/core-ts/src/commands.ts), in the page's words.
+  if (name === "commands.find") return findCommands(String(params.query ?? ""), Array.isArray(params.offered) ? params.offered : [], t);
   const chat = chats.find((c) => c.thread === params.thread || c.key === params.session);
   // A card's option picked: its label sent, quoting the post, as the core sends it (and the card answered at once).
   if (name === "decision.answer" && chat && typeof params.option === "string") {
