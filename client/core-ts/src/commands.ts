@@ -18,7 +18,7 @@ export type Group = (typeof GROUPS)[number];
 
 /// What a client can do now, as it offers it: by id; one the core does not name with its words (`label`, `group`,
 /// `words`, `typed`); one whose name takes something, with it (`version` an update goes to, `station` updated).
-export type Offer = { id: string; label?: string; group?: string; words?: string; typed?: boolean; version?: string; station?: string };
+export type Offer = { id: string; label?: string | undefined; group?: string | undefined; words?: string | undefined; typed?: boolean; version?: string | undefined; station?: string | undefined };
 
 /// One the core names: its part, its name, its other words (its name in English, as an id is), and whether it is only
 /// found by typing (one of many alike, or rarely wanted).
