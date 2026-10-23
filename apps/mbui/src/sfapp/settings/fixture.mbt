@@ -182,6 +182,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-recover" => up("vault-recover", "", 0)
     "settings-add-people" => up("add-people", "", 0)
     "settings-workspace-mark" => up("workspace-mark", "", 0)
+    // the desktop's archive policy with a dialog up (web_decisions.mbt): its words, an option of the station's
+    "settings-policy-text" => fx_policy_up.val = "text"
+    "settings-policy-option" => fx_policy_up.val = "option"
     // the desktop's 安全 with a dialog up (web_security.mbt): a device's code to confirm, MBA to take in, turning it off
     "settings-security-confirm" => up("lock-confirm", "", 0)
     "settings-security-join" => up("lock-join", "", 0)
@@ -222,7 +225,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-item" => "vault-item:v1#it1"
     "settings-decisions" => "decisions-settings"
     "settings-completion" => "completion"
-    "settings-policy" => "policy:ws1/st1"
+    "settings-policy" | "settings-policy-text" | "settings-policy-option" => "policy:ws1/st1"
     "settings-bars" => "bars"
     "settings-kept" | "settings-kept-many" => "kept"
     "settings-changelog" => "changelog"
@@ -1020,7 +1023,22 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
     "decisionForm" =>
       Some(obj([("enabled", Json::boolean(true)), ("model", str("gpt-6-mini")), ("dirty", Json::boolean(false)), ("pending", Json::boolean(false))]))
     "policyForm" =>
-      Some(obj([("policy", str("做完、没有待办的对话归档；还在等人回复或有后续计划的留下。")), ("options", []), ("dirty", Json::boolean(false)), ("pending", Json::boolean(false))]))
+      Some(
+        obj([
+          ("policy", str("做完、没有待办的对话归档；还在等人回复或有后续计划的留下。")),
+          // the station's options, each its draft's key its id
+          (
+            "options",
+            [
+              obj([("key", str("o1")), ("id", str("o1")), ("name", str("已完成")), ("rubric", str("任务做完，没有后续")), ("archive", Json::boolean(true))]),
+              obj([("key", str("o2")), ("id", str("o2")), ("name", str("被放弃")), ("rubric", str("明确不再继续")), ("archive", Json::boolean(true))]),
+              obj([("key", str("o3")), ("id", str("o3")), ("name", str("等回复")), ("rubric", str("在等某人的答复")), ("archive", Json::boolean(false))]),
+            ],
+          ),
+          ("dirty", Json::boolean(false)),
+          ("pending", Json::boolean(false)),
+        ]),
+      )
     "changelog" =>
       Some(
         obj([

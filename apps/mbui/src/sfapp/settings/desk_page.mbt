@@ -266,6 +266,7 @@ priv struct DeskDialog {
   key : String
   title : String
   description : String
+  wide : Bool
   body : (@ui.Ctx, () -> Unit) -> Unit
   foot : (@ui.Ctx, () -> Unit) -> Unit
 }
@@ -292,8 +293,9 @@ fn open_dialog(
   body : (@ui.Ctx, () -> Unit) -> Unit,
   foot : (@ui.Ctx, () -> Unit) -> Unit,
   description? : String = "",
+  wide? : Bool = false,
 ) -> Unit {
-  let d = { key, title, description, body, foot }
+  let d = { key, title, description, wide, body, foot }
   desk_dialogs.val += 1
   desk_dialog.val = Some(d)
   desk_dialog_last.val = Some(d)
@@ -309,7 +311,7 @@ fn desk_dialog_overlay(c : @ui.Ctx) -> Unit {
         Some(now) => now.key == d.key
         None => false
       }
-      let still = @sf.dialog(c, d.key, open, d.title, fn() { (d.body)(c, shut) }, description=d.description, close_label=tr("common.close"), footer=fn() {
+      let still = @sf.dialog(c, d.key, open, d.title, fn() { (d.body)(c, shut) }, description=d.description, wide=d.wide, close_label=tr("common.close"), footer=fn() {
         (d.foot)(c, shut)
       })
       if open && !still {
