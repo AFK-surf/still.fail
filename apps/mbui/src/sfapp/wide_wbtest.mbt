@@ -548,3 +548,51 @@ test "wide: 本机 Station as the system says it (a service running in a workspa
   t.frame()
   assert_eq(t.local_acts(), ["stop"])
 }
+
+///|
+test "the desktop's dock: once on, its words, its settings and every workspace's chats that want the person; what it asks done" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_dock(true)
+  t.frame()
+  // off until turned on: nothing told
+  assert_eq(t.dock_lines().length(), 0)
+  @settings.dock_set("on", true)
+  t.frame()
+  t.frame()
+  let lines = t.dock_lines()
+  assert_true(lines.length() >= 3, msg="its words, settings, items: " + lines.join("\n"))
+  assert_true(lines[0].contains("\"words\""))
+  assert_true(lines[1].contains("\"settings\""))
+  let parsed = @json.parse(lines[lines.length() - 1]) catch { _ => Json::null() }
+  let shown = items(Some(parsed), "items")
+  assert_true(shown.length() > 0, msg="the chats that want the person")
+  // read from it: chat.read
+  let id = text(Some(shown[0]), "id")
+  t.post(@hostapi.dock_channel, ({ "type": "open", "id": Json::string(id) } : Json).stringify())
+  t.frame()
+  t.frame()
+  match app.nav.top() {
+    Chat(r) => assert_eq(r.station + "|" + r.session, id)
+    _ => fail("not opened")
+  }
+  // turned off from its menu: stopped
+  t.post(@hostapi.dock_channel, "{\"type\":\"off\"}")
+  t.frame()
+  t.frame()
+  assert_false(@settings.dock_setting("on"))
+  assert_true(t.dock_stops() > 0)
+}
+
+///|
+test "wide: 通知's 桌面浮窗 beside the banner and the badge where there is a dock, kept on this device" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_dock(true)
+  app.nav.replace(Setting(@settings.Route::Notifications))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("桌面浮窗") is Some(_))
+  t.tap_text("桌面浮窗")
+  t.frame()
+  assert_true(@settings.dock_setting("on"))
+}
