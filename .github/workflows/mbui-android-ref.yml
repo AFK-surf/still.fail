@@ -71,8 +71,16 @@ jobs:
           lookup-only: true
       - id: what
         run: |
+          # (and only where there is one to take: a pull request that changes screens main has no picture of, or none it
+          # has, builds no Android app: 39926112139 built it for nothing, past the job's 10 minutes)
+          take=""
           if [ "${{ steps.changed.outputs.refs }}" = 1 ] && [ "${{ steps.same.outputs.cache-hit }}" != true ]; then
-            echo "refs=1" >> "$GITHUB_OUTPUT"; echo "Android's pictures taken anew"
+            take=$(bash apps/mbui/scripts/android-ref.sh plan | tr '\n' ' ')
+          fi
+          if [ -n "$(echo $take)" ]; then
+            echo "refs=1" >> "$GITHUB_OUTPUT"; echo "Android's pictures taken anew: $take"
+          elif [ "${{ steps.changed.outputs.refs }}" = 1 ] && [ "${{ steps.same.outputs.cache-hit }}" != true ]; then
+            echo "refs=0" >> "$GITHUB_OUTPUT"; echo "Android's pictures as kept: none of the screens changed is one to take anew"
           elif [ "${{ steps.changed.outputs.refs }}" = 1 ]; then
             echo "refs=0" >> "$GITHUB_OUTPUT"; echo "Android's pictures as kept: taken over all this already, the same"
           else echo "refs=0" >> "$GITHUB_OUTPUT"; echo "Android's pictures as kept"; fi

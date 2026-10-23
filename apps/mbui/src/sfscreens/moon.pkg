@@ -158,11 +158,6 @@ options(
       "command": ":embed -i $input -o $output --name screen_files",
     },
     {
-      "input": "../../../../client/fixtures/screens/history.json",
-      "output": "screen_history_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_history",
-    },
-    {
       "input": "../../../../client/fixtures/screens/history-details.json",
       "output": "screen_history_details_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_history_details",

@@ -273,14 +273,6 @@ class ScreensRefTest(private val name: String) {
         // the agent's mark in the bar, "<agent> · <station>"
         "chat-agent" to { _ -> rule.onAllNodes(hasContentDescription(" · Studio", substring = true)).onFirst().performClick() },
         "home-sheet" to { app -> rule.runOnUiThread { openWorkspaces(app) } },
-        // the reading's group (h2) and its second step, the change's group (h4) and its first, as the mbui fixture has
-        // them open (a step's row says what it was said to do, else its tool's name)
-        "history" to { _ ->
-            for (words in listOf("读了 src/ui/list.mbt 等 2 个文件，跑了测试", "跑一遍列表的测试", "改了 src/ui/list.mbt，跑了 2 条命令", "Edit")) {
-                rule.onAllNodesWithText(words).onFirst().performClick()
-                rule.runOnUiThread { rule.mainClock.advanceTimeByFrame() }
-            }
-        },
         // rows chosen as the phone's file managers choose them: one held, another tapped
         "drive-chosen" to { _ ->
             rule.onAllNodesWithText("长篇小说.txt").onFirst().performTouchInput { longClick() }

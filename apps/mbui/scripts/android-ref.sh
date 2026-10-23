@@ -21,6 +21,8 @@
 #   scripts/android-ref.sh compare [NAME…]   each against its reference: out/android-ref/<name>.png (Android | mbui |
 #                                            the pixels that differ), out/android-ref/report.md; fails on a difference
 #                                            allowed.json does not allow
+#   scripts/android-ref.sh plan              the screens whose Android pictures CI's run would take (none: no Android
+#                                            app to build)
 #   scripts/android-ref.sh ci                CI's: refs (REFS=1, or none kept yet: then held to those kept), text (TEXT=1),
 #                                            lists, mbui, compare; with no emulator where neither is asked for and every
 #                                            picture is kept
@@ -54,6 +56,22 @@ render_code() {
     apps/mbui/mbui/android/apk.lock apps/mbui/mbui/tools/apk/main.mbt apps/mbui/mbui/scripts/android.sh \
     apps/mbui/mbui/scripts/render_android_hook.sh apps/mbui/scripts/android-ref.sh apps/mbui/scripts/android_ref.py \
     -type f | LC_ALL=C sort | xargs shasum -a 256) || die "what draws the pictures not read"
+}
+# The screens of NAMEs whose Android pictures are taken anew (ci, REFS=1): in a pull request, of the screens main has
+# whose JSON it changed; else (main, after its app changed) every one, REFS_MOST a run in turn by the run's number,
+# so a run fits its 10 minutes.
+again_of() {
+  if [ -n "${GITHUB_BASE_REF:-}" ]; then
+    local base=$(git -C $ROOT merge-base origin/main HEAD 2>/dev/null)
+    # (one main had a picture of, its JSON changed here: a screen new here has the pictures its runs took)
+    for n in "$@"; do git -C $ROOT cat-file -e "$base:client/fixtures/screens/android/$n.png" 2>/dev/null \
+      && ! git -C $ROOT diff --quiet "$base" HEAD -- "client/fixtures/screens/$n.json" && echo $n; done
+  elif [ $# -gt ${REFS_MOST:-12} ]; then
+    local all=$# most=${REFS_MOST:-12}; local from=$(( (${GITHUB_RUN_NUMBER:-0} * most) % all ))
+    echo "$@" "$@" | tr ' ' '\n' | tail -n +$((from + 1)) | head -$most
+  else
+    echo "$@" | tr ' ' '\n'
+  fi
 }
 cmd=${1:-}; shift || true
 names=${*:-$(cd $S && ls *.json | sed 's/\.json$//' | grep -v -x allowed)}
@@ -223,6 +241,14 @@ case "$cmd" in
   compare)
     python3 "$D/android_ref.py" "$R" "$O/mbui" "$O" "$S/allowed.json" $names
     ;;
+  plan)
+    # the screens whose Android pictures a CI run takes (ci, REFS=1): those with none yet, REFS_MOST of them; else in a
+    # pull request those main has a picture of whose JSON it changed, on main every one in turn; none, nothing of
+    # Android's to build or draw (mbui-android-ref.yml's `what`)
+    fresh=$(for n in $names; do [ -f $R/$n.png ] || echo $n; done)
+    if [ -n "$fresh" ]; then echo $fresh | tr ' ' '\n' | head -${REFS_MOST:-12}; exit 0; fi
+    again_of $names
+    ;;
   ci)
     # CI's run (mbui-android-ref.yml: every screen): the runner's CPU said (the emulator draws in software on it); Android's
     # pictures taken anew where its app or the screens changed (REFS=1), held to those kept (a change is a new
@@ -243,16 +269,9 @@ case "$cmd" in
     fi
     # (Android's pictures taken anew: in a pull request, of the screens main has whose JSON it changed; after its app changed,
     # every one, REFS_MOST a run in turn by the run's number, so a run fits its 10 minutes)
-    again=$names
-    if [ -n "${GITHUB_BASE_REF:-}" ]; then
-      base=$(git -C $ROOT merge-base origin/main HEAD 2>/dev/null)
-      # (one main had a picture of, its JSON changed here: a screen new here has the pictures its runs took)
-      again=$(for n in $names; do git -C $ROOT cat-file -e "$base:client/fixtures/screens/android/$n.png" 2>/dev/null \
-        && ! git -C $ROOT diff --quiet "$base" HEAD -- "client/fixtures/screens/$n.json" && echo $n; done)
-    elif [ $(echo $again | wc -w) -gt ${REFS_MOST:-12} ]; then
-      all=$(echo $again | wc -w); most=${REFS_MOST:-12}; from=$(( (${GITHUB_RUN_NUMBER:-0} * most) % all ))
-      again=$(echo $again $again | tr ' ' '\n' | tail -n +$((from + 1)) | head -$most | tr '\n' ' ')
-    fi
+    again=$(again_of $names | tr '\n' ' ')
+    # (Android's system as the pictures kept have it: the draw lists, made for it, made again only if it changed)
+    system=$(cat $R/android.json 2>/dev/null)
     if { [ "${REFS:-}" = 1 ] && [ -n "$(echo $again)" ]; } || [ ! -f $R/android.json ]; then
       rm -rf $O/kept && mkdir -p $O && { [ -f $R/android.json ] && cp -r $R $O/kept; true; }
       all_names=$names
@@ -299,8 +318,10 @@ case "$cmd" in
       echo "android-ref: the Android text recorded anew: commit this run's screens/text-android.textrec (its artifact) in the PR"
       exit 1
     fi
-    # (the draw lists again where the text was recorded anew or Android's system changed with its pictures)
-    { [ "${TEXT:-}" = 1 ] || [ "${REFS:-}" = 1 ] || [ ! -f $O/dl/print.txt ]; } && { bash "$0" lists $names || exit 1; }
+    # (the draw lists again where the text was recorded anew or Android's system changed with its pictures: not for
+    # pictures taken over the same system, which left the draw lists as they were, 39926112139)
+    { [ "${TEXT:-}" = 1 ] || [ "$(cat $R/android.json 2>/dev/null)" != "${system:-}" ] || [ ! -f $O/dl/print.txt ]; } \
+      && { bash "$0" lists $names || exit 1; }
     bash "$0" mbui $names || exit 1
     bash "$0" compare $names || fail=1
     exit $fail

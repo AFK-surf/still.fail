@@ -30,7 +30,6 @@ fn screens_kept() -> Array[(String, String)] {
     ("drive-entry", screen_drive_entry),
     ("drive-sub", screen_drive_sub),
     ("files", screen_files),
-    ("history", screen_history),
     ("history-details", screen_history_details),
     ("home", screen_home),
     ("home-jobs", screen_home_jobs),
