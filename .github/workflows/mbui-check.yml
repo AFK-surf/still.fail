@@ -103,6 +103,14 @@ jobs:
         run: |
           S=$MBC_STORE
           [ ! -d $S ] || { find $S -name '*.lock' -delete; find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +; }
+          # (and of ThinLTO's cache the entries this run's links read or wrote: lld reads one with its access time
+          # updated, and prunes only what a week left unread, so it grew to 1.3-1.5 GB a part, a minute to restore and
+          # another to save, 2026-10-23, 40006064839)
+          if [ -d .ci/lto ]; then
+            before=$(du -sm .ci/lto | cut -f1)
+            find .ci/lto -type f -name 'llvmcache-*' ! -anewer "$RUNNER_TEMP/start" -delete
+            echo "ThinLTO's cache: $before MB, $(du -sm .ci/lto | cut -f1) MB of it read by this run's links"
+          fi
           c=$( { (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort); ls .ci/lto 2>/dev/null; } | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$OWN$c" >> "$GITHUB_ENV"
       - if: always() && env.BUILD_KEY != steps.main.outputs.cache-matched-key && env.BUILD_KEY != steps.own.outputs.cache-matched-key
