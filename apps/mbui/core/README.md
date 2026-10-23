@@ -40,6 +40,7 @@ scripts/core.sh hermes               # out/core/core.hbc (ENTRY: core/hermes.ts,
 scripts/core.sh apple [TARGET]       # all four for an app, each when missing or stale (the media entry)
 scripts/core.sh smoke                # out/core/smoke built and run twice against https://app.still.fail
 scripts/core.sh listen               # listen.* with core/listen-test.js in the core's place
+scripts/core.sh exit                 # exit() with the core in a task (core/exit_test.m, core/exit-test.js)
 ```
 
 TARGET is aarch64-apple-darwin (the default), aarch64-apple-ios-sim or aarch64-apple-ios.
@@ -94,6 +95,10 @@ stops the core and prints timings and the process's memory footprint.
   `random(n)`.
 - The shell's answers come on tokio's threads; they go through a `Gate` (as engine.cpp's) closed by `mb_core_stop`, so
   an answer arriving after a stop is dropped instead of touching a dead core.
+- `exit()` (a host's `mb_host_exit`, AppKit's as the app quits) stops the core before anything is destroyed: its
+  statics' destructors (the core's mutex and queues, Hermes's) run after what atexit was given, and the first
+  `mb_core_start` gives it `mb_core_stop`. A core thread left in a task had locked a destroyed mutex or read freed
+  memory, and macOS reported the app as crashed (`scripts/core.sh exit` holds it).
 - `secure.*` and `listen.*` are the app's, not the shell's (on Android too): answered here (the Keychain, below;
   apple_listen.m, under Login).
 - An exception that escapes to the engine, or the core's own `fatal`, sends `{"fatal": reason}` once; the host then

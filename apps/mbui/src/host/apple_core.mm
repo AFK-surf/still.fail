@@ -665,8 +665,18 @@ static void run(void) {
   }
 }
 
+// exit() (a host's, or AppKit's as the app quits) runs what atexit was given, the last first, then the destructors of
+// this file's statics (C's mutex and queues) and Hermes's, registered as the program loaded: a core thread still in a
+// task then locked a destroyed mutex (abort) or read freed memory (SIGSEGV), and the system said the app had crashed.
+// So the core ends first, as mb_core_stop ends it (core/exit_test.m).
+static void stop_at_exit(void) {
+  if (!pthread_equal(pthread_self(), C.thread)) mb_core_stop();
+}
+
 void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
   if (C.running) return;
+  static bool at_exit = false;
+  if (!at_exit) at_exit = atexit(stop_at_exit) == 0;
   C.on_message = on_message;
   C.ctx = ctx;
   C.dead = false;
