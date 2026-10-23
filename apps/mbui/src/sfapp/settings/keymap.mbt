@@ -405,6 +405,10 @@ let keys_reset_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap
 /// 版本 (AppVersion.tsx AppVersionPage): still.fail's desktop app's version, what is under way of a newer one, and the
 /// way to it (检查更新, 更新到 …).
 fn version_page(c : @ui.Ctx, core : Core) -> Unit {
+  // the desktop's: the web's (web_local_station.mbt)
+  if wide.val {
+    return version_page_wide(c, core)
+  }
   let (words, newer) = (core.version_words)()
   scroll_page(c, "version", [
     fn() { top_back(c, core, tr("android-settings.title")) },

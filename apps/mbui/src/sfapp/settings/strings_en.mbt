@@ -1363,6 +1363,7 @@ let en : Map[String, String] = {
   "web-pages.automaticDecisions.adminOnly": "Only administrators can configure automatic decisions and view checks",
   "web-pages.automaticDecisions.completion": "Archive suggestions",
   "web-pages.automaticDecisions.disabled": "Off",
+  "web-main.menu.more": "More",
   "web-pages.vault.deleteBody": "Agents can no longer ask for it; grants already given last till they end",
   "web-pages.vault.deleteTitle": "Delete “{name}”",
   "web-pages.vault.deleteWhat": "delete",

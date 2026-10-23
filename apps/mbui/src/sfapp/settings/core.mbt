@@ -560,6 +560,7 @@ pub fn reset() -> Unit {
   desk_dialog_last.val = None
   desk_dialogs.val = 0
   fx_policy_up.val = ""
+  local_menu.val = false
   asked.val = None
   sheet.last = None
   sheet.was_up = false

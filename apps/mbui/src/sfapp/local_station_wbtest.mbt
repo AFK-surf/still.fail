@@ -38,7 +38,7 @@ test "本机 Station, none here: 添加这台 Mac asks the cloud for this worksp
 }
 
 ///|
-test "本机 Station: the one here brought up to the latest release from its page" {
+test "本机 Station: the one here brought up to the latest release from its card's menu" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.set_local_station(
@@ -47,6 +47,8 @@ test "本机 Station: the one here brought up to the latest release from its pag
   )
   app.nav.replace(Setting(@settings.Route::LocalStation))
   t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="更多操作")
+  t.frame()
   let (x, y) = t.find("更新到最新版").unwrap()
   t.tap(x, y)
   t.frame()
