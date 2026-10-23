@@ -884,12 +884,14 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 // ── 奏 (DecisionDesk.tsx DecisionRows) ───────────────────────────────────
 
 ///|
-/// 奏's sidebar: the decisions waiting for the viewer, the one shown first lit; its question in two lines at most,
-/// its chat and station under it; pressed, it is the one the page shows. None: 暂无待决的奏折.
+/// 奏's sidebar: the decisions waiting for the viewer as the core lists them (set aside last), the one the page shows lit
+/// (the core's `shown`); its question in two lines at most, its chat and station under it; pressed, it is the one the
+/// page shows (`decision.show`). None: 暂无待决的奏折.
 fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let topic = (src.topic)("decisions", { "workspace": Json::string(w.id) })
-  let shown = shown_decisions(items(topic.value, "items"))
+  let shown = items(topic.value, "items")
+  let front = decision_front(topic.value, shown)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     // under the band (新建对话 and the filter stay over 奏's list, as over the chats')
     side_space(c, band_h(src, w))
@@ -907,7 +909,7 @@ fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           "" => text(v, "title")
           q => q
         }
-        if nav_row(c, "zou-nav/" + decision_key(d), i == 0, pady=8.0, align=AStart, fn() {
+        if nav_row(c, "zou-nav/" + decision_key(d), i == front, pady=8.0, align=AStart, fn() {
             c.box(w=Fill(1.0), gap=2.0, fn() {
               c.box(w=Fill(1.0), max_h=40.0, clip=true, fn() {
                 c.text(question, size=13.0, weight=500, color=t.p.text, line=20.0) |> ignore
@@ -918,13 +920,8 @@ fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             })
             |> ignore
           }) {
-          // the one pressed shown first (the others after it as they were)
-          dui.dlater.retain(fn(k) { k != decision_key(d) })
-          for j, o in shown {
-            if j < i {
-              dui.dlater.push(decision_key(o))
-            }
-          }
+          // the one pressed shown from now on (the list as it is)
+          decision_show(src, w, d)
         }
       }
     })

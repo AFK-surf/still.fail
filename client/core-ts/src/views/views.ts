@@ -1824,33 +1824,27 @@ export class Views implements Owner {
 
   // ── the 奏 page ──
 
-  /// The decision the wide 奏 page shows, by workspace (`decision.show`): its key (none picked yet: null; "": the one in
-  /// the place of the one set aside), and where in the list it was last.
-  readonly #decisionShown = new Map<string, { key: string | null; at: number }>();
+  /// The decision the wide 奏 page shows, by workspace (`decision.show`, decisions.ts Shown).
+  readonly #decisionShown = new Map<string, decisions.Shown>();
 
   /// The one shown from now on (`decision.show`).
   showDecision(workspace: string, station: string, thread: number, seq: number): void {
-    const was = this.#decisionShown.get(workspace);
-    this.#decisionShown.set(workspace, { key: decisions.deferralKey(station, thread, seq), at: was?.at ?? 0 });
+    this.#decisionShown.set(workspace, decisions.picked(this.#decisionShown.get(workspace) ?? { key: null, at: 0 }, decisions.deferralKey(station, thread, seq)));
     this.#invalidate((v) => v.topic === "decisions" && v.workspace === workspace);
   }
 
   /// Set aside (`decision.defer`): if it is the one shown, the one now in its place shows (itself if it is the only one).
   decisionDeferred(station: string, thread: number, seq: number): void {
     const key = decisions.deferralKey(station, thread, seq);
-    for (const [workspace, shown] of this.#decisionShown) if (shown.key === key) this.#decisionShown.set(workspace, { key: "", at: shown.at });
+    for (const [workspace, shown] of this.#decisionShown) this.#decisionShown.set(workspace, decisions.setAside(shown, key));
   }
 
-  /// Where the one shown is in `items`: the one picked while it is there, else the one now where it was (the last when
-  /// the list got shorter), which is then the one shown; null for none.
+  /// Where the one shown is in `items` (decisions.ts shownIn), kept for the next view; null for none.
   #shownDecision(workspace: string, items: J[]): number | null {
-    const keyOf = (d: J) => decisions.deferralKey(d.station, d.thread, d.seq);
-    const was = this.#decisionShown.get(workspace) ?? { key: null, at: 0 };
-    const found = was.key === null ? -1 : items.findIndex((d) => keyOf(d) === was.key);
-    const at = found >= 0 ? found : Math.min(was.at, items.length - 1);
-    // Nothing picked yet, the first shows, whichever it is.
-    this.#decisionShown.set(workspace, { key: was.key !== null && at >= 0 ? keyOf(items[at]) : was.key, at: Math.max(at, 0) });
-    return at >= 0 ? at : null;
+    const keys = items.map((d) => decisions.deferralKey(d.station, d.thread, d.seq));
+    const { at, next } = decisions.shownIn(this.#decisionShown.get(workspace) ?? { key: null, at: 0 }, keys);
+    this.#decisionShown.set(workspace, next);
+    return at;
   }
 
   #decisions(scope: string): Value | undefined {

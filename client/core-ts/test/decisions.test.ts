@@ -261,3 +261,22 @@ test("what_waits_in_a_chat_says_the_agents_need_else_its_posts_first_line", () =
   assert.deepEqual(d.undecided({ creator: me, card: { ...card, dismissed: true } }), []);
   assert.deepEqual(d.undecided({ creator: me }), []);
 });
+
+test("the_wide_decisions_page_shows_the_one_picked_while_it_is_there_else_the_one_now_in_its_place", () => {
+  const none: d.Shown = { key: null, at: 0 };
+  // Nothing picked: the first, whichever it is.
+  assert.deepEqual(d.shownIn(none, ["a", "b", "c"]), { at: 0, next: { key: null, at: 0 } });
+  // Picked: it, wherever it goes in the list.
+  const b = d.picked(none, "b");
+  assert.deepEqual(d.shownIn(b, ["a", "b", "c"]), { at: 1, next: { key: "b", at: 1 } });
+  assert.deepEqual(d.shownIn({ key: "b", at: 1 }, ["b", "a", "c"]), { at: 0, next: { key: "b", at: 0 } });
+  // Gone: the one now in its place, shown from then on; the last when the list got shorter.
+  assert.deepEqual(d.shownIn({ key: "b", at: 1 }, ["a", "c"]), { at: 1, next: { key: "c", at: 1 } });
+  assert.deepEqual(d.shownIn({ key: "c", at: 2 }, ["a", "b"]), { at: 1, next: { key: "b", at: 1 } });
+  // Set aside while shown: the one in its place; another set aside leaves the one shown as it is.
+  assert.deepEqual(d.setAside({ key: "b", at: 1 }, "b"), { key: "", at: 1 });
+  assert.deepEqual(d.setAside({ key: "b", at: 1 }, "a"), { key: "b", at: 1 });
+  assert.deepEqual(d.shownIn({ key: "", at: 1 }, ["a", "c", "b"]), { at: 1, next: { key: "c", at: 1 } });
+  // None left: none.
+  assert.deepEqual(d.shownIn({ key: "b", at: 0 }, []), { at: null, next: { key: "b", at: 0 } });
+});

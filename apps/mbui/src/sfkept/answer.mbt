@@ -2,8 +2,8 @@
 // src/sfapp with its screens), the screenshots' app (src/sffix), the design system's (src/sfkit), and the replays of tapes
 // older than a call (src/sfreplay). `markdown` (a text's tree), `code.ink` (what each piece of a code is), `reader.book`,
 // `reader.text` and `reader.search` (a text as the drive's reader shows it), `commands.find` (what ⌘K lists of what is
-// offered), `chat.tabs` (a chat's side panel's tabs, for a run's made-up core: chat-tabs.ts) answer the same for the
-// same words, so the
+// offered), `chat.tabs` and `decisions.queue` (a chat's side panel's tabs and the 奏 page's queue, for a run's made-up
+// core: chat-tabs.ts, decisions.ts) answer the same for the same words, so the
 // TypeScript core's answers are kept here (kept.mbt, made by client/core-ts/scripts/kept-answers.ts) and nothing in the
 // app reads Markdown or code itself. An answer asked and not kept is said on the run's output (`kept-answers-ask {…}`):
 // scripts/test.sh fails on it, and scripts/kept has the core work it out and keeps it.
@@ -165,6 +165,15 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
       }
     }
     "browse" => browse_answer(params)
+    // the 奏 page's queue (decisions.ts) for a made-up core that keeps one: its items in order and the one shown, or
+    // what is kept after a pick or a setting aside, as asked
+    "decisions.queue" => {
+      let key = params.stringify()
+      match kept("decisions.queue").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "decisions.queue", "key": Json::string(key) })
+      }
+    }
     "reader.text" =>
       match book_of(params) {
         Some(key) => {

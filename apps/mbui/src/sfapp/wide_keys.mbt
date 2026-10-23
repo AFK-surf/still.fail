@@ -89,8 +89,13 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// The chat before (-1) or after (1) the one open, in the list as it shows (Sidebar.tsx goToNeighbour); the first when
-/// none is open.
+/// none is open. On the 奏 page, the decision before or after the one it shows.
 fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
+  // on the 奏 page: its list's (DecisionDesk.tsx DecisionRows)
+  if app.nav.top() is Decisions {
+    decision_step(src, w, way)
+    return
+  }
   let filter = filter_of(src, w.id)
   let rows : Array[ChatItem] = []
   match chats_of(src, w.id, filter) {
