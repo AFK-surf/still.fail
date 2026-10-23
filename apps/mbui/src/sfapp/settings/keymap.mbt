@@ -36,6 +36,7 @@ pub let keys_recording : Ref[String] = Ref("")
 fn keymap_reset() -> Unit {
   keys_set.clear()
   keys_recording.val = ""
+  action_asked.val = ""
 }
 
 ///|
@@ -208,6 +209,10 @@ pub fn keys_text(prefs : Json?, action : String) -> String {
 /// Whether one of `action`'s keys came since the last frame (with `in_field`, one a focused field took too); none while
 /// the 快捷键 page records new ones.
 pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : Bool = false) -> Bool {
+  // chosen from the Mac's menu bar since the last frame: as if one of its keys was
+  if action_asked.val == action {
+    return true
+  }
   if keys_recording.val != "" {
     return false
   }
@@ -380,3 +385,20 @@ fn version_page(c : @ui.Ctx, core : Core) -> Unit {
 ///|
 // kept across runs: a value (no field of it changes)
 let keys_cap_accent : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, wrap=false)
+
+///|
+/// The action chosen from the Mac's menu bar since the last frame ("" none: the app's menu_bar.mbt), read by
+/// `action_pressed` as one of its keys.
+let action_asked : Ref[String] = Ref("")
+
+///|
+/// One of the menu bar's items chosen: `action` done by the frame after, as if one of its keys was pressed.
+pub fn ask_action(action : String) -> Unit {
+  action_asked.val = action
+}
+
+///|
+/// The frame that read it built: asked no more.
+pub fn action_asked_done() -> Unit {
+  action_asked.val = ""
+}

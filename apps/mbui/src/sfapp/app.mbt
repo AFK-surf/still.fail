@@ -277,6 +277,10 @@ fn pages_left(src : Source) -> Unit {
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   fix_ctx.val = Some(c)
+  // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
+  // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
+  menu_bar(c, src)
+  c.after_build("menu-asked", fn() { @settings.action_asked_done() })
   appearance(src)
   faces(src)
   // pictures put up by their address come as the core gives them (a GIF among them moves)
@@ -1187,6 +1191,8 @@ fn system_said(json : String) -> Unit {
       }
       // 检查更新 from the menu bar (menu_bar.mbt)
       Menu("update.check") => update_from_menu(src)
+      // one of the pages' actions from the menu bar: as its keys pressed (keymap.mbt action_pressed)
+      Menu(action) => @settings.ask_action(action)
       // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
       InstallAllow(..) => toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
       InstallFailed(error~, ..) => toast_later(pv_fill("android-chat.file.installFailed", [("error", error)]))
