@@ -1021,3 +1021,16 @@ test "wide: the rail as the web's: the stations their glyph and how they are; th
   t.frame()
   assert_true(sheet_host.kind == NewWorkspace)
 }
+
+///|
+test "wide: words with no face chosen are set in the desktop app's face (Inter, carried by the app), code in the app's own; a phone's width the system's" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(faces_in[1], desktop_face, msg="the app's words")
+  assert_eq(faces_in[3], "", msg="code: the app's own")
+  assert_eq(named(calls, "fonts.fetch").length(), 0, msg="nothing fetched")
+  t.resize(390.0, 844.0)
+  t.frame()
+  assert_eq(faces_in[1], "", msg="a phone's: the system's")
+}

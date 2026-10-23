@@ -45,6 +45,30 @@ fn faces_reset() -> Unit {
 }
 
 ///|
+/// The app's words' own face in the wide frame (a computer's window, as the desktop app's pages: Inter, inter_face.mbt),
+/// where none is chosen: its id in `faces_in`, its file unzipped once.
+let desktop_face : String = "\u{1}inter"
+
+///|
+// kept across runs: the same bytes once made
+let inter_bytes : Ref[Bytes?] = Ref(None)
+
+///|
+fn inter_face() -> Bytes? {
+  match inter_bytes.val {
+    Some(b) => Some(b)
+    None =>
+      match @zip.gunzip(@codec.from_base64(inter_gz_b64)) {
+        Some(b) => {
+          inter_bytes.val = Some(b)
+          Some(b)
+        }
+        None => None
+      }
+  }
+}
+
+///|
 /// The places' faces as the prefs say them, given to the host as each is here (call each frame, before the pages).
 fn faces(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
@@ -62,8 +86,9 @@ fn faces(src : Source) -> Unit {
     if id != "" {
       wanted.push(id)
     }
+    // the app's words with none chosen, in the wide frame: the desktop app's face (what people wrote follows them)
     let now = if id == "" {
-      ""
+      if host_face == @hostapi.face_ui && wide_on.val { desktop_face } else { "" }
     } else {
       match face_had(src, id, files) {
         Some(_) => id
@@ -75,7 +100,12 @@ fn faces(src : Source) -> Unit {
       continue
     }
     @ui.face_clear(host_face)
-    if now == "" {
+    if now == desktop_face {
+      match inter_face() {
+        Some(b) => ignore(@ui.face_add_bytes(host_face, b))
+        None => ()
+      }
+    } else if now == "" {
       if host_face == @hostapi.face_code {
         ignore(@ui.face_add_bytes(host_face, @sf.code_face()))
       }
