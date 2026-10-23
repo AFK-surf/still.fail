@@ -129,7 +129,7 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
     list = (
       <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
         {row(picked, true, <>{kindNote(picked.place)} · <span className={css.change}>{t("web-main.relay.change")}</span></>, () => setPicked(null))}
-        <p className={css.via}><ConnectAvatar connect={picked.connect} size={16} />{t("web-main.relay.via", { bot: picked.connect.name })}</p>
+        <Via connect={picked.connect} />
       </div>
     );
   } else if ("reading" in read) list = <WaitLine text={t("web-main.relay.reading")} />;
@@ -173,6 +173,19 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
   const label = picked !== null ? t("web-main.relay.goTo", { place: placeName(picked.place) }) : t("web-main.relay.go");
   return { body, ready: picked !== null || link !== null, busy, go, label };
 }
+
+/** Which bot the agent speaks through there, its picture before its name (「那里由 [picture] Claude 回复」). */
+function Via({ connect }: { connect: RelayConnect }) {
+  const [before, after = ""] = t("web-main.relay.via", { bot: BOT }).split(BOT);
+  return (
+    <p className={css.via}>
+      {before}<span className={css.viaBot}><ConnectAvatar connect={connect} size={16} />{connect.name}</span>{after}
+    </p>
+  );
+}
+
+/** Where the bot's name is in the words that say it, split there. */
+const BOT = "\uE000";
 
 function RelayDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
   const relay = useRelay(station, thread, useToast(), onClose);

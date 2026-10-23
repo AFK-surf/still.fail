@@ -50,6 +50,8 @@ export const unread = style({ margin: "0", padding: "4px 8px", fontSize: vars.te
 export const empty = style({ margin: "0", padding: "4px 8px", fontSize: vars.textMeta, color: vars.muted });
 export const noteField = style({ display: "grid", gap: "6px" });
 export const noteLabel = style({ fontSize: vars.textMeta, color: vars.muted });
-/** Which bot the agent speaks through there, under the place picked: its picture under the row's mark, its words in
- * line with the place's name (the row's 10 in, 16 and 8 apart). */
-export const via = style({ display: "flex", alignItems: "center", gap: "8px", margin: "0", padding: "2px 10px 0", fontSize: vars.textMeta, color: vars.muted });
+/** Which bot the agent speaks through there, under the place picked: in line with the place's name (the row's 10 in,
+ * its mark's 16 and the 8 after it). */
+export const via = style({ display: "flex", alignItems: "center", flexWrap: "wrap", margin: "0", padding: "2px 10px 0 34px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "pre" });
+/** The bot: its picture before its name. */
+export const viaBot = style({ display: "inline-flex", alignItems: "center", gap: "4px", color: vars.text });

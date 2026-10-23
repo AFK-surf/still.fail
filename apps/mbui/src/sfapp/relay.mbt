@@ -202,7 +202,8 @@ fn relay_arrange(connects : Array[Json], query : String, all : Bool) -> (Array[(
 priv enum RelayPart {
   Lead
   Search
-  /// the place picked: its name, workspace, note, whether it can be changed, and the bot replying there (its words, connect, name, picture)
+  /// the place picked: its name, workspace, note, whether it can be changed, and the bot replying there (the words
+  /// saying so, U+E000 where its name goes, and its connect)
   Picked(String, String?, String, Bool, (String, Json)?)
   Reading
   Failed(String)
@@ -250,7 +251,7 @@ fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit 
           Some(relay_workspace(conn)),
           relay_kind_note(p) + " · " + tr("web-main.relay.change"),
           true,
-          Some((fill("web-main.relay.via", [("bot", text(Some(conn), "name"))]), conn)),
+          Some((fill("web-main.relay.via", [("bot", "\u{E000}")]), conn)),
         ),
       )
     (None, None) =>
@@ -426,10 +427,23 @@ let relay_place : @ui.Style = @ui.style(
 let relay_place_on : @ui.Style = relay_place.then(@ui.style(bg=AccentBg))
 
 ///|
-/// Which bot the agent speaks through there, under the place picked (Relay.kt): its picture under the row's mark,
-/// its words in line with the place's name (10 in, 8 apart, as the row).
+/// Which bot the agent speaks through there, under the place picked (Relay.kt): in line with the place's name (the
+/// row's 10 in, its mark's 16 and the 8 after it), the bot's picture before its name.
 // kept across runs: a value (no field of it changes)
-let relay_via : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, pt=S0_5, gap=S2, align=ACenter)
+let relay_via : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, pt=S0_5, align=ACenter)
+
+///|
+/// As wide as the row's mark and the 8 after it.
+// kept across runs: a value (no field of it changes)
+let relay_via_indent : @ui.Style = @ui.style(w=S6)
+
+///|
+// kept across runs: a value (no field of it changes)
+let relay_via_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let relay_via_bot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -460,7 +474,10 @@ fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : Re
           relaying.picked = None
         }
         if via is Some((words, conn)) {
+          let split = words.split("\u{E000}").map(fn(w) { w.to_owned() }).collect()
           c.box(style=relay_via, fn() {
+            c.box(style=relay_via_indent, fn() {  }) |> ignore
+            c.text(split[0], style=relay_via_words) |> ignore
             match opt_text(Some(conn), "botImage") {
               Some(picture) if picture != "" =>
                 avatar(c, src, text(Some(conn), "id"), text(Some(conn), "name"), picture, relay_mark)
@@ -470,7 +487,10 @@ fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : Re
                   _ => @sf.slack_mark(c, relay_mark) |> ignore
                 }
             }
-            c.text(words, style=relay_small) |> ignore
+            c.text(" " + text(Some(conn), "name"), style=relay_via_bot) |> ignore
+            if split.length() > 1 {
+              c.text(split[1], style=relay_via_words) |> ignore
+            }
           })
           |> ignore
         }

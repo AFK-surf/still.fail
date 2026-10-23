@@ -116,11 +116,14 @@ internal fun openRelay(app: AppState, station: String, thread: Long) {
                 link != null -> PlaceRow(null, t("web-main.relay.thread"), null, t("web-main.relay.kind.thread"), on = true) {}
                 chosen != null -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     PlaceRow(markOf(chosen.connect), placeName(chosen.place), workspace(chosen.connect, (read as? Places.Ok)?.connects.orEmpty()), "${kindNote(chosen.place)} · ${t("web-main.relay.change")}", on = true) { picked = null }
-                    // its picture under the row's mark, its words in line with the place's name
-                    Row(Modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // in line with the place's name (the row's 10 in, its mark's 16, the 8 after); the bot's picture before its name
+                    val (before, after) = t("web-main.relay.via", "bot" to "\uE000").split("\uE000").let { it[0] to it.getOrElse(1) { "" } }
+                    Row(Modifier.padding(start = 34.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(before, fontSize = 12.sp, color = C.muted)
                         val image = chosen.connect.botImage
                         if (image != null) Avatar(chosen.connect.id, chosen.connect.name, 16.dp, picture = image) else SlackMark(16.dp, markOf(chosen.connect))
-                        Text(t("web-main.relay.via", "bot" to chosen.connect.name), fontSize = 12.sp, color = C.muted)
+                        Text(" " + chosen.connect.name, fontSize = 12.sp, color = C.ink)
+                        Text(after, fontSize = 12.sp, color = C.muted)
                     }
                 }
                 shown is Places.Reading -> WaitLine(t("web-main.relay.reading"))
