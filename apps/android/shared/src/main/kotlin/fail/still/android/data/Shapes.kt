@@ -4607,6 +4607,17 @@ data class ScreenScale (
 	val steps: List<UInt>
 )
 
+/// How a screen view's pictures are made (docs/remote-screens.md `video`), as its statistics show it.
+@Serializable
+data class ScreenVideo (
+	/// What captures the screen's pictures: ScreenCaptureKit, Windows.Graphics.Capture, Chrome screencast.
+	val capture: String,
+	/// The encoder as the station names it.
+	val encoder: String? = null,
+	/// Whether that encoder is the hardware's; none: a JPEG a picture.
+	val hardware: Boolean? = null
+)
+
 /// A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is.
 @Serializable
 data class ScreenViewState (
@@ -4643,6 +4654,8 @@ data class ScreenViewState (
 	val clipboard: List<String>? = null,
 	/// While driving it: where a file dropped into the view goes (none while only looking, or from a station before files).
 	val drop: ScreenDrop? = null,
+	/// How its pictures are made, as the station said as the view opened (none from a station before it).
+	val video: ScreenVideo? = null,
 	/// While driving it: its display's scale, set with `screen.input` `{t: "scale", percent}` and put back as it was
 	/// once nobody views it (a Windows station's desktop; none elsewhere, or while only looking).
 	val scale: ScreenScale? = null
