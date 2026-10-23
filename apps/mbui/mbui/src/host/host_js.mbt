@@ -381,6 +381,16 @@ fn font_scale() -> Double {
 }
 
 ///|
+fn a11y_on() -> Bool {
+  false
+}
+
+///|
+fn a11y_tree(_s : String) -> Unit {
+  ()
+}
+
+///|
 /// The app is drawn dark from now on (host_native.mbt): the page has nothing of its own to follow it.
 fn set_dark(dark : Bool) -> Unit {
   ignore(dark)

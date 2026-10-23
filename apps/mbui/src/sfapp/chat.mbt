@@ -1636,6 +1636,12 @@ fn jump_to_latest(
           }
         },
       )
+      // what it is to a screen reader (Chat.kt JumpToLatest's contentDescription, its count's words with it)
+      let latest = tr("android-chat.chat.latest")
+      c.semantics(pill, Button, id~, label=match count {
+        Some(n) => latest + " " + fill("android-chat.chat.newMessages", [("n", "\{n}")])
+        None => latest
+      })
       c.look(pill, look)
       // going, only drawn: a tap there goes to the rows under it
       @motion.leaving(c, pill, shown)
@@ -1721,6 +1727,8 @@ fn jump_to_ask(
         id~,
         fn() { @sf.icon(c, "bell", size=18.0, color=t.p.text) |> ignore },
       )
+      // (Chat.kt JumpToAsk's contentDescription)
+      c.semantics(bell, Button, id~, label=tr("android-chat.asks.go"))
       c.look(bell, look)
       @motion.leaving(c, bell, shown)
     })
@@ -1774,7 +1782,7 @@ fn bar_frame(
     })
     |> ignore
     trailing()
-    if more && nav_button(c, "more", 18.0, key="chat-more") {
+    if more && nav_button(c, "more", 18.0, key="chat-more", said=tr("android-chat.info.title")) {
       on_more()
     }
   })
@@ -1847,7 +1855,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
                     @sf.spinner(c) |> ignore
                   })
                   |> ignore
-                } else if nav_button(c, "archive", 20.0, key="chat-archive") && archive {
+                } else if nav_button(c, "archive", 20.0, key="chat-archive", said=tr("android-chat.archive")) && archive {
                   archive_chat(src, r, v)
                 }
               })
@@ -1910,6 +1918,8 @@ fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
     border=1.0,
     border_color=t.p.line,
     align=ACenter,
+    // (StationTag: its name to a screen reader)
+    label=s.name,
     fn() {
       if s.via != "" {
         via_dot(c, s.via, 7.0, 0.0)
@@ -2029,7 +2039,8 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
   match station {
     None => model_mark(c, a, 22.0)
     Some(s) =>
-      c.box(fn() {
+      // (AgentStationMark: 「who · station」 to a screen reader)
+      c.box(label=a.who + " · " + s.name, fn() {
         c.box(
           dir=Row,
           h=Px(22.0),

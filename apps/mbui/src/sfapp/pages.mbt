@@ -318,12 +318,13 @@ fn mark_counts(c : @ui.Ctx, mark : Json) -> Unit {
     return
   }
   let t = @sf.theme()
-  c.box(dir=Row, gap=8.0, align=ACenter, fn() {
+  // (read out as what it says: MarkCounts' contentDescription)
+  c.box(dir=Row, gap=8.0, align=ACenter, label=text(m, "label"), fn() {
     for k in [("alert", "alert"), ("wait", "wait"), ("done", "unread")] {
       let n = count(m, k.1)
       if n > 0 {
         c.box(dir=Row, gap=4.0, align=ACenter, fn() {
-          workspace_mark(c, k.0)
+          workspace_mark(c, k.0, "")
           c.text("\{n}", size=12.0, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore

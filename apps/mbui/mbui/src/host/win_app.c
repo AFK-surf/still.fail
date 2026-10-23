@@ -755,6 +755,9 @@ void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
 int32_t mb_host_system_dark(void) { return 0; }
 // Words as the app sizes them (@hostapi.font_scale): the system's text scale not read here yet.
 double mb_host_font_scale(void) { return 1.0; }
+// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
+int32_t mb_host_a11y_on(void) { return 0; }
+void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
 
 // Sharing (@hostapi.share, @hostapi.shared_in): no share sheet here yet; nothing comes in.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {

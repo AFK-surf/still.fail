@@ -2,7 +2,9 @@
 // (Compose's semantics tree, the DOM's accessibility tree that Testing Library queries): each widget built says of its
 // node its role, its label, its state (checked, expanded, selected, pressed, disabled, its value) and what can be done
 // to it. The tree is that of the nodes: a widget's parent in it is the nearest node above it that said something.
-// Words built under no widget that names itself are nodes of their own (role Text). A part can be hidden from it
+// Words built under no widget that names itself are nodes of their own (role Text); a box that takes presses (an `id`,
+// `taps`) and says nothing is a Button named by its `label` or the words in it, as Compose's clickable is, unless it
+// covers nearly the whole window (a scrim, a page's ground). A part can be hidden from it
 // (Ctx::hidden_from_semantics: what only decorates); a modal over the page hides what is under it. An action asked of
 // a node (by a test, later by the host's VoiceOver, TalkBack or UI Automation) comes to its widget the next frame as
 // though it were done by hand (Ctx::interact: Activate is a click). The tree is made when asked
@@ -285,6 +287,64 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
         s.role != Menu && s.role != Toolbar && s.role != RadioGroup && s.role != TabList &&
         s.role != TabPanel && s.role != Region && s.role != Form && s.role != MenuBar &&
         s.role != Listbox && s.role != ScrollArea && s.role != Navigation
+    } else if self.press_target(i) {
+      // a box pressed and saying nothing: a button, named by its label or its own words (not a widget's in it)
+      let label = if n.label != "" { n.label } else { self.own_words(i) }
+      let hidden = parent_hid || !in_modal[i]
+      let depth = if parent_out >= 0 { out[parent_out].depth + 1 } else { 0 }
+      out.push({
+        id: n.id,
+        role: Button,
+        label,
+        description: "",
+        value: "",
+        check: None,
+        expanded: None,
+        selected: None,
+        pressed: None,
+        disabled: false,
+        modal: false,
+        range: None,
+        actions: [Activate],
+        rect: (n.x, n.y, n.fw, n.fh),
+        focused: n.id == self.focus,
+        hidden,
+        parent: parent_out,
+        depth,
+      })
+      at[i] = out.length() - 1
+      up[i] = at[i]
+      hid[i] = hidden
+      named[i] = label != ""
+    } else if n.kind == kind_box && n.label != "" && !parent_named {
+      // a box that says what it is called and takes no presses (Compose's contentDescription on what is not
+      // clickable): words read for it, an image's where it holds none
+      let hidden = parent_hid || !in_modal[i]
+      let depth = if parent_out >= 0 { out[parent_out].depth + 1 } else { 0 }
+      out.push({
+        id: 0,
+        role: if self.words_in(i) == "" { Image } else { Text },
+        label: n.label,
+        description: "",
+        value: "",
+        check: None,
+        expanded: None,
+        selected: None,
+        pressed: None,
+        disabled: false,
+        modal: false,
+        range: None,
+        actions: [],
+        rect: (n.x, n.y, n.fw, n.fh),
+        focused: false,
+        hidden,
+        parent: parent_out,
+        depth,
+      })
+      at[i] = out.length() - 1
+      up[i] = at[i]
+      hid[i] = hidden
+      named[i] = true
     } else if (n.kind == kind_text || n.kind == kind_rich) && !parent_named && n.text != "" {
       let hidden = parent_hid || !in_modal[i]
       let depth = if parent_out >= 0 { out[parent_out].depth + 1 } else { 0 }
@@ -311,6 +371,73 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
     }
   }
   out
+}
+
+///|
+/// Whether node `i` is a box that takes presses and says nothing of itself (a Button in the tree): an id it takes
+/// presses by, no widget's word of it, and less than nearly the whole window (not a scrim, nor a page's ground).
+fn Ctx::press_target(self : Ctx, i : Int) -> Bool {
+  let n = self.nodes[i]
+  if n.kind != kind_box || n.id == 0 || !n.hit {
+    return false
+  }
+  // (nor one whose id a widget said itself by on another node: the widget is the node)
+  for s in self.sems {
+    if s.node == i || s.id == n.id {
+      return false
+    }
+  }
+  n.fw * n.fh < 0.9 * self.width * self.height
+}
+
+///|
+/// The words built in node `i` that are no widget's (none in what says it is something, nor in a button of its own in
+/// it), joined by spaces: what names a box pressed that says nothing.
+fn Ctx::own_words(self : Ctx, i : Int) -> String {
+  let sb = StringBuilder()
+  self.collect_own_words(i, sb)
+  sb.to_string()
+}
+
+///|
+fn Ctx::collect_own_words(self : Ctx, i : Int, sb : StringBuilder) -> Unit {
+  let n = self.nodes[i]
+  if (n.kind == kind_text || n.kind == kind_rich) && n.text != "" {
+    if sb.to_string().length() > 0 {
+      sb.write_char(' ')
+    }
+    sb.write_string(n.text)
+  }
+  let mut ch = n.first
+  while ch >= 0 {
+    // (as Compose merges what a clickable holds: a widget's words that takes nothing itself, a box's label, words;
+    // not what is pressed on its own)
+    let said = self.sems.filter(fn(s) { s.node == ch })
+    let words = if self.press_target(ch) {
+      ""
+    } else if said.length() > 0 {
+      let s = said[said.length() - 1]
+      if s.hidden || s.id != 0 || s.actions.length() > 0 {
+        ""
+      } else if s.label != "" {
+        s.label
+      } else {
+        self.words_in(ch)
+      }
+    } else if self.nodes[ch].kind == kind_box && self.nodes[ch].label != "" {
+      self.nodes[ch].label
+    } else {
+      self.collect_own_words(ch, sb)
+      ""
+    }
+    if words != "" {
+      if sb.to_string().length() > 0 {
+        sb.write_char(' ')
+      }
+      sb.write_string(words)
+    }
+    ch = self.nodes[ch].next
+  }
 }
 
 ///|

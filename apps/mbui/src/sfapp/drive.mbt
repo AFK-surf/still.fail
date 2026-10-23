@@ -23,7 +23,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
       }
       if dv_nav_bar(c, back, tr("android-misc.bar.place.files"), fn() {
           if lenders.length() > 0 &&
-            dv_nav_button(c, "files-lend", "plus", size=20.0) {
+            dv_nav_button(c, "files-lend", "plus", size=20.0, said=tr("android-misc.bar.action.files")) {
             files_lend_on(c, lenders)
           }
         }) {
@@ -1131,13 +1131,13 @@ fn upload_row(
         }
       })
       |> ignore
-      if u.state == "failed" && dv_row_key(c, k + "/retry", "retry") {
+      if u.state == "failed" && dv_row_key(c, k + "/retry", "retry", tr("android-misc.drive.retry")) {
         u.state = "waiting"
         u.error = ""
         u.sent = 0
         dv_pump(src)
       }
-      if dv_row_key(c, k + "/cancel", "close") {
+      if dv_row_key(c, k + "/cancel", "close", tr("common.cancel")) {
         dv.uploads.retain(fn(x) { x.serial != u.serial })
         if u.state == "going" {
           dv.pumping = false
@@ -1151,15 +1151,17 @@ fn upload_row(
 
 ///|
 /// A key at a row's end (DriveScreen.kt RowKey): 34 round, a 16 icon in grey.
-fn dv_row_key(c : @ui.Ctx, key : String, icon : String) -> Bool {
+fn dv_row_key(c : @ui.Ctx, key : String, icon : String, said : String) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
+  // (`said`: what it is to a screen reader, RowKey's contentDescription)
   c.box(
     w=Px(34.0),
     h=Px(34.0),
     radius=17.0,
     align=ACenter,
     justify=JCenter,
+    label=said,
     id~,
     fn() {
       @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore

@@ -133,6 +133,12 @@ fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
   if channel == @hostapi.system_channel {
     system_took(json)
   }
+  // the framework's own: what a screen reader asks of a widget (a11y.mbt)
+  if channel == @hostapi.a11y_channel {
+    messages_handed.val += 1
+    a11y_took(json)
+    return
+  }
   match message_handlers.get(channel) {
     Some(f) => {
       messages_handed.val += 1

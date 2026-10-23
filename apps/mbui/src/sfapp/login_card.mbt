@@ -231,7 +231,8 @@ fn login_cancel_button(c : @ui.Ctx, src : Source, station : String, id : String)
       "id": Json::string(id),
     })
   }
-  c.box(style=login_cancel, id=cancel, fn() {
+  // (取消 to a screen reader: CancelLogin's contentDescription)
+  c.box(style=login_cancel, id=cancel, label=tr("web-main.logins.cancelWhat"), fn() {
     if busy {
       @sf.spinner(c, size=12.0) |> ignore
     } else {

@@ -989,6 +989,8 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
       pr=12.0,
       pt=9.0,
       pb=8.0,
+      // (AgentTiles: 「name figure」 to a screen reader)
+      label=name + " " + figure,
       fn() {
         c.box(h=Px(26.0), justify=JCenter, fn() {
           c.text(

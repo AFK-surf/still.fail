@@ -936,7 +936,8 @@ fn service_page_bar(
           raise_sheet(LoadOf(station, port))
         }
         let color = if number(load, "failed") > 0.0 { t.p.red } else { t.p.muted }
-        c.box(w=Px(28.0), h=Px(28.0), align=ACenter, justify=JCenter, id=ring, fn() {
+        // (PreviewLoad.kt: how far, in words, to a screen reader)
+        c.box(w=Px(28.0), h=Px(28.0), align=ACenter, justify=JCenter, id=ring, label=load_label(load), fn() {
           @sf.progress_ring(c, 20.0, number(load, "percent") / 100.0, color) |> ignore
         })
         |> ignore

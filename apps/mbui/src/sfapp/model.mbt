@@ -99,6 +99,8 @@ pub(all) struct ChatItem {
   reconnecting : String?
   connect : Bool
   origin_text : String
+  /// the people in it in words, for a screen reader (RowPicture.kt Faces)
+  people_text : String
   pending : Bool
   settled : Bool
   archivable : Bool
@@ -186,6 +188,7 @@ pub fn chat_item(v : Json) -> ChatItem {
     reconnecting: opt_text(s, "reconnecting"),
     connect: field(s, "connect") is Some(String(_)),
     origin_text: text(s, "originText"),
+    people_text: text(s, "peopleText"),
     pending: flag(s, "pending"),
     settled: flag(s, "settled"),
     archivable: flag(s, "archivable"),

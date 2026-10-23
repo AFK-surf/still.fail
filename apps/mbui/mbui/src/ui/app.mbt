@@ -285,6 +285,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.paint_overlays()
   c.emit_segs()
   c.sync_views()
+  // what the widgets are, for a screen reader reading them (a11y.mbt)
+  c.a11y_after_paint()
   // the streams' frames taken in this frame said shown (stream.mbt)
   streams_after_paint()
   // back goes where the stack drawn now says (Ctx::nav, while building)

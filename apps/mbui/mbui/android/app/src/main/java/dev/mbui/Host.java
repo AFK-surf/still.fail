@@ -53,6 +53,19 @@ final class Host {
         return fontScale;
     }
 
+    /** Whether a service reads the screen (@hostapi.a11y_on; A11y.on). */
+    static boolean a11yOn() {
+        return A11y.on();
+    }
+
+    /** What the app's widgets are now (@hostapi.a11y_tree, from the GL thread): the view's virtual nodes made of it. */
+    static void a11yTree(String lines) {
+        main.post(() -> {
+            MBView v = view;
+            if (v != null) v.a11y().set(lines);
+        });
+    }
+
     static boolean systemDark() {
         return systemDark;
     }

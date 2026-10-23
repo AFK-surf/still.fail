@@ -331,7 +331,7 @@ fn top_bar(
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
-      if nav_button(c, "settings", 22.0, key="home-settings") {
+      if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
         app.nav.push(Settings)
       }
       let wid = c.id("home-workspace")
@@ -347,10 +347,10 @@ fn top_bar(
         |> ignore
         let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
         match field(marks.value, "others") {
-          Some(String(tone)) => workspace_mark(c, tone)
+          Some(String(tone)) => workspace_mark(c, tone, text(marks.value, "othersLabel"))
           _ =>
             if invited {
-              c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, fn() {  })
+              c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, label=tr("android-chat.home.invited"), fn() {  })
               |> ignore
             }
         }
@@ -368,6 +368,18 @@ fn top_bar(
               20.0,
               key="home-filter",
               color=if filter != "all" { t.p.accent } else { t.p.text },
+              said=fill("android-chat.home.filter.label", [
+                (
+                  "filter",
+                  tr(
+                    match filter {
+                      "mine" => "android-chat.home.filter.mine"
+                      "watching" => "android-chat.home.filter.watching"
+                      _ => "android-chat.home.filter.all"
+                    },
+                  ),
+                ),
+              ]),
             ) {
             app.menu = true
           }
@@ -631,7 +643,16 @@ fn waiting(c : @ui.Ctx, n : Int, note : ListNote?, error : String?) -> Unit {
       |> ignore
     }
     let breath = if reading { @sf.breath(c) } else { 0.6 }
-    c.box(w=Fill(1.0), opacity=breath, fn() {
+    // what it waits on, said only to a screen reader while it reads (Waiting.kt)
+    let said = if reading {
+      match note {
+        Some({ text: Some(s), .. }) => s
+        _ => tr("common.reading")
+      }
+    } else {
+      ""
+    }
+    c.box(w=Fill(1.0), opacity=breath, label=said, fn() {
       for i in 0..<n {
         c.box(dir=Row, w=Fill(1.0), h=Px(66.0), pl=22.0, pr=16.0, gap=12.0, align=ACenter, fn() {
           c.box(w=Fill(1.0), gap=10.0, fn() {
@@ -736,8 +757,9 @@ let mark_yellow : Int64 = 0xF2B01EFFL
 ///|
 /// What a workspace has waiting (SettingParts.kt WorkspaceMark): `alert` a red dot with a soft halo, `wait` a blue
 /// ring, `done` a blue dot.
-fn workspace_mark(c : @ui.Ctx, tone : String) -> Unit {
-  c.box(w=Px(10.0), h=Px(10.0), fn() {
+fn workspace_mark(c : @ui.Ctx, tone : String, label : String) -> Unit {
+  // (what it says to a screen reader: SettingParts.kt WorkspaceMark's contentDescription)
+  c.box(w=Px(10.0), h=Px(10.0), label~, fn() {
     match tone {
       "alert" => halo_dot(c, mark_red)
       "wait" => ring(c, mark_blue)
@@ -807,7 +829,17 @@ fn row_tone(item : ChatItem) -> String {
 /// grey one when only on others.
 fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
   let t = @sf.theme()
-  let mark = c.box(w=Px(10.0), h=Px(10.0), fn() {
+  // what it says to a screen reader (Home.kt ChatMark's contentDescription)
+  let label = tr(
+    match tone {
+      "done" => "android-chat.home.mark.done"
+      "alert" => "android-chat.home.mark.alert"
+      "wait" => "android-chat.home.mark.wait"
+      "other" => "android-chat.home.mark.other"
+      _ => "android-chat.home.mark.busy"
+    },
+  )
+  let mark = c.box(w=Px(10.0), h=Px(10.0), label~, fn() {
     match tone {
       "done" => dot(c, mark_blue)
       "alert" => halo_dot(c, mark_red)
@@ -991,7 +1023,8 @@ fn chat_row(
             })
             |> ignore
             if @sf.has_station_mark(item.station_emoji, item.station_icon) {
-              c.box(opacity=dim, fn() {
+              // (read as its station's name: Home.kt's contentDescription)
+              c.box(opacity=dim, label=item.station_name, fn() {
                 @sf.station_mark(c, item.station_emoji, item.station_icon, 12.0, t.p.muted)
               })
               |> ignore
@@ -1007,12 +1040,20 @@ fn chat_row(
               })
               |> ignore
             } else if item.offline is Some(_) || item.reconnecting is Some(_) {
-              c.box(w=Px(14.0), align=ACenter, fn() {
+              c.box(w=Px(14.0), align=ACenter, label=match item.offline {
+                Some(o) => o
+                None => item.reconnecting.unwrap_or("")
+              }, fn() {
                 @sf.icon(c, "unplug", size=13.0, color=t.p.subtle) |> ignore
               })
               |> ignore
             } else if item.connect {
-              c.box(w=Px(14.0), align=ACenter, fn() { @sf.slack_mark(c, 13.0) |> ignore })
+              c.box(
+                w=Px(14.0),
+                align=ACenter,
+                label=if item.origin_text != "" { item.origin_text } else { "Slack" },
+                fn() { @sf.slack_mark(c, 13.0) |> ignore },
+              )
               |> ignore
             }
           })
@@ -1068,7 +1109,7 @@ fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit
   if c.clicked(id) && !busy {
     archive_from_row(src, item)
   }
-  c.box(
+  let chip = c.box(
     padx=10.0,
     pady=4.0,
     radius=12.0,
@@ -1090,7 +1131,8 @@ fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit
       }
     },
   )
-  |> ignore
+  // (Home.kt: 归档「title」 to a screen reader)
+  c.semantics(chip, Button, id~, label=fill("android-chat.archive.named", [("title", item.title)]), disabled=busy)
 }
 
 ///|
@@ -1166,7 +1208,8 @@ fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double
   if icon != "" {
     let rest = state.view(start_offset=n).to_owned()
     let tint = if need is Some(_) { t.p.text } else { t.p.muted }
-    c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
+    // (read out whole: StateLine's contentDescription)
+    c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, label=state, fn() {
       // the title's mark's place (10), the icon 14 centred on it
       c.box(w=Px(10.0), h=Px(14.0), fn() {
         c.box(tx=-2.0, fn() { @sf.icon(c, icon, size=14.0, color=tint) |> ignore })
@@ -1235,7 +1278,9 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
     return
   }
   let agents = fn() {
-    c.box(dir=Row, gap=4.0, align=ACenter, fn() {
+    // (RowPicture.kt Agents: the agents in words to a screen reader)
+    let said = item.agents.map(fn(a) { a.text }).filter(fn(s) { s != "" })
+    c.box(dir=Row, gap=4.0, align=ACenter, label=said.join(tr("web-main.list.separator")), fn() {
       for k, g in groups {
         if k < 3 {
           @sf.maker_mark(c, g.maker, g.runtime, 14.0) |> ignore
@@ -1251,7 +1296,8 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
   let faces = fn() {
     let shown = if people.length() > 3 { people[:3].to_array() } else { people }
     let starter = fn(p : Person) { people.length() > 1 && p.id == item.creator }
-    c.box(dir=Row, align=ACenter, fn() {
+    // (RowPicture.kt Faces: the people in words to a screen reader)
+    c.box(dir=Row, align=ACenter, label=item.people_text, fn() {
       for i, p in shown {
         let f = face(c, src, p, face_size, starter(p), -3.0 * i.to_double())
         // the one who started the chat over the rest (RowPicture.kt Faces: zIndex(1f))
