@@ -86,6 +86,9 @@ function vaultAsk(v: J): J | null {
   const out: J = { name, reason: str(get(v, "reason")) ?? "", mode, hosts: arr(get(v, "hosts")).filter((h) => typeof h === "string") };
   const command = trimmed(get(v, "command"));
   if (command !== null) out.command = command;
+  // Another station its commands run on (or a secret to keep was read on), by name.
+  const station = trimmed(get(v, "station"));
+  if (station !== null) out.station = station;
   const status = trimmed(get(get(v, "outcome"), "status"));
   if (status !== null) out.status = status;
   const scope = trimmed(get(get(v, "outcome"), "scope"));

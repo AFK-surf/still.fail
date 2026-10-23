@@ -50,9 +50,21 @@ fn vault_ask_card(c : @ui.Ctx, src : Source, here : Here, card : Card, ask : Vau
       if !save && ask.command != "" {
         c.rich([@ui.span(ask.command, mono=true)], style=vault_command) |> ignore
       }
-      // only what is out of the ordinary: a command that reads the secret itself
-      if !save && ask.mode == "env" {
-        c.rich([@ui.span(tr("android-settings.vault.ask.plain"), color=t.p.warn_ink)], style=vault_note) |> ignore
+      // only what is out of the ordinary: a command that reads the secret itself, one run on another station
+      let risky = !save && ask.mode == "env"
+      let elsewhere = !save && ask.station != ""
+      if risky || elsewhere {
+        let runs : Array[@ui.Run] = []
+        if risky {
+          runs.push(@ui.span(tr("android-settings.vault.ask.plain"), color=t.p.warn_ink))
+        }
+        if risky && elsewhere {
+          runs.push(@ui.span(" · "))
+        }
+        if elsewhere {
+          runs.push(@ui.span(fill("android-settings.vault.ask.on", [("station", ask.station)])))
+        }
+        c.rich(runs, style=vault_note) |> ignore
       }
     })
     |> ignore

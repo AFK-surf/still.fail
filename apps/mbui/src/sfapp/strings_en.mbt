@@ -352,6 +352,7 @@ let en : Map[String, String] = {
   "android-settings.vault.ask.kind.token": "token",
   "android-settings.vault.ask.kind.ssh_key": "SSH key",
   "android-settings.vault.ask.plain": "Can read it in plain text",
+  "android-settings.vault.ask.on": "Runs on {station}",
   "android-settings.vault.ask.kept": "Saved {kind} “{name}”",
   "android-settings.vault.ask.granted": "Allowed “{name}” · {scope}",
   "android-settings.vault.ask.denied": "Refused “{name}”",

@@ -134,6 +134,8 @@ pub(all) struct VaultAsk {
   username : String
   status : String
   scope : String
+  /// another station of the workspace its commands run on, by name (empty: the chat's)
+  station : String
 }
 
 ///|
@@ -328,6 +330,7 @@ pub fn message_of(m : Json) -> Message {
                 username: text(field(a, "save"), "username"),
                 status: text(a, "status"),
                 scope: text(a, "scope"),
+                station: text(a, "station"),
               })
             _ => None
           },

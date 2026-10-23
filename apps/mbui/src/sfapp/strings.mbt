@@ -229,6 +229,7 @@ let zh : Map[String, String] = {
   "android-settings.vault.ask.kind.token": "Token",
   "android-settings.vault.ask.kind.ssh_key": "SSH 私钥",
   "android-settings.vault.ask.plain": "可读取明文",
+  "android-settings.vault.ask.on": "在 {station} 运行",
   "android-settings.vault.ask.kept": "已存入{kind}「{name}」",
   "android-settings.vault.ask.granted": "已允许使用「{name}」 · {scope}",
   "android-settings.vault.ask.denied": "已拒绝使用「{name}」",
