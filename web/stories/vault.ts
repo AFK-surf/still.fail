@@ -1,6 +1,6 @@
 // The vault for the stories (docs/vault.md): the demo workspace's `vaults` and `vaultItems` topics as the core puts
 // them together (client/core-ts/src/views/vault.ts) in each state the page has, what its calls answer (the words once,
-// an item opened), and an agent's request for an item as a card in the demo's chat.
+// an item opened), and an agent's request for an item (or to keep one, secret_save) as a card in the demo's chat.
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { ChatMessage, ChatView, Stamp, VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView, VaultUse, VaultUsesView } from "../src/core/shapes.ts";
 
@@ -35,6 +35,13 @@ export const REQUEST: VaultRequest = {
   station: "local", mode: "proxy", reason: "重跑 PR #512 失败的 release job", command: "gh run rerun 1846 --failed", hosts: ["api.github.com"], at: AT,
 };
 
+/** An agent asking to keep a password it read with 1Password (secret_save). */
+export const SAVE_REQUEST: VaultRequest = {
+  id: "r_01JASAVE", vault: PERSONAL.id, vaultName: "个人", item: "i_ux7", itemName: "UniFi UX7 管理员", session: "ember:c-demo-safari", chat: "EMBER/1792199000.000100",
+  station: "local", mode: "env", reason: "登录路由器查 WAN 口丢包，以后不用每次都在 Studio 上点 1Password", command: "op read 'op://Personal/Ui/password'", hosts: [], at: AT,
+  save: { kind: "login", username: "zzj3720" },
+};
+
 /** The page's states, as the core says them. */
 export type VaultStory = "web" | "noLock" | "unconfirmed" | "off" | "on" | "locked" | "waiting" | "notKeyed";
 
@@ -62,7 +69,7 @@ function items(story: VaultStory): VaultItemsView {
 export const LONG_COMMAND = "sh /private/tmp/claude-501/-Users-ada--stillfail-sessions-ember-c-28ddcd9a46-workspace/a511bb72-32b1-47de-b73d-590cfd491c4a/scratchpad/s/search.sh --query 'release job' --channels eng,ops --since 2026-10-01 --limit 200 --format json --fields ts,user,text,thread_ts,reactions --sort recent --out /tmp/release-job.json";
 
 /** How the request's card is told: its command, and how it ended (none: it waits). */
-export type CardStory = { command?: string; status?: "granted" | "denied" | "expired"; scope?: "once" | "hour" | "chat"; lasts?: "once" | "hour" };
+export type CardStory = { command?: string; status?: "granted" | "denied" | "expired"; scope?: "once" | "hour" | "chat"; lasts?: "once" | "hour"; save?: boolean };
 
 /** The station's card for the request, under the agent's post in the chat on show (as station/src/vault/secrets.ts posts it). */
 function withCard(chat: ChatView, told: CardStory): ChatView {
@@ -74,7 +81,23 @@ function withCard(chat: ChatView, told: CardStory): ChatView {
     { label: "本对话 1 小时内", detail: "1 小时内这个对话可以反复使用，不用再批准" },
     { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
   ].slice(0, told.lasts === "once" ? 1 : told.lasts === "hour" ? 2 : 3);
-  const options = [...scopes.map((o, i) => (i === scopes.length - 1 ? { ...o, recommended: true } : o)), { label: "拒绝", detail: "通知 agent 已拒绝" }];
+  const options = told.save
+    ? [{ label: "存入密钥库", detail: "agent 之后每次使用仍需你批准", recommended: true }, { label: "拒绝", detail: "不保存，通知 agent" }]
+    : [...scopes.map((o, i) => (i === scopes.length - 1 ? { ...o, recommended: true } : o)), { label: "拒绝", detail: "通知 agent 已拒绝" }];
+  if (told.save) {
+    const r = SAVE_REQUEST;
+    const keep: ChatMessage = {
+      ...last, seq, ts: `${Number(last.ts) + 30}`, quotes: [], attachments: [],
+      text: `申请将「${r.itemName}」存入密钥库：${r.reason}\n\n类型：登录（用户名 zzj3720）\n\n来源：\`${r.command}\`\n\nagent 使用方式：环境变量（命令可读取明文），每次使用需你批准`,
+      options,
+      card: {
+        type: "options", options, assignee: "you@acme.dev", assigneeText: "待你决策", vault: r.id,
+        vaultAsk: { name: r.itemName!, reason: r.reason, command: r.command!, mode: "env", hosts: [], save: r.save!, ...(told.status ? { status: told.status } : {}) },
+      },
+      decision: { resolved: !!told.status },
+    };
+    return { ...chat, messages: [...chat.messages, keep] };
+  }
   const command = told.command ?? REQUEST.command!;
   const ask: ChatMessage = {
     ...last, seq, ts: `${Number(last.ts) + 30}`, quotes: [], attachments: [],
@@ -96,6 +119,8 @@ export function vaultDemo(story: VaultStory, card: boolean | CardStory = false):
       if (t.topic === "vaults") {
         const v = view(story);
         const lasts = typeof card === "object" ? card.lasts : undefined;
+        // One to keep: waiting on the viewer while it is not decided, whether their vault is on here or not.
+        if (typeof card === "object" && card.save) return { ...v, requests: card.status ? [] : [SAVE_REQUEST] };
         return lasts ? { ...v, requests: v.requests.map((r) => ({ ...r, lasts })) } : v;
       }
       return t.topic === "vaultItems" ? items(story) : undefined;

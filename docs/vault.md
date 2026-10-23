@@ -120,6 +120,20 @@ sequenceDiagram
 
 每次申请、批准、拒绝、使用（时间、chat、方式、目标域名或命令，不含值）都写进 station 的 `vault_audit`，并作为一条系统消息显示在那个 chat 里。在库的页面能按条目查。记录按库同步给成员的设备（第一期只存在 station 上，同步下来放到界面那一步做）。
 
+## agent 存入（2026-10-24 用户定）
+
+chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）。agent 手上有了以后还要用的凭据（用 `op`/`bw` 读出的密码、人给的 token、自己建的 key），由 agent 申请存进库，人在卡片上批准，不让人自己去 app 里填。
+
+- **工具** `secret_save {name, kind, reason, command | value, username?, public_key?, modes?, hosts?, env?}`：存给这个 chat 的发起人。值优先用 `command` 给：station 在 session 的工作目录里 `sh -c` 跑它，标准输出（去掉末尾一个换行，最多 64 KB）就是值，agent 看不到；失败时只回 stderr，且把输出逐字遮掉。`value` 只给 agent 本来就拿着的值。`modes` 默认：有 `hosts` 用代理，SSH 钥匙用 ssh，其余用环境变量。
+- **申请**：还是 `vault_requests` 里的一条 Request，多 `save`（条目的 listing 加上不是秘密的 `username`、`public_key`）和 `owner`（发起人的 email，由他决定）；`item` 是 station 先分配好的条目 id，`vault` 是打算放进的库：
+  - 加锁：发起人自己的、他某台已设置设备有钥匙的库（自己是 owner 的优先），没有就空着。值用 `seal` 封给他每台已设置设备的箱钥匙（锁里验过的证书），上下文 `stillfail-vault-save/1\0<ws>\0<request>`，存在 `sealed: [{device, box, secret}]` 里；station 不存原值。
+  - 不加锁：`vault` 是 `plain`。
+  - 两种都把原值留在 station 内存里直到有结果（重启就忘，agent 重新申请）：不加锁的批准时由 station 写进明文库；加锁的在他之后才设置的设备发布箱钥匙证书时（`PUT vault/boxes`）补封给那台设备，申请重新推送。
+- **卡片**：options 卡片「存入密钥库 / 拒绝」，assignee 是发起人，`vault` 字段多 `save: {kind, username?}`；客户端据此画成「想存入」而不是「想使用」，批准行是「存入 / 拒绝」。他在这个 workspace 里还没开启密钥库（加锁但这台设备没设置、或者一个库都没有）时，卡片上是「开启密钥库」，进「密钥」页走原来的开启流程（抄恢复码），回来再存入。
+- **批准**：`vault.approve {request}`（scope 不用）。加锁：用这台设备的箱钥匙打开给它的那份（过一次生物识别），选库（申请指定的、这台设备有钥匙的优先，其次自己的，没有就建一个「个人」库），用请求里的 `item` 写第 0 版（已经写过就不再写），把副本送到提出申请的 station，再 `POST vault/saves {request, vault}`；station 核对那个库里确有这个条目、名字对得上，记为 granted。不加锁：`POST vault/plain/saves {request}`，station 用内存里的值写进明文库、推 `vault-plain`。拒绝和别的申请一样走 `vault/denials`、`vault/plain/denials`（存入的申请由发起人决定，不看库成员）。
+- **之后**：存进去的条目和人自己加的一样，agent 用时照样 `secret_use` → 卡片 → `secret_run`。存入的申请不算条目的使用记录（`uses` 里不列）。
+- **主动提**：内置 skill `stillfail-vault`，agent 的指令里也有一句：要读密码管理器、人贴了凭据、自己建了 key、写的脚本要登录某处时，先提议存进库再用；他的库没开启时照样调 `secret_save`，卡片会请他开启。`secret_list` 会说他的库开没开。
+
 ## 人用的密码库（第二期以后）
 
 - app 里加一个「密钥」页：库、条目、搜索、复制（30 秒后清剪贴板）、生成密码、TOTP。网页版只列名字。
@@ -304,4 +318,4 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 - 一个 workspace 默认建一个「共享」库，还是每人一个「个人」库加按需建共享库（1Password 的做法是后者）。
 - 代理模式的 CA：每个会话一个，还是每台 station 一个。每个会话一个更干净，但要在 agent 启动时就生成，并写进它的环境变量。
 - 已经在用 1Password、Bitwarden 的人：要不要把它们当成「来源」接进来，也就是 agent 的申请由手机上的 still.fail app 批准，值从对方的库里取。好处是不用搬家，坏处是要做对方的 SDK，零知识也得由对方保证。
-- agent 能不能自己写入库（比如注册了一个服务，把拿到的 token 存回来）。写入也要人批准吗？
+- ~~agent 能不能自己写入库~~：能，要人批准（见「agent 存入」）。

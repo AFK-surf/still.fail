@@ -33,9 +33,21 @@ export const allows = (lasts: Scope | null | undefined, scope: Scope): boolean =
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
   command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
-  /// A request for an item of the plain library (`vault` is `plain`, no box): its owner's email, who decides it.
+  /// A request for an item of the plain library (`vault` is `plain`, no box): its owner's email, who decides it. A
+  /// request to keep a secret (`save`): whose it is to be (whoever started the chat), who decides it.
   owner?: string;
+  /// An agent asking to keep a secret in its owner's vault (secret_save, docs/vault.md agent 存入): the item as it is to
+  /// be listed; `item` is the id it is written under, `vault` the one it is meant for (`plain` without security mode;
+  /// empty while its owner has none). No box: nothing is granted to the station.
+  save?: Save;
+  /// A request to keep a secret in a vault: the secret's fields, sealed to each of its owner's devices set up (their
+  /// box keys), when it was asked or since (`saveContext`). The device that approves it opens its own.
+  sealed?: Sealed[];
 };
+/// What an agent asks to keep: the item's listing, and the fields of it that are not secret (a login's account name, an
+/// SSH key's public half), said on its card.
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string };
+export type Sealed = { device: string; box: string; secret: string };
 export type Grant = {
   v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number;
   secret: string; at: number; sig: Sig;
@@ -57,6 +69,8 @@ export const keyContext = (ws: string, vault: string, epoch: number) => `stillfa
 export const itemContext = (ws: string, vault: string, id: string, version: number, epoch: number) => `stillfail-vault-item/1\0${ws}\0${vault}\0${id}\0${version}\0${epoch}`;
 /// The seal's context for a secret granted to one request.
 export const grantContext = (ws: string, request: string) => `stillfail-vault-grant/1\0${ws}\0${request}`;
+/// The seal's context for a secret an agent asks to keep, sealed to one of its owner's devices.
+export const saveContext = (ws: string, request: string) => `stillfail-vault-save/1\0${ws}\0${request}`;
 
 const sha256 = (b: Uint8Array | string) => createHash("sha256").update(b).digest();
 

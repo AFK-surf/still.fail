@@ -15,7 +15,8 @@ import { profileGroups } from "./settings.tsx";
 import { addProfilePath } from "../pages/AddProfile.tsx";
 import { AddKinds } from "../VaultAdd.tsx";
 import { stationBase } from "../station.tsx";
-import { VaultChoices } from "../VaultApproval.tsx";
+import { VaultActions } from "../VaultApproval.tsx";
+import { AskCard } from "../VaultAsk.tsx";
 import {
   ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemPath, lastsChoice, lastsName, listLine, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
@@ -322,21 +323,14 @@ function LibraryVault({ entry, v, plain, many, quiet }: { entry: WorkspaceEntry;
   );
 }
 
-/** A request waiting on the viewer: which item, why, the command, how; its chat; the approval's rows. */
+/** A request waiting on the viewer (to use an item, or to keep one): its card, as in its chat, and a way to that chat. */
 function Request({ entry, r }: { entry: WorkspaceEntry; r: VaultRequest }) {
+  const go = useNavigate();
+  const chat = r.station ? `${stationBase(`${entry.id}/${r.station}`)}/chats/${encodeURIComponent(r.session)}` : null;
   return (
-    <div className={css.request}>
-      <div className={css.requestHead}>
-        <span className={css.rowName}>{t("web-pages.vault.approve.wants", { name: r.itemName ?? r.item })}</span>
-        {r.station && <Link className={css.link} to={`${stationBase(`${entry.id}/${r.station}`)}/chats/${encodeURIComponent(r.session)}`}>{t("web-pages.vault.openChat")}</Link>}
-      </div>
-      <dl className={css.facts}>
-        <dt>{t("web-pages.vault.reason")}</dt><dd>{r.reason}</dd>
-        {r.command && <><dt>{t("web-pages.vault.command")}</dt><dd><code className={css.mono}>{r.command}</code></dd></>}
-        <dt>{t("web-pages.vault.how")}</dt><dd>{howLine(r.mode, r.hosts)}</dd>
-      </dl>
-      <VaultChoices workspace={entry.id} id={r.id} />
-    </div>
+    <AskCard fill ask={{ name: r.itemName ?? r.item, mode: r.mode, command: r.command, save: r.save }}>
+      <VaultActions workspace={entry.id} id={r.id} extra={chat && <Button variant="ghost" onClick={() => go(chat)}>{t("web-pages.vault.openChat")}</Button>} />
+    </AskCard>
   );
 }
 

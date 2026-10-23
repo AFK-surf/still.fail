@@ -1024,9 +1024,10 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} files={m.attachments} />
-      {/* An agent's request for a vault item, as its card says it (VaultAsk.tsx): the card in place of its words. */}
+      {/* An agent's request about a vault item, as its card says it (VaultAsk.tsx): the card in place of its words,
+          answered or turned down on it (nothing to set aside: once decided it is a line). */}
       {ask
-        ? <VaultAsk message={m} ask={ask} rows={options}>{options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={!!(m.decision?.resolved || m.decision?.dismissed)} />}</VaultAsk>
+        ? <VaultAsk message={m} ask={ask} rows={options} />
         : m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files files={besideQuotes(m.quotes, m.attachments)} /></>
         : <ProseWithFiles text={m.text} md={m.md as Md | undefined} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}

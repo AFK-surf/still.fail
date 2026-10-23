@@ -33,9 +33,10 @@ CREATE TABLE IF NOT EXISTS vault_plain_lasts (
 );
 `;
 
-const KINDS: Kind[] = ["token", "ssh_key", "login"];
-const MODES: Mode[] = ["proxy", "ssh", "env"];
-const FIELDS: Record<Kind, string[]> = { token: ["value"], ssh_key: ["private_key", "public_key"], login: ["username", "password", "totp"] };
+export const KINDS: Kind[] = ["token", "ssh_key", "login"];
+export const MODES: Mode[] = ["proxy", "ssh", "env"];
+/// The fields each kind of item holds.
+export const FIELDS: Record<Kind, string[]> = { token: ["value"], ssh_key: ["private_key", "public_key"], login: ["username", "password", "totp"] };
 const isStr = (v: unknown, max = 100_000): v is string => typeof v === "string" && v.length <= max;
 
 /// An item as the pages are told it: all but its fields.

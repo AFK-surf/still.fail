@@ -77,8 +77,8 @@ export function cardShown(card: J): J {
   return v;
 }
 
-/// A vault request as its card says it (station/src/vault/secrets.ts): which item, why, the command, how; and once
-/// decided, how. Null for a card from before it said so (its post's words say it).
+/// A vault request as its card says it (station/src/vault/secrets.ts): which item, why, the command, how (or, one to
+/// keep a secret, what it is); and once decided, how. Null for a card from before it said so (its post's words say it).
 function vaultAsk(v: J): J | null {
   const name = trimmed(get(v, "name"));
   const mode = trimmed(get(v, "mode"));
@@ -90,6 +90,12 @@ function vaultAsk(v: J): J | null {
   if (status !== null) out.status = status;
   const scope = trimmed(get(get(v, "outcome"), "scope"));
   if (scope !== null) out.scope = scope;
+  // A request to keep a secret (secret_save): what kind, the account it is for.
+  const kind = trimmed(get(get(v, "save"), "kind"));
+  if (kind !== null) {
+    const username = trimmed(get(get(v, "save"), "username"));
+    out.save = { kind, ...(username !== null ? { username } : {}) };
+  }
   return out;
 }
 

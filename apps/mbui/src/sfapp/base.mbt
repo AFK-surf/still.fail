@@ -70,6 +70,7 @@ pub using @sfbase {
   type Stamp,
   type Station,
   type Topic,
+  type VaultAsk,
   type Workspace,
   use_core_markdown,
   workspaces_of,
