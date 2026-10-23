@@ -14,7 +14,7 @@ test "64-wide-new-chat" {
     f.enter()
     f.run_for(@sfapp.flight_ms)
     f.see("宽屏新对话 085912")
-    f.gone("新对话")
+    f.gone("做任何事")
     // its agent's answer in the chat
     f.see("=宽屏新对话的回答 085912")
     // the agent's avatar lingering after its turn ended: once its answer is out of it and it is home again, there a
