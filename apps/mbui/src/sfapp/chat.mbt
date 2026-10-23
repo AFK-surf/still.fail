@@ -138,6 +138,16 @@ priv struct Reading {
   sent : Map[Double, String]
   /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220): Lingering
   linger : Map[String, Lingering]
+  /// the room agents' lines left as they went from the list (Chat.kt floor): the list never gets shorter under the
+  /// reader. What comes in next takes it back (`floor_takers`: each row by key, as tall as the build last read it;
+  /// `floor_laid`: as the frame before laid it out). Each agent's line's room (its row, the gap over it with it) as last
+  /// read, by key; the frame the floor was last counted in
+  mut floor : Double
+  floor_takers : Map[String, Double]
+  floor_laid : Map[String, Double]
+  act_room : Map[String, Double]
+  act_whole : Map[String, Bool]
+  mut floor_frame : Int
   /// the agents running as last drawn
   running : Map[String, Agent]
   /// a message gone to (a notification's, "" none: ChatMotion.kt flashed) and how lit it is (flash_of)
@@ -201,6 +211,12 @@ fn reading_of(key : String) -> Reading {
         follow_key: "",
         sent: {},
         linger: {},
+        floor: 0.0,
+        floor_takers: {},
+        floor_laid: {},
+        act_room: {},
+        act_whole: {},
+        floor_frame: -1,
         running: {},
         flash: "",
         flash_lit: @motion.Anim::new(0.0),
@@ -450,6 +466,9 @@ fn messages(
   // a new chat's list comes up out of the composer with its first words (flight.mbt flight_carry_shift); not drawn
   // the build their row is first laid out, where it is not known yet
   let carry = flight_carry_shift(c, dkey)
+  // the room agents' lines left, less what has come in since (under the rows, over the composer's room)
+  act_rooms(c, rd, key, keys)
+  let floor = floor_of(c, rd, key, keys)
   let list_box = c.box(w=Fill(1.0), h=Fill(1.0), ty=carry.unwrap_or(0.0), fn() {
     c.list(
       key,
@@ -472,7 +491,7 @@ fn messages(
         }
         match e {
           Top => c.box(h=Px(status_top() + chat_bar_h + 14.0), fn() {  }) |> ignore
-          Foot => c.box(h=Px(composer_room_for(c, draft_key(r), Some(v)) + 10.0), fn() {  }) |> ignore
+          Foot => c.box(h=Px(composer_room_for(c, draft_key(r), Some(v)) + 10.0 + floor), fn() {  }) |> ignore
           Working(a) => {
             // coming in, its room opens (220 ms, Ease.Out) as it fades in and grows from its avatar; its turn over,
             // it stays a moment and fades (Chat.kt Activity)
@@ -496,6 +515,8 @@ fn messages(
               spec=@motion.tween(linger_out_ms),
             )
             let p = open.get()
+            // (its room read as it was laid out whole, not opening: act_rooms)
+            rd.act_whole[keys[i]] = p >= 1.0 && !open.moving()
             @motion.reveal(c, mk, p, fn() {
               let ri = c.box(w=Fill(1.0), pl=row_side(c), pr=row_side(c), pt=top, fn() {
                 activity(c, src, here, a, leaving~)
@@ -1056,6 +1077,69 @@ fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
 }
 
 ///|
+/// The room of each agent's line in the list as it was last laid out whole (its own room open, not opening: read back,
+/// laid out otherwise the frame is built again), what it leaves as a floor when it goes (row_keys).
+fn act_rooms(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -> Unit {
+  for k, whole in rd.act_whole {
+    if !whole {
+      continue
+    }
+    match keys.search(k) {
+      Some(i) =>
+        match c.list_row_height(key, i) {
+          Some(h) => rd.act_room[k] = h
+          None => ()
+        }
+      None => ()
+    }
+  }
+}
+
+///|
+/// How tall the floor agents' lines left is in this build (Chat.kt floor, web's): what they left, less the rows that
+/// came in since, each as tall as last laid out (read back: laid out otherwise, the frame is built again). As a frame
+/// begins, from what the frame before laid out: once they fill it, it is gone; one gone from the list (an outbox entry
+/// become its message, by another key), its height is taken for good.
+fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -> Double {
+  if rd.floor <= 0.0 {
+    rd.floor = 0.0
+    rd.floor_takers.clear()
+    rd.floor_laid.clear()
+    return 0.0
+  }
+  if rd.floor_frame != c.frame_number() {
+    rd.floor_frame = c.frame_number()
+    rd.floor_laid.clear()
+    let mut took = 0.0
+    for k, h in rd.floor_takers {
+      rd.floor_laid[k] = h
+      took += h
+    }
+    if took >= rd.floor {
+      rd.floor = 0.0
+      rd.floor_takers.clear()
+      rd.floor_laid.clear()
+      return 0.0
+    }
+  }
+  let gone = rd.floor_takers.keys().filter(fn(k) { !keys.contains(k) }).collect()
+  for k in gone {
+    rd.floor = rd.floor - rd.floor_laid.get(k).unwrap_or(0.0)
+    rd.floor_takers.remove(k)
+    rd.floor_laid.remove(k)
+  }
+  let mut took = 0.0
+  for i, k in keys {
+    if rd.floor_takers.contains(k) {
+      let h = c.list_row_height(key, i).unwrap_or(0.0)
+      rd.floor_takers[k] = h
+      took += h
+    }
+  }
+  dmax(0.0, rd.floor - took)
+}
+
+///|
 /// What was sent from here, in the list from the frame it was sent until the core's view has it (Chat.kt shows the
 /// core's outbox; here the core's row comes a round trip later, and what is sent is on screen first): drawn as an
 /// outbox entry of its words, by a key of its own ("local:n"); the first of this device's own rows not there when it
@@ -1170,6 +1254,9 @@ fn row_keys(
   // there go on to it)
   let taken : Map[String, Bool] = {}
   let still : Array[LocalSent] = []
+  // (the core's rows taken for what was sent before its own row was ever in the list: new to the list's end, they take
+  // back the floor as what comes in does)
+  let came_new : Array[String] = []
   for l in rd.sending {
     let mut came = ""
     for i, e in all {
@@ -1189,6 +1276,9 @@ fn row_keys(
       continue
     }
     taken[came] = true
+    if !rd.known.contains(came) && !rd.known.contains("o:" + l.row.id) {
+      came_new.push(came)
+    }
     rd.known[came] = true
     match flight {
       Some(f) if f.key == "o:" + l.row.id => f.key = came
@@ -1223,6 +1313,14 @@ fn row_keys(
       rd.acts.remove(k)
       rd.known.remove(k)
       rd.admitted.remove(k)
+      // its room stays as a floor, taken in the build it goes in (Chat.kt floor: a frame without either would have
+      // the list shorter by it, its end pulled up, everything over it dropped at once)
+      match rd.act_room.get(k) {
+        Some(h) => rd.floor += h
+        None => ()
+      }
+      rd.act_room.remove(k) |> ignore
+      rd.act_whole.remove(k) |> ignore
     }
   }
   let info = c.list_info(key)
@@ -1275,6 +1373,11 @@ fn row_keys(
     list.push(e)
     keys.push(k)
   }
+  if rd.drawn && following && rd.floor > 0.0 {
+    for k in came_new {
+      rd.floor_takers[k] = 0.0
+    }
+  }
   if rd.drawn && following {
     for i, e in list {
       let caught = match e {
@@ -1285,6 +1388,10 @@ fn row_keys(
       }
       if !rd.known.contains(keys[i]) && !caught {
         rd.fresh[keys[i]] = true
+        // what comes in takes back the room an agent's line left (Chat.kt floor)
+        if rd.floor > 0.0 {
+          rd.floor_takers[keys[i]] = 0.0
+        }
       }
     }
   }
