@@ -1318,6 +1318,12 @@ fn rail_icon(place : String) -> String {
 ///|
 /// Settings from the rail's gear (or ⌘,): its first page, 外观, the sidebar its list.
 fn open_settings() -> Unit {
+  open_settings_at(@settings.Route::Appearance)
+}
+
+///|
+/// Settings at one of its pages (快捷键 from the shortcuts' dialog), the sidebar its list.
+fn open_settings_at(route : @settings.Route) -> Unit {
   lower_sheet()
   app.menu = false
   while app.nav.depth() > 1 {
@@ -1325,7 +1331,7 @@ fn open_settings() -> Unit {
       break
     }
   }
-  app.nav.push(Setting(@settings.Route::Appearance))
+  app.nav.push(Setting(route))
 }
 
 ///|

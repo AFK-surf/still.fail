@@ -446,58 +446,107 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// ⌘/ (Shortcuts.tsx ShortcutsDialog): the shortcuts this app keeps, by group, in mbui's dialog (over a scrim, in the
-/// window's middle; Esc, back or a press outside close it) in the web's look.
+/// ⌘/ (Shortcuts.tsx ShortcutsDialog): every shortcut, by where it works (the core's keymap, then those of one place,
+/// not changed here), quiet words beside each; the way to change them at its foot (the desktop app's).
 fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
-  let mac = @ui.platform() == 0
-  let shift = if mac { "⇧" } else { "Shift+" }
   let prefs = (src.topic)("prefs", {}).value
-  let keys = fn(action : String) { (tr("web-main.keymap." + action), @settings.keys_text(prefs, action)) }
-  let groups : Array[(String, Array[(String, String)])] = [
-    (
-      tr("web-main.keymap.group.global"),
-      ["chat.switch", "chat.new", "chat.prev", "chat.next", "sidebar.toggle", "settings", "shortcuts"].map(keys),
-    ),
-    (tr("web-main.keymap.group.chat"), ["chat.find", "chat.jobs"].map(keys)),
+  let (first_ws, last_ws) = @settings.workspace_keys(prefs)
+  let groups = @settings.key_groups(prefs)
+  groups.push((tr("web-main.shortcuts.group.workspace"), [(tr("web-main.shortcuts.switchWorkspace"), first_ws + " … " + last_ws)]))
+  groups.push(
     (
       tr("web-main.shortcuts.group.composer"),
       [
-        (tr("web-main.shortcuts.send"), "Enter"),
-        (tr("web-main.shortcuts.newline"), shift + "Enter"),
-        keys("composer.focus"),
+        (tr("web-main.shortcuts.send"), "↩"),
+        (tr("web-main.shortcuts.newline"), "⇧↩"),
+        (tr("web-main.shortcuts.prevNextChat"), "↑ / ↓"),
       ],
     ),
-  ]
+  )
+  groups.push(
+    (
+      tr("web-main.shortcuts.group.preview"),
+      [
+        (tr("web-main.shortcuts.prevNextImage"), "← / →"),
+        (tr("web-main.shortcuts.zoom"), "+ / -"),
+        (tr("web-main.shortcuts.fitActual"), "0 / 1"),
+        (tr("common.close"), "Esc"),
+      ],
+    ),
+  )
+  let change = Ref(false)
+  let footer : (() -> Unit)? = if @settings.keys_changeable(prefs) {
+    Some(fn() {
+      if @sf.button(c, tr("web-main.shortcuts.change"), key="keys-dialog/change", tone=Ghost) {
+        change.val = true
+      }
+    })
+  } else {
+    None
+  }
   let d = @sf.dialog(
     c,
     "keys-dialog",
     wide.keys_open,
     tr("web-main.shortcuts.title"),
-    w=dmin(520.0, c.width - 32.0),
     close_label=tr("common.close"),
+    footer?,
     fn() {
-      for g in groups {
-        c.box(pt=10.0, pb=2.0, fn() {
-          c.text(g.0, size=12.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
-        })
-        |> ignore
-        for k in g.1 {
-          c.box(dir=Row, w=Fill(1.0), h=Px(30.0), align=ACenter, fn() {
-            c.box(w=Fill(1.0), fn() { c.text(k.0, size=13.0, color=t.p.text, wrap=false) |> ignore })
-            |> ignore
-            c.box(padx=6.0, pady=2.0, radius=6.0, bg=t.p.hover, fn() {
-              c.text(k.1, size=12.0, color=t.p.muted, wrap=false) |> ignore
-            })
-            |> ignore
+      c.box(style=keys_sheet, fn() {
+        for g in groups {
+          c.box(style=keys_group, fn() {
+            c.box(style=keys_group_head, fn() { c.text(g.0, style=keys_group_title) |> ignore }) |> ignore
+            for k in g.1 {
+              c.box(style=keys_line, fn() {
+                c.text(k.0, style=keys_line_words) |> ignore
+                c.text(k.1, style=keys_line_keys) |> ignore
+              })
+              |> ignore
+            }
           })
           |> ignore
         }
-      }
+      })
+      |> ignore
     },
   )
-  wide.keys_open = d
+  wide.keys_open = d && !change.val
+  if change.val {
+    open_settings_at(@settings.Route::Shortcuts)
+  }
 }
+
+///|
+/// (Shortcuts.css.ts sheet: the groups 18 apart; group: its lines 2 apart, its title 4 over them)
+// kept across runs: a value (no field of it changes)
+let keys_sheet : @ui.Style = @ui.style(w=Full, gap=S4_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_group : @ui.Style = @ui.style(w=Full, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_group_head : @ui.Style = @ui.style(w=Full, pb=S1)
+
+///|
+/// (groupTitle: 12, 500, muted)
+// kept across runs: a value (no field of it changes)
+let keys_group_title : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, weight=Medium, color=Muted, wrap=false)
+
+///|
+/// (line: what it does and its keys at the two ends, 16 apart, 4 over and under, the list's words)
+// kept across runs: a value (no field of it changes)
+let keys_line : @ui.Style = @ui.style(row=true, w=Full, py=S1, gap=S4, align=AEnd, justify=JBetween)
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_line_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
+
+///|
+/// (keys: muted, their digits as wide as each other)
+// kept across runs: a value (no field of it changes)
+let keys_line_keys : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// A row's title as a field (Rename.tsx TitleInput, from its menu's 重命名): Enter saves it (`chat.rename`), Esc or

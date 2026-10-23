@@ -433,6 +433,10 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   if in_row && n.parent >= 0 && self.nodes[n.parent].flow {
     shrink = 0.0
   }
+  // what scrolls in itself, kept to the room its column has left (Ctx::capped `shrinks`)
+  if in_col && n.shrinks {
+    shrink = 1.0
+  }
   if s.shrink != shrink {
     s.shrink = shrink
     ch = true

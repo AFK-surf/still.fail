@@ -107,6 +107,42 @@ test "a dialog: 520 wide, its title and its lead, what it holds; its close butto
 }
 
 ///|
+test "a dialog taller than the window leaves: at most the window less 48, its buttons in it, what it holds scrolling" {
+  let t = @ui.Tester::new(
+    wide_view(fn(c) {
+      dialog(
+        c,
+        "long",
+        true,
+        "快捷键",
+        fn() {
+          for i in 0..<40 {
+            c.text("第 \{i} 行", size=13.0) |> ignore
+          }
+        },
+        footer=fn() { button(c, "修改", key="long/change") |> ignore },
+      )
+      |> ignore
+    }),
+    w=1280.0,
+    h=600.0,
+  )
+  t.draw()
+  let d = t.get(Dialog, label="快捷键")
+  assert_true(d.rect.3 <= 600.0 - 48.0 + 0.5, msg="\{d.rect.3} tall")
+  match t.rect_of("修改") {
+    Some((_, y, _, h)) => assert_true(y + h <= d.rect.1 + d.rect.3, msg="its button inside it")
+    None => fail("no button")
+  }
+  // the first lines shown, the last not until it is scrolled
+  assert_true(t.find("第 0 行") is Some(_))
+  match t.rect_of("第 39 行") {
+    Some((_, y, _, _)) => assert_true(y >= d.rect.1 + d.rect.3, msg="the last line under the dialog's end")
+    None => ()
+  }
+}
+
+///|
 /// A column 240 wide by a window's height with its edge (ResizeHandle) on its right, its width as the edge says; what
 /// the edge was done with, each time it was done with something.
 fn edge_view(width : Ref[Double], said : Array[Resized]) -> (@ui.Ctx) -> Unit {

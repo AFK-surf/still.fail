@@ -193,7 +193,8 @@ impl Moving for Sideways with rest_at(self, now, frame) {
 
 ///|
 /// A box at most `max_h` tall whose content, when taller, scrolls up and down inside it (see the file's head); `key`
-/// keeps where it is scrolled to. Its id.
+/// keeps where it is scrolled to. `shrinks`: in a column, shorter still when the column has less room left (CSS's
+/// flex-shrink on what scrolls: a dialog's body when the dialog would be taller than its maximum). Its id.
 pub fn Ctx::capped(
   self : Ctx,
   key : String,
@@ -203,6 +204,7 @@ pub fn Ctx::capped(
   radius? : Double = 0.0,
   padx? : Double = 0.0,
   pady? : Double = 0.0,
+  shrinks? : Bool = false,
   body : () -> Unit,
 ) -> Int {
   let id = self.id("\u{1}capped\u{1}" + key)
@@ -212,6 +214,7 @@ pub fn Ctx::capped(
     inner = self.box(w=Fill(1.0), ty=-st.x, padx~, pady~, body)
   })
   self.nodes[b].sideways = true
+  self.nodes[b].shrinks = shrinks
   self.nodes[b].hit = false
   st.box = b
   st.inner = inner

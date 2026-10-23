@@ -1,32 +1,7 @@
-// The wide frame's shortcuts as kept on this device (ember web/src/keymap.ts): each action's keys, the app's own unless
-// changed (prefs `keys`: an action's bindings, null its own again), a binding as words (Mod+Shift+H) and as a key cap
-// (⌘⇧H on a Mac, Ctrl+Shift+H elsewhere); the 快捷键 page where they are changed by pressing new ones (Shortcuts.tsx).
-
-///|
-/// The actions this app has keys for, by part, with their own keys (keymap.ts ACTIONS, the desktop app's).
-// kept across runs: a table, never written
-let key_actions : Array[(String, String, Array[String])] = [
-  ("chat.switch", "global", ["Mod+K"]),
-  ("chat.new", "global", ["Mod+N"]),
-  ("chat.prev", "global", ["Alt+Up"]),
-  ("chat.next", "global", ["Alt+Down"]),
-  ("sidebar.toggle", "global", ["Mod+\\"]),
-  ("settings", "global", ["Mod+,"]),
-  ("shortcuts", "global", ["Mod+/"]),
-  ("composer.focus", "chat", ["Space"]),
-  ("composer.file", "chat", ["Mod+U"]),
-  ("chat.stop", "chat", ["Mod+."]),
-  ("chat.history", "chat", ["Mod+Shift+H"]),
-  ("chat.jobs", "chat", ["Mod+Shift+J"]),
-  ("chat.latest", "chat", ["Mod+Down"]),
-  ("chat.find", "chat", ["Mod+F"]),
-  ("chat.archive", "chat", ["Mod+Shift+E"]),
-  ("panel.close", "chat", ["Escape"]),
-]
-
-///|
-/// The keys changed here before the prefs say them back (an action's bindings; null its own again).
-let keys_set : Map[String, Json] = {}
+// The wide frame's shortcuts, as the core says them (the prefs' `keymap`, client/core-ts/src/keymap.ts): each action,
+// where it works, its keys here and as a key cap shows them, changed with `keys.set`. What is the app's own here is a
+// key press turned into a binding (Mod+Shift+H) and a binding into a key press; and the 快捷键 page (Shortcuts.tsx),
+// where they are changed by pressing new ones.
 
 ///|
 /// The action whose new keys the next key press is ("" none): the page's.
@@ -34,41 +9,41 @@ pub let keys_recording : Ref[String] = Ref("")
 
 ///|
 fn keymap_reset() -> Unit {
-  keys_set.clear()
   keys_recording.val = ""
   action_asked.val = ""
 }
 
 ///|
-/// An action's own keys.
-fn own_keys(action : String) -> Array[String] {
-  match key_actions.iter().find_first(fn(a) { a.0 == action }) {
-    Some((_, _, keys)) => keys
-    None => []
-  }
+/// The core's keymap's actions (KeyAction), in the order they are listed.
+fn key_actions(prefs : Json?) -> Array[Json] {
+  items(field(prefs, "keymap"), "actions")
 }
 
 ///|
-/// The keys that do `action` here (`prefs` the core's prefs): changed on this device, or its own.
+/// An action as the keymap has it.
+fn key_action(prefs : Json?, action : String) -> Json? {
+  key_actions(prefs).iter().find_first(fn(a) { text(Some(a), "action") == action })
+}
+
+///|
+/// The keys that do `action` here (`prefs` the core's prefs): bindings, Shift+Mod+H.
 pub fn keys_of(prefs : Json?, action : String) -> Array[String] {
-  let kept = match keys_set.get(action) {
-    Some(v) => Some(v)
-    None => field(field(prefs, "keys"), action)
-  }
-  match kept {
-    Some(Array(a)) => a.filter_map(fn(b) { if b is String(s) { Some(s) } else { None } })
-    _ => own_keys(action)
+  strings(key_action(prefs, action), "keys")
+}
+
+///|
+/// An action's first keys as a key cap shows them ("" none): ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere.
+pub fn key_label(prefs : Json?, action : String) -> String {
+  match strings(key_action(prefs, action), "labels") {
+    [first, ..] => first
+    [] => ""
   }
 }
 
 ///|
-/// Whether an action's keys were changed on this device.
-fn keys_changed(prefs : Json?, action : String) -> Bool {
-  match keys_set.get(action) {
-    Some(Array(_)) => true
-    Some(_) => false
-    None => field(field(prefs, "keys"), action) is Some(Array(_))
-  }
+/// An action's keys in words, as the list of shortcuts says them ("未设置" none).
+pub fn keys_text(prefs : Json?, action : String) -> String {
+  text(key_action(prefs, action), "text")
 }
 
 ///|
@@ -82,7 +57,7 @@ fn mod_key() -> Int {
 }
 
 ///|
-/// The keys' names a binding's key has (keymap.ts CODES), by its code.
+/// The keys' names a binding's key has (keymap.ts NAMED), by its code.
 // kept across runs: a table, never written
 let key_names : Array[(String, Int)] = [
   ("Up", 5),
@@ -95,7 +70,7 @@ let key_names : Array[(String, Int)] = [
 ]
 
 ///|
-/// A binding (Mod+Shift+H) as the key's code and the modifiers held, or None for one this app cannot have.
+/// A binding (Shift+Mod+H) as the key's code and the modifiers held, or None for one this app cannot have.
 fn binding_key(binding : String) -> (Int, Int)? {
   let parts = binding.split("+").map(fn(p) { p.to_string() }).collect()
   // (a plus itself is no binding: the last part is always the key)
@@ -135,7 +110,8 @@ fn lower_char(ch : Char) -> Char {
 }
 
 ///|
-/// The binding a key press makes (Mod+Shift+H; keymap.ts bindingOf), or None for a key that is none here.
+/// The binding a key press makes (Shift+Mod+H: the modifiers in the core's order, Ctrl, Alt, Shift, Mod; keymap.ts
+/// binding), or None for a key that is none here.
 fn binding_of(code : Int, mods : Int) -> String? {
   let key = match key_names.iter().find_first(fn(n) { n.1 == code }) {
     Some((name, _)) => name
@@ -171,41 +147,6 @@ fn binding_of(code : Int, mods : Int) -> String? {
 }
 
 ///|
-/// A binding as a key cap shows it (keymap.ts keyLabel): ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere.
-pub fn key_label(binding : String) -> String {
-  let parts = binding.split("+").map(fn(p) { p.to_string() }).collect()
-  let key = parts.last().unwrap_or("")
-  let mods = parts[:dmax(0.0, (parts.length() - 1).to_double()).to_int()].to_array()
-  let shown = match key {
-    "Space" => tr("web-main.keymap.space")
-    "Up" => "↑"
-    "Down" => "↓"
-    "Left" => "←"
-    "Right" => "→"
-    "Escape" => "Esc"
-    "Enter" => "↩"
-    k => k
-  }
-  if @ui.platform() == 0 {
-    let marks = [("Ctrl", "⌃"), ("Alt", "⌥"), ("Shift", "⇧"), ("Mod", "⌘")]
-    marks.filter(fn(m) { mods.contains(m.0) }).map(fn(m) { m.1 }).join("") + shown
-  } else {
-    let named = mods.map(fn(m) { if m == "Mod" { "Ctrl" } else { m } })
-    named.push(shown)
-    named.join("+")
-  }
-}
-
-///|
-/// An action's keys as words ("未设置" none).
-pub fn keys_text(prefs : Json?, action : String) -> String {
-  match keys_of(prefs, action) {
-    [] => tr("web-main.shortcuts.unset")
-    keys => keys.map(key_label).join(" / ")
-  }
-}
-
-///|
 /// Whether one of `action`'s keys came since the last frame (with `in_field`, one a focused field took too); none while
 /// the 快捷键 page records new ones.
 pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : Bool = false) -> Bool {
@@ -225,18 +166,32 @@ pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : B
 }
 
 ///|
-/// An action's keys changed (`prefs.set {keys: {action: …}}`): shown at once.
-fn set_keys(core : Core, action : String, keys : Json) -> Unit {
-  keys_set[action] = keys
-  (core.call)("prefs.set", obj([("keys", obj([(action, keys)]))]), fn(_) {  })
+/// An action's keys changed (`keys.set`: none, its own again; no action, every one's), what the core says of it
+/// (keys another action had, moved here) said.
+fn set_keys(core : Core, action : String?, keys : Json) -> Unit {
+  let params = match action {
+    Some(a) => obj([("action", str(a)), ("keys", keys)])
+    None => obj([])
+  }
+  (core.call)("keys.set", params, fn(r) {
+    match r {
+      Ok(v) =>
+        match text(Some(v), "said") {
+          "" => ()
+          said => (core.say)(said)
+        }
+      Err(_) => ()
+    }
+  })
 }
 
 ///|
-/// 快捷键 (Shortcuts.tsx ShortcutsPage): each part's actions, their keys; pressed, the next key press is its new keys
+/// 快捷键 (Shortcuts.tsx ShortcutsPage): each group's actions, their keys; pressed, the next key press is its new keys
 /// (Esc leaves them, ⌫ clears them; keys another action had are moved here, said so); 恢复默认 an action's own again,
 /// 全部恢复默认 every one's. Kept on this device.
 fn shortcuts_page(c : @ui.Ctx, core : Core) -> Unit {
   let prefs = (core.topic)("prefs", Map::new()).value
+  let keymap = field(prefs, "keymap")
   // recording: the next key press
   let recording = keys_recording.val
   if recording != "" {
@@ -248,23 +203,13 @@ fn shortcuts_page(c : @ui.Ctx, core : Core) -> Unit {
       }
       if code == 1 && mods == 0 {
         // ⌫: none
-        c.after_build("keys-clear", fn() { set_keys(core, recording, Json::array([])) })
+        c.after_build("keys-clear", fn() { set_keys(core, Some(recording), Json::array([])) })
         keys_recording.val = ""
         break
       }
       match binding_of(code, mods) {
         Some(b) => {
-          let other = key_actions.iter().find_first(fn(a) { a.0 != recording && keys_of(prefs, a.0).contains(b) })
-          c.after_build("keys-set", fn() {
-            match other {
-              Some((o, _, _)) => {
-                set_keys(core, o, Json::array(keys_of(prefs, o).filter(fn(x) { x != b }).map(fn(x) { Json::string(x) })))
-                (core.say)(fill("web-main.shortcuts.moved", [("keys", key_label(b)), ("action", tr("web-main.keymap." + o))]))
-              }
-              None => ()
-            }
-            set_keys(core, recording, Json::array([Json::string(b)]))
-          })
+          c.after_build("keys-set", fn() { set_keys(core, Some(recording), Json::array([Json::string(b)])) })
           keys_recording.val = ""
           break
         }
@@ -272,65 +217,168 @@ fn shortcuts_page(c : @ui.Ctx, core : Core) -> Unit {
       }
     }
   }
-  let any = key_actions.iter().any(fn(a) { keys_changed(prefs, a.0) })
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-main.shortcuts.title")) },
-  ]
-  for i, group in ["global", "chat"] {
+  let listed = key_actions(prefs).filter(fn(a) { flag(Some(a), "listed") })
+  let any = listed.iter().any(fn(a) { flag(Some(a), "changed") })
+  let blocks : Array[() -> Unit] = []
+  for i, g in items(keymap, "groups") {
+    let group = text(Some(g), "group")
     blocks.push(fn() {
-      section_header(c, tr("web-main.keymap.group." + group))
-      if i == 0 {
-        section_note(c, tr("web-main.shortcuts.hint"))
-      }
-    })
-    blocks.push(fn() {
-      list_card(c, boxed=true, fn() {
-        for a in key_actions {
-          let (action, g, _) = a
-          if g != group {
-            continue
-          }
-          let on = keys_recording.val == action
-          if list_row(c, key="keys/" + action, fn() {
-              row_title(c, tr("web-main.keymap." + action))
-              if keys_changed(prefs, action) && !on {
-                let rid = c.id("keys-reset/" + action)
-                if hit(c, rid) {
-                  set_keys(core, action, Json::null())
-                }
-                c.cursor(rid, Hand)
-                c.box(style=keys_reset_box, id=rid, fn() {
-                  c.text(tr("web-main.shortcuts.reset"), style=keys_reset_words) |> ignore
-                })
-                |> ignore
+      @sf.section(
+        c,
+        text(Some(g), "name"),
+        note=if i == 0 { tr("web-main.shortcuts.hint") } else { "" },
+        actions?=if i == 0 && any {
+          Some(fn() {
+            if keys_toggle(c, "keys-reset-all", tr("web-main.shortcuts.resetAll")) {
+              c.after_build("keys-reset-all", fn() { set_keys(core, None, Json::null()) })
+            }
+          })
+        } else {
+          None
+        },
+        fn() {
+          c.box(style=keys_rows, fn() {
+            for a in listed {
+              if text(Some(a), "group") == group {
+                keys_row(c, core, a)
               }
-              c.box(style=if on { keys_cap_on } else { keys_cap }, fn() {
-                c.text(if on { tr("web-main.shortcuts.recording") } else { keys_text(prefs, action) }, style=keys_cap_words)
-                |> ignore
-              })
-              |> ignore
-            }) {
-            keys_recording.val = if on { "" } else { action }
-          }
-        }
-      })
+            }
+          })
+          |> ignore
+        },
+      )
     })
   }
-  if any {
-    blocks.push(fn() {
-      list_card(c, boxed=true, fn() {
-        if list_row(c, key="keys-reset-all", fn() { row_title(c, tr("web-main.shortcuts.resetAll")) }) {
-          for a in key_actions {
-            set_keys(core, a.0, Json::null())
-          }
-        }
-      })
-    })
-  }
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "shortcuts", blocks)
+  desk_page(c, core, "shortcuts", tr("web-main.shortcuts.title"), blocks)
 }
+
+///|
+/// An action's row (Shortcuts.css.ts row): its name, 恢复默认 once changed, its keys on a button that, pressed, records
+/// new ones.
+fn keys_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
+  let av = Some(a)
+  let action = text(av, "action")
+  let on = keys_recording.val == action
+  c.box(style=keys_row_box, fn() {
+    c.box(style=keys_row_label, fn() { c.text(text(av, "name"), style=keys_row_words) |> ignore }) |> ignore
+    if flag(av, "changed") && keys_toggle(c, "keys-reset/" + action, tr("web-main.shortcuts.reset")) {
+      c.after_build("keys-reset/" + action, fn() { set_keys(core, Some(action), Json::null()) })
+    }
+    let id = c.id("keys/" + action)
+    c.cursor(id, Hand)
+    c.focusable(id)
+    let none = strings(av, "keys").length() == 0
+    c.box(
+      id~,
+      style=if on {
+        keys_record_on
+      } else if c.hovered(id) {
+        keys_record_hot
+      } else {
+        keys_record
+      },
+      fn() {
+        c.text(if on { tr("web-main.shortcuts.recording") } else { text(av, "text") }, style=if on {
+          keys_record_on_words
+        } else if none {
+          keys_record_none
+        } else {
+          keys_record_words
+        })
+        |> ignore
+      },
+    )
+    |> ignore
+    if hit(c, id) {
+      keys_recording.val = if on { "" } else { action }
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A quiet word to press (controls.css.ts textToggle): 12 muted, the words' colour pointed at. Whether it was pressed.
+fn keys_toggle(c : @ui.Ctx, key : String, words : String) -> Bool {
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  c.focusable(id)
+  c.box(id~, style=keys_toggle_box, fn() {
+    c.text(words, style=if c.hovered(id) { keys_toggle_hot } else { keys_toggle_words }) |> ignore
+  })
+  |> ignore
+  hit(c, id)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_rows : @ui.Style = @ui.style(w=Full, gap=S0_5)
+
+///|
+/// (Shortcuts.css.ts row: 40 high at least, 8 apart, the list's words)
+// kept across runs: a value (no field of it changes)
+let keys_row_box : @ui.Style = @ui.style(row=true, w=Full, min_h=S10, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_row_label : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_row_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, w=Full)
+
+///|
+/// Its keys (Shortcuts.css.ts record): 120 wide at least, 30 high, 12 in, the field's corner, the hover ground (the
+/// selected one pointed at), in the middle; none, subtle; recording, the accent's ground and words.
+// kept across runs: a value (no field of it changes)
+let keys_record : @ui.Style = @ui.style(
+  row=true,
+  min_w=Fixed(keys_record_w),
+  h=Fixed(keys_record_h),
+  px=S3,
+  radius=Xl,
+  bg=Hover,
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
+let keys_record_w : Double = 120.0
+
+///|
+let keys_record_h : Double = 30.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_record_hot : @ui.Style = keys_record.then(@ui.style(bg=Selected))
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_record_on : @ui.Style = keys_record.then(@ui.style(bg=AccentBg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_record_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_record_none : @ui.TextStyle = keys_record_words.then(@ui.text_style(color=Subtle))
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_record_on_words : @ui.TextStyle = keys_record_words.then(@ui.text_style(color=AccentText))
+
+///|
+/// (controls.css.ts textToggle: 2 by 4 in)
+// kept across runs: a value (no field of it changes)
+let keys_toggle_box : @ui.Style = @ui.style(px=S1, py=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_toggle_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let keys_toggle_hot : @ui.TextStyle = keys_toggle_words.then(@ui.text_style(color=Fg))
 
 ///|
 /// A key cap (Shortcuts.css.ts record): a capsule on the words' tint; recording, the accent's ring.
@@ -401,4 +449,30 @@ pub fn ask_action(action : String) -> Unit {
 /// The frame that read it built: asked no more.
 pub fn action_asked_done() -> Unit {
   action_asked.val = ""
+}
+
+///|
+/// The keymap's groups (where the actions work, as the list of shortcuts heads them), each with its listed actions'
+/// names and keys in words: the shortcuts at a glance (⌘/).
+pub fn key_groups(prefs : Json?) -> Array[(String, Array[(String, String)])] {
+  items(field(prefs, "keymap"), "groups").map(fn(g) {
+    let group = text(Some(g), "group")
+    let rows = key_actions(prefs)
+      .filter(fn(a) { flag(Some(a), "listed") && text(Some(a), "group") == group })
+      .map(fn(a) { (text(Some(a), "name"), text(Some(a), "text")) })
+    (text(Some(g), "name"), rows)
+  })
+}
+
+///|
+/// The keys that switch to the workspaces at the first and the last place of its menu, as shown (⌃1, ⌃9).
+pub fn workspace_keys(prefs : Json?) -> (String, String) {
+  let all = strings(field(prefs, "keymap"), "workspace")
+  (all.get(0).unwrap_or(""), all.last().unwrap_or(""))
+}
+
+///|
+/// Whether keys can be changed here (the desktop app's).
+pub fn keys_changeable(prefs : Json?) -> Bool {
+  flag(field(prefs, "keymap"), "changeable")
 }

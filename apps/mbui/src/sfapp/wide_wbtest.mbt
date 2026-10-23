@@ -773,7 +773,7 @@ test "wide: 通知's 红点 beside the banner (prefs.set badgeKinds), each kind'
 }
 
 ///|
-test "wide: 快捷键 changed by pressing new ones (prefs.set keys), and the new keys do it; 版本 its own page" {
+test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys do it; 版本 its own page" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Setting(@settings.Route::Shortcuts))
@@ -786,8 +786,10 @@ test "wide: 快捷键 changed by pressing new ones (prefs.set keys), and the new
   // ⌘J: 快速切换对话's now, not the switcher's opening
   t.key(@ui.key_of_char('j'), mods=@ui.mod_cmd)
   t.frame()
-  let set = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "keys") is Some(_) })
+  let set = named(calls, "keys.set")
   assert_eq(set.length(), 1)
+  assert_eq(field(Some(set[0].params), "action"), Some(Json::string("chat.switch")))
+  t.frame()
   assert_true(t.find("⌘J") is Some(_))
   assert_false(wide.switcher)
   t.key(@ui.key_of_char('j'), mods=@ui.mod_cmd)
