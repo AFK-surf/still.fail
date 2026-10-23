@@ -24,6 +24,7 @@ let up_zh : Map[String, String] = {
   "android-misc.updates.downloadingPercent": "下载中 {percent}%",
   "android-misc.updates.failed": "无法更新：{error}",
   "android-misc.updates.incomplete": "下载的文件不完整，请重试",
+  "android-misc.updates.httpStatus": "下载返回 {status}",
   "android-misc.updates.installing": "正在安装",
   "android-misc.updates.latest": "已是最新",
   "android-misc.updates.retrying": "网络中断，正在继续下载",
@@ -179,6 +180,18 @@ fn up_say(words : String) -> Unit {
 }
 
 ///|
+/// What went wrong with an update as the host said it, in the words Android's Updates.kt says it in: a download cut
+/// short, the download's answer ("status 404", as Updates.java says it: 下载返回 404), else as said.
+fn update_error(e : String) -> String {
+  match e {
+    "incomplete" => up("android-misc.updates.incomplete")
+    e if e.has_prefix("status ") =>
+      up("android-misc.updates.httpStatus", args=[("status", e.view(start_offset=7).to_string())])
+    e => e
+  }
+}
+
+///|
 /// What an update under way is doing ("下载中 40%"), "" when none is; what went wrong said once.
 fn update_progress() -> String {
   if update.installing {
@@ -196,13 +209,7 @@ fn update_progress() -> String {
       "failed" =>
         up_say(
           up("android-misc.updates.failed", args=[
-            (
-              "error",
-              match text(v, "error") {
-                "incomplete" => up("android-misc.updates.incomplete")
-                e => e
-              },
-            ),
+            ("error", update_error(text(v, "error"))),
           ]),
         )
       "allow" => up_say(up("android-misc.updates.allowInstall", args=[("app", "still.fail")]))

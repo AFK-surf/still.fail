@@ -402,7 +402,15 @@ pub fn markdown(
     }
   }
   let blocks = blocks_of(text, tree)
-  md.column(if key == "" { "sf-md/" + text } else { key }, md.pieces(blocks, false))
+  let key = if key == "" { "sf-md/" + text } else { key }
+  // words the core has not laid out yet: said so in the subtle tone, as Markdown.kt's 正在排版 (android-misc.markdown.
+  // laying, the catalog's words) until it has
+  if blocks.is_empty() && text != "" && tree is None && markdown_read.val is Some(_) && !core_parsed.contains(text) {
+    let waiting = { ..md, ink: web().subtle }
+    let words = if language() == "en" { "Formatting" } else { "正在排版" }
+    return waiting.column(key, waiting.pieces([Paragraph([Text(words)])], false))
+  }
+  md.column(key, md.pieces(blocks, false))
 }
 
 ///|

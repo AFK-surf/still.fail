@@ -365,6 +365,7 @@ let en : Map[String, String] = {
   "android-misc.updates.downloadingPercent": "Downloading {percent}%",
   "android-misc.updates.failed": "Couldn't update: {error}",
   "android-misc.updates.incomplete": "Download incomplete. Try again.",
+  "android-misc.updates.httpStatus": "Download failed: {status}",
   "android-misc.updates.installing": "Installing",
   "android-misc.updates.latest": "Up to date",
   "android-misc.updates.retrying": "Connection dropped, resuming",
