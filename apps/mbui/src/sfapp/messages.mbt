@@ -773,10 +773,13 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
         size=if wide_on.val { web_body } else { 15.0 },
         ink=ink().text,
         on_link=fn(h) {
-          // a link within a sentence to a visualization it places: opened over the whole screen (Prose.kt OpenedFile)
-          match placed.get(base_name(h)) {
+          // a link within a sentence to a file it places, by the file's name as written or escaped (Markdown.kt
+          // fileNameOf): a visualization opened over the whole screen, any other in the preview as a tap on it below
+          // the text opens it (Prose.kt OpenedFile)
+          match placed.get(@sf.file_name_of(h)) {
             Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here, linked=true)
-            _ => open_link(h)
+            Some(a) => open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session))
+            None => open_link(h)
           }
         },
         on_link_hold=Some(fn(href, line) { link_held(c, href, line) }),
