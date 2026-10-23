@@ -5,8 +5,8 @@
 // stack says comes from the left (`from_left`: still.fail's settings, its
 // gear at the top left) comes in from there, the one under it going out to
 // the right, and goes back that way. Swiped back
-// (from the left edge with a finger or a mouse here, or the system's back
-// gesture where there is one, Android's predictive back), the page follows
+// (from the left edge with a finger or a mouse here; on Android, the system's
+// back gesture, its predictive back, and no edge of mbui's), the page follows
 // the finger and the one under it comes along beside it, edge to edge; let
 // go past a third of the way (or flung) it goes on from there, easing out
 // (.25, .46, .45, .94) over what is left of 280 ms (120 at least), else it
