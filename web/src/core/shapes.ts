@@ -4391,6 +4391,57 @@ export interface ReaderPrefs {
 	paper: ReaderPaper;
 }
 
+/**
+ * A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已归档, 奏), 待处理's panel, or a page
+ * (文件, Station, Profile, 连接, 用量).
+ */
+export type RailPlaceId = "chats" | "mine" | "watching" | "archive" | "decisions" | "attention" | "files" | "stations" | "profiles" | "connects" | "usage";
+
+/** What kind of place: a page of its own, one of the chats' lists, 待处理. */
+export type RailKind = "places" | "lists" | "attention";
+
+/** A place the rail can show. */
+export interface RailPlace {
+	id: RailPlaceId;
+	/** Its name, as the rail's tip and its settings say it. */
+	label: string;
+	kind: RailKind;
+	/** The list of chats it shows in the sidebar (`listFilter`'s word); none for a place that is not one. */
+	list?: ListFilter;
+}
+
+/** The places of one kind, as the panel that adds them to the rail groups them. */
+export interface RailGroup {
+	kind: RailKind;
+	label: string;
+	/** Its places, in the settings' order. */
+	places: RailPlaceId[];
+}
+
+/** One workspace's rail. */
+export interface RailOf {
+	/** What the rail shows, in its order: as kept, those this build does not know left out; none kept, `default`. */
+	items: RailPlaceId[];
+	/** The places left out of it, in the settings' order. */
+	hidden: RailPlaceId[];
+	/** It is other than `default` (恢复默认 offered). */
+	changed: boolean;
+}
+
+/** The wide screen's rail (prefs `railView`, rail.ts railView): which places, in what order, their words and kinds. */
+export interface RailView {
+	/** Every place it can show, in the order its settings list them. */
+	places: RailPlace[];
+	/** What can be put in it, by kind, in the panel's order. */
+	groups: RailGroup[];
+	/** What it shows when none was chosen. */
+	default: RailPlaceId[];
+	/** The rail of a workspace with none of its own (`rail`). */
+	all: RailOf;
+	/** Each workspace's own (`rails`), by workspace; one not there goes by `all`. */
+	by: Record<string, RailOf>;
+}
+
 /** What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is. */
 export interface PrefsView {
 	/** The lists show only the chats and connects the viewer takes part in. */
@@ -4516,8 +4567,8 @@ export interface PrefsView {
 	/** How the drive's reader lays text out (always whole: the core fills in what is not kept). */
 	reader?: ReaderPrefs;
 	/**
-	 * What the wide screen's rail shows, in its order (web/src/Rail.tsx RAIL_ITEMS: chats, mine, watching, archive,
-	 * decisions, attention, files, stations, profiles, connects, usage); none: its default ones.
+	 * What the wide screen's rail shows, in its order (rail.ts RAIL_PLACES: chats, mine, watching, archive,
+	 * decisions, attention, files, stations, profiles, connects, usage); none: its default ones. `railView` says it as drawn.
 	 */
 	rail?: string[];
 	/**
@@ -4538,6 +4589,8 @@ export interface PrefsView {
 	faces?: FontsView;
 	/** The keyboard shortcuts here (the core's, from `keys` and `device`; none from a core before it). */
 	keymap?: KeymapView;
+	/** The wide screen's rail as clients draw it (the core's, from `rail` and `rails`; none from a core before it). */
+	railView?: RailView;
 }
 
 /** Providers of one group, as the picker lists them. */

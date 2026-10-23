@@ -3,6 +3,7 @@
 import * as brand from "./brand.ts";
 import * as fonts from "./fonts.ts";
 import { conform } from "./conform.ts";
+import { railView } from "./rail.ts";
 import type { Data } from "./data.ts";
 import { CoreError } from "./error.ts";
 import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
@@ -83,11 +84,11 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
 }
 
 /// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), the faces, and the
-/// keymap.
+/// keymap and the rail.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v) };
+  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
 }
 
 /// What is kept, as kept (no defaults filled in).
