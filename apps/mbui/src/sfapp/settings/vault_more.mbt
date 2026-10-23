@@ -245,7 +245,7 @@ fn vault_devices(c : @ui.Ctx, core : Core, ws : String, vaults : Array[Json]) ->
           if giving {
             spinner(c)
           } else if give {
-            c.text(tr("android-settings.vault.giveKey"), size=14.0, color=@sf.theme().p.accent, wrap=false) |> ignore
+            c.text(tr("android-settings.vault.giveKey"), size=14.0, color=@sf.link_ink(), wrap=false) |> ignore
           }
         }) {
         vault_act(core, ws, "addDevice", [("vault", str(id))], tr("android-settings.vault.giveKey"), done=tr("android-settings.vault.gaveKey"))
@@ -422,11 +422,16 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
             c.text(tr("web-pages.vault.notForAgents"), size=15.0, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
           } else {
             let hosts = strings(rv, "hosts")
-            fact(c, tr("web-pages.vault.how"), join(strings(rv, "modes").map(fn(m) { how_line(m, hosts) }), "、"))
+            fact(c, tr("web-pages.vault.how"), join(strings(rv, "modes").map(fn(m) { how_line(m, hosts) }), tr("web-main.list.separator")))
             match opt_text(rv, "env") {
               Some(env) if env != "" => fact(c, tr("android-settings.vault.env"), env, code=true)
               _ => ()
             }
+            // its own longest grant, else its vault's (跟随默认 · …)
+            fact(c, tr("android-settings.vault.lasts"), match opt_text(rv, "lasts") {
+              Some(l) if l != "" => lasts_name(l)
+              _ => fill("android-settings.vault.lasts.following", [("lasts", lasts_name(text(vv, "lasts")))])
+            })
           }
         })
       })
@@ -532,9 +537,12 @@ fn round_icon(c : @ui.Ctx, key : String, icon : String, tint : Int64, said~ : St
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
     id~,
-    fn() { @sf.icon(c, icon, size=18.0, color=tint) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=18.0, color=tint) |> ignore
+      // RoundIcon: clip(CircleShape).clickable
+      @motion.ripple(c, id, 17.0)
+    },
   )
   // `said`: what it is to a screen reader (RoundIcon's contentDescription)
   c.semantics(b, Button, id~, label=said)
@@ -576,46 +584,20 @@ fn field_row(c : @ui.Ctx, core : Core, item : String, f : String, value : String
 }
 
 ///|
-/// What a secret copied was, and when (it is taken off the clipboard 30 s later, unless the app copied something else
-/// meanwhile).
-priv struct Copied {
-  mut words : String
-  /// a count of secrets copied: each its own 30 s
-  mut serial : Int
-}
-
-///|
-let copied : Copied = { words: "", serial: 0 }
-
-///|
 /// How long a secret copied stays on the clipboard (Vault.kt: 30 s).
 let copied_life : Double = 30000.0
 
 ///|
-/// Copied to the clipboard (copy): a secret said so and cleared copied_life later. (The Android app also marks it
-/// sensitive for the system's preview of it, which this app's hosts do not do yet.)
+/// Copied to the clipboard (Vault.kt copy): said so; a secret marked sensitive (the system's preview of it masked,
+/// Android 13 on) and taken off copied_life later unless something else was copied meanwhile (the host's own timer:
+/// Ctx::copy_secret).
 fn copy_secret(c : @ui.Ctx, core : Core, words : String, secret : Bool) -> Unit {
-  c.copy_text(words)
-  (core.say)(tr(if secret { "android-settings.vault.copied" } else { "common.copied" }))
   if secret {
-    copied.words = words
-    copied.serial += 1
+    c.copy_secret(words, clear_ms=copied_life)
   } else {
-    copied.words = ""
+    c.copy_text(words)
   }
-}
-
-///|
-/// The secret copied taken off the clipboard once its time is up (@kit.after on the Ctx's clock; what is shown does
-/// not wait for it).
-fn clear_copied(c : @ui.Ctx) -> Unit {
-  if copied.words == "" {
-    return
-  }
-  if @kit.after(c, "vault-copied/" + copied.serial.to_string(), true, copied_life, later=true) {
-    c.copy_text("")
-    copied.words = ""
-  }
+  (core.say)(tr(if secret { "android-settings.vault.copied" } else { "common.copied" }))
 }
 
 ///|
@@ -624,6 +606,8 @@ priv struct VaultEditing {
   mut kind : Int
   mut agent : Bool
   mut mode : String
+  /// its longest grant (vault_lasts: 跟随默认 first)
+  mut lasts : Int
   mut error : String
   mut saving : Bool
   /// the fields shown in the clear (by field)
@@ -660,6 +644,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
       Some(m) => m
       None => "proxy"
     },
+    lasts: vault_lasts.search(text(row, "lasts")).unwrap_or(0),
     error: "",
     saving: false,
     reveal: {},
@@ -756,7 +741,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
         }
         c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, id=aid, fn() {
           row_lines(c, tr("android-settings.vault.agent"), tr("android-settings.vault.agentNote"), wrap_sub=true)
-          switch(c, e.agent)
+          switch(c, key("agent"), e.agent)
         })
         |> ignore
         if e.agent {
@@ -791,6 +776,11 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
               words["env"] = field_box(c, key("env"), tr("android-settings.vault.envPlaceholder"))
             })
           }
+          // how long a grant of it lasts at most: its vault's, or its own
+          labeled(tr("android-settings.vault.lasts"), fn() {
+            e.lasts = seg(c, key("lasts"), vault_lasts.map(lasts_choice), e.lasts, fill=true, height=34.0)
+            c.box(style=vault_note_room, fn() { c.text(tr("android-settings.vault.lastsNote"), style=vault_note_words) |> ignore }) |> ignore
+          })
         }
       })
       |> ignore
@@ -883,6 +873,10 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
           let env = got("env")
           if env != "" && k != "ssh_key" {
             listing.push(("env", str(env)))
+          }
+          // its own longest grant (none: its vault's)
+          if vault_lasts[e.lasts] != "default" {
+            listing.push(("lasts", str(vault_lasts[e.lasts])))
           }
           params.push(("listing", obj(listing)))
         }
@@ -992,3 +986,12 @@ fn open_vault_recover(_core : Core, ws : String) -> Unit {
 /// Hosts that name none (Vault.kt hostsNeeded: 12sp, red).
 // kept across runs: a value (no field of it changes)
 let hosts_needed_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
+
+///|
+/// A field's note under it, 4 below (Vault.kt Labeled's: 12/18, muted).
+// kept across runs: a value (no field of it changes)
+let vault_note_room : @ui.Style = @ui.style(w=Full, pt=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let vault_note_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)

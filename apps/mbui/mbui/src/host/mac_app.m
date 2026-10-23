@@ -943,6 +943,11 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
   [v.inputContext invalidateCharacterCoordinates];
 }
 
+// no floating text menu of the system's here (the field's own keys and shortcuts do what it would)
+void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
+  (void)shown, (void)x, (void)y, (void)w, (void)h, (void)can;
+}
+
 void mb_host_clipboard_set(moonbit_string_t s) {
   NSPasteboard *pb = [NSPasteboard generalPasteboard];
   [pb clearContents];
@@ -1038,6 +1043,12 @@ static void tell_state(void) {
 
 // Whether the system's appearance is dark (@hostapi.system_dark): the app's own (NSApp.appearance is never set, so this is
 // the system's even while the window is made to look otherwise below).
+// Words as the app sizes them (@hostapi.font_scale): the system's own size of words not followed here yet.
+double mb_host_font_scale(void) { return 1.0; }
+// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
+int32_t mb_host_a11y_on(void) { return 0; }
+void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
+
 int32_t mb_host_system_dark(void) {
   NSAppearanceName n = [NSApp.effectiveAppearance
       bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
@@ -1374,6 +1385,7 @@ static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
 }
 
 int32_t mb_host_pick_start(int32_t kind) {
+  kind &= 15;  // (16: a big file may be held: none is here, each read whole)
   if (kind != 1 && kind != 2) return 0;  // no camera here
   if (!picks) picks = [NSMutableDictionary new];
   int32_t pid = next_pick++;
@@ -1430,6 +1442,9 @@ moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) {
   NSArray *names = picks[@(pid)][@"names"];
   return mb_string_from_ns(i >= 0 && i < (int32_t)names.count ? names[i] : @"");
 }
+
+// every file read whole here (none held: pick.mbt's Picked.held)
+moonbit_string_t mb_host_pick_info(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
 
 moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) {
   NSArray<NSData *> *datas = picks[@(pid)][@"datas"];

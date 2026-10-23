@@ -6,7 +6,7 @@
 
 ///|
 /// The menu that is open: its items (its words and its icon), what a tap on one does, where it is put (x, the top and
-/// bottom of what it is under), the link it is for when it is a link's; the press it opened on (cui.down_frame), so the
+/// bottom of what it is under), the link it is for when it is a link's; the press it opened on (Ctx::press frame), so the
 /// same press picks no words.
 priv struct LinkMenu {
   mut href : String
@@ -33,9 +33,10 @@ let link_menu : LinkMenu = {
 
 ///|
 /// What a message's words give their rich text for a link held: its menu opened there.
-fn link_held(href : String, line : (Double, Double, Double, Double)) -> Unit {
-  link_menu_at(href, cui.down_x, line.1, line.1 + line.3)
-  link_menu.at = cui.down_frame
+fn link_held(c : @ui.Ctx, href : String, line : (Double, Double, Double, Double)) -> Unit {
+  let press = c.press()
+  link_menu_at(href, press.x, line.1, line.1 + line.3)
+  link_menu.at = press.frame
 }
 
 ///|
@@ -73,43 +74,52 @@ fn menu_under(
 }
 
 ///|
-/// The menu over the page, while open and as it goes.
+/// The menu over the page, while open and as it goes: mbui's dropdown menu (the arrows and Enter as a menu's; a tap
+/// beside it, Esc or back close it) at the line held, in MenuHost's look.
 fn link_menu_layer(c : @ui.Ctx) -> Unit {
   // opened by a link held: felt as it opens (Links.kt)
-  if link_menu.open && link_menu.at == cui.down_frame {
+  if link_menu.open && link_menu.at == c.press().frame {
     feel_hold(c, "link")
   }
-  let look = match
-    @motion.presence(
-      c,
-      "link-menu",
-      link_menu.open,
-      enter=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
-      exit=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
-    ) {
-    Some(l) => l
-    None => return
-  }
-  let shown = @motion.animate(c, "link-menu/scrim", if link_menu.open { 1.0 } else { 0.0 }, spec=@motion.tween(200.0))
-  scrim(c, "link-menu-scrim", shown, open=link_menu.open, fn() { link_menu.open = false })
-  // its rows of 45 and its padding (MenuHost's menuHeight), 6 off the line; above the line when it would not fit below
-  let h = menu_height(link_menu.items.length())
-  let below = link_menu.bottom + 6.0
-  let y = if below + h > c.height - 16.0 { dmax(16.0, link_menu.top - 6.0 - h) } else { below }
+  // 180 wide centred on the finger, 6 under the line held (over it when there is no room below), kept 12 in
   let x = dmax(12.0, dmin(link_menu.x - 90.0, c.width - 12.0 - 180.0))
-  c.layer(fn() {
-    let menu = phone_menu(c, tx=x, ty=y, fn() {
-      for i, it in link_menu.items {
-        let id = c.id("link-menu/" + i.to_string())
-        phone_menu_row(c, it.0, icon=it.1, lit=@motion.pressing(c, id), id~) |> ignore
-        if c.clicked(id) && link_menu.open {
-          link_menu.open = false
+  let entries = link_menu.items.mapi(fn(i, it) { @kit.menu_item(i.to_string(), label=it.0) })
+  let m = @kit.dropdown_menu(
+    c,
+    "link-menu",
+    link_menu.open,
+    0,
+    entries,
+    at=(x, link_menu.top, 180.0, link_menu.bottom - link_menu.top),
+    along=Start,
+    offset=6.0,
+    scrim=0x00000047L,
+    enter=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
+    exit=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
+    look=menu_panel_look,
+    item_look=fn(c, s) { menu_row_look(c, s, link_icon(s.entry.value)) },
+  )
+  if link_menu.open && !m.open {
+    link_menu.open = false
+  }
+  match m.chosen {
+    Some(v) =>
+      for i, _ in link_menu.items {
+        if i.to_string() == v {
           (link_menu.pick)(c, i)
         }
       }
-    })
-    c.look(menu, look)
-    @motion.leaving(c, menu, link_menu.open)
-  })
-  |> ignore
+    None => ()
+  }
+}
+
+///|
+/// The icon of the open menu's item `value` (its index).
+fn link_icon(value : String) -> String {
+  for i, it in link_menu.items {
+    if i.to_string() == value {
+      return it.1
+    }
+  }
+  ""
 }

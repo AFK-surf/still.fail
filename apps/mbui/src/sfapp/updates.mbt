@@ -24,6 +24,7 @@ let up_zh : Map[String, String] = {
   "android-misc.updates.downloadingPercent": "下载中 {percent}%",
   "android-misc.updates.failed": "无法更新：{error}",
   "android-misc.updates.incomplete": "下载的文件不完整，请重试",
+  "android-misc.updates.httpStatus": "下载返回 {status}",
   "android-misc.updates.installing": "正在安装",
   "android-misc.updates.latest": "已是最新",
   "android-misc.updates.retrying": "网络中断，正在继续下载",
@@ -34,7 +35,10 @@ let up_zh : Map[String, String] = {
 
 ///|
 fn up(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = up_zh.get(key).unwrap_or(key)
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => up_zh.get(key).unwrap_or(key)
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }
@@ -176,6 +180,18 @@ fn up_say(words : String) -> Unit {
 }
 
 ///|
+/// What went wrong with an update as the host said it, in the words Android's Updates.kt says it in: a download cut
+/// short, the download's answer ("status 404", as Updates.java says it: 下载返回 404), else as said.
+fn update_error(e : String) -> String {
+  match e {
+    "incomplete" => up("android-misc.updates.incomplete")
+    e if e.has_prefix("status ") =>
+      up("android-misc.updates.httpStatus", args=[("status", e.view(start_offset=7).to_string())])
+    e => e
+  }
+}
+
+///|
 /// What an update under way is doing ("下载中 40%"), "" when none is; what went wrong said once.
 fn update_progress() -> String {
   if update.installing {
@@ -193,13 +209,7 @@ fn update_progress() -> String {
       "failed" =>
         up_say(
           up("android-misc.updates.failed", args=[
-            (
-              "error",
-              match text(v, "error") {
-                "incomplete" => up("android-misc.updates.incomplete")
-                e => e
-              },
-            ),
+            ("error", update_error(text(v, "error"))),
           ]),
         )
       "allow" => up_say(up("android-misc.updates.allowInstall", args=[("app", "still.fail")]))
@@ -245,22 +255,26 @@ fn update_button(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let progress = update_progress()
   if progress != "" {
-    c.text(
-      match progress.find(" ") {
-        Some(i) => progress.view(start_offset=i + 1).to_owned()
-        None => "…"
-      },
-      size=13.0,
-      color=t.p.muted,
-      wrap=false,
-    )
+    // (read out whole: Home.kt's contentDescription = progress)
+    c.box(label=progress, fn() {
+      c.text(
+        match progress.find(" ") {
+          Some(i) => progress.view(start_offset=i + 1).to_owned()
+          None => "…"
+        },
+        size=13.0,
+        color=t.p.muted,
+        wrap=false,
+      )
+      |> ignore
+    })
     |> ignore
     return
   }
   match update.available {
     Some(v) if items(Some(v), "news").length() > 0 =>
       c.box(fn() {
-        if nav_button(c, "download", 20.0, key="home-update") {
+        if nav_button(c, "download", 20.0, key="home-update", said=up("android-chat.home.update", args=[("version", text(Some(v), "versionName"))])) {
           update_install(src)
         }
         c.layer(align=AEnd, fn() {

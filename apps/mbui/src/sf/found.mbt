@@ -49,6 +49,8 @@ pub fn found_weight(runs : Array[@ui.Run], words : Array[String]) -> Array[@ui.R
   let mut off = 0
   for r in runs {
     let n = r.text.length()
+    // An inline drawing is one cluster. Splitting its alternative text would duplicate the drawing.
+    if r.drawing is Some(_) { out.push(r); off = off + n; continue }
     // where in this run the marks start and end
     let cuts : Array[Int] = [0, n]
     for m in ranges {

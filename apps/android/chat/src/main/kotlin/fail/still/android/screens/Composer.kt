@@ -231,8 +231,13 @@ class Draft {
     var focus by mutableIntStateOf(0)
     var warmed = 0L
     val uploading get() = files.any { it.done == null && it.error == null && !it.named }
-    /** Nothing can be sent (its station is offline, or the chat archived). */
+    /** Nothing can be sent (the chat archived). */
     var locked by mutableStateOf(false)
+    /**
+     * Its station is taken for down: what is written is sent once it is reached (it waits in the outbox), but no file is
+     * taken in, as files go up to the station first.
+     */
+    var offline by mutableStateOf(false)
     /** A file that did not go up: it is sent again or taken out first, never left out of the message unsaid. */
     val failed get() = files.any { it.error != null && !it.named }
     /** A file going up outside the core (a station's file switched to one, StationFiles.kt): sending waits for it here. */
@@ -291,6 +296,24 @@ class Draft {
         focusQuote = q.id
     }
 
+    /** An image of a message, quoted: the file goes again with the message as the station has it (nothing goes up). */
+    fun quoteFile(author: String, ts: String, role: String, file: Attachment) {
+        val q = DraftQuote(System.nanoTime(), author, file.name, ts, role, file.name)
+        quotes += q
+        if (files.none { it.done?.path == file.path }) files += Pending(System.nanoTime(), file.name, file.size, null, width = file.width?.toInt(), height = file.height?.toInt()).also { it.done = file }
+        focusQuote = q.id
+    }
+
+    /** The file going with a quote (a mark's screenshot, an image of a message), shown in its card rather than with the files. */
+    fun fileOf(q: DraftQuote): Pending? = q.file?.let { name -> files.firstOrNull { (it.done?.name ?: it.name) == name } }
+
+    /** A quote taken out, with the file that went with it (unless another quote names it too). */
+    fun unquote(q: DraftQuote) {
+        val own = fileOf(q)
+        quotes.remove(q)
+        if (own != null && quotes.none { fileOf(it) === own }) takeOut(own)
+    }
+
     /** Empties it, for what is sent: the text (its references' marks, which the core makes links) with where each file
      *  named by its path is (StationFiles.kt), the files up, the quotes. */
     fun take(): Taken {
@@ -299,6 +322,8 @@ class Draft {
         val links = named.mapNotNull { it.link }.map { l -> listOfNotNull(l.title?.takeIf { it.isNotEmpty() }, l.url).joinToString("\n") }
         val words = (listOf(text.trim()) + links + named.mapNotNull { f -> f.ref?.let { pathWords(it) } }).filter { it.isNotEmpty() }.joinToString("\n")
         val taken = Taken(words, files.filter { !it.named }, quotes.toList(), text, named)
+        // Pictures still going up: their message draws them from here once they are, by their uploads' ids.
+        for (f in taken.files) { val id = f.coreId ?: continue; if (f.done == null) f.preview?.let { FileData.keepUpload(id, it, f.local) } }
         text = ""; files.clear(); quotes.clear(); error = null; refClosed = null
         save()
         return taken
@@ -678,7 +703,9 @@ suspend fun readPicked(context: Context, uri: Uri): Picked? = withContext(Dispat
     if (bytes != null && bytes.size <= IN_MEMORY) {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, it) }
         val image = bounds.outWidth > 0
-        val preview = if (image) BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = maxOf(1, bounds.outWidth / 160) })?.asImageBitmap() else null
+        // Turned as the photo's EXIF says, as the station's copy of it will be (one ImageDecoder cannot read, as it is).
+        val preview = if (!image) null else decodeTurned(bytes, 320)
+            ?: BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = maxOf(1, bounds.outWidth / 160) })?.asImageBitmap()
         return@withContext Picked(name, bytes, bounds.outWidth.takeIf { image }, bounds.outHeight.takeIf { image }, preview)
     }
     // Big: its size as read when the provider did not say (counted, not kept), its picture from a pass of its own.
@@ -750,7 +777,7 @@ private suspend fun AppState.follow(draft: Draft, station: String, picked: Picke
         when {
             done != null -> {
                 p.done = if (done.width == null && picked.width != null && picked.height != null) done.copy(width = picked.width.toLong(), height = picked.height.toLong()) else done
-                picked.preview?.let { FileData.keepSent(station, done.path, it) }
+                picked.preview?.let { FileData.keepSent(station, done.path, it, p.local) }
                 draft.save()
                 true
             }
@@ -798,6 +825,10 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                         quoteLine(q.author, q.text), inlineContent = quoteMark(), fontSize = 13.sp, lineHeight = 19.5.sp, color = chatMuted(), maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = 16.dp, end = 34.dp, top = 9.dp),
                     )
+                    // Its own picture (an image of a message quoted, a mark's screenshot), under what it quotes (web: quoteCardPicture).
+                    draft.fileOf(q)?.let { f -> draftPictureOf(f, station, session) }?.let { picture ->
+                        Image(picture, q.text, Modifier.padding(start = 16.dp, top = 6.dp).size(56.dp).clip(InComposerFiles).background(C.chip), contentScale = ContentScale.Crop)
+                    }
                     val focus = remember { FocusRequester() }
                     LaunchedEffect(draft.focusQuote) { if (draft.focusQuote == q.id) { focus.requestFocus(); draft.focusQuote = null } }
                     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 3.dp, bottom = 10.dp)) {
@@ -810,7 +841,7 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                     }
                 }
                 // In the quote's corner as far from both edges, round in its corner (its half and that: the quote's).
-                Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(28.dp).clip(CircleShape).clickable { draft.quotes.remove(q) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(28.dp).clip(CircleShape).clickable { draft.unquote(q) }, contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 12.dp, chatSubtle())
                 }
             }
@@ -819,8 +850,11 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
     // As far from the capsule's edge as from its top (ComposerFilesIn), past its own room (ComposerInset).
     val beyond = ComposerFilesIn - ComposerInset
     // A picture's remove button sits over its corner (PictureRemoveOut beyond it): the gap after it room for that too.
-    if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = beyond, end = beyond + PictureRemoveOut, top = beyond), horizontalArrangement = Arrangement.spacedBy(6.dp + PictureRemoveOut)) {
-        draft.files.forEach { f ->
+    // Those going with a quote are in its card.
+    val quoted = draft.quotes.mapNotNull { draft.fileOf(it) }.toSet()
+    val rest = draft.files.filter { it !in quoted }
+    if (rest.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = beyond, end = beyond + PictureRemoveOut, top = beyond), horizontalArrangement = Arrangement.spacedBy(6.dp + PictureRemoveOut)) {
+        rest.forEach { f ->
             val remove = { draft.takeOut(f) }
             val picture = draftPictureOf(f, station, session)
             if (picture != null) Box {
@@ -944,11 +978,13 @@ private fun draftPictureOf(f: Pending, station: String?, key: String?): ImageBit
     if (a == null || station == null || !isImage(a.name)) return null
     val app = LocalApp.current
     val longest = with(LocalDensity.current) { 56.dp.roundToPx() * 2 }
-    val id = FileData.id(station, key ?: "", a, thumb = true)
+    // Through the session keeping it (an image of a message quoted: its message's), else the chat's.
+    val keeper = a.owner ?: key
+    val id = FileData.id(station, keeper ?: "", a, thumb = true)
     var picture by remember(f.id) { mutableStateOf(FileData.sentPicture(station, a.path) ?: FileData.keptPicture(id, longest)) }
-    LaunchedEffect(f.id, key) {
-        if (picture != null || key == null) return@LaunchedEffect
-        try { picture = FileData.picture(id, FileData.fetch(app, station, key, a, thumb = true).await(), longest) } catch (_: CoreException) {}
+    LaunchedEffect(f.id, keeper) {
+        if (picture != null || keeper == null) return@LaunchedEffect
+        try { picture = FileData.picture(id, FileData.fetch(app, station, keeper, a, thumb = true).await(), longest) } catch (_: CoreException) {}
     }
     return picture
 }
@@ -996,14 +1032,16 @@ fun ComposerBar(
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = SendTextFaced.copy(color = C.ink)
     val locked = draft.locked || draft.starting
+    // No file is taken in while its station is down: files go up to it before the message goes.
+    val noFiles = locked || draft.offline
     val expanded = draft.composerExpanded
     // Keep the field in one composition slot while the buttons move below it, preserving focus and the IME.
     Layout(content = {
         Box(
-            Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !locked, onClick = onPlus)
+            Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !noFiles, onClick = onPlus)
                 .semantics { contentDescription = t("android-chat.attach.title") },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Plus, 18.dp, if (locked) C.ink.copy(alpha = 0.35f) else C.ink) }
+        ) { IconIn(Icons.Plus, 18.dp, if (noFiles) C.ink.copy(alpha = 0.35f) else C.ink) }
         Box(
             Modifier.part(morph, "field").heightIn(min = 36.dp).padding(start = if (expanded) PlusInk else 0.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,
@@ -1026,7 +1064,7 @@ fun ComposerBar(
                 if (mark != null) { delete(mark, caret - 1); selection = TextRange(mark); onType(); return@InputTransformation }
                 val put = insertedRange(was, now)
                 // A long paste goes as a file (PastedText.kt), the text left as it was.
-                if (put != null && put.last - put.first + 1 >= PASTE_THRESHOLD && station != null && !locked) {
+                if (put != null && put.last - put.first + 1 >= PASTE_THRESHOLD && station != null && !noFiles) {
                     val text = now.substring(put.first, put.last + 1)
                     revertAllChanges()
                     scope.launch { pasteAsFile(app, draft, station, text) }
@@ -1047,7 +1085,7 @@ fun ComposerBar(
                     // Pictures and files pasted, or sent by the keyboard (its clipboard, stickers): with the message, as one
                     // added by ＋ is; their text, and any other, goes into the text.
                     .contentReceiver { content ->
-                        if (station == null || locked) return@contentReceiver content
+                        if (station == null || noFiles) return@contentReceiver content
                         val uris = mutableListOf<Uri>()
                         val rest = content.consume { item -> item.uri?.also { uris += it } != null }
                         // `content` held until they are read: what lets them be read (the keyboard's grant) goes with it.
@@ -1227,18 +1265,20 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
     val launchers = AttachLaunchers { picked -> app.upload(draft, station, picked, app.scope) }
     val thread = view.thread
     val archived = view.archived == true
-    draft.locked = view.offline || archived
+    // Its station down, what is sent waits in the outbox until it is reached (the core sends it then).
+    draft.locked = archived
+    draft.offline = view.offline
     val send = app.chatSend(host, api, of, view, keeper, draft)
     return ComposerSpec(
         station = station, here = keeper, draft = draft, placeholder = if (archived) t("android-chat.composer.archived.placeholder") else t("android-chat.chat.placeholder"),
         notices = {
             if (archived) ArchiveNotice(view.offline) { api.setArchived(thread?.id, (of as? ChatOf.Session)?.key ?: keeper ?: "", false) }
-            if (view.offline) Text(t("android-chat.composer.offline"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+            if (view.offline) Text(view.offlineNote ?: t("android-chat.composer.offline"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
         },
         onPlus = { openAttach(app, launchers) { openStationFiles(app, draft, station) } },
         // Typing starts the session's runtime, so a cold start overlaps the writing.
         onType = {
-            if (!draft.locked && keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {
+            if (!draft.locked && !draft.offline && keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {
                 draft.warmed = System.currentTimeMillis()
                 scope.launch { try { api.warm(keeper) } catch (_: CoreException) {} }
             }

@@ -129,7 +129,7 @@ class SecurityTest {
         rule.onNodeWithText("关闭安全模式").performScrollTo().performClick()
         h.settle()
         rule.onNodeWithText("关闭安全模式？").assertIsDisplayed()
-        rule.onNodeWithText("密钥库将无法使用").assertIsDisplayed()
+        rule.onNodeWithText("密钥库中的密钥将解密，改为明文保存在 station 上").assertIsDisplayed()
         picture(h, "security-turn-off")
         // Not yet named: the button does nothing.
         rule.onAllNodesWithText("关闭安全模式").onLast().performClick()
@@ -183,6 +183,26 @@ class SecurityTest {
         rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lockPrompt.deny" && it.second["device"]!!.jsonPrimitive.content == "cc".repeat(32) }) }
     }
 
+    @Test fun aNewDeviceTurnedAwayIsPutUpAgainWhenItAsksAgain() {
+        val h = Harness(rule)
+        h.fake.put(Topics.lock(ws), on())
+        h.fake.put(Topics.lockPrompts, prompts())
+        h.launch(listOf(Screen.Home))
+        rule.onNodeWithText("李二的新设备请求批准").assertIsDisplayed()
+        rule.onNodeWithText("拒绝").performClick()
+        h.settle()
+        rule.onNodeWithText("李二的新设备请求批准").assertDoesNotExist()
+        // The core drops it; the same device asks again, shown a new code: up again (it was not until the app started
+        // again, 2026-10-23).
+        h.fake.put(Topics.lockPrompts, LockPromptsView(pairing = emptyList()))
+        h.settle()
+        val again = prompts().pairing.first().copy(code = "105377")
+        h.fake.put(Topics.lockPrompts, LockPromptsView(pairing = listOf(again)))
+        h.settle()
+        rule.onNodeWithText("李二的新设备请求批准").assertIsDisplayed()
+        rule.onNodeWithText("105 377").assertIsDisplayed()
+    }
+
     private fun waiting(pair: LockPair? = null, failed: String? = null) =
         off().copy(locked = true, me = me.copy(confirmed = false, waiting = true, asked = false, failed = failed, pair = pair))
 
@@ -197,6 +217,18 @@ class SecurityTest {
         rule.onNodeWithText("发送批准请求").performClick()
         h.settle()
         rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.pair" && it.second["workspace"]!!.jsonPrimitive.content == ws }) }
+    }
+
+    @Test fun aWaitingDeviceGoesToAnotherWorkspaceOrToTheSettings() {
+        val h = Harness(rule)
+        h.fake.put(Topics.lock(ws), waiting())
+        h.launch(listOf(Screen.Home))
+        rule.onNodeWithText("等待批准此设备").assertIsDisplayed()
+        // Home's top bar over the page: the workspace's name opens the switcher (with no bottom bar, there was no way
+        // out of the workspace, 2026-10-23).
+        rule.onNodeWithText("Dev").performClick()
+        h.settle()
+        rule.onNodeWithText("切换 workspace").assertIsDisplayed()
     }
 
     @Test fun aWaitingDeviceTypesTheCodeItIsShown() {

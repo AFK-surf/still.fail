@@ -7,7 +7,7 @@ import type { CoreModule } from "../src/module.ts";
 import type { HttpRequest, HttpResponse, Pull } from "../src/host.ts";
 import { HostWire, type StationWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
-import { HostError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
 import { digest } from "../src/digest.ts";
 import { signIn } from "./helpers.ts";
 
@@ -120,14 +120,16 @@ export function stationHost(answers: Answers) {
     if (path.startsWith("/admin/api/threads/") && path.includes("/entries")) return jsonResponse(200, { last: 0, entries: [] });
     return jsonResponse(404, { error: "no" });
   };
-  // How its events stream answers: opens, fails (the station is not reached), hangs (a try that takes long), or a
-  // status of its own; `resumes`: one asked `since` an event says it was told first what came after it; `marks`: one
-  // not resumed is told where the log is, an id alone (station/src/api/events.ts).
-  const gate: { stream: "open" | "fail" | "hang" | number; resumes: boolean; marks: boolean } = { stream: "open", resumes: false, marks: false };
+  // How its events stream answers: opens, fails (the station is not reached), hangs (a try that takes long), a status
+  // of its own, or the station's refusal of the link (a CoreError, as the mesh says it: a security mode's); `resumes`:
+  // one asked `since` an event says it was told first what came after it; `marks`: one not resumed is told where the
+  // log is, an id alone (station/src/api/events.ts).
+  const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean } = { stream: "open", resumes: false, marks: false };
   let marked = 0;
   host.onFetchStream((req) =>
     Effect.gen(function* () {
       if (gate.stream === "fail") return yield* Effect.fail(new HostError("连不上"));
+      if (gate.stream instanceof CoreError) return yield* Effect.fail(gate.stream);
       if (gate.stream === "hang") return yield* Effect.never;
       if (typeof gate.stream === "number") {
         const said = new TextEncoder().encode('{"error":"没有权限"}');

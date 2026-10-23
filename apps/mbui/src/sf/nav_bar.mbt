@@ -8,17 +8,10 @@
 // at either side.
 
 ///|
-/// Back: a chevron and where to, 6 after it and 4 over and under, its corner 8; quieter while pressed.
+/// Back: a chevron and where to, 6 after it and 4 over and under, its corner 8; rippled where it is pressed
+/// (Parts.kt NavBack: clip(Smooth(8)).clickable).
 // kept across runs: a value (no field of it changes)
-let nav_back_box : @ui.Style = @ui.style(
-  row=true,
-  pr=S1_5,
-  pt=S1,
-  pb=S1,
-  radius=Lg,
-  align=ACenter,
-  pressed=@ui.patch(opacity=O60),
-)
+let nav_back_box : @ui.Style = @ui.style(row=true, pr=S1_5, pt=S1, pb=S1, radius=Lg, align=ACenter)
 
 ///|
 /// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent).
@@ -72,6 +65,7 @@ pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0
     } else {
       c.text(label, style=nav_back_words) |> ignore
     }
+    @motion.ripple(c, id, 8.0)
   })
   |> ignore
   c.clicked(id)

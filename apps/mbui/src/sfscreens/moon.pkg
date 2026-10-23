@@ -6,6 +6,8 @@ import {
 import {
   "moonbitlang/core/json",
   "moonbitlang/core/env",
+  "stillfail/sf",
+  "stillfail/sfkept",
 } for "wbtest"
 
 options(
@@ -37,6 +39,11 @@ options(
       "input": "../../../../client/fixtures/screens/settings.json",
       "output": "screen_settings_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_settings",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/home.json",
+      "output": "screen_home_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_home",
     },
   ],
 )

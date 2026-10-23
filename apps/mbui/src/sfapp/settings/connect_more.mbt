@@ -249,7 +249,7 @@ fn mode_choices(c : @ui.Ctx, key : String, mode : String, mention : Bool, kind? 
           |> ignore
         })
         |> ignore
-        switch(c, mention)
+        switch(c, key + "/mention", mention)
       })
       |> ignore
     }
@@ -586,17 +586,7 @@ fn connect_run_page(c : @ui.Ctx, core : Core, station : String, id : String) -> 
     }
     if list != "" {
       // back to the page's first view, not off it
-      c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-        if nav_back(c, tr("android-settings.run.title")) {
-          run_list.remove(of)
-        }
-        c.box(w=Fill(1.0), align=ACenter, fn() {
-          c.text(title, size=17.0, weight=600, color=t.p.text, wrap=false, line=22.0) |> ignore
-        })
-        |> ignore
-        c.box(w=Px(60.0), fn() {  }) |> ignore
-      })
-      |> ignore
+      nav_bar(c, core, tr("android-settings.run.title"), title, on_back=fn() { run_list.remove(of) })
       c.on_back(fn() { run_list.remove(of) })
     } else {
       nav_bar(c, core, tr("common.back"), title)
@@ -624,27 +614,10 @@ fn connect_run_page(c : @ui.Ctx, core : Core, station : String, id : String) -> 
         return
       }
       "account" => {
-        scroll_page(c, "run-accounts/" + of, [
-          fn() {
-            if pick_row(c, "run-account/auto", tr("android-settings.connect.autoAccount"), checked=!has(draft, "profile")) {
-              pick([("profile", Json::null())])
-              run_list.remove(of)
-            }
-            for a in items(v, "accounts") {
-              let av = Some(a)
-              if pick_row(
-                  c,
-                  "run-account/" + text(av, "id"),
-                  text(av, "name"),
-                  sub=text(av, "line"),
-                  checked=text(draft, "profile") == text(av, "id"),
-                ) {
-                pick([("profile", str(text(av, "id")))])
-                run_list.remove(of)
-              }
-            }
-          },
-        ])
+        account_list(c, "run-accounts/" + of, items(v, "accounts"), runtime, text(draft, "profile"), fn(p) {
+          pick([("profile", match p { Some(id) => str(id); None => Json::null() })])
+          run_list.remove(of)
+        })
         return
       }
       _ => ()
@@ -971,23 +944,22 @@ fn new_connect_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     }
     let step = text(view, "step")
     let back = fn() { go("back") }
-    if step != "team" {
+    // the step before, unless the core says back closes the flow (Connects.kt: BackHandler(view.back != "close"))
+    if text(view, "back") != "close" {
       c.on_back(back)
     }
     // back: the step before, or (on the first) the page closed
-    c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-      if nav_back(c, tr(if text(view, "back") == "close" { "common.cancel" } else { "android-settings.flow.previous" })) {
-        back()
-      }
-      c.box(w=Fill(1.0), align=ACenter, fn() {
-        c.text(tr("android-settings.flow.title"), size=17.0, weight=600, color=t.p.text, wrap=false, line=22.0) |> ignore
+    nav_bar(
+      c,
+      core,
+      tr(if text(view, "back") == "close" { "common.cancel" } else { "android-settings.flow.previous" }),
+      tr("android-settings.flow.title"),
+      sub=fn() {
         c.text("\{text(view, "title")} · \{count(view, "number")} / \{count(view, "total")}", size=11.0, color=t.p.muted, wrap=false, line=16.0)
         |> ignore
-      })
-      |> ignore
-      c.box(w=Px(60.0), fn() {  }) |> ignore
-    })
-    |> ignore
+      },
+      on_back=back,
+    )
     let blocks : Array[() -> Unit] = []
     let pad = fn(f : () -> Unit) { c.box(w=Fill(1.0), padx=18.0, pt=8.0, gap=12.0, f) |> ignore }
     let next = fn(key : String, label : String, enabled : Bool, run : () -> Unit) {
@@ -1437,18 +1409,7 @@ fn slack_app_page(c : @ui.Ctx, core : Core, station : String, connect : String) 
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     let sub = fn() { c.text(tr("android-settings.slack.sub"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore }
     if adding {
-      c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-        if nav_back(c, "Slack app") {
-          slack_adding.remove(k)
-        }
-        c.box(w=Fill(1.0), align=ACenter, fn() {
-          c.text(tr("android-settings.slack.addToken"), size=17.0, weight=600, color=t.p.text, wrap=false, line=22.0) |> ignore
-          sub()
-        })
-        |> ignore
-        c.box(w=Px(60.0), fn() {  }) |> ignore
-      })
-      |> ignore
+      nav_bar(c, core, "Slack app", tr("android-settings.slack.addToken"), sub~, on_back=fn() { slack_adding.remove(k) })
       c.on_back(fn() { slack_adding.remove(k) })
     } else {
       nav_bar(c, core, tr("android-settings.connects.title"), "Slack app", sub~)

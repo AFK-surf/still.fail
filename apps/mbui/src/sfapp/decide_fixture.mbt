@@ -2,8 +2,13 @@
 // screenshots). MBUI_FIXTURE: "decisions" (the 奏 page with an options card in front), "decisions-text" (a text card),
 // "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-peek" (its station's card), "chat-jobs",
-// "chat-job"; "home-jobs" (Home with the jobs left up a long while at its top); "history-link" (Home, the history there
-// for a link to open at an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
+// "chat-job"; "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
+// other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); the wide
+// frame's "chat-letters-pop" (the chat's "…" open), "chat-jobs-pop" (its services' popover), "chat-letters-side",
+// "chat-jobs-side", "chat-history-side" (what is opened beside it), "chat-model-pop" (its agent's model control's panel
+// open), "chat-find" (⌘F's bar, a word typed in it); "home-jobs"
+// (Home with the jobs left up a long while at its top); "history-link" (Home, the history there for a link to open at
+// an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
 
 ///|
 /// Whether `mode` is one of this slice's.
@@ -11,6 +16,8 @@ fn decide_mode(mode : String) -> Bool {
   [
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
+    "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
+    "chat-jobs-side", "chat-history-side", "chat-model-pop", "chat-find",
   ].contains(mode)
 }
 
@@ -413,12 +420,14 @@ fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) 
         _ => ""
       }
       let base = fixture_chat_topic(f, name, params)
+      let base = if f.mode.has_prefix("chat-letters") { base.map(fix_with_letters) } else { base }
       if session == "s-c1" {
         Some(base.map(fix_detailed_chat))
       } else {
         Some(base)
       }
     }
+    "chatLetters" => if f.mode.has_prefix("chat-letters") { Some(Some(fix_letters())) } else { None }
     "decisions" => Some(Some(fix_decisions(f.mode)))
     "history" => Some(Some(fix_history()))
     "agentCard" =>
@@ -439,7 +448,7 @@ fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) 
       )
     "host" => Some(Some({ "identity": "Mac Studio · macOS 26 · M2 Max" }))
     "chatJobs" =>
-      if f.mode == "chat-jobs" || f.mode == "chat-job" || f.mode == "chat-agent" {
+      if f.mode.has_prefix("chat-jobs") || f.mode == "chat-job" || f.mode == "chat-agent" {
         Some(Some(fix_chat_jobs()))
       } else {
         None
@@ -578,7 +587,36 @@ pub fn open_fixture(mode : String) -> Unit {
         dui.opened["step/h4/0"] = true
       }
     }
-    "chat-info" => dui.sheet = Some(Info(r))
+    "chat-info" | "chat-letters-info" => dui.sheet = Some(Info(r))
+    "chat-letters" => {
+      dui.letters_open = ""
+      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
+      dui.sheet = Some(LettersOf(r, 7.0))
+    }
+    // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
+    "chat-letters-pop" => wide.info_open = true
+    "chat-jobs-pop" => wide.jobs_open = true
+    "chat-letters-side" => {
+      dui.letters_open = ""
+      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
+      side_open(r, "letters")
+    }
+    "chat-jobs-side" => side_open(r, "jobs")
+    "chat-history-side" => side_open(r, "history/s-c1")
+    "chat-model-pop" => {
+      side_open(r, "history/s-c1")
+      wide.triple = r.station + "\u{1}session:s-c1"
+    }
+    // (what is typed is looked for as the bar is first drawn)
+    "chat-find" => {
+      wide.find_chat = side_key(r)
+      wide.find_field.set("截图")
+    }
+    "chat-letters-open" => {
+      dui.letters_open = fix_letters_link
+      dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
+      dui.sheet = Some(LettersOf(r, 7.0))
+    }
     // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
     "chat-publish" => {
       publish_reset()
@@ -595,5 +633,73 @@ pub fn open_fixture(mode : String) -> Unit {
       dui.sheet = Some(JobOf(r, "j-ci"))
     }
     _ => ()
+  }
+}
+
+///|
+/// The chat's view saying how many letters its agents and other chats' wrote each other (the core's `letters`).
+fn fix_with_letters(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["letters"] = Json::number(4.0)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The chat a letter came from, by its link (the core's key for it).
+let fix_letters_link : String = "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e"
+
+///|
+/// What the chat's agents and other chats' wrote each other (the core's `chatLetters`): two chats written with, the
+/// one written with last first; the other's three letters, two coming in and one going out.
+fn fix_letters() -> Json {
+  let link = fix_letters_link
+  let theirs = fn(chat : String, from : String) -> Json {
+    { "name": "「" + chat + "」的 agent", "from": from, "maker": { "id": "anthropic", "name": "anthropic" } }
+  }
+  let way = fn(m : Json, w : String) -> Json {
+    match m {
+      Object(o) => {
+        let o = o.copy()
+        o["way"] = Json::string(w)
+        Json::object(o)
+      }
+      _ => m
+    }
+  }
+  let mbui = "https://app.still.fail/o/w/s/ember%3Ac-06ffb79643"
+  {
+    "title": "整理发布清单",
+    "whole": true,
+    "chats": [
+      {
+        "key": mbui,
+        "title": "接手监督 mbui",
+        "link": mbui,
+        "last": "测试版 4521 已出，你这边的改动等它跑完再合",
+        "lastActiveAt": 1790000300000.0,
+        "time": { "lastActiveAt": { "ago": "4 分钟前" } },
+        "letters": [
+          way(msg(300, "agent", theirs("接手监督 mbui", mbui), "测试版 **4521** 已出，你这边的改动等它跑完再合", "4 分钟前", { "author": "peer/ember:c-8" }), "in"),
+        ],
+      },
+      {
+        "key": link,
+        "title": "BFT 备份尺寸分析",
+        "link": link,
+        "last": "补充一点：系统自带的 tar 能直接解 zstd",
+        "lastActiveAt": 1790000200000.0,
+        "time": { "lastActiveAt": { "ago": "5 分钟前" } },
+        "letters": [
+          way(msg(200, "agent", theirs("BFT 备份尺寸分析", link), "用户让精简备份并改用 zstd，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下", "7 分钟前", { "author": "peer/ember:c-9" }), "in"),
+          way(msg(201, "agent", by_agent("anthropic", "claude", "s-c1"), "已替换，**今晚 02:00** 那份会按新脚本出", "6 分钟前", {}), "out"),
+          way(msg(202, "agent", theirs("BFT 备份尺寸分析", link), "补充一点：系统自带的 tar 能直接解 zstd", "5 分钟前", { "author": "peer/ember:c-9" }), "in"),
+        ],
+      },
+    ],
   }
 }

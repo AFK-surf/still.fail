@@ -91,7 +91,9 @@ let left_pages : Array[Page] = []
 
 ///|
 fn new_nav() -> @ui.Nav[Page] {
-  @ui.Nav::new(Home, on_leave=fn(p) {
+  // settings are to the left of the list, as the gear is at its top left: they come in from the left and go back
+  // that way (App.kt transition, swipe)
+  @ui.Nav::new(Home, from_left=fn(p) { p is Settings }, on_leave=fn(p) {
     left_pages.push(p)
     match p {
       Setting(r) => @settings.left(r)
@@ -156,10 +158,12 @@ fn init {
 /// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
+  @sf.set_language(None)
   files_cornered.val = false
   felt_menu.val = -1
   felt_past.clear()
   felt_holds.clear()
+  image_quoted_at.val = -1
   attention.told = false
   picture_pick.val = None
   bar_glyph.val = None
@@ -209,6 +213,7 @@ fn reset() -> Unit {
   read_views.clear()
   read_chats.clear()
   readings.clear()
+  kept_places.clear()
   left_pages.clear()
   playing.clear()
   play_srcs.clear()
@@ -237,8 +242,6 @@ fn reset() -> Unit {
   share_in.query = ""
   share_in.find.set("")
   share_over.val = false
-  bars_top.val = 0.0
-  bars_foot.val = 0.0
   share_closing.val = false
   update.available = None
   update.asked = false
@@ -247,21 +250,15 @@ fn reset() -> Unit {
   update.phase = "idle"
   update.source = None
   update_version.val = 0
-  svc_folded.val = false
+  svc_folded.val = None
+  svc_keep.val = fn(_) {  }
   splash_waited.val = false
   drafts.clear()
+  sent_pictures.clear()
   cui.attach = false
   cui.picking = None
   cui.picking_for = ""
-  cui.was_down = false
-  cui.press_new = false
-  cui.released = false
-  cui.down_x = 0.0
-  cui.down_y = 0.0
-  cui.down_frame = 0
-  cui.moved = false
   cui.outside = false
-  cui.long = false
   cui.restore_error.clear()
   sharing.val = None
   cui.room_for = ("", None)
@@ -274,6 +271,7 @@ fn reset() -> Unit {
   fix_due.clear()
   fix_unsaid.clear()
   fix_drafts.clear()
+  fix_composers.clear()
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()
@@ -287,6 +285,7 @@ fn reset() -> Unit {
   ref_fields.clear()
   go_to_words.clear()
   found_marking.val = ("", [], 0.0)
+  find_marking.val = []
   search_reset()
   ask_turns.clear()
   flash_held.val = false
@@ -309,6 +308,7 @@ fn reset() -> Unit {
   told_bars.val = None
   told_dark.val = None
   send_flight.val = None
+  local_sent_n.val = 0
   flying.val = None
   absolute_times.val = false
   opened_notices.clear()
@@ -342,17 +342,21 @@ fn reset() -> Unit {
   marking.write_field.set("")
   marking.note_field.set("")
   pv_thumbs.clear()
+  pv_frames.clear()
+  fix_fetches.clear()
+  pv_frames_n.val = 0
+  pv_first.clear()
   pv_hidden.val = ""
   pv_read.clear()
   pv_strip.leaving = None
   pv_strip.pinned = None
   pv_strip.near.clear()
+  near_asked.clear()
   viewer_awake_env.val = -1
   src_now.val = fn() { 0.0 }
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
   dv_fetches.clear()
   keepings.clear()
-  reader_mds.clear()
   // the wide frame's keys (wide_keys.mbt)
   focus_composer.val = false
   switcher_query.val = ""
@@ -405,18 +409,21 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   appearance(src)
   faces(src)
   // pictures put up by their address come as the core gives them (a GIF among them moves)
-  @sf.picture_of.val = fn(url) { (src.picture)(url) }
+  @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
   let t = @sf.begin(c)
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)
   c.set_clear((t.p.bg >> 8) & 0xFFFFFFL)
-  // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
+  // a desktop's width: the web app's wide frame (wide.mbt); a phone's or a tablet's as wide (an opened foldable, a
+  // phone on its side): Android's, the pages the whole width with the latest chats at a corner (corners.mbt); below
+  // them the phone's pages
   wide_on.val = is_wide(c)
+  corners_on.val = is_corners(c)
   @settings.wide.val = wide_on.val
+  @settings.no_bar.val = corners_on.val
   @settings.status_top.val = status_top()
   @settings.nav_foot.val = nav_foot()
-  @settings.bar_room.val = if wide_on.val { 0.0 } else { bar_room }
-  track_press(c)
+  @settings.bar_room.val = if has_bar() { bar_room } else { 0.0 }
   linger_tick(c, src)
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
@@ -522,27 +529,34 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       } else {
         // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
         app.nav.comes_when(fn() { page_ready(src, app.nav.top()) }, page_local_ms)
-        c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
-        |> ignore
-        // a place's top page other than the chats, with nothing over it: back goes to the chats, in place
+        let page_took = c.took_back(fn() {
+          c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg) |> ignore
+        })
+        // a place's top page other than the chats, with nothing over it or in it taking back: back goes to the chats,
+        // in place
         let root = app.nav.top()
-        if app.nav.depth() == 1 && root != Home && !app.menu && !sheet_open() {
+        if app.nav.depth() == 1 && root != Home && !page_took && !app.menu && !sheet_open() {
           c.on_back(fn() { go_place(c, "chats", [], -1) })
         }
         // the player sideways: back turns it upright first
         play_back(c)
         // words picked in a chat, a link's menu: back lets go of them first (pick.mbt)
         pick_back(c)
-        // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in
-        // the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
-        let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
-        bottom_bar(
-          c,
-          src,
-          w,
-          place_of(root),
-          app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
-        )
+        if corners_on.val {
+          // wide, no bottom bar: the latest chats and the new-chat button at the corners (Wide.kt WideCorners)
+          wide_corners(c, src, w)
+        } else {
+          // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed
+          // in the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
+          let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
+          bottom_bar(
+            c,
+            src,
+            w,
+            place_of(root),
+            app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
+          )
+        }
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
         // a visualization over the whole screen (viz.mbt)
@@ -624,7 +638,7 @@ fn page_view(
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
         // stations refuse it: Security.kt LockGate); its settings stay
         Home =>
-          if lock_gate(c, src, w) {
+          if lock_gate(c, src, w, bar=invited) {
             home_page(c, src, w, all, invited)
           }
         Chat(r) => {
@@ -727,16 +741,31 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -
 }
 
 ///|
-/// The workspace's safe mode in its chats' place while this device waits to be confirmed in it (the settings'
-/// lock_wait.mbt): true when there is nothing to wait for, and the page is the caller's to draw.
-fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
+/// Whether the workspace's pages are shown: not while this device waits to be confirmed in its safe mode, whose page is
+/// drawn instead (Security.kt LockGate). `bar` (whether invitations wait): on a phone, under Home's top bar, settings
+/// and the workspace's name, its switcher (Security.kt SecurityWaitingScreen: with no bottom bar either, a phone had no
+/// way out of the workspace, 2026-10-23); none beside the wide screen's rail, which has them.
+fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
   let core = settings_core(src, w)
   if !@settings.lock_waiting(core, w.id) {
     return true
   }
-  @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+  match bar {
+    None => @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+    Some(invited) =>
+      c.box(style=gate_fill, fn() {
+        c.layer(fn() { @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name)) }) |> ignore
+        c.layer(fn() { top_bar(c, src, w, None, "all", invited) }) |> ignore
+      })
+      |> ignore
+  }
   false
 }
+
+///|
+/// The waiting page and Home's top bar over it, the screen's whole.
+// kept across runs: a value (no field of it changes)
+let gate_fill : @ui.Style = @ui.style(w=Full, h=Full)
 
 ///|
 /// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.
@@ -788,7 +817,8 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       app.toast = words
       app.toast_n += 1
     },
-    picture: fn(url) { (src.picture)(url) },
+    picture: fn(url, frame) { (src.picture)(url, frame) },
+    now: src.now,
     notify_ask: fn() { ask_from_switch() },
     push_sync: fn(wanted) { if !src.read_only { push_sync(src, wanted) } },
     under: fn() {
@@ -876,6 +906,8 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 /// when it follows it; the host told when it changes (its bars follow).
 fn appearance(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
+  // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
+  @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
   let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
   // (the host told once the prefs are read: not the system's first, then the one chosen)
@@ -908,14 +940,15 @@ let told_bars : Ref[Bool?] = Ref(None)
 let told_dark : Ref[Bool?] = Ref(None)
 
 ///|
-/// What a write said (Sheet.kt ToastHost), mbui's toast (@kit.toaster) in still.fail's look: over the foot (90 above
-/// it), in ink, 2.6 s (paused while the pointer is on it), coming in and going out; one said again is a new one.
+/// What a write said (Sheet.kt ToastHost), mbui's toast (@kit.toaster) in still.fail's look: over the foot, clear of
+/// the bar and the action standing over it (bar_room above it), in ink, 2.6 s (paused while the pointer is on it),
+/// coming in and going out; one said again is a new one.
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
   // (above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
   let foot = nav_foot()
-  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=90.0 + foot, look=fn(c, s, _action, _close) {
+  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=bar_room + foot, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
       c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore
@@ -1062,11 +1095,7 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
         w=Fill(1.0),
         h=Px(50.0),
         radius=25.0,
-        bg=if c.pressed(id) {
-          @sf.mix(t.p.text, 0.85, t.p.bg)
-        } else {
-          t.p.text
-        },
+        bg=t.p.text,
         align=ACenter,
         justify=JCenter,
         id~,
@@ -1083,6 +1112,10 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
             wrap=false,
           )
           |> ignore
+          // SignIn.kt: clip(CircleShape).clickable
+          if !busy {
+            @motion.ripple(c, id, 25.0)
+          }
         },
       )
       |> ignore
@@ -1187,23 +1220,16 @@ fn attend(src : Source, workspace : String) -> Unit {
 /// {away}`, client/core-ts src/wake.ts), and a newer build is asked for again (onStart's checkUpdates); the default
 /// network changed, every link it had is taken for dead (NetworkWatch: `client.wake {away: 0, network: true}`).
 fn system_said(json : String) -> Unit {
-  let v = @json.parse(json) catch { _ => return }
-  // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
-  match field(Some(v), "link") {
-    Some(String(url)) => link_later.push(url)
-    _ => ()
-  }
-  // shown over another app, or in its own window again (share.mbt)
-  match field(Some(v), "over") {
-    Some(True) => share_over.val = true
-    Some(False) => share_over.val = false
-    _ => ()
-  }
-  // how far the bars reach in over the view (bars.mbt): edge to edge, or over another app
-  let bars = field(Some(v), "bars")
-  if bars is Some(Object(_)) {
-    bars_top.val = number(bars, "top")
-    bars_foot.val = number(bars, "bottom")
+  let said = @hostapi.system_said(json)
+  for s in said {
+    match s {
+      // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
+      Link(url) => link_later.push(url)
+      // shown over another app, or in its own window again (share.mbt)
+      Over(over) => share_over.val = over
+      // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
+      _ => ()
+    }
   }
   let src = match attention.src {
     Some(s) => s
@@ -1212,31 +1238,23 @@ fn system_said(json : String) -> Unit {
   if src.read_only {
     return
   }
-  match field(Some(v), "shown") {
-    Some(Object(_) as s) => {
-      let away = match field(Some(s), "away") {
-        Some(Number(n, ..)) => n
-        _ => 0.0
+  for s in said {
+    match s {
+      Shown(away~) => {
+        (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
+        update_check(src, false)
       }
-      (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
-      update_check(src, false)
+      // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
+      InstallAllow(..) => toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
+      InstallFailed(error~, ..) => toast_later(pv_fill("android-chat.file.installFailed", [("error", error)]))
+      Network =>
+        (src.call)(
+          "client.wake",
+          { "away": Json::number(0.0), "network": Json::boolean(true) },
+          fn(_) {  },
+        )
+      _ => ()
     }
-    _ => ()
-  }
-  // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
-  match field(Some(v), "install") {
-    Some(Object(_) as i) if flag(Some(i), "allow") =>
-      toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
-    Some(Object(_) as i) =>
-      toast_later(pv_fill("android-chat.file.installFailed", [("error", text(Some(i), "error"))]))
-    _ => ()
-  }
-  if flag(Some(v), "network") {
-    (src.call)(
-      "client.wake",
-      { "away": Json::number(0.0), "network": Json::boolean(true) },
-      fn(_) {  },
-    )
   }
 }
 

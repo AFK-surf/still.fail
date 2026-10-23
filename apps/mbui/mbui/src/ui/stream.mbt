@@ -52,6 +52,8 @@ pub struct Stream {
   /// the frame its events were last taken in
   priv mut taken : Int
   priv mut closed : Bool
+  /// its H.264 decoder, driven from here where the host's is (@hostapi.stream_feeds: stream_feed.mbt)
+  priv mut feed : Feed?
 }
 
 ///|
@@ -99,6 +101,7 @@ pub fn Stream::new(shown~ : (Double) -> Unit, broken~ : () -> Unit) -> Stream {
     acks: [],
     taken: -1,
     closed: false,
+    feed: None,
   }
   open_streams.push(s)
   s
@@ -125,6 +128,46 @@ pub fn Stream::h264(self : Stream, avcc : Bytes, w : Int, h : Int) -> Unit {
   self.need_key = true
   if self.id != 0 {
     h_stream_h264(self.id, avcc, w, h)
+    if h_stream_feeds() {
+      let f = match self.feed {
+        Some(f) => f
+        None => {
+          // (the host's first surface made as its first config came: @hostapi.stream_h264)
+          let f = Feed::new()
+          f.surface = 1
+          self.feed = Some(f)
+          f
+        }
+      }
+      f.configure(avcc, w, h)
+      self.fed()
+    }
+  }
+}
+
+///|
+/// What its feed said and asks of the host since: its words for the app said as the next frame begins (as the frames
+/// it lets go itself are), its commands given the host now.
+fn Stream::fed(self : Stream) -> Unit {
+  guard self.feed is Some(f) else { return }
+  let said = f.said.copy()
+  f.said.clear()
+  for e in said {
+    self.own.push(e)
+  }
+  if said.length() > 0 {
+    self.owe()
+  }
+  self.feed_host(f)
+}
+
+///|
+/// Its feed's commands given the host, oldest first.
+fn Stream::feed_host(self : Stream, f : Feed) -> Unit {
+  let todo = f.todo.copy()
+  f.todo.clear()
+  for d in todo {
+    h_stream_codec(self.id, d.cmd, d.data)
   }
 }
 
@@ -142,7 +185,13 @@ pub fn Stream::frame(self : Stream, data : Bytes, key : Bool, ts : Double) -> Un
     return
   }
   self.need_key = false
-  h_stream_frame(self.id, data, key, ts)
+  match self.feed {
+    Some(f) => {
+      f.frame(data, key, ts)
+      self.fed()
+    }
+    None => h_stream_frame(self.id, data, key, ts)
+  }
 }
 
 ///|
@@ -199,6 +248,7 @@ pub fn Stream::close(self : Stream) -> Unit {
   self.out.clear()
   self.own.clear()
   self.acks.clear()
+  self.feed = None
   if self.id != 0 {
     h_stream_close(self.id)
   }
@@ -229,11 +279,17 @@ fn Stream::hand_over(self : Stream, ts : Double) -> Unit {
 /// for the next frame's start (streams_frame_start): that frame is owed now (Ctx::owe_next).
 fn Stream::let_go(self : Stream, ts : Double) -> Unit {
   self.own.push("d \{ts}")
+  self.owe()
+}
+
+///|
+/// What it said itself is taken as the next frame begins: that frame asked for (owed, when this one took its events).
+fn Stream::owe(self : Stream) -> Unit {
   let c = g()
   if in_frame.val && self.taken == c.frame_no {
     c.owe_next()
   } else if !in_frame.val {
-    c.read_changed("stream \{self.id}'s frame \{ts} let go")
+    c.read_changed("stream \{self.id} said")
   }
 }
 
@@ -283,8 +339,8 @@ fn streams_frame_start() -> Unit {
         events.push(e)
       }
     }
-    let mut latch : Double? = None
-    for e in events {
+    let latch : Ref[Double?] = Ref::new(None)
+    let take = fn(e : String) {
       let w = e.split(" ").map(fn(x) { x.to_string() }).to_array()
       match w {
         ["f", t, pw, ph, ..] =>
@@ -296,7 +352,7 @@ fn streams_frame_start() -> Unit {
               } else {
                 Some((fw.to_int(), fh.to_int()))
               }
-              latch = Some(ts)
+              latch.val = Some(ts)
               s.acks.push(ts)
               s.settled_to(ts)
             }
@@ -317,8 +373,32 @@ fn streams_frame_start() -> Unit {
         _ => ()
       }
     }
-    match latch {
-      Some(ts) if s.id != 0 && !s.closed => h_stream_show(s.id, ts)
+    for e in events {
+      match (e.has_prefix("c "), s.feed) {
+        (true, Some(f)) => {
+          // the host's decoder or surface said something: what the feed makes of it taken now, in its place
+          f.event(e.split(" ").map(fn(x) { x.to_string() }).to_array()[1:].to_array())
+          let said = f.said.copy()
+          f.said.clear()
+          for x in said {
+            take(x)
+          }
+          s.feed_host(f)
+        }
+        (true, None) => ()
+        _ => take(e)
+      }
+    }
+    match latch.val {
+      Some(ts) if s.id != 0 && !s.closed =>
+        match s.feed {
+          Some(f) => {
+            f.latch(ts)
+            // (what it said meanwhile, the next frame's)
+            s.fed()
+          }
+          None => h_stream_show(s.id, ts)
+        }
       _ => ()
     }
   }
@@ -483,6 +563,32 @@ fn h_stream_show(id : Int, ts : Double) -> Unit {
 }
 
 ///|
+fn h_stream_codec(id : Int, cmd : String, data : Bytes) -> Unit {
+  match fake.val {
+    Some(f) => fake_fed(f, id, if data.length() > 0 { "do \{cmd} bytes=\{data.length()}" } else { "do \{cmd}" })
+    None => @hostapi.stream_codec(id, cmd, data)
+  }
+}
+
+///|
+/// Whether the host's H.264 decoder is driven from here (stream_feed.mbt): Tester::set_stream_feeds, a run's ENV line.
+fn h_stream_feeds() -> Bool {
+  match fake.val {
+    Some(f) => f.stream_feeds
+    None => {
+      if feeds_known.val < 0 {
+        feeds_known.val = if @hostapi.stream_feeds() { 1 } else { 0 }
+      }
+      feeds_known.val == 1
+    }
+  }
+}
+
+///|
+// kept across runs: the real host's (asked once)
+let feeds_known : Ref[Int] = Ref::new(-1)
+
+///|
 fn h_stream_close(id : Int) -> Unit {
   match fake.val {
     Some(f) => fake_fed(f, id, "close")
@@ -568,4 +674,17 @@ pub fn Tester::stream_drops(self : Tester, id : Int, ts : Double) -> Unit {
 /// Stream `id`'s decoder lost its state: taken at the next frame (`broken`; frames let go until a key frame).
 pub fn Tester::stream_broken(self : Tester, id : Int) -> Unit {
   fake_said(self.fake, id, "b")
+}
+
+///|
+/// Whether its host's H.264 decoder is driven from here, as Android's (stream_feed.mbt): what it is told shows in
+/// stream_fed ("do CMD", "do queue … bytes=N"), what it says is the test's to give (stream_codec_said).
+pub fn Tester::set_stream_feeds(self : Tester, on : Bool) -> Unit {
+  self.fake.stream_feeds = on
+}
+
+///|
+/// Stream `id`'s host's decoder or surface said `e` (stream_feed.mbt's words, without "c "): taken at the next frame.
+pub fn Tester::stream_codec_said(self : Tester, id : Int, e : String) -> Unit {
+  fake_said(self.fake, id, "c " + e)
 }

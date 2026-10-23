@@ -47,7 +47,9 @@ export function listNote(stations: J[], days: J[], loading: boolean, unread: str
         .filter((s) => is(s, "error") || (is(s, "offline") && typeof get(s, "station") === "string" && unread.includes(s.station)))
         .map((s) => {
           const name = strOf(s, "name");
-          const text = is(s, "error") ? t("core-logic.looks.failing.retrying", { name }) : t("core-logic.looks.failing.offline", { name });
+          const cause = get(s, "cause");
+          const text = is(s, "error") || cause === "unreached" ? t("core-logic.looks.failing.retrying", { name }) : cause === "network" ? t("core-logic.looks.failing.network")
+            : cause === "lock" ? t("core-logic.looks.failing.lock", { name }) : t("core-logic.looks.failing.offline", { name });
           return { station: get(s, "station") ?? null, text, message: get(s, "message") ?? null };
         });
   const empty = !loading && !connecting && failing.length === 0;
@@ -179,6 +181,26 @@ export function memorySections(text: string): J[] {
 export function outboxWaits(outbox: J[], notice: J): J[] {
   if (get(notice, "tone") !== "busy") return outbox;
   return outbox.map((e) => (get(e, "state") === "sending" && (get(e, "seq") === undefined || get(e, "seq") === null) ? { ...e, waits: t("core-logic.looks.update.waits") } : e));
+}
+
+/// The outbox while its station is taken for down: what failed as the station was not reached (and is sent once it is:
+/// calls.ts `stationBack`) waits for it, said under it (`waits`) in place of 未发送; what the station refused stays failed.
+export function outboxHeld(outbox: J[]): J[] {
+  return outbox.map((e) => {
+    if (get(e, "state") !== "failed" || get(e, "unreached") !== true || get(e, "final") === true) return e;
+    const { error: _error, ...rest } = e as Record<string, unknown>;
+    return { ...rest, state: "sending", waits: t("core-logic.looks.outbox.held") };
+  });
+}
+
+/// The line over a chat's composer while its station is taken for down: why, and that what is sent goes once it is
+/// reached.
+export function offlineNote(link: J, name: string): string {
+  const cause = get(link, "cause");
+  // Refused for a security mode: why, as the station's refusal says it.
+  if (cause === "lock" && typeof get(link, "message") === "string") return t("core-logic.looks.offline.lock", { name: name === "" ? "station" : name, reason: get(link, "message") });
+  const key = cause === "network" ? "core-logic.looks.offline.network" : cause === "unreached" ? "core-logic.looks.offline.unreached" : "core-logic.looks.offline.station";
+  return name === "" ? t(key, { name: "station" }) : t(key, { name });
 }
 
 /// Kept overview progress survives a handover's disconnected interval. No update is inferred from a disconnect.

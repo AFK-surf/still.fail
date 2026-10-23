@@ -19,6 +19,16 @@ fn dv_fetch_key(station : String, root : String, path : String) -> String {
 }
 
 ///|
+/// A `drive.read`'s part kept on the device and answered from there when it is kept (the core's drive-kept.ts, as
+/// DriveCache.kt keeps a drive's files on the phone): `keep` a file read whole or from its start (`file`) or a video's
+/// or song's ranges as played (`played`), the file as its folder lists it (`mtime`, `size`: changed since, read anew).
+fn drive_keep(p : Map[String, Json], keep : String, mtime : Double, size : Double) -> Unit {
+  p["keep"] = Json::string(keep)
+  p["mtime"] = Json::number(mtime)
+  p["size"] = Json::number(size)
+}
+
+///|
 /// A keep the host has not answered yet, and its file's name.
 priv struct Keeping {
   keep : @ui.Keep
@@ -74,6 +84,7 @@ fn keep_bytes(c : @ui.Ctx, name : String, mime : String, bytes : Bytes) -> Unit 
 /// A drive's file read a part at a time (`drive.read`, drive_part each), each handed to `part` as it comes (false: no
 /// more wanted), its row's progress kept in dv_fetches meanwhile; `done` with None once it is all read (or `part`
 /// refused one), else the core's error. `row`: the row that shows how far, when not the file's own (a folder zipped).
+/// `listed`: the file as its folder lists it (its mtime, its size), what is read kept in the core as that (drive_keep).
 fn drive_fetch(
   src : Source,
   station : String,
@@ -82,6 +93,7 @@ fn drive_fetch(
   part : (Bytes) -> Bool,
   done : (Json?) -> Unit,
   row? : String,
+  listed? : (Double, Double)?,
 ) -> Unit {
   let key = row.unwrap_or(dv_fetch_key(station, root, path))
   dv_fetches[key] = 0
@@ -93,6 +105,10 @@ fn drive_fetch(
       "path": Json::string(path),
       "offset": Json::number(got.val.to_double()),
       "length": Json::number(drive_part.to_double()),
+    }
+    match listed {
+      Some(Some((mtime, size))) => drive_keep(p, "file", mtime, size)
+      _ => ()
     }
     (src.read_bytes)("drive.read", Json::object(p), fn(r) {
       match r {
@@ -126,7 +142,8 @@ fn drive_fetch(
 }
 
 ///|
-/// A drive's file downloaded to the device (DriveScreen.kt saveToDownloads): fetched into a keep, then kept.
+/// A drive's file downloaded to the device (DriveScreen.kt saveToDownloads): fetched into a keep, then kept. `listed`:
+/// the file as its folder lists it (its mtime, its size), what is read kept in the core as that (drive_keep).
 fn download_drive_file(
   c : @ui.Ctx,
   src : Source,
@@ -136,11 +153,12 @@ fn download_drive_file(
   name : String,
   mime : String,
   row? : String,
+  listed? : (Double, Double)?,
 ) -> Unit {
   match @ui.keep_begin(name, mime) {
     None => say(c, tr("android-chat.file.saveFailed"))
     Some(k) =>
-      drive_fetch(src, station, root, path, row?=row, fn(b) { k.append(b) }, fn(err) {
+      drive_fetch(src, station, root, path, row?=row, listed?, fn(b) { k.append(b) }, fn(err) {
         match err {
           None => {
             k.finish()
@@ -167,7 +185,7 @@ fn download_drive_files(
   files : Array[DvEntry],
 ) -> Unit {
   for e in files {
-    download_drive_file(c, src, station, root, dv_join(dir, e.name), e.name, e.mime)
+    download_drive_file(c, src, station, root, dv_join(dir, e.name), e.name, e.mime, listed=Some((e.mtime, e.size)))
   }
 }
 
@@ -202,11 +220,6 @@ fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : String
 
 
 ///|
-/// The corner of a chip whose ground fills from the left (how far a download or a use has come): its fill, flush with
-/// the chip's edges, is concentric with it (the chip's clip does not round what is in it until mbui#42).
-let fill_chip_radius : Double = 6.0
-
-///|
 /// How far a file of the drive has come while it is fetched (Parts.kt DownloadChip, FillChip's `progress`): the
 /// allowance's rounded box, its ground filled in the accent from the left as it comes (moving smoothly to each new
 /// share over 500 ms), n% on it.
@@ -221,11 +234,11 @@ fn download_chip(c : @ui.Ctx, key : String, percent : Int) -> Unit {
   }
   // (at its first share at once, as animateFloatAsState starts)
   let drawn = @motion.animate(c, "fetch/" + key, p.to_double(), spec=@motion.tween(500.0))
-  c.box(h=Px(20.0), radius=fill_chip_radius, bg=t.p.chip, clip=true, justify=JCenter, fn() {
+  c.box(h=Px(20.0), radius=@sf.fill_chip_corner, bg=t.p.chip, clip=true, justify=JCenter, fn() {
     if drawn > 0.0 {
       c.layer(fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-          c.box(w=Fill(drawn), h=Fill(1.0), radius=@ui.concentric(fill_chip_radius, 0.0), bg=@sf.alpha(t.p.accent, 0.2), fn() {  }) |> ignore
+          c.box(w=Fill(drawn), h=Fill(1.0), bg=@sf.alpha(t.p.accent, 0.2), fn() {  }) |> ignore
           if drawn < 100.0 {
             c.box(w=Fill(100.0 - drawn), h=Fill(1.0), fn() {  }) |> ignore
           }

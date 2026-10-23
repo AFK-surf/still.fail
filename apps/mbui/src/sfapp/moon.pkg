@@ -1,4 +1,6 @@
 import {
+  "mbui/pixels",
+  "mbui/codec",
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -14,3 +16,5 @@ import {
   "mbui/zip",
   "stillfail/sfapp/settings",
 }
+
+import { "stillfail/sfkept" } for "wbtest"

@@ -41,7 +41,6 @@ src/ui      the framework (MoonBit, target independent)
 src/kit     the components (Radix Primitives' set, docs/components.md): behaviour,
             semantics and a default look from the theme; the time they keep
 src/kitdemo their gallery, light beside dark (APP=kitdemo, MBUI_SCREEN=<page>)
-src/md      a small Markdown parser (blocks, inlines)
 src/text    Unicode text segmentation (target independent, no host calls)
   grapheme.mbt   extended grapheme clusters, UAX #29 (caret, backspace)
   linebreak.mbt  line break opportunities, UAX #14 (wrapping)
@@ -55,6 +54,7 @@ src/host    the platform boundary
   host_native.mbt / host_js.mbt   the same API over C and over JS
   apple_render.m  Metal renderer (macOS and iOS)
   apple_text.m    Core Text shaping and glyph atlas (macOS and iOS)
+  apple_film.m    a film's frames written into an MP4 (AVFoundation; src/film)
   mac_app.m       AppKit window, NSTextInputClient
   ios_app.m       UIKit view, UITextInput (built by scripts/ios.sh)
   win_render.cpp  Direct3D 11 renderer (WARP without a GPU)
@@ -63,6 +63,10 @@ src/host    the platform boundary
 web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
 src/demo    the demo: a chat screen with 10,000 messages
 src/bench   a headless benchmark after nanoui's hill-climb (bench/README.md)
+src/film    a scripted run of an app filmed offscreen, straight into an MP4: the
+            run in a Tester of this host's text and pictures, each frame drawn
+            by this host's renderer (macOS; an app's film program: still.fail's
+            src/sffilm, its scripts/film.sh)
 src/textdiff  the corpus drawn by mbui and by the platform's own text
             drawing, side by side (scripts/textdiff.sh)
 ```

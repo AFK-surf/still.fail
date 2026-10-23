@@ -12,9 +12,9 @@
 // - A chat on top: its notification taken off (App.kt). A notification tapped: its link read by the core
 //   (`link.parse`), its workspace switched to, the chat pushed over Home at the message (chat.mbt `go_to`).
 // - Pushes (Push.kt): this device's registration held as the core's `notify` says (`push.register` with the host's
-//   token, `push.unregister` while off); a push delivered while the app runs shown unless the core says not
-//   (`notice.pushed`), then what it is about brought onto the device (`notice.bring`). No push service is linked in
-//   this build (src/hostapi/notify.mbt): there is no token, and nothing is delivered.
+//   token, `push.unregister` while off), a token come later registered then. A push delivered is the app's push
+//   service's (android/…/Push.java, as PushService: it asks the core whether to show it, `notice.pushed`, then brings
+//   what it is about, `notice.bring`), since the app's frames stop while it is behind.
 //
 // Nothing of it with Source.read_only (a run on a real account changes nothing in it).
 
@@ -28,7 +28,6 @@ priv struct NoticeHost {
   answer : () -> Bool?
   opened : () -> String
   token : () -> String
-  pushed : () -> String
 }
 
 ///|
@@ -43,7 +42,6 @@ fn host_notices() -> NoticeHost {
     answer: fn() { @ui.notice_answer() },
     opened: fn() { @ui.notice_opened() },
     token: fn() { @hostapi.push_token() },
-    pushed: fn() { @hostapi.push_next() },
   }
 }
 
@@ -64,6 +62,8 @@ priv struct NoticeState {
   mut from_switch : Bool
   /// the push registration held as the core says, once at the start
   mut synced : Bool
+  /// the push token last seen (a new one, or the first come after the start, registered: PushService.onNewToken)
+  mut token : String
   /// the chat whose notification was taken off as it came on top ("" none on top)
   mut cancelled : String
   /// the source last seen, for the system's say between frames
@@ -78,6 +78,7 @@ let nt : NoticeState = {
   asked_once: false,
   from_switch: false,
   synced: false,
+  token: "",
   cancelled: "",
   src: None,
 }
@@ -90,6 +91,7 @@ fn notices_reset() -> Unit {
   nt.asked_once = false
   nt.from_switch = false
   nt.synced = false
+  nt.token = ""
   nt.cancelled = ""
   nt.src = None
   notice_host.val = host_notices()
@@ -126,6 +128,14 @@ fn notices_frame(src : Source, w : Workspace) -> Unit {
       // the registration for pushes, once at the start (MainActivity: Push.sync)
       if !nt.synced {
         nt.synced = true
+        nt.token = (h.token)()
+        push_sync(src, None)
+      }
+      // a token come since (the push service's first, given after the start, or a new one): registered as the core
+      // says (PushService.onNewToken)
+      let token = (h.token)()
+      if token != "" && token != nt.token {
+        nt.token = token
         push_sync(src, None)
       }
     }
@@ -157,11 +167,6 @@ fn notices_frame(src : Source, w : Workspace) -> Unit {
   match (h.opened)() {
     "" => ()
     opens => open_notice(src, opens)
-  }
-  // a push delivered while the app runs
-  match (h.pushed)() {
-    "" => ()
-    data => pushed(src, data)
   }
   // a chat on top: its notification goes (App.kt LaunchedEffect(top))
   match app.nav.top() {
@@ -258,7 +263,7 @@ fn ask_from_switch() -> Unit {
 
 ///|
 /// This device's push registration as the core wants it (Push.sync): taken off every account when its `notify`
-/// says no pushes, else registered with the host's token (none in this build). `wanted`: what the core has just
+/// says no pushes, else registered with the host's token (none where the build links no push service). `wanted`: what the core has just
 /// answered, else what its `notify` says.
 fn push_sync(src : Source, wanted : Bool?) -> Unit {
   let push = match wanted {
@@ -301,57 +306,6 @@ fn open_notice(src : Source, opens : String) -> Unit {
   @hostapi.log("notice tapped \{url} at \{seq}")
   open_link_in(src, trim_slash(cloud_origin()) + url, outside=true, at~, or_else=fn() {
     @hostapi.log("notice: the link opens nothing here: " + url)
-  })
-}
-
-///|
-/// A push delivered (PushService.onMessageReceived): shown unless the core says not (`notice.pushed`: off, a page in
-/// view, another workspace's, its kind off), then what it is about brought onto the device (`notice.bring`).
-fn pushed(src : Source, data : String) -> Unit {
-  let parsed = @json.parse(data) catch { _ => Json::null() }
-  let d = match parsed {
-    Object(_) => Some(parsed)
-    _ => None
-  }
-  if text(d, "type") != "notice" || text(d, "tag") == "" || text(d, "url") == "" {
-    return
-  }
-  let ask : Map[String, Json] = {}
-  for k in ["workspace", "kind"] {
-    if text(d, k) != "" {
-      ask[k] = Json::string(text(d, k))
-    }
-  }
-  (src.call)("notice.pushed", Json::object(ask), fn(r) {
-    let show = match r {
-      Ok(a) => flag(Some(a), "show")
-      // the core not answering: shown unless the app is in front (it shows its own)
-      Err(_) => !@ui.app_focused()
-    }
-    if !show {
-      return
-    }
-    (notice_host.val.show)(
-      text(d, "tag"),
-      text(d, "title"),
-      text(d, "body"),
-      text(d, "url") + "\n" + text(d, "seq"),
-    )
-    let ws = text(d, "workspace")
-    let st = text(d, "station")
-    let session = text(d, "session")
-    if ws == "" || st == "" || session == "" {
-      return
-    }
-    let bring : Map[String, Json] = {
-      "station": Json::string(ws + "/" + st),
-      "session": Json::string(session),
-    }
-    let seq = seq_of(text(d, "seq"))
-    if seq > 0.0 {
-      bring["seq"] = Json::number(seq)
-    }
-    (src.call)("notice.bring", Json::object(bring), fn(_) {  })
   })
 }
 

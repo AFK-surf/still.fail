@@ -25,6 +25,7 @@ import { useRailItems } from "./Rail.tsx";
 import { NAME } from "./channel.ts";
 import { RUNTIME_LABEL } from "./format.ts";
 import { t } from "./i18n.ts";
+import { StationInWords } from "./StationNamed.tsx";
 
 const WIDE = "(min-width: 701px)";
 
@@ -133,7 +134,7 @@ function MachineLogins({ station, scope }: { station: StationView; scope: string
   const at: Station = { id: station.id, name: station.name, online: station.online, address: station.station, base: stationBase(station.station), settings: `/w/${scope}/settings` };
   return (
     <StationContext.Provider value={at}>
-      <NavSection title={t("web-pages.profiles.machineSignedIn", { station: station.name })}>
+      <NavSection title={<StationInWords station={station.station} text={t("web-pages.profiles.machineSignedIn", { station: station.name })} />} label={t("web-pages.profiles.machineSignedIn", { station: station.name })}>
         {offers.map((l) => <MachineLoginRow key={l.runtime} login={l} scope={scope} station={station.station} />)}
       </NavSection>
     </StationContext.Provider>

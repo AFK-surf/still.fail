@@ -1,9 +1,14 @@
 // The words of the settings, as the Android app says them in Chinese (ember client/i18n/catalog/zh: android-settings,
-// android-misc, web-pages, web-mobile, web-main, common): the keys these pages use, `{name}` put in by `fill`.
+// android-misc, web-pages, web-mobile, web-main, common): the keys these pages use, `{name}` put in by `fill`. In
+// English, strings_en.mbt's (scripts/strings, from the catalog's English; lang_wbtest.mbt holds every key to have one).
 
 ///|
 // kept across runs: a table, never written
 let zh : Map[String, String] = {
+  "web-mobile.connects.feishu.qr": "创建飞书机器人的二维码",
+  "android-misc.bar.action.connects": "添加连接",
+  "android-misc.bar.action.profiles": "添加 Profile",
+  "android-misc.bar.action.stations": "添加 station",
   "web-mobile.connects.feishu.name": "飞书",
   "web-mobile.connects.feishu.slackNote": "在 Slack 的频道和私信中使用",
   "web-mobile.connects.feishu.feishuNote": "在飞书的群和私聊中使用，含国际版 Lark",
@@ -78,6 +83,19 @@ let zh : Map[String, String] = {
   "android-misc.archive.deleteNamed": "删除「{title}」",
   "android-misc.versions.lastChecked": "上次检查 {time}",
   "android-settings.vault.add": "添加",
+  "android-settings.vault.lasts": "最长授权",
+  "android-settings.vault.lastsNote": "批准这个密钥的申请时，选项最多到这一档。「跟随默认」用「密钥」页上的默认最长授权，以后改那里，这个密钥也跟着变。",
+  "android-settings.vault.lasts.default": "跟随默认",
+  "android-settings.vault.lasts.following": "跟随默认 · {lasts}",
+  "android-settings.vault.lasts.title": "默认最长授权",
+  "android-settings.vault.lasts.note": "agent 申请用密钥时，批准选项最多到你选的这一档。没单独设置过的密钥都按这里；编辑某个密钥可以给它另设一档。",
+  "android-settings.vault.lasts.once": "仅一次",
+  "android-settings.vault.lasts.hour": "1 小时",
+  "android-settings.vault.lasts.chat": "直到对话归档",
+  "android-settings.vault.lasts.onceDetail": "每次使用都要你批准一次",
+  "android-settings.vault.lasts.hourDetail": "批准时最长能选「本对话 1 小时内」",
+  "android-settings.vault.lasts.chatDetail": "批准时最长能选「本对话直到归档」：对话归档或删除时失效，最长 30 天",
+  "android-settings.vault.lasts.what": "设置授权上限",
   "android-settings.vault.hide": "隐藏",
   "android-settings.vault.reveal": "显示",
   "android-misc.status.done": "已完成",
@@ -165,7 +183,6 @@ let zh : Map[String, String] = {
   "android-settings.home.online": "{online}/{total} 在线",
   "android-settings.home.short": "{n} 个需查看",
   "android-settings.home.usage": "用量",
-  "android-settings.home.workspace": "{name} · 你是{role}",
   "android-settings.legal.privacy": "隐私政策",
   "android-settings.legal.terms": "服务条款",
   "android-settings.me.accounts": "此设备上的账号",
@@ -214,8 +231,6 @@ let zh : Map[String, String] = {
   "android-settings.models.refreshWhat": "刷新模型",
   "android-settings.models.refreshed": "检查完成",
   "android-settings.none": "全不选",
-  "android-settings.notify.off": "不接收通知",
-  "android-settings.notify.on": "任务完成、需要处理、出错或有新消息时通知你",
   "android-settings.notify.title": "通知",
   "android-settings.profile.checkedAt": " · {ago}检查",
   "android-settings.profile.defaultModel": "默认模型",
@@ -299,9 +314,11 @@ let zh : Map[String, String] = {
   "android-settings.vault.approve.denyDetail": "通知 agent 已拒绝",
   "android-settings.vault.approve.denyWhat": "拒绝",
   "android-settings.vault.approve.hour": "本对话 1 小时内",
-  "android-settings.vault.approve.hourDetail": "期间无需再次批准",
+  "android-settings.vault.approve.hourDetail": "1 小时内这个对话可以反复使用，不用再批准",
+  "android-settings.vault.approve.chat": "本对话直到归档",
+  "android-settings.vault.approve.chatDetail": "这个对话归档或删除前都能用，最长 30 天",
   "android-settings.vault.approve.once": "仅本次",
-  "android-settings.vault.approve.onceDetail": "单次有效",
+  "android-settings.vault.approve.onceDetail": "只给这一条命令用，下次还要再批准",
   "android-settings.vault.approve.what": "批准",
   "android-settings.vault.create": "创建个人库",
   "android-settings.vault.devices": "设备",
@@ -474,8 +491,6 @@ let zh : Map[String, String] = {
   "web-pages.security.request": "发送批准请求",
   "web-pages.security.waitingLead": "「{name}」已开启安全模式，新设备需由你的受信任设备批准",
   "web-pages.security.waitingTitle": "等待批准此设备",
-  // (this app's own: the 安全 page of a device that waits, where it asks: the chats' place)
-  "mbui.security.waitingWhere": "在对话页「发送批准请求」，再输入你的受信任设备上显示的安全码；批准前此设备看不到对话，也连不上 station",
   "web-pages.security.requestFailed": "此设备无法提交批准请求：{error}",
   "web-pages.security.confirmDevice": "批准设备",
   "web-pages.security.denyDevice": "拒绝设备",
@@ -490,6 +505,7 @@ let zh : Map[String, String] = {
   "web-pages.security.pairNone": "未找到在线的受信任设备：在你已获批的设备上打开 still.fail 后重试",
   "web-pages.security.pairWrong": "安全码不对，还可以试 {n} 次",
   "web-pages.security.title": "安全",
+  "web-pages.settings.nav.about": "关于",
   "web-pages.security.tooOld": "版本过旧，不受保护 · 更新后可在此保护",
   "web-pages.security.turnOff": "关闭安全模式",
   "web-pages.security.turnOffApproval": "添加成员、设备和 station 将不再需要受信任设备批准",
@@ -516,7 +532,7 @@ let zh : Map[String, String] = {
   "web-pages.stations.joinedFrom": "来自 {name}",
   "web-pages.vault.lib.plain": "未加锁",
   "web-pages.vault.lib.plainWhy": "以明文保存在 station 上",
-  "web-pages.vault.lib.sealed": "已加锁",
+  "web-pages.vault.lib.sealed": "已加密",
   "web-pages.vault.lib.sealedWhy": "仅你的设备可解密",
   "web-pages.vault.lib.turnOn": "开启安全模式",
   "web-pages.vault.onlyTo": "限 {hosts}",
@@ -662,6 +678,14 @@ let zh : Map[String, String] = {
   "web-pages.stations.search.personal": "搜索个人数据",
   "web-pages.stations.search.personalLine": "workspace 成员也可搜索邮件、信息、日历、通讯录、备忘录和照片",
   "web-pages.stations.search.section": "搜索",
+  "web-pages.stations.page.part.overview": "概览",
+  "web-pages.stations.page.part.settings": "设置",
+  "web-pages.stations.page.part.machine": "软件与设备",
+  "web-pages.stations.page.footprint": "数据占用",
+  "web-pages.stations.device": "设备信息",
+  "web-pages.stations.deviceOffline": "离线，暂无设备信息",
+  "web-pages.stations.software": "软件与更新",
+  "web-pages.stations.softwareOffline": "station 离线，连接后可查看更新",
   "web-pages.stations.search.what": "更改搜索设置",
   "android-settings.connect.changeOwner": "更改所属用户",
   "android-settings.connect.changeTokens": "更换 token",
@@ -729,7 +753,6 @@ let zh : Map[String, String] = {
   "android-settings.flow.tokenNote": "有了 Slack 配置 token，{app} 会替你在 Slack 中创建 app：名称、头像和权限都在这里填写，无需在 Slack 后台逐项配置。该 token 仅供你使用。",
   "android-settings.flow.tokenRemoved": "已移除配置 token",
   "android-settings.flow.whichTeam": "选择用于创建 app 的 Slack 工作区配置 token。",
-  "android-settings.login.active": "正在登录 {provider}",
   "android-settings.login.adding": "已登录，正在添加",
   "android-settings.login.again": "重新登录",
   "android-settings.login.cancel": "取消登录",
@@ -742,13 +765,11 @@ let zh : Map[String, String] = {
   "android-settings.login.finishing": "正在完成登录",
   "android-settings.login.grokNote": "在打开的 xAI 页面，用订阅了 SuperGrok 或 X Premium+ 的账号登录，输入代码后批准。完成后此处会自动继续，无需返回操作。",
   "android-settings.login.making": "正在生成 {provider} 的登录链接",
-  "android-settings.login.manual": "也可以在该机器上手动登录",
   "android-settings.login.cursorNote": "在打开的 Cursor 页面登录并确认。完成后此处会自动继续，无需返回操作。",
   "android-settings.login.step1Short": "在打开的页面用 {app} 要使用的 Claude 账号登录，并同意授权",
   "android-settings.login.step1ShortDevin": "在打开的页面用 {app} 要使用的 Devin 账号登录",
   "android-settings.login.finishShort": "完成",
   "android-settings.login.manualShort": "在机器上手动登录",
-  "android-settings.login.needed": "尚未登录 {provider} 账号",
   "android-settings.login.note": "登录在运行 {app} 的机器上完成，你只需在浏览器中授权。",
   "android-settings.login.openPage": "打开授权页面",
   "android-settings.login.opencodeNote": "在打开的 OpenCode 页面登录，确认页面上的代码与此处一致，选择订阅了 Go 的 workspace 并授权。完成后此处会自动继续，无需返回操作。",
@@ -757,9 +778,6 @@ let zh : Map[String, String] = {
   "android-settings.login.reopen": "已复制，重新打开登录页",
   "android-settings.login.restart": "重新开始",
   "android-settings.login.signIn": "登录",
-  "android-settings.login.signedIn": "已登录。如需切换账号，请重新登录。",
-  "android-settings.login.step2": "2. 同意后页面会显示授权码，复制到此处：",
-  "android-settings.login.subscription": "{provider} 订阅",
   "android-settings.login.unfinished": "登录未完成",
   "android-settings.machine.added": "已添加 Profile，使用此机器的登录",
   "android-settings.machine.signedIn": "已登录",
@@ -1027,6 +1045,8 @@ let zh : Map[String, String] = {
   "android-chat.pick.model": "选择模型",
   "android-chat.pick.speed.follow": "跟随订阅",
   "android-chat.pick.speed.standard": "标准",
+  "android-chat.run.account.auto": "自动分配",
+  "android-chat.run.account.note": "自动分配时，额度用完或登录失效会切换账号；指定账号后将始终使用该账号。",
   "android-chat.run.account.choose": "选择账号",
   "android-chat.run.account.warn": "此模型需要更换账号",
   "android-chat.run.borrowed": "已借用，同步到此 station 后即可使用",
@@ -1096,6 +1116,21 @@ let zh : Map[String, String] = {
   "android-settings.files.clearAll.title": "全部清除？",
   "android-settings.files.clearChat": "清除此 chat 的缓存",
   "android-settings.files.clearChat.text": "删除此设备上存储的 {size}，再次打开时会重新下载。",
+  "android-settings.files.chat.both": "消息 {size} · {n} 个文件 {files}",
+  "android-settings.files.count": "{n} 个文件",
+  "android-settings.files.days": "{n} 天前",
+  "android-settings.files.files": "已打开的文件",
+  "android-settings.files.filesTotal": "{n} 个 · {size}",
+  "android-settings.files.hours": "{n} 小时前",
+  "android-settings.files.justNow": "刚刚",
+  "android-settings.files.loose": "无法确定所属 chat 的文件",
+  "android-settings.files.meta": "{size} · {opened}打开",
+  "android-settings.files.minutes": "{n} 分钟前",
+  "android-settings.files.partial": "{size} · 未下载完成",
+  "android-settings.files.drive": "文件浏览",
+  "android-settings.files.drive.sub": "最多存储 2 GB，超出时优先删除最久未打开的文件",
+  "android-settings.files.drive.text": "删除从 station 文件中打开过的文本、图片、视频等，再次打开时重新下载。",
+  "android-settings.files.other": "其他",
   "android-settings.files.messages": "消息记录",
   "android-settings.files.messages.clear": "删除此设备上存储的此 chat 的消息，再次打开时从 station 重新读取。",
   "android-settings.files.messages.text": "打开时从 station 重新读取",
@@ -1146,15 +1181,34 @@ let zh : Map[String, String] = {
 }
 
 ///|
+/// `key`'s words in English when that is the language (@sf.language: strings_en.mbt, scripts/strings), a count's of one
+/// (`n` 1) its `.one`, as Android's I18n.kt chooses; None in Chinese, or for a key it has no words for.
+fn english(key : String, args? : Array[(String, String)] = []) -> String? {
+  if @sf.language() != "en" {
+    return None
+  }
+  if args.iter().any(fn(a) { a.0 == "n" && a.1 == "1" }) && en.get(key + ".one") is Some(one) {
+    return Some(one)
+  }
+  en.get(key)
+}
+
+///|
 /// The words for `key`.
 fn tr(key : String) -> String {
-  zh.get(key).unwrap_or(key)
+  match english(key) {
+    Some(s) => s
+    None => zh.get(key).unwrap_or(key)
+  }
 }
 
 ///|
 /// The words for `key` with `{name}`s put in.
 fn fill(key : String, args : Array[(String, String)]) -> String {
-  let mut s = tr(key)
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => tr(key)
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }

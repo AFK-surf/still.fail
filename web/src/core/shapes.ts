@@ -1199,7 +1199,7 @@ export interface Quote {
 	ts?: string;
 	/** agent | person | page (a mark on a previewed page) | image (a numbered mark on an image) */
 	role?: string;
-	/** The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot). */
+	/** The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot; an image of the quoted message, sent again with this one). */
 	file?: string;
 }
 
@@ -1767,18 +1767,6 @@ export interface ChatSentElsewhere {
 }
 
 /**
- * A run of messages other chats' agents wrote to a chat, folded into a line (core views.ts `lettersFolded`), so they
- * do not bury what people and the chat's own agents say.
- */
-export interface Letters {
-	count: number;
-	/** Who wrote them to whom and how many, in words: 「X」发给 Opus 5.5 · 3 条. */
-	line: string;
-	/** Shown whole: `chat.letters` {station, thread, seq, open} opens it or folds it again. */
-	open: boolean;
-}
-
-/**
  * A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said
  * it, and whether its agents have yet to take it.
  */
@@ -1882,11 +1870,46 @@ export interface ChatMessage {
 	 */
 	placed?: string[];
 	/**
-	 * In a chat's page: the first of a run of messages other chats' agents wrote to it (session_send), with nothing
-	 * else said between: the run is one line on it. Folded, it shows the line alone and the rest of the run is not in the
-	 * list; open (`chat.letters`), the line over it and the rest after it. Absent on every other message.
+	 * On a chat's letters page (`chatLetters`): in, another chat's agent wrote it to this chat's; out, this chat's
+	 * agent wrote it to the other. Absent in a chat's page, which has no letters.
 	 */
-	letters?: Letters;
+	way?: string;
+}
+
+/** The letters between a chat and another: a row of the page's list, its letters once it is opened. */
+export interface LettersChat {
+	/** Which it is, among the page's (its link, else its title). */
+	key: string;
+	title: string;
+	/** Its link, opened as a chat link is. Absent when its station gave none. */
+	link?: string;
+	/**
+	 * Its last letter in brief, on a line, for the page's list: by this chat's agent, its name before it
+	 * (Opus 5.5：…).
+	 */
+	last: string;
+	/** When its last letter was written. */
+	lastActiveAt: number;
+	/** `lastActiveAt` in words. */
+	time?: Record<string, Stamp>;
+	/**
+	 * Both ways, in the order written (`way`): one coming in by that chat's agent, named by the chat; one going out by
+	 * this chat's agent.
+	 */
+	letters: ChatMessage[];
+}
+
+/**
+ * What a chat's agents and other chats' agents wrote each other (session_send): not said in the chat, read on a page of
+ * its own (the `chatLetters` view {station, thread}).
+ */
+export interface ChatLettersView {
+	/** The chat's title. */
+	title: string;
+	/** By the other chat, the one written with last first: the page lists them, one opened shows its letters. */
+	chats: LettersChat[];
+	/** All of the chat is on the device: no letter is missing. Until then, those held, more coming. */
+	whole: boolean;
 }
 
 /** A snapshot of a chat its station keeps for anyone with its link (`chat.publish` answers one too). */
@@ -2083,6 +2106,12 @@ export interface Link {
 	 * until the try reaches it, its 重试 turning meanwhile.
 	 */
 	retrying?: boolean;
+	/**
+	 * Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the
+	 * cloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the
+	 * workspace's members, for a security mode: `message` says why). Absent otherwise, and from a core before it.
+	 */
+	cause?: string;
 }
 
 /**
@@ -2143,10 +2172,15 @@ export interface ChatView {
 	 */
 	elsewhere?: ChatSentElsewhere[];
 	more: boolean;
-	/** First loaded entry before messages are merged or folded; the cursor for loading older pages. */
+	/** The first entry loaded (letters and edits are not messages): the cursor for loading older pages. */
 	firstEntry?: number;
-	/** Last loaded entry before messages are merged or folded; the cursor for loading newer pages. */
+	/** The last entry loaded: the cursor for loading newer pages. */
 	lastEntry?: number;
+	/**
+	 * How many letters its agents and other chats' wrote each other (not in `messages`; the `chatLetters` view shows
+	 * them). Absent when none.
+	 */
+	letters?: number;
 	/**
 	 * Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,
 	 * `chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`.
@@ -2177,6 +2211,11 @@ export interface ChatView {
 	outbox: Outgoing[];
 	link: Link;
 	offline: boolean;
+	/**
+	 * Its station taken for down, the line over the composer: why, and that what is sent goes once it is
+	 * reached (the composer stays open). Absent otherwise, and from a core before it.
+	 */
+	offlineNote?: string;
 	/** One of its agents keeps watch: archiving it by hand asks first. Absent otherwise. */
 	watch?: RowWatch;
 	/** A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox. */
@@ -2217,6 +2256,8 @@ export interface StationState {
 	/** online | connecting | offline | error */
 	state: string;
 	message?: string;
+	/** Offline, why as the device can tell (Link's `cause`). Absent otherwise. */
+	cause?: string;
 }
 
 /**
@@ -2227,6 +2268,8 @@ export interface StationTrouble {
 	text: string;
 	state: string;
 	retry?: boolean;
+	/** The station's address when one alone is in trouble (its mark is shown with the line); absent with several, or from a core before it. */
+	station?: string;
 }
 
 /** Whose pictures lead the rows of a list (`ChatsView::leading`). */
@@ -4065,6 +4108,11 @@ export interface StationView {
 	online: boolean;
 	/** Up, but not reached just now (connecting or coming back): its figures are from before. */
 	reconnecting?: boolean;
+	/**
+	 * Down for a security mode (it refused this device, or takes none of this workspace's members yet): why, in
+	 * words, in place of the page's 离线 note. Absent otherwise.
+	 */
+	blocked?: string;
 	/** Seconds, from still.fail cloud. */
 	lastSeen?: number;
 	version?: string;
@@ -4324,6 +4372,19 @@ export interface PrefsView {
 	 * trackpad (the finger moves the pointer, a tap clicks where it points).
 	 */
 	screenTouch?: string;
+	/**
+	 * How large a picture of a station's screen this device asks for: `smooth` (at most 1280×720), `hd` (at
+	 * most 1920×1080), `original` (the screen's own size), or (none) as the window is (at most 1920×1080, 2560×1440 on
+	 * a screen that has more).
+	 */
+	screenQuality?: string;
+	/**
+	 * The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
+	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
+	 */
+	previewSizes?: Record<string, string>;
+	/** A service's page's toolbar folded away on this device (held down; the bar's size button opens it again). */
+	previewFolded?: boolean;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
 	resume?: Record<string, string>;
 	/** Versions dismissed on this device, by workspace/station. */
@@ -4980,6 +5041,13 @@ export interface UsageSeries {
 	name: string;
 }
 
+/** A line of the scale the bars stand in, at `value` dollars. */
+export interface UsageTick {
+	value: number;
+	/** 2k */
+	label: string;
+}
+
 /** 折合费用 $1,911 (按 API 价算). */
 export interface UsageTile {
 	label: string;
@@ -5001,8 +5069,12 @@ export interface UsageView {
 	tiles: UsageTile[];
 	series: UsageSeries[];
 	daily: UsageDay[];
-	/** The most a day cost (what the bars are drawn against). */
+	/** The most a day cost. */
 	max: number;
+	/** What the bars are drawn against: a round number at or above `max` (views/usage.ts scale), 0 when nothing was spent. */
+	top: number;
+	/** The scale's lines, the last at `top`. */
+	ticks: UsageTick[];
 	lists: UsageList[];
 	notes: string[];
 	basis: string;

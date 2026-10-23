@@ -54,7 +54,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.CompositionLocalProvider
 import fail.still.android.LocalApp
+import fail.still.android.data.Attachment
 import fail.still.android.data.t
 import fail.still.android.ui.C
 import fail.still.android.ui.Drawn
@@ -107,6 +109,12 @@ class MessagePick(private val draft: Draft?) {
         dragging = false
     }
 
+    /** An image of the message `ts` held: into the draft as a quote, the file going again with the message (Composer.kt). */
+    fun quoteFile(ts: String, author: String, role: String, file: Attachment) {
+        draft?.quoteFile(author, ts, role, file)
+        clear()
+    }
+
     /** Into the draft as a quote, its comment line taking the focus (Composer.kt); then let go. */
     fun quote() {
         val text = picked?.let { words?.textOf(it)?.trim() }
@@ -117,6 +125,19 @@ class MessagePick(private val draft: Draft?) {
 
 /** The list's picking, for the messages in it (none: their words are only read). */
 val LocalMessagePick = staticCompositionLocalOf<MessagePick?> { null }
+
+/** How an image of the message drawn is quoted when held (ChatFiles.kt ChatImage): none where nothing quotes. */
+val LocalImageQuote = staticCompositionLocalOf<((Attachment) -> Unit)?> { null }
+
+/** The images in `content`, one message's (`ts`, said by `author` as `role`), quoted when held, where the list quotes. */
+@Composable
+internal fun QuotesImages(ts: String, author: String, role: String, content: @Composable () -> Unit) {
+    val pick = LocalMessagePick.current
+    if (pick == null || !pick.quotes) return content()
+    val said by rememberUpdatedState(Triple(ts, author, role))
+    val quote = remember(pick) { { f: Attachment -> pick.quoteFile(said.first, said.second, said.third, f) } }
+    CompositionLocalProvider(LocalImageQuote provides quote, content = content)
+}
 
 /**
  * The hook for one message's words where passages are picked in place (LocalMessagePick): a modifier for what holds

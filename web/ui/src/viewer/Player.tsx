@@ -22,7 +22,7 @@ import { compareNatural, sideSubtitle } from "./names.ts";
 import { REST_MS, TAP_REST_MS } from "./rest.ts";
 import * as vvCss from "./media.css.ts";
 import { ViewerBar, ViewerDownload, ViewerTool } from "./ViewerBar.tsx";
-import { decodeText } from "./text.ts";
+import { decodeText } from "./decode.ts";
 import { toVtt } from "./subtitles.ts";
 import * as css from "./Player.css.ts";
 

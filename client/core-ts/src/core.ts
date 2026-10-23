@@ -13,6 +13,7 @@ import { importFormer } from "./db/import.ts";
 import { Data, holds } from "./data.ts";
 import { chatDerive } from "./views/views.ts";
 import { Doing, FAILED_SHOWN_MS, heavy } from "./doing.ts";
+import { DriveKept } from "./drive-kept.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
@@ -102,6 +103,8 @@ export class Inner {
   workspaces!: Workspaces;
   /// What the device waits on: still.fail cloud, its sockets, the relay for no station.
   status!: Status;
+  /// Files of the stations' drives kept on this device once read, for an app that asks (drive-kept.ts).
+  driveKept!: DriveKept;
   wakes!: Wakes;
   scheduler!: Scheduler;
   cloudSync!: CloudSync;
@@ -152,6 +155,7 @@ export class Core {
       inner.wakes = new Wakes();
       // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
       inner.host = new WakingHost(host, inner.wakes);
+      inner.driveKept = new DriveKept(inner.host);
       brand.setTestChannel(inner.host.testChannel());
       fonts.setOrigin(inner.host.cloudOrigin());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
@@ -188,6 +192,8 @@ export class Core {
         } else store.changed(topic);
       });
       inner.status.onChange(() => store.invalidateAll((t) => t.topic === "status"));
+      // Why a station down is not reached is said again as still.fail cloud is reached, or no longer is.
+      inner.status.onCloud = () => inner.stations?.recause();
       inner.scheduler = new Scheduler(inner.runner, inner.runner.root);
       inner.cloudSync = new CloudSync(inner);
       inner.status.setNames((address) => inner.cloudSync.nameOf(address));

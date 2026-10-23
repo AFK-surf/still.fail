@@ -131,7 +131,7 @@ fn faded(color : Int64, k : Double) -> Int64 {
 }
 
 ///|
-fn glyph_layer(d : String, fill : Int64, stroke : Int64, width : Double, even_odd? : Bool = false) -> Layer {
+fn glyph_layer(d : String, fill : Int64, stroke : Int64, width : Double, even_odd? : Bool = false) -> @pixels.VectorPath {
   { d, fill, stroke, width, even_odd, sx: 1.0, sy: 1.0, tx: 0.0, ty: 0.0 }
 }
 
@@ -172,7 +172,7 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
     pulse = ((glyph_track + (0.85 - glyph_track) * eased) * 20.0).round() / 20.0
   }
   let whole = if g.asleep { 0.4 } else { 1.0 }
-  let layers : Array[Layer] = []
+  let layers : Array[@pixels.VectorPath] = []
   for a in arcs {
     let k = if a.lit { 1.0 } else if a.pulse { pulse } else { glyph_track }
     layers.push(glyph_layer(arc_path(a.from, a.to), 0L, faded(tint, k * whole), 1.8))

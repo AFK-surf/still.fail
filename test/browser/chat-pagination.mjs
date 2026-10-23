@@ -43,7 +43,7 @@ window.loads = [];
 createRoot(document.getElementById('root')!).render(<List />);
 `, { flag: 'wx' });
   writeFileSync(html, '<div id="root"></div><script type="module" src="/chat-pagination-check.tsx"></script>', { flag: 'wx' });
-  server = await createServer({ configFile: false, root: fileURLToPath(new URL('../../web', import.meta.url)), plugins: [react(), vanillaExtractPlugin()], resolve: { alias: [uiAlias] }, server: { host: '127.0.0.1', port: 0 } });
+  server = await createServer({ configFile: false, cacheDir: fileURLToPath(new URL("../../node_modules/.vite-chat-pagination", import.meta.url)), optimizeDeps: { entries: [fileURLToPath(html)] }, root: fileURLToPath(new URL('../../web', import.meta.url)), plugins: [react(), vanillaExtractPlugin()], resolve: { alias: [uiAlias] }, server: { host: '127.0.0.1', port: 0 } });
   await server.listen();
   browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}), ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
@@ -56,10 +56,12 @@ createRoot(document.getElementById('root')!).render(<List />);
     await page.goto(server.resolvedUrls.local[0] + 'chat-pagination-check.html?mode=' + mode);
     await page.waitForFunction(() => window.model);
     await page.clock.runFor(1000);
+    await page.waitForFunction(() => window.loads.length > 0, null, { polling: 50 });
   };
   const state = () => page.evaluate(() => ({ loads: window.loads, last: window.last }));
   for (const mode of ['folded', 'older', 'edits']) {
     await open(mode);
+    await page.waitForFunction(target => window.last === target, mode === "older" ? 50 : 200, { polling: 50 });
     assert.deepEqual(await state(), mode === 'older'
       ? { loads: [200, 150, 100], last: 50 }
       : { loads: [50, 100, 150], last: 200 }, mode + ': pages progress without scrolling');
@@ -73,12 +75,14 @@ createRoot(document.getElementById('root')!).render(<List />);
   assert.deepEqual(await state(), { loads: [50], last: 50 }, 'an answer alone cannot release ownership');
   await page.evaluate(() => window.advance());
   await page.clock.runFor(1000);
+  await page.waitForFunction(() => window.loads.length === 2, null, { polling: 50 });
   assert.deepEqual(await state(), { loads: [50, 100], last: 100 }, 'committed cursor releases the answered request');
   await page.evaluate(() => window.advance());
   await page.clock.runFor(1000);
   assert.deepEqual(await state(), { loads: [50, 100], last: 150 }, 'a committed cursor alone cannot release the unanswered request');
   await page.evaluate(() => window.answer());
   await page.clock.runFor(1000);
+  await page.waitForFunction(() => window.loads.length === 3, null, { polling: 50 });
   assert.deepEqual(await state(), { loads: [50, 100, 150], last: 150 });
   assert.deepEqual(errors, []);
   console.log('PASS pagination: folded newer pages, older pages, edit-only pages, failure, and answer/commit ordering');

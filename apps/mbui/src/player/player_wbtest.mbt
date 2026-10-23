@@ -39,40 +39,12 @@ test "times and speeds as they are shown" {
 }
 
 ///|
-test "SubRip: its times, its lines, its tags gone" {
-  let srt = "1\n00:00:01,500 --> 00:00:03,000\n<i>第一句</i>\n第二行\n\n2\n00:01:02,000 --> 00:01:04,250\n{\\an8}上面 &amp; 下面\n"
-  let cues = parse_timed(srt)
-  assert_eq(cues.length(), 2)
-  assert_eq((cues[0].from, cues[0].to, cues[0].text), (1500.0, 3000.0, "第一句\n第二行"))
-  assert_eq((cues[1].from, cues[1].to, cues[1].text), (62000.0, 64250.0, "上面 & 下面"))
-  assert_eq(cues_at(cues, 2000.0), "第一句\n第二行")
-  assert_eq(cues_at(cues, 4000.0), "")
-}
-
-///|
-test "WebVTT: its header and notes passed over, minutes without hours, settings after the time" {
-  let vtt = "WEBVTT\n\nNOTE 说明\n\n00:01.000 --> 00:02.500 align:start\n<c.yellow>一</c>\n\n01:00:00.000 --> 01:00:01.000\n二\n"
-  let cues = parse_subtitles("a.vtt", @utf8.encode(vtt))
-  assert_eq(cues.map(fn(q) { (q.from, q.to, q.text) }), [(1000.0, 2500.0, "一"), (3600000.0, 3601000.0, "二")])
-}
-
-///|
-test "ASS: its dialogue by the Format line, commas in the words kept, overrides gone, \\N a new line" {
-  let ass = "[Script Info]\nTitle: x\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:03.00,0:00:05.50,Default,,0,0,0,,{\\b1}你好，世界, 再见\\N第二行\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,先说\n"
-  let cues = parse_subtitles("a.ass", @utf8.encode(ass))
-  assert_eq(cues.map(fn(q) { (q.from, q.to, q.text) }), [(1000.0, 2000.0, "先说"), (3000.0, 5500.0, "你好，世界, 再见\n第二行")])
-  assert_eq(time_of("0:00:03.25"), Some(3250.0))
-  assert_eq(time_of("12:34"), Some(754000.0))
-  assert_eq(time_of("x"), None)
-}
-
-///|
 /// A player over the fake host, playing `name` of a folder of `list`.
-fn tester_with(p : Player, list : Array[String], opened : Array[String], backs : Array[Int]) -> @ui.Tester {
+fn tester_with(p : @kit.Media, list : Array[String], opened : Array[String], backs : Array[Int]) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
       @sf.begin(c) |> ignore
-      p.view(c, list~, fn() { backs.push(1) }, fn(n) { opened.push(n) })
+      view(p, c, list~, fn() { backs.push(1) }, fn(n) { opened.push(n) })
     },
     w=390.0,
     h=844.0,
@@ -80,13 +52,13 @@ fn tester_with(p : Player, list : Array[String], opened : Array[String], backs :
 }
 
 ///|
-fn track(name : String, audio? : Bool = false) -> Track {
+fn track(name : String, audio? : Bool = false) -> @kit.MediaTrack {
   { name, mime: if audio { "audio/mpeg" } else { "video/mp4" }, audio, read: fn(_, _, _) {  } }
 }
 
 ///|
 test "the player: its bar, where it is, its controls; the picture fitted in the middle" {
-  let p = Player::new()
+  let p = player()
   let opened = []
   let backs = []
   let t = tester_with(p, ["E1.mp4", "E2.mp4", "E3.mp4"], opened, backs)
@@ -111,7 +83,7 @@ test "the player: its bar, where it is, its controls; the picture fitted in the 
 
 ///|
 test "the player: a double tap on the right third jumps 15 s on (at most to the end), said a moment" {
-  let p = Player::new()
+  let p = player()
   let t = tester_with(p, [], [], [])
   p.open(track("a.mp4"))
   t.draw()
@@ -120,14 +92,14 @@ test "the player: a double tap on the right third jumps 15 s on (at most to the 
   assert_true(t.find("快进 15 秒") is Some(_))
   // the fake view is 10 s long: to its end
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" 3 10000") }))
-  t.run_for(note_ms)
+  t.run_for(@kit.media_note_ms)
   assert_true(t.find("快进 15 秒") is None)
   t.assert_idle()
 }
 
 ///|
 test "the player: the speed steps through 1× 1.25× 1.5× 2× 0.5× 0.75×; back and the next one" {
-  let p = Player::new()
+  let p = player()
   let opened = []
   let backs = []
   let t = tester_with(p, ["E1.mp4", "E2.mp4"], opened, backs)
@@ -142,17 +114,19 @@ test "the player: the speed steps through 1× 1.25× 1.5× 2× 0.5× 0.75×; bac
   t.tap(26.0, y)
   assert_eq(backs.length(), 1)
   ignore(opened)
+  // the keys' ripples gone (their way in, then out)
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
 ///|
 test "a song: its mark and name in the middle, no sideways key, the controls staying" {
-  let p = Player::new()
+  let p = player()
   let t = tester_with(p, [], [], [])
   p.open(track("曲.mp3", audio=true))
   t.draw()
   // past the time a video's controls go, and their fade
-  t.run_for(rest_ms + shown_ms)
+  t.run_for(@kit.media_rest_ms + @kit.media_shown_ms)
   assert_true(t.find("0:00 / 0:10") is Some(_))
   assert_eq(t.find_last("曲.mp3") is Some(_), true)
   t.assert_idle()
@@ -160,7 +134,7 @@ test "a song: its mark and name in the middle, no sideways key, the controls sta
 
 ///|
 test "a subtitle's words over the picture at their time; the captions key turns them off" {
-  let p = Player::new()
+  let p = player()
   let t = tester_with(p, [], [], [])
   p.open(track("a.mp4"))
   p.set_subtitle(true, [{ from: 0.0, to: 5000.0, text: "第一句" }])

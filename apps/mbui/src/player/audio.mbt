@@ -5,24 +5,11 @@
 /// The song `n` (a native player of src/ui/native.mbt, not placed: it has no picture) named `name`: its name, then the
 /// capsule (54 high on the chip's ground): play or pause on the ink, the timeline, `m:ss / m:ss` (播放失败 when it
 /// cannot be played). `key` keeps its widgets apart.
-pub fn audio_strip(c : @ui.Ctx, key : String, n : @ui.NativeView, name : String, pinned? : Status? = None) -> Unit {
+pub fn audio_strip(c : @ui.Ctx, key : String, n : @ui.NativeView, name : String, pinned? : @kit.MediaStatus? = None) -> Unit {
   let t = @sf.theme().p
   let s = match pinned {
     Some(s) => s
-    None => {
-      let (w, h) = n.natural()
-      {
-        state: n.state(),
-        duration: n.duration(),
-        position: n.position(),
-        buffered: n.buffered(),
-        playing: n.playing(),
-        buffering: n.buffering(),
-        ended: n.ended(),
-        width: w,
-        height: h,
-      }
-    }
+    None => @kit.media_status(Some(n))
   }
   let ready = s.state == 1
   let failed = s.state == -1
@@ -51,12 +38,15 @@ pub fn audio_strip(c : @ui.Ctx, key : String, n : @ui.NativeView, name : String,
           h=Px(38.0),
           radius=19.0,
           bg=t.text,
-          opacity=1.0 - 0.15 * @motion.pressing(c, play),
           align=ACenter,
           justify=JCenter,
           id=if ready { play } else { 0 },
           fn() {
             @sf.icon(c, if s.playing { "pause" } else { "play" }, size=16.0, color=t.bg) |> ignore
+            // VideoViewer.kt: clip(CircleShape).clickable(enabled = ready)
+            if ready {
+              @motion.ripple(c, play, 19.0)
+            }
           },
         )
         |> ignore
@@ -90,7 +80,7 @@ pub fn audio_strip(c : @ui.Ctx, key : String, n : @ui.NativeView, name : String,
 ///|
 /// Where in the song it is (VideoViewer.kt Timeline, light): a 4 high track of the ink at 12%, what has played and a
 /// round head in the accent; tapped or dragged along, it goes there as the finger does.
-fn light_timeline(c : @ui.Ctx, key : String, n : @ui.NativeView, s : Status, ready : Bool) -> Unit {
+fn light_timeline(c : @ui.Ctx, key : String, n : @ui.NativeView, s : @kit.MediaStatus, ready : Bool) -> Unit {
   let t = @sf.theme().p
   let id = c.id(key + "/timeline")
   let dur = s.duration

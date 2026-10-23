@@ -63,6 +63,9 @@ pub fn Flow::start(
       abort("flow: nothing in the run holds " + text + " to drop")
     }
   }
+  // (the core's pure calls the app has kept answers for are answered here, not asked of the run's core: src/sfreplay
+  // source.mbt; the run's asks of them not waited for)
+  r.skip_where(fn(name, params) { @sfkept.has(name, params) })
   r.shuffle(seed)
   // (a test's steps written as a scripted run (FLOW_EMIT) over a trace the app may have outgrown: at once, as the steps
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)
@@ -966,7 +969,12 @@ pub fn Flow::share_files(self : Flow, names : Array[String]) -> Unit raise {
   emit("#env MBUI_SHARE_FILES=" + names.map(fn(n) { "{FILES}/" + n }).join("|"))
   let files = []
   for n in names {
-    match self.r.sent_bytes("station.upload.part", "name", n) {
+    // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
+    let handed = match self.r.sent_bytes("composer.add", "name", n) {
+      Some(b) => Some(b)
+      None => self.r.sent_bytes("station.upload.part", "name", n)
+    }
+    match handed {
       Some(b) => files.push((n, b))
       None => fail("flow: the trace has none of " + n + "'s bytes (over scripts/trace make's MAX_BYTES?)")
     }

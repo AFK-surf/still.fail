@@ -226,6 +226,13 @@ export class Way {
   }
 }
 
+/// Why a station takes none of the workspace's members for a security mode (its hello's `lock_station` `why`): the lock
+/// it joined with not brought yet, this workspace locked after it joined, or its own workspace locked and this one not.
+function lockStationWords(why: unknown, reason: string): string {
+  if (why === "pending" || why === "unpinned" || why === "home") return t(`core-logic.mesh.lock_station.${why}`);
+  return t("core-logic.mesh.credential_refused_why", { reason });
+}
+
 function closeMessage(reason: CloseReason): string {
   if (reason.kind === "application") {
     switch (reason.reason) {
@@ -311,6 +318,9 @@ class Control {
         if (answer.code === "client_upgrade_required") return yield* Effect.fail(new CoreError("client_upgrade_required", reason));
         // A station with a workspace lock that does not know this device yet: it waits to be confirmed (lock.ts).
         if (answer.code === "lock_unconfirmed") return yield* Effect.fail(new CoreError("lock_unconfirmed", t("core-logic.mesh.lock_unconfirmed", { reason })));
+        // A station that takes none of this workspace's members for a security mode, its own or this workspace's not
+        // brought to it yet (station/src/cloud/state.ts `leftOut`): why, as it said.
+        if (answer.code === "lock_station") return yield* Effect.fail(new CoreError("lock_station", lockStationWords(answer.why, reason)));
         return yield* Effect.fail(new CoreError("credential_refused", t("core-logic.mesh.credential_refused_why", { reason })));
       }
       return answer;
@@ -883,7 +893,7 @@ export class Mesh {
         if ("ok" in existing.result) {
           if (existing.result.ok.usable()) return existing.result.ok;
           // Refused for the workspace lock, the credential was fine: no new one asked of the cloud each time.
-          fresh = existing.result.ok.refused !== null && existing.result.ok.refused.code !== "lock_unconfirmed";
+          fresh = existing.result.ok.refused !== null && existing.result.ok.refused.code !== "lock_unconfirmed" && existing.result.ok.refused.code !== "lock_station";
         } else fresh = existing.result.err.code === "credential_refused";
       }
       // Gone, with another way still open: requests go on that one at once.

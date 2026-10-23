@@ -79,8 +79,11 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           }
           blocks.push(fn() {
             c.box(w=Fill(1.0), padx=24.0, pady=6.0, gap=4.0, fn() {
+              // how it is counted, under what was counted (nothing counted: the empty place says it already)
               let lines = strings(v, "notes")
-              lines.push(text(v, "basis"))
+              if !flag(v, "empty") {
+                lines.push(text(v, "basis"))
+              }
               for l in lines {
                 if l != "" {
                   c.text(l, size=12.0, color=t.p.subtle, w=Fill(1.0), line=17.0) |> ignore
@@ -149,13 +152,13 @@ fn usage_tiles(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
 }
 
 ///|
-/// Each day's cost as a bar split by who it was for (Usage.kt Days): the day tapped (the last at first) says its
-/// numbers under them.
+/// Each day's cost as a bar on the scale's lines, split by who it was for (Usage.kt Days): the day tapped (the last at
+/// first) says its numbers over them, and with several people what each of them spent that day under them.
 fn usage_days(c : @ui.Ctx, v : Json?) -> Unit {
-  let t = @sf.theme()
   let daily = items(v, "daily")
   let series = items(v, "series")
-  let max = number(v, "max")
+  let top = number(v, "top")
+  let ticks = items(v, "ticks")
   let several = series.length() > 1
   let many = daily.length() > 10
   let mut day : Json? = None
@@ -167,60 +170,54 @@ fn usage_days(c : @ui.Ctx, v : Json?) -> Unit {
   if day is None && daily.length() > 0 {
     day = Some(daily[daily.length() - 1])
   }
-  let gap_w = if many { 3.0 } else { 6.0 }
-  if several {
-    c.box(dir=Row, w=Fill(1.0), pb=10.0, gap=12.0, align=ACenter, fn() {
-      for i, s in series {
-        c.box(dir=Row, gap=5.0, align=ACenter, fn() {
-          c.box(w=Px(8.0), h=Px(8.0), radius=2.0, bg=series_color(series, i), fn() {  }) |> ignore
-          c.text(text(Some(s), "name"), size=12.0, color=t.p.muted, wrap=false) |> ignore
-        })
-        |> ignore
-      }
+  // the day's numbers over the bars: its cost large, its calls beside it (Usage.kt: by their baselines; here by their
+  // feet, the calls lifted to the cost's baseline)
+  if day is Some(_) {
+    c.text(if flag(day, "today") { tr("android-misc.usage.today") } else { text(day, "label") }, style=usage_day_name)
+    |> ignore
+    c.box(style=usage_figures, fn() {
+      c.text(text(day, "costText"), style=usage_cost_words) |> ignore
+      c.box(style=usage_calls_box, fn() { c.text(text(day, "callsText"), style=usage_calls_words) |> ignore }) |> ignore
     })
     |> ignore
   }
-  c.box(dir=Row, w=Fill(1.0), h=Px(150.0), gap=gap_w, fn() {
-    for d in daily {
-      let dv = Some(d)
-      let id = c.id("usage-day/" + text(dv, "day"))
-      if hit(c, id) {
-        usage_state.day = text(dv, "day")
-      }
-      let on = text(dv, "day") == text(day, "day")
-      c.box(w=Fill(1.0), h=Fill(1.0), radius=4.0, bg=if on { t.p.chip } else { 0L }, align=ACenter, justify=JEnd, id~, fn() {
-        let cost = number(dv, "cost")
-        if max > 0.0 && cost > 0.0 {
-          let share = dmin(1.0, dmax(0.0, cost / max))
-          c.box(w=Fill(1.0), max_w=28.0, h=Px(150.0 * share), radius=4.0, clip=true, gap=2.0, justify=JEnd, fn() {
-            let parts = items(dv, "parts")
-            let mut k = parts.length() - 1
-            while k >= 0 {
-              let p = match parts[k] {
-                Number(n, ..) => n
-                _ => 0.0
-              }
-              if p > 0.0 {
-                c.box(w=Fill(1.0), h=Fill(dmax(p / cost, 0.001)), bg=series_color(series, k), fn() {  }) |> ignore
-              }
-              k -= 1
-            }
+  c.box(style=usage_plot_box, fn() {
+    // the scale's lines across, each said at the right just over it, where no bar is
+    if top > 0.0 {
+      for k in ticks {
+        let y = @sf.usage_plot * (1.0 - number(Some(k), "value") / top)
+        c.layer(fn() { c.box(style=usage_tick_rule, ty=y, fn() {  }) |> ignore }) |> ignore
+        c.layer(fn() {
+          c.box(style=usage_tick_row, ty=y - @sf.usage_tick_rise, fn() {
+            c.text(text(Some(k), "label"), style=usage_tick_words) |> ignore
           })
           |> ignore
-        }
-      })
-      |> ignore
+        })
+        |> ignore
+      }
     }
+    c.box(style=if many { usage_days_row_many } else { usage_days_row }, fn() {
+      for d in daily {
+        let dv = Some(d)
+        let id = c.id("usage-day/" + text(dv, "day"))
+        if hit(c, id) {
+          usage_state.day = text(dv, "day")
+        }
+        c.box(style=usage_day_col, id~, fn() { usage_bar(c, dv, series, top, many) }) |> ignore
+      }
+    })
+    |> ignore
   })
   |> ignore
-  c.box(w=Fill(1.0), h=Px(1.0), bg=t.p.line, fn() {  }) |> ignore
-  c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=gap_w, fn() {
+  c.box(style=usage_base, fn() {  }) |> ignore
+  c.box(style=if many { usage_labels_many } else { usage_labels }, fn() {
     let n = daily.length()
     for i, d in daily {
       let dv = Some(d)
       let today = flag(dv, "today")
+      let on = text(dv, "day") == text(day, "day")
       let shown = !many || today || (n - 1 - i) % 7 == 0
-      c.box(w=Fill(1.0), align=ACenter, fn() {
+      c.box(style=usage_label_cell, fn() {
         c.text(
           if !shown {
             ""
@@ -229,9 +226,7 @@ fn usage_days(c : @ui.Ctx, v : Json?) -> Unit {
           } else {
             text(dv, "label")
           },
-          size=11.0,
-          color=if today { t.p.text } else { t.p.subtle },
-          wrap=false,
+          style=if on { usage_label_on } else { usage_label_words },
         )
         |> ignore
       })
@@ -239,49 +234,225 @@ fn usage_days(c : @ui.Ctx, v : Json?) -> Unit {
     }
   })
   |> ignore
-  match day {
-    Some(_) =>
-      c.box(w=Fill(1.0), pt=12.0, gap=3.0, fn() {
-        c.text(
-          (if flag(day, "today") { tr("android-misc.usage.today") } else { text(day, "label") }) +
-          " · " +
-          text(day, "costText") +
-          " · " +
-          text(day, "callsText"),
-          size=13.0,
-          weight=500,
-          color=t.p.text,
-          w=Fill(1.0),
-          line=18.0,
-        )
-        |> ignore
-        if several && number(day, "cost") > 0.0 {
-          let parts = items(day, "parts")
-          let words = strings(day, "partsText")
-          for i, s in series {
-            let p = if i < parts.length() {
-              match parts[i] {
-                Number(n, ..) => n
-                _ => 0.0
-              }
-            } else {
-              0.0
-            }
-            if p > 0.0 {
-              c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-                c.box(w=Px(8.0), h=Px(8.0), radius=2.0, bg=series_color(series, i), fn() {  }) |> ignore
-                c.text(text(Some(s), "name"), size=12.0, color=t.p.muted, wrap=false, w=Fill(1.0)) |> ignore
-                c.text(if i < words.length() { words[i] } else { "" }, size=12.0, color=t.p.muted, wrap=false) |> ignore
-              })
-              |> ignore
-            }
+  // with several people: each of them (the rest too), what they spent that day and its share of the day's
+  if several && day is Some(_) {
+    let parts = items(day, "parts")
+    let words = strings(day, "partsText")
+    let cost = number(day, "cost")
+    c.box(style=usage_people, fn() {
+      for i, s in series {
+        let p = if i < parts.length() {
+          match parts[i] {
+            Number(n, ..) => n
+            _ => 0.0
           }
+        } else {
+          0.0
         }
-      })
-      |> ignore
-    None => ()
+        let share = if cost > 0.0 { dmin(1.0, dmax(0.0, p / cost)) } else { 0.0 }
+        // (a fill as wide as its share: a row of two, Fill by their parts; a little of it shown for a little spent)
+        let fill = if share > 0.0 { dmax(share, 0.01) } else { 0.0 }
+        let rest = 1.0 - fill
+        c.box(style=usage_person, fn() {
+          c.box(style=usage_person_row, fn() {
+            c.box(style=usage_person_dot, bg=series_color(series, i), fn() {  }) |> ignore
+            c.text(text(Some(s), "name"), style=usage_person_name) |> ignore
+            c.text(if i < words.length() { words[i] } else { "" }, style=usage_person_part) |> ignore
+          })
+          |> ignore
+          // its share of the day, on the chip's ground
+          c.box(style=usage_share_room, fn() {
+            c.box(style=usage_share_track, fn() {
+              if fill > 0.0 {
+                c.box(style=usage_share_fill, w=Fill(fill), bg=series_color(series, i), fn() {  }) |> ignore
+              }
+              c.box(w=Fill(rest), fn() {  }) |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
   }
 }
+
+///|
+/// A day's bar (Usage.kt Bar), as high as its share of the scale's top, at most 16 wide (as wide as its day once days
+/// are many): its people's parts one over another, the first at the foot, 1 apart, each round at its ends but the
+/// foot's, which stands square on the line (the foot's part the corner longer, cut there).
+fn usage_bar(c : @ui.Ctx, dv : Json?, series : Array[Json], top : Double, many : Bool) -> Unit {
+  let cost = number(dv, "cost")
+  if top <= 0.0 || cost <= 0.0 {
+    return
+  }
+  let h = @sf.usage_plot * dmin(1.0, cost / top)
+  let r = if many { @sf.usage_part_r_many } else { @sf.usage_part_r }
+  let parts : Array[(Int, Double)] = []
+  for k, p in items(dv, "parts") {
+    match p {
+      Number(n, ..) if n > 0.0 => parts.push((k, n))
+      _ => ()
+    }
+  }
+  if parts.length() == 0 {
+    return
+  }
+  let room = dmax(0.0, h - (parts.length() - 1).to_double())
+  let hr = h + r
+  c.box(style=if many { usage_bar_many } else { usage_bar_box }, h=Px(h), fn() {
+    c.box(style=usage_bar_parts, h=Px(hr), fn() {
+      // top first: the column is laid out from the top, the first person at the foot
+      let mut j = parts.length() - 1
+      while j >= 0 {
+        let (k, p) = parts[j]
+        let ph = room * p / cost + (if j == 0 { r } else { 0.0 })
+        c.box(style=if many { usage_part_many } else { usage_part }, h=Px(ph), bg=series_color(series, k), fn() {  })
+        |> ignore
+        j -= 1
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The day picked: its name, its cost large (Xl3, as the tiles' figures), its calls beside it lifted onto the cost's
+/// baseline.
+// kept across runs: a value (no field of it changes)
+let usage_day_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_figures : @ui.Style = @ui.style(row=true, pt=S0_5, pb=S4, gap=S2, align=AEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_cost_words : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_calls_box : @ui.Style = @ui.style(pb=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_calls_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+
+///|
+/// The plot, its scale's lines and their words (in the 24 at its right where no bar is), the days 6 apart (2 when many).
+// kept across runs: a value (no field of it changes)
+let usage_plot_box : @ui.Style = @ui.style(w=Full, h=@sf.usage_plot_h)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_tick_rule : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_tick_row : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_tick_words : @ui.TextStyle = @ui.text_style(size=Xs3, color=Subtle, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_days_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S6, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_days_row_many : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S6, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_day_col : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JEnd)
+
+///|
+/// A bar: at most 16 wide, cut at the foot; its parts 1 apart, round 4 (2 when many).
+// kept across runs: a value (no field of it changes)
+let usage_bar_box : @ui.Style = @ui.style(w=Full, max_w=@sf.usage_bar_max, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_bar_many : @ui.Style = @ui.style(w=Full, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_bar_parts : @ui.Style = @ui.style(w=Full, gap=SPx)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_part : @ui.Style = @ui.style(w=Full, radius=Base)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_part_many : @ui.Style = @ui.style(w=Full, radius=Sm)
+
+///|
+/// The days' foot and their dates under it.
+// kept across runs: a value (no field of it changes)
+let usage_base : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_labels : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pr=S6, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_labels_many : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pr=S6, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_label_cell : @ui.Style = @ui.style(w=Full, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_label_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_label_on : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Medium, color=Fg, wrap=false)
+
+///|
+/// Each of the day's people: a dot of theirs, their name, what they spent, its share under the name on the chip's
+/// ground.
+// kept across runs: a value (no field of it changes)
+let usage_people : @ui.Style = @ui.style(w=Full, pt=S4, gap=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_person : @ui.Style = @ui.style(w=Full, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_person_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_person_dot : @ui.Style = @ui.style(w=S2, h=S2, radius=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_person_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_person_part : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_share_room : @ui.Style = @ui.style(row=true, w=Full, h=S1, pl=S4)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_share_track : @ui.Style = @ui.style(row=true, w=Full, h=Full, radius=Sm, bg=Neutral, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_share_fill : @ui.Style = @ui.style(h=Full, radius=Sm)
 
 ///|
 /// The lists, one at a time, the first eight until asked for all (Usage.kt Lists).
@@ -350,7 +521,6 @@ fn usage_item(c : @ui.Ctx, core : Core, it : Json, rank : Int, kind : String) ->
     w=Fill(1.0),
     pady=10.0,
     radius=12.0,
-    bg=if opens && c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L },
     id=if opens { id } else { 0 },
     fn() {
       c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
@@ -404,6 +574,10 @@ fn usage_item(c : @ui.Ctx, core : Core, it : Json, rank : Int, kind : String) ->
         |> ignore
       })
       |> ignore
+      // Usage.kt ItemRow: a chat's clickable over its clip, Smooth(LIST_ROW_CORNER)
+      if opens {
+        @motion.ripple(c, id, @sf.row_corner)
+      }
     },
   )
   |> ignore

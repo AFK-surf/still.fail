@@ -56,8 +56,9 @@ export interface Draft {
   /** What is said about a quote. */
   comment(id: string, comment: string): void;
   unquote(id: string): void;
-  /** Quotes a passage; its comment line then asks for the focus (`focusQuote`, until `quoteFocused`). */
-  quote(q: Omit<Quote, "comment">): void;
+  /** Quotes a passage, or an image of a message (`file`: it goes again with the message, as the station has it); its
+   *  comment line then asks for the focus (`focusQuote`, until `quoteFocused`). */
+  quote(q: Omit<Quote, "comment">, file?: Attachment): void;
   focusQuote: string | null; quoteFocused(): void;
   /** A file still going up; sending queues the message until it is there. */
   uploading: boolean;
@@ -85,8 +86,9 @@ export interface Offer {
   files: File[]; quotes: DraftQuote[]; text?: string;
   /** Files and folders of a station's, named by their path (a chat's 文件 tab). */
   dropped?: Dropped[];
-  /** A passage selected in the chat, quoted with its comment line taking the focus. */
+  /** A passage selected in the chat (or an image of it held, `quotedFile`), quoted with its comment line taking the focus. */
   quote?: Omit<Quote, "comment">;
+  quotedFile?: Attachment;
 }
 
 /** The key of the draft of the chat a part of the page sits in, for what offers to it from within a message. */
@@ -302,9 +304,15 @@ export function useDraft({ key: given, station, carry }: {
   const addQuotes = (quotes: DraftQuote[]) => {
     for (const q of quotes) void act("quote", { id: q.id, quote: q }, (s) => ({ ...s, quotes: [...s.quotes, q] }));
   };
-  const quote = (q: Omit<Quote, "comment">) => {
+  const quote = (q: Omit<Quote, "comment">, file?: Attachment) => {
     const id = `${Date.now()}`;
-    void act("quote", { id, quote: { ...q, comment: "" }, focus: true }, (s) => ({ ...s, quotes: [...s.quotes, { ...q, comment: "", id }], focus: id }));
+    // An image of a message: among the files as one up already (the core puts it there too, by the same id).
+    const fileId = `quoted-${id}`;
+    const going = file && q.file ? file : undefined;
+    void act("quote", { id, quote: { ...q, comment: "" }, focus: true, ...(going ? { attachment: going, fileId } : {}) }, (s) => ({
+      ...s, quotes: [...s.quotes, { ...q, comment: "", id }], focus: id,
+      files: going && !s.files.some((f) => f.done?.path === going.path) ? [...s.files, { id: fileId, name: going.name, size: going.size, done: going }] : s.files,
+    }));
   };
   const comment = (id: string, words: string) => {
     void act("comment", { id, comment: words }, (s) => ({ ...s, quotes: s.quotes.map((x) => (x.id === id ? { ...x, comment: words } : x)) }));

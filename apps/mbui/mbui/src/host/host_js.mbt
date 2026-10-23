@@ -68,6 +68,11 @@ extern "js" fn js_present(
 ) -> Unit =
   #|(buf, n, r, g, b) => globalThis.__mbhost.present(buf, n, r, g, b)
 
+///|
+extern "js" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit =
+  #|(s, x, y, w, h, c) => { if (globalThis.__mbhost && globalThis.__mbhost.textMenu) globalThis.__mbhost.textMenu(s, x, y, w, h, c) }
+
+///|
 extern "js" fn js_set_ime(
   active : Bool,
   x : Double,
@@ -371,6 +376,21 @@ fn system_dark() -> Bool {
 }
 
 ///|
+fn font_scale() -> Double {
+  1.0
+}
+
+///|
+fn a11y_on() -> Bool {
+  false
+}
+
+///|
+fn a11y_tree(_s : String) -> Unit {
+  ()
+}
+
+///|
 /// The app is drawn dark from now on (host_native.mbt): the page has nothing of its own to follow it.
 fn set_dark(dark : Bool) -> Unit {
   ignore(dark)
@@ -542,6 +562,11 @@ fn pk_name(_id : Int, _i : Int) -> String {
 ///|
 fn pk_bytes(_id : Int, _i : Int) -> Bytes {
   b""
+}
+
+///|
+fn pk_info(_id : Int, _i : Int) -> String {
+  ""
 }
 
 ///|

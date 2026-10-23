@@ -33,6 +33,8 @@ test "the variables' field follows the core's text that comes after the sheet op
   open_setting("station:ws1/st1")
   t.draw()
   t.run_for(@ui.nav_push_ms)
+  // in the page's 设置
+  station_part(t, "设置")
   shown_on_page(t, "编辑变量")
   t.tap_text("编辑变量")
   t.run_for(@kit.sheet_rest("settings-sheet") - t.time())

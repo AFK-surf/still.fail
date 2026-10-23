@@ -586,6 +586,7 @@ function entryJson(e: EntryRow): Json {
   if (e.options !== undefined) v.options = e.options;
   if (e.card !== undefined) v.card = e.card;
   v.at = e.at;
+  if (e.letter !== undefined) v.letter = e.letter;
   return v;
 }
 

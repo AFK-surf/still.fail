@@ -1,10 +1,24 @@
-// Settings, one page from the gear on Home, as the narrow web has it (web/src/mobile/Settings.tsx): who is signed in, then
-// the workspace's (its people, stations, connects, profiles, memory), then this device's (how it looks, whether it
-// notifies, whether it reports, this build, the terms). Each row says how things stand at its end, what is wrong in
-// red, so the page is worth a look before anything is opened. And how this device shows still.fail (外观).
+// Settings, one page from the gear on Home: who is signed in and the workspace in view, each a card; then the
+// workspace's in small groups (who may do what; its stations and what they run; its agents), then this device's (how it
+// looks, its bar, whether it notifies, what it keeps), then 关于 (this build, what changed, whether it reports, the
+// terms). Each row has its icon, and says how things stand at its end, what is wrong in red, so the page is worth a look
+// before anything is opened. And how this device shows still.fail (外观), and 关于 itself.
 package fail.still.android.screens
 
 import fail.still.android.ui.Spinner
+import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.CARD_CORNER
+import fail.still.android.ui.concentric
+import fail.still.android.ui.initial
+import fail.still.android.ui.isStationPicture
+import fail.still.android.ui.hasStationMark
+import fail.still.android.ui.StationMark
+import fail.still.android.ui.Smooth
+import fail.still.android.data.VaultsView
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -98,6 +112,7 @@ fun SettingsScreen(current: WorkspaceEntry) {
     val failing = connects?.items?.count { it.connect.presence == "error" } ?: 0
     val profiles = stations.orEmpty().flatMap { it.overview?.profiles.orEmpty() }
     val short = profiles.count { it.trouble != null }
+    val vaults by rememberTopic<VaultsView>(app.core, Topics.vaults(current.workspace.id))
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack(t("android-settings.home.back"), app::pop)
         LargeTitle("", t("android-settings.title"))
@@ -111,32 +126,94 @@ fun SettingsScreen(current: WorkspaceEntry) {
                 IconIn(Icons.ChevronRight, 14.dp, C.subtle)
             }
         }
-        SectionHeader(view?.let { t("android-settings.home.workspace", "name" to it.name, "role" to (ROLE_LABEL[it.role] ?: it.role)) } ?: current.workspace.name, start = 24.dp)
-        ListCard {
-            GoRow("Workspace", view?.let { if (it.manager && waiting > 0) t("android-settings.members.waiting", "n" to it.members.size, "waiting" to waiting) else t("android-settings.members.count", "n" to it.members.size) }) { app.push(Screen.Workspace) }
-            lock.value?.takeIf { it.available }?.let { l ->
-                GoRow(t("web-pages.security.title"), if (!l.locked) t("web-mobile.settings.securityOff") else if (l.attention > 0u) t("web-mobile.settings.securityWaiting", "n" to l.attention.toInt()) else t("web-mobile.settings.securityOn"), bad = l.attention > 0u) { app.push(Screen.Security) }
+        // The workspace as the account is: its mark, its name, the viewer's role in it and its people.
+        val summary = current.workspace
+        val role = view?.role ?: summary.role
+        val members = view?.let { if (it.manager && waiting > 0) t("android-settings.members.waiting", "n" to it.members.size, "waiting" to waiting) else t("android-settings.members.count", "n" to it.members.size) }
+            ?: t("android-settings.members.count", "n" to summary.members)
+        Card(onClick = { app.push(Screen.Workspace) }) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                WorkspaceTile(view?.name ?: summary.name, view?.emoji ?: summary.emoji, view?.icon ?: summary.icon)
+                Column(Modifier.weight(1f)) {
+                    Text(view?.name ?: summary.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(listOfNotNull(ROLE_LABEL[role] ?: role.ifEmpty { null }, members).joinToString(" · "), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+            }
+        }
+        // Who may do what: security mode and the vault, where the workspace has them.
+        val security = lock.value?.takeIf { it.available }
+        if (security != null || vaults.value != null) ListCard {
+            security?.let { l ->
+                GoRow(t("web-pages.security.title"), if (!l.locked) t("web-mobile.settings.securityOff") else if (l.attention > 0u) t("web-mobile.settings.securityWaiting", "n" to l.attention.toInt()) else t("web-mobile.settings.securityOn"), bad = l.attention > 0u, icon = Icons.ShieldCheck) { app.push(Screen.Security) }
             }
             VaultSettingsRow(current.workspace.id)
-            GoRow("Station", stations?.let { t("android-settings.home.online", "online" to online, "total" to it.size) }, dot = troubled) { app.push(Screen.Stations) }
-            GoRow(t("android-settings.connects.title"), connects?.let { if (failing > 0) t("android-settings.home.failing", "n" to failing) else t("android-settings.count", "n" to it.items.size) }, bad = failing > 0) { app.push(Screen.Connects()) }
-            GoRow("Profile", stations?.let { if (short > 0) t("android-settings.home.short", "n" to short) else t("android-settings.count", "n" to profiles.size) }, bad = short > 0) { app.push(Screen.Profiles()) }
-            GoRow(t("web-pages.automaticDecisions.title")) { app.push(Screen.AutomaticDecisions) }
-            GoRow(t("android-settings.memory")) { app.push(Screen.Memories) }
-            GoRow(t("android-settings.home.usage")) { app.push(Screen.Usage) }
+        }
+        // Its stations and what they run: the agents' accounts and the chats' ways in.
+        ListCard {
+            GoRow("Station", stations?.let { t("android-settings.home.online", "online" to online, "total" to it.size) }, dot = troubled, icon = Icons.Server) { app.push(Screen.Stations) }
+            GoRow(t("android-settings.connects.title"), connects?.let { if (failing > 0) t("android-settings.home.failing", "n" to failing) else t("android-settings.count", "n" to it.items.size) }, bad = failing > 0, icon = Icons.Im) { app.push(Screen.Connects()) }
+            GoRow("Profile", stations?.let { if (short > 0) t("android-settings.home.short", "n" to short) else t("android-settings.count", "n" to profiles.size) }, bad = short > 0, icon = Icons.Quota) { app.push(Screen.Profiles()) }
+        }
+        // Its agents: what they decide by themselves, what they remember, what they used.
+        ListCard {
+            GoRow(t("web-pages.automaticDecisions.title"), icon = Icons.Check) { app.push(Screen.AutomaticDecisions) }
+            GoRow(t("android-settings.memory"), icon = Icons.Brain) { app.push(Screen.Memories) }
+            GoRow(t("android-settings.home.usage"), icon = Icons.Chart) { app.push(Screen.Usage) }
         }
         SectionHeader(t("android-settings.home.device"), start = 24.dp)
         ListCard {
-            GoRow(t("android-settings.appearance.title"), themes().firstOrNull { it.first == app.theme }?.second) { app.push(Screen.Appearance) }
+            GoRow(t("android-settings.appearance.title"), themes().firstOrNull { it.first == app.theme }?.second, icon = Icons.Sliders) { app.push(Screen.Appearance) }
             // The bottom bar's places (BarSettings.kt): a phone's only, a wide screen has none.
-            if (!LocalWide.current) GoRow(t("android-misc.bar.title"), barsValue(app)) { app.push(Screen.BarSettings) }
-            KeptFilesRow()
+            if (!LocalWide.current) GoRow(t("android-misc.bar.title"), barsValue(app), icon = Icons.ViewColumns) { app.push(Screen.BarSettings) }
             Notify()
-            Reporting()
+            KeptFilesRow()
+        }
+        ListCard { AboutRow() }
+        Spacer(Modifier.height(30.dp))
+    }
+}
+
+/**
+ * The workspace's mark on its card, as the account's picture is on its own: CARD_PAD from the card's edges, so in its
+ * corners, its corner concentric with the card's; a picture put up fills the square; one of still.fail's icons or an
+ * emoji on the chips' ground; else its first letter, muted, as the web's rail has it, near the account's initial beside
+ * it (half its picture).
+ */
+@Composable
+private fun WorkspaceTile(name: String, emoji: String?, icon: String?) {
+    val picture = isStationPicture(icon)
+    Box(Modifier.size(46.dp).clip(Smooth(concentric(CARD_CORNER, CARD_PAD))).background(if (picture) C.surface else C.chip), contentAlignment = Alignment.Center) {
+        when {
+            picture -> StationMark(emoji, icon, 46.dp, C.ink)
+            hasStationMark(emoji, icon) -> StationMark(emoji, icon, 26.dp, C.ink)
+            else -> Text(initial(name), fontSize = 22.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = C.muted)
+        }
+    }
+}
+
+/** 关于's row: this build, or the newer one still.fail cloud has (tapped there, it is installed). */
+@Composable
+private fun AboutRow() {
+    val app = LocalApp.current
+    LaunchedEffect(Unit) { app.checkUpdates() }
+    val newer = app.updates.available
+    GoRow(t("web-pages.settings.nav.about"), newer?.let { t("android-settings.version.update", "version" to it.versionName) } ?: BuildConfig.VERSION_NAME, icon = Icons.Info) { app.push(Screen.About) }
+}
+
+/** About this app, as the web's 关于: this build and a newer one, what changed, whether it reports, the terms. */
+@Composable
+fun AboutScreen() {
+    val app = LocalApp.current
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack(t("android-settings.title"), app::pop)
+        LargeTitle("", t("web-pages.settings.nav.about"))
+        ListCard {
             Version()
             GoRow(t("android-settings.changelog.title")) { app.push(Screen.Changelog) }
-            Legal()
         }
+        if (BuildConfig.POSTHOG_KEY.isNotEmpty()) ListCard { Reporting() }
+        ListCard { Legal() }
         Spacer(Modifier.height(30.dp))
     }
 }
@@ -148,10 +225,11 @@ private fun KeptFilesRow() {
     val context = LocalContext.current
     var total by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(Unit) { total = KeptFiles.read(app, context).total }
-    GoRow(t("android-settings.files.title"), total?.let { fileSize(it) }) { app.push(Screen.KeptFiles) }
+    GoRow(t("android-settings.files.title"), total?.let { fileSize(it) }, icon = Icons.Disk) { app.push(Screen.KeptFiles) }
 }
 
-/** Local notices and pushes alike, on this device (Notices.kt, Push.kt); turned on, the system is asked too. */
+/** Local notices and pushes alike, on this device (Notices.kt, Push.kt); turned on, the system is asked too. Its switch
+ *  says whether: no note under it. */
 @Composable
 private fun Notify() {
     val app = LocalApp.current
@@ -164,10 +242,8 @@ private fun Notify() {
         if (on) ask()
         app.scope.launch { Push.sync(context.applicationContext, app.core, app.useNotify(on)) }
     })) {
-        Column(Modifier.weight(1f)) {
-            Text(t("android-settings.notify.title"), fontSize = 15.sp, color = C.ink)
-            Text(if (app.notify) t("android-settings.notify.on") else t("android-settings.notify.off"), fontSize = 13.sp, color = C.muted)
-        }
+        RowIcon(Icons.Bell)
+        Text(t("android-settings.notify.title"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
         if (pending) Spinner()
         Switch(app.notify)
     }
@@ -191,7 +267,10 @@ private fun Reporting() {
     }
 }
 
-/** still.fail's terms and privacy policy, on the web in a Custom Tab, in English when the app speaks it (data/I18n.kt). */
+/**
+ * still.fail's terms and privacy policy, on the web in a Custom Tab, in English when the app speaks it (data/I18n.kt):
+ * the arrow out, as the web's 关于 has them.
+ */
 @Composable
 private fun Legal() {
     val context = LocalContext.current
@@ -199,8 +278,12 @@ private fun Legal() {
         val url = "https://still.fail${if (I18n.lang == "en") "/en" else ""}/$page"
         CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, url.toUri())
     }
-    GoRow(t("android-settings.legal.terms")) { open("terms") }
-    GoRow(t("android-settings.legal.privacy")) { open("privacy") }
+    for ((page, title) in listOf("terms" to t("android-settings.legal.terms"), "privacy" to t("android-settings.legal.privacy"))) {
+        ListRow(onClick = { open(page) }) {
+            Text(title, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            IconIn(Icons.ArrowUpRight, 14.dp, C.subtle)
+        }
+    }
 }
 
 /**

@@ -203,7 +203,9 @@ fn rich_same(a : Rich?, b : Rich?) -> Bool {
 /// The flex node for node `i` (laid out in direction `pdir`: 0 none, 1
 /// row, 2 column) and its subtree,
 /// styled from the builder's sizes: Fill along the parent's direction
-/// grows from nothing, across it stretches; content-sized children of a
+/// grows from nothing, across it stretches (held to a max across in a
+/// parent that centres or ends, placed as the parent places what it
+/// holds); content-sized children of a
 /// row may shrink (and wrap), except text that must stay on one line.
 ///
 /// Styles, children and what leaves measure are compared with what the
@@ -374,6 +376,15 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       }
     Auto => ()
   }
+  // Fill across, held to a max there, in what centres or ends what it holds: as wide (high) as that up to its max, and
+  // placed as the parent places its children, as Compose's fillMaxWidth().widthIn(max) in a centred Column; stretched
+  // it would sit at the start (a flex item stretched short of its line)
+  let placed = n.parent >= 0 && self.nodes[n.parent].align is (ACenter | AEnd)
+  let fill_w = in_col && n.w is Fill(_) && has_max_w && placed
+  let fill_h = in_row && n.h is Fill(_) && has_max_h && placed
+  if fill_w || fill_h {
+    stretch = false
+  }
   if s.grow != grow {
     s.grow = grow
     ch = true
@@ -417,6 +428,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     if !(s.width_kind() == @flex.LEN_PCT && s.width_value() == 100.0) {
       s.set_width(Pct(100.0))
     }
+  } else if fill_w {
+    if !(s.width_kind() == @flex.LEN_PCT && s.width_value() == 100.0) {
+      s.set_width(Pct(100.0))
+      ch = true
+    }
   } else {
     let w = len(wpx)
     if opt_differs(s.width_kind(), s.width_value(), has_w, w) {
@@ -424,7 +440,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       ch = true
     }
   }
-  if !has_h && over {
+  if (!has_h && over) || fill_h {
     if !(s.height_kind() == @flex.LEN_PCT && s.height_value() == 100.0) {
       s.set_height(Pct(100.0))
       ch = true

@@ -127,6 +127,39 @@ function brought(hello: any, cloud: Cloud, workspace: string, base: string | und
 /// `ws` when it is a workspace the station joined, null for its home one (whose lock is the home's).
 const joinedOf = (cloud: Cloud, ws: string) => (ws && ws !== cloud.home() ? ws : null);
 
+/// What a device is told when this station takes none of its workspace's members for a security mode (Cloud.leftOut):
+/// a refusal of its own (`lock_station`, `why`), so the device says that rather than the station being down.
+const LEFT_OUT = {
+  pending: "this station has not pinned this workspace's lock yet: the control plane has not brought the one it joined with",
+  unpinned: "this workspace turned its lock on after this station joined it: remove the station from it and add it again",
+  home: "this station's own workspace is locked and this one is not: it takes none of this one's members",
+} as const;
+
+/// Why a credential for a workspace this station joined is refused, when it is as the control plane signs them and that
+/// workspace is left out for a lock (Cloud.leftOut); null otherwise (one that does not check out learns nothing of
+/// the workspaces this station is in).
+function leftOutFor(cloud: Cloud, hello: any, device: string, accepted?: Accepted): keyof typeof LEFT_OUT | null {
+  const ws = claimed(hello);
+  const why = ws === "" ? null : cloud.leftOut(ws);
+  if (why === null) return null;
+  const revocations = cloud.state?.joined?.find((j) => j.workspace === ws)?.revocations ?? [];
+  try {
+    verifyMemberOf(typeof hello?.credential === "string" ? hello.credential : "", cloud.state?.grant_keys, [{ workspace: ws, revocations }], device, accepted);
+    return why;
+  } catch {
+    return null;
+  }
+}
+
+/// What a hello this station refused (`e`, why) is answered: a lock's refusal with the code the device asks to be
+/// approved by and how far the lock goes here; a workspace left out for a lock, why (`lock_station`); else the reason.
+export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, accepted?: Accepted): Record<string, unknown> {
+  if (e instanceof LockRefusal) return { error: e.message, code: e.code, lock: lockHead(cloud, joinedOf(cloud, claimed(hello))) };
+  const left = leftOutFor(cloud, hello, device, accepted);
+  if (left !== null) return { error: LEFT_OUT[left], code: "lock_station", why: left };
+  return { error: (e as Error).message };
+}
+
 /// The workspace a hello's credential names, as it says (checked by verifyMember: only to say which lock refused it).
 function claimed(hello: any): string {
   try {
@@ -247,8 +280,7 @@ export async function serve(m: Members, conn: Connection) {
   try {
     current = check(hello);
   } catch (e) {
-    const refusal = e instanceof LockRefusal ? { code: e.code, lock: lockHead(m.cloud, joinedOf(m.cloud, claimed(hello))) } : {};
-    await writeLine(first, { error: (e as Error).message, ...refusal }).catch(() => {});
+    await writeLine(first, refusalOf(m.cloud, hello, device, e, m.accepted?.())).catch(() => {});
     await first.finish().catch(() => {});
     wall.after(200, () => conn.close(1, e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused"));
     throw e;

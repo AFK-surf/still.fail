@@ -634,6 +634,11 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
   ime_place();
 }
 
+// no floating text menu of the system's here (the field's own keys and shortcuts do what it would)
+void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
+  (void)shown, (void)x, (void)y, (void)w, (void)h, (void)can;
+}
+
 void mb_host_clipboard_set(moonbit_string_t s) {
   int n = Moonbit_array_length(s), k = 0;
   // other Windows programs expect CR LF
@@ -748,6 +753,11 @@ void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
 
 // Whether the system is set to dark (@hostapi.system_dark): not read here yet (light).
 int32_t mb_host_system_dark(void) { return 0; }
+// Words as the app sizes them (@hostapi.font_scale): the system's text scale not read here yet.
+double mb_host_font_scale(void) { return 1.0; }
+// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
+int32_t mb_host_a11y_on(void) { return 0; }
+void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
 
 // Sharing (@hostapi.share, @hostapi.shared_in): no share sheet here yet; nothing comes in.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
@@ -906,6 +916,7 @@ int32_t mb_host_pick_state(int32_t pid) { return -1; }
 int32_t mb_host_pick_count(int32_t pid) { return 0; }
 moonbit_string_t mb_host_pick_name(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_pick_bytes(int32_t pid, int32_t i) { return moonbit_make_bytes(0, 0); }
+moonbit_string_t mb_host_pick_info(int32_t pid, int32_t i) { return moonbit_make_string_raw(0); }
 void mb_host_pick_end(int32_t pid) {}
 
 // The gallery (gallery.mbt): none on this host; no photo of it picked.

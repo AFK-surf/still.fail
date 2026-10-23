@@ -47,10 +47,10 @@ Done (branch fw-richtext-nav, 2026-10-19):
   (UAX #14 over the whole paragraph). Hosts shape and measure by run: a
   `style` (italic, mono) beside size and weight on every host. The layout
   answers offsets, carets and a range's rects, for selection later.
-  src/md parses Markdown (GFM's tables too); `@sf.markdown` draws it as a message does
-  (Markdown.kt): tables in a card's frame, their columns as wide as their words allow up to the message's width,
-  then scrolled sideways; code highlighted as the web's Shiki (vitesse light and dark, src/sf/highlight.mbt from
-  Highlight.kt) and scrolled sideways rather than wrapped (mbui's `Ctx::sideways`: a finger moving sideways first
+  the core reads Markdown (client/core-ts/src/markdown.ts, GFM's tables too) and `@sf.markdown` draws its tree as a
+  message does (Markdown.kt): tables in a card's frame, their columns as wide as their words allow up to the message's
+  width, then scrolled sideways; code in the colours the core says (`ink`, painted as the web's Shiki: vitesse light
+  and dark, src/sf/ink.mbt) and scrolled sideways rather than wrapped (mbui's `Ctx::sideways`: a finger moving sideways first
   drags it, up or down first the list); a link held is its menu (打开链接, 复制链接; src/sfapp/link_menu.mbt, Links.kt
   linkHold over mbui's `on_link_hold`). Selection: slice 5's picking.
 - 2, the page stack: `Nav[P]` and `Ctx::nav` (src/ui/nav.mbt), App.kt's
@@ -225,8 +225,8 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   macOS (`@hostapi.pick`, src/hostapi/pick.mbt; Picks.java); the camera tile takes
   a photo on Android (ACTION_IMAGE_CAPTURE's picture, as the app's
   TakePicturePreview); the recent photos across the top and Station 文件 (both
-  branch mbui-media-complete, below). Not yet: any picker on iOS, Windows and
-  the web (a toast says so).
+  branch mbui-media-complete, below); on iOS the photo picker, the document picker and the camera. Not yet: any
+  picker on Windows and the web (a toast says so).
 - Quoting: a message's words held still a long press's time (400 ms) pick the word under the finger, widened by
   words as it slides on (the list holds still meanwhile: `Ctx::take_press`), the passage drawn behind the words in the
   accent at 26%; lifted, handles at its ends (a line down its side with a knob, the finger's room 36 round it) move
@@ -352,8 +352,8 @@ the core.
 Not yet, against the current app: the frosted glass of the player's bars (a native view under them cannot be blurred: a
 deeper solid tint, as the preview's), the subtitle's shadow (a dark ground under its words only), the bytes played kept on
 the device to play again without the station (DriveCache's played: each play reads through the core again), why it
-failed in words (the host logs the player's error; the page says 播放失败), turning sideways on iOS (no host there turns
-yet), the tabular figures of the time (the UI face's own).
+failed in words (the host logs the player's error; the page says 播放失败), the tabular figures of the time (the UI
+face's own).
 
 Slice 8, decisions, history, tool steps, a chat's sheets, jobs (branch decisions, 2026-10-19): what a chat asks is
 answered from it, and an agent's work can be looked into (src/sfapp/decide.mbt, sheets.mbt, history.mbt,
@@ -804,29 +804,31 @@ notifications (src/hostapi/notify.mbt).
   back with 无法开启/关闭通知：… when it fails; the push registration then follows what the core answered (Push.sync:
   `push.unregister` while off, `push.register {kind: fcm, token}` with the host's token while on), as it does at
   every start.
-- A push delivered while the app runs is shown unless the core says not (`notice.pushed`: off, a page in view, another
-  workspace's, its kind off), and what it is about is brought onto the device (`notice.bring`).
+- A push delivered is shown unless the core says not (`notice.pushed`: off, a page in view, another workspace's, its
+  kind off), and what it is about is brought onto the device (`notice.bring`), by the push service (Push.java).
 - `APP=sffix MBUI_FIXTURE=chat-flash|chat-flash-mine` (a message gone to, its flash held at its peak) and
   `settings-notify-off`: `scripts/shots.sh notify web-notify` (mac-notify-*, web-notify-* pictures).
 
-Hosts (@hostapi.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token,
-push_next): Android is the system's (android/…/Notices.java, POST_NOTIFICATIONS in the manifest, the activity's
+Hosts (@hostapi.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token):
+Android is the system's (android/…/Notices.java, POST_NOTIFICATIONS in the manifest, the activity's
 permission answer and the tap's intent). macOS keeps what would be shown and says it on the log (`NOTICE <tag>\t<title>\t
 <body>`, `NOTICE CANCEL`, `NOTICE TAP`): the app there is a bare executable, which UNUserNotificationCenter does not
-take (it wants a bundle); what it allows is unknown. iOS and Windows show none yet (UNUserNotificationCenter and APNs,
-toast notifications and WNS: a later slice's), nor the web page (it logs). A scripted run looks for and taps a
+take (it wants a bundle); what it allows is unknown. iOS's are the system's (UNUserNotificationCenter, no pushes).
+Windows shows none yet (toast notifications and WNS: a later slice's), nor the web page (it logs). A scripted run looks for and taps a
 notification by its words on Android (the app's own active notifications; the tap its PendingIntent sent) and on
 macOS (the kept ones): drive.mbt `noticed`, `nonotice`, `notice`.
 
-Not yet, against the current app: Firebase Cloud Messaging. The Android app sets Firebase up by hand from its build's
-FCM_* settings and shows pushes from its FirebaseMessagingService (PushService) while it is not in front, starting its
-core headless to ask `notice.pushed` and `notice.bring`. Here no push service is linked: this app (dev.mbui.demo, later
-fail.still.mbui) would need its own app in still.fail's Firebase project, and its core runs only inside the activity's
-process (no headless start for a service yet). `push_token` says none and `push_next` delivers nothing, so the app
-registers no device (and takes it off the accounts while off, as the Android app does); the app's own side of a
-delivered push (notice.pushed, the notification, notice.bring) is there and tested (src/sfapp/notices_wbtest.mbt). Also
-not: the client.wake before notice.bring (the app is awake when a push reaches it here), the notification's language
-when the app is not running (KeptLang: the app's words are the Chinese catalog's).
+Firebase Cloud Messaging (android/…/Push.java, as the Android app's Push.kt): Firebase set up by hand from the app's
+resources (res/values/push.xml, firebase.properties' values) for the package's Firebase app (fail.still.android.beta's;
+none registered for the others, whose pushes stay off), its components merged into the app's manifest by hand (apk.json
+`merged`). The token is asked for as the process starts; the app registers it as the core's `notify` says, at its
+start and as a token comes later. The FirebaseMessagingService does what PushService does, on FCM's thread, with the
+core: the app's where it runs (its own Java client, AdbCore's ids), else one started for the push
+(android_core.c CoreHost.startAlone: the app takes it as its own if it opens meanwhile, else it stops once the push is
+handled). A new token is registered; a push is asked of the core (`notice.pushed`; it not answering, shown unless the
+app is in front), shown, then `client.wake` (the app off screen: how long, since it went or the push before woke it)
+and `notice.bring`. The app's frames stop while it is behind, so none of it is the MoonBit side's. Still not: the
+notification's language when the app is not running (KeptLang: the app's words are the Chinese catalog's).
 
 Files and media, kept on the device (branch mbui-media-complete, 2026-10-19; ember apps/android shared/screens/
 FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetches, ui/Parts.kt DownloadChip):
@@ -873,8 +875,8 @@ RefCard, openRefSheet, sendUp):
   the last tile asks (显示最近照片: the system's dialog; asked and refused for good, the app's settings), with only the
   photos chosen for the app (Android 14 on) it chooses more (选择更多照片); read again as the sheet opens and as the
   system answers. The strip moves sideways under a finger and glides on once let go (a drag area: it is no list).
-  macOS, iOS and Windows have no gallery here: the tile says so (as before). Apple's own Photos picker is not used yet
-  (照片 is the open panel on macOS; iOS has no picker).
+  iOS's is the photo library (Photos: all of it, or the photos chosen; its picker of more). macOS and Windows have no
+  gallery here: the tile says so (as before). 照片 is the open panel on macOS, the photo picker on iOS.
 - Station 文件: ticked files go in named by their path, or as files where the chat says so (此对话默认发送文件: the
   core's prefs `dropFiles` by the chat's key, else `dropAs`); a card tapped opens its sheet (where it is, 发送方式 路径 /
   文件 (a folder of the chat's own station: zip), the chat's say as a switch). As a file it is staged on the chat's
@@ -1001,6 +1003,15 @@ A flow's `#env K=V` lines are put in the app's environment for that flow (the dr
 MBUI_OPEN_PAGE=files until the bottom bar reaches it). Before the flows, `scripts/e2e-local.sh drive-seed <tag>` makes
 the drive flows' folder in the test station's home (e2e-<tag>: a text, a novel of made-up chapters, a folder with a
 file), a run's own, which flow 15 lends through the app.
+
+The live client renders the local core's Markdown tree, including code colours and formula drawings, and asks it for
+code's colours (`code.ink`) and a drive text as the reader shows it (`reader.*`). A run without a core (the Tester's
+tests, the screenshots' app, and tapes older than those calls) has the real core's answers kept in `src/sfkept`
+(`kept.mbt`, made by `client/core-ts/scripts/kept-answers.ts`): an answer asked and not kept is said on the run's output
+and fails `scripts/test.sh`; `scripts/kept` runs the tests and has the core work out what they asked (`FRESH=1`: only
+what they ask now). The check script verifies the kept answers are the core's own. This adds no backend messages or elapsed time
+to the recordings. Formula glyphs are packaged once from `client/math/font.json`; messages carry only glyph IDs,
+positions, rules and any native text (see `client/math/README.md`).
 
 A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
 every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace make
@@ -1171,7 +1182,7 @@ keyboard), and anything only a real agent runtime does.
 
 ## The PC (wide) frame (branch mbui-pc, 2026-10-19)
 
-On macOS and Windows the app is a desktop's window (@sfapp.desktop_window: 1280×820 at first, as still.fail's desktop app
+On macOS and Windows the app is a desktop's window (@sfapp.host_setup: 1280×820 at first, as still.fail's desktop app
 opens, at least 360×560, its size not kept, the system's title bar). Above the web's breakpoint (701 wide) it is the web
 app's wide frame (web/src/cloud/workspace.tsx WorkspaceShell), src/sfapp/wide*.mbt; below it the phone's pages as
 before, live as the window is resized: both draw the same stack (app.nav) over the same topics, the wide frame its top
@@ -1223,7 +1234,9 @@ pushed, words sent flying from the field into their bubble with the rows above g
 change of shape, the way to the newest, toasts, ＋'s sheet on the sheet's spring, the filter's menu, pressed grounds on
 the ripple's timing. MBUI_MOTION_LOG=1 logs every moving frame; scripts/record.sh records a motion on macOS frame by
 frame (MBUI_RECORD), `scripts/android.sh record` on the emulator, scripts/motionplot.py compares the frames with the
-Android app's curves. At rest nothing of it is drawn: every picture is unchanged.
+Android app's curves. scripts/film.sh films one with no window (src/sffilm, mbui's film): the same script run in a
+Tester of the Mac's text and pictures, each frame drawn by the Mac's renderer offscreen and written into an MP4 at its
+moment, so a change's old and new are the same run frame for frame (`scripts/film.sh side` puts two side by side). At rest nothing of it is drawn: every picture is unchanged.
 
 ## A chat's messages in motion (branch mbui-chat-complete)
 
@@ -1256,20 +1269,42 @@ its own (`MBUI_IOS_DEVICE`, default ios-mbui-sf): the same pages as Android and 
 xcframework slice in the app's Frameworks; core/README.md, "iOS"). mbui's scripts/ios.sh takes an app of this module
 (MBUI_APP_MOD, a hook as Android's: scripts/ios-core.sh) and its host (ios_app.m) does what still.fail asks of it:
 
-- The safe areas: the app's view is inside them (as Android's is inside the system bars), what shows round it the
-  page's ground, light or dark (`@hostapi.set_dark`, with the status bar's words to match).
-- The keyboard: the view ends at the keyboard's top (UIKeyboardLayoutGuide), following it as it moves, so the composer
-  rides on it and the list keeps its end in view.
+The app on iOS is Android's, as on an Android phone (2026-10-23):
+
+- Edge to edge (ios/Info.plist's MBUIEdge, as Android's manifest dev.mbui.edge): the view from the screen's top to its
+  foot, the status bar's and the home indicator's room said as the system's `bars`, each page padded where Android's
+  is (src/sfapp/bars.mbt); round it, and at launch, the page's paper (MBUIGround; the launch screen's Paper colour),
+  the status bar's words to match (`@hostapi.set_dark`).
+- The keyboard as Android's: the view keeps its size, the keyboard's top followed frame by frame as the system moves
+  it (UIKeyboardLayoutGuide's motion read off a mark's presentation layer), the app laid out above it; the keyboard
+  asked for plain text, no capitals or curly quotes of its own, its return key a new line (a search field's its search
+  key); put away by the person (not the app), the field lets go of the focus.
+- Its touches and fields feel as Android's (@sfapp.host_setup: `@ui.feel_as(2)`): lists fling and give at their edges
+  as Compose's and show no scroll bar, a field takes a tap as it lifts, draws Compose's caret and handles, picks words
+  by a long press or a double tap, with the system's floating edit menu over them (UIEditMenuInteraction: 剪切, 拷贝,
+  粘贴, 全选, as Android's ActionMode).
 - Back: the left edge's swipe is the app's own (src/ui/nav.mbt), as on every host; iOS has no system back of its own.
-- `secure.*` in the Keychain; the sign-in through ASWebAuthenticationSession (`stillfail` scheme), as on macOS.
-- Pictures and files picked (PHPickerViewController, UIDocumentPickerViewController), the share sheet
-  (UIActivityViewController), the app in front or not (`@hostapi.set_app_state`), the edit menu's paste.
+- `secure.*` in the Keychain; the sign-in through ASWebAuthenticationSession (`stillfail` scheme), as on macOS. A
+  login card's page in Safari's view over the app (SFSafariViewController, Android's Custom Tab): the app stays in front
+  under it, the core's loopback listener answering the page.
+- Pictures and files picked (PHPickerViewController, JPEG for the library's HEIC as Android's; UIDocumentPickerViewController),
+  a photo taken (UIImagePickerController's camera), ＋'s recent photos (Photos: all of the library, or the photos
+  chosen, its picker of more as Android 14's), the share sheet (UIActivityViewController), the app in front or not
+  (`@hostapi.set_app_state`), its time off the screen (`shown`), the network changed (`network`), its links (`link`:
+  a universal link, a URL of its scheme), a film sideways (the status bar and home indicator out of its way).
+- Notifications the system's (UNUserNotificationCenter; no pushes: APNs wants a signed app, as Android's FCM is not
+  done either). The build's number (CFBundleVersion: main's commits, as Android's versionCode) in 设置's version row
+  and told to the core, which names the device still.fail mbui iOS · <its model> and says messages came from `ios`.
 - Scripted runs (src/ui/drive.mbt): the keyboard's calls on the view, the paste, the app's picture, notifications
   tapped; the log on stderr (`simctl launch --stderr`).
 
-Not yet, against Android: notifications shown by the system and pushes (APNs: kept and logged here, as on macOS), a
-share extension (sharing in), the camera tile, turning sideways for a film, a signed build for a device and TestFlight
-(they need the Apple developer account), updates (the App Store's, not the app's).
+- Sharing in (the person's choice, 2026-10-23: an iOS share extension cannot open its app): the share sheet's still.fail
+  mbui (ios/Share-Info.plist; mbui's src/host/ios_share.m, PlugIns/Share.appex) keeps what is shared in the app group
+  the two share and says to open the app; the app takes it as it next comes to the front (`@hostapi.shared_in`) and
+  shows the same 发到 sheet as Android's, over itself (not over the app it came from).
+
+Not yet, against Android: a signed build for a device and TestFlight (they need the Apple developer account, its
+profiles the app group too), updates (the App Store's, not the app's).
 
 ## What the hosts need (platform)
 

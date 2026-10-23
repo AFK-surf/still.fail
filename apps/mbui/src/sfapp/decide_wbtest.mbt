@@ -39,6 +39,8 @@ test "an option tapped in the chat answers its card (decision.answer)" {
   assert_eq(text(Some(made[0].params), "option"), "一起换")
   assert_eq(number(Some(made[0].params), "seq"), 8.0)
   assert_eq(number(Some(made[0].params), "thread"), 7.0)
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -99,6 +101,8 @@ test "the history: a group opens to its steps, a step to its call and what came 
   t.tap_text("详情")
   assert_true(t.find("Claude Code 2.1.3") is Some(_))
   assert_true(t.find("Mac Studio · macOS 26 · M2 Max") is Some(_))
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -116,6 +120,8 @@ test "the 奏 page: an option answers the card in front, the next comes in" {
   assert_true(t.find("1 / 1") is Some(_))
   assert_true(t.find("第 4 个：支付的测试") is Some(_))
   t.run_for(card_up_ms)
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -159,6 +165,8 @@ test "the 奏 page: the card turns as it is moved across, 4° a width about its 
   t.run_for(card_off_ms)
   assert_eq(t.turn_of("把首页和聊天页的截图都更新"), None)
   assert_true(t.find("1 / 1") is Some(_))
+  // the last tap's ripple shown whole, its way in and out
+  t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
 }
 
@@ -312,6 +320,13 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
   t.tap_text("#dev")
   assert_true(t.find("接力到 #dev") is Some(_))
   assert_true(t.find("开头附一句（可选）") is Some(_))
+  // (which bot replies there, under the place picked, in line with its name; its picture before its name)
+  let (name_x, _, _, _) = t.rect_of("#dev").unwrap()
+  let (via_x, _, via_w, _) = t.rect_of("那里由").unwrap()
+  let (bot_x, _, _, _) = t.rect_of("星火助手").unwrap()
+  // (the picture, 16 wide, between 「那里由」 and the name)
+  assert_true(bot_x >= via_x + via_w + 16.0)
+  assert_eq(via_x, name_x)
   t.tap_text("接力到 #dev")
   let relayed = named(calls, "chat.relay")
   assert_eq(relayed.length(), 1)

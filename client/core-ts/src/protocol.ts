@@ -62,6 +62,7 @@ export const TOPICS: Record<string, Spec> = {
   way: { station: S },
   threads: { station: S },
   thread: { station: S, thread: ["u64", "req"] },
+  letters: { station: S, thread: ["u64", "req"] },
   chatRows: { station: S },
   slackApp: { station: S, connect: S },
   jobs: { station: S },
@@ -98,6 +99,7 @@ export const TOPICS: Record<string, Spec> = {
   shareIn: { scope: S, source: S, query: ["string", "def"] },
   pick: { station: S, of: S },
   chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"] },
+  chatLetters: { station: S, thread: ["u64", "req"] },
   imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S },
   longJobs: { scope: S },
   stationUsage: { station: S },
@@ -185,8 +187,8 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
-const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
+const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

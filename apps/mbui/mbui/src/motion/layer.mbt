@@ -521,7 +521,8 @@ pub fn layout_rest(key : String) -> Double {
 
 ///|
 /// What changes a list shows by its rows' keys (ListMotion.kt update): call while building, each frame, with the keys
-/// of the rows of list `list` (as given to Ctx::list in the same scope) in order. The first time nothing moves. As
+/// of the rows of list `list` (as given to Ctx::list in the same scope) in order. The first time nothing moves, nor
+/// the first time again after a frame it was not built in (Android's list composed anew: its page come back to). As
 /// they change: rows new to it come in (layout's `enter`), rows gone that showed leave by a copy (its `exit`), rows
 /// that went ahead of others pass over them (lifted), the rest close over what left 100 ms late, and for 150 ms the
 /// rows' moves are the list's change (moved to on their springs); otherwise rows are put in their places at once.
@@ -555,6 +556,8 @@ pub fn list_keys(
       return id
     }
   }
+  // not built the frame before (its page come back to, its pane slid to): drawn anew, as the first time
+  let away = lm.seen < frame - 1
   lm.seen = frame
   if lm.keys == ks {
     return id
@@ -564,7 +567,8 @@ pub fn list_keys(
   lm.keys = ks
   lm.names = keys
   // nothing to move from: only where they are is kept
-  if before.is_empty() || c.still() {
+  if before.is_empty() || away || c.still() {
+    lm.unghost.clear()
     return id
   }
   lm.changed_at = now
@@ -634,7 +638,12 @@ pub fn list_keys(
   if gone {
     lm.close_until = now + 50.0
   }
-  lm.unghost.clear()
+  // (one let go without a copy stays so until it leaves: ListMotion.kt swiped.retainAll)
+  let left : Array[Int] = []
+  lm.unghost.each(fn(k, _) { if !fresh.contains(k) { left.push(k) } })
+  for k in left {
+    lm.unghost.remove(k)
+  }
   let stale : Array[Int] = []
   lm.arrived.each(fn(k, at) { if now - at >= 500.0 { stale.push(k) } })
   for k in stale {
@@ -644,11 +653,17 @@ pub fn list_keys(
 }
 
 ///|
-/// Row `key` of list `list` leaves without a copy (it went out of sight already: swiped away).
-pub fn list_unghost(c : @ui.Ctx, list : Int, key : String) -> Unit {
+/// Row `key` of list `list` leaves without a copy (it went out of sight already: swiped away) when it leaves; `off`
+/// false: with one again (its archiving refused, it came back).
+pub fn list_unghost(c : @ui.Ctx, list : Int, key : String, off? : Bool = true) -> Unit {
   ignore(c)
   match mo.lists.get(list) {
-    Some(lm) => lm.unghost[motion_key(key)] = true
+    Some(lm) =>
+      if off {
+        lm.unghost[motion_key(key)] = true
+      } else {
+        lm.unghost.remove(motion_key(key))
+      }
     None => ()
   }
 }

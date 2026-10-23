@@ -1,7 +1,7 @@
 // The player over the made-up drive (APP=sffix MBUI_FIXTURE=player-<what>; scripts/shots.sh player, web-player): a folder
 // of 文档 that no listing shows (影片: three episodes, a subtitle beside the second, a song), its files' reads never
 // answered (the player waits, as on a slow link, the same on every run) but the subtitle's; how the player stands pinned
-// for the shot (`@player.Player::pin`): an episode paused at 5:12 of 23:24 with its subtitle, the song, an episode at its
+// for the shot (`@kit.Media::pin`): an episode paused at 5:12 of 23:24 with its subtitle, the song, an episode at its
 // end with the next one offered, one still opening. Every word in it is made up.
 
 ///|
@@ -37,8 +37,9 @@ fn fixture_play_read(params : Json, done : (Result[(Json, Bytes), Json]) -> Unit
   if !path.has_prefix(fix_films + "/") {
     return false
   }
+  fix_reads.push(params)
   if path.has_suffix(".srt") {
-    let whole = utf8_bytes(fix_srt)
+    let whole = @utf8.encode(fix_srt)
     let offset = number(Some(params), "offset").to_int()
     let part = if offset >= whole.length() {
       Bytes::new(0)
@@ -54,7 +55,7 @@ fn fixture_play_read(params : Json, done : (Result[(Json, Bytes), Json]) -> Unit
 ///|
 /// MBUI_FIXTURE=player-video | player-audio | player-ended | player-opening: the folder's page under the player.
 fn open_play_fixture(mode : String) -> Unit {
-  let (file, pin) : (String, @player.Status?) = match mode {
+  let (file, pin) : (String, @kit.MediaStatus?) = match mode {
     "player-video" =>
       (
         "第02集.mp4",

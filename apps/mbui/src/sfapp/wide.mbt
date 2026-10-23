@@ -43,6 +43,40 @@ priv struct Wide {
   mut keys_open : Bool
   /// the chat last opened here by the frame (the core's last chat taken once per workspace)
   mut landed : String
+  /// beside each chat, by its station and session (wide_panel.mbt): the side panel's tabs, the one in front
+  tabs : Map[String, Array[String]]
+  front : Map[String, String]
+  /// the chat's "…" open (what is done with it), its services' popover open
+  mut info_open : Bool
+  mut jobs_open : Bool
+  /// the job picked in the 任务 tab ("" the first)
+  mut job_picked : String
+  /// ⌘F's bar (wide_find.mbt): the chat it is open in ("" closed), its field, what is typed, what the core found
+  /// (None nothing asked yet), the time the reader is at (which of its messages, which time in it), whether what is
+  /// not on the device is being read, the message the chat's window was last moved about for it
+  mut find_chat : String
+  find_field : @ui.Field
+  mut find_query : String
+  mut found : Found?
+  mut find_at : Int
+  mut find_k : Int
+  mut bringing : Bool
+  mut find_around : Double
+  /// a model control's panel open (model_triple.mbt): its station and pick ("" none), its accounts' panel beside it,
+  /// its filter's field and words; the borrowing it asks to confirm ("" none)
+  mut triple : String
+  mut triple_accounts : Bool
+  triple_field : @ui.Field
+  mut triple_query : String
+  mut borrow_asking : String
+  /// an agent's history in the side panel (wide_history.mbt): 只看收发, its details folded; where its runtime keeps
+  /// each session's transcript (by station and session; "" none), asked once; its context's 管理 menu open, clearing
+  /// it asked to confirm (its session's key, "" none)
+  mut history_io : Bool
+  mut history_shut : Bool
+  transcripts : Map[String, String]
+  mut context_menu : String
+  mut clear_asking : String
 }
 
 ///|
@@ -60,6 +94,29 @@ let wide : Wide = {
   chosen: 0,
   keys_open: false,
   landed: "",
+  tabs: {},
+  front: {},
+  info_open: false,
+  jobs_open: false,
+  job_picked: "",
+  find_chat: "",
+  find_field: @ui.Field::new(),
+  find_query: "",
+  found: None,
+  find_at: -1,
+  find_k: 0,
+  bringing: false,
+  find_around: -1.0,
+  triple: "",
+  triple_accounts: false,
+  triple_field: @ui.Field::new(),
+  triple_query: "",
+  borrow_asking: "",
+  history_io: false,
+  history_shut: false,
+  transcripts: {},
+  context_menu: "",
+  clear_asking: "",
 }
 
 ///|
@@ -68,9 +125,10 @@ let wide : Wide = {
 let wide_on : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether a window this wide is drawn wide.
+/// Whether a window this wide is drawn wide: a desktop's (the phone's and the tablet's are drawn as Android's at any
+/// width: corners.mbt).
 pub fn is_wide(c : @ui.Ctx) -> Bool {
-  c.width >= wide_from
+  c.width >= wide_from && !@sf.touch_system()
 }
 
 ///|
@@ -88,7 +146,26 @@ fn wide_reset() -> Unit {
   wide.chosen = 0
   wide.keys_open = false
   wide.landed = ""
+  wide.tabs.clear()
+  wide.front.clear()
+  wide.info_open = false
+  wide.jobs_open = false
+  wide.job_picked = ""
+  find_forget()
+  wide.triple = ""
+  wide.triple_accounts = false
+  wide.triple_field.set("")
+  wide.triple_query = ""
+  wide.borrow_asking = ""
+  wide.history_io = false
+  wide.history_shut = false
+  wide.transcripts.clear()
+  wide.context_menu = ""
+  wide.clear_asking = ""
   wide_on.val = false
+  corners_on.val = false
+  recent_open.val = false
+  recent_over.val = None
 }
 
 ///|
@@ -122,33 +199,36 @@ fn wide_frame(
   let main_w = dmax(0.0, c.width - rail_w - side)
   // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
   land(src, w)
-  c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    c.box(dir=Row, w=Px(rail_w + side), h=Fill(1.0), bg=t.p.sidebar, clip=true, fn() {
-      rail(c, src, w, all)
-      if side > 0.0 {
-        c.box(w=Px(side + 8.0), h=Fill(1.0), fn() { sidebar(c, src, w, side + 8.0) }) |> ignore
-      }
-    })
-    |> ignore
-    c.box(w=Px(main_w), h=Fill(1.0), clip=true, fn() {
-      c.sized(main_w, c.height, fn() {
-        // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not)
-        c.selectable(color=@sf.alpha(t.p.blue, 0.28), fn() {
-          if gated {
-            c.box(w=Px(main_w), h=Px(c.height), bg=t.p.bg, fn() { lock_gate(c, src, w) |> ignore }) |> ignore
-          } else {
-            c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
-            |> ignore
-          }
+  // what the page or the sidebar takes back for (a sheet, a menu, a step of a page's) goes back before the stack does
+  let took = c.took_back(fn() {
+    c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+      c.box(dir=Row, w=Px(rail_w + side), h=Fill(1.0), bg=t.p.sidebar, clip=true, fn() {
+        rail(c, src, w, all)
+        if side > 0.0 {
+          c.box(w=Px(side + 8.0), h=Fill(1.0), fn() { sidebar(c, src, w, side + 8.0) }) |> ignore
+        }
+      })
+      |> ignore
+      c.box(w=Px(main_w), h=Fill(1.0), clip=true, fn() {
+        c.sized(main_w, c.height, fn() {
+          // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not)
+          c.selectable(color=@sf.alpha(t.p.blue, 0.28), fn() {
+            if gated {
+              c.box(w=Px(main_w), h=Px(c.height), bg=t.p.bg, fn() { lock_gate(c, src, w) |> ignore }) |> ignore
+            } else {
+              c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
+              |> ignore
+            }
+          })
         })
       })
-    })
-    |> ignore
+      |> ignore
   })
   |> ignore
+  })
   sidebar_edge(c, side)
   // back (⌘[, a mouse's back button) a page of the stack, where there is one
-  if app.nav.depth() > 1 && !app.menu && !sheet_open() {
+  if app.nav.depth() > 1 && !took && !app.menu && !sheet_open() {
     c.take_back(fn() { app.nav.pop() |> ignore })
   }
 }
@@ -303,7 +383,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Uni
               @sf.station_mark(c, x.emoji, x.icon, 18.0, t.p.text)
             } else {
               c.text(
-                initial(x.name),
+                @sf.initial(x.name),
                 size=13.0,
                 weight=600,
                 color=if on || c.hovered(id) { t.p.text } else { t.p.muted },
@@ -590,9 +670,14 @@ fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 }
 
 ///|
-/// The desktop's window for still.fail (before @ui.run): 1280 by 820 at first, as still.fail's desktop app opens
-/// (apps/desktop main.ts), its size not kept (the desktop app keeps none either); at least 360 by 560, a phone's page
-/// below the breakpoint. Its title bar the system's (macOS, Windows).
-pub fn desktop_window() -> Unit {
+/// The system's side of still.fail (before @ui.run). The desktop's window: 1280 by 820 at first, as still.fail's
+/// desktop app opens (apps/desktop main.ts), its size not kept (the desktop app keeps none either); at least 360 by
+/// 560, a phone's page below the breakpoint; its title bar the system's (macOS, Windows). On a phone the app is
+/// Android's whatever the phone: on iOS too its lists fling, give at their edges and show no scroll bar as Android's,
+/// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
+pub fn host_setup() -> Unit {
   @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0)
+  if @ui.platform() == 1 {
+    @ui.feel_as(2)
+  }
 }

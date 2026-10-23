@@ -4,6 +4,8 @@
 
 ///|
 let drive_zh : Map[String, String] = {
+  "android-misc.bar.action.files": "添加文件夹",
+  "android-misc.drive.pick.filterClear": "清除筛选",
   "android-misc.act.failed": "无法{what}：{error}",
   "android-misc.bar.place.files": "文件",
   "android-misc.drive.choose": "选择文件夹",
@@ -105,6 +107,9 @@ let drive_zh : Map[String, String] = {
   "android-misc.drive.upload": "上传文件",
   "android-misc.drive.upload.failed": "上传失败：{error}",
   "android-misc.drive.upload.going": "{sent} / {size}",
+  "android-misc.drive.add": "添加",
+  "android-misc.drive.chosenActions": "对所选项的操作",
+  "android-misc.drive.refresh": "刷新",
   "android-misc.drive.view": "显示方式",
   "android-misc.failed": "失败",
   "android-misc.files.lendOn": "选择文件夹所在的 station",

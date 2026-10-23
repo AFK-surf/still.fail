@@ -30,6 +30,7 @@ fn archive_reset() -> Unit {
 
 ///|
 priv enum ArchiveEntry {
+  Room(Double)
   Search
   Wait(Json?, String)
   Error(String)
@@ -52,7 +53,9 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     None => ()
   }
   let view = archive_state.last
-  let entries : Array[ArchiveEntry] = [Search]
+  // under the app's top bar at the bar's top, from under it, scrolling under it (Archive.kt: contentPadding top)
+  let top = top_room()
+  let entries : Array[ArchiveEntry] = if top > 0.0 { [Room(top), Search] } else { [Search] }
   let days = items(view, "days")
   let wait = field(view, "wait")
   if view is None || (days.length() == 0 && note_waits(wait)) {
@@ -97,6 +100,7 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   place_page(c, core, tr("android-misc.bar.place.archive"), back=tr("android-misc.bar.place.chats"), fn() {
     c.list("settings/archive", entries.length(), 54.0, fn(i) {
       match entries[i] {
+        Room(h) => gap(c, h)
         Search => archive_search(c)
         Wait(note, error) =>
           waiting_rows(c, count=7, error~, failing=failing_of(note))
@@ -185,12 +189,15 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
     pr=10.0,
     pt=6.0,
     pb=6.0,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L },
     id~,
     fn() {
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=10.0, align=ACenter, fn() {
         c.text(title, size=16.0, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
-        c.text(join([text(v, "place"), text(v, "clock")], "  "), size=12.0, color=t.p.subtle, wrap=false)
+        // (read as how it was archived: ArchiveRow's contentDescription = item.how)
+        c.box(label=text(v, "how"), fn() {
+          c.text(join([text(v, "place"), text(v, "clock")], "  "), size=12.0, color=t.p.subtle, wrap=false)
+          |> ignore
+        })
         |> ignore
         if busy {
           c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() { spinner(c) }) |> ignore
@@ -248,6 +255,8 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
         c.text(text(v, "last"), size=14.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=20.0) |> ignore
       })
       |> ignore
+      // Archive.kt Row: clickable over the whole row
+      @motion.ripple(c, id, 0.0)
     },
   )
   |> ignore
@@ -267,9 +276,12 @@ fn round_action(c : @ui.Ctx, key : String, icon : String, label? : String = "") 
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
     id~,
-    fn() { @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore
+      // Archive.kt Action: clip(CircleShape).clickable
+      @motion.ripple(c, id, 17.0)
+    },
   )
   // what it says to a screen reader (Archive.kt Action: its contentDescription)
   c.semantics(b, Button, id~, label~)

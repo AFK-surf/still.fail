@@ -89,7 +89,7 @@ test "a page of the service gets page.js's tag after its <head>, its length no l
   let v = t.views()
   let head = v.iter().find_first(fn(s) { s.has_prefix("site head \{site} 1 200 ") }).unwrap()
   assert_false(head.to_lower().contains("content-length"))
-  let n = utf8_bytes(fix_service_html).length() + utf8_bytes(page_js_tag).length()
+  let n = @utf8.encode(fix_service_html).length() + @utf8.encode(page_js_tag).length()
   assert_true(v.contains("site chunk \{site} 1 \{n}"))
 }
 
@@ -98,20 +98,20 @@ test "the tag's place: after <head>, else <html>, else the doctype, else first; 
   let tag = page_js_tag
   let tg = tagging_new()
   // the start waits until the <head> tag is there
-  assert_eq(tagging_take(tg, utf8_bytes("<!doctype html><ht"), false).length(), 0)
-  let out = tagging_take(tg, utf8_bytes("ml lang=zh><HEAD><title>"), false)
-  assert_eq(utf8_text(out, 1000), "<!doctype html><html lang=zh><HEAD>" + tag + "<title>")
-  assert_eq(utf8_text(tagging_take(tg, utf8_bytes("rest"), false), 100), "rest")
+  assert_eq(tagging_take(tg, @utf8.encode("<!doctype html><ht"), false).length(), 0)
+  let out = tagging_take(tg, @utf8.encode("ml lang=zh><HEAD><title>"), false)
+  assert_eq(@codec.utf8_text(out, 1000), "<!doctype html><html lang=zh><HEAD>" + tag + "<title>")
+  assert_eq(@codec.utf8_text(tagging_take(tg, @utf8.encode("rest"), false), 100), "rest")
   // a page with no <head> or <html>: after its doctype once it ends
   let t2 = tagging_new()
-  assert_eq(tagging_take(t2, utf8_bytes("<!DOCTYPE html><p>x"), false).length(), 0)
-  assert_eq(utf8_text(tagging_take(t2, Bytes::new(0), true), 1000), "<!DOCTYPE html>" + tag + "<p>x")
+  assert_eq(tagging_take(t2, @utf8.encode("<!DOCTYPE html><p>x"), false).length(), 0)
+  assert_eq(@codec.utf8_text(tagging_take(t2, Bytes::new(0), true), 1000), "<!DOCTYPE html>" + tag + "<p>x")
   // none of them: first
   let t3 = tagging_new()
-  assert_eq(utf8_text(tagging_take(t3, utf8_bytes("<p>x"), true), 1000), tag + "<p>x")
+  assert_eq(@codec.utf8_text(tagging_take(t3, @utf8.encode("<p>x"), true), 1000), tag + "<p>x")
   // a <header> is no <head>
   let t4 = tagging_new()
-  assert_eq(utf8_text(tagging_take(t4, utf8_bytes("<html><header>"), true), 1000), "<html>" + tag + "<header>")
+  assert_eq(@codec.utf8_text(tagging_take(t4, @utf8.encode("<html><header>"), true), 1000), "<html>" + tag + "<header>")
 }
 
 ///|
@@ -358,4 +358,32 @@ test "redirects resolved as a browser does: dot segments out, a fragment never a
   assert_eq(service_redirect("/a", "/x/./y/../z"), Ok("/x/z"))
   assert_eq(service_redirect("/", "http://localhost:5173?x=1"), Ok("/?x=1"))
   assert_true(service_redirect("/", "mailto:a@b.c") is Err(_))
+}
+
+///|
+test "the system's back steps the page back in its own history first; at its first page it leaves (Preview.kt BackHandler(canBack))" {
+  let (t, _) = link_tester()
+  let site = site_id(t)
+  let depth = app.nav.depth()
+  assert_true(depth > 1)
+  let state = fn(path : String, back : Bool) {
+    "{\"sitestate\":{\"view\":\{site},\"state\":{\"path\":\"\{path}\",\"loading\":false,\"title\":\"\",\"forward\":false,\"back\":\{back}}}}"
+  }
+  assert_true(t.view_said(state("/b.html", true)))
+  // (the view's word taken as a frame begins, the page's back as the frame after builds it)
+  t.frame()
+  t.draw()
+  t.back()
+  // the page a step back, the service's page still there
+  if !t.views().iter().any(fn(s) { s.has_prefix("control \{site} 5 ") }) {
+    fail("the page not stepped back: \{t.views()}")
+  }
+  assert_eq(app.nav.depth(), depth)
+  assert_true(t.view_said(state("/", false)))
+  // (the view's word taken as a frame begins, the page's back as the frame after builds it)
+  t.frame()
+  t.draw()
+  t.back()
+  t.run_for(@ui.nav_rest() - t.time())
+  assert_eq(app.nav.depth(), depth - 1)
 }

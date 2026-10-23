@@ -28,27 +28,6 @@ fn placeholder_page(c : @ui.Ctx, title : String) -> Unit {
 }
 
 ///|
-/// The scrim under a menu or a sheet (black at 28%), which closes it when tapped.
-fn scrim(
-  c : @ui.Ctx,
-  key : String,
-  shown : Double,
-  open? : Bool = true,
-  close : () -> Unit,
-) -> Unit {
-  let id = c.id(key)
-  if c.clicked(id) && open {
-    close()
-  }
-  let l = c.layer(fn() {
-    c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(0x000000FFL, 0.28 * shown), id~, fn() {  })
-    |> ignore
-  })
-  // fading once let go of, only drawn: it takes no tap from the page coming back under it
-  @motion.leaving(c, l, open)
-}
-
-///|
 /// A list card on a sheet (Parts.kt RowsCard): its rows list_pad in, its corner concentric round theirs; its ground the
 /// caller's (the workspace in use: the chips' grey).
 // kept across runs: a value (no field of it changes)
@@ -125,9 +104,13 @@ fn menu_panel_look(c : @ui.Ctx, _min_w : Double, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// A menu's row in MenuHost's look, `icon` at its end, lit while the finger or the keyboard is on it.
+/// A menu's row in MenuHost's look, `icon` at its end: rippled where a finger presses it (Sheet.kt MenuHost:
+/// clip(Smooth(MENU_ROW)).clickable), lit while the keyboard's focus shows on it.
 fn menu_row_look(c : @ui.Ctx, s : @kit.MenuItemState, icon : String) -> Unit {
-  phone_menu_row(c, s.entry.label, icon~, lit=if s.hot { 1.0 } else { 0.0 }) |> ignore
+  phone_menu_row(c, s.entry.label, icon~, lit=if s.lit && c.focus_shown(s.id) { 1.0 } else { 0.0 }) |> ignore
+  if !s.entry.disabled {
+    @motion.ripple(c, s.id, menu_row)
+  }
 }
 
 ///|
@@ -186,7 +169,7 @@ fn workspaces_sheet(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Worksp
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let by_ws = field(marks.value, "workspaces")
   let any_marked = all.iter().any(fn(x) { @sf.has_station_mark(x.emoji, x.icon) })
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   sheet_head(c, tr("android-misc.workspace.sheet.title"))
   c.box(w=Fill(1.0), h=Fill(1.0), pb=24.0, clip=true, fn() {
     sheet_label(c, tr("android-misc.workspace.current"))
@@ -286,7 +269,6 @@ fn pick_row(
       pady=12.0,
       gap=12.0,
       align=ACenter,
-      bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
       id~,
       fn() {
         match lead {
@@ -296,7 +278,7 @@ fn pick_row(
                 // a GIF moving only for the workspace in use (Workspaces.kt: still for the others)
                 @sf.station_mark(c, w.emoji, w.icon, 22.0, t.p.text, still=!checked)
               } else {
-                c.text(initial(w.name), size=15.0, weight=600, color=t.p.muted, wrap=false)
+                c.text(@sf.initial(w.name), size=15.0, weight=600, color=t.p.muted, wrap=false)
                 |> ignore
               }
             })
@@ -317,6 +299,8 @@ fn pick_row(
         if checked {
           @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
         }
+        // Workspaces.kt: clip(Smooth(LIST_ROW_CORNER)).clickable
+        @motion.ripple(c, id, @sf.row_corner)
       },
     )
     |> ignore
@@ -334,12 +318,13 @@ fn mark_counts(c : @ui.Ctx, mark : Json) -> Unit {
     return
   }
   let t = @sf.theme()
-  c.box(dir=Row, gap=8.0, align=ACenter, fn() {
+  // (read out as what it says: MarkCounts' contentDescription)
+  c.box(dir=Row, gap=8.0, align=ACenter, label=text(m, "label"), fn() {
     for k in [("alert", "alert"), ("wait", "wait"), ("done", "unread")] {
       let n = count(m, k.1)
       if n > 0 {
         c.box(dir=Row, gap=4.0, align=ACenter, fn() {
-          workspace_mark(c, k.0)
+          workspace_mark(c, k.0, "")
           c.text("\{n}", size=12.0, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore

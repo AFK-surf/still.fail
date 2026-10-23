@@ -23,6 +23,9 @@ priv struct ImageEntry {
   mut oh : Double
   mut used : Int // the frame it was last drawn
   mut ready_at : Double
+  // a sharper decode of a picture already shown (a smaller one was ready when this was asked for): that one's ready_at,
+  // its fade gone on with as this takes its place, not started again from nothing
+  follows : Double?
   // its fade in (image_fade_ms from ready_at), told once as it is first drawn fading (Ctx::moving)
   mover : Mover
   mut fade_told : Bool
@@ -90,7 +93,7 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
       self.h = image_info_out[1]
       self.ow = image_info_out[2]
       self.oh = image_info_out[3]
-      self.ready_at = now
+      self.ready_at = self.follows.unwrap_or(now)
     }
     self.state = st
   }
@@ -156,6 +159,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       oh: 0.0,
       used: self.frame_no,
       ready_at: 0.0,
+      follows: fallback.map(fn(f) { f.ready_at }),
       mover: Mover::new(),
       fade_told: false,
     }

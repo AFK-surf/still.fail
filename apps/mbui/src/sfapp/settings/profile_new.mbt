@@ -179,29 +179,18 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     if d is Some(_) && step != "pick" {
       c.on_back(leave)
     }
-    c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-      if nav_back(c, tr(if d is Some(_) && step != "pick" { "web-mobile.profiles.pick" } else { "common.cancel" })) {
-        leave()
-      }
-      c.box(w=Fill(1.0), align=ACenter, fn() {
-        c.text(
-          match opt_text(d, "title") {
-            Some(x) => x
-            None => tr("android-settings.profile.add")
-          },
-          size=17.0,
-          weight=600,
-          color=t.p.text,
-          wrap=false,
-          line=22.0,
-        )
-        |> ignore
-        c.text(text(s, "name"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
-      })
-      |> ignore
-      c.box(w=Px(60.0), fn() {  }) |> ignore
-    })
-    |> ignore
+    // (Profiles.kt NewProfileScreen: NavBar, under the status bar, its title in the middle)
+    nav_bar(
+      c,
+      core,
+      tr(if d is Some(_) && step != "pick" { "web-mobile.profiles.pick" } else { "common.cancel" }),
+      match opt_text(d, "title") {
+        Some(x) => x
+        None => tr("android-settings.profile.add")
+      },
+      sub=fn() { c.text(text(s, "name"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore },
+      on_back=leave,
+    )
     guard d is Some(Object(_)) else {
       waiting_cards(
         c,

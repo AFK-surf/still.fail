@@ -43,7 +43,10 @@ function shape(path: string): string[] {
 
 /// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
 /// (docs/multi-workspace.md). A table's latest first: each is taken off the end of its table's SQL in turn.
-const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"], ["entries", "runtime"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"]];
+const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"], ["entries", "letter"], ["entries", "runtime"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"]];
+/// What those columns bring with them: an index of its own, and the `merged` view saying the column (letters).
+const ADDED_INDEXES = ["entries_letters"];
+const MERGED_ADDS = [", m.letter"];
 
 const noToken = <T extends { token: string }>(r: T) => {
   const { token: _, ...rest } = r;
@@ -67,8 +70,11 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     opened = shape(path);
     // Besides the columns the TS station adds on open itself (schema.ts `add*Columns`), as later ones are: a table's SQL
     // then says them after its last column (at its end, or before its PRIMARY KEY), and each is a column line of its own.
-    const plain = (l: string) => ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z]+(?=\\)$|,\\s*PRIMARY KEY)`), "") : t), l);
-    const mine = (l: string) => ADDED.some(([table, column]) => l.startsWith(`  ${table}.${column} `));
+    const plain = (l: string) => {
+      const columns = ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z]+(?=\\)$|,\\s*PRIMARY KEY)`), "") : t), l);
+      return columns.startsWith("view merged:") ? MERGED_ADDS.reduce((t, add) => t.replace(add, ""), columns) : columns;
+    };
+    const mine = (l: string) => ADDED.some(([table, column]) => l.startsWith(`  ${table}.${column} `)) || ADDED_INDEXES.some((index) => l.startsWith(`index ${index}:`));
     const was = before.map(plain);
     // Ignore only newly added columns; columns already present must still survive opening.
     const now = opened.filter((l) => !mine(l) || before.includes(l)).map(plain);

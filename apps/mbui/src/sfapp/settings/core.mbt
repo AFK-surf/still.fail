@@ -33,7 +33,7 @@ pub(all) struct Core {
   /// a toast (Sheet.kt ToastHost)
   say : (String) -> Unit
   /// a person's picture by its URL: an image's key once it is here, "" until then
-  picture : (String) -> String
+  picture : (String, Int) -> String
   /// notifications turned on here: the system asked to allow them (Notices.kt rememberNotificationAsk)
   notify_ask : () -> Unit
   /// this device's push registration as the core now wants it (Push.sync): what `notify.set` answered (`push`), or
@@ -74,6 +74,8 @@ pub(all) struct Core {
   face_failed : (String) -> String
   /// the host face the app's own code face is in, for the fonts page's 默认
   own_code_face : () -> Int
+  /// the time of day (ms), for what is shown of it (剩余 N 分钟): the source's `now`
+  now : () -> Double
 }
 
 ///|
@@ -137,6 +139,8 @@ pub(all) enum Route {
   KeptChat(String, Int)
   /// what changed in still.fail (ChangelogScreen)
   Changelog
+  /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
+  About
   /// the prices the usage is counted at, over its days (UsagePricesScreen)
   UsagePrices(Int)
   /// how a chat's agent runs (RunSettingsScreen): its station, its session's key
@@ -460,6 +464,7 @@ pub fn left(route : Route) -> Unit {
         None => ()
       }
     Connects(_) => connects_mine.val = false
+    Station(a) => station_parts.remove(a)
     NewConnect(a) =>
       match left_core.val {
         Some(core) => new_connect_left(core, a)
@@ -483,6 +488,8 @@ pub fn left(route : Route) -> Unit {
       }
     KeptFiles => {
       kept.chats = None
+      kept.drive = 0.0
+      kept.loose = []
       kept.asked += 1
     }
     Changelog => changelog_state.seen = false
@@ -511,6 +518,7 @@ pub fn left(route : Route) -> Unit {
 pub fn reset() -> Unit {
   archive_reset()
   login_marked.val = None
+  station_parts.clear()
   lock_prompts_reset()
   fonts_at.val = 0
   adb_reset()
@@ -540,12 +548,16 @@ pub fn reset() -> Unit {
   menu.up = false
   frame_core.val = None
   at_root.val = false
+  root_top.val = 0.0
+  root_bar_actions.val = None
   wide.val = false
   status_top.val = 0.0
   nav_foot.val = 0.0
   bar_room.val = 0.0
+  no_bar.val = false
   wide_deep.val = false
   top_trailing.val = None
+  top_on_back.val = None
   top_label.val = ""
   on_card.val = false
   // the pages' own state (settings complete): drafts, fields filled once, what was being done, as a run starts
@@ -584,8 +596,6 @@ pub fn reset() -> Unit {
   versions_state.turning.clear()
   versions_state.failed.clear()
   recovery_words.clear()
-  copied.words = ""
-  copied.serial = 0
   vault_serial.val = 0
   // the drafts each page opened of the core (a form a station, a new connect's, a profile's, a Slack app's): a run
   // opens its own
@@ -593,6 +603,8 @@ pub fn reset() -> Unit {
   policy_forms.clear()
   // what this device keeps, asked of a run's own core
   kept.chats = None
+  kept.drive = 0.0
+  kept.loose = []
   kept.asked = 0
   kept.read = -1
   run_opened.clear()
@@ -603,6 +615,7 @@ pub fn reset() -> Unit {
   app_looks_reset()
   new_profiles.clear()
   bar_adding.val = false
+  bar_moves.clear()
   changelog_state.part = ""
   changelog_state.seen = false
   opened.plain.clear()
@@ -636,6 +649,7 @@ pub fn route_of(name : String) -> Route? {
     "bars" => Some(BarSettings)
     "kept" => Some(KeptFiles)
     "changelog" => Some(Changelog)
+    "about" => Some(About)
     _ =>
       match name.find(":") {
         Some(i) => {

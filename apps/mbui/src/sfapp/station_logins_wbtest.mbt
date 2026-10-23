@@ -4,6 +4,8 @@
 ///|
 test "a station's 登录: the login under way its card, the one done a row saying who started it and how it ended" {
   let t = settings_tester("station:ws1/st1")
+  // in the page's 设置
+  station_part(t, "设置")
   shown_on_page(t, "agent 在这台 station 上做的登录")
   assert_true(t.find("登录") is Some(_))
   // under way: its card, its step to do
@@ -17,5 +19,7 @@ test "a station's 登录: the login under way its card, the one done a row sayin
 test "a station with no logins says nothing of them" {
   let t = settings_tester("station:ws1/st2")
   shown_on_page(t, "在此 station 上")
+  station_part(t, "设置")
+  assert_true(t.find("在此 station 上") is None, msg="the page's 设置 shown")
   assert_true(t.find("agent 在这台 station 上做的登录") is None)
 }

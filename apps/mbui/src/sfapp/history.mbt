@@ -41,63 +41,77 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
   let title = text(chat.value, "title")
   let link = match chat_link(r.station, key) {
     "" => ""
-    l => l + "?history=" + encode_component(key)
+    l => l + "?history=" + @codec.encode_uri_component(key)
   }
   // over the navigation bar (History.kt: windowInsetsPadding(navigationBars))
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
     page_bar(c, "history", tr("common.back"), tr("android-chat.history.title"), fn() {
-      if title != "" && link != "" && nav_button(c, "copy", 18.0, key="history/copy") {
+      if title != "" && link != "" && nav_button(c, "copy", 18.0, key="history/copy", said=tr("web-mobile.history.copyLink")) {
         copy_chat_link(c, title, link)
       }
     })
-    let a = agent_json(chat.value, key)
-    match a {
-      None => {
-        waiting_messages(
-          c,
-          match chat.error {
-            Some(e) => Some(error_words(e))
-            None => None
-          },
-        )
-        return
-      }
-      Some(_) => ()
-    }
-    let s = field(a, "session")
-    c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, gap=6.0, align=ACenter, fn() {
-      model_mark_big(
-        c,
-        text(field(s, "maker"), "id"),
-        text(s, "runtime"),
-        20.0,
-        state_of_badge(text(a, "badge")),
-        t.p.bg,
-      )
-      c.box(w=Fill(1.0), fn() {
-        c.text(text(s, "agentText"), size=16.0, weight=700, color=t.p.text, wrap=false) |> ignore
-      })
-      |> ignore
-      history_actions(c, src, r, a)
-      dui.history_tab = seg(
-        c,
-        "history/tab",
-        [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
-        dui.history_tab,
-      )
-    })
-    |> ignore
-    history_summary(c, a)
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      if dui.history_tab == 0 {
-        history_steps(c, src, r, key, entry)
-      } else {
-        history_details(c, src, r, key, a)
-      }
-    })
-    |> ignore
+    history_body(c, src, r, key, entry, chat)
     // a Slack user's name tapped: its menu (link_menu.mbt)
     link_menu_layer(c)
+  })
+  |> ignore
+}
+
+///|
+/// What the history's page shows under its bar, and the wide frame's tab for it beside the chat (wide_panel.mbt): the
+/// agent at its head with what can be done to it and the tabs, then its steps or its details.
+fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?, chat : Topic) -> Unit {
+  let t = @sf.theme()
+  let a = agent_json(chat.value, key)
+  match a {
+    None => {
+      waiting_messages(
+        c,
+        match chat.error {
+          Some(e) => Some(error_words(e))
+          None => None
+        },
+      )
+      return
+    }
+    Some(_) => ()
+  }
+  // in the wide frame, the web's head (wide_history.mbt)
+  if wide_on.val {
+    wide_history_head(c, src, r, key, a)
+    c.box(style=wh_fill, fn() { history_steps(c, src, r, key, entry) }) |> ignore
+    return
+  }
+  let s = field(a, "session")
+  c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, gap=6.0, align=ACenter, fn() {
+    model_mark_big(
+      c,
+      text(field(s, "maker"), "id"),
+      text(s, "runtime"),
+      20.0,
+      state_of_badge(text(a, "badge")),
+      t.p.bg,
+    )
+    c.box(w=Fill(1.0), fn() {
+      c.text(text(s, "agentText"), size=16.0, weight=700, color=t.p.text, wrap=false) |> ignore
+    })
+    |> ignore
+    history_actions(c, src, r, a)
+    dui.history_tab = seg(
+      c,
+      "history/tab",
+      [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
+      dui.history_tab,
+    )
+  })
+  |> ignore
+  history_summary(c, a)
+  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+    if dui.history_tab == 0 {
+      history_steps(c, src, r, key, entry)
+    } else {
+      history_details(c, src, r, key, a)
+    }
   })
   |> ignore
 }
@@ -128,7 +142,7 @@ fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
       w=Px(28.0),
       h=Px(28.0),
       radius=14.0,
-      bg=if c.pressed(id) { @sf.over(t.p.chip, @sf.alpha(t.p.text, 0.08)) } else { t.p.chip },
+      bg=t.p.chip,
       align=ACenter,
       justify=JCenter,
       id~,
@@ -138,6 +152,8 @@ fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
         } else {
           @sf.icon(c, icon, size=14.0, color=t.p.text) |> ignore
         }
+        // History.kt: clip(CircleShape).clickable
+        @motion.ripple(c, id, 14.0)
       },
     )
     |> ignore
@@ -260,13 +276,17 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : I
     history_edge(c, text(h, "edge"))
     return
   }
-  let its = items(h, "items")
+  // 只看收发 (the wide frame's, History.tsx onlyIo): its steps and its own words left out
+  let io = wide_on.val && wide.history_io
+  let its = items(h, "items").filter(fn(i) { !io || !history_work(Some(i)) })
   let lines : Array[HLine] = [HEdge]
   for i in its {
     lines.push(HItem(i))
   }
-  for l in items(h, "live") {
-    lines.push(HLive(l))
+  if !io {
+    for l in items(h, "live") {
+      lines.push(HLive(l))
+    }
   }
   match field(h, "phase") {
     Some(Object(_) as p) => lines.push(HPhase(p))
@@ -672,7 +692,12 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, user : String, name :
     }
   }
   c.box(style=slack_name_row, fn() {
-    c.box(style=slack_name_ground, id~, fn() { c.text(name, style=slack_name_words) |> ignore }) |> ignore
+    c.box(style=slack_name_ground, id~, fn() {
+      c.text(name, style=slack_name_words) |> ignore
+      // History.kt: clip(Smooth(4)).clickable
+      @motion.ripple(c, id, 4.0)
+    })
+    |> ignore
     @settings.doing_mark(c, busy, if failed_lately(c, key) { Some("") } else { None }, inline=true)
   })
   |> ignore
@@ -685,24 +710,25 @@ let slack_name_row : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
 ///|
 /// Its ground under the finger rounded 4 (Smooth(4)).
 // kept across runs: a value (no field of it changes)
-let slack_name_ground : @ui.Style = @ui.style(radius=Base, pressed=@ui.patch(bg=A(Fg, O5)))
+let slack_name_ground : @ui.Style = @ui.style(radius=Base)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let slack_name_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=AccentText, wrap=false)
 
 ///|
-/// A place, as the core names it (History.kt Place): its platform's mark (still.fail's for a chat here, Slack's for
-/// another) and its name, 13 semibold; a chat here is its agent's item, opened by its session (back to it when it is the
-/// chat under the history), in the accent's ink; a Slack thread opens by its link. (Feishu's mark is Slack's here: the
-/// app has no picture of Feishu's yet.)
+/// A place, as the core names it (History.kt Place): its platform's mark (still.fail's for a chat here, Feishu's for a
+/// Feishu chat, Slack's for another: Parts.kt SlackMark) and its name, 13 semibold; a chat here is its agent's item,
+/// opened by its session (back to it when it is the chat under the history), in the accent's ink; a Slack thread opens
+/// by its link.
 fn history_place(c : @ui.Ctx, r : ChatRef, ik : String, place : Json?) -> Unit {
   let t = @sf.theme()
   let surface = text(place, "surface")
   let session = text(place, "session")
   let url = text(place, "url")
   let here = surface == "ember" || surface == "stillfail"
-  let slack = url != "" && (surface == "slack" || surface == "feishu" || surface.has_prefix("feishu:"))
+  let feishu = surface == "feishu" || surface.has_prefix("feishu:")
+  let slack = url != "" && (surface == "slack" || feishu)
   let opens = session != "" || slack
   let id = c.id("history-place/" + ik)
   if opens && c.clicked(id) {
@@ -719,6 +745,8 @@ fn history_place(c : @ui.Ctx, r : ChatRef, ik : String, place : Json?) -> Unit {
   c.box(dir=Row, gap=3.0, align=ACenter, radius=4.0, id=if opens { id } else { 0 }, fn() {
     if here {
       @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 12.0) |> ignore
+    } else if feishu {
+      @sf.feishu_mark(c, 12.0) |> ignore
     } else {
       @sf.slack_mark(c, 12.0) |> ignore
     }
@@ -810,10 +838,11 @@ fn brief(c : @ui.Ctx, key : String, words : String) -> Bool {
     max_h=42.0,
     radius=6.0,
     clip=true,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
     id~,
     fn() {
       c.text(plain_brief(words), size=14.0, color=t.p.text, line=21.0, w=Fill(1.0)) |> ignore
+      // History.kt: clip(Smooth(6)).clickable
+      @motion.ripple(c, id, 6.0)
     },
   )
   |> ignore
@@ -879,7 +908,6 @@ fn history_group(c : @ui.Ctx, src : Source, r : ChatRef, key : String, ik : Stri
       gap=6.0,
       radius=6.0,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id~,
       fn() {
         @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=13.0, color=t.p.subtle)
@@ -901,6 +929,8 @@ fn history_group(c : @ui.Ctx, src : Source, r : ChatRef, key : String, ik : Stri
         if pending > 0 {
           pill(c, fill("android-chat.history.group.pending", [("n", pending.to_string())]), t.p.accent_text)
         }
+        // History.kt: clip(Smooth(6)).clickable
+        @motion.ripple(c, id, 6.0)
       },
     )
     |> ignore
@@ -998,7 +1028,6 @@ fn folding(
       pady=3.0,
       gap=8.0,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id~,
       fn() {
         let ink = if failed { t.p.red } else { t.p.text }
@@ -1017,6 +1046,8 @@ fn folding(
         if meta != "" {
           c.text(meta, size=11.0, color=if failed { t.p.red } else { t.p.subtle }, wrap=false) |> ignore
         }
+        // History.kt: clip(Smooth(6)).clickable
+        @motion.ripple(c, id, 6.0)
       },
     )
     |> ignore
@@ -1246,7 +1277,6 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
       border=1.0,
       border_color=t.p.line,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L },
       id~,
       fn() {
         @sf.maker_mark(c, text(field(s, "maker"), "id"), text(s, "runtime"), 15.0) |> ignore
@@ -1257,6 +1287,8 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
         |> ignore
         quota_chips(c, field(field(a, "account"), "quota"))
         @sf.icon(c, "chevron-down", size=14.0, color=t.p.muted) |> ignore
+        // History.kt: clip(Smooth(10)).clickable
+        @motion.ripple(c, id, 10.0)
       },
     )
     |> ignore
@@ -1266,14 +1298,15 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
 }
 
 ///|
-/// An entry opened in full (History.kt's reader): the line it was under, then all its words as Markdown.
+/// An entry opened in full (History.kt's reader, Sheet.kt ReaderHost): back to 执行历史, the line it was under, then
+/// all its words as Markdown, 20 from the sides, 12 between.
 fn words_page(c : @ui.Ctx, src : Source, head : String, words : String) -> Unit {
   ignore(src)
   let t = @sf.theme()
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    page_bar(c, "words", tr("common.back"), "", fn() {  })
+    page_bar(c, "words", tr("android-misc.reader.back"), "", fn() {  })
     c.list("words/" + head + "/" + words.length().to_string(), 2, 200.0, fn(i) {
-      c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=if i == 1 { 30.0 } else { 8.0 }, fn() {
+      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=if i == 1 { 30.0 } else { 12.0 }, fn() {
         if i == 0 {
           if head != "" {
             c.text(head, size=13.0, color=t.p.muted) |> ignore
@@ -1392,41 +1425,6 @@ fn scalar_text(v : Json) -> String {
 }
 
 ///|
-/// JSON written out, two spaces a level (as the Android app's pretty printing).
-fn pretty_json(v : Json, depth : Int) -> String {
-  let pad = fn(d : Int) -> String {
-    let sb = StringBuilder()
-    for _ in 0..<d {
-      sb.write_string("  ")
-    }
-    sb.to_string()
-  }
-  match v {
-    Object(m) => {
-      if m.size() == 0 {
-        return "{}"
-      }
-      let parts = []
-      for k, x in m {
-        parts.push(pad(depth + 1) + Json::string(k).stringify() + ": " + pretty_json(x, depth + 1))
-      }
-      "{\n" + parts.join(",\n") + "\n" + pad(depth) + "}"
-    }
-    Array(a) => {
-      if a.length() == 0 {
-        return "[]"
-      }
-      "[\n" +
-      a.map(fn(x) { pad(depth + 1) + pretty_json(x, depth + 1) }).join(",\n") +
-      "\n" +
-      pad(depth) +
-      "]"
-    }
-    _ => v.stringify()
-  }
-}
-
-///|
 /// A command as it would be typed: `["bash", "-lc", "ls"]` is `ls`.
 fn command_of(a : Map[String, Json]) -> String? {
   let c = match a.get("command") {
@@ -1507,16 +1505,17 @@ fn code_ground() -> Int64 {
 }
 
 ///|
-/// Code (a command, a file written or read) in the code face, highlighted by its language (Highlight.kt), wrapping,
-/// kept to 360 high and scrolled within (ToolStep.kt Block).
+/// Code (a command, a file written or read) in the code face, in the colours the core says of its language (`code.ink`),
+/// wrapping, kept to 360 high and scrolled within (ToolStep.kt Block).
 fn code_lines(c : @ui.Ctx, words : String, language? : String = "") -> Unit {
   let t = @sf.theme()
   let n = boxed_n.val
   boxed_n.val += 1
+  let ink = if language == "" { None } else { @sf.code_ink(c, words, language).flatten() }
   c.capped("code/\{n}", 360.0, bg=code_ground(), radius=12.0, padx=12.0, pady=8.0, fn() {
     c.rich(
-      match @sf.highlight(words, language, t.dark) {
-        Some(runs) => runs
+      match ink {
+        Some(ink) => @sf.ink_runs(words, ink, t.dark)
         None => [@ui.span(words, mono=true)]
       },
       size=12.0,
@@ -1803,7 +1802,7 @@ fn fields(c : @ui.Ctx, a : Map[String, Json], skip : Array[String]) -> Unit {
 fn json_block(c : @ui.Ctx, v : Json) -> Unit {
   let t = @sf.theme()
   boxed(c, code_ground(), 240.0, 12.0, 8.0, fn() {
-    c.rich([@ui.span(pretty_json(v, 0), mono=true)], size=12.0, line=18.6, color=t.p.text, w=Fill(1.0))
+    c.rich([@ui.span(@codec.pretty_json(v), mono=true)], size=12.0, line=18.6, color=t.p.text, w=Fill(1.0))
     |> ignore
   })
 }
@@ -2215,4 +2214,13 @@ fn tool_result(c : @ui.Ctx, name : String, call : String, result : String, faile
   })
   |> ignore
   ignore(call)
+}
+
+///|
+/// An item of its own work (History.tsx isWork): its steps, and the words it says to itself; what 只看收发 leaves out.
+fn history_work(item : Json?) -> Bool {
+  match text(field(item, "body"), "kind") {
+    "group" | "text" => true
+    _ => false
+  }
 }

@@ -24,8 +24,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.asPaddingValues
 import fail.still.android.ui.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -117,9 +119,11 @@ import fail.still.android.ui.rememberBreath
 import fail.still.android.ui.NavBack
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
+import fail.still.android.ui.FILL_CHIP_CORNER
 import fail.still.android.ui.MeterChips
 import fail.still.android.ui.MeterDials
 import fail.still.android.ui.HostDetails
+import fail.still.android.ui.Seg
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SlackMark
 import fail.still.android.data.t
@@ -218,7 +222,7 @@ private fun StationBody(s: StationView) {
                 Text(t("android-settings.stations.silent", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         } else {
-            if (host == null) Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
+            if (host == null) Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, FILL_CHIP_CORNER) } }
             if (net == null) Row(Modifier.matchParentSize().padding(top = 30.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(34.dp); Bar(96.dp) }
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(132.dp); Bar(132.dp) }
@@ -228,10 +232,10 @@ private fun StationBody(s: StationView) {
 }
 
 /**
- * An online station's machine on its page, as the web's MachineDetails (web/src/cloud/StationCards.tsx): what it is,
- * what is left of it large, its network, the rest a row each, its agents' processes; in its room whether known yet or
- * not (grey bars until it is); reconnecting, as last heard, faded. `peek` (a chat's station card): what it is, what is
- * left of it in the allowance's boxes and its network, the rest on its page.
+ * An online station's machine on its page's 概览, as the web's 资源 (web/src/cloud/StationPage.tsx Overview): what is
+ * left of it large, its network, its agents' processes (what it is, a row each, is under 软件与设备: StationDevice); in
+ * its room whether known yet or not (grey bars until it is); reconnecting, as last heard, faded. `peek` (a chat's
+ * station card): what is left of it in the allowance's boxes and its network, the rest on its page.
  */
 @Composable
 private fun StationFigures(s: StationView, peek: Boolean = false) {
@@ -242,7 +246,7 @@ private fun StationFigures(s: StationView, peek: Boolean = false) {
         // What it is: on its page, under the page's title; in a chat's card, in the line above.
         if (peek) Box(Modifier.padding(vertical = 4.dp).height(20.dp)) {
             if (host != null) MeterChips(host.meters)
-            else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
+            else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, FILL_CHIP_CORNER) } }
         }
         // Not read yet: laid out unseen as when it is, grey bars over it, so nothing below moves as it comes.
         else Box(Modifier.padding(top = 4.dp)) {
@@ -256,12 +260,25 @@ private fun StationFigures(s: StationView, peek: Boolean = false) {
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(132.dp); Bar(132.dp) }
             }
         }
-        if (!peek) {
-            Box(Modifier.padding(top = 16.dp)) {
-                HostDetails((host ?: unreadHost).details, Modifier.alpha(if (host != null) 1f else 0f))
-                if (host == null) Column(Modifier.matchParentSize(), verticalArrangement = Arrangement.SpaceEvenly) { repeat(4) { Bar(180.dp) } }
-            }
-            Line(running, 120.dp, Modifier.padding(top = 8.dp))
+        if (!peek) Line(running, 120.dp, Modifier.padding(top = 14.dp))
+    }
+}
+
+/**
+ * What the machine is, a row each (its hostname, chip, how long it has been up, the process) and what still.fail keeps
+ * on it, as the web's 设备信息: grey bars in their room while it is not read yet; offline and never read, a line saying so.
+ */
+@Composable
+private fun StationDevice(s: StationView) {
+    val host = s.host
+    val footprint = s.overview?.footprint?.text?.takeIf { it.isNotEmpty() }
+    SectionHeader(t("web-pages.stations.device"), start = 24.dp)
+    Card {
+        if (host == null && !s.online) Text(t("web-pages.stations.deviceOffline"), fontSize = 13.sp, lineHeight = 20.sp, color = C.muted)
+        else Box {
+            val details = (host ?: unreadHost).details + listOfNotNull(footprint?.let { fail.still.android.data.HostDetail(t("web-pages.stations.page.footprint"), it) })
+            HostDetails(details, Modifier.alpha(if (host != null) 1f else 0f))
+            if (host == null) Column(Modifier.matchParentSize(), verticalArrangement = Arrangement.SpaceEvenly) { repeat(details.size) { Bar(180.dp) } }
         }
     }
 }
@@ -309,7 +326,6 @@ fun StationScreen(current: WorkspaceEntry, address: String, login: String? = nul
     val app = LocalApp.current
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val s = stations.value?.firstOrNull { it.station == address }
-    val shared by rememberTopic<fail.still.android.data.AdbShareView>(app.core, Topics.adbShare)
     Column(Modifier.fillMaxSize()) {
         val manager = isManager(current)
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
@@ -317,44 +333,85 @@ fun StationScreen(current: WorkspaceEntry, address: String, login: String? = nul
             { Box(Modifier.height(16.dp), contentAlignment = Alignment.CenterStart) { if (st.reconnecting == true) Reconnecting() else Text(listOfNotNull(joinedMark(st), (st.host?.identity ?: st.line)?.takeIf { it.isNotEmpty() }).joinToString(" · "), fontSize = 11.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
         }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
         if (s == null) return Waiting(WaitShape.Cards, error = stations.error?.message)
+        // In three parts, as the web's (StationPage.tsx Body): how it is and what runs on it; what it is let do and set
+        // to; its software and the machine. A login's link opens the settings, its card there.
+        var part by rememberSaveable(address) { mutableIntStateOf(if (login != null) 1 else 0) }
+        LaunchedEffect(login) { if (login != null) part = 1 }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
-            // Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
-            // offline changes what the page is.
-            if (s.online) Card { StationFigures(s) }
-            else Card {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                    Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
-                    RetryPill(Modifier.padding(top = 6.dp), retrying = s.link.retrying == true)
-                }
+            Seg(
+                listOf(t("web-pages.stations.page.part.overview"), t("web-pages.stations.page.part.settings"), t("web-pages.stations.page.part.machine")),
+                part, { part = it }, Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth(), height = 34.dp, fill = true,
+            )
+            when (part) {
+                0 -> StationOverview(s)
+                1 -> StationSettingsPart(current, s, login)
+                else -> StationMachine(current, s)
             }
-            val overview = s.overview
-            // What runs on it is in settings' lists, every station's together; here, how much of it there is (once read).
-            SectionHeader(t("android-settings.stations.onIt"), start = 24.dp)
-            ListCard {
-                GoRow(t("android-settings.connects.title"), overview?.let { t("android-settings.count", "n" to it.connects.size) }) { app.push(Screen.Connects(address)) }
-                GoRow("Profile", overview?.let { t("android-settings.count", "n" to it.profiles.size) }) { app.push(Screen.Profiles(address)) }
-                GoRow(t("android-settings.memory")) { app.push(Screen.Memory(address)) }
-                // This phone's adb, lent to its agents (AdbShare.kt).
-                GoRow(t("android-misc.adb.title"), if (shared.value?.let { it.sharing && it.station == address } == true) t("android-misc.adb.sharing") else null) { app.push(Screen.AdbShare(address)) }
-                // The folders it lends its members (docs/drive.md); none offered by a station from before the drive.
-                overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.data.driveValue(drive.roots)) { app.push(Screen.Drive(address, null, "")) } }
-            }
-            StationScreens(address)
-            // What macOS lets a Mac station's helper do (StationPermissions.kt); nothing from another or an older one.
-            if (s.online) overview?.permissions?.let { StationPermissionsSection(address, s.name, it) }
-            // The logins its agents did there (LoginCards.kt): those under way as their cards; nothing when none.
-            StationLogins(address, marked = login)
-            // The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them.
-            overview?.agentEnv?.let { StationAgentEnv(address, it, manager) }
-            // What its search finds of the machine (docs/search.md): the person's own data only where its managers say.
-            if (s.online) overview?.search?.takeIf { it.files == "spotlight" }?.let { StationSearchSection(address, it.personal, manager) }
-            if (manager) StationWorkspaces(address)
-            // Its updates are its home workspace's managers' (docs/multi-workspace.md).
-            if (s.online && overview != null) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
             Spacer(Modifier.height(30.dp))
         }
     }
+}
+
+/** A station's 概览: the machine (or that it is offline), what runs on it, its screens. */
+@Composable
+private fun StationOverview(s: StationView) {
+    val app = LocalApp.current
+    val address = s.station
+    val shared by rememberTopic<fail.still.android.data.AdbShareView>(app.core, Topics.adbShare)
+    // Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
+    // offline changes what the page is.
+    if (s.online) Card { StationFigures(s) }
+    else Card {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
+            // Down for a security mode: why (the core's `blocked`), not how to bring it back.
+            Text(s.blocked ?: t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
+            RetryPill(Modifier.padding(top = 6.dp), retrying = s.link.retrying == true)
+        }
+    }
+    val overview = s.overview
+    // What runs on it is in settings' lists, every station's together; here, how much of it there is (once read).
+    SectionHeader(t("android-settings.stations.onIt"), start = 24.dp)
+    ListCard {
+        GoRow(t("android-settings.connects.title"), overview?.let { t("android-settings.count", "n" to it.connects.size) }) { app.push(Screen.Connects(address)) }
+        GoRow("Profile", overview?.let { t("android-settings.count", "n" to it.profiles.size) }) { app.push(Screen.Profiles(address)) }
+        GoRow(t("android-settings.memory")) { app.push(Screen.Memory(address)) }
+        // This phone's adb, lent to its agents (AdbShare.kt).
+        GoRow(t("android-misc.adb.title"), if (shared.value?.let { it.sharing && it.station == address } == true) t("android-misc.adb.sharing") else null) { app.push(Screen.AdbShare(address)) }
+        // The folders it lends its members (docs/drive.md); none offered by a station from before the drive.
+        overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.data.driveValue(drive.roots)) { app.push(Screen.Drive(address, null, "")) } }
+    }
+    StationScreens(address)
+}
+
+/** A station's 设置: what macOS lets it do, the logins on it, its agents' variables, its search, its workspaces. */
+@Composable
+private fun StationSettingsPart(current: WorkspaceEntry, s: StationView, login: String?) {
+    val address = s.station
+    val manager = isManager(current)
+    val overview = s.overview
+    // What macOS lets a Mac station's helper do (StationPermissions.kt); nothing from another or an older one.
+    if (s.online) overview?.permissions?.let { StationPermissionsSection(address, s.name, it) }
+    // The logins its agents did there (LoginCards.kt): those under way as their cards; nothing when none.
+    StationLogins(address, marked = login)
+    // The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them.
+    overview?.agentEnv?.let { StationAgentEnv(address, it, manager) }
+    // What its search finds of the machine (docs/search.md): the person's own data only where its managers say.
+    if (s.online) overview?.search?.takeIf { it.files == "spotlight" }?.let { StationSearchSection(address, it.personal, manager) }
+    if (manager) StationWorkspaces(address)
+}
+
+/** A station's 软件与设备: its software and updates (offline, that they are seen once it is back), and the machine. */
+@Composable
+private fun StationMachine(current: WorkspaceEntry, s: StationView) {
+    val overview = s.overview
+    // Its updates are its home workspace's managers' (docs/multi-workspace.md).
+    if (s.online && overview != null) Versions(s.station, overview.updates, isManager(current), beta = s.betaOffered == true)
+    else if (!s.online) {
+        SectionHeader(t("web-pages.stations.software"), start = 24.dp)
+        Card { Text(t("web-pages.stations.softwareOffline"), fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
+    }
+    StationDevice(s)
 }
 
 /** Whether the station's search finds the machine's person's own mail, messages and the like (web StationSearch.tsx). */
@@ -578,7 +635,7 @@ fun openStationPeek(app: AppState, address: String) {
                 Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
                 // What its agents' processes are is on its page, a tap away.
                 if (s.online) StationFigures(s, peek = true)
-                else Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
+                else Text(s.blocked ?: t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
             }
             ListCard {
                 // Its files (docs/drive.md), where it has a drive: a way there from where it is named, as the wide screen's card has.

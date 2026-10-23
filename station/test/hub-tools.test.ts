@@ -654,19 +654,24 @@ test("an agent writes to another session's chat, which sees whom it is from", as
   await settle();
   const [keyA, keyB] = [sessionKey("cl", "C1", a.threadTs), sessionKey("cl", "C1", b.threadTs)];
   const linkB = `https://ember.test/o/ws/st/${keyB.replaceAll(":", "%3A")}`;
+  const posted = r.chat.posts.length;
   const sent = await r.call(keyA, "session_send", { to: linkB, text: "the build is at /tmp/out" });
   assert.ok(sent.includes(`C1/${b.threadTs}`) && sent.includes(keyB), sent);
-  // Posted in B's thread for people to see, headed with A's chat, and handed to B.
-  const [place, said] = r.chat.posts.at(-1)!;
-  assert.deepEqual(place, { channel: "C1", threadTs: b.threadTs });
+  // A letter: kept in B's chat apart from what is said there, posted nowhere (not in Slack), headed with A's chat, and
+  // handed to B.
+  assert.equal(r.chat.posts.length, posted, "posted nowhere");
   const linkA = `https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")}`;
-  assert.ok(matches(said, [`<${linkA}|`, ">", "\n\nthe build is at /tmp/out"]), said);
   const last = r.said(r.thread("C1", b.threadTs).id).at(-1)!;
-  assert.deepEqual([last.authorKind, last.author, last.text], ["agent", keyA, said]);
+  const said = last.text;
+  assert.ok(matches(said, [`<${linkA}|`, ">", "\n\nthe build is at /tmp/out"]), said);
+  assert.deepEqual([last.authorKind, last.author, last.letter?.way, last.letter?.link], ["agent", keyA, "in", linkA]);
   assert.deepEqual(
     r.store.pendingMessages(keyB).map((p) => p.message.text),
     [said],
   );
+  // Kept in A's chat too, going out, by its agent: handed to no one.
+  const out = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  assert.deepEqual([out.author, out.letter?.way, out.letter?.link, out.text.endsWith("\n\nthe build is at /tmp/out")], [keyA, "out", linkB, true]);
   assert.deepEqual(r.store.pendingMessages(keyA), [], "not handed back to its sender");
   // By session key too; not to itself, nor into a conversation it is in.
   await r.call(keyB, "session_send", { to: keyA, text: "tests pass" });
@@ -824,7 +829,6 @@ test("files go between stations: a chat's attachments come with reading it, and 
   assert.deepEqual([got.author, got.attachments.map((f) => f.name)], [`near/${keyB}`, ["answer.txt"]]);
   assert.ok(got.attachments[0]!.path.startsWith(join(workspaceA, "uploads")));
   assert.equal(readFileSync(got.attachments[0]!.path, "utf8"), "seen it");
-  assert.deepEqual(r.chat.files.at(-1), ["answer.txt"]);
   // A file that did not all arrive is not posted.
   await assert.rejects(fromPeer(r.hub, "near", { session: keyB, to: keyA, text: "again", files: [{ id: "nope", name: "x.txt" }] }), /did not all arrive/);
   // On this station too: copied into the uploads of the chat it goes to.

@@ -279,7 +279,7 @@ fn clip_said(c : Clipboard) -> Unit {
   }
   let (kind, png) = match c.picture {
     NoPicture => ("none", "")
-    Png(b) => ("png", hex_of(b))
+    Png(b) => ("png", @codec.hex(b))
     TooLarge => ("too_large", "")
     Unreadable => ("unreadable", "")
   }
@@ -304,7 +304,7 @@ fn clip_of_line(line : String) -> Clipboard? {
     }
   }
   let picture = match str("picture") {
-    "png" => Png(bytes_of_hex(str("png")))
+    "png" => Png(@codec.from_hex(str("png")))
     "too_large" => TooLarge
     "unreadable" => Unreadable
     _ => NoPicture

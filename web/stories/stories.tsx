@@ -34,6 +34,7 @@ import type { DemoExtension } from "../src/demo/mount.tsx";
 import { shown as fontsShown } from "../../client/core-ts/src/fonts.ts";
 import type { ChatMessage, ChatView, ShareInView, StationView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
+import { markdown } from "../../client/core-ts/src/markdown.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
@@ -47,7 +48,7 @@ import { softwareDemo } from "./software.ts";
 import { lockDemo } from "./lock.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { relaysDemo } from "./relays.ts";
-import { relayDemo } from "./relay.ts";
+import { relayDemo, TWO_BOTS } from "./relay.ts";
 import { Console } from "../src/admin/console.tsx";
 import { ACCOUNT } from "../src/demo/station.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
@@ -320,6 +321,17 @@ const memberships = (joined = false): DemoExtension => ({
     return [...value, { ...first, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab" }];
   },
 });
+/** Lab's Mini1 joined to this workspace, which it takes none of the members of for a security mode (the core's `blocked`). */
+const blockedJoined: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "stations" || !Array.isArray(value)) return undefined;
+    const first = value[0] as StationView;
+    const why = "此 workspace 在此 station 加入后才开启安全模式，它不再接受此 workspace 的成员：请将它从此 workspace 移除后重新添加";
+    const { overview: _, host: __, ...rest } = first;
+    return [...value, { ...rest, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab", online: false,
+      summary: "安全模式未放行", blocked: why, link: { state: "offline", cause: "lock", message: why } }];
+  },
+};
 /** Several of these at once: the first that answers a topic or call, each `then` over the last's value. */
 const together = (...all: DemoExtension[]): DemoExtension => ({
   topic: (t) => { for (const e of all) { const v = e.topic?.(t); if (v !== undefined) return v; } return undefined; },
@@ -338,9 +350,9 @@ const fullStation = (): DemoExtension => together(
  * H.264 where the browser encodes it. */
 const screenView = (story: ViewStory, phone = false, h264 = false): Pick<Story, "render" | "demo"> => ({
   demo: screensDemo(story, undefined, h264),
-  render: () => stage(<ScreenViewer station="demo/local" screen="desktop" backLabel="返回" onBack={noop} phone={phone} />),
+  render: () => stage(<ScreenViewer station="demo/local" screen="desktop" backLabel="返回" onBack={noop} onWindow={phone ? undefined : noop} phone={phone} />),
 });
-/** With a mouse, the pointer brought to the top: the bar there while the view is live. */
+/** With a mouse, the pointer brought to the bar at the top. */
 const toTheBar: Step[] = [{ move: [640, 20] }];
 /** A chat row of the demo's, the made-up ones copied from (kept from its first view, whatever is typed later). */
 let shareRowLike: ShareInView["items"][number] | undefined;
@@ -417,28 +429,56 @@ const followed: DemoExtension = {
     return { ...chat, messages: [...chat.messages, ...said] };
   },
 };
-/** What other chats' agents wrote to the chat, between the person's message and the agent's answer: folded into one
- *  line (the core's `letters`, views.ts lettersFolded), or (`open`) the line with the run whole under it. */
-const letters = (open: boolean): DemoExtension => ({
+/** What the chat's agent and another chat's wrote each other: not in the chat (only its bar's button says how many,
+ *  the core's `letters`), read in their own tab or sheet (`chatLetters`, Letters.tsx); with `open`, that tab open. */
+const letters: DemoExtension = {
+  topic: (t) => {
+    if (t.topic !== "chatLetters") return undefined;
+    const start = Date.now() - 6 * 60_000;
+    const at = (i: number) => start + i * 50_000;
+    const link = "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e";
+    const theirs = (chat: string, from: string) => ({ name: `「${chat}」的 agent`, from, maker: ANTHROPIC });
+    const mbui = "https://app.still.fail/o/w/s/ember%3Ac-06ffb79643";
+    const ours = { name: "Opus 5.5", maker: ANTHROPIC, runtime: "claude" as const };
+    const letter = (i: number, way: "in" | "out", text: string, by = theirs("BFT 备份尺寸分析", link)): ChatMessage => ({
+      seq: 100 + i, thread: Number(t.thread), ts: `${at(i) / 1000}`, attachments: [], quotes: [], createdAt: at(i), waiting: false, time: { createdAt: stamp(at(i)) },
+      authorKind: "agent", author: way === "in" ? "peer/ember:c-9" : "ember:c-1", text, md: markdown(text), mine: false, system: false, by: way === "in" ? by : ours, way,
+    });
+    return {
+      title: "备份改成 zstd",
+      whole: true,
+      chats: [
+        { key: mbui, title: "接手监督 mbui", link: mbui, last: "测试版 4521 已出，你这边的 #1108 等它跑完再合", lastActiveAt: at(3), time: { lastActiveAt: stamp(at(3)) }, letters: [
+          letter(3, "in", "测试版 **4521** 已出，你这边的 #1108 等它跑完再合", theirs("接手监督 mbui", mbui)),
+        ] },
+        { key: link, title: "BFT 备份尺寸分析", link, last: "补充一点：macOS 自带的 /usr/bin/tar 能直接解 zstd，guest 里不用另装", lastActiveAt: at(2), time: { lastActiveAt: stamp(at(2)) }, letters: [
+          letter(0, "in", "用户让精简备份并改用 zstd。我没有 host2 的权限，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下"),
+          letter(1, "out", "已替换，**今晚 02:00** 那份会按新脚本出"),
+          letter(2, "in", "补充一点：macOS 自带的 `/usr/bin/tar` 能直接解 zstd，guest 里不用另装"),
+        ] },
+      ],
+    };
+  },
   then: (t, value) => {
     if (t.topic !== "chat" || !value) return undefined;
-    const chat = value as ChatView;
-    const last = chat.messages.at(-1);
-    if (!last) return undefined;
-    const start = Date.now() - 6 * 60_000;
-    const from = { name: "BFT 备份尺寸分析", from: "https://app.still.fail/o/w/s/ember%3Ac-4dbf0d0c6e", maker: ANTHROPIC };
-    const at = (i: number) => start + i * 50_000;
-    const base = (i: number) => ({ seq: last.seq + 1 + i, thread: last.thread, ts: `${at(i) / 1000}`, attachments: [], quotes: [], createdAt: at(i), waiting: false, time: { createdAt: stamp(at(i)) } });
-    const asked: ChatMessage = { ...base(0), authorKind: "person", author: "local", authorName: "你", text: "备份改成 zstd，顺便看看每份为什么这么大", mine: true, system: false, by: { name: "你" } };
-    const words = ["用户让精简备份并改用 zstd。我没有 host2 的权限，改好的两个脚本放在 `~/bft/backup/`，麻烦替换一下", "补充一点：macOS 自带的 `/usr/bin/tar` 能直接解 zstd，guest 里不用另装", "已替换，**今晚 02:00** 那份会按新脚本出"];
-    const said: ChatMessage[] = words.map((text, i) => ({ ...base(1 + i), authorKind: "agent", author: `peer/ember:c-${i}`, text, mine: false, system: false, by: from }));
-    const own = chat.messages.findLast((m) => m.authorKind === "agent") ?? last;
-    const line = { count: said.length, line: `「${from.name}」发给 ${own.by.name} · ${said.length} 条`, open };
-    const answer: ChatMessage = { ...base(4), authorKind: "agent", author: own.author, text: "备份改好了：每份从 650 MiB 降到 180 MiB，今晚 02:00 起按新脚本出", mine: false, system: false, by: own.by };
-    const run = open ? [{ ...said[0]!, letters: line }, ...said.slice(1)] : [{ ...said[0]!, letters: line }];
-    return { ...chat, messages: [...chat.messages, asked, ...run, answer] };
+    return { ...(value as ChatView), letters: 4 };
   },
-});
+};
+/** The chat's services and background jobs (the `chatJobs` view): a web service up and a task that ended, so the title
+ *  bar's button for them is there (it is not while there are none). */
+const someJobs: DemoExtension = {
+  topic: (t) => {
+    if (t.topic !== "chatJobs") return undefined;
+    const now = Date.now();
+    return {
+      jobs: [
+        { id: "j1", name: "dev server", state: "running", port: 5173, startedAt: now - 20 * 60_000, tone: "up", service: true, open: true, current: true, word: "运行中", meta: [{ text: ":5173" }], age: "20 分钟" },
+        { id: "j2", name: "pnpm test", state: "exited", exitCode: 0, startedAt: now - 9 * 60_000, endedAt: now - 7 * 60_000, tone: "off", ended: true, word: "已结束", meta: [{ text: "2 分钟" }], age: "9 分钟前" },
+      ],
+      servicesNote: "1 个运行中", jobsNote: "", current: 1, ended: 1, clear: ["c1"], allText: "全部 2 个", clearText: "清除已结束的", hiddenText: "",
+    };
+  },
+};
 /** A message sent while the chat's station updates: it waits for the update to finish, saying so under it
  *  (`Outgoing.waits`), and the chat's head says the station is updating. */
 const sentUpdating: DemoExtension = {
@@ -472,6 +512,14 @@ const chatsWaiting = (state: "reading" | "failing"): DemoExtension => ({
     note: state === "reading" ? { reading: true, text: "正在从 Studio 读取对话", failing: [], empty: false }
       : { reading: false, failing: [{ station: "demo/local", text: "无法连接 Studio", message: "station 离线" }], empty: false },
   }),
+});
+/** Lab's Mini1 in this workspace, not reached: the bell's Station line, its mark by its name (the core's `trouble`);
+ * Studio with an emoji, by its name where it is named. */
+const stationDown: DemoExtension = together(memberships(true), {
+  then: (t, value) => t.topic === "stations" && Array.isArray(value)
+    ? value.map((s: Record<string, unknown>) => (s.station === "demo/local" ? { ...s, emoji: "🖥️" } : s))
+    : t.topic !== "chats" || !value ? undefined
+    : { ...(value as object), trouble: { text: "无法连接「Mini1」", state: "error", retry: false, station: "demo/mini1" } },
 });
 /** 用量 not come yet: its stations still read. */
 const usageWaiting: DemoExtension = {
@@ -711,27 +759,31 @@ export const stories: Story[] = [
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
-  { id: "app-chat-letters", group: "应用", title: "对话 · 别的对话的 agent 发来的消息（折起）", app: true, demo: letters(false) },
-  { id: "app-chat-letters-open", group: "应用", title: "对话 · 别的对话的 agent 发来的消息（展开）", app: true, demo: letters(true) },
-  { id: "phone-chat-letters", group: "手机", title: "对话 · 别的对话的 agent 发来的消息（折起）", app: true, phone: true, demo: letters(false) },
+  { id: "app-chat-letters-entry", group: "应用", title: "对话 · agent 往来的入口（对话信息里）", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }] },
+  { id: "app-chat-letters", group: "应用", title: "对话 · agent 往来", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }] },
+  { id: "app-chat-letters-open", group: "应用", title: "对话 · agent 往来 · 打开一个对话的", app: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { click: "text=BFT 备份尺寸分析" }] },
+  { id: "phone-chat-letters-info", group: "手机", title: "对话 · agent 往来的入口（对话信息里）", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }] },
+  { id: "phone-chat-letters", group: "手机", title: "对话 · agent 往来", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }] },
+  { id: "phone-chat-letters-open", group: "手机", title: "对话 · agent 往来 · 打开一个对话的", app: true, phone: true, demo: letters, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { click: "text=BFT 备份尺寸分析" }] },
   { id: "app-chat-sent-updating", group: "应用", title: "对话 · station 更新时发出的消息", app: true, demo: sentUpdating },
   { id: "phone-chat-sent-updating", group: "手机", title: "对话 · station 更新时发出的消息", app: true, phone: true, demo: sentUpdating },
   { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
   { id: "app-chat-history-turns", group: "应用", title: "执行历史 · 一轮一轮", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }], demo: historyTurns },
   { id: "app-chat-side", group: "应用", title: "对话 · 侧栏打开", app: true, steps: [{ click: '[aria-label="打开侧栏"]' }] },
-  { id: "app-chat-relay", group: "应用", title: "对话 · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="接力到频道…"]' }] },
-  { id: "app-chat-relay-picked", group: "应用", title: "对话 · 接力到频道 · 选中一个", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="接力到频道…"]' }, { text: "#cue-dev" }] },
-  { id: "app-chat-relay-all", group: "应用", title: "对话 · 接力到频道 · 显示全部", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="接力到频道…"]' }, { text: "显示全部 10 个" }] },
-  { id: "app-chat-relay-workspace", group: "应用", title: "对话 · 接力到频道 · 只看一个 workspace", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="接力到频道…"]' }, { click: '[aria-label="在哪个 workspace 里找"] button:nth-child(3)' }] },
-  { id: "app-chat-relay-search", group: "应用", title: "对话 · 接力到频道 · 搜索", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="接力到频道…"]' }, { click: '[aria-label="搜索频道或群"]' }, { key: "d" }] },
-  { id: "app-chat-relay-none", group: "应用", title: "对话 · 接力到频道 · 没有连接", app: true, demo: relayDemo([]), steps: [{ click: '[aria-label="接力到频道…"]' }] },
+  { id: "app-chat-relay", group: "应用", title: "对话 · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }] },
+  { id: "app-chat-relay-picked", group: "应用", title: "对话 · 接力到频道 · 选中一个", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "#cue-dev" }] },
+  { id: "app-chat-relay-all", group: "应用", title: "对话 · 接力到频道 · 显示全部", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "显示全部 10 个" }] },
+  { id: "app-chat-relay-bot", group: "应用", title: "对话 · 接力到频道 · 换一个 bot", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="用哪个 bot"] button:nth-child(2)' }] },
+  { id: "app-chat-relay-search", group: "应用", title: "对话 · 接力到频道 · 搜索", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="搜索频道或群"]' }, { key: "d" }] },
+  { id: "app-chat-relay-none", group: "应用", title: "对话 · 接力到频道 · 没有连接", app: true, demo: relayDemo([]), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }] },
   { id: "app-sidebar-folded", group: "应用", title: "侧栏收起", app: true, steps: [{ click: '[aria-label="对话"]' }] },
   { id: "app-sidebar-peek", group: "应用", title: "侧栏收起后临时展开", app: true, steps: [{ click: '[aria-label="对话"]' }, { hover: '[aria-label="对话"]' }, { move: [150, 60] }] },
   { id: "app-new-chat", group: "应用", title: "新建对话", app: true, steps: [{ text: "新建对话" }] },
   { id: "app-new-chat-files", group: "应用", title: "新建对话 · Station 文件", app: true, steps: [{ text: "新建对话" }, { click: '[aria-label="Station 文件"]' }, { text: "Downloads" }] },
   { id: "app-new-chat-files-added", group: "应用", title: "新建对话 · Station 文件 · 发路径", app: true, steps: [{ text: "新建对话" }, { click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }] },
   { id: "app-todo", group: "应用", title: "待处理", app: true, steps: [{ click: '[aria-label="待处理"]' }] },
+  { id: "app-todo-station-down", group: "应用", title: "待处理 · station 连不上", app: true, demo: stationDown, steps: [{ click: '[aria-label="待处理"]' }] },
   { id: "app-files", group: "应用", title: "文件", app: true, steps: [{ click: '[aria-label="文件"]' }] },
   { id: "app-files-home", group: "应用", title: "文件 · 主目录", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }] },
   { id: "app-files-deep", group: "应用", title: "文件 · 分栏", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { text: "code" }, { text: "acme" }, { text: "web" }] },
@@ -744,16 +796,18 @@ export const stories: Story[] = [
   { id: "app-files-tabs", group: "应用", title: "文件 · 多标签", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { click: '[aria-label="新标签"]' }, { text: "MBA" }] },
   { id: "app-files-split", group: "应用", title: "文件 · 左右分栏", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { text: "Downloads" }, { click: '[aria-label="左右分栏"]' }, { text: "MBA" }, { text: "项目" }] },
   { id: "app-files-transfers", group: "应用", title: "文件 · 传输", app: true, demo: filesDemo(TRANSFERS), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { click: 'button:has-text("个传输")' }] },
-  { id: "app-chat-files", group: "应用", title: "对话 · Station 文件", app: true, steps: [{ click: '[aria-label="Station 文件"]' }] },
-  { id: "app-chat-files-folder", group: "应用", title: "对话 · Station 文件 · 文件夹", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }] },
-  { id: "app-chat-files-tree", group: "应用", title: "对话 · Station 文件 · 文件树", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { click: '[aria-label="文件树"]' }, { text: "code" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }] },
-  { id: "app-chat-files-menu", group: "应用", title: "对话 · Station 文件 · 右键", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"login-375.png\")" }] },
-  { id: "app-chat-files-added", group: "应用", title: "对话 · Station 文件 · 发路径", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }] },
-  { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Studio · 路径" }] },
+  { id: "app-chat-files", group: "应用", title: "对话 · Station 文件", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }] },
+  { id: "app-chat-files-folder", group: "应用", title: "对话 · Station 文件 · 文件夹", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }] },
+  { id: "app-chat-files-tree", group: "应用", title: "对话 · Station 文件 · 文件树", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { click: '[aria-label="文件树"]' }, { text: "code" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }] },
+  { id: "app-chat-files-menu", group: "应用", title: "对话 · Station 文件 · 右键", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }, { rightClick: "button:has-text(\"login-375.png\")" }] },
+  { id: "app-chat-files-added", group: "应用", title: "对话 · Station 文件 · 发路径", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }] },
+  { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=Station 文件" }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Studio · 路径" }] },
   { id: "app-station", group: "应用", title: "station", app: true, steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="为 Studio 选择图标"]' }] },
   { id: "app-station-workspaces", group: "应用", title: "station · 在几个 workspace 里", app: true, demo: memberships(), steps: toStation("设置") },
   { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
+  { id: "app-station-blocked", group: "应用", title: "station · 安全模式未放行", app: true, demo: blockedJoined, steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
+  { id: "phone-station-blocked", group: "应用", title: "手机 · station · 安全模式未放行", app: true, phone: true, demo: blockedJoined, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Mini1" }] },
   { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-first-station-existing", group: "应用", title: "第一台 station · 也可加已有的", app: true, demo: firstJoining },
   { id: "app-first-station-existing-open", group: "应用", title: "第一台 station · 选已有的", app: true, demo: firstJoining, steps: [{ text: "添加其他 workspace 的 station" }] },
@@ -866,6 +920,8 @@ export const stories: Story[] = [
 
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
+  { id: "phone-settings", group: "设置", title: "手机 · 设置（账号、workspace 两张卡，各组带图标）", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }] },
+  { id: "phone-settings-about", group: "设置", title: "手机 · 关于（更新日志、使用统计、条款）", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "关于" }] },
   { id: "phone-settings-appearance", group: "设置", title: "手机 · 外观", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }] },
   { id: "settings-appearance-fonts", group: "设置", title: "外观 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }] },
   { id: "settings-appearance-fonts-text", group: "设置", title: "外观 · 字体 · 正文，指着思源宋体（预览里先试）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }, { click: '[aria-label="字体"] button:has-text("正文")' }, { hover: 'button[aria-pressed]:has-text("思源宋体")' }] },
@@ -914,6 +970,7 @@ export const stories: Story[] = [
   { id: "security-waiting-wrong", group: "设置", title: "安全 · 安全码不对", app: true, demo: lockDemo("wrong") },
   { id: "security-waiting-none", group: "设置", title: "安全 · 未找到在线的受信任设备", app: true, demo: lockDemo("none") },
   { id: "security-waiting-failed", group: "设置", title: "安全 · 批准请求未能提交", app: true, demo: lockDemo("failed") },
+  { id: "phone-security-waiting", group: "设置", title: "手机 · 安全 · 等待批准此设备（顶栏可切换 workspace）", app: true, phone: true, demo: lockDemo("waiting") },
   { id: "phone-security-waiting-failed", group: "设置", title: "手机 · 安全 · 批准请求未能提交", app: true, phone: true, demo: lockDemo("failed") },
   { id: "security-prompt-two-workspaces", group: "设置", title: "安全 · 新设备请求批准（显示安全码）", app: true, demo: lockDemo("prompt") },
   { id: "phone-security-prompt-two-workspaces", group: "设置", title: "手机 · 安全 · 新设备请求批准（显示安全码）", app: true, phone: true, demo: lockDemo("prompt") },
@@ -972,7 +1029,7 @@ export const stories: Story[] = [
   // ── small panels (docs/ui-panels.md) ──
   { id: "panel-filter", group: "小面板", title: "筛选菜单", app: true, steps: [{ click: '[aria-label^="筛选会话"]' }] },
   { id: "panel-chat-info", group: "小面板", title: "对话信息", app: true, steps: [{ click: '[aria-label="对话信息"]' }] },
-  { id: "panel-jobs", group: "小面板", title: "服务和后台任务", app: true, steps: [{ click: '[aria-label="服务和后台任务"]' }] },
+  { id: "panel-jobs", group: "小面板", title: "服务和后台任务", app: true, demo: someJobs, steps: [{ click: '[aria-label="服务和后台任务"]' }] },
   { id: "panel-workspace", group: "小面板", title: "workspace 菜单", app: true, steps: [{ click: '[aria-label="新建 workspace、添加账号"]' }] },
   { id: "panel-rail-menu", group: "小面板", title: "侧边条右键菜单", app: true, steps: [{ rightClick: '[aria-label="文件"]' }] },
   { id: "panel-rail-adder", group: "小面板", title: "侧边条自定义", app: true, steps: [{ rightClick: '[aria-label="文件"]' }, { text: "自定义侧边条" }] },
@@ -1109,6 +1166,8 @@ export const stories: Story[] = [
   { id: "phone-chat-history-turns", group: "手机", title: "执行历史 · 一轮一轮", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "历史" }], demo: historyTurns },
   { id: "phone-chat-history-steps", group: "手机", title: "执行历史 · 展开的一组", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "历史" }, { text: "读取 Win11 上 pnpm shot 的输出 · 共 8 项" }], demo: historyTurns },
   { id: "phone-chat-info", group: "手机", title: "对话信息", app: true, phone: true, steps: [{ click: '[aria-label="对话信息"]' }] },
+  { id: "phone-chat-relay-one", group: "手机", title: "对话 · 接力到频道 · 只有一个 bot", app: true, phone: true, demo: relayDemo(TWO_BOTS.slice(0, 1)), steps: [{ click: '[aria-label="对话信息"]' }, { text: "接力到频道…" }] },
+  { id: "phone-chat-relay-two-bots", group: "手机", title: "对话 · 接力到频道 · 一个 workspace 两个 bot（选中这个对话的）", app: true, phone: true, demo: relayDemo(TWO_BOTS), steps: [{ click: '[aria-label="对话信息"]' }, { text: "接力到频道…" }] },
   { id: "phone-chat-relay", group: "手机", title: "对话 · 接力到频道", app: true, phone: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { text: "接力到频道…" }, { text: "#cue-dev" }] },
   { id: "phone-files", group: "手机", title: "文件", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="文件"]' }] },
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },

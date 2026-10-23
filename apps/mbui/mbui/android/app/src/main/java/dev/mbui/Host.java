@@ -46,6 +46,25 @@ final class Host {
 
     /** The system in night mode (MainActivity: its configuration's uiMode, kept as it changes): @hostapi.system_dark. */
     static volatile boolean systemDark;
+    /** The system's size of words (MainActivity: its configuration's fontScale, kept as it changes): @hostapi.font_scale. */
+    static volatile float fontScale = 1f;
+
+    static float fontScale() {
+        return fontScale;
+    }
+
+    /** Whether a service reads the screen (@hostapi.a11y_on; A11y.on). */
+    static boolean a11yOn() {
+        return A11y.on();
+    }
+
+    /** What the app's widgets are now (@hostapi.a11y_tree, from the GL thread): the view's virtual nodes made of it. */
+    static void a11yTree(String lines) {
+        main.post(() -> {
+            MBView v = view;
+            if (v != null) v.a11y().set(lines);
+        });
+    }
 
     static boolean systemDark() {
         return systemDark;
@@ -201,6 +220,16 @@ final class Host {
                     imm.updateSelection(view, a, b, -1, -1);
                 }
             }
+        });
+    }
+
+    /**
+     * The system's floating text menu over a field's words (@hostapi.text_menu: ActionMode.TYPE_FLOATING), at the
+     * rectangle given in dp, offering what {@code can} says (1 cut, 2 copy, 4 paste, 8 select all); or put away.
+     */
+    static void textMenu(boolean shown, double x, double y, double w, double h, int can) {
+        main.post(() -> {
+            if (view != null) view.textMenu(shown, x, y, w, h, can);
         });
     }
 

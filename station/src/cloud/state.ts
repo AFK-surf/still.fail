@@ -163,9 +163,11 @@ export class Cloud {
     this.listeners.clear();
   }
 
-  reload() {
+  /// The state read again from its file; told when it changed, or anyway (`tell`: the station joined a workspace, and
+  /// what to pin there is to be asked for at once, cloud.json as the plane's frame left it or not).
+  reload(tell = false) {
     const next = readState(this.data);
-    if (JSON.stringify(next) !== JSON.stringify(this.state)) {
+    if (tell || JSON.stringify(next) !== JSON.stringify(this.state)) {
       this.state = next;
       this.tell();
     }
@@ -364,15 +366,26 @@ export class Cloud {
     const s = this.state;
     if (s === null || !s.workspace || this.removed()) return [];
     const home: Membership = { workspace: s.workspace, workspace_name: s.workspace_name, name: s.name, peers: s.peers, revocations: s.revocations, home: true };
-    const homeLocked = this.locked() !== null;
     const joined = (s.joined ?? []).flatMap((j): Membership[] => {
-      if (j.workspace === s.workspace) return [];
+      if (j.workspace === s.workspace || this.leftOut(j.workspace) !== null) return [];
       const own = this.locked(j.workspace);
-      if (own === null && (homeLocked || j.locked === true || this.pendingLock(j.workspace) !== null)) return [];
       const peers = own === null ? j.peers : j.peers.filter((p) => own.state !== null && typeof p?.id === "string" && own.state.stations.has(p.id));
       return [{ ...j, peers, home: false }];
     });
     return [home, ...joined];
+  }
+
+  /// Why a workspace this station joined is none it takes members of now (`memberships` leaves it out): the lock joining
+  /// named not brought by the control plane yet (`pending`); locked, with no lock named to pin (`unpinned`: joined before
+  /// it was locked); or this station's home locked and it not (`home`). Null when it is in, or is none it joined.
+  leftOut(ws: string): "pending" | "unpinned" | "home" | null {
+    const s = this.state;
+    if (s === null || !s.workspace || this.removed() || ws === s.workspace) return null;
+    const j = (s.joined ?? []).find((x) => x.workspace === ws);
+    if (j === undefined || this.locked(ws) !== null) return null;
+    if (this.pendingLock(ws) !== null) return "pending";
+    if (j.locked === true) return "unpinned";
+    return this.locked() !== null ? "home" : null;
   }
 
   /// The station in `workspace`, if it is in it now.

@@ -4,6 +4,7 @@ import { useParams } from "react-router";
 import type { ArchivingView, StationView } from "../core/shapes.ts";
 import { useStations } from "../api.ts";
 import { t } from "../i18n.ts";
+import { StationNamed } from "../StationNamed.tsx";
 import { HINTS, IDLE_DAYS, MODES, SLACK_DAYS, daysLabel, daysOffered, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, summaryOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { useApp } from "./app.tsx";
@@ -55,7 +56,7 @@ function StationRow({ s }: { s: StationView }) {
   return (
     <ListRow onClick={view ? () => app.push(app.at(`/settings/archive/${encodeURIComponent(s.station)}`)) : undefined}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-        <span className={listsCss.mRowTitle}>{s.name}</span>
+        <span className={listsCss.mRowTitle}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>
         <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}${stalled ? ` ${partsCss.mRed}` : ""}`}>{note}</span>
       </span>
       {view && <ChevronRight size={14} className={partsCss.mSubtle} />}

@@ -33,7 +33,7 @@ fn trace_bytes(m : Map[String, Json], b : Bytes) -> Unit {
   if b.length() > trace_bytes_max.val {
     m["bn"] = Json::number(b.length().to_double())
   } else {
-    m["b"] = Json::string(hex(b))
+    m["b"] = Json::string(@codec.hex(b))
   }
 }
 
@@ -87,45 +87,3 @@ fn trace_in(msg : Json, bytes : Bytes?, wall : Double) -> Unit {
   }
 }
 
-///|
-let hex_digits : Array[Char] = [
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-]
-
-///|
-fn hex(b : Bytes) -> String {
-  let out = StringBuilder::new()
-  for i in 0..<b.length() {
-    let v = b[i].to_int()
-    out.write_char(hex_digits[v >> 4])
-    out.write_char(hex_digits[v & 15])
-  }
-  out.to_string()
-}
-
-///|
-fn hex_value(c : Char) -> Int {
-  let n = c.to_int()
-  if n >= '0'.to_int() && n <= '9'.to_int() {
-    n - '0'.to_int()
-  } else if n >= 'a'.to_int() && n <= 'f'.to_int() {
-    n - 'a'.to_int() + 10
-  } else {
-    0
-  }
-}
-
-///|
-fn unhex(s : String) -> Bytes {
-  let out : Array[Byte] = []
-  let mut hi = -1
-  for c in s {
-    if hi < 0 {
-      hi = hex_value(c)
-    } else {
-      out.push(((hi << 4) | hex_value(c)).to_byte())
-      hi = -1
-    }
-  }
-  Bytes::from_array(out)
-}

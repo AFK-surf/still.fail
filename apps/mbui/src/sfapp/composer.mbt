@@ -3,8 +3,10 @@
 // with the words up to six lines, the round send button; focused or holding something, the field takes the whole
 // width and the buttons go under it. What waits to go with the words sits over the field: the quotes (each with a
 // line for a comment) and the files (pictures as tiles, a long paste as its card, any other file as a card), each
-// going up to the station as soon as it is added (`station.upload.part`, 4 MB a part), waiting there in no chat until
-// a message takes it. Enter is a new line, as the Android app's field has it; send sends.
+// handed to the core as soon as it is added, which sends it up to the station (`composer.add`, its bytes beside the
+// call; a station that has it already copies its own), where it waits in no chat until a message takes it. A message
+// sent while one is still going up names it (`uploads`) and waits in the outbox until it is up; one that failed goes
+// again from what the core kept (`composer.retry`). Enter is a new line, as the Android app's field has it; send sends.
 //
 // Each chat has its own draft (`<station>:<session>`, as the Android app keys it): the words, the quotes with what is
 // said about them, the files already up, kept by the core on the device (`draft.get`, `draft.put` a moment after each
@@ -158,6 +160,13 @@ priv struct Pending {
   /// how much of it the station has
   mut sent : Int
   mut error : String?
+  /// its id in the core, which sends it up (`composer.add`): a message sent before it is up names it (`uploads`); ""
+  /// for one going up here (a station's file switched to one) and for any other
+  mut core_id : String
+  /// failed going up in the core: it can go again from what the core kept (`composer.retry`)
+  mut retry : Bool
+  /// asked to go again: the core's failure said before it is not taken again, until it says otherwise
+  mut retrying : Bool
 }
 
 ///|
@@ -330,6 +339,9 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       done: Some(a),
       sent: number(as_, "size").to_int(),
       error: None,
+      core_id: "",
+      retry: false,
+      retrying: false,
     })
   }
   // links shared in (share-in.ts): each a card among the files, kept and sent as words
@@ -352,6 +364,9 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       done: Some({ "link": l }),
       sent: 0,
       error: None,
+      core_id: "",
+      retry: false,
+      retrying: false,
     })
   }
 }
@@ -486,15 +501,24 @@ fn uploading(d : Draft) -> Bool {
 }
 
 ///|
-/// Something can be sent: words, a file up or a quote, nothing still going up, nothing locking it.
+/// A file going up outside the core (a station's file switched to one, station_files.mbt): sending waits for it here
+/// (Composer.kt goingHere).
+fn going_here(d : Draft) -> Bool {
+  d.files.iter().any(fn(f) { f.done is None && f.error is None && f.core_id == "" }) || refs_uploading(d.key)
+}
+
+///|
+/// Something can be sent (Composer.kt ready): words, a file up or going up in the core, or a quote; nothing going up
+/// here, no file that failed (sent again or taken out first, never left out unsaid), nothing locking it.
 fn draft_ready(d : Draft, locked : Bool) -> Bool {
   (
     d.text.trim(chars=" \n\t") != "" ||
-    d.files.iter().any(fn(f) { f.done is Some(_) }) ||
+    d.files.iter().any(fn(f) { f.done is Some(_) || f.core_id != "" }) ||
     d.quotes.length() > 0 ||
     refs_of(d.key).length() > 0
   ) &&
-  !uploading(d) &&
+  !going_here(d) &&
+  !d.files.iter().any(fn(f) { f.error is Some(_) }) &&
   !locked
 }
 
@@ -506,6 +530,75 @@ fn draft_quote(d : Draft, author : String, words : String, ts : String, role : S
   d.quotes.push({ id, author, text: words, ts, role, file: "" })
   d.comments[id] = ""
   d.focus = id
+}
+
+///|
+/// An image of a message quoted (Composer.kt Draft.quoteFile): a quote naming it, its comment line taking the focus;
+/// the file (`a`, as the station has it) goes again with the message, nothing going up, once however often it is
+/// quoted.
+fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : Json) -> Unit {
+  let s = Some(a)
+  let name = text(s, "name")
+  let path = text(s, "path")
+  let id = next_pending.val
+  next_pending.val += 1
+  d.quotes.push({ id, author, text: name, ts, role, file: name })
+  d.comments[id] = ""
+  if !d.files.iter().any(fn(f) { f.done is Some(_) && text(f.done, "path") == path }) {
+    let fid = next_pending.val
+    next_pending.val += 1
+    let size = number(s, "size").to_int()
+    d.files.push({
+      id: fid,
+      name,
+      size,
+      image: "",
+      width: number(s, "width").to_int(),
+      height: number(s, "height").to_int(),
+      pasted: None,
+      local: None,
+      done: Some(a),
+      sent: size,
+      error: None,
+      core_id: "",
+      retry: false,
+      retrying: false,
+    })
+  }
+  d.focus = id
+}
+
+///|
+/// A quote's own picture in the composer's quote card: 16 in, 6 under its words (Composer.kt DraftExtras).
+// kept across runs: a value (no field of it changes)
+let quote_picture_in : @ui.Style = @ui.style(pl=S4, pt=S1_5)
+
+///|
+/// The file going with a quote (a mark's screenshot, an image of a message quoted), shown in its card rather than
+/// with the files (Composer.kt Draft.fileOf): the one it names, by the name it went up as.
+fn quote_file_of(d : Draft, q : DraftQuote) -> Pending? {
+  if q.file == "" {
+    return None
+  }
+  d.files
+  .iter()
+  .find_first(fn(f) {
+    let up = text(f.done, "name")
+    (if up != "" { up } else { f.name }) == q.file
+  })
+}
+
+///|
+/// A quote taken out (Composer.kt Draft.unquote), with the file that went with it unless another quote names it too.
+fn draft_unquote(src : Source, d : Draft, q : DraftQuote) -> Unit {
+  let own = quote_file_of(d, q)
+  d.quotes.retain(fn(x) { x.id != q.id })
+  d.comments.remove(q.id)
+  match own {
+    Some(f) if !d.quotes.iter().any(fn(x) { quote_file_of(d, x).map(fn(g) { g.id }) == Some(f.id) }) =>
+      take_out(src, d, f)
+    _ => ()
+  }
 }
 
 // ── files ──────────────────────────────────────────────────────────────
@@ -532,57 +625,92 @@ fn upload_id(what : String, n : Int) -> String {
 }
 
 ///|
-/// The width and height a picture's bytes say (PNG, JPEG, GIF, WebP), or None.
-fn image_size(b : Bytes) -> (Int, Int)? {
-  let n = b.length()
-  let u8 = fn(i : Int) -> Int { if i < n { b[i].to_int() } else { 0 } }
-  let be16 = fn(i : Int) -> Int { (u8(i) << 8) | u8(i + 1) }
-  let le16 = fn(i : Int) -> Int { u8(i) | (u8(i + 1) << 8) }
-  let be32 = fn(i : Int) -> Int { (be16(i) << 16) | be16(i + 2) }
-  if n >= 24 && u8(0) == 0x89 && u8(1) == 0x50 && u8(2) == 0x4E && u8(3) == 0x47 {
-    return Some((be32(16), be32(20)))
+/// The pictures of images sent from here, as they were picked (ChatFiles.kt FileData.sentOf): by station and the name
+/// it keeps the file under once up, or by the upload's id from when it starts going up (a message sent before it is up
+/// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
+/// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image).
+let sent_pictures : Map[String, String] = {}
+
+///|
+fn sent_key(station : String, path : String) -> String {
+  station + "\u{1}" + base_name(path)
+}
+
+///|
+/// The picture `a` was sent from here as, if it was.
+fn sent_picture(station : String, a : Attachment) -> String? {
+  match sent_pictures.get(sent_key(station, a.path)) {
+    Some(k) => Some(k)
+    None => if a.upload != "" { sent_pictures.get("upload\u{1}" + a.upload) } else { None }
   }
-  if n >= 10 && u8(0) == 0x47 && u8(1) == 0x49 && u8(2) == 0x46 {
-    return Some((le16(6), le16(8)))
+}
+
+///|
+/// A file the host holds, too big to be read whole (a video: @hostapi.Picked.held), into the draft: the core sends it
+/// up, reading it from the host a part at a time as it goes (`composer.add` with `blob: {hostFile, size, type}`:
+/// still.fail's Android app's PickedFiles.kt), named by its content first where the host can say it; its tile the
+/// host's picture of it (a video's still).
+fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked) -> Unit {
+  let id = next_pending.val
+  next_pending.val += 1
+  let size = f.size.to_int64()
+  let p : Pending = {
+    id,
+    name: f.name,
+    size: f.size.to_int(),
+    image: f.src,
+    width: 0,
+    height: 0,
+    pasted: None,
+    local: None,
+    done: None,
+    sent: 0,
+    error: None,
+    core_id: "",
+    retry: false,
+    retrying: false,
   }
-  if n >= 30 && u8(0) == 0x52 && u8(1) == 0x49 && u8(8) == 0x57 && u8(9) == 0x45 {
-    // RIFF….WEBP: VP8 , VP8L, VP8X
-    let kind = u8(15)
-    if kind == 0x20 {
-      return Some((le16(26) & 0x3FFF, le16(28) & 0x3FFF))
-    } else if kind == 0x4C {
-      let bits = u8(21) | (u8(22) << 8) | (u8(23) << 16) | (u8(24) << 24)
-      return Some(((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1))
-    } else if kind == 0x58 {
-      return Some(
-        (
-          (u8(24) | (u8(25) << 8) | (u8(26) << 16)) + 1,
-          (u8(27) | (u8(28) << 8) | (u8(29) << 16)) + 1,
-        ),
-      )
-    }
-    return None
+  d.files.push(p)
+  if size > max_file.to_int64() {
+    p.error = Some(tr("android-chat.file.tooBig"))
+    return
   }
-  if n >= 4 && u8(0) == 0xFF && u8(1) == 0xD8 {
-    let mut i = 2
-    while i + 9 < n {
-      if u8(i) != 0xFF {
-        i += 1
-        continue
+  if src.read_only {
+    p.error = Some(read_only_words)
+    return
+  }
+  let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{size}", d.files.length() - 1)
+  p.core_id = cid
+  let one : Map[String, Json] = {
+    "id": Json::string(cid),
+    "name": Json::string(f.name),
+    "size": Json::number(f.size),
+    "blob": Json::object({
+      "hostFile": Json::number(f.held.to_double()),
+      "size": Json::number(f.size),
+      "type": Json::string(file_type(f.name)),
+    }),
+  }
+  (src.call)(
+    "composer.add",
+    Json::object({
+      "key": Json::string(upload_key(d)),
+      "station": Json::string(station),
+      "files": Json::array([Json::object(one)]),
+    }),
+    fn(res) {
+      match res {
+        Err(e) if p.done is None =>
+          p.error = Some(
+            match text(Some(e), "message") {
+              "" => tr("android-chat.file.uploadFailed")
+              m => m
+            },
+          )
+        _ => ()
       }
-      let m = u8(i + 1)
-      if m == 0xD8 || m == 0x01 || (m >= 0xD0 && m <= 0xD7) || m == 0xFF {
-        i += if m == 0xFF { 1 } else { 2 }
-        continue
-      }
-      // a start of frame (not DHT C4, JPG C8, DAC CC)
-      if m >= 0xC0 && m <= 0xCF && m != 0xC4 && m != 0xC8 && m != 0xCC {
-        return Some((be16(i + 7), be16(i + 5)))
-      }
-      i += 2 + be16(i + 2)
-    }
-  }
-  None
+    },
+  )
 }
 
 ///|
@@ -591,7 +719,7 @@ fn image_size(b : Bytes) -> (Int, Int)? {
 fn add_file(src : Source, d : Draft, station : String, name : String, bytes : Bytes, pasted : String?) -> Unit {
   let id = next_pending.val
   next_pending.val += 1
-  let (w, h) = match image_size(bytes) {
+  let (w, h) = match @pixels.image_size(bytes) {
     Some(s) if pasted is None => s
     _ => (0, 0)
   }
@@ -614,6 +742,9 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
     done: None,
     sent: 0,
     error: None,
+    core_id: "",
+    retry: false,
+    retrying: false,
   }
   d.files.push(p)
   if bytes.length() > max_file {
@@ -624,15 +755,188 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
     p.error = Some(read_only_words)
     return
   }
-  upload_part(
-    src,
-    d,
-    station,
-    p,
+  // the core sends it up, from its bytes handed over beside the call; a message sent before it is up waits for it
+  let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1)
+  p.core_id = cid
+  if image != "" {
+    sent_pictures["upload\u{1}" + cid] = image
+  }
+  let blob : Map[String, Json] = {
+    "hostBytes": [0, Json::number(bytes.length().to_double())],
+    "type": Json::string(file_type(name)),
+  }
+  // named by its content first, so a station that has it already copies its own (PickedFiles.kt picked.hash: worked
+  // out here, on the frame's thread, only for what that is quick for)
+  if bytes.length() <= hashed_max {
+    blob["sha256"] = Json::string(@zip.sha256(bytes))
+  }
+  let one : Map[String, Json] = {
+    "id": Json::string(cid),
+    "name": Json::string(name),
+    "size": Json::number(bytes.length().to_double()),
+    "blob": Json::object(blob),
+  }
+  (src.call_bytes)(
+    "composer.add",
+    Json::object({
+      "key": Json::string(upload_key(d)),
+      "station": Json::string(station),
+      "files": Json::array([Json::object(one)]),
+    }),
     bytes,
-    upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1),
-    0,
+    fn(res) {
+      match res {
+        Err(e) if p.done is None =>
+          p.error = Some(
+            match text(Some(e), "message") {
+              "" => tr("android-chat.file.uploadFailed")
+              m => m
+            },
+          )
+        _ => ()
+      }
+    },
   )
+}
+
+///|
+/// The most of a file named by its content before it goes up (its SHA-256, on the frame's thread).
+let hashed_max : Int = 32 * 1024 * 1024
+
+///|
+/// Where a draft's files go up in the core: a composer of their own there (`composer.add`), by a key no chat has, so
+/// nothing of it is kept there; the draft keeps what is written (Composer.kt uploadKey).
+fn upload_key(d : Draft) -> String {
+  "mbui:" + d.key
+}
+
+///|
+/// What a file is by its name's ending, for the core (URLConnection.guessContentTypeFromName: a picture's size is read
+/// from its head as it goes up): "" when not known.
+fn file_type(name : String) -> String {
+  let lower = name.to_lower()
+  let ends = fn(e : String) { lower.has_suffix(e) }
+  if ends(".png") {
+    "image/png"
+  } else if ends(".jpg") || ends(".jpeg") {
+    "image/jpeg"
+  } else if ends(".gif") {
+    "image/gif"
+  } else if ends(".webp") {
+    "image/webp"
+  } else if ends(".heic") {
+    "image/heic"
+  } else if ends(".mp4") || ends(".m4v") {
+    "video/mp4"
+  } else if ends(".mov") {
+    "video/quicktime"
+  } else if ends(".webm") {
+    "video/webm"
+  } else if ends(".3gp") {
+    "video/3gpp"
+  } else if ends(".pdf") {
+    "application/pdf"
+  } else if ends(".txt") {
+    "text/plain"
+  } else {
+    ""
+  }
+}
+
+///|
+/// What the core says of the draft's files as they go up (its composer's topic), each frame one is going: how far,
+/// up (with a picture's size from here when the station gave none), or failed (to go again).
+fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
+  if !d.files.iter().any(fn(f) { f.core_id != "" && f.done is None && f.error is None }) {
+    return
+  }
+  let v = (src.topic)("composer", { "key": Json::string(upload_key(d)) }).value
+  for one in items(v, "files") {
+    let id = text(Some(one), "id")
+    for f in d.files {
+      if f.core_id != id || f.done is Some(_) || f.error is Some(_) {
+        continue
+      }
+      match field(Some(one), "sent") {
+        Some(Number(n, ..)) => f.sent = n.to_int()
+        _ => ()
+      }
+      match field(Some(one), "done") {
+        Some(Object(a)) => {
+          let file = a.copy()
+          if f.width > 0 && f.height > 0 && !file.contains("width") {
+            file["width"] = Json::number(f.width.to_double())
+            file["height"] = Json::number(f.height.to_double())
+          }
+          f.sent = f.size
+          f.done = Some(Json::object(file))
+          if f.image != "" {
+            sent_pictures[sent_key(station, text(f.done, "path"))] = f.image
+          }
+        }
+        _ =>
+          match text(Some(one), "error") {
+            "" => f.retrying = false
+            _ if f.retrying => ()
+            e => {
+              f.error = Some(e)
+              f.retry = true
+            }
+          }
+      }
+    }
+  }
+}
+
+///|
+/// A file that failed going up in the core, sent again from what it kept (`composer.retry`).
+fn retry_upload(src : Source, d : Draft, f : Pending) -> Unit {
+  if !f.retry || f.core_id == "" {
+    return
+  }
+  f.error = None
+  f.sent = 0
+  f.retry = false
+  f.retrying = true
+  (src.call)("composer.retry", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id) }), fn(res) {
+    match res {
+      Err(e) if f.done is None => {
+        f.retrying = false
+        f.error = Some(text(Some(e), "message"))
+      }
+      // taken again: what it says from here on is of this try
+      _ => f.retrying = false
+    }
+  })
+}
+
+///|
+/// A file taken out of the draft: one going up in the core stops (it lets go of it: `composer.remove`).
+fn take_out(src : Source, d : Draft, f : Pending) -> Unit {
+  d.files.retain(fn(x) { x.id != f.id })
+  if f.core_id != "" && f.done is None {
+    (src.call)("composer.remove", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id) }), fn(_) {  })
+  }
+}
+
+///|
+/// The files still going up in the core as a message takes them (Taken.uploads): it waits for them in the outbox.
+fn up_uploads(d : Draft) -> Array[Json] {
+  d.files.filter_map(fn(f) {
+    if f.core_id == "" || f.done is Some(_) || f.error is Some(_) {
+      return None
+    }
+    let u : Map[String, Json] = {
+      "id": Json::string(f.core_id),
+      "name": Json::string(f.name),
+      "size": Json::number(f.size.to_double()),
+    }
+    if f.width > 0 && f.height > 0 {
+      u["width"] = Json::number(f.width.to_double())
+      u["height"] = Json::number(f.height.to_double())
+    }
+    Some(Json::object(u))
+  })
 }
 
 ///|
@@ -736,7 +1040,7 @@ fn uploading_text(f : Pending) -> String {
 /// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name).
 fn paste_as_file(src : Source, d : Draft, station : String, words : String) -> Unit {
   let name = paste_name(d.key + "\u{1}" + d.id, words, d.files.length())
-  add_file(src, d, station, name, utf8_bytes(words), Some(words))
+  add_file(src, d, station, name, @utf8.encode(words), Some(words))
 }
 
 ///|
@@ -784,19 +1088,8 @@ priv struct ComposerUi {
   mut attach : Bool
   mut picking : @ui.Pick?
   mut picking_for : String
-  /// the finger: down last frame, down first this frame, lifted this frame, where it went down and the frame it did (the
-  /// press's name: what it opened is not opened again by it), moved past the slop since (track_press)
-  mut was_down : Bool
-  mut press_new : Bool
-  mut released : Bool
-  mut down_x : Double
-  mut down_y : Double
-  mut down_frame : Int
-  mut moved : Bool
+  /// a finger went down outside the composer (it lets go of the keyboard once lifted or moved: Ctx::press)
   mut outside : Bool
-  /// the press under way (or just lifted) has been held still for a long press's time: lifted, it is not a tap
-  /// (ui/Keyboard.kt letsGoOfKeyboard: a long press lets the keyboard be)
-  mut long : Bool
   /// why restoring the chat failed (Composer.kt ArchiveNotice: said under it until it is tried again), by its draft
   restore_error : Map[String, String]
   /// the draft the page's composer was last built for and the chat it was in (whose room the page's other parts ask:
@@ -815,15 +1108,7 @@ let cui : ComposerUi = {
   attach: false,
   picking: None,
   picking_for: "",
-  was_down: false,
-  press_new: false,
-  released: false,
-  down_x: 0.0,
-  down_y: 0.0,
-  down_frame: 0,
-  moved: false,
   outside: false,
-  long: false,
   restore_error: {},
   room_for: ("", None),
   cap_id: 0,
@@ -916,30 +1201,9 @@ fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
 // ── sending ─────────────────────────────────────────────────────────────
 
 ///|
-/// Sends what the draft holds (Composer.kt chatSend): emptied at once, the message in the chat's outbox until the
-/// station has it, the list taken to its end; refused before the outbox, the words come back and why is said.
-fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -> Unit {
-  if src.read_only {
-    say(c, read_only_words)
-    return
-  }
-  // the station files named by their paths, a line each under the words
-  let words = with_link_words(with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key), d)
-  // (the station files sent as files with them, taken before the draft lets go of its refs)
-  let files = up_files(d)
-  for a in ref_attachments(d.key) {
-    files.push(a)
-  }
-  let taken_refs = refs_of(d.key)
-  draft_refs.remove(d.key)
-  let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
-  // what was taken, to put back
-  let taken_text = d.text
-  let taken_files = d.files.copy()
-  let taken_quotes = d.quotes.copy()
-  let taken_comments = d.comments.copy()
-  // the words take off from where they were typed, the files from their tiles (flight.mbt; ChatHost.kt sending: those
-  // up, each from where its tile is)
+/// The draft's files that are up, each from its tile in the composer (what flies to the message sent: flight.mbt;
+/// ChatHost.kt sending: those up, each from where its tile is).
+fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[FlyingFile] {
   let flying : Array[FlyingFile] = []
   for f in d.files {
     match (f.done, @motion.measured_rect(c, "composer/tile/\{f.id}")) {
@@ -953,6 +1217,36 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
       _ => ()
     }
   }
+  flying
+}
+
+///|
+/// Sends what the draft holds (Composer.kt chatSend): emptied at once, the message in the chat's outbox until the
+/// station has it, the list taken to its end; refused before the outbox, the words come back and why is said.
+fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -> Unit {
+  if src.read_only {
+    say(c, read_only_words)
+    return
+  }
+  // the station files named by their paths, a line each under the words
+  let words = with_link_words(with_ref_words(d.text.trim(chars=" \n\t").to_string(), d.key), d)
+  // (the station files sent as files with them, taken before the draft lets go of its refs)
+  let files = up_files(d)
+  let uploads = up_uploads(d)
+  for a in ref_attachments(d.key) {
+    files.push(a)
+  }
+  let taken_refs = refs_of(d.key)
+  draft_refs.remove(d.key)
+  let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
+  // what was taken, to put back
+  let taken_text = d.text
+  let taken_files = d.files.copy()
+  let taken_quotes = d.quotes.copy()
+  let taken_comments = d.comments.copy()
+  // the words take off from where they were typed, the files from their tiles (flight.mbt; ChatHost.kt sending: those
+  // up, each from where its tile is)
+  let flying = draft_flying(c, src, r, d)
   for x in taken_refs {
     match (x.up, @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
       (Some({ done: Some(a), .. }), Some(from)) if x.mode == "file" && text(Some(a), "path") != "" =>
@@ -960,7 +1254,10 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
       _ => ()
     }
   }
-  flight_start(c, d.key, r.station + "\u{1}" + r.session, words, v, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
+  // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
+  let rk = r.station + "\u{1}" + r.session
+  let row = sent_local(rk, Some(v), words, files)
+  flight_start(c, d.key, rk, row, words, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
@@ -975,11 +1272,20 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     "attachments": Json::array(files),
     "quotes": Json::array(quotes),
   }
+  // the files still going up: it waits for them in the outbox (the core sends it once they are)
+  if uploads.length() > 0 {
+    params["uploads"] = Json::array(uploads)
+  }
   match v.thread {
     Some(th) => params["thread"] = Json::number(th)
     None => params["session"] = Json::string(r.session)
   }
   (src.call)("chat.send", Json::object(params), fn(res) {
+    // not gone: it leaves the list (the core's outbox has what failed on its way)
+    match res {
+      Err(_) => sent_local_gone(rk, row)
+      _ => ()
+    }
     match res {
       Err(e) if text(Some(e), "code") == "invalid_params" =>
         if draft_empty(d) {
@@ -1014,12 +1320,22 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
 ///|
 /// The composer at the chat page's foot (ChatHost.kt HostComposer): its notices, what waits to go, the bar, what went
 /// wrong; ＋'s sheet over the page when open. `v` None while the chat is read the first time (it takes nothing yet).
-fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fresh? = None) -> Unit {
+/// `beside`: a chat's on a wide screen, beside the latest chats' button (ChatHost.kt besideRecent, corners.mbt).
+fn composer(
+  c : @ui.Ctx,
+  src : Source,
+  r : ChatRef,
+  v : ChatView?,
+  fresh? : Fresh? = None,
+  beside? : Bool = false,
+) -> Unit {
   let t = @sf.theme()
   let d = draft_by(c, src, match fresh {
     Some(f) => f.key
     None => draft_key(r)
   })
+  // its files as they go up in the core
+  follow_uploads(src, d, r.station)
   let offline = match v {
     Some(v) => v.offline
     None => false
@@ -1028,8 +1344,10 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     Some(v) => v.archived
     None => false
   }
-  // while the chat is read the first time it takes words, but nothing goes (Chat.kt: its spec sends nothing yet)
-  let locked = offline || archived
+  // while the chat is read the first time it takes words, but nothing goes (Chat.kt: its spec sends nothing yet); its
+  // station down, what is sent waits in the outbox until it is reached, and no file is taken in (Composer.kt
+  // draft.offline: files go up to the station first)
+  let locked = archived
   let focused = c.editor_focused(field_key)
   // the words kept, or put back, into the field (put there, not written: no link in it taken as pasted, chat_refs.mbt)
   match d.put_text {
@@ -1071,7 +1389,11 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
           cui.picking = None
           if cui.picking_for == d.key {
             for f in files {
-              add_file(src, d, r.station, f.name, f.bytes, None)
+              if f.held != 0 {
+                add_held_file(src, d, r.station, f)
+              } else {
+                add_file(src, d, r.station, f.name, f.bytes, None)
+              }
             }
           }
         }
@@ -1112,7 +1434,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   let top = capsule_top(v, d)
   // `@` and a few letters: the chats they find, over the capsule (chat_refs.mbt)
   chat_ref_menu(c, src, d, r.station, if fresh is Some(_) { "" } else { r.session }, field_key, locked)
-  c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, pb=10.0, fn() {
+  c.box(w=Fill(1.0), pl=if beside { beside_recent } else { 10.0 }, pr=10.0, pt=8.0, pb=10.0, fn() {
     c.box(w=Fill(1.0), pad=composer_inset, pt=top, id=cap, fn() {
       // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller)
       let ground = c.layer(fn() {
@@ -1126,13 +1448,15 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
         |> ignore
       })
       c.draw_only(ground)
-      content = c.box(w=Fill(1.0), gap=8.0, id=composer_content_id(c), fn() {
+      // (named to be measured, not to be pressed: a tap anywhere in the capsule that nothing in it takes is the capsule's,
+      // which puts the caret in the field, ChatHost.kt's clickable { draft.focus++ })
+      content = c.box(w=Fill(1.0), gap=8.0, id=composer_content_id(c), taps=false, fn() {
         match v {
           Some(v) => composer_notices(c, src, r, v, d.key)
           None => ()
         }
         draft_extras(c, src, r, d, locked)
-        composer_bar(c, src, r, v, d, expanded, locked, fresh)
+        composer_bar(c, src, r, v, d, expanded, locked, locked || offline, fresh)
         match d.error {
           Some(e) =>
             c.box(padx=6.0, fn() { c.text(e, size=12.0, color=t.p.red, line=16.0) |> ignore })
@@ -1153,20 +1477,20 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   }
   keep_draft_soon(c, src, d)
   // a finger down outside the composer lets go of the keyboard once lifted or moved on (reading on)
-  if cui.press_new {
+  let press = c.press()
+  if press.fresh {
     let off_capsule = match c.rect_of(cap) {
-      Some((x, y, w, h)) =>
-        !(cui.down_x >= x && cui.down_x < x + w && cui.down_y >= y && cui.down_y < y + h)
+      Some((x, y, w, h)) => !(press.x >= x && press.x < x + w && press.y >= y && press.y < y + h)
       None => true
     }
     cui.outside = off_capsule && !cui.attach
   }
   // (lifted after a long press: not a tap, the keyboard stays: Keyboard.kt letsGoOfKeyboard)
-  if cui.outside && c.editor_focused(field_key) && (cui.moved || (cui.released && !cui.long)) {
+  if cui.outside && c.editor_focused(field_key) && (press.moved || (press.lifted && !press.long)) {
     cui.outside = false
     c.blur()
   }
-  if cui.released {
+  if press.lifted {
     cui.outside = false
   }
   // its station files switched to go as files: up (station_files.mbt)
@@ -1292,7 +1616,7 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
   }
   if v.offline {
     c.box(padx=8.0, pady=2.0, fn() {
-      c.text(tr("android-chat.composer.offline"), size=13.0, color=t.p.muted, line=18.0) |> ignore
+      c.text(v.offline_note.unwrap_or(tr("android-chat.composer.offline")), size=13.0, color=t.p.muted, line=18.0) |> ignore
     })
     |> ignore
   }
@@ -1309,6 +1633,7 @@ fn composer_bar(
   d : Draft,
   expanded : Bool,
   locked : Bool,
+  no_files : Bool,
   fresh : Fresh?,
 ) -> Unit {
   let t = @sf.theme()
@@ -1318,7 +1643,7 @@ fn composer_bar(
   let ready = draft_ready(d, locked)
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
-  if c.clicked(plus) && !locked && (v is Some(_) || fresh is Some(_)) {
+  if c.clicked(plus) && !no_files && (v is Some(_) || fresh is Some(_)) {
     cui.attach = true
     c.blur()
   }
@@ -1352,14 +1677,17 @@ fn composer_bar(
       radius=18.0,
       align=ACenter,
       justify=JCenter,
-      bg=if locked { 0L } else { @sf.alpha(t.p.text, 0.08 * @motion.pressing(c, plus)) },
       id=plus,
       fn() {
-        @sf.icon(c, "plus", size=18.0, color=if locked { @sf.alpha(t.p.text, 0.35) } else { t.p.text })
+        @sf.icon(c, "plus", size=18.0, color=if no_files { @sf.alpha(t.p.text, 0.35) } else { t.p.text })
         |> ignore
+        // Composer.kt: clip(CircleShape).clickable (not when locked)
+        if !no_files {
+          @motion.ripple(c, plus, 18.0)
+        }
       },
     )
-    c.semantics(b, Button, id=plus, label=tr("android-chat.attach.title"), disabled=locked)
+    c.semantics(b, Button, id=plus, label=tr("android-chat.attach.title"), disabled=no_files)
     part(b, "plus")
   }
   let send_button = fn() {
@@ -1376,6 +1704,10 @@ fn composer_bar(
       id=send,
       fn() {
         @sf.icon(c, "arrow-up", size=18.0, color=if ready { t.p.bg } else { ground }) |> ignore
+        // Composer.kt: clip(CircleShape).clickable(enabled = ready)
+        if ready {
+          @motion.ripple(c, send, 18.0)
+        }
       },
     )
     c.semantics(b, Button, id=send, label=tr("android-chat.composer.send"), disabled=!ready)
@@ -1423,7 +1755,7 @@ fn composer_bar(
           caret_color=t.p.accent,
           // at a desktop's width Enter sends and ⇧Enter is a new line (the web's); on a phone Enter is a new line
           enter_sends=wide_on.val,
-          paste_limit=if locked { 0 } else { paste_threshold },
+          paste_limit=if no_files { 0 } else { paste_threshold },
           // references to other chats drawn as marks (chat_refs.mbt RefMarks)
           look=ref_look(t.p.accent),
           // the draft's words, its own (another chat's draft: another field)
@@ -1449,7 +1781,7 @@ fn composer_bar(
           d.text = res.text
           // typing starts the agent's runtime, so a cold start overlaps the writing (once a minute)
           match v {
-            Some(view) if !locked && !src.read_only && view.agents.length() > 0 &&
+            Some(view) if !locked && !view.offline && !src.read_only && view.agents.length() > 0 &&
               warm_due => {
               d.warm_n += 1
               (src.call)(
@@ -1508,8 +1840,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
       for q in d.quotes {
         let close = c.id("composer/unquote/\{q.id}")
         if c.clicked(close) {
-          d.quotes.retain(fn(x) { x.id != q.id })
-          d.comments.remove(q.id)
+          draft_unquote(src, d, q)
         }
         let key = "composer/quote/\{q.id}"
         let field = quote_field(d, q.id)
@@ -1540,6 +1871,17 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
             |> ignore
           })
           |> ignore
+          // its own picture (an image of a message quoted, a mark's screenshot) under what it quotes (Composer.kt
+          // DraftExtras: 56, the files' corner, 16 in and 6 under)
+          match quote_file_of(d, q) {
+            Some(f) => {
+              let picture = draft_picture_key(src, r, f)
+              if draft_is_picture(f, picture) {
+                c.box(style=quote_picture_in, fn() { picture_face(c, f, picture, 0) |> ignore }) |> ignore
+              }
+            }
+            None => ()
+          }
           c.box(w=Fill(1.0), pl=16.0, pr=16.0, pt=3.0, pb=10.0, fn() {
             let res = c.editor(
               key,
@@ -1602,9 +1944,10 @@ fn DraftItem::order(self : DraftItem) -> Int {
 }
 
 ///|
-/// The draft's files and its station files, as they were put in.
+/// The draft's files and its station files, as they were put in; those going with a quote are in its card.
 fn draft_items(d : Draft) -> Array[DraftItem] {
-  let all : Array[DraftItem] = d.files.map(fn(f) { AFile(f) })
+  let quoted = d.quotes.filter_map(fn(q) { quote_file_of(d, q).map(fn(f) { f.id }) })
+  let all : Array[DraftItem] = d.files.filter(fn(f) { !quoted.contains(f.id) }).map(fn(f) { AFile(f) })
   for x in refs_of(d.key) {
     all.push(ARef(x))
   }
@@ -1637,14 +1980,16 @@ fn draft_files_row(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : B
 
 ///|
 /// What a draft's picture shows: the one picked, or (a draft kept, which keeps no picture, only the file it went up
-/// as) the station's ("" while it comes or when it cannot be had); "" for a file that is no picture.
+/// as; an image of a message quoted) the station's, through the session keeping it (its `owner`, else the chat's)
+/// ("" while it comes or when it cannot be had); "" for a file that is no picture.
 fn draft_picture_key(src : Source, r : ChatRef, f : Pending) -> String {
   if f.image != "" {
     return f.image
   }
   match f.done {
     Some(a) if kind_of(f.name) == "image" && f.pasted is None => {
-      let k = (src.file)(r.station, r.session, text(Some(a), "name"))
+      let owner = text(Some(a), "owner")
+      let k = (src.file)(r.station, if owner != "" { owner } else { r.session }, text(Some(a), "name"))
       if k == "!" {
         ""
       } else {
@@ -1667,18 +2012,23 @@ fn draft_is_picture(f : Pending, picture : String) -> Bool {
 fn draft_file(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending, locked : Bool) -> Unit {
   let remove = c.id("composer/remove/\{f.id}")
   if c.clicked(remove) {
-    d.files.retain(fn(x) { x.id != f.id })
+    take_out(src, d, f)
+  }
+  // failed going up in the core: tapped, it goes again (Composer.kt: the tile's 失败, a card's retry key)
+  let again = c.id("composer/retry/\{f.id}")
+  if c.clicked(again) {
+    retry_upload(src, d, f)
   }
   let picture = draft_picture_key(src, r, f)
   if draft_is_picture(f, picture) {
-    draft_picture(c, r.station, f, picture, remove)
+    draft_picture(c, r.station, f, picture, remove, again)
   } else {
     // (as far down as a picture's tile, under its remove button's room: their tops in line; as wide as it is,
     // never squeezed by a row too narrow for all of them)
     c.box(w=Px(if f.pasted is Some(_) { pasted_card_w } else { file_card_w }), pt=picture_remove_out, fn() {
       let card = match f.pasted {
         Some(words) => pasted_card(c, src, r, d, f, words, remove, locked)
-        None => file_tile(c, f, remove)
+        None => file_tile(c, f, remove, again~)
       }
       @motion.measure(c, card, "composer/tile/\{f.id}")
     })
@@ -1709,7 +2059,7 @@ fn draft_face(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending) ->
 /// remove button over its corner. Tapped, it opens in the viewer, growing out of its tile, from the bytes picked
 /// (Composer.kt draftPicture: `draft:<id>`, no session's; nothing to mark it into, it is in the draft already); one of
 /// a draft kept, whose bytes are not, opens nothing.
-fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, remove : Int) -> Unit {
+fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, remove : Int, again : Int) -> Unit {
   let open = c.id("composer/picture/\{f.id}")
   let a : Attachment = {
     name: f.name,
@@ -1719,6 +2069,7 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
     height: f.height.to_double(),
     thumbhash: "",
     owner: "",
+    upload: "",
   }
   // the viewer's id of it (Viewer::id: its station, no session, its path), its tile kept for it to fly from
   let thumb = station + "//" + a.path
@@ -1730,7 +2081,7 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
     _ => ()
   }
   with_remove(c, remove, picture_tile, fn() {
-    let tile = picture_face(c, f, picture, if f.local is Some(_) { open } else { 0 })
+    let tile = picture_face(c, f, picture, if f.local is Some(_) { open } else { 0 }, again~)
     @motion.measure(c, tile, "composer/tile/\{f.id}")
     if f.local is Some(_) {
       note_thumb(c, thumb, open, files_corner())
@@ -1743,9 +2094,9 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
 }
 
 ///|
-/// A picture's tile (56, its corner the files' row's): darkened with a spinner while it goes up, 失败 when it failed.
-/// Its node; `id` what a tap on it is (0 none).
-fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int) -> Int {
+/// A picture's tile (56, its corner the files' row's): darkened with a spinner while it goes up, 失败 when it failed
+/// (with the retry mark over it when it can go again: tapped, `again`). Its node; `id` what a tap on it is (0 none).
+fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int, again? : Int = 0) -> Int {
   let t = @sf.theme()
   c.box(
     w=Px(picture_tile),
@@ -1760,21 +2111,28 @@ fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int) -> Int {
       }
       if f.done is None {
         c.layer(fn() {
-          c.box(
+          let can = f.error is Some(_) && f.retry && again != 0
+          let shade = c.box(
             w=Fill(1.0),
             h=Fill(1.0),
             bg=@sf.alpha(0x000000FFL, if f.error is Some(_) { 0.5 } else { 0.25 }),
             align=ACenter,
             justify=JCenter,
+            id=if can { again } else { 0 },
             fn() {
               if f.error is Some(_) {
+                if can {
+                  @sf.icon(c, "retry", size=16.0, color=0xFFFFFFFFL) |> ignore
+                }
                 c.text(tr("android-chat.file.failed"), size=11.0, color=0xFFFFFFFFL, wrap=false) |> ignore
               } else {
                 @sf.spinner(c, ring=@sf.alpha(0xFFFFFFFFL, 0.3), arc=0xFFFFFFFFL) |> ignore
               }
             },
           )
-          |> ignore
+          if can {
+            c.semantics(shade, Button, id=again, label=tr("web-main.composer.retryUpload"))
+          }
         })
         |> ignore
       }
@@ -1791,12 +2149,13 @@ fn files_corner() -> Double {
 }
 
 ///|
-/// The round × of a file's card in the composer, at its trailing end (ChatFiles.kt FileCard).
+/// The round × of a file's card in the composer, at its trailing end (ChatFiles.kt FileCard); `icon` another key's
+/// mark of the same look (its retry).
 /// `label`: what it says to a screen reader (a pasted text's: Composer.kt PastedCard's removePaste), none else.
-fn card_close(c : @ui.Ctx, remove : Int, label? : String = "") -> Unit {
+fn card_close(c : @ui.Ctx, remove : Int, label? : String = "", icon? : String = "close") -> Unit {
   let t = @sf.theme()
   let b = c.box(w=Px(22.0), h=Px(22.0), radius=11.0, bg=@sf.alpha(t.p.text, 0.06), align=ACenter, justify=JCenter, id=remove, fn() {
-    @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore
+    @sf.icon(c, icon, size=12.0, color=t.p.muted) |> ignore
   })
   if label != "" {
     c.semantics(b, Button, id=remove, label~)
@@ -1845,10 +2204,10 @@ fn pasted_card(
   let can_restore = words.length() <= paste_restore_limit && !locked
   if c.clicked(action) {
     if can_retry {
-      d.files.retain(fn(x) { x.id != f.id })
+      take_out(src, d, f)
       paste_as_file(src, d, r.station, words)
     } else if can_restore {
-      d.files.retain(fn(x) { x.id != f.id })
+      take_out(src, d, f)
       let now = if d.text == "" { words } else { d.text + "\n" + words }
       d.text = now
       d.put_text = Some(now)
@@ -1922,7 +2281,7 @@ fn pasted_card(
 ///|
 /// Any other file in the composer (ChatFiles.kt FileCard, in the composer's shape): its kind's mark, its name, its
 /// size or how it goes.
-fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Int {
+fn file_tile(c : @ui.Ctx, f : Pending, remove : Int, again? : Int = 0, closable? : Bool = true) -> Int {
   let t = @sf.theme()
   let k = ink()
   let busy = f.done is None && f.error is None
@@ -1972,7 +2331,13 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Int {
       |> ignore
     })
     |> ignore
-    card_close(c, remove)
+    // failed going up in the core: its retry key before its × (ChatFiles.kt FileCard onRetry)
+    if f.error is Some(_) && f.retry && again != 0 {
+      card_close(c, again, icon="retry", label=tr("web-main.composer.retryUpload"))
+    }
+    if closable {
+      card_close(c, remove)
+    }
     },
   )
 }
@@ -2019,7 +2384,8 @@ fn attach_sheet(
   let t = @sf.theme()
   let ask = fn(kind : @hostapi.PickKind) {
     cui.attach = false
-    match @ui.pick(kind) {
+    // (a big file, a video, held by the host and read a part at a time as it goes up: add_held_file)
+    match @ui.pick(kind, hold=true) {
       Some(p) => {
         cui.picking = Some(p)
         cui.picking_for = d.key
@@ -2027,11 +2393,7 @@ fn attach_sheet(
       None =>
         say(
           c,
-          if kind == Camera {
-            "这台设备上还不能拍照"
-          } else {
-            "这个版本在这台设备上还不能选文件"
-          },
+          tr(if kind == Camera { "android-chat.composer.noCamera" } else { "android-chat.composer.noFiles" }),
         )
     }
   }
@@ -2059,7 +2421,7 @@ fn attach_sheet(
         // no gallery on this host: said so
         NoGallery => {
           cui.attach = false
-          say(c, "这个版本还不能读相册的最近照片")
+          say(c, tr("android-chat.composer.noRecent"))
         }
         _ => @hostapi.gallery_ask()
       }
@@ -2108,13 +2470,15 @@ fn attach_sheet(
               padx=4.0,
               gap=6.0,
               radius=14.0,
-              bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { t.p.chip },
+              bg=t.p.chip,
               align=ACenter,
               justify=JCenter,
               id~,
               fn() {
                 @sf.icon(c, icon, size=22.0, color=t.p.text) |> ignore
                 c.text(label, size=13.0, color=t.p.text, wrap=false, line=18.0) |> ignore
+                // Attach.kt: clip(Smooth(14)).clickable
+                @motion.ripple(c, id, 14.0)
               },
             )
             |> ignore
@@ -2144,56 +2508,3 @@ fn composer_left(src : Source, r : ChatRef) -> Unit {
   pick_clear()
 }
 
-///|
-/// Words as UTF-8.
-fn utf8_bytes(s : String) -> Bytes {
-  let out = @buffer.new(size_hint=s.length() * 3)
-  for ch in s {
-    let u = ch.to_int()
-    if u < 0x80 {
-      out.write_byte(u.to_byte())
-    } else if u < 0x800 {
-      out.write_byte((0xC0 | (u >> 6)).to_byte())
-      out.write_byte((0x80 | (u & 0x3F)).to_byte())
-    } else if u < 0x10000 {
-      out.write_byte((0xE0 | (u >> 12)).to_byte())
-      out.write_byte((0x80 | ((u >> 6) & 0x3F)).to_byte())
-      out.write_byte((0x80 | (u & 0x3F)).to_byte())
-    } else {
-      out.write_byte((0xF0 | (u >> 18)).to_byte())
-      out.write_byte((0x80 | ((u >> 12) & 0x3F)).to_byte())
-      out.write_byte((0x80 | ((u >> 6) & 0x3F)).to_byte())
-      out.write_byte((0x80 | (u & 0x3F)).to_byte())
-    }
-  }
-  out.to_bytes()
-}
-
-///|
-/// The finger, once a frame before the chat's page is built: whether it went down or was lifted since the last frame,
-/// where and when it went down, whether it has moved past the slop (8) since.
-fn track_press(c : @ui.Ctx) -> Unit {
-  let (px, py, down) = c.pointer()
-  cui.press_new = down && !cui.was_down
-  cui.released = !down && cui.was_down
-  if cui.press_new {
-    cui.down_x = px
-    cui.down_y = py
-    cui.down_frame = c.frame_number()
-    cui.moved = false
-    cui.long = false
-  }
-  // a tap down and up between two frames (no frame saw it down): a press of its own, not the long one before it
-  if !down && !cui.was_down && c.tapped_anywhere() is Some(_) {
-    cui.moved = false
-    cui.long = false
-  }
-  if down && ((px - cui.down_x).abs() > 8.0 || (py - cui.down_y).abs() > 8.0) {
-    cui.moved = true
-  }
-  // (asked each frame: a press let go, or moved, starts it again from nothing; what it says kept till the next press)
-  if @kit.after(c, "press/long", down && !cui.moved, long_press_ms) {
-    cui.long = true
-  }
-  cui.was_down = down
-}

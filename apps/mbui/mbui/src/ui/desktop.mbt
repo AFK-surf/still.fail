@@ -69,6 +69,16 @@ pub let key_code_page_up : Int = 15
 pub let key_code_page_down : Int = 16
 
 ///|
+/// Select all, copy, cut: the keys a field takes for them (a shortcut's, the floating text menu's: @hostapi.text_menu).
+pub let key_code_select_all : Int = 12
+
+///|
+pub let key_code_copy : Int = 13
+
+///|
+pub let key_code_cut : Int = 14
+
+///|
 /// Modifiers in a key's `mods`: Shift, Ctrl, Alt (Option), ⌘ (the Windows key, Meta).
 pub let mod_shift_key : Int = 1
 
@@ -98,7 +108,9 @@ priv struct Desk {
   /// targets that drag the window (Ctx::window_drag), this frame's and the last one's
   next_drags : Array[Int]
   mut drags : Array[Int]
-  /// lists dragged by the mouse as a finger drags them (true unless the app says not)
+  /// lists dragged by the mouse as a finger drags them (true unless the app says not), as this frame's build says and
+  /// as the last one's said
+  mut next_mouse_drags : Bool
   mut mouse_drags : Bool
   /// rich text built now is picked with the pointer (Ctx::selectable), and in what colour picked words are grounded
   mut selecting : Bool
@@ -148,6 +160,7 @@ let desk : Desk = {
   shown: 0,
   next_drags: [],
   drags: [],
+  next_mouse_drags: true,
   mouse_drags: true,
   selecting: false,
   sel_color: 0x3B82F64DL,
@@ -166,6 +179,7 @@ fn desk_reset() -> Unit {
   desk.shown = 0
   desk.next_drags.clear()
   desk.drags.clear()
+  desk.next_mouse_drags = true
   desk.mouse_drags = true
   desk.selecting = false
   desk.next_sels.clear()
@@ -196,6 +210,7 @@ fn desk_frame_start() -> Unit {
 fn desk_build_start() -> Unit {
   desk.next_cursors.clear()
   desk.next_drags.clear()
+  desk.next_mouse_drags = true
   desk.next_sels.clear()
   desk.selecting = false
 }
@@ -208,6 +223,7 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   desk.cursors = desk.next_cursors.copy()
   cs.clear()
   desk.drags = desk.next_drags.copy()
+  desk.mouse_drags = desk.next_mouse_drags
   desk.sels = desk.next_sels.copy()
   if !self.down && self.px >= 0.0 {
     self.hover = hit_in(self.hit_ids, self.hit_rects, self.px, self.py)
@@ -279,10 +295,11 @@ pub fn Ctx::window_drag(self : Ctx, id : Int) -> Unit {
 
 ///|
 /// Whether a mouse's drag moves a list as a finger does (a phone's page in a window: true, as before); false on a
-/// desktop's page, where the wheel and the trackpad scroll and a drag is the pointer's own. Said each frame.
+/// desktop's page, where the wheel and the trackpad scroll and a drag is the pointer's own. Said each frame: a frame
+/// that does not say it drags them (a wide window made narrow).
 pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
   ignore(self)
-  desk.mouse_drags = on
+  desk.next_mouse_drags = on
 }
 
 ///|

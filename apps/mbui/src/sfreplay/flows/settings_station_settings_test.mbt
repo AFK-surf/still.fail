@@ -1,5 +1,6 @@
-// 82-station-settings (e2e/traces/settings-station-settings.trace): the test station's page: Agent 环境变量 → 编辑变量,
-// a variable typed and saved (agentEnv.form.*), then taken away; 版本 → 检查更新 (software.check).
+// 82-station-settings (e2e/traces/settings-station-settings.trace): the test station's page: its 设置's Agent 环境变量
+// → 编辑变量, a variable typed and saved (agentEnv.form.*), then taken away; its 软件与设备's 版本 → 检查更新
+// (software.check).
 
 ///|
 test "82-station-settings" {
@@ -11,7 +12,7 @@ test "82-station-settings" {
     f.run_to(@ui.nav_rest())
     f.tap("=studio")
     f.run_to(@ui.nav_rest())
-    f.wheel_at("在此 station 上", 450.0)
+    f.tap("=设置")
     f.tap("编辑变量")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.tap("HTTPS_PROXY=")
@@ -35,7 +36,9 @@ test "82-station-settings" {
     f.see("已保存")
     f.toast_gone()
     f.see("暂无变量")
-    f.wheel_at("编辑变量", 1500.0)
+    f.tap("=软件与设备")
+    // (under its versions, a row each: past the window's foot)
+    f.wheel_at("=版本", 600.0)
     f.tap("=检查更新")
     f.end()
   })

@@ -120,6 +120,7 @@
   "core-misc.device.android": "{brand} Android{more}",
   "core-misc.device.browser": "浏览器",
   "core-misc.device.desktop": "{brand} 桌面版{more}",
+  "core-misc.device.ios": "{brand} iOS{more}",
   "core-misc.device.web": "{brand} 网页版 · {browser}{more}",
   "core-misc.decisionForm.notYours": "此自动决策草稿不属于当前页面",
   "core-misc.decisionForm.wait": "请等保存完成",
@@ -156,7 +157,7 @@
   "core-misc.notice.hidden.wait": "待你决定",
   "core-misc.notice.untitled": "（暂无消息）",
   "core-misc.notice.wait": "待你决定 · {text}",
-  "core-misc.params.app": "参数无效：app 应为 web、desktop 或 android",
+  "core-misc.params.app": "参数无效：app 应为 web、desktop、android 或 ios",
   "core-misc.params.bad_models": "模型列表无效",
   "core-misc.params.device_key_size": "设备密钥应是 32 字节",
   "core-misc.params.empty_option": "参数无效：option 为空",
@@ -245,5 +246,6 @@
   "core-misc.vault.reason.approve": "批准 agent 使用「{name}」",
   "core-misc.vault.personal": "个人",
   "core-misc.vault.noPlainStation": "没有可存放密钥的 station：请更新 station",
-  "core-misc.vault.plainLocked": "已开启安全模式：密钥需存入加密的库"
+  "core-misc.vault.plainLocked": "已开启安全模式：密钥需存入加密的库",
+  "core-misc.reader.gone": "这本书已经不在了，请重新打开"
 }

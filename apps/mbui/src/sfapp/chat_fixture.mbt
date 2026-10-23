@@ -270,6 +270,19 @@ fn small_chat(title : String, session : String) -> Json {
 }
 
 ///|
+/// A chat just made from a new chat (`new:N`, newChat.create): no title yet, nothing said in it.
+fn made_chat(session : String) -> Json {
+  match small_chat("", session) {
+    Object(m) => {
+      let o = m.copy()
+      o["messages"] = Json::array([])
+      Json::object(o)
+    }
+    v => v
+  }
+}
+
+///|
 /// Thousands of messages, of the kinds a long chat has: short words back and forth, an agent's Markdown now and then.
 fn long_chat(n : Int) -> Json {
   let claude = by_agent("anthropic", "claude", "s-c1")
@@ -349,6 +362,8 @@ fn fixture_file_png(name : String) -> Bytes {
     "compare.png" => (160, 90, (0x5B, 0x7B, 0xB2), (0xF2, 0xB0, 0x1E))
     // a screen's preview (chat-screens): a frame of a tab, 16:10
     "peek.png" => (160, 100, (0xFF, 0xFF, 0xFF), (0x5B, 0x7B, 0xB2))
+    // a video's still (its poster: a frame of a screen recording, 16:9)
+    "演示录屏.mp4" => (160, 90, (0x1E, 0x2A, 0x3A), (0x5B, 0x7B, 0xB2))
     _ => (120, 80, (0x2F, 0x8F, 0x5B), (0xE8, 0xE4, 0xDC))
   }
   let rgba = FixedArray::make(w * h * 4, b'\x00')
@@ -363,7 +378,7 @@ fn fixture_file_png(name : String) -> Bytes {
       rgba[i + 3] = b'\xFF'
     }
   }
-  @sf.png(w, h, rgba)
+  @pixels.png(w, h, rgba)
 }
 
 ///|
@@ -385,6 +400,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_md_message(rich_chat(f.older))
           } else if f.mode == "chat-viz" {
             with_viz_message(rich_chat(f.older))
+          } else if f.mode == "chat-file-links" {
+            with_file_links(rich_chat(f.older))
           } else if f.mode == "chat-screens" {
             with_message(rich_chat(f.older), screens_answer)
           } else if f.mode == "chat-update" {
@@ -402,6 +419,9 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
           }
         })
         Some(with_cards(f, with_sent(base, session), session))
+      } else if session.has_prefix("new:") {
+        // one just made from a new chat (newChat.create): nothing in it but what is sent to it
+        Some(with_sent(made_chat(session), session))
       } else {
         // its row's title
         let mut title = ""
@@ -588,6 +608,11 @@ let fix_clock : Ref[(() -> Double)?] = { val: None }
 let fix_drafts : Map[String, Json] = {}
 
 ///|
+/// The fixture core's composers' files (`composer.add`), by the composer's key: each up as soon as it is added, as the
+/// station takes it whole.
+let fix_composers : Map[String, Array[Json]] = {}
+
+///|
 /// The chats of the viewer's other workspace (个人, its station ws2/st9) that a reference may name (`chat.outsideRefs`):
 /// their keys, titles, and whether the viewer may share them.
 // kept across runs: a table, never written
@@ -735,6 +760,8 @@ fn fix_deliver(session : String, id : String) -> Unit {
       "mine": true,
       "author": "lin@example.com",
       "ts": Json::string("sent\{fix_serial.val}"),
+      // the outbox entry it was, as the core says it (views.ts: a message sent from here keeps its outbox row)
+      "outgoing": Json::string(id),
       "attachments": Json::array(items(Some(params), "attachments")),
       "quotes": Json::array(items(Some(params), "quotes")),
     }),
@@ -826,6 +853,37 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         }
         _ => Some(Err({ "code": "invalid_params", "message": "draft.put" }))
       }
+    // a file handed over: up at once, at the station's uploads (as station.upload.part's last part answers)
+    "composer.add" => {
+      let key = text(p, "key")
+      let list = fix_composers.get(key).unwrap_or([])
+      for one in items(p, "files") {
+        let o = Some(one)
+        let id = text(o, "id")
+        let name = text(o, "name")
+        list.push({
+          "id": Json::string(id),
+          "name": Json::string(name),
+          "size": Json::number(number(o, "size")),
+          "sent": Json::number(number(o, "size")),
+          "done": {
+            "name": Json::string(name),
+            "path": Json::string("uploads/" + id + "/" + name),
+            "size": Json::number(number(o, "size")),
+          },
+        })
+      }
+      fix_composers[key] = list
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "composer.remove" => {
+      let key = text(p, "key")
+      fix_composers[key] = fix_composers.get(key).unwrap_or([]).filter(fn(x) { text(Some(x), "id") != text(p, "id") })
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
+    "composer.retry" => Some(Ok(Json::object({})))
     "station.upload.part" => {
       let name = text(p, "name")
       let id = text(p, "id")
@@ -839,7 +897,49 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         }),
       )
     }
-    "session.warm" | "client.focus" | "chat.place" => Some(Ok(Json::object({})))
+    "session.warm" | "client.focus" | "chat.place" | "chat.around" => Some(Ok(Json::object({})))
+    // where its runtime keeps the session's transcript
+    "session.transcript" => Some(Ok({ "path": "/Users/lin/.claude/projects/release/7c1e5b2a-4f0d-4c8e-9a61-3b2f.jsonl" }))
+    // the messages of the made-up chat that have every word (topics.ts find): all of it on the device
+    "chat.find" => {
+      let words : Array[String] = []
+      for w in text(p, "query").to_lower().split(" ") {
+        if w.length() > 0 {
+          words.push(w.to_string())
+        }
+      }
+      let all = items(Some(rich_chat(f.older)), "messages")
+      let hits : Array[Json] = []
+      for m in all {
+        let said = text(Some(m), "text").to_lower()
+        let mut count = 0
+        for w in words {
+          let mut from = 0
+          while from <= said.length() {
+            match said.view(start_offset=from).to_string().find(w) {
+              Some(i) => {
+                count += 1
+                from = from + i + w.length()
+              }
+              None => break
+            }
+          }
+        }
+        if count > 0 && words.iter().all(fn(w) { said.contains(w) }) {
+          hits.push({ "seq": Json::number(number(Some(m), "seq")), "count": Json::number(count.to_double()) })
+        }
+      }
+      let n = Json::number(all.length().to_double())
+      Some(
+        Ok({
+          "words": Json::array(words.map(fn(w) { Json::string(w) })),
+          "hits": Json::array(hits),
+          "held": n,
+          "of": n,
+          "whole": true,
+        }),
+      )
+    }
     // a chat's mark (chat.ref): `@[its title]`, its link kept; links kept for marks (chat.refs)
     "chat.ref" => Some(Ok({ "mark": Json::string("@[" + text(p, "title") + "]") }))
     "chat.refs" => Some(Ok(Json::object({})))
@@ -1032,11 +1132,11 @@ pub fn open_cards_fixture(mode : String) -> Unit {
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
       pk.ts = "ts11"
-      pk.key = "pick/ts11"
+      pk.sel.key = "pick/ts11"
       pk.author = "Claude"
       pk.role = "agent"
-      pk.a = 4
-      pk.b = 6
+      pk.sel.a = 4
+      pk.sel.b = 6
     }
     // the bare address in the long answer held: its menu (link_menu.mbt)
     "chat-link-menu" => {
@@ -1106,6 +1206,50 @@ let viz_answer : String =
   #|```mermaid
   #|graph LR; 构建-->签名-->发布
   #|```
+
+///|
+/// MBUI_FIXTURE=chat-file-links: a last message naming two of its files by links within a sentence, written escaped
+/// as the station sends them (`release%2Ehtml`), its Markdown tree with it (file_links_md).
+fn with_file_links(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), file_links_answer, "1 分钟前", {
+          "attachments": [file("release.html", 0, 0, 1200), file("界面草图.png", 600, 400, 18000)],
+          "placed": ["release.html", "界面草图.png"],
+          "md": file_links_md,
+          "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+let file_links_answer : String = "这周的[发布节奏](release%2Ehtml)，草图在[界面草图](%E7%95%8C%E9%9D%A2%E8%8D%89%E5%9B%BE.png)。"
+
+///|
+/// file_links_answer's tree as the core reads it: its words by where they are in it.
+let file_links_md : Json = [
+  [
+    "p",
+    [
+      [0, 3],
+      ["a", [[4, 8]], { "href": "release%2Ehtml" }],
+      [25, 29],
+      ["a", [[30, 34]], { "href": "%E7%95%8C%E9%9D%A2%E8%8D%89%E5%9B%BE.png" }],
+      [77, 78],
+    ],
+  ],
+]
 
 ///|
 /// MBUI_FIXTURE=chat-viz's visualization: a fragment, as the viz skill has agents write them.

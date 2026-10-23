@@ -39,17 +39,7 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       _ => tr("android-chat.run.title")
     }
     if list != "" {
-      c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-        if nav_back(c, tr("android-chat.run.title")) {
-          run_list.remove(of)
-        }
-        c.box(w=Fill(1.0), align=ACenter, fn() {
-          c.text(title, size=17.0, weight=600, color=t.p.text, wrap=false, line=22.0) |> ignore
-        })
-        |> ignore
-        c.box(w=Px(60.0), fn() {  }) |> ignore
-      })
-      |> ignore
+      nav_bar(c, core, tr("android-chat.run.title"), title, on_back=fn() { run_list.remove(of) })
       c.on_back(fn() { run_list.remove(of) })
     } else {
       nav_bar(c, core, tr("common.back"), title)
@@ -73,21 +63,10 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       return
     }
     if list == "account" {
-      scroll_page(c, "run-session-accounts/" + key, [
-        fn() {
-          if pick_row(c, "session-account/auto", tr("android-settings.connect.autoAccount"), checked=!has(draft, "profile")) {
-            pick([("profile", Json::null())])
-            run_list.remove(of)
-          }
-          for a in items(v, "accounts") {
-            let av = Some(a)
-            if pick_row(c, "session-account/" + text(av, "id"), text(av, "name"), sub=text(av, "line"), checked=text(draft, "profile") == text(av, "id")) {
-              pick([("profile", str(text(av, "id")))])
-              run_list.remove(of)
-            }
-          }
-        },
-      ])
+      account_list(c, "run-session-accounts/" + key, items(v, "accounts"), runtime, text(draft, "profile"), fn(p) {
+        pick([("profile", match p { Some(id) => str(id); None => Json::null() })])
+        run_list.remove(of)
+      })
       return
     }
     let group = fn(words : String) {
@@ -294,7 +273,7 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
     open_machine_sessions(core, station, name)
   }
   c.box(pt=8.0, fn() {
-    c.box(dir=Row, padx=10.0, pady=6.0, gap=6.0, radius=10.0, align=ACenter, bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L }, id~, fn() {
+    c.box(dir=Row, padx=10.0, pady=6.0, gap=6.0, radius=10.0, align=ACenter, id~, fn() {
       @sf.icon(c, "monitor", size=14.0, color=t.p.muted) |> ignore
       c.text(
         fill("android-chat.new.machine.offer", [("station", if name == "" { tr("android-chat.new.machine.here") } else { name })]),
@@ -303,6 +282,7 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
         wrap=false,
       )
       |> ignore
+      @motion.ripple(c, id, 10.0)
     })
     |> ignore
   })
@@ -329,7 +309,7 @@ pub fn open_machine_sessions(_core : Core, station : String, name : String) -> U
             if hit(c, id) {
               look_at_machine_session(core, station, name, s)
             }
-            c.box(dir=Row, w=Fill(1.0), padx=20.0, pady=10.0, gap=12.0, align=ACenter, bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L }, id~, fn() {
+            c.box(dir=Row, w=Fill(1.0), padx=20.0, pady=10.0, gap=12.0, align=ACenter, id~, fn() {
               @sf.maker_mark(c, "", text(sv, "runtime"), 18.0) |> ignore
               c.box(w=Fill(1.0), fn() {
                 c.text(first_text(sv, ["title", "first"], ""), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
@@ -339,6 +319,7 @@ pub fn open_machine_sessions(_core : Core, station : String, name : String) -> U
               if has(sv, "session") {
                 c.text(fill("android-chat.new.machine.inApp", [("app", "still.fail")]), size=12.0, color=t.p.muted, wrap=false) |> ignore
               }
+              @motion.ripple(c, id, 0.0)
             })
             |> ignore
           }
@@ -768,3 +749,52 @@ let chip_py : Double = 9.0
 
 ///|
 let chip_corner : Double = 18.0
+
+///|
+/// Who runs the model picked (SettingParts.kt AccountList): what 自动分配 means, then 自动分配 (none picked: the
+/// station's pick) and each account it may be kept to, its provider's mark before it and its allowance after it,
+/// 18 from the sides. `pick` hears the account picked (None: 自动分配).
+fn account_list(c : @ui.Ctx, key : String, accounts : Array[Json], runtime : String, picked : String, pick : (String?) -> Unit) -> Unit {
+  scroll_page(c, key, [
+    fn() {
+      c.box(style=account_list_room, fn() {
+        c.box(style=account_note_room, fn() { c.text(tr("android-chat.run.account.note"), style=account_note_words) |> ignore }) |> ignore
+        if pick_line_row(c, key + "/auto", tr("android-chat.run.account.auto"), "", picked == "") {
+          pick(None)
+        }
+        for a in accounts {
+          let av = Some(a)
+          let id = text(av, "id")
+          let own = text(av, "runtime")
+          if pick_line_row(
+              c,
+              key + "/" + id,
+              text(av, "name"),
+              "",
+              picked == id,
+              leading=fn() { provider_mark(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
+              trailing=fn() { quota_chips(c, field(av, "quota")) },
+            ) {
+            pick(Some(id))
+          }
+        }
+      })
+      |> ignore
+    },
+  ])
+}
+
+///|
+/// The accounts' list, 18 from the sides (AccountList: padding(horizontal = 18)).
+// kept across runs: a value (no field of it changes)
+let account_list_room : @ui.Style = @ui.style(w=Full, px=S4_5)
+
+///|
+/// What 自动分配 means, over the list: 8 above it, 4 below (padding(top = 8, bottom = 4)).
+// kept across runs: a value (no field of it changes)
+let account_note_room : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
+
+///|
+/// 12sp, muted.
+// kept across runs: a value (no field of it changes)
+let account_note_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)

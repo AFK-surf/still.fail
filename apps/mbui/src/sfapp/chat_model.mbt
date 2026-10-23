@@ -36,6 +36,9 @@ pub(all) struct Attachment {
   thumbhash : String
   /// the session whose workspace keeps it (its preview and download go through it)
   owner : String
+  /// the id of this device's upload it is (`composer.add`), sent before it was up: its picture is still here
+  /// (composer.mbt sent_picture); "" for any other
+  upload : String
 }
 
 ///|
@@ -49,6 +52,7 @@ fn attachment_of(a : Json) -> Attachment {
     height: number(s, "height"),
     thumbhash: text(s, "thumbhash"),
     owner: text(s, "owner"),
+    upload: text(s, "upload"),
   }
 }
 
@@ -59,12 +63,24 @@ pub(all) struct Quote {
   text : String
   comment : String
   ts : String
+  /// agent | person | page (a mark on a previewed page) | image (a numbered mark on an image)
+  role : String
+  /// the name of the file among the message's that goes with it (a mark's screenshot, an image of the message
+  /// quoted): shown in its card, not with the message's files; "" none
+  file : String
 }
 
 ///|
 fn quote_of(q : Json) -> Quote {
   let s = Some(q)
-  { author: text(s, "author"), text: text(s, "text"), comment: text(s, "comment"), ts: text(s, "ts") }
+  {
+    author: text(s, "author"),
+    text: text(s, "text"),
+    comment: text(s, "comment"),
+    ts: text(s, "ts"),
+    role: text(s, "role"),
+    file: text(s, "file"),
+  }
 }
 
 ///|
@@ -223,6 +239,7 @@ pub(all) struct Message {
   author_kind : String
   author : String
   text : String
+  md : Json?
   attachments : Array[Attachment]
   quotes : Array[Quote]
   created_at : Double
@@ -249,18 +266,6 @@ pub(all) struct Message {
   outgoing : String
   /// a failure still.fail says that the viewer may send to the still.fail team (`chat.report`)
   reportable : Bool
-  /// the first of a run of what other chats' agents wrote to the chat: the run's line (the core's `letters`)
-  letters : Letters?
-}
-
-///|
-/// A run of messages other chats' agents wrote to a chat, folded into a line (core views.ts `lettersFolded`), so they
-/// do not bury what people and the chat's own agents say: who wrote them to whom and how many, in words (「X」发给
-/// Opus 5.5 · 3 条), and whether it is shown whole (`chat.letters` opens it or folds it again).
-pub(all) struct Letters {
-  count : Int
-  line : String
-  open : Bool
 }
 
 ///|
@@ -273,6 +278,7 @@ fn message_of(m : Json) -> Message {
     author_kind: text(s, "authorKind"),
     author: text(s, "author"),
     text: text(s, "text"),
+    md: field(s, "md"),
     attachments: items(s, "attachments").map(attachment_of),
     quotes: items(s, "quotes").map(quote_of),
     created_at: number(s, "createdAt"),
@@ -322,10 +328,6 @@ fn message_of(m : Json) -> Message {
     said: flag(s, "said"),
     outgoing: text(s, "outgoing"),
     reportable: flag(s, "reportable"),
-    letters: match field(s, "letters") {
-      Some(Object(_)) as l => Some({ count: number(l, "count").to_int(), line: text(l, "line"), open: flag(l, "open") })
-      _ => None
-    },
   }
 }
 
@@ -345,6 +347,8 @@ pub(all) struct Outgoing {
   seq : Double
   /// why it has not reached the station yet, in place of 正在发送 ("" none)
   waits : String
+  /// its files still going up before it goes (`uploads`): each one's name, size and how much of it the station has
+  uploads : Array[(String, Int, Int)]
 }
 
 ///|
@@ -398,12 +402,19 @@ pub(all) struct ChatView {
   elsewhere : Array[Elsewhere]
   more : Bool
   newer : Bool
+  /// the first and last entries loaded (letters and edits are not messages): the cursors for loading pages
+  first_entry : Double?
+  last_entry : Double?
+  /// how many letters its agents and other chats' wrote each other (not in `messages`: their own sheet)
+  letters : Int
   at : Double?
   at_offset : Double?
   unread_line : Double?
   unread_above : Bool
   outbox : Array[Outgoing]
   offline : Bool
+  /// its station down, the line over the composer (why, and that what is sent goes once it is reached)
+  offline_note : String?
   archived : Bool
   archivable : Bool
   pending : Bool
@@ -430,6 +441,9 @@ pub fn chat_view(v : Json) -> ChatView {
     elsewhere: items(s, "elsewhere").map(elsewhere_of),
     more: flag(s, "more"),
     newer: flag(s, "newer"),
+    first_entry: opt_number(s, "firstEntry"),
+    last_entry: opt_number(s, "lastEntry"),
+    letters: number(s, "letters").to_int(),
     at: opt_number(s, "at"),
     at_offset: opt_number(s, "atOffset"),
     unread_line: opt_number(s, "unreadLine"),
@@ -447,9 +461,13 @@ pub fn chat_view(v : Json) -> ChatView {
         followed: flag(s, "followed"),
         seq: opt_number(s, "seq").unwrap_or(-1.0),
         waits: text(s, "waits"),
+        uploads: items(s, "uploads").map(fn(u) {
+          (text(Some(u), "name"), number(Some(u), "size").to_int(), number(Some(u), "sent").to_int())
+        }),
       }
     }),
     offline: flag(s, "offline"),
+    offline_note: opt_text(s, "offlineNote"),
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),
     asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),

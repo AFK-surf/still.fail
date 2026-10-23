@@ -35,7 +35,10 @@ fn agent_line(listed : Bool, modes : Array[String], hosts : Array[String]) -> St
   }
   let parts = [tr("android-settings.vault.agentCan")]
   parts.append(modes.map(mode_name))
-  parts.push(join(hosts, ", "))
+  // (no hosts, none said: an env's)
+  if hosts.length() > 0 {
+    parts.push(join(hosts, ", "))
+  }
   join(parts, " · ")
 }
 
@@ -183,6 +186,11 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
       }
     })
   })
+  // the longest an agent's request for the viewer's secrets is approved for, where a secret says none
+  match vaults.iter().find_first(fn(r) { flag(Some(r), "mine") }) {
+    Some(mine) => blocks.append(default_lasts(c, core, ws, mine))
+    None => ()
+  }
   // locked, the viewer's secrets saved before it still in plain text: encrypted into their vault
   let left = number(v, "plainLeft").to_int()
   if !plain && left > 0 {
@@ -287,8 +295,18 @@ fn profile_groups(list : Array[Json]) -> Array[(String, Array[Json])] {
 }
 
 ///|
+/// The grants an approval offers for an item whose longest is `lasts` (Vault.kt scopesUpTo: every one where it names
+/// none), shortest first; the longest of them the one recommended.
+pub fn vault_scopes_up_to(lasts : String) -> Array[String] {
+  match vault_scopes.search(lasts) {
+    Some(i) => vault_scopes[:i + 1].to_array()
+    None => vault_scopes.copy()
+  }
+}
+
+///|
 /// A request waiting on the viewer (Vault.kt RequestCard): what it is for, its command, how it is given, its chat; the
-/// three answers under it (VaultOptions).
+/// answers under it (VaultOptions): its grants up to the item's longest, the longest recommended, and refused.
 fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> Unit {
   let t = @sf.theme()
   let rv = Some(r)
@@ -333,29 +351,27 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
   })
   c.box(w=Fill(1.0), padx=12.0, pb=10.0, fn() {
     let on = [("workspace", ws), ("request", id)]
-    let options = [
-      (tr("android-settings.vault.approve.once"), tr("android-settings.vault.approve.onceDetail"), true),
-      (tr("android-settings.vault.approve.hour"), tr("android-settings.vault.approve.hourDetail"), false),
-      (tr("android-settings.vault.approve.deny"), tr("android-settings.vault.approve.denyDetail"), false),
-    ]
-    let busy = if is_doing(core, ["vault.approve"], [("workspace", ws), ("request", id), ("scope", "once")]) {
-      0
-    } else if is_doing(core, ["vault.approve"], [("workspace", ws), ("request", id), ("scope", "hour")]) {
-      1
-    } else if is_doing(core, ["vault.deny"], on) {
-      2
-    } else {
-      -1
+    let scopes = vault_scopes_up_to(text(rv, "lasts"))
+    let options = scopes.mapi(fn(i, s) {
+      (tr("android-settings.vault.approve." + s), tr("android-settings.vault.approve." + s + "Detail"), i == scopes.length() - 1)
+    })
+    options.push((tr("android-settings.vault.approve.deny"), tr("android-settings.vault.approve.denyDetail"), false))
+    let deny = scopes.length()
+    let mut busy = if is_doing(core, ["vault.deny"], on) { deny } else { -1 }
+    for i, s in scopes {
+      if is_doing(core, ["vault.approve"], [("workspace", ws), ("request", id), ("scope", s)]) {
+        busy = i
+      }
     }
     match decision_options(c, "vault-options/" + id, options, busy) {
-      Some(2) =>
+      Some(k) if k == deny =>
         act(core, tr("android-settings.vault.approve.denyWhat"), "vault.deny", obj([("workspace", str(ws)), ("request", str(id))]))
       Some(k) =>
         act(
           core,
           tr("android-settings.vault.approve.what"),
           "vault.approve",
-          obj([("workspace", str(ws)), ("request", str(id)), ("scope", str(if k == 0 { "once" } else { "hour" }))]),
+          obj([("workspace", str(ws)), ("request", str(id)), ("scope", str(scopes[k]))]),
         )
       None => ()
     }
@@ -390,7 +406,6 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
         pb=row_pad,
         gap=12.0,
         radius=18.0,
-        bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
         id~,
         fn() {
           c.box(
@@ -420,6 +435,10 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
           |> ignore
           if busy == i {
             spinner(c, inline=true)
+          }
+          // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
+          if busy < 0 {
+            @motion.ripple(c, id, 18.0, ink=@sf.alpha(t.p.text, 0.1))
           }
         },
       )
@@ -593,7 +612,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
 
 ///|
 /// Whose service a profile runs on (Parts.kt ProviderMark): OpenCode's square, a listed provider's maker (the plug where
-/// there is none), Anthropic or OpenAI.
+/// there is none), Anthropic, xAI, Cursor, Devin or OpenAI by its runtime.
 fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
   let t = @sf.theme()
   if kind == "opencode-go" || mark == "opencode" {
@@ -608,7 +627,12 @@ fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, ma
   } else if runtime == "claude" || kind == "anthropic-api" {
     "anthropic"
   } else {
-    "openai"
+    match runtime {
+      "grok" => "xai"
+      "cursor" => "cursor"
+      "devin" => "devin"
+      _ => "openai"
+    }
   }
   if maker == "" || !@sf.has_drawable("maker_" + maker.replace_all(old="-", new="_")) {
     @sf.icon(c, "plug", size~, color=t.p.text) |> ignore
@@ -669,3 +693,72 @@ let plain_left_column : @ui.Style = @ui.style(w=Full, gap=S3)
 ///|
 // kept across runs: a value (no field of it changes)
 let plain_left_body : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, color=Muted, w=Full)
+
+///|
+/// How long a grant lasts, shortest first: one use, an hour, the chat until it is archived (Vault.kt SCOPES).
+// kept across runs: a table, never written
+let vault_scopes : Array[String] = ["once", "hour", "chat"]
+
+///|
+/// The longest an item is granted for, in a word: 仅一次, 1 小时, 直到对话归档 (Vault.kt lastsName: the chat's when
+/// it says none it knows).
+fn lasts_name(lasts : String) -> String {
+  tr("android-settings.vault.lasts." + (if vault_scopes.contains(lasts) { lasts } else { "chat" }))
+}
+
+///|
+/// An item's longest grant as its editor offers it: its vault's (`default`, the library's setting), or its own
+/// (Vault.kt LASTS).
+// kept across runs: a table, never written
+let vault_lasts : Array[String] = ["default", "once", "hour", "chat"]
+
+///|
+/// An item's longest grant as its editor names it (Vault.kt lastsChoice).
+fn lasts_choice(lasts : String) -> String {
+  if lasts == "default" {
+    tr("android-settings.vault.lasts.default")
+  } else {
+    lasts_name(lasts)
+  }
+}
+
+///|
+/// The longest an agent's request for the viewer's secrets is approved for, where a secret says none (Vault.kt
+/// DefaultLasts, `vault.setLasts`): a note, then 仅一次, 1 小时, 直到对话归档 each with what it means, the one set
+/// checked (the chat's when none is).
+fn default_lasts(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() -> Unit] {
+  let id = text(Some(row), "id")
+  let now = match vault_scopes.search(text(Some(row), "lasts")) {
+    Some(i) => i
+    None => vault_scopes.length() - 1
+  }
+  [
+    fn() { section_header(c, tr("android-settings.vault.lasts.title"), start=S6) },
+    fn() {
+      card(c, fn() {
+        c.box(style=lasts_note_room, fn() {
+          c.text(tr("android-settings.vault.lasts.note"), style=row_sub_lines) |> ignore
+        })
+        |> ignore
+        for i, s in vault_scopes {
+          if pick_line_row(
+              c,
+              "vault-lasts/" + s,
+              tr("android-settings.vault.lasts." + s),
+              tr("android-settings.vault.lasts." + s + "Detail"),
+              i == now,
+            ) &&
+            i != now {
+            vault_act(core, ws, "setLasts", [("vault", str(id)), ("lasts", str(s))], tr("android-settings.vault.lasts.what"))
+          }
+        }
+      })
+      |> ignore
+    },
+  ]
+}
+
+///|
+/// Under the note, 4 before the first choice (Vault.kt DefaultLasts).
+// kept across runs: a value (no field of it changes)
+let lasts_note_room : @ui.Style = @ui.style(w=Full, pb=S1)

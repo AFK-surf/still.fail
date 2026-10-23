@@ -149,6 +149,44 @@ test("a_file_picked_in_the_app_is_read_from_there_as_it_goes_up", async (t) => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a_file_held_whole_by_the_app_goes_up_from_the_bytes_beside_its_call", async (t) => {
+  const blob = Object.getOwnPropertyDescriptor(globalThis, "Blob")!;
+  delete (globalThis as { Blob?: unknown }).Blob;
+  t.after(() => Object.defineProperty(globalThis, "Blob", blob));
+  const dir = mkdtempSync(join(tmpdir(), "bridge-held-"));
+  const native = new NodeShell(dir);
+  const core = startBridged(native, "http://127.0.0.1:1", false, "android", () => {});
+  native.bridge = core.bridge;
+  const client = core.connect();
+  const states = new Map<number, J>();
+  const errors = new Map<number, J>();
+  const read = () => {
+    for (const [, json] of native.emitted.splice(0)) {
+      const m = JSON.parse(json);
+      if ("value" in m) states.set(m.id, m.value);
+      else if ("delta" in m) states.set(m.id, apply(states.get(m.id), m.delta));
+      else if ("error" in m) errors.set(m.id, m.error);
+    }
+  };
+  const until = async (done: () => boolean) => {
+    for (read(); !done(); read()) await native.heard();
+  };
+  core.receive(client, JSON.stringify({ id: 1, subscribe: { topic: "composer", key: "mbui-1" } }));
+  // two files in one call, each its own run of the bytes
+  const sha = "a".repeat(64);
+  core.receive(client, JSON.stringify({ id: 2, call: "composer.add", params: { key: "mbui-1", station: "ws/st", files: [
+    { id: "f1", name: "a.txt", size: 3, blob: { hostBytes: [0, 3], type: "text/plain", sha256: sha } },
+    { id: "f2", name: "b.txt", size: 2, blob: { hostBytes: [3, 2], type: "text/plain" } },
+  ] } }), bytes("abcde"));
+  // taken (no such station here: each fails as it goes up), never asked of the app
+  await until(() => errors.has(2) || (states.get(1)?.files?.length === 2 && states.get(1).files.every((f: J) => f.error != null)));
+  assert.equal(errors.get(2), undefined);
+  assert.deepEqual(states.get(1).files.map((f: J) => [f.id, f.size]), [["f1", 3], ["f2", 2]]);
+  assert.ok(!native.calls.some((c) => c.startsWith("picked.")));
+  native.host.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 const skip = loadAddon() === null ? "the mesh addon is not built here" : false;
 
 test("the_mesh_goes_through_the_bridges_iroh", { skip }, async () => {

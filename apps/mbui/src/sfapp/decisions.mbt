@@ -28,7 +28,7 @@ fn decisions_capsule(c : @ui.Ctx, src : Source, w : Workspace, ground : Int64) -
   if c.clicked(id) {
     open_decisions()
   }
-  c.box(
+  let capsule = c.box(
     dir=Row,
     h=Px(56.0),
     min_w=56.0,
@@ -47,7 +47,8 @@ fn decisions_capsule(c : @ui.Ctx, src : Source, w : Workspace, ground : Int64) -
       }
     },
   )
-  |> ignore
+  // (Home.kt DecisionsCapsule: 「n 件待你决定」 to a screen reader)
+  c.semantics(capsule, Button, id~, label=fill("android-chat.home.decisions", [("n", n.to_string())]))
 }
 
 ///|
@@ -93,24 +94,37 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else {
       nav_bar(c, tr("android-misc.bar.place.decisions"))
     }
-    c.box(w=Fill(1.0), h=Fill(1.0), pt=4.0, pb=if place && !wide_on.val { nav_foot() + bar_room } else { nav_foot() }, fn() {
-      if shown.length() == 0 {
-        // none yet while stations are still read is not none: their cards to come
-        if view is Some(_) && !flag(field(view, "wait"), "reading") {
-          decisions_idle(c, view)
-        } else {
-          waiting_cards(c, topic.error)
-        }
-        // the last one, gone: drawn going over them
+    // what it shows 4 under the bar (Decisions.kt: Spacer(top)); none left and all read, the day so far, scrolling up
+    // to the bar, its 4 inside what scrolls (Idle's `top`)
+    let idle = shown.length() == 0 && view is Some(_) && !flag(field(view, "wait"), "reading")
+    c.box(w=Fill(1.0), h=Fill(1.0), pb=if place && has_bar() { nav_foot() + bar_room } else { nav_foot() }, fn() {
+      if idle {
+        decisions_idle(c, view, 4.0)
+        // the last one, gone: drawn going over it
         deck_out(c, src, c.width, c.height)
         return
       }
-      deck(c, src, shown)
+      c.box(style=decisions_body, fn() {
+        if shown.length() == 0 {
+          // none yet while stations are still read is not none: their cards to come
+          waiting_cards(c, topic.error)
+          // the last one, gone: drawn going over them
+          deck_out(c, src, c.width, c.height)
+          return
+        }
+        deck(c, src, shown)
+      })
+      |> ignore
     })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// What the page shows, 4 under its bar (Decisions.kt: Spacer(top), PlacePage.kt's `top` for a page pushed).
+// kept across runs: a value (no field of it changes)
+let decisions_body : @ui.Style = @ui.style(w=Full, h=Full, pt=S1)
 
 ///|
 /// Cards to come, breathing (Waiting.kt Waiting, WaitShape.Cards): what went wrong over them in red.
@@ -133,15 +147,16 @@ fn waiting_cards(c : @ui.Ctx, error : Json?) -> Unit {
 
 ///|
 /// None left (Decisions.kt Idle): the page stays for the next to come and says how the day went, where the next may come
-/// from (the viewer's chats with an agent at work or waiting) and what was answered today. Each opens its chat.
-fn decisions_idle(c : @ui.Ctx, view : Json?) -> Unit {
+/// from (the viewer's chats with an agent at work or waiting) and what was answered today. Each opens its chat. `top`:
+/// the room over it, inside what scrolls (Decisions.kt Idle: `top = top + 16.dp`).
+fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
   let t = @sf.theme()
   let today = field(view, "today")
   let working = items(view, "working")
   let answered = items(view, "answered")
   let rows : Array[() -> Unit] = [
     fn() {
-      c.box(w=Fill(1.0), pt=16.0, align=ACenter, fn() {
+      c.box(w=Fill(1.0), pt=top + 16.0, align=ACenter, fn() {
         for f in items(field(view, "wait"), "failing") {
           c.box(pb=8.0, fn() { @sf.wait_pill(c, text(Some(f), "text"), error=true) }) |> ignore
         }
@@ -254,7 +269,6 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
     pady=8.0,
     gap=10.0,
     radius=10.0,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
     id~,
     fn() {
       c.box(w=Px(12.0), h=Px(12.0), pt=4.0, align=ACenter, justify=JCenter, fn() {
@@ -271,6 +285,8 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
       })
       |> ignore
       c.text(at, size=12.0, color=t.p.subtle, wrap=false) |> ignore
+      // Decisions.kt IdleRow: clip(Smooth(10)).clickable
+      @motion.ripple(c, id, 10.0)
     },
   )
   |> ignore
@@ -668,12 +684,13 @@ fn decision_face(
       pady=8.0,
       gap=4.0,
       align=ACenter,
-      bg=if c.pressed(open) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id=open,
       fn() {
         c.box(fn() { c.text(text(v, "title"), size=13.0, color=t.p.muted, wrap=false) |> ignore })
         |> ignore
         @sf.icon(c, "chevron-right", size=14.0, color=t.p.subtle) |> ignore
+        // Decisions.kt: the row clickable
+        @motion.ripple(c, open, 0.0)
       },
     )
     |> ignore
@@ -781,6 +798,7 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
   let v = Some(item)
   let words = with_link_words(d.text.trim(chars=" \n\t").to_owned(), d)
   let files = up_files(d)
+  let uploads = up_uploads(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   let taken_text = d.text
   let taken_files = d.files.copy()
@@ -795,16 +813,21 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
   save_draft(src, d)
   c.blur()
   go_decision(c, 2, item, fn() { dui.dgone.push(key) })
+  let reply : Map[String, Json] = {
+    "station": Json::string(text(v, "station")),
+    "thread": Json::number(number(v, "thread")),
+    "seq": Json::number(number(v, "seq")),
+    "text": Json::string(words),
+    "attachments": Json::array(files),
+    "quotes": Json::array(quotes),
+  }
+  // the files still going up: it waits for them (Decisions.kt reply's taken.uploads)
+  if uploads.length() > 0 {
+    reply["uploads"] = Json::array(uploads)
+  }
   (src.call)(
     "decision.reply",
-    Json::object({
-      "station": Json::string(text(v, "station")),
-      "thread": Json::number(number(v, "thread")),
-      "seq": Json::number(number(v, "seq")),
-      "text": Json::string(words),
-      "attachments": Json::array(files),
-      "quotes": Json::array(quotes),
-    }),
+    Json::object(reply),
     fn(res) {
       match res {
         Err(e) => {

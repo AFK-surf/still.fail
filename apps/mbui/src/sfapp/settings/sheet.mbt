@@ -88,7 +88,7 @@ pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
     look=@sf.sheet_look(),
     fn() {
       c.scope(sheet.serial, fn() {
-        sheet_grab(c)
+        @sf.sheet_grab(c)
         c.box(w=Fill(1.0), h=Fill(1.0), fn() { draw(c, core) }) |> ignore
       })
     },
@@ -99,30 +99,6 @@ pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
   if !up && !r.shown {
     sheet.last = None
   }
-}
-
-///|
-/// The grabber's two paddings (Sheet.kt SheetGrab's padding(top 8, bottom 4), then padding(vertical 4)).
-// kept across runs: a value (no field of it changes)
-let grab_outer : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
-
-///|
-// kept across runs: a value (no field of it changes)
-let grab_inner : @ui.Style = @ui.style(w=Full, py=S1, align=ACenter)
-
-///|
-/// The grabber at a sheet's top (Sheet.kt SheetGrab).
-fn sheet_grab(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  // (two paddings, as Sheet.kt's two: each a length of its own, on Android's whole pixels 21 + 11 above the grabber and
-  // 11 + 11 under it, not one 12 and one 8)
-  c.box(style=grab_outer, fn() {
-    c.box(style=grab_inner, fn() {
-      c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -157,7 +133,8 @@ fn field_of(key : String) -> @ui.Field {
 }
 
 ///|
-/// A line to type in (Controls.kt Field): on a soft frame, its placeholder until it has words.
+/// A line to type in (Controls.kt Field): mbui's field in its look (@sf.field_look), its placeholder until it has
+/// words, its words 15 on 21 (`secret`: as dots).
 fn field_box(
   c : @ui.Ctx,
   key : String,
@@ -166,40 +143,11 @@ fn field_box(
   secret? : Bool = false,
   field? : @ui.Field,
 ) -> String {
-  let t = @sf.theme()
-  let mut words = ""
-  c.box(
-    w=Fill(1.0),
-    padx=12.0,
-    pady=10.0,
-    radius=12.0,
-    bg=t.p.card,
-    border=1.0,
-    border_color=t.p.line,
-    fn() {
-      let r = c.editor(
-        key,
-        placeholder~,
-        font_size=15.0,
-        max_lines=1,
-        plain=true,
-        line=21.0,
-        color=t.p.text,
-        placeholder_color=t.p.subtle,
-        caret_color=t.p.accent,
-        enter_sends=true,
-        secret~,
-        field=match field {
-          Some(f) => f
-          None => field_of(key)
-        },
-      )
-      ignore(mono)
-      words = r.text
-    },
-  )
-  |> ignore
-  words
+  ignore(mono)
+  @kit.text_field(c, key, placeholder~, secret~, size=15.0, line=21.0, look=@sf.field_look, field=match field {
+    Some(f) => f
+    None => field_of(key)
+  }).text
 }
 
 ///|
@@ -323,10 +271,10 @@ fn band_filter(c : @ui.Ctx, key : String, options : Array[String], selected : In
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
     id~,
     fn() {
       @sf.icon(c, "filter", size=20.0, color=if selected != 0 { t.p.accent } else { t.p.text }) |> ignore
+      @motion.ripple(c, id, 17.0)
     },
   )
   |> ignore
@@ -360,7 +308,6 @@ fn menu_overlay(c : @ui.Ctx) -> Unit {
           align=ACenter,
           justify=JBetween,
           radius=menu_row,
-          bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
           id~,
           fn() {
             c.text(label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
@@ -369,6 +316,8 @@ fn menu_overlay(c : @ui.Ctx) -> Unit {
             } else {
               c.box(w=Px(16.0), h=Px(16.0), fn() {  }) |> ignore
             }
+            // Sheet.kt MenuHost: clip(Smooth(MENU_ROW)).clickable
+            @motion.ripple(c, id, menu_row)
           },
         )
         |> ignore

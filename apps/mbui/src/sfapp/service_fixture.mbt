@@ -89,7 +89,7 @@ fn fixture_stream(
     _ => (404, "text/plain; charset=utf-8", "Not Found")
   }
   on_value({ "head": { "status": status, "headers": [["Content-Type", kind]] } }, None)
-  on_value({ "chunk": true }, Some(utf8_bytes(body)))
+  on_value({ "chunk": true }, Some(@utf8.encode(body)))
   done(Ok(Json::null()))
   fix_stream_ids.val += 1
   fix_stream_ids.val

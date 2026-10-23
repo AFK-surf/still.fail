@@ -184,6 +184,7 @@ public class MainActivity extends Activity {
         Host.activity = this;
         Host.view = view;
         Host.systemDark = night(getResources().getConfiguration());
+        Host.fontScale = getResources().getConfiguration().fontScale;
         if (Host.script != null) Script.start(view);
         // started by a notification's tap (Notices): what it opens, for the app
         Notices.from(getIntent());
@@ -194,9 +195,10 @@ public class MainActivity extends Activity {
     /**
      * Since when the app has been off screen (elapsedRealtime: deep sleep counted); 0 while on it. The process's, not
      * an activity's: one closed with back and made again later is the same app coming back (as still.fail's
-     * MainActivity's `hidden`).
+     * MainActivity's `hidden`). An app's push service reads it too (still.fail's Push.java: how long the app was away
+     * as a push wakes its core).
      */
-    private static long hiddenAt;
+    static volatile long hiddenAt;
 
     /** The Wi-Fi multicast lock held while on screen, when the manifest asks for it (src/hostapi/system.mbt). */
     private android.net.wifi.WifiManager.MulticastLock multicast;
@@ -296,15 +298,14 @@ public class MainActivity extends Activity {
 
     // Back: while the app has a page to go back to (Host.backEnabled), the system's back is the app's, its
     // predictive back gesture followed as it goes (Android 14 on: OnBackAnimationCallback; 13: back only once
-    // done); otherwise the system's own (leaving the app). Told to MoonBit on the GL thread (Native.back).
+    // done); otherwise the system's own (leaving the app). Told to MoonBit on the GL thread by the next frame (MBView.back).
     private boolean backOn;
     private Object backCallback;
 
     private void back(int kind, float x, float progress, int edge) {
         MBView v = Host.view;
         if (v == null) return;
-        float d = v.density;
-        v.toGL(() -> Native.back(kind, x / d, progress, edge));
+        v.back(kind, x / v.density, progress, edge);
     }
 
     void setBackEnabled(boolean on) {
@@ -372,6 +373,11 @@ public class MainActivity extends Activity {
     @Override
     public void onConfigurationChanged(android.content.res.Configuration c) {
         super.onConfigurationChanged(c);
+        // the system's size of words changed (configChanges has fontScale): the next frame draws words at it
+        if (c.fontScale != Host.fontScale) {
+            Host.fontScale = c.fontScale;
+            Host.requestFrame();
+        }
         boolean dark = night(c);
         if (dark != Host.systemDark) {
             Host.systemDark = dark;
@@ -409,6 +415,7 @@ public class MainActivity extends Activity {
     public void onWindowFocusChanged(boolean has) {
         super.onWindowFocusChanged(has);
         Host.focused = has;
+        if (has) NativeViews.focused();
         Host.windowFocused(has);
         Host.tellAppState();
     }

@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import fail.still.android.BAR_ROOM
 import fail.still.android.data.t
 
 
@@ -347,7 +348,8 @@ fun ToastHost(toast: String?, done: () -> Unit) {
     // Kept while it fades, so it fades with its words.
     var last by remember { mutableStateOf("") }
     if (text != null) last = text
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 90.dp), contentAlignment = Alignment.BottomCenter) {
+    // Clear of the bar and the action standing over it (Places.kt BAR_ROOM), over any page.
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = BAR_ROOM), contentAlignment = Alignment.BottomCenter) {
         AnimatedVisibility(text != null, enter = fadeIn(tween(200, easing = Ease.Css)), exit = fadeOut(tween(200, easing = Ease.Css))) {
             Text(
                 last, color = C.bg, fontSize = 14.sp,

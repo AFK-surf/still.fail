@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addQueueColumns, addSizeColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 
 export * from "./rows.ts";
@@ -89,6 +89,7 @@ export class Store {
       }
       db.exec(SCHEMA);
       addArchiveColumns(db);
+      addLetterColumn(db);
       addClientColumn(db);
       addAutoTitleColumns(db);
       addWatchColumn(db);
@@ -718,6 +719,7 @@ export class Store {
         unread: this.#unreadCount(viewer, t.id, read),
         people: this.#threadPeople(t.id, t.surface),
         firstText: this.#firstText(t.id),
+        letters: this.#letterCount(t.id),
         thread: t,
       };
     });
@@ -733,13 +735,22 @@ export class Store {
     return r ? toMessage(r) : null;
   }
 
+  /// How many letters the thread has (rows.ts isLetter), in either way.
+  #letterCount(thread: number): number {
+    if (this.#isArchived(thread)) {
+      const keys = new Set(this.threadSessions(thread).map((m) => m.session));
+      return mergeEntries(this.#archivedEntries(thread)).filter((m) => isLetter(m, keys)).length;
+    }
+    return this.#one(`SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND kind = 'message' AND ${LETTER_SQL}`, thread).c;
+  }
+
   /// The thread's latest message that is not a letter (rows.ts isLetter), for lists: what they show and sort by.
   #lastSaid(thread: number): MessageRow | null {
     if (this.#isArchived(thread)) {
       const keys = new Set(this.threadSessions(thread).map((m) => m.session));
       return mergeEntries(this.#archivedEntries(thread)).findLast((m) => !isLetter(m, keys)) ?? null;
     }
-    const r = this.#one(`SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread, thread);
+    const r = this.#one(`SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread);
     return r ? toMessage(r) : null;
   }
 
@@ -768,6 +779,7 @@ export class Store {
           options: options ?? (card !== undefined && card !== null && typeof card === "object" && card.type === "options" ? card.options : undefined),
           card: card ?? (options === undefined ? undefined : optionsCard(options)),
           at: m.at ?? this.now(),
+          ...(m.letter !== undefined ? { letter: m.letter } : {}),
         },
         changes,
       );
@@ -1680,7 +1692,7 @@ export class Store {
     return this.#one(
       `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
        AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?))) AND NOT ${LETTER_SQL}`,
-      thread, read, JSON.stringify(selves), thread,
+      thread, read, JSON.stringify(selves),
     ).c;
   }
 
@@ -1873,7 +1885,7 @@ export class Store {
 
   #insertEntry(e: EntryRow): void {
     this.#run(
-      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       e.thread, e.n, e.kind, e.target, e.ts, e.authorKind, e.author, e.text,
       jsonList<Attachment>(e.attachments, attachment), jsonList<Quote>(e.quotes, quote),
       e.declared, e.client, e.profile, e.runtime,
@@ -1881,6 +1893,7 @@ export class Store {
       e.card === undefined ? null : JSON.stringify(e.card),
       e.at,
       e.agentIdentity === undefined ? null : JSON.stringify(e.agentIdentity),
+      e.letter === undefined ? null : JSON.stringify(e.letter),
     );
   }
 }

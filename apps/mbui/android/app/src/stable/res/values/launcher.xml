@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The released app's face, as fail.still.android's (apps/android app/build.gradle.kts): orange, its eyes dark. -->
+<resources>
+    <color name="launcher_bg">#E5704A</color>
+    <color name="launcher_eyes">#24272B</color>
+</resources>

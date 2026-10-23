@@ -287,3 +287,33 @@ test "as the Android app's SearchResultsTest: each kind, 查看更多 only where
     _ => fail("no chat under the service")
   }
 }
+
+///|
+/// The ripples drawn over (x, y) (@motion.ripple's discs: black, faint).
+fn ripples_at(t : @ui.Tester, x : Double, y : Double) -> Int {
+  t
+  .drawn_shadows()
+  .filter(fn(s) {
+    let (sx, sy, sw, sh, _, _, color) = s
+    (color & 0xFFFFFF00L) == 0L &&
+    (color & 0xFFL) <= (@motion.ripple_ink & 0xFFL) &&
+    sx <= x &&
+    x <= sx + sw &&
+    sy <= y &&
+    y <= sy + sh
+  })
+  .length()
+}
+
+///|
+test "a chat the search found, pressed: rippled (Search.kt: ChatRowBody's clickable)" {
+  let t = search_tester()
+  t.type_text("签名")
+  let (x, y) = t.find("签名证书续期").unwrap()
+  assert_eq(ripples_at(t, x, y), 0)
+  t.press_at(x, y)
+  t.run_for(@ui.tap_indication_ms + 100.0)
+  assert_true(ripples_at(t, x, y) > 0)
+  t.release(x, y)
+  assert_eq(app.nav.depth(), 2)
+}

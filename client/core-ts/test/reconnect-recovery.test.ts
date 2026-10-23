@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Deferred, Effect, Queue } from "effect";
 import { Core } from "../src/core.ts";
-import { HostError } from "../src/error.ts";
+import { t } from "../src/i18n.ts";
+import { CoreError, HostError } from "../src/error.ts";
 import { BRIEF_MAX_MS, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_HELD_MS } from "../src/station/link.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { SOCKET_RETRY_MAX_MS } from "../src/sync/cloud.ts";
@@ -296,18 +297,39 @@ test("a_station_tried_seldom_after_long_down_is_tried_as_still_fail_cloud_is_rea
   }
 });
 
+test("a_station_refusing_this_device_for_a_security_mode_is_down_for_that_and_says_why_whatever_still_fail_cloud_says", async () => {
+  const s = await started();
+  try {
+    const why = "此 station 尚未接入此 workspace 的安全模式，稍后会自动重试；如果一直如此，请将它更新到最新版本";
+    s.gate.stream = new CoreError("lock_station", why);
+    s.end();
+    await s.host.time.pass(10_000, 1000);
+    const link = () => s.core.inner.stations.link(ST)?.state as { state: string; cause?: string; message?: string };
+    assert.deepEqual([link().state, link().cause, link().message], ["offline", "lock", why]);
+    // still.fail cloud's word changing (it lists the station online) does not make it 连不上.
+    s.core.inner.stations.recause();
+    assert.equal(link().cause, "lock");
+    // Taking members again: reached.
+    s.gate.stream = "open";
+    await s.host.time.pass(RECONNECT_MAX_MS + 1000, 1000);
+    assert.equal(link().state, "online");
+  } finally {
+    s.core.close();
+  }
+});
+
 /// Takes the station down (nothing reaches it, its stream not opened) until the returned function brings it back.
-async function takenDown(s: Awaited<ReturnType<typeof started>>): Promise<() => void> {
+async function takenDown(s: Awaited<ReturnType<typeof started>>): Promise<(() => void) & { down: () => boolean }> {
   let down = true;
   stationLater(s.host, (req) => (down && req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
   s.gate.stream = "fail";
   s.end();
   await s.host.time.pass(60_000, 1000);
   assert.equal((s.core.inner.stations.link(ST)?.state as { state: string }).state, "offline");
-  return () => {
+  return Object.assign(() => {
     down = false;
     s.gate.stream = "open";
-  };
+  }, { down: () => down });
 }
 
 test("messages_that_failed_as_their_station_was_down_go_in_order_once_it_is_reached_and_refused_ones_do_not", async () => {
@@ -371,6 +393,87 @@ test("a_new_chat_whose_station_went_down_stays_said_down_and_is_asked_for_once_t
     await reopens(s, 20 * 60_000);
     await s.host.time.pass(2000, 250);
     assert.equal(asked.length, 1);
+  } finally {
+    s.core.close();
+  }
+});
+
+type Shown = { offline: boolean; offlineNote?: string; outbox: { text: string; state: string; waits?: string; error?: string }[] };
+type Listed = { trouble: { text: string; state: string } | null; days: { items: { id: string; offline?: string }[] }[] };
+
+test("a_station_down_says_why_as_the_device_can_tell_and_its_chat_takes_messages_that_go_once_it_is_reached", async () => {
+  // A weak network took a phone's stations for down, said each 离线 while it was up, and its composer took nothing.
+  const row7 = { id: "k1", session: "k1", thread: 7, title: "部署", agents: [], last: null, unread: false, mine: true, lastActiveAt: 1, connect: null, origin: null };
+  const s = await started({ ...base(), "GET /chats": [row7] });
+  const posted: string[] = [];
+  let tried = 0;
+  let n = 3;
+  stationReplies(s.host, (req) => {
+    if (req.method !== "POST" || !req.url.endsWith("/threads/7/messages")) return undefined;
+    posted.push(JSON.parse(new TextDecoder().decode(req.body!)).text as string);
+    return { n: ++n };
+  });
+  try {
+    const values = new Map<number, unknown>();
+    subscribe(s.core, 1, 1, { topic: "chat", station: ST, thread: 7 });
+    subscribe(s.core, 1, 2, { topic: "chats", scope: "ws" });
+    const back = await takenDown(s);
+    stationLater(s.host, (req) => {
+      if (req.url.endsWith("/threads/7/messages")) tried++;
+      return back.down() && req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined;
+    });
+    await s.host.time.pass(500, 250);
+    apply(s.host, values);
+    const chat = () => values.get(1) as Shown;
+    const list = () => values.get(2) as Listed;
+    const row = () => list().days.flatMap((d) => d.items).find((i) => i.id === "k1");
+    // still.fail cloud is reached and lists it online: not said 离线, but not reached from here.
+    assert.equal((s.core.inner.stations.link(ST)?.state as { cause?: string }).cause, "unreached");
+    assert.equal(chat().offline, true);
+    assert.equal(chat().offlineNote, t("core-logic.looks.offline.unreached", { name: "studio" }));
+    assert.equal(row()?.offline, t("core-views.station.unreachable", { name: "studio" }));
+    assert.equal(list().trouble?.text, t("core-views.station.unreachable", { name: "studio" }));
+    // Sent while it is down: it waits in the outbox, said so, the station not tried for it.
+    call(s.core, 1, 3, "chat.send", { station: ST, thread: 7, text: "一" });
+    await s.host.time.pass(1000, 250);
+    apply(s.host, values);
+    assert.deepEqual(chat().outbox.map((o) => [o.text, o.state, o.waits, o.error]), [["一", "sending", t("core-logic.looks.outbox.held"), undefined]]);
+    assert.equal(tried, 0, "not tried while it is down");
+    // The device's network goes too: still.fail cloud is not reached either, and that is what is said.
+    s.host.refuseSockets = true;
+    s.host.socketClose("/v1/events");
+    await s.host.time.pass(1000, 250);
+    apply(s.host, values);
+    assert.equal((s.core.inner.stations.link(ST)?.state as { cause?: string }).cause, "network");
+    assert.equal(chat().offlineNote, t("core-logic.looks.offline.network", { name: "studio" }));
+    assert.equal(row()?.offline, t("core-views.station.offline_network", { name: "studio" }));
+    // Both back: the message goes, once.
+    s.host.refuseSockets = false;
+    back();
+    await reopens(s, 20 * 60_000);
+    await s.host.time.pass(2000, 250);
+    apply(s.host, values);
+    assert.deepEqual(posted, ["一"]);
+    assert.equal(chat().offline, false);
+    assert.equal(chat().offlineNote, undefined);
+    assert.equal(row()?.offline, undefined);
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_station_the_cloud_says_is_not_online_is_said_offline", async () => {
+  const s = await started(undefined, 0, undefined, (st) => {
+    st.cloud.online = false;
+    st.gate.stream = "fail";
+  });
+  try {
+    const values = new Map<number, unknown>();
+    subscribe(s.core, 1, 2, { topic: "chats", scope: "ws" });
+    await s.host.time.pass(1000, 250);
+    apply(s.host, values);
+    assert.equal((s.core.inner.stations.link(ST)?.state as { cause?: string }).cause, "station");
+    assert.equal((values.get(2) as Listed).trouble?.text, t("core-views.station.offline", { name: "studio" }));
   } finally {
     s.core.close();
   }

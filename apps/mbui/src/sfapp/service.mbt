@@ -17,11 +17,12 @@
 // held down it folds away and the bar's size button opens it again. A service being started again is said over the
 // page, which loads anew once it is back; one stopped, or not found, is said in its place.
 //
-// Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): the size chosen
-// and the toolbar folded kept on the device across runs (kept while the app runs: there is no store of the device's
-// own), the address's keyboard for addresses with 前往 (an editor's keyboard is not chosen), a marked picture's pin and
-// edge as the page shows them (drawn as an image's marks are), and on Android the top page's fetch() on its port (the
-// WebView's cookies are not the app's to send along: it goes as the page's other requests do).
+// The size chosen and the toolbar folded are kept on the device (the core's prefs `previewSizes`, `previewFolded`;
+// Preview.kt keeps them in its own); the address is typed with the keyboard for addresses, its key 前往.
+//
+// Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): a marked picture's
+// pin and edge as the page shows them (drawn as an image's marks are), and on Android the top page's fetch() on its
+// port (the WebView's cookies are not the app's to send along: it goes as the page's other requests do).
 
 ///|
 // kept across runs: a table, never written
@@ -80,9 +81,13 @@ let svc_zh : Map[String, String] = {
 
 ///|
 fn svc(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = match svc_zh.get(key) {
+  let mut s = match english(key, args~) {
     Some(w) => w
-    None => tr(key)
+    None =>
+      match svc_zh.get(key) {
+        Some(w) => w
+        None => tr(key)
+      }
   }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
@@ -95,7 +100,7 @@ fn svc(key : String, args? : Array[(String, String)] = []) -> String {
 priv struct Viewport {
   width : Int
   height : Int?
-}
+} derive(Eq)
 
 ///|
 /// The sizes offered (Preview.kt PRESETS).
@@ -129,10 +134,10 @@ priv struct ServicePage {
   address : @ui.Field
   /// what its page has open through the app (service_link.mbt)
   link : PageLink
-  /// a sized page moved or zoomed by hand (its top left on the stage, its scale; None: fitted), moved by a finger on
-  /// it (the toolbar's 移动), where it was drawn last, the stage's fingers, when the
-  /// ground was last tapped
-  mut view : (Double, Double, Double)?
+  /// a sized page on its canvas (mbui's Zoom, free: dragged anywhere, 0.05 to 4 times, fitted 16 in by thousandths;
+  /// Preview.kt StageState), moved by a finger on it (the toolbar's 移动), where it was drawn last, the stage's fingers,
+  /// when the ground was last tapped
+  view : @kit.Zoom
   mut moving : Bool
   mut placed : Placed?
   mut hold : StageHold?
@@ -151,11 +156,62 @@ priv struct ServicePage {
 let service_pages : Map[String, ServicePage] = Map([])
 
 ///|
-/// The size chosen for each service, while the app runs (Preview.kt keeps it on the device).
+/// The size chosen for each service while the app runs, and whether the toolbar was folded (None: not chosen since it
+/// started): what the core keeps of them on the device (prefs `previewSizes`, `previewFolded`) is read only before.
 let svc_viewports : Map[String, Viewport?] = Map([])
 
 ///|
-let svc_folded : Ref[Bool] = Ref(false)
+let svc_folded : Ref[Bool?] = Ref(None)
+
+///|
+/// Puts a patch into the core's prefs (the page's source's `prefs.set`; nothing until a page has been shown).
+let svc_keep : Ref[(Json) -> Unit] = Ref(fn(_) {  })
+
+///|
+/// A size as the core keeps it: its width, or `<width>x<height>`.
+fn size_kept(v : Viewport?) -> Json {
+  match v {
+    None => Json::null()
+    Some({ width, height: None }) => Json::string(width.to_string())
+    Some({ width, height: Some(h) }) => Json::string(width.to_string() + "x" + h.to_string())
+  }
+}
+
+///|
+/// A size the core kept (size_kept's), within the sizes a page can take; None for none, or one that does not read.
+fn size_of_kept(s : String) -> Viewport? {
+  let parts = s.split("x").map(fn(x) { x.to_string() }).to_array()
+  let num = fn(x : String) -> Int? {
+    if x.length() > 4 {
+      None
+    } else {
+      size_of(x).map(clamp_size)
+    }
+  }
+  match parts {
+    [w] => num(w).map(fn(w) { { width: w, height: None } })
+    [w, h] =>
+      match (num(w), num(h)) {
+        (Some(w), Some(h)) => Some({ width: w, height: Some(h) })
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+/// A size chosen for a service: shown, and kept on the device.
+fn keep_size(key : String, v : Viewport?) -> Unit {
+  svc_viewports[key] = v
+  (svc_keep.val)(Json::object({ "previewSizes": Json::object(Map::from_array([(key, size_kept(v))])) }))
+}
+
+///|
+/// The toolbar folded away or opened again: kept on the device (null: opened, as none is).
+fn keep_folded(on : Bool) -> Unit {
+  svc_folded.val = Some(on)
+  (svc_keep.val)(Json::object({ "previewFolded": if on { Json::boolean(true) } else { Json::null() } }))
+}
 
 ///|
 fn service_key(station : String, job : String) -> String {
@@ -163,7 +219,7 @@ fn service_key(station : String, job : String) -> String {
 }
 
 ///|
-fn service_page_for(station : String, job : String) -> ServicePage {
+fn service_page_for(station : String, job : String, prefs? : Json? = None) -> ServicePage {
   let key = service_key(station, job)
   match service_pages.get(key) {
     Some(p) => p
@@ -174,8 +230,18 @@ fn service_page_for(station : String, job : String) -> ServicePage {
         site: None,
         port: 0,
         cookies: {},
-        viewport: svc_viewports.get(key).unwrap_or(None),
-        folded: svc_folded.val,
+        viewport: match svc_viewports.get(key) {
+          Some(v) => v
+          None =>
+            match field(field(prefs, "previewSizes"), key) {
+              Some(String(s)) => size_of_kept(s)
+              _ => None
+            }
+        },
+        folded: match svc_folded.val {
+          Some(on) => on
+          None => flag(prefs, "previewFolded")
+        },
         restarting: false,
         calls: {},
         asked: 0,
@@ -183,7 +249,7 @@ fn service_page_for(station : String, job : String) -> ServicePage {
         logged_path: "",
         address: @ui.Field::new(),
         link: page_link_new(),
-        view: None,
+        view: stage_zoom(),
         moving: false,
         placed: None,
         hold: None,
@@ -321,7 +387,8 @@ fn service_body(
   session : String,
   file? : FilePage? = None,
 ) -> Unit {
-  let p = service_page_for(station, job)
+  svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, fn(_) {  }) }
+  let p = service_page_for(station, job, prefs=(src.topic)("prefs", {}).value)
   p.port = port
   p.name = name
   p.session = session
@@ -423,7 +490,7 @@ fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply : @
   }
   if bare == page_js_path {
     reply.head(200, [("Content-Type", "text/javascript; charset=utf-8"), ("Cache-Control", "no-store")])
-    reply.chunk(utf8_bytes(page_script_served(service_fetches(p))))
+    reply.chunk(@utf8.encode(page_script_served(service_fetches(p))))
     reply.end()
     return
   }
@@ -673,7 +740,7 @@ fn service_ask(
 /// A request that got no answer from the service: said to the page with `status`, in words (PreviewLink.text).
 fn service_unanswered(sink : Sink, path : String, status : Int, words : String) -> Unit {
   (sink.head)(status, [("Content-Type", "text/plain; charset=utf-8")], path, false)
-  (sink.chunk)(utf8_bytes(words))
+  (sink.chunk)(@utf8.encode(words))
   (sink.end)("")
 }
 
@@ -934,7 +1001,8 @@ fn service_page_bar(
           raise_sheet(LoadOf(station, port))
         }
         let color = if number(load, "failed") > 0.0 { t.p.red } else { t.p.muted }
-        c.box(w=Px(28.0), h=Px(28.0), align=ACenter, justify=JCenter, id=ring, fn() {
+        // (PreviewLoad.kt: how far, in words, to a screen reader)
+        c.box(w=Px(28.0), h=Px(28.0), align=ACenter, justify=JCenter, id=ring, label=load_label(load), fn() {
           @sf.progress_ring(c, 20.0, number(load, "percent") / 100.0, color) |> ignore
         })
         |> ignore
@@ -977,6 +1045,7 @@ fn service_page_bar(
             font_size=16.0,
             max_lines=1,
             plain=true,
+            ime_action=@hostapi.ime_action_go,
             color=if editing { t.p.text } else { t.p.muted },
             caret_color=t.p.accent,
             field=p.address,
@@ -999,7 +1068,7 @@ fn service_page_bar(
       let sid = c.id("service/size")
       if c.clicked(sid) {
         p.folded = false
-        svc_folded.val = false
+        keep_folded(false)
       }
       c.box(
         dir=Row,
@@ -1049,13 +1118,16 @@ fn bar_icon(c : @ui.Ctx, key : String, icon : String, enabled : Bool) -> Bool {
     radius=14.0,
     align=ACenter,
     justify=JCenter,
-    bg=if enabled { @sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)) } else { 0L },
     id=if enabled { id } else { 0 },
     fn() {
       c.box(opacity=if enabled { 1.0 } else { 0.35 }, fn() {
         @sf.icon(c, icon, size=14.0, color=t.p.text) |> ignore
       })
       |> ignore
+      // Preview.kt BarIcon: clip(CircleShape).clickable
+      if enabled {
+        @motion.ripple(c, id, 14.0)
+      }
     },
   )
   |> ignore
@@ -1074,11 +1146,9 @@ priv struct Placed {
 }
 
 ///|
-/// A finger (or two) on the stage, from where it went down (Preview.kt Stage's gesture): the page as it was drawn
-/// when the fingers came (or one came or went), where they were then, how far one finger went, when it went down,
-/// whether on the page.
+/// A finger (or two) on the stage, from where it went down (Preview.kt Stage's gesture): where they were the frame
+/// before (or when one came or went), how far one finger went, when it went down, whether on the page.
 priv struct StageHold {
-  mut from : (Double, Double, Double)
   mut was : Array[(Double, Double)]
   mut travelled : Double
   down_at : Double
@@ -1091,6 +1161,19 @@ let stage_min_scale : Double = 0.05
 
 ///|
 let stage_max_scale : Double = 4.0
+
+///|
+/// A sized page's place on its canvas (Preview.kt StageState): fitted 16 in, never enlarged, by thousandths; dragged
+/// anywhere; zoomed by hand within `stage_min_scale` … `stage_max_scale`.
+fn stage_zoom() -> @kit.Zoom {
+  @kit.Zoom::new(
+    margin=fn(_) { 16.0 },
+    min_scale=fn(_) { stage_min_scale },
+    max_scale=fn(_) { stage_max_scale },
+    free=true,
+    fit_step=0.001,
+  )
+}
 
 ///|
 /// A double tap on the ground (Preview.kt Stage): each tap shorter than this, moving less than `stage_tap_slop`, the
@@ -1145,27 +1228,23 @@ fn service_stage(
     // (the stage's place as this frame lays it out: read back, built again once it is)
     let placed = match (p.viewport, c.laid_size(stage)) {
       (Some(v), Some((sw, sh))) => {
-        let room_w = sw - 32.0
-        let room_h = sh - 32.0
         let w = v.width.to_double()
-        let fitted = dmax(
-          0.05,
-          (dmin(1.0, dmin(room_w / w, match v.height { Some(h) => room_h / h.to_double(); None => 1.0 })) * 1000.0).floor() /
-          1000.0,
-        )
-        let scale = match p.view {
-          Some((_, _, s)) => s
-          None => fitted
-        }
+        // a page of no height of its own: as high as the stage leaves it at the scale its width is fitted at
         let h = match v.height {
           Some(x) => x.to_double()
-          None => dmax(240.0, (room_h / fitted).floor())
+          None => {
+            let fitted = dmax(stage_min_scale, (dmin(1.0, (sw - 32.0) / w) * 1000.0).floor() / 1000.0)
+            dmax(240.0, ((sh - 32.0) / fitted).floor())
+          }
         }
-        let (x, y) = match p.view {
-          Some((x, y, _)) => (x, y)
-          None => ((16.0 + dmax(0.0, (room_w - w * scale) / 2.0)).round(), (16.0 + dmax(0.0, (room_h - h * scale) / 2.0)).round())
+        p.view.boxed(sw, sh)
+        p.view.natural(w, h)
+        match p.view.rect() {
+          // (fitted: on whole points, as Preview.kt centres it)
+          Some((x, y, _, _)) if p.view.fitted => Some({ x: x.round(), y: y.round(), scale: p.view.scale, w, h })
+          Some((x, y, _, _)) => Some({ x, y, scale: p.view.scale, w, h })
+          None => None
         }
-        Some({ x, y, scale, w, h })
       }
       _ => None
     }
@@ -1262,17 +1341,16 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
         let dy = c.press_y - sy
         let on_page = dx >= pl.x && dx <= pl.x + pl.w * pl.scale && dy >= pl.y && dy <= pl.y + pl.h * pl.scale
         p.hold = Some({
-          from: (pl.x, pl.y, pl.scale),
           was: if at.length() == 1 { [(dx, dy)] } else { at },
           travelled: 0.0,
           down_at: c.pointer_at(),
           on_page,
         })
         if at.length() == 1 && (at[0].0 != dx || at[0].1 != dy) {
-          stage_moved(p, pl, at)
+          stage_moved(p, at)
         }
       }
-      Some(_) => stage_moved(p, pl, at)
+      Some(_) => stage_moved(p, at)
     }
   } else {
     // let go (down and up between two frames: a tap the frames never saw held, taken all the same)
@@ -1290,7 +1368,7 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
     let now = c.pointer_at()
     if !on_page && travelled < stage_tap_slop && now - down_at < stage_tap_ms {
       if now - p.tapped_at < stage_double_ms {
-        p.view = None
+        p.view.fit_now()
         p.tapped_at = -1.0e9
       } else {
         p.tapped_at = now
@@ -1301,25 +1379,22 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
 
 ///|
 /// The fingers now at `at` (from the stage's top left): one moves the page as far as it went, two zoom it by how far
-/// apart they went about the point between them (Preview.kt pinch); a finger come or gone, from where the page is now.
-fn stage_moved(p : ServicePage, pl : Placed, at : Array[(Double, Double)]) -> Unit {
+/// apart they went about the point between them, moving it as that point did (Preview.kt pinch); a finger come or gone,
+/// from there on.
+fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
   let h = match p.hold {
     Some(h) => h
     None => return
   }
   if at.length() != h.was.length() {
-    h.from = (pl.x, pl.y, pl.scale)
     h.was = at
     return
   }
-  let (fx, fy, fs) = h.from
   if at.length() == 1 {
     let (x0, y0) = h.was[0]
     let (x1, y1) = at[0]
     h.travelled = h.travelled + ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).sqrt()
-    p.view = Some((fx + x1 - x0, fy + y1 - y0, fs))
-    h.from = (fx + x1 - x0, fy + y1 - y0, fs)
-    h.was = at
+    p.view.pan(x1 - x0, y1 - y0)
   } else {
     let mid = fn(ps : Array[(Double, Double)]) { ((ps[0].0 + ps[1].0) / 2.0, (ps[0].1 + ps[1].1) / 2.0) }
     let apart = fn(ps : Array[(Double, Double)]) {
@@ -1329,9 +1404,9 @@ fn stage_moved(p : ServicePage, pl : Placed, at : Array[(Double, Double)]) -> Un
     }
     let (m0x, m0y) = mid(h.was)
     let (m1x, m1y) = mid(at)
-    let scale = dmin(stage_max_scale, dmax(stage_min_scale, fs * apart(at) / apart(h.was)))
-    p.view = Some((m1x - (m0x - fx) * scale / fs, m1y - (m0y - fy) * scale / fs, scale))
+    p.view.transform(m0x, m0y, apart(at) / apart(h.was), m1x - m0x, m1y - m0y)
   }
+  h.was = at
 }
 
 ///|
@@ -1389,15 +1464,15 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
   let set = fn(v : Viewport?) {
     // a size chosen (or turned) is fitted anew; the page no longer moved by a finger
     p.moving = false
-    p.view = None
+    p.view.fit_now()
     p.viewport = v
-    svc_viewports[key] = v
+    keep_size(key, v)
   }
   let bar = c.id("service/toolbar")
   // held still half a second: folded away (the bar's size button opens it again)
   if @kit.after(c, "service/fold-hold", c.pressed(bar) || toolbar_child_pressed(c), svc_fold_hold_ms) {
     p.folded = true
-    svc_folded.val = true
+    keep_folded(true)
     feel_hold(c, "service/fold")
   }
   let ground = if sized { @sf.mix(t.p.chip, 0.55, t.p.card) } else { t.p.card }
@@ -1452,7 +1527,7 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
               match v.height {
                 Some(h) =>
                   if toolbar_tool(c, "service/turn", "landscape", false) {
-                    p.view = None
+                    p.view.fit_now()
                     set(Some({ width: h, height: Some(v.width) }))
                   }
                 None => ()
@@ -1460,10 +1535,10 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
               if toolbar_tool(c, "service/move", "move", p.moving) {
                 p.moving = !p.moving
               }
-              if p.view is Some(_) {
+              if !p.view.fitted {
                 let id = c.id("service/fit-view")
                 if c.clicked(id) {
-                  p.view = None
+                  p.view.fit_now()
                   p.moving = false
                 }
                 c.box(style=fit_view_pill, id~, fn() {
@@ -1586,7 +1661,7 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
     None => None
   }
   let preset = preset_of(current)
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   sheet_head(c, svc("android-chat.preview.size.title"))
   c.box(w=Fill(1.0), pl=10.0, pr=10.0, pb=24.0, fn() {
     let option = fn(k : String, checked : Bool, name : String, note : String, v : Viewport?) {
@@ -1595,7 +1670,7 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
         match p {
           Some(x) => {
             x.viewport = v
-            svc_viewports[key] = v
+            keep_size(key, v)
           }
           None => ()
         }
@@ -1609,7 +1684,6 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
         padx=10.0,
         gap=10.0,
         align=ACenter,
-        bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
         id~,
         fn() {
           c.box(w=Px(18.0), align=ACenter, fn() {
@@ -1623,6 +1697,8 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
           })
           |> ignore
           c.text(note, size=13.0, color=t.p.muted, wrap=false) |> ignore
+          // the row clickable over its clip
+          @motion.ripple(c, id, 12.0)
         },
       )
       |> ignore
@@ -1760,9 +1836,9 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
         }
         if !same {
           p.moving = false
-          p.view = None
+          p.view.fit_now()
           p.viewport = Some(v)
-          svc_viewports[key] = Some(v)
+          keep_size(key, Some(v))
         }
       }
       _ => ()
@@ -1782,6 +1858,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
           font_size=15.0,
           max_lines=1,
           plain=true,
+          ime_action=@hostapi.ime_action_number,
           placeholder=hint,
           color=t.p.text,
           placeholder_color=t.p.subtle,
@@ -1814,9 +1891,9 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
       match p.viewport {
         Some({ width, height: Some(h) }) => {
           let v : Viewport = { width: h, height: Some(width) }
-          p.view = None
+          p.view.fit_now()
           p.viewport = Some(v)
-          svc_viewports[key] = Some(v)
+          keep_size(key, Some(v))
         }
         _ => ()
       }
@@ -1977,13 +2054,13 @@ fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Uni
   let served = req.verb == "GET" && !last.contains(".")
   if !served {
     reply.head(404, [("Content-Type", "text/plain; charset=utf-8")])
-    reply.chunk(utf8_bytes("Not found"))
+    reply.chunk(@utf8.encode("Not found"))
     reply.end()
     return
   }
   let doc = viz_served(f.html, f.state, @sf.theme().dark, 0xFFFFFFFFL, page_script_served(false))
   reply.head(200, [("Content-Type", "text/html; charset=utf-8"), ("Cache-Control", "no-store")])
-  reply.chunk(utf8_bytes(doc))
+  reply.chunk(@utf8.encode(doc))
   reply.end()
 }
 

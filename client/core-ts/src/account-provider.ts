@@ -80,7 +80,7 @@ export const stillfailAccountProvider: AccountProviderFactory = ({ host, tracer,
       supports: () => true,
       start: () => {},
       request: (sub, method, path, body, ctx) => cloud.request(sub, method, path, body, ctx),
-      me: (sub, ctx) => cloud.me(sub, ctx),
+      me: (sub, ctx) => Effect.tap(cloud.me(sub, ctx), (answer) => accounts.profile(sub, answer)),
       credential: (sub, workspace, device, said) => cloud.credential(sub, workspace, device, said),
       events: (sub) =>
         Effect.gen(function* () {

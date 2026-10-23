@@ -201,12 +201,8 @@
   "core-views.joinable.offline": "offline",
   "core-views.joinable.needsLock": "{workspace} is in security mode. Turn on security mode in this workspace to add it.",
   "core-views.joinable.online": "online",
-  "core-views.letters.chatAgent": "this chat's agent",
-  "core-views.letters.line": {
-    "one": "{from} to {to}",
-    "other": "{from} to {to} · {n} messages"
-  },
-  "core-views.letters.name": "“{name}”",
+  "core-views.letters.out": "{name}: {text}",
+  "core-views.letters.their": "Agent of “{chat}”",
   "core-views.list_separator": ", ",
   "core-views.local_author": "Local",
   "core-views.marks.alert": {
@@ -356,6 +352,11 @@
     "other": "{n} stations with issues"
   },
   "core-views.station.unreachable": "Can't reach {name}",
+  "core-views.station.unreachable_short": "Can't reach",
+  "core-views.station.lock": "Security mode is blocking {name}",
+  "core-views.station.lock_short": "Blocked by security mode",
+  "core-views.station.offline_network": "No network: can't reach {name}",
+  "core-views.station.network": "No network connection",
   "core-views.station.not_listed": "This station isn't in the list",
   "core-views.unsent": "Not sent: {text}",
   "core-views.usage.archived": "Archived",

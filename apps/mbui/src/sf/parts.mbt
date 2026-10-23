@@ -259,6 +259,18 @@ pub fn segmented(
   }
 }
 
+///|
+/// A line to type in, its frame (Controls.kt Field) as a look for mbui's field (@kit.text_field): 12 round, the card's
+/// ground, a line round it, its words 12 by 10 in.
+pub fn field_look(c : @ui.Ctx, s : @kit.FieldState, editor : () -> Unit) -> Unit {
+  c.box(id=s.id, style=field_frame, editor) |> ignore
+}
+
+///|
+/// Controls.kt Field's frame: as wide as where it is, 12 by 10 in, 12 round, the card's ground, a line round it.
+// kept across runs: a value (no field of it changes)
+let field_frame : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5, radius=Xl, bg=Card, border=B1, border_color=Line)
+
 // ---------------------------------------------------------------------------
 // Small panels (docs/ui-panels.md)
 
@@ -571,4 +583,24 @@ pub fn slider(
       ring=ground.unwrap_or(t.p.canvas),
     ),
   ).value
+}
+
+///|
+/// Round a sheet's grabber: 8 above and 4 under it, then 4 above and under it (Sheet.kt's two paddings, each a length
+/// of its own: on Android's whole pixels 21 + 11 above the grabber and 11 + 11 under it, not one 12 and one 8).
+// kept across runs: a value (no field of it changes)
+let sheet_grab_outer : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sheet_grab_inner : @ui.Style = @ui.style(w=Full, py=S1, align=ACenter)
+
+///|
+/// The grabber at a sheet's top (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
+pub fn sheet_grab(c : @ui.Ctx) -> Unit {
+  let grabber = sheet_grabber.then(@ui.style(bg=Data(theme().p.line)))
+  c.box(style=sheet_grab_outer, fn() {
+    c.box(style=sheet_grab_inner, fn() { c.box(style=grabber, fn() {  }) |> ignore }) |> ignore
+  })
+  |> ignore
 }

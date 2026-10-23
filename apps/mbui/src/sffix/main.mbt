@@ -11,6 +11,8 @@
 
 ///|
 fn main {
+  // no core here: the real core's answers to its pure calls, kept (src/sfkept)
+  @sf.kept_call.val = Some(@sfkept.answer)
   // MBUI_DARK=1: the dark theme
   if @ui.env("MBUI_DARK") == "1" {
     @sf.set_dark(Some(true))
@@ -28,6 +30,6 @@ fn main {
   }
   // the faces the app carries (code's JetBrains Mono), as the app has them
   @sf.give_faces()
-  @sfapp.desktop_window()
+  @sfapp.host_setup()
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }

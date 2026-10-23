@@ -3,7 +3,8 @@
 # signed and put in the releases bucket as .github/workflows/mbui.yml does on mini1:
 #   apps/mbui/scripts/beta.sh tools      MoonBit, its latest release (installed again only when cli.moonbitlang.com
 #                                        has a newer one: its ETag), mbui (apps/mbui/mbui), the core's packages
-#   apps/mbui/scripts/beta.sh build      the APK (scripts/android.sh, VARIANT=release): versionCode the build (git
+#   apps/mbui/scripts/beta.sh build      the APK (scripts/android.sh, VARIANT=release; MBUI_VARIANT=stable or beta
+#                                        still.fail's Android app's own, for scripts/release.sh): versionCode the build (git
 #                                        rev-list --count HEAD), signed with ANDROID_DEBUG_KEYSTORE_B64 (every still.fail
 #                                        Android release's key; POSTHOG_JSON: the key its crash reports go with), into
 #                                        $RELEASE_DIR as android/stillfail-mbui-<n>.apk and android/mbui/latest.json
@@ -28,7 +29,7 @@
 # MBUI_CACHE ($RUNNER_TEMP's).
 # Warm between runs on a machine of its own (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui kept outside the job's checkout (which the
 # other jobs' clean takes), so moonc's and the compiler's outputs and the link stay; core.hbc is kept by its inputs
-# (HBC_CACHE), the APK's dex by its own (mbui's scripts/apk.py: APK_CACHE).
+# (HBC_CACHE), the APK's dex by its own (mbui's scripts/apk: APK_CACHE).
 set -eo pipefail
 A=$(cd "$(dirname "$0")/.." && pwd)
 REPO=$(cd "$A/../.." && pwd)
@@ -154,11 +155,15 @@ json.dump({"versionCode": int(n), "versionName": "0.1." + n, "file": name, "sha2
 
 build() {
   local t0=$(now) n apk name sum size badging cert prev prev_sha
+  # (MBUI_VARIANT=stable or beta: still.fail's Android app's own, fail.still.android(.beta), for scripts/release.sh, which
+  # puts it on that app's feed; the APK alone, in $RELEASE_DIR/android/app-<variant>.apk)
+  local variant=${MBUI_VARIANT:-release} id=fail.still.mbui
+  case $variant in stable) id=fail.still.android ;; beta) id=fail.still.android.beta ;; esac
   n=$(build_number)
   copy
   rm -rf "$RELEASE_DIR/android" && mkdir -p "$RELEASE_DIR/android/android/mbui"
   # every still.fail Android release's key (the debug keystore $ANDROID_USER_HOME holds, as the Android Gradle plugin's
-  # signingConfigs.debug had it: mbui's scripts/apk.py signs with it)
+  # signingConfigs.debug had it: mbui's scripts/apk signs with it)
   if [ -n "${ANDROID_DEBUG_KEYSTORE_B64:-}" ]; then
     export ANDROID_USER_HOME=$(mktemp -d "${RUNNER_TEMP:-/tmp}/mbui-key.XXXXXX")
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$ANDROID_USER_HOME/debug.keystore"
@@ -172,15 +177,20 @@ build() {
     export STILLFAIL_POSTHOG="$posthog/posthog.json"
   fi
   local r=0
-  env APP=stillfail VARIANT=release HBC_CACHE="${HBC_CACHE:-$C/hbc}" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
+  env APP=stillfail VARIANT=$variant HBC_CACHE="${HBC_CACHE:-$C/hbc}" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
     bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
   [ -z "$posthog" ] || rm -rf "$posthog"
   [ $r = 0 ] || exit $r
-  apk=$WORK/android/app/build/outputs/apk/release/app-release.apk
-  badging=$("$BT/aapt2" dump badging "$apk" | head -1)
-  echo "$badging" | grep -q "name='fail.still.mbui' versionCode='$n' " || { echo "beta: not this build's APK: $badging" >&2; exit 1; }
-  cert=$("$BT/apksigner" verify --print-certs "$apk" | grep 'certificate SHA-256 digest' | head -1 | sed 's/.*: //')
+  apk=$WORK/android/app/build/outputs/apk/$variant/app-$variant.apk
+  badging=$("$BT/aapt2" dump badging "$apk" | sed -n '1p')
+  echo "$badging" | grep -q "name='$id' versionCode='$n' " || { echo "beta: not this build's APK: $badging" >&2; exit 1; }
+  cert=$("$BT/apksigner" verify --print-certs "$apk" | sed -n '/certificate SHA-256 digest/{s/.*: //;p;}' | sed -n '1p')
+  if [ "$variant" != release ]; then
+    cp "$apk" "$RELEASE_DIR/android/app-$variant.apk"
+    summary "- $id 0.1.$n: $(wc -c < "$apk" | tr -d ' ') bytes, signed by $cert; built in $(secs $t0) s"
+    return 0
+  fi
   name=android/stillfail-mbui-$n.apk
   cp "$apk" "$RELEASE_DIR/android/$name"
   sum=$(shasum -a 256 "$apk" | cut -d' ' -f1)

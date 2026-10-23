@@ -1,10 +1,11 @@
 // Sharing (ember apps/android app/share/ShareActivity.kt, ShareSheet.kt; drive/DriveScreen.kt hand; docs/share-in.md).
 //
 // In: what another app shares into still.fail (Android's share sheet: ACTION_SEND of a link, some text or files,
-// ACTION_SEND_MULTIPLE of files, @ui.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs, the host's
-// MBUI_SHARE_FILES on macOS) opens one sheet: what is shared at its top (its title, the
-// app's subject or its first line; a link's mark or text's), 发到 the chats it can go to (the core's `shareIn` view: the
-// one a thing from the same site went to last first, saying so; 搜索 from six chats), 新 chat last (then which station,
+// ACTION_SEND_MULTIPLE of files, iOS's share extension's as the app next comes to the front, @ui.shared_in;
+// MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs, the host's MBUI_SHARE_FILES on macOS and iOS) opens one
+// sheet: what is shared at its top (its title, the app's subject or its first line; a link's mark or text's), 发到
+// the chats it can go to (the core's `shareIn` view: the one a thing from the same site went to last first, saying so;
+// 搜索 from six chats), 新 chat last (then which station,
 // when there are more). A tap puts what is shared in that chat's composer (`shareIn.open`: a link as a card among its
 // files, the words after what is written) and opens the chat there (or a new chat on that station), where it is added
 // to and sent. Files (which the Android app does not take in) head the sheet as the composer shows them (pictures as
@@ -40,7 +41,10 @@ let share_zh : Map[String, String] = {
 
 ///|
 fn sh(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = share_zh.get(key).unwrap_or(tr(key))
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => share_zh.get(key).unwrap_or(tr(key))
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }
@@ -126,7 +130,7 @@ fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
     None => return
   }
   let head = fn() {
-    sheet_grab(c)
+    @sf.sheet_grab(c)
     if share_in.files.length() > 0 {
       shared_files_head(c, share_in.files, source, title)
     } else {
@@ -201,7 +205,7 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
           continue
         }
         let name = text(Some(f), "name")
-        let image = match image_size(bytes) {
+        let image = match @pixels.image_size(bytes) {
           Some(_) => {
             share_files_made.val += 1
             let key = "mem:share-in/\{share_files_made.val}"
@@ -262,7 +266,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Some(s) => s
     None => return
   }
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   if share_in.files.length() > 0 {
     shared_files_head(c, share_in.files, source, title)
   } else {
@@ -526,7 +530,6 @@ fn share_row(
       pady=12.0,
       gap=12.0,
       align=ACenter,
-      bg=@sf.alpha(t.p.text, 0.06 * @motion.pressing(c, id)),
       id=if enabled { id } else { 0 },
       fn() {
         c.box(w=Px(16.0), align=ACenter, fn() { lead() }) |> ignore
@@ -541,6 +544,10 @@ fn share_row(
           @sf.spinner(c, size=14.0) |> ignore
         } else if checked {
           @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+        }
+        // a PickRow: clip(Smooth(LIST_ROW_CORNER)).clickable
+        if enabled {
+          @motion.ripple(c, id, @sf.row_corner)
         }
       },
     )
@@ -635,7 +642,7 @@ fn share_opened(
   if files.length() > 0 {
     let list = shared_into.get(key).unwrap_or([])
     for f in files {
-      list.push({ name: f.name, bytes: f.bytes })
+      list.push({ name: f.name, bytes: f.bytes, held: 0, size: f.bytes.length().to_double(), src: "" })
     }
     shared_into[key] = list
   }
@@ -697,7 +704,7 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
   let under = if one {
     file_size(size.to_double())
   } else {
-    files.map(fn(f) { f.name }).join("、")
+    files.map(fn(f) { f.name }).join(tr("web-main.list.separator"))
   }
   let said = match title {
     Some(x) => x
@@ -759,5 +766,6 @@ fn share_drive_file(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Uni
         }
       }
     },
+    listed=Some((e.mtime, e.size)),
   )
 }

@@ -164,6 +164,12 @@ pub let scrollbar_hold_ms : Double = 600.0
 pub let scrollbar_fade_ms : Double = 300.0
 
 ///|
+/// Whether a list draws its scroll bar as it is scrolled: not on Android, whose lists (Compose's LazyColumn) have none.
+fn scrollbars_shown() -> Bool {
+  h_feel() != 2
+}
+
+///|
 /// When list `key` (asked where it is built) is at rest: its wheel's ease come, its fling and its overscroll over and
 /// its scroll bar gone (the frames' clock; before now: it is).
 pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
@@ -192,7 +198,7 @@ impl Moving for ListState with rest_at(self, now, frame) {
   if self.glide && self.glide_t0 == @double.infinity {
     return @double.infinity
   }
-  let bar = self.shown_until() + scrollbar_hold_ms + scrollbar_fade_ms
+  let bar = self.shown_until() + (if scrollbars_shown() { scrollbar_hold_ms + scrollbar_fade_ms } else { 0.0 })
   let eased = if self.ease == 0.0 { -1.0 } else { self.ease_t0 + ease_end(self.ease) }
   let glided = if self.glide { self.glide_rest } else { -1.0 }
   dmax(bar, dmax(eased, glided))
@@ -698,7 +704,7 @@ fn Ctx::paint_scrollbar(self : Ctx, n : Node, alpha : Double) -> Unit {
   match self.lists.get(n.id) {
     Some(st) => {
       let age = self.now - st.shown_until()
-      if age > scrollbar_hold_ms + scrollbar_fade_ms || st.count == 0 {
+      if !scrollbars_shown() || age > scrollbar_hold_ms + scrollbar_fade_ms || st.count == 0 {
         return
       }
       let fade = if age < scrollbar_hold_ms { 1.0 } else { 1.0 - (age - scrollbar_hold_ms) / scrollbar_fade_ms }
@@ -849,6 +855,8 @@ pub(all) struct ListInfo {
   /// how far the last row's bottom is below the view's (1e9 when the last
   /// row was not laid out)
   below : Double
+  /// the view's height (what of the rows shows at once)
+  height : Double
   /// gliding to its end (list_to_end)
   gliding : Bool
   /// a row followed from its top (Ctx::list_follow_from), not let go by the reader since
@@ -870,6 +878,7 @@ pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
         last: st.vis_last,
         at_end: st.at_end,
         below: st.below,
+        height: st.vp_h,
         gliding: st.glide,
         following_row: st.follow_item >= 0,
         rest: st.own_rest(),

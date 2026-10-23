@@ -1,27 +1,27 @@
-// How far the system bars reach in over the app's view (the host's `bars`, @hostapi.system_channel): Android's app is
-// edge to edge (its manifest's dev.mbui.edge), its pages running under the status bar and the navigation bar and each
-// padded by them where Android's are (WindowInsets.statusBars, navigationBars); over another app too. 0 where the host
-// lays the view out inside them, and in a Tester unless a test says them (t.post of the system's `bars`).
-
-///|
-/// The status bar's height over the view's top (WindowInsets.statusBars' top).
-let bars_top : Ref[Double] = Ref(0.0)
-
-///|
-/// The navigation bar's over its foot (WindowInsets.navigationBars' bottom): the soft keyboard up, the view ends where
-/// it starts plus this, so what is padded by it sits on the keyboard (keyboard.union(navigationBars)).
-let bars_foot : Ref[Double] = Ref(0.0)
+// How far the system bars reach in over the app's view (mbui's @ui.system_bars, as the host says them): Android's app
+// is edge to edge (its manifest's dev.mbui.edge), its pages running under the status bar and the navigation bar and
+// each padded by them where Android's are (WindowInsets.statusBars, navigationBars); over another app too. 0 where the
+// host lays the view out inside them, and in a Tester unless a test says them (t.post of the system's `bars`).
 
 ///|
 /// The status bar's height: what a page's top bar is padded by.
 fn status_top() -> Double {
-  bars_top.val
+  @ui.system_bars().top
 }
 
 ///|
-/// The navigation bar's height: what a page's foot is padded by.
+/// A top bar's least height, the status bar's and its own (bar_h) as one length (TopGlassBar, Chat.kt BarFrame: the
+/// status bar's padding, then heightIn(min = TopBarHeight)).
+fn top_bar_h() -> Double {
+  status_top() + bar_h
+}
+
+///|
+/// The navigation bar's height (WindowInsets.navigationBars' bottom): what a page's foot is padded by. The soft keyboard
+/// up, the view ends where it starts plus this, so what is padded by it sits on the keyboard
+/// (keyboard.union(navigationBars)).
 fn nav_foot() -> Double {
-  bars_foot.val
+  @ui.system_bars().bottom
 }
 
 ///|

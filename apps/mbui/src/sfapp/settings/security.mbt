@@ -549,14 +549,8 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       let blocks : Array[() -> Unit] = [
-        fn() {
-          c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, align=ACenter, fn() {
-            if nav_back(c, tr("web-pages.security.title")) {
-              opening_lock.val = false
-            }
-          })
-          |> ignore
-        },
+        // (Security.kt SecurityOpenScreen: TopBack, under the status bar)
+        fn() { top_back(c, core, tr("web-pages.security.title"), on_back=fn() { opening_lock.val = false }) },
         fn() { large_title(c, tr("web-pages.security.openTitle")) },
       ]
       if !ready {

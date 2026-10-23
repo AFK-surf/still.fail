@@ -37,7 +37,7 @@ test("a chat's places: the connects that can start a conversation, each bot's ch
   const connects = await relayPlaces(r.hub, thread);
   assert.deepEqual(connects, [
     {
-      id: "cl", kind: "slack", name: "ember", team: null,
+      id: "cl", kind: "slack", name: "ember", team: null, botImage: null, preferred: true,
       places: [{ id: "C1", name: "cue-dev", kind: "channel" }, { id: "C2", name: "design", kind: "channel", private: true }],
     },
   ], "the connects whose surface cannot start one (gpt, team here) are not offered");
@@ -45,6 +45,24 @@ test("a chat's places: the connects that can start a conversation, each bot's ch
   Object.assign(r.gptChat, { places: async () => { throw new Error("missing_scope"); }, begin: async () => { throw new Error("no"); } });
   const again = await relayPlaces(r.hub, thread);
   assert.deepEqual(again.map((c) => [c.id, c.places.length, c.error ?? null]), [["cl", 2, null], ["gpt", 0, "missing_scope"]]);
+  await r.close();
+});
+
+test("a chat's places: every bot, the one running what the chat's agent runs preferred", async () => {
+  const { r } = relayRig();
+  const preferred = async (thread: Parameters<typeof relayPlaces>[1]) => (await relayPlaces(r.hub, thread)).filter((c) => c.preferred).map((c) => c.id);
+  Object.assign(r.gptChat, { places: async () => [{ id: "C1", name: "cue-dev", kind: "channel" }], begin: async (channel: string) => ({ thread: { channel, threadTs: "1700.000200" }, ts: "1700.000200" }) });
+  const [, claude] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  const [, codex] = newSession(r.hub, { runtime: "codex", createdBy: "ada@x.com" });
+  assert.deepEqual((await relayPlaces(r.hub, claude)).map((c) => c.id), ["cl", "gpt"]);
+  assert.deepEqual(await preferred(claude), ["cl"]);
+  assert.deepEqual(await preferred(codex), ["gpt"]);
+  // Of the bots running its runtime, the one bound to the profile it runs on (cc).
+  r.config.connects.find((c) => c.id === "gpt")!.bind = { runtime: "claude", profile: "cc" };
+  assert.deepEqual(await preferred(claude), ["gpt"]);
+  // Another bot can be picked all the same.
+  const done = await relay(r.hub, claude, "Ada", { connect: "gpt", channel: "C1" }, "");
+  assert.equal(done.place, "#cue-dev");
   await r.close();
 });
 

@@ -7,6 +7,7 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
+import { StationInWords, StationNamedAt } from "./StationNamed.tsx";
 import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "@stillfail/ui/icons.tsx";
 import { createContext, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
@@ -133,7 +134,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
   // What waits to be decided here and does not show: a button over the list leads to it.
   const asks = useAsksShown(rows.virtual, chat);
   // Selecting text inside one message offers to quote it: into the chat's draft, its composer's (by its key).
-  const quoting = useSelectionQuote(list, (quote) => offerToDraft(draftKey, { files: [], quotes: [], quote }));
+  const quoting = useSelectionQuote(list, (quote, file) => offerToDraft(draftKey, { files: [], quotes: [], quote, ...(file ? { quotedFile: file } : {}) }));
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
@@ -150,7 +151,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
           if (to && chat.agents.some((a) => a.session.key === to.key)) { e.preventDefault(); chatPage.history(draftKey, to.key, to.entry); }
         }}>
         <DraftKey.Provider value={draftKey}>
-          <ChatRows chat={chat} rows={rows} to={to} />
+          <ImageQuote.Provider value={quoting.images}><ChatRows chat={chat} rows={rows} to={to} /></ImageQuote.Provider>
         </DraftKey.Provider>
       </div>
       </Gallery.Provider>
@@ -158,10 +159,10 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       {quoting.pop}
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
-      {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
+      {chat.offline && <p className={css.offlineNotice} role="status">{<StationInWords station={station.address} text={chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))} />}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}
-        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
+        locked={!!chat.archived} offline={chat.offline} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
     </section>
   );
 }
@@ -267,10 +268,6 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
     drawn.set(`m:${m.seq}`, () => {
       const { enter, emitted, caught } = rowOf(m);
       return <MessageRow key={`m:${m.seq}`} message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />;
-    });
-    if (m.letters) drawn.set(`l:${m.seq}`, () => {
-      const { enter, caught } = rowOf(m);
-      return <LettersLine key={`l:${m.seq}`} message={m} enter={enter} caught={caught} />;
     });
     sent(m.elsewhere);
   }
@@ -380,12 +377,49 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   );
 }
 
+/** How an image of a message in the list is quoted (useSelectionQuote's `images`): none outside a chat's list. */
+export const ImageQuote = createContext<ImageQuoting | null>(null);
+export interface ImageQuoting {
+  /** The pointer over the image `file` (its box `at`): a button over its corner quotes it. */
+  over(file: Attachment, at: Element): void;
+  /** Off it, to `to`: the button goes, unless that is where it went. */
+  off(to: EventTarget | null): void;
+  /** Held there (a finger's long press): quoted at once. */
+  hold(file: Attachment, at: Element): void;
+}
+
 /**
  * Selecting words inside one message of the list offers to quote them (`onQuote`), in a small button over the
- * selection. Answers what the list takes to watch the selection, and the button.
+ * selection; an image of one (`images`, for its files' boxes), a button over its corner, or holding it, quotes the
+ * image (its file going again with the message). Answers what the list takes to watch the selection, and the button.
  */
-export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">) => void) {
-  const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number } | null>(null);
+export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">, file?: Attachment) => void) {
+  const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number; file?: Attachment } | null>(null);
+  const latest = useRef(onQuote);
+  latest.current = onQuote;
+  const [images] = useState((): ImageQuoting => {
+    // The image's message, as a quote names it; only one the station has (its ts).
+    const of = (file: Attachment, at: Element): Omit<Quote, "comment"> | null => {
+      const row = at.closest<HTMLElement>("[data-author][data-ts]");
+      if (!row || !list.current?.contains(row)) return null;
+      return { author: row.dataset.author!, text: file.name, ts: row.dataset.ts!, role: row.dataset.role === "agent" ? "agent" : "person", file: file.name };
+    };
+    return {
+      over: (file, at) => {
+        const quote = of(file, at);
+        if (!quote) return;
+        const box = at.getBoundingClientRect();
+        setPicked({ quote, file, x: box.right - 6, y: box.top + 6 });
+      },
+      off: (to) => setPicked((p) => (p?.file && !(to instanceof Element && to.closest(`.${css.quoteImagePop}`)) ? null : p)),
+      hold: (file, at) => {
+        const quote = of(file, at);
+        if (!quote) return;
+        navigator.vibrate?.(10);
+        latest.current(quote, file);
+      },
+    };
+  });
   const pick = () => {
     const selection = window.getSelection();
     const text = selection?.toString().trim();
@@ -400,10 +434,11 @@ export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: 
   };
   return {
     listProps: { onMouseUp: () => { setTimeout(pick, 0); }, onScroll: () => setPicked(null) },
+    images,
     pop: picked && (
-      <button type="button" className={css.quotePop} style={{ left: picked.x, top: picked.y }}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => { onQuote(picked.quote); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
+      <button type="button" className={picked.file ? `${css.quotePop} ${css.quoteImagePop}` : css.quotePop} style={{ left: picked.x, top: picked.y }}
+        onMouseDown={(e) => e.preventDefault()} onMouseLeave={picked.file ? (e) => images.off(e.relatedTarget) : undefined}
+        onClick={() => { onQuote(picked.quote, picked.file); setPicked(null); if (!picked.file) window.getSelection()?.removeAllRanges(); }}>
         <QuoteIcon size={12} strokeWidth={2.2} />{t("web-main.chat.quote")}
       </button>
     ),
@@ -519,11 +554,9 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   for (const m of messages) {
     if (m.seq === divider) items.push({ key: "line", estimate: 20 });
-    // The first of a run of what other chats' agents wrote to it: the run's line (LettersLine), the message only open.
-    if (m.letters) items.push({ key: `l:${m.seq}`, estimate: 36 });
     // One waiting to come out of its avatar takes no room, not even the gap before it (the list measures it so): known,
-    // not guessed, so that nothing below it moves for a guess and back for the fact. A run folded is its line alone.
-    if (!m.letters || m.letters.open) items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
+    // not guessed, so that nothing below it moves for a guess and back for the fact.
+    items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
     for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   }
   if (chat.newer) items.push({ key: "newer", estimate: 30, place: false });
@@ -561,10 +594,10 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   usePlace(virtual, place, messages, short, leave);
   useHistoryFade(list, messages);
   // Without a chat there is nothing older (or newer) to load.
-  // Folded letters and edits can advance the loaded page without changing any visible message sequence.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
+  // Loaded as far as entries go, not messages: a page of what is not a message here (letters, edits) moves it too.
   useLoadNear(virtual, "top", !!chat.more, chat.firstEntry ?? chat.messages[0]?.seq, older);
-  useJumpTo(list, virtual, station, id, messages, chat.more, older, (seq) => (id === null ? Promise.resolve() : sending.around(id, seq)));
+  useJumpTo(list, virtual, station, id, messages, chat.more, older);
   const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
   useLoadNear(virtual, "bottom", short, chat.lastEntry ?? chat.messages.at(-1)?.seq, newer);
   useShowing(virtual, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
@@ -692,13 +725,12 @@ function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessa
 /**
  * A message asked to be shown (jumpTo.ts: a row's state line pressed): once it is in the list, scrolled to the top
  * (below what floats there, as the unread line) and flashed, after the list has been put where it opens (the unread
- * line, where it was left). Older than the window: older pages load until it is in; among what other chats' agents
- * wrote to it, folded, the core asked to show it (`chat.around` shows their run whole); not there at all, nothing.
+ * line, where it was left). Older than the window: older pages load until it is in; not there at all (a letter, which
+ * the chat does not show), nothing.
  */
-function useJumpTo(list: RefObject<HTMLDivElement | null>, virtual: VirtualList, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>, around: (seq: number) => Promise<unknown>) {
+function useJumpTo(list: RefObject<HTMLDivElement | null>, virtual: VirtualList, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>) {
   const seq = useJump(station, thread);
   const loading = useRef(false);
-  const asked = useRef<number | null>(null);
   useEffect(() => {
     if (seq === null || !messages.length || loading.current) return;
     const message = messages.find((m) => m.seq === seq);
@@ -706,10 +738,6 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, virtual: VirtualList,
       if (more && seq < messages[0]!.seq) {
         loading.current = true;
         void older().catch(() => jumped()).finally(() => { loading.current = false; });
-      } else if (asked.current !== seq && messages.some((m) => m.letters && !m.letters.open)) {
-        // Its run comes whole with the chat's next value (this effect again, finding it there).
-        asked.current = seq;
-        void around(seq).catch(() => jumped());
       } else jumped();
       return;
     }
@@ -1126,28 +1154,6 @@ function SystemNotice({ text, profile, install, report, time, ts, enter, caught,
 }
 
 /**
- * What other chats' agents wrote to this one, a run of it with nothing else said between (the core's `letters`, on its
- * first message): a pill across the chat as still.fail's notices are, saying which chat's agent wrote to which and how
- * many. Pressed, the run shows whole under it, or folds again (`chat.letters`).
- */
-function LettersLine({ message: m, enter, caught }: { message: ChatMessage; enter: true | undefined; caught: true | undefined }) {
-  const sending = useChatSend();
-  const act = useAct();
-  const letters = m.letters!;
-  const toggle = () => act(sending.letters(m.thread, m.seq, !letters.open), t(letters.open ? "web-main.chat.letters.close" : "web-main.chat.letters.open"));
-  return (
-    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-vk={`l:${m.seq}`} data-role="letters" data-enter={enter} data-caught={caught}>
-      <div className={css.msgSystemBox} role="button" tabIndex={0} aria-expanded={letters.open}
-        onClick={toggle} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
-        <div className={css.msgSystemLine}>
-          <span className={css.lettersWho}>{letters.line}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * Under the viewer's message that waits for a runtime the station does not have (core `blocked`), in place of its
  * waiting: how that stands, in red while nothing is under way, and installing it. The whole line is what installs it
  * (as a message not delivered is sent again from its line), so it is as big to press as it is wide. Once installed it
@@ -1429,6 +1435,9 @@ const revealed = new Set<string>();
  */
 function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
   const station = useStation();
+  const quoting = useContext(ImageQuote);
+  // Held to quote it: the tap the finger's lifting makes does not open it too.
+  const held = useRef(false);
   const image = isImage(file.name);
   const video = kindOf(file.name).kind === "video";
   const [videoFailed, setVideoFailed] = useState(false);
@@ -1478,7 +1487,19 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} data-send-image={sentFileKey(file)} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
+        <button ref={box} type="button" className={look.image} data-send-image={sentFileKey(file)} onClick={() => { if (held.current) held.current = false; else setOpen(true); }} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
+          // In a chat's list, one the station has can be quoted: a button over its corner as a mouse comes over it, or held.
+          {...(quoting && sessionKey !== null ? {
+            onPointerDown: () => { held.current = false; },
+            onMouseEnter: (e: React.MouseEvent<HTMLElement>) => quoting.over(file, e.currentTarget),
+            onMouseLeave: (e: React.MouseEvent<HTMLElement>) => quoting.off(e.relatedTarget),
+            onContextMenu: (e: React.MouseEvent<HTMLElement>) => {
+              if ((e.nativeEvent as Partial<PointerEvent>).pointerType !== "touch" && !matchMedia("(hover: none)").matches) return;
+              e.preventDefault();
+              held.current = true;
+              quoting.hold(file, e.currentTarget);
+            },
+          } : {})}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined} data-near={near || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
@@ -1496,6 +1517,13 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
       {preview}
     </>
   );
+}
+
+/** An image of a message quoted, waiting in the composer: a small picture of the station's (none: its likeness). */
+function QuotedThumb({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
+  const fetched = useFileShown(sessionKey, file, isImage(file.name), true);
+  const likeness = !fetched.url && file.thumbhash ? thumbhashUrl(file.thumbhash) : null;
+  return <span className={css.quoteThumb}>{(fetched.url ?? likeness) && <img src={fetched.url ?? likeness!} alt={file.name} />}</span>;
 }
 
 /**
@@ -1622,6 +1650,9 @@ export interface ComposerProps {
   placeholder?: string;
   /** While true (a new chat being made) nothing can be sent. */
   locked?: boolean;
+  /** Its station taken for down: what is written waits in the outbox until it is reached, and no file is taken in
+   * (files go up to the station first). */
+  offline?: boolean;
   /** Text above, toolbar below, even for one line (a new chat, whose toolbar holds choices). */
   roomy?: boolean;
   /** Whose draft it shows: changing it keeps what is typed for the one before and brings back the next one's. */
@@ -1642,7 +1673,7 @@ export function Composer(props: ComposerProps) {
 const LET_GO_MS = 300;
 
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = draft.focusQuote, onFocused = draft.quoteFocused, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = draft.focusQuote, onFocused = draft.quoteFocused, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, offline = false, roomy = false, draftKey }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1655,7 +1686,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   // Typing starts the session's runtime, so a cold start overlaps the writing.
   const warmed = useRef(0);
   const warm = () => {
-    if (locked || !sessionKey || Date.now() - warmed.current < 60_000) return;
+    if (locked || offline || !sessionKey || Date.now() - warmed.current < 60_000) return;
     warmed.current = Date.now();
     void api.warm(sessionKey).catch(() => {});
   };
@@ -1695,13 +1726,14 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   // Nothing focused, the box says which key brings the cursor back (its key changed here, or none).
   useKeymap();
   const hint = useSpaceHint(locked);
-  useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
+  const noFiles = locked || offline;
+  useShortcut("composer.file", noFiles ? null : () => { picker.current?.click(); });
   const ready = draft.ready && !locked;
   const submit = () => {
     if (ready) void send();
   };
   const multiline = roomy || focused || text !== "" || files.length > 0 || quotes.length > 0;
-  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder: hint ?? placeholder, className: css.composerText, layout: multiline, onType: warm, onSubmit: submit });
+  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, noFiles, placeholder: hint ?? placeholder, className: css.composerText, layout: multiline, onType: warm, onSubmit: submit });
   // Capsule ⇄ box, in one motion (morph.ts); laid out for another page (a new chat's roomy box ⇄ a chat's foot), the
   // dock moves it (dock.tsx).
   const box = useRef<HTMLFormElement>(null);
@@ -1724,18 +1756,18 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
           letGo.current = setTimeout(() => setFocused(false), LET_GO_MS);
         }}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
-        // Locked (its station offline), no file is taken in.
+        // Locked, or its station down, no file is taken in.
         // Over a chat's page the page shows where they go (ChatPage.tsx useChatDrop); the composer is not marked then.
-        onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !locked) { e.preventDefault(); if (pageOver === null) setDragging(true); } }}
+        onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !noFiles) { e.preventDefault(); if (pageOver === null) setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           // Dropped on a chat's page, the page takes it (ChatPage.tsx useChatDrop: its marks fly here).
           if (pageOver !== null) return;
           // A station's files (the chat's 文件 tab): named by their path there, until switched to files.
-          if (carriesDrive(e.dataTransfer)) { e.preventDefault(); setDragging(false); if (!locked) draft.addDropped(droppedOf(e.dataTransfer).map(droppedFrom)); return; }
+          if (carriesDrive(e.dataTransfer)) { e.preventDefault(); setDragging(false); if (!noFiles) draft.addDropped(droppedOf(e.dataTransfer).map(droppedFrom)); return; }
           if (e.dataTransfer.files.length) {
             e.preventDefault(); setDragging(false);
-            if (locked) return;
+            if (noFiles) return;
             // From Finder on a machine that is a station: named by their path there, as a station's files are.
             const named = droppedFromFinder(e.dataTransfer, here);
             if (named) draft.addDropped(named); else add(e.dataTransfer.files);
@@ -1744,7 +1776,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
         {field}
         <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-        <ComposerTools picker={picker} locked={locked} toolbar={toolbar} ready={ready} starting={draft.starting} />
+        <ComposerTools picker={picker} locked={noFiles} toolbar={toolbar} ready={ready} starting={draft.starting} />
       </form>
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
@@ -1804,8 +1836,10 @@ export function sendDraft(draft: Draft, to: ChatTo | null, ensureChat: (() => Pr
  * starts a line); with nothing typed, ↑ / ↓ go to the chat above or below. What a preview's marks offer the draft
  * `draftKey` comes in. Answers the box and the menu of chats (put over the composer), for the composer to place.
  */
-export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines, layout, enterSends = true, onType, onSubmit }: {
+export function useComposerText({ draft, input, draftKey, sessionKey, locked, noFiles = locked, placeholder, className, lines, layout, enterSends = true, onType, onSubmit }: {
   draft: Draft; input: RefObject<HTMLTextAreaElement | null>; draftKey: string | undefined; sessionKey: string | null; locked: boolean;
+  /** No file is taken in (pasted), though it may be written: its station down. Locked, none is. */
+  noFiles?: boolean;
   placeholder: string; className: string; lines?: number; layout?: unknown; enterSends?: boolean; onType(): void; onSubmit(): void;
 }): { menu: ReactNode; field: ReactNode } {
   const { text, setText, add } = draft;
@@ -1892,13 +1926,14 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     el.setSelectionRange(at, at);
   }, [text]);
   // A preview's marks beside the chat: their screenshot and a quote each, to say more about before sending.
-  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words, quote, dropped }) => {
+  useDraftInbox(locked ? undefined : draftKey, (offer) => {
+    const { files: offered, quotes: added, text: words, quote, dropped } = offer;
     if (words) setText(text.trim() ? `${text.trimEnd()}\n${words}` : words);
     if (offered.length) add(offered);
     if (dropped?.length) draft.addDropped(dropped);
     if (added.length) draft.addQuotes(added);
-    // A passage selected in the chat: its comment line takes the focus.
-    if (quote) draft.quote(quote);
+    // A passage selected in the chat (or an image of it): its comment line takes the focus.
+    if (quote) draft.quote(quote, offer.quotedFile);
     else input.current?.focus();
   });
   // Grow with the text up to its lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
@@ -1977,9 +2012,9 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
         onBlur={() => setReference(null)}
         onPaste={(e) => {
           if (draft.starting) return;
-          if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); return; }
+          if (e.clipboardData.files.length) { e.preventDefault(); if (!noFiles) add(e.clipboardData.files); return; }
           const pasted = e.clipboardData.getData("text/plain");
-          if (!locked && pasted.length >= PASTE_THRESHOLD) {
+          if (!noFiles && pasted.length >= PASTE_THRESHOLD) {
             e.preventDefault();
             add([makePastedFile(pasted)], pastedInfo(pasted));
             onType();
@@ -2036,10 +2071,12 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: 
         <div className={css.composerQuotes}>
           {quotes.map((q) => {
             const own = fileOf(q, files);
+            // An image of a message quoted is the station's already (none of this device's): a small picture of it.
+            const kept = own?.done && !own.preview ? own.done : undefined;
             return (
             <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
-              <QuoteCard quote={q} picture={own && <PendingFile file={own} />}
-                onRemove={() => { draft.unquote(q.id); if (own) draft.remove(own.id); }} comment={
+              <QuoteCard quote={q} picture={own && (kept?.owner ? <QuotedThumb sessionKey={kept.owner} file={kept} /> : <PendingFile file={own} />)}
+                onRemove={() => { draft.unquote(q.id); if (own && !quotes.some((o) => o !== q && fileOf(o, files) === own)) draft.remove(own.id); }} comment={
                 <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
                   className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder={t("web-main.quote.commentPlaceholder")} aria-label={t("web-main.quote.commentLabel", { author: q.author })}
                   onChange={(e) => draft.comment(q.id, e.target.value)}
@@ -2089,7 +2126,7 @@ function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Dr
       <div className={css.refInfoHead}>
         <span className={css.refInfoText}>
           <span className={css.refInfoName}>{f.name}</span>
-          <span className={css.refInfoPath} title={ref.path}><bdi>{ref.stationName} · {where}</bdi></span>
+          <span className={css.refInfoPath} title={ref.path}><bdi><StationNamedAt station={ref.station} name={ref.stationName} /> · {where}</bdi></span>
         </span>
         {(!ref.dir || zips) && (
           <Segmented className={css.refInfoMode} label={t("web-main.file.sendAs")} value={ref.mode} onChange={(mode) => draft.setMode(f.id, mode)}

@@ -69,30 +69,17 @@ fn logged(name : String, v : Json) -> String {
 }
 
 ///|
-/// People's pictures as the core gives them (`picture`): asked once each, kept as images.
-let pictures : Map[String, String] = {}
-
-///|
-fn picture(url : String) -> String {
-  match pictures.get(url) {
-    Some(key) => key
-    None => {
-      pictures[url] = ""
-      let params : Map[String, Json] = { "url": Json::string(url) }
-      @core.call_bytes("picture", params=Json::object(params), on_done=fn(r) {
-        match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            let key = "mem:picture/\{@ui.stable_hash(url)}/\{url.length()}"
-            @ui.add_image(key, bytes)
-            pictures[url] = key
-          }
-          _ => ()
-        }
-      })
-      ""
+/// Pictures by their address as the core gives them (`picture`): kept as images, one that could not be had asked
+/// again when it is put up anew (@sfapp.core_pictures).
+let picture : (String, Int) -> String = @sfapp.core_pictures(fn(url, done) {
+  let params : Map[String, Json] = { "url": Json::string(url) }
+  @core.call_bytes("picture", params=Json::object(params), on_done=fn(r) {
+    match r {
+      Ok((_, bytes)) => done(bytes)
+      Err(_) => done(None)
     }
-  }
-}
+  })
+})
 
 ///|
 /// Chats' images as their messages show them (`station.file` with `thumb`: the station's thumbnail where it keeps one),
@@ -129,6 +116,35 @@ fn chat_file(station : String, key : String, name : String) -> String {
 }
 
 ///|
+/// A video of a chat's still as its station makes it (`station.poster`), asked once: its key once here, "" while it
+/// comes, "!" when there is none (the station could not make one, or is from before posters).
+fn chat_poster(station : String, key : String, name : String) -> String {
+  let id = station + "\u{1}" + key + "\u{1}" + name + "\u{1}poster"
+  match chat_files.get(id) {
+    Some(k) => k
+    None => {
+      chat_files[id] = ""
+      let params : Map[String, Json] = {
+        "station": Json::string(station),
+        "key": Json::string(key),
+        "name": Json::string(name),
+      }
+      @core.call_bytes("station.poster", params=Json::object(params), on_done=fn(r) {
+        match r {
+          Ok((_, Some(bytes))) if bytes.length() > 0 => {
+            let k = "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
+            @ui.add_image(k, bytes)
+            chat_files[id] = k
+          }
+          _ => chat_files[id] = "!"
+        }
+      })
+      ""
+    }
+  }
+}
+
+///|
 /// MBUI_READONLY=1: nothing the reader does is told to the core (no read marks, no place kept, nothing sent, no draft
 /// kept, no file put up), for runs on a real account that must change nothing in it.
 let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
@@ -138,7 +154,7 @@ let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
 /// list's filter) and the faces' files it keeps for them. Anything else (sending, drafts kept, files put up, read marks, places, archiving…) is refused here,
 /// whatever page asks it.
 let read_only_calls : Array[String] = [
-  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part",
+  "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part", "station.poster",
   "picture", "memory.get", "prefs.set", "drive.read", "drive.folders", "drive.refresh", "fonts.fetch", "fonts.file",
   "fonts.keep", "fonts.preview",
 ]
@@ -269,6 +285,7 @@ let core_source : @sfapp.Source = {
   picture,
   fatal: fn() { @core.fatal() },
   file: chat_file,
+  poster: chat_poster,
   now: fn() { @ui.wall_ms() },
   leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
   read_only,
@@ -337,7 +354,7 @@ fn main {
     })
   }
   if core_linked() == 0 || !@sfcore.start() {
-    @sfapp.desktop_window()
+    @sfapp.host_setup()
     @ui.run("still.fail", fn(c) {
       @sf.begin(c) |> ignore
       c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
@@ -378,9 +395,10 @@ fn main {
   }
   // crash reports and the bar's timing, where the host has them (reports.mbt: Android)
   reports_start()
+  @sfapp.use_core_markdown(core_source)
   // the faces the app carries (code's JetBrains Mono, as Android's): before its first frame
   @sf.give_faces()
-  @sfapp.desktop_window()
+  @sfapp.host_setup()
   @ui.run("still.fail", fn(c) {
     // (what the core said since the last frame is handed to @core.receive as the frame begins, before this: sfcore.start)
     let accounts = @core.subscribe("accounts")

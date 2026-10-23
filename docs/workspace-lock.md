@@ -105,7 +105,9 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 
 - core：`lock`、`lockDraft` 两个 topic 和 `lock.*` 调用（`client/core-ts/src/views/lock.ts`），锁记录存在 workspace 的 `lock` 里；workspace 视图多了 `lock`、`lock_requests`，变了就重读。core 读到锁、发现这台设备不在里面（开启时没勾上，或之后才加的），就显示等待页，不等 station 拒绝；**不会自己提交申请**（2026-10-19 用户定：要让用户知道，并由要核对安全码的本人发起），只有用户在等待页点「发送批准请求」（`lock.request`）才发出。station 以 `lock_unconfirmed` 拒绝这台设备后，锁没变前不再连那台 station；锁一变（有人确认了）立刻重试。被安全模式拒绝时凭证本身没问题，重连不再每次向 cloud 领新凭证。
 - 桌面/网页：设置 › 安全（`web/src/cloud/Security.tsx`）；开启前核对页 `settings/security/open`；owner 在设置页顶上的一行提示（`lock.dismiss` 关掉，记在 prefs `lockNotice`）；等待确认的设备看到的整页。
-- 受信任设备上，面对面批准的新设备自己弹出来（`lockPrompts` 的 `pairing`，见「新设备」）：在哪个 workspace 都弹，写明申请访问哪几个 workspace，只显示码和「拒绝」（桌面对话框，手机网页和安卓底部面板），关掉就是拒绝；新设备那边输对码、或被拒绝，弹窗跟着关。
+- 等待页在首页的位置，顶上仍是首页的顶栏：设置，和 workspace 名称（点开切换 workspace）。手机上没有底栏，以前进了待批准的 workspace 就回不去（2026-10-23）。
+- 被安全模式拦下的 station（这台设备未获批 `lock_unconfirmed`，或 station 不接受这个 workspace 的成员 `lock_station`）不显示成离线：link 的 `cause` 是 `lock`，station 列表写「安全模式未放行」，station 页（`blocked`）和对话里写原因。
+- 受信任设备上，面对面批准的新设备自己弹出来（`lockPrompts` 的 `pairing`，见「新设备」）：在哪个 workspace 都弹，写明申请访问哪几个 workspace，只显示码和「拒绝」（桌面对话框，手机网页和安卓底部面板），关掉就是拒绝；新设备那边输对码、或被拒绝，弹窗跟着关。被拒绝（或手动关掉）的只是那一次请求（设备加它当时的码）：同一台新设备再发请求，弹窗照样弹（以前要重启 app，2026-10-23）。
 - 手机网页（`web/src/mobile/Security.tsx`）和安卓（`screens/Security.kt`）同一套：设置里「安全」一行写现状（等你确认的件数标红），确认设备用底部面板。
 - 网页版设备 30 天到期，快到期（5 天内）在「成员和设备」里标出、可续期（`lock.renew`）。
 

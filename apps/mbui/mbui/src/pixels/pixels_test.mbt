@@ -109,3 +109,26 @@ test "what of a picture is drawn, and the colour of its edge" {
   c.fill(0x336699FFL)
   assert_eq(@pixels.edge_colour(40, 40, c.pixels()), "#336699")
 }
+
+///|
+test "a ThumbHash drawn back as the reference does, and its proportions" {
+  // the size, the first two pixels and the one at (11, 16), as the npm package thumbhash's thumbHashToRGBA gives them
+  // for 1QcSHQRnh493V4dIh4eXh1h4kJUI
+  let hash = b"\xd5\x07\x12\x1d\x04\x67\x87\x8f\x77\x57\x87\x48\x87\x87\x97\x87\x58\x78\x90\x95\x08"
+  guard @pixels.thumbhash(hash) is Some((w, h, rgba)) else { fail("no picture") }
+  let first = []
+  for i in 0..<8 {
+    first.push(rgba[i].to_int())
+  }
+  let mid = []
+  for i in 0..<4 {
+    mid.push(rgba[(w * 16 + 11) * 4 + i].to_int())
+  }
+  inspect(
+    "\{w}x\{h} \{first} \{mid}",
+    content="23x32 [64, 77, 113, 255, 66, 79, 114, 255] [140, 109, 88, 255]",
+  )
+  // thumbHashToApproximateAspectRatio: 5 / 7
+  assert_eq(@pixels.thumbhash_ratio(hash), Some(5.0 / 7.0))
+  assert_eq(@pixels.thumbhash(b"\x01\x02"), None)
+}

@@ -51,7 +51,7 @@ render_code() {
     apps/mbui/mbui/src/ui/drawlist.mbt apps/mbui/mbui/src/ui/scene.mbt apps/mbui/mbui/src/ui/line.mbt \
     apps/mbui/mbui/src/ui/smooth.mbt apps/mbui/mbui/android/app/src/main/java apps/mbui/mbui/android/app/src/main/res \
     apps/mbui/mbui/android/app/src/main/AndroidManifest.xml apps/mbui/mbui/android/apk.json \
-    apps/mbui/mbui/android/apk.lock apps/mbui/mbui/scripts/apk.py apps/mbui/mbui/scripts/android.sh \
+    apps/mbui/mbui/android/apk.lock apps/mbui/mbui/tools/apk/main.mbt apps/mbui/mbui/scripts/android.sh \
     apps/mbui/mbui/scripts/render_android_hook.sh apps/mbui/scripts/android-ref.sh apps/mbui/scripts/android_ref.py \
     -type f | LC_ALL=C sort | xargs shasum -a 256) || die "what draws the pictures not read"
 }
@@ -185,6 +185,8 @@ case "$cmd" in
     [ "$have" = "$want" ] || die "the emulator's system is not the references': this one is $have, they were taken on $want (make them again: the refs job)"
     [ -n "${RENDER_APK:-}" ] && { $ADB install -r "$RENDER_APK" > /dev/null || die "mbui-render not installed"; }
     RID=dev.mbui.demo
+    render_uid=$($ADB shell pm list packages -U $RID | tr -d '\r' | sed -n "s/^package:$RID uid:\([0-9]*\)$/\1/p")
+    case "$render_uid" in ""|*[!0-9]*) die "mbui-render has no installed uid" ;; esac
     F=/data/user/0/$RID/files
     $ADB shell input keyevent KEYCODE_WAKEUP
     $ADB shell wm dismiss-keyguard
@@ -197,8 +199,8 @@ case "$cmd" in
       $ADB exec-in "run-as $RID sh -c 'cat > files/$n.dl'" < $O/dl/$n.dl
       $ADB logcat -c
       $ADB shell am start -n $RID/dev.mbui.MainActivity --es env "'MBUI_DL=$F/$n.dl;MBUI_DL_PNG=$F/$n.png'" > /dev/null
-      # the renderer's own line once the picture is written (or the app's end)
-      said=$($ADB logcat -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
+      # Only this renderer's completion or crash; a system app's crash says nothing about this picture.
+      said=$($ADB logcat --uid="$render_uid" -v brief -e 'mbui-render: |FATAL EXCEPTION|Fatal signal' -m 1 | grep -v '^-----')
       case "$said" in
         *"mbui-render: "*"instances"*) ;;
         *) echo "$said"; $ADB logcat -d -t 200 | tail -40; die "$n: not drawn" ;;
@@ -242,10 +244,19 @@ case "$cmd" in
       fi
     fi
     # the Android host's text the Tester lacks, recorded (TEXT=1: the job found it lacking), then kept in the PR
+    # (nothing compared after it: the run fails for the text to be committed, and the next compares over it; the job
+    # has 10 minutes, and recording, the draw lists again, drawing and comparing them took more: 39773993975)
     if [ "${TEXT:-}" = 1 ]; then
-      bash "$0" text || exit 1
+      # (the screens with no section of their own yet, where there are such: a new screen's alone, not every screen's
+      # again; recording chat-cards alone took 3 minutes, 39854585955)
+      lacking=$(for n in $names; do grep -q "^# $n " "$A/screens/text-android.textrec" || echo $n; done)
+      # (and a screen whose section lacks what the Tester asked of it, as the draw lists said: one with words set anew,
+      # its title's spacing; the first of them, the test stopping there, the next in the run after)
+      [ -n "$lacking" ] || lacking=$(grep -a -oE "FAILED: [a-z0-9-]+: the Android text lacks" $O/dl/print.txt 2>/dev/null \
+        | sed 's/^FAILED: //; s/: the Android text lacks$//' | sort -u)
+      bash "$0" text ${lacking:-$names} || exit 1
       echo "android-ref: the Android text recorded anew: commit this run's screens/text-android.textrec (its artifact) in the PR"
-      fail=1
+      exit 1
     fi
     # (the draw lists again where the text was recorded anew or Android's system changed with its pictures)
     { [ "${TEXT:-}" = 1 ] || [ "${REFS:-}" = 1 ] || [ ! -f $O/dl/print.txt ]; } && { bash "$0" lists || exit 1; }

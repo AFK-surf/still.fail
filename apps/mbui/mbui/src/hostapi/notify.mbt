@@ -6,10 +6,10 @@
 //
 // Android: NotificationManager (dev.mbui.Notices: the channel made as a notification is shown, POST_NOTIFICATIONS
 // asked for from the activity, a tap a PendingIntent back to MainActivity). A push service is the app's own (its Java
-// linking Firebase Cloud Messaging hands dev.mbui.Notices the token and each push delivered: still.fail's Push.java):
-// `push_token` and `push_next` give what it handed, none where the app links none. macOS: UNUserNotificationCenter (mac_app.m) when the app is a bundle (its .app); a bare
-// executable has no bundle for it, and keeps what would be shown, said on the log (`NOTICE …`), as iOS, Windows and the
-// page do (no way in there yet). A scripted run taps one by its words everywhere (@hostapi.drive 6, src/ui/drive.mbt
+// linking Firebase Cloud Messaging hands dev.mbui.Notices the token: still.fail's Push.java, which shows a push itself,
+// as the app's frames stop while it is behind): `push_token` gives what it handed, none where the app links none. macOS: UNUserNotificationCenter (mac_app.m) when the app is a bundle (its .app); a bare
+// executable has no bundle for it, and keeps what would be shown, said on the log (`NOTICE …`), as Windows and the
+// page do (no way in there yet). iOS: UNUserNotificationCenter (ios_app.m), no pushes. A scripted run taps one by its words everywhere (@hostapi.drive 6, src/ui/drive.mbt
 // `notice`), as on Android.
 
 ///|
@@ -71,10 +71,4 @@ pub fn notice_opened() -> String {
 /// This device's push token for the app ("" none: no push service in this build).
 pub fn push_token() -> String {
   nt_text(1)
-}
-
-///|
-/// A push delivered while the app runs, once: its data as JSON (an object of strings), "" none.
-pub fn push_next() -> String {
-  nt_text(2)
 }

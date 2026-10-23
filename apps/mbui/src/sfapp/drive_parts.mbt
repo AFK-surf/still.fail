@@ -158,6 +158,7 @@ fn dv_reset() -> Unit {
   dv_reads.clear()
   fix_folders.clear()
   fix_places.clear()
+  fix_reads.clear()
   draft_refs.clear()
   sfs.open = false
   sfs.closing = false
@@ -226,8 +227,8 @@ fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit)
 
 ///|
 /// A round button in a bar (Parts.kt NavButton), 34 across, the icon alone (18 unless said).
-fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0) -> Bool {
-  nav_button(c, icon, size, key~)
+fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String) -> Bool {
+  nav_button(c, icon, size, key~, said?)
 }
 
 ///|
@@ -289,13 +290,17 @@ fn dv_button(
     padx=16.0,
     gap=8.0,
     align=ACenter,
-    bg=if on && c.pressed(id) { @sf.mix(ground, 0.85, t.p.bg) } else { ground },
+    bg=ground,
     id=if on { id } else { 0 },
     fn() {
       if busy {
         @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
       }
       c.text(label, size=14.0, weight=600, color=ink, wrap=false) |> ignore
+      // Controls.kt Button: clickable over its capsule
+      if on {
+        @motion.ripple(c, id, 19.0)
+      }
     },
   )
   |> ignore
@@ -329,7 +334,6 @@ fn dv_pick_row(
       pady=12.0,
       gap=12.0,
       align=ACenter,
-      bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id~,
       fn() {
         if icon != "" {
@@ -351,6 +355,8 @@ fn dv_pick_row(
         if checked {
           @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
         }
+        // Controls.kt PickRow: clip(Smooth(LIST_ROW_CORNER)).clickable
+        @motion.ripple(c, id, @sf.row_corner)
       },
     )
     |> ignore
@@ -360,36 +366,9 @@ fn dv_pick_row(
 }
 
 ///|
-/// A line to type in, on a soft frame (Controls.kt Field): 12 corners, the card's ground, a line round it.
+/// A line to type in (Controls.kt Field): mbui's field in its look (@sf.field_look), its words 15 on 21.
 fn dv_field(c : @ui.Ctx, key : String, placeholder : String, field : @ui.Field) -> String {
-  let t = @sf.theme()
-  let mut words = ""
-  c.box(
-    w=Fill(1.0),
-    radius=12.0,
-    bg=t.p.card,
-    border=1.0,
-    border_color=t.p.line,
-    padx=12.0,
-    pady=10.0,
-    fn() {
-      let res = c.editor(
-        key,
-        placeholder~,
-        font_size=15.0,
-        line=21.0,
-        max_lines=1,
-        plain=true,
-        color=t.p.text,
-        placeholder_color=t.p.subtle,
-        caret_color=t.p.accent,
-        field~,
-      )
-      words = res.text
-    },
-  )
-  |> ignore
-  words
+  @kit.text_field(c, key, placeholder~, size=15.0, line=21.0, look=@sf.field_look, field~).text
 }
 
 // ── sheets ───────────────────────────────────────────────────────────────
@@ -489,20 +468,21 @@ fn dv_card_row(
           |> ignore
         }
       }
-      if id != 0 && c.pressed(id) {
-        c.layer(fn() {
-          c.box(
-            w=Fill(1.0),
-            h=Fill(1.0),
-            radius=if first && last { 16.0 } else { 0.0 },
-            bg=@sf.alpha(t.p.text, 0.05),
-            fn() {  },
+      c.box(w=Fill(1.0), id~, fn() {
+        body()
+        // DriveScreen.kt cardRow: clickable inside the card's padding (LIST_PAD), clip(Smooth(LIST_ROW_CORNER))
+        if id != 0 {
+          @motion.ripple(
+            c,
+            id,
+            @sf.row_corner,
+            out_x=-@sf.list_pad,
+            out_top=if first { -@sf.list_pad } else { 0.0 },
+            out_bottom=if last { -@sf.list_pad } else { 0.0 },
           )
-          |> ignore
-        })
-        |> ignore
-      }
-      c.box(w=Fill(1.0), id~, body) |> ignore
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -519,7 +499,7 @@ fn dv_held(c : @ui.Ctx, id : Int) -> Bool {
     dv.held_done = false
   }
   // (`after` asks for the frame it acts on)
-  if @kit.after(c, "dv-held/\{id}", pressed && dv.held == id && !dv.held_done && !cui.moved, dv_hold_ms) {
+  if @kit.after(c, "dv-held/\{id}", pressed && dv.held == id && !dv.held_done && !c.press().moved, dv_hold_ms) {
     dv.held_done = true
     return true
   }

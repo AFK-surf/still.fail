@@ -219,4 +219,5 @@ class ScreensRefTest {
     @Test fun chatCards() = ref("chat-cards")
     @Test fun history() = ref("history")
     @Test fun settings() = ref("settings")
+    @Test fun home() = ref("home")
 }

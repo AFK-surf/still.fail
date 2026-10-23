@@ -9,7 +9,7 @@
 ///|
 /// A file played, kept while its page is in the stack.
 priv struct Playing {
-  player : @player.Player
+  player : @kit.Media
   mut opened : Bool
   mut subtitle_asked : Bool
   /// the places kept (each next one play_keep_ms after it)
@@ -34,7 +34,7 @@ fn playing_for(key : String) -> Playing {
     Some(p) => p
     None => {
       let p : Playing = {
-        player: @player.Player::new(key="drive-play"),
+        player: @player.player(key="drive-play"),
         opened: false,
         subtitle_asked: false,
         keeps: 0,
@@ -106,6 +106,12 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
             let p = play_params(at, at.path)
             p["offset"] = Json::number(offset)
             p["length"] = Json::number(length.to_double())
+            // kept as played, as the folder lists it (Player.kt: DriveCache.played by its mtime and size); one not in
+            // it played without being kept
+            match entry {
+              Some(e) => drive_keep(p, "played", e.mtime, e.size)
+              None => ()
+            }
             (src.read_bytes)("drive.read", Json::object(p), fn(r) {
               match r {
                 Ok((answer_json, bytes)) => {
@@ -141,10 +147,11 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     match @player.pick_subtitle(name, names) {
       Some(sub) => {
         pl.player.set_subtitle(true, [])
-        drive_read_all(src, at.station, at.root.unwrap_or(""), dv_join(dir, sub), subtitle_limit, fn(r) {
+        let listed = entries.iter().find_first(fn(e) { e.name == sub && !e.dir }).map(fn(e) { (e.mtime, e.size) })
+        drive_read_all(src, at.station, at.root.unwrap_or(""), dv_join(dir, sub), subtitle_limit, listed~, fn(r) {
           match r {
             Ok(bytes) => {
-              let cues = @player.parse_subtitles(sub, bytes)
+              let cues = @codec.parse_subtitles(sub, bytes)
               @ui.log("player: subtitle \{sub}: \{cues.length()} lines")
               pl.player.set_subtitle(true, cues)
             }
@@ -176,7 +183,7 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     .map(fn(e) { e.name }),
     fn(_) { true },
   )
-  pl.player.view(c, list~, top=status_top(), foot=nav_foot(), fn() { app.nav.pop() |> ignore }, fn(other) {
+  @player.view(pl.player, c, list~, top=status_top(), foot=nav_foot(), fn() { app.nav.pop() |> ignore }, fn(other) {
     app.nav.replace(DrivePlay({ station: at.station, root: at.root, path: dv_join(dir, other) }))
   })
 }
@@ -246,13 +253,15 @@ fn page_dark(src : Source) -> Bool? {
 }
 
 ///|
-/// A file of a drive read whole (`drive.read`, 4 MB a part), `limit` bytes at most.
+/// A file of a drive read whole (`drive.read`, 4 MB a part), `limit` bytes at most; kept as the player keeps what it
+/// plays (Player.kt reads a subtitle through the same cache), as its folder lists it (`listed`: its mtime, its size).
 fn drive_read_all(
   src : Source,
   station : String,
   root : String,
   path : String,
   limit : Int,
+  listed~ : (Double, Double)?,
   done : (Result[Bytes, Json]) -> Unit,
 ) -> Unit {
   let parts : Array[Bytes] = []
@@ -265,6 +274,10 @@ fn drive_read_all(
       "path": Json::string(path),
       "offset": Json::number(got.val.to_double()),
       "length": Json::number(want.to_double()),
+    }
+    match listed {
+      Some((mtime, size)) => drive_keep(p, "played", mtime, size)
+      None => ()
     }
     (src.read_bytes)("drive.read", Json::object(p), fn(r) {
       match r {

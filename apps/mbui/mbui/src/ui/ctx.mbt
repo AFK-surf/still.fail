@@ -101,6 +101,19 @@ struct EditorState {
   mut handle_on : Bool
   mut handle_x : Double
   mut handle_y : Double
+  /// Android's: words picked by a finger (a long press, a double tap, all selected from the menu): the selection's two
+  /// handles shown, and where their tips were drawn last (`sel_on` false: not drawn); the word a long press picked
+  /// first, which sliding on widens from
+  mut sel_handles : Bool
+  mut sel_on : Bool
+  mut sel_ax : Double
+  mut sel_ay : Double
+  mut sel_bx : Double
+  mut sel_by : Double
+  mut word_a : Int
+  mut word_b : Int
+  /// Android's: the system's floating text menu asked for over its selection (or its caret)
+  mut menu : Bool
   /// the composing region the input method said with the field's state it sends next (on_text kinds 6 and 5,
   /// Android's): -1 none
   mut comp_a : Int
@@ -162,6 +175,8 @@ pub struct Ctx {
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int
+  /// the system's size of words this frame (font_scale): every word's size and line times it, as Compose's sp
+  mut font_scale : Double
   /// how many times a frame has been built (frame_body's passes, over every frame): what is said of a build, said
   /// again by the next (motion's keyed nodes, by node: another pass's nodes are other nodes)
   mut build_no : Int
@@ -216,6 +231,12 @@ pub struct Ctx {
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
   mut held_told : Double
+  /// the press as frames see it (Ctx::press, press.mbt): as the frame it was last worked out in saw it, whether a
+  /// frame saw it down, when one first did
+  mut press_seen : Press
+  mut press_seen_frame : Int
+  mut press_was_down : Bool
+  mut press_seen_at : Double
   /// a tap this frame (a press let go without dragging, not taken by the app: Ctx::tapped_anywhere), and the press
   /// the app took (Ctx::take_press)
   mut tapped : (Double, Double)?
@@ -231,6 +252,14 @@ pub struct Ctx {
   mut handle_drag : Int
   /// Android's: the field a finger came down on, which a tap gives the focus as it lifts (0 none)
   mut editor_tap : Int
+  /// which handle `handle_drag` is: 1 the caret's, 2 the selection's start, 3 its end
+  mut handle_which : Int
+  /// Android's: the field whose words a long press picked, while that finger is still down (sliding widens them)
+  mut word_drag : Int
+  /// the last tap on a field as it lifted (its id, when, where): a second soon after picks the word there
+  mut last_tap : (Int, Double, Double, Double)
+  /// what the host was last told of the floating text menu (text_menu)
+  mut menu_sig : String
   mut handle_dy : Double
   // persistent widget state
   lists : Map[Int, ListState]
@@ -281,6 +310,8 @@ pub struct Ctx {
   // the page being built (a page of a Nav, by its serial; 0 none), and the
   // ids of the state each page's widgets made, forgotten with the page
   mut owner : Int
+  // the time on top of the page being built (nav.mbt Ctx::page_stint)
+  mut stint : Int
   owned : Map[Int, Array[Int]]
   // back: where it goes this frame (the Nav drawn that can go back) and the
   // node it is drawn in, as the last frame had them; whether the host was
@@ -315,6 +346,8 @@ pub struct Ctx {
   sem_hidden : Array[(Int, Int)]
   asked_actions : Array[(Int, Action)]
   actions : Array[(Int, Action)]
+  // what the system's accessibility was last told the widgets are (a11y.mbt; "" nothing yet, or it is off)
+  mut a11y_sent : String
   // the keyboard's focus beyond a field's (focus.mbt): whether it shows (it came by the keyboard), what had it as the
   // frame started; what can take it, as this frame builds it and as the last one did; roving groups' state, and the
   // group being built
@@ -373,6 +406,7 @@ fn Ctx::new() -> Ctx {
     dt: 16.0,
     last_now: -1.0,
     frame_no: 0,
+    font_scale: 1.0,
     build_no: 0,
     sideways_depth: 0,
     epoch: 0,
@@ -408,6 +442,10 @@ fn Ctx::new() -> Ctx {
     press_late: false,
     pointer_t: 0.0,
     held_told: -1.0,
+    press_seen: no_press,
+    press_seen_frame: -1,
+    press_was_down: false,
+    press_seen_at: -1.0,
     tapped: None,
     taken_at: -1.0,
     press_y: 0.0,
@@ -419,6 +457,10 @@ fn Ctx::new() -> Ctx {
     editor_drag: false,
     handle_drag: 0,
     editor_tap: 0,
+    handle_which: 0,
+    word_drag: 0,
+    last_tap: (0, -1.0e9, 0.0, 0.0),
+    menu_sig: "",
     handle_dy: 0.0,
     lists: Map::new(),
     editors: Map::new(),
@@ -448,6 +490,7 @@ fn Ctx::new() -> Ctx {
     covers: Map::new(),
     cover_asks: [],
     owner: 0,
+    stint: 0,
     owned: Map::new(),
     back: None,
     back_node: -1,
@@ -471,6 +514,7 @@ fn Ctx::new() -> Ctx {
     sem_hidden: [],
     asked_actions: [],
     actions: [],
+    a11y_sent: "",
     focus_visible: false,
     focus_roved: false,
     focus_before: 0,
@@ -599,7 +643,9 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// `style` (style.mbt) says how it looks, its state blocks picked by its own state: pressed, hovered, focused by `id`
 /// (as Ctx::pressed, hovered, focus_shown read them), `selected` and `disabled` as said, dark and narrow by the theme
 /// (Ctx::set_theme). What is said here besides (`pad=`, `bg=`…) wins over the style's same property; what neither
-/// says is as without either (no padding, no ground). A padding below 0 is not said (Ctx::row passes -1).
+/// says is as without either (no padding, no ground). A padding below 0 is not said (Ctx::row passes -1). With an
+/// `id` it takes the presses on its room (the innermost box with an id under the finger does); `taps` false: the id
+/// only names it (to measure it, Ctx::laid_size; to move it by a look), what holds it taking the presses there.
 pub fn Ctx::box(
   self : Ctx,
   style? : Style,
@@ -645,6 +691,7 @@ pub fn Ctx::box(
   line_gap? : Double = -1.0,
   label? : String = "",
   id? : Int = 0,
+  taps? : Bool = true,
   body : () -> Unit,
 ) -> Int {
   let i = self.alloc_part(kind_box, false, false)
@@ -777,7 +824,9 @@ pub fn Ctx::box(
   n.notch_f = notch_fillet
   if id != 0 {
     n.id = id
-    n.hit = true
+    // (`taps` false: an id only to be measured or moved by (laid_size, a look): what is pressed in it is what holds
+    // it, not it, which would take every press on its room that nothing in it takes)
+    n.hit = taps
   }
   self.with_parent(i, body)
   i
@@ -932,15 +981,16 @@ pub fn Ctx::text(
   let n = self.nodes[i]
   n.center = first(center, st.center).unwrap_or(false)
   n.text = s
-  n.font_size = first(size, s_size).unwrap_or(15.0)
-  n.line_h = first(line, s_line).unwrap_or(self.theme.text_line * n.font_size)
+  // (sizes as the original's sp: the system's size of words applied, fontscale.mbt)
+  n.font_size = self.sp(first(size, s_size).unwrap_or(15.0))
+  n.line_h = first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * n.font_size)
   n.line_trim = trim
   n.weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   n.color = first(color, opt_color(self.theme, st.color)).unwrap_or(self.theme.fg)
   n.wrap = first(wrap, st.wrap).unwrap_or(true)
   n.w = first(w, opt_size(st.w)).unwrap_or(Auto)
   n.spacing = match (tracking, st.tracking) {
-    (Some(v), _) => v
+    (Some(v), _) => self.sp(v)
     (None, Some(t)) => t.px(n.font_size)
     (None, None) => 0.0
   }
@@ -1000,8 +1050,9 @@ let no_text_patch : TextPatch = text_patch()
 
 ///|
 pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
-  // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame)
-  self.clicked.contains(id)
+  // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame; the Activate
+  // a screen reader asks of it is one: semantics.mbt)
+  self.clicked.contains(id) || (id != 0 && self.action_asked(id, Activate))
 }
 
 ///|

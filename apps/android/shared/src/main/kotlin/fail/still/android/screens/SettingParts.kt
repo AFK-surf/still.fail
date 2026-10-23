@@ -48,6 +48,7 @@ import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
 import fail.still.android.ui.Card
 import fail.still.android.ui.IconIn
+import androidx.compose.ui.graphics.vector.ImageVector
 import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
@@ -247,10 +248,14 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
 import fail.still.android.data.Auth
 
-/** A row that opens a page: its name, how things stand (`bad` in red; `dot`, a red dot before it), a chevron. */
+/**
+ * A row that opens a page: its icon (settings' rows: what each is at a glance), its name, how things stand (`bad` in
+ * red; `dot`, a red dot before it), a chevron.
+ */
 @Composable
-fun GoRow(title: String, value: String? = null, bad: Boolean = false, dot: Boolean = false, lead: (@Composable RowScope.() -> Unit)? = null, onClick: () -> Unit) {
+fun GoRow(title: String, value: String? = null, bad: Boolean = false, dot: Boolean = false, icon: ImageVector? = null, lead: (@Composable RowScope.() -> Unit)? = null, onClick: () -> Unit) {
     ListRow(onClick = onClick) {
+        if (icon != null) RowIcon(icon)
         lead?.invoke(this)
         Text(title, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (value != null) Row(Modifier.widthIn(max = 220.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -260,6 +265,13 @@ fun GoRow(title: String, value: String? = null, bad: Boolean = false, dot: Boole
         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
     }
 }
+
+/** A settings row's icon, before its name: the line art in the muted ink, as the bar's places are drawn. */
+@Composable
+fun RowIcon(icon: ImageVector) = IconIn(icon, ROW_ICON, C.muted)
+
+/** A settings row's icon's size. */
+val ROW_ICON = 22.dp
 
 /** A page's note under its title, in a line or two. */
 @Composable

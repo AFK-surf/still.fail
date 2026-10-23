@@ -37,18 +37,38 @@ import javax.crypto.spec.GCMParameterSpec;
  */
 final class CoreHost {
     // The device as the core names it to the people who approve it (sfcore's `client.device`, as still.fail's Android
-    // app tells it: maker and model), in the environment before the first core starts.
+    // app tells it: maker and model), and its language (the locale's tag: the core's `lang` when none is chosen, the
+    // app's words' until the core says: @sf.lang; a scripted run's own kept, e2e/android-flow.sh), in the environment
+    // before the first core starts.
     static {
         try {
             Os.setenv("MBUI_DEVICE_MODEL", android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL, true);
+            Os.setenv("MBUI_LOCALE", java.util.Locale.getDefault().toLanguageTag(), false);
         } catch (Exception e) {
             Host.log("device model: " + e);
         }
+        // (the app's library, src/host/android_core.c in it: loaded already where the app runs, not where a push
+        // started the process)
+        System.loadLibrary("mbui");
     }
+
+    /**
+     * A push's core (Push.Service, on FCM's thread; android_core.c): the one running, else one started with no app's
+     * client yet, which the app takes as its own if it starts meanwhile. True when one runs.
+     */
+    static native boolean startAlone(String cloud, boolean beta);
+
+    /** The push handled: the core startAlone started stopped, unless the app has taken it. */
+    static native void stopAlone();
+
+    /** Whether a core runs in this process. */
+    static native boolean running();
 
     /** Off the core's thread: the Keystore takes its time. */
     private static final ExecutorService calls = Executors.newSingleThreadExecutor();
     private static final ExecutorService listenCalls = Executors.newSingleThreadExecutor();
+    /** A picked file's parts as they go up: a thread of their own (reading a video through takes a while). */
+    private static final ExecutorService pickedCalls = Executors.newSingleThreadExecutor();
 
     private final String dataDir;
     /** The engine's handle once its start returned (a call can come before); 0 until then. */
@@ -81,6 +101,34 @@ final class CoreHost {
     }
 
     void onApp(long id, String op, byte[] json, byte[] bytes) {
+        if (op.startsWith("picked.")) {
+            // a file picked too big to be read whole (mbui's Picks.Held), read a part at a time as it goes up
+            // (`composer.add` with `blob: {hostFile}`; still.fail's Android app's PickedFiles.kt)
+            pickedCalls.execute(() -> {
+                try {
+                    JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
+                    int file = a.getInt("file");
+                    switch (op) {
+                        case "picked.read":
+                            answer(id, "{}", null, Picks.read(file, a.getLong("start"), a.getLong("end")));
+                            break;
+                        case "picked.hash":
+                            answer(id, "{\"sha256\":\"" + Picks.hash(file) + "\"}", null, null);
+                            break;
+                        case "picked.release":
+                            Picks.release(file);
+                            answer(id, "{}", null, null);
+                            break;
+                        default:
+                            answer(id, null, "unsupported", null);
+                    }
+                } catch (Throwable e) {
+                    if (tracing()) Host.log("core app call " + op + " -> error " + errorText(e));
+                    answer(id, null, op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), null);
+                }
+            });
+            return;
+        }
         if (op.startsWith("listen.")) {
             // A thread of their own, not the Keystore's: none of them waits (a listen.next is answered as a request
             // comes, from the listener's thread).
@@ -307,7 +355,14 @@ final class CoreHost {
         File file = new File(new File(dataDir, "secure"), hex(key.getBytes(StandardCharsets.UTF_8)));
         switch (op) {
             case "secure.get": {
-                if (!file.exists()) return new Answer("{\"none\":true}", null);
+                if (!file.exists()) {
+                    // kept by still.fail's Android app before this one took its place (its signing key of the
+                    // workspace's lock): opened with its key, kept again as this app keeps it
+                    byte[] before = formerDevice(key);
+                    if (before == null) return new Answer("{\"none\":true}", null);
+                    secure("secure.set", a, before);
+                    return new Answer("{}", before);
+                }
                 byte[] sealed = Files.readAllBytes(file.toPath());
                 Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
                 c.init(Cipher.DECRYPT_MODE, sealingKey(), new GCMParameterSpec(128, sealed, 0, 12));
@@ -329,6 +384,7 @@ final class CoreHost {
             case "secure.delete":
                 file.delete();
                 new File(new File(dataDir, "secure-user"), hex(key.getBytes(StandardCharsets.UTF_8))).delete();
+                former(key).delete();
                 return new Answer("{}", null);
             default:
                 throw new Unsupported();
@@ -356,7 +412,15 @@ final class CoreHost {
         File file = new File(new File(dataDir, "secure-user"), hex(key.getBytes(StandardCharsets.UTF_8)));
         switch (op) {
             case "secure.get": {
-                if (!file.exists()) return new Answer("{\"none\":true}", null);
+                // one kept by still.fail's Android app before this one took its place: the same file's form, sealed
+                // to its own key for the person (read as it is: opening it takes the person anyway)
+                String alias = PERSON;
+                if (!file.exists()) {
+                    File before = former(key);
+                    if (!before.exists()) return new Answer("{\"none\":true}", null);
+                    file = before;
+                    alias = FORMER_PERSON;
+                }
                 byte[] blob = Files.readAllBytes(file.toPath());
                 if (blob.length <= 2 || blob[0] != VERSION || blob[1] != 1) throw new IllegalArgumentException(key + ": not a sealed value");
                 if (!locked()) throw new SecureException("no_device_lock");
@@ -366,7 +430,7 @@ final class CoreHost {
                 byte[] iv = new byte[12];
                 rest.get(iv);
                 KeyStore ks = keystore();
-                if (!(ks.getKey(PERSON, null) instanceof java.security.PrivateKey secret))
+                if (!(ks.getKey(alias, null) instanceof java.security.PrivateKey secret))
                     throw new android.security.keystore.KeyPermanentlyInvalidatedException("no key for what was sealed");
                 Cipher unwrap = Cipher.getInstance("RSA/ECB/OAEPPadding");
                 byte[] opened;
@@ -417,10 +481,56 @@ final class CoreHost {
             }
             case "secure.delete":
                 file.delete();
+                former(key).delete();
                 return new Answer("{}", null);
             default:
                 throw new Unsupported();
         }
+    }
+
+    // ── what still.fail's Android app kept, this app having taken its place (the same package, so its files and its
+    // Keystore's keys): its sealed values (apps/android core SecureStore.kt), each a file of <files>/stillfail-sealed
+    // named by its key (letters, digits, - and _ as they are, the rest %XX), a version byte (1), `user`, then for
+    // `user: false` the IV (12) and AES-GCM's output under its key stillfail-sealed-device, its associated data
+    // naming the key and `user`; for `user: true` this app's own form, under stillfail-sealed-person.
+
+    private static final String FORMER_DEVICE = "stillfail-sealed-device";
+    private static final String FORMER_PERSON = "stillfail-sealed-person";
+
+    /** Where still.fail's Android app kept `key`'s value (SecureStore.kt fileName). */
+    static File former(String key) {
+        StringBuilder name = new StringBuilder();
+        for (byte b : key.getBytes(StandardCharsets.UTF_8)) {
+            char c = (char) (b & 0xff);
+            if ((c < 128 && Character.isLetterOrDigit(c)) || c == '-' || c == '_') name.append(c);
+            else name.append(String.format("%%%02X", b & 0xff));
+        }
+        return new File(new File(context().getFilesDir(), "stillfail-sealed"), name.toString());
+    }
+
+    /** still.fail's Android app's key for what it kept without asking (made here only by secureTest, where none is). */
+    private static SecretKey formerDeviceKey() throws Exception {
+        if (keystore().getKey(FORMER_DEVICE, null) instanceof SecretKey k) return k;
+        KeyGenerator g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        g.init(new KeyGenParameterSpec.Builder(FORMER_DEVICE, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build());
+        return g.generateKey();
+    }
+
+    /** A value still.fail's Android app kept without asking the person (`user: false`), opened; null where none is. */
+    private static byte[] formerDevice(String key) throws Exception {
+        File file = former(key);
+        if (!file.exists()) return null;
+        byte[] blob = Files.readAllBytes(file.toPath());
+        if (blob.length < 2 + 12 + 16 || blob[0] != VERSION || blob[1] != 0) return null;
+        if (!(keystore().getKey(FORMER_DEVICE, null) instanceof SecretKey k)) return null;
+        Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+        c.init(Cipher.DECRYPT_MODE, k, new GCMParameterSpec(128, blob, 2, 12));
+        c.updateAAD(("stillfail-sealed/1\u0000" + key + "\u00000").getBytes(StandardCharsets.UTF_8));
+        return c.doFinal(blob, 14, blob.length - 14);
     }
 
     private static boolean locked() {
@@ -549,9 +659,9 @@ final class CoreHost {
         return got[0] instanceof android.hardware.biometrics.BiometricPrompt.CryptoObject c ? c : crypto;
     }
 
-    /** The app's context, from the activity (the core runs only beside it). */
+    /** The app's context (a push's core runs with no activity). */
     private static android.content.Context context() {
-        return Host.activity.getApplicationContext();
+        return StillfailApp.app;
     }
 
     /**
@@ -587,6 +697,28 @@ final class CoreHost {
                 boolean none = "{\"none\":true}".equals(gone.json) && gone.bytes == null;
                 ok &= none;
                 Host.log("SECURE_TEST secure.get after delete " + gone.json);
+                // one kept as still.fail's Android app kept it (SecureStore.kt set, user: false): read as it was, kept
+                // again as this app keeps it, the former file gone with secure.delete
+                String fkey = "mbui.secure-test.former";
+                String fargs = "{\"key\":" + JSONObject.quote(fkey) + "}";
+                File ffile = former(fkey);
+                ffile.getParentFile().mkdirs();
+                Cipher fc = Cipher.getInstance("AES/GCM/NoPadding");
+                fc.init(Cipher.ENCRYPT_MODE, formerDeviceKey());
+                fc.updateAAD(("stillfail-sealed/1\u0000" + fkey + "\u00000").getBytes(StandardCharsets.UTF_8));
+                ByteArrayOutputStream fout = new ByteArrayOutputStream();
+                fout.write(new byte[] {VERSION, 0});
+                fout.write(fc.getIV());
+                fout.write(fc.doFinal(value));
+                keep(ffile, fout.toByteArray());
+                Answer taken = h.secure("secure.get", new JSONObject(fargs), null);
+                boolean same2 = taken.bytes != null && java.util.Arrays.equals(taken.bytes, value);
+                File now = new File(new File(dir, "secure"), hex(fkey.getBytes(StandardCharsets.UTF_8)));
+                ok &= same2 && now.exists();
+                Host.log("SECURE_TEST former secure.get " + (same2 ? "the same" : "NOT the same") + ", " + (now.exists() ? "kept again" : "NOT kept again"));
+                h.secure("secure.delete", new JSONObject(fargs), null);
+                ok &= !ffile.exists() && !now.exists();
+                Host.log("SECURE_TEST former secure.delete " + (!ffile.exists() && !now.exists() ? "both gone" : "NOT gone"));
                 Host.log("SECURE_TEST " + (ok ? "ok" : "FAILED") + " in " + (System.nanoTime() - t0) / 1_000_000 + " ms (Android Keystore, AES-GCM)");
             } catch (Throwable e) {
                 Host.log("SECURE_TEST FAILED: " + errorText(e));
@@ -617,16 +749,26 @@ final class CoreHost {
 
     // ── for android_core.c, on the UI's (GL) thread ──
 
-    /** Where the core keeps its files: the app's own files, never another app's. */
+    /**
+     * Where the core keeps its files: the app's own files, never another app's. Where still.fail's Android app kept its
+     * core's (this app having taken its place: the same package; apps/android StillFailCore.kt, <files>/stillfail-core,
+     * the same core and shell, so the same files), they become this one's, as they are: its account, its chats, its
+     * drafts, what it kept of the device.
+     */
     static String dataDir() {
-        File d = new File(Host.activity.getFilesDir(), "core");
+        File files = StillfailApp.app.getFilesDir();
+        File d = new File(files, "core");
+        File before = new File(files, "stillfail-core");
+        if (!d.exists() && before.isDirectory()) {
+            Host.log("core: still.fail's Android app's files taken " + (before.renameTo(d) ? "as they are" : "FAILED"));
+        }
         d.mkdirs();
         return d.getAbsolutePath();
     }
 
     /** An asset of the APK (the core's bytecode), or null. */
     static byte[] asset(String name) {
-        try (InputStream in = Host.activity.getAssets().open(name)) {
+        try (InputStream in = StillfailApp.app.getAssets().open(name)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[1 << 16];
             for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);

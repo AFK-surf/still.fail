@@ -16,6 +16,7 @@ import * as css from "./MachineSessions.css.ts";
 
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
+import { StationInWords } from "./StationNamed.tsx";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 // Times in words, still worked out here (they were the job lists' until those moved into the core).
 
@@ -60,7 +61,8 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
   const [open, setOpen] = useState(false);
   /** The one being looked at before going on with it. */
   const [looking, setLooking] = useState<MachineSession | null>(null);
-  const busy = useDoing("machineSessions.continue", { station: useStation().address });
+  const here = useStation().address;
+  const busy = useDoing("machineSessions.continue", { station: here });
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -86,7 +88,7 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
   const meta = (s: MachineSession) => s.meta ?? "";
   return (
     <>
-      <button type="button" className={css.offer} onClick={() => setOpen(true)}><Monitor size={14} />{t("web-main.machine.offer", { name: name || t("web-main.machine.this") })}</button>
+      <button type="button" className={css.offer} onClick={() => setOpen(true)}><Monitor size={14} /><StationInWords station={here} text={t("web-main.machine.offer", { name: name || t("web-main.machine.this") })} /></button>
       {looking ? (
         <Dialog open={open} wide onClose={close} title={looking.title ?? looking.first} description={meta(looking)}
           footer={<>
@@ -97,7 +99,7 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
           <Preview runtime={looking.runtime} id={looking.id} models={models} />
         </Dialog>
       ) : (
-        <Dialog open={open} wide onClose={close} title={t("web-main.machine.title", { name: name || t("web-main.machine.this") })}
+        <Dialog open={open} wide onClose={close} title={<StationInWords station={here} text={t("web-main.machine.title", { name: name || t("web-main.machine.this") })} />}
           description={t("web-main.machine.description")}>
           <ul className={css.list}>
             {sessions.map((s) => (

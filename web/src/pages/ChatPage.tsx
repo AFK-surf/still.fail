@@ -5,7 +5,8 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, ArrowUpRight, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, More, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Letters } from "../Letters.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
@@ -133,7 +134,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   useEffect(() => {
     for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
-  const known = agents.length ? tabs.filter((key) => key === JOBS || key === FILES || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
+  const known = agents.length ? tabs.filter((key) => key === JOBS || key === FILES || key === LETTERS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   const isAgent = (key: string) => agents.some((a) => a.session.key === key);
   const open = known;
   // The job picked in the 任务 tab.
@@ -275,6 +276,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // Files dragged anywhere over the chat go into its message (useChatDrop).
   const drop = useChatDrop(chatKey, station.address);
   const toggleFiles = () => (open.includes(FILES) && shown === FILES ? closeTab(FILES) : openTab(FILES));
+  const toggleLetters = () => (open.includes(LETTERS) && shown === LETTERS ? closeTab(LETTERS) : openTab(LETTERS));
   useShortcut("panel.close", open.length ? closePanel : null);
   const thread = chatView.value?.thread?.id ?? null;
   const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
@@ -316,7 +318,6 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   const panel = open.length > 0;
   // What the panel shows: its tabs, or while it slides out, what it showed.
   const side = panel && shown ? { tabs: open, shown } : leaving;
-  const slackUrl = chat.slackUrl;
   // Before its agent has a chat, what is sent goes to the agent: it waits in the outbox at once while the core has the
   // station make the chat behind it; the page stays (the core shows the chat at the same address once it is there).
   const sendTo = made ?? ("session" in of && !chat.thread ? of.session : undefined);
@@ -344,19 +345,10 @@ function ChatScreen({ session: chatSession }: { session: string }) {
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
-          {relayable && <IconButton label={t("web-main.relay.action")} icon={ArrowUpRight} onClick={relay} />}
-          {drive && <IconButton label={t("web-pages.chat.files")} icon={Folder} onMouseDown={keepFocus} onClick={toggleFiles} />}
-          {chat.thread && <ChatInfo station={station.address} session={chatSession} />}
-          {slackUrl && (
-            <Tip label={t("web-pages.chat.openInSlack")}>
-              <a className={pageCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
-            </Tip>
-          )}
-          {chat.feishuUrl && (
-            <Tip label={t("web-pages.chat.openInFeishu")}>
-              <a className={pageCss.iconBtn} href={chat.feishuUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInFeishu")}><FeishuLogo /></a>
-            </Tip>
-          )}
+          {/* The rest of what is done with the chat, in one place: its own panel (its files, what its agents and other
+              chats' wrote each other, relaying it, where it is in Slack, sharing and publishing it). */}
+          {chat.thread && <ChatInfo station={station.address} session={chatSession} onLetters={toggleLetters} onFiles={drive ? toggleFiles : undefined}
+            onRelay={relayable ? relay : undefined} />}
           {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onMouseDown={keepFocus} onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
@@ -384,6 +376,16 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                     );
                   }
                   if (key === FILES) return <FilesTab key={key} onClose={() => closeTab(key)} />;
+                  if (key === LETTERS) {
+                    return (
+                      <span key={key} className={css.sideTabWrap}>
+                        <Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
+                          <span className={css.sideTabAgent}><Chats size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={t("web-main.letters.title")}>{t("web-main.letters.title")}</span></span>
+                        </Tabs.Trigger>
+                        <button type="button" className={css.sideTabClose} aria-label={t("web-main.letters.close")} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                      </span>
+                    );
+                  }
                   const file = fileOf(key);
                   if (file) {
                     return (
@@ -428,6 +430,13 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                 return (
                   <SidePane key={key} of={key} shown={side.shown}>
                     <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} chat={chatKey} />
+                  </SidePane>
+                );
+              }
+              if (key === LETTERS) {
+                return (
+                  <SidePane key={key} of={key} shown={side.shown}>
+                    {thread !== null && keeper && <Letters station={station.address} thread={thread} keeper={keeper} />}
                   </SidePane>
                 );
               }
@@ -554,6 +563,8 @@ function useChatAgent(station: string, session: string, key: string): ChatAgent 
 
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
+/** The agent 往来 tab's key: what the chat's agents and other chats' wrote each other (Letters.tsx). */
+const LETTERS = "letters";
 /** A visualization's tab: its place among the previews (Preview.tsx's fileService), opened from its message. */
 function fileTab(session: string, path: string, name: string): string {
   return fileService({ session, path, name });
@@ -571,6 +582,8 @@ function JobsPanel({ station, session, chat }: { station: string; session: strin
   const view = useChatJobs(station, { session }).value ?? NO_JOBS;
   const [open, setOpen] = useState(false);
   const alarm = view.alarm;
+  // None: nothing in the bar (the shortcut still opens its tab).
+  if (view.jobs.length === 0) return null;
   const close = (then: () => void) => { setOpen(false); then(); };
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -596,7 +609,13 @@ function slackConnect(chat: ChatView) {
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
-function ChatInfo({ station, session }: { station: string; session: string }) {
+function ChatInfo({ station, session, onLetters, onFiles, onRelay }: { station: string; session: string;
+  /** What its agents and other chats' wrote each other: their tab beside the chat (Letters.tsx). */
+  onLetters(): void;
+  /** The stations' files beside the chat (DriveTab.tsx), where they have them. */
+  onFiles?: (() => void) | undefined;
+  /** Relaying it to a channel (docs/relay.md), where it can be. */
+  onRelay?: (() => void) | undefined }) {
   const [open, setOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   // Its thread, while publishing it or asking before one of its links is revoked (the info closes meanwhile).
@@ -607,13 +626,15 @@ function ChatInfo({ station, session }: { station: string; session: string }) {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label={t("web-pages.chat.info")}>
         <Popover.Trigger asChild>
-          <button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.chat.info")}><Info {...ICON} /></button>
+          <button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.chat.info")}><More {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${controlsCss.panelCard} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
           <ChatInfoBody station={station} session={session} onShare={() => { setOpen(false); setSharing(true); }}
-            onPublish={(thread) => { setOpen(false); setPublishing(thread); }} onRevoke={(thread, id) => { setOpen(false); setRevoking({ thread, id }); }} />
+            onPublish={(thread) => { setOpen(false); setPublishing(thread); }} onRevoke={(thread, id) => { setOpen(false); setRevoking({ thread, id }); }}
+            onLetters={() => { setOpen(false); onLetters(); }}
+            onFiles={onFiles && (() => { setOpen(false); onFiles(); })} onRelay={onRelay && (() => { setOpen(false); onRelay(); })} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -631,7 +652,7 @@ function ShareOf({ station, session, onClose }: { station: string; session: stri
 }
 
 /** What the chat's info says, as the chat is now: read only while it shows. */
-function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void }) {
+function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetters, onFiles, onRelay }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void; onLetters(): void; onFiles?: (() => void) | undefined; onRelay?: (() => void) | undefined }) {
   const chat = useChat(station, { session }).value;
   const link = useLink();
   if (!chat?.thread) return null;
@@ -659,6 +680,14 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { stat
           {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
         </ul>
       )}
+      {(onFiles || chat.letters || onRelay || chat.slackUrl || chat.feishuUrl) && <div className={`${css.infoTools} ${controlsCss.panelEdge}`}>
+        {onFiles && <PanelRow icon={<Folder size={14} />} label={t("web-pages.chat.files")} onClick={onFiles} />}
+        {/* What its agents and other chats' wrote each other, not in the chat: their tab beside it. */}
+        {chat.letters && <PanelRow icon={<Chats size={14} />} label={t("web-main.letters.title")} end={t("web-main.letters.count", { n: chat.letters })} onClick={onLetters} />}
+        {onRelay && <PanelRow icon={<ArrowUpRight size={14} />} label={t("web-main.relay.action")} onClick={onRelay} />}
+        {chat.slackUrl && <PanelRow icon={<SlackLogo size={14} />} label={t("web-pages.chat.openInSlack")} onClick={() => window.open(chat.slackUrl!, "_blank", "noopener")} />}
+        {chat.feishuUrl && <PanelRow icon={<FeishuLogo size={14} />} label={t("web-pages.chat.openInFeishu")} onClick={() => window.open(chat.feishuUrl!, "_blank", "noopener")} />}
+      </div>}
       {(share || publish) && (
         <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>
           {share && <ShareRow share={share} onOpen={onShare} />}

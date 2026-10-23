@@ -29,6 +29,10 @@ priv struct SettingsFixture {
   models_added : Array[String]
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away
   mut pairing : Bool
+  /// the bytes of the drives' files kept (`cache.usage`'s `drive`), until let go (`drive.kept.clear`)
+  mut drive_kept : Double
+  /// the chats' files kept let go (`cache.file.clear`), by name
+  kept_cleared : Array[String]
 }
 
 ///|
@@ -46,7 +50,34 @@ let fx : SettingsFixture = {
   resets_used: 0,
   models_added: [],
   pairing: false,
+  drive_kept: fx_drive_kept,
+  kept_cleared: [],
 }
+
+///|
+/// A chat's file kept (`cache.usage`'s `files`, `loose`): its session, its name, its size, the bytes kept of it, when
+/// it was last opened (the fixture's clock stands at 0), unless let go.
+fn fx_kept_file(key : String, name : String, size : Double, bytes : Double, opened : Double, station? : String) -> Json? {
+  if fx.kept_cleared.contains(name) {
+    return None
+  }
+  let o : Map[String, Json] = {
+    "key": str(key),
+    "name": str(name),
+    "size": Json::number(size),
+    "bytes": Json::number(bytes),
+    "opened": Json::number(opened),
+  }
+  match station {
+    Some(s) => o["station"] = str(s)
+    None => ()
+  }
+  Some(Json::object(o))
+}
+
+///|
+/// What the drives' files kept come to as a run starts: 38.5 MB.
+let fx_drive_kept : Double = 40370176.0
 
 ///|
 /// A sheet a fixture's mode puts up over its page once it is drawn (mark, add, add-existing, add-command, env), and a
@@ -70,8 +101,11 @@ let fx_connect_step : Ref[String] = Ref("team")
 fn fixture_reset() -> Unit {
   fx.names.clear()
   fx_many_models.val = false
+  fx_many_kept.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
+  fx.drive_kept = fx_drive_kept
+  fx.kept_cleared.clear()
   fx.resets_used = 0
   fx.models_added.clear()
   fx.version = 0
@@ -112,20 +146,30 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings-station-mark" => up("mark", "", 0)
-    "settings-station-env" => up("env", "", 0)
-    "settings-station-lower" => up("", "settings/station/ws1/st1", 6)
-    "settings-station-versions" => up("", "settings/station/ws1/st1", 10)
+    // the page's 设置 (its variables' sheet up over it), its 软件与设备
+    "settings-station-env" => {
+      station_parts["ws1/st1"] = 1
+      up("env", "", 0)
+    }
+    "settings-station-lower" => {
+      station_parts["ws1/st1"] = 1
+      up("", "settings/station/ws1/st1", 0)
+    }
+    "settings-station-versions" => {
+      station_parts["ws1/st1"] = 2
+      up("", "settings/station/ws1/st1", 0)
+    }
     "settings-stations-add" => up("add", "", 0)
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
     "settings-profile-menu" => up("profile-menu", "", 0)
-    "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 4)
+    "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
     // ChatGPT 团队's quota with its resets, its models (many, a filter, one to name by hand)
-    "settings-profile-models" => up("", "settings/profile/ws1/st1/cx", 9)
+    "settings-profile-models" => up("", "settings/profile/ws1/st1/cx", 7)
     "settings-profile-login" => {
       fx.login = true
-      up("", "settings/profile/ws1/st1/cc", 2)
+      up("", "settings/profile/ws1/st1/cc", 0)
     }
     "settings-connect-menu" => up("connect-menu", "", 0)
     "settings-connect-mode" => up("connect-mode", "", 0)
@@ -143,6 +187,10 @@ pub fn fixture_page(mode : String) -> String {
       fx_many_models.val = true
       run_list["session:s-c1"] = "model"
     }
+    // 本机缓存 with many chats kept (a card of 200 rows)
+    "settings-kept-many" => fx_many_kept.val = true
+    // the run's accounts listed (run_more.mbt account_list)
+    "settings-run-accounts" => run_list["session:s-c1"] = "account"
     // the fonts page at code's faces
     "settings-fonts-code" => fonts_at.val = 2
     "settings-new-connect-platform" => fx_connect_step.val = "platform"
@@ -172,11 +220,11 @@ pub fn fixture_page(mode : String) -> String {
     "settings-completion" => "completion"
     "settings-policy" => "policy:ws1/st1"
     "settings-bars" => "bars"
-    "settings-kept" => "kept"
+    "settings-kept" | "settings-kept-many" => "kept"
     "settings-changelog" => "changelog"
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
-    "settings-run" | "settings-run-models" => "run:ws1/st1#s-c1"
+    "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"
     "settings-notify-off" | "settings-lock-prompt" => "home"
     "settings-station" => "station:ws1/st1"
@@ -642,6 +690,9 @@ fn fx_usage(days : Int) -> Json {
     ("series", [obj([("key", str("lin@example.com")), ("name", str("林"))]), obj([("key", str("ana@example.com")), ("name", str("Ana"))]), obj([("key", str("")), ("name", str("其他"))])]),
     ("daily", Json::array(daily)),
     ("max", Json::number(27.0)),
+    // (the scale the core works out for it: views/usage.ts scale)
+    ("top", Json::number(30.0)),
+    ("ticks", [obj([("value", Json::number(10.0)), ("label", str("10"))]), obj([("value", Json::number(20.0)), ("label", str("20"))]), obj([("value", Json::number(30.0)), ("label", str("30"))])]),
     (
       "lists",
       [
@@ -1298,15 +1349,44 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           obj([
             (
               "chats",
-              [
-                obj([("station", str("ws1/st1")), ("thread", Json::number(1.0)), ("title", str("整理发布清单")), ("sessions", ["s-c1"]), ("bytes", Json::number(2400000.0))]),
+              Json::array([
+                // a PDF opened, 5 minutes ago; a video, 12 of its 48 MB come
+                obj([
+                  ("station", str("ws1/st1")),
+                  ("thread", Json::number(1.0)),
+                  ("title", str("整理发布清单")),
+                  ("sessions", ["s-c1"]),
+                  ("bytes", Json::number(2400000.0)),
+                  (
+                    "files",
+                    Json::array(
+                      [
+                        fx_kept_file("s-c1", "季度报告.pdf", 3355443.0, 3355443.0, -300000.0),
+                        fx_kept_file("s-c1", "演示录屏.mp4", 50331648.0, 12582912.0, -7200000.0),
+                      ].filter_map(fn(f) { f }),
+                    ),
+                  ),
+                ]),
                 obj([("station", str("ws1/st1")), ("thread", Json::number(4.0)), ("title", str("给设置页加一个深色模式开关")), ("sessions", ["s-c4"]), ("bytes", Json::number(860000.0))]),
                 obj([("station", str("ws1/st2")), ("thread", Json::number(3.0)), ("title", str("夜里的构建又失败了")), ("sessions", ["s-c3"]), ("bytes", Json::number(41000.0))]),
-              ],
+                ] +
+                fx_kept_many(),
+              ),
             ),
+            ("drive", Json::number(fx.drive_kept)),
+            // one of a chat no longer kept here, 3 days ago
+            ("loose", Json::array([fx_kept_file("s-old", "旧日志.zip", 921600.0, 921600.0, -3.0 * 86400000.0, station="ws1/st2")].filter_map(fn(f) { f }))),
           ]),
         ),
       )
+    "drive.kept.clear" => {
+      fx.drive_kept = 0.0
+      Some(Ok(Json::null()))
+    }
+    "cache.file.clear" => {
+      fx.kept_cleared.push(text(p, "name"))
+      Some(Ok(Json::null()))
+    }
     "machineSessions.list" => Some(Ok(obj([("sessions", [])])))
     "workspace.enroll" =>
       Some(
@@ -1539,6 +1619,27 @@ fn fx_profile_flow() -> Json {
 let fx_many_models : Ref[Bool] = Ref(false)
 
 ///|
+/// Whether many chats are kept (MBUI_FIXTURE=settings-kept-many): 200 more after the three, each with a few KB.
+let fx_many_kept : Ref[Bool] = Ref(false)
+
+///|
+/// The chats kept after the three when many are (fx_many_kept): 测试会话 1 to 200.
+fn fx_kept_many() -> Array[Json] {
+  if !fx_many_kept.val {
+    return []
+  }
+  Array::makei(200, fn(i) -> Json {
+    obj([
+      ("station", str("ws1/st2")),
+      ("thread", Json::number((100 + i).to_double())),
+      ("title", str("测试会话 \{i + 1}")),
+      ("sessions", Json::array([str("s-m\{i}")])),
+      ("bytes", Json::number((4096 * (i + 1)).to_double())),
+    ])
+  })
+}
+
+///|
 /// A chat's agent as it runs and as it is to run (`pick` of `session:<key>`, MBUI_FIXTURE=settings-run): its effort
 /// raised to high, the rest as it was.
 fn fx_session_pick() -> Json {
@@ -1582,7 +1683,26 @@ fn fx_session_pick() -> Json {
     ("becomes", ["Opus 5.5", "high", "自动 · Claude 主账号"]),
     ("accountText", str("自动分配")),
     ("accountNote", str("Claude 主账号 · 5 小时窗口已用 62%")),
-    ("accounts", [obj([("id", str("p1")), ("name", str("Claude 主账号")), ("line", str("订阅 · 只在 Studio"))])]),
+    // (RunnableProfile: its kind, its runtime, its allowance)
+    (
+      "accounts",
+      [
+        obj([
+          ("id", str("p1")),
+          ("name", str("Claude 主账号")),
+          ("current", Json::boolean(true)),
+          ("kind", str("subscription")),
+          ("runtime", str("claude")),
+          (
+            "quota",
+            obj([
+              ("state", str("ok")),
+              ("windows", [obj([("mark", str("5H")), ("left", Json::number(38.0)), ("level", str("ok"))]), obj([("mark", str("W")), ("left", Json::number(70.0)), ("level", str("ok"))])]),
+            ]),
+          ),
+        ]),
+      ],
+    ),
     ("changed", Json::boolean(true)),
     ("saveText", str("改成 Opus 5.5 · high · 自动分配")),
   ])

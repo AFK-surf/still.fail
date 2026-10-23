@@ -114,13 +114,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** The chat's latest page in place of what it shows: the reader goes to its end. */
     suspend fun latest(thread: Long) { chat("chat.latest", thread) }
 
-    /** The chat's window about one of its messages (`chat.around`): a page on either side, read where not held; among
-     *  what other chats' agents wrote to it, their run shown whole. */
+    /** The chat's window about one of its messages (`chat.around`): a page on either side, read where not held. */
     suspend fun around(thread: Long, seq: Long) { chat("chat.around", thread) { put("seq", seq) } }
-
-    /** The run of other chats' agents' messages with `seq` in it shown whole (`open`), or folded into its line again
-     *  (`chat.letters`; the core's `letters`). */
-    suspend fun letters(thread: Long, seq: Long, open: Boolean) { chat("chat.letters", thread) { put("seq", seq); put("open", open) } }
 
     /** Where the reader leaves the chat: the message at the top of what shows and how far below the list's top its top
      *  is (`offset`, px), or none at its end (it opens there next, while nothing is unread). */
@@ -453,7 +448,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun relay(thread: Long, connect: String?, channel: String?, link: String?, note: String): String =
         decode(Relayed.serializer(), op("chat.relay") {
             put("thread", thread)
-            if (link != null) put("link", link) else { put("connect", connect); put("channel", channel) }
+            if (link != null) { put("link", link); if (connect != null) put("connect", connect) } else { put("connect", connect); put("channel", channel) }
             if (note.isNotBlank()) put("note", note)
         }).place
     /** Shares this station's chat `id` with one workspace more (`workspace`), telling its station `prefer` first. */
@@ -846,7 +841,7 @@ data class RelayPlace(val id: String, val name: String, val kind: String, val pr
 
 /** A connect a chat can be relayed through (`kind` slack, feishu or lark), with its places; none, and why, when they could not be read. */
 @kotlinx.serialization.Serializable
-data class RelayConnect(val id: String, val kind: String, val name: String, val team: String? = null, val places: List<RelayPlace> = emptyList(), val error: String? = null)
+data class RelayConnect(val id: String, val kind: String, val name: String, val team: String? = null, val botImage: String? = null, val preferred: Boolean = false, val places: List<RelayPlace> = emptyList(), val error: String? = null)
 
 @kotlinx.serialization.Serializable
 private class RelayPlaces(val connects: List<RelayConnect> = emptyList())

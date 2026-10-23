@@ -6,7 +6,8 @@
 import { Dialog as RDialog } from "radix-ui";
 import { useState } from "react";
 import { afterBack, useBackClose } from "@stillfail/ui/backClose.ts";
-import { Compose, Server, Text, Web } from "@stillfail/ui/icons.tsx";
+import { Compose, Text, Web } from "@stillfail/ui/icons.tsx";
+import { StationMarkAt } from "./StationNamed.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import type { ChatItem, ShareInView } from "./core/shapes.ts";
 import { useGo } from "./go.ts";
@@ -102,7 +103,7 @@ function Places({ view, searching, onOpen }: { view: ShareInView; searching: boo
       {on && !searching && <Row picture={<Compose size={16} />} title={t("web-main.shareIn.newChat")} onClick={() => onOpen(on)} />}
       {!searching && view.stations.length > 1 && <>
         <div className={css.section}>{t("web-main.shareIn.startOn")}</div>
-        {view.stations.map((s) => <Row key={s.station} picture={<Server size={16} />} title={s.name} onClick={() => onOpen(s.station)} />)}
+        {view.stations.map((s) => <Row key={s.station} picture={<StationMarkAt station={s.station} size={16} alone />} title={s.name} onClick={() => onOpen(s.station)} />)}
       </>}
     </>
   );

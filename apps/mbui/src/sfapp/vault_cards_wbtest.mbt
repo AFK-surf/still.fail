@@ -4,7 +4,7 @@
 ///|
 /// A source over the settings' fixture whose vault in ws1 holds `requests` (and holds keys here: `available`); the
 /// calls made, by name and params.
-fn vault_src(requests : Array[String], available : Bool, calls : Array[String]) -> Source {
+fn vault_src(requests : Array[String], available : Bool, calls : Array[String], lasts? : String = "") -> Source {
   let base = fixture("settings")
   {
     ..base,
@@ -14,7 +14,15 @@ fn vault_src(requests : Array[String], available : Bool, calls : Array[String]) 
           value: Some(
             Json::object({
               "available": Json::boolean(available),
-              "requests": Json::array(requests.map(fn(r) { Json::object({ "id": Json::string(r) }) })),
+              "requests": Json::array(
+                requests.map(fn(r) {
+                  let o : Map[String, Json] = { "id": Json::string(r) }
+                  if lasts != "" {
+                    o["lasts"] = Json::string(lasts)
+                  }
+                  Json::object(o)
+                }),
+              ),
             }),
           ),
           error: None,
@@ -32,18 +40,34 @@ fn vault_src(requests : Array[String], available : Bool, calls : Array[String]) 
 }
 
 ///|
-test "a vault request waiting on the viewer: its three answers in place of the card's; 仅本次 approves it once" {
+test "a vault request waiting on the viewer: its answers in place of the card's, up to the chat until it is archived" {
   reset()
   let calls = []
   let src = vault_src(["r1"], true, calls)
   let t = @ui.Tester::new(fn(c) { c.box(w=Fill(1.0), fn() { vault_approval(c, src, "ws1", "r1", true) }) |> ignore }, w=390.0, h=844.0)
   t.draw()
-  for w in ["仅本次", "本对话 1 小时内", "拒绝"] {
+  for w in ["仅本次", "本对话 1 小时内", "本对话直到归档", "拒绝"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
-  t.tap_text("仅本次")
+  t.tap_text("本对话直到归档")
   t.draw()
-  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"once\"}"])
+  assert_eq(calls, [
+    "vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"chat\"}",
+  ])
+}
+
+///|
+test "a vault request for an item granted an hour at most: once and the hour, the hour recommended" {
+  reset()
+  let calls = []
+  let src = vault_src(["r1"], true, calls, lasts="hour")
+  let t = @ui.Tester::new(fn(c) { c.box(w=Fill(1.0), fn() { vault_approval(c, src, "ws1", "r1", true) }) |> ignore }, w=390.0, h=844.0)
+  t.draw()
+  assert_true(t.find("本对话 1 小时内") is Some(_))
+  assert_true(t.find("本对话直到归档") is None)
+  t.tap_text("本对话 1 小时内")
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"hour\"}"])
 }
 
 ///|
@@ -90,4 +114,14 @@ test "secrets left in plain text from before security mode: how many, 加密 enc
   let (x, y) = t.find_last("加密").unwrap()
   t.tap(x, y)
   assert_true(t.find("2 条密钥尚未加密") is None)
+}
+
+///|
+test "密钥: 默认最长授权 over the profiles' keys, its note and its three choices (Vault.kt DefaultLasts)" {
+  let t = settings_tester("vault")
+  shown_on_page(t, "默认最长授权")
+  assert_true(t.find("默认最长授权") is Some(_))
+  for words in ["仅一次", "1 小时", "直到对话归档", "每次使用都要你批准一次"] {
+    assert_true(t.find(words) is Some(_), msg=words)
+  }
 }

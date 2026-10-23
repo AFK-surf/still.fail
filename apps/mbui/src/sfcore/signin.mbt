@@ -56,11 +56,13 @@ pub fn start() -> Bool {
   // a screen is settled only once what it asked of the core is in (mbui's effect.mb outside)
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
   let cloud = @ui.env("MBUI_CLOUD")
+  // (the beta app's core says so: its newer builds from the beta feed, Host::beta; MBUI_BETA=1, its build's env)
+  let beta = @ui.env("MBUI_BETA") == "1"
   let started = if cloud != "" {
     @hostapi.log("still.fail cloud at " + cloud)
-    @core.start(cloud~)
+    @core.start(cloud~, beta~)
   } else {
-    @core.start()
+    @core.start(beta~)
   }
   if started {
     // (a run on a clock of its own: the core's timers on it too; not a replay's, which has no engine)
@@ -89,9 +91,14 @@ pub fn begin() -> Unit {
 ///|
 /// What the device is, to the core (`client.device`, as still.fail's apps tell it): the name the people who approve it
 /// in a workspace's safe mode see (and a sign-in's device) is still.fail mbui's, not still.fail's own app's: "still.fail
-/// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui 桌面版 · macOS".
+/// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui iOS · iPhone17,1"
+/// (apple_engine.m's), "still.fail mbui 桌面版 · macOS". Built as still.fail's Android app in its place (apk.json's
+/// stable and beta: MBUI_OWN=1), it is still.fail's own, named as that app named the device: "still.fail Android · …".
 fn tell_device() -> Unit {
-  let facts : Map[String, Json] = { "client": Json::string("still.fail mbui") }
+  let facts : Map[String, Json] = {}
+  if @ui.env("MBUI_OWN") != "1" {
+    facts["client"] = Json::string("still.fail mbui")
+  }
   match @ui.platform() {
     2 => {
       facts["app"] = Json::string("android")
@@ -101,16 +108,25 @@ fn tell_device() -> Unit {
       facts["app"] = Json::string("desktop")
       facts["userAgent"] = Json::string("Macintosh; Mac OS X")
     }
+    1 => {
+      facts["app"] = Json::string("ios")
+      facts["model"] = Json::string(@ui.env("MBUI_DEVICE_MODEL"))
+    }
     3 => {
       facts["app"] = Json::string("desktop")
       facts["userAgent"] = Json::string("Windows")
     }
-    // (iOS and the browser: no kind of the core's for them yet)
+    // (the browser: no kind of the core's for it yet)
     _ => return
   }
   let version = @ui.app_version()
   if version > 0 {
     facts["build"] = Json::string("0.1." + version.to_string())
+  }
+  // the device's language (its host's MBUI_LOCALE, a BCP 47 tag): the core's `lang` when none is chosen (prefs.ts)
+  let locale = @ui.env("MBUI_LOCALE")
+  if locale != "" {
+    facts["locale"] = Json::string(locale)
   }
   @core.call("client.device", params=Json::object(facts))
 }

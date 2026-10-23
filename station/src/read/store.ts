@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { type InWorkspace, LETTER_SQL, isLetter, liveShare, sees, toChatShare } from "../store/rows.ts";
+import { type InWorkspace, LETTER_SQL, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -55,12 +55,15 @@ export type EntryRow = {
   ts: string | null; authorKind: AuthorKind; author: string; text: string | null; attachments: Json[]; quotes: Json[];
   declared: string | null; client: string | null; profile: string | null; runtime: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
+  /// A letter's (store/rows.ts Letter). Absent on every other entry.
+  letter?: Letter;
 };
 
 /// A message as it reads now: its latest edit's words, files and quotes.
 export type MessageRow = {
   agentIdentity: Json | null; thread: number; n: number; ts: string; authorKind: AuthorKind; author: string; text: string;
   attachments: Json[]; quotes: Json[]; declared: string | null; client: string | null; createdAt: number; editedAt: number | null;
+  letter?: Letter;
 };
 
 /// A card someone answered (`answers_since`).
@@ -70,6 +73,8 @@ export type CardAnswer = { question: MessageRow; card: Json; by: string; at: num
 export type ThreadSummary = {
   thread: ThreadRow; sessions: Membership[]; last: number; lastMessage: MessageRow | null; read: number; unread: number;
   people: string[]; firstText: string | null;
+  /// How many letters it has (store/rows.ts Letter), in either way.
+  letters: number;
 };
 
 /// TurnSummary, as serde writes it (camelCase, the skipped Nones left out).
@@ -206,6 +211,7 @@ function toEntry(r: Json): EntryRow {
     options: parsed(r.options),
     card: parsed(r.card),
     at: r.at,
+    ...withLetter(r.letter),
   };
 }
 
@@ -224,6 +230,7 @@ function toMessage(r: Json): MessageRow {
     client: r.client,
     createdAt: r.created_at,
     editedAt: r.edited_at,
+    ...withLetter(r.letter),
   };
 }
 
@@ -238,6 +245,7 @@ function archivedEntry(e: Json): EntryRow {
     authorKind: authorKind(e.authorKind), author: e.author, text: e.text ?? null, attachments: (e.attachments ?? []).map(attachment),
     quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null, runtime: e.runtime ?? null,
     options: some(e.options), card: some(e.card), at: e.at,
+    ...withLetter(e.letter),
   };
 }
 
@@ -249,7 +257,7 @@ function mergeEntries(entries: EntryRow[]): MessageRow[] {
       messages.set(e.n, {
         agentIdentity: e.agentIdentity ?? null, thread: e.thread, n: e.n, ts: e.ts ?? "", authorKind: e.authorKind,
         author: e.author, text: e.text ?? "", attachments: e.attachments, quotes: e.quotes, declared: e.declared,
-        client: e.client, createdAt: e.at, editedAt: null,
+        client: e.client, createdAt: e.at, editedAt: null, ...(e.letter !== undefined ? { letter: e.letter } : {}),
       });
     } else {
       const m = e.target === null ? undefined : messages.get(e.target);
@@ -390,6 +398,7 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
       unread: unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own, at),
       people: threadPeople(s, t.id, t.surface, at),
       firstText: firstText(s, t.id, at),
+      letters: letterCount(s, t.id, at),
       thread: t,
     };
   });
@@ -454,11 +463,18 @@ export function lastMessage(s: Store, thread: number, at?: number | null): Messa
   return r ? toMessage(r) : null;
 }
 
+/// How many letters the thread has (isLetter), in either way.
+export function letterCount(s: Store, thread: number, at?: number | null): number {
+  const archived = archivedSummary(s, thread, at);
+  if (archived !== null) return archived.messages.filter((m) => m.letter).length;
+  return one(s, `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND kind = 'message' AND ${LETTER_SQL}`, thread).c;
+}
+
 /// The thread's latest message that is not a letter (isLetter), for lists: what they show and sort by.
 export function lastSaid(s: Store, thread: number, at?: number | null): MessageRow | null {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.lastSaid === null ? null : { ...archived.lastSaid };
-  const r = one(s, `SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread, thread);
+  const r = one(s, `SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread);
   return r ? toMessage(r) : null;
 }
 
@@ -482,7 +498,6 @@ function unreadOf(s: Store, thread: number, read: number, selves: string[], at?:
     thread,
     read,
     JSON.stringify(selves),
-    thread,
   ).c;
 }
 

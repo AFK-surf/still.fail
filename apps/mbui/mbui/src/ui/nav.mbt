@@ -1,9 +1,12 @@
 // A stack of pages, as still.fail's Android app moves between them
 // (app/App.kt Pages): a page pushed comes in whole from the right as the one
 // under it goes out whole to the left, side by side, 300 ms on the standard
-// curve (.4, 0, .2, 1), nothing fading; back, the other way. Swiped back
-// (from the left edge with a finger or a mouse here, or the system's back
-// gesture where there is one, Android's predictive back), the page follows
+// curve (.4, 0, .2, 1), nothing fading; back, the other way. A page the
+// stack says comes from the left (`from_left`: still.fail's settings, its
+// gear at the top left) comes in from there, the one under it going out to
+// the right, and goes back that way. Swiped back
+// (from the left edge with a finger or a mouse here; on Android, the system's
+// back gesture, its predictive back, and no edge of mbui's), the page follows
 // the finger and the one under it comes along beside it, edge to edge; let
 // go past a third of the way (or flung) it goes on from there, easing out
 // (.25, .46, .45, .94) over what is left of 280 ms (120 at least), else it
@@ -21,6 +24,9 @@ struct NavPage[P] {
   mut page : P
   // it rose from the bottom (Nav::rise): it goes back down the same way
   mut rise : Bool
+  // its time on top: a number of its own each time it is put there (pushed, or come back to as the one over it went),
+  // what is built on it reads (Ctx::page_stint)
+  mut stint : Int
 }
 
 ///|
@@ -32,7 +38,26 @@ let nav_serial : Ref[Int] = { val: 0 }
 ///|
 fn[P] nav_page(page : P) -> NavPage[P] {
   nav_serial.val = nav_serial.val + 1
-  { serial: nav_serial.val, page, rise: false }
+  { serial: nav_serial.val, page, rise: false, stint: next_stint() }
+}
+
+///|
+/// Pages' times on top, unique across every Nav.
+// kept across runs: it goes on counting, as nav_serial does
+let nav_stint : Ref[Int] = { val: 0 }
+
+///|
+fn next_stint() -> Int {
+  nav_stint.val = nav_stint.val + 1
+  nav_stint.val
+}
+
+///|
+/// The page now on top (the one under a page that went) put there anew.
+fn[P] Nav::topped(self : Nav[P]) -> Unit {
+  if self.pages.length() > 0 {
+    self.pages[self.pages.length() - 1].stint = next_stint()
+  }
 }
 
 ///|
@@ -45,8 +70,9 @@ struct Nav[P] {
   mut leaving : NavPage[P]?
   // pages gone, to forget at the next frame
   gone : Array[NavPage[P]]
-  // how far the top page is off to the right, in its widths (0 in place);
-  // the one under it is edge to edge with it, at p - 1
+  // how far the top page is off to its side, in its widths (0 in place):
+  // the right, or the left for one from the left (from_left); the one under
+  // it is edge to edge with it, at p - 1 (1 - p)
   mut p : Double
   mut p0 : Double
   mut p1 : Double
@@ -60,6 +86,8 @@ struct Nav[P] {
   mut vel : Double
   track : Tracker
   on_leave : (P) -> Unit
+  // the pages that come in from the left and go back that way
+  from_left : (P) -> Bool
   /// what its motion is said to move by (Ctx::moving), and the frame it was told to move in
   mover : Mover
   mut asked : Int
@@ -72,8 +100,14 @@ struct Nav[P] {
 
 ///|
 /// A stack of pages, `root` at the bottom. `on_leave` is told of each page
-/// that leaves it for good (popped, once it has slid away).
-pub fn[P] Nav::new(root : P, on_leave? : (P) -> Unit = fn(_) {  }) -> Nav[P] {
+/// that leaves it for good (popped, once it has slid away); a page
+/// `from_left` says yes to slides in from the left and back out that way
+/// (App.kt transition: Settings), swiped back too.
+pub fn[P] Nav::new(
+  root : P,
+  on_leave? : (P) -> Unit = fn(_) {  },
+  from_left? : (P) -> Bool = fn(_) { false },
+) -> Nav[P] {
   {
     pages: [nav_page(root)],
     mode: 0,
@@ -89,6 +123,7 @@ pub fn[P] Nav::new(root : P, on_leave? : (P) -> Unit = fn(_) {  }) -> Nav[P] {
     vel: 0.0,
     track: Tracker::new(),
     on_leave,
+    from_left,
     mover: Mover::new(),
     asked: -1,
     wait_from: -1.0,
@@ -305,6 +340,7 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
     }
   }
   self.leaving = self.pages.pop()
+  self.topped()
   match self.leaving {
     Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Arrive)
     _ => self.go(2, 1.0, nav_push_ms, Standard)
@@ -375,6 +411,7 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
 /// Gone back from where a finger left the page: on from there, easing out.
 fn[P] Nav::let_go(self : Nav[P]) -> Unit {
   self.leaving = self.pages.pop()
+  self.topped()
   self.go(2, 1.0, dmax(nav_let_go_ms * (1.0 - self.p), nav_let_go_min_ms), LetGo)
 }
 
@@ -382,7 +419,8 @@ fn[P] Nav::let_go(self : Nav[P]) -> Unit {
 /// The stack drawn, filling what it is given: the top page (and, while one
 /// moves, the page beside it), each built by `page` on a ground of `bg`.
 /// Back (Ctx::back, the left edge's swipe within `edge` of its side, the
-/// system's) comes here while it has a page to go back to.
+/// system's) comes here while it has a page to go back to, unless the top
+/// page takes it itself (what is open in it closed first).
 pub fn[P] Ctx::nav(
   self : Ctx,
   nav : Nav[P],
@@ -438,19 +476,57 @@ pub fn[P] Ctx::nav(
   let p = nav.p
   // a page that rose goes up and down over the one under it, which stays
   let rising = top.rise
+  // the side the top page is off to (one from the left goes back left, the page under it coming from the right)
+  let way = if (nav.from_left)(top.page) { -1.0 } else { 1.0 }
+  // back as it was before the stack, for when neither its top page nor it takes it
+  let before = self.back_next
+  let before_node = self.back_node_next
+  let before_edge = self.back_edge_next
+  let leaving = nav.leaving is Some(_)
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
     match under {
-      Some(e) => self.nav_layer(e, if rising { 0.0 } else { p - 1.0 }, 0.0, bg, page)
+      Some(e) => self.nav_layer(e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page)
       None => ()
     }
-    self.nav_layer(top, if rising { 0.0 } else { p }, if rising { p * self.height } else { 0.0 }, bg, page)
+    // what the top page takes back for (a sheet, a menu, a step of its own, a stack in it) goes back before the stack
+    // does, as Android's BackHandler in a page is asked before the pages' own; the page under it, one leaving, take none
+    self.back_next = None
+    self.back_node_next = -1
+    self.nav_layer(top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page)
   })
-  if n > 1 || nav.mode != 0 {
+  if self.back_next is Some(_) && !leaving {
+    ()
+  } else if n > 1 || nav.mode != 0 {
     self.back_next = Some(fn(kind, x, w, t) { nav.gesture(kind, x, w, t) })
     self.back_node_next = i
     self.back_edge_next = edge
+  } else {
+    self.back_next = before
+    self.back_node_next = before_node
+    self.back_edge_next = before_edge
   }
   i
+}
+
+///|
+/// Builds `body`, back taken in it (Ctx::on_back, Ctx::take_back, an overlay, a stack: Ctx::nav) kept over what took
+/// it before: true when it took it; when not, back is as it was. For what goes back only when nothing within it does
+/// (a stack drawn flat, whose pop is taken after it: Ctx::nav_flat).
+pub fn Ctx::took_back(self : Ctx, body : () -> Unit) -> Bool {
+  let before = self.back_next
+  let before_node = self.back_node_next
+  let before_edge = self.back_edge_next
+  self.back_next = None
+  self.back_node_next = -1
+  body()
+  if self.back_next is Some(_) {
+    true
+  } else {
+    self.back_next = before
+    self.back_node_next = before_node
+    self.back_edge_next = before_edge
+    false
+  }
 }
 
 ///|
@@ -464,12 +540,23 @@ fn[P] Ctx::nav_layer(
 ) -> Unit {
   let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, ty=drop, fn() {
     let saved = self.owner
+    let saved_stint = self.stint
     self.owner = e.serial
+    self.stint = e.stint
     self.scope(e.serial, fn() { page(e.page) })
     self.owner = saved
+    self.stint = saved_stint
   })
   self.nodes[i].layer = true
   self.nodes[i].slide = slide
+}
+
+///|
+/// The time on top of the page being built (a stack's: a number of its own each time the page is put on top, pushed
+/// or come back to; 0 outside any): what is put up anew when its page is (a picture that could not be had asked for
+/// again, as Compose's produceState runs again as its page comes back), whatever frames were drawn between.
+pub fn Ctx::page_stint(self : Ctx) -> Int {
+  self.stint
 }
 
 ///|
@@ -547,8 +634,11 @@ pub fn[P] Ctx::nav_flat(self : Ctx, nav : Nav[P], page : (P) -> Unit, bg? : Int6
   let top = nav.pages[nav.pages.length() - 1]
   self.box(w=Fill(1.0), h=Fill(1.0), clip=true, bg~, fn() {
     let saved = self.owner
+    let saved_stint = self.stint
     self.owner = top.serial
+    self.stint = top.stint
     self.scope(top.serial, fn() { page(top.page) })
     self.owner = saved
+    self.stint = saved_stint
   })
 }

@@ -145,6 +145,9 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
     done: None,
     sent: 0,
     error: None,
+    core_id: "",
+    retry: false,
+    retrying: false,
   }
   r.up = Some(p)
   let failed = fn(e : Json) {
@@ -629,19 +632,8 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, fn() {
         c.box(dir=Row, w=Fill(1.0), padx=14.0, pady=10.0, gap=12.0, radius=14.0, bg=t.p.chip, align=ACenter, id~, fn() {
           c.text(tr("web-main.file.chatAsFiles"), size=14.0, weight=600, color=t.p.text, w=Fill(1.0)) |> ignore
-          // the settings' switch (PageParts.kt Switch): mbui's switch's look in still.fail's colours
-          @kit.switch_look_of(w=44.0, h=26.0, inset=3.0, on_color=t.p.green, off_color=t.p.line, knob=0xFFFFFFFFL, shadow=false)(
-            c,
-            {
-              on: chat,
-              t: if chat { 1.0 } else { 0.0 },
-              hovered: false,
-              pressed: false,
-              focus_shown: false,
-              disabled: false,
-              rect: (0.0, 0.0, 44.0, 26.0),
-            },
-          )
+          // the settings' switch (PageParts.kt Switch)
+          @settings.switch(c, "ref/chat-files", chat)
         })
         |> ignore
       })

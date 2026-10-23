@@ -10,8 +10,12 @@
 // the stream (an instance of kind 4 whose image is `stream_tex_base` + its id) with the last one shown. A host asks for
 // a frame as an event comes.
 //
-// Hosts: Android (Streams.java: MediaCodec onto a SurfaceTexture, copied into a texture of the frame's size as it is
-// shown; JPEG by BitmapFactory), macOS and iOS (apple_stream.m: VideoToolbox into Metal-compatible pixel buffers;
+// A host may have its H.264 decoder driven by the framework instead (`stream_feeds`: @ui's stream_feed.mbt): it then
+// says what its decoder and its surface said ("c ..." events) and does what it is told (`stream_codec`), deciding
+// nothing; its frames come as "queue" commands, not `stream_frame`, and its first config makes its first surface (1).
+//
+// Hosts: Android (Streams.java: MediaCodec onto a SurfaceTexture, driven by the framework, copied into a texture of the
+// frame's size as it is shown; JPEG by BitmapFactory), macOS and iOS (apple_stream.m: VideoToolbox into Metal-compatible pixel buffers;
 // JPEG by ImageIO), the browser (web/host.js: WebCodecs' VideoDecoder where there is one; JPEG by createImageBitmap),
 // Windows (win_stream.cpp: JPEG by WIC; no H.264, `h264_here` false).
 
@@ -67,4 +71,17 @@ pub fn stream_close(id : Int) -> Unit {
 /// Whether this host decodes H.264 (else a stream takes JPEG only: the sender is asked for that).
 pub fn h264_here() -> Bool {
   st_h264_here() != 0
+}
+
+///|
+/// Whether this host's H.264 decoder is driven by the framework (@ui's stream_feed.mbt): its events "c ...", its
+/// commands `stream_codec`.
+pub fn stream_feeds() -> Bool {
+  st_feeds() != 0
+}
+
+///|
+/// A command for stream `id`'s decoder or surface (@ui's stream_feed.mbt says which), with a frame's bytes for "queue".
+pub fn stream_codec(id : Int, cmd : String, data : Bytes) -> Unit {
+  st_codec(id, cmd, data)
 }

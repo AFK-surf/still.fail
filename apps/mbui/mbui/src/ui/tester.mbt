@@ -158,6 +158,8 @@ fn leaked_state() -> Array[String] {
 /// decides when and in what order it comes in.
 /// `h264`: whether its host decodes H.264 (@ui.h264_here: a stream's frames, stream.mbt).
 /// `copy_shown`: the system says itself that something was put on the clipboard (Android 13 and later: @ui.copy_shown).
+/// `live`: a real host asked in place of the fake for what is drawn by, its text and its pictures (Live: a film's,
+/// mbui/src/film; never a test's), recorded as a host's are (MBUI_TEXT_RECORD=1 in `env`); `text` is then not read.
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -177,6 +179,7 @@ pub fn Tester::new(
   run? : String,
   h264? : Bool = false,
   copy_shown? : Bool = false,
+  live? : Live,
 ) -> Tester {
   let f = {
     time,
@@ -189,6 +192,7 @@ pub fn Tester::new(
     ime_text: "",
     ime_sel: (0, 0),
     ime_told: 0,
+    text_menu: (false, 0.0, 0.0, 0.0, 0.0, 0),
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
     clipboard_secret: -1.0,
@@ -212,6 +216,9 @@ pub fn Tester::new(
     opened: [],
     dark,
     inset: window_inset,
+    font_scale: 1.0,
+    a11y: false,
+    a11y_said: "",
     env: Map::from_array(env),
     app_version,
     notices: [],
@@ -255,23 +262,28 @@ pub fn Tester::new(
     page_there: {},
     scripts_sent: [],
     h264,
+    stream_feeds: false,
     stream_ids: 0,
     streams_fed: {},
     stream_said: {},
     dev: FakeDevice::new(copy_shown),
     pixels_of_src: {},
     pixels_of: {},
+    live,
+    live_images: {},
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
-  }
-  if run is Some(r) {
-    env_before_frames(f, r)
   }
   fake.val = Some(f)
   // (what the app asks of its host directly, the fake's too: fake_host.mbt)
   @hostapi.set_host(f)
   reset_globals()
+  // (after the globals are put back: what came from outside before the run's first frame, posted here, would be lost
+  // with them, and the first frame drawn without it: the system's bars round an edge-to-edge window)
+  if run is Some(r) {
+    env_before_frames(f, r)
+  }
   // (the words drawn kept a line at a time, for Tester::text_runs)
   text_runs.on = true
   match text {
@@ -680,6 +692,13 @@ pub fn Tester::tap_text(self : Tester, s : String) -> Unit {
 pub fn Tester::ime(self : Tester) -> (Bool, String, Int, Int) {
   let (a, b) = self.fake.ime_sel
   (self.fake.ime_active, self.fake.ime_text, a, b)
+}
+
+///|
+/// The floating text menu as the host was last told it (@hostapi.text_menu): shown, over (x, y, w, h), offering
+/// what `can` says (@hostapi.text_menu_*).
+pub fn Tester::text_menu(self : Tester) -> (Bool, Double, Double, Double, Double, Int) {
+  self.fake.text_menu
 }
 
 ///|
@@ -1270,6 +1289,27 @@ pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Doub
 }
 
 ///|
+/// The shadows drawn in the last frame (a blurred shape, kind 2): (x, y, w, h, its corner, its blur, colour
+/// RRGGBBAA with its opacity applied).
+pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Double, Double, Double, Int64)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 2.0 {
+      let ch = fn(v : Double) { (v * 255.0).round().to_int64() }
+      let color = (ch(c.inst[b + 8]) << 24) |
+        (ch(c.inst[b + 9]) << 16) |
+        (ch(c.inst[b + 10]) << 8) |
+        ch(c.inst[b + 11])
+      out.push((c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3], c.inst[b + 4], c.inst[b + 7], color))
+    }
+  }
+  out
+}
+
+///|
 /// The glyphs drawn in the last frame: (x, y, colour).
 pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
   ignore(self)
@@ -1412,6 +1452,39 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
     let n = c.nodes[i]
     if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
       return Some(c.drawn_at(i))
+    }
+  }
+  None
+}
+
+///|
+/// What shows of the first text node containing `s` (x, y, w, h): where it is drawn (drawn_of), cut by each box
+/// holding it that clips, where that box is drawn (a clip moves with its own look and its holders', not with what it
+/// holds); nothing shows when w or h is 0.
+pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
+  ignore(self)
+  let c = g()
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(s) {
+      let (x, y) = c.drawn_at(i)
+      let mut x0 = x
+      let mut y0 = y
+      let mut x1 = x + n.fw
+      let mut y1 = y + n.fh
+      let mut p = n.parent
+      while p >= 0 {
+        let a = c.nodes[p]
+        if a.clip {
+          let (ax, ay) = c.drawn_at(p)
+          x0 = dmax(x0, ax)
+          y0 = dmax(y0, ay)
+          x1 = dmin(x1, ax + a.fw)
+          y1 = dmin(y1, ay + a.fh)
+        }
+        p = a.parent
+      }
+      return Some((x0, y0, dmax(x1 - x0, 0.0), dmax(y1 - y0, 0.0)))
     }
   }
   None

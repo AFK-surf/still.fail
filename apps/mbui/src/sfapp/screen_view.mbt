@@ -13,7 +13,7 @@
 /// What the viewer keeps of a view beside the session: the frame's zoom, the trackpad's pointer, the modifiers held,
 /// 全屏 and its folded tools, the rail's line said, the press under way.
 priv struct ScreenUi {
-  zoom : ViewZoom
+  zoom : @kit.Zoom
   pad : PadPointer
   held : HeldKeys
   mut full : Bool
@@ -53,7 +53,7 @@ fn screen_ui(key : String) -> ScreenUi {
     Some(u) => u
     None => {
       let u : ScreenUi = {
-        zoom: { scale: 1.0, x: 0.0, y: 0.0 },
+        zoom: screen_zoom(),
         pad: { x: 0.5, y: 0.5, moves: 0 },
         held: { mods: 0 },
         full: false,
@@ -364,7 +364,7 @@ fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       u.picking = Some(p)
       u.drop_to = Some(to)
     }
-    None => say(c, "这个版本在这台设备上还不能选文件")
+    None => say(c, tr("android-chat.composer.noFiles"))
   }
 }
 
@@ -766,7 +766,7 @@ fn take_over(c : @ui.Ctx, s : ScreenSess) -> Unit {
         if who.is_empty() {
           tr("android-misc.screen.someoneDrives")
         } else {
-          fill("android-misc.screen.drives", [("who", who.join("、"))])
+          fill("android-misc.screen.drives", [("who", who.join(tr("web-main.list.separator")))])
         },
         style=take_over_words,
       )

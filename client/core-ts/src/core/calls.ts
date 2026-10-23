@@ -7,6 +7,7 @@ import type { FontsCall } from "../font-files.ts";
 import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
 import { type HeldCall, type ModuleCall, parseModuleCall } from "../module.ts";
+import type { KeepKind } from "../drive-kept.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import * as ops from "../ops.ts";
@@ -55,7 +56,6 @@ export type Call =
   | { kind: "chatLatest"; station: string; thread: number }
   | { kind: "chatPlace"; station: string; thread: number; seq: number | null; offset: number | null }
   | { kind: "chatAround"; station: string; thread: number; seq: number }
-  | { kind: "chatLetters"; station: string; thread: number; seq: number; open: boolean }
   | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
   | { kind: "historyOlder"; station: string; key: string }
   | { kind: "historyDetail"; station: string; key: string; from: number; to: number }
@@ -64,11 +64,15 @@ export type Call =
   | { kind: "chatRead"; station: string; thread: number; seq: number }
   | { kind: "stationUpload"; station: string; name: string; bytes: Uint8Array }
   | { kind: "stationUploadPart"; station: string; id: string; name: string; size: number; offset: number; bytes: Uint8Array; progress: boolean }
-  | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
-  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean }
+  /// `keep` with the file's `size` as its message says: what is read kept on the device, with its chat, and what is
+  /// kept answered (drive-kept.ts `chat`); without a size, nothing kept.
+  | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean; keep: number | null }
+  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null }
   | { kind: "stationPoster"; station: string; key: string; name: string }
   | { kind: "fileOpen"; station: string; key: string; path: string }
-  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean }
+  /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
+  /// is (`mtime`, `size`; neither said, nothing kept).
+  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean; keep: KeepKind | null; mtime: number | null; size: number | null }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
   /// A login's page to open (docs/remote-login.md): a loopback login's callback listened for here first, unless the
@@ -80,7 +84,18 @@ export type Call =
   | { kind: "codeInk"; code: string; lang: string }
   /// Markdown a client holds itself read by the core (markdown.ts): a file's, a memory's.
   | { kind: "markdown"; text: string }
+  /// A text file as a reader shows it (reader.ts): the text, decoded by the client (in `text`, or its UTF-8 beside the
+  /// call); `withText`: the text as joined in the answer too (else `reader.text` gives it).
+  | { kind: "readerBook"; text: string; markdown: boolean; withText: boolean; tree: boolean }
+  /// A kept book's text as joined, its UTF-8 beside the answer.
+  | { kind: "readerText"; id: number }
+  /// Where words are in a kept book.
+  | { kind: "readerSearch"; id: number; query: string; limit: number }
   | { kind: "cacheClear"; station: string; thread: number }
+  /// What the device keeps of the drives' files let go (drive-kept.ts).
+  | { kind: "driveKeptClear" }
+  /// A chat's file kept on the device let go (drive-kept.ts `chat`).
+  | { kind: "cacheFileClear"; station: string; key: string; name: string }
   | { kind: "stationPreview"; station: string; port: number; method: string; path: string; headers: [string, string][]; body: Uint8Array; stream: boolean }
   | { kind: "previewSocket"; station: string; port: number; path: string; headers: [string, string][]; socket: string }
   | { kind: "previewSocketSend"; socket: string; frame: SocketFrame }
@@ -495,15 +510,6 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return { kind: "chatAround", station: p.station as string, thread: p.thread as number, seq: p.seq as number };
     }
-    case "chat.letters": {
-      const p = read(params, [
-        ["station", S, "req"],
-        ["thread", "u64", "req"],
-        ["seq", "u64", "req"],
-        ["open", "bool", "req"],
-      ]);
-      return { kind: "chatLetters", station: p.station as string, thread: p.thread as number, seq: p.seq as number, open: p.open as boolean };
-    }
     case "chat.find": {
       const p = read(params, [
         ["station", S, "req"],
@@ -711,8 +717,13 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["name", S, "req"],
         ["thumb", "bool", "default"],
         ["progress", "bool", "default"],
+        ["keep", "bool", "default"],
+        ["size", "f64", "opt"],
       ]);
-      return { kind: "stationFile", station: p.station as string, key: p.key as string, name: p.name as string, thumb: p.thumb as boolean, progress: p.progress as boolean };
+      return {
+        kind: "stationFile", station: p.station as string, key: p.key as string, name: p.name as string, thumb: p.thumb as boolean, progress: p.progress as boolean,
+        keep: p.keep && !p.thumb && p.size !== null ? (p.size as number) : null,
+      };
     }
     case "station.file.part": {
       const p = read(params, [
@@ -723,8 +734,13 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["length", "u64", "req"],
         ["progress", "bool", "default"],
         ["stream", "bool", "default"],
+        ["keep", "bool", "default"],
+        ["size", "f64", "opt"],
       ]);
-      return { kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean };
+      return {
+        kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean,
+        keep: p.keep && p.size !== null ? (p.size as number) : null,
+      };
     }
     // The station's drive (docs/drive.md): a part of a file read, a part of one written, a folder read again.
     case "drive.read": {
@@ -736,8 +752,16 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["length", "u64", "req"],
         ["progress", "bool", "default"],
         ["stream", "bool", "default"],
+        ["keep", S, "opt"],
+        ["mtime", "f64", "opt"],
+        ["size", "f64", "opt"],
       ]);
-      return { kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean };
+      if (p.keep !== null && p.keep !== "file" && p.keep !== "played") throw CoreError.invalid(`keep: ${String(p.keep)}`);
+      const said = p.keep !== null && p.mtime !== null && p.size !== null;
+      return {
+        kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean, stream: p.stream as boolean,
+        keep: said ? (p.keep as KeepKind) : null, mtime: said ? (p.mtime as number) : null, size: said ? (p.size as number) : null,
+      };
     }
     case "drive.upload.part": {
       const p = read(params, [
@@ -809,6 +833,36 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     }
     case "markdown":
       return { kind: "markdown", text: read(params, [["text", S, "req"]]).text as string };
+    case "reader.book": {
+      const p = read(params, [
+        ["markdown", "bool", "default"],
+        ["text", S, "opt"],
+        ["withText", "bool", "default"],
+        ["tree", "bool", "default"],
+      ]);
+      const text = (p.text as string | undefined) ?? new TextDecoder().decode(beside(bytes));
+      return { kind: "readerBook", text, markdown: p.markdown as boolean, withText: p.withText as boolean, tree: p.tree as boolean };
+    }
+    case "reader.text":
+      return { kind: "readerText", id: read(params, [["id", "u64", "req"]]).id as number };
+    case "reader.search": {
+      const p = read(params, [
+        ["id", "u64", "req"],
+        ["query", S, "req"],
+        ["limit", "u64", "opt"],
+      ]);
+      return { kind: "readerSearch", id: p.id as number, query: p.query as string, limit: (p.limit as number | undefined) ?? 500 };
+    }
+    case "drive.kept.clear":
+      return { kind: "driveKeptClear" };
+    case "cache.file.clear": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["name", S, "req"],
+      ]);
+      return { kind: "cacheFileClear", station: p.station as string, key: p.key as string, name: p.name as string };
+    }
     case "cache.clear": {
       const p = read(params, [
         ["station", S, "req"],

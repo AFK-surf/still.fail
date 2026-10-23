@@ -72,6 +72,7 @@ import * as chatMarkCss from "../ChatMark.css.ts";
 import { WebUpdate } from "../WebUpdate.tsx";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import { StationWordsIn } from "../StationNamed.tsx";
 import { tx } from "./words.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The workspace in view and the signed-in account that reaches it. */
@@ -214,11 +215,11 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   );
 });
 
-/** The workspace's members, by email, for what shows people (PeopleContext): read here, not by the shell. */
+/** The workspace's members, by email, for what shows people (PeopleContext), and its stations for the words that name them (StationWordsIn): read here, not by the shell. */
 function WorkspacePeople({ id, children }: { id: string; children: ReactNode }) {
   const members = useWorkspace(id).value?.members;
   const people = useMemo(() => new Map((members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [members]);
-  return <PeopleContext.Provider value={people}>{children}</PeopleContext.Provider>;
+  return <PeopleContext.Provider value={people}><StationWordsIn scope={id}>{children}</StationWordsIn></PeopleContext.Provider>;
 }
 
 /**

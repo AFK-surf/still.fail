@@ -32,7 +32,7 @@ let news_room : @ui.Style = @ui.style(w=Full, px=S3, pt=S1, pb=S2_5)
 let news_card : @ui.Style = @ui.style(w=Full, radius=Xl3, bg=Surface, clip=true)
 
 ///|
-/// What it says, 16 in (44 on the right, for the ×), 12 over and under, its lines 2 apart; pressed, the ink at 5%.
+/// What it says, 16 in (44 on the right, for the ×), 12 over and under, its lines 2 apart; rippled where it is pressed.
 // kept across runs: a value (no field of it changes)
 let news_words : @ui.Style = @ui.style(
   w=Full,
@@ -41,7 +41,6 @@ let news_words : @ui.Style = @ui.style(
   pt=S3,
   pb=S3,
   gap=S0_5,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -71,7 +70,6 @@ let news_close : @ui.Style = @ui.style(
   radius=Full,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -124,6 +122,8 @@ fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
           c.text(fill("android-settings.changelog.more", [("n", (lines.length() - news_lines_most).to_string())]), style=news_line)
           |> ignore
         }
+        // PageParts.kt ChangelogNews: clickable, cut to the card's corners
+        @motion.ripple(c, open, 0.0)
       })
       |> ignore
       // let go: gone at once, the core told
@@ -134,7 +134,11 @@ fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
             news_gone.val = news
             (src.call)("changelog.seen", Json::object({}), fn(_) {  })
           }
-          c.box(style=news_close, id=close, fn() { @sf.icon(c, "close", size=16.0, color=t.p.muted) |> ignore }) |> ignore
+          c.box(style=news_close, id=close, label=tr("android-settings.changelog.dismiss"), fn() {
+            @sf.icon(c, "close", size=16.0, color=t.p.muted) |> ignore
+            @motion.ripple(c, close, 16.0)
+          })
+          |> ignore
         })
         |> ignore
       })

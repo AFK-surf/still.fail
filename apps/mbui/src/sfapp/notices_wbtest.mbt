@@ -1,6 +1,6 @@
 // Notifications (notices.mbt) over the fixture's chats, the core's `notify` made up here and the system a fake that
 // keeps what it is asked: a notice shown once it is taken, tapped it opens its chat at its message, the chat on top
-// takes its notification off, the system asked once and told what it allows, pushes registered and shown.
+// takes its notification off, the system asked once and told what it allows, pushes registered.
 
 ///|
 /// What the fake system was asked.
@@ -12,12 +12,11 @@ priv struct FakeSystem {
   mut answer : Bool?
   mut opened : String
   mut token : String
-  mut push : String
 }
 
 ///|
 fn fake_system() -> FakeSystem {
-  { shown: [], cancelled: [], permission: "granted", asks: 0, answer: None, opened: "", token: "", push: "" }
+  { shown: [], cancelled: [], permission: "granted", asks: 0, answer: None, opened: "", token: "" }
 }
 
 ///|
@@ -41,11 +40,6 @@ fn use_system(s : FakeSystem) -> Unit {
       o
     },
     token: fn() { s.token },
-    pushed: fn() {
-      let p = s.push
-      s.push = ""
-      p
-    },
   }
 }
 
@@ -98,7 +92,6 @@ fn notify_core(
       match name {
         "notice.claim" => done(Ok({ "show": true }))
         "link.parse" => done(Ok({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "s-c2" }))
-        "notice.pushed" => done(Ok({ "show": true }))
         // left for the test to answer
         "notify.set" | "notify.permission" | "push.register" | "push.unregister" | "notice.bring" => ()
         _ => (base.call)(name, params, done)
@@ -241,23 +234,6 @@ test "pushes: none registered without a token, taken off while off; a token regi
 }
 
 ///|
-test "a push delivered: shown as the core says, then what it is about brought onto the device" {
-  let calls : Array[Made] = []
-  let sys = fake_system()
-  let t = notify_core(calls, sys)
-  sys.push = "{\"type\":\"notice\",\"kind\":\"done\",\"title\":\"周报的模板\",\"body\":\"Claude: 放好了\",\"tag\":\"ws1/st1/s-c10\",\"url\":\"/o/ws1/st1/s-c10?message=4\",\"workspace\":\"ws1\",\"station\":\"st1\",\"session\":\"s-c10\",\"at\":\"1790000000000\",\"seq\":\"4\"}"
-  t.frame()
-  assert_eq(named(calls, "notice.pushed").length(), 1)
-  assert_true(sys.shown.iter().any(fn(n) { n.0 == "ws1/st1/s-c10" && n.2 == "Claude: 放好了" }))
-  let bring = named(calls, "notice.bring")
-  assert_eq(bring.length(), 1)
-  let p = bring[0].params.stringify()
-  assert_true(p.contains("\"station\":\"ws1/st1\""))
-  assert_true(p.contains("\"seq\":4"))
-  // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
-}
-
-///|
 test "settings: notifications switched off, the core keeps it; on again, the system asked" {
   let calls : Array[Made] = []
   let sys = fake_system()
@@ -266,7 +242,6 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   open_setting("home")
   t.draw()
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("任务完成、需要处理、出错或有新消息时通知你") is Some(_))
   // the row below the fold on a 844 high screen since the cards keep Android's room (20 in): the page at its end
   t.scroll_to_end()
   t.draw()
@@ -274,8 +249,17 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   let set = named(calls, "notify.set")
   assert_eq(set.length(), 1)
   assert_true(set[0].params.stringify().contains("\"on\":false"))
-  // switched at once, a spinner while the core has not answered
-  assert_true(t.find("不接收通知") is Some(_))
+  // its knob slides off as mbui's switch's does (asked for: Android's jumps), the row without its tap meanwhile: on
+  // still as it is tapped, part of the way halfway to its rest, off at its rest
+  assert_eq(knob_across(t, "通知"), 1.0)
+  t.run_for((@kit.switch_rest("notify") - t.time()) / 2.0)
+  let mid = knob_across(t, "通知")
+  assert_true(mid > 0.0 && mid < 1.0)
+  t.run_for(@kit.switch_rest("notify") - t.time())
+  assert_eq(knob_across(t, "通知"), 0.0)
+  // switched at once, a spinner while the core has not answered: not switched again meanwhile
+  t.tap_text("通知")
+  assert_eq(named(calls, "notify.set").length(), 1)
   notify.val = { "on": false, "asked": true, "push": false, "show": [] }
   (set[0].done)(Ok(notify.val))
   t.draw()
@@ -303,7 +287,7 @@ test "settings: usage statistics and error reports switched off on this device, 
   let notify : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] })
   let t = notify_core(calls, sys, notify~)
   // (a host that sends none: a build without PostHog's key, macOS, the web)
-  open_setting("home")
+  open_setting("about")
   t.draw()
   t.run_for(@ui.nav_push_ms)
   t.scroll_to_end()
@@ -325,4 +309,43 @@ test "settings: usage statistics and error reports switched off on this device, 
   t.tap_text("发送使用统计和错误报告")
   assert_eq(told, [false, true])
   reporting_host.val = None
+}
+
+///|
+/// How far the knob of the settings' switch in the row of `words` is across (0 off … 1 on): its white 20 round in the
+/// 44 by 26 ground drawn level with the words, 3 in from the ground's ends.
+fn knob_across(t : @ui.Tester, words : String) -> Double raise {
+  guard t.drawn_of(words) is Some((_, y)) else { fail("no \{words} drawn") }
+  let rects = t.drawn_rects()
+  let level = fn(r : (Double, Double, Double, Double, Int64)) { (r.1 + r.3 / 2.0 - y).abs() < 30.0 }
+  guard rects.iter().find_first(fn(r) { r.2 == 44.0 && r.3 == 26.0 && level(r) }) is Some(ground) else {
+    fail("no switch by \{words}")
+  }
+  guard rects.iter().find_first(fn(r) { r.2 == 20.0 && r.3 == 20.0 && r.4 == 0xFFFFFFFFL && level(r) })
+    is Some(knob) else {
+    fail("no knob by \{words}")
+  }
+  (knob.0 - ground.0 - 3.0) / 18.0
+}
+
+///|
+test "pushes: a token come after the start registered then, a new one again; the same one not twice" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys)
+  assert_eq(named(calls, "push.register").length(), 0)
+  // the push service's first token, given once the app runs (Push.java: FirebaseMessaging's token)
+  sys.token = "tok-1"
+  t.frame()
+  let reg = named(calls, "push.register")
+  assert_eq(reg.length(), 1)
+  assert_true(reg[0].params.stringify().contains("\"token\":\"tok-1\""))
+  t.frame()
+  assert_eq(named(calls, "push.register").length(), 1)
+  // a new token (PushService.onNewToken)
+  sys.token = "tok-2"
+  t.frame()
+  let reg = named(calls, "push.register")
+  assert_eq(reg.length(), 2)
+  assert_true(reg[1].params.stringify().contains("\"token\":\"tok-2\""))
 }

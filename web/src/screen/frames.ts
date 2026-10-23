@@ -23,11 +23,17 @@ export function avcCodec(avcc: Uint8Array | undefined): string {
   return `avc1.${hex(avcc[1]!)}${hex(avcc[2]!)}${hex(avcc[3]!)}`;
 }
 
+/** The picture's size as chosen on this device (prefs `screenQuality`): `auto` as the window is. */
+export type Quality = "auto" | "smooth" | "hd" | "original";
+/** The bounds each chosen size asks for; `original`: the largest the core lets a view ask (the screen's own size). */
+const QUALITY = { smooth: [1280, 720], hd: [1920, 1080], original: [7680, 4320] } as const;
+
 /**
- * How large a picture to ask for: the window in device pixels, no larger than 1920×1080 (2560×1440 on a screen that
- * has more), so a phone is not sent a desktop's every pixel.
+ * How large a picture to ask for: as chosen, or (`auto`) the window in device pixels, no larger than 1920×1080
+ * (2560×1440 on a screen that has more), so a phone is not sent a desktop's every pixel.
  */
-export function viewSize(): { maxWidth: number; maxHeight: number } {
+export function viewSize(quality: Quality = "auto"): { maxWidth: number; maxHeight: number } {
+  if (quality !== "auto") { const [maxWidth, maxHeight] = QUALITY[quality]; return { maxWidth, maxHeight }; }
   const ratio = window.devicePixelRatio || 1;
   const big = screen.width * ratio >= 2560 && screen.height * ratio >= 1440;
   const [w, h] = big ? [2560, 1440] : [1920, 1080];

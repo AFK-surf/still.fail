@@ -77,11 +77,17 @@ test("a_file_the_station_has_already_is_not_sent_again", async () => {
   const asked: J[] = [];
   let parts = 0;
   const requests = t.core.inner.stations.requests as J;
-  requests.uploadName = Object.getPrototypeOf(requests).uploadName;
+  // the content named as the core names it (the blob read, WebCrypto's digest: done off the host's clock, so its end is
+  // waited for here, not guessed by settling: run 39917135209 settled before it and found nothing up yet)
+  let done = () => {};
+  const named = new Promise<void>((resolve) => { done = resolve; });
+  const name = Object.getPrototypeOf(requests).uploadName;
+  requests.uploadName = async (...a: unknown[]) => { try { return await name.apply(requests, a); } finally { done(); } };
   (t.core.inner.stations.requests as J).uploadHave = (_addr: unknown, q: J) => { asked.push(q); return Effect.succeed({ name: q.name, path: "/u/kept.png", size: q.size }); };
   (t.core.inner.stations.requests as J).uploadPart = () => { parts++; return Effect.fail(new CoreError("upload", "not asked")); };
   await t.watch(1, "ws/st:k");
   call(t.core, t.ui, 101, "composer.add", { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "image.png", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])]) }] });
+  await named;
   await t.settle();
   assert.equal(v(t.values, 1).files[0].done.path, "/u/kept.png");
   assert.equal(parts, 0);
@@ -175,6 +181,23 @@ test("what_is_written_shows_with_what_it_can_do_and_is_kept_as_the_chats_draft",
   await t.host.settle();
   const kept = t.host.rows(dbName("s1"), "SELECT json FROM draft ORDER BY station, chat").map(([json]) => JSON.parse(json as string));
   assert.deepEqual(kept.map((d: J) => [d.text, d.quotes.map((q: J) => [q.text, q.comment])]), [["修一下", [["这段", "为什么"]]]]);
+  t.core.close();
+});
+
+test("an_image_of_a_message_quoted_goes_again_with_the_message_as_it_is_on_the_station_nothing_going_up", async () => {
+  const t = await setup();
+  await t.watch(1, "ws/st:k");
+  const image = { name: "shot.png", path: "/w/uploads/shot.png", size: 120, width: 40, height: 30, owner: "s1" };
+  const quote = { author: "agent", text: "shot.png", ts: "1.0", role: "agent", file: "shot.png" };
+  await t.ask("quote", { key: "ws/st:k", id: "q1", quote, focus: true, attachment: image, fileId: "f1" });
+  // Quoted twice: the file goes once.
+  await t.ask("quote", { key: "ws/st:k", id: "q2", quote, attachment: image });
+  const shown = v(t.values, 1);
+  assert.deepEqual([shown.quotes.map((q: J) => q.file), shown.files.map((f: J) => f.done), shown.uploading, shown.ready], [["shot.png", "shot.png"], [image], false, true]);
+  assert.equal(shown.files[0].id, "f1");
+  // Without the quote naming it, an attachment offered is not taken.
+  await t.ask("quote", { key: "ws/st:k", id: "q3", quote: { author: "agent", text: "这段" }, attachment: { ...image, path: "/w/uploads/other.png" } });
+  assert.equal(v(t.values, 1).files.length, 1);
   t.core.close();
 });
 

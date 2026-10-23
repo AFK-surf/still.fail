@@ -17,7 +17,7 @@ let viz_zh : Map[String, String] = {
   "android-misc.viz.cantRead": "无法读取此文件",
   "android-misc.viz.cantSend": "此对话当前无法发送消息",
   "android-misc.viz.followupDrafted": "已添加到输入框，确认后发送",
-  "android-misc.viz.fullscreen": "全屏",
+  "android-misc.viz.fullscreen": "全屏打开",
   "android-misc.viz.mermaidFailed": "mermaid 加载失败",
   "android-misc.viz.openAside": "在侧边打开",
   "android-chat.preview.unreadable": "无法读取「{name}」",
@@ -26,9 +26,13 @@ let viz_zh : Map[String, String] = {
 
 ///|
 fn viz_tr(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = match viz_zh.get(key) {
+  let mut s = match english(key, args~) {
     Some(w) => w
-    None => tr(key)
+    None =>
+      match viz_zh.get(key) {
+        Some(w) => w
+        None => tr(key)
+      }
   }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
@@ -593,7 +597,7 @@ fn viz_frame(
       None => c.width
     }
     let h = dmin((w * viz_page_ratio).floor(), (c.height * viz_page_most).floor())
-    c.box(style=viz_page_frame.then(@ui.style(h=Fixed(h))), id=box, fn() {
+    c.box(style=viz_page_frame.then(@ui.style(h=Fixed(h))), id=box, taps=false, fn() {
       c.native(f.view) |> ignore
       cover(viz_paper_cover)
     })
@@ -722,7 +726,12 @@ fn viz_file(c : @ui.Ctx, src : Source, here : Here, ts : String, a : Attachment,
 /// One of the ways under a page (VizFiles.kt): a 22 box (corners Smooth 6), a 14 icon in the web's subtle grey.
 fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String) -> Unit {
   ignore(label)
-  c.box(style=viz_way, id~, fn() { @sf.icon(c, icon, size=14.0, color=ink().subtle) |> ignore }) |> ignore
+  c.box(style=viz_way, id~, fn() {
+    @sf.icon(c, icon, size=14.0, color=ink().subtle) |> ignore
+    // VizFiles.kt: clip(Smooth(6)).clickable
+    @motion.ripple(c, id, 6.0)
+  })
+  |> ignore
 }
 
 ///|
@@ -752,7 +761,6 @@ let viz_way : @ui.Style = @ui.style(
   radius=Md,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=Hover),
 )
 
 // ── over the whole screen (Viz.kt VizFull, VizFiles.kt VizOpen) ────────
@@ -814,7 +822,11 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
             if c.clicked(close) {
               viz_close_full()
             }
-            c.box(style=viz_full_close, id=close, fn() { @sf.icon(c, "close", size=18.0, color=t.p.text) |> ignore })
+            c.box(style=viz_full_close, id=close, fn() {
+              @sf.icon(c, "close", size=18.0, color=t.p.text) |> ignore
+              // Viz.kt: clip(CircleShape).clickable
+              @motion.ripple(c, close, 18.0)
+            })
             |> ignore
           })
           |> ignore
@@ -863,7 +875,6 @@ let viz_full_close : @ui.Style = @ui.style(
   radius=Full,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=Hover),
 )
 
 ///|

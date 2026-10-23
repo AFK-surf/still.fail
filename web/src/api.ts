@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { core, useCall, useTopic, useTopicSelect, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatLettersView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { ChatPublished, PublishPreview } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
@@ -163,6 +163,13 @@ export function useStationLook(address: string | null): StationLook | undefined 
   }, (a, b) => a === b || (!!a && !!b && a.name === b.name && a.emoji === b.emoji && a.icon === b.icon));
 }
 
+/** The system a station runs on, in words (its host's `os`: macOS 26.6.2, Windows 11 Pro…), by its address; undefined
+ * until known. */
+export function useStationOs(address: string): string | undefined {
+  const scope = address.split("/")[0];
+  return useTopicSelect<StationView[], string | undefined>(scope ? { topic: "stations", scope } : null, (s) => s.value?.find((x) => x.station === address)?.host?.os || undefined, (a, b) => a === b);
+}
+
 const sameStations = (a: StationView[] | undefined, b: StationView[] | undefined) =>
   a === b || (!!a && !!b && a.length === b.length && a.every((x, i) => x.id === b[i]!.id && x.name === b[i]!.name && x.online === b[i]!.online && x.station === b[i]!.station));
 
@@ -183,6 +190,11 @@ export function useChat(station: string, of: { thread: number } | { session: str
 /** A chat's services and background jobs as its pages show them (the same `of` as its `useChat`). */
 export function useChatJobs(station: string, of: { thread: number } | { session: string }): TopicState<ChatJobsView> {
   return useTopic<ChatJobsView>({ topic: "chatJobs", station, ...of });
+}
+
+/** What a chat's agents and other chats' wrote each other (`chatLetters`, Letters.tsx). */
+export function useChatLetters(station: string, thread: number): TopicState<ChatLettersView> {
+  return useTopic<ChatLettersView>({ topic: "chatLetters", station, thread });
 }
 
 /** A job as it is now (null: none). */
@@ -392,7 +404,7 @@ export interface MachineSaid { person: boolean; text: string; at: number | null 
 export interface RelayPlace { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean; used?: number }
 
 /** A connect a chat can be relayed through, with its places (none, and why, when they could not be read). */
-export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; places: RelayPlace[]; error?: string }
+export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; botImage?: string | null; preferred?: boolean; places: RelayPlace[]; error?: string }
 
 /** Where a chat was relayed: the place's name, and its link where the platform has one. */
 export interface Relayed { thread: number; to: string; place: string; link: string | null }
@@ -427,7 +439,7 @@ export function stationApi(t: StationCall) {
     /** Where the chat can be relayed: each connect's channels and groups its bot is in. */
     relayPlaces: (thread: number) => ops.chatRelayPlaces<{ connects: RelayConnect[] }>({ thread }),
     /** The chat relayed to a connect's channel or group, or the Slack thread of a message's link, with the person's note; its agent goes on there too. */
-    relay: (thread: number, to: { connect: string; channel: string } | { link: string }, note: string) =>
+    relay: (thread: number, to: { connect: string; channel: string } | { link: string; connect?: string }, note: string) =>
       ops.chatRelay<Relayed>(note.trim() === "" ? { thread, ...to } : { thread, ...to, note }),
     deleteSession: (key: string) => ops.sessionDelete<{ ok: true }>({ key }),
     evict: (key: string) => ops.sessionEvict<{ ok: true }>({ key }),
@@ -565,9 +577,6 @@ export function useChatSend(address?: string) {
     place: (thread: number, seq: number | null, offset: number | null = null) => call("chat.place", { station, thread, seq, offset }),
     /** The chat's window about one of its messages (`chat.around`): a page on either side, read where not held. */
     around: (thread: number, seq: number) => call("chat.around", { station, thread, seq }),
-    /** The run of other chats' agents' messages with `seq` in it shown whole (`open`), or folded into its line again
-     *  (`chat.letters`; the core's `letters`). */
-    letters: (thread: number, seq: number, open: boolean) => call("chat.letters", { station, thread, seq, open }),
     /** The chat's messages that have every word of `query` (`chat.find`), oldest first; `bring`: what is not on the
      *  device is read first. */
     find: (thread: number, query: string, bring = false) => call("chat.find", { station, thread, query, bring }) as Promise<ChatFound>,

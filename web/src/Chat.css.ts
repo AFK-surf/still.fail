@@ -110,9 +110,6 @@ globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit"
 /** A notice's words and what is done at their end (reporting it): the words cut short before it, not it. */
 export const msgSystemLine = style({ display: "flex", alignItems: "baseline", minWidth: "0" });
 export const msgSystemEnd = style({ flex: "none", whiteSpace: "nowrap" });
-/** Other chats' agents' messages folded (Chat.tsx LettersLine): which chat's agent wrote to which and how many, cut
- * short where the line does not fit. */
-export const lettersWho = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** What reporting a notice sends, in its dialog's body: the dialog's own words. */
 export const reportSends = style({ margin: "0", fontSize: vars.textUi, color: vars.muted, textWrap: "pretty" });
 /**
@@ -385,6 +382,14 @@ export const quotePop = style({
     "&:hover": { background: vars.primaryHover },
   },
 });
+/** An image of a message quoted, in the composer's quote card: as small as a picked one, the station's picture. */
+export const quoteThumb = style({
+  cornerShape: vars.cornerShape, display: "block", width: "64px", height: "64px", borderRadius: vars.rField, overflow: "hidden",
+  background: vars.neutralBg,
+});
+globalStyle(`${quoteThumb} img`, { width: "100%", height: "100%", objectFit: "cover", display: "block" });
+/** The same over an image's corner in the list (Chat.tsx useSelectionQuote's `images`): inside it, to be reached from it. */
+export const quoteImagePop = style({ transform: "translate(-100%, 0)" });
 export const activityLine = style({
   selectors: {
     [`${chatList} &`]: outsetStart(columns.activity),

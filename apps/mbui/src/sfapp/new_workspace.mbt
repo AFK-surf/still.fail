@@ -82,28 +82,18 @@ let new_ws_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, w=Full)
 let new_ws_buttons : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pb=S6, gap=S2, justify=JEnd)
 
 ///|
-/// A field (Controls.kt Field), as the landing's code's.
+/// A field (Controls.kt Field), as the landing's code's: mbui's field in that look, one line, its words 15 on 21.
 fn new_ws_field(c : @ui.Ctx, key : String, placeholder : String, field : @ui.Field) -> String {
-  let t = @sf.theme()
-  let mut words = ""
-  c.box(style=code_field, fn() {
-    let r = c.editor(
-      key,
-      placeholder~,
-      font_size=15.0,
-      line=21.0,
-      max_lines=1,
-      plain=true,
-      color=t.p.text,
-      placeholder_color=t.p.subtle,
-      caret_color=t.p.accent,
-      enter_sends=false,
-      field~,
-    )
-    words = r.text.trim(chars=" \n").to_string()
-  })
-  |> ignore
-  words
+  @kit.text_field(
+    c,
+    key,
+    placeholder~,
+    enter_sends=false,
+    size=15.0,
+    line=21.0,
+    look=fn(c, s, editor) { c.box(id=s.id, style=code_field, editor) |> ignore },
+    field~,
+  ).text.trim(chars=" \n").to_string()
 }
 
 ///|
@@ -121,7 +111,7 @@ fn new_workspace_sheet(c : @ui.Ctx, src : Source) -> Unit {
         None => ""
       }
   }
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   sheet_head(c, tr("android-misc.workspace.new"))
   c.box(style=new_ws_body, fn() {
     c.text(tr("android-misc.workspace.new.text"), style=new_ws_lead) |> ignore

@@ -266,19 +266,24 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
 }
 
 ///|
+/// What `drive.read` was asked, in order (each its params).
+let fix_reads : Array[Json] = []
+
+///|
 /// A part of a made-up file (`drive.read`): the novel, the Markdown, or a line.
 fn fixture_drive_read(name : String, params : Json) -> Result[(Json, Bytes), Json]? {
   if name != "drive.read" {
     return None
   }
+  fix_reads.push(params)
   let p = Some(params)
   let path = text(p, "path")
   let whole = if path.has_suffix(".md") {
-    utf8_bytes(fixture_markdown())
+    @utf8.encode(fixture_markdown())
   } else if path.has_suffix("小说.txt") {
-    utf8_bytes(novel_text())
+    @utf8.encode(novel_text())
   } else {
-    utf8_bytes("这是一个说明文件。\n")
+    @utf8.encode("这是一个说明文件。\n")
   }
   let offset = number(p, "offset").to_int()
   let length = number(p, "length").to_int()
@@ -441,6 +446,9 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         done: Some({ "name": "发布清单.md", "path": "uploads/发布清单.md", "size": 4210 }),
         sent: 4210,
         error: None,
+        core_id: "",
+        retry: false,
+        retrying: false,
       })
       let folder = draft_ref("ws1/st1", "Studio", fix_docs, "设计稿", "设计稿", true)
       folder.mode = "file"
@@ -456,6 +464,9 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         done: None,
         sent: 0,
         error: None,
+        core_id: "",
+        retry: false,
+        retrying: false,
       })
       draft_refs["ws1/st1:s-c1"] = [file, folder]
       if mode == "chat-station-sheet" {

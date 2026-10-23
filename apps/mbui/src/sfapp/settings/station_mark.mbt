@@ -132,7 +132,7 @@ fn picture_mark(bytes : Bytes) -> String? {
   } else {
     return None
   }
-  let url = "data:image/" + kind + ";base64," + base64_of(bytes)
+  let url = "data:image/" + kind + ";base64," + @codec.base64(bytes)
   // a GIF may move, and may be larger: still.fail cloud keeps it in its bucket (cloud/src/icons.ts, 1 MB)
   if url.length() <= (if kind == "gif" { 1390000 } else { 46000 }) {
     Some(url)
@@ -153,7 +153,7 @@ fn picture_mark_small(w : Int, h : Int, px : FixedArray[Byte]) -> String? {
   let y = (h - s) / 2
   icon.draw(w, h, px, (x, y, x + s, y + s), (0.0, 0.0, mark_picture_px.to_double(), mark_picture_px.to_double()))
   let url = "data:image/jpeg;base64," +
-    base64_of(@pixels.jpeg(mark_picture_px, mark_picture_px, icon.pixels(), quality=85))
+    @codec.base64(@pixels.jpeg(mark_picture_px, mark_picture_px, icon.pixels(), quality=85))
   if url.length() <= 46000 {
     Some(url)
   } else {
@@ -171,26 +171,6 @@ let mark_picture_read : Int = 768
 ///|
 /// Pictures picked as marks too large to put up as they are: each its own key.
 let mark_pictures : Ref[Int] = Ref(0)
-
-///|
-/// Bytes in base64 (RFC 4648, padded).
-fn base64_of(b : Bytes) -> String {
-  let abc : Array[Char] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".iter().collect()
-  let out = StringBuilder()
-  let n = b.length()
-  let mut i = 0
-  while i < n {
-    let b0 = b[i].to_int()
-    let b1 = if i + 1 < n { b[i + 1].to_int() } else { 0 }
-    let b2 = if i + 2 < n { b[i + 2].to_int() } else { 0 }
-    out.write_char(abc[b0 >> 2])
-    out.write_char(abc[((b0 & 3) << 4) | (b1 >> 4)])
-    out.write_char(if i + 1 < n { abc[((b1 & 15) << 2) | (b2 >> 6)] } else { '=' })
-    out.write_char(if i + 2 < n { abc[b2 & 63] } else { '=' })
-    i += 3
-  }
-  out.to_string()
-}
 
 ///|
 /// The mark picker (openMarkPick) for `name`, whose mark is `emoji` and `icon` now: `save(emoji, icon)` sets one,
@@ -363,17 +343,12 @@ fn open_mark_pick(
                 pick(glyph_emoji(key), "glyph:" + key + (if mark_pick.color == "" { "" } else { ":" + mark_pick.color }))
               }
             }
+            // square, as wide as a sixth of the row (Settings.kt: weight(1f).aspectRatio(1f)), rippled over its clip
             c.box(
               w=Fill(1.0),
-              h=Px(56.0),
+              aspect=1.0,
               radius=14.0,
-              bg=if on {
-                t.p.accent_bg
-              } else if c.pressed(id) {
-                @sf.alpha(t.p.text, 0.05)
-              } else {
-                0L
-              },
+              bg=if on { t.p.accent_bg } else { 0L },
               align=ACenter,
               justify=JCenter,
               id~,
@@ -383,6 +358,7 @@ fn open_mark_pick(
                 } else {
                   @sf.station_mark(c, "", "glyph:" + key, 24.0, tint.unwrap_or(if on { t.p.accent } else { t.p.text }))
                 }
+                @motion.ripple(c, id, 14.0)
               },
             )
             |> ignore

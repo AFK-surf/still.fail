@@ -39,14 +39,19 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
     return
   }
   // what it shows ends over the navigation bar (SettingParts.kt pages: windowInsetsPadding(navigationBars)), and at a
-  // place's top, over the bottom bar too (Stations.kt BarRoom)
+  // place's top, over the bottom bar too (Stations.kt BarRoom); there it starts under the app's top bar, scrolling
+  // under it (PlacePage.kt: `padding(top = top)` inside what scrolls)
   let foot = nav_foot.val + (if at_root.val { bar_room.val } else { 0.0 })
-  let n = blocks.length() + (if foot > 0.0 { 1 } else { 0 })
+  let top = top_room()
+  let head = if top > 0.0 { 1 } else { 0 }
+  let n = head + blocks.length() + (if foot > 0.0 { 1 } else { 0 })
   c.list("settings/" + key, n, 80.0, fn(i) {
-    if i == blocks.length() {
+    if i < head {
+      gap(c, top)
+    } else if i - head == blocks.length() {
       gap(c, foot)
     } else {
-      (blocks[i])()
+      (blocks[i - head])()
     }
   })
   |> ignore
@@ -54,8 +59,8 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
 }
 
 ///|
-/// A page's head in the wide frame (pages.css.ts pageHead): back above it only on a page under another, the title,
-/// what it does at its end.
+/// A page's head in the wide frame (pages.css.ts pageHead): back above it only on a page under another (`on_back` when
+/// it is said, else the page popped), the title, what it does at its end.
 fn wide_head(
   c : @ui.Ctx,
   core : Core,
@@ -63,6 +68,7 @@ fn wide_head(
   title : String,
   trailing? : () -> Unit,
   inside? : Bool = false,
+  on_back? : () -> Unit,
 ) -> Unit {
   let t = @sf.theme()
   // (inside a block of the page, which stands in already)
@@ -77,7 +83,10 @@ fn wide_head(
       })
       |> ignore
       if hit(c, id) {
-        (core.pop)()
+        match on_back {
+          Some(f) => f()
+          None => (core.pop)()
+        }
       }
     }
     c.box(style=title_line, fn() {
@@ -127,11 +136,13 @@ fn nav_back(c : @ui.Ctx, label : String) -> Bool {
 }
 
 ///|
-/// Back at the top of a large-title page (Stations.kt TopBack); `trailing` at its other end (a ＋).
-fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) -> Unit {
+/// Back at the top of a large-title page (Stations.kt TopBack): `on_back` when it is said, else the page popped;
+/// `trailing` at its other end (a ＋).
+fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on_back? : () -> Unit) -> Unit {
   if wide.val {
     // (the large title under it is the head's: large_title)
     top_trailing.val = trailing
+    top_on_back.val = on_back
     top_label.val = label
     return
   }
@@ -141,7 +152,10 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) ->
   }
   c.box(style=top_back_line, fn() {
     if nav_back(c, label) {
-      (core.pop)()
+      match on_back {
+        Some(f) => f()
+        None => (core.pop)()
+      }
     }
     match trailing {
       Some(f) => f()
@@ -169,6 +183,9 @@ let top_back_line : @ui.Style = @ui.style(
 let top_trailing : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
+let top_on_back : Ref[(() -> Unit)?] = Ref(None)
+
+///|
 let top_label : Ref[String] = Ref("")
 
 ///|
@@ -188,10 +205,7 @@ fn nav_bar(
 ) -> Unit {
   if wide.val {
     ignore(sub)
-    match trailing {
-      Some(f) => wide_head(c, core, back, title, trailing=f)
-      None => wide_head(c, core, back, title)
-    }
+    wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back)
     return
   }
   if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val) {
@@ -223,8 +237,32 @@ fn bar_room_gap(c : @ui.Ctx, h : Double) -> Unit {
 pub let bar_room : Ref[Double] = Ref(0.0)
 
 ///|
+/// A phone's or a tablet's wide screen (Android's LocalWide), which has no bottom bar: nothing to set of it.
+pub let no_bar : Ref[Bool] = Ref(false)
+
+///|
 /// Whether the page being drawn is a place of the bottom bar's at the stack's root (`page`'s `root`).
 let at_root : Ref[Bool] = Ref(false)
+
+///|
+/// Under the app's top bar (`page`'s `top`: a place's top page on a phone, PlacePage.kt), how far down what the page
+/// shows starts, scrolling under the bar; 0 where the page has a bar of its own over it.
+let root_top : Ref[Double] = Ref(0.0)
+
+///|
+/// The room what a page shows keeps at its top for the app's top bar over it (`root_top`), none elsewhere.
+fn top_room() -> Double {
+  if at_root.val {
+    root_top.val
+  } else {
+    0.0
+  }
+}
+
+///|
+/// The actions of the place's top page just drawn under the app's top bar, which that bar holds at its end
+/// (PlacePage.kt: TopGlassBar's `actions`, 用量's days, 连接's filter) and takes from here once drawn.
+pub let root_bar_actions : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
 /// What the back of a pushed place's page says (PlacePage.kt underLabel): the chats or settings, else `or_else`.
@@ -239,7 +277,7 @@ fn under_label(core : Core, or_else : String) -> String {
 ///|
 /// A place's page pushed (PlacePage.kt, not a bar's top): the compact bar, back to the page under it, its title; its
 /// actions at the bar's end; what it shows under it, 4 down. At the bar's top (`page`'s root) the app's top bar is
-/// over it instead, and only what it shows is drawn here.
+/// over it instead, holding its actions, and only what it shows is drawn here, from the top of the page.
 fn place_page(
   c : @ui.Ctx,
   core : Core,
@@ -250,9 +288,11 @@ fn place_page(
   primary? : (String, () -> Unit),
 ) -> Unit {
   c.box(style=page_fill, fn() {
+    let under_bar = top_room() > 0.0
     match (actions, primary) {
-      // (at the root its actions at the end of a row of their own, over what it shows; its primary one is the bar's
-      // notch's)
+      // (at the root its actions in the app's top bar over it; in the wide frame, which has no such bar, at the end of
+      // a row of their own over what it shows; its primary one is the bar's notch's)
+      (Some(a), _) if under_bar => root_bar_actions.val = Some(a)
       (Some(a), _) if at_root.val => c.box(style=root_actions, fn() { a() }) |> ignore
       (None, _) if at_root.val => ()
       (None, None) => nav_bar(c, core, under_label(core, back), title)
@@ -265,14 +305,38 @@ fn place_page(
             }
             // its ＋, named as what it adds (PlusButton)
             match primary {
-              Some((key, run)) => if nav_button(c, key, "plus", size=20.0) { run() }
+              Some((key, run)) =>
+                if nav_button(
+                    c,
+                    key,
+                    "plus",
+                    size=20.0,
+                    said=match key {
+                      "add-station" => tr("android-misc.bar.action.stations")
+                      "add-profile" => tr("android-misc.bar.action.profiles")
+                      "add-connect" => tr("android-misc.bar.action.connects")
+                      _ => ""
+                    },
+                  ) {
+                  run()
+                }
               None => ()
             }
           })
           |> ignore
         })
     }
-    c.box(style=if at_root.val { root_body } else { place_body }, fn() { body() }) |> ignore
+    c.box(
+      style=if under_bar {
+        page_fill
+      } else if at_root.val {
+        root_body
+      } else {
+        place_body
+      },
+      fn() { body() },
+    )
+    |> ignore
   })
   |> ignore
 }
@@ -297,7 +361,7 @@ let root_actions : @ui.Style = bar_actions.then(@ui.style(w=Full, px=S4, pt=S2, 
 let place_body : @ui.Style = page_fill.then(@ui.style(pt=S1))
 
 ///|
-/// What a place's page shows at the bar's top, 8 under the app's top bar (PlacePage.kt: `bar + 8.dp`).
+/// What a place's page shows at the bar's top in the wide frame, 8 under its page bar (PlacePage.kt: `bar + 8.dp`).
 // kept across runs: a value (no field of it changes)
 let root_body : @ui.Style = page_fill.then(@ui.style(pt=S2))
 
@@ -309,13 +373,11 @@ fn large_title(c : @ui.Ctx, big : String, small? : String = "", lead? : () -> Un
     ignore(lead)
     match frame_core.val {
       Some(core) =>
-        match top_trailing.val {
-          Some(f) => wide_head(c, core, top_label.val, big, trailing=f, inside=true)
-          None => wide_head(c, core, top_label.val, big, inside=true)
-        }
+        wide_head(c, core, top_label.val, big, trailing?=top_trailing.val, inside=true, on_back?=top_on_back.val)
       None => ()
     }
     top_trailing.val = None
+    top_on_back.val = None
     return
   }
   c.box(style=large_title_box, fn() {
@@ -409,7 +471,17 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false
     Some(r) => card_ground.then(@ui.style(radius=r))
     None => if foot { card_foot_ground } else { card_ground }
   }
-  c.box(style=card_room, fn() { c.box(style=ground, id~, body) |> ignore }) |> ignore
+  c.box(style=card_room, fn() {
+    c.box(style=ground, id~, fn() {
+      body()
+      // Parts.kt Card: clickable over its clip (Smooth: its corner, or a foot's)
+      if id != 0 {
+        @motion.ripple(c, id, if foot { @sf.card_pad + 19.0 } else { @sf.card_corner })
+      }
+    })
+    |> ignore
+  })
+  |> ignore
   id != 0 && hit(c, id)
 }
 
@@ -419,16 +491,9 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false
 let card_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
 
 ///|
-/// A card: 20 in (CARD_PAD), 22 round (CARD_CORNER), the ink at 5% over it while pressed (tapped: an id).
+/// A card: 20 in (CARD_PAD), 22 round (CARD_CORNER); rippled where it is tapped (an id).
 // kept across runs: a value (no field of it changes)
-let card_ground : @ui.Style = @ui.style(
-  w=Full,
-  p=S5,
-  radius=Xl3,
-  bg=Card,
-  clip=true,
-  pressed=@ui.patch(bg=Over(Card, A(Fg, O5))),
-)
+let card_ground : @ui.Style = @ui.style(w=Full, p=S5, radius=Xl3, bg=Card, clip=true)
 
 ///|
 /// A card with a button in its corner: 20 + 19 round.
@@ -464,26 +529,109 @@ let list_ground : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radiu
 ///|
 /// A row of a list card (Parts.kt ListRow): its ground concentric with the card's (LIST_ROW_CORNER), its words 12 and
 /// 12 in (CARD_PAD less LIST_PAD: 20 from the card's edge), what it holds 12 apart; tapped when `key` is given. True on
-/// the frame after a tap.
-fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
+/// the frame after a tap. `piece`: the row a block of the page's list of its own, a piece of its card (card_piece:
+/// whether it is the card's first row, its last).
+fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, Bool)) -> Bool {
   let id = if key == "" { 0 } else { c.id(key) }
-  c.box(style=list_line, id~, body) |> ignore
+  let row = fn(style) {
+    c.box(style~, id~, fn() {
+      body()
+      // Parts.kt ListRow: clickable over its clip, Smooth(LIST_ROW_CORNER)
+      if id != 0 {
+        @motion.ripple(c, id, @sf.row_corner)
+      }
+    })
+    |> ignore
+  }
+  match piece {
+    None => row(list_line)
+    Some((first, last)) => card_piece(c, first, last, fn() { row(list_piece_line) })
+  }
   id != 0 && hit(c, id)
 }
 
 ///|
-/// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card, the ink at 5% under it while pressed.
+/// A piece of a list card, a block of a page's list of its own (scroll_page lays out only the blocks in view: a card
+/// of many rows, 本机缓存's chats, builds only the rows shown, not all of them each frame): the card's sides and
+/// ground, 8 in above its first row and under its last, its corners there (the halves that are no end of the card
+/// squared again by a patch of its ground), the card's 10 under it.
+fn card_piece(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit) -> Unit {
+  c.box(style=if last { card_room } else { card_piece_room }, fn() {
+    let ground = match (first, last) {
+      (true, true) => list_ground_open
+      (true, false) => list_piece_first
+      (false, true) => list_piece_last
+      (false, false) => list_piece_ground
+    }
+    c.box(style=ground, fn() {
+      c.layer(fn() { c.box(style=list_piece_fill, fn() {  }) |> ignore }) |> ignore
+      // (the card's corner, 30.5 high wholly smooth, is within half of a row's 62: a patch leaves the other end's)
+      if !first {
+        c.layer(fn() {
+          c.box(style=list_piece_patch, fn() {  }) |> ignore
+          c.spacer()
+        })
+        |> ignore
+      }
+      if !last {
+        c.layer(fn() {
+          c.spacer()
+          c.box(style=list_piece_patch, fn() {  }) |> ignore
+        })
+        |> ignore
+      }
+      let was = on_card.val
+      on_card.val = true
+      body()
+      on_card.val = was
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A card's piece's room on the page but its last: 12 from its sides, nothing under it.
 // kept across runs: a value (no field of it changes)
-let list_line : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3,
-  py=S3,
-  gap=S3,
-  radius=Inner,
-  align=ACenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
-)
+let card_piece_room : @ui.Style = @ui.style(w=Full, px=S3)
+
+///|
+/// A list card's piece: its rows 8 in from its sides (LIST_PAD); 8 above the card's first, under its last.
+// kept across runs: a value (no field of it changes)
+let list_piece_ground : @ui.Style = @ui.style(w=Full, px=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_piece_first : @ui.Style = @ui.style(w=Full, px=S2, pt=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_piece_last : @ui.Style = @ui.style(w=Full, px=S2, pb=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_ground_open : @ui.Style = @ui.style(w=Full, p=S2)
+
+///|
+/// A list card's piece's ground: the card's, its corners (LIST_CARD_CORNER).
+// kept across runs: a value (no field of it changes)
+let list_piece_fill : @ui.Style = @ui.style(w=Full, h=Full, radius=@sf.list_card_radius, bg=Card)
+
+///|
+/// Half of a card's piece squared again (Full: as the spacer beside it grows), the card's ground.
+// kept across runs: a value (no field of it changes)
+let list_piece_patch : @ui.Style = @ui.style(w=Full, h=Full, bg=Card)
+
+///|
+/// A row of a card's piece: ListRow's line, its corner the card's less 8 said (LIST_ROW_CORNER 18, Xl2 on the scale:
+/// what `Inner` works out on a whole card; a piece's ground is no container of it, squared where it is no end of it).
+// kept across runs: a value (no field of it changes)
+let list_piece_line : @ui.Style = list_line.then(@ui.style(radius=Xl2))
+
+///|
+/// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.
+// kept across runs: a value (no field of it changes)
+let list_line : @ui.Style = @ui.style(row=true, w=Full, px=S3, py=S3, gap=S3, radius=Inner, align=ACenter)
 
 ///|
 /// A row's main words, as wide as the row lets them, cut to one line.
@@ -548,8 +696,8 @@ fn chevron(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// A row that opens a page (SettingParts.kt GoRow): its name, how things stand at its end (`bad` in red; `dot`, a red
-/// dot before it), a chevron. True on the frame after a tap.
+/// A row that opens a page (SettingParts.kt GoRow): its icon (settings' rows: `icon`, design/icons' name), its name, how
+/// things stand at its end (`bad` in red; `dot`, a red dot before it), a chevron. True on the frame after a tap.
 fn go_row(
   c : @ui.Ctx,
   key : String,
@@ -557,9 +705,13 @@ fn go_row(
   value? : String = "",
   bad? : Bool = false,
   dot? : Bool = false,
+  icon? : String = "",
   lead? : () -> Unit,
 ) -> Bool {
   list_row(c, key~, fn() {
+    if icon != "" {
+      row_icon(c, icon)
+    }
     match lead {
       Some(f) => f()
       None => ()
@@ -580,20 +732,28 @@ fn go_row(
 }
 
 ///|
+/// A settings row's icon, before its name (SettingParts.kt RowIcon): the line art in the muted ink.
+fn row_icon(c : @ui.Ctx, name : String) -> Unit {
+  let t = @sf.theme()
+  @sf.icon(c, name, size=@sf.row_icon, color=t.p.muted) |> ignore
+}
+
+///|
 /// Things in a line, centred across it, 6 apart (a dot and its words, a mark and a word).
 // kept across runs: a value (no field of it changes)
 let near_beside : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
 
 ///|
 /// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white: mbui's switch's look (@kit.switch_look_of)
-/// in still.fail's colours; the row it is in takes the tap.
-pub fn switch(c : @ui.Ctx, on : Bool) -> Unit {
+/// in still.fail's colours; the row it is in takes the tap. Its knob slides as mbui's switch's does
+/// (`@kit.switch_knob` by `key`, unique where it is asked); Android's jumps.
+pub fn switch(c : @ui.Ctx, key : String, on : Bool) -> Unit {
   let t = @sf.theme()
   @kit.switch_look_of(w=44.0, h=26.0, inset=3.0, on_color=t.p.green, off_color=t.p.line, knob=0xFFFFFFFFL, shadow=false)(
     c,
     {
       on,
-      t: if on { 1.0 } else { 0.0 },
+      t: @kit.switch_knob(c, key, on),
       hovered: false,
       pressed: false,
       focus_shown: false,
@@ -649,8 +809,10 @@ fn tone_dot(tone : String) -> String {
 }
 
 ///|
-/// A segmented choice (Parts.kt Seg): a track the ink at 6%, a light thumb (a hairline round it) sliding to the one
-/// chosen. `fill`: as wide as where it is, each option an equal share. Answers the one chosen (a tap's, this frame).
+/// A segmented choice (Parts.kt Seg): mbui's sliding toggle group (@kit.toggle_group: the arrows move along it, a
+/// screen reader reads its options) in Seg's look: a track the ink at 6%, a light thumb (a hairline round it) sliding to
+/// the one chosen. `fill`: as wide as where it is, each option an equal share. Answers the one chosen (a tap's, this
+/// frame).
 fn seg(
   c : @ui.Ctx,
   key : String,
@@ -666,76 +828,74 @@ fn seg(
   let fill = fill && !pill
   let height = if pill { 36.0 } else { height }
   let radius = if pill { 18.0 } else { radius }
-  let base = c.id(key)
-  let mut picked = selected
-  for i, _ in options {
-    if hit(c, base + i + 1) {
-      picked = i
-    }
-  }
   let inset = 2.0
   let thumb = if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL }
-  let track = fn() {
-    c.box(
-      style=if fill { seg_track_full } else { seg_track },
-      h=Px(height),
-      radius~,
-      bg=@sf.alpha(t.p.text, 0.06),
-      id=base,
-      fn() {
-        // the thumb behind the options, laid out over the one chosen in the frame they are (Ctx::cover): to another
-        // on its spring, placed at once the first time (as Seg's first placement jumps)
-        let holder = c.layer(fn() {  })
-        let items : Array[Int] = []
-        for i, label in options {
-          let id = base + i + 1
-          let item = c.box(
-            style=if pill {
-              seg_pill_option
-            } else if fill {
-              seg_full_option
-            } else {
-              seg_option
-            },
-            id~,
-            fn() {
-              // Parts.kt:424 (14sp filling, else 13sp)
-              c.text(
-                label,
-                style=@ui.text_style(
-                  size=if fill { Base } else { Sm },
-                  color=if i == picked { Fg } else { Muted },
-                  wrap=false,
-                ),
-              )
-              |> ignore
-            },
-          )
-          items.push(item)
-        }
-        c.cover(key + "/thumb", holder, items, picked, fn(c, w, h) {
-          c.box(
-            w=Px(w),
-            h=Px(h),
-            radius=@ui.concentric(radius, inset),
-            bg=thumb,
-            border=0.5,
-            border_color=t.p.line,
-            fn() {  },
+  let items = options.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
+  let now = @kit.toggle_group(
+    c,
+    key,
+    items,
+    [selected.to_string()],
+    slide=true,
+    grow=fill,
+    look=fn(c, st) {
+      c.box(
+        style=if pill {
+          seg_pill_option
+        } else if fill {
+          seg_full_option
+        } else {
+          seg_option
+        },
+        fn() {
+          // Parts.kt:424 (14sp filling, else 13sp)
+          c.text(
+            st.label,
+            style=@ui.text_style(size=if fill { Base } else { Sm }, color=if st.on { Fg } else { Muted }, wrap=false),
           )
           |> ignore
-        })
-      },
-    )
-    |> ignore
+        },
+      )
+      |> ignore
+    },
+    // the thumb behind the options, over the one chosen: to another on its spring, placed at once the first time (as
+    // Seg's first placement jumps)
+    thumb=fn(c, w, h) {
+      c.box(
+        w=Px(w),
+        h=Px(h),
+        radius=@ui.concentric(radius, inset),
+        bg=thumb,
+        border=0.5,
+        border_color=t.p.line,
+        fn() {  },
+      )
+      |> ignore
+    },
+    ground=fn(c, _, options) {
+      let track = fn() {
+        c.box(
+          style=if fill { seg_track_full } else { seg_track },
+          h=Px(height),
+          radius~,
+          bg=@sf.alpha(t.p.text, 0.06),
+          options,
+        )
+        |> ignore
+      }
+      // (in a row, as wide as its options: not stretched to its parent's width)
+      if pill {
+        c.box(style=seg_pill_line, fn() { track() }) |> ignore
+      } else {
+        track()
+      }
+    },
+  ).value
+  // the chosen one tapped again stays chosen
+  match now {
+    [v] => items.search_by(fn(it) { it.value == v }).unwrap_or(selected)
+    _ => selected
   }
-  // (in a row, as wide as its options: not stretched to its parent's width)
-  if pill {
-    c.box(style=seg_pill_line, fn() { track() }) |> ignore
-  } else {
-    track()
-  }
-  picked
 }
 
 ///|
@@ -770,64 +930,7 @@ let seg_pill_line : @ui.Style = @ui.style(row=true, w=Full)
 ///|
 /// A person's picture (Parts.kt Avatar): theirs once it is here, else their initial on their colour.
 fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, picture? : String = "") -> Unit {
-  let key = if picture == "" { "" } else { (core.picture)(picture) }
-  c.box(
-    style=avatar_disc,
-    w=Px(size),
-    h=Px(size),
-    bg=avatar_color(id),
-    fn() {
-      if key != "" {
-        c.image(key, w=Px(size), h=Px(size), radius=size / 2.0, bg=0L) |> ignore
-      } else {
-        c.text(initial(name), size=size * 0.5, weight=600, color=0xFFFFFFFFL, wrap=false, line=size * 0.5)
-        |> ignore
-      }
-    },
-  )
-  |> ignore
-}
-
-///|
-/// A person's disc (its side and colour said where it is used): round, what it holds in its middle.
-// kept across runs: a value (no field of it changes)
-let avatar_disc : @ui.Style = @ui.style(radius=Full, align=ACenter, justify=JCenter, clip=true)
-
-///|
-/// The people's colours (Parts.kt AVATAR).
-// kept across runs: a table, never written
-let avatar_colors : Array[Int64] = [
-  0x5B7BB2FFL, 0x2F8F5BFFL, 0xB9471FFFL, 0x8A6BB0FFL, 0x3F8C99FFL, 0xB0842FFFL,
-]
-
-///|
-/// A person's colour, by their id lowered (Parts.kt avatarColor: Java's hashCode, floorMod).
-fn avatar_color(id : String) -> Int64 {
-  let n = avatar_colors.length()
-  let mut h = 0
-  for i in 0..<id.length() {
-    let k = id.at(i).to_int()
-    h = h * 31 + (if k >= 65 && k <= 90 { k + 32 } else { k })
-  }
-  let m = h % n
-  avatar_colors[if m < 0 { m + n } else { m }]
-}
-
-///|
-/// The first letter of a name, upper case (Parts.kt initial).
-fn initial(name : String) -> String {
-  for ch in name {
-    let k = ch.to_int()
-    if k == 32 || k == 9 || k == 10 {
-      continue
-    }
-    return if k >= 97 && k <= 122 {
-      (k - 32).unsafe_to_char().to_string()
-    } else {
-      ch.to_string()
-    }
-  }
-  "?"
+  @sf.avatar(c, id, name, if picture == "" { "" } else { (core.picture)(picture, c.page_stint()) }, size)
 }
 
 ///|
@@ -1062,19 +1165,17 @@ pub fn button(
     t.p.chip
   }
   // (38 high, off the scale; its ground and ink from what it is)
-  c.box(
-    style=button_box,
-    h=Px(38.0),
-    bg=if c.pressed(id) && enabled && !busy { @sf.over(ground, @sf.alpha(ink, 0.12)) } else { ground },
-    id~,
-    fn() {
-      if busy {
-        @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
-      }
-      // Controls.kt:126 (14sp)
-      c.text(label, style=button_words, color=ink) |> ignore
-    },
-  )
+  c.box(style=button_box, h=Px(38.0), bg=ground, id~, fn() {
+    if busy {
+      @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
+    }
+    // Controls.kt:126 (14sp)
+    c.text(label, style=button_words, color=ink) |> ignore
+    // Controls.kt Button: clickable over its capsule
+    if enabled && !busy {
+      @motion.ripple(c, id, 19.0)
+    }
+  })
   |> ignore
   enabled && !busy && hit(c, id)
 }
@@ -1123,19 +1224,17 @@ fn wide_button(
     t.p.text
   }
   // (46 high, off the scale; its ground and ink from what it is)
-  c.box(
-    style=wide_button_box,
-    h=Px(46.0),
-    bg=if c.pressed(id) && enabled && !busy { @sf.over(ground, @sf.alpha(ink, 0.12)) } else { ground },
-    id~,
-    fn() {
-      if busy {
-        @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
-      }
-      // Security.kt:127 (15sp)
-      c.text(label, style=@sf.body.then(@sf.strong).then(@sf.one_line), color=ink) |> ignore
-    },
-  )
+  c.box(style=wide_button_box, h=Px(46.0), bg=ground, id~, fn() {
+    if busy {
+      @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
+    }
+    // Security.kt:127 (15sp)
+    c.text(label, style=@sf.body.then(@sf.strong).then(@sf.one_line), color=ink) |> ignore
+    // Security.kt WideButton: clickable over its capsule
+    if enabled && !busy {
+      @motion.ripple(c, id, 23.0)
+    }
+  })
   |> ignore
   enabled && !busy && hit(c, id)
 }
@@ -1202,6 +1301,10 @@ pub fn pick_row(
       } else if checked {
         @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
       }
+      // Controls.kt PickRow: clickable (not when off or busy) over its clip, Smooth(LIST_ROW_CORNER)
+      if enabled && !busy {
+        @motion.ripple(c, id, @sf.row_corner)
+      }
     })
     |> ignore
   })
@@ -1210,8 +1313,8 @@ pub fn pick_row(
 }
 
 ///|
-/// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, the ink at 5% under it while pressed (not
-/// when off); its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
+/// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, rippled where it is pressed (not when off);
+/// its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
 /// 12 in and rounded concentric with the card, as a ListRow.
 // kept across runs: a value (no field of it changes)
 let pick_room : @ui.Style = @ui.style(w=Full, px=S3)
@@ -1222,7 +1325,7 @@ let pick_line_off : @ui.Style = @ui.style(row=true, w=Full, px=S2, py=S3, gap=S3
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_line : @ui.Style = pick_line_off.then(@ui.style(pressed=@ui.patch(bg=A(Fg, O5))))
+let pick_line : @ui.Style = pick_line_off
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1247,9 +1350,11 @@ fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : S
   let id = c.id(key)
   c.box(style=near_beside, fn() {
     doing_mark(c, false, failed)
-    c.box(style=press_fade, id~, fn() {
+    c.box(id~, fn() {
       // Settings.kt:288 (14sp)
       c.text(label, style=@sf.value.then(@sf.accent)) |> ignore
+      // Controls.kt pressText: rippled round its words, 6 past them on each side and 3 above and under, 8 round
+      @motion.ripple(c, id, press_corner, out_x=press_out, out_y=press_out / 2.0)
     })
     |> ignore
   })
@@ -1258,18 +1363,42 @@ fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : S
 }
 
 ///|
-/// Words to tap, faded while pressed.
+/// A text button's ground under the finger past its words (Controls.kt pressText: PRESS_OUT on each side, half that
+/// above and under), and its corner (PRESS_CORNER).
+let press_out : Double = 6.0
+
+///|
+let press_corner : Double = 8.0
+
+///|
+/// Words to tap with room round them, what is tapped (BarSettings.kt 设为当前, 删除: padding(4) inside its clickable).
 // kept across runs: a value (no field of it changes)
-let press_fade : @ui.Style = @ui.style(pressed=@ui.patch(opacity=O60))
+let press_room : @ui.Style = @ui.style(p=S1)
 
 ///|
 /// Words that do something when tapped (a link's look: Theme.kt link). True on the frame after a tap.
-fn tap_text(c : @ui.Ctx, key : String, label : String, color? : Int64, size? : Double = 15.0, said? : String = "") -> Bool {
+fn tap_text(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  color? : Int64,
+  size? : Double = 15.0,
+  said? : String = "",
+  room? : Bool = false,
+) -> Bool {
   let id = c.id(key)
-  let b = c.box(style=press_fade, id~, fn() {
+  // `room`: 4 round its words, what it takes (BarSettings.kt's 设为当前, 删除: padding(4) inside what is tapped)
+  let b = c.box(style=if room { press_room } else { @ui.style() }, id~, fn() {
     // Settings.kt:447 (15sp), Profiles.kt:794, Vault.kt:365 (14sp): the theme's line, 1.4 its size (its size the
     // caller's)
     c.text(label, style=@sf.link.then(@sf.one_line), size~, line=size * 1.4, color?) |> ignore
+    // with room: rippled over it, 6 round (BarSettings.kt: clip(Smooth(6)).clickable); else round its words as
+    // Controls.kt pressText
+    if room {
+      @motion.ripple(c, id, 6.0)
+    } else {
+      @motion.ripple(c, id, press_corner, out_x=press_out, out_y=press_out / 2.0)
+    }
   })
   // `said`: what it says to a screen reader in place of its words (its contentDescription)
   if said != "" {
@@ -1280,18 +1409,15 @@ fn tap_text(c : @ui.Ctx, key : String, label : String, color? : Int64, size? : D
 
 ///|
 /// A round button in a bar (Parts.kt NavButton): its icon alone, 34 round. True on the frame after a tap.
-fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0) -> Bool {
+fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String = "") -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  // (34 round, off the scale; the ink at 8% while pressed, off the scale of opacities)
-  c.box(
-    style=round_button,
-    w=Px(34.0),
-    h=Px(34.0),
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
-    id~,
-    fn() { @sf.icon(c, icon, size~, color=t.p.text) |> ignore },
-  )
+  // (34 round, off the scale; rippled over its circle: NavButton's clip(CircleShape).clickable; `said` what it is to a
+  // screen reader, a contentDescription round it)
+  c.box(style=round_button, w=Px(34.0), h=Px(34.0), id~, label=said, fn() {
+    @sf.icon(c, icon, size~, color=t.p.text) |> ignore
+    @motion.ripple(c, id, 17.0)
+  })
   |> ignore
   hit(c, id)
 }
@@ -1514,3 +1640,64 @@ let status_sm : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
 ///|
 /// A state's lead as an icon, as tall as the words (StatusText.kt: 14).
 let status_icon : Double = 14.0
+
+///|
+/// A choice on a card (Parts.kt PickLine): its label (15) over its line (12, muted), a check (16, the accent) at its
+/// end where it is the one chosen; 4 and 11 in, rounded 10, rippled where it is pressed. True on the frame after a
+/// tap.
+fn pick_line_row(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  sub : String,
+  checked : Bool,
+  leading? : () -> Unit,
+  trailing? : () -> Unit,
+) -> Bool {
+  let t = @sf.theme()
+  let id = c.id(key)
+  c.box(style=pick_line_ground, id~, fn() {
+    // what it is before its words, what it says after them (PickLine's leading, trailing)
+    match leading {
+      Some(f) => f()
+      None => ()
+    }
+    c.box(style=@sf.full_width, fn() {
+      c.text(label, style=row_title_words) |> ignore
+      if sub != "" {
+        c.text(sub, style=@sf.caption.then(@sf.full_words)) |> ignore
+      }
+    })
+    |> ignore
+    match trailing {
+      Some(f) => f()
+      None => ()
+    }
+    c.box(style=check_room, fn() {
+      if checked {
+        @sf.icon(c, "check", size=16.0, color=t.p.accent) |> ignore
+      }
+    })
+    |> ignore
+    // SettingParts.kt PickLine: clickable over its clip, Smooth(10)
+    @motion.ripple(c, id, 10.0)
+  })
+  |> ignore
+  hit(c, id)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_line_ground : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  px=S1,
+  py=@sf.pick_line_y,
+  gap=S3,
+  align=ACenter,
+  radius=@sf.pick_line_r,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let check_room : @ui.Style = @ui.style(w=@sf.check_room_w, align=ACenter)

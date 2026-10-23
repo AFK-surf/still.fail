@@ -252,8 +252,8 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             list_row(c, key="relay-add", fn() {
               c.text(
                 tr(if busy { "common.saving" } else { "android-settings.relays.add" }),
-                // Settings.kt:256 (15sp)
-                style=@sf.body.then(@sf.accent).then(@sf.one_line),
+                // Settings.kt:257 (15sp, C.link)
+                style=@sf.body.then(@sf.link).then(@sf.one_line),
               )
               |> ignore
             }) &&

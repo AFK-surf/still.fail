@@ -126,3 +126,35 @@ test "wide: Enter sends the composer's words, ⇧Enter is a new line" {
   assert_eq(sent.length(), 1)
   assert_eq(text(Some(sent[0].params), "text"), "第一行\n第二行")
 }
+
+///|
+test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter the next, Esc closes it and forgets" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  assert_true(t.find("在对话中查找") is Some(_))
+  // the bar in place of the chat's buttons
+  assert_true(t.query(Button, label="关闭查找") is Some(_))
+  t.type_text("截图")
+  t.frame()
+  assert_true(named(calls, "chat.find").length() > 0)
+  let (at, total) = find_position()
+  assert_true(total >= 2)
+  assert_true(t.find("\{at}/\{total}") is Some(_))
+  // gone to: its words marked in it
+  let first = wide.find_at
+  t.enter()
+  t.frame()
+  let (next, _) = find_position()
+  assert_eq(next, if at == total { 1 } else { at + 1 })
+  assert_true(wide.find_at != first || wide.find_k > 0 || total == 1)
+  assert_eq(find_marking.val, ["截图"])
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_true(t.find("在对话中查找") is None)
+  assert_eq(wide.find_chat, "")
+  assert_true(find_marking.val.is_empty())
+  // opened again: empty
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  assert_eq(wide.find_query, "")
+}

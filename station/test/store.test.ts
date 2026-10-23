@@ -240,7 +240,7 @@ test("archiving writes a thread out to a zstd file and back", () => {
   assert.deepEqual(store.entriesAfter(shared.id, 0).map((e) => e.text), ["hi"], "b's archived thread stays");
 });
 
-test("what other chats' agents wrote to a chat is neither its unread nor what lists show of it, archived or not", () => {
+test("what two chats' agents wrote each other is neither a chat's unread nor what lists show of it, archived or not", () => {
   const data = tempdir();
   const store = open(join(data, "stillfail.db"), join(data, "archive"));
   session(store, "a");
@@ -249,19 +249,52 @@ test("what other chats' agents wrote to a chat is neither its unread nor what li
   // Opened by another chat's agent: what it is about is the chat's first message, said as any other.
   say(store, thread.id, "1.2", "agent", "b", "由 [备份](https://x/o/w/s/b) 开的 chat：\n\n看看备份");
   say(store, thread.id, "1.3", "agent", "a", "好，在看");
-  // Letters: from a session here and from one of another station, in either language; and this chat's own agent quoting one.
-  say(store, thread.id, "1.4", "agent", "b", "来自 [备份](https://x/o/w/s/b)：\n\n脚本放好了");
-  say(store, thread.id, "1.5", "agent", "peer/ember:c-9", "From [Backups](https://x/o/w/t/c):\n\nDone");
+  // Letters: from a session here and from one of another station, and one this chat's agent wrote another chat.
+  const letter = (ts: string, author: string, text: string, way: "in" | "out") =>
+    store.insertMessage({ ...newMessage(thread.id, ts, "agent", author, text), letter: { way, title: "备份", link: "https://x/o/w/s/b" } });
+  letter("1.4", "b", "来自 [备份](https://x/o/w/s/b)：\n\n脚本放好了", "in");
+  letter("1.5", "peer/ember:c-9", "From [Backups](https://x/o/w/t/c):\n\nDone", "in");
+  letter("1.6", "a", "发给 [备份](https://x/o/w/s/b)：\n\n收到", "out");
   const reader = read.openStore(data);
   const lists = () => [store.listThreads("local", null, null), read.listThreads(reader, "local", null, null)];
-  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread]), [["1.3", 2]]);
+  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.3", 2, 3]]);
   assert.equal(store.unreadCount("local", thread.id), 2);
-  say(store, thread.id, "1.6", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
-  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread]), [["1.6", 3]]);
+  // This chat's own agent quoting one in the chat says it in the chat.
+  say(store, thread.id, "1.7", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
+  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
   // Archived, read from its file: the same.
   store.setArchived("a", true, MANUAL);
-  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread]), [["1.6", 3]]);
+  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
   reader.db.close();
+});
+
+test("letters from before they were marked are marked as the column comes, by the chat their heading names", () => {
+  const data = tempdir();
+  const path = join(data, "stillfail.db");
+  const store = open(path);
+  session(store, "a");
+  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  store.joinThread(thread.id, "a", "ember");
+  say(store, thread.id, "1.2", "agent", "b", "来自 [备份](https://x/o/w/s/b)：\n\n脚本放好了");
+  say(store, thread.id, "1.3", "agent", "peer/ember:c-9", "From <https://x/o/w/t/c|Backups>:\n\nDone");
+  say(store, thread.id, "1.4", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
+  say(store, thread.id, "1.5", "agent", "b", "由 [备份](https://x/o/w/s/b) 开的 chat：\n\n看看备份");
+  store.close();
+  // As a station from before letters left it.
+  const db = new DatabaseSync(path);
+  db.exec("DROP VIEW merged; DROP INDEX entries_letters; ALTER TABLE entries DROP COLUMN letter");
+  db.close();
+  const again = open(path);
+  assert.deepEqual(
+    again.entriesAfter(thread.id, 0).map((e) => [e.ts, e.letter ?? null]),
+    [
+      ["1.2", { way: "in", title: "备份", link: "https://x/o/w/s/b" }],
+      ["1.3", { way: "in", title: "Backups", link: "https://x/o/w/t/c" }],
+      ["1.4", null],
+      ["1.5", null],
+    ],
+  );
+  assert.equal(again.listThreads("local", null, null)[0]?.letters, 2);
 });
 
 test("an archived thread whose file is lost reads as empty, and is counted on from what was read of it", () => {

@@ -1,5 +1,5 @@
 {
-  "//": "still.fail mbui's APK as mbui/scripts/apk.py builds it (no Gradle): fail.still.mbui, its debug build .debug. Its host is mbui's (the Java of apps/mbui/mbui/android) with the still.fail core's (CoreHost.java here); libmbui.so and the core's parts are put by scripts/android.sh where jniLibs and assets say. The release: R8 over the Java (Media3's most of it), signed as every still.fail Android release is (the debug keystore $ANDROID_USER_HOME holds), its versionCode the build (git rev-list --count HEAD), versionName 0.1.<build>, its update feed android/mbui. PostHog's project from the file $STILLFAIL_POSTHOG names ({host, key}: docs/telemetry.md), as string resources Crashes.java reads.",
+  "//": "still.fail mbui's APK as mbui/scripts/apk builds it (no Gradle): fail.still.mbui, its debug build .debug; as still.fail's Android app in its place (variants stable and beta: fail.still.android and fail.still.android.beta, their names, faces and update feeds, the beta's core a beta's). Its host is mbui's (the Java of apps/mbui/mbui/android) with the still.fail core's (CoreHost.java here); libmbui.so and the core's parts are put by scripts/android.sh where jniLibs and assets say. The release: R8 over the Java (Media3's most of it), signed as every still.fail Android release is (the debug keystore $ANDROID_USER_HOME holds), its versionCode the build (git rev-list --count HEAD), versionName 0.1.<build>, its update feed android/mbui. PostHog's project from the file $STILLFAIL_POSTHOG names ({host, key}: docs/telemetry.md), as string resources Crashes.java reads.",
   "namespace": "dev.mbui",
   "applicationId": "fail.still.mbui",
   "minSdk": 29,
@@ -12,6 +12,7 @@
   "jniLibs": ["../out/android/apk/jniLibs", "app/src/main/jniLibs"],
   "rules": ["app/proguard-rules.pro"],
   "lock": "apk.lock",
+  "merged": ["androidx.core:core:", "androidx.profileinstaller:", "androidx.startup:", "com.google.firebase:", "com.google.android.gms:", "com.google.android.datatransport:"],
   "strings": {
     "posthog_host": ["STILLFAIL_POSTHOG", "host"],
     "posthog_key": ["STILLFAIL_POSTHOG", "key"]
@@ -20,6 +21,18 @@
     "release": {
       "minify": true,
       "placeholders": {"appLabel": "still.fail mbui", "mbuiEnv": "MBUI_UPDATE_FEED=android/mbui"}
+    },
+    "stable": {
+      "applicationId": "fail.still.android",
+      "minify": true,
+      "res": ["app/src/still/res", "app/src/stable/res"],
+      "placeholders": {"appLabel": "still.fail", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_OWN=1"}
+    },
+    "beta": {
+      "applicationId": "fail.still.android.beta",
+      "minify": true,
+      "res": ["app/src/still/res", "app/src/beta/res"],
+      "placeholders": {"appLabel": "youdid.wtf", "mbuiEnv": "MBUI_UPDATE_FEED=android/beta;MBUI_BETA=1;MBUI_OWN=1"}
     },
     "debug": {
       "applicationIdSuffix": ".debug",

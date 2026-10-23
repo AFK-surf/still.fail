@@ -18,7 +18,7 @@ test "34-appearance-kept" {
     f.run_for(@ui.cover_slide_ms)
     f.back()
     f.run_for(@ui.nav_push_ms)
-    f.see("Workspace")
+    f.see("=设置")
     f.end()
   })
 }

@@ -69,7 +69,14 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String) -> Unit {
         if flag(s, "online") {
           peek_figures(c, core, s)
         } else {
-          c.text(fill("android-settings.stations.offline", [("app", "still.fail")]), style=peek_said) |> ignore
+          // down for a security mode: why (the core's `blocked`), not how to bring it back
+          let blocked = text(s, "blocked")
+          let said = if blocked != "" {
+            blocked
+          } else {
+            fill("android-settings.stations.offline", [("app", "still.fail")])
+          }
+          c.text(said, style=peek_said) |> ignore
         }
       })
       |> ignore
@@ -136,7 +143,8 @@ let unread_meters : Array[Double] = [46.0, 52.0, 50.0]
 let unread_meter_h : Double = 20.0
 
 ///|
-let unread_meter_r : Double = 6.0
+/// (where a chip goes, its corner)
+let unread_meter_r : Double = @sf.fill_chip_corner
 
 ///|
 /// Its network 6 under the boxes; until it is read, as tall as a real one but unseen, grey bars over it.
@@ -196,17 +204,15 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
     })
     |> ignore
     c.box(style=peek_net, fn() {
-      c.box(style=if net is Some(_) { @sf.full_width } else { peek_net_unseen }, fn() { net_line(c, net) }) |> ignore
-      if net is None {
-        c.layer(fn() {
-          c.box(style=peek_net_bars, fn() {
-            net_bars(c, peek_net_side_fill, 34.0, 96.0)
-            net_bars(c, peek_net_side, 132.0, 132.0)
-          })
-          |> ignore
-        })
-        |> ignore
-      }
+      // the room under the 6, the bars laid over that alone (matchParentSize inside the Box's padding: a layer covers
+      // its parent's padding too)
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=if net is Some(_) { @sf.full_width } else { peek_net_unseen }, fn() { net_line(c, net) }) |> ignore
+        if net is None {
+          c.layer(fn() { net_bars(c) }) |> ignore
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -214,8 +220,19 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 }
 
 ///|
+/// The network's bars over its line's room, centred across it (Stations.kt's, in a station's card, its page and the
+/// list): two on its left (Bar 34 and 96), two on its right (132 and 132).
+fn net_bars(c : @ui.Ctx) -> Unit {
+  c.box(style=peek_net_bars, fn() {
+    net_side(c, peek_net_side_fill, 34.0, 96.0)
+    net_side(c, peek_net_side, 132.0, 132.0)
+  })
+  |> ignore
+}
+
+///|
 /// One side's two bars, `top` and `under` wide, breathing.
-fn net_bars(c : @ui.Ctx, side : @ui.Style, top : Double, under : Double) -> Unit {
+fn net_side(c : @ui.Ctx, side : @ui.Style, top : Double, under : Double) -> Unit {
   c.box(style=side, fn() {
     @sf.bar(c, Px(top), net_bar_h, breathing=true)
     c.box(style=peek_net_second, fn() { @sf.bar(c, Px(under), net_bar_h, breathing=true) }) |> ignore

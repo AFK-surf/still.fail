@@ -1,0 +1,14 @@
+# A new chat from 令 and its first words sent (newchat.mbt, flight.mbt carried): they stay where they were typed while
+# the chat is made, then go up into their bubble with the chat's list coming up out of the composer, the new chat's
+# scene going up and out. With MBUI_CORE_MS the core answers as late as a phone's.
+timeout 20000
+until 整理发布清单
+wait 600
+tap icon:ling
+wait 900
+tap 做任何事
+wait 500
+type 把发布说明写一下
+wait 700
+tap icon:arrow-up
+wait 2500

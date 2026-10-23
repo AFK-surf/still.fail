@@ -206,7 +206,7 @@ fn entry_sheet(
         dv_close(c)
         done()
         say(c, fill("android-misc.drive.downloading", [("name", e.name)]))
-        download_drive_file(c, src, at.station, root, path, e.name, e.mime)
+        download_drive_file(c, src, at.station, root, path, e.name, e.mime, listed=Some((e.mtime, e.size)))
       }
       if dv_pick_row(c, "entry/share", tr("android-misc.drive.share"), icon="external") {
         dv_close(c)
@@ -619,7 +619,7 @@ fn picker_sheet(c : @ui.Ctx, src : Source, station : String, lent : Array[String
           wanted = res.text.trim(chars=" ").to_owned()
         })
         |> ignore
-        if wanted != "" && dv_row_key(c, "pick-filter-clear", "close") {
+        if wanted != "" && dv_row_key(c, "pick-filter-clear", "close", tr("android-misc.drive.pick.filterClear")) {
           dv.picker_filter.set("")
         }
       })

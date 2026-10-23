@@ -323,6 +323,20 @@ export class Accounts {
     });
   }
 
+  /// Takes the profile a `/v1/me` answered with (`{user: {name, picture}}`): the picture fetched at sign-in may have
+  /// failed, or the account's picture changed since. A name only where it says one.
+  profile(sub: string, me: unknown): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const account = this.#get(sub);
+      const name = pointer(me, "/user/name");
+      const picture = pointer(me, "/user/picture");
+      if (!account || typeof picture !== "string") return Effect.void;
+      const next = { ...account, picture, name: typeof name === "string" && name !== "" ? name : account.name };
+      if (next.picture === account.picture && next.name === account.name) return Effect.void;
+      return Effect.ignore(this.#put(next));
+    });
+  }
+
   #picture(access: string): Effect.Effect<string | null> {
     return this.#host.fetch({ method: "GET", url: `${this.#host.cloudOrigin()}/v1/me`, headers: [["authorization", `Bearer ${access}`]], body: null }).pipe(
       Effect.map((response) => {

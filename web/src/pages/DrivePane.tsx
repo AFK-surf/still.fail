@@ -9,6 +9,7 @@ import { absoluteOf } from "../drive/useDrive.ts";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Prose } from "../Prose.tsx";
 import { Button } from "../ui.tsx";
+import { StationNamedAt } from "../StationNamed.tsx";
 import { Copy, Download } from "@stillfail/ui/icons.tsx";
 import * as css from "./DrivePane.css.ts";
 import { t } from "../i18n.ts";
@@ -41,7 +42,7 @@ export function DrivePane({ shown, stationName, onOpen, onSave, onCopyPath, belo
         <dl className={css.facts}>
           {!entry.dir && <><dt>{t("web-pages.files.size")}</dt><dd>{entry.sizeText}</dd></>}
           <dt>{t("web-pages.files.modified")}</dt><dd>{entry.timeText}</dd>
-          <dt>Station</dt><dd>{stationName}</dd>
+          <dt>Station</dt><dd><StationNamedAt station={at.station} name={stationName} /></dd>
           <dt>{t("web-pages.files.where")}</dt><dd className={css.path} title={abs}>{abs}</dd>
         </dl>
         <div className={css.actions}>

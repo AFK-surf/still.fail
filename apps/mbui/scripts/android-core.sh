@@ -16,10 +16,10 @@ APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/android_engine.c"
 APP_LINK="-L$jni -lstillfail_hermes"
 
 # A .so of an AAR on Maven Central (GROUP/ARTIFACT VERSION FILE LIB SHA-256), fetched once and checked (mbui's
-# scripts/apk.py fetch: kept in $APK_CACHE), into $jni.
+# scripts/apk fetch: kept in $APK_CACHE), into $jni.
 aar_lib() {
   local aar
-  aar=$(python3 "$MBUI_DIR/scripts/apk.py" fetch "$(echo ${1%/*} | tr . /)/${1#*/}/$2/$3" "$5") || exit 1
+  aar=$("$MBUI_DIR/scripts/apk" fetch "$(echo ${1%/*} | tr . /)/${1#*/}/$2/$3" "$5") || exit 1
   unzip -o -q -j "$aar" jni/arm64-v8a/$4 -d $jni
 }
 

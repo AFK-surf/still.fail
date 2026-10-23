@@ -11,7 +11,12 @@
 ///|
 /// The screens (their names, as client/fixtures/screens has them, and their JSON).
 fn android_screens() -> Array[(String, String)] {
-  [("chat-cards", screen_chat_cards), ("history", screen_history), ("settings", screen_settings)]
+  [
+    ("chat-cards", screen_chat_cards),
+    ("history", screen_history),
+    ("settings", screen_settings),
+    ("home", screen_home),
+  ]
 }
 
 ///|
@@ -141,8 +146,8 @@ fn android_screen(name : String, json : String) -> @ui.Tester raise {
 }
 
 ///|
-/// The words the Tester drew, a line at a time (Tester::text_runs: in points), with the window's scale: what
-/// android_ref.py holds to Android's lines by where they stand (MBUI/NAME.texts.json).
+/// The words the Tester drew, a line at a time (Tester::text_runs: in points), with the window's scale and whether it
+/// lies under the system's bars: what android_ref.py holds to Android's lines by where they stand (MBUI/NAME.texts.json).
 fn text_runs_json(t : @ui.Tester, scale : Double) -> Json {
   let lines : Array[Json] = t
     .text_runs()
@@ -156,7 +161,9 @@ fn text_runs_json(t : @ui.Tester, scale : Double) -> Json {
         "bot": Json::number(r.bottom),
       }
     })
-  { "scale": Json::number(scale), "lines": Json::array(lines) }
+  // (edge: the window under the system's bars, as the run that had their message laid it out: on the screen from its
+  // top, not below the status bar)
+  { "scale": Json::number(scale), "edge": Json::boolean(@ui.system_bars().top > 0.0), "lines": Json::array(lines) }
 }
 
 ///|

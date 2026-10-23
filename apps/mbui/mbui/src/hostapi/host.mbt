@@ -33,6 +33,7 @@ pub(open) trait Host {
   atlas_generation(Self) -> Int = _
   present(Self, FixedArray[Double], Int, Double, Double, Double) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
+  text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
   log(Self, String) -> Unit = _
@@ -50,6 +51,9 @@ pub(open) trait Host {
   env(Self, String) -> String = _
   set_app_state(Self, FuncRef[(Int) -> Unit]) -> Unit = _
   system_dark(Self) -> Bool = _
+  font_scale(Self) -> Double = _
+  a11y_on(Self) -> Bool = _
+  a11y_tree(Self, String) -> Unit = _
   set_dark(Self, Bool) -> Unit = _
   set_sideways(Self, Bool) -> Unit = _
   share(Self, String, String, String, Bytes) -> Bool = _
@@ -109,6 +113,7 @@ pub(open) trait Host {
   pk_count(Self, Int) -> Int = _
   pk_name(Self, Int, Int) -> String = _
   pk_bytes(Self, Int, Int) -> Bytes = _
+  pk_info(Self, Int, Int) -> String = _
   pk_end(Self, Int) -> Unit = _
   kp_begin(Self, String, String, Int) -> Int = _
   kp_append(Self, Int, Bytes) -> Int = _
@@ -141,6 +146,8 @@ pub(open) trait Host {
   st_show(Self, Int, Double) -> Unit = _
   st_close(Self, Int) -> Unit = _
   st_h264_here(Self) -> Int = _
+  st_feeds(Self) -> Int = _
+  st_codec(Self, Int, String, Bytes) -> Unit = _
   cl_read(Self) -> Int = _
   cl_state(Self, Int) -> Int = _
   cl_picture(Self, Int) -> Int = _
@@ -271,6 +278,11 @@ impl Host with set_ime(_, _, _, _, _, _, _, _, _) {
 }
 
 ///|
+impl Host with text_menu(_, _, _, _, _, _, _) {
+  ()
+}
+
+///|
 impl Host with clipboard_set(_, _) {
   ()
 }
@@ -348,6 +360,21 @@ impl Host with env(_, _) {
 ///|
 impl Host with set_app_state(_, _) {
   ()
+}
+
+///|
+impl Host with a11y_on(_) {
+  false
+}
+
+///|
+impl Host with a11y_tree(_, _) {
+  ()
+}
+
+///|
+impl Host with font_scale(_) {
+  1.0
 }
 
 ///|
@@ -651,6 +678,11 @@ impl Host with pk_bytes(_, _, _) {
 }
 
 ///|
+impl Host with pk_info(_, _, _) {
+  ""
+}
+
+///|
 impl Host with pk_end(_, _) {
   ()
 }
@@ -806,6 +838,16 @@ impl Host with st_close(_, _) {
 }
 
 ///|
+impl Host with st_feeds(_) {
+  0
+}
+
+///|
+impl Host with st_codec(_, _, _, _) {
+  ()
+}
+
+///|
 impl Host with st_h264_here(_) {
   0
 }
@@ -909,6 +951,13 @@ let current : Ref[&Host] = { val: NoHost::{  } }
 /// Who answers from now on: the platform's (mbui/host's init, as the program starts), a Tester's fake.
 pub fn set_host(h : &Host) -> Unit {
   current.val = h
+}
+
+///|
+/// Who answers now: the platform's in a program with mbui/host, asked before a Tester gives its fake (a film's,
+/// mbui/src/film: its text and pictures the platform's, Tester::new's `live`).
+pub fn host() -> &Host {
+  current.val
 }
 
 ///|
@@ -1089,6 +1138,28 @@ pub fn set_ime(
 }
 
 ///|
+/// What a field's selected words can have done to them: cut, copy, paste, select all (text_menu's `can`).
+pub let text_menu_cut : Int = 1
+
+///|
+pub let text_menu_copy : Int = 2
+
+///|
+pub let text_menu_paste : Int = 4
+
+///|
+pub let text_menu_select_all : Int = 8
+
+///|
+/// The system's floating menu for a field's words (Android's text toolbar: ActionMode.TYPE_FLOATING) `shown` over the
+/// window's rectangle (`x`, `y`, `w`, `h`: the words picked, or the caret), offering what `can` says (text_menu_*); or
+/// put away. What is chosen comes as the keys and the paste the field already takes (select all, copy, cut: keys 12,
+/// 13, 14; paste: the clipboard's words as text), the menu then gone. A host with none shows nothing.
+pub fn text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit {
+  current.val.text_menu(shown, x, y, w, h, can)
+}
+
+///|
 pub fn clipboard_set(s : String) -> Unit {
   current.val.clipboard_set(s)
 }
@@ -1200,6 +1271,32 @@ pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
 }
 
 ///|
+/// Whether something reads the app's widgets out (Android: an accessibility service on, TalkBack's or another's): the
+/// app then tells the host what its widgets are as they change (`a11y_tree`, @ui's semantics.mbt).
+pub fn a11y_on() -> Bool {
+  current.val.a11y_on()
+}
+
+///|
+/// What the app's widgets are now, for the system's accessibility (@ui's semantics.mbt says the lines). What is asked
+/// of one comes back on the channel `a11y_channel`.
+pub fn a11y_tree(tree : String) -> Unit {
+  current.val.a11y_tree(tree)
+}
+
+///|
+/// The channel what the system's accessibility asks of a widget is posted on (`{"id": widget, "action": name}`): the
+/// framework's own (@ui takes it).
+pub let a11y_channel : String = "a11y"
+
+///|
+/// How much bigger the system's setting for the size of words makes them (Android's fontScale: 1 as it is, 1.3 the
+/// largest of most phones' steps): words are drawn that much bigger, as Compose's sp are; lengths are not.
+pub fn font_scale() -> Double {
+  current.val.font_scale()
+}
+
+///|
 /// Whether the system is set to dark (macOS's appearance, Android's night mode, iOS's interface style, the browser's
 /// prefers-color-scheme): what an app that follows the system shows. Asked each frame; a host asks for a frame when
 /// it changes. Hosts that cannot tell say light.
@@ -1217,7 +1314,8 @@ pub fn set_dark(dark : Bool) -> Unit {
 ///|
 /// Turned sideways for a film (still.fail's player, Player.kt): landscape asked for (a phone with rotation locked
 /// turns too) and the system's bars out of the way (a swipe brings them for a while); `false`, upright as it was.
-/// Android does it (the activity's requested orientation, its window's insets controller); elsewhere nothing turns.
+/// Android does it (the activity's requested orientation, its window's insets controller), and iOS (the scene's
+/// orientations, the status bar and the home indicator hidden); elsewhere nothing turns.
 pub fn set_sideways(on : Bool) -> Unit {
   current.val.set_sideways(on)
 }
@@ -1231,7 +1329,8 @@ pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool 
 
 ///|
 /// What another app shared into this one since last asked (Android's ACTION_SEND of text or files, ACTION_SEND_MULTIPLE
-/// of files; MBUI_SHARE_FILES, paths split by |, on macOS for scripted runs), as JSON text `{"text","title","files"}`,
+/// of files; iOS's share extension, what it kept taken as the app comes to the front: src/host/ios_share.m;
+/// MBUI_SHARE_FILES, paths split by |, on macOS and iOS for scripted runs), as JSON text `{"text","title","files"}`,
 /// `files` each `{"name","type","size"}` (absent when none); "" when nothing was.
 pub fn shared_in() -> String {
   current.val.shared_in()
@@ -1519,7 +1618,7 @@ pub fn over_done(open_app~ : Bool) -> Unit {
 
 ///|
 /// A page shown in a browser's tab over the app, the app under it (Android's Custom Tab, the system's browser where
-/// none takes one); elsewhere as open_url. False when nothing took it.
+/// none takes one; iOS's SFSafariViewController); elsewhere as open_url. False when nothing took it.
 pub fn open_tab(url : String) -> Bool {
   current.val.open_tab(url)
 }
@@ -1626,6 +1725,11 @@ fn pk_count(id : Int) -> Int {
 ///|
 fn pk_name(id : Int, i : Int) -> String {
   current.val.pk_name(id, i)
+}
+
+///|
+fn pk_info(id : Int, i : Int) -> String {
+  current.val.pk_info(id, i)
 }
 
 ///|
@@ -1791,6 +1895,16 @@ fn st_close(id : Int) -> Unit {
 ///|
 fn st_h264_here() -> Int {
   current.val.st_h264_here()
+}
+
+///|
+fn st_feeds() -> Int {
+  current.val.st_feeds()
+}
+
+///|
+fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit {
+  current.val.st_codec(id, cmd, data)
 }
 
 ///|

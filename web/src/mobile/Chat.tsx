@@ -7,7 +7,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { topicNow, useReady, useTopicSelect } from "../core/react.ts";
-import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote, type Attachment } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -16,9 +16,9 @@ import type { Draft as SharedDraft } from "../draft.ts";
 import { Gallery } from "../FilePreview.tsx";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
-import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { ChatRows, historyLinkClicked, ImageQuote, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -40,6 +40,7 @@ import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideSh
 import { useAction } from "../action.ts";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
+import { Letters } from "../Letters.tsx";
 import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
@@ -296,7 +297,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
     find: find.show,
   });
   const [stable] = useState(() => ({
-    quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
+    quote: (q: Omit<Quote, "comment">, file?: Attachment) => latest.current.draft.current.quote(q, file),
     file: (session: string, file: { path: string; name: string }) => {
       const { app, here } = latest.current;
       app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })));
@@ -349,7 +350,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
       <Gallery.Provider value={gallery}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold} {...sentAfter(view)}>
         <DraftKey.Provider value={chatKey}>
-          <ChatRows chat={view} rows={rows} to={to} />
+          <ImageQuote.Provider value={quoting.images}><ChatRows chat={view} rows={rows} to={to} /></ImageQuote.Provider>
         </DraftKey.Provider>
       </div>
       </Gallery.Provider>
@@ -449,8 +450,10 @@ export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: 
  * a touch keyboard), and a round send button (a spinner while a new chat is made). The menu of chats goes over the
  * capsule (`menu`).
  */
-export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locked = false, onPlus, onType, onSend }: {
+export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locked = false, noFiles = locked, onPlus, onType, onSend }: {
   draft: Draft; draftKey: string | undefined; sessionKey: string | null; placeholder: string; locked?: boolean;
+  /** No file is taken in, though it may be written (its station down). */
+  noFiles?: boolean;
   onPlus: (plus: HTMLElement) => void; onType: () => void; onSend: () => void;
 }): { menu: ReactNode; bar: ReactNode; expanded: boolean } {
   const input = useRef<HTMLTextAreaElement>(null);
@@ -459,13 +462,13 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
   const ready = draft.ready && !locked;
   useEffect(() => { if (draft.focus > 0) input.current?.focus(); }, [draft.focus]);
   const { menu, field } = useComposerText({
-    draft, input, draftKey, sessionKey, locked, placeholder, className: css.mComposerField, lines: 6, layout: expanded,
+    draft, input, draftKey, sessionKey, locked, noFiles, placeholder, className: css.mComposerField, lines: 6, layout: expanded,
     enterSends: window.matchMedia("(hover: hover)").matches, onType, onSubmit: () => { if (ready) onSend(); },
   });
   const bar = (
     <div className={css.mComposerBar} data-expanded={expanded || undefined}
       onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
-      <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget)} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
+      <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget)} disabled={noFiles} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
       {field}
       <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label={t("web-mobile.chat.send")}>
         {draft.starting ? <Spinner className={partsCss.mSpinOnColor} /> : <ArrowUp size={18} />}
@@ -498,7 +501,7 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
     void sendDraft(draft, to, undefined);
   };
   useLayoutEffect(() => use({
-    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, archived: !!view.archived, send,
+    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived, send,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
@@ -525,6 +528,25 @@ function JobsButton({ station, session, alarm }: { station: string; session: str
       {alarm && <span className={css.mJobsAlarm} data-alarm={alarm} aria-hidden="true" />}
     </button>
   );
+}
+
+/** How many letters the chat's agents and other chats' wrote each other, and opening them; none when there are none. */
+function lettersOf(app: MobileApp, here: Here): { n: number; open(): void } | undefined {
+  const n = here.view.letters ?? 0;
+  const thread = here.view.thread?.id;
+  const keeper = here.view.agents[0]?.session.key;
+  return n > 0 && thread != null && keeper ? { n, open: () => openLetters(app, here.station, thread, keeper) } : undefined;
+}
+
+/** What the chat's agents and other chats' wrote each other, not in the chat (Letters.tsx), in a sheet. */
+function openLetters(app: MobileApp, station: string, thread: number, keeper: string) {
+  app.sheet({ height: 0.8, draggable: true, content: () => (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-main.letters.title")} />
+      <div className={sheetsCss.mSheetScroll}><Letters station={station} thread={thread} keeper={keeper} /></div>
+    </>
+  ) });
 }
 
 /** One of the chat's agents in brief, in a sheet (AgentSheet.tsx): from its name, its mark in the bar, its row in the chat's sheet. */
@@ -692,7 +714,7 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
  */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
   const publish = shownPublish(here.view);
-  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.feishuUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + (relayable(here.view) ? 1 : 0) + 2) * 41
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.letters ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.feishuUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + (relayable(here.view) ? 1 : 0) + 2) * 41
     + (publish ? ((publish.may ? 1 : 0) + publish.links.length) * 41 + 10 : 0);
   // As tall as what it shows: its name and line, its agents, its rows.
   app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
@@ -707,6 +729,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const pinFailed = useDoingFailed("chat.pin", { station: here.station, session: here.key });
   const open = !view.archived && !view.offline;
   const publish = shownPublish(view);
+  const letters = lettersOf(app, { ...here, view });
   const rename = () => ask(app, {
     title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
     run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
@@ -756,6 +779,12 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
               <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
                 .catch((error) => app.toast(t(view.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
+              </InfoRow>
+            )}
+            {letters && (
+              <InfoRow onClick={letters.open}>
+                <Chats size={16} /><span className={partsCss.mGrow}>{t("web-main.letters.title")}</span>
+                <span className={partsCss.mMuted}>{t("web-main.letters.count", { n: letters.n })}</span><ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}
             <InfoRow onClick={() => { app.sheet(null); chatPage.find(draftKeyOf(here.station, here.key)); }}>

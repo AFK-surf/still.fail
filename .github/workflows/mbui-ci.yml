@@ -50,10 +50,10 @@ jobs:
           moon test --target native -p mbui/text 2>&1 | tail -4
       - name: flexbox (Yoga's tests)
         run: moon test --target native -p mbui/flex 2>&1 | tail -3
-      - name: "sin, exp, pow… worked out in MoonBit (mbui/dmath); gzip unzipped and SHA-256 (mbui/zip); pictures made from others and their JPEGs (mbui/pixels)"
+      - name: "sin, exp, pow… worked out in MoonBit (mbui/dmath); gzip unzipped and SHA-256 (mbui/zip); pictures made from others, paths drawn, their PNGs and JPEGs, ThumbHash (mbui/pixels); base64, a link's parts, text's bytes, CSV, subtitles (mbui/codec)"
         run: |
           set -o pipefail
-          moon test --target native -p mbui/dmath -p mbui/zip -p mbui/pixels 2>&1 | tail -3
+          moon test --target native -p mbui/dmath -p mbui/zip -p mbui/pixels -p mbui/codec 2>&1 | tail -3
       - name: "The tools (tools/): detlint's rules on made-up files; the C step (tools/mbc): the splitter on made-up C, then programs built with it, a MoonBit one whole and split (scripts/mbc_test.sh)"
         run: |
           set -o pipefail
@@ -126,7 +126,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      # (the APK without Gradle: mbui/scripts/apk.py; its dependencies and their dex kept by the lock)
+      # (the APK without Gradle: mbui/scripts/apk (tools/apk); its dependencies and their dex kept by the lock)
       - uses: ./.github/actions/mbui-apk
       - uses: ./.github/actions/mbui-moonbit
       - name: "The differential text test's APK (APP=textdiff; it runs on an emulator, scripts/textdiff.sh android)"
@@ -160,7 +160,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      # (the APK without Gradle: mbui/scripts/apk.py; its dependencies and their dex kept by the lock)
+      # (the APK without Gradle: mbui/scripts/apk (tools/apk); its dependencies and their dex kept by the lock)
       - uses: ./.github/actions/mbui-apk
       - uses: ./.github/actions/mbui-moonbit
       # (AOSP's image, no Google Play services: on google_apis, just booted, their updates changed the assets' paths
@@ -177,10 +177,17 @@ jobs:
       - name: "The streams (scripts/android-streams.sh: plain, reopen, away, anew, thrown)"
         if: (success() || failure()) && steps.emu.outcome == 'success'
         run: APP=streamdemo scripts/android.sh build && APP=streamdemo bash scripts/android-streams.sh
+      # (the same over the system's MediaCodec: a smoke run for people, not a gate. Its start has Codec2's deadline,
+      # which this emulator, busy drawing each launch on the runner's CPU, misses now and then: no H.264 decoder)
+      - name: "The streams over the system's decoder (REAL=1, not a gate)"
+        if: (success() || failure()) && steps.emu.outcome == 'success'
+        continue-on-error: true
+        run: REAL=1 APP=streamdemo bash scripts/android-streams.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-devices
           path: |
             apps/mbui/mbui/out/android/streams/
+            apps/mbui/mbui/out/android/streams-real/
             apps/mbui/mbui/out/android/keyboard/

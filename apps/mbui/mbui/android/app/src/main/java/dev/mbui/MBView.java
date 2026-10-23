@@ -18,6 +18,7 @@ import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 
+import java.util.ArrayDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -29,7 +30,8 @@ import javax.microedition.khronos.opengles.GL10;
  * display's vsync (Choreographer), one per vsync at most, each told that
  * vsync's time, as Compose's frames are: a frame asked for while touches are
  * handled (the input phase of a vsync) is drawn at that vsync, one asked for
- * by a frame (an animation) at the next.
+ * by a frame (an animation) at the next; the system's back, said in a vsync's
+ * animation phase, is drawn by the next (back()).
  */
 public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private static boolean started;  // MoonBit's main runs once per process
@@ -56,6 +58,30 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         setRenderMode(RENDERMODE_WHEN_DIRTY);
         setFocusable(true);
         setFocusableInTouchMode(true);
+        // a screen reader turned on or off: the app tells its widgets, or stops (A11y, @hostapi.a11y_on)
+        android.view.accessibility.AccessibilityManager am =
+                (android.view.accessibility.AccessibilityManager) c.getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (am != null) am.addAccessibilityStateChangeListener(on -> wantFrame());
+    }
+
+    /** The app's widgets for Android's accessibility (A11y): made as the app first tells them. */
+    private A11y a11y;
+
+    A11y a11y() {
+        if (a11y == null) a11y = new A11y(this);
+        return a11y;
+    }
+
+    @Override
+    public android.view.accessibility.AccessibilityNodeProvider getAccessibilityNodeProvider() {
+        return a11y != null && a11y.any() ? a11y : super.getAccessibilityNodeProvider();
+    }
+
+    @Override
+    protected boolean dispatchHoverEvent(android.view.MotionEvent e) {
+        // a finger exploring the screen with a screen reader on: the widget under it (A11y)
+        if (a11y != null && a11y.any() && a11y.hover(e)) return true;
+        return super.dispatchHoverEvent(e);
     }
 
     // ---- GL thread ----
@@ -94,6 +120,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     private void shotFrame(float w, float h) {
         double t = shotClock;
+        takeBacks(Long.MAX_VALUE);
         Native.frame(w, h, density, t);
         Script.frameDrawn();
         if (shotTaken) return;
@@ -163,9 +190,45 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         double now = v != 0 ? v / 1e6 : System.nanoTime() / 1e6;
         if (now < lastFrame) now = lastFrame;
         lastFrame = now;
+        // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
+        boolean later = takeBacks(v != 0 ? v : System.nanoTime());
         boolean more = Native.frame(w, h, density, now);
-        if (more) wantFrame();
+        if (more || later) wantFrame();
         Script.frameDrawn();
+    }
+
+    // ---- the system's back ----
+
+    /** What the system's back said (main thread), each with when (System.nanoTime) and its kind, x, progress, edge. */
+    private final ArrayDeque<double[]> backs = new ArrayDeque<>();
+
+    /**
+     * The system's back (MainActivity's OnBackAnimationCallback, main thread), x in dp: drawn by the first frame whose
+     * vsync is later than when it was said. Its gesture's steps come from the system's spring (BackProgressAnimator)
+     * in a vsync's animation phase, as that vsync's frame (asked for in the same phase: vsync, below) may already be
+     * drawing on the GL thread. Handed to the GL thread at once, a step went into that frame or the next as the two
+     * threads raced: a frame got none, the next two, and the page following the finger stood still for a frame and
+     * jumped two. A finger's touches come in the vsync's input phase, before its frame is asked for, and do not race.
+     */
+    void back(int kind, float x, float progress, int edge) {
+        synchronized (backs) {
+            backs.add(new double[] {System.nanoTime(), kind, x, progress, edge});
+        }
+        wantFrame();
+    }
+
+    /** Hands MoonBit the backs said before {@code before} (ns), in order (GL thread); whether any is left for later. */
+    private boolean takeBacks(long before) {
+        while (true) {
+            double[] b;
+            synchronized (backs) {
+                b = backs.peek();
+                if (b == null) return false;
+                if (b[0] >= before) return true;
+                backs.poll();
+            }
+            Native.back((int) b[1], (float) b[2], (float) b[3], (int) b[4]);
+        }
     }
 
     // ---- vsync ----
@@ -258,6 +321,69 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     }
 
     /** What the clipboard holds, as words, into the focused field (a paste: KEYCODE_PASTE, the keyboard's menu). */
+    // ── the floating text menu (Host.textMenu): the system's text toolbar over a field's words ──
+
+    private android.view.ActionMode textMenu;
+    private final android.graphics.Rect textMenuRect = new android.graphics.Rect();
+    private int textMenuCan;
+
+    /** Shown over (x, y, w, h) in dp with what {@code can} offers, moved there when it is up; or put away. */
+    void textMenu(boolean shown, double x, double y, double w, double h, int can) {
+        if (!shown) {
+            if (textMenu != null) textMenu.finish();
+            textMenu = null;
+            return;
+        }
+        textMenuRect.set((int) Math.floor(x * density), (int) Math.floor(y * density),
+                (int) Math.ceil((x + w) * density), (int) Math.ceil((y + h) * density));
+        textMenuCan = can;
+        if (textMenu != null) {
+            textMenu.invalidate();
+            textMenu.invalidateContentRect();
+            return;
+        }
+        textMenu = startActionMode(new android.view.ActionMode.Callback2() {
+            private void items(android.view.Menu m) {
+                m.clear();
+                if ((textMenuCan & 1) != 0) m.add(0, android.R.id.cut, 0, android.R.string.cut);
+                if ((textMenuCan & 2) != 0) m.add(0, android.R.id.copy, 1, android.R.string.copy);
+                // nothing on the clipboard: no 粘贴 (as Compose's text toolbar offers it only then)
+                if ((textMenuCan & 4) != 0 && clipHasText()) m.add(0, android.R.id.paste, 2, android.R.string.paste);
+                if ((textMenuCan & 8) != 0) m.add(0, android.R.id.selectAll, 3, android.R.string.selectAll);
+            }
+
+            @Override public boolean onCreateActionMode(android.view.ActionMode mode, android.view.Menu m) { items(m); return true; }
+
+            @Override public boolean onPrepareActionMode(android.view.ActionMode mode, android.view.Menu m) { items(m); return true; }
+
+            @Override public boolean onActionItemClicked(android.view.ActionMode mode, android.view.MenuItem item) {
+                int id = item.getItemId();
+                // as the input method's own (MBInput.performContextMenuAction): the keys and the paste the field takes
+                if (id == android.R.id.paste) paste();
+                else if (id == android.R.id.selectAll) toGL(() -> Native.key(12, 0));
+                else if (id == android.R.id.copy) toGL(() -> Native.key(13, 0));
+                else if (id == android.R.id.cut) toGL(() -> Native.key(14, 0));
+                mode.finish();
+                return true;
+            }
+
+            @Override public void onDestroyActionMode(android.view.ActionMode mode) {
+                if (textMenu == mode) textMenu = null;
+            }
+
+            @Override public void onGetContentRect(android.view.ActionMode mode, android.view.View v, android.graphics.Rect out) {
+                out.set(textMenuRect);
+            }
+        }, android.view.ActionMode.TYPE_FLOATING);
+    }
+
+    /** Whether the clipboard holds something to paste (ClipboardManager.hasPrimaryClip). */
+    private boolean clipHasText() {
+        android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        return cm != null && cm.hasPrimaryClip();
+    }
+
     void paste() {
         android.content.ClipboardManager cm = (android.content.ClipboardManager)
                 getContext().getSystemService(Context.CLIPBOARD_SERVICE);
@@ -352,6 +478,14 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             // (performEditorAction)
             out.inputType = InputType.TYPE_CLASS_TEXT;
             out.imeOptions = EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        } else if (Device.imeAction == 2) {
+            // an address's: the keyboard's for addresses, its Enter a go key (Compose's ImeAction.Go, KeyboardType.Uri)
+            out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI;
+            out.imeOptions = EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        } else if (Device.imeAction == 3) {
+            // a number's: digits, its Enter a done key (Compose's ImeAction.Done, KeyboardType.Number)
+            out.inputType = InputType.TYPE_CLASS_NUMBER;
+            out.imeOptions = EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
         }
         out.initialSelStart = Host.selStart;
         out.initialSelEnd = Host.selEnd;

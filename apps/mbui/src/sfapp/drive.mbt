@@ -23,7 +23,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
       }
       if dv_nav_bar(c, back, tr("android-misc.bar.place.files"), fn() {
           if lenders.length() > 0 &&
-            dv_nav_button(c, "files-lend", "plus", size=20.0) {
+            dv_nav_button(c, "files-lend", "plus", size=20.0, said=tr("android-misc.bar.action.files")) {
             files_lend_on(c, lenders)
           }
         }) {
@@ -33,7 +33,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       // under the top bar (and the status bar); at the foot 30 over the navigation bar, and the bottom bar's room at a
       // place's top (Files.kt foot)
-      let foot = nav_foot() + 30.0 + (if place && !wide_on.val { bar_room } else { 0.0 })
+      let foot = nav_foot() + 30.0 + (if place && has_bar() { bar_room } else { 0.0 })
       files_body(c, src, list, error, lenders, if place { status_top() + bar_h + 8.0 } else { 4.0 }, foot)
       if place {
         c.layer(fn() { files_top_bar(c) }) |> ignore
@@ -94,14 +94,13 @@ fn under_page() -> Page? {
 fn files_top_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
-    // under the status bar (TopGlassBar)
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top() + 8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
+    // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
+    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="files-settings") {
         app.nav.push(Settings)
       }
       c.box(w=Fill(1.0), h=Px(34.0), justify=JCenter, fn() {
-        c.text(tr("android-misc.bar.place.files"), size=24.0, weight=700, color=t.p.text, wrap=false, line=30.0)
-        |> ignore
+        top_bar_title(c, tr("android-misc.bar.place.files")) |> ignore
       })
       |> ignore
     })
@@ -484,7 +483,7 @@ fn folder_page(
               dv.chosen[key] = shown.map(fn(e) { e.name })
             }
           }
-          c.box(padx=8.0, pady=6.0, radius=6.0, opacity=if c.pressed(id) { 0.6 } else { 1.0 }, id~, fn() {
+          c.box(padx=8.0, pady=6.0, radius=6.0, id~, fn() {
             c.text(
               tr(if all { "android-misc.drive.chooseNone" } else { "android-misc.drive.chooseAll" }),
               size=15.0,
@@ -492,9 +491,11 @@ fn folder_page(
               wrap=false,
             )
             |> ignore
+            // DriveScreen.kt: clip(Smooth(6)).clickable
+            @motion.ripple(c, id, 6.0)
           })
           |> ignore
-          if dv_nav_button(c, "drive-chosen-more", "more") {
+          if dv_nav_button(c, "drive-chosen-more", "more", said=tr("android-misc.drive.chosenActions")) {
             let picked = entries.filter(fn(e) { chosen.contains(e.name) })
             match picked {
               [] => ()
@@ -513,13 +514,12 @@ fn folder_page(
         if c.clicked(rid) {
           reload()
         }
-        c.box(
+        let rb = c.box(
           w=Px(34.0),
           h=Px(34.0),
           radius=17.0,
           align=ACenter,
           justify=JCenter,
-          bg=if c.pressed(rid) { @sf.alpha(t.p.text, 0.08) } else { 0L },
           id=rid,
           fn() {
             if refreshing {
@@ -527,13 +527,15 @@ fn folder_page(
             } else {
               @sf.icon(c, "refresh", size=18.0, color=t.p.text) |> ignore
             }
+            // DriveScreen.kt: clip(CircleShape).clickable
+            @motion.ripple(c, rid, 17.0)
           },
         )
-        |> ignore
-        if can.write && dv_nav_button(c, "drive-add", "plus", size=20.0) {
+        c.semantics(rb, Button, id=rid, label=tr("android-misc.drive.refresh"))
+        if can.write && dv_nav_button(c, "drive-add", "plus", size=20.0, said=tr("android-misc.drive.add")) {
           dv_open(c, Add(here, name, can.manage && top))
         }
-        if dv_nav_button(c, "drive-view", "more") {
+        if dv_nav_button(c, "drive-view", "more", said=tr("android-misc.drive.view")) {
           dv_open(c, View(here, can.manage && top))
         }
       })
@@ -638,8 +640,10 @@ fn dv_retry_line(
     if c.clicked(id) {
       retry()
     }
-    c.box(pad=4.0, radius=6.0, opacity=if c.pressed(id) { 0.6 } else { 1.0 }, id~, fn() {
+    c.box(pad=4.0, radius=6.0, id~, fn() {
       c.text(tr("android-misc.drive.retry"), size~, color=@sf.link_ink(), wrap=false) |> ignore
+      // DriveScreen.kt: clip(Smooth(6)).clickable
+      @motion.ripple(c, id, 6.0)
     })
     |> ignore
   })
@@ -900,7 +904,7 @@ fn dv_upload(c : @ui.Ctx, at : DriveAt) -> Unit {
       dv.picking = Some(p)
       dv.picking_for = at
     }
-    None => say(c, "这个版本在这台设备上还不能选文件")
+    None => say(c, tr("android-chat.composer.noFiles"))
   }
 }
 
@@ -1127,13 +1131,13 @@ fn upload_row(
         }
       })
       |> ignore
-      if u.state == "failed" && dv_row_key(c, k + "/retry", "retry") {
+      if u.state == "failed" && dv_row_key(c, k + "/retry", "retry", tr("android-misc.drive.retry")) {
         u.state = "waiting"
         u.error = ""
         u.sent = 0
         dv_pump(src)
       }
-      if dv_row_key(c, k + "/cancel", "close") {
+      if dv_row_key(c, k + "/cancel", "close", tr("common.cancel")) {
         dv.uploads.retain(fn(x) { x.serial != u.serial })
         if u.state == "going" {
           dv.pumping = false
@@ -1147,18 +1151,23 @@ fn upload_row(
 
 ///|
 /// A key at a row's end (DriveScreen.kt RowKey): 34 round, a 16 icon in grey.
-fn dv_row_key(c : @ui.Ctx, key : String, icon : String) -> Bool {
+fn dv_row_key(c : @ui.Ctx, key : String, icon : String, said : String) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
+  // (`said`: what it is to a screen reader, RowKey's contentDescription)
   c.box(
     w=Px(34.0),
     h=Px(34.0),
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
+    label=said,
     id~,
-    fn() { @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore
+      // DriveScreen.kt RowKey: clip(CircleShape).clickable
+      @motion.ripple(c, id, 17.0)
+    },
   )
   |> ignore
   c.clicked(id)

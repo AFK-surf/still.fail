@@ -31,13 +31,17 @@ pub(all) struct Source {
   sign_in : () -> Unit
   /// whether a sign-in is under way
   signing_in : () -> Bool
-  /// a person's picture by its URL: an image's src once it is here, "" until then (the core's `picture`)
-  picture : (String) -> String
+  /// a picture by its URL (a person's, a station's icon) as it is put up on its page's time on top `stint`
+  /// (Ctx::page_stint): an image's src once it is here, "" until then (the core's `picture`: core_pictures.mbt)
+  picture : (String, Int) -> String
   /// what the core said when it stopped, if it did
   fatal : () -> String?
   /// a file of a chat as its messages show it (`station.file`, an image's thumbnail): by its station, the session
   /// that keeps it and its name; an image's key once it is here, "" while it comes, "!" when it could not be had
   file : (String, String, String) -> String
+  /// a video of a chat's still as the station makes it (`station.poster`: its first frame, a small JPEG), by the same
+  /// three; an image's key once it is here, "" while it comes, "!" when the station has none
+  poster : (String, String, String) -> String
   /// the time of day, in milliseconds since 1970 (how long an agent's turn has run)
   now : () -> Double
   /// a topic no page shows any more (`unsubscribe`)
@@ -45,4 +49,33 @@ pub(all) struct Source {
   /// nothing the reader does is told to the core (MBUI_READONLY=1): no read marks, no place kept, nothing sent, no
   /// draft kept, no file put up
   read_only : Bool
+}
+
+///|
+/// Bind the client's core once when it starts: Markdown read and code coloured by it (`markdown`, `code.ink`). Static
+/// fixtures have no core (the real core's answers kept instead: src/sfkept); a recorded client binds its replay of the
+/// same operations. The live renderer never interprets Markdown, TeX or code while an answer is coming.
+pub fn use_core_markdown(src : Source) -> Unit {
+  @sf.markdown_read.val = Some(fn(words, done) {
+    (src.call)("markdown", { "text": Json::string(words) }, fn(answer) {
+      match answer {
+        Ok(v) => done(field(Some(v), "md"))
+        Err(_) => done(None)
+      }
+    })
+  })
+  @sf.ink_read.val = Some(fn(code, lang, done) {
+    (src.call)("code.ink", { "code": Json::string(code), "lang": Json::string(lang) }, fn(answer) {
+      match answer {
+        Ok(v) =>
+          done(
+            match field(Some(v), "ink") {
+              Some(String(s)) => Some(s)
+              _ => None
+            },
+          )
+        Err(_) => done(None)
+      }
+    })
+  })
 }

@@ -5,8 +5,9 @@ import { CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
 import { isObject } from "./util.ts";
 
-/// A chat as a UI names it: its thread, or its key before it has one (or both).
-export type ChatOf = { station: string; thread: number | null; session: string | null; end: boolean };
+/// A chat as a UI names it: its thread, or its key before it has one (or both); whether its end shows, and the newest
+/// message shown whole (`seen`, its seq).
+export type ChatOf = { station: string; thread: number | null; session: string | null; end: boolean; seen: number | null };
 
 /// What a UI said: each field given changes, the rest stays. `chat` undefined: not said; null: shows none.
 export type FocusCall = { visible: boolean | null; focused: boolean | null; chat: ChatOf | null | undefined; left: ChatOf | null; workspace: string | null };
@@ -30,6 +31,7 @@ function chatOf(v: unknown): ChatOf {
     ["thread", "u64", "opt"],
     ["session", "string", "opt"],
     ["end", "bool", "default"],
+    ["seen", "u64", "opt"],
   ]);
   return p as unknown as ChatOf;
 }

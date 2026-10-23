@@ -50,20 +50,6 @@ fn update_trouble(notice : Json?) -> Bool {
 }
 
 ///|
-/// The control's width in the bar (what follows a chat's title is laid out by its width): its dot, its gap, its word.
-fn update_control_w(notice : Json?) -> Double {
-  let words = match text(notice, "label") {
-    "" => text(notice, "text")
-    l => l
-  }
-  let mut w = 0.0
-  for ch in words {
-    w = w + (if ch.to_int() > 0x2E80 { 12.0 } else { 7.0 })
-  }
-  6.0 + 5.0 + w
-}
-
-///|
 /// Tells the core how the notice of `station`'s update now is: `open`, `close` or `dismiss` (for this version).
 fn update_notice(src : Source, station : String, notice : Json?, action : String) -> Unit {
   act(src, tr("android-misc.stationUpdate.noticeWhat"), "station.updateNotice/" + station, "station.updateNotice", {
@@ -92,7 +78,8 @@ fn station_update_control(c : @ui.Ctx, src : Source, station : String, notice : 
     }
     None => ()
   }
-  c.box(style=update_control_row, id~, fn() {
+  // (read as the notice's words: StationUpdate.kt's contentDescription = notice.text)
+  c.box(style=update_control_row, id~, label=text(notice, "text"), fn() {
     c.box(style=if trouble { update_dot_trouble } else { update_dot }, fn() {  }) |> ignore
     c.text(
       match text(notice, "label") {
@@ -102,6 +89,8 @@ fn station_update_control(c : @ui.Ctx, src : Source, station : String, notice : 
       style=if trouble { update_label_trouble } else { update_label },
     )
     |> ignore
+    // StationUpdate.kt: the control's row clickable
+    @motion.ripple(c, id, 0.0)
   })
   |> ignore
 }
@@ -120,11 +109,6 @@ let update_dot_center : Double = 3.0
 
 ///|
 let update_arrow_keep : Double = 30.0
-
-///|
-/// What a tap beside the popover lands on: all of the window.
-// kept across runs: a value (no field of it changes)
-let update_scrim : @ui.Style = @ui.style(w=Full, h=Full)
 
 ///|
 /// The popover (24 round, raised, a soft shadow): 14 in on the left, 8 on the right, 12 over and 10 under; its rows 8
@@ -183,7 +167,6 @@ let update_close : @ui.Style = @ui.style(
   radius=Full,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -202,7 +185,6 @@ let update_now : @ui.Style = @ui.style(
   radius=Full,
   bg=AccentBg,
   align=ACenter,
-  pressed=@ui.patch(bg=Over(AccentBg, A(Fg, O5))),
 )
 
 ///|
@@ -215,23 +197,20 @@ let update_now_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, co
 let update_progress_room : @ui.Style = @ui.style(w=Full, pr=S1)
 
 ///|
-/// The popover under the control while the core says it is open; a tap beside it closes it.
+/// The popover under the control while the core says it is open, in mbui's layer over the page (modal, its ground
+/// clear: a tap beside it, Esc or back close it, nothing under it taking the tap; the focus in it, back to the control
+/// as it goes).
 fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> Unit {
   if !(notice is Some(Object(_))) || !flag(notice, "open") {
     return
   }
   let trouble = update_trouble(notice)
-  let scrim = c.id("station-update-scrim")
-  if c.clicked(scrim) {
-    update_notice(src, station, notice, "close")
-  }
   // the room (the popover and the 12 round it) right in the window less 12, its top 4 over the control's foot
   // (StationUpdate.kt: gap -4); its arrow at the control's dot, kept 30 from the room's sides
   let room_w = dmin(update_pop_most, c.width - update_pop_margin)
   let room_left = c.width - update_pop_margin - room_w
   let arrow = dmin(dmax(update_anchor.x + update_dot_center - room_left, update_arrow_keep), room_w - update_arrow_keep)
-  c.layer(fn() { c.box(style=update_scrim, id=scrim, fn() {  }) |> ignore }) |> ignore
-  c.layer(fn() {
+  let o = c.overlay("station-update-layer", modal=true, anchor=c.id("station-update"), fn() {
     c.box(style=@ui.style(w=Fixed(room_w), p=S3), tx=room_left, ty=update_anchor.bottom - 4.0, fn() {
       c.box(style=@sf.full_width, fn() {
         // its arrow, from the popover's top edge up toward the control's dot (the layer is the room's inside, 12 in)
@@ -265,7 +244,21 @@ fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : 
             if c.clicked(close) {
               update_notice(src, station, notice, if flag(notice, "dismissible") { "dismiss" } else { "close" })
             }
-            c.box(style=update_close, id=close, fn() { @sf.icon(c, "close", size=14.0, color=@sf.theme().p.muted) |> ignore })
+            c.box(
+              style=update_close,
+              id=close,
+              label=tr(
+                if flag(notice, "dismissible") {
+                  "android-misc.stationUpdate.dismiss"
+                } else {
+                  "android-misc.stationUpdate.collapse"
+                },
+              ),
+              fn() {
+                @sf.icon(c, "close", size=14.0, color=@sf.theme().p.muted) |> ignore
+                @motion.ripple(c, close, 16.0)
+              },
+            )
             |> ignore
           })
           |> ignore
@@ -296,7 +289,9 @@ fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : 
     })
     |> ignore
   })
-  |> ignore
+  if o.dismissed is Some(_) {
+    update_notice(src, station, notice, "close")
+  }
 }
 
 ///|
@@ -324,6 +319,10 @@ fn update_now_button(c : @ui.Ctx, src : Source, station : String, notice : Json?
       style=update_now_words,
     )
     |> ignore
+    // StationUpdate.kt: clip(CircleShape).clickable, not while busy
+    if !busy {
+      @motion.ripple(c, id, 14.0)
+    }
   })
   |> ignore
 }

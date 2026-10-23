@@ -28,3 +28,15 @@ static const char *core_data_dir(void) {
 static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_stop, core_data_dir, mb_web_auth, mb_post, mb_post_drop};
 
 __attribute__((constructor)) static void use_hermes_engine(void) { mbc_use(&hermes_engine); }
+
+#if TARGET_OS_IPHONE
+#include <sys/utsname.h>
+// The phone's model, as Android's CoreHost.java puts its maker's and model in MBUI_DEVICE_MODEL (the device's name the
+// core makes: signin.mbt tell_device): its machine identifier (iPhone17,1; the simulator's the device it plays).
+__attribute__((constructor)) static void device_model(void) {
+  const char *sim = getenv("SIMULATOR_MODEL_IDENTIFIER");
+  struct utsname u;
+  if (!sim && uname(&u) != 0) return;
+  setenv("MBUI_DEVICE_MODEL", sim ? sim : u.machine, 0);
+}
+#endif

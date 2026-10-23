@@ -324,6 +324,9 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
   let value : Json? = match name {
     "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
+    // a draft's files going up in the core (composer.add): up at once
+    "composer" =>
+      Some({ "files": Json::array(fix_composers.get(text(Some(Json::object(params)), "key")).unwrap_or([])) })
     // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the
     // account not let into this app)
     "workspaces" if f.mode == "landing" || f.mode == "landing-invited" || f.mode == "blocked" => {
@@ -397,7 +400,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
       })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
     // (a chat's agent's run settings, a settings page: the settings' own)
-    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" => @settings.fixture_topic(f.mode, name, params)
+    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
+      @settings.fixture_topic(f.mode, name, params)
     "newChat" | "pick" => fixture_new_topic(f, name)
     _ =>
       match decide_fixture_topic(f, name, params) {
@@ -452,6 +456,31 @@ fn fixture_stations_way(v : Json?) -> Json? {
 }
 
 ///|
+/// `base` answering `ms` late, as a phone's core across its thread does: each call's answer and each topic's first value
+/// (src/sffilm's MBUI_CORE_MS: what shows meanwhile filmed too). What is due comes as the fixture is next read
+/// (fix_later).
+pub fn round_trip(base : Source, ms : Double) -> Source {
+  let read : Map[String, Bool] = {}
+  {
+    ..base,
+    call: fn(name, params, done) { (base.call)(name, params, fn(r) { fix_later(ms, fn() { done(r) }) }) },
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      let k = name + Json::object(params).stringify()
+      match read.get(k) {
+        Some(true) => t
+        Some(false) => { value: None, error: None, version: -1 }
+        None => {
+          read[k] = false
+          fix_later(ms, fn() { read[k] = true })
+          { value: None, error: None, version: -1 }
+        }
+      }
+    },
+  }
+}
+
+///|
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
   fixture_preview(mode)
@@ -496,6 +525,13 @@ pub fn fixture(mode : String) -> Source {
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
     call: fn(name, params, done) {
+      match fixture_kept(name, params, None) {
+        Some(r) => {
+          done(r.map(fn(a) { a.0 }))
+          return
+        }
+        None => ()
+      }
       match @settings.fixture_call(name, params) {
         Some(r) => {
           done(r)
@@ -580,6 +616,13 @@ pub fn fixture(mode : String) -> Source {
       }
     },
     read_bytes: fn(name, params, done) {
+      match fixture_kept(name, params, None) {
+        Some(r) => {
+          done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
+          return
+        }
+        None => ()
+      }
       // the faces' files (fonts_fixture.mbt)
       match fixture_fonts_read(f, name) {
         Some(r) => {
@@ -616,7 +659,14 @@ pub fn fixture(mode : String) -> Source {
       fixture_stream(name, params, on_value, done)
     },
     cancel: fn(_) {  },
-    call_bytes: fn(name, params, _bytes, done) {
+    call_bytes: fn(name, params, bytes, done) {
+      match fixture_kept(name, params, Some(bytes)) {
+        Some(r) => {
+          done(r.map(fn(a) { a.0 }))
+          return
+        }
+        None => ()
+      }
       if fixture_fonts_call(f, name, params, done) {
         return
       }
@@ -627,12 +677,24 @@ pub fn fixture(mode : String) -> Source {
     },
     sign_in: fn() {  },
     signing_in: fn() { false },
-    picture: fn(_) { "" },
+    picture: fn(_, _) { "" },
     fatal: fn() { None },
     file: fn(_, _, name) { fixture_file(name) },
+    // a video's still: its first frame as the station makes it (the made-up ones' each a picture of its own)
+    poster: fn(_, _, name) { fixture_file(name) },
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
     read_only: false,
+  }
+}
+
+///|
+/// The core's pure calls (`markdown`, `code.ink`, `reader.*`) as the real core answered them, kept (src/sfkept: bound
+/// by a run without a core); None for any other.
+fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Bytes?), Json]? {
+  match @sf.kept_call.val {
+    Some(kept) => kept(name, params, bytes)
+    None => None
   }
 }
 

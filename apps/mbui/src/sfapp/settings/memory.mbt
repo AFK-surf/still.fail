@@ -512,7 +512,6 @@ let skill_share_line : @ui.Style = @ui.style(
   gap=S2_5,
   radius=Inner,
   align=ACenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -544,7 +543,11 @@ fn skill_share_row(c : @ui.Ctx, core : Core, address : String, kv : Json?, read 
     c.box(style=skill_share_line, id~, fn() {
       c.text(tr("web-main.memory.share.switch"), style=skill_share_words) |> ignore
       doing_mark(c, busy, failed_of(core, ["skill.share"], on_what))
-      switch(c, on)
+      switch(c, "skill-share/" + name, on)
+      // Memory.kt: clip(Smooth(LIST_ROW_CORNER)).clickable (not while busy)
+      if id != 0 {
+        @motion.ripple(c, id, @sf.row_corner)
+      }
     })
     |> ignore
     if id != 0 && hit(c, id) {

@@ -5,6 +5,11 @@
 #import "apple.h"
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#import <Photos/Photos.h>
+#import <UIKit/UIKit.h>
+#endif
 
 void mb_host_request_frame(void);
 
@@ -104,6 +109,42 @@ static void decode(int iid, CGImageSourceRef src, int max_px) {
   finish_rgba(iid, px, w, h, ow, oh);
 }
 
+#if TARGET_OS_IPHONE
+// A photo of the library by its local identifier, at most max_px on its longer side, upright: drawn into the bitmap
+// as UIKit draws it (its orientation applied); its size the photo's own.
+static void photo_thumb(int iid, NSString *lid, int max_px) {
+  PHAsset *a = [PHAsset fetchAssetsWithLocalIdentifiers:@[ lid ] options:nil].firstObject;
+  if (!a) {
+    finish(iid, -1, 0, 0, 0, 0, nil);
+    return;
+  }
+  PHImageRequestOptions *o = [PHImageRequestOptions new];
+  o.synchronous = YES;
+  o.networkAccessAllowed = YES;
+  o.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
+  o.resizeMode = PHImageRequestOptionsResizeModeFast;
+  __block UIImage *im = nil;
+  [PHImageManager.defaultManager requestImageForAsset:a targetSize:CGSizeMake(max_px, max_px)
+                                          contentMode:PHImageContentModeAspectFit options:o
+                                        resultHandler:^(UIImage *r, NSDictionary *info) { im = r; }];
+  if (!im) {
+    finish(iid, -1, 0, 0, 0, 0, nil);
+    return;
+  }
+  double k = MIN(1.0, (double)max_px / MAX(im.size.width * im.scale, im.size.height * im.scale));
+  int w = MAX(1, (int)lround(im.size.width * im.scale * k)), h = MAX(1, (int)lround(im.size.height * im.scale * k));
+  void *px;
+  CGContextRef ctx = rgba_context(w, h, &px);
+  CGContextTranslateCTM(ctx, 0, h);
+  CGContextScaleCTM(ctx, 1, -1);
+  UIGraphicsPushContext(ctx);
+  [im drawInRect:CGRectMake(0, 0, w, h)];
+  UIGraphicsPopContext();
+  CGContextRelease(ctx);
+  finish_rgba(iid, px, w, h, (int)a.pixelWidth, (int)a.pixelHeight);
+}
+#endif
+
 static int start(void (^load)(int iid)) {
   setup();
   int iid = ++next_id;
@@ -136,6 +177,14 @@ int32_t mb_host_image_load(moonbit_string_t s, int32_t max_px) {
         }] resume];
     return iid;
   }
+#if TARGET_OS_IPHONE
+  // a photo of the gallery (ios_app.m's gallery_read): the library's picture of it, as big as asked for (as Android's
+  // content:// thumbnail)
+  if ([src hasPrefix:@"ph://"]) {
+    NSString *lid = [src substringFromIndex:5];
+    return start(^(int iid) { photo_thumb(iid, lid, max_px); });
+  }
+#endif
   NSURL *url = [src hasPrefix:@"file://"] ? [NSURL URLWithString:src] : [NSURL fileURLWithPath:src];
   return start(^(int iid) {
     decode(iid, CGImageSourceCreateWithURL((__bridge CFURLRef)url, NULL), max_px);

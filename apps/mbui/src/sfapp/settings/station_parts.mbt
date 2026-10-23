@@ -86,12 +86,16 @@ fn end_words(c : @ui.Ctx, words : String, color : Int64, weight? : Int = 400) ->
 fn end_action(c : @ui.Ctx, key : String, label : String, busy? : Bool = false, failed? : String? = None) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(dir=Row, pady=8.0, gap=6.0, align=ACenter, id~, opacity=if c.pressed(id) && !busy { 0.6 } else { 1.0 }, fn() {
+  c.box(dir=Row, pady=8.0, gap=6.0, align=ACenter, id~, fn() {
     if busy || failed is Some(_) {
       doing_mark(c, busy, failed, inline=true)
     }
     c.text(label, size=13.0, weight=500, color=if busy { t.p.muted } else { @sf.link_ink() }, wrap=false, line=18.0)
     |> ignore
+    // StationPermissions.kt RowAction: clip(Smooth(8)).clickable (not while busy)
+    if !busy {
+      @motion.ripple(c, id, 8.0)
+    }
   })
   |> ignore
   !busy && hit(c, id)
@@ -193,7 +197,7 @@ fn station_agent_env(c : @ui.Ctx, core : Core, address : String, env : Array[Jso
         if manager {
           let on = [("station", address)]
           if list_row(c, key="env-edit", fn() {
-              row_title(c, tr("android-settings.env.edit"), color=t.p.accent)
+              row_title(c, tr("android-settings.env.edit"), color=@sf.link_ink())
               // saved (the sheet gone): a spinner until the station has them
               doing_mark(c, is_doing(core, ["agentEnv.form.save"], on), failed_of(core, ["agentEnv.form.save"], on))
             }) {
@@ -370,7 +374,7 @@ fn station_search(c : @ui.Ctx, core : Core, address : String, personal : Bool, m
               |> ignore
             })
             |> ignore
-            switch(c, personal)
+            switch(c, "search-personal", personal)
           }) {
           act(
             core,
@@ -524,7 +528,7 @@ fn station_versions(c : @ui.Ctx, core : Core, station : String, updates : Array[
             let busy = versions_state.switching.contains(station)
             if list_row(c, key=if busy { "" } else { "versions-beta" }, fn() {
                 row_lines(c, tr("android-misc.versions.beta"), tr("android-misc.versions.beta.text"), wrap_sub=true)
-                switch(c, on)
+                switch(c, "versions-beta", on)
               }) {
               let to = if on { "stable" } else { "beta" }
               versions_state.switching[station] = to
@@ -550,7 +554,7 @@ fn station_versions(c : @ui.Ctx, core : Core, station : String, updates : Array[
                   tr(if idle { "android-misc.versions.auto.idle" } else { "android-misc.versions.auto.text" }),
                   wrap_sub=true,
                 )
-                switch(c, on)
+                switch(c, "versions-auto", on)
               }) {
               versions_state.turning[station] = !on
               version_call(core, station, "software.auto", [("on", Json::boolean(!on))], fn() {
@@ -875,7 +879,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                 c.text(tr("android-misc.adb.title"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
                 let stopped = if !sharing { text(view, "message") } else { "" }
                 let sub = if there {
-                  adb_state(view)
+                  adb_state(c, view, (core.now)())
                 } else if elsewhere {
                   tr("android-misc.adb.elsewhere")
                 } else if stopped != "" {
@@ -896,7 +900,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
               |> ignore
               let adb = text(view, "adb")
               doing_mark(c, there && (text(view, "phase") != "offered" || adb == "" || adb == "connecting"), None)
-              switch(c, there)
+              switch(c, "adb-switch", there)
             }) {
             if there {
               act(core, tr("android-misc.adb.stopWhat"), "adb.stop", obj([]))
@@ -923,7 +927,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             }
             // what the station said, when it says more than the line above
             let said = text(view, "message")
-            let line = adb_state(view)
+            let line = adb_state(c, view, (core.now)())
             if text(view, "adb") != "connected" && said != "" && said != line && !line.has_suffix(said) {
               list_row(c, fn() {
                 c.text(said, size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
@@ -1074,7 +1078,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             if list_row(c, key=if busy { "" } else { "adb-grant" }, fn() {
                 row_lines(c, tr("android-misc.adb.grant.title"), tr("android-misc.adb.grant.note"), wrap_sub=true)
                 doing_mark(c, busy, failed_of(core, ["adb.grant"], []))
-                switch(c, false)
+                switch(c, "adb-grant", false)
               }) {
               act(
                 core,
@@ -1102,8 +1106,9 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
 }
 
 ///|
-/// How the lending stands, in a line (AdbShare.kt state).
-fn adb_state(view : Json?) -> String {
+/// How the lending stands, in a line (AdbShare.kt state): lent, the minutes left of it as the time of day `now` has
+/// them, said again as they change (AdbShare.kt: its `now` every 20 s).
+fn adb_state(c : @ui.Ctx, view : Json?, now : Double) -> String {
   let adb = text(view, "adb")
   if text(view, "phase") != "offered" {
     return match opt_text(view, "message") {
@@ -1113,8 +1118,18 @@ fn adb_state(view : Json?) -> String {
   }
   match adb {
     "connected" =>
-      // (还剩 N 分钟 left out: the app has no clock of the day's time yet)
-      tr("android-misc.adb.connected")
+      match field(view, "until") {
+        Some(Number(until, ..)) => {
+          let left = until - now
+          let n = if left > 0.0 { (left / 60000.0).floor() } else { 0.0 }
+          // the next minute's change
+          if left > 0.0 {
+            c.wake_in(left - n * 60000.0 + 1.0, later=true)
+          }
+          fill("android-misc.adb.connected.left", [("n", n.to_int().to_string())])
+        }
+        _ => tr("android-misc.adb.connected")
+      }
     "unpaired" => tr("android-misc.adb.unpaired")
     "unauthorized" => tr("android-misc.adb.unauthorized")
     "off" => tr("android-misc.adb.off")

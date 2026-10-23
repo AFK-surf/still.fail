@@ -28,8 +28,8 @@ fn access_label(kind : String) -> String {
 
 ///|
 /// A profile's allowance in a line (Parts.kt QuotaChips): a box per window, what is left in it, its mark when there is
-/// more than one.
-fn quota_chips(c : @ui.Ctx, q : Json?, corner? : Double = fill_chip_radius) -> Unit {
+/// more than one; `small`, a lower line (a chat's agents, an execution's notes).
+pub fn quota_chips(c : @ui.Ctx, q : Json?, small? : Bool = false) -> Unit {
   if text(q, "state") != "ok" {
     return
   }
@@ -47,7 +47,7 @@ fn quota_chips(c : @ui.Ctx, q : Json?, corner? : Double = fill_chip_radius) -> U
         text(wv, "level"),
         if windows.length() == 1 { "" } else { text(wv, "mark") },
         left.to_string() + "%",
-        corner~,
+        small~,
       )
     }
   })
@@ -173,13 +173,13 @@ fn group_by(list : Array[Json]) -> Array[(String, String, Array[Json])] {
 fn group_mark(c : @ui.Ctx, group : String) -> Unit {
   match group {
     "key" => @sf.icon(c, "key", size=16.0, color=@sf.theme().p.text) |> ignore
-    "chatgpt" => provider_mark(c, "codex", "subscription", 16.0, "")
-    // SuperGrok: xAI's
-    "grok" => provider_mark(c, "grok", "api-provider", 16.0, "xai")
     // signed in to an account: its provider's
     "kimi" => provider_mark(c, "claude", "api-provider", 16.0, "kimi")
     "opencode" => provider_mark(c, "claude", "opencode-go", 16.0, "")
-    _ => provider_mark(c, "claude", "subscription", 16.0, "")
+    // a subscription: its vendor's, by the runtime it is (ChatGPT's Codex; SuperGrok's xAI, Cursor's, Devin's)
+    "chatgpt" => provider_mark(c, "codex", "subscription", 16.0, "")
+    "" => provider_mark(c, "claude", "subscription", 16.0, "")
+    g => provider_mark(c, g, "subscription", 16.0, "")
   }
 }
 
@@ -253,10 +253,8 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                   c.text(line, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
                   // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
-                    // (in its row's corner: concentric with it, the row's 12 in)
-                    c.box(style=quota_line, fn() {
-                      quota_chips(c, field(p, "quota"), corner=@ui.concentric(@sf.row_corner, quota_row_inset))
-                    })
+                    // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
+                    c.box(style=quota_line, fn() { quota_chips(c, field(p, "quota")) })
                     |> ignore
                   }
                 })
@@ -413,49 +411,81 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         let users = strings(pv, "usedBy").filter_map(fn(u) {
           items(field(sv, "overview"), "connects").iter().find_first(fn(x) { text(Some(x), "id") == u })
         })
-        let blocks : Array[() -> Unit] = [
-          fn() { gap(c, 12.0) },
-          fn() {
+        let on = [("station", address), ("id", id)]
+        // where it stands: its mark, its pill, what the check said beyond its pill (需要登录 under 需要登录 said nothing
+        // more) and when; its check or allowance refresh failed a moment ago, a red mark that says why
+        let check = field(pv, "check")
+        let checked = match stamp(check, "checkedAt", "ago") {
+          "" => ""
+          ago => fill("android-settings.profile.checkedAt", [("ago", ago)])
+        }
+        let detail = match check {
+          Some(Object(_)) if opt_text(check, "detail") is Some(_) => strip_works(text(check, "detail"))
+          _ => tr("android-settings.profile.notChecked")
+        }
+        let line = if detail != text(pv, "checkText") {
+          detail + checked
+        } else if checked.has_prefix(" · ") {
+          checked.unsafe_substring(start=3, end=checked.length())
+        } else {
+          checked
+        }
+        let status = fn() {
+          c.box(dir=Row, w=Fill(1.0), gap=12.0, fn() {
+            provider_mark(c, text(pv, "runtime"), kind, 26.0, text(pv, "providerMark"))
+            c.box(w=Fill(1.0), gap=4.0, fn() {
+              c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+                tone_pill(c, text(pv, "checkText"), text(pv, "checkTone"))
+                if is_doing(core, ["profile.check"], on) {
+                  wait_line(c, tr("android-settings.version.checking"))
+                } else {
+                  doing_mark(c, false, failed_of(core, ["profile.check", "profile.quota"], on), inline=true)
+                }
+              })
+              |> ignore
+              if line != "" {
+                c.text(line, size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+              }
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+        let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
+        // a subscription's (or one on an account: OpenCode Go's, Kimi Code's) is the head of its sign-in's card; the
+        // machine's own login's, of the card that says whose it is; a key's, of the card with its key (one card for the
+        // account, not a card of a pill over another)
+        let signs = !copy &&
+          (kind == "subscription" || flag(field(pv, "access"), "login")) &&
+          !flag(pv, "machine")
+        if signs {
+          let state = text(field(pv, "login"), "state")
+          blocks.append(profile_sign_in(c, core, address, pv, text(check, "state") == "login" || signing_in.contains(state), status))
+        } else if !copy && flag(pv, "machine") {
+          // on the machine's own login: whose it is is changed on that machine, not here
+          let runtime = runtime_label(text(pv, "runtime"))
+          blocks.push(fn() {
             card(c, fn() {
-              c.box(dir=Row, w=Fill(1.0), gap=12.0, fn() {
-                provider_mark(c, text(pv, "runtime"), kind, 26.0, text(pv, "providerMark"))
-                c.box(w=Fill(1.0), gap=4.0, fn() {
-                  c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-                    tone_pill(c, text(pv, "checkText"), text(pv, "checkTone"))
-                    if is_doing(core, ["profile.check"], [("station", address), ("id", id)]) {
-                      wait_line(c, tr("android-settings.version.checking"))
-                    }
-                  })
-                  |> ignore
-                  let check = field(pv, "check")
-                  let detail = match check {
-                    Some(Object(_)) => strip_works(text(check, "detail"))
-                    _ => tr("android-settings.profile.notChecked")
-                  }
-                  let at = stamp(check, "checkedAt", "ago")
-                  c.text(
-                    detail + (if at != "" { fill("android-settings.profile.checkedAt", [("ago", at)]) } else { "" }),
-                    size=13.0,
-                    color=t.p.muted,
-                    w=Fill(1.0),
-                    line=18.0,
-                  )
-                  |> ignore
-                })
+              status()
+              c.box(style=machine_login_room, fn() {
+                c.text(fill("android-settings.profile.machineLogin", [("station", text(sv, "name")), ("runtime", runtime)]), style=@sf.body.then(@sf.full_words))
+                |> ignore
+              })
+              |> ignore
+              c.box(w=Fill(1.0), pt=4.0, fn() {
+                c.text(fill("android-settings.profile.machineNote", [("runtime", runtime)]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
                 |> ignore
               })
               |> ignore
             })
             |> ignore
-          },
-        ]
-        blocks.append(profile_recovery(c, core, sv, pv))
-        // a subscription, or a profile on an account (OpenCode Go's, Kimi Code's): signed in (again) here
-        if !copy &&
-          (kind == "subscription" || flag(field(pv, "access"), "login")) &&
-          !flag(pv, "machine") {
-          blocks.append(profile_sign_in(c, core, address, pv))
+          })
+        } else if !copy && keyed.contains(kind) && !flag(field(pv, "access"), "login") {
+          blocks.append(profile_key(c, core, address, pv, status))
+        } else {
+          blocks.push(fn() { card(c, status) |> ignore })
         }
+        blocks.append(profile_recovery(c, core, sv, pv))
         if text(field(pv, "trouble"), "action") != "quota" {
           blocks.append(quota_section(c, core, address, pv))
         }
@@ -509,35 +539,6 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
             })
           },
         ])
-        if copy {
-          ()
-        } else if flag(pv, "machine") {
-          // on the machine's own login: whose it is is changed on that machine, not here
-          let runtime = runtime_label(text(pv, "runtime"))
-          blocks.append([
-            fn() { section_header(c, tr("android-settings.run.account"), start=S6) },
-            fn() {
-              card(c, fn() {
-                c.text(
-                  fill("android-settings.profile.machineLogin", [("station", text(sv, "name")), ("runtime", runtime)]),
-                  size=15.0,
-                  color=t.p.text,
-                  w=Fill(1.0),
-                  line=21.0,
-                )
-                |> ignore
-                c.box(w=Fill(1.0), pt=4.0, fn() {
-                  c.text(fill("android-settings.profile.machineNote", [("runtime", runtime)]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
-                  |> ignore
-                })
-                |> ignore
-              })
-              |> ignore
-            },
-          ])
-        } else if keyed.contains(kind) && !flag(field(pv, "access"), "login") {
-          blocks.append(profile_key(c, core, address, pv))
-        }
         if kind == "env" && !copy {
           blocks.append(profile_env(c, core, address, pv))
         }
@@ -959,7 +960,6 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?, bare? 
           pady=11.0,
           gap=12.0,
           align=ACenter,
-          bg=if c.pressed(mid) { @sf.alpha(t.p.text, 0.05) } else { 0L },
           id=mid,
           fn() {
             c.box(w=Px(20.0), h=Px(20.0), radius=6.0, bg=if ticked { t.p.accent } else { t.p.chip }, align=ACenter, justify=JCenter, fn() {
@@ -974,6 +974,8 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?, bare? 
             if pending.contains(m) {
               spinner(c, inline=true)
             }
+            // Profiles.kt ModelsSection: the row clickable
+            @motion.ripple(c, mid, 0.0)
           },
         )
         |> ignore
@@ -1003,5 +1005,6 @@ let models_add_row : @ui.Style = @ui.style(row=true, w=Full, px=S6, pb=S2, gap=S
 let quota_line : @ui.Style = @ui.style(pt=S1_5)
 
 ///|
-/// How far a list row's words are in from its edges (list_line's 12).
-let quota_row_inset : Double = 12.0
+/// Whose the machine's own login is, 14 under where it stands (Profiles.kt: padding(top = 14)).
+// kept across runs: a value (no field of it changes)
+let machine_login_room : @ui.Style = @ui.style(w=Full, pt=S3_5)

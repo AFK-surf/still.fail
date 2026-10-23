@@ -89,19 +89,27 @@ test("parses_each_call", () => {
   assert.equal((parseCall("station.upload.part", { station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4, progress: true }, hello) as { progress: boolean }).progress, true);
   const upload = parseCall("station.upload", { station: "w/s", name: "a.png" }, hello);
   assert.deepEqual({ ...upload, bytes: [...(upload as { bytes: Uint8Array }).bytes] }, { kind: "stationUpload", station: "w/s", name: "a.png", bytes: [...new TextEncoder().encode("hello")] });
-  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png" }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: false });
-  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", thumb: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: true, progress: false });
-  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", progress: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: true });
-  assert.deepEqual(parseCall("station.file.part", { station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4 }), { kind: "stationFilePart", station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4, progress: false, stream: false });
-  assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: true }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: true, stream: false });
-  assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, stream: true }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: false, stream: true });
+  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png" }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: false, keep: null });
+  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", thumb: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: true, progress: false, keep: null });
+  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", progress: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: true, keep: null });
+  assert.deepEqual(parseCall("station.file.part", { station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4 }), { kind: "stationFilePart", station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4, progress: false, stream: false, keep: null });
+  assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.pdf", keep: true, size: 9 }), { kind: "stationFile", station: "w/s", key: "k", name: "a.pdf", thumb: false, progress: false, keep: 9 });
+  assert.deepEqual(parseCall("station.file.part", { station: "w/s", key: "k", name: "a.mp4", offset: 0, length: 4, keep: true, size: 9 }), { kind: "stationFilePart", station: "w/s", key: "k", name: "a.mp4", offset: 0, length: 4, progress: false, stream: false, keep: 9 });
+  // (kept only with its size, and never a thumbnail: kept as it is)
+  assert.equal((parseCall("station.file", { station: "w/s", key: "k", name: "a.pdf", keep: true }) as { keep: unknown }).keep, null);
+  assert.equal((parseCall("station.file", { station: "w/s", key: "k", name: "a.png", thumb: true, keep: true, size: 9 }) as { keep: unknown }).keep, null);
+  assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: true }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: true, stream: false, keep: null, mtime: null, size: null });
+  assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, stream: true }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: false, stream: true, keep: null, mtime: null, size: null });
+  assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 0, length: 4, keep: "played", mtime: 9, size: 40 }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 0, length: 4, progress: false, stream: false, keep: "played", mtime: 9, size: 40 });
+  // (kept only as its folder said the file is)
+  assert.equal((parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 0, length: 4, keep: "file" }) as { keep: unknown }).keep, null);
+  assert.throws(() => parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 0, length: 4, keep: "all", mtime: 9, size: 40 }));
   assert.deepEqual(parseCall("chat.send", { station: "w/s", thread: 7, text: "hi" }), { kind: "chatSend", station: "w/s", thread: 7, text: "hi", attachments: [], quotes: [], client: null });
   assert.deepEqual(parseCall("chat.send", { station: "w/s", thread: 7, text: "hi", client: "android 0.1.1123" }), { kind: "chatSend", station: "w/s", thread: 7, text: "hi", attachments: [], quotes: [], client: "android 0.1.1123" });
   assert.deepEqual(parseCall("chat.retry", { station: "w/s", thread: 7, id: "out-1" }), { kind: "chatRetry", station: "w/s", thread: 7, id: "out-1" });
   assert.deepEqual(parseCall("chat.discard", { station: "w/s", thread: 7, id: "out-1" }), { kind: "chatDiscard", station: "w/s", thread: 7, id: "out-1" });
   assert.deepEqual(parseCall("chat.older", { station: "w/s", thread: 7 }), { kind: "chatOlder", station: "w/s", thread: 7 });
   assert.deepEqual(parseCall("chat.around", { station: "w/s", thread: 7, seq: 3 }), { kind: "chatAround", station: "w/s", thread: 7, seq: 3 });
-  assert.deepEqual(parseCall("chat.letters", { station: "w/s", thread: 7, seq: 3, open: true }), { kind: "chatLetters", station: "w/s", thread: 7, seq: 3, open: true });
   assert.deepEqual(parseCall("chat.find", { station: "w/s", thread: 7, query: "a b" }), { kind: "chatFind", station: "w/s", thread: 7, query: "a b", bring: false });
   assert.deepEqual(parseCall("history.older", { station: "w/s", key: "ember:c-1" }), { kind: "historyOlder", station: "w/s", key: "ember:c-1" });
   assert.deepEqual(parseCall("station.measure", { station: "w/s" }), { kind: "stationMeasure", station: "w/s" });
@@ -460,6 +468,50 @@ test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", asyn
   assert.ok("ws/st:204" in tabs && !("ws/st:4" in tabs) && !("ws/st:t" in tabs));
   void id;
   again.close();
+});
+
+test("a_service_page_s_size_and_folded_toolbar_are_kept_on_the_device", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).previewSizes, {});
+  call(core, ui, 2, "prefs.set", { previewSizes: { "ws/st\nj1": "390x844", "ws/st\nj2": "1280" }, previewFolded: true });
+  call(core, ui, 3, "prefs.set", { previewSizes: { "ws/st\nj2": null } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).previewSizes, { "ws/st\nj1": "390x844" });
+  assert.equal(v(values, 1).previewFolded, true);
+  // a size is digits, or two with an x between
+  call(core, ui, 4, "prefs.set", { previewSizes: { "ws/st\nj1": "wide" } });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 4).length, 1);
+  apply(host, values);
+  assert.deepEqual(v(values, 1).previewSizes, { "ws/st\nj1": "390x844" });
+});
+
+test("a_screen_s_picture_size_is_kept_on_the_device", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).screenQuality, undefined);
+  call(core, ui, 2, "prefs.set", { screenQuality: "original" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenQuality, "original");
+  // only the sizes there are; none again is as the window is
+  call(core, ui, 3, "prefs.set", { screenQuality: "8k" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 3).length, 1);
+  call(core, ui, 4, "prefs.set", { screenQuality: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenQuality, undefined);
 });
 
 test("the_language_is_as_chosen_else_as_the_device_is", async () => {

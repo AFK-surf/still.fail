@@ -105,6 +105,7 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
                 <ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}
+
           </InfoList>
         </div>
       </div>

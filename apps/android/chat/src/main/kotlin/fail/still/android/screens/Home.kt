@@ -10,6 +10,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
+import android.view.ViewConfiguration
 import androidx.compose.ui.layout.boundsInRoot
 import fail.still.android.ui.inkCentred
 import fail.still.android.ui.pressText
@@ -137,6 +138,7 @@ import fail.still.android.ui.NavButton
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.avatarColor
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import fail.still.android.ui.initial
 import fail.still.android.ui.Smooth
@@ -198,15 +200,7 @@ fun HomeScreen(current: WorkspaceEntry) {
         TopGlassBar(haze, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.graphicsLayer { alpha = 1f - away }) {
             // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
             SettingsGear()
-            Row(Modifier.weight(1f).clip(Smooth(8.dp)).clickable { Elsewhere.workspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TopBarTitle(current.workspace.name, Modifier.weight(1f, fill = false))
-                // The other workspaces have something waiting: its dot by the name, before an invitation's.
-                val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
-                val others = marks.value?.others
-                if (others != null) WorkspaceMark(others, marks.value?.othersLabel.orEmpty())
-                else if (Elsewhere.invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
-                IconIn(Icons.ChevronDown, 16.dp, C.muted)
-            }
+            WorkspaceTitle(current, Modifier.weight(1f))
             // A newer build of the app that brings something the changelog says (one that does not waits in the settings
             // until one does): tapped, it is downloaded and handed to the installer (Updates.kt).
             val updates = app.updates
@@ -386,7 +380,10 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
     val app = LocalApp.current
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var held by remember { mutableStateOf(false) }
+    // Pressed, once the press is not the list's (the tap timeout, Compose's TapIndicationDelay): on the ground it has held.
+    var pressed by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
     // Its state line (in the root, as `bounds`): tapped while it names a message (`stateAbout`: not one that asks for a
@@ -401,7 +398,11 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
     val body = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending, item.stateAbout) {
         detectTapGestures(
             // Pressed, the chat is read ahead of its page (AppState.prime).
-            onPress = { app.prime(item.station, item.page); tryAwaitRelease(); held = false },
+            onPress = {
+                app.prime(item.station, item.page)
+                val shown = scope.launch { delay(ViewConfiguration.getTapTimeout().toLong()); pressed = true }
+                try { tryAwaitRelease() } finally { shown.cancel(); pressed = false; held = false }
+            },
             onLongPress = { at ->
                 held = true
                 // Held long, what can be done to the chat, as the wide screen's right click: always just below the row (over it
@@ -418,9 +419,9 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
             },
         )
     })
-    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
+    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, pressed = pressed, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
     SwipeToArchive(item, motion) {
-        ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
+        ChatRowBody(item, view.leading ?: "agents", held || menuOpen, pressed = pressed, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
     }
 }
 
@@ -554,11 +555,11 @@ private fun rowBusy(app: AppState, item: ChatItem): Boolean =
 private fun rowFailed(app: AppState, item: ChatItem): String? =
     app.failedOf(setOf("chat.pin", "chat.archive"), "station" to item.station, "session" to item.session)
 
-/** What a row shows, `lead` leading who is in it (RowPicture.kt); its station by its icon (the core gives one only with several stations); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
+/** What a row shows, `lead` leading who is in it (RowPicture.kt); its station by its icon (the core gives one only with several stations); the time while it is `held`, its ground while that or `pressed`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
 @Composable
-internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, onStateLine: (Rect) -> Unit = {}, modifier: Modifier = Modifier) {
+internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, pressed: Boolean = false, busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, onStateLine: (Rect) -> Unit = {}, modifier: Modifier = Modifier) {
     Box(
-        Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
+        Modifier.fillMaxWidth().height(66.dp).background(if (held || pressed) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
             .then(modifier),
     ) {
         // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).

@@ -172,7 +172,7 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
     list_card(c, fn() {
       if list_row(c, key=if busy { "" } else { "auto-enabled/" + station }, fn() {
           row_title(c, tr("web-pages.automaticDecisions.enabled"))
-          switch(c, flag(d, "enabled"))
+          switch(c, "auto-enabled/" + station, flag(d, "enabled"))
         }) {
         call("edit", [("enabled", Json::boolean(!flag(d, "enabled")))])
       }
@@ -631,9 +631,8 @@ let bar_adding : Ref[Bool] = Ref(false)
 
 ///|
 /// 下方栏 (BarSettingsScreen): this device's bottom bars, each a card of its places (a place taken out with the "−" at its
-/// corner, one added from a sheet of them all, moved by the arrows of its sheet); a bar made the one in view, deleted,
-/// or a new one made. (The Android app moves a place by holding it and sliding it sideways; here its slot's sheet moves
-/// it left or right.)
+/// corner, one added from a sheet of them all, one held and moved sideways to change its order); a bar made the one in
+/// view, deleted, or a new one made.
 fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
   let t = @sf.theme()
   let (made, cur) = (core.bars)()
@@ -672,7 +671,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
           |> ignore
         }
         c.spacer()
-        if is_made && i != cur && tap_text(c, "bar-use/" + i.to_string(), tr("android-misc.bar.use"), size=13.0) {
+        if is_made && i != cur && tap_text(c, "bar-use/" + i.to_string(), tr("android-misc.bar.use"), size=13.0, room=true) {
           save_bars(core, made, i)
         }
         if sets.length() > 1 {
@@ -684,6 +683,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
                 color=t.p.red,
                 size=13.0,
                 said=fill("android-misc.bar.deleteNamed", [("n", (i + 1).to_string())]),
+                room=true,
               ) {
               if !is_made {
                 bar_adding.val = false
@@ -725,45 +725,119 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
 }
 
 ///|
+/// How far a place held is moved along its bar (BarCard's `dx`: the finger's way past the slop), by its bar and its
+/// name, while a finger has it.
+let bar_moves : Map[String, Double] = {}
+
+///|
+/// A place held and moved sideways (BarCard): lifted 8% over the card's ground, 14 round, raised (shadow(6), black at
+/// 14% both).
+// kept across runs: a value (no field of it changes)
+let place_lifted : @sf.Raised = @sf.raised(6.0, ambient=0.14, spot=0.14)
+
+///|
+/// A place on its bar as it lies.
+// kept across runs: a value (no field of it changes)
+let place_slot : @ui.Style = @ui.style()
+
+///|
+/// A place held: on the card's ground, raised (place_lifted).
+// kept across runs: a value (no field of it changes)
+let place_held : @ui.Style = @ui.style(bg=Card, shadow=place_lifted.cast())
+
+///|
 /// A bar's card (BarCard): its places in four slots, each its icon over its name with a "−" at its corner (none on the
-/// last place of the only bar), a tap on it its sheet (moved left or right); with room left, a slot that adds one.
+/// last place of the only bar), one held and moved sideways put where it is let go (by how many slots it went), a
+/// screen reader's step moving it one along; with room left, a slot that adds one.
 fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool, add : () -> Unit) -> Unit {
   let t = @sf.theme()
+  // BarSettingsScreen's onMove: the place at `j` put at `to`
+  let move = fn(j : Int, to : Int) {
+    let (now, ncur) = (core.bars)()
+    if to != j && i < now.length() && j < now[i].length() && to >= 0 && to < now[i].length() {
+      let moved = now[i].copy()
+      let p = moved.remove(j)
+      moved.insert(to, p)
+      save_bars(core, now.mapi(fn(n, s) { if n == i { moved } else { s } }), ncur)
+    }
+  }
   c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, fn() {
-    c.box(dir=Row, w=Fill(1.0), padx=4.0, pady=8.0, radius=20.0, bg=t.p.card, fn() {
+    // 6 in (BarCard: padding(6))
+    c.box(dir=Row, w=Fill(1.0), pad=6.0, radius=20.0, bg=t.p.card, fn() {
       for j, key in set {
         let id = c.id("bar-slot/" + i.to_string() + "/" + key)
-        if hit(c, id) {
-          open_bar_place(core, i, j, set)
-        }
-        // the slot, and its "−" over it beside (not inside) what a tap on the slot opens: the slot's press does not
-        // take the "−"'s
-        c.box(w=Fill(1.0), fn() {
-          c.box(w=Fill(1.0), pt=12.0, pb=10.0, align=ACenter, id~, fn() {
-            c.box(gap=6.0, align=ACenter, fn() {
-              c.box(h=Px(30.0), justify=JCenter, fn() { (core.place_icon)(c, key, t.p.text) }) |> ignore
-              c.text(tr("android-misc.bar.place." + key), size=12.0, color=t.p.muted, wrap=false) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-          if !only {
-            c.layer(align=ACenter, fn() {
-              let rid = c.id("bar-remove/" + i.to_string() + "/" + key)
-              if hit(c, rid) {
-                let (now, ncur) = (core.bars)()
-                save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
+        let held = i.to_string() + "/" + key
+        // the finger's (detectHorizontalDragGestures): lifted once it goes sideways past the slop, following it; let go,
+        // put by how many slots it went (a slot's width, Row's quarter)
+        c.drag_on(id, axis=Horizontal)
+        let lifted = match c.drag_of(id) {
+          Some(d) => {
+            let (dx, _) = d.take_move()
+            if d.down && d.moving {
+              bar_moves[held] = bar_moves.get(held).unwrap_or(0.0) + dx
+            }
+            if d.take_end() {
+              let went = bar_moves.get(held).unwrap_or(0.0)
+              bar_moves.remove(held)
+              match c.rect_of(id) {
+                Some((_, _, w, _)) if w > 0.0 => {
+                  let to = j + (went / w).round().to_int()
+                  move(j, if to < 0 { 0 } else if to >= set.length() { set.length() - 1 } else { to })
+                }
+                _ => ()
               }
-              // at the icon's top right, 8 above the slot (BarSettings.kt: TopCenter, offset 16, -8)
-              let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=-8.0, align=ACenter, justify=JCenter, id=rid, fn() {
-                @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
-              })
-              c.semantics(minus, Button, id=rid, label=fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))]))
-            })
-            |> ignore
+            } else if !d.down {
+              bar_moves.remove(held)
+            }
+            d.down && d.moving
           }
-        })
-        |> ignore
+          None => false
+        }
+        // a screen reader's (BarSettings.kt's actions 左移, 右移): one slot along
+        if c.action_asked(id, Decrement) && j > 0 {
+          move(j, j - 1)
+        }
+        if c.action_asked(id, Increment) && j < set.length() - 1 {
+          move(j, j + 1)
+        }
+        // the slot, and its "−" over it beside (not inside) what the finger holds: a press on the "−" is its own
+        // (14 round: Smooth(concentric(20, 6)), the card's corner 6 in)
+        let slot = c.box(
+          style=if lifted { place_held } else { place_slot },
+          w=Fill(1.0),
+          radius=14.0,
+          fn() {
+            let face = c.box(w=Fill(1.0), pt=12.0, pb=10.0, align=ACenter, id~, fn() {
+              c.box(gap=6.0, align=ACenter, fn() {
+                c.box(h=Px(30.0), justify=JCenter, fn() { (core.place_icon)(c, key, t.p.text) }) |> ignore
+                c.text(tr("android-misc.bar.place." + key), size=12.0, color=t.p.muted, wrap=false) |> ignore
+              })
+              |> ignore
+            })
+            c.semantics(face, Group, id~, label=tr("android-misc.bar.place." + key), actions=[Decrement, Increment])
+            if !only {
+              c.layer(align=ACenter, fn() {
+                let rid = c.id("bar-remove/" + i.to_string() + "/" + key)
+                if hit(c, rid) {
+                  let (now, ncur) = (core.bars)()
+                  save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
+                }
+                // at the icon's top right: 8 over the top of what the slot holds, 12 under the slot's own top
+                // (BarSettings.kt: TopCenter of the slot's padded content, offset 16, -8)
+                let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=4.0, align=ACenter, justify=JCenter, id=rid, fn() {
+                  @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
+                })
+                c.semantics(minus, Button, id=rid, label=fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))]))
+              })
+              |> ignore
+            }
+          },
+        )
+        // held: where the finger has it, 8% bigger, over the other places (graphicsLayer, zIndex(2f))
+        if lifted {
+          c.look(slot, @ui.look(dx=bar_moves.get(held).unwrap_or(0.0), scale=1.08))
+          c.put_over(slot)
+        }
       }
       if set.length() < bar_size {
         let aid = c.id("bar-add/" + i.to_string())
@@ -772,11 +846,10 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
         }
         c.box(w=Fill(1.0), pt=12.0, pb=10.0, radius=16.0, align=ACenter, id=aid, fn() {
           c.box(gap=6.0, align=ACenter, fn() {
-            c.box(w=Px(30.0), h=Px(30.0), align=ACenter, justify=JCenter, fn() {
-              c.box(w=Px(44.0), h=Px(44.0), radius=22.0, border=1.5, border_color=t.p.line, align=ACenter, justify=JCenter, fn() {
-                @sf.icon(c, "plus", size=22.0, color=t.p.subtle) |> ignore
-              })
-              |> ignore
+            // its ring held to the 30 it is in (BarSettings.kt asks 44 of a Box(size(30)): Compose's `size` takes the
+            // constraints it is given)
+            c.box(w=Px(30.0), h=Px(30.0), radius=15.0, border=1.5, border_color=t.p.line, align=ACenter, justify=JCenter, fn() {
+              @sf.icon(c, "plus", size=22.0, color=t.p.subtle) |> ignore
             })
             |> ignore
             c.text(tr("android-misc.bar.add"), size=12.0, color=t.p.subtle, wrap=false) |> ignore
@@ -794,37 +867,6 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
   |> ignore
 }
 
-///|
-/// A place on a bar moved left or right (BarSettings' drag and its screen readers' actions).
-fn open_bar_place(core : Core, i : Int, j : Int, set : Array[String]) -> Unit {
-  let shift = fn(to : Int) {
-    close_sheet()
-    let (now, ncur) = (core.bars)()
-    save_bars(
-      core,
-      now.mapi(fn(n, s) {
-        if n == i && j < s.length() && to >= 0 && to < s.length() {
-          let moved = s.copy()
-          let p = moved.remove(j)
-          moved.insert(to, p)
-          moved
-        } else {
-          s
-        }
-      }),
-      ncur,
-    )
-  }
-  open_sheet(0.3, fn(c, _core) {
-    sheet_head(c, tr("android-misc.bar.place." + set[j]))
-    if j > 0 && pick_row(c, "bar-left", tr("android-misc.bar.moveLeft")) {
-      shift(j - 1)
-    }
-    if j < set.length() - 1 && pick_row(c, "bar-right", tr("android-misc.bar.moveRight")) {
-      shift(j + 1)
-    }
-  })
-}
 
 ///|
 /// The places to add to bar `i` (openPick): all of them, those in it already greyed (已在这一栏), none when it is full.
@@ -883,15 +925,20 @@ fn open_bar_pick(_core : Core, i : Int, picked : (String) -> Unit) -> Unit {
 // 存储空间 (what this device keeps)
 
 ///|
-/// What the core keeps of each chat (`cache.usage`), read as the page opens and again after a deletion.
+/// What the core keeps of each chat (its messages, the files opened in it) and of the drives' files, and the files of
+/// no chat known (`cache.usage`), read as the page opens and again after a deletion.
 priv struct Kept {
   mut chats : Array[Json]?
+  /// the bytes of the drives' files kept (drive.read's `keep`)
+  mut drive : Double
+  /// the files of no chat known (`loose`)
+  mut loose : Array[Json]
   mut asked : Int
   mut read : Int
 }
 
 ///|
-let kept : Kept = { chats: None, asked: 0, read: -1 }
+let kept : Kept = { chats: None, drive: 0.0, loose: [], asked: 0, read: -1 }
 
 ///|
 /// The chats' kept data asked of the core again.
@@ -909,8 +956,28 @@ fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
           Err(_) => []
         },
       )
+      kept.drive = match r {
+        Ok(v) => number(Some(v), "drive")
+        Err(_) => 0.0
+      }
+      kept.loose = match r {
+        Ok(v) => items(Some(v), "loose")
+        Err(_) => []
+      }
     })
   })
+}
+
+///|
+/// The bytes kept of `files` (a chat's, or those of no chat).
+fn files_bytes(files : Array[Json]) -> Double {
+  files.fold(init=0.0, fn(s, f) { s + number(Some(f), "bytes") })
+}
+
+///|
+/// What is kept of a chat: its messages and the files opened in it.
+fn chat_bytes(x : Json) -> Double {
+  number(Some(x), "bytes") + files_bytes(items(Some(x), "files"))
 }
 
 ///|
@@ -929,10 +996,34 @@ fn size_words(n : Double) -> String {
 }
 
 ///|
-/// A row of a size (SizeRow): what, a line under it, its size; tapped when `key` is given.
-fn size_row(c : @ui.Ctx, key : String, title : String, sub : String, size : Double, more? : Bool = false) -> Bool {
+/// How long ago `at` was, in the app's words (KeptFiles.kt since): just now, minutes, hours, days.
+fn since_words(now : Double, at : Double) -> String {
+  let minutes = ((now - at) / 60000.0).floor().to_int()
+  if minutes < 1 {
+    tr("android-settings.files.justNow")
+  } else if minutes < 60 {
+    fill("android-settings.files.minutes", [("n", minutes.to_string())])
+  } else if minutes < 24 * 60 {
+    fill("android-settings.files.hours", [("n", (minutes / 60).to_string())])
+  } else {
+    fill("android-settings.files.days", [("n", (minutes / (24 * 60)).to_string())])
+  }
+}
+
+///|
+/// A row of a size (SizeRow): what, a line under it, its size; tapped when `key` is given; `piece`: a piece of its card
+/// (list_row).
+fn size_row(
+  c : @ui.Ctx,
+  key : String,
+  title : String,
+  sub : String,
+  size : Double,
+  more? : Bool = false,
+  piece? : (Bool, Bool),
+) -> Bool {
   let t = @sf.theme()
-  list_row(c, key~, fn() {
+  list_row(c, key~, piece?, fn() {
     row_lines(c, title, sub)
     c.text(size_words(size), size=14.0, color=t.p.muted, wrap=false) |> ignore
     if more {
@@ -943,9 +1034,9 @@ fn size_row(c : @ui.Ctx, key : String, title : String, sub : String, size : Doub
 
 ///|
 /// What this device keeps (KeptFilesScreen): by chat, what the core keeps of each (its messages, its transcripts, the
-/// files it keeps), each to delete (`cache.clear`), or everything. (The Android app also lists the files its viewers
-/// keep in its cache, its web pages' cache, update packages and temporary files: this app keeps none of its own on the
-/// disk, its viewers reading through the core into memory.)
+/// files opened in it), each to look into; then what is of no chat: files of no chat known, the drives' files opened
+/// (`drive.kept.clear`); or everything. (The Android app also lists its web pages' cache, update packages, temporary
+/// files and the core's own data: this app keeps none of those apart.)
 fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
   let t = @sf.theme()
   kept_read(c, core)
@@ -957,35 +1048,73 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
   match kept.chats {
     None => blocks.push(fn() { waiting_rows(c) })
     Some(chats) => {
-      let total = chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") })
+      let loose = kept.loose
+      let total = chats.fold(init=kept.drive + files_bytes(loose), fn(s, x) { s + chat_bytes(x) })
       blocks.push(fn() {
         section_header(c, tr("android-settings.files.byChat"), trailing=fill("android-settings.files.total", [("size", size_words(total))]), start=S6)
       })
       if chats.length() == 0 {
         blocks.push(fn() { page_note(c, tr("android-settings.files.none")) })
       } else {
-        blocks.push(fn() {
-          list_card(c, fn() {
-            for x in chats {
-              let xv = Some(x)
-              let title = match text(xv, "title") {
-                "" => fill("android-settings.files.untitled", [("n", count(xv, "thread").to_string())])
-                s => s
-              }
-              if size_row(
-                  c,
-                  "kept/" + text(xv, "station") + "/" + count(xv, "thread").to_string(),
-                  title,
-                  fill("android-settings.files.chat.messages", [("size", size_words(number(xv, "bytes")))]),
-                  number(xv, "bytes"),
-                  more=true,
-                ) {
-                (core.push)(KeptChat(text(xv, "station"), count(xv, "thread")))
-              }
+        // a block each, one card's pieces: of many chats only the rows in view are laid out (one block of them all was
+        // built whole each frame, every row's words with it)
+        let n = chats.length()
+        for i, x in chats {
+          blocks.push(fn() {
+            let xv = Some(x)
+            let title = match text(xv, "title") {
+              "" => fill("android-settings.files.untitled", [("n", count(xv, "thread").to_string())])
+              s => s
+            }
+            let files = items(xv, "files")
+            let messages = size_words(number(xv, "bytes"))
+            let sub = if files.length() == 0 {
+              fill("android-settings.files.chat.messages", [("size", messages)])
+            } else {
+              fill("android-settings.files.chat.both", [
+                ("size", messages),
+                ("n", files.length().to_string()),
+                ("files", size_words(files_bytes(files))),
+              ])
+            }
+            if size_row(
+                c,
+                "kept/" + text(xv, "station") + "/" + count(xv, "thread").to_string(),
+                title,
+                sub,
+                chat_bytes(x),
+                more=true,
+                piece=(i == 0, i == n - 1),
+              ) {
+              (core.push)(KeptChat(text(xv, "station"), count(xv, "thread")))
             }
           })
-        })
+        }
       }
+      // what is of no chat (KeptFiles.kt 其他): files of no chat known, the drives' files opened (文件浏览), each to
+      // delete when there are some
+      blocks.push(fn() { section_header(c, tr("android-settings.files.other"), start=S6) })
+      blocks.push(fn() {
+        list_card(c, fn() {
+          if loose.length() > 0 &&
+            size_row(
+              c,
+              "kept-loose",
+              tr("android-settings.files.loose"),
+              fill("android-settings.files.count", [("n", loose.length().to_string())]),
+              files_bytes(loose),
+              more=true,
+            ) {
+            (core.push)(KeptChat("", -1))
+          }
+          let drive = kept.drive
+          if size_row(c, if drive > 0.0 { "kept-drive" } else { "" }, tr("android-settings.files.drive"), tr("android-settings.files.drive.sub"), drive) {
+            confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
+              (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked += 1 })
+            })
+          }
+        })
+      })
       if total > 0.0 {
         blocks.push(fn() {
           list_card(c, fn() {
@@ -1001,6 +1130,10 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
                       kept.asked += 1
                     })
                   }
+                  kept_files_clear(core, loose)
+                  if kept.drive > 0.0 {
+                    (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked += 1 })
+                  }
                 },
               )
             }
@@ -1014,51 +1147,130 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
 }
 
 ///|
+/// Files kept let go, each (`cache.file.clear`), of no chat known: by the station each says.
+fn kept_files_clear(core : Core, files : Array[Json]) -> Unit {
+  for f in files {
+    kept_file_clear(core, text(Some(f), "station"), f)
+  }
+}
+
+///|
+/// A file kept of a chat on `station` let go (`cache.file.clear`): read again from its station when opened.
+fn kept_file_clear(core : Core, station : String, f : Json) -> Unit {
+  let fv = Some(f)
+  (core.call)("cache.file.clear", obj([("station", str(station)), ("key", str(text(fv, "key"))), ("name", str(text(fv, "name")))]), fn(_) {
+    kept.asked += 1
+  })
+}
+
+///|
+/// A file kept (KeptChatScreen's row): its name, how much and when it was last opened (未下载完成 when only a part of
+/// it came), deleted by its bin (a 36 circle, its 18 icon muted); a piece of its card (list_row).
+fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (Bool, Bool)) -> Unit {
+  let t = @sf.theme()
+  let fv = Some(f)
+  let name = text(fv, "name")
+  let bytes = number(fv, "bytes")
+  let sub = if bytes < number(fv, "size") {
+    fill("android-settings.files.partial", [("size", size_words(bytes))])
+  } else {
+    fill("android-settings.files.meta", [("size", size_words(bytes)), ("opened", since_words((core.now)(), number(fv, "opened")))])
+  }
+  list_row(c, key="", piece~, fn() {
+    row_lines(c, name, sub)
+    let id = c.id("kept-file/" + station + "/" + text(fv, "key") + "/" + name)
+    let b = c.box(style=kept_bin, id~, fn() {
+      @sf.icon(c, "trash", size=18.0, color=t.p.muted) |> ignore
+      // clip(CircleShape).clickable
+      @motion.ripple(c, id, 18.0)
+    })
+    c.semantics(b, Button, id~, label=tr("android-settings.files.clear.action") + "「" + name + "」")
+    if hit(c, id) {
+      kept_file_clear(core, station, f)
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A kept file's bin (KeptFiles.kt: a 36 circle, its icon in its middle).
+// kept across runs: a value (no field of it changes)
+let kept_bin : @ui.Style = @ui.style(w=S9, h=S9, radius=Full, align=ACenter, justify=JCenter)
+
+///|
 /// A chat's (KeptChatScreen): what is kept of its messages, deleted when asked (`cache.clear`: read again from its
-/// station when it is opened).
+/// station when it is opened), and the files opened in it, each to delete; or all of it. Station "": the files of no
+/// chat known.
 fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> Unit {
   let t = @sf.theme()
   kept_read(c, core)
+  let loose = station == ""
   let chat = match kept.chats {
-    Some(a) => a.iter().find_first(fn(x) { text(Some(x), "station") == station && count(Some(x), "thread") == thread })
-    None => None
+    Some(a) if !loose => a.iter().find_first(fn(x) { text(Some(x), "station") == station && count(Some(x), "thread") == thread })
+    _ => None
   }
+  let files = if loose { kept.loose } else { items(chat, "files") }
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("android-settings.files.title")) },
-    fn() { large_title(c, text(chat, "title")) },
+    fn() { large_title(c, if loose { tr("android-settings.files.loose") } else { text(chat, "title") }) },
   ]
   let clear = fn() {
-    (core.call)("cache.clear", obj([("station", str(station)), ("thread", Json::number(thread.to_double()))]), fn(_) {
-      kept.asked += 1
-    })
+    match chat {
+      Some(_) =>
+        (core.call)("cache.clear", obj([("station", str(station)), ("thread", Json::number(thread.to_double()))]), fn(_) {
+          kept.asked += 1
+        })
+      None => kept_files_clear(core, files)
+    }
   }
-  match chat {
-    Some(_) => {
-      let size = number(chat, "bytes")
+  if kept.chats is None {
+    blocks.push(fn() { waiting_rows(c) })
+  } else {
+    let messages = number(chat, "bytes")
+    if chat is Some(_) {
       blocks.push(fn() {
         list_card(c, fn() {
-          if size_row(c, if size > 0.0 { "kept-messages" } else { "" }, tr("android-settings.files.messages"), tr("android-settings.files.messages.text"), size) {
-            confirm(tr("android-settings.files.messages"), tr("android-settings.files.messages.clear"), tr("android-settings.files.clear.action"), danger=true, clear)
+          if size_row(c, if messages > 0.0 { "kept-messages" } else { "" }, tr("android-settings.files.messages"), tr("android-settings.files.messages.text"), messages) {
+            confirm(tr("android-settings.files.messages"), tr("android-settings.files.messages.clear"), tr("android-settings.files.clear.action"), danger=true, fn() {
+              (core.call)("cache.clear", obj([("station", str(station)), ("thread", Json::number(thread.to_double()))]), fn(_) {
+                kept.asked += 1
+              })
+            })
           }
         })
       })
-      if size > 0.0 {
-        blocks.push(fn() {
-          list_card(c, fn() {
-            if list_row(c, key="kept-chat-all", fn() { row_title(c, tr("android-settings.files.clearChat"), color=t.p.red) }) {
-              confirm(
-                tr("android-settings.files.clearChat"),
-                fill("android-settings.files.clearChat.text", [("size", size_words(size))]),
-                tr("android-settings.files.clear.action"),
-                danger=true,
-                clear,
-              )
-            }
-          })
-        })
+    }
+    if files.length() > 0 {
+      blocks.push(fn() {
+        section_header(
+          c,
+          tr("android-settings.files.files"),
+          trailing=fill("android-settings.files.filesTotal", [("n", files.length().to_string()), ("size", size_words(files_bytes(files)))]),
+          start=S6,
+        )
+      })
+      // a block each, one card's pieces (as the chats' on 本机缓存): of many only those in view laid out
+      let n = files.length()
+      for i, f in files {
+        blocks.push(fn() { kept_file_row(c, core, if loose { text(Some(f), "station") } else { station }, f, (i == 0, i == n - 1)) })
       }
     }
-    None => if kept.chats is None { blocks.push(fn() { waiting_rows(c) }) }
+    let all = messages + files_bytes(files)
+    if all > 0.0 {
+      blocks.push(fn() {
+        list_card(c, fn() {
+          if list_row(c, key="kept-chat-all", fn() { row_title(c, tr("android-settings.files.clearChat"), color=t.p.red) }) {
+            confirm(
+              tr("android-settings.files.clearChat"),
+              fill("android-settings.files.clearChat.text", [("size", size_words(all))]),
+              tr("android-settings.files.clear.action"),
+              danger=true,
+              clear,
+            )
+          }
+        })
+      })
+    }
   }
   blocks.push(fn() { gap(c, 30.0) })
   scroll_page(c, "kept/" + station + "/" + thread.to_string(), blocks)

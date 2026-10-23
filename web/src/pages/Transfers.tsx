@@ -19,6 +19,7 @@ import { Dialog } from "../ui.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Files.css.ts";
 import { t } from "../i18n.ts";
+import { StationNamed } from "../StationNamed.tsx";
 
 /** The person's transfers into the workspace's stations. */
 export function useTransfers(scope: string): DriveTransferShown[] {
@@ -157,7 +158,7 @@ export function CopyTo({ items, move, from, onClose }: { items: Dragged[]; move:
   return (
     <Dialog open wide onClose={onClose} title={t(move ? "web-pages.files.moveToTitle" : "web-pages.files.copyToTitle", { what })}
       footer={<>
-        <span className={css.copyWhere}>{s && at ? `${s.name} › ${at}` : ""}</span>
+        <span className={css.copyWhere}>{s && at ? <><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} />{` › ${at}`}</> : ""}</span>
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="primary" disabled={!at || !s || why(s) !== null} onClick={pick}>{t(move ? "web-pages.files.moveHereButton" : "web-pages.files.copyHereButton")}</Button>
       </>}>

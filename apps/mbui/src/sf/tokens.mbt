@@ -45,6 +45,8 @@ pub(all) struct Palette {
   on_primary : Int64
   /// a card's ground on the page
   card : Int64
+  /// what sits a step apart on a card: a command's box (Theme.kt surface2, root.css.ts --m-surface2)
+  card2 : Int64
   /// the narrow screen's quiet button
   chip : Int64
   /// links (--blue)
@@ -106,6 +108,10 @@ pub let panel_pill : Double = 24.0
 pub let card_pad : Double = 20.0
 
 ///|
+/// A command's box's corner: its copy button's (8), 10 in from its edges, concentric (Settings.kt COMMAND_BOX_CORNER).
+pub let command_box_corner : Double = concentric_out(8.0, 10.0)
+
+///|
 /// A card's corner with nothing in its corners.
 pub let card_corner : Double = 22.0
 
@@ -121,6 +127,41 @@ pub let list_pad : Double = 8.0
 
 ///|
 pub let row_corner : Double = 18.0
+
+///|
+/// A settings row's icon, before its name (SettingParts.kt ROW_ICON).
+pub let row_icon : Double = 22.0
+
+///|
+/// The account's picture and the workspace's mark, each on its card atop settings (SettingsHome.kt): 46.
+pub let identity_mark : Double = 46.0
+
+///|
+/// The workspace's mark's square (SettingsHome.kt WorkspaceTile): the account's picture's size beside it, card_pad from
+/// its card's edges, so in its corners: concentric with the card's (22, 20 in: 6, Md), what it holds in its middle.
+pub let workspace_tile : @ui.Style = @ui.style(
+  w=Fixed(identity_mark),
+  h=Fixed(identity_mark),
+  radius=Md,
+  align=ACenter,
+  justify=JCenter,
+  clip=true,
+)
+
+///|
+/// A mark of the workspace's own (one of still.fail's icons, an emoji) in its square: 26.
+pub let workspace_tile_mark : Double = 26.0
+
+///|
+/// A workspace's first letter in its square, where it has no mark: 22 on a line of 22 (Xl3, L7: SettingsHome.kt's
+/// lineHeight, near the account's initial beside it, half its picture), semibold, muted (Rail.css.ts workspaceItem).
+pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Xl3, leading=L7, weight=Semibold, color=Muted, wrap=false)
+
+///|
+/// A chip whose ground fills from the left (an allowance's, a machine's load, a download's: Parts.kt FILL_CHIP_CORNER):
+/// near a capsule's on its 20 (a small one's 16 a capsule); in a list row's corner, 12 in, the row's corner is
+/// concentric round it (concentric_out(8.4, 12) = row_corner).
+pub let fill_chip_corner : Double = 8.4
 
 ///|
 /// Corners (--r-*): a field's, a card's, a dialog's, the nav's, a menu's,
@@ -180,6 +221,7 @@ let wide_light : Palette = {
   on_primary: 0xFFFFFFFFL,
   // the text at 4% over the canvas (pages.css.ts cardGround)
   card: 0xF6F6F7FFL,
+  card2: 0xFBFAF7FFL,
   chip: 0xEFECE6FFL,
   blue: 0x1559C4FFL,
   code_ink: 0x7C3FA0FFL,
@@ -216,6 +258,7 @@ let wide_dark : Palette = {
   primary_hover: 0xD3D4D6FFL,
   on_primary: 0x1F2023FFL,
   card: 0x28292CFFL,
+  card2: 0x2C2D31FFL,
   chip: 0x313237FFL,
   blue: 0x81AEFAFFL,
   code_ink: 0xC9A2E6FFL,
@@ -320,11 +363,19 @@ pub fn set_dark(dark : Bool?) -> Unit {
 }
 
 ///|
-/// The theme for this frame, from the window's width: call at the top of a
+/// Whether the system is a phone's or a tablet's (iOS, Android), whose app is still.fail's Android app at any width
+/// (an opened foldable, a phone on its side): its own theme and pages, never the desktop's.
+pub fn touch_system() -> Bool {
+  let p = @ui.platform()
+  p == 1 || p == 2
+}
+
+///|
+/// The theme for this frame, from the window's width (a phone's or a tablet's always its own): call at the top of a
 /// view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = c.width < narrow_below
+  let narrow = c.width < narrow_below || touch_system()
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark
@@ -466,6 +517,26 @@ pub let list_card_radius : @ui.Radius = Exact(concentric_out(row_corner, list_pa
 pub let seg_card_radius : @ui.Radius = Exact(concentric_out(10.0, card_pad))
 
 ///|
+/// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 16 wide at most (BAR), how far a line of the
+/// scale's words stand over it (their line, Xs3's 14, and 2), and a part's corner (4; 2 with many days: Base, Sm).
+pub let usage_plot : Double = 150.0
+
+///|
+pub let usage_plot_h : @ui.Len = Fixed(usage_plot)
+
+///|
+pub let usage_bar_max : @ui.Len = Fixed(16.0)
+
+///|
+pub let usage_tick_rise : Double = 16.0
+
+///|
+pub let usage_part_r : Double = 4.0
+
+///|
+pub let usage_part_r_many : Double = 2.0
+
+///|
 /// A small dot's side, how a thing stands (7: PageParts.kt:465 PresenceDot, Security.kt:101 Dot).
 pub let dot_size : @ui.Len = Fixed(7.0)
 
@@ -481,6 +552,25 @@ pub let code_edge : @ui.Color = A(Fg, Exact(0.18))
 ///|
 /// A column a phone's width at most, in the middle (phone_column): its widest.
 pub let phone_max : @ui.Len = Fixed(420.0)
+
+///|
+/// The latest chats raised on a wide screen (Wide.kt Recent): 340 wide, 560 tall at most.
+pub let recent_w : @ui.Len = Fixed(340.0)
+
+///|
+pub let recent_max_h : @ui.Len = Fixed(560.0)
+
+///|
+/// The button that raises them (Wide.kt Recent): 52 across, as tall as the composer on one line.
+pub let recent_button : @ui.Len = Fixed(52.0)
+
+///|
+/// A bar's round button (Parts.kt NavButton): 34 across.
+pub let nav_button_side : @ui.Len = Fixed(34.0)
+
+///|
+/// A hairline across (0.5: a panel's rule over its foot).
+pub let hairline : @ui.Len = Fixed(0.5)
 
 ///|
 /// The theme as mbui's (its Theme's roles over this frame's palette: wide or narrow, light or dark), with
@@ -500,6 +590,10 @@ pub fn ui_theme() -> @ui.Theme {
     leading: leading_scale,
     radii,
     link: if t.dark { base.accent } else { base.accent_text },
+    // on a phone the greys Android's (Theme.kt C.muted, C.subtle: the narrow palette's), not mbui's own narrow theme's
+    // lighter ones: what a style's Muted and Subtle say there
+    muted: if t.narrow { t.p.muted } else { base.muted },
+    subtle: if t.narrow { t.p.subtle } else { base.subtle },
     // a line of words that say none 1.4 of their size, as the web's root (`line-height: 1.4`) and Android's (Theme.kt
     // WebType: 1.4.em)
     text_line: 1.4,
@@ -686,3 +780,24 @@ pub let face_status_most : @ui.Len = Fixed(140.0)
 /// A Slack app's icon as it is in its look (SlackApp.kt AppLook: 72 square), off the scale.
 pub let app_icon_side : @ui.Len = Fixed(72.0)
 
+
+///|
+/// A choice's line on a card (Parts.kt PickLine): 11 over and under (as files_gap), rounded 10 (as custom_field_r),
+/// its check in a room 18 wide at its end.
+pub let pick_line_y : @ui.Space = files_gap
+
+///|
+pub let pick_line_r : @ui.Radius = custom_field_r
+
+///|
+pub let check_room_w : @ui.Len = Fixed(18.0)
+
+///|
+/// A person's initial on their colour (Parts.kt Avatar: Color.White), on every theme.
+pub let face_ink : Int64 = 0xFFFFFFFFL
+
+///|
+/// A sheet's grabber (Sheet.kt SheetGrab): 38 × 5, round at its ends (its 3 capped at half its height, as every
+/// renderer draws it; its colour the palette's line, said where it is drawn).
+// kept across runs: a value (no field of it changes)
+pub let sheet_grabber : @ui.Style = @ui.style(w=Fixed(38.0), h=Fixed(5.0), radius=Full)

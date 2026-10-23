@@ -89,8 +89,7 @@ fn entry_view(c : @ui.Ctx, src : Source, here : Here, e : Entry, list : Array[En
       })
       |> ignore
     Line => unread_line(c)
-    Said(m) => said(c, src, here, m, list)
-    Letters(m) => letters_line(c, src, here, m)
+    Said(m) => said(c, src, here, m, list, quotes=true)
     Sent(s) => sent_elsewhere(c, src, here, s)
     Out(o) => outgoing(c, src, here, o)
     Working(a) => activity(c, src, here, a)
@@ -124,7 +123,7 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
       c.box(id~, fn() {
         c.text(
           if absolute_times.val { s.full } else { s.ago },
-          size=10.0,
+          size=if wide_on.val { web_time } else { 10.0 },
           color=ink().muted,
           wrap=false,
           line=16.0,
@@ -135,6 +134,32 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
     }
   }
 }
+
+///|
+/// A chat's words on a desktop's width, as the web's (styles/global.css.ts, conversation.css.ts): a message's 14 (its
+/// head's name too), its time 11; the viewer's bubble 14 on 22, 10 by 16 in, 20 round, 640 wide at most.
+let web_body : Double = 14.0
+
+///|
+let web_time : Double = 11.0
+
+///|
+let web_bubble_line : Double = 22.0
+
+///|
+let web_bubble_w : Double = 640.0
+
+///|
+let web_bubble_share : Double = 0.78
+
+///|
+let web_bubble_px : Double = 16.0
+
+///|
+let web_bubble_py : Double = 10.0
+
+///|
+let web_bubble_r : Double = 20.0
 
 ///|
 /// A message's picture (Chat.kt MessageAvatar): an agent's maker on the round grey ground, still.fail's mark, or a
@@ -181,6 +206,7 @@ fn said(
   m : Message,
   list : Array[Entry],
   decide? : Bool = true,
+  quotes? : Bool = false,
 ) -> Unit {
   ignore(list)
   let k = ink()
@@ -188,13 +214,18 @@ fn said(
     system_notice(c, src, here.station, m)
     return
   }
+  // whose it is as a quote of it says (MessagePick.kt: the viewer's own is 你)
+  let who = if m.mine { tr("android-chat.annotate.you") } else { m.by.name }
+  let role = if !m.mine && m.author_kind == "agent" { "agent" } else { "person" }
+  // in the chat's list, its images held are quoted (MessagePick.kt QuotesImages)
+  let quote = if quotes { Some(fn(a : Attachment) { quote_image(c, src, here, m.ts, who, role, a) }) } else { None }
   if m.mine {
     c.box(w=Fill(1.0), gap=4.0, align=AEnd, fn() {
-      quote_cards(c, m.quotes, true)
+      quote_cards(c, src, here, m.quotes, m.attachments, true)
       if m.text != "" {
-        pickable(c, m.ts, m.by.name, "person", m.text, false, fn() { bubble(c, m.text, m.ts) })
+        pickable(c, m.ts, who, role, m.text, false, fn() { bubble(c, m.text, m.ts) })
       }
-      files(c, src, here, m.attachments, true)
+      files(c, src, here, beside_quotes(m.quotes, m.attachments), true, quote~)
       if m.followed {
         ()
       } else {
@@ -209,7 +240,7 @@ fn said(
                 // (files sent alone: the row comes in where it is, its time with it)
                 Some(f) if f.text != "" => {
                   let at = c.box(fn() { message_time(c, m.ts, m.time) })
-                  c.look(at, @ui.look(alpha=flight_settled(flight_p(c, f))))
+                  c.look(at, @ui.look(alpha=flight_settled_of(c, f)))
                 }
                 _ => message_time(c, m.ts, m.time)
               }
@@ -231,14 +262,14 @@ fn said(
         open_sheet(c, AgentOf(ref_of(here), m.by.agent))
       }
       said_head(c, m.by.name, if mine { name } else { 0 }, m.ts, m.time)
-      quote_cards(c, m.quotes, false)
+      quote_cards(c, src, here, m.quotes, m.attachments, false)
       if m.author_kind == "person" {
         if m.text != "" {
-          pickable(c, m.ts, m.by.name, "person", m.text, true, fn() { person_words(c, m.text, m.ts) })
+          pickable(c, m.ts, who, role, m.text, true, fn() { person_words(c, m.text, m.ts) })
         }
-        files(c, src, here, m.attachments, false)
+        files(c, src, here, beside_quotes(m.quotes, m.attachments), false, quote~)
       } else {
-        pickable(c, m.ts, m.by.name, "agent", m.text, true, fn() { agent_words(c, src, here, m) })
+        pickable(c, m.ts, who, role, m.text, true, fn() { agent_words(c, src, here, m, quote~) })
       }
       // what it asks, under it: not on the 奏 page, which has its options at its foot (Chat.kt SaidAlone)
       if !decide {
@@ -285,7 +316,8 @@ fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) 
   let k = ink()
   c.box(dir=Row, w=Fill(1.0), pl=25.0, min_h=24.0, gap=6.0, align=ACenter, fn() {
     c.box(max_w=240.0, id~, fn() {
-      c.text(name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0) |> ignore
+      c.text(name, size=if wide_on.val { web_body } else { 15.0 }, weight=650, color=k.name, wrap=false, line=21.0)
+      |> ignore
     })
     |> ignore
     message_time(c, key, time)
@@ -475,7 +507,7 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
 }
 
 ///|
-/// A notice's pill (Chat.kt SystemNotice, LettersLine): as wide as its words, 14 and 6 in, round at its ends.
+/// A notice's pill (Chat.kt SystemNotice): as wide as its words, 14 and 6 in, round at its ends.
 fn notice_pill(c : @ui.Ctx, id : Int, ground : Int64, open : Bool, body : () -> Unit) -> Unit {
   c.box(max_w=c.width - 28.0, padx=14.0, pady=6.0, radius=if open { 16.0 } else { 18.0 }, bg=ground, id~, body)
   |> ignore
@@ -488,7 +520,7 @@ fn pill_words(c : @ui.Ctx, words : String, color : Int64) -> Unit {
 }
 
 ///|
-/// A notice's ground, what it says not a failure: the words' colour faint (Chat.kt SystemNotice, LettersLine).
+/// A notice's ground, what it says not a failure: the words' colour faint (Chat.kt SystemNotice).
 fn notice_ground(dark : Bool) -> Int64 {
   if dark {
     0xFFFFFF0DL
@@ -501,34 +533,6 @@ fn notice_ground(dark : Bool) -> Int64 {
 /// A notice across the chat, in its middle, its time 4 under it once opened.
 // kept across runs: a value (no field of it changes)
 let notice_across : @ui.Style = @ui.style(w=Full, gap=S1, align=ACenter)
-
-///|
-/// What other chats' agents wrote to this one, a run of it with nothing else said between (Chat.kt LettersLine, the
-/// core's `letters` on its first message): a pill across the chat as still.fail's notices are, saying which chat's
-/// agent wrote to which and how many, cut short where it does not fit. A tap shows the run whole under it, or folds it
-/// again (`chat.letters`).
-fn letters_line(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
-  guard m.letters is Some(letters) else { return }
-  let id = c.id("letters/" + m.ts)
-  if c.clicked(id) {
-    act(
-      src,
-      tr(if letters.open { "web-main.chat.letters.close" } else { "web-main.chat.letters.open" }),
-      "",
-      "chat.letters",
-      {
-        "station": Json::string(here.station),
-        "thread": Json::number(m.thread),
-        "seq": Json::number(m.seq),
-        "open": Json::boolean(!letters.open),
-      },
-    )
-  }
-  c.box(style=notice_across, fn() {
-    notice_pill(c, id, notice_ground(@sf.theme().dark), false, fn() { pill_words(c, letters.line, ink().text) })
-  })
-  |> ignore
-}
 
 ///|
 /// A word at a notice's end that acts on it (Chat.kt InstallAction, ReportAction): " · " fainter, then the word, semibold
@@ -684,13 +688,13 @@ fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
   c.rich(
     @sf.found_weight(ref_runs(words), found_words_of(ts)),
     key="words/" + ts,
-    size=15.0,
+    size=if wide_on.val { web_body } else { 15.0 },
     color=ink().text,
     line=23.0,
     link_color=t.p.blue,
     pressed_bg=@sf.alpha(t.p.blue, 0.14),
     on_link=fn(h) { open_link(h) },
-    on_link_hold=Some(link_held),
+    on_link_hold=Some(fn(href, line) { link_held(c, href, line) }),
   )
   |> ignore
 }
@@ -703,25 +707,33 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   let k = ink()
   // words sent flying here: the bubble's ground comes in round them on their way (flight.mbt)
   let ground = match flying.val {
-    Some(f) if f.placed => flight_ground(flight_p(c, f))
+    Some(f) if f.placed => flight_ground_of(c, f)
     _ => 1.0
   }
   // gone to (a notification's), the bubble takes the accent's ground as it flashes (Chat.kt Bubble: lit)
   let lit = if flashing.val.0 == ts { flashing.val.1 } else { 0.0 }
   let neutral = if lit > 0.0 { @sf.mix(flash_ground(), lit, k.neutral) } else { k.neutral }
-  let b = c.box(max_w=c.width - 36.0, padx=14.0, pady=8.0, radius=18.0, bg=@sf.alpha(neutral, ground), fn() {
+  // (the web's on a desktop's width: conversation.css.ts msgBubble, 78% of the column and 640 at most, 10 by 16 in, 20
+  // round)
+  let b = c.box(
+    max_w=if wide_on.val { dmin(c.width * web_bubble_share, web_bubble_w) } else { c.width - 36.0 },
+    padx=if wide_on.val { web_bubble_px } else { 14.0 },
+    pady=if wide_on.val { web_bubble_py } else { 8.0 },
+    radius=if wide_on.val { web_bubble_r } else { 18.0 },
+    bg=@sf.alpha(neutral, ground),
+    fn() {
     c.rich(
       @sf.found_weight(ref_runs(words), found_words_of(ts)),
       key="bubble/" + ts,
-      size=16.0,
+      size=if wide_on.val { web_body } else { 16.0 },
       color=k.text,
-      line=21.0,
+      line=if wide_on.val { web_bubble_line } else { 21.0 },
       // (SendTextStyle's lines: a TextStyle of its own, no LineHeightStyle)
       trim=true,
       link_color=t.p.blue,
       pressed_bg=@sf.alpha(t.p.blue, 0.14),
       on_link=fn(h) { open_link(h) },
-      on_link_hold=Some(link_held),
+      on_link_hold=Some(fn(href, line) { link_held(c, href, line) }),
       // what people wrote: in the face chosen for it (Chat.kt SendTextFaced)
       words=true,
     )
@@ -748,7 +760,13 @@ fn open_link(href : String) -> Unit {
 ///|
 /// An agent's Markdown with its files (Prose.kt AgentWords): those its text names (`placed`) drawn there, the rest
 /// below it; its links to a station's screens as their cards (screen_links.mbt).
-fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
+fn agent_words(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  m : Message,
+  quote? : ((Attachment) -> Unit)? = None,
+) -> Unit {
   let placed : Map[String, Attachment] = {}
   for n in m.placed {
     match m.attachments.iter().find_first(fn(a) { a.name == n }) {
@@ -762,24 +780,28 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
       @sf.markdown(
         c,
         m.text,
+        tree=m.md,
         key="md/" + m.ts,
-        size=15.0,
+        size=if wide_on.val { web_body } else { 15.0 },
         ink=ink().text,
         on_link=fn(h) {
-          // a link within a sentence to a visualization it places: opened over the whole screen (Prose.kt OpenedFile)
-          match placed.get(base_name(h)) {
+          // a link within a sentence to a file it places, by the file's name as written or escaped (Markdown.kt
+          // fileNameOf): a visualization opened over the whole screen, any other in the preview as a tap on it below
+          // the text opens it (Prose.kt OpenedFile)
+          match placed.get(@sf.file_name_of(h)) {
             Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here, linked=true)
-            _ => open_link(h)
+            Some(a) => open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session))
+            None => open_link(h)
           }
         },
-        on_link_hold=Some(link_held),
+        on_link_hold=Some(fn(href, line) { link_held(c, href, line) }),
         found=found_words_of(m.ts),
         files=fn(name) {
           match placed.get(name) {
             // an HTML one is a visualization, drawn there; failing, its card (Prose.kt PlacedFile)
             Some(a) if is_viz(a.name) =>
               Some(fn() { viz_file(c, src, here, m.ts, a, fn() { files(c, src, here, [a], false) }) })
-            Some(a) => Some(fn() { files(c, src, here, [a], false) })
+            Some(a) => Some(fn() { files(c, src, here, [a], false, quote~) })
             None => None
           }
         },
@@ -788,7 +810,7 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
           match placed.get(name) {
             Some(a) if kind_of(a.name) == "image" => {
               let r = if a.width > 0.0 && a.height > 0.0 { a.width / a.height } else { cell_image_ratio }
-              Some((r, fn(w) { file_item(c, src, here, a, w) }))
+              Some((r, fn(w) { file_item(c, src, here, a, w, quote~) }))
             }
             _ => None
           }
@@ -811,7 +833,7 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     }
     viz_opening(c, src, here)
     if rest.length() > 0 {
-      c.box(w=Fill(1.0), pt=4.0, fn() { files(c, src, here, rest, false) }) |> ignore
+      c.box(w=Fill(1.0), pt=4.0, fn() { files(c, src, here, rest, false, quote~) }) |> ignore
     }
   })
   |> ignore
@@ -819,22 +841,31 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
 
 ///|
 /// Quotes as sent, each a card of its own ahead of the message (Chat.kt QuoteCards): the passage small and grey,
-/// whose it is; then what was said about it.
-fn quote_cards(c : @ui.Ctx, quotes : Array[Quote], mine : Bool) -> Unit {
+/// whose it is; its own picture under it (an image of a message quoted, a mark's screenshot: the file of `files` it
+/// names, at most 120 high, opening as the message's do); then what was said about it.
+fn quote_cards(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  quotes : Array[Quote],
+  files : Array[Attachment],
+  mine : Bool,
+) -> Unit {
   if quotes.length() == 0 {
     return
   }
   let k = ink()
   let most = dmin(380.0, (c.width - 28.0) * 0.88)
-  c.box(w=Fill(1.0), gap=4.0, align=if mine { AEnd } else { AStart }, fn() {
+  c.box(style=if mine { quote_cards_end } else { quote_cards_start }, fn() {
     for q in quotes {
+      let own = quote_file(q, files)
       c.box(max_w=most, radius=12.0, bg=k.card, fn() {
         c.box(
           dir=Row,
           pl=11.0,
           pr=11.0,
           pt=7.0,
-          pb=if q.comment == "" { 7.0 } else { 0.0 },
+          pb=if q.comment == "" && own is None { 7.0 } else { 0.0 },
           align=AStart,
           fn() {
             c.box(w=Px(15.0), h=Px(19.5), justify=JCenter, fn() {
@@ -858,9 +889,26 @@ fn quote_cards(c : @ui.Ctx, quotes : Array[Quote], mine : Bool) -> Unit {
           },
         )
         |> ignore
-        if q.comment != "" {
-          c.box(pl=11.0, pr=11.0, pt=3.0, pb=8.0, fn() {
-            c.text(q.comment, size=15.0, color=k.text, line=22.5) |> ignore
+        // under the words: its own picture (6 under them), what was said about it (3 under)
+        if own is Some(_) || q.comment != "" {
+          c.box(pl=11.0, pr=11.0, pb=8.0, fn() {
+            match own {
+              Some(a) =>
+                c.box(style=quote_picture_room, fn() {
+                  let w = if kind_of(a.name) == "image" {
+                    let (bw, bh, _) = image_box(a, 16.0)
+                    bw * dmin(1.0, 120.0 / bh)
+                  } else {
+                    dmin(236.0, most - 22.0)
+                  }
+                  file_item(c, src, here, a, w)
+                })
+                |> ignore
+              None => ()
+            }
+            if q.comment != "" {
+              c.box(pt=3.0, fn() { c.text(q.comment, size=15.0, color=k.text, line=22.5) |> ignore }) |> ignore
+            }
           })
           |> ignore
         }
@@ -870,6 +918,82 @@ fn quote_cards(c : @ui.Ctx, quotes : Array[Quote], mine : Bool) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// A message's quote cards, one under another 4 apart, at its end when it is the viewer's (Chat.kt QuoteCards).
+// kept across runs: a value (no field of it changes)
+let quote_cards_end : @ui.Style = @ui.style(w=Full, gap=S1, align=AEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let quote_cards_start : @ui.Style = @ui.style(w=Full, gap=S1, align=AStart)
+
+///|
+/// A quote card's own picture, 6 under its words (Chat.kt QuoteCard).
+// kept across runs: a value (no field of it changes)
+let quote_picture_room : @ui.Style = @ui.style(pt=S1_5)
+
+///|
+/// The file of a message's `files` that is a quote's own (Chat.kt fileOf): the one it names.
+fn quote_file(q : Quote, files : Array[Attachment]) -> Attachment? {
+  if q.file == "" {
+    return None
+  }
+  files.iter().find_first(fn(a) { a.name == q.file })
+}
+
+///|
+/// A message's files but those shown in its quotes' cards (Chat.kt besideQuotes, web Chat.tsx).
+fn beside_quotes(quotes : Array[Quote], files : Array[Attachment]) -> Array[Attachment] {
+  let own = quotes.filter_map(fn(q) { if q.file == "" { None } else { Some(q.file) } })
+  if own.length() == 0 {
+    files
+  } else {
+    files.filter(fn(a) { !own.contains(a.name) })
+  }
+}
+
+///|
+/// An image of the message `ts` held (MessagePick.kt quoteFile): into the chat's draft as a quote, its file going again
+/// with the message as the station has it (nothing goes up), named by the session that keeps it; what was picked of
+/// the message let go.
+fn quote_image(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  ts : String,
+  author : String,
+  role : String,
+  a : Attachment,
+) -> Unit {
+  draft_quote_file(draft_of(c, src, ref_of(here)), author, ts, role, attachment_json(a, owner_of(here, a)))
+  pick_clear()
+}
+
+///|
+/// A file as the core gives it (Attachment), kept by `owner`'s workspace.
+fn attachment_json(a : Attachment, owner : String) -> Json {
+  let o : Map[String, Json] = {
+    "name": Json::string(a.name),
+    "path": Json::string(a.path),
+    "size": Json::number(a.size),
+  }
+  if a.width > 0.0 && a.height > 0.0 {
+    o["width"] = Json::number(a.width)
+    o["height"] = Json::number(a.height)
+  }
+  if a.thumbhash != "" {
+    o["thumbhash"] = Json::string(a.thumbhash)
+  }
+  if owner != "" {
+    o["owner"] = Json::string(owner)
+  }
+  Json::object(o)
+}
+
+///|
+/// The press an image of a message was last quoted by (file_item): a passage of its message is not picked by it too.
+let image_quoted_at : Ref[Int] = { val: -1 }
 
 ///|
 /// The kind of a file by its name (FileKinds.kt kindOf): image, video, or anything else.
@@ -934,25 +1058,12 @@ fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
 }
 
 ///|
-/// A ThumbHash's width over its height, from its header (thumbhash.js thumbHashToApproximateAspectRatio).
+/// A ThumbHash's width over its height, from its header (mbui's @pixels.thumbhash_ratio).
 fn thumb_ratio(hash : String) -> Double? {
   if hash == "" {
     return None
   }
-  let bytes = @gallery.b64_decode(hash)
-  if bytes.length() < 5 {
-    return None
-  }
-  let header = bytes[3]
-  let has_alpha = (bytes[2] & 0x80) != 0
-  let is_landscape = (bytes[4] & 0x80) != 0
-  let lx = if is_landscape { if has_alpha { 5 } else { 7 } } else { header & 7 }
-  let ly = if is_landscape { header & 7 } else if has_alpha { 5 } else { 7 }
-  if ly == 0 {
-    None
-  } else {
-    Some(lx.to_double() / ly.to_double())
-  }
+  @pixels.thumbhash_ratio(@codec.from_base64(hash))
 }
 
 ///|
@@ -964,6 +1075,7 @@ fn files(
   here : Here,
   list : Array[Attachment],
   mine : Bool,
+  quote? : ((Attachment) -> Unit)? = None,
 ) -> Unit {
   if list.length() == 0 {
     return
@@ -993,7 +1105,7 @@ fn files(
       c.box(dir=Row, gap=6.0, align=AStart, fn() {
         for i in r {
           // (each in a box of its own: where a file sent from the composer flies to, flight.mbt)
-          let item = c.box(fn() { file_item(c, src, here, list[i], widths[i]) })
+          let item = c.box(fn() { file_item(c, src, here, list[i], widths[i], quote~) })
           match flying.val {
             Some(f) => flight_landing(c, f, item, list[i].path)
             None => ()
@@ -1030,8 +1142,16 @@ fn base_name(path : String) -> String {
 
 ///|
 /// A file of a message (ChatFiles.kt FileItem): an image in its box (its likeness until it is here), a video's box
-/// on black with the play mark and its name, anything else a card.
-fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double) -> Unit {
+/// on black with the play mark and its name, anything else a card. `quote`: where the list quotes, an image held long
+/// is quoted (ChatFiles.kt ChatImage: felt as it is).
+fn file_item(
+  c : @ui.Ctx,
+  src : Source,
+  here : Here,
+  a : Attachment,
+  w : Double,
+  quote? : ((Attachment) -> Unit)? = None,
+) -> Unit {
   let t = @sf.theme()
   // tapped, it opens in the preview (preview.mbt)
   let open = c.id("file-open/" + a.path)
@@ -1043,11 +1163,30 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
     "image" => {
       let (bw, bh, letterbox) = image_box(a, 16.0)
       let h = bh * w / bw
-      let key = (src.file)(here.station, owner_of(here, a), base_name(a.path))
+      // one sent from here: the picture it was picked as, which flew in to it (not its likeness, then the station's)
+      let sent = sent_picture(here.station, a)
+      let key = match sent {
+        Some(k) => k
+        None => (src.file)(here.station, owner_of(here, a), base_name(a.path))
+      }
       // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
-      note_thumb(c, thumb, open, 10.0)
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, id=open, opacity=if pv_hidden.val == thumb { 0.0 } else { 1.0 }, fn() {
+      note_thumb(c, thumb, open, 10.0, letterbox~)
+      // held long where the list quotes: quoted, the press its (lifting it opens nothing), once a press
+      match quote {
+        Some(q) => {
+          let press = c.press()
+          let held = @kit.after(c, "quote-image/" + thumb, c.pressed(open) && !press.moved, @ui.long_press_ms)
+          if held && image_quoted_at.val != press.frame {
+            image_quoted_at.val = press.frame
+            c.take_press()
+            feel_hold(c, "quote-image")
+            q(a)
+          }
+        }
+        None => ()
+      }
+      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, id=open, opacity=thumb_shows(thumb), fn() {
         if key != "" && key != "!" {
           c.image(
             key,
@@ -1056,6 +1195,7 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
             fit=if letterbox { FitContain } else { FitCover },
             radius=10.0,
             bg=0L,
+            fade=sent is None,
           )
           |> ignore
         } else if key == "!" {
@@ -1077,9 +1217,37 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
       |> ignore
     }
     "video" => {
-      let (bw, bh, _) = image_box(a, 96.0)
+      let (bw, bh, letterbox) = image_box(a, 96.0)
       let h = bh * w / bw
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=0x000000FFL, id=open, fn() {
+      // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
+      let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
+      note_thumb(c, thumb, open, 10.0, letterbox~)
+      // the frame the viewer was left at, once it has been closed back into here; else its first as the station makes
+      // it (ChatFiles.kt ChatVideo: the station's poster), or as drawn here where the station made none and it is
+      // small; else the black alone
+      let still = match pv_frames.get(thumb) {
+        Some((k, _)) => k
+        None =>
+          match (src.poster)(here.station, owner_of(here, a), base_name(a.path)) {
+            "!" => first_frame(c, src, here.station, owner_of(here, a), a, thumb)
+            k => k
+          }
+      }
+      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=0x000000FFL, id=open, opacity=thumb_shows(thumb), fn() {
+        if still != "" && still != "!" {
+          c.layer(fn() {
+            c.image(
+              still,
+              w=Px(w),
+              h=Px(h),
+              fit=if letterbox { FitContain } else { FitCover },
+              radius=10.0,
+              bg=0L,
+            )
+            |> ignore
+          })
+          |> ignore
+        }
         c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
           c.box(w=Px(40.0), h=Px(40.0), radius=20.0, bg=0x000000A6L, align=ACenter, justify=JCenter, fn() {
             @sf.icon(c, "play", size=16.0, color=0xFFFFFFFFL) |> ignore
@@ -1351,14 +1519,6 @@ fn decision_options(
           align=AStart,
           radius=18.0,
           opacity=if enabled || chosen == Some(o.label) { 1.0 } else { 0.5 },
-          bg={
-            let p = if free { @motion.pressing(c, id) } else { 0.0 }
-            if p > 0.0 {
-              @sf.alpha(t.p.text, 0.08 * p)
-            } else {
-              0L
-            }
-          },
           id~,
           fn() {
             c.box(
@@ -1388,6 +1548,10 @@ fn decision_options(
             if busy == Some(o.label) {
               c.box(h=Px(21.0), justify=JCenter, fn() { @sf.spinner(c, size=12.0) |> ignore })
               |> ignore
+            }
+            // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
+            if free {
+              @motion.ripple(c, id, 18.0, ink=@sf.alpha(t.p.text, 0.1))
             }
           },
         )
@@ -1551,11 +1715,32 @@ fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
   let failed = o.state == "failed"
   c.box(w=Fill(1.0), gap=4.0, align=AEnd, fn() {
     c.box(w=Fill(1.0), gap=4.0, align=AEnd, opacity=if failed { 0.55 } else { 1.0 }, fn() {
-      quote_cards(c, o.quotes, true)
+      quote_cards(c, src, here, o.quotes, o.attachments, true)
       if o.text != "" {
         bubble(c, o.text, "o:" + o.id)
       }
-      files(c, src, here, o.attachments, true)
+      files(c, src, here, beside_quotes(o.quotes, o.attachments), true)
+      // still going up: it is sent once they are (the core sends it), as the web's says (Chat.kt Out)
+      for i, u in o.uploads {
+        let (name, size, sent) = u
+        let f : Pending = {
+          id: i,
+          name,
+          size,
+          image: "",
+          width: 0,
+          height: 0,
+          pasted: None,
+          local: None,
+          done: None,
+          sent,
+          error: if failed { Some(if o.error != "" { o.error } else { tr("android-chat.file.failed") }) } else { None },
+          core_id: "",
+          retry: false,
+          retrying: false,
+        }
+        file_tile(c, f, 0, closable=false) |> ignore
+      }
     })
     |> ignore
     if failed {
@@ -1585,7 +1770,13 @@ fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
       })
       |> ignore
     } else if !o.followed {
-      let sending = if o.waits != "" { o.waits } else { tr("android-chat.chat.sending") }
+      let sending = if o.waits != "" {
+        o.waits
+      } else if o.uploads.length() > 0 {
+        tr("common.uploading")
+      } else {
+        tr("android-chat.chat.sending")
+      }
       // not seen while its words fly here, its room kept (Chat.kt Out: a layer at no opacity)
       match flying.val {
         Some(_) => {
@@ -1648,7 +1839,6 @@ fn unsent_button(
     radius=7.0,
     align=ACenter,
     opacity=if enabled { 1.0 } else { 0.5 },
-    bg=if enabled { @sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)) } else { 0L },
     id~,
     fn() {
       if busy {
@@ -1657,6 +1847,10 @@ fn unsent_button(
         @sf.icon(c, icon, size=12.0, color=k.muted) |> ignore
       }
       c.text(label, size=13.0, color=k.muted, wrap=false) |> ignore
+      // Chat.kt: clip(Smooth(7)).clickable (not while busy)
+      if enabled && !busy {
+        @motion.ripple(c, id, 7.0)
+      }
     },
   )
   |> ignore

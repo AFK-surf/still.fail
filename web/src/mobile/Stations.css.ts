@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mGrow } from "./styles/parts.css.ts";
 import { connectionRetry } from "../Connection.css.ts";
+import { CHIP_CORNER } from "../components.css.ts";
 
 export const mPad20 = style({ padding: "20px" });
 export const mMark = style({ flex: "none" });
@@ -35,7 +36,7 @@ export const mBarChips = style({ display: "flex", gap: "4px", height: "20px", ma
 export const mBarNet = style({ flex: "1", display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px" });
 globalStyle(`${mBarNet} > span`, { display: "flex", flexDirection: "column", gap: "9px" });
 globalStyle(`${mStationBars} i`, { display: "block", height: "10px", borderRadius: "999px", background: vars.neutralBg });
-globalStyle(`${mBarChips} i`, { display: "block", height: "20px", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.neutralBg }); // own corner: an EdgeChip's, held for it
+globalStyle(`${mBarChips} i`, { display: "block", height: "20px", borderRadius: CHIP_CORNER, cornerShape: vars.cornerShape, background: vars.neutralBg }); // own corner: a chip's, held for it
 export const mStationOffline = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", paddingTop: "6px", textAlign: "center",
 });

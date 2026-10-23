@@ -5,13 +5,42 @@
 // the same every time, no backend, no wall clock.
 
 ///|
-/// Pictures and chats' images as the core gives them (`picture`, `station.file`), asked once each.
+/// Chats' images as the core gives them (`station.file`), asked once each.
 let images : Map[String, String] = {}
+
+///|
+/// Pictures by their address as the app's own are (src/stillfail: @sfapp.core_pictures, one that could not be had
+/// asked again when its page is put up anew), so a run that asked again is asked again here; made anew in each
+/// Tester.
+let pictures : Ref[((String, Int) -> String)?] = Ref(None)
+
+///|
+fn picture(url : String, stint : Int) -> String {
+  let f = match pictures.val {
+    Some(f) => f
+    None => {
+      let f = @sfapp.core_pictures(fn(url, done) {
+        @core.call_bytes("picture", params=Json::object({ "url": Json::string(url) }), on_done=fn(r) {
+          match r {
+            Ok((_, bytes)) => done(bytes)
+            Err(_) => done(None)
+          }
+        })
+      })
+      pictures.val = Some(f)
+      f
+    }
+  }
+  f(url, stint)
+}
 
 ///|
 /// Asked again in every Tester (mbui's on_reset): the pictures it had are gone from its images.
 fn init {
-  @ui.on_reset(fn() { images.clear() })
+  @ui.on_reset(fn() {
+    images.clear()
+    pictures.val = None
+  })
 }
 
 ///|
@@ -44,11 +73,29 @@ pub fn source() -> @sfapp.Source {
       let s = @core.subscribe(name, params~)
       { value: s.value, error: s.error, version: s.version }
     },
-    call: fn(name, params, done) { @core.call(name, params~, on_done=done) },
+    // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
+    // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
+    // here. Any other ask the tape does not have still diverges.
+    call: fn(name, params, done) {
+      match @sfkept.answer(name, params, None) {
+        Some(Ok((v, _))) => done(Ok(v))
+        _ => @core.call(name, params~, on_done=done)
+      }
+    },
     call_bytes: fn(name, params, bytes, done) {
-      @core.call(name, params~, bytes=Some(bytes), on_done=done)
+      match @sfkept.answer(name, params, Some(bytes)) {
+        Some(Ok((v, _))) => done(Ok(v))
+        _ => @core.call(name, params~, bytes=Some(bytes), on_done=done)
+      }
     },
     read_bytes: fn(name, params, done) {
+      match @sfkept.answer(name, params, None) {
+        Some(Ok((v, b))) => {
+          done(Ok((v, b.unwrap_or(Bytes::new(0)))))
+          return
+        }
+        _ => ()
+      }
       @core.call_bytes(name, params~, on_done=fn(r) {
         done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
       })
@@ -65,9 +112,7 @@ pub fn source() -> @sfapp.Source {
     cancel: fn(id) { @core.cancel(id) },
     sign_in: fn() { @sfcore.sign_in() },
     signing_in: fn() { @sfcore.state.busy },
-    picture: fn(url) {
-      image("picture", Json::object({ "url": Json::string(url) }), "picture " + url, "mem:picture/\{@ui.stable_hash(url)}/\{url.length()}")
-    },
+    picture: fn(url, stint) { picture(url, stint) },
     fatal: fn() { @core.fatal() },
     file: fn(station, key, name) {
       let params : Map[String, Json] = {
@@ -78,6 +123,15 @@ pub fn source() -> @sfapp.Source {
       }
       let id = station + "\u{1}" + key + "\u{1}" + name
       image("station.file", Json::object(params), "file " + id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
+    },
+    poster: fn(station, key, name) {
+      let params : Map[String, Json] = {
+        "station": Json::string(station),
+        "key": Json::string(key),
+        "name": Json::string(name),
+      }
+      let id = station + "\u{1}" + key + "\u{1}" + name + "\u{1}poster"
+      image("station.poster", Json::object(params), "poster " + id, "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
     },
     now: fn() { @ui.wall_ms() },
     leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
@@ -104,6 +158,7 @@ fn init {
 pub fn app(c : @ui.Ctx) -> Unit {
   if !started.val {
     started.val = true
+    @sfapp.use_core_markdown(the_source)
     @sfcore.begin()
   }
   @sfcore.frame(@core.subscribe("accounts"))

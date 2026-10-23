@@ -28,8 +28,6 @@ priv enum Entry {
   Empty
   Line
   Said(Message)
-  /// a run of what other chats' agents wrote to it, as its first message has it (the core's `letters`): its line
-  Letters(Message)
   Sent(Elsewhere)
   Newer
   Out(Outgoing)
@@ -45,7 +43,6 @@ fn Entry::id(self : Entry) -> String {
     Empty => "empty"
     Line => "line"
     Said(m) => "m:" + m.ts
-    Letters(m) => "l:" + m.ts
     Sent(e) => "s:" + e.key
     Newer => "newer"
     Out(o) => "o:" + o.id
@@ -55,9 +52,10 @@ fn Entry::id(self : Entry) -> String {
 }
 
 ///|
-/// The bar's height (6 + 40 + 8) and the room the list keeps under it; the composer's room at the foot (ChatHost.kt
-/// roomForList: a line of words, the capsule's insets, its toolbar and margins) and the list's under it.
-let chat_bar_h : Double = 54.0
+/// The bar's height (Home's top bar's, bar_h: the two bars' lines meet as the page is swiped back) and the room
+/// the list keeps under it; the composer's room at the foot (ChatHost.kt roomForList: a line of words, the capsule's
+/// insets, its toolbar and margins) and the list's under it.
+let chat_bar_h : Double = bar_h
 
 ///|
 /// The title's line in the bar (Chat.kt BarFrame: a Text with no line height of its own, 16 on the theme's 1.4em).
@@ -86,12 +84,14 @@ priv struct Reading {
   /// the first message when the page before was asked for (once per page)
   mut asked : Double
   mut asked_newer : Double
-  /// the message gone to that the core was asked to show the run of what other chats' agents wrote around (once)
-  mut around_asked : Double
   /// what the core was told of the chat shown, its end seen or not ("" nothing yet)
   mut told : String
+  /// the newest message seen whole on this visit (-1 none): read up to there
+  mut seen_whole : Double
   /// where the reader is: the message at the top of what shows (-1 none), and whether at the chat's end
   mut top_seq : Double
+  /// the message at the foot of what shows (-1 none): what ⌘F starts at lies between (wide_find.mbt)
+  mut bottom_seq : Double
   /// how far that message's top is below the list's (points: above it, less than 0)
   mut top_off : Double
   mut at_end : Bool
@@ -114,6 +114,8 @@ priv struct Reading {
   /// drawn; the rows new to it since, until they show
   known : Map[String, Bool]
   mut drawn : Bool
+  /// the agents' lines among them (by key): one gone from the chat's end is forgotten (row_keys)
+  acts : Map[String, Bool]
   /// the frame its page was last built in, and its own data last taken in (chat_tick: what comes out of its avatars
   /// played on, its activities' lingering)
   mut shown_frame : Int
@@ -125,6 +127,8 @@ priv struct Reading {
   rises : Map[String, @motion.Anim]
   /// when the list's own motion is at rest, as last laid out (ListInfo's `rest`): a turn waits for it
   mut list_rest : Double
+  /// what was sent from here and is not in the core's view yet: in the list from the frame it was sent (sent_local)
+  sending : Array[LocalSent]
   /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
   /// anchor: a message arriving while it is followed is read from its start)
   mut newest : String
@@ -165,9 +169,10 @@ fn reading_of(key : String) -> Reading {
         put: false,
         asked: -1.0,
         asked_newer: -1.0,
-        around_asked: -1.0,
         told: "",
+        seen_whole: -1.0,
         top_seq: -1.0,
+        bottom_seq: -1.0,
         top_off: 0.0,
         at_end: true,
         told_place: "",
@@ -182,6 +187,7 @@ fn reading_of(key : String) -> Reading {
         bench_present: [],
         known: {},
         drawn: false,
+        acts: {},
         shown_frame: -10,
         played: -10,
         ticked: -10,
@@ -189,6 +195,7 @@ fn reading_of(key : String) -> Reading {
         admitted: {},
         rises: {},
         list_rest: -1.0,
+        sending: [],
         newest: "",
         following_row: false,
         follow_key: "",
@@ -214,6 +221,20 @@ fn reading_of(key : String) -> Reading {
 let read_chats : Map[String, (Int, ChatView, Array[Entry])] = {}
 
 ///|
+/// Where a chat was left this run (AppState.places, Chat.kt leave): the message at the top of what showed (its seq) and
+/// how far its top was below the list's (points); and, left at its end, the newest message then (else -1). It opens
+/// there again before where the core says (`at`): the chat's view can outlive its page (opened again before the core
+/// lets it go, a minute after: store.ts EVICT_AFTER_MS) and still say where it was opened the first time.
+priv struct KeptPlace {
+  top : Double
+  offset : Double
+  bottom : Double
+}
+
+///|
+let kept_places : Map[String, KeptPlace] = {}
+
+///|
 fn chat_params(r : ChatRef) -> Map[String, Json] {
   { "station": Json::string(r.station), "session": Json::string(r.session) }
 }
@@ -237,16 +258,7 @@ fn entries_of(v : ChatView) -> Array[Entry] {
       Some(l) if l == m.seq => out.push(Line)
       _ => ()
     }
-    // the first of a run of what other chats' agents wrote to it: the run's line, the message only open
-    match m.letters {
-      Some(l) => {
-        out.push(Letters(m))
-        if l.open {
-          out.push(Said(m))
-        }
-      }
-      None => out.push(Said(m))
-    }
+    out.push(Said(m))
     for e in m.elsewhere {
       out.push(Sent(e))
     }
@@ -307,21 +319,30 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
             )
           None => None
         }
-        waiting_messages(c, failed)
+        // a chat just made from a new chat (its scene leaving, its first words on their way) is the core's own:
+        // nothing to read from a station, nothing breathing for the frames until the core's view of it comes
+        // (Chat.kt made)
+        if failed is Some(_) || !new_chat_made(c, r) {
+          waiting_messages(c, failed)
+        }
         c.layer(fn() {
           c.spacer()
-          composer(c, src, r, None)
+          composer(c, src, r, None, beside=corners_on.val)
           // over the navigation bar (a layer goes on under the page's padding)
           bar_room_box(c, nav_foot())
         })
         |> ignore
+        // its first words, as typed, till their row is in the list (flight.mbt; their wait for it counted from now)
+        flight_frame(c, draft_key(r))
+        flight_waiting(c, draft_key(r))
+        flight_files(c, draft_key(r))
       }
       Some(v) => {
         messages(c, src, r, v, list)
         c.layer(fn() { chat_bar(c, src, w, r, v) }) |> ignore
         c.layer(fn() {
           c.spacer()
-          composer(c, src, r, Some(v))
+          composer(c, src, r, Some(v), beside=corners_on.val)
           // over the navigation bar (a layer goes on under the page's padding)
           bar_room_box(c, nav_foot())
         })
@@ -383,6 +404,11 @@ fn messages(
   follow_newest(c, rd, list, keys, key)
   flight_frame(c, dkey)
   let flight = flight_of(dkey)
+  // (the first of what was sent from here not in the chat yet: a message out of an avatar comes in over it, emit.mbt)
+  em.out_key = match list.search_by(fn(e) { e is Out(_) }) {
+    Some(i) => keys[i]
+    None => ""
+  }
   // half a second after it was put in place (shown), what comes at its end may glide: asked each frame it is drawn
   // (later: nothing shown waits for it)
   let glides = @kit.after(c, "glide/" + key, rd.placed, glide_after_place_ms, later=true)
@@ -393,7 +419,7 @@ fn messages(
   let mut head = ""
   let mut head_at = -1
   for i, e in list {
-    if e is (Said(_) | Letters(_)) {
+    if e is Said(_) {
       head = e.id()
       head_at = i
       break
@@ -418,10 +444,13 @@ fn messages(
   flashing.val = (rd.flash, flash_of(c, rd, rd.flash))
   // a search's words marked in the message it opened the chat at (search_marks.mbt)
   found_marking.val = (rd.found_at, rd.found_words, rd.found_drawn.get())
+  find_marking.val = find_words_in(r)
   found_centre(c, rd, key)
   flash_row.val = None
-  // a new chat's list comes up out of the composer as it becomes this chat (newchat.mbt)
-  c.box(w=Fill(1.0), h=Fill(1.0), ty=new_chat_rise(c, r), fn() {
+  // a new chat's list comes up out of the composer with its first words (flight.mbt flight_carry_shift); not drawn
+  // the build their row is first laid out, where it is not known yet
+  let carry = flight_carry_shift(c, dkey)
+  let list_box = c.box(w=Fill(1.0), h=Fill(1.0), ty=carry.unwrap_or(0.0), fn() {
     c.list(
       key,
       n,
@@ -482,18 +511,17 @@ fn messages(
           }
           _ => {
             // the row words sent go to: its bubble flies there from the composer (flight.mbt)
-            let mine = match e {
-              Out(_) => true
-              Said(m) => m.mine && !m.system
-              _ => false
-            }
-            let flies = flight_takes(dkey, keys[i], mine)
+            let flies = flight_takes(dkey, keys[i])
             flying.val = if flies { flight } else { None }
             match flight {
               Some(f) if flies => flight_placed(c, f)
               _ => ()
             }
             let ri = c.box(w=Fill(1.0), pl=row_side(c), pr=row_side(c), pt=top, fn() {
+              // (where a message out of an avatar comes in over it: emit.mbt)
+              if keys[i] == em.out_key {
+                @motion.measure(c, c.box(fn() {  }), "emit-out/" + ek + "/" + keys[i])
+              }
               entry_view(c, src, here, e, list)
             })
             flying.val = None
@@ -518,15 +546,20 @@ fn messages(
                   screen=true,
                   drive=flight_up(flight_p(c, f)),
                 )
+              // what was sent from here not in the chat yet, pushed down by a message coming in over it out of an
+              // avatar (where the avatar landed): it glides there, as an agent's activity does
+              None if e is Out(_) && em.current is Some(_) =>
+                @motion.layout(c, ri, key + "\u{1}" + keys[i], spec=@motion.spring(stiffness=300.0, threshold=1.0), listed=false)
               _ => ()
             }
             // what is new to the list while it is followed rises in (Chat.kt rise: 14 up and from nothing, 320 ms
-            // on the standard curve); what leaves the chat from the outbox fades (200 ms)
+            // on the standard curve); what leaves the chat from the outbox fades (200 ms), not what was sent from here
+            // and is now the core's (LocalSent: its row goes on as the core's)
             let mk = key + "\u{1}" + keys[i]
-            if e is Out(_) {
-              @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(out_leave_ms)))
-            } else {
-              @motion.keyed(c, ri, mk)
+            match e {
+              Out(o) if !local_sent(o) =>
+                @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(out_leave_ms)))
+              _ => @motion.keyed(c, ri, mk)
             }
             // (one out of an avatar does not rise in as well)
             let emitted = match e {
@@ -573,22 +606,41 @@ fn messages(
     let mut put_now = false
     if rd.placed && !rd.put && !at_end_asked() {
       rd.put = true
+      // where it was left here this run (Chat.kt kept): unless at its end with nothing new since, then at its end
+      let newest = match v.messages.last() {
+        Some(m) => m.seq
+        None => -1.0
+      }
+      let kept = kept_places.get(r.station + "\u{1}" + r.session)
+      let left_at_end = match kept {
+        Some(p) => p.bottom >= 0.0 && p.bottom == newest
+        None => false
+      }
+      let opened_at = if left_at_end { None } else { v.at }
       let mut line = -1
       let mut at = -1
+      let mut was = -1
       for i, e in list {
         match e {
           Line => line = i
-          Said(m) =>
-            match v.at {
+          Said(m) => {
+            match opened_at {
               Some(a) if at < 0 && m.seq >= a => at = i
               _ => ()
             }
+            match kept {
+              Some(p) if !left_at_end && m.seq == p.top => was = i
+              _ => ()
+            }
+          }
           _ => ()
         }
       }
-      put_now = line >= 0 || at >= 0
+      put_now = line >= 0 || was >= 0 || at >= 0
       if line >= 0 {
         c.list_scroll_to(key, line, offset=-(status_top() + chat_bar_h + 14.0 + 85.0))
+      } else if was >= 0 {
+        c.list_scroll_to(key, was, offset=-kept.unwrap().offset)
       } else if at >= 0 {
         // where it was left: that message's top as far below the list's as it was (atOffset, the screen's pixels);
         // else its top under the bar
@@ -643,6 +695,22 @@ fn messages(
           @hostapi.log("chat: gone to message \{target.to_int()}")
         } else {
           match v.thread {
+            // what ⌘F found, not in the chat's window: the window moved about it (chat.around), once
+            Some(thread) if wide.find_chat == gk =>
+              if wide.find_around != target {
+                wide.find_around = target
+                c.tell("chat.around/" + gk, fn() {
+                  (src.call)(
+                    "chat.around",
+                    {
+                      "station": Json::string(r.station),
+                      "thread": Json::number(thread),
+                      "seq": Json::number(target),
+                    },
+                    fn(res) { if res is Err(_) { go_tos.remove(gk) } },
+                  )
+                })
+              }
             Some(thread) if v.more && first > target =>
               if rd.asked != first {
                 rd.asked = first
@@ -655,19 +723,6 @@ fn messages(
                   )
                 })
               }
-            // among what other chats' agents wrote to it, folded: the core asked to show it (their run comes
-            // whole, and this again finds it)
-            Some(thread) if rd.around_asked != target &&
-              v.messages.iter().any(fn(m) { m.letters is Some(l) && !l.open }) => {
-              rd.around_asked = target
-              c.tell("chat.around/" + gk, fn() {
-                (src.call)(
-                  "chat.around",
-                  { "station": Json::string(r.station), "thread": Json::number(thread), "seq": Json::number(target) },
-                  fn(res) { if res is Err(_) { go_tos.remove(gk) } },
-                )
-              })
-            }
             _ => go_tos.remove(gk)
           }
         }
@@ -678,9 +733,14 @@ fn messages(
     // near the top: the page before comes in, once per page
     match (info, v.thread) {
       (Some(i), Some(thread)) if v.more && rd.placed && i.first >= 0 && i.first <= 3 => {
-        let first = match list.iter().find_first(fn(e) { e is Said(_) }) {
-          Some(Said(m)) => m.seq
-          _ => -1.0
+        // by entries, not messages: a page of what the chat does not show (letters, edits) moves it too
+        let first = match v.first_entry {
+          Some(f) => f
+          None =>
+            match list.iter().find_first(fn(e) { e is Said(_) }) {
+              Some(Said(m)) => m.seq
+              _ => -1.0
+            }
         }
         // (asked once the frame's builds are over, from where the last laid the list out)
         if rd.asked != first {
@@ -710,9 +770,13 @@ fn messages(
     // near the end of a window short of the chat's: the page after
     match (info, v.thread) {
       (Some(i), Some(thread)) if v.newer && rd.placed && i.last >= n - 4 => {
-        let last = match v.messages.last() {
-          Some(m) => m.seq
-          None => -1.0
+        let last = match v.last_entry {
+          Some(l) => l
+          None =>
+            match v.messages.last() {
+              Some(m) => m.seq
+              None => -1.0
+            }
         }
         if rd.asked_newer != last {
           c.after_build("newer", fn() {
@@ -738,11 +802,44 @@ fn messages(
       None => false
     }
     rd.at_end = seen
+    // the last message wholly in view, between the bar and the composer, while it is not short of the chat's end:
+    // read up to there (a message shown whole on a page in front is read), its end seen or not
+    match (info, c.list_place(key)) {
+      (Some(i), Some((first, past, _))) if i.first >= 0 && !v.newer => {
+        let top = status_top() + chat_bar_h
+        let foot = i.height - composer_room_for(c, draft_key(r), Some(v))
+        let mut y = -past
+        let mut k = first
+        while k <= i.last && k < n {
+          let h = c.list_row_height(key, k).unwrap_or(0.0)
+          match list[k] {
+            Said(m) if y >= top - 0.5 && y + h <= foot + 0.5 && m.seq > rd.seen_whole => rd.seen_whole = m.seq
+            _ => ()
+          }
+          y = y + h
+          k = k + 1
+        }
+      }
+      _ => ()
+    }
     rd.top_seq = match info {
       Some(i) if i.first >= 0 => {
         let mut k = i.first
         while k < n && !(list[k] is Said(_)) {
           k = k + 1
+        }
+        match list.get(k) {
+          Some(Said(m)) => m.seq
+          _ => -1.0
+        }
+      }
+      _ => -1.0
+    }
+    rd.bottom_seq = match info {
+      Some(i) if i.first >= 0 => {
+        let mut k = if i.last < n { i.last } else { n - 1 }
+        while k >= 0 && !(list[k] is Said(_)) {
+          k = k - 1
         }
         match list.get(k) {
           Some(Said(m)) => m.seq
@@ -772,7 +869,7 @@ fn messages(
     }
     // (told once the frame's builds are over, as the last says it: a build let go of, the frame built again, read the
     // list from before its layout)
-    c.after_build("focus", fn() { tell_focus(src, r, v, rd, seen) })
+    c.after_build("focus", fn() { tell_focus(src, r, v, rd, seen, rd.seen_whole) })
     // the way to the newest: away from the end by more than a corner of the screen, or short of the chat's end (not
     // before the list is first laid out: until then nothing is in view, and the end is not far, only not known)
     let away = match info {
@@ -786,7 +883,10 @@ fn messages(
     emit_flyer(c, ek, em, v)
     chat_bench(c, key, rd, v.more, n)
   })
-  |> ignore
+  // (its row laid out in this build: where the list is to start from is measured now)
+  if carry is None {
+    c.look(list_box, @ui.look(alpha=0.0))
+  }
 }
 
 ///|
@@ -883,7 +983,14 @@ fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool
       showing[k] = true
     }
     emit_take(c, em, v, showing)
-    emit_step(c, em, turns)
+    // words sent from here on their way: their landing as declared (-2: not laid out yet), -1 none or landed
+    // (emit_step)
+    let sending = match send_flight.val {
+      Some(f) if f.turns == rk && !f.placed => -2.0
+      Some(f) if f.turns == rk && f.way.moving() => f.way.ends()
+      _ => -1.0
+    }
+    emit_step(c, em, turns, sending)
   }
   if lingered {
     return
@@ -949,11 +1056,85 @@ fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
 }
 
 ///|
+/// What was sent from here, in the list from the frame it was sent until the core's view has it (Chat.kt shows the
+/// core's outbox; here the core's row comes a round trip later, and what is sent is on screen first): drawn as an
+/// outbox entry of its words, by a key of its own ("local:n"); the first of this device's own rows not there when it
+/// was sent (an outbox entry, or the message it became) is it, from then on by that row's key.
+priv struct LocalSent {
+  row : Outgoing
+  before : Map[String, Bool]
+}
+
+///|
+let local_sent_n : Ref[Int] = { val: 0 }
+
+///|
+fn local_sent(o : Outgoing) -> Bool {
+  o.id.has_prefix("local:")
+}
+
+///|
+/// The rows of the view `v` there when words were sent: an outbox entry's, a message's, and the outbox entry it was
+/// (rows are keyed by it: row_keys).
+fn sent_before(v : ChatView) -> Map[String, Bool] {
+  let before : Map[String, Bool] = {}
+  for o in v.outbox {
+    before["o:" + o.id] = true
+  }
+  for m in v.messages {
+    if m.outgoing != "" {
+      before["o:" + m.outgoing] = true
+    }
+    before["m:" + m.ts] = true
+  }
+  before
+}
+
+///|
+/// Words sent from chat `rk` (its station and session; `v` its view, None for one just made) are in its list now,
+/// before the core has them (LocalSent). Its key, for what flies there (flight.mbt).
+fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json]) -> String {
+  local_sent_n.val += 1
+  let id = "local:\{local_sent_n.val}"
+  reading_of(rk).sending.push({
+    row: {
+      id,
+      text: words,
+      attachments: files.map(attachment_of),
+      quotes: [],
+      state: "sending",
+      error: "",
+      joined: false,
+      followed: false,
+      seq: -1.0,
+      waits: "",
+      uploads: [],
+    },
+    // (a chat just made: none)
+    before: match v {
+      Some(v) => sent_before(v)
+      None => Map::new()
+    },
+  })
+  "o:" + id
+}
+
+///|
+/// What was sent from chat `rk` (key: sent_local's) did not go: it leaves the list.
+fn sent_local_gone(rk : String, key : String) -> Unit {
+  let rd = reading_of(rk)
+  match rd.sending.search_by(fn(l) { "o:" + l.row.id == key }) {
+    Some(i) => rd.sending.remove(i) |> ignore
+    None => ()
+  }
+}
+
+///|
 /// The rows in the list and their keys, as they move (a message sent from here keeps its outbox row's: Chat.kt
 /// sentAs), and which are new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt
 /// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) comes in its turn
-/// among what changes the list's height (turns.mbt, Chat.kt newcomers), kept out of the list till then; so are the
-/// words sent from here (`flight`) till theirs.
+/// among what changes the list's height (turns.mbt, Chat.kt newcomers), kept out of the list till then. What was sent
+/// from here never waits: in the list the frame it is sent, before the core has it (LocalSent).
 fn row_keys(
   c : @ui.Ctx,
   rd : Reading,
@@ -984,6 +1165,66 @@ fn row_keys(
       _ => e.id()
     }
   })
+  // what was sent from here: the core's row once it has it (the first of this device's own not there when it was
+  // sent, each taken once), going on as that row (drawn already: it does not rise in, nor wait a turn; words flying
+  // there go on to it)
+  let taken : Map[String, Bool] = {}
+  let still : Array[LocalSent] = []
+  for l in rd.sending {
+    let mut came = ""
+    for i, e in all {
+      let k = all_keys[i]
+      let mine = match e {
+        Out(_) => true
+        Said(m) => m.mine && !m.system
+        _ => false
+      }
+      if mine && !l.before.contains(k) && !taken.contains(k) {
+        came = k
+        break
+      }
+    }
+    if came == "" {
+      still.push(l)
+      continue
+    }
+    taken[came] = true
+    rd.known[came] = true
+    match flight {
+      Some(f) if f.key == "o:" + l.row.id => f.key = came
+      _ => ()
+    }
+  }
+  rd.sending.clear()
+  for l in still {
+    rd.sending.push(l)
+  }
+  // (after the outbox, before the agents' lines and the room under them)
+  let all = all.copy()
+  let all_keys = all_keys.copy()
+  if still.length() > 0 {
+    let mut at = all.length()
+    for i, e in all {
+      if e is (Working(_) | Foot) {
+        at = i
+        break
+      }
+    }
+    for j, l in still {
+      all.insert(at + j, Out(l.row))
+      all_keys.insert(at + j, "o:" + l.row.id)
+    }
+  }
+  // an agent's line gone from the chat's end (its turn over, its moment stayed) is new to the list again: its next
+  // turn comes in as its first did, its room opening, not there at once (its key is its agent's, the same each turn)
+  if !v.newer && !rd.acts.is_empty() {
+    let gone = rd.acts.keys().filter(fn(k) { !all_keys.contains(k) }).collect()
+    for k in gone {
+      rd.acts.remove(k)
+      rd.known.remove(k)
+      rd.admitted.remove(k)
+    }
+  }
   let info = c.list_info(key)
   let following = match info {
     Some(i) => i.at_end || i.gliding || i.following_row
@@ -997,35 +1238,25 @@ fn row_keys(
     Some(i) => i.rest
     None => -1.0
   }
-  // words sent from here (a flight's): their row, the first of this device's own not there when they were sent
-  let sent_row = fn(e : Entry, k : String) {
-    match flight {
-      Some(f) =>
-        !f.before.contains(k) &&
-        (match e {
-          Out(_) => true
-          Said(m) => m.mine && !m.system
-          _ => false
-        })
-      None => false
-    }
-  }
   if rd.drawn && following {
     for i, e in all {
       let k = all_keys[i]
-      if rd.known.contains(k) || rd.admitted.contains(k) || sent_row(e, k) {
+      if rd.known.contains(k) || rd.admitted.contains(k) {
         continue
       }
       let comes = match e {
         Working(a) => a.started
-        Out(_) => true
+        // (what was sent from here is in the list at once)
+        Out(o) => !local_sent(o)
         // (one out of an avatar comes out of it instead)
         Said(m) => m.said && !emit_goes(em, m.seq)
-        Letters(m) => m.said
         _ => false
       }
       if comes {
         rd.admitted[k] = true
+        if e is Working(_) {
+          rd.acts[k] = true
+        }
         match e {
           // (after what closes under a post as its agent starts)
           Working(_) => turns.admit(c, k, working_turn_ms, after=true)
@@ -1038,7 +1269,7 @@ fn row_keys(
   let keys : Array[String] = []
   for i, e in all {
     let k = all_keys[i]
-    if turns.waiting.contains(k) || (turns.send_waiting && sent_row(e, k)) {
+    if turns.waiting.contains(k) {
       continue
     }
     list.push(e)
@@ -1047,7 +1278,7 @@ fn row_keys(
   if rd.drawn && following {
     for i, e in list {
       let caught = match e {
-        Said(m) | Letters(m) => !m.said
+        Said(m) => !m.said
         Working(a) => !a.started
         Top | Foot => true
         _ => false
@@ -1057,8 +1288,11 @@ fn row_keys(
       }
     }
   }
-  for k in keys {
+  for i, k in keys {
     rd.known[k] = true
+    if list[i] is Working(_) {
+      rd.acts[k] = true
+    }
   }
   rd.drawn = true
   (list, keys)
@@ -1206,18 +1440,33 @@ fn at_end_asked() -> Bool {
 }
 
 ///|
-/// Tells the core the chat shows, its end seen or not (Chat.kt: `client.focus` with `chat`), as that changes; it
-/// marks what is read and where the unread line goes. Never with Source.readonly.
-fn tell_focus(src : Source, r : ChatRef, v : ChatView, rd : Reading, seen : Bool) -> Unit {
+/// Tells the core the chat shows, its end seen or not (Chat.kt: `client.focus` with `chat`), and the last message seen
+/// whole (`seen`), as either changes; it marks what is read and where the unread line goes. Never with
+/// Source.readonly.
+fn tell_focus(
+  src : Source,
+  r : ChatRef,
+  v : ChatView,
+  rd : Reading,
+  seen : Bool,
+  whole : Double,
+) -> Unit {
   if src.read_only {
     return
   }
-  let said = "\{seen}"
+  let said = "\{seen} \{whole}"
   if rd.told == said {
     return
   }
   rd.told = said
-  (src.call)("client.focus", { "chat": focus_chat(r, v, Some(seen)) }, fn(_) {  })
+  let chat = focus_chat(r, v, Some(seen))
+  if whole >= 0.0 {
+    match chat {
+      Object(o) => o["seen"] = Json::number(whole)
+      _ => ()
+    }
+  }
+  (src.call)("client.focus", { "chat": chat }, fn(_) {  })
 }
 
 ///|
@@ -1241,6 +1490,21 @@ fn focus_chat(r : ChatRef, v : ChatView, end : Bool?) -> Json {
 /// Where the chat is, told the core (`chat.place`, Chat.kt leave): the message at the top and how far its top is below
 /// the list's (in the screen's pixels, as Android's app tells it), none at its end; told again only where that moved.
 fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit {
+  // kept here too, for opening it again this run (Chat.kt leave: app.places)
+  if rd.top_seq >= 0.0 {
+    kept_places[r.station + "\u{1}" + r.session] = {
+      top: rd.top_seq,
+      offset: rd.top_off,
+      bottom: if rd.at_end {
+        match v.messages.last() {
+          Some(m) => m.seq
+          None => -1.0
+        }
+      } else {
+        -1.0
+      },
+    }
+  }
   guard v.thread is Some(th) && !src.read_only else { return }
   let scale = rd.scale
   let place : Map[String, Json] = { "station": Json::string(r.station), "thread": Json::number(th) }
@@ -1273,7 +1537,20 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   }
   composer_left(src, r)
   readings.remove(k)
+  // what holds the chat's thread at the core with it (its jobs in the bar and their sheets, the images beside one
+  // opened from it): while any is held the core keeps the thread's window as first read, and the chat opened again
+  // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
   (src.leave)("chat", chat_params(r))
+  (src.leave)("chatJobs", chat_params(r))
+  // what its agents and other chats' wrote each other, read for its sheet: let go if it was (held only once opened)
+  match dui.letters_held.get(k) {
+    Some(th) => {
+      (src.leave)("chatLetters", letters_params(r, th))
+      dui.letters_held.remove(k)
+    }
+    None => ()
+  }
+  near_left(src, r.station)
   read_chats.remove(k)
 }
 
@@ -1359,6 +1636,12 @@ fn jump_to_latest(
           }
         },
       )
+      // what it is to a screen reader (Chat.kt JumpToLatest's contentDescription, its count's words with it)
+      let latest = tr("android-chat.chat.latest")
+      c.semantics(pill, Button, id~, label=match count {
+        Some(n) => latest + " " + fill("android-chat.chat.newMessages", [("n", "\{n}")])
+        None => latest
+      })
       c.look(pill, look)
       // going, only drawn: a tap there goes to the rows under it
       @motion.leaving(c, pill, shown)
@@ -1444,6 +1727,8 @@ fn jump_to_ask(
         id~,
         fn() { @sf.icon(c, "bell", size=18.0, color=t.p.text) |> ignore },
       )
+      // (Chat.kt JumpToAsk's contentDescription)
+      c.semantics(bell, Button, id~, label=tr("android-chat.asks.go"))
       c.look(bell, look)
       @motion.leaving(c, bell, shown)
     })
@@ -1462,12 +1747,11 @@ fn bar_frame(
   after : () -> Unit,
   trailing : () -> Unit,
   more : Bool,
-  room? : Double = 0.0,
   on_more? : () -> Unit = fn() {  },
 ) -> Unit {
   let t = @sf.theme()
-  // under the status bar (Chat.kt BarFrame: windowInsetsPadding(statusBars), then 6)
-  c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=status_top() + 6.0, pb=8.0, align=ACenter, fn() {
+  // under the status bar (Chat.kt BarFrame: windowInsetsPadding(statusBars), then TopBarHeight, as Home's bar)
+  c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), align=ACenter, fn() {
     let back = c.id("chat-back")
     if c.clicked(back) {
       app.nav.pop() |> ignore
@@ -1478,23 +1762,27 @@ fn bar_frame(
       radius=20.0,
       align=ACenter,
       justify=JCenter,
-      bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, back)),
       id=back,
-      fn() { @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore },
+      fn() {
+        @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
+        // Chat.kt: back, clip(CircleShape).clickable
+        @motion.ripple(c, back, 20.0)
+      },
     )
     |> ignore
     c.box(dir=Row, w=Fill(1.0), pr=8.0, gap=8.0, align=ACenter, fn() {
-      // the title as long as there is room for it beside what follows it
-      c.box(max_w=dmax(c.width - 4.0 - 40.0 - 16.0 - 8.0 - room, 40.0), fn() {
+      // the title as long as there is room for it beside what follows it (weight(1f, fill = false): what follows is
+      // measured first, as wide as it is, and the title has what is left)
+      c.box(fn() {
         c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false, line=chat_title_line)
         |> ignore
       })
       |> ignore
-      after()
+      c.box(dir=Row, gap=8.0, align=ACenter, keep=true, fn() { after() }) |> ignore
     })
     |> ignore
     trailing()
-    if more && nav_button(c, "more", 18.0, key="chat-more") {
+    if more && nav_button(c, "more", 18.0, key="chat-more", said=tr("android-chat.info.title")) {
       on_more()
     }
   })
@@ -1525,27 +1813,6 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
   let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
   let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
-  // what follows the title, as wide as it is drawn
-  let mut room = 0.0
-  if v.agents.length() == 0 {
-    match station {
-      Some(s) => room = room + 8.0 + station_tag_w(s)
-      None => ()
-    }
-  }
-  if v.station_update is Some(Object(_)) {
-    room = room + 8.0 + update_control_w(v.station_update)
-  }
-  if people.length() > 0 {
-    room = room + 8.0 + 19.0 + 14.0 * (people.length() - 1).to_double()
-  }
-  for i, a in v.agents {
-    ignore(a)
-    room = room + 8.0 + (if i == 0 && station is Some(_) { 46.0 } else { 22.0 })
-  }
-  room = room + (if v.thread is Some(_) { 34.0 } else { 0.0 }) +
-    (if has_jobs { 34.0 } else { 0.0 }) +
-    34.0 * archive_share
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
@@ -1588,7 +1855,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
                     @sf.spinner(c) |> ignore
                   })
                   |> ignore
-                } else if nav_button(c, "archive", 20.0, key="chat-archive") && archive {
+                } else if nav_button(c, "archive", 20.0, key="chat-archive", said=tr("android-chat.archive")) && archive {
                   archive_chat(src, r, v)
                 }
               })
@@ -1630,7 +1897,6 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
         }
       },
       v.thread is Some(_),
-      room~,
       on_more=fn() { open_sheet(c, Info(r)) },
     )
     c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
@@ -1652,6 +1918,8 @@ fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
     border=1.0,
     border_color=t.p.line,
     align=ACenter,
+    // (StationTag: its name to a screen reader)
+    label=s.name,
     fn() {
       if s.via != "" {
         via_dot(c, s.via, 7.0, 0.0)
@@ -1676,18 +1944,6 @@ fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
     @settings.open_station_peek(address)
   }
   c.box(id~, fn() { station_tag(c, s) }) |> ignore
-}
-
-///|
-fn station_tag_w(s : Station) -> Double {
-  let name = s.name.length().to_double() * 7.0
-  dmin(
-    104.0,
-    16.0 +
-    (if s.via != "" { 11.0 } else { 0.0 }) +
-    (if @sf.has_station_mark(s.emoji, s.icon) { 16.0 } else { 0.0 }) +
-    name,
-  )
 }
 
 ///|
@@ -1783,7 +2039,8 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
   match station {
     None => model_mark(c, a, 22.0)
     Some(s) =>
-      c.box(fn() {
+      // (AgentStationMark: 「who · station」 to a screen reader)
+      c.box(label=a.who + " · " + s.name, fn() {
         c.box(
           dir=Row,
           h=Px(22.0),
@@ -1826,30 +2083,39 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
 }
 
 ///|
-/// People overlapping a little, each ringed in the page's ground (Parts.kt PeopleStack).
-fn people_stack(c : @ui.Ctx, src : Source, people : Array[Person], size : Double) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, align=ACenter, fn() {
-    for i, p in people {
-      c.box(
-        w=Px(size + 3.0),
-        h=Px(size + 3.0),
-        radius=(size + 3.0) / 2.0,
-        bg=t.p.bg,
-        tx=-5.0 * i.to_double(),
-        align=ACenter,
-        justify=JCenter,
-        fn() {
-          avatar(
-            c,
-            src,
-            if p.email != "" { p.email } else { p.id },
-            if p.name != "" { p.name } else { p.email },
-            p.picture,
-            size,
-          )
-        },
-      )
+/// People overlapping a little, each ringed in the ground they are on (Parts.kt PeopleStack: Avatar(p.id,
+/// p.shown.display), `ring` C.bg unless said): laid out side by side, each drawn 5 over the one before it, the first
+/// over them all (zIndex(-i)).
+fn people_stack(
+  c : @ui.Ctx,
+  src : Source,
+  people : Array[Person],
+  size : Double,
+  ring? : Int64 = @sf.theme().p.bg,
+) -> Unit {
+  let step = size + 3.0
+  let n = people.length()
+  c.box(w=Px(step * n.to_double()), h=Px(step), fn() {
+    // the last drawn first, each under the one before it
+    for j in 0..<n {
+      let i = n - 1 - j
+      let p = people[i]
+      c.layer(fn() {
+        c.box(
+          w=Px(step),
+          h=Px(step),
+          radius=step / 2.0,
+          bg=ring,
+          tx=(step - 5.0) * i.to_double(),
+          align=ACenter,
+          justify=JCenter,
+          fn() {
+            // coloured by their id, lettered by what the bar calls them (the viewer 「你」)
+            avatar(c, src, p.id, p.display, p.picture, size)
+          },
+        )
+        |> ignore
+      })
       |> ignore
     }
   })
@@ -1866,31 +2132,7 @@ fn avatar(
   picture : String,
   size : Double,
 ) -> Unit {
-  let pic = if picture != "" { (src.picture)(picture) } else { "" }
-  c.box(
-    w=Px(size),
-    h=Px(size),
-    radius=size / 2.0,
-    bg=avatar_color(id),
-    align=ACenter,
-    justify=JCenter,
-    fn() {
-      if pic != "" {
-        c.image(pic, w=Px(size), h=Px(size), radius=size / 2.0, bg=0L) |> ignore
-      } else {
-        c.text(
-          initial(name),
-          size=size * 0.5,
-          weight=600,
-          color=0xFFFFFFFFL,
-          wrap=false,
-          line=size * 0.5,
-        )
-        |> ignore
-      }
-    },
-  )
-  |> ignore
+  @sf.avatar(c, id, name, if picture != "" { (src.picture)(picture, c.page_stint()) } else { "" }, size)
 }
 
 ///|

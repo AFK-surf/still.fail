@@ -28,7 +28,7 @@ pub let tracker_gap_ms : Double = 40.0
 ///|
 /// How lists scroll here: 0 the desktop's, 1 iOS's, 2 Android's.
 fn scroll_kind() -> Int {
-  match h_platform() {
+  match h_feel() {
     1 => 1
     2 => 2
     _ => 0

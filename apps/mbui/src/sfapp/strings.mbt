@@ -1,10 +1,21 @@
 // The words, as the Android app says them in Chinese (ember client/i18n/catalog/zh: android-chat.json,
-// android-settings.json, android-misc.json, common.json); `{name}` is put in by `fill`.
+// android-settings.json, android-misc.json, common.json); `{name}` is put in by `fill`. In English (@sf.language: the
+// core's `lang`, else the phone's) this package's tables' words are strings_en.mbt's, which scripts/strings writes from
+// the catalog's English: a word added here is run through it (lang_wbtest.mbt holds every key to have its English).
 
 ///|
 let zh : Map[String, String] = {
+  "android-chat.archive.named": "归档「{title}」",
+  "android-settings.changelog.dismiss": "知道了",
+  "web-main.list.separator": "、",
+  // what this version cannot do on a device yet (composer.mbt, drive.mbt, screen_view.mbt, preview.mbt)
+  "android-chat.composer.noCamera": "这台设备上还不能拍照",
+  "android-chat.composer.noFiles": "这个版本在这台设备上还不能选文件",
+  "android-chat.composer.noRecent": "这个版本还不能读相册的最近照片",
+  "android-chat.preview.noPdf": "此平台不能显示 PDF",
+  // a station that lends its files, offline (wide_side.mbt)
+  "android-settings.connects.offline": "{name} · 离线",
   "web-main.relay.action": "接力到频道…",
-  "web-main.relay.allWorkspaces": "全部",
   "web-main.relay.change": "更换",
   "web-main.relay.done": "已接力到 {place}",
   "web-main.relay.go": "接力",
@@ -30,7 +41,7 @@ let zh : Map[String, String] = {
   "web-main.relay.title": "接力到频道",
   "web-main.relay.unread": "读取失败：{error}",
   "web-main.relay.verb": "接力",
-  "web-main.relay.workspaces": "在哪个 workspace 里找",
+  "web-main.relay.via": "那里由 {bot} 回复",
   "common.link.open": "打开链接",
   "common.link.copy": "复制链接",
   "common.link.copied": "已复制链接",
@@ -41,6 +52,7 @@ let zh : Map[String, String] = {
   "common.report.lead": "仅在你认为这是 still.fail 本身的问题时上报。网络、代理、账号额度或模型服务的问题，请先自行排查。",
   "common.report.sends": "将发送此报错、出错这一轮的原因、agent 和 station 的版本、agent 环境变量的名称（不含值）、此对话相关的 station 日志，以及你的名字和邮箱。",
   "android-misc.link.cantOpen": "无法打开此链接",
+  "android-misc.reader.back": "执行历史",
   "android-misc.screen.title": "屏幕",
   "android-misc.adb.title": "共享调试",
   "android-chat.annotate.copied": "已复制",
@@ -61,7 +73,6 @@ let zh : Map[String, String] = {
   "android-chat.ref.none.match": "没有标题匹配的对话",
   "android-chat.ref.title": "引用对话",
   "android-chat.ref.update": "更新 {app} 后才能引用对话",
-  "android-chat.chat.archiveThis": "归档此对话",
   "android-chat.chat.delete.verb": "删除",
   "android-chat.chat.empty": "在此发送消息，此对话中的 agent 会在这里回复",
   "android-chat.chat.latest": "跳到最新",
@@ -81,7 +92,7 @@ let zh : Map[String, String] = {
   "android-chat.chat.working": "处理中",
   "android-chat.composer.archived": "已归档，还原后才能发送消息。 ",
   "android-chat.composer.archived.placeholder": "还原对话后才能发送",
-  "android-chat.composer.offline": "此 station 已离线：当前显示的是之前读取的内容，暂时无法发送消息",
+  "android-chat.composer.offline": "暂时连不上此 station：当前显示的是之前读取的内容，发出的消息会在连上后送达",
   "android-chat.composer.restore": "还原对话",
   "android-chat.composer.restoring": "正在还原",
   "android-chat.composer.send": "发送",
@@ -188,14 +199,17 @@ let zh : Map[String, String] = {
   "common.reading": "正在读取",
   "common.retry": "重试",
   "common.uploading": "正在上传",
+  "web-main.composer.retryUpload": "重试上传",
   "web-main.composer.expandPaste": "展开到输入框",
   "web-main.composer.pasteAttachment": "{count} 字符",
   "web-main.composer.pasteUploading": "正在上传",
   "web-main.composer.pastedText": "粘贴的文字",
   "web-main.composer.removePaste": "删除粘贴片段",
-  // what other chats' agents wrote, its line tapped (Chat.kt LettersLine)
-  "web-main.chat.letters.close": "收起消息",
-  "web-main.chat.letters.open": "展开消息",
+  // what a chat's agents and other chats' wrote each other: its row in the chat's sheet, and their own (Letters.kt)
+  "web-main.letters.title": "agent 往来",
+  "web-main.letters.none": "暂无 agent 往来",
+  "web-main.letters.back": "所有往来",
+  "web-main.letters.count": "{n} 条",
   "web-main.composer.retryPaste": "重试上传",
   "web-pages.chat.files": "Station 文件",
   "web-main.outside.title": "分享对话",
@@ -207,9 +221,11 @@ let zh : Map[String, String] = {
   "web-main.outside.failed": "分享失败：{error}",
   // a vault request on its card (vault_approval.mbt)
   "android-settings.vault.approve.once": "仅本次",
-  "android-settings.vault.approve.onceDetail": "单次有效",
+  "android-settings.vault.approve.onceDetail": "只给这一条命令用，下次还要再批准",
   "android-settings.vault.approve.hour": "本对话 1 小时内",
-  "android-settings.vault.approve.hourDetail": "期间无需再次批准",
+  "android-settings.vault.approve.hourDetail": "1 小时内这个对话可以反复使用，不用再批准",
+  "android-settings.vault.approve.chat": "本对话直到归档",
+  "android-settings.vault.approve.chatDetail": "这个对话归档或删除前都能用，最长 30 天",
   "android-settings.vault.approve.deny": "拒绝",
   "android-settings.vault.approve.denyDetail": "通知 agent 已拒绝",
   "android-settings.vault.approve.what": "批准",
@@ -218,11 +234,32 @@ let zh : Map[String, String] = {
   "android-settings.vault.approve.decided": "此申请已处理",
   // a face's file not what it says (faces.mbt)
   "android-settings.fonts.damaged": "文件已损坏",
+  // a phone's or a tablet's wide screen (corners.mbt)
+  "android-misc.wide.all": "全部会话",
+  "android-misc.wide.empty": "暂无会话",
+  "android-misc.wide.newChat": "新建对话",
+  "android-misc.wide.recent": "最近会话",
+}
+
+///|
+/// `key`'s words in English when that is the language (@sf.language: strings_en.mbt, scripts/strings), a count's of one
+/// (`n` 1) its `.one`, as Android's I18n.kt chooses; None in Chinese, or for a key it has no words for.
+fn english(key : String, args? : Array[(String, String)] = []) -> String? {
+  if @sf.language() != "en" {
+    return None
+  }
+  if args.iter().any(fn(a) { a.0 == "n" && a.1 == "1" }) && en.get(key + ".one") is Some(one) {
+    return Some(one)
+  }
+  en.get(key)
 }
 
 ///|
 /// The words for `key`.
 pub fn tr(key : String) -> String {
+  if english(key) is Some(s) {
+    return s
+  }
   match zh.get(key) {
     Some(s) => s
     None =>
@@ -248,7 +285,10 @@ pub fn tr(key : String) -> String {
 ///|
 /// The words for `key` with `{name}`s put in.
 pub fn fill(key : String, args : Array[(String, String)]) -> String {
-  let mut s = tr(key)
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => tr(key)
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }

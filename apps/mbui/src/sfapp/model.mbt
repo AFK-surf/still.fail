@@ -65,6 +65,8 @@ pub(all) struct Person {
   id : String
   email : String
   name : String
+  /// what the chat's bar calls them (「你」 for the viewer)
+  display : String
   picture : String
   mine : Bool
 }
@@ -97,6 +99,8 @@ pub(all) struct ChatItem {
   reconnecting : String?
   connect : Bool
   origin_text : String
+  /// the people in it in words, for a screen reader (RowPicture.kt Faces)
+  people_text : String
   pending : Bool
   settled : Bool
   archivable : Bool
@@ -109,6 +113,9 @@ pub(all) struct ChatItem {
   /// pinned to the list's top (None: a station from before pins), kept from the archive
   pinned : Bool?
   kept : Bool
+  /// the key a chat asked for here went by before its station made it ("" for none): its row is the same row
+  /// throughout
+  client_key : String
 }
 
 ///|
@@ -144,6 +151,7 @@ fn person_of(p : Json) -> Person {
     id: text(Some(p), "id"),
     email: text(Some(p), "email"),
     name: text(shown, "name"),
+    display: text(shown, "display"),
     picture: text(shown, "picture"),
     mine: flag(shown, "mine"),
   }
@@ -180,6 +188,7 @@ pub fn chat_item(v : Json) -> ChatItem {
     reconnecting: opt_text(s, "reconnecting"),
     connect: field(s, "connect") is Some(String(_)),
     origin_text: text(s, "originText"),
+    people_text: text(s, "peopleText"),
     pending: flag(s, "pending"),
     settled: flag(s, "settled"),
     archivable: flag(s, "archivable"),
@@ -200,6 +209,7 @@ pub fn chat_item(v : Json) -> ChatItem {
       _ => None
     },
     kept: flag(s, "kept"),
+    client_key: text(s, "clientKey"),
   }
 }
 

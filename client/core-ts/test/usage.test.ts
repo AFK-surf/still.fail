@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
 import { holdLanguage, tr } from "../src/i18n.ts";
-import { count, countIn, localDay, money, priceTables, usageView, type Source } from "../src/views/usage.ts";
+import { count, countIn, localDay, money, priceTables, scale, usageView, type Source } from "../src/views/usage.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -138,4 +138,19 @@ test("numbers_read_as_people_say_them", () => {
   const en = (n: number) => countIn("en", n);
   assert.deepEqual([en(9850), en(29_443), en(17_146_455), en(4_914_110_860)], ["9,850", "29.4K", "17.1M", "4.9B"]);
   assert.deepEqual([tr("en", "core-views.usage.calls", { n: en(1) }), tr("en", "core-views.usage.calls", { n: en(29_443) })], ["1 call", "29.4K calls"]);
+});
+
+test("the_bars_scale_is_a_round_top_cut_in_two_or_three_steps_each_said_short", () => {
+  const of = (max: number) => { const s = scale(max); return [s.top, s.ticks.map((t) => t.label)]; };
+  assert.deepEqual(of(5351), [6000, ["2k", "4k", "6k"]]);
+  assert.deepEqual(of(27), [30, ["10", "20", "30"]]);
+  assert.deepEqual(of(10), [10, ["5", "10"]]);
+  assert.deepEqual(of(1200), [1500, ["500", "1k", "1.5k"]]);
+  assert.deepEqual(of(7400), [7500, ["2.5k", "5k", "7.5k"]]);
+  assert.deepEqual(of(0.42), [0.6, ["0.2", "0.4", "0.6"]]);
+  assert.deepEqual(of(2_400_000), [3_000_000, ["1M", "2M", "3M"]]);
+  assert.deepEqual(scale(0), { top: 0, ticks: [] });
+  // each step's line at its value: the last the top
+  const s = scale(5351);
+  assert.deepEqual(s.ticks.map((t) => t.value), [2000, 4000, 6000]);
 });

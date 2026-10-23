@@ -117,3 +117,37 @@ test "a decision answered: its options close in their turn after the answer has 
 ///|
 /// How long the test's list says it glides after what came (its declared rest, Turns::step's `list_rest`).
 let test_glide_ms : Double = 500.0
+
+///|
+test "turns: words sent wait for nothing (a row before them, a list never at rest); what is asked after them waits for their landing" {
+  reset()
+  let tu = turns_of("test")
+  let phase = Ref::new(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      // (an answer streaming in: the list never at rest)
+      tu.step(c, @double.infinity)
+      match phase.val {
+        0 => {
+          tu.admit(c, "a", row_turn_ms)
+          tu.send(c)
+          tu.admit(c, "b", row_turn_ms)
+          phase.val = 1
+        }
+        _ => ()
+      }
+      c.box(fn() {  }) |> ignore
+    },
+    w=100.0,
+    h=100.0,
+  )
+  t.draw()
+  t.draw()
+  // (sending holds nothing of what was sent: no turn of its own)
+  assert_true(tu.asks.iter().all(fn(a) { a.what != Send }))
+  // the row asked after them waits for their landing, said as they land
+  assert_true(tu.waiting.contains("b"))
+  let landed = t.time()
+  tu.over(t.ctx(), Send, landed)
+  assert_eq(tu.sent_until, landed + turn_calm_ms)
+}

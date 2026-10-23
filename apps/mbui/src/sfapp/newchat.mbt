@@ -5,8 +5,10 @@
 // composer at its foot is a chat's (composer.mbt), its draft the station's (`new:<station>`). The first message makes
 // the chat (`newChat.create`, the core has it at once under the key it answers, its station makes it behind it) and
 // goes to it (`chat.send` by that key); then the page becomes that chat in place (@ui.Nav::become), its composer and
-// focus kept: the new chat's scene goes up out of view as it fades (140 ms), its choices fade where they are (80 ms),
-// and the chat's list comes up out of the composer (480 ms after 90). Home lists it at once (the core's row).
+// focus kept: the new chat's scene goes up out of view as it fades (140 ms), its choices fade where they are (80 ms).
+// The words sent stay where they were typed from the frame they are sent, and once their row is in the chat's list
+// they go to it with the list coming up out of the composer (flight.mbt: carried, 480 ms after 90). Home lists it at
+// once (the core's row).
 
 ///|
 /// What the page keeps while it is a new chat, and as it becomes its chat.
@@ -18,7 +20,7 @@ priv struct FreshChat {
   mut sent : Bool
   /// a message on its way (the create and the send)
   mut starting : Bool
-  /// the chat it became (its scene leaving over it, its list rising: new_leave, new_rise)
+  /// the chat it became (its scene leaving over it: new_leave)
   mut became : ChatRef?
   /// the scene's look as it left: the view it showed
   mut scene : Json?
@@ -35,8 +37,9 @@ let fresh : FreshChat = {
 }
 
 ///|
-/// A new chat's page, rising over the page on top (Places.kt: 令 in the bar's notch).
-fn new_chat(c : @ui.Ctx) -> Unit {
+/// A new chat's page, rising over the page on top (Places.kt: 令 in the bar's notch); `in_place`, in the place of the
+/// page on top if it is not the stack's root (AppState.open: the latest chats' on a wide screen, corners.mbt).
+fn new_chat(c : @ui.Ctx, in_place? : Bool = false) -> Unit {
   ignore(c)
   fresh.made = ""
   fresh.made_sig = ""
@@ -46,7 +49,11 @@ fn new_chat(c : @ui.Ctx) -> Unit {
   fresh.scene = None
   lower_sheet()
   app.menu = false
-  app.nav.rise(NewChat)
+  if in_place && app.nav.depth() > 1 {
+    app.nav.replace(NewChat)
+  } else {
+    app.nav.rise(NewChat)
+  }
 }
 
 ///|
@@ -107,6 +114,14 @@ fn new_chat_bar(c : @ui.Ctx) -> Unit {
 /// The new chat's page (NewChatScreen): its bar; while its stations are read, their first read; with none at all, the
 /// first station to add; with none up, said so; else the page on the station it starts on.
 fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  // on a wide screen in a column in the middle, its composer too (Wide.kt NewChatColumn)
+  new_chat_column(c, fn() { new_chat_in(c, src, w) })
+  // the first words sent, where they were typed, while the chat is made (flight.mbt)
+  flight_carry_waiting(c)
+}
+
+///|
+fn new_chat_in(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let topic = new_chat_topic(src, w.id)
   let v = topic.value
@@ -223,7 +238,7 @@ fn new_chat_on(
     // the keyboard up, the choices and the composer stay over it
     c.box(style=new_scene_room, fn() {
     c.list("new/scene", 1, new_scene_h, fn(_) {
-    c.box(
+    let scene = c.box(
       w=Fill(1.0),
       pl=30.0,
       pr=30.0,
@@ -308,7 +323,10 @@ fn new_chat_on(
         }
       },
     )
-    |> ignore
+    // and a little smaller as it goes, from its middle (NewChat.kt: scale 1 - 0.04 a)
+    if up > 0.0 {
+      c.look(scene, @ui.look(scale=1.0 - 0.04 * up))
+    }
     }) |> ignore
     }) |> ignore
     // at the foot, on the page's paper: what was used up, the choices, the composer
@@ -467,11 +485,7 @@ fn chooser(
     gap=6.0,
     align=ACenter,
     radius=15.0,
-    glass=if c.pressed(id) {
-      @sf.glass_floating(tint=@sf.over(t.p.raised, @sf.alpha(t.p.text, 0.08)))
-    } else {
-      @sf.glass_floating()
-    },
+    glass=@sf.glass_floating(),
     shadow=@sf.floating.sigma,
     shadow_color=@sf.floating.color,
     shadow_y=@sf.floating.dy,
@@ -486,6 +500,8 @@ fn chooser(
       if chevron {
         @sf.icon(c, "chevron-down", size=12.0, color=t.p.muted) |> ignore
       }
+      // NewChat.kt: floating(Smooth(15)).clickable
+      @motion.ripple(c, id, 15.0)
     },
   )
   |> ignore
@@ -552,9 +568,14 @@ fn send_first(
   }
   let words = with_link_words(d.text.trim(chars=" \n\t").to_owned(), d)
   let files = up_files(d)
+  let uploads = up_uploads(d)
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   let taken_text = d.text
   let taken_files = d.files.copy()
+  // the words stay where they were typed, the files where their tiles were, while the chat is made (flight.mbt:
+  // carried; NewChat.kt host.sending)
+  let here : ChatRef = { station, session: "", title: "", station_name }
+  flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
@@ -567,6 +588,7 @@ fn send_first(
   let sig = picked_sig(v)
   let give_back = fn(e : Json) {
     fresh.starting = false
+    flight_carry_gone(d.key)
     if draft_empty(d) {
       d.text = taken_text
       d.put_text = Some(taken_text)
@@ -585,19 +607,24 @@ fn send_first(
       "attachments": Json::array(files),
       "quotes": Json::array(quotes),
     }
+    if uploads.length() > 0 {
+      params["uploads"] = Json::array(uploads)
+    }
     (src.call)("chat.send", Json::object(params), fn(res) {
       match res {
         Err(e) => give_back(e)
         Ok(_) => {
           fresh.sent = true
           fresh.starting = false
-          // the page becomes the chat, in place
+          // the page becomes the chat, in place, its first words in its list from now and going on there
           let r : ChatRef = { station, session: key, title: "", station_name }
+          let rk = station + "\u{1}" + key
+          flight_carry_into(d.key, draft_key(r), rk, sent_local(rk, None, words, files))
           fresh.scene = v
           fresh.became = Some(r)
           became_starts()
           app.nav.become(Chat(r))
-              }
+        }
       }
     })
   }
@@ -629,14 +656,6 @@ let new_leave_ms : Double = 140.0
 let new_fade_ms : Double = 80.0
 
 ///|
-/// The list of the chat a new chat became rising into its place (the words' way up out of the composer), after a
-/// little.
-let new_rise_ms : Double = 480.0
-
-///|
-let new_rise_after_ms : Double = 90.0
-
-///|
 /// Over the chat a new chat became: its scene leaving (140 ms), then nothing.
 fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   match fresh.became {
@@ -649,27 +668,22 @@ fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Un
   }
   let v = fresh.scene
   c.layer(fn() {
-    // its bar gone at once (the chat has its own), its room kept
-    c.box(h=Px(48.0), fn() {  }) |> ignore
-    new_chat_on(c, src, w, v, field(v, "station"), true)
+    new_chat_column(c, fn() {
+      // its bar gone at once (the chat has its own), its room kept
+      c.box(h=Px(48.0), fn() {  }) |> ignore
+      new_chat_on(c, src, w, v, field(v, "station"), true)
+    })
   })
   |> ignore
 }
 
 ///|
-/// How far the list of a chat a new chat became is still below its place (the words' way up out of the composer):
-/// 480 ms on Arrive, after 90.
-fn new_chat_rise(c : @ui.Ctx, r : ChatRef) -> Double {
+/// Whether the page of chat `r` is the one a new chat just became, its first value not read yet (its scene leaving,
+/// its first words on their way): the core's own, nothing breathing over it (Chat.kt made).
+fn new_chat_made(c : @ui.Ctx, r : ChatRef) -> Bool {
   match fresh.became {
-    Some(b) if b == r => {
-      let k = new_rise(c).get()
-      if k <= 0.0 {
-        return 0.0
-      }
-      let rise = dmax(0.0, c.height - nav_foot() - composer_room_of(c) - status_top() - chat_bar_h - 120.0)
-      rise * k
-    }
-    _ => 0.0
+    Some(b) if b == r => new_leave(c).moving() || flight_carried(draft_key(r))
+    _ => false
   }
 }
 
@@ -685,13 +699,7 @@ fn new_fade(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// How far the list of the chat a new chat became is still below its place (1 … 0, Arrive, after a little).
-fn new_rise(c : @ui.Ctx) -> @motion.Anim {
-  @motion.anim(c, "new/rise", 0.0, global=true)
-}
-
-///|
-/// The new chat became the chat: its scene leaves and the chat's list rises, from now.
+/// The new chat became the chat: its scene leaves, from now.
 fn became_starts() -> Unit {
   let c = @ui.current()
   let leave = new_leave(c)
@@ -700,9 +708,6 @@ fn became_starts() -> Unit {
   let fade = new_fade(c)
   fade.snap(0.0)
   fade.animate(1.0, @motion.tween(new_fade_ms, ease=LeaveFade))
-  let rise = new_rise(c)
-  rise.snap(1.0)
-  rise.animate(0.0, @motion.tween(new_rise_ms, ease=Arrive, delay=new_rise_after_ms))
 }
 
 // ── the sheets ─────────────────────────────────────────────────────────
@@ -713,7 +718,7 @@ fn pick_station_sheet(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let t = @sf.theme()
   let v = new_chat_topic(src, ws).value
   let current = text(field(v, "station"), "station")
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   sheet_head(c, tr("android-chat.new.station.pick"))
   c.box(w=Fill(1.0), h=Fill(1.0), pb=24.0, clip=true, fn() {
     for s in items(v, "stations") {
@@ -731,7 +736,6 @@ fn pick_station_sheet(c : @ui.Ctx, src : Source, ws : String) -> Unit {
           pady=12.0,
           gap=12.0,
           align=ACenter,
-          bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
           id~,
           fn() {
             station_or_server(c, text(st, "emoji"), text(st, "icon"), 22.0, t.p.text)
@@ -745,6 +749,8 @@ fn pick_station_sheet(c : @ui.Ctx, src : Source, ws : String) -> Unit {
             if text(st, "station") == current {
               @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
             }
+            // NewChat.kt: clip(Smooth(LIST_ROW_CORNER)).clickable
+            @motion.ripple(c, id, @sf.row_corner)
           },
         )
         |> ignore
@@ -788,13 +794,7 @@ fn cascade_option(
     gap=10.0,
     align=ACenter,
     radius=10.0,
-    bg=if checked {
-      t.p.accent_bg
-    } else if c.pressed(id) {
-      @sf.alpha(t.p.text, 0.06)
-    } else {
-      0L
-    },
+    bg=if checked { t.p.accent_bg } else { 0L },
     id~,
     fn() {
       match lead {
@@ -825,6 +825,8 @@ fn cascade_option(
       if checked {
         @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
       }
+      // NewChat.kt: the cascade's row, clip(Smooth(concentric(CASCADE_CORNER, CASCADE_PAD))).clickable
+      @motion.ripple(c, id, 14.0 - 4.0 / @sf.smooth_scale)
     },
   )
   |> ignore
@@ -860,7 +862,7 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
     run_picker_opened.val = true
     set({ "open": Json::boolean(true) })
   }
-  sheet_grab(c)
+  @sf.sheet_grab(c)
   if sheet_host.accounts {
     c.box(dir=Row, w=Fill(1.0), pl=8.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
       let back = c.id("pick/accounts-back")
@@ -1067,7 +1069,6 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
       gap=4.0,
       radius=12.0,
       align=ACenter,
-      bg=if c.pressed(who) { @sf.alpha(t.p.text, 0.06) } else { 0L },
       id=who,
       fn() {
         c.text(tr("android-chat.new.account"), size=14.0, color=t.p.muted, wrap=false) |> ignore
@@ -1082,6 +1083,8 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
         })
         |> ignore
         @sf.icon(c, "chevron-right", size=14.0, color=t.p.muted) |> ignore
+        // NewChat.kt: clip(Smooth(12)).clickable
+        @motion.ripple(c, who, 12.0)
       },
     )
     |> ignore

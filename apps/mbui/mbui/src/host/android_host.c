@@ -36,13 +36,14 @@ static struct {
 static JavaVM *vm;
 static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, pdfs_cls, notices_cls;
 static jmethodID m_reduce_motion;
+static jmethodID m_text_menu;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
-    m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
+    m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes, m_pk_info,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_v_tell, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
-    m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
+    m_save, m_system_dark, m_font_scale, m_a11y_on, m_a11y_tree, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
     m_open_url, m_open_tab, m_hold_words, m_clipboard_secret, m_over_done, m_text_scale, m_img_hold, m_img_pump;
 static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
@@ -84,6 +85,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_wake_after = (*env)->GetStaticMethodID(env, host_cls, "wakeAfter", "(D)V");
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
+  m_text_menu = (*env)->GetStaticMethodID(env, host_cls, "textMenu", "(ZDDDDI)V");
   m_clipboard_secret = (*env)->GetStaticMethodID(env, host_cls, "clipboardSecret", "(Ljava/lang/String;D)V");
   m_log = (*env)->GetStaticMethodID(env, host_cls, "log", "(Ljava/lang/String;)V");
   m_bench = (*env)->GetStaticMethodID(env, host_cls, "benchMode", "()I");
@@ -92,6 +94,9 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_back_enabled = (*env)->GetStaticMethodID(env, host_cls, "backEnabled", "(Z)V");
   m_drive = (*env)->GetStaticMethodID(env, host_cls, "drive", "(ILjava/lang/String;)I");
   m_system_dark = (*env)->GetStaticMethodID(env, host_cls, "systemDark", "()Z");
+  m_font_scale = (*env)->GetStaticMethodID(env, host_cls, "fontScale", "()F");
+  m_a11y_on = (*env)->GetStaticMethodID(env, host_cls, "a11yOn", "()Z");
+  m_a11y_tree = (*env)->GetStaticMethodID(env, host_cls, "a11yTree", "(Ljava/lang/String;)V");
   m_set_dark = (*env)->GetStaticMethodID(env, host_cls, "setDark", "(Z)V");
   m_set_sideways = (*env)->GetStaticMethodID(env, host_cls, "setSideways", "(Z)V");
   m_word_at = (*env)->GetStaticMethodID(env, host_cls, "wordAt", "(Ljava/lang/String;I)D");
@@ -139,6 +144,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_pk_state = (*env)->GetStaticMethodID(env, picks_cls, "state", "(I)I");
   m_pk_count = (*env)->GetStaticMethodID(env, picks_cls, "count", "(I)I");
   m_pk_name = (*env)->GetStaticMethodID(env, picks_cls, "name", "(II)Ljava/lang/String;");
+  m_pk_info = (*env)->GetStaticMethodID(env, picks_cls, "info", "(II)Ljava/lang/String;");
   m_pk_bytes = (*env)->GetStaticMethodID(env, picks_cls, "bytes", "(II)[B");
   m_pk_end = (*env)->GetStaticMethodID(env, picks_cls, "end", "(I)V");
   keeps_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Keeps"));
@@ -1124,6 +1130,27 @@ int32_t mb_host_system_dark(void) {
   return (*env)->CallStaticBooleanMethod(env, host_cls, m_system_dark) ? 1 : 0;
 }
 
+// Whether an accessibility service is on (@hostapi.a11y_on: Host.a11yOn, AccessibilityManager's say, a frame asked as it
+// changes), and what the app's widgets are now for it (@hostapi.a11y_tree: MBView's A11y, the view's virtual nodes).
+int32_t mb_host_a11y_on(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticBooleanMethod(env, host_cls, m_a11y_on) ? 1 : 0;
+}
+
+void mb_host_a11y_tree(moonbit_string_t s) {
+  JNIEnv *env = env_();
+  jstring j = jstr(env, s);
+  (*env)->CallStaticVoidMethod(env, host_cls, m_a11y_tree, j);
+  (*env)->DeleteLocalRef(env, j);
+}
+
+// How much bigger the system's words setting makes words (@hostapi.font_scale), as MainActivity keeps it (Host.fontScale:
+// the configuration's fontScale, a frame asked for when it changes).
+double mb_host_font_scale(void) {
+  JNIEnv *env = env_();
+  return (double)(*env)->CallStaticFloatMethod(env, host_cls, m_font_scale);
+}
+
 // The app drawn dark or light (@hostapi.set_dark): the status and navigation bars' icons light on it or dark (Host.setDark).
 void mb_host_set_dark(int32_t dark) {
   JNIEnv *env = env_();
@@ -1347,6 +1374,12 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
   (*env)->CallStaticVoidMethod(env, host_cls, m_set_ime, (jboolean)(active != 0), x, y, w, h, s,
                                a, b);
   (*env)->DeleteLocalRef(env, s);
+}
+
+// The system's floating text menu over a field's words, or put away (Host.textMenu: ActionMode.TYPE_FLOATING).
+void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);
 }
 
 void mb_host_clipboard_set(moonbit_string_t s) {
@@ -1636,6 +1669,15 @@ int32_t mb_host_pick_count(int32_t id) {
 moonbit_string_t mb_host_pick_name(int32_t id, int32_t i) {
   JNIEnv *env = env_();
   jstring s = (jstring)(*env)->CallStaticObjectMethod(env, picks_cls, m_pk_name, id, i);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+// a file held (Picks.java: too big to read whole): its id, size and address, a tab between; "" for one read whole
+moonbit_string_t mb_host_pick_info(int32_t id, int32_t i) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, picks_cls, m_pk_info, id, i);
   moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
   if (s) (*env)->DeleteLocalRef(env, s);
   return out;
@@ -2042,7 +2084,7 @@ void mb_host_set_cursor(int32_t kind) { (void)kind; }
 #include "avc.h"
 
 static jclass streams_cls;
-static jmethodID m_st_open, m_st_h264, m_st_frame, m_st_jpeg, m_st_next, m_st_show, m_st_close, m_st_here, m_st_lost;
+static jmethodID m_st_open, m_st_h264, m_st_frame, m_st_jpeg, m_st_next, m_st_show, m_st_close, m_st_here, m_st_lost, m_st_codec;
 static GLuint *stream_texs;  // by id
 static int stream_cap;
 
@@ -2060,6 +2102,7 @@ static JNIEnv *streams_env(void) {
     m_st_close = (*env)->GetStaticMethodID(env, streams_cls, "close", "(I)V");
     m_st_here = (*env)->GetStaticMethodID(env, streams_cls, "h264Here", "()Z");
     m_st_lost = (*env)->GetStaticMethodID(env, streams_cls, "lost", "()V");
+    m_st_codec = (*env)->GetStaticMethodID(env, streams_cls, "codec", "(ILjava/lang/String;[B)V");
   }
   return env;
 }
@@ -2184,6 +2227,20 @@ void mb_host_stream_close(int32_t id) {
   JNIEnv *env = streams_env();
   (*env)->CallStaticVoidMethod(env, streams_cls, m_st_close, id);
   streams_threw(env);
+}
+
+// (its H.264 decoder driven by the framework: what MediaCodec and the SurfaceTexture say goes up as events, what to do
+// comes down here; @ui's stream_feed.mbt)
+int32_t mb_host_stream_feeds(void) { return 1; }
+
+void mb_host_stream_codec(int32_t id, moonbit_string_t cmd, moonbit_bytes_t data) {
+  JNIEnv *env = streams_env();
+  jstring c = jstr(env, cmd);
+  jbyteArray b = jbytes(env, data);
+  (*env)->CallStaticVoidMethod(env, streams_cls, m_st_codec, id, c, b);
+  streams_threw(env);
+  (*env)->DeleteLocalRef(env, b);
+  (*env)->DeleteLocalRef(env, c);
 }
 
 int32_t mb_host_h264_here(void) {

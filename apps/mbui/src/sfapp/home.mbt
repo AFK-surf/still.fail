@@ -139,7 +139,10 @@ fn open_listed(view : ChatsView) -> Unit {
 }
 
 ///|
-/// The top bar's height (8 + 34 + 8), under which the list starts.
+/// The top bars' height under the status bar (a place's, TopGlassBar, and a chat's, BarFrame: TopBarHeight), what is in
+/// them in its middle; the list starts under it. One length, on the device's pixels at once: 8 + 34 + 8 and 5 + 40 + 5,
+/// each on whole pixels, can come out a pixel apart (at 2.85 pixels a point, 143 and 142), the two bars' lines apart
+/// as a chat is swiped back.
 let bar_h : Double = 50.0
 
 ///|
@@ -284,10 +287,21 @@ fn home_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, current 
         }
       OpenJobs => open_jobs(c, src, w)
       Header(label) => moving(c, lid, key, keys[i], section_header(c, label))
-      Row(item) =>
-        moving(c, lid, key, keys[i], chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, key + "\u{1}" + keys[i])))
-      // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom)
-      Foot => c.box(h=Px(nav_foot() + bar_room), fn() {  }) |> ignore
+      Row(item) => {
+        let name = key + "\u{1}" + keys[i]
+        moving(
+          c,
+          lid,
+          key,
+          keys[i],
+          chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, name), unghost=fn(off) {
+            @motion.list_unghost(c, lid, name, off~)
+          }),
+        )
+      }
+      // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom); on a wide screen,
+      // whose corners have 奏 and 令 over the list, a little
+      Foot => c.box(h=Px(if has_bar() { nav_foot() + bar_room } else { wide_foot }), fn() {  }) |> ignore
     }
   })
   |> ignore
@@ -315,9 +329,9 @@ fn top_bar(
   let t = @sf.theme()
   // frosted glass over the list (the page's paper at 70% over a 24px blur), a hairline under it
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
-    // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then 8)
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top() + 8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
-      if nav_button(c, "settings", 22.0, key="home-settings") {
+    // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
+    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
+      if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
         app.nav.push(Settings)
       }
       let wid = c.id("home-workspace")
@@ -328,16 +342,15 @@ fn top_bar(
         // the name as long as there is room for it
         let room = c.width - 16.0 * 2.0 - 34.0 * 2.0 - 10.0 * 2.0 - 6.0 * 2.0 - 16.0 - 10.0
         c.box(max_w=dmax(room, 40.0), fn() {
-          c.text(w.name, size=24.0, weight=700, color=t.p.text, wrap=false, line=30.0)
-          |> ignore
+          top_bar_title(c, w.name) |> ignore
         })
         |> ignore
         let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
         match field(marks.value, "others") {
-          Some(String(tone)) => workspace_mark(c, tone)
+          Some(String(tone)) => workspace_mark(c, tone, text(marks.value, "othersLabel"))
           _ =>
             if invited {
-              c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, fn() {  })
+              c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, label=tr("android-chat.home.invited"), fn() {  })
               |> ignore
             }
         }
@@ -355,10 +368,26 @@ fn top_bar(
               20.0,
               key="home-filter",
               color=if filter != "all" { t.p.accent } else { t.p.text },
+              said=fill("android-chat.home.filter.label", [
+                (
+                  "filter",
+                  tr(
+                    match filter {
+                      "mine" => "android-chat.home.filter.mine"
+                      "watching" => "android-chat.home.filter.watching"
+                      _ => "android-chat.home.filter.all"
+                    },
+                  ),
+                ),
+              ]),
             ) {
             app.menu = true
           }
         _ => ()
+      }
+      // the stations at a glance on a wide screen, which has no bottom bar to have them as a place (Home.kt)
+      if corners_on.val {
+        stations_button(c, src, w)
       }
     })
     |> ignore
@@ -366,6 +395,15 @@ fn top_bar(
   })
   |> ignore
 }
+
+///|
+/// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, its letters 0.4 closer, on one line.
+fn top_bar_title(c : @ui.Ctx, s : String) -> Int {
+  c.text(s, size=24.0, weight=700, color=@sf.theme().p.text, wrap=false, line=30.0, tracking=top_title_tracking)
+}
+
+///|
+let top_title_tracking : Double = -0.4
 
 ///|
 /// A round button in a bar (Parts.kt NavButton): 34 across, the icon alone, no disc behind it (a ground while
@@ -376,20 +414,28 @@ fn nav_button(
   size : Double,
   key~ : String,
   color? : Int64,
+  said? : String,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(
+  let b = c.box(
     w=Px(34.0),
     h=Px(34.0),
     radius=17.0,
     align=ACenter,
     justify=JCenter,
-    bg=@sf.alpha(t.p.text, 0.08 * @motion.pressing(c, id)),
     id~,
-    fn() { @sf.icon(c, icon, size~, color=color.unwrap_or(t.p.text)) |> ignore },
+    fn() {
+      @sf.icon(c, icon, size~, color=color.unwrap_or(t.p.text)) |> ignore
+      // Parts.kt NavButton: clip(CircleShape).clickable
+      @motion.ripple(c, id, 17.0)
+    },
   )
-  |> ignore
+  // what it is to a screen reader, where the page says (a Box's contentDescription round it)
+  match said {
+    Some(s) => c.semantics(b, Button, id~, label=s)
+    None => ()
+  }
   c.clicked(id)
 }
 
@@ -421,17 +467,17 @@ fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay
   let fresh : Map[String, ChatItem] = {}
   for d in days {
     for item in d.items {
-      fresh[item.station + "/" + item.id] = item
+      fresh[row_name(item)] = item
     }
   }
   let held : Map[String, Bool] = {}
   let out : Array[(String, Array[ChatItem])] = shown.map(fn(d) {
     let items : Array[ChatItem] = []
     for item in d.items {
-      match fresh.get(item.station + "/" + item.id) {
+      match fresh.get(row_name(item)) {
         Some(now) => {
           items.push(now)
-          held[item.station + "/" + item.id] = true
+          held[row_name(item)] = true
         }
         None => ()
       }
@@ -440,7 +486,7 @@ fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay
   })
   for di, d in days {
     for i, item in d.items {
-      if held.contains(item.station + "/" + item.id) {
+      if held.contains(row_name(item)) {
         continue
       }
       let into = match out.search_by(fn(o) { o.0 == d.label }) {
@@ -472,7 +518,14 @@ fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay
 }
 
 ///|
-/// An item's key in the list (ListMotion.kt rowKey, dayKey): a row by its station and chat, a day by its heading.
+/// A row's name in the list, kept as it changes (ListMotion.kt rowKey): its station and chat, a chat asked for here by
+/// its `clientKey` before and after its station makes it.
+fn row_name(item : ChatItem) -> String {
+  item.station + "/" + (if item.client_key != "" { item.client_key } else { item.id })
+}
+
+///|
+/// An item's key in the list (ListMotion.kt rowKey, dayKey): a row by its name, a day by its heading.
 fn item_key(it : Item) -> String {
   match it {
     Top => "top"
@@ -482,7 +535,7 @@ fn item_key(it : Item) -> String {
     Empty => "empty"
     OpenJobs => "open-jobs"
     Header(label) => "h/" + label
-    Row(item) => "r/" + item.station + "/" + item.id
+    Row(item) => "r/" + row_name(item)
     Foot => "foot"
   }
 }
@@ -534,7 +587,7 @@ let marks_seen : Map[String, String] = {}
 fn note_marks(c : @ui.Ctx, v : ChatsView) -> Unit {
   for d in v.days {
     for item in d.items {
-      let k = item.station + "/" + item.id
+      let k = row_name(item)
       let tone = row_tone(item)
       match marks_seen.get(k) {
         None => marks_seen[k] = tone
@@ -590,7 +643,16 @@ fn waiting(c : @ui.Ctx, n : Int, note : ListNote?, error : String?) -> Unit {
       |> ignore
     }
     let breath = if reading { @sf.breath(c) } else { 0.6 }
-    c.box(w=Fill(1.0), opacity=breath, fn() {
+    // what it waits on, said only to a screen reader while it reads (Waiting.kt)
+    let said = if reading {
+      match note {
+        Some({ text: Some(s), .. }) => s
+        _ => tr("common.reading")
+      }
+    } else {
+      ""
+    }
+    c.box(w=Fill(1.0), opacity=breath, label=said, fn() {
       for i in 0..<n {
         c.box(dir=Row, w=Fill(1.0), h=Px(66.0), pl=22.0, pr=16.0, gap=12.0, align=ACenter, fn() {
           c.box(w=Fill(1.0), gap=10.0, fn() {
@@ -695,8 +757,9 @@ let mark_yellow : Int64 = 0xF2B01EFFL
 ///|
 /// What a workspace has waiting (SettingParts.kt WorkspaceMark): `alert` a red dot with a soft halo, `wait` a blue
 /// ring, `done` a blue dot.
-fn workspace_mark(c : @ui.Ctx, tone : String) -> Unit {
-  c.box(w=Px(10.0), h=Px(10.0), fn() {
+fn workspace_mark(c : @ui.Ctx, tone : String, label : String) -> Unit {
+  // (what it says to a screen reader: SettingParts.kt WorkspaceMark's contentDescription)
+  c.box(w=Px(10.0), h=Px(10.0), label~, fn() {
     match tone {
       "alert" => halo_dot(c, mark_red)
       "wait" => ring(c, mark_blue)
@@ -766,7 +829,17 @@ fn row_tone(item : ChatItem) -> String {
 /// grey one when only on others.
 fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
   let t = @sf.theme()
-  let mark = c.box(w=Px(10.0), h=Px(10.0), fn() {
+  // what it says to a screen reader (Home.kt ChatMark's contentDescription)
+  let label = tr(
+    match tone {
+      "done" => "android-chat.home.mark.done"
+      "alert" => "android-chat.home.mark.alert"
+      "wait" => "android-chat.home.mark.wait"
+      "other" => "android-chat.home.mark.other"
+      _ => "android-chat.home.mark.busy"
+    },
+  )
+  let mark = c.box(w=Px(10.0), h=Px(10.0), label~, fn() {
     match tone {
       "done" => dot(c, mark_blue)
       "alert" => halo_dot(c, mark_red)
@@ -834,8 +907,9 @@ fn row_opens_at(item : ChatItem, ry : Double, ty : Double) -> Double? {
 }
 
 ///|
-/// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; tapped, its chat is pushed (at the message its state line
-/// names, tapped there).
+/// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; pressed, on the ground it has held (a found one rippled);
+/// tapped, its chat is pushed (at the message its state line names, tapped there), or given to `opened` (the latest
+/// chats' panel on a wide screen: corners.mbt).
 fn chat_row(
   c : @ui.Ctx,
   src : Source,
@@ -843,9 +917,11 @@ fn chat_row(
   lead : String,
   lifted? : Double = -1.0,
   found? : Bool = false,
+  opened? : (ChatRef) -> Unit,
+  unghost? : (Bool) -> Unit = fn(_) {  },
 ) -> Int {
   let t = @sf.theme()
-  let id = c.id("row/" + item.station + "/" + item.id)
+  let id = c.id("row/" + row_name(item))
   // a chat the search found (Search.kt: ChatRowBody alone, a tap its chat): not held, archived nor swiped
   let pressed = c.pressed(id) && !found
   let r : ChatRef = {
@@ -863,7 +939,7 @@ fn chat_row(
     }
   }
   // held hold_ms (a frame asked for when it will have been)
-  let held = @kit.after(c, "row-hold/" + item.station + "/" + item.id, pressed && app.held == id, hold_ms)
+  let held = @kit.after(c, "row-hold/" + row_name(item), pressed && app.held == id, hold_ms)
   if held {
     app.held_long = true
     // held long: what can be done to the chat (home_menu.mbt)
@@ -873,7 +949,11 @@ fn chat_row(
     // a long press is not a tap
     let long = app.held == id && app.held_long
     app.held = 0
-    if !long {
+    if long {
+      unprime(src, r)
+    } else if opened is Some(f) {
+      f(r)
+    } else {
       // on its state line while it names a message (and nothing in it is unread: then at the unread line, as any
       // tap), at that message
       let at = match (c.rect_of(id), c.tapped_anywhere()) {
@@ -884,8 +964,6 @@ fn chat_row(
         Some(seq) => open_chat_at(r, seq)
         None => app.nav.push(Chat(r))
       }
-    } else {
-      unprime(src, r)
     }
   } else if !pressed && app.held == id {
     app.held = 0
@@ -896,6 +974,8 @@ fn chat_row(
   let busy = row_busy(item)
   let failed = row_failed(c, item)
   let row = fn(tx : Double) -> Int {
+    // pressed and where it rests (not swiped over its 归档)
+    let pressed_here = pressed && tx == 0.0
     c.box(
       dir=Row,
       w=Fill(1.0),
@@ -905,7 +985,9 @@ fn chat_row(
       pr=16.0,
       gap=6.0,
       align=ACenter,
-      bg=if held || row_menu_open(item) {
+      // held, its menu open, or pressed (once the press is not the list's: Ctx::pressed): Home.kt ChatRowBody
+      // `held || pressed`, as PlaceRow's pressed ground
+      bg=if held || row_menu_open(item) || pressed_here {
         @sf.alpha(t.p.text, 0.05)
       } else if lifted >= 0.0 {
         // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
@@ -926,7 +1008,7 @@ fn chat_row(
           c.box(dir=Row, w=Fill(1.0), h=Px(chat_title_h), gap=8.0, align=ACenter, fn() {
             let tone = row_tone(item)
             if tone != "" {
-              chat_mark(c, tone, pop=item.station + "/" + item.id)
+              chat_mark(c, tone, pop=row_name(item))
             }
             c.box(w=Fill(1.0), opacity=dim, fn() {
               c.text(
@@ -941,7 +1023,8 @@ fn chat_row(
             })
             |> ignore
             if @sf.has_station_mark(item.station_emoji, item.station_icon) {
-              c.box(opacity=dim, fn() {
+              // (read as its station's name: Home.kt's contentDescription)
+              c.box(opacity=dim, label=item.station_name, fn() {
                 @sf.station_mark(c, item.station_emoji, item.station_icon, 12.0, t.p.muted)
               })
               |> ignore
@@ -957,12 +1040,20 @@ fn chat_row(
               })
               |> ignore
             } else if item.offline is Some(_) || item.reconnecting is Some(_) {
-              c.box(w=Px(14.0), align=ACenter, fn() {
+              c.box(w=Px(14.0), align=ACenter, label=match item.offline {
+                Some(o) => o
+                None => item.reconnecting.unwrap_or("")
+              }, fn() {
                 @sf.icon(c, "unplug", size=13.0, color=t.p.subtle) |> ignore
               })
               |> ignore
             } else if item.connect {
-              c.box(w=Px(14.0), align=ACenter, fn() { @sf.slack_mark(c, 13.0) |> ignore })
+              c.box(
+                w=Px(14.0),
+                align=ACenter,
+                label=if item.origin_text != "" { item.origin_text } else { "Slack" },
+                fn() { @sf.slack_mark(c, 13.0) |> ignore },
+              )
               |> ignore
             }
           })
@@ -995,11 +1086,15 @@ fn chat_row(
           |> ignore
         })
         |> ignore
+        // a chat the search found, or in the latest chats' panel: ChatRowBody's clickable (Search.kt, Wide.kt)
+        if found {
+          @motion.ripple(c, id, 0.0)
+        }
       },
     )
   }
   if archivable {
-    swipe_to_archive(c, src, item, busy, row)
+    swipe_to_archive(c, src, item, busy, row, unghost~)
   } else {
     row(0.0)
   }
@@ -1010,15 +1105,15 @@ fn chat_row(
 /// while its pin or archive is under way.
 fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit {
   let t = @sf.theme()
-  let id = c.id("archive/" + item.station + "/" + item.id)
+  let id = c.id("archive/" + row_name(item))
   if c.clicked(id) && !busy {
     archive_from_row(src, item)
   }
-  c.box(
+  let chip = c.box(
     padx=10.0,
     pady=4.0,
     radius=12.0,
-    bg=if c.pressed(id) { @sf.mix(t.p.chip, 0.9, t.p.text) } else { t.p.chip },
+    bg=t.p.chip,
     id~,
     fn() {
       c.text(
@@ -1030,9 +1125,14 @@ fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit
         line=16.0,
       )
       |> ignore
+      // Home.kt: 归档, clip(RoundedCornerShape(50)).clickable(enabled = !busy)
+      if !busy {
+        @motion.ripple(c, id, 12.0)
+      }
     },
   )
-  |> ignore
+  // (Home.kt: 归档「title」 to a screen reader)
+  c.semantics(chip, Button, id~, label=fill("android-chat.archive.named", [("title", item.title)]), disabled=busy)
 }
 
 ///|
@@ -1108,7 +1208,8 @@ fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double
   if icon != "" {
     let rest = state.view(start_offset=n).to_owned()
     let tint = if need is Some(_) { t.p.text } else { t.p.muted }
-    c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
+    // (read out whole: StateLine's contentDescription)
+    c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, label=state, fn() {
       // the title's mark's place (10), the icon 14 centred on it
       c.box(w=Px(10.0), h=Px(14.0), fn() {
         c.box(tx=-2.0, fn() { @sf.icon(c, icon, size=14.0, color=tint) |> ignore })
@@ -1177,7 +1278,9 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
     return
   }
   let agents = fn() {
-    c.box(dir=Row, gap=4.0, align=ACenter, fn() {
+    // (RowPicture.kt Agents: the agents in words to a screen reader)
+    let said = item.agents.map(fn(a) { a.text }).filter(fn(s) { s != "" })
+    c.box(dir=Row, gap=4.0, align=ACenter, label=said.join(tr("web-main.list.separator")), fn() {
       for k, g in groups {
         if k < 3 {
           @sf.maker_mark(c, g.maker, g.runtime, 14.0) |> ignore
@@ -1192,10 +1295,15 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
   }
   let faces = fn() {
     let shown = if people.length() > 3 { people[:3].to_array() } else { people }
-    c.box(dir=Row, align=ACenter, fn() {
+    let starter = fn(p : Person) { people.length() > 1 && p.id == item.creator }
+    // (RowPicture.kt Faces: the people in words to a screen reader)
+    c.box(dir=Row, align=ACenter, label=item.people_text, fn() {
       for i, p in shown {
-        let starter = people.length() > 1 && p.id == item.creator
-        face(c, src, p, face_size, starter, -3.0 * i.to_double())
+        let f = face(c, src, p, face_size, starter(p), -3.0 * i.to_double())
+        // the one who started the chat over the rest (RowPicture.kt Faces: zIndex(1f))
+        if starter(p) {
+          c.put_over(f)
+        }
       }
       if people.length() > shown.length() {
         c.box(tx=-3.0 * (shown.length() - 1).to_double() + 3.0, fn() {
@@ -1233,13 +1341,6 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
 }
 
 ///|
-/// The people's colours (Parts.kt AVATAR).
-// kept across runs: a table, never written
-let avatar_colors : Array[Int64] = [
-  0x5B7BB2FFL, 0x2F8F5BFFL, 0xB9471FFFL, 0x8A6BB0FFL, 0x3F8C99FFL, 0xB0842FFFL,
-]
-
-///|
 fn lower(s : String) -> String {
   let sb = StringBuilder()
   for ch in s {
@@ -1250,92 +1351,26 @@ fn lower(s : String) -> String {
 }
 
 ///|
-/// A person's colour, by their email or id (Parts.kt avatarColor).
-pub fn avatar_color(id : String) -> Int64 {
-  let n = avatar_colors.length()
-  let h = java_hash(lower(id)) % n
-  avatar_colors[if h < 0 { h + n } else { h }]
-}
-
-///|
-/// The first letter of a name, as a lettered picture shows it.
-fn initial(name : String) -> String {
-  for ch in name {
-    let k = ch.to_int()
-    if k == 32 || k == 9 || k == 10 {
-      continue
-    }
-    return if k >= 97 && k <= 122 {
-      (k - 32).unsafe_to_char().to_string()
-    } else {
-      ch.to_string()
-    }
-  }
-  "?"
-}
-
-///|
 /// A person, round (RowPicture.kt Face, Parts.kt Avatar): their account's picture once it is here, their initial on
-/// their colour until then; ringed in ink when they started the chat, else in the page's ground.
-fn face(
-  c : @ui.Ctx,
-  src : Source,
-  p : Person,
-  size : Double,
-  starter : Bool,
-  dx : Double,
-) -> Unit {
+/// their colour until then; ringed 1.5 over their edge, in ink when they started the chat, else in the page's ground
+/// (the starter's ring asked 4 wider is held to the face's own size by its Box, as Compose's `size` takes the
+/// constraints it is given).
+fn face(c : @ui.Ctx, src : Source, p : Person, size : Double, starter : Bool, dx : Double) -> Int {
   let t = @sf.theme()
-  let picture = if p.picture != "" { (src.picture)(p.picture) } else { "" }
-  c.box(
-    w=Px(size),
-    h=Px(size),
-    radius=size / 2.0,
-    bg=avatar_color(if p.email != "" { p.email } else { p.id }),
-    align=ACenter,
-    justify=JCenter,
-    tx=dx,
-    fn() {
-      if picture != "" {
-        c.image(picture, w=Px(size), h=Px(size), radius=size / 2.0, bg=0L) |> ignore
-      } else {
-        c.text(
-          initial(p.name),
-          size=size * 0.5,
-          weight=600,
-          color=0xFFFFFFFFL,
-          wrap=false,
-          line=size * 0.5,
-        )
-        |> ignore
-      }
-      c.layer(fn() {
-        if starter {
-          c.box(
-            w=Px(size + 4.0),
-            h=Px(size + 4.0),
-            radius=size / 2.0 + 2.0,
-            border=1.5,
-            border_color=t.p.text,
-            tx=-2.0,
-            ty=-2.0,
-            fn() {  },
-          )
-          |> ignore
-        } else {
-          c.box(
-            w=Px(size),
-            h=Px(size),
-            radius=size / 2.0,
-            border=1.5,
-            border_color=t.p.bg,
-            fn() {  },
-          )
-          |> ignore
-        }
-      })
+  let picture = if p.picture != "" { (src.picture)(p.picture, c.page_stint()) } else { "" }
+  c.box(w=Px(size), h=Px(size), tx=dx, fn() {
+    @sf.avatar(c, if p.email != "" { p.email } else { p.id }, p.name, picture, size)
+    c.layer(fn() {
+      c.box(
+        w=Px(size),
+        h=Px(size),
+        radius=size / 2.0,
+        border=1.5,
+        border_color=if starter { t.p.text } else { t.p.bg },
+        fn() {  },
+      )
       |> ignore
-    },
-  )
-  |> ignore
+    })
+    |> ignore
+  })
 }

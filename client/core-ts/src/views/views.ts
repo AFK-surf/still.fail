@@ -53,7 +53,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -79,6 +79,16 @@ export type StationInfo = { address: string; id: string; name: string; emoji: st
 export function down(link: J): boolean {
   const state = get(link, "state");
   return state === "offline" || (state === "connecting" && get(link, "last") === "offline");
+}
+
+/// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or
+/// the way between them.
+export function downWords(link: J, name: string): string {
+  const cause = get(link, "cause");
+  if (cause === "network") return t("core-views.station.offline_network", { name });
+  if (cause === "unreached") return t("core-views.station.unreachable", { name });
+  if (cause === "lock") return t("core-views.station.lock", { name });
+  return t("core-views.station.offline", { name });
 }
 
 /// Whether a station's versions offer the 测试版 switch.
@@ -178,48 +188,53 @@ function sentHead(text: string): { title: string; link: string; rest: string; op
   return { title, link, rest, opened };
 }
 
-/// Whether a message is a letter: one another chat's agent wrote to this chat (session_send), as its station posts it
-/// (headed `来自 …：`), by an agent that is not one of this chat's (`keys`). The first message of a chat such an agent
-/// opened is not: it is what the chat is about.
+/// Whether a message is a letter: what two chats' agents wrote each other (session_send), as its station marked it
+/// (`letter`: which way, and the other chat); from a station before that, one another chat's agent wrote to this chat,
+/// headed `来自 …：`, by an agent that is not one of this chat's (`keys`). The first message of a chat such an agent opened
+/// is not: it is what the chat is about.
 export function isLetter(message: J, keys: ReadonlySet<string>): boolean {
+  if (isObject(message.letter)) return true;
   if (message.authorKind !== "agent" || keys.has(str(message.author) ?? "")) return false;
   const sent = sentHead(str(message.text) ?? "");
   return sent !== null && !sent.opened;
 }
 
-/// A chat's letters (isLetter) folded, so that what agents write to each other does not bury what people and the
-/// chat's own agents say: each run of them, with nothing else said between, is one line on its first (`letters`: who
-/// wrote to whom (`to`: the chat's agent, by its label; null when it has more than one), how many), the rest of it out
-/// of the list, so that it reads as agents talking, not as words for the reader; a run with
-/// one of its messages in `open` shows whole, under that line. Messages as shownMessage made them (a letter's words
-/// without their heading).
-export function lettersFolded(messages: J[], letter: (m: J) => boolean, open: ReadonlySet<number>, to: string | null = null): { messages: J[]; runs: number[][] } {
-  const runs: number[][] = [];
-  const out: J[] = [];
-  for (let i = 0; i < messages.length; ) {
-    if (!letter(messages[i]!)) {
-      out.push(messages[i]!);
-      i++;
-      continue;
-    }
-    let j = i;
-    while (j < messages.length && letter(messages[j]!)) j++;
-    const run = messages.slice(i, j);
-    const seqs = run.flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
-    runs.push(seqs);
-    const shown = seqs.some((s) => open.has(s));
-    const from: string[] = [];
-    for (const m of run) {
-      const name = str(get(m.by, "name"));
-      if (name !== null && !from.includes(name)) from.push(name);
-    }
-    const names = from.map((name) => t("core-views.letters.name", { name })).join(t("core-views.list_separator"));
-    const line = t("core-views.letters.line", { from: names, to: to ?? t("core-views.letters.chatAgent"), n: run.length });
-    out.push({ ...run[0]!, letters: { count: run.length, line, open: shown } });
-    if (shown) out.push(...run.slice(1));
-    i = j;
+/// Which way a letter (isLetter) went and the other chat, as its station marked it; from a station before that, coming
+/// in from the chat its heading names.
+export function letterWay(message: J): { way: "in" | "out"; title: string; link: string | null } {
+  const marked = message.letter;
+  if (isObject(marked) && typeof marked.title === "string") {
+    return { way: marked.way === "out" ? "out" : "in", title: marked.title, link: str(marked.link) };
   }
-  return { messages: out, runs };
+  const sent = sentHead(str(message.text) ?? "");
+  return { way: "in", title: sent?.title ?? "", link: sent?.link ?? null };
+}
+
+/// A letter's words without the heading its station wrote (`来自 …：`, `发给 …：`): the page says which chat.
+export function letterWords(text: string): string {
+  const at = text.indexOf("\n\n");
+  return at < 0 ? text : text.slice(at + 2);
+}
+
+/// A chat's letters as their page shows them (`chatLetters`): by the other chat, the one written with last first, each
+/// with its letters both ways in the order written (`way`).
+export function lettersByChat(letters: { message: J; way: "in" | "out"; title: string; link: string | null }[]): J[] {
+  const chats = new Map<string, { title: string; link: string | null; letters: J[]; last: number }>();
+  for (const l of letters) {
+    const key = l.link ?? `\u0000${l.title}`;
+    const was = chats.get(key);
+    const letter = { ...l.message, way: l.way };
+    const seq = u64(l.message.seq) ?? 0;
+    chats.set(key, was === undefined ? { title: l.title, link: l.link, letters: [letter], last: seq } : { ...was, letters: [...was.letters, letter], last: Math.max(was.last, seq) });
+  }
+  return [...chats.values()].sort((a, b) => b.last - a.last).map(({ title, link, letters }) => {
+    const last = letters.at(-1)!;
+    // In brief, as a row of the page's list has it: the last letter's words on a line, said by this chat's agent when
+    // it went out (one coming in is the row's own chat's).
+    const words = format.plainText(str(last.text) ?? "").replace(/\s+/g, " ").trim();
+    const said = last.way === "out" ? t("core-views.letters.out", { name: str(get(last.by, "name")) ?? "", text: words }) : words;
+    return { key: link ?? title, title, link, letters, last: said, lastActiveAt: u64(last.createdAt) ?? 0 };
+  });
 }
 
 /// The notices that a runtime is not installed, said where they matter: under the viewer's message that waits for it
@@ -432,10 +447,6 @@ export class Views implements Owner {
   /// Per live view, the topics it watches.
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
   readonly #updateNoticesOpen = new Set<string>();
-  /// Per chat (`station␁thread`), the messages whose run of letters is shown whole (lettersFolded), as `chat.letters`
-  /// opened them; and its runs as last shown, which closing one goes by.
-  readonly #lettersOpen = new Map<string, Set<number>>();
-  readonly #letterRuns = new Map<string, number[][]>();
   /// Views whose words count seconds (a chat's jobs): each computed again when they next change.
   readonly #again = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The scopes whose stations' rows are being loaded (the list showed its first screen meanwhile).
@@ -545,18 +556,6 @@ export class Views implements Owner {
     this.local.outboxSent(station, thread, id, seq, this.chatViews(station, thread).length > 0);
   }
 
-  /// The run of letters with message `seq` in it shown whole (`open`), or folded again (`chat.letters`), in the pages
-  /// showing that chat; kept while the core runs.
-  lettersOpen(station: string, thread: number, seq: number, open: boolean): void {
-    const key = `${station}\u0001${thread}`;
-    const shown = this.#lettersOpen.get(key) ?? new Set<number>();
-    if (open) shown.add(seq);
-    else for (const s of this.#letterRuns.get(key)?.find((run) => run.includes(seq)) ?? [seq]) shown.delete(s);
-    if (shown.size > 0) this.#lettersOpen.set(key, shown);
-    else this.#lettersOpen.delete(key);
-    for (const view of this.chatViews(station, thread)) this.#core.store.invalidate(view);
-  }
-
   updateNoticeOpen(station: string, open: boolean): void {
     if (open) this.#updateNoticesOpen.add(station);
     else this.#updateNoticesOpen.delete(station);
@@ -638,6 +637,12 @@ export class Views implements Owner {
       case "chatJobs":
       case "imageNear":
         return [{ topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null }];
+      case "chatLetters":
+        return [
+          { topic: "chat", station, thread: view.thread, session: null },
+          { topic: "letters", station, thread: view.thread },
+          { topic: "workspace", workspace: ofAddress(station) },
+        ];
       case "workspaceMarks":
         return this.#marksSources();
       case "agentCard":
@@ -796,7 +801,8 @@ export class Views implements Owner {
     const v = this.value({ topic: "link", station });
     if (v === undefined) return { state: "connecting", message: null };
     if ("err" in v) return { state: "error", message: v.err.message };
-    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}) };
+    const cause = get(v.ok, "cause");
+    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}) };
   }
 
   #clock(): present.Clock {
@@ -852,6 +858,10 @@ export class Views implements Owner {
     const dismissed = get(get(prefs, "stationUpdatesDismissed"), station);
     v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager, this.stationName(station));
     if (Array.isArray(v.outbox)) v.outbox = looks.outboxWaits(v.outbox, v.stationUpdate);
+    if (v.offline === true) {
+      v.offlineNote = looks.offlineNote(v.link, this.stationName(station));
+      if (Array.isArray(v.outbox)) v.outbox = looks.outboxHeld(v.outbox);
+    }
     // Its sharing with the viewer's other workspaces, as asked here meanwhile.
     const shared = xshare.shown({ places: this.#core.places?.() ?? [], asked: (session) => this.#core.xshareAsked?.(station, session), me: str(get(v.me, "email")) }, station, v.thread);
     if (shared !== null) v.xshare = shared;
@@ -927,6 +937,8 @@ export class Views implements Owner {
         if (Array.isArray(v.outbox)) v.outbox.push(...waiting);
         return draw(out);
       }
+      case "chatLetters":
+        return this.#chatLetters(view.station as string, view.thread as number);
       case "history":
         return this.#history(view.station as string, view.key as string);
       case "stationNet": {
@@ -1030,7 +1042,7 @@ export class Views implements Owner {
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const hint = archiveHintOf(this.ok({ topic: "prefs" }) ?? null);
     const states: J[] = [];
-    const troubles: [string, string][] = [];
+    const troubles: [string, string, boolean, string][] = [];
     const rows: J[] = [];
     let loading = false;
     const unread: string[] = [];
@@ -1052,7 +1064,7 @@ export class Views implements Owner {
         const link = this.link(s.address);
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
-        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, me, slackUsers, members_, watching, hint]);
+        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint]);
         for (const listedRaw of [...asked.rows, ...listed]) {
           const raw = asked.titled.get(get(listedRaw, "id")) ?? listedRaw;
           if (mine && get(raw, "mine") !== true) continue;
@@ -1089,17 +1101,22 @@ export class Views implements Owner {
           else state = "connecting";
         }
       }
-      if (state === "offline") troubles.push(["offline", t("core-views.station.offline", { name: s.name })]);
-      else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name })]);
-      else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name })]);
-      states.push({ station: s.address, id: s.id, name: s.name, state, message });
+      if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network", s.address]);
+      else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name }), false, s.address]);
+      else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name }), false, s.address]);
+      const cause = state === "offline" ? get(this.link(s.address), "cause") : undefined;
+      // Refused for a security mode: why.
+      if (cause === "lock") message = get(this.link(s.address), "message") ?? null;
+      states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}) });
     }
     const days = this.#days(rows);
     let trouble: J = null;
-    if (troubles.length === 1) trouble = { text: troubles[0][1], state: troubles[0][0], retry: false };
+    if (troubles.length === 1) trouble = { text: troubles[0][1], state: troubles[0][0], retry: false, station: troubles[0][3] };
     else if (troubles.length > 1) {
       const worst = ["error", "offline", "reconnecting"].find((w) => troubles.some(([s]) => s === w)) ?? "offline";
-      trouble = { text: t("core-views.station.troubles", { n: troubles.length }), state: worst, retry: false };
+      // Every one down as the device's network is: that, once, and not as so many stations amiss.
+      const network = troubles.every(([, , n]) => n === true);
+      trouble = { text: network ? t("core-views.station.network") : t("core-views.station.troubles", { n: troubles.length }), state: worst, retry: false };
     }
     const glyph = looks.glyph(states, days);
     const note = looks.listNote(states, days, loading, unread);
@@ -1186,7 +1203,7 @@ export class Views implements Owner {
     row.stationName = s.name;
     if (mark?.emoji) row.stationEmoji = mark.emoji;
     if (mark?.icon) row.stationIcon = mark.icon;
-    if (!s.online) row.offline = t("core-views.station.offline", { name: s.name });
+    if (!s.online) row.offline = downWords(this.link(s.address), s.name);
     else {
       const state = str(this.link(s.address).state) ?? "connecting";
       if (state === "error") row.reconnecting = t("core-views.station.retrying", { name: s.name });
@@ -1292,7 +1309,11 @@ export class Views implements Owner {
       const host = hostRaw === undefined ? null : present.host(hostRaw);
       const shown = overview === undefined ? null : present.decorate({ topic: "overview", station: s.address }, structuredClone(overview), c);
       let summary: string;
-      if (!s.online) {
+      const cause = get(this.link(s.address), "cause");
+      if (!s.online && cause === "network") summary = t("core-views.station.network");
+      else if (!s.online && cause === "unreached") summary = t("core-views.station.unreachable_short");
+      else if (!s.online && cause === "lock") summary = t("core-views.station.lock_short");
+      else if (!s.online) {
         summary = typeof s.lastSeen === "number" ? t("core-views.station.offline_since", { ago: format.relativeTime(s.lastSeen * 1000, c.now, c.offsetMin) }) : t("core-views.station.offline_short");
       } else if (host !== null) {
         const running = u64(get(get(overview, "counts"), "running")) ?? 0;
@@ -1311,9 +1332,11 @@ export class Views implements Owner {
         ...(s.icon ? { icon: s.icon } : {}),
         summary,
         face: looks.face(s.online, overview),
-        line: looks.stationLine(s.online, host),
+        line: !s.online && cause === "lock" ? t("core-views.station.lock_short") : looks.stationLine(s.online, host),
         online: s.online,
         reconnecting: s.online && state !== "online" && state !== "error",
+        // Down for a security mode: why, in place of the page's 离线 words.
+        ...(!s.online && cause === "lock" && typeof get(this.link(s.address), "message") === "string" ? { blocked: get(this.link(s.address), "message") } : {}),
         lastSeen: s.lastSeen,
         version: s.version,
         link: this.link(s.address),
@@ -1386,7 +1409,11 @@ export class Views implements Owner {
       const a = this.agent(station, key);
       return a === null ? [] : [a];
     });
-    let messages: J[] = merge(arr(page.entries));
+    // What two chats' agents wrote each other is not said in it: it has a page of its own (`chatLetters`).
+    const keys = new Set(members(thread));
+    const all: J[] = merge(arr(page.entries));
+    let messages: J[] = all.filter((m) => !isLetter(m, keys));
+    const letters = Math.max(u64(get(thread, "letters")) ?? 0, all.length - messages.length);
     const scope = ofAddress(station);
     const viewer = this.me(scope);
     const slackUsers = arr(get(this.ok({ topic: "overview", station }), "slackUsers")).filter((u): u is string => typeof u === "string");
@@ -1405,9 +1432,6 @@ export class Views implements Owner {
     const manages = role === "owner" || role === "admin";
     // A failure notice may be sent to the still.fail team where the station takes bug reports.
     const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
-    // What other chats' agents wrote to it, read before their headings are taken off.
-    const keys = new Set(members(thread));
-    const letters = new Set(messages.flatMap((m) => (isLetter(m, keys) && u64(m.seq) !== null ? [m.seq as number] : [])));
     for (let i = 0; i < messages.length; i++) {
       const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
       messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
@@ -1484,13 +1508,6 @@ export class Views implements Owner {
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
     messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed")));
-    if (letters.size > 0) {
-      const key = `${station}\u0001${id}`;
-      const to = agents.length === 1 ? str(get(agents[0]!.session, "agentText")) : null;
-      const folded = lettersFolded(messages, (m) => letters.has(m.seq), this.#lettersOpen.get(key) ?? new Set(), to);
-      messages.splice(0, messages.length, ...folded.messages);
-      this.#letterRuns.set(key, folded.runs);
-    }
     const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots });
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
     const view: J = {
@@ -1534,7 +1551,39 @@ export class Views implements Owner {
       if (isObject(m)) (m as J).asked = true;
     }
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
+    if (letters > 0) view.letters = letters;
     return { ok: view };
+  }
+
+  /// What a chat's agents and other chats' wrote each other (`chatLetters`), all of it as far as it is on the device
+  /// (`whole` once all is): by the other chat, as lettersByChat has them, each named as the chat's page names its
+  /// messages, with the chat's title.
+  #chatLetters(station: string, id: number): Value | undefined {
+    const chat = this.value({ topic: "chat", station, thread: id, session: null });
+    if (chat === undefined || "err" in chat) return chat;
+    const held = this.value({ topic: "letters", station, thread: id });
+    if (held === undefined || "err" in held) return held;
+    const view = chat.ok as J;
+    const thread = view.thread as J;
+    const keys = new Set(members(thread));
+    const agents = arr(view.agents);
+    const scope = ofAddress(station);
+    const viewer = this.me(scope);
+    const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+    const letters = merge(arr(get(held.ok, "entries"))).flatMap((m) => {
+      if (!isLetter(m, keys)) return [];
+      const l = letterWay(m);
+      const shown: J = { ...shownMessage({ ...m, text: letterWords(str(m.text) ?? "") }, agents, viewer, [], members_, [], thread.creator), waiting: false };
+      // Coming in: by the agent of the chat it came from, named by that chat.
+      if (l.way === "in") shown.by = { name: t("core-views.letters.their", { chat: l.title }), from: l.link, maker: get(shown.by, "maker") ?? null };
+      return [{ message: shown, ...l }];
+    });
+    // Each chat's letters drawn as the chat's page draws its messages (their Markdown, their files).
+    const chats = lettersByChat(letters).map((c) => {
+      const out = drawn({ ok: { agents, messages: c.letters } }, (path) => this.local.uploadOf(station, path));
+      return { ...c, letters: arr(get(out.ok, "messages")) };
+    });
+    return { ok: { title: view.title, chats, whole: get(held.ok, "whole") === true } };
   }
 
   /// What a chat's agents said in Slack and were given from it (not this chat's own thread), each after the message it

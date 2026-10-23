@@ -13,6 +13,10 @@ fn chat_tester(mode : String) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
+  // its people in the bar lettered as it calls them: the viewer 「你」, not their name (Parts.kt PeopleStack)
+  let bar = t.words().filter(fn(w) { w.2 < 100.0 }).map(fn(w) { w.0 })
+  assert_true(bar.contains("你"))
+  assert_true(!bar.contains("林"))
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   assert_true(y < 844.0 - 110.0 && y > 500.0)
@@ -139,6 +143,7 @@ test "images take their own proportions before they load" {
     height: 2532.0,
     thumbhash: "",
     owner: "",
+    upload: "",
   }
   assert_eq(image_box(a, 16.0), (139.0, 300.0, false))
   assert_eq(image_box({ ..a, width: 1600.0, height: 900.0 }, 16.0), (360.0, 203.0, false))
@@ -235,3 +240,154 @@ test "a chat's place: told the core as the list comes to rest (the message at th
 ///|
 /// How far the list is dragged down from its end.
 let place_drag : Double = 300.0
+
+///|
+test "a long title has what is left beside what follows it, which keeps its own width (Chat.kt BarFrame)" {
+  reset()
+  let t = @ui.Tester::new(
+    fn(c) {
+      bar_frame(
+        c,
+        "端到端测试的对话 post:你好，我是测试用的 agent",
+        fn() { c.box(w=Px(60.0), fn() { c.text("尾", size=12.0, wrap=false) |> ignore }) |> ignore },
+        fn() {  },
+        true,
+      )
+    },
+    w=390.0,
+    h=200.0,
+  )
+  t.draw()
+  let (tx, _, tw, _) = t.rect_of("端到端").unwrap()
+  let (ax, _, _, _) = t.rect_of("尾").unwrap()
+  // 390 - 16 (its end) - 34 (…) - 8, the box of 60: what follows starts where it would with a short title
+  assert_eq(ax, 390.0 - 16.0 - 34.0 - 8.0 - 60.0)
+  // the title cut to what is left, 8 before it
+  assert_true(tx + tw <= ax - 8.0 + 0.5)
+  assert_true(t.lines_of("端到端")[0].has_suffix("…"))
+}
+
+///|
+test "a chat left lets go of all that holds its thread at the core: its view and its jobs (Chat.kt's rememberTopic)" {
+  reset()
+  let base = fixture("chat")
+  let left : Array[(String, String)] = []
+  let src : Source = {
+    ..base,
+    leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
+  }
+  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(left, [])
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  let held = Json::object(chat_params(r)).stringify()
+  // (else the core keeps the thread's window as first read: the chat opened again where it was first opened, not
+  // where it was left)
+  assert_true(left.contains(("chat", held)))
+  assert_true(left.contains(("chatJobs", held)))
+}
+
+///|
+test "left short of its end, a chat opens again where it was left, though the core still says where it first opened (Chat.kt kept)" {
+  reset()
+  let base = fixture("chat")
+  let place : Ref[Map[String, Json]?] = Ref(None)
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "chat.place" {
+        match params {
+          Object(p) => place.val = Some(p)
+          _ => ()
+        }
+      }
+      (base.call)(name, params, done)
+    },
+  }
+  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.draw()
+  open_chat(r)
+  t.run_for(@ui.nav_push_ms)
+  t.move(195.0, 400.0)
+  t.wheel(195.0, 400.0, -900.0)
+  t.run_for(@ui.nav_push_ms)
+  let k = "ws1/st1\u{1}s-c1"
+  let left_at = readings.get(k).unwrap().top_seq
+  let left_off = readings.get(k).unwrap().top_off
+  assert_true(left_at > 0.0 && !readings.get(k).unwrap().at_end)
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  // told where it was left
+  assert_eq(place.val.map(fn(p) { p.get("seq") }), Some(Some(Json::number(left_at))))
+  open_chat(r)
+  t.run_for(@ui.nav_push_ms)
+  // opened there, not at its end where the core's view, kept a minute after the page left it, still opens it
+  assert_eq(readings.get(k).unwrap().top_seq, left_at)
+  assert_true((readings.get(k).unwrap().top_off - left_off).abs() < 0.5)
+  assert_true(!readings.get(k).unwrap().at_end)
+}
+
+///|
+/// The last `client.focus {chat}` of `calls`: whether its end shows, and the newest message it said was seen whole
+/// (-1 none).
+fn focus_seen(calls : Array[Made]) -> (Bool, Double) {
+  let told = named(calls, "client.focus").filter(fn(m) { field(Some(m.params), "chat") is Some(Object(_)) })
+  match told.last() {
+    Some(m) => {
+      let chat = field(Some(m.params), "chat")
+      (
+        field(chat, "end") == Some(Json::boolean(true)),
+        match field(chat, "seen") {
+          Some(Number(n, ..)) => n
+          _ => -1.0
+        },
+      )
+    }
+    None => (false, -1.0)
+  }
+}
+
+///|
+/// How far the list is dragged down from its end to leave its last message short of whole.
+let seen_drag : Double = 160.0
+
+///|
+test "opened short of its end, the core is told the messages shown whole: read up to there, the end not seen" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  // at its end: the end seen, and its newest shown whole
+  let (end, newest) = focus_seen(calls)
+  assert_true(end)
+  assert_true(newest > 0.0)
+  // scrolled up from its end, let be: the place it is at
+  t.drag(200.0, 300.0, 200.0, 300.0 + seen_drag)
+  t.run_for(t.rest_of("a list") - t.time())
+  t.frame()
+  let told = named(calls, "chat.place")
+  let p = told[told.length() - 1].params
+  let seq = number(Some(p), "seq")
+  let px = number(Some(p), "offset")
+  // opened again there (the core's `at`): the messages in view shown whole, the end not
+  let again : Array[Made] = []
+  let t2 = fake_core(again, over=fn(name, tp) {
+    match (name, tp.value) {
+      ("chat", Some(Object(m))) => {
+        let v = m.copy()
+        v["at"] = Json::number(seq)
+        v["atOffset"] = Json::number(px)
+        { ..tp, value: Some(Json::object(v)) }
+      }
+      _ => tp
+    }
+  })
+  t2.run_for(@ui.nav_push_ms)
+  let (end2, seen) = focus_seen(again)
+  assert_true(!end2)
+  assert_true(seen >= 0.0)
+  assert_true(seen < newest)
+  ignore(t)
+}

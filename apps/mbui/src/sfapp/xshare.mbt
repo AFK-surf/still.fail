@@ -152,7 +152,7 @@ fn xshare_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?) -> Uni
           c.text(tr("web-pages.chat.xshare.writeNote"), style=@sf.secondary) |> ignore
         })
         |> ignore
-        @settings.switch(c, xsharing.write && !none)
+        @settings.switch(c, "xshare/write", xsharing.write && !none)
       })
       |> ignore
     })

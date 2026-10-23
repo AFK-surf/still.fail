@@ -172,6 +172,12 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
   let shift = (mods & mod_shift) != 0
   self.blink0 = now
   self.handle = false
+  // a key (the menu's own included) puts the menu away; what is picked loses its handles, but for all of it picked
+  // by a finger's menu, which keeps both (Compose's TextFieldSelectionManager.selectAll)
+  let picked = self.sel_handles
+  let menu_was = self.menu
+  self.menu = false
+  self.sel_handles = false
   let t = self.text
   if code == key_backspace {
     if !self.delete_selection() && self.caret > 0 {
@@ -227,6 +233,11 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
   } else if code == key_select_all {
     self.anchor = 0
     self.caret = t.length()
+    // (from the floating menu, over words picked or the caret: picked, both handles and the menu over all of it)
+    if picked || menu_was {
+      self.sel_handles = t.length() > 0
+      self.menu = t.length() > 0
+    }
   } else if code == key_copy || code == key_cut {
     let (a, b) = self.sel()
     // (a secret is not copied or cut out)
@@ -234,6 +245,10 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
       h_clipboard_set(sub(t, a, b))
       if code == key_cut {
         self.delete_selection() |> ignore
+      } else if picked {
+        // copied from a finger's menu: let go of, the caret at its end (Compose's copy(cancelSelection))
+        self.anchor = b
+        self.caret = b
       }
     }
   } else if code == key_enter {
@@ -264,9 +279,11 @@ fn EditorState::text_input(
 ) -> Unit {
   self.blink0 = now
   self.pref_x = -1.0
-  // what is typed lets the handle go (Compose: shown again by the next tap)
+  // what is typed lets the handle go (Compose: shown again by the next tap), and the menu and a pick's handles
   if kind != text_composing {
     self.handle = false
+    self.menu = false
+    self.sel_handles = false
   }
   if kind == 0 {
     if self.limit > 0 && s.length() >= self.limit {
@@ -388,6 +405,27 @@ pub fn Ctx::editor(
   st.built_frame = self.build_no
   st.built_key = key
   st.built_id = id
+  // Android's long press on it (the finger still, held long_press_ms: one that moves past the slop is no tap, app.mbt): the word there picked, its handles and the
+  // floating menu, felt (Compose's text field); the finger sliding on from there widens it by words (`editor_tap`
+  // is Android's alone: elsewhere a press on a field puts the caret at once)
+  if self.editor_tap == id &&
+    self.down &&
+    !self.dragging &&
+    self.held_told != self.press_at {
+    let held = self.now - self.press_at
+    if held >= long_press_ms {
+      self.held_told = self.press_at
+      self.take_press()
+      self.editor_tap = 0
+      self.focus = id
+      if st.pick_word(self.press_x, self.press_y, self.now) {
+        self.word_drag = id
+      }
+      haptic(LongPress)
+    } else {
+      self.wake_in(long_press_ms - held)
+    }
+  }
   if st.blink_again {
     st.blink_again = false
     st.blink0 = self.now
@@ -403,7 +441,9 @@ pub fn Ctx::editor(
   self.focusable(id, node=i, keys=0, on_press=true)
   self.semantics(i, TextField, id~, label=placeholder, value=if secret { "" } else { st.text })
   let n = self.nodes[i]
-  let line = if line > 0.0 { line } else { self.theme.text_line * font_size }
+  // (the system's size of words: as Ctx::text's)
+  let font_size = self.sp(font_size)
+  let line = if line > 0.0 { self.sp(line) } else { self.theme.text_line * font_size }
   let (_, _, own_lh) = font_metrics(font_size, 400)
   let lh = if line > 0.0 { line } else { own_lh }
   n.id = id
@@ -447,7 +487,7 @@ pub let caret_blink_android_ms : Double = 500.0
 ///|
 /// How long the caret is shown, and then hidden, here.
 fn caret_blink() -> Double {
-  if h_platform() == 2 {
+  if h_feel() == 2 {
     caret_blink_android_ms
   } else {
     caret_blink_ms
@@ -550,7 +590,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
       let top = st.oy + cl.to_double() * tl.line_h
       // Android's as Compose's text field draws it (TextFieldCursor.kt): from the caret rightwards (kept in the
       // field), its line's whole height, square; elsewhere about the caret, 2 short of each end, round
-      let (x, y, h, r) = if h_platform() == 2 {
+      let (x, y, h, r) = if h_feel() == 2 {
         (dmin(st.ox + cx, n.x + n.fw - caret_w), top, tl.line_h, 0.0)
       } else {
         (st.ox + cx - caret_w / 2.0, top + 2.0, tl.line_h - 4.0, 1.0)
@@ -571,7 +611,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   pop_clip()
   // Android's handle under the caret (Compose's cursor handle, TextFieldSelectionManager): a drop in the caret's colour
   // hanging from it, a circle 25 across under a corner turned to point up, over everything (a popup's: no box cuts it)
-  if focused && st.handle && h_platform() == 2 && a == b && ml == 0 && st.text.length() > 0 {
+  if focused && st.handle && h_feel() == 2 && a == b && ml == 0 && st.text.length() > 0 {
     let (cx, cl) = tl.caret(st.caret)
     let x = st.ox + cx
     let y = st.oy + (cl + 1).to_double() * tl.line_h
@@ -591,6 +631,34 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     if !focused {
       st.handle = false
     }
+  }
+  // Android's handles of words a finger picked (Compose's SelectionHandle, as large as the caret's): a drop hanging
+  // from each end's foot, the start's corner up and to its right, the end's up and to its left, over everything
+  if focused && st.sel_handles && h_feel() == 2 && a != b && ml == 0 {
+    let r = handle_r
+    let (ax, al) = tl.caret(a)
+    let (bx, bl) = tl.caret(b)
+    st.sel_ax = st.ox + ax
+    st.sel_ay = st.oy + (al + 1).to_double() * tl.line_h
+    st.sel_bx = st.ox + bx
+    st.sel_by = st.oy + (bl + 1).to_double() * tl.line_h
+    st.sel_on = true
+    push_clip(-1.0e9, -1.0e9, 1.0e9, 1.0e9)
+    // the start's: the circle to the tip's left, its square corner at the tip
+    self.emit_rect(st.sel_ax - 2.0 * r, st.sel_ay, 2.0 * r, 2.0 * r, r, st.caret_color, 0.0, 0L, alpha)
+    self.emit_rect(st.sel_ax - r, st.sel_ay, r, r, 0.0, st.caret_color, 0.0, 0L, alpha)
+    // the end's: to its right
+    self.emit_rect(st.sel_bx, st.sel_by, 2.0 * r, 2.0 * r, r, st.caret_color, 0.0, 0L, alpha)
+    self.emit_rect(st.sel_bx, st.sel_by, r, r, 0.0, st.caret_color, 0.0, 0L, alpha)
+    pop_clip()
+  } else {
+    st.sel_on = false
+    if !focused || a == b {
+      st.sel_handles = false
+    }
+  }
+  if !focused {
+    st.menu = false
   }
 }
 
@@ -658,6 +726,15 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     handle_on: false,
     handle_x: 0.0,
     handle_y: 0.0,
+    sel_handles: false,
+    sel_on: false,
+    sel_ax: 0.0,
+    sel_ay: 0.0,
+    sel_bx: 0.0,
+    sel_by: 0.0,
+    word_a: 0,
+    word_b: 0,
+    menu: false,
     comp_a: -1,
     comp_b: -1,
     blink0: now,
@@ -789,4 +866,148 @@ pub fn Ctx::editor_focused(self : Ctx, key : String) -> Bool {
 /// Lets go of the focus: no field takes keys, the keyboard goes.
 pub fn Ctx::blur(self : Ctx) -> Unit {
   self.focus = 0
+}
+
+// ── words picked by a finger (Android's: Compose's text field selection) ──────────────────────────────────────
+
+///|
+/// How soon a second tap on a field picks the word there (ViewConfiguration's double tap timeout).
+pub let double_tap_ms : Double = 300.0
+
+///|
+/// The word at (`x`, `y`) in the field picked (a long press's, a double tap's): its two handles, the floating menu
+/// over it. False when there is none there (nothing under the finger but spaces: the caret put there instead).
+fn EditorState::pick_word(self : EditorState, x : Double, y : Double, now : Double) -> Bool {
+  let tl = match self.tl {
+    Some(t) => t
+    None => return false
+  }
+  if self.marked.length() > 0 {
+    self.text_input(2, "", 0, 0, now)
+  }
+  let off = imin(tl.offset_at(x - self.ox, y - self.oy), self.text.length())
+  let (a, b) = word_at(self.text, off)
+  self.blink0 = now
+  self.handle = false
+  if b <= a || self.secret {
+    self.caret = off
+    self.anchor = off
+    self.sel_handles = false
+    self.menu = self.text.length() > 0
+    return false
+  }
+  self.anchor = a
+  self.caret = b
+  self.word_a = a
+  self.word_b = b
+  self.sel_handles = true
+  self.menu = true
+  true
+}
+
+///|
+/// A finger sliding on from a long press's word: the selection widened by words to where it is (Compose's word
+/// granularity), from the word first picked.
+fn EditorState::widen_to(self : EditorState, x : Double, y : Double) -> Unit {
+  let tl = match self.tl {
+    Some(t) => t
+    None => return
+  }
+  let off = imin(tl.offset_at(x - self.ox, y - self.oy), self.text.length())
+  let (a, b) = word_at(self.text, off)
+  if off >= self.word_a {
+    self.anchor = self.word_a
+    self.caret = if b > off { b } else { imax(off, self.word_b) }
+  } else {
+    self.anchor = self.word_b
+    self.caret = if b > a { a } else { off }
+  }
+}
+
+///|
+/// Which of the selection's handles (`x`, `y`) is on: 2 its start's, 3 its end's, 0 neither (a finger's reach round
+/// each circle, which hangs from its tip on the outside of the words).
+fn EditorState::on_sel_handle(self : EditorState, x : Double, y : Double) -> Int {
+  if !self.sel_on {
+    return 0
+  }
+  let near = fn(cx : Double, cy : Double) {
+    let dx = x - cx
+    let dy = y - cy
+    (dx * dx + dy * dy).sqrt() <= handle_r + 8.0
+  }
+  if near(self.sel_bx + handle_r, self.sel_by + handle_r) {
+    3
+  } else if near(self.sel_ax - handle_r, self.sel_ay + handle_r) {
+    2
+  } else {
+    0
+  }
+}
+
+///|
+/// A selection's handle dragged to (`x`, `y`) (its tip `dy` over the finger): that end where the tip comes, in the
+/// middle of the line over it, never past the other end.
+fn EditorState::sel_handle_to(self : EditorState, which : Int, x : Double, y : Double, dy : Double) -> Unit {
+  let tl = match self.tl {
+    Some(t) => t
+    None => return
+  }
+  let tip = y - dy
+  let off = imin(tl.offset_at(x - self.ox, tip - tl.line_h / 2.0 - self.oy), self.text.length())
+  let (a, b) = self.sel()
+  if which == 2 {
+    self.anchor = b
+    self.caret = imin(off, imax(b - 1, 0))
+  } else {
+    self.anchor = a
+    self.caret = imax(off, imin(a + 1, self.text.length()))
+  }
+}
+
+///|
+/// Tells the host whether the floating text menu is up and over what (Android's: a field's picked words, or its caret
+/// when its handle was tapped): offering cut and copy over words picked (not a secret's), paste always, select all
+/// unless all is picked; each frame, said again only when it changed.
+fn Ctx::sync_text_menu(self : Ctx) -> Unit {
+  let want = match self.editors.get(self.focus) {
+    Some(st) if st.menu && st.marked.length() == 0 =>
+      match st.tl {
+        Some(tl) => {
+          let (a, b) = st.sel()
+          let n = st.text.length()
+          let (x0, l0) = tl.caret(a)
+          let (x1, l1) = tl.caret(b)
+          let top = st.oy + l0.to_double() * tl.line_h
+          let bottom = st.oy + (l1 + 1).to_double() * tl.line_h
+          let (x, w) = if l0 == l1 {
+            (st.ox + dmin(x0, x1), dmax((x1 - x0).abs(), caret_w))
+          } else {
+            (st.ox, tl.w)
+          }
+          let can = (if a != b && !st.secret {
+            @hostapi.text_menu_cut | @hostapi.text_menu_copy
+          } else {
+            0
+          }) |
+            @hostapi.text_menu_paste |
+            (if n > 0 && !(a == 0 && b == n) { @hostapi.text_menu_select_all } else { 0 })
+          Some((x, top, w, bottom - top, can))
+        }
+        None => None
+      }
+    _ => None
+  }
+  let sig = match want {
+    Some((x, y, w, h, can)) => "\{x.to_int()},\{y.to_int()},\{w.to_int()},\{h.to_int()},\{can}"
+    None => ""
+  }
+  if sig == self.menu_sig {
+    return
+  }
+  self.menu_sig = sig
+  match want {
+    Some((x, y, w, h, can)) => h_text_menu(true, x, y, w, h, can)
+    None => h_text_menu(false, 0.0, 0.0, 0.0, 0.0, 0)
+  }
 }

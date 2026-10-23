@@ -190,7 +190,7 @@ fn feishu_own_app(
       c.text(tr("web-mobile.connects.feishu.larkNote"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
     })
     |> ignore
-    switch(c, lark)
+    switch(c, "feishu-app/" + form + "/lark", lark)
   })
   |> ignore
   let identity = field(f, "identity")
@@ -226,7 +226,8 @@ fn feishu_qr(c : @ui.Ctx, code : Json?, size : Double) -> Unit {
   let n = count(code, "size") + quiet * 2
   let cell = (size / n.to_double()).floor()
   let start = (size - cell * n.to_double()) / 2.0 + cell * quiet.to_double()
-  c.box(w=Px(size), h=Px(size), radius=12.0, bg=0xFFFFFFFFL, clip=true, fn() {
+  // (FeishuConnect.kt Qr: what it is to a screen reader)
+  c.box(w=Px(size), h=Px(size), radius=12.0, bg=0xFFFFFFFFL, clip=true, label=tr("web-mobile.connects.feishu.qr"), fn() {
     for y, row in rows {
       // each row's dark runs, laid over the white
       let mut x = 0

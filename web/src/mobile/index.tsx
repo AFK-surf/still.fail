@@ -12,7 +12,7 @@ import { DecisionsScreen } from "./Decisions.tsx";
 import { ChatHost } from "./ChatHost.tsx";
 import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } from "./Connects.tsx";
 import { HistoryScreen, RunSettingsScreen } from "./History.tsx";
-import { Home, Recent } from "./Home.tsx";
+import { Home, Recent, WaitingHome } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
 import { MemoriesScreen, MemoryDocScreen, MemoryScreen } from "./Memory.tsx";
 import { DrivePlayScreen, DriveReadScreen, DriveScreen } from "./Drive.tsx";
@@ -26,11 +26,11 @@ import { Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
 import { NewProfileScreen, PickModelsScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
-import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
+import { AboutScreen, AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
 import { FontScreen } from "./Fonts.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
-import { SecurityOpenScreen, SecurityPrompt, SecurityScreen, SecurityWaitingScreen } from "./Security.tsx";
+import { SecurityOpenScreen, SecurityPrompt, SecurityScreen } from "./Security.tsx";
 import { ShareInSheet } from "./ShareIn.tsx";
 import { useLock } from "../cloud/Security.tsx";
 import { VaultItemScreen, VaultScreen } from "./Vault.tsx";
@@ -61,6 +61,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/bar" element={<BarSettingsScreen />} />
       <Route path="settings/language" element={<LanguageScreen />} />
       <Route path="settings/changelog" element={<ChangelogScreen />} />
+      <Route path="settings/about" element={<AboutScreen />} />
       <Route path="settings/workspace" element={<WorkspaceScreen />} />
       <Route path="settings/security" element={<SecurityScreen />} />
       <Route path="settings/security/open" element={<SecurityOpenScreen />} />
@@ -115,7 +116,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
 /** A device waiting to be confirmed into the workspace's lock sees that instead of its pages (but the settings). */
 function LockGate({ workspace, path, children }: { workspace: string; path: string; children: React.ReactNode }) {
   const lock = useLock(workspace);
-  if (lock?.me?.waiting && !/\/settings(\/|$)/.test(path)) return <SecurityWaitingScreen lock={lock} />;
+  if (lock?.me?.waiting && !/\/settings(\/|$)/.test(path)) return <WaitingHome lock={lock} />;
   return <>{children}</>;
 }
 

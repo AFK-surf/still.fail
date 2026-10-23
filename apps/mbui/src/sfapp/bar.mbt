@@ -1185,26 +1185,10 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     Some(Object(_)) => dots["stations"] = t.p.red
     _ => ()
   }
-  // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), asleep while the core reaches
-  // nothing at all
-  let g = field(chats.value, "glyph")
-  let status = (src.topic)("status", { "workspace": Json::string(ws.id) }).value
-  let asleep = text(status, "state") == "trouble"
-  bar_glyph.val = Some({
-    online: count(g, "online"),
-    dim: count(g, "dim"),
-    failing: count(g, "failing"),
-    working: count(g, "working"),
-    connecting: count(g, "connecting"),
-    asleep,
-  })
-  // in words: asleep, what the core cannot reach says it; else the stations (the core's), and what is wrong with them
-  let said = if asleep { text(status, "text") } else { text(g, "label") }
-  bar_stations_said.val = match field(chats.value, "trouble") {
-    _ if said == "" => ""
-    Some(Object(_)) as trouble => fill("android-chat.home.stations.trouble", [("said", said), ("trouble", text(trouble, "text"))])
-    _ => fill("android-chat.home.stations", [("said", said)])
-  }
+  // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), and in words
+  let (glyph, said) = stations_at_glance(src, ws.id)
+  bar_glyph.val = Some(glyph)
+  bar_stations_said.val = said
   let m = bar
   // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, it moves from
   // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
@@ -1865,25 +1849,35 @@ fn bar_gesture(
 /// A place's top page other than the chats (PlacePage.kt, with the bar under it): Home's top bar over it (settings,
 /// the place's name), what it shows the settings' page of it (src/sfapp/settings).
 fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
+  // on a phone what it shows runs under the top bar, frosted over it (PlacePage.kt: `bar + 8.dp` down, scrolling
+  // under it); the wide frame's page bar stands above it
+  let over = !wide_on.val
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    place_top_bar(c, place)
-    // what it shows: the settings' page of the same place (src/sfapp/settings), under this bar in place of its own
+    if !over {
+      place_top_bar(c, place)
+    }
+    // what it shows: the settings' page of the same place (src/sfapp/settings), in place of its own bar
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       match @settings.route_of(place) {
         Some(r) => {
           let core = settings_core(src, w)
-          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
+          let top = if over { status_top() + bar_h + 8.0 } else { 0.0 }
+          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true, top~)
         }
         None => ()
       }
     })
     |> ignore
+    if over {
+      c.layer(fn() { place_top_bar(c, place) }) |> ignore
+    }
   })
   |> ignore
 }
 
 ///|
-/// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, a hairline under.
+/// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, the page's actions
+/// (`@settings.root_bar_actions`), a hairline under; frosted over what runs under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
   // the wide frame's page bar (wide_chat.mbt): the rail is the way to the others
@@ -1891,17 +1885,22 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
     page_bar_wide(c, place_label(place), false, fn() {  }) |> ignore
     return
   }
-  c.box(w=Fill(1.0), bg=@sf.alpha(t.p.bg, 0.94), fn() {
-    // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then 8)
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top() + 8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
-      if nav_button(c, "settings", 22.0, key="place-settings") {
+  let actions = @settings.root_bar_actions.val
+  @settings.root_bar_actions.val = None
+  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
+    // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
+    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
+      if nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings")) {
         app.nav.push(Settings)
       }
       c.box(w=Fill(1.0), h=Px(34.0), justify=JCenter, fn() {
-        c.text(place_label(place), size=24.0, weight=700, color=t.p.text, wrap=false, line=30.0)
-        |> ignore
+        top_bar_title(c, place_label(place)) |> ignore
       })
       |> ignore
+      match actions {
+        Some(a) => a()
+        None => ()
+      }
     })
     |> ignore
     c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore

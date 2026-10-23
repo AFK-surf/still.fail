@@ -13,8 +13,12 @@
 // MB_CORE_TRACE=1 in the app's environment says what the core says (its first 400 bytes) and the app's calls in the
 // log.
 //
-// mb_core_start/send/stop come from the UI's (GL) thread; on_message runs on the core's.
+// mb_core_start/send/stop come from the UI's (GL) thread; on_message runs on the core's. A push delivered with no core
+// running (the app's process started for it: dev.mbui.Push) starts one alone (CoreHost.startAlone, FCM's thread), which
+// the app takes as its own if it starts meanwhile (its on_message set then), else is stopped once the push is handled
+// (CoreHost.stopAlone), as still.fail's PushService starts its StillFailCore.
 #include <jni.h>
+#include <pthread.h>
 #include <android/log.h>
 #include <errno.h>
 #include <stdio.h>
@@ -51,7 +55,11 @@ static struct {
   jlong handle, client;
   mb_core_message_fn on_message;
   void *ctx;
+  int alone;  // started for a push, no app's yet
 } A;
+
+// starting, taking and stopping a core: the app's (GL) thread and a push's
+static pthread_mutex_t A_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static JNIEnv *core_env(void) {
   JavaVM *vm = mb_android_vm();
@@ -202,8 +210,7 @@ const char *mb_core_data_dir(void) {
   return dir;
 }
 
-void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
-  if (A.handle) return;
+static void core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
   A.on_message = on_message;
   A.ctx = ctx;
   JNIEnv *env = core_env();
@@ -238,6 +245,20 @@ void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_
   (*env)->DeleteLocalRef(env, cloud);
 }
 
+void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
+  pthread_mutex_lock(&A_lock);
+  if (!A.handle) {
+    core_start(data_dir, cloud_origin, beta, on_message, ctx);
+  } else if (!A.on_message) {
+    // one started for a push: the app's from now on
+    A.on_message = on_message;
+    A.ctx = ctx;
+    A.alone = 0;
+    CORE_LOG("core: the one started for a push taken by the app");
+  }
+  pthread_mutex_unlock(&A_lock);
+}
+
 void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t blen) {
   if (!A.handle) return;
   JNIEnv *env = core_env();
@@ -253,8 +274,7 @@ void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t ble
   (*env)->DeleteLocalRef(env, s);
 }
 
-void mb_core_stop(void) {
-  if (!A.handle) return;
+static void core_stop(void) {
   JNIEnv *env = core_env();
   (*env)->CallVoidMethod(env, A.listener, A.closing);
   cleared(env);
@@ -265,6 +285,42 @@ void mb_core_stop(void) {
   A.listener = NULL;
   CORE_LOG("core: stopped");
 }
+
+void mb_core_stop(void) {
+  pthread_mutex_lock(&A_lock);
+  if (A.handle) core_stop();
+  A.alone = 0;
+  pthread_mutex_unlock(&A_lock);
+}
+
+// A push's core (dev.mbui.Push, on FCM's thread): the one running, else one started here with no app's client yet (its
+// files where the app keeps them, still.fail cloud at `cloud`). True when one runs.
+JNIEXPORT jboolean JNICALL Java_dev_mbui_CoreHost_startAlone(JNIEnv *env, jclass c, jstring cloud, jboolean beta) {
+  pthread_mutex_lock(&A_lock);
+  if (!A.handle) {
+    const char *dir = mb_core_data_dir();
+    const char *origin = (*env)->GetStringUTFChars(env, cloud, NULL);
+    if (dir && origin) {
+      core_start(dir, origin, beta ? 1 : 0, NULL, NULL);
+      A.alone = A.handle != 0;
+    }
+    if (origin) (*env)->ReleaseStringUTFChars(env, cloud, origin);
+  }
+  jboolean running = A.handle != 0;
+  pthread_mutex_unlock(&A_lock);
+  return running;
+}
+
+// The push handled: the core started for it stopped, unless the app has taken it.
+JNIEXPORT void JNICALL Java_dev_mbui_CoreHost_stopAlone(JNIEnv *env, jclass c) {
+  pthread_mutex_lock(&A_lock);
+  if (A.handle && A.alone && !A.on_message) core_stop();
+  A.alone = 0;
+  pthread_mutex_unlock(&A_lock);
+}
+
+// Whether a core runs in this process (the app's, or one a push started).
+JNIEXPORT jboolean JNICALL Java_dev_mbui_CoreHost_running(JNIEnv *env, jclass c) { return A.handle != 0; }
 
 /// secure.set/get/delete round-tripped through CoreHost's own answers (MBUI_SECURE_TEST=1 in src/coredemo); the
 /// outcome goes to the log (SECURE_TEST …). Returns at once: 0 when there is no CoreHost.

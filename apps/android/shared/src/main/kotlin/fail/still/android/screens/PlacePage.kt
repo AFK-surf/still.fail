@@ -5,6 +5,8 @@
 // under it either way.
 package fail.still.android.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,9 +15,12 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -41,20 +47,33 @@ import fail.still.android.LocalPlaceRoot
 import fail.still.android.PlaceAction
 import fail.still.android.PlaceRoot
 import fail.still.android.Screen
+import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
+import fail.still.android.data.WorkspaceMarksView
+import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
 import fail.still.android.placeLabel
 import fail.still.android.ui.BarAction
 import fail.still.android.ui.C
+import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
+import fail.still.android.ui.Smooth
 import fail.still.android.ui.glass
+
+/**
+ * The top bars' height under the status bar: Home's and a place's (TopGlassBar) and a chat's (Chat.kt BarFrame),
+ * what is in them in its middle. One length, on the device's pixels at once: 8 + 34 + 8dp and 5 + 40 + 5dp, each
+ * rounded, can come out a pixel apart (at 2.85 pixels a dp, 143 and 142), the two bars' lines apart as a chat is swiped
+ * back.
+ */
+val TopBarHeight = 50.dp
 
 /** Home's top bar (and a place's): frosted over what `haze` is the source of, a hairline under it; its row of buttons. */
 @Composable
 fun TopGlassBar(haze: HazeState, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) = Row(
-    modifier.fillMaxWidth().glass(haze).windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+    modifier.fillMaxWidth().glass(haze).windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp).heightIn(min = TopBarHeight),
     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = content,
 )
 
@@ -69,6 +88,24 @@ fun SettingsGear() {
 @Composable
 fun TopBarTitle(text: String, modifier: Modifier = Modifier) =
     Text(text, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+
+/**
+ * The workspace's name in Home's top bar, which opens the switcher (Workspaces.kt), with a dot by it when the other
+ * workspaces have something waiting (before an invitation's). Also over the page a device waiting in the workspace's
+ * security mode shows in Home's place (Security.kt SecurityWaitingScreen): the way to another workspace from there.
+ */
+@Composable
+fun WorkspaceTitle(current: WorkspaceEntry, modifier: Modifier = Modifier) {
+    val app = LocalApp.current
+    Row(modifier.clip(Smooth(8.dp)).clickable { Elsewhere.workspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TopBarTitle(current.workspace.name, Modifier.weight(1f, fill = false))
+        val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
+        val others = marks.value?.others
+        if (others != null) WorkspaceMark(others, marks.value?.othersLabel.orEmpty())
+        else if (Elsewhere.invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
+        IconIn(Icons.ChevronDown, 16.dp, C.muted)
+    }
+}
 
 /** A page's "+" in its top bar (pushed, or on a wide screen: no bar to hold it), named as what it adds. */
 @Composable

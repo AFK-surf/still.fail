@@ -928,7 +928,8 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
     }
   }
   marking.popped = -1
-  let glass = solid_glass()
+  // (over the picture: FilePreview.kt's darkGlass, as MarksTools has it)
+  let glass = dark_glass()
   c.box(w=Fill(1.0), pb=8.0, gap=10.0, align=ACenter, fn() {
     // the notes said so far, a card each, scrolled across when they do not fit (ImageMarks.kt: horizontalScroll)
     let notes = mark_notes()
@@ -949,7 +950,7 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
     }
     c.box(gap=12.0, align=ACenter, fn() {
       if marking.palette {
-        c.box(dir=Row, pad=4.0, gap=2.0, radius=20.0, bg=glass, fn() {
+        c.box(dir=Row, pad=4.0, gap=2.0, radius=20.0, glass~, fn() {
           for col in mark_colors {
             let id = c.id("marks/color/\{col.0}")
             if c.clicked(id) {
@@ -970,7 +971,7 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
         })
         |> ignore
       }
-      c.box(dir=Row, h=Px(44.0), padx=6.0, gap=2.0, radius=picture_bar_corner, bg=glass, align=ACenter, fn() {
+      c.box(dir=Row, h=Px(44.0), padx=6.0, gap=2.0, radius=picture_bar_corner, glass~, align=ACenter, fn() {
         for x in [(Select, "cursor", "select"), (Rect, "square", "rect"), (Arrow, "arrow-up-right", "arrow"), (Pen, "scribble", "pen"), (Words, "text", "text")] {
           let (tool, icon, name) = x
           if picture_button(c, "marks/tool/" + icon, icon, dark_muted, true, held=marking.tool == tool, said=pv("android-chat.marks.tool." + name)) {
@@ -1211,7 +1212,7 @@ fn marks_pick_color(col : Int64) -> Unit {
 ///|
 /// Where what is being written ends on the stage (ImageMarks.kt writingBottom): the words being written's foot; the
 /// open note's pin's point and the note's box under it (NOTE_BOX, 140); None while neither is.
-fn marks_writing_bottom(z : Zoom) -> Double? {
+fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
   if !marking.on {
     return None
   }

@@ -52,17 +52,20 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 
 | Motion | Trigger | Property | Spec | Where | mbui |
 |---|---|---|---|---|---|
-| Rows move to their new places (FLIP) | the list's keys change (a chat with news to the top, one in, one out) | a row's placement (y) from where it was, going on from where it had got to | spring(1, 350, threshold 1 px); taken at once unless the rows changed within 150 ms (CHANGED_MS: a width or something over the rows is the list's own layout) | chat/ListMotion.kt:32-33, 121-134; chat/Home.kt:331-335 | `list_keys` + `layout` (`@ui.row_spring`), Home's rows and day headings (src/sfapp/home.mbt `moving`); measured below |
+| Rows move to their new places (FLIP) | the list's keys change (a chat with news to the top, one in, one out; a chat asked for here keeps its row by its `clientKey` as its station makes it) | a row's placement (y) from where it was, going on from where it had got to | spring(1, 350, threshold 1 px); taken at once unless the rows changed within 150 ms (CHANGED_MS: a width or something over the rows is the list's own layout) | chat/ListMotion.kt:32-33, 121-134; chat/Home.kt:331-335 | `list_keys` + `layout` (`@ui.row_spring`), Home's rows and day headings (src/sfapp/home.mbt `moving`); measured below |
 | Closing over a row gone | a row gone | the rows after it wait | 100 ms (CLOSE_DELAY_MS) while within 50 ms of the change, not for one lifted | chat/ListMotion.kt:28-30, 102, 114-116 | same (the spring's delay) |
 | A row new to the list grows in | its key new since the last change, drawn within 400 ms | alpha 0 → 1, scale .9 → 1 (centre) | tween(240, delay 100, (.2, .7, .2, 1)) | chat/Home.kt:321-322, 336; chat/ListMotion.kt:90, 108-112 | `layout(enter=…)` |
 | A row gone leaves | its key gone while it showed (not swiped away) | a copy where it was: alpha 1 → 0, scale 1 → .9, under the rows closing over it | tween(200, CSS ease-out) | chat/Home.kt:286, 348-358; chat/ListMotion.kt:96-101 | `layout(exit=…)`: the copy is the row's last frame's instances (src/motion ghosts, `Drawing`), painted under the rows |
 | A row that went ahead passes over the others | kept rows' order: one now ahead of others it was behind (not a day heading) | drawn over its siblings; a ground of its own (ink 6% over the page) held to 60%, then fading | 480 ms linear | chat/ListMotion.kt:91-95, 118-119; chat/Home.kt:323-345 | `Ctx::lifted`, `Ctx::put_over`; the ground in `chat_row` |
+| Come back to | the list drawn again after frames it was not (its page come back to from a chat, its pane slid to) | nothing moves: drawn as it is, as Android composes the list anew (a new ListMotion) | — | app/App.kt AnimatedContent; chat/Home.kt:266 | `list_keys` (a list not built the frame before is new again) |
 | Held order | a finger on the list or it scrolling | rows keep their places and days; new ones come in where they would be; let go, the list as it is | — | chat/ListMotion.kt:159-189; chat/Home.kt:269-284 | yes (`held_order`; `Ctx::list_moving`) |
 | A chat's mark comes | its tone changes while the list shows (within 300 ms) | scale 0 → 1.3 (at 60%) → 1 | tween(320, CSS ease-out) | chat/Home.kt:654-664; chat/ListMotion.kt:191-210 | yes (`chat_mark` `pop`, `marks_seen`) |
 | The busy mark turns | at work | rotation | 1200 ms linear, repeating | chat/Home.kt:662 | `@sf.spinner` (before this work) |
-| Swipe to archive | a finger across a done row | x follows; 归档 under it fills in ink past 35% | fill tween(140); back MoveSpring with the finger's speed; off tween(200, Standard); a fling past 500 dp/s | chat/Home.kt:427-520 | not yet (no swipe in this slice) |
-| The filter's lists switch | 全部 / 我参与的 / 监控中 | the three panes side by side, x | tween(240, FastOutSlowIn) | chat/Home.kt:163, 192-194 | not yet (mbui swaps the list) |
-| Search opens | the field at the list's top | the lists up 56 dp and out; the bars fade | open tween(280, Arrive), close tween(240, Standard) | chat/Home.kt:181-199; chat/Search.kt:149-157 | not yet (no search page) |
+| Swipe to archive | a finger across a done row | x follows; 归档 under it fills in ink past 35%; gone off, archived, leaving no copy as it leaves the list | fill tween(140); back MoveSpring with the finger's speed; off tween(200, Standard), then the call; a fling past 500 dp/s | chat/Home.kt:427-520 | yes (home_menu.mbt `swipe_to_archive`; `list_unghost`) |
+| The filter's lists switch | 全部 / 我参与的 / 监控中 | the three panes side by side, x | tween(240, FastOutSlowIn) | chat/Home.kt:163, 192-194 | yes (`home_page`) |
+| Search opens | the field at the list's top | the lists up 56 dp and out; the bars fade | open tween(280, Arrive), close tween(240, Standard) | chat/Home.kt:181-199; chat/Search.kt:149-157 | yes (search.mbt) |
+
+Android's recordings of these (HomeMotionTest: e2e/tapes/home-*.trace) are replayed over the app (src/sfreplay/tapes_wbtest.mbt), each frame's words held to where Android drew them.
 
 ## A chat's list (chat/Chat.kt)
 
@@ -72,7 +75,7 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | The list glides after them | something new at the end while followed (from half a second after it is put in place) | scroll | 1 − e^(−dt/100) per frame | ui/Follow.kt | yes: `Ctx::list(glide_on_growth=true)` keeps where it was and glides (before, a list stuck to its end jumped); the jump button's glide was there before |
 | A sent message keeps its row | the outbox entry becomes the chat's message | its key stays `o:<outbox id>` (no row leaving, none coming) | — | chat/Chat.kt:351-354, 485-489 | yes (`Reading.sent`; the model reads `outgoing`, the outbox's `seq`) |
 | What leaves the chat fades | an outbox row dropped, an activity gone | alpha 1 → 0 (a copy) | tween(200) | chat/Chat.kt:838-844 | outbox rows yes (`keyed(exit=…)`), activities by their own fade |
-| An activity comes in | an agent starting while the chat shows | its room opens (height 0 → its own), alpha 0 → 1, scale .5 → 1 from its avatar (9 dp, middle) | tween(220, Ease.Out) | chat/Chat.kt:1529-1556 | yes (`reveal` + look; the room is laid out, as the app's, see below) |
+| An activity comes in | an agent starting while the chat shows, each turn (the core's `started`; in a chat made here, an agent first seen at work in it) | its room opens (height 0 → its own), alpha 0 → 1, scale .5 → 1 from its avatar (9 dp, middle) | tween(220, Ease.Out) | chat/Chat.kt:1529-1556 | yes (`reveal` + look; the room is laid out, as the app's, see below). Its key is its agent's, the same each turn: gone from the chat's end, it is new to the list again (`row_keys`), so a later turn comes in as the first did (Android's app keeps it known: there its later turns are there at once) |
 | An activity stays, then goes | its agent stops | stays 600 ms (HOLD_MS), then alpha → 0 over 220 (FADE_MS), its ring out over 160 | tween(220), tween(160) | chat/Chat.kt:396-398, 437-462, 1537, 1603 | yes (`with_lingering`) |
 | An activity pushed down glides | something said above it | placement | spring(1, 300, 1 px) (web useActivityGlide) | chat/Chat.kt:393-394, 844 | yes (`layout` in content places; not while words fly, nor as the page before comes in) |
 | The floor | an activity folded away | the room it leaves kept so nothing above drops | — | chat/Chat.kt:465-479 | not yet |
@@ -94,12 +97,12 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 |---|---|---|---|---|---|
 | Words wait as typed | sent, until their row is in the list | the field's words drawn over the field | ≤ 2 s, then given up | chat/ChatHost.kt:520-534, 629-635 | yes (`flight_waiting`) |
 | Words fly into their bubble (open chat) | their row laid out | x on Ease.Flight over the first 80% of 600 ms; y the same 12% late (a curve); their size as typed until they settle; the bubble's ground coming in round them from 24% to 80%; the row's time and the rest coming in as they settle (Ease.Arrive from 24%) | 600 ms linear clock (FLIGHT_MS, FLY .8, SETTLE .24) | chat/ChatHost.kt:112-211, 508-648, 685-693 | yes: the bubble flown over the composer by `fly` (flight.mbt); the words go as one block (the field and the bubble wrap alike), not cut into pieces by line |
-| A new chat's first words | a new chat made | across and up together, Ease.Arrive, 480 ms after 90; the list rises from the composer's top | ARRIVE_MS 480 | chat/ChatHost.kt:145-167, 645 | not yet (new chat is another slice) |
+| A new chat's first words | a new chat made | where typed from the frame sent until their row is laid out; then across and up together, Ease.Arrive, 480 ms after 90; the list rises from the composer's top, cut there | ARRIVE_MS 480 | chat/ChatHost.kt:145-167, 645 | yes (`flight_carry_*`, flight.mbt: the list's box drawn off its place, the bubble across over the composer) |
 | The rows above go up with them | the new row puts them up at once | their offset from where they were, on the words' way up | the flight's `up` | chat/ChatHost.kt:407-420 | yes (`layout(screen=true, drive=up)`) |
 | Files fly from their tiles | sent with files | each from its tile to its place, its crop opening, corners from the composer's to 10 dp | the flight's across/up | chat/ChatHost.kt:650-683 | not yet |
 | The composer is held | words sent | its content as tall as when sent until they are 24% of the way | — | chat/ChatHost.kt:324-333, 644 | yes (the morph's target) |
 | The hint comes back | the words out of the composer's top | the placeholder's alpha | gone at once, back tween(200, Arrive) | chat/ChatHost.kt:470-472, 612-614 | yes, once the words are half way up (not by their bottom against the composer's edge) |
-| A new chat's scene leaves | its chat made | up and out, scale .96, alpha; its choices fade where they are | 140 ms Arrive; choices 80 ms LeaveFade | chat/ChatHost.kt:451-460; chat/NewChat.kt:165-215 | not yet |
+| A new chat's scene leaves | its chat made | up and out, scale .96, alpha; its choices fade where they are | 140 ms Arrive; choices 80 ms LeaveFade | chat/ChatHost.kt:451-460; chat/NewChat.kt:165-215 | yes (`new_chat_leaving`, newchat.mbt) |
 
 ## The composer (chat/Composer.kt)
 
@@ -130,6 +133,7 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | A row held | a long press on a Home row | ink 5% ground; its time shows | at once | chat/Home.kt:572, 615 | yes (before this work) |
 | An option pressed | a decision's option | scale .97 | tween(80) in, tween(180) out, Ease.Out | chat/Decisions.kt:141-150 | yes (`option_button`) |
 | An activity pressed | its line | ink 10% ground round it | at once | chat/Chat.kt:1538-1554 | — |
+| A switch turned | a settings row's switch (通知, 共享到工作区…), its value changed | the knob 3 → 21 across, its ground grey → green | at once: no motion (PageParts.kt:220-224) | shared/…/screens/PageParts.kt:220-224 | slides, unlike Android's (asked for, 2026-10-23): mbui's switch's spring() (`@kit.switch_knob`), the ground blending with it |
 
 ## Agents' messages out of their avatar (chat/ChatMotion.kt)
 

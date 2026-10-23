@@ -63,11 +63,17 @@ test "a bigger box loads a sharper decode, showing the small one meanwhile" {
     images=[("p.png", 2000, 2000)],
   )
   t.draw()
+  t.run_for(@ui.image_fade_ms)
   big[0] = true
   t.frame()
   assert_eq(t.image_loads(), [("p.png", 128), ("p.png", 1024)])
   // the small decode stands in this frame
   assert_eq(t.drawn_images().length(), 1)
+  // the sharper one takes its place as it is shown, not faded in again from nothing
+  t.frame()
+  assert_eq(t.drawn_images().length(), 1)
+  assert_eq(t.drawn_images()[0][8], 1.0)
+  t.assert_idle()
 }
 
 ///|

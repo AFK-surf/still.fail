@@ -16,7 +16,7 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, CoreError, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
-import type { ChatItem, ChatMessage, ComposerLink, SearchView, ShareInView } from "../core/shapes.ts";
+import type { ChatItem, ChatMessage, ChatView, ComposerLink, SearchView, ShareInView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY, STATION } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
@@ -24,6 +24,9 @@ import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
 import { followFonts } from "../fonts.ts";
+import { markdown } from "../../../client/core-ts/src/markdown.ts";
+import { inkKept } from "../../../client/core-ts/src/highlight.ts";
+import { bookAnswer, keepBook, keptBook, searchBook } from "../../../client/core-ts/src/reader.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
 let root: HTMLElement;
@@ -60,6 +63,15 @@ const extensions: DemoExtension[] = [];
 export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
 
 function valueOf(topic: Topic): unknown {
+  const value = extendedValueOf(topic);
+  if (topic.topic !== "chat" || !value || value instanceof CoreError) return value;
+  const chat = value as ChatView;
+  // Like the real core, send prose with the message, before the row's first layout. Stories may change its words
+  // in an extension: read the final text, so the source offsets and the tree always describe those same words.
+  return { ...chat, messages: chat.messages.map((m) => m.authorKind === "agent" ? { ...m, md: markdown(m.text) } : m) };
+}
+
+function extendedValueOf(topic: Topic): unknown {
   for (const e of extensions) { const v = e.topic?.(topic); if (v !== undefined) return v; }
   let value = demoValueOf(topic);
   for (const e of extensions) { const v = e.then?.(topic, value); if (v !== undefined) value = v; }
@@ -266,6 +278,17 @@ const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
 function answer(name: string, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void = () => undefined, signal: AbortSignal = new AbortController().signal): unknown {
   for (const e of extensions) { const v = e.stream?.(name, params, emit, signal); if (v !== undefined) return v; }
   for (const e of extensions) { const v = e.call?.(name, params); if (v !== undefined) return v; }
+  if (name === "markdown") return { md: markdown(String(params.text ?? "")) };
+  if (name === "code.ink") return { ink: inkKept(String(params.code ?? ""), String(params.lang ?? "")) };
+  if (name === "reader.book") {
+    const text = String(params.text ?? "");
+    const { id, book } = keepBook(text, params.markdown === true);
+    return bookAnswer(id, book, text, { withText: true });
+  }
+  if (name === "reader.search") {
+    const book = keptBook(Number(params.id));
+    return { at: book ? searchBook(book, String(params.query ?? "")) : [] };
+  }
   if (name === "prefs.set") {
     for (const [field, value] of Object.entries(params)) {
       const before = prefs[field];

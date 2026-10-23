@@ -214,11 +214,12 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
     // The chat's own draft, kept as the chat is left and the app closed (Composer.kt → Drafts).
     val draft = rememberDraft(station, of)
     // The bar's height, which the list keeps its top clear of: from the first frame what the bar is laid out as (the
-    // status bar, and its row: 6 + 40 + 8dp), and measured from the bar itself, the loading one's too, so the list's
-    // first frame is not laid out under a bar of no height and pushed down the next.
+    // status bar, and its row: TopBarHeight, as Home's top bar, so their lines meet as the page is swiped back), and
+    // measured from the bar itself, the loading one's too, so the list's first frame is not laid out under a bar of no
+    // height and pushed down the next.
     val density = LocalDensity.current
     val statusTop = WindowInsets.statusBars.getTop(density)
-    var topBar by remember { mutableIntStateOf(statusTop + with(density) { 54.dp.roundToPx() }) }
+    var topBar by remember { mutableIntStateOf(statusTop + with(density) { TopBarHeight.roundToPx() }) }
     if (view == null) {
         // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in
         // place instead of replacing another page. Its composer is there, not sending yet.
@@ -314,7 +315,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
 private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, modifier: Modifier = Modifier.background(C.bg), trailing: @Composable () -> Unit = {}, after: @Composable RowScope.() -> Unit) {
     val app = LocalApp.current
     Column(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp).heightIn(min = TopBarHeight), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = app::pop), contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 22.dp, C.accent) }
             Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -356,8 +357,6 @@ private sealed interface Entry {
     data class Said(val m: ChatMessage, val sent: String? = null) : Entry {
         override val id get() = sent?.let { "o:$it" } ?: "m:${m.ts}"
     }
-    /** A run of what other chats' agents wrote to it, as its first message has it (the core's `letters`): its line. */
-    data class Letters(val m: ChatMessage) : Entry { override val id get() = "l:${m.ts}" }
     data class Out(val o: Outgoing) : Entry { override val id get() = "o:${o.id}" }
     /** What was said in Slack by or to an agent of the chat (the core's `elsewhere`): shown, not one of the chat's. */
     data class Sent(val s: ChatSentElsewhere) : Entry { override val id get() = "s:${s.key}" }
@@ -489,6 +488,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val lineAt = view.unreadLine
     val above = view.unreadAbove == true
     val first = view.messages.firstOrNull()?.seq
+    val firstEntry = view.firstEntry ?: first
 
     // Messages the agents have not taken yet (the core says which): after a second, yours say they wait.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -561,9 +561,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         messages.forEach { m ->
             if (motion.held(m.seq)) return@forEach
             if (m.seq == lineAt) add(Entry.Line)
-            // The first of a run of what other chats' agents wrote to it: the run's line, the message only open.
-            if (m.letters != null) add(Entry.Letters(m))
-            if (m.letters?.open != false) add(Entry.Said(m, sentAs[m.seq]))
+            add(Entry.Said(m, sentAs[m.seq]))
             elsewhere[m.seq]?.forEach { add(Entry.Sent(it)) }
         }
         if (short) add(Entry.Newer)
@@ -609,7 +607,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val caught = { row: Entry ->
         when (row) {
             is Entry.Said -> row.m.said != true
-            is Entry.Letters -> row.m.said != true
             is Entry.Working -> row.agent.key !in started
             else -> false
         }
@@ -628,7 +625,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         r.id !in known && r.id !in admitted && !caught(r) && !sentRow(r) &&
             // (Sent otherwise than from the composer, a decision's option picked: in its turn as anything else coming,
             // before the options close, as they do once it is answered.)
-            (r is Entry.Working || r is Entry.Out || r is Entry.Letters || (r is Entry.Said && !motion.emits(r.m.seq)))
+            (r is Entry.Working || r is Entry.Out || (r is Entry.Said && !motion.emits(r.m.seq)))
     }
     // Words sent from here (the composer counts them: `sends`) wait from this very composition, not only once their turn
     // is asked for after it (a SideEffect): a core that has them in the outbox at once would else bring their row in now.
@@ -696,7 +693,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // pages before brought in until it is loaded (none left, or it is gone: where the chat opened).
     // Whether the unread line was gone to (or is not to be: the chat opened at a message asked for, below).
     val lineShown = remember { mutableStateOf(false) }
-    val aroundAsked = remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(follow.placed, first, reveal.revealing, host.goTo, messages) {
         val target = host.goTo ?: return@LaunchedEffect
         if (!follow.placed || reveal.revealing) return@LaunchedEffect
@@ -713,14 +709,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 jumpTo(m.ts, if (words.isNotEmpty()) FOUND else "")
             }
             view.more && thread != null && first != null && first > target -> {
-                asked.value = first
+                asked.value = firstEntry
                 try { api.older(thread.id) } catch (_: CoreException) { host.goTo = null }
-            }
-            // Among what other chats' agents wrote to it, folded: the core asked to show it (their run comes whole, and
-            // this again finds it).
-            thread != null && aroundAsked.value != target && messages.any { it.letters?.open == false } -> {
-                aroundAsked.value = target
-                try { api.around(thread.id, target) } catch (_: CoreException) { host.goTo = null }
             }
             else -> host.goTo = null
         }
@@ -866,19 +856,20 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             shown.first().key != at.key && index != at.index -> list.requestScrollToItem(index, -at.offset)
         }
     }
-    // Near the top: the page before comes in (once per page); what is on screen stays put.
-    LaunchedEffect(view.more, first, follow.placed, reveal.revealing) {
+    // Near the top: the page before comes in (once per page); what is on screen stays put. Pages go by entries, not
+    // messages: one of what the chat does not show (letters, edits) moves it too.
+    LaunchedEffect(view.more, firstEntry, follow.placed, reveal.revealing) {
         if (!view.more || thread == null || !follow.placed || reveal.revealing) return@LaunchedEffect
         snapshotFlow { list.firstVisibleItemIndex }.collect { index ->
-            if (index <= 2 && asked.value != first) {
-                asked.value = first
+            if (index <= 2 && asked.value != firstEntry) {
+                asked.value = firstEntry
                 try { api.older(thread.id) } catch (_: CoreException) { asked.value = null }
             }
         }
     }
     // Near the end, short of the chat's: the page after comes in (once per page), read rather than said (no motion);
     // as many go at the start, and what is on screen stays put.
-    val lastSeq = messages.lastOrNull()?.seq
+    val lastSeq = view.lastEntry ?: messages.lastOrNull()?.seq
     val askedNewer = remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(short, lastSeq, follow.placed, reveal.revealing) {
         if (!short || thread == null || !follow.placed || reveal.revealing) return@LaunchedEffect
@@ -896,6 +887,21 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     val lastRowKey = rememberUpdatedState(rows.lastOrNull()?.id)
     val lastLaidOut by remember(list) { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.key == lastRowKey.value } }
     val seen = !short && endInView(list) && lastLaidOut && follow.placed && resumed.isAtLeast(Lifecycle.State.RESUMED)
+    // The newest message shown whole between the bar and the composer (the list's padding), the most of this visit:
+    // read up to there, its end shown or not (client/core-ts/src/attend.ts `seen`).
+    val wholeNow by remember(list) {
+        derivedStateOf {
+            val info = list.layoutInfo
+            val bottom = info.viewportEndOffset - info.afterContentPadding
+            info.visibleItemsInfo.filter { it.offset >= 0 && it.offset + it.size <= bottom }
+                .mapNotNull { (rowsNow.getOrNull(it.index) as? Entry.Said)?.m?.seq }.maxOrNull()
+        }
+    }
+    var seenWhole by remember(station, thread?.id) { mutableStateOf<Long?>(null) }
+    LaunchedEffect(wholeNow, follow.placed, resumed) {
+        val w = wholeNow ?: return@LaunchedEffect
+        if (follow.placed && resumed.isAtLeast(Lifecycle.State.RESUMED) && (seenWhole ?: -1L) < w) seenWhole = w
+    }
     // Only what is watched comes out of an avatar: the page in front, the reader at the end; else all shows at once.
     val watched = follow.on && resumed.isAtLeast(Lifecycle.State.RESUMED)
     SideEffect { motion.watched = watched; motion.start() }
@@ -905,9 +911,10 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // which notices are left out follow there (client/core-ts/src/attend.ts).
     val session = (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
     val shownAs = { end: Boolean? -> buildJsonObject {
-        put("station", station); put("thread", thread?.id); put("session", session); end?.let { put("end", it) }
+        put("station", station); put("thread", thread?.id); put("session", session)
+        end?.let { put("end", it); seenWhole?.let { w -> put("seen", w) } }
     } }
-    LaunchedEffect(station, thread?.id, session, seen) { app.core.focus(buildJsonObject { put("chat", shownAs(seen)) }) }
+    LaunchedEffect(station, thread?.id, session, seen, seenWhole) { app.core.focus(buildJsonObject { put("chat", shownAs(seen)) }) }
     DisposableEffect(station, thread?.id, session) { onDispose { app.core.focus(buildJsonObject { put("left", shownAs(null)) }) } }
 
     // A new chat's first words on their way (ChatHost.kt): the list comes up after them, out of the composer's top edge.
@@ -963,7 +970,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.waiting && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
                         is Entry.Sent -> SentElsewhere(ctx, row.s)
-                        is Entry.Letters -> LettersLine(ctx, row.m)
                         is Entry.Working -> Activity(ctx, row.agent, leaving(row.agent.key), opening = fresh)
                         is Entry.Floor -> Spacer(Modifier.fillMaxWidth().height(with(LocalDensity.current) { row.px.toDp() }))
                     } }
@@ -1216,11 +1222,12 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
     if (ctx.mine(m)) {
         // A finger held on the words picks a passage of them, here (MessagePick.kt).
         val (hold, words) = messagePick(m.ts, t("android-chat.annotate.you"), "person", m.text)
-        // Flashing, your words' bubble takes the accent's ground (it is the message); with no words, the row does.
-        Column(Modifier.joined(m.joined == true).fillMaxWidth().flashed(motion, m.ts.takeIf { m.text.isEmpty() }, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            QuoteCards(m.quotes, jump, Alignment.End)
+        // Flashing, your words' bubble takes the accent's ground (it is the message); with no words, the row does. Its
+        // images held are quoted (MessagePick.kt).
+        QuotesImages(m.ts, t("android-chat.annotate.you"), "person") { Column(Modifier.joined(m.joined == true).fillMaxWidth().flashed(motion, m.ts.takeIf { m.text.isEmpty() }, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            QuoteCards(ctx, m.quotes, m.attachments, jump, Alignment.End)
             if (m.text.isNotEmpty()) CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) { Bubble(m.text, hold, m.ts) }
-            Files(ctx, m.attachments, mine = true)
+            Files(ctx, besideQuotes(m.quotes, m.attachments), mine = true)
             // Not taken by its agents yet: after a second it says it waits. Your next message soon after: under that one
             // instead, close under this.
             if (m.followed == true) {}
@@ -1228,15 +1235,16 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             else if (waitingNow) UnderWay(t("android-chat.chat.waitingAgent"))
             // Coming in with the words, when they fly here from the composer.
             else LocalFlight.current.let { f -> MessageTime(m.time?.get("createdAt"), if (f == null) Modifier else Modifier.graphicsLayer { alpha = f.e() }) }
-        }
+        } }
         return
     }
     // Someone else's: the avatar and name in line over what they say (web: the phone's inline heads), the name an
     // agent's opens its card (AgentSheet.kt).
     val agent = m.by.agent?.let { ctx.agent(it) }
     val who = m.by.name
-    val (hold, words) = messagePick(m.ts, who, if (m.authorKind == "agent") "agent" else "person", m.text)
-    Box(Modifier.fillMaxWidth().flashed(motion, m.ts, flash)) {
+    val role = if (m.authorKind == "agent") "agent" else "person"
+    val (hold, words) = messagePick(m.ts, who, role, m.text)
+    QuotesImages(m.ts, who, role) { Box(Modifier.fillMaxWidth().flashed(motion, m.ts, flash)) {
         // Where a message out of an agent's avatar lands: its own avatar, hidden while the flying one is over it.
         Box(
             Modifier.padding(top = 3.dp).onGloballyPositioned { motion?.landings?.set(m.seq, it) }
@@ -1258,14 +1266,14 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
                 )
                 MessageTime(m.time?.get("createdAt"))
             }
-            QuoteCards(m.quotes, jump, Alignment.Start)
+            QuoteCards(ctx, m.quotes, m.attachments, jump, Alignment.Start)
             Box(hold) { CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
                 if (m.authorKind == "person") { if (m.text.isNotEmpty()) PersonWords(m.text) }
                 else AgentWords(ctx, m.text, m.attachments, m.placed.orEmpty(), draft, md = m.md)
             } }
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
-            if (m.authorKind == "person") Files(ctx, m.attachments)
+            if (m.authorKind == "person") Files(ctx, besideQuotes(m.quotes, m.attachments))
             // A decision it asks (its options): them under it, a line saying how it went once it has.
             // Answered (or let go), what is under it for that closes in one turn among what changes the list's height
             // (ListTurns.kt), its options and 忽略 together, after the answer has come in (Chat: an option picked).
@@ -1274,7 +1282,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             // It asks what no one has decided (the core's `asked`): letting it go, right under it (web Chat.tsx AskDismiss).
             if (decide) AskDismiss(ctx, m, asking)
         }
-    }
+    } }
 }
 
 /** The session a chat is archived by: the page's, the one its station made of it, else its first agent's. */
@@ -1350,32 +1358,6 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
             )
         }
         if (open) MessageTime(time)
-    }
-}
-
-/**
- * What other chats' agents wrote to this one, a run of it with nothing else said between (web Chat.tsx LettersLine, the
- * core's `letters` on its first message): a pill across the chat as still.fail's notices are, saying which chat's agent
- * wrote to which and how many, cut short where it does not fit. A tap shows the run whole under it, or folds it again
- * (`chat.letters`).
- */
-@Composable
-private fun LettersLine(ctx: Here, m: ChatMessage) {
-    val app = LocalApp.current
-    val letters = m.letters ?: return
-    val ground = if (C.dark) Color.White.copy(alpha = 0.05f) else Color(0xFF262117).copy(alpha = 0.065f)
-    val ink = chatInk().text
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Row(
-            Modifier.clip(RoundedCornerShape(50)).background(ground)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                    app.act(t(if (letters.open) "web-main.chat.letters.close" else "web-main.chat.letters.open")) { app.api(ctx.station).letters(m.thread, m.seq, !letters.open) }
-                }
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(letters.line, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
     }
 }
 
@@ -1510,9 +1492,9 @@ private fun Out(ctx: Here, o: Outgoing) {
     Column(Modifier.joined(o.joined == true).fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Not sent: what was written faded.
         Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if (failed) 0.55f else 1f }, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            QuoteCards(o.quotes, null, Alignment.End)
+            QuoteCards(ctx, o.quotes, o.attachments, null, Alignment.End)
             if (o.text.isNotEmpty()) Bubble(o.text, Modifier)
-            Files(ctx, o.attachments, mine = true)
+            Files(ctx, besideQuotes(o.quotes, o.attachments), mine = true)
             // Still going up: it is sent once they are (the core sends it), as the web's says.
             o.uploads?.forEach { u -> FileCard(u.name, u.size, if (failed) o.error ?: t("android-chat.file.failed") else uploadingText(u.sent, u.size), busy = !failed) }
         }
@@ -1626,26 +1608,43 @@ internal fun quoteMark(): Map<String, androidx.compose.foundation.text.InlineTex
  * grey, leading back to it; then what was said about it.
  */
 @Composable
-private fun QuoteCards(quotes: List<Quote>, onJump: ((String, String) -> Unit)?, side: Alignment.Horizontal) {
+private fun QuoteCards(ctx: Here, quotes: List<Quote>, files: List<Attachment>, onJump: ((String, String) -> Unit)?, side: Alignment.Horizontal) {
     if (quotes.isEmpty()) return
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val most = minOf(380.dp, maxWidth * 0.88f)
         Column(Modifier.fillMaxWidth(), horizontalAlignment = side, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            quotes.forEach { q -> QuoteCard(q, onJump, Modifier.widthIn(max = most)) }
+            quotes.forEach { q -> QuoteCard(ctx, q, fileOf(q, files), onJump, Modifier.widthIn(max = most)) }
         }
     }
 }
 
+/** The file among `files` that is a quote's own (an image of a message quoted, a mark's screenshot), shown in its card. */
+private fun fileOf(q: Quote, files: List<Attachment>): Attachment? = q.file?.let { name -> files.firstOrNull { it.name == name } }
+
+/** A message's files but those shown in its quotes' cards (web Chat.tsx besideQuotes). */
+private fun besideQuotes(quotes: List<Quote>, files: List<Attachment>): List<Attachment> {
+    val own = quotes.mapNotNull { it.file }.toSet()
+    return if (own.isEmpty()) files else files.filter { it.name !in own }
+}
+
 @Composable
-private fun QuoteCard(q: Quote, onJump: ((String, String) -> Unit)?, modifier: Modifier) {
+private fun QuoteCard(ctx: Here, q: Quote, own: Attachment?, onJump: ((String, String) -> Unit)?, modifier: Modifier) {
     val ink = chatInk()
     Column(modifier.clip(Smooth(12.dp)).background(ink.card)) {
         val ts = q.ts
         Text(
             quoteLine(q.author, q.text), inlineContent = quoteMark(), fontSize = 13.sp, lineHeight = 19.5.sp, color = ink.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.let { if (ts != null && onJump != null) it.clickable { onJump(ts, q.text) } else it }
-                .padding(start = 11.dp, end = 11.dp, top = 7.dp, bottom = if (q.comment.isEmpty()) 7.dp else 0.dp),
+                .padding(start = 11.dp, end = 11.dp, top = 7.dp, bottom = if (q.comment.isEmpty() && own == null) 7.dp else 0.dp),
         )
+        // Its own picture under what it quotes (web: quoteCardPicture), at most 120 high; a tap opens it.
+        if (own != null) Box(Modifier.padding(start = 11.dp, end = 11.dp, top = 6.dp, bottom = if (q.comment.isEmpty()) 8.dp else 0.dp)) {
+            val box = imageBox(own)
+            val scale = minOf(1f, 120f / box.height)
+            val key = ctx.owner(own)
+            if (key != null && isImage(own.name)) StationImage(ctx.station, key, own, Modifier.size((box.width * scale).dp, (box.height * scale).dp))
+            else Files(ctx, listOf(own))
+        }
         if (q.comment.isNotEmpty()) Text(q.comment, fontSize = 15.sp, lineHeight = 22.5.sp, color = ink.text, modifier = Modifier.padding(start = 11.dp, end = 11.dp, top = 3.dp, bottom = 8.dp))
     }
 }

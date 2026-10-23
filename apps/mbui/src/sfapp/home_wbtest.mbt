@@ -52,6 +52,55 @@ test "a row tapped pushes its chat, its title in the bar; back comes home" {
 }
 
 ///|
+/// How many rows are drawn on the ground a row has held (ChatRowBody's: the ink at 5%), and whether one is under `y`.
+fn rows_lit(t : @ui.Tester, y? : Double = -1.0) -> Int {
+  let ground = @sf.alpha(@sf.theme().p.text, 0.05)
+  t
+  .drawn_rects()
+  .filter(fn(r) {
+    let (_, ry, _, rh, color) = r
+    color == ground && (rh - chat_row_h).abs() < 0.5 && (y < 0.0 || (ry <= y && y <= ry + rh))
+  })
+  .length()
+}
+
+///|
+/// Home on Android (a press in what scrolls shows once it is not the list's: Ctx::pressed).
+fn android_home() -> @ui.Tester {
+  reset()
+  let src = fixture("home")
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+}
+
+///|
+test "a row pressed: on the ground it has held once the press is not the list's (the tap timeout)" {
+  // one that cannot be archived, one that can (swiped left)
+  for title in ["夜里的构建又失败了", "把旧的截图都换成新的"] {
+    let t = android_home()
+    t.scroll_to(12)
+    t.draw()
+    let (x, y) = t.find(title).unwrap()
+    t.press_at(x, y)
+    assert_eq(rows_lit(t), 0)
+    t.run_for(@ui.tap_indication_ms)
+    assert_eq(rows_lit(t, y~), 1)
+    assert_eq(rows_lit(t), 1)
+    // let go, its chat
+    t.release(x, y)
+    assert_eq(app.nav.depth(), 2)
+  }
+}
+
+///|
+test "a row a finger scrolls the list from: not lit" {
+  let t = android_home()
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.hold_drag(x, y, x, y - 160.0)
+  t.run_for(@ui.tap_indication_ms)
+  assert_eq(rows_lit(t), 0)
+}
+
+///|
 test "the workspaces' sheet: another workspace tapped is the one in view" {
   let t = tester("home")
   t.tap_text("星火工作室")
@@ -93,6 +142,34 @@ test "归档 at a row's start archives its chat" {
 }
 
 ///|
+test "a row archived: an archivable row under it closes over it whole, its swipe's clip moving with it" {
+  // (Home.kt: the list's animateItem moves the whole of SwipeToArchive. Filmed on a phone: the 归档 rows under one
+  // archived gone a moment, then coming up cut off below, the row moved inside a clip left where it is laid out)
+  // (the list at its top: the rows under one gone come up; scrolled to its end, the rows over it would come down)
+  let t = tester("home")
+  let under = "把旧的截图都换成新的"
+  let (_, y_was, _, h) = t.rect_of(under).unwrap()
+  hold_row(t, "Slack 里问的报销流程")
+  // the menu's last item, a row (45) under 复制会话链接
+  let (lx, ly) = t.find("复制会话链接").unwrap()
+  t.tap(lx, ly + 45.0)
+  assert_true(t.find("Slack 里问的报销流程") is None)
+  // laid out a row up at once, drawn where it was, all of it
+  let (_, y_now, _, _) = t.rect_of(under).unwrap()
+  assert_true(y_now < y_was - 1.0, msg="\{y_now} \{y_was}")
+  let (_, d0) = t.drawn_of(under).unwrap()
+  assert_true((d0 - y_was).abs() < 0.5, msg="drawn at \{d0}, was at \{y_was}")
+  let (_, _, _, s0) = t.shown_of(under).unwrap()
+  assert_true((s0 - h).abs() < 0.5, msg="\{s0} of \{h} shown where it was")
+  // on its way up, all of it still
+  t.run_for(@motion.row_spring.duration(y_was - y_now, 0.0, 0.0) / 2.0)
+  let (_, d1) = t.drawn_of(under).unwrap()
+  assert_true(d1 < y_was - 1.0 && d1 > y_now + 1.0, msg="drawn at \{d1}, from \{y_was} to \{y_now}")
+  let (_, _, _, s1) = t.shown_of(under).unwrap()
+  assert_true((s1 - h).abs() < 0.5, msg="\{s1} of \{h} shown on its way")
+}
+
+///|
 test "the list while it is read: no rows, the shapes" {
   let t = tester("loading")
   t.frame()
@@ -110,12 +187,11 @@ test "state leads, in either language" {
 }
 
 ///|
-test "a person's colour as Java's hashCode picks it" {
+test "Java's hashCode" {
   assert_eq(java_hash("a"), 97)
   assert_eq(java_hash("ab"), 97 * 31 + 98)
   // wraps as Java's int does
   assert_eq(java_hash("polygenelubricants"), -2147483648)
-  assert_eq(avatar_color("A"), avatar_color("a"))
 }
 
 ///|
@@ -181,7 +257,7 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
 }
 
 ///|
-test "a row with nothing left in it, swiped left past a third: archived (chat.archive); a short swipe archives nothing" {
+test "a row with nothing left in it, swiped left past a third: off, then archived (chat.archive); a short swipe archives nothing" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0)
   t.scroll_to(12)
@@ -196,8 +272,10 @@ test "a row with nothing left in it, swiped left past a third: archived (chat.ar
   t.drag(300.0, y, 290.0, y + 120.0)
   assert_eq(named(calls, "chat.archive").length(), 0)
   let (_, y) = t.find("把旧的截图都换成新的").unwrap()
-  // across past a third of the row
+  // across past a third of the row: it goes off, then is archived (Home.kt: the call once it has gone)
   t.drag(340.0, y, 120.0, y)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  t.run_for(swipe_off_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
   // its line felt as it was passed, once (Home.kt: TextHandleMove)
   assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])

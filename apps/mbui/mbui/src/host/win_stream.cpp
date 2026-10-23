@@ -285,6 +285,10 @@ void mb_host_stream_close(int32_t id) {
 
 int32_t mb_host_h264_here(void) { return 0; }
 
+// (no H.264 here, so nothing for the framework to drive: @hostapi.stream_feeds)
+int32_t mb_host_stream_feeds(void) { return 0; }
+void mb_host_stream_codec(int32_t id, moonbit_string_t cmd, moonbit_bytes_t data) {}
+
 void *mb_stream_srv(int id) {
   Stream *s = stream_of(id);
   return s ? s->srv : NULL;

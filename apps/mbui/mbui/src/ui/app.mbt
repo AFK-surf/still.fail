@@ -163,6 +163,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.whole_px = whole
     c.epoch = c.epoch + 1
   }
+  // the system's size of words: every layout made anew when it changes
+  let fs = font_scale()
+  if fs != c.font_scale && fs > 0.0 {
+    c.font_scale = fs
+    c.epoch = c.epoch + 1
+  }
   c.now = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t
@@ -197,6 +203,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
   // overlay.mbt), before the view builds
   c.focus_frame_start()
+  // the press as this frame sees it (press.mbt): every build of it the same
+  c.press() |> ignore
   // how each native view stands, read before the view builds what it shows of it (a player's time, its first frame)
   views_frame_start()
   // each stream's events since the last frame (a frame decoded, let go, a decoder broken), the frame it shows from now
@@ -277,6 +285,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.paint_overlays()
   c.emit_segs()
   c.sync_views()
+  // what the widgets are, for a screen reader reading them (a11y.mbt)
+  c.a11y_after_paint()
   // the streams' frames taken in this frame said shown (stream.mbt)
   streams_after_paint()
   // back goes where the stack drawn now says (Ctx::nav, while building)
@@ -312,6 +322,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.focus_frame_end()
   c.desk_frame_end()
   c.sync_ime()
+  c.sync_text_menu()
   fx_frame_end(c)
   match frame_hook.val {
     Some(f) => f()
@@ -547,9 +558,29 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     }
     c.editor_drag = false
     c.handle_drag = 0
+    c.word_drag = 0
+    // a selection's handle under the finger (Android's): the finger moves that end, the menu away meanwhile
+    match c.editors.get(c.focus) {
+      Some(st) if st.on_sel_handle(x, y) != 0 => {
+        c.handle_which = st.on_sel_handle(x, y)
+        c.handle_drag = c.focus
+        c.handle_dy = y - (if c.handle_which == 2 { st.sel_ay } else { st.sel_by })
+        st.menu = false
+        c.claimed = true
+        for other in c.press_chain {
+          drag_cancel(other)
+        }
+        c.active = 0
+        c.edge = 0
+        h_request_frame()
+        return
+      }
+      _ => ()
+    }
     // the caret's handle under the finger (Android's): the finger moves the caret, nothing under it pressed or scrolled
     match c.editors.get(c.focus) {
       Some(st) if st.on_handle(x, y) => {
+        c.handle_which = 1
         c.handle_drag = c.focus
         c.handle_dy = y - st.handle_y
         c.claimed = true
@@ -577,7 +608,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         c.drag_scroll = 0
       }
     }
-    c.press_late = h_platform() == 2 && c.drag_scroll != 0
+    c.press_late = h_feel() == 2 && c.drag_scroll != 0
     match c.lists.get(c.drag_scroll) {
       // a list moving on its own (flung, springing back from an end) is
       // caught: the finger drags it from there, and presses nothing in it
@@ -603,7 +634,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     match c.editors.get(target) {
       // Android's: a field takes the focus and the caret where it is tapped, the finger lifted where it came down
       // (Compose's tap); a finger that moves on drags what is under it (the list), the field untouched
-      Some(_) if h_platform() == 2 => c.editor_tap = target
+      Some(_) if h_feel() == 2 => c.editor_tap = target
       Some(st) => {
         c.focus = target
         c.editor_drag = true
@@ -616,8 +647,23 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)
+      // a finger on a field moved past the slop: no tap and no long press of it (Android's)
+      if c.editor_tap != 0 &&
+        ((x - c.press_x).abs() > touch_slop() || (y - c.press_y).abs() > touch_slop()) {
+        c.editor_tap = 0
+      }
       if c.handle_drag != 0 {
         handle_move(c, x, y, t)
+      } else if c.word_drag != 0 {
+        // sliding on from a long press's word: widened by words (the menu away meanwhile)
+        match c.editors.get(c.word_drag) {
+          Some(st) => {
+            st.widen_to(x, y)
+            st.menu = false
+            h_request_frame()
+          }
+          None => ()
+        }
       } else if c.edge > 0 && c.edge_move(x, y, t) {
         ()
       } else if select_move(x, y) {
@@ -737,13 +783,49 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
             c.ime_sig = "tap"
           }
           c.focus = c.editor_tap
-          place_caret(st, c.press_x, c.press_y, t)
-          st.handle = st.text.length() > 0
+          let (was, at, lx, ly) = c.last_tap
+          if was == c.editor_tap &&
+            t - at <= double_tap_ms &&
+            (c.press_x - lx).abs() <= 2.0 * touch_slop() &&
+            (c.press_y - ly).abs() <= 2.0 * touch_slop() {
+            // a second tap soon after the first, near it: the word there picked (Compose's double tap)
+            st.pick_word(c.press_x, c.press_y, t) |> ignore
+            c.last_tap = (0, -1.0e9, 0.0, 0.0)
+          } else {
+            place_caret(st, c.press_x, c.press_y, t)
+            st.handle = st.text.length() > 0
+            c.last_tap = (c.editor_tap, t, c.press_x, c.press_y)
+          }
           h_request_frame()
         }
         None => ()
       }
     }
+    // a handle let go: the menu back over what is picked; the caret's handle tapped (not moved): its menu (粘贴) shown
+    // or put away
+    if c.handle_drag != 0 {
+      match c.editors.get(c.handle_drag) {
+        Some(st) =>
+          if c.handle_which == 1 {
+            if (x - c.press_x).abs() <= touch_slop() && (y - c.press_y).abs() <= touch_slop() {
+              st.menu = !st.menu
+            }
+          } else {
+            st.menu = true
+          }
+        None => ()
+      }
+      h_request_frame()
+    }
+    // a long press's word slid on from, let go: the menu over it
+    if c.word_drag != 0 {
+      match c.editors.get(c.word_drag) {
+        Some(st) => st.menu = true
+        None => ()
+      }
+      h_request_frame()
+    }
+    c.word_drag = 0
     c.editor_tap = 0
     c.down = false
     c.dragging = false
@@ -756,6 +838,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     // (the touch cancelled: no tap, no handle dragged)
     c.editor_tap = 0
     c.handle_drag = 0
+    c.word_drag = 0
     if c.edge == 2 {
       c.back_gesture(3, x, t)
     }
@@ -798,8 +881,16 @@ fn Ctx::list_drag(self : Ctx, id : Int, d : Double) -> Unit {
 
 ///|
 /// Whether a press at (x, y) is on the left edge of the stack that takes
-/// back (Ctx::nav), where a swipe back starts.
+/// back (Ctx::nav), where a swipe back starts. None on Android: there the
+/// swipe from the edge is the system's back gesture (on_back), as still.fail's
+/// Android app has no other. One of these started beside it too, and the
+/// system taking the finger from the app once it had decided (a cancel here)
+/// called the page back to its place mid-swipe, deaf to the system's steps
+/// after it.
 fn Ctx::on_edge(self : Ctx, x : Double, y : Double) -> Bool {
+  if h_platform() == 2 {
+    return false
+  }
   match self.back {
     Some(_) if self.back_node >= 0 && self.back_node < self.count => {
       let n = self.nodes[self.back_node]
@@ -996,6 +1087,8 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
 /// The caret put where (`x`, `y`) is in the field `st` (what is composed committed first), its blinking from `t`.
 fn place_caret(st : EditorState, x : Double, y : Double, t : Double) -> Unit {
   st.blink0 = t
+  st.menu = false
+  st.sel_handles = false
   match st.tl {
     Some(tl) => {
       if st.marked.length() > 0 {
@@ -1012,6 +1105,11 @@ fn place_caret(st : EditorState, x : Double, y : Double, t : Double) -> Unit {
 /// The caret's handle dragged to (`x`, `y`): the caret where the handle's tip comes, in the middle of the line over it.
 fn handle_move(c : Ctx, x : Double, y : Double, t : Double) -> Unit {
   match c.editors.get(c.handle_drag) {
+    Some(st) if c.handle_which >= 2 => {
+      st.sel_handle_to(c.handle_which, x, y, c.handle_dy)
+      st.blink0 = t
+      h_request_frame()
+    }
     Some(st) =>
       match st.tl {
         Some(tl) => {

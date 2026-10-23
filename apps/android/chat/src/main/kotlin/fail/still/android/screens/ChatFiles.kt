@@ -12,6 +12,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.media.MediaMetadataRetriever
 import android.provider.MediaStore
 import android.util.LruCache
@@ -24,6 +25,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -82,6 +86,7 @@ import fail.still.android.ui.ThumbHash
 import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import java.io.File
+import java.nio.ByteBuffer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -172,10 +177,32 @@ object FileData {
 
     fun keptPicture(id: String, longest: Int): ImageBitmap? = pictures.get("$id@$longest")
 
-    /** Pictures sent from here as they were picked (by station and file name), until the station's own are read. */
-    private val sent = LruCache<String, ImageBitmap>(32)
-    fun keepSent(station: String, path: String, picture: ImageBitmap) { sent.put("$station\n${path.substringAfterLast('/')}", picture) }
-    fun sentPicture(station: String, path: String): ImageBitmap? = sent.get("$station\n${path.substringAfterLast('/')}")
+    /**
+     * Pictures sent from here as they were picked, which their messages draw rather than the station's: by station and
+     * the name it keeps the file under once up, or (sent while it still went up) by its upload's id, as the message's
+     * file then names it (Attachment.upload). Each the composer's picture, a tile's (soft at a message's size), and the
+     * bytes picked (an image read whole), which a message's is drawn from at its own size.
+     */
+    class Sent internal constructor(internal val key: String, val preview: ImageBitmap, internal val bytes: ByteArray?)
+    private val sent = object : LruCache<String, Sent>(48 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Sent) = value.preview.width * value.preview.height * 4 + (value.bytes?.size ?: 0)
+    }
+    private fun sentKey(station: String, path: String) = "$station\n${path.substringAfterLast('/')}"
+    fun keepSent(station: String, path: String, picture: ImageBitmap, bytes: ByteArray? = null) { sentKey(station, path).let { sent.put(it, Sent(it, picture, bytes)) } }
+    /** One sent while it still goes up, by its upload's id (`composer.add`'s, this device's own). */
+    fun keepUpload(upload: String, picture: ImageBitmap, bytes: ByteArray?) { "upload\n$upload".let { sent.put(it, Sent(it, picture, bytes)) } }
+    fun sentPicture(station: String, path: String): ImageBitmap? = sent.get(sentKey(station, path))?.preview
+    fun sentOf(station: String, file: Attachment): Sent? = sent.get(sentKey(station, file.path)) ?: file.upload?.let { sent.get("upload\n$it") }
+
+    /** A picture sent from here, from its bytes, its longer side at most `longest` pixels (null with none kept); kept. */
+    suspend fun sentPicture(s: Sent, longest: Int): ImageBitmap? {
+        val bytes = s.bytes ?: return null
+        val tag = "sent\n${s.key}@$longest"
+        pictures.get(tag)?.let { return it }
+        return withContext(Dispatchers.Default) { decodeTurned(bytes, longest) }?.also { pictures.put(tag, it) }
+    }
+
+    fun keptSent(s: Sent, longest: Int): ImageBitmap? = pictures.get("sent\n${s.key}@$longest")
     fun keepPicture(id: String, longest: Int, picture: ImageBitmap) { pictures.put("$id@$longest", picture) }
 
     private val comingToDisk = HashMap<String, Deferred<File>>()
@@ -252,6 +279,24 @@ fun decode(bytes: ByteArray, longest: Int): ImageBitmap? {
     return scaled.asImageBitmap()
 }
 
+/**
+ * A picture picked here from its bytes, turned as its camera says (a photo's EXIF), as the station's copies are
+ * (thumbs.rs) and the box a message gives it is: decoded at the power-of-two sample that keeps its longer side at least
+ * `longest` pixels, then scaled to it (not softer than asked, as [decode] may be).
+ */
+fun decodeTurned(bytes: ByteArray, longest: Int): ImageBitmap? = try {
+    val got = ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes))) { d, info, _ ->
+        val max = maxOf(info.size.width, info.size.height)
+        var sample = 1
+        if (longest > 0) while (max / (sample * 2) >= longest) sample *= 2
+        d.setTargetSampleSize(sample)
+        d.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+    }
+    val side = maxOf(got.width, got.height)
+    if (longest <= 0 || side <= longest) got.asImageBitmap()
+    else Bitmap.createScaledBitmap(got, maxOf(1, got.width * longest / side), maxOf(1, got.height * longest / side), true).also { if (it !== got) got.recycle() }.asImageBitmap()
+} catch (_: Exception) { null } catch (_: OutOfMemoryError) { null }
+
 // ── in the chat ────────────────────────────────────────────────────────
 
 /** A message's files, side by side and wrapping (6dp apart); `owner` says which session of the chat keeps each. */
@@ -322,7 +367,7 @@ fun StationFile(station: String, key: String, file: Attachment) {
 private fun FileItem(station: String, key: String?, file: Attachment, onOpen: () -> Unit) {
     val kind = kindOf(file.name).kind
     when {
-        kind == PreviewKind.Image && (key != null || FileData.sentPicture(station, file.path) != null) -> ChatImage(station, key, file, onOpen = onOpen)
+        kind == PreviewKind.Image && (key != null || FileData.sentOf(station, file) != null) -> ChatImage(station, key, file, onOpen = onOpen)
         key != null && kind == PreviewKind.Video -> ChatVideo(station, key, file, onOpen)
         else -> FileCard(file.name, file.size, onClick = if (key != null) onOpen else null)
     }
@@ -359,15 +404,18 @@ private fun ChatImage(station: String, key: String?, file: Attachment, size: Mod
     val app = LocalApp.current
     val id = FileData.id(station, key ?: "", file, thumb = true)
     val longest = with(LocalDensity.current) { 360.dp.roundToPx() }
-    // One sent from here shows the picture it had in the composer until the station's comes (it flies in from there).
-    val sent = remember(id) { FileData.sentPicture(station, file.path) }
-    var image by remember(id) { mutableStateOf(FileData.keptPicture(id, longest) ?: sent) }
+    // One sent from here is the picture it was picked as (it flies in from the composer), drawn from the bytes picked at
+    // this size: not the composer's, a tile's (soft here), nor the station's, a round trip after it has landed.
+    val sent = remember(id) { FileData.sentOf(station, file) }
+    var image by remember(id) { mutableStateOf(FileData.keptPicture(id, longest) ?: sent?.let { FileData.keptSent(it, longest) ?: it.preview }) }
     var failed by remember(id) { mutableStateOf(false) }
     val instant = remember(id) { image != null || id in revealed }
     val born = remember(id) { System.currentTimeMillis() }
     var reveal by remember(id) { mutableStateOf(false) }
     LaunchedEffect(id) {
-        if (key == null || FileData.keptPicture(id, longest) != null) return@LaunchedEffect
+        if (FileData.keptPicture(id, longest) != null) return@LaunchedEffect
+        sent?.let { s -> FileData.sentPicture(s, longest)?.let { image = it; return@LaunchedEffect } }
+        if (key == null) return@LaunchedEffect
         try {
             val bytes = FileData.fetch(app, station, key, file, thumb = true).await()
             val got = FileData.picture(id, bytes, longest)
@@ -388,7 +436,14 @@ private fun ChatImage(station: String, key: String?, file: Attachment, size: Mod
     val box = imageBox(file)
     // Letterboxed only in its own box (one given it is filled).
     val fit = box.fit.takeIf { size == null }
-    MediaBox(box, Modifier.clickable(enabled = key != null && (image != null || failed), onClick = onOpen), background = if (fit != null && !failed) Color.Transparent else C.chip, size = size, thumb = Modifier.viewerThumb(thumb, radius, letterbox = fit != null) { image }) {
+    // Held, in a list that quotes (MessagePick.kt): quoted, its file going again with the message (it is the station's already).
+    val quote = LocalImageQuote.current?.takeIf { key != null }
+    val haptics = LocalHapticFeedback.current
+    val open = Modifier.combinedClickable(
+        enabled = key != null && (image != null || failed), onClick = onOpen,
+        onLongClick = quote?.let { q -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); q(if (file.owner == null) file.copy(owner = key) else file) } },
+    )
+    MediaBox(box, open, background = if (fit != null && !failed) Color.Transparent else C.chip, size = size, thumb = Modifier.viewerThumb(thumb, radius, letterbox = fit != null) { image }) {
         if (!instant) Waiting(file.thumbhash, loaded = image != null, still = failed, fit = fit)
         if (failed) Unavailable(20.dp, null)
         image?.let { Revealed(it, file.name, reveal, if (fit != null) ContentScale.Fit else ContentScale.Crop) }

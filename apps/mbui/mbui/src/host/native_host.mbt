@@ -121,6 +121,11 @@ impl @hostapi.Host for Native with set_ime(_, active, x, y, w, h, text, sel_star
 }
 
 ///|
+impl @hostapi.Host for Native with text_menu(_, shown, x, y, w, h, can) {
+  ffi_text_menu(if shown { 1 } else { 0 }, x, y, w, h, can)
+}
+
+///|
 impl @hostapi.Host for Native with clipboard_set(_, s) {
   clipboard_set(s)
 }
@@ -203,6 +208,21 @@ impl @hostapi.Host for Native with set_app_state(_, f) {
 ///|
 impl @hostapi.Host for Native with system_dark(_) {
   system_dark()
+}
+
+///|
+impl @hostapi.Host for Native with font_scale(_) {
+  font_scale()
+}
+
+///|
+impl @hostapi.Host for Native with a11y_on(_) {
+  a11y_on()
+}
+
+///|
+impl @hostapi.Host for Native with a11y_tree(_, s) {
+  a11y_tree(s)
 }
 
 ///|
@@ -501,6 +521,11 @@ impl @hostapi.Host for Native with pk_bytes(_, id, i) {
 }
 
 ///|
+impl @hostapi.Host for Native with pk_info(_, id, i) {
+  pk_info(id, i)
+}
+
+///|
 impl @hostapi.Host for Native with pk_end(_, id) {
   pk_end(id)
 }
@@ -658,6 +683,16 @@ impl @hostapi.Host for Native with st_close(_, id) {
 ///|
 impl @hostapi.Host for Native with st_h264_here(_) {
   st_h264_here()
+}
+
+///|
+impl @hostapi.Host for Native with st_feeds(_) {
+  st_feeds()
+}
+
+///|
+impl @hostapi.Host for Native with st_codec(_, id, cmd, data) {
+  st_codec(id, cmd, data)
 }
 
 ///|

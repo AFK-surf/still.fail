@@ -15,6 +15,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./Files.css.ts";
 import { t } from "../i18n.ts";
+import { StationInWords } from "../StationNamed.tsx";
 
 export function FilesScreen() {
   const app = useApp();
@@ -40,7 +41,8 @@ export function FilesScreen() {
             {lending.map(({ station, home, roots }) => {
               const open = (path: string) => () => app.push(drivePath(stationBase(station.station), path));
               return (
-                <NavSection key={station.station} title={station.online ? station.name : t("web-pages.drive.stationAway", { name: station.name })}>
+                <NavSection key={station.station} label={station.online ? station.name : t("web-pages.drive.stationAway", { name: station.name })}
+                  title={<StationInWords station={station.station} text={station.online ? station.name : t("web-pages.drive.stationAway", { name: station.name })} />}>
                   {home && <NavItem onClick={open(home)} mark={<Server size={16} />} title={t("web-pages.drive.home")} away={!station.online} />}
                   {roots.map((r) => <NavItem key={r.path} onClick={open(r.path)} mark={<Folder size={16} />} title={r.name} away={!station.online} />)}
                 </NavSection>

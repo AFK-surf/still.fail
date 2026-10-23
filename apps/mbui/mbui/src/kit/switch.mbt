@@ -28,7 +28,7 @@ pub fn switch(
   let id = c.id(key)
   let r = c.interact(id, disabled~)
   let on = if r.clicked { !checked } else { checked }
-  let t = animate(c, key + "/knob", if on { 1.0 } else { 0.0 })
+  let t = switch_knob(c, key, on)
   let st = {
     on,
     t,
@@ -95,6 +95,14 @@ pub fn switch_look_of(
 ///|
 /// The default look: still.fail's switch, 36 by 22, its 18 knob white, the accent when on.
 pub let switch_look : (@ui.Ctx, SwitchState) -> Unit = switch_look_of()
+
+///|
+/// How far the switch `key`'s knob is across this frame (0 off … 1 on): sliding by a spring to the side `on` puts it,
+/// from where it is; at that side at once the first time. A switch's look drawn without `switch` (a row around it
+/// takes the tap) moves by it as `switch`'s does.
+pub fn switch_knob(c : @ui.Ctx, key : String, on : Bool) -> Double {
+  animate(c, key + "/knob", if on { 1.0 } else { 0.0 })
+}
 
 ///|
 /// When the switch `key`'s knob is at rest after a turn (the frames' clock; -1: it is, +inf: told, not started).

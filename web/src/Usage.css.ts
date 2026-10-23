@@ -57,43 +57,58 @@ export const tileSub = style({ fontSize: vars.textMeta, color: u.subtle });
 
 // ── the days ──────────────────────────────────────────────────────────────
 
-export const chartHead = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px", minHeight: "20px" });
-export const legend = style({ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: vars.textMeta, color: u.muted });
-export const legendItem = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
-export const swatch = style({ width: "8px", height: "8px", borderRadius: "2px", flex: "none" });
-export const top = style({ fontSize: vars.textMeta, color: u.subtle, fontVariantNumeric: "tabular-nums", marginLeft: "auto", whiteSpace: "nowrap" });
+/** The day picked: its name, its cost large with its calls beside it, over the bars. */
+export const dayHead = style({ display: "grid", gap: "2px", marginBottom: "16px" });
+export const dayName = style({ fontSize: vars.textMeta, color: u.muted });
+export const dayFigures = style({ display: "flex", alignItems: "baseline", gap: "8px", minWidth: "0" });
+export const dayCost = style({ fontSize: vars.textHeading, lineHeight: "1.4", fontWeight: "600", letterSpacing: "-.01em", color: u.text });
+export const dayCalls = style({ fontSize: vars.textUi, color: u.muted, whiteSpace: "nowrap" });
 
 const PLOT = 150;
-export const plot = style({
-  position: "relative", height: `${PLOT}px`, display: "flex", alignItems: "stretch", gap: "6px",
-  borderBottom: `1px solid ${u.line}`,
-  selectors: { "&[data-many]": { gap: "3px" } },
+/** The room at the plot's right the scale says its lines in, where no bar is. */
+const SCALE_ROOM = "24px";
+export const plot = style({ position: "relative", height: `${PLOT}px`, borderBottom: `1px solid ${u.line}` });
+/** A line of the scale, across under the bars; its words at the right just over it. */
+export const tick = style({ position: "absolute", left: "0", right: "0", height: "1px", background: u.line, pointerEvents: "none" });
+export const tickLabel = style({
+  position: "absolute", right: "0", bottom: "3px", fontSize: vars.textCaption, lineHeight: "14px", color: u.subtle, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
 });
-/** The most a day cost: a quiet line at the top. */
-export const ceiling = style({ position: "absolute", left: "0", right: "0", top: "0", borderTop: `1px dashed ${u.line}`, pointerEvents: "none" });
-/** A day: the whole column is what hovers, the bar sits at its foot. */
+export const days = style({
+  position: "absolute", inset: `0 ${SCALE_ROOM} 0 0`, display: "flex", alignItems: "stretch", gap: "6px",
+  selectors: { "&[data-many]": { gap: "2px" } },
+});
+/** A day: the whole column is what is clicked, the bar sits at its foot. */
 export const day = style({
-  flex: "1", minWidth: "0", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "stretch",
-  padding: "0", border: "0", background: "none", cursor: "default",
-  borderRadius: `calc(4px * ${vars.cornerScale}) calc(4px * ${vars.cornerScale}) 0 0`, cornerShape: vars.cornerShape,
-  transition: `background ${vars.dur} ${vars.easeOut}`,
-  selectors: { "&:hover": { background: u.hover } },
+  flex: "1", minWidth: "0", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center",
+  padding: "0", border: "0", background: "none", cursor: "pointer",
 });
+/** A day's bar: its parts one over another, the first at the foot, 1 apart. */
 export const bar = style({
-  display: "flex", flexDirection: "column-reverse", gap: "2px", margin: "0 auto", width: "min(100%, 28px)",
-  borderRadius: `calc(4px * ${vars.cornerScale}) calc(4px * ${vars.cornerScale}) 0 0`, cornerShape: vars.cornerShape,
-  overflow: "hidden",
+  display: "flex", flexDirection: "column-reverse", gap: "1px", width: "min(100%, 16px)",
+  selectors: { "&[data-many]": { width: "100%" } },
 });
-export const part = style({ flex: "none", minHeight: "1px" });
-export const labels = style({ display: "flex", gap: "6px", marginTop: "6px", selectors: { "&[data-many]": { gap: "3px" } } });
+/** A part: round at its ends (3 with many days), the foot's square on the line. */
+export const part = style({
+  flex: "1 1 0", minHeight: "1px", borderRadius: `calc(4px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  selectors: {
+    [`${bar}[data-many] &`]: { borderRadius: `calc(2px * ${vars.cornerScale})` },
+    "&:first-child": { borderBottomLeftRadius: "0", borderBottomRightRadius: "0" },
+  },
+});
+export const labels = style({ display: "flex", gap: "6px", marginTop: "6px", paddingRight: SCALE_ROOM, selectors: { "&[data-many]": { gap: "2px" } } });
 export const label = style({
   flex: "1", minWidth: "0", textAlign: "center", fontSize: vars.textCaption, color: u.subtle, whiteSpace: "nowrap", overflow: "visible",
   fontVariantNumeric: "tabular-nums",
-  selectors: { "&[data-today]": { color: u.text, fontWeight: "500" } },
+  selectors: { "&[data-on]": { color: u.text, fontWeight: "500" } },
 });
-export const tipHead = style({ display: "block", fontWeight: "600" });
-export const tipRow = style({ display: "flex", alignItems: "center", gap: "6px", fontVariantNumeric: "tabular-nums" });
-export const tipValue = style({ marginLeft: "auto", paddingLeft: "12px" });
+/** With several people: each of them, what they spent the day picked, and its share of the day's under it. */
+export const dayRows = style({ display: "grid", gap: "12px", marginTop: "16px" });
+export const dayRow = style({ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", alignItems: "center", columnGap: "8px", rowGap: "6px", fontSize: vars.textUi, color: u.text });
+export const dayDot = style({ width: "8px", height: "8px", borderRadius: "50%" });
+export const dayWho = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const dayPart = style({ fontVariantNumeric: "tabular-nums" });
+export const dayShare = style({ gridColumn: "2 / 4", height: "4px", borderRadius: "2px", background: u.hover, overflow: "hidden", display: "flex" });
+globalStyle(`${dayShare} > span`, { height: "100%", borderRadius: "2px" });
 
 // ── the lists ─────────────────────────────────────────────────────────────
 

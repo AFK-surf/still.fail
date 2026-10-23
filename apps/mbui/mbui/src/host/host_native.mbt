@@ -68,6 +68,9 @@ extern "C" fn ffi_present(
   b : Double,
 ) -> Unit = "mb_host_present"
 
+///|
+extern "C" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit = "mb_host_text_menu"
+
 #borrow(text)
 extern "C" fn ffi_set_ime(
   active : Int,
@@ -129,6 +132,16 @@ extern "C" fn ffi_drive(kind : Int, text : String) -> Int = "mb_host_drive"
 extern "C" fn ffi_set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit = "mb_host_set_app_state"
 
 extern "C" fn ffi_system_dark() -> Int = "mb_host_system_dark"
+
+///|
+extern "C" fn ffi_font_scale() -> Double = "mb_host_font_scale"
+
+///|
+extern "C" fn ffi_a11y_on() -> Int = "mb_host_a11y_on"
+
+///|
+#borrow(s)
+extern "C" fn ffi_a11y_tree(s : String) -> Unit = "mb_host_a11y_tree"
 
 extern "C" fn ffi_set_dark(dark : Int) -> Unit = "mb_host_set_dark"
 
@@ -504,6 +517,21 @@ fn system_dark() -> Bool {
 }
 
 ///|
+fn font_scale() -> Double {
+  ffi_font_scale()
+}
+
+///|
+fn a11y_on() -> Bool {
+  ffi_a11y_on() != 0
+}
+
+///|
+fn a11y_tree(s : String) -> Unit {
+  ffi_a11y_tree(s)
+}
+
+///|
 /// The app is drawn dark (or light) from now on: the host's own parts follow it (Android's status and navigation
 /// bars' icons, the Mac window's title bar). Said when it changes.
 fn set_dark(dark : Bool) -> Unit {
@@ -668,6 +696,9 @@ extern "C" fn pk_name(id : Int, i : Int) -> String = "mb_host_pick_name"
 
 ///|
 extern "C" fn pk_bytes(id : Int, i : Int) -> Bytes = "mb_host_pick_bytes"
+
+///|
+extern "C" fn pk_info(id : Int, i : Int) -> String = "mb_host_pick_info"
 
 ///|
 extern "C" fn pk_end(id : Int) -> Unit = "mb_host_pick_end"

@@ -74,7 +74,7 @@ let login_title_room : @ui.Style = @ui.style(px=S2_5, pt=S2_5)
 let login_title_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg)
 
 ///|
-/// 取消 as the card's ×: a pill's size (28), round, pressed the ink at 5% under it.
+/// 取消 as the card's ×: a pill's size (28), round, rippled in the ink (LoginCards.kt CancelLogin: ripple(color = C.ink)).
 // kept across runs: a value (no field of it changes)
 let login_cancel : @ui.Style = @ui.style(
   w=S7,
@@ -82,7 +82,6 @@ let login_cancel : @ui.Style = @ui.style(
   radius=Full,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
 )
 
 ///|
@@ -129,12 +128,11 @@ let login_step : @ui.Style = @ui.style(
   bg=A(Fg, O5),
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O10)),
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_step_solid : @ui.Style = login_step.then(@ui.style(bg=Fg, pressed=@ui.patch(bg=Over(Fg, A(Bg, O15)))))
+let login_step_solid : @ui.Style = login_step.then(@ui.style(bg=Fg))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -168,7 +166,6 @@ let login_finish : @ui.Style = @ui.style(
   bg=Fg,
   align=ACenter,
   justify=JCenter,
-  pressed=@ui.patch(bg=Over(Fg, A(Bg, O15))),
 )
 
 ///|
@@ -234,12 +231,14 @@ fn login_cancel_button(c : @ui.Ctx, src : Source, station : String, id : String)
       "id": Json::string(id),
     })
   }
-  c.box(style=login_cancel, id=cancel, fn() {
+  // (取消 to a screen reader: CancelLogin's contentDescription)
+  c.box(style=login_cancel, id=cancel, label=tr("web-main.logins.cancelWhat"), fn() {
     if busy {
       @sf.spinner(c, size=12.0) |> ignore
     } else {
       @sf.icon(c, "close", size=14.0, color=t.p.muted) |> ignore
     }
+    @motion.ripple(c, cancel, 14.0, ink=@sf.alpha(t.p.text, 0.1))
   })
   |> ignore
 }
@@ -271,6 +270,8 @@ fn login_step_button(c : @ui.Ctx, key : String, label : String, solid : Bool, bu
       if external {
         @sf.icon(c, "arrow-up-right", size=16.0, color=ink) |> ignore
       }
+      // LoginCards.kt StepButton: its ripple in its words' colour, STEP_CORNER (concentric(CARD_CORNER, CARD_PAD))
+      @motion.ripple(c, id, 22.0 - 8.0 / @sf.smooth_scale, ink=@sf.alpha(ink, 0.1))
     })
     |> ignore
   })
@@ -481,6 +482,8 @@ fn login_paste_steps(c : @ui.Ctx, src : Source, station : String, l : Json?) -> 
           } else {
             c.text(tr("web-main.logins.finish"), style=login_finish_words) |> ignore
           }
+          // LoginCards.kt: 完成 in the page's colour, the step's corner less 6
+          @motion.ripple(c, go, 22.0 - 8.0 / @sf.smooth_scale - 6.0, ink=@sf.alpha(t.p.bg, 0.1))
         })
         |> ignore
       }

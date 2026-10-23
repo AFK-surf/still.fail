@@ -2,8 +2,8 @@
 // app, chat/screens/Attach.kt): the photo picker (Android's ACTION_PICK_IMAGES, macOS's open panel on images), the
 // file picker (ACTION_OPEN_DOCUMENT; the open panel), a photo taken now (ACTION_IMAGE_CAPTURE's picture). The system
 // asks on its own; `files` is None until it has answered, then what was picked (none when it was called off). A frame
-// is asked for as the answer comes, so a view can look each frame. Not on iOS, Windows or the web yet (`pick` is None
-// there).
+// is asked for as the answer comes, so a view can look each frame. iOS: its photo picker (PHPickerViewController), its
+// document picker, its camera (UIImagePickerController). Not on Windows or the web yet (`pick` is None there).
 
 ///|
 /// What the system's pickers offer.
@@ -17,10 +17,17 @@ pub(all) enum PickKind {
 } derive(Eq)
 
 ///|
-/// A file picked: its name and its bytes.
+/// A file picked: its name and its bytes; or, one too big to be read whole (a video), held by the host: `held` its id
+/// there (0: read whole, its bytes here), its `size`, and `src` where it is (an image source the host draws: its
+/// gallery's content:// address, a video's still). A file held goes up through the core a part at a time, read from
+/// the host as it goes (the core's `composer.add` with `blob: {hostFile: held, size}`: the host answers `picked.read`,
+/// `picked.hash`, `picked.release`; still.fail's Android app's PickedFiles.kt).
 pub(all) struct Picked {
   name : String
   bytes : Bytes
+  held : Int
+  size : Double
+  src : String
 }
 
 ///|
@@ -36,14 +43,17 @@ pub fn Pick::id(self : Pick) -> Int {
 }
 
 ///|
-/// Asks the system for files of `kind`: None when this host cannot.
-pub fn pick(kind : PickKind) -> Pick? {
+/// Asks the system for files of `kind`: None when this host cannot. `hold`: a file too big to be read whole may be held
+/// by the host (Picked.held: for what sends it up through the core); else every one is read whole (16 added to the
+/// kind the host is told).
+pub fn pick(kind : PickKind, hold? : Bool = false) -> Pick? {
   let id = pk_start(
-    match kind {
+    (match kind {
       Photos => 1
       Files => 2
       Camera => 3
-    },
+    }) +
+    (if hold { 16 } else { 0 }),
   )
   if id == 0 {
     None
@@ -70,7 +80,21 @@ pub fn Pick::files(self : Pick) -> Array[Picked]? {
     1 => {
       let out = []
       for i in 0..<pk_count(self.id) {
-        out.push({ name: pk_name(self.id, i), bytes: pk_bytes(self.id, i) })
+        // (one held by the host: its id, size and address, a tab between; none for one read whole)
+        let info = pk_info(self.id, i).split("\t").to_array()
+        let bytes = pk_bytes(self.id, i)
+        match info {
+          [held, size, src] =>
+            out.push({
+              name: pk_name(self.id, i),
+              bytes,
+              held: ga_int(held).to_int(),
+              size: ga_int(size).to_double(),
+              src: src.to_string(),
+            })
+          _ =>
+            out.push({ name: pk_name(self.id, i), bytes, held: 0, size: bytes.length().to_double(), src: "" })
+        }
       }
       pk_end(self.id)
       Some(out)

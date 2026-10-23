@@ -492,7 +492,7 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
         }
         "png" =>
           match bytes {
-            Some(b) if b.length() > 0 && b.length() <= clip_png_max && is_png(b) =>
+            Some(b) if b.length() > 0 && b.length() <= clip_png_max && @pixels.is_png(b) =>
               self.copied.push(CopiedPng(b))
             _ => ()
           }
@@ -523,17 +523,3 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
 /// The most a clipboard carries of a picture, each way (client/core-ts/src/screen-frames.ts; ScreenClips.kt).
 let clip_png_max : Int = 8 * 1024 * 1024
 
-///|
-/// `b` starts as a PNG does.
-fn is_png(b : Bytes) -> Bool {
-  let sig = [137, 80, 78, 71, 13, 10, 26, 10]
-  if b.length() < sig.length() {
-    return false
-  }
-  for i, v in sig {
-    if b[i].to_int() != v {
-      return false
-    }
-  }
-  true
-}
