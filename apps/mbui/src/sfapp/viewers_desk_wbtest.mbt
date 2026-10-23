@@ -62,6 +62,33 @@ test "desk: a click on the image does nothing, one round it closes the preview" 
 }
 
 ///|
+test "desk: ⌘ and the wheel (or a pinch) zoom round the pointer, the wheel alone pans; + − 0 1 as the web's keys" {
+  let t = desk_tester("chat-preview-image")
+  let z = viewer.val.unwrap().zoom
+  // 600 × 400 fitted in 1280 × 800: as it is
+  assert_true((z.scale - 1.0).abs() < 0.001)
+  // fitted, the wheel alone moves nothing
+  t.wheel_with(640.0, 400.0, 0.0, 120.0, 0)
+  assert_true((z.scale - 1.0).abs() < 0.001)
+  // ⌘ and the wheel up: e^(200 × 0.002)
+  t.wheel_with(640.0, 400.0, 0.0, -200.0, @ui.wheel_mod_cmd)
+  assert_true((z.scale - @dmath.exp(0.4)).abs() < 0.01, msg="\{z.scale}")
+  // a pinch (a wheel with ⌃, marked so): its small steps finer
+  t.wheel_with(640.0, 400.0, 0.0, -10.0, @ui.wheel_mod_ctrl | @ui.wheel_mod_pinch)
+  assert_true((z.scale - @dmath.exp(0.4) * @dmath.exp(0.1)).abs() < 0.01, msg="\{z.scale}")
+  // 0 fitted again, + a quarter more (its glide run), 1 as it is
+  t.key(@ui.key_of_char('0'))
+  t.run_for(zoom_glide_ms)
+  assert_true((z.scale - 1.0).abs() < 0.001, msg="\{z.scale}")
+  t.key(@ui.key_of_char('='))
+  t.run_for(zoom_glide_ms)
+  assert_true((z.scale - 1.25).abs() < 0.01, msg="\{z.scale}")
+  t.key(@ui.key_of_char('1'))
+  t.run_for(zoom_glide_ms)
+  assert_true((z.scale - 1.0).abs() < 0.01, msg="\{z.scale}")
+}
+
+///|
 test "desk: a file told of says so, 下载 the page's button; the bar's own download too" {
   let t = desk_tester("chat-preview-none")
   assert_true(t.find("此文件类型不支持预览") is Some(_))

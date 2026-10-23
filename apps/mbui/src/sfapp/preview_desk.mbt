@@ -186,6 +186,22 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
     } else if c.key_pressed(@ui.key_code_right) {
       v.go(c, src, 1, 0.0)
     }
+    // + − 0 1: in, out, fitted, as it is (useZoom's keys; + is ⇧= on most keyboards)
+    let key = fn(ch : Char) {
+      c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
+    }
+    let z = v.zoom
+    if z.nw > 0.0 {
+      if key('+') || key('=') {
+        z.zoom_to(z.scale * desk_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+      } else if key('-') || key('_') {
+        z.zoom_to(z.scale / desk_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+      } else if key('0') {
+        z.reset()
+      } else if key('1') {
+        z.zoom_to(desk_whole, z.bw / 2.0, z.bh / 2.0, true)
+      }
+    }
   }
   // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays
   let hidden = kind == Some(KImage) && !v.bars_shown()
@@ -423,6 +439,17 @@ let desk_pdf_foot : Double = 28.0
 ///|
 /// A table's words (fpTable: --text-ui, 13).
 let desk_cell_size : Double = 13.0
+
+///|
+/// The wheel's zoom (useZoom onWheel): a pinch's small steps (under 50) by a hundredth of each, a wheel's notches by a
+/// five-hundredth.
+let desk_pinch_step : Double = 50.0
+
+///|
+let desk_pinch_rate : Double = 0.01
+
+///|
+let desk_wheel_rate : Double = 0.002
 
 ///|
 /// A copy's check shown this long (CopyImage: 1.6 s).

@@ -416,6 +416,21 @@ fn desk_play_timeline(c : @ui.Ctx, p : @kit.Media, s : @kit.MediaStatus, on : Bo
       |> ignore
     })
     |> ignore
+    // with a mouse over it (or dragging), the time where it points, over it (Player.tsx Timeline `pointed`)
+    match c.rect_of(id) {
+      Some((x, _, w, _)) if on && dur > 0.0 && (c.hovered(id) || c.pressed(id)) => {
+        let (px, _, _) = c.pointer()
+        let at = dmin(desk_whole, dmax(desk_none, (px - x) / dmax(desk_whole, w)))
+        c.layer(fn() {
+          c.box(style=desk_pointed, tx=px - x - desk_pointed_w / 2.0, ty=-desk_pointed_up, fn() {
+            c.rich([@ui.span(@player.clock(at * dur), mono=true)], style=desk_pointed_words) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      }
+      _ => ()
+    }
   })
   |> ignore
 }
@@ -502,6 +517,21 @@ let desk_head_r : Double = 6.0
 
 ///|
 let desk_came_share : Double = 0.22
+
+///|
+/// The time where the pointer is (Player.css.ts pointed): over the timeline, 4 above it, on black at 75%, 11 in white.
+let desk_pointed_w : Double = 56.0
+
+///|
+let desk_pointed_up : Double = 24.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_pointed : @ui.Style = @ui.style(w=Fixed(desk_pointed_w), h=S5, radius=Md, bg=VeilDeep, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_pointed_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=OnVeil, wrap=false)
 
 ///|
 /// The sound's line: in twentieths; its head 10 across.

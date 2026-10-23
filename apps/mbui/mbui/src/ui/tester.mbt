@@ -73,6 +73,8 @@ fn reset_globals() -> Unit {
   native_nodes.clear()
   picture_at.clear()
   wheels.clear()
+  wheels_x.clear()
+  wheel_mods.clear()
   captures.clear()
   drags.clear()
   sideways.clear()
@@ -1661,6 +1663,13 @@ pub fn Tester::leave(self : Tester) -> Unit {
 /// notch (eased in over the next frames). One frame drawn, not settled.
 pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, phase : Int) -> Unit {
   finger_wheel(x, y, 0.0, dy, phase)
+  self.draw()
+}
+
+///|
+/// The wheel turned both ways (`dx`, `dy`) at (x, y) with `mods` held (wheel_mod_*: ⌘ to zoom a picture, a pinch).
+pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> Unit {
+  finger_wheel(x, y, dx, dy, mods * 16)
   self.draw()
 }
 

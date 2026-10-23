@@ -340,7 +340,17 @@ static NSCursor *cursor_of(int kind) {
   double dy = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 40.0;
   double dx = e.hasPreciseScrollingDeltas ? e.scrollingDeltaX : e.scrollingDeltaX * 40.0;
   int phase = !e.hasPreciseScrollingDeltas ? 4 : e.momentumPhase != NSEventPhaseNone ? 3 : (e.phase != NSEventPhaseNone ? 1 : 0);
-  mb_cb.wheel(p.x, p.y, -dx, -dy, phase);
+  // what is held with it, above the phase (ui's wheel_mod_*)
+  NSEventModifierFlags m = e.modifierFlags;
+  int mods = ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
+             ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
+  mb_cb.wheel(p.x, p.y, -dx, -dy, phase | (mods << 4));
+}
+// a trackpad's pinch: a wheel with ⌃ held and marked a pinch (ui's wheel_mod_pinch), as a browser gives one: a
+// picture zooms by it (its magnification as a hundredth of a wheel's point each way), no list scrolls
+- (void)magnifyWithEvent:(NSEvent *)e {
+  NSPoint p = [self pt:e];
+  mb_cb.wheel(p.x, p.y, 0, -e.magnification * 100.0, 1 | ((2 | 16) << 4));
 }
 
 // ---- keys ----

@@ -2399,9 +2399,23 @@ fn Viewer::gestures(
       }
     }
   }
-  let dy = @ui.wheel(c, stage)
-  if dy != 0.0 && z.nw > 0.0 {
-    z.zoom_to(z.scale * @dmath.pow(1.0015, -dy), px, py, false)
+  // the wheel: a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round the pointer
+  // (FilePreview.tsx useZoom onWheel: a pinch's small steps finer than a wheel's notches); a phone's zooms
+  let (wx, wy, mods) = @ui.wheel_of(c, stage)
+  if desk && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
+    if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd)) != 0 {
+      let fine = (mods & @ui.wheel_mod_ctrl) != 0 && wy.abs() < desk_pinch_step
+      z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { desk_pinch_rate } else { desk_wheel_rate })), px, py, false)
+    } else if !z.zoomed() {
+      // (fitted, it is all in view: nothing to pan, and it stays fitted as the window changes)
+      ()
+    } else if (mods & @ui.wheel_mod_shift) != 0 && wx == 0.0 {
+      z.pan(-wy, 0.0)
+    } else {
+      z.pan(-wx, -wy)
+    }
+  } else if !desk && wy != 0.0 && z.nw > 0.0 {
+    z.zoom_to(z.scale * @dmath.pow(1.0015, -wy), px, py, false)
   }
 }
 

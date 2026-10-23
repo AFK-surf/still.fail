@@ -1070,6 +1070,30 @@ let captures : Map[Int, Bool] = Map([])
 let wheels : Map[Int, Double] = Map([])
 
 ///|
+/// The wheel's sideways part over a box that keeps it, and what was held with it last.
+let wheels_x : Map[Int, Double] = Map([])
+
+///|
+let wheel_mods : Map[Int, Int] = Map([])
+
+///|
+/// What a wheel came with (`wheel_of`'s third): ⇧, ⌃, ⌥, ⌘ held, and a trackpad's pinch (a wheel with ⌃, as a browser
+/// gives a pinch: a page zooms by it, no list scrolls).
+pub let wheel_mod_shift : Int = 1
+
+///|
+pub let wheel_mod_ctrl : Int = 2
+
+///|
+pub let wheel_mod_alt : Int = 4
+
+///|
+pub let wheel_mod_cmd : Int = 8
+
+///|
+pub let wheel_mod_pinch : Int = 16
+
+///|
 /// The box of `id` (given to it this frame) takes the pointer: a finger dragging on it keeps it pressed (`pressed`,
 /// `pointer`: a pan), nothing under it scrolls, and the wheel over it is kept for `wheel`.
 pub fn capture(c : Ctx, id : Int) -> Unit {
@@ -1081,6 +1105,8 @@ pub fn capture(c : Ctx, id : Int) -> Unit {
 /// What the wheel moved over `id` since last asked (its dy, as a list would scroll by it).
 pub fn wheel(c : Ctx, id : Int) -> Double {
   ignore(c)
+  wheels_x.remove(id)
+  wheel_mods.remove(id)
   match wheels.get(id) {
     Some(d) => {
       wheels.remove(id)
@@ -1088,6 +1114,20 @@ pub fn wheel(c : Ctx, id : Int) -> Double {
     }
     None => 0.0
   }
+}
+
+///|
+/// What the wheel moved over `id` since last asked, both ways (dx, dy, as a list would scroll by them), and what was
+/// held with it last (wheel_mod_*): a picture pans by it, and zooms with ⌃ or ⌘ (or a pinch).
+pub fn wheel_of(c : Ctx, id : Int) -> (Double, Double, Int) {
+  ignore(c)
+  let dx = wheels_x.get(id).unwrap_or(0.0)
+  let dy = wheels.get(id).unwrap_or(0.0)
+  let mods = wheel_mods.get(id).unwrap_or(0)
+  wheels.remove(id)
+  wheels_x.remove(id)
+  wheel_mods.remove(id)
+  (dx, dy, mods)
 }
 
 ///|
