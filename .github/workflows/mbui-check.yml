@@ -59,13 +59,16 @@ jobs:
       # again each run, 46-53 s of the tests' build with every unit and link kept, and the check's type-check from
       # nothing (2026-10-23, 40018743319); over it, moon makes again what changed (on a branch over its own: the app
       # part's build 29 s to 20, the check 24 s to 5 after it, the replay's build 26 s to 13-17). Main's only (75-180 MB
-      # a part): a branch takes main's.
+      # a part): a branch takes main's. Without each test program's objects (<test>.mbc: the units' store keeps them):
+      # with them, a run took its units from there and left the store's untouched, so it kept none of them, and a
+      # branch from before this took main's store of 68 units and compiled the rest (files-browse, 40038188859).
       - uses: actions/cache/restore@v4
         id: moon
         with:
           path: |
             apps/mbui/_build
             !${{ env.MBC_STORE }}
+            !apps/mbui/_build/**/*.mbc
           key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
           restore-keys: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-
       # The units main's newest run kept, and on a branch its own last run's beside them (a store by content: the two
@@ -147,6 +150,7 @@ jobs:
           path: |
             apps/mbui/_build
             !${{ env.MBC_STORE }}
+            !apps/mbui/_build/**/*.mbc
           key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
       # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
       - name: What failed
