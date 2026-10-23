@@ -1,8 +1,9 @@
 // The changelog people read in the apps (docs/changelog.md), from main's history: each commit's `Changelog:` trailers
 // (a line for people, in Chinese) and `Fixes: FB-<n>` (the bug reports it fixes), with the version it came in (the
-// commits up to it: 0.1.<n>, as every part numbers its builds) and the parts it reached by the files it changed (partsOf),
-// or as it says (`Changelog-parts:`). docs/changelog-notes.json adds lines to commits from before, or says one again:
-// { "<commit or its start>": { "text": [...], "fixes": [...], "parts": [...] } }.
+// commits up to it: 0.1.<n>, as every part numbers its builds) and the parts people see it in, as its agent says
+// (`Changelog-parts:`; one from before that did not, by the files it changed: partsOf). docs/changelog-notes.json adds
+// lines to commits from before, or says one again: { "<commit or its start>": { "text": [...], "fixes": [...], "parts":
+// [...] } }.
 // That is the test channel's. The stable channel's is written once a release, for people who skip the steps between:
 // docs/releases/0.1.<n>.md, which an agent drafts from the test channel's entries since the last one (--draft) and a
 // person reads before the release goes out (docs/changelog.md).
@@ -32,7 +33,8 @@ export interface Entry {
   parts: Part[];
 }
 
-// Each file reaches the parts of the first of these it is under.
+// For a commit that does not say its parts (those from before they were said), each file reaches the parts of the first
+// of these it is under.
 const PARTS: [RegExp, Part[]][] = [
   // The station: station/ (src/ and its native parts; not its tests), and mesh/ in the history before it (the Rust one).
   [/^station\/(src|native)\/|^mesh\//, ["station"]],
@@ -138,15 +140,24 @@ export function readMessage(message: string): { text: string[]; fixes: number[];
   return { text, fixes, parts };
 }
 
-/** The parts a commit was said to reach people in, those that are parts; null: none was. */
+/** The parts a commit was said to reach people in ([]: `none`, it needs no release); null: it does not say. */
 function partsSaid(said: string[]): Part[] | null {
   const parts = [...new Set(said.filter(isPart))].sort();
-  return parts.length ? parts : null;
+  return parts.length || said.includes("none") ? parts : null;
 }
 
-/** The message's Changelog-parts that name no part. */
-export function unknownParts(message: string): string[] {
-  return readMessage(message).parts.filter((p) => !isPart(p));
+/**
+ * Why the commit-msg hook and CI (`--refuse`) refuse a commit's message: a Changelog line saying there is nothing to
+ * tell; lines or fixes that do not say which parts people see them in (`Changelog-parts:`, the agent's to decide: the
+ * files cannot tell, the desktop's change in code the Android app carries too); a part that is none.
+ */
+export function refused(message: string): string[] {
+  const { text, fixes, parts } = readMessage(message);
+  const why = text.filter((t) => NOTHING.test(t)).map((t) => `"Changelog: ${t}": a commit with nothing to tell people writes no Changelog line`);
+  if ((text.length || fixes.length) && !parts.length) why.push(`no Changelog-parts: say which of ${PART_NAMES.join(", ")} people see it in (none: it needs no release)`);
+  const unknown = parts.filter((p) => !isPart(p) && p !== "none");
+  if (unknown.length) why.push(`"Changelog-parts: ${unknown.join(", ")}": the parts are ${PART_NAMES.join(", ")}, or none`);
+  return why;
 }
 
 /** The message's Changelog lines that only say there is nothing to tell. */
@@ -182,8 +193,7 @@ export function changelog(root: string, rev = "HEAD"): Entry[] {
     const fixes = [...new Set([...said.fixes, ...(note?.fixes ?? [])])];
     if (!text.length && !fixes.length) continue;
     const version = versions.get(commit)!;
-    // Where it reaches people: what it says (docs/changelog-notes.json's `parts`, or its `Changelog-parts:`), where its
-    // files alone cannot tell (the desktop's change in code the Android app carries too); else where its files are.
+    // Where people see it: as docs/changelog-notes.json or its agent says; one from before that did not, where its files are.
     const parts = partsSaid(note?.parts ?? []) ?? partsSaid(said.parts) ?? partsOf(rest.split("\n").filter(Boolean), notCarried);
     entries.push({ version, commit, at: Number(at), text, fixes, parts });
   }
@@ -241,16 +251,13 @@ if (import.meta.main) {
   const root = join(import.meta.dirname, "..");
   const [flag, rev] = process.argv[2]?.startsWith("--") ? [process.argv[2], process.argv[3]] : [undefined, process.argv[2]];
   if (flag === "--refuse") {
-    // A commit message's file (the commit-msg hook), or a range's commits (CI): no `Changelog: none`.
+    // A commit message's file (the commit-msg hook), or a range's commits (CI): what refused says.
     const arg = rev!;
     const messages = existsSync(arg) ? [["this commit", readFileSync(arg, "utf8")]]
       : execFileSync("git", ["log", "--format=%h%x1f%B%x1e", arg], { cwd: root, encoding: "utf8" }).split("\x1e").map((r) => r.trim()).filter(Boolean).map((r) => r.split("\x1f"));
-    const bad = messages.filter(([, m]) => saysNothing(m!).length || unknownParts(m!).length);
-    for (const [commit, m] of bad) {
-      if (saysNothing(m!).length) console.error(`${commit}: "Changelog: ${saysNothing(m!)[0]}": a commit with nothing to tell people writes no Changelog line (docs/changelog.md)`);
-      if (unknownParts(m!).length) console.error(`${commit}: "Changelog-parts: ${unknownParts(m!).join(", ")}": the parts are ${PART_NAMES.join(", ")} (docs/changelog.md)`);
-    }
-    process.exit(bad.length ? 1 : 0);
+    const refusals = messages.flatMap(([commit, m]) => refused(m!).map((why) => `${commit}: ${why} (docs/changelog.md)`));
+    for (const why of refusals) console.error(why);
+    process.exit(refusals.length ? 1 : 0);
   }
   if (flag === "--stable") console.log(JSON.stringify(stable(root, changelog(root, rev ?? "HEAD"))));
   else if (flag === "--draft") process.stdout.write(draft(root, rev ?? "HEAD"));
