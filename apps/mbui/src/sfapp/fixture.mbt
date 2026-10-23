@@ -407,7 +407,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
       match decide_fixture_topic(f, name, params) {
         Some(v) => v
         // the settings' pages (src/sfapp/settings/fixture.mbt): theirs first on their own screenshots, else the chats'
-        None if f.mode.has_prefix("settings") =>
+        None if f.mode.has_prefix("settings") || f.mode.has_prefix("place-") =>
           match @settings.fixture_topic(f.mode, name, params) {
             Some(v) => Some(v)
             None => fixture_chat_topic(f, name, params)

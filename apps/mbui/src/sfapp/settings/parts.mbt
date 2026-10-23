@@ -289,6 +289,36 @@ fn place_page(
 ) -> Unit {
   c.box(style=page_fill, fn() {
     let under_bar = top_room() > 0.0
+    // the wide frame's place (连接, 用量: across the pane): the web's head, its title and at its end what it does, its
+    // primary one a pill named as what it adds
+    if wide.val && at_root.val && !under_bar {
+      match frame_core.val {
+        Some(core) =>
+          wide_head(c, core, "", title, trailing=fn() {
+            match actions {
+              Some(a) => a()
+              None => ()
+            }
+            match primary {
+              Some((key, run)) => {
+                let label = match key {
+                  "add-station" => tr("android-misc.bar.action.stations")
+                  "add-profile" => tr("android-misc.bar.action.profiles")
+                  "add-connect" => tr("android-misc.bar.action.connects")
+                  _ => ""
+                }
+                if head_pill(c, key, label) {
+                  run()
+                }
+              }
+              None => ()
+            }
+          })
+        None => ()
+      }
+      c.box(style=root_body, fn() { body() }) |> ignore
+      return
+    }
     match (actions, primary) {
       // (at the root its actions in the app's top bar over it; in the wide frame, which has no such bar, at the end of
       // a row of their own over what it shows; its primary one is the bar's notch's)
@@ -1852,3 +1882,37 @@ let pick_line_ground : @ui.Style = @ui.style(
 ///|
 // kept across runs: a value (no field of it changes)
 let check_room : @ui.Style = @ui.style(w=@sf.check_room_w, align=ACenter)
+
+///|
+/// A page head's own action in the wide frame (the web's outlined pill, ui.tsx Button with Plus): its ＋ and words, a
+/// line round it, the pointer's ground. True on the frame after a press.
+fn head_pill(c : @ui.Ctx, key : String, label : String) -> Bool {
+  let t = @sf.theme()
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let b = c.box(style=head_pill_style, id~, fn() {
+    @sf.icon(c, "plus", size=@sf.row_icon, color=t.p.text) |> ignore
+    c.text(label, style=head_pill_words) |> ignore
+  })
+  c.semantics(b, Button, id~, label~)
+  hit(c, id)
+}
+
+///|
+/// The pill (controls.css.ts btn: 36 high, 16 in, the field's line round it).
+// kept across runs: a value (no field of it changes)
+let head_pill_style : @ui.Style = @ui.style(
+  row=true,
+  h=S9,
+  px=S4,
+  gap=S1_5,
+  align=ACenter,
+  radius=Full,
+  border=B1,
+  border_color=Border,
+  hovered=@ui.patch(bg=Hover),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_pill_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false)

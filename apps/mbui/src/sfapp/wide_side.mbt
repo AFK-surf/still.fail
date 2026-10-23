@@ -27,6 +27,8 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
     "settings" => settings_side(c, src, w)
     "files" => files_side(c, src, w)
     "decisions" => decisions_side(c, src, w)
+    "stations" => stations_side(c, src, w)
+    "profiles" => profiles_side(c, src, w)
     _ => chats_side(c, src, w)
   }
 }

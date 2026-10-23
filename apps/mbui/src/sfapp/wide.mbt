@@ -79,6 +79,8 @@ priv struct Wide {
   mut clear_asking : String
   /// the new chat's station chooser open (wide_newchat.mbt)
   mut station_menu : Bool
+  /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
+  place_pick : Map[String, @settings.Route]
 }
 
 ///|
@@ -120,6 +122,7 @@ let wide : Wide = {
   context_menu: "",
   clear_asking: "",
   station_menu: false,
+  place_pick: {},
 }
 
 ///|
@@ -166,6 +169,7 @@ fn wide_reset() -> Unit {
   wide.context_menu = ""
   wide.clear_asking = ""
   wide.station_menu = false
+  wide.place_pick.clear()
   wide_on.val = false
   corners_on.val = false
   recent_open.val = false
@@ -199,7 +203,9 @@ fn wide_frame(
   // a device waiting to be confirmed in the workspace's safe mode: beside the rail (the workspaces, settings) only
   // what it waits on, no chats' list (its stations refuse it), unless a settings page is open
   let gated = lit_place() != "settings" && @settings.lock_waiting(settings_core(src, w), w.id)
-  let side = if gated { 0.0 } else { side_now() }
+  // (连接 and 用量: a page across the pane, no sidebar: wide_places.mbt)
+  let bare = place_bare(lit_place())
+  let side = if gated || bare { 0.0 } else { side_now() }
   let main_w = dmax(0.0, c.width - rail_w - side)
   // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
   land(src, w)
@@ -230,7 +236,9 @@ fn wide_frame(
   })
   |> ignore
   })
-  sidebar_edge(c, side)
+  if !bare {
+    sidebar_edge(c, side)
+  }
   // back (⌘[, a mouse's back button) a page of the stack, where there is one
   if app.nav.depth() > 1 && !took && !app.menu && !sheet_open() {
     c.take_back(fn() { app.nav.pop() |> ignore })
@@ -280,6 +288,7 @@ fn main_page(
     // settings' own home is its first page (the web goes to 外观)
     Settings => setting_page(c, src, w, @settings.Route::Appearance)
     // a place of the rail's other than the chats': its page, under its title
+    Place("stations" | "profiles" as p) => place_page_wide(c, src, w, p)
     Place(p) => wide_place(c, src, w, p)
     // 文件: the stations' folders, under its bar (the phone's place has the bottom bar's room)
     Files => files_page(c, src, w)
@@ -655,10 +664,13 @@ fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
     if @ui.window_inset() {
       c.window_drag(head)
     }
-    c.box(w=Fill(1.0), pl=side, pr=side, pt=40.0, pb=12.0, id=head, fn() {
-      c.text(place_label(place), size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
-    })
-    |> ignore
+    // (a place across the pane has its page's own head, its title and what it does: settings' place_page)
+    if !place_bare(place) {
+      c.box(w=Fill(1.0), pl=side, pr=side, pt=40.0, pb=12.0, id=head, fn() {
+        c.text(place_label(place), size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
+      })
+      |> ignore
+    }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       match @settings.route_of(place) {
         Some(r) => {

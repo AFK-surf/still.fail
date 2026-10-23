@@ -3,6 +3,12 @@
 
 ///|
 let zh_wide : Map[String, String] = {
+  "android-settings.machine.use": "使用此账号",
+  "web-pages.profiles.machineSignedIn": "已在 {station} 上登录",
+  "web-pages.settings.profiles.add": "添加 Profile",
+  "web-pages.settings.profiles.hostAway": "{station} 离线",
+  "web-pages.settings.stations.add": "添加 station",
+  "web-pages.stations.page.runningShort": "{n} 个运行中",
   "web-pages.automaticDecisions.title": "自动决策",
   "web-pages.settings.nav.about": "关于",
   "web-pages.settings.nav.changelog": "更新日志",
