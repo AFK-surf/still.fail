@@ -179,6 +179,37 @@ test "a mermaid chart is drawn as a page of its own; one that will not draw is s
 }
 
 ///|
+test "under a mermaid chart: the whole screen, the chart as written to pinch, its touches its own; back closes it" {
+  let t = chat_tester("chat-viz")
+  t.frame()
+  let (_, chart) = viz_views(t)
+  // drawn (a line of it, so what is under it is above the composer)
+  t.view_says(chart, "{\"emberViz\":true,\"type\":\"height\",\"height\":40}")
+  t.frame()
+  t.frame()
+  let (x, y, w, h) = view_rect(t, chart).unwrap()
+  // one 22 box under it, at its right
+  t.tap(x + w - 11.0, y + h + 2.0 + 11.0)
+  t.frame()
+  assert_true(t.find("Mermaid") is Some(_))
+  let mut full = 0
+  for k, f in viz_frames {
+    if k.has_prefix("full/mermaid/") {
+      full = f.view.id()
+      // fitted to the screen, the page moving it under the fingers
+      assert_true(f.html.contains("const FULL = true"))
+      assert_true(f.html.contains("touch-action:none"))
+    }
+  }
+  assert_true(full != 0)
+  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full} ") }))
+  t.back()
+  t.frame()
+  assert_true(t.find("Mermaid") is None)
+  assert_true(t.views().contains("close \{full}"))
+}
+
+///|
 test "a visualization's document: a fragment in the stylesheet with its tokens and what it kept; a whole page as written" {
   let doc = viz_document("<p>hi</p>", Some({ "a": "<b>" }), true, 0xF7F6F3FFL)
   assert_true(doc.has_prefix("<!doctype html><html data-theme=\"dark\">"))
