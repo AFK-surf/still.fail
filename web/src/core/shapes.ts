@@ -4367,6 +4367,12 @@ export interface PrefsView {
 	 */
 	screenTouch?: string;
 	/**
+	 * How large a picture of a station's screen this device asks for: `smooth` (at most 1280×720), `hd` (at
+	 * most 1920×1080), `original` (the screen's own size), or (none) as the window is (at most 1920×1080, 2560×1440 on
+	 * a screen that has more).
+	 */
+	screenQuality?: string;
+	/**
 	 * The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
 	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
 	 */

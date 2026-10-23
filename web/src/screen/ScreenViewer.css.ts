@@ -5,7 +5,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pictureGlass as glass } from "@stillfail/ui/styles/glass.ts";
-import { IN, PANEL_PAD, PANEL_PILL, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
 import { VIEWER_BAR } from "@stillfail/ui/viewer/ViewerBar.css.ts";
 
@@ -174,4 +174,58 @@ export const fullTools = style({
 /** A figure of the connection in the bar's line (its round trip, packets lost): amber, then red, as it gets worse. */
 export const figure = style({
   selectors: { '&[data-level="amber"]': { color: vars.amber }, '&[data-level="red"]': { color: vars.red } },
+});
+
+/** How the view goes, in the bar: the signal mark on its tile and how long it has been seen; pressed, its panel. */
+export const netChip = style({
+  display: "inline-flex", alignItems: "center", gap: "8px", height: "32px", padding: "0 10px 0 4px", border: "0", borderRadius: "999px",
+  background: "none", color: `var(--viewer-muted, ${vars.muted})`, font: "inherit", cursor: "pointer",
+  selectors: { "&:hover, &[data-state=open]": { background: vars.hover } },
+});
+const levels = {
+  '&[data-level="ok"]': { color: vars.green }, '&[data-level="amber"]': { color: vars.amber }, '&[data-level="red"]': { color: vars.red },
+};
+/** The bars on a small tile, coloured as the round trip is. */
+export const netMark = style({
+  display: "inline-grid", placeItems: "center", width: "24px", height: "24px", borderRadius: "999px",
+  background: `color-mix(in srgb, ${vars.text} 8%, transparent)`, color: vars.muted, selectors: levels,
+});
+export const netTime = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums", letterSpacing: "0.04em" });
+/** The view's figures, a small panel of words: the round trip at its head, then groups of a name and its value a line. */
+export const netPanel = style([popover, panelCard, {
+  zIndex: "1000", display: "grid", gap: "10px", width: "280px", boxSizing: "border-box", color: vars.text, fontSize: vars.textUi,
+  lineHeight: vars.leadingUi, animation: "none",
+}]);
+export const netHead = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textBody, lineHeight: vars.leadingBody });
+globalStyle(`${netHead} > b`, { fontWeight: "600", fontVariantNumeric: "tabular-nums" });
+export const netHeadMark = style({ display: "inline-grid", color: vars.muted, selectors: levels });
+export const netRows = style({
+  display: "grid", gap: "4px", margin: "0", paddingTop: "10px",
+  boxShadow: `inset 0 1px 0 color-mix(in srgb, ${vars.text} 10%, transparent)`,
+});
+globalStyle(`${netRows} > div`, { display: "grid", gridTemplateColumns: "88px minmax(0, 1fr)", gap: "12px" });
+globalStyle(`${netRows} dt`, { color: vars.muted });
+globalStyle(`${netRows} dd`, { margin: "0", minWidth: "0", fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere" });
+
+/** 控制中心, in the bar: words beside its mark, as a tool that opens a menu. */
+export const centerButton = style({
+  display: "inline-flex", alignItems: "center", gap: "6px", height: "32px", padding: "0 10px", border: "0", borderRadius: "999px",
+  background: "none", color: `var(--viewer-muted, ${vars.muted})`, font: "inherit", fontSize: vars.textUi, cursor: "pointer",
+  selectors: { "&:hover, &[data-state=open]": { background: vars.hover, color: `var(--viewer-ink, ${vars.text})` } },
+});
+/** Its menu and the menus beside it, above the screen's page. */
+export const menu = style({ zIndex: "1000", minWidth: "200px" });
+export const menuItem = style({ selectors: { "&[data-state=open]": { background: vars.hover } } });
+globalStyle(`${menuItem} > svg`, { flex: "none", color: vars.muted });
+globalStyle(`${menuItem}[data-danger] > svg`, { color: "inherit" });
+export const menuWords = style({ flex: "1", minWidth: "0", whiteSpace: "nowrap" });
+/** What a row says at its end: the size chosen, a size's bounds. */
+export const menuEnd = style({ color: vars.muted, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
+export const menuCheck = style({ display: "inline-grid", placeItems: "center", width: "16px", flex: "none" });
+/** A combo's keys, as keycaps. */
+export const menuKeys = style({ display: "flex", gap: "3px", flex: "none" });
+globalStyle(`${menuKeys} > kbd`, {
+  display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "20px", height: "20px", padding: "0 5px", boxSizing: "border-box",
+  border: `1px solid color-mix(in srgb, ${vars.text} 18%, transparent)`, borderBottomWidth: "2px", borderRadius: "4px",
+  fontFamily: "inherit", fontSize: vars.textCaption, fontWeight: "500", lineHeight: "1", color: vars.muted,
 });

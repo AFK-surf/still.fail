@@ -14,17 +14,19 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, External, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { ViewerBar, ViewerTool } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { ViewerBar } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { Button, PanelButton, Segmented, Tip, WaitPill } from "../ui.tsx";
 import { t } from "../i18n.ts";
-import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead } from "./frames.ts";
+import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead, type Quality } from "./frames.ts";
 import { hearInput, type ScreenInput } from "./input.ts";
 import { PAD_SETTLE_MS, PadPointer, Zoom, fitIn } from "./zoom.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { useStationNet } from "../cloud/StationCards.tsx";
+import { useStationOs } from "../api.ts";
+import { ControlCenter, NetChip, combosFor, type Combo, type Meter } from "./ScreenPanel.tsx";
 import { CopiedNote, DropVeil, SendsPanel, clipOf, pasted, putClip, useSends, type Clip } from "./Transfer.tsx";
 import * as css from "./ScreenViewer.css.ts";
 
@@ -102,6 +104,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   heldRef.current = held;
 
   const [attempt, setAttempt] = useState(0);
+  /** How large a picture is asked for (its panel's 画质; a phone's is as its window is): another opens the view again. */
+  const quality: Quality = phone ? "auto" : usePrefs((p) => p.screenQuality) as Quality | undefined ?? "auto";
+  /** What came of the view: its panel reads the frames and bits a second from it. */
+  const meter = useRef<Meter>({ frames: 0, bytes: 0 });
   const [shown, setShown] = useState<Shown | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [drawn, setDrawn] = useState(false);
@@ -205,10 +211,14 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
     };
     void decodable().then((codecs) => {
       if (!open) return;
-      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize() }, (value, bytes) => {
+      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(quality) }, (value, bytes) => {
         if (!open) return;
         const v = value as { state?: ScreenViewState; config?: FrameConfig; frame?: FrameHead; clipboard?: { type?: string; text?: string } };
-        if (v.frame) frames.frame(v.frame, bytes);
+        if (v.frame) {
+          meter.current.frames++;
+          meter.current.bytes += bytes?.length ?? 0;
+          frames.frame(v.frame, bytes);
+        }
         else if (v.config) frames.config(v.config, bytes);
         else if (v.state) took(v.state);
         else if (v.clipboard) { const clip = clipOf(v.clipboard, bytes); if (clip) copiedThere(clip); }
@@ -226,7 +236,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
       abort.abort();
       frames.close();
     };
-  }, [station, screen, attempt, place, drawPointer]);
+  }, [station, screen, attempt, quality, place, drawPointer]);
 
   // What is done over the picture, while driving.
   useEffect(() => {
@@ -330,15 +340,22 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   const headline = OVER.has(phase) ? t(`web-pages.screen.over.${phase}`) : "";
   const why = [failure ?? shown?.message, access?.message].filter((w, i, all): w is string => !!w && w !== headline && all.indexOf(w) === i);
   // How this device reaches the station while it is seen: the way (直连, a relay), its round trip and packets lost,
-  // each in its colour as it gets worse (the station page's figures, the `stationNet` view).
+  // each in its colour as it gets worse (the station page's figures, the `stationNet` view). With a mouse they are the
+  // bar's own mark (NetChip); a phone says them in its head's line.
   const net = useStationNet(live ? station : null);
-  const netParts = net ? [<span key="path">{net.path}</span>, ...[net.rtt, net.loss].flatMap((f, i) => (f ? [<span key={i} className={css.figure} data-level={f.level}>{f.text}</span>] : []))] : [];
+  const netParts = phone && net ? [<span key="path">{net.path}</span>, ...[net.rtt, net.loss].flatMap((f, i) => (f ? [<span key={i} className={css.figure} data-level={f.level}>{f.text}</span>] : []))] : [];
   const meta = line || netParts.length ? <>{[...(line ? [<span key="line">{line}</span>] : []), ...netParts].flatMap((part, i) => (i ? [" · ", part] : [part]))}</> : null;
-  const windowTool = onWindow && !over ? (
-    <ViewerTool label={t("web-pages.screen.window")} onClick={onWindow}><External size={18} /></ViewerTool>
-  ) : null;
-  const sendTool = drop && !over ? (
-    <ViewerTool label={t("web-pages.screen.sendFile")} onClick={() => files.current?.click()}><Upload size={18} /></ViewerTool>
+  const os = useStationOs(station);
+  const sendCombo = (c: Combo) => {
+    for (const kind of ["down", "up"] as const) tell("screen.input", { view: view.current, input: { t: "key", kind, key: c.key, code: c.code, mods: c.mods } });
+  };
+  const viewTools = !over ? (
+    <>
+      {live && <NetChip net={net} shown={shown} meter={meter} os={os} />}
+      <ControlCenter quality={quality} onQuality={(q) => setPrefs({ screenQuality: q === "auto" ? null : q })}
+        combos={driving ? combosFor(os) : []} onCombo={sendCombo} onSend={drop ? () => files.current?.click() : undefined}
+        onWindow={onWindow} full={full} onFull={goFull} onLeave={onBack} />
+    </>
   ) : null;
   const modes = (
     <Tip label={cannot}>
@@ -478,7 +495,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
         </>
       ) : (
         <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={meta}
-          tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : <>{sendTool}{windowTool}{modes}</>} />
+          tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : <>{viewTools}{modes}</>} />
       )}
     </div>
   );
