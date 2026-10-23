@@ -60,7 +60,8 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
 
 ///|
 /// A page's head in the wide frame (pages.css.ts pageHead): back above it only on a page under another (`on_back` when
-/// it is said, else the page popped), the title, what it does at its end.
+/// it is said, else the page popped), the title (`about`: what the page is for, said by a mark beside it), what it
+/// does at its end.
 fn wide_head(
   c : @ui.Ctx,
   core : Core,
@@ -69,6 +70,7 @@ fn wide_head(
   trailing? : () -> Unit,
   inside? : Bool = false,
   on_back? : () -> Unit,
+  about? : String = "",
 ) -> Unit {
   let t = @sf.theme()
   // (inside a block of the page, which stands in already)
@@ -90,8 +92,11 @@ fn wide_head(
       }
     }
     c.box(style=title_line, fn() {
-      c.box(style=@sf.full_width, fn() {
+      c.box(style=if about == "" { @sf.full_width } else { title_about }, fn() {
         c.text(title, size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
+        if about != "" {
+          about_mark(c, "settings-about", about)
+        }
       })
       |> ignore
       match trailing {
@@ -122,6 +127,31 @@ let wide_back : @ui.Style = @ui.style(row=true, pb=S2, gap=S1, align=ACenter)
 /// A title and what is at its end, in a line (LargeTitle's lead and big word too).
 // kept across runs: a value (no field of it changes)
 let title_line : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+
+///|
+/// A title with what it is for beside it.
+// kept across runs: a value (no field of it changes)
+let title_about : @ui.Style = @sf.full_width.then(@ui.style(row=true, gap=S1_5, align=ACenter))
+
+///|
+/// What a thing is, said when the pointer rests on a quiet mark beside it (parts.tsx About, own.css.ts about: a 20
+/// circle, its ⓘ 14 in the subtle ink, the words' under the pointer; what it says in a tip under it).
+fn about_mark(c : @ui.Ctx, key : String, words : String) -> Unit {
+  let t = @sf.theme()
+  let id = c.id(key)
+  let b = c.box(style=about_box, id~, fn() {
+    @sf.icon(c, "info", size=about_icon, color=if c.hovered(id) { t.p.text } else { t.p.subtle }) |> ignore
+  })
+  c.semantics(b, Button, id~, label=tr("web-main.about"))
+  @kit.tooltip(c, key + "/tip", id, words, side=Bottom) |> ignore
+}
+
+///|
+let about_icon : Double = 14.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let about_box : @ui.Style = @ui.style(w=S5, h=S5, radius=Full, align=ACenter, justify=JCenter)
 
 ///|
 /// A gap of `h` (Spacer).
@@ -286,6 +316,7 @@ fn place_page(
   back? : String = tr("android-settings.title"),
   actions? : () -> Unit,
   primary? : (String, () -> Unit),
+  about? : String = "",
 ) -> Unit {
   c.box(style=page_fill, fn() {
     let under_bar = top_room() > 0.0
@@ -294,7 +325,7 @@ fn place_page(
     if wide.val && at_root.val && !under_bar {
       match frame_core.val {
         Some(core) =>
-          wide_head(c, core, "", title, trailing=fn() {
+          wide_head(c, core, "", title, about~, trailing=fn() {
             match actions {
               Some(a) => a()
               None => ()
