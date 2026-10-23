@@ -7,7 +7,11 @@
 # (nothing points at them yet: --files); the station's, named the same each time, and every feed, once the check
 # passed (.github/workflows/pipeline.yml, put). --files takes each file it put out of the directory, leaving the feeds
 # for the put after.
-#   release-put.sh [--files | --feeds] <dir>…
+# --stage (the station's job, on mini1): its files put in the bucket at once all the same, under staged/<when>-<commit>/,
+# not carried to the put in a run artifact (that went up through the proxy mini1's DNS sends GitHub to, 40 MB a release,
+# 2026-10-23): each left in the directory as <name>.staged, saying where it is. A put finding one takes the file back
+# from there first, and deletes it there once all is put (scripts/release-prune.ts deletes what stays after two days).
+#   release-put.sh [--files | --feeds | --stage] <dir>…
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 
@@ -45,6 +49,28 @@ put() {
   done
   return 1
 }
+# get <name in the bucket> <file>, and drop <name in the bucket>: as put, through Cloudflare's API or wrangler.
+api_get() {
+  [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ] || return 1
+  # shellcheck disable=SC2086 # direct is words
+  curl $direct -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -o "$2" \
+    "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1"
+}
+get() {
+  for try in 1 2 3; do
+    { api_get "$@" || (cd "$root/cloud" && pnpm exec wrangler r2 object get "stillfail-releases/$1" --file "$2" --remote >/dev/null); } && return 0
+    [ $try = 3 ] || { echo "getting $1 failed (try $try), trying again" >&2; sleep 15; }
+  done
+  return 1
+}
+drop() {
+  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ]; then
+    # shellcheck disable=SC2086 # direct is words
+    curl $direct -fsS -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+      "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > /dev/null && return 0
+  fi
+  (cd "$root/cloud" && pnpm exec wrangler r2 object delete "stillfail-releases/$1" --remote >/dev/null)
+}
 type_of() {
   case $1 in
     *.json) echo application/json ;;
@@ -63,9 +89,37 @@ pass_of() { case $1 in node/*) echo node ;; *) if feed "$1"; then echo feeds; el
 
 passes="node files feeds"
 taken=""
-case "${1:-}" in --files) passes="node files"; taken=yes; shift ;; --feeds) passes=feeds; shift ;; esac
+case "${1:-}" in
+  --files) passes="node files"; taken=yes; shift ;;
+  --feeds) passes=feeds; shift ;;
+  --stage)
+    shift
+    stage="staged/$(date -u +%s)-${GITHUB_SHA:-$(git -C "$root" rev-parse HEAD)}"
+    for dir in "$@"; do
+      [ -d "$dir" ] || { echo "no releases in $dir" >&2; exit 1; }
+      pids=""
+      for name in $(cd "$dir" && find . -type f ! -name '*.staged' | sed 's|^\./||' | sort); do
+        if feed "$name"; then continue; fi
+        { put "$stage/$name" "$dir/$name" "$(type_of "$name")" && printf '%s\n' "$stage/$name" > "$dir/$name.staged" && rm "$dir/$name"; } &
+        pids="$pids $!"
+      done
+      for pid in $pids; do wait "$pid" || { echo "not all of $dir was staged" >&2; exit 1; }; done
+    done
+    exit 0 ;;
+esac
+# The files staged before (--stage), taken back first (by a put of the files: --feeds leaves them).
+staged=""
 for dir in "$@"; do
   [ -d "$dir" ] || { echo "no releases in $dir" >&2; exit 1; }
+  case $passes in *files*) ;; *) continue ;; esac
+  for marker in $(cd "$dir" && find . -type f -name '*.staged' | sed 's|^\./||' | sort); do
+    key=$(cat "$dir/$marker")
+    get "$key" "$dir/${marker%.staged}" || { echo "could not get $key back" >&2; exit 1; }
+    rm "$dir/$marker"; staged="$staged $key"
+    echo "got ${marker%.staged} back from $key"
+  done
+done
+for dir in "$@"; do
   names=$(cd "$dir" && find . -type f | sed 's|^\./||' | sort)
   for pass in $passes; do
     pids=""
@@ -77,3 +131,4 @@ for dir in "$@"; do
     for pid in $pids; do wait "$pid" || { echo "not all of $dir was put" >&2; exit 1; }; done
   done
 done
+for key in $staged; do drop "$key" || echo "deleting $key failed: scripts/release-prune.ts deletes it in two days" >&2; done
