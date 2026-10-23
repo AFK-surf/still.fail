@@ -243,7 +243,7 @@ fn fdrag_target(
 ///|
 /// Each frame of the files' page, before it is built: the drag moved on or let go, files from outside held or let go,
 /// those read going up, the target under the pointer.
-fn fdrag_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+fn fdrag_frame(c : @ui.Ctx, src : Source, w : Workspace, outside? : Bool = true) -> Unit {
   if fdrag.frame == c.frame_number() {
     return
   }
@@ -269,8 +269,8 @@ fn fdrag_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
     _ => if !down { fdrag.press = None }
   }
-  // files from the computer let go: read as a pick's, then up into the folder they were let go on
-  while true {
+  // files from the computer let go: read as a pick's, then up into the folder they were let go on (on the files' page)
+  while outside {
     match @ui.take_drop() {
       Some((x, y, pick)) =>
         match fdrag_at(c, x, y) {
@@ -284,7 +284,8 @@ fn fdrag_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   for d in fdrag.dropped {
     let (pick, into) = d
     match pick.files() {
-      Some(files) => fdrag_put_up(src, into, files)
+      // (up once the frame's builds are over)
+      Some(files) => c.after_build("files-put-up", fn() { fdrag_put_up(src, into, files) })
       None => still.push(d)
     }
   }
