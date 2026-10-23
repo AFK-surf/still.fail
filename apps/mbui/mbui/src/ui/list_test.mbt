@@ -79,9 +79,9 @@ test "list: rows far smaller than the estimate fill the first frame" {
   let (first, last) = t.visible()
   assert_true(first == 0 && last >= 133)
   t.check_rows(0.0, 400.0)
-  // the first frame lays them out, and builds the view again in it over the rows in view as they are now told (what
-  // it read of them first was from before they were laid out)
-  assert_eq(frames[0], 2)
+  // the first frame lays them out, built once: the view read nothing of the list (what reads its rows in view is built
+  // again from them in that frame: readback_test)
+  assert_eq(frames[0], 1)
   assert_eq(t.ctx().frame_number(), 1)
 }
 

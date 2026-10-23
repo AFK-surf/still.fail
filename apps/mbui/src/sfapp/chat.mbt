@@ -750,7 +750,9 @@ fn messages(
       }
       _ => ()
     }
-    let info = c.list_info(key)
+    // (read back by what the page builds from it: not at every step of a scroll, which changes none of that)
+    let asks_shown = !(v.archived || v.thread is None) && v.asks.length() > 0
+    let info = c.list_info_as(key, fn(i) { list_made(i, n, asks_shown) })
     // near the top: the page before comes in, once per page
     match (info, v.thread) {
       (Some(i), Some(thread)) if v.more && rd.placed && i.first >= 0 && i.first <= 3 => {
@@ -823,65 +825,12 @@ fn messages(
       None => false
     }
     rd.at_end = seen
-    // the last message wholly in view, between the bar and the composer, while it is not short of the chat's end:
-    // read up to there (a message shown whole on a page in front is read), its end seen or not
-    match (info, c.list_place(key)) {
-      (Some(i), Some((first, past, _))) if i.first >= 0 && !v.newer => {
-        let top = status_top() + chat_bar_h
-        let foot = i.height - composer_room_for(c, draft_key(r), Some(v))
-        let mut y = -past
-        let mut k = first
-        while k <= i.last && k < n {
-          let h = c.list_row_height(key, k).unwrap_or(0.0)
-          match list[k] {
-            Said(m) if y >= top - 0.5 && y + h <= foot + 0.5 && m.seq > rd.seen_whole => rd.seen_whole = m.seq
-            _ => ()
-          }
-          y = y + h
-          k = k + 1
-        }
-      }
-      _ => ()
-    }
-    rd.top_seq = match info {
-      Some(i) if i.first >= 0 => {
-        let mut k = i.first
-        while k < n && !(list[k] is Said(_)) {
-          k = k + 1
-        }
-        match list.get(k) {
-          Some(Said(m)) => m.seq
-          _ => -1.0
-        }
-      }
-      _ => -1.0
-    }
-    rd.bottom_seq = match info {
-      Some(i) if i.first >= 0 => {
-        let mut k = if i.last < n { i.last } else { n - 1 }
-        while k >= 0 && !(list[k] is Said(_)) {
-          k = k - 1
-        }
-        match list.get(k) {
-          Some(Said(m)) => m.seq
-          _ => -1.0
-        }
-      }
-      _ => -1.0
-    }
-    // that message's top, below the list's (the first row in view scrolled past its top, the rows over it)
-    rd.top_off = match (info, c.list_place(key)) {
-      (Some(i), Some((first, past, _))) if i.first >= 0 => {
-        let mut y = -past
-        let mut k = first
-        while k < n && !(list[k] is Said(_)) {
-          y = y + c.list_row_height(key, k).unwrap_or(0.0)
-          k = k + 1
-        }
-        y
-      }
-      _ => 0.0
-    }
+    // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
+    // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
+    let lr = c.list_reader(key)
+    let top = status_top() + chat_bar_h
+    let room = composer_room_for(c, draft_key(r), Some(v))
+    c.after_build("reading", fn() { read_place(rd, v, list, lr, top, room) })
     // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
     // from memory never leaves the page)
     rd.scale = c.scale
@@ -1214,6 +1163,110 @@ fn sent_local_gone(rk : String, key : String) -> Unit {
 }
 
 ///|
+/// What the chat's page builds from where its list is (messages): whether it is laid out, near its top (the page
+/// before asked for) or its end (the page after), at its end, away from it (the way to the newest), and, while asks
+/// wait, the rows in view (the bell over them). A scroll changing none of that builds nothing again.
+priv struct ListMade {
+  laid : Bool
+  near_top : Bool
+  near_end : Bool
+  at_end : Bool
+  away : Bool
+  rows : (Int, Int)
+} derive(Eq)
+
+///|
+fn list_made(info : @ui.ListInfo?, n : Int, asks : Bool) -> ListMade {
+  match info {
+    Some(i) =>
+      {
+        laid: i.first >= 0,
+        near_top: i.first >= 0 && i.first <= 3,
+        near_end: i.last >= n - 4,
+        at_end: i.at_end,
+        away: i.first >= 0 && i.below > 120.0 && !i.gliding,
+        rows: if asks { (i.first, i.last) } else { (0, 0) },
+      }
+    None => { laid: false, near_top: false, near_end: false, at_end: false, away: false, rows: (0, 0) }
+  }
+}
+
+///|
+/// Whether the list follows its end (at it, gliding to it, a row followed): what the rows coming in are built from.
+fn follows(info : @ui.ListInfo?) -> Bool? {
+  match info {
+    Some(i) => Some(i.at_end || i.gliding || i.following_row)
+    None => None
+  }
+}
+
+///|
+/// Where the reader is, as the list stands once the frame's builds are over (messages): the last message wholly in view
+/// between the bar (`top`) and the composer (`room` over the list's foot), while the window is not short of the chat's
+/// end (read up to there: a message shown whole on a page in front is read, its end seen or not); the first and the
+/// last message in view, and how far the first's top is below the list's.
+fn read_place(rd : Reading, v : ChatView, list : Array[Entry], lr : @ui.ListReader, top : Double, room : Double) -> Unit {
+  let n = list.length()
+  let info = lr.info()
+  match (info, lr.place()) {
+    (Some(i), Some((first, past, _))) if i.first >= 0 && !v.newer => {
+      let foot = i.height - room
+      let mut y = -past
+      let mut k = first
+      while k <= i.last && k < n {
+        let h = lr.row_height(k).unwrap_or(0.0)
+        match list[k] {
+          Said(m) if y >= top - 0.5 && y + h <= foot + 0.5 && m.seq > rd.seen_whole => rd.seen_whole = m.seq
+          _ => ()
+        }
+        y = y + h
+        k = k + 1
+      }
+    }
+    _ => ()
+  }
+  rd.top_seq = match info {
+    Some(i) if i.first >= 0 => {
+      let mut k = i.first
+      while k < n && !(list[k] is Said(_)) {
+        k = k + 1
+      }
+      match list.get(k) {
+        Some(Said(m)) => m.seq
+        _ => -1.0
+      }
+    }
+    _ => -1.0
+  }
+  rd.bottom_seq = match info {
+    Some(i) if i.first >= 0 => {
+      let mut k = if i.last < n { i.last } else { n - 1 }
+      while k >= 0 && !(list[k] is Said(_)) {
+        k = k - 1
+      }
+      match list.get(k) {
+        Some(Said(m)) => m.seq
+        _ => -1.0
+      }
+    }
+    _ => -1.0
+  }
+  // that message's top, below the list's (the first row in view scrolled past its top, the rows over it)
+  rd.top_off = match (info, lr.place()) {
+    (Some(i), Some((first, past, _))) if i.first >= 0 => {
+      let mut y = -past
+      let mut k = first
+      while k < n && !(list[k] is Said(_)) {
+        y = y + lr.row_height(k).unwrap_or(0.0)
+        k = k + 1
+      }
+      y
+    }
+    _ => 0.0
+  }
+}
+
+///|
 /// The rows in the list and their keys, as they move (a message sent from here keeps its outbox row's: Chat.kt
 /// sentAs), and which are new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt
 /// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) comes in its turn
@@ -1323,7 +1376,7 @@ fn row_keys(
       rd.act_whole.remove(k) |> ignore
     }
   }
-  let info = c.list_info(key)
+  let info = c.list_info_as(key, follows)
   let following = match info {
     Some(i) => i.at_end || i.gliding || i.following_row
     None => true
@@ -1418,7 +1471,7 @@ fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Array[St
     }
   }
   let newest = if at >= 0 { keys[at] } else { "" }
-  let following = match c.list_info(key) {
+  let following = match c.list_info_as(key, follows) {
     Some(i) => i.at_end || i.gliding || i.following_row
     None => false
   }
