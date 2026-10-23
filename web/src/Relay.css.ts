@@ -50,3 +50,5 @@ export const unread = style({ margin: "0", padding: "4px 8px", fontSize: vars.te
 export const empty = style({ margin: "0", padding: "4px 8px", fontSize: vars.textMeta, color: vars.muted });
 export const noteField = style({ display: "grid", gap: "6px" });
 export const noteLabel = style({ fontSize: vars.textMeta, color: vars.muted });
+/** Which bot the agent speaks through there, under the place picked. */
+export const via = style({ margin: "0 10px", fontSize: vars.textMeta, color: vars.muted });

@@ -113,7 +113,10 @@ internal fun openRelay(app: AppState, station: String, thread: Long) {
             val shown = read
             when {
                 link != null -> PlaceRow(null, t("web-main.relay.thread"), null, t("web-main.relay.kind.thread"), on = true) {}
-                chosen != null -> PlaceRow(markOf(chosen.connect), placeName(chosen.place), workspace(chosen.connect, (read as? Places.Ok)?.connects.orEmpty()), "${kindNote(chosen.place)} · ${t("web-main.relay.change")}", on = true) { picked = null }
+                chosen != null -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PlaceRow(markOf(chosen.connect), placeName(chosen.place), workspace(chosen.connect, (read as? Places.Ok)?.connects.orEmpty()), "${kindNote(chosen.place)} · ${t("web-main.relay.change")}", on = true) { picked = null }
+                    Text(t("web-main.relay.via", "bot" to chosen.connect.name), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp))
+                }
                 shown is Places.Reading -> WaitLine(t("web-main.relay.reading"))
                 shown is Places.Failed -> Text(shown.error, fontSize = 13.sp, color = C.red)
                 shown is Places.Ok && shown.connects.isEmpty() -> Text(t("web-main.relay.noConnects"), fontSize = 13.sp, color = C.muted)

@@ -21,6 +21,12 @@ const CONNECTS: RelayConnect[] = [
   { id: "lk", kind: "lark", name: "Codex", team: "Cue Global", places: [], error: "missing_scope: im:chat:readonly" },
 ];
 
+/** One Slack workspace whose only bots run another runtime than the chat's agent: the station offers both (docs/relay.md). */
+export const TWO_BOTS: RelayConnect[] = [
+  { id: "cl", kind: "slack", name: "claude", team: "AFK AI", places: CONNECTS[0]!.places },
+  { id: "cx", kind: "slack", name: "codex", team: "AFK AI", places: CONNECTS[0]!.places.slice(0, 5) },
+];
+
 /** The dialog's calls, with `connects` as the station's. */
 export function relayDemo(connects: RelayConnect[] = CONNECTS): DemoExtension {
   return {

@@ -242,7 +242,7 @@ fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit 
   }
   match (link, chosen) {
     (Some(_), _) => parts.push(Picked("", None, tr("web-main.relay.kind.thread"), false))
-    (None, Some((conn, p))) =>
+    (None, Some((conn, p))) => {
       parts.push(
         Picked(
           relay_place_name(p),
@@ -251,6 +251,8 @@ fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit 
           true,
         ),
       )
+      parts.push(Note(fill("web-main.relay.via", [("bot", text(Some(conn), "name"))])))
+    }
     (None, None) =>
       match relaying.read {
         0 => parts.push(Reading)

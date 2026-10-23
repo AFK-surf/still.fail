@@ -30,6 +30,7 @@ let zh : Map[String, String] = {
   "web-main.relay.title": "接力到频道",
   "web-main.relay.unread": "读取失败：{error}",
   "web-main.relay.verb": "接力",
+  "web-main.relay.via": "那里由 {bot} 回复",
   "web-main.relay.workspaces": "在哪个 workspace 里找",
   "common.link.open": "打开链接",
   "common.link.copy": "复制链接",

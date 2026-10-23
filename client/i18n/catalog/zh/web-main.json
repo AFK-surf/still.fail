@@ -764,5 +764,6 @@
   "web-main.relay.workspaces": "在哪个 workspace 里找",
   "web-main.relay.allWorkspaces": "全部",
   "web-main.relay.change": "更换",
+  "web-main.relay.via": "那里由 {bot} 回复",
   "web-main.relay.goTo": "接力到 {place}"
 }

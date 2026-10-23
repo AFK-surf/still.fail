@@ -839,5 +839,6 @@
   "web-main.relay.workspaces": "Workspaces to look in",
   "web-main.relay.allWorkspaces": "All",
   "web-main.relay.change": "Change",
+  "web-main.relay.via": "{bot} replies there",
   "web-main.relay.goTo": "Relay to {place}"
 }

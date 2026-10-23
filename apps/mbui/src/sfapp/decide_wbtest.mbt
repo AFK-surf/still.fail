@@ -320,6 +320,7 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
   t.tap_text("#dev")
   assert_true(t.find("接力到 #dev") is Some(_))
   assert_true(t.find("开头附一句（可选）") is Some(_))
+  assert_true(t.find("那里由 星火助手 回复") is Some(_))
   t.tap_text("接力到 #dev")
   let relayed = named(calls, "chat.relay")
   assert_eq(relayed.length(), 1)
