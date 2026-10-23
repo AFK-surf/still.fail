@@ -15,9 +15,9 @@
     "texts_left": 3
   },
   "home": {
-    "left": 17279,
+    "left": 11977,
     "why": "not yet as Android's: words up to three pixels apart down the list (the rows' second lines, the days' headings) and the top bar a pixel shorter, its hairline with it, where Compose rounds each padding and height to whole pixels on the way down (8 + 34 + 8, 14, 22, 20), which mbui does not yet; the marks', icons' and faces' edges a pixel apart; words compared by where they stand (their boxes out of the pixels)",
-    "texts_left": 21,
+    "texts_left": 20,
     "regions": [
       {
         "x": 16,
