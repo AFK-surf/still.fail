@@ -173,7 +173,7 @@ jobs:
             apps/mbui/out/core
             apps/mbui/_build/.macos-min
             ~/Library/Caches/stillfail-build
-          key: mbui-core-mac-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/src/host/apple_core.mm', 'apps/mbui/src/host/electron_sealed.h', 'apps/mbui/src/host/core_api.h') }}
+          key: mbui-core-mac-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/src/host/apple_core.mm', 'apps/mbui/src/host/apple_collate.h', 'apps/mbui/src/host/electron_sealed.h', 'apps/mbui/src/host/core_api.h') }}
       - name: Tools (Rust's target, the core's packages)
         run: |
           sh apps/mbui/scripts/mbui.sh > /dev/null
@@ -242,7 +242,7 @@ jobs:
           path: |
             apps/mbui/out/core
             ~/Library/Caches/stillfail-build
-          key: mbui-core-ios-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/src/host/apple_core.mm', 'apps/mbui/src/host/electron_sealed.h', 'apps/mbui/src/host/core_api.h') }}
+          key: mbui-core-ios-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/src/host/apple_core.mm', 'apps/mbui/src/host/apple_collate.h', 'apps/mbui/src/host/electron_sealed.h', 'apps/mbui/src/host/core_api.h') }}
       - name: Tools (Rust's target, the core's packages)
         run: |
           rustup target add aarch64-apple-ios > /dev/null
