@@ -38,6 +38,10 @@ typedef struct {
   /// Called first on the core's thread, before Hermes runs anything there: on Android the host attaches it to the VM,
   /// as Hermes answers String's normalize, Intl and the rest in Java through it. May be NULL.
   void (*thread)(void *ctx);
+  /// A call only the app answers, at once (`text.collate`: the order people read names in, its system's): the answer's
+  /// JSON (UTF-8, NUL-terminated, malloc'd: the engine frees it), or NULL for the shell's answer. Called on the core's
+  /// thread. May be NULL.
+  char *(*app_sync)(void *ctx, const char *op, const char *json, size_t len);
 } sf_engine_host;
 
 /// Starts a core: its script (Hermes bytecode or source; copied), named `script_url` in its stack traces, its files in
