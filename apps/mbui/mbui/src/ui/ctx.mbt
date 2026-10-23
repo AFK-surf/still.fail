@@ -804,17 +804,17 @@ pub fn Ctx::box(
   // margins as the padding: one side said over both, both over all four, said here over the style's (below 0 too)
   let mx = first(mx, m)
   let my = first(my, m)
-  let sm_x = opt_px(first(st.mx, st.m))
-  let sm_y = opt_px(first(st.my, st.m))
-  n.mar_l = first(ml, first(mx, first(opt_px(st.ml), sm_x))).unwrap_or(0.0)
-  n.mar_r = first(mr, first(mx, first(opt_px(st.mr), sm_x))).unwrap_or(0.0)
+  let sm_x = opt_margin(first(st.mx, st.m))
+  let sm_y = opt_margin(first(st.my, st.m))
+  n.mar_l = first(ml, first(mx, first(opt_margin(st.ml), sm_x))).unwrap_or(0.0)
+  n.mar_r = first(mr, first(mx, first(opt_margin(st.mr), sm_x))).unwrap_or(0.0)
   if n.rtl {
     let l = n.mar_l
     n.mar_l = n.mar_r
     n.mar_r = l
   }
-  n.mar_t = first(mt, first(my, first(opt_px(st.mt), sm_y))).unwrap_or(0.0)
-  n.mar_b = first(mb, first(my, first(opt_px(st.mb), sm_y))).unwrap_or(0.0)
+  n.mar_t = first(mt, first(my, first(opt_margin(st.mt), sm_y))).unwrap_or(0.0)
+  n.mar_b = first(mb, first(my, first(opt_margin(st.mb), sm_y))).unwrap_or(0.0)
   n.at_l = left.unwrap_or(0.0 / 0.0)
   n.at_t = top.unwrap_or(0.0 / 0.0)
   n.at_r = right.unwrap_or(0.0 / 0.0)
@@ -906,6 +906,14 @@ fn said(v : Double?) -> Double? {
   match v {
     Some(x) if x >= 0.0 => v
     _ => None
+  }
+}
+
+///|
+fn opt_margin(v : Space?) -> Double? {
+  match v {
+    Some(v) => Some(v.margin_px())
+    None => None
   }
 }
 

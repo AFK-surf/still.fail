@@ -39,7 +39,10 @@ pub fn page(
 /// The desktop's pages ported from the web's onto the library's parts (desk_page.mbt): their words in the library's
 /// sizes, as the web's, not the wide scale taken down for the pages still made of the phone's parts.
 fn desk_ported(route : Route) -> Bool {
-  route is Notifications
+  match route {
+    Notifications | Permissions | Archiving | StationArchiving(_) => true
+    _ => false
+  }
 }
 
 ///|

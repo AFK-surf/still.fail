@@ -73,6 +73,7 @@ fn wide_head(
   inside? : Bool = false,
   on_back? : () -> Unit,
   about? : String = "",
+  lead? : String = "",
 ) -> Unit {
   let t = @sf.theme()
   head_block.val = block_at.val
@@ -108,9 +109,21 @@ fn wide_head(
       }
     })
     |> ignore
+    // what the page is for, said under its title (pageHead's p: 6 under it, the ui's 13 muted)
+    if lead != "" {
+      c.box(style=wide_head_lead_box, fn() { c.text(lead, style=wide_head_lead) |> ignore }) |> ignore
+    }
   })
   |> ignore
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_head_lead_box : @ui.Style = @ui.style(w=Full, pt=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_head_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
 
 ///|
 /// Which of a wide page's blocks is being laid out (-1: none, outside its list), and which drew its head (-1: a head
@@ -423,12 +436,19 @@ let root_body : @ui.Style = page_fill.then(@ui.style(pt=S2))
 ///|
 /// A page's large title (Parts.kt LargeTitle): `small`'s line over the big word when it is said, the word after `lead`
 /// when there is one (a workspace's mark). (LargeTitle's letterSpacing -0.6sp: mbui's words have no spacing.)
-fn large_title(c : @ui.Ctx, big : String, small? : String = "", lead? : () -> Unit, about? : String = "") -> Unit {
+fn large_title(
+  c : @ui.Ctx,
+  big : String,
+  small? : String = "",
+  lead? : () -> Unit,
+  about? : String = "",
+  says? : String = "",
+) -> Unit {
   if wide.val {
     ignore(lead)
     match frame_core.val {
       Some(core) =>
-        wide_head(c, core, top_label.val, big, trailing?=top_trailing.val, inside=true, on_back?=top_on_back.val, about~)
+        wide_head(c, core, top_label.val, big, trailing?=top_trailing.val, inside=true, on_back?=top_on_back.val, about~, lead=says)
       None => ()
     }
     top_trailing.val = None
