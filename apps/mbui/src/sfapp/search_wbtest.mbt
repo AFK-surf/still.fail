@@ -168,42 +168,34 @@ test "nothing found; still being looked for, what could not be, what the core sa
 }
 
 ///|
-test "a file found: where it opens by its kind (Search.kt fileScreen)" {
+test "what was found opens where the core says (SearchItem.open): a file read, a service its chat and its page, a station its page" {
+  reset()
   let base : FoundItem = {
     kind: "file",
     key: "f",
     station: "s",
-    station_name: "",
+    station_name: "S",
     station_emoji: "",
     station_icon: "",
     title: "",
     text: "",
     marks: [],
-    chat: None,
-    chat_title: "",
-    job: None,
-    port: false,
-    path: Some("/a/b/c.txt"),
-    root: None,
-    rel: None,
+    chat_title: "那个对话",
     dir: false,
-    file_kind: "text",
     ago: "",
+    open: Some({ to: "files", station: "s", chat: None, job: None, root: Some("/a/b"), path: "c.txt", how: "read" }),
   }
-  assert_true(file_page(base) == Some(DriveRead({ station: "s", root: Some("/a/b"), path: "c.txt" })))
-  assert_true(file_page({ ..base, dir: true }) == Some(Drive({ station: "s", root: Some("/a/b/c.txt"), path: "" })))
-  assert_true(
-    file_page({ ..base, file_kind: "image" }) == Some(Drive({ station: "s", root: Some("/a/b"), path: "" })),
-  )
-  // found under a folder pinned: from it
-  assert_true(
-    file_page({ ..base, root: Some("/a"), rel: Some("b/c.txt"), file_kind: "video" }) ==
-    Some(DrivePlay({ station: "s", root: Some("/a"), path: "b/c.txt" })),
-  )
-  assert_true(
-    file_page({ ..base, root: Some("/a"), rel: Some("b/c.txt"), file_kind: "pdf" }) ==
-    Some(Drive({ station: "s", root: Some("/a"), path: "b" })),
-  )
+  open_found(base)
+  assert_true(app.nav.top() == DriveRead({ station: "s", root: Some("/a/b"), path: "c.txt" }))
+  open_found({ ..base, open: Some({ to: "files", station: "s", chat: None, job: None, root: Some("/a"), path: "b", how: "" }) })
+  assert_true(app.nav.top() == Drive({ station: "s", root: Some("/a"), path: "b" }))
+  open_found({ ..base, open: Some({ to: "service", station: "s", chat: Some("k"), job: Some("j"), root: None, path: "", how: "" }) })
+  assert_true(app.nav.top() == Service("s", "j"))
+  open_found({ ..base, open: Some({ to: "station", station: "s", chat: None, job: None, root: None, path: "", how: "" }) })
+  assert_true(app.nav.top() == Setting(@settings.Station("s")))
+  // opening nowhere: where it was
+  open_found({ ..base, open: None })
+  assert_true(app.nav.top() == Setting(@settings.Station("s")))
 }
 
 ///|
