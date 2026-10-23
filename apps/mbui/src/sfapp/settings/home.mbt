@@ -227,46 +227,47 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         (core.push)(Workspace)
       }
     },
-    // who may do what: security mode and the vault, where the workspace has them
+    // who may do what: security mode, where the workspace has it, and the vault. Each row there from the first frame,
+    // its words once the core has said them: a row put in only then pushed the page under it down a row while it was
+    // looked at (security mode's taken out only where the core says there is none, still.fail's always has it)
     fn() {
-      if flag(lock, "available") || vaults is Some(_) {
-        list_card(c, fn() {
-          if flag(lock, "available") {
-            let attention = count(lock, "attention")
-            let said = if !flag(lock, "locked") {
-              tr("web-mobile.settings.securityOff")
-            } else if attention > 0 {
-              fill("web-mobile.settings.securityWaiting", [("n", attention.to_string())])
+      list_card(c, fn() {
+        if lock is None || flag(lock, "available") {
+          let attention = count(lock, "attention")
+          let said = if lock is None {
+            ""
+          } else if !flag(lock, "locked") {
+            tr("web-mobile.settings.securityOff")
+          } else if attention > 0 {
+            fill("web-mobile.settings.securityWaiting", [("n", attention.to_string())])
+          } else {
+            tr("web-mobile.settings.securityOn")
+          }
+          if go_row(c, "go-security", tr("web-pages.security.title"), value=said, bad=attention > 0, icon="shield-check") {
+            (core.push)(Security)
+          }
+        }
+        // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off
+        let n = items(vaults, "requests").length()
+        let said = match vaults {
+          None => ""
+          Some(_) =>
+            if n > 0 {
+              fill("android-settings.vault.waiting", [("n", n.to_string())])
+            } else if items(vaults, "vaults").length() > 0 {
+              let mut total = 0
+              for x in items(vaults, "vaults") {
+                total += count(Some(x), "items")
+              }
+              fill("android-settings.vault.items", [("n", total.to_string())])
             } else {
-              tr("web-mobile.settings.securityOn")
+              tr("android-settings.vault.off")
             }
-            if go_row(c, "go-security", tr("web-pages.security.title"), value=said, bad=attention > 0, icon="shield-check") {
-              (core.push)(Security)
-            }
-          }
-          // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off
-          match vaults {
-            Some(_) => {
-              let n = items(vaults, "requests").length()
-              let said = if n > 0 {
-                fill("android-settings.vault.waiting", [("n", n.to_string())])
-              } else if items(vaults, "vaults").length() > 0 {
-                let mut total = 0
-                for x in items(vaults, "vaults") {
-                  total += count(Some(x), "items")
-                }
-                fill("android-settings.vault.items", [("n", total.to_string())])
-              } else {
-                tr("android-settings.vault.off")
-              }
-              if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0, icon="key") {
-                (core.push)(Vault)
-              }
-            }
-            None => ()
-          }
-        })
-      }
+        }
+        if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0, icon="key") {
+          (core.push)(Vault)
+        }
+      })
     },
     // its stations and what they run: the chats' ways in and the agents' accounts
     fn() {

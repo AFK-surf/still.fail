@@ -75,6 +75,37 @@ test "settings: the account, the workspace's rows and how each stands, this devi
 }
 
 ///|
+/// How late a phone's core gives each topic's first value, in the test below (round_trip): well after a page has slid
+/// in (@ui.nav_push_ms).
+let core_late_ms : Double = 600.0
+
+///|
+test "settings: the vault's row there before the core has said how it stands, the page under it not moved when it does" {
+  reset()
+  // a phone's core: each topic's first value a while late (the lock's read on Home already, the vaults' first by
+  // settings)
+  let src = round_trip(fixture("settings"), core_late_ms)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=1600.0)
+  t.draw()
+  // Home, its topics one after another (the accounts, the workspaces, the workspace's)
+  t.run_for(core_late_ms * 5.0)
+  open_setting("home")
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  // in, the core yet to answer: the rows there, their words not yet
+  assert_true(t.find("1/2 在线") is None)
+  assert_true(t.find("安全") is Some(_))
+  assert_true(t.find("密钥") is Some(_))
+  let at = t.find("外观").unwrap()
+  // answered (the workspace's view, then what its stations say): what each says, nothing under them moved
+  t.run_for(core_late_ms * 3.0)
+  t.draw()
+  assert_true(t.find("1/2 在线") is Some(_))
+  assert_true(t.find("1 个待批准") is Some(_))
+  assert_eq(t.find("外观").unwrap(), at)
+}
+
+///|
 test "settings: 关于 says the build, as Android's versionName (0.1.<build>), its page the app's name before it; the line alone where the host has none" {
   for case in [(4566, "0.1.4566"), (0, "0.1")] {
     reset()
