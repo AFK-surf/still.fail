@@ -77,11 +77,17 @@ test("a_file_the_station_has_already_is_not_sent_again", async () => {
   const asked: J[] = [];
   let parts = 0;
   const requests = t.core.inner.stations.requests as J;
-  requests.uploadName = Object.getPrototypeOf(requests).uploadName;
+  // the content named as the core names it (the blob read, WebCrypto's digest: done off the host's clock, so its end is
+  // waited for here, not guessed by settling: run 39917135209 settled before it and found nothing up yet)
+  let done = () => {};
+  const named = new Promise<void>((resolve) => { done = resolve; });
+  const name = Object.getPrototypeOf(requests).uploadName;
+  requests.uploadName = async (...a: unknown[]) => { try { return await name.apply(requests, a); } finally { done(); } };
   (t.core.inner.stations.requests as J).uploadHave = (_addr: unknown, q: J) => { asked.push(q); return Effect.succeed({ name: q.name, path: "/u/kept.png", size: q.size }); };
   (t.core.inner.stations.requests as J).uploadPart = () => { parts++; return Effect.fail(new CoreError("upload", "not asked")); };
   await t.watch(1, "ws/st:k");
   call(t.core, t.ui, 101, "composer.add", { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "image.png", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])]) }] });
+  await named;
   await t.settle();
   assert.equal(v(t.values, 1).files[0].done.path, "/u/kept.png");
   assert.equal(parts, 0);
