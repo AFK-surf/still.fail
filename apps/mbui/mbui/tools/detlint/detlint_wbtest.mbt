@@ -547,6 +547,39 @@ test "host-import" {
 }
 
 ///|
+test "library-import" {
+  let cfg = Config::new(
+    @rjson.parse(
+      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"], "imports": ["mbui/", "moonbitlang/", "app/sf", "app/kept"]}}
+      ,
+    ) catch {
+      _ => panic()
+    },
+  )
+  // the library importing the app's pages, its core
+  assert_eq(
+    lint_of(
+      [("src/sf/moon.pkg", "import {\n  \"mbui/ui\",\n  \"app/pages\",\n  \"app/core\",\n}\n")],
+      rule="library-import",
+      cfg~,
+    ).length(),
+    2,
+  )
+  // the framework, the core library, what it is said to have; the app's pages may import anything
+  assert_eq(
+    lint_of(
+      [
+        ("src/sf/moon.pkg", "import {\n  \"mbui/ui\",\n  \"moonbitlang/core/json\",\n}\n\nimport { \"app/kept\" } for \"test\"\n"),
+        ("src/pages/moon.pkg", "import {\n  \"app/core\",\n  \"app/sf\",\n}\n"),
+      ],
+      rule="library-import",
+      cfg~,
+    ).length(),
+    0,
+  )
+}
+
+///|
 test "page-settle" {
   found(
     [

@@ -387,7 +387,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     c.id("chat-more"),
     side=Bottom,
     along=End,
-    look=fn(c, _, body) { wide_panel(c, 320.0, body) },
+    look=fn(c, _, body) { @sf.panel(c, w=Px(320.0), body) |> ignore },
     fn() { chat_info_rows(c, src, r, v) },
   )
   // (closed by what was pressed in it, or as a popover closes: Escape, a press outside)
@@ -399,7 +399,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     c.id("chat-jobs"),
     side=Bottom,
     along=End,
-    look=fn(c, _, body) { wide_panel(c, 360.0, body) },
+    look=fn(c, _, body) { @sf.panel(c, w=Px(360.0), body) |> ignore },
     fn() { jobs_rows(c, src, r) },
   )
   wide.jobs_open = wide.jobs_open && jobs.value
@@ -518,7 +518,7 @@ fn chat_info_rows(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit 
       c.box(style=info_inline, fn() {
         let people = if v.people.length() > 8 { v.people[:8].to_array() } else { v.people }
         if people.length() > 0 {
-          people_stack(c, src, people, 16.0, ring=panel_ground())
+          people_stack(c, src, people, 16.0, ring=@sf.panel_ground())
         }
         c.text(fill("android-chat.info.people.count", [("n", v.people.length().to_string())]), style=info_words_sm)
         |> ignore

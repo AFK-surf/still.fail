@@ -63,6 +63,7 @@ there a file's findings and exceptions together stay under their bar, so marking
 | `globals` | a top-level `let` of a Ref, Map, Array or struct in `globals.roots` that its package's `reset` / `reset_globals` / what `on_reset` is given (and what they call) does not name, nor says `// kept across runs: why` over it (still.fail's check of `mbui-reader-rest`) | put it back in reset |
 | `style-literal` | a number in a box's or words' look (`c.box(pad=12.0)`, `c.text(size=13.0)`, `c.row(gap=8.0)`), in `@ui.style(…)`, `patch`, `text_style`, `text_patch`, or an `Exact(…)` made outside the token files (`style.tokens` in detlint.json); not in tests | a token by name; an off-scale value named in the token file (docs/style.md) |
 | `box-loose` | a call to `box`, `row`, `column`, `layer`, `text`, `rich` that says its look loosely (`pad=`, `bg=`, `size=`, `color=`…); not in tests | `style=` a named style |
+| `library-import` | a package of an app's component library (detlint.json `library.roots`: still.fail's `src/sf`, as the web's `web/ui`) imports what is not the framework's nor listed in `library.imports`: the app's pages, its core, a station's, the cloud's | what the library needs of the app is given to it as the app starts (a function it sets: `@sf.set_shortcuts`); a page passes what it knows as an argument |
 | `style-exact` | every `Exact(…)` made (not the enums' declarations, nor a match's patterns), the token files' too; not in tests | a token on the theme's scale |
 
 ## How it reads MoonBit, and its limits

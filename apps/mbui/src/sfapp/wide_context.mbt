@@ -139,11 +139,11 @@ fn wide_context_menu(c : @ui.Ctx) -> Unit {
   }
   if entries.is_empty() {
     wide_context.open = false
-    wide_menu(c, "context-menu", false, 0, [], {}, context_menu_w) |> ignore
+    @sf.menu(c, "context-menu", false, 0, [], {}, context_menu_w) |> ignore
     return
   }
   let at = (wide_context.x, wide_context.y, 0.0, 0.0)
-  let m = wide_menu(c, "context-menu", true, 0, entries, {}, context_menu_w, offset=0.0, at~)
+  let m = @sf.menu(c, "context-menu", true, 0, entries, {}, context_menu_w, offset=0.0, at~)
   if !m.open {
     wide_context.open = false
   }

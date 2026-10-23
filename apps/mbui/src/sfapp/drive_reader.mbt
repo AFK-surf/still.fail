@@ -338,7 +338,7 @@ fn reader_view(c : @ui.Ctx, src : Source, at : DriveAt, r : TextReading, desk : 
   let bar_alone = fn() {
     match desk {
       Some(d) =>
-        if viewer_bar(c, "reader/bar", d.back, d.name, file_size(d.size), false, paper_viewer_ink(p, rule), fn() {  }) {
+        if viewer_bar(c, "reader/bar", d.back, d.name, @sf.file_size(d.size), false, paper_viewer_ink(p, rule), fn() {  }) {
           (d.go_back)()
         }
       None => reader_top_bar(c, p, dv_name(at.path), "", 1.0)
@@ -396,8 +396,8 @@ fn reader_view(c : @ui.Ctx, src : Source, at : DriveAt, r : TextReading, desk : 
           if r.of > 0 {
             c.text(
               fill("android-misc.drive.reader.loading.size", [
-                ("got", file_size(r.got.to_double())),
-                ("size", file_size(r.of.to_double())),
+                ("got", @sf.file_size(r.got.to_double())),
+                ("size", @sf.file_size(r.of.to_double())),
               ]),
               size=13.0,
               color=p.muted,
@@ -656,7 +656,7 @@ fn reader_book(
         ""
       },
       if novel.truncated {
-        fill("android-misc.drive.reader.truncated", [("size", file_size(max_novel_bytes.to_double()))])
+        fill("android-misc.drive.reader.truncated", [("size", @sf.file_size(max_novel_bytes.to_double()))])
       } else {
         ""
       },

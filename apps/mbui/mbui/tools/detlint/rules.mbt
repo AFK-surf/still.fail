@@ -6,7 +6,7 @@ let rule_names : Array[String] = [
   "host-import", "frame-wait", "at-rest-wait", "frame-count", "literal-time", "stable-mode",
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "build-effect",
-  "unsettled-ok", "host-delay",
+  "unsettled-ok", "host-delay", "library-import",
 ]
 
 ///|
@@ -37,6 +37,7 @@ let rule_words : Map[String, String] = {
   "style-exact": "a value off the theme's scale (Exact(…)), in a token file too: only goes down",
   "build-effect": "a view tells outside while it builds (a core's call, a host's effect): a frame is built again while what it read changes, and a build let go of tells all the same; say it in Ctx::after_build (once the frame's builds are over, as the last says it), or in the event's own handler",
   "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says its end): counted so the ones left only go",
+  "library-import": "a package of the app's component library (detlint.json `library`) imports what is not the framework's nor said to be its own (the app's pages, its core, a station's, the cloud's): what it needs of the app, the app gives it as it starts (a function it sets: @sf.set_shortcuts)",
   "host-delay": "a host does something a fixed time later (postDelayed, dispatch_after, SetTimer, setTimeout): do it on the event it waits for (a callback, a listener, the system's word); a time the app asked for (its wake) says so on its line (det-ok)",
 }
 

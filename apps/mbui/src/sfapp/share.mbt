@@ -702,7 +702,7 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
   }
   let head = if one { files[0].name } else { sh("android-settings.files.count", args=[("n", "\{files.length()}")]) }
   let under = if one {
-    file_size(size.to_double())
+    @sf.file_size(size.to_double())
   } else {
     files.map(fn(f) { f.name }).join(tr("web-main.list.separator"))
   }

@@ -1161,30 +1161,7 @@ fn kind_of(name : String) -> String {
   }
 }
 
-///|
-/// A file's size in words (Controls.kt fileSize).
-fn file_size(bytes : Double) -> String {
-  let kb = 1024.0
-  if bytes < kb {
-    "\{bytes.to_int()} B"
-  } else if bytes < kb * kb {
-    "\{(bytes / kb).round().to_int()} KB"
-  } else if bytes < kb * kb * kb {
-    one_decimal(bytes / kb / kb, 1) + " MB"
-  } else {
-    one_decimal(bytes / kb / kb / kb, 2) + " GB"
-  }
-}
 
-///|
-fn one_decimal(x : Double, places : Int) -> String {
-  let scale = if places == 2 { 100.0 } else { 10.0 }
-  let n = (x * scale).round().to_int()
-  let whole = n / scale.to_int()
-  let part = n % scale.to_int()
-  let digits = if places == 2 && part < 10 { "0\{part}" } else { "\{part}" }
-  "\{whole}.\{digits}"
-}
 
 ///|
 /// The box an image takes in the chat, known before it loads (ChatFiles.kt imageBox, MediaSize.kt mediaSize): its own
@@ -1452,7 +1429,7 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
       @sf.icon(c, "read", size=16.0, color=t.p.muted) |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(a.name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
-        c.text(file_size(a.size), size=11.0, color=t.p.muted, wrap=false, line=16.0)
+        c.text(@sf.file_size(a.size), size=11.0, color=t.p.muted, wrap=false, line=16.0)
         |> ignore
       })
       |> ignore
@@ -1476,7 +1453,7 @@ fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int) -> Unit {
     file_sheet(c, a.name)
     c.box(style=file_card_words, fn() {
       file_name_line(c, a.name)
-      c.text(file_size(a.size), style=file_card_meta) |> ignore
+      c.text(@sf.file_size(a.size), style=file_card_meta) |> ignore
     })
     |> ignore
   })

@@ -1102,8 +1102,8 @@ fn upload_row(
             let size = u.bytes.length()
             c.text(
               fill("android-misc.drive.upload.going", [
-                ("sent", file_size(u.sent.to_double())),
-                ("size", file_size(size.to_double())),
+                ("sent", @sf.file_size(u.sent.to_double())),
+                ("size", @sf.file_size(size.to_double())),
               ]),
               size=12.0,
               color=t.p.muted,

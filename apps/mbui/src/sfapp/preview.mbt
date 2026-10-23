@@ -1615,8 +1615,8 @@ fn file_progress(c : @ui.Ctx, got : (Double, Double?), sent : Double) -> Unit {
         c.rich(
           [
             @ui.span(before),
-            @ui.span(file_size(got.0), weight=600, color=t.p.text),
-            @ui.span(" / " + file_size(n) + after),
+            @ui.span(@sf.file_size(got.0), weight=600, color=t.p.text),
+            @ui.span(" / " + @sf.file_size(n) + after),
           ],
           style=file_progress_words,
         )
@@ -1664,7 +1664,7 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx) -> Unit {
         upper(v.file.name.view(start_offset=i + 1).to_owned())
       _ => ""
     }
-    let facts = if ext == "" { file_size(v.file.size) } else { file_size(v.file.size) + " · " + ext }
+    let facts = if ext == "" { @sf.file_size(v.file.size) } else { @sf.file_size(v.file.size) + " · " + ext }
     c.text(facts, size=13.0, color=t.p.muted, wrap=false) |> ignore
     c.box(pt=4.0, fn() {
       c.text(
@@ -3096,7 +3096,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
       c.box(w=Fill(1.0), h=Px(top), fn() {  })
       |> ignore
       if cut {
-        cut_line(c, pv_fill("android-chat.file.cut", [("size", file_size(show_limit.to_double()))]))
+        cut_line(c, pv_fill("android-chat.file.cut", [("size", @sf.file_size(show_limit.to_double()))]))
       }
     } else if i == count + 1 {
       c.box(w=Fill(1.0), h=Px(foot), fn() {  }) |> ignore

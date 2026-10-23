@@ -98,7 +98,7 @@ fn wide_head(
       c.box(style=if about == "" { @sf.full_width } else { title_about }, fn() {
         c.text(title, size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
         if about != "" {
-          about_mark(c, "settings-about", about)
+          @sf.about(c, "settings-about", about, label=tr("web-main.about"))
         }
       })
       |> ignore
@@ -145,26 +145,6 @@ let title_line : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter
 /// A title with what it is for beside it.
 // kept across runs: a value (no field of it changes)
 let title_about : @ui.Style = @sf.full_width.then(@ui.style(row=true, gap=S1_5, align=ACenter))
-
-///|
-/// What a thing is, said when the pointer rests on a quiet mark beside it (parts.tsx About, own.css.ts about: a 20
-/// circle, its ⓘ 14 in the subtle ink, the words' under the pointer; what it says in a tip under it).
-fn about_mark(c : @ui.Ctx, key : String, words : String) -> Unit {
-  let t = @sf.theme()
-  let id = c.id(key)
-  let b = c.box(style=about_box, id~, fn() {
-    @sf.icon(c, "info", size=about_icon, color=if c.hovered(id) { t.p.text } else { t.p.subtle }) |> ignore
-  })
-  c.semantics(b, Button, id~, label=tr("web-main.about"))
-  @kit.tooltip(c, key + "/tip", id, words, side=Bottom) |> ignore
-}
-
-///|
-let about_icon : Double = 14.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let about_box : @ui.Style = @ui.style(w=S5, h=S5, radius=Full, align=ACenter, justify=JCenter)
 
 ///|
 /// A gap of `h` (Spacer).

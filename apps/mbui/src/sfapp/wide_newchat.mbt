@@ -285,7 +285,7 @@ fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json
     let s = Some(s)
     @kit.menu_radio(text(s, "id"), text(s, "station") == address, label=text(s, "name"))
   })
-  let m = wide_menu(c, "new/stations", wide.station_menu, sid, entries, {}, 220.0)
+  let m = @sf.menu(c, "new/stations", wide.station_menu, sid, entries, {}, 220.0)
   if !m.open {
     wide.station_menu = false
   }

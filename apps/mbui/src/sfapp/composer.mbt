@@ -1215,7 +1215,7 @@ fn uploading_text(f : Pending) -> String {
   } else {
     fill("android-chat.file.uploading.part", [
       ("percent", "\{(f.sent.to_double() * 100.0 / f.size.to_double()).to_int()}"),
-      ("size", file_size(f.size.to_double())),
+      ("size", @sf.file_size(f.size.to_double())),
     ])
   }
 }
@@ -2637,7 +2637,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int, again? : Int = 0, closable?
               "" => text(Some(l), "url")
               site => site
             }
-          (None, None) => if busy { uploading_text(f) } else { file_size(f.size.to_double()) }
+          (None, None) => if busy { uploading_text(f) } else { @sf.file_size(f.size.to_double()) }
         },
         size=11.0,
         color=if f.error is Some(_) { t.p.red } else { t.p.muted },

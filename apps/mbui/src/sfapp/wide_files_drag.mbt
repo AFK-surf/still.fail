@@ -629,7 +629,7 @@ fn files_clash_dialog(c : @ui.Ctx) -> Unit {
             })
             |> ignore
             c.box(style=fpane_values_column, fn() {
-              let coming = if n.dir { tr("web-pages.files.folder") } else { file_size(n.size) }
+              let coming = if n.dir { tr("web-pages.files.folder") } else { @sf.file_size(n.size) }
               c.text(coming + " · " + n.station, style=fpane_fact_value) |> ignore
               let there = if n.there.dir { tr("web-pages.files.folder") } else { n.there.size_text }
               c.text(there + " · " + n.there.time_text, style=fpane_fact_value) |> ignore
@@ -914,7 +914,7 @@ fn files_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     id,
     side=Bottom,
     along=End,
-    look=fn(c, _, body) { wide_panel(c, ftransfers_w, body) },
+    look=fn(c, _, body) { @sf.panel(c, w=Px(ftransfers_w), body) |> ignore },
     fn() {
       c.box(style=ftransfers_head, fn() { c.text(tr("web-pages.files.transfers"), style=ftransfers_head_words) |> ignore })
       |> ignore
@@ -1020,7 +1020,7 @@ fn files_upload_row(c : @ui.Ctx, src : Source, u : DvUpload, entries : Array[DvE
         c.box(style=fupload_cell, fn() {
           fdrag_bar(c, fupload_bar, fupload_bar_done, if size > 0 { u.sent.to_double() / size.to_double() } else { 0.0 })
           c.text(
-            fill("web-pages.drive.uploading", [("sent", file_size(u.sent.to_double())), ("size", file_size(size.to_double()))]),
+            fill("web-pages.drive.uploading", [("sent", @sf.file_size(u.sent.to_double())), ("size", @sf.file_size(size.to_double()))]),
             style=files_cell_words,
           )
           |> ignore

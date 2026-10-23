@@ -183,7 +183,8 @@
       "src/host/mac_app.m": 2,
       "src/host/win_app.c": 1,
       "web/host.js": 1
-    }
+    },
+    "library-import": {}
   },
   "excused": {
     "frame-request": {},
@@ -214,6 +215,7 @@
     "style-exact": {},
     "build-effect": {},
     "unsettled-ok": {},
-    "host-delay": {}
+    "host-delay": {},
+    "library-import": {}
   }
 }

@@ -151,7 +151,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           side=Top,
           along=End,
           offset=6.0,
-          look=fn(c, _, body) { wide_panel(c, 320.0, body) },
+          look=fn(c, _, body) { @sf.panel(c, w=Px(320.0), body) |> ignore },
           fn() { open_jobs(c, src, w) },
         )
         rail_ws.jobs_open = p.value
@@ -414,7 +414,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
             }
           })
           c.semantics(b, Button, id=back, label=fill("web-pages.archive.restoreNamed", [("title", title)]))
-          @kit.tooltip(c, "side/archived-back-tip/" + key, back, tr("web-pages.archive.restore")) |> ignore
+          @sf.tip(c, "side/archived-back-tip/" + key, back, tr("web-pages.archive.restore"))
           if flag(v, "deletable") {
             c.cursor(drop, Hand)
             if c.clicked(drop) && !busy {
@@ -748,7 +748,7 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     along=Start,
     offset=rail_adder_off,
     at=(0.0, rail_menu_clear, rail_w, 0.0),
-    look=fn(c, _, body) { wide_panel(c, rail_adder_w, fn() { c.box(style=adder_body, body) |> ignore }) },
+    look=fn(c, _, body) { @sf.panel(c, w=Px(rail_adder_w), fn() { c.box(style=adder_body, body) |> ignore }) |> ignore },
     fn() {
       c.box(style=adder_head, fn() {
         c.text(tr("web-main.rail.customize"), style=adder_title) |> ignore
