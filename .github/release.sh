@@ -33,11 +33,9 @@ case "${1:?usage: release.sh station|android|modules}" in
     mkdir -p "$dir/android"
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$dir/android/debug.keystore"
     export ANDROID_USER_HOME="$dir/android"
+    # (scripts/release.sh verifies the APK, the Kotlin stable's or mbui's beta, and that it is signed with studio's key
+    # before putting it, and prints the certificate)
     sh scripts/release.sh ${beta:+$beta} android
-    apk=apps/android/app/build/outputs/apk/release/app-release.apk
-    # The certificate it was signed with: the same SHA-256 every time (studio's key). (scripts/release.sh verified it
-    # before uploading it; a certificate not printed fails the release too.)
-    "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner" verify --print-certs "$apk" | grep -i "SHA-256"
     ;;
   modules)
     # The modules' packages (scripts/module-bundle.ts): plain files, signed; nothing of the machine's in them. Each

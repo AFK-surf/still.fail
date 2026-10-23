@@ -51,6 +51,7 @@ jobs:
       station: ${{ steps.plan.outputs.station }}
       modules: ${{ steps.plan.outputs.modules }}
       android: ${{ steps.plan.outputs.android }}
+      android_beta: ${{ steps.plan.outputs.android_beta }}
       android_lint: ${{ steps.plan.outputs.android_lint }}
       desktop: ${{ steps.plan.outputs.desktop }}
       desktop_web: ${{ steps.plan.outputs.desktop_web }}
@@ -101,10 +102,14 @@ jobs:
           # The modules' packages (scripts/module-bundle.ts): what one packs (its module.json says), or how they are packed
           # and signed: modules=….
           eval "$(printf '%s\n' "$changed" | node scripts/module-bundle.ts plan)"
-          # the Android app: mbui's in its place (scripts/release.sh android), made of what apps/mbui's beta is made of
-          # (scripts/beta.sh APP_SRC: its code, mbui's, the client's, media's, vendor's), or how it is released
+          # The Android app in Kotlin (apps/android: still the stable app's), checked (check-android) for a change it carries.
           android=false
-          if has '^(apps/mbui/(src|core|android|ios|engine)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release\.sh|native\.ts)$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android=true; fi
+          if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
+          # The beta Android app: mbui's in the Kotlin one's place (scripts/release.sh --beta android), released for a
+          # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's, the client's, media's,
+          # vendor's), or to how it is released.
+          android_beta=false
+          if has '^(apps/mbui/(src|core|android|ios|engine)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release\.sh|native\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android_beta=true; fi
           # check-android-lint: only for a change lint can find anything in (apps/android/lints.sh), or a branch's to
           # .github/ but mbui's workflows (mbui.yml, mbui-*: none of this pipeline's but mbui-check, which runs mbui's own
           # tests; its check then runs as if all changed).
@@ -137,6 +142,7 @@ jobs:
             echo "station=$station"
             echo "modules=$modules"
             echo "android=$android"
+            echo "android_beta=$android_beta"
             echo "android_lint=$android_lint"
             echo "desktop=$desktop"
             echo "desktop_web=$desktop_web"
@@ -144,7 +150,7 @@ jobs:
             echo "windows_natives=$windows_natives"
             echo "mbui=$mbui"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_beta=$android_beta android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -617,7 +623,7 @@ jobs:
   # The Android app (fail.still.android.beta: mbui's, apps/mbui, in the place of apps/android's), on android/beta/latest.json.
   android:
     needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' }}
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 10
@@ -870,7 +876,7 @@ jobs:
           planned '${{ needs.plan.outputs.static }}' '${{ needs.static.result }}' static
           planned '${{ needs.plan.outputs.station }}' '${{ needs.station.result }}' station
           planned '${{ needs.plan.outputs.modules }}' '${{ needs.modules.result }}' modules
-          planned '${{ needs.plan.outputs.android }}' '${{ needs.android.result }}' android
+          planned '${{ needs.plan.outputs.android_beta }}' '${{ needs.android.result }}' android
           planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop.result }}' desktop
           planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop-win.result }}' desktop-win
           [ '${{ needs.plan.outputs.desktop }}' = true ] || planned '${{ needs.plan.outputs.desktop_web }}' '${{ needs.desktop-web.result }}' desktop-web
