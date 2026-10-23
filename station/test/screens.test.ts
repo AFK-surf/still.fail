@@ -74,6 +74,14 @@ class FakeView implements ScreenView {
   async reveal(path: string) {
     this.asks.push({ reveal: path });
   }
+  /// Who hears the pointer while it is watched.
+  pointer: ((cursor: { x: number; y: number; shape: string }) => void) | null = null;
+  watchCursor(heard: (cursor: { x: number; y: number; shape: string }) => void) {
+    this.pointer = heard;
+    return () => {
+      if (this.pointer === heard) this.pointer = null;
+    };
+  }
   close() {
     this.closed = true;
   }
@@ -207,6 +215,27 @@ test("frames go unacknowledged while the link keeps up: two before its round tri
   assert.equal(view.keyframes, 1);
   await v.stream.finish();
   await v.served;
+});
+
+test("the pointer a source says beside its pictures goes to the view as its state's cursor", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  hub.add(source);
+  const v = await open(hub, member);
+  await until(v.frames, KIND.video);
+  const view = source.views[0]!;
+  assert.ok(view.pointer, "watched as the view opened");
+  view.pointer!({ x: 0.25, y: 0.5, shape: "text" });
+  for (;;) {
+    const got = await v.frames.next();
+    if (got?.kind === KIND.state && json(got.payload).cursor) {
+      assert.deepEqual(json(got.payload).cursor, { x: 0.25, y: 0.5, shape: "text" });
+      break;
+    }
+  }
+  await v.stream.finish();
+  await v.served;
+  assert.equal(view.pointer, null, "no longer heard once the view ended");
 });
 
 test("input reaches the source from a member who asked to drive, checked; a read-only member's is dropped", async () => {

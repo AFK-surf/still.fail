@@ -83,7 +83,7 @@ JPEG frames are all key frames and their config has no `description`.
 |---|---|---|
 | 1 `config` | station → client | JSON `{codec:"h265"\|"h264"\|"jpeg", width, height, description?}`: `description` is the hvcC (H.265) or avcC (H.264), base64. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
 | 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.265 or H.264 as length-prefixed NALs (parameter sets in the config only), or one JPEG. |
-| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], ended?: reason}`: first `{title, control, access?}` (`control`: whether this view's input is taken), then what changes; `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
+| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], ended?: reason}`: first `{title, control, access?}` (`control`: whether this view's input is taken), then what changes; `cursor`: the screen's pointer (0..1 of the frame, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
 | 4 `clipboard` | station → client | 1 byte type (1 text in UTF-8, 2 PNG), the content: the screen's clipboard each time it changes (a copy made on it), only to a view that drives it; not what it held as the view opened. |
 | 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
 | 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded (drawn). What the station sends next goes by them (Pace, below). |
@@ -165,7 +165,7 @@ does it, with nothing to grant: the station runs in its person's session (the lo
 captured and driven. A view is a process of its own (`stillfail-screen view`, the helper's messages on its standard
 input and output, ended as its input is). One that ends by itself (the display went or another became the main one, the
 graphics driver started again, a crash) is started again and the view goes on from a key frame with its config; past
-three times a minute the view ends. Windows.Graphics.Capture captures the main display (the cursor drawn in, no
+three times a minute the view ends. Windows.Graphics.Capture captures the main display (the cursor left out of a video, drawn in a JPEG; no
 yellow border on Windows 11; a picture where nothing changed, by its dirty regions on 11 24H2 on, is not a new one); the
 GPU's video processor scales it into `maxWidth`×`maxHeight` as NV12; Media Foundation encodes H.265 (when the client takes it and the
 hardware has an HEVC encoder) or H.264 on the hardware encoder (its MFT given the D3D11 textures; Microsoft's software
@@ -257,6 +257,11 @@ person); the viewer's own views, however many the list names (another window, or
 open left), are not someone else. A station from before screens answers `GET /screens` 404: its list is empty and says
 it needs an update, and a link to one of its screens says so without opening a stream (such a station would take the
 stream for a request and wait for a body).
+
+The screen's pointer is one: the desktop's video leaves it out and the station says where it is (`cursor`). The page
+draws it, an arrow as large as a pointer on the screen looks at the picture's size (a 90th of its width, 10 to 18 px),
+except while this device's own mouse is over the picture and drives it: then that mouse is the pointer, shown in the
+screen's shape (a text cursor over text), and nothing is drawn. Hidden on the screen (`none`), neither is.
 
 On a phone (Android, the phone web) a finger drives a screen as a trackpad unless the device keeps `direct`
 (`prefs.screenTouch`, switched on the viewer's foot): one finger moves the pointer (relative, faster strokes further:

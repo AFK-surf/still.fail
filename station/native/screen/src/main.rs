@@ -23,6 +23,8 @@
 //        3 frame     1 byte flags (bit 0: key frame), 8 bytes timestamp (µs), then the frame (AVCC, or one JPEG)
 //        4 event     JSON     what the station logs
 //        5 clipboard 1 byte type (1 text, 2 PNG), the bytes: what was copied, while watched
+//        6 cursor    JSON     {x, y, shape}: the pointer (0..1 of the display, a CSS cursor's name; "none" hidden) as it
+//                             moves or changes; a video's pictures leave it out, a JPEG's have it drawn in
 //
 // Windows.Graphics.Capture captures the main display (the cursor drawn in, no border), a picture only when the screen
 // changed; the GPU's video processor scales it into the view's bounds as NV12 (or BGRA for a JPEG); Media Foundation
@@ -37,6 +39,8 @@ mod hevc;
 mod capture;
 #[cfg(windows)]
 mod clipboard;
+#[cfg(windows)]
+mod cursor;
 #[cfg(windows)]
 mod encode;
 #[cfg(windows)]

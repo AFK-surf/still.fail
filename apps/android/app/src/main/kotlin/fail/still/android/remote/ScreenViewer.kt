@@ -689,7 +689,8 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
                 contentAlignment = Alignment.Center,
             ) { Ended(session, phase) }
             // Drawn over the frame at its own size, however zoomed: where the trackpad has it, else where the station says.
-            else Pointer({ if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
+            // (None where the station's own is hidden.)
+            else Pointer({ if (padNow) pad.at else session.state?.cursor?.takeIf { it.shape != "none" }?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
         }
         Over(session, phase, Modifier.align(Alignment.Center))
         Column(
@@ -791,14 +792,15 @@ private fun Texture(session: ScreenSession) {
 
 /**
  * Where the pointer is (`at`, 0..1 of the frame drawn at `shown` on the stage; read as it is drawn, it moves without
- * the page composed again): an arrow, white with a dark edge, its tip there.
+ * the page composed again): an arrow, white with a dark edge, its tip there; as large as a pointer on the screen looks at
+ * the frame's size (a 90th of its width), 10 to 18.5 dp.
  */
 @Composable
 private fun Pointer(at: () -> Offset?, shown: () -> Rect) {
     Canvas(Modifier.fillMaxSize()) {
         val at = at() ?: return@Canvas
         val shown = shown()
-        val k = 1.dp.toPx()
+        val k = (shown.width / 90f / 18.5f).coerceIn(10.dp.toPx() / 18.5f, 1.dp.toPx())
         val arrow = Path().apply {
             moveTo(0f, 0f); lineTo(0f, 16 * k); lineTo(4 * k, 12.5f * k); lineTo(7 * k, 18.5f * k)
             lineTo(9.5f * k, 17.5f * k); lineTo(6.5f * k, 11.5f * k); lineTo(11.5f * k, 11.5f * k); close()

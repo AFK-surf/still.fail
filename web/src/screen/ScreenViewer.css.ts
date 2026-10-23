@@ -62,7 +62,12 @@ export const canvas = style({ display: "block", width: "100%", height: "100%" })
 
 /** The station's pointer, where it says it is (none while a mouse here drives: it is that mouse's own). */
 export const cursor = style({ position: "absolute", left: "0", top: "0", width: "0", height: "0", pointerEvents: "none" });
-globalStyle(`${cursor} svg`, { display: "block", translate: "-4px -2px", filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, .35))" });
+globalStyle(`${cursor} svg`, {
+  display: "block", width: "var(--pointer, 18px)", height: "var(--pointer, 18px)",
+  // The arrow's tip (4, 2 of its 18) on the point, at any size.
+  translate: "calc(var(--pointer, 18px) * -4 / 18) calc(var(--pointer, 18px) * -2 / 18)",
+  filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, .35))",
+});
 
 /** Hears the keys while driving (an IME composes in it, a phone's keyboard comes up for it); never seen. */
 export const keys = style({

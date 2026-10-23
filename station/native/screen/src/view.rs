@@ -190,7 +190,10 @@ impl View {
     fn open(options: Options, tx: Sender<Msg>, out: &Out) -> windows::core::Result<View> {
         let gpu = Gpu::new().map_err(|e| failed(out, &e, "capture"))?;
         let (monitor, rect) = main_display();
-        let capture = Capture::start(&gpu, monitor, tx).map_err(|e| failed(out, &e, "capture"))?;
+        let capture = Capture::start(&gpu, monitor, tx, options.jpeg).map_err(|e| failed(out, &e, "capture"))?;
+        if !options.jpeg {
+            super::cursor::follow(out.clone());
+        }
         let (width, height) = fitted((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32, options.max.0, options.max.1);
         let mut view = View {
             gpu,

@@ -55,12 +55,19 @@ export interface ScreenView {
   /// Hears the source's clipboard each time it changes (a copy made on it; not what it holds as this starts), until
   /// the returned function. Only a view a person drives is asked, for as long as it is open.
   watchClipboard?(heard: (clip: Clip) => void): () => void;
+  /// Hears where the pointer is on the source (0..1 of the frame) and its shape (a CSS cursor's name) as it moves or
+  /// changes, until the returned function: a source whose pictures leave the pointer out (a video of the desktop) says
+  /// it so; one without it draws it in its pictures, or has none.
+  watchCursor?(heard: (cursor: ScreenCursor) => void): () => void;
   /// Shows a file in the machine's file manager (a file dropped into the view, put on the machine): the source's
   /// `reveal` says it can.
   reveal?(path: string): Promise<void>;
 }
 
 export type ScreenKind = "desktop" | "browser";
+
+/// Where a screen's pointer is, 0..1 of the frame, and its shape as CSS names it.
+export type ScreenCursor = { x: number; y: number; shape: string };
 
 /// Whether a source can be seen and driven now, for one that may not be (the desktop: macOS's grants, a machine it is
 /// not supported on). `app` and `path`: what a person turns on in System Settings for it; `asking`: a window on the

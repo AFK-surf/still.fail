@@ -16,7 +16,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
-import type { Clip, ClipType, Codec, Frame, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
+import type { Clip, ClipType, Codec, Frame, ScreenAccess, ScreenCursor, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
 import { WinInput } from "./win-input.ts";
 
 export const SCREEN_BINARY = "stillfail-screen.exe";
@@ -181,6 +181,9 @@ export class LastingView implements ScreenView {
   #restarting: Promise<boolean> | null = null;
   #heard: ((clip: Clip) => void) | null = null;
   #unwatch: (() => void) | null = null;
+  /// Who hears the pointer, heard again from a process started again.
+  #pointer: ((cursor: ScreenCursor) => void) | null = null;
+  #unpoint: (() => void) | null = null;
   /// The bit rate and bounds asked last, asked again of a process started again.
   #rate: number | null = null;
   #bounds: [number, number] | null = null;
@@ -219,6 +222,7 @@ export class LastingView implements ScreenView {
       log.info("screens", "stillfail-screen ended by itself; started again");
       this.#view = view;
       if (this.#heard !== null) this.#unwatch = view.watchClipboard(this.#heard);
+      if (this.#pointer !== null) this.#unpoint = view.watchCursor(this.#pointer);
       if (this.#rate !== null) view.rate(this.#rate);
       if (this.#bounds !== null) view.bounds(...this.#bounds);
       return true;
@@ -264,6 +268,17 @@ export class LastingView implements ScreenView {
 
   reveal(path: string): Promise<void> {
     return this.#view.reveal(path);
+  }
+
+  watchCursor(heard: (cursor: ScreenCursor) => void): () => void {
+    this.#pointer = heard;
+    this.#unpoint = this.#view.watchCursor(heard);
+    return () => {
+      if (this.#pointer !== heard) return;
+      this.#pointer = null;
+      this.#unpoint?.();
+      this.#unpoint = null;
+    };
   }
 
   close() {
