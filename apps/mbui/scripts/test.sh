@@ -31,10 +31,17 @@ for t in ${TARGETS:-native}; do
     # (the screens' tests in sfapp's own, screens_wbtest.mbt: a package of their own was a second program of the whole
     # app, compiled again on every change, 88 s of a branch's app part with sfapp's own 92, 2026-10-23)
     pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
+    # (with ThinLTO, MBC_LTO=thin: only the program of the whole app. What ThinLTO's tests are for is the code that
+    # ships, built as it ships, inlined across its units; all of it is in sfapp's test, run with the whole app's tests.
+    # The smaller programs are parts of the same code, each linked again with ThinLTO for its own few tests: five
+    # links a part side by side, 35-69 s each after a change, 2026-10-23, 40022031382; their tests run without it)
+    [ "${MBC_LTO:-0}" = thin ] && pkgs="-p stillfail/sfapp"
   fi
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
+    if [ "${MBC_LTO:-0}" = thin ]; then pkgs="$pkgs -p stillfail/sfreplay/flows"; else
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
     pkgs="$pkgs -p stillfail/sfreplay/flows"
+    fi
     # (a test under a directory of its own there is in no package this runs: a branch from before brought one back)
     for g in src/sfreplay/flows/*/; do
       [ -d "$g" ] || continue
