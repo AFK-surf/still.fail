@@ -257,6 +257,9 @@ priv struct Fresh {
   /// the wide frame's new chat (the web's roomy composer): its choices in the row under the words, beside ＋, the
   /// words always over them; None: the capsule as it is
   tools : (() -> Unit)?
+  /// a new chat's while its stations are read: it takes words, but nothing goes and no file is taken in (NewChat.tsx:
+  /// locked until there is a station to write to)
+  held : Bool
 }
 
 ///|
@@ -1459,7 +1462,11 @@ fn composer(
           None => ()
         }
         draft_extras(c, src, r, d, locked)
-        composer_bar(c, src, r, v, d, expanded, locked, locked || offline, fresh)
+        let held = match fresh {
+          Some(f) => f.held
+          None => false
+        }
+        composer_bar(c, src, r, v, d, expanded, locked || held, locked || offline || held, fresh)
         match d.error {
           Some(e) =>
             c.box(padx=6.0, fn() { c.text(e, size=12.0, color=t.p.red, line=16.0) |> ignore })

@@ -1,0 +1,3 @@
+# A new chat held while its stations are read (MBUI_FIXTURE=newchat-reading opens it so): what it shows meanwhile.
+timeout 5000
+wait 1500

@@ -196,6 +196,7 @@ fn reset() -> Unit {
   new_fix.d_effort = "high"
   new_fix.d_profile = ""
   new_fix.made = 0
+  new_fix.reading = 0
   app.switch_way = 0
   bar_timing.val = None
   reporting_host.val = None

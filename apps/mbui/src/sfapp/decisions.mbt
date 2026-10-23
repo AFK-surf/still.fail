@@ -793,6 +793,7 @@ fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, place
     placeholder: if placeholder != "" { placeholder } else { tr("android-misc.decisions.placeholder") },
     send: fn(d) { decision_reply(c, src, item, key, d) },
     tools: None,
+    held: false,
   }))
 }
 

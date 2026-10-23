@@ -174,6 +174,8 @@ fn new_chat_in(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             Some(_) => new_chat_on(c, src, w, v, station, false)
           }
         }
+      // its stations not read yet: the page as it will be, only what comes from them waiting (NewChat.tsx: laid out
+      // as the page will be, so nothing moves when it comes)
       _ => {
         let error = match text(v, "error") {
           "" =>
@@ -183,7 +185,7 @@ fn new_chat_in(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             }
           e => Some(e)
         }
-        waiting(c, 7, None, error)
+        new_chat_on(c, src, w, v, None, false, held=true, error~)
       }
     }
   })
@@ -211,7 +213,9 @@ fn picked_sig(v : Json?) -> String {
 ///|
 /// The page on a station (NewChatOn): the scene (the illustration, what to do, the frequent combinations, what keeps
 /// it from starting), and at its foot over the composer the choices: where it runs, what it runs on. `leaving`: it has
-/// become its chat, which is under it now: only its scene is drawn, going.
+/// become its chat, which is under it now: only its scene is drawn, going. `held`: its stations not read yet (`error`:
+/// why they could not be), the station unknown: what is said of it and the choices breathing, the composer the draft
+/// of the station it last started on, taking words but sending nothing.
 fn new_chat_on(
   c : @ui.Ctx,
   src : Source,
@@ -219,10 +223,14 @@ fn new_chat_on(
   v : Json?,
   station : Json?,
   leaving : Bool,
+  held? : Bool = false,
+  error? : String? = None,
 ) -> Unit {
   let t = @sf.theme()
-  let address = text(station, "station")
+  let address = if held { held_address(w, v) } else { text(station, "station") }
   let name = text(station, "name")
+  // (still when what they wait on failed)
+  let breathing = error is None
   let sig = picked_sig(v)
   if !fresh.sent && !fresh.starting && sig != fresh.made_sig {
     fresh.made = ""
@@ -230,7 +238,7 @@ fn new_chat_on(
   // at a desktop's width, the web's page (wide_newchat.mbt); once its first words are sent, the composer at the foot
   // where the chat's is, as the web's goes to the chat's dock (the words fly from there into the chat: flight.mbt)
   if wide_on.val && !leaving && !fresh.sent && !fresh.starting {
-    new_chat_page_wide(c, src, w, v, station)
+    new_chat_page_wide(c, src, w, v, station, held~, error~)
     return
   }
   // leaving: up out of view as it fades (140 ms, Arrive), the choices fading where they are (80 ms)
@@ -270,19 +278,28 @@ fn new_chat_on(
           |> ignore
         })
         |> ignore
-        c.text(
-          if wide_on.val {
-            fill("web-main.newChat.sub", [("name", if name == "" { tr("web-main.newChat.thisMachine") } else { name })])
-          } else {
-            fill("android-chat.new.sub", [("station", name)])
-          },
-          size=14.0,
-          color=t.p.muted,
-          center=true,
-          w=Fill(1.0),
-          line=20.0,
-        )
-        |> ignore
+        // (held: its two lines breathing, the station's name in them not known yet)
+        if held {
+          c.box(style=held_lines, fn() {
+            held_line(c, 250.0, breathing)
+            held_line(c, 170.0, breathing)
+          })
+          |> ignore
+        } else {
+          c.text(
+            if wide_on.val {
+              fill("web-main.newChat.sub", [("name", if name == "" { tr("web-main.newChat.thisMachine") } else { name })])
+            } else {
+              fill("android-chat.new.sub", [("station", name)])
+            },
+            size=14.0,
+            color=t.p.muted,
+            center=true,
+            w=Fill(1.0),
+            line=20.0,
+          )
+          |> ignore
+        }
         let combos = items(v, "frequent")
         if combos.length() > 0 {
           c.box(w=Fill(1.0), pt=12.0, pb=12.0, gap=8.0, align=ACenter, fn() {
@@ -297,13 +314,13 @@ fn new_chat_on(
           })
           |> ignore
         }
-        match opt_text(v, "problem") {
+        match (if held { error } else { opt_text(v, "problem") }) {
           Some(p) =>
             c.box(pt=6.0, w=Fill(1.0), fn() {
               c.text(
                 p,
                 size=13.0,
-                color=if flag(v, "waiting") || text(v, "blocked") == "" {
+                color=if !held && (flag(v, "waiting") || text(v, "blocked") == "") {
                   t.p.muted
                 } else {
                   t.p.red
@@ -369,6 +386,12 @@ fn new_chat_on(
       }
       c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, fn() {
         c.box(dir=Row, w=Fill(1.0), padx=2.0, pady=6.0, gap=6.0, fn() {
+          // held: where it runs and what it runs on breathing in their places, as high as they will be
+          if held {
+            @sf.bar(c, Px(held_station_w), chooser_h, breathing~)
+            @sf.bar(c, Px(held_model_w), chooser_h, breathing~)
+            return
+          }
           if chooser(
               c,
               "new/station",
@@ -386,7 +409,10 @@ fn new_chat_on(
           let options = items(p, "options")
           let runtime = text(v, "runtime")
           let model = text(field(v, "model"), "model")
-          if p is None || options.length() == 0 {
+          // its profiles still read (the core's `waiting`): what it runs on breathing, not said to be missing
+          if flag(v, "waiting") {
+            @sf.bar(c, Px(held_model_w), chooser_h, breathing=true)
+          } else if p is None || options.length() == 0 {
             if chooser(c, "new/models", fn() {  }, tr("android-chat.new.noModels"), 1.0e9, false) && !leaving {
               app.nav.push(Place("profiles"))
             }
@@ -417,7 +443,8 @@ fn new_chat_on(
         |> ignore
       })
       |> ignore
-      if !leaving {
+      // (held with no station to hold it on, its first value not come yet: its room, no draft asked for)
+      if !leaving && (!held || address != "") {
         let r : ChatRef = { station: address, session: "", title: "", station_name: name }
         wide_center(c, fn() {
           composer(c, src, r, None, fresh=Some({
@@ -425,6 +452,7 @@ fn new_chat_on(
             placeholder: tr("android-chat.new.placeholder"),
             send: fn(d) { send_first(c, src, w, v, address, name, d) },
             tools: None,
+            held,
           }))
         })
       } else {
@@ -498,7 +526,7 @@ fn chooser(
   let id = c.id(key)
   c.box(
     dir=Row,
-    h=Px(30.0),
+    h=Px(chooser_h),
     max_w~,
     padx=11.0,
     gap=6.0,
@@ -1204,3 +1232,42 @@ let new_scene_h : Double = 600.0
 ///|
 // kept across runs: a value (no field of it changes)
 let new_scene_room : @ui.Style = @ui.style(w=Full, h=@sf.grow, clip=true)
+
+///|
+/// A choice's height over the composer (NewChat.kt Chooser: 30), its place's while the stations are read.
+let chooser_h : Double = 30.0
+
+///|
+/// While the stations are read, the widths of where it runs and what it runs on breathing in their places.
+let held_station_w : Double = 96.0
+
+///|
+let held_model_w : Double = 150.0
+
+///|
+/// The station a new chat is held on while its stations are read: the one it last started on (the core's `kept`), its
+/// draft the one the page will have; "" when it has started on none.
+fn held_address(w : Workspace, v : Json?) -> String {
+  match text(v, "kept") {
+    "" => ""
+    kept => w.id + "/" + kept
+  }
+}
+
+///|
+/// A line of words to come, breathing (`breathing` false: still, what it waits on failed), `w` wide in the middle of
+/// a line of the page's words (20 high).
+fn held_line(c : @ui.Ctx, w : Double, breathing : Bool) -> Unit {
+  c.box(style=held_line_box, fn() { @sf.bar(c, Px(w), held_bar_h, breathing~) }) |> ignore
+}
+
+///|
+let held_bar_h : Double = 12.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let held_lines : @ui.Style = @ui.style(w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let held_line_box : @ui.Style = @ui.style(w=Full, h=S5, align=ACenter, justify=JCenter)

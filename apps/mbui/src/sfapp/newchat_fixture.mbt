@@ -1,7 +1,8 @@
 // A new chat over the made-up workspace (fixture.mbt): the `newChat` topic (its stations, what it runs on, the
 // combinations used often) and the model control's (`pick`), in the core's shapes; the picks taken as the core would
 // (`newChat.pick`, `pick.set`, `pick.save`), a chat made at once (`newChat.create`). MBUI_FIXTURE=newchat opens it,
-// newchat-station with its station's sheet, newchat-model with what it runs on; home-bars opens the bar's panel of
+// newchat-station with its station's sheet, newchat-model with what it runs on, newchat-reading while its stations
+// are read, newchat-profiles while its station's profiles are; home-bars opens the bar's panel of
 // the other bars, place the 文件 place (drive.mbt's page at the root).
 
 ///|
@@ -16,6 +17,8 @@ priv struct NewFix {
   mut d_effort : String
   mut d_profile : String
   mut made : Int
+  /// MBUI_FIXTURE=stations-slow: its stations not asked for yet (0), being read (1), read (2)
+  mut reading : Int
 }
 
 ///|
@@ -29,6 +32,7 @@ let new_fix : NewFix = {
   d_effort: "high",
   d_profile: "",
   made: 0,
+  reading: 0,
 }
 
 ///|
@@ -166,8 +170,45 @@ fn fix_pick() -> Json {
 
 ///|
 fn fix_new_chat(f : Fixture) -> Json {
-  ignore(f)
   let n = new_fix
+  // its stations read stations_slow_ms after the page first asks (MBUI_FIXTURE=stations-slow: Home, for the films of
+  // what shows meanwhile)
+  let slow = f.mode == "stations-slow" && n.reading < 2
+  if slow && n.reading == 0 {
+    n.reading = 1
+    fix_later(stations_slow_ms, fn() { n.reading = 2 })
+  }
+  // its stations not read yet: only the one it last started on (MBUI_FIXTURE=newchat-reading)
+  if f.mode == "newchat-reading" || slow {
+    return {
+      "kept": Json::string(n.station),
+      "any": false,
+      "efforts": [],
+      "accounts": [],
+      "pickAccount": false,
+      "waiting": false,
+      "frequent": [],
+    }
+  }
+  // its station's profiles not read yet (newchat-profiles)
+  if f.mode == "newchat-profiles" {
+    return {
+      "kept": Json::string(n.station),
+      "stations": [fix_station("st1"), fix_station("st2")],
+      "any": true,
+      "station": fix_station(n.station),
+      "model": Json::null(),
+      "runtime": "",
+      "effort": "",
+      "efforts": [],
+      "accounts": [],
+      "pickAccount": false,
+      "waiting": true,
+      "problem": "正在读取 Studio 的 Profile",
+      "pick": Json::null(),
+      "frequent": [],
+    }
+  }
   let effort_word = match n.effort {
     "low" => "低"
     "medium" => "中"
@@ -212,6 +253,10 @@ fn fix_new_chat(f : Fixture) -> Json {
     "label": Json::string(effort_word),
   }
 }
+
+///|
+/// How long stations-slow's stations take to be read.
+let stations_slow_ms : Double = 1200.0
 
 ///|
 /// The new chat's topics, None for any other.
