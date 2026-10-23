@@ -39,10 +39,11 @@ export const back = style({
 globalStyle(`${back} > span`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${back} > svg`, { flex: "none" });
 
-export const center = style({ display: "grid", justifyItems: "center", minWidth: "0", lineHeight: "1.25" });
-export const name = style({ maxWidth: "100%", fontSize: vars.textUi, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+// Each line its own leading: the clip that ellipsizes it keeps a descender (the g of "Controlling") whole.
+export const center = style({ display: "grid", justifyItems: "center", minWidth: "0" });
+export const name = style({ maxWidth: "100%", fontSize: vars.textUi, lineHeight: vars.leadingUi, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const meta = style({
-  maxWidth: "100%", color: `var(--viewer-muted, ${vars.muted})`, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums",
+  maxWidth: "100%", color: `var(--viewer-muted, ${vars.muted})`, fontSize: vars.textCaption, lineHeight: vars.leadingCaption, fontVariantNumeric: "tabular-nums",
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const tools = style({ justifySelf: "end", display: "flex", alignItems: "center", gap: "2px", minWidth: "0" });
