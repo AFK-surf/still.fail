@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { Accounts } from "../src/accounts.ts";
-import { Asks, PICTURE_RETRY_MS, buddies, devCloud, linkTarget } from "../src/asks.ts";
+import { Asks, PICTURE_RETRY_MS, PICTURES_KEPT, buddies, devCloud, linkTarget } from "../src/asks.ts";
 import { parseAsk } from "../src/asks-parse.ts";
 import { HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
+import { toJsonBytes } from "../src/util.ts";
 import { run } from "./run.ts";
 
 holdLanguage();
@@ -73,6 +74,63 @@ test("a_newer_app_is_asked_for_at_most_hourly_and_a_picture_once", async () => {
   await assert.rejects(run(asks.picture("https://p.test/gone.png")));
   assert.equal(host.requests.filter((r) => r.url.endsWith("gone.png")).length, 2);
   await assert.rejects(run(asks.picture("file:///etc/passwd")));
+});
+
+test("a_picture_had_is_kept_on_the_device_and_answered_from_it_when_the_network_is_gone", async () => {
+  const host = new FakeHost();
+  let online = true;
+  host.onFetch((req) => {
+    if (!online) throw new HostError("offline");
+    return { status: 200, headers: [["content-type", "image/png"]], body: new Uint8Array([req.url.length, 7]) };
+  });
+  const first = new Asks(host, nothing);
+  await run(first.picture("https://p.test/a.png"));
+  await run(first.picture("https://p.test/0.png"));
+  // The app again, the network gone: the one had is there at once, never fetched again.
+  online = false;
+  const asks = new Asks(host, nothing);
+  const [kind, bytes] = await run(asks.picture("https://p.test/a.png"));
+  assert.deepEqual([kind, [...bytes]], ["image/png", [20, 7]]);
+  assert.equal(host.requests.filter((r) => r.url === "https://p.test/a.png").length, 1);
+  await assert.rejects(run(asks.picture("https://p.test/b.png")));
+  // Past the bound the least lately had go: the one had again since stays.
+  online = true;
+  for (let i = 1; i < PICTURES_KEPT; i++) await run(asks.picture(`https://p.test/${i}.png`));
+  online = false;
+  const later = new Asks(host, nothing);
+  await run(later.picture("https://p.test/a.png"));
+  await assert.rejects(run(later.picture("https://p.test/0.png")));
+  await run(later.picture(`https://p.test/${PICTURES_KEPT - 1}.png`));
+  assert.equal([...host.storage.keys()].filter((k) => k.startsWith("picture-")).length, PICTURES_KEPT);
+});
+
+test("an_account_whose_picture_changed_shows_its_last_one_until_the_new_one_is_had", async () => {
+  const host = new FakeHost();
+  let reached = new Set(["https://g.test/old"]);
+  host.onFetch((req) => {
+    if (!reached.has(req.url)) throw new HostError("unreachable");
+    return { status: 200, headers: [["content-type", "image/jpeg"]], body: new Uint8Array([req.url.endsWith("old") ? 1 : 2]) };
+  });
+  const account = { sub: "u1", email: "u@x.test", name: "U", picture: "https://g.test/old", access: "a", refresh: "r", access_expires: 9e9 };
+  host.storage.set("accounts", toJsonBytes([account]));
+  let accounts = await run(Accounts.load(host));
+  let asks = new Asks(host, nothing);
+  asks.follow(accounts);
+  await run(asks.picture("https://g.test/old"));
+  await run(accounts.profile("u1", { user: { name: "U", picture: "https://g.test/new" } }));
+  assert.deepEqual([...(await run(asks.picture("https://g.test/new")))[1]], [1]);
+  // Across the app's start too, and changed again before the new one was ever had.
+  accounts = await run(Accounts.load(host));
+  asks = new Asks(host, nothing);
+  asks.follow(accounts);
+  await run(accounts.profile("u1", { user: { picture: "https://g.test/newer" } }));
+  assert.deepEqual([...(await run(asks.picture("https://g.test/newer")))[1]], [1]);
+  // Once reached, the new one.
+  reached = new Set(["https://g.test/newer"]);
+  host.advance(PICTURE_RETRY_MS);
+  assert.deepEqual([...(await run(new Asks(host, nothing).picture("https://g.test/newer")))[1]], [2]);
+  // Nothing stands in for a picture no account had.
+  await assert.rejects(run(new Asks(host, nothing).picture("https://g.test/other")));
 });
 
 test("a_newer_build_comes_with_what_it_brings_the_app", async () => {
