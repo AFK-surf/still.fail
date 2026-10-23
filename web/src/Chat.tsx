@@ -2108,12 +2108,12 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: 
         <div className={css.composerQuotes}>
           {quotes.map((q) => {
             const own = fileOf(q, files);
-            // An image of a message quoted is the station's already (none of this device's): drawn as the chat draws it.
+            // An image of a message quoted is the station's already (none of this device's): a small picture of it.
             const kept = own?.done && !own.preview ? own.done : undefined;
             return (
             <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
               <QuoteCard quote={q} picture={own && (kept?.owner ? <QuotedThumb sessionKey={kept.owner} file={kept} /> : <PendingFile file={own} />)}
-                onRemove={() => { draft.unquote(q.id); if (own) draft.remove(own.id); }} comment={
+                onRemove={() => { draft.unquote(q.id); if (own && !quotes.some((o) => o !== q && fileOf(o, files) === own)) draft.remove(own.id); }} comment={
                 <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
                   className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder={t("web-main.quote.commentPlaceholder")} aria-label={t("web-main.quote.commentLabel", { author: q.author })}
                   onChange={(e) => draft.comment(q.id, e.target.value)}
