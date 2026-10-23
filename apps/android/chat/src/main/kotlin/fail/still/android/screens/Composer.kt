@@ -231,8 +231,13 @@ class Draft {
     var focus by mutableIntStateOf(0)
     var warmed = 0L
     val uploading get() = files.any { it.done == null && it.error == null && !it.named }
-    /** Nothing can be sent (its station is offline, or the chat archived). */
+    /** Nothing can be sent (the chat archived). */
     var locked by mutableStateOf(false)
+    /**
+     * Its station is taken for down: what is written is sent once it is reached (it waits in the outbox), but no file is
+     * taken in, as files go up to the station first.
+     */
+    var offline by mutableStateOf(false)
     /** A file that did not go up: it is sent again or taken out first, never left out of the message unsaid. */
     val failed get() = files.any { it.error != null && !it.named }
     /** A file going up outside the core (a station's file switched to one, StationFiles.kt): sending waits for it here. */
@@ -996,14 +1001,16 @@ fun ComposerBar(
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = SendTextFaced.copy(color = C.ink)
     val locked = draft.locked || draft.starting
+    // No file is taken in while its station is down: files go up to it before the message goes.
+    val noFiles = locked || draft.offline
     val expanded = draft.composerExpanded
     // Keep the field in one composition slot while the buttons move below it, preserving focus and the IME.
     Layout(content = {
         Box(
-            Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !locked, onClick = onPlus)
+            Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !noFiles, onClick = onPlus)
                 .semantics { contentDescription = t("android-chat.attach.title") },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Plus, 18.dp, if (locked) C.ink.copy(alpha = 0.35f) else C.ink) }
+        ) { IconIn(Icons.Plus, 18.dp, if (noFiles) C.ink.copy(alpha = 0.35f) else C.ink) }
         Box(
             Modifier.part(morph, "field").heightIn(min = 36.dp).padding(start = if (expanded) PlusInk else 0.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,
@@ -1026,7 +1033,7 @@ fun ComposerBar(
                 if (mark != null) { delete(mark, caret - 1); selection = TextRange(mark); onType(); return@InputTransformation }
                 val put = insertedRange(was, now)
                 // A long paste goes as a file (PastedText.kt), the text left as it was.
-                if (put != null && put.last - put.first + 1 >= PASTE_THRESHOLD && station != null && !locked) {
+                if (put != null && put.last - put.first + 1 >= PASTE_THRESHOLD && station != null && !noFiles) {
                     val text = now.substring(put.first, put.last + 1)
                     revertAllChanges()
                     scope.launch { pasteAsFile(app, draft, station, text) }
@@ -1047,7 +1054,7 @@ fun ComposerBar(
                     // Pictures and files pasted, or sent by the keyboard (its clipboard, stickers): with the message, as one
                     // added by ＋ is; their text, and any other, goes into the text.
                     .contentReceiver { content ->
-                        if (station == null || locked) return@contentReceiver content
+                        if (station == null || noFiles) return@contentReceiver content
                         val uris = mutableListOf<Uri>()
                         val rest = content.consume { item -> item.uri?.also { uris += it } != null }
                         // `content` held until they are read: what lets them be read (the keyboard's grant) goes with it.
@@ -1227,18 +1234,20 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
     val launchers = AttachLaunchers { picked -> app.upload(draft, station, picked, app.scope) }
     val thread = view.thread
     val archived = view.archived == true
-    draft.locked = view.offline || archived
+    // Its station down, what is sent waits in the outbox until it is reached (the core sends it then).
+    draft.locked = archived
+    draft.offline = view.offline
     val send = app.chatSend(host, api, of, view, keeper, draft)
     return ComposerSpec(
         station = station, here = keeper, draft = draft, placeholder = if (archived) t("android-chat.composer.archived.placeholder") else t("android-chat.chat.placeholder"),
         notices = {
             if (archived) ArchiveNotice(view.offline) { api.setArchived(thread?.id, (of as? ChatOf.Session)?.key ?: keeper ?: "", false) }
-            if (view.offline) Text(t("android-chat.composer.offline"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+            if (view.offline) Text(view.offlineNote ?: t("android-chat.composer.offline"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
         },
         onPlus = { openAttach(app, launchers) { openStationFiles(app, draft, station) } },
         // Typing starts the session's runtime, so a cold start overlaps the writing.
         onType = {
-            if (!draft.locked && keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {
+            if (!draft.locked && !draft.offline && keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {
                 draft.warmed = System.currentTimeMillis()
                 scope.launch { try { api.warm(keeper) } catch (_: CoreException) {} }
             }

@@ -397,6 +397,8 @@ pub(all) struct ChatView {
   unread_above : Bool
   outbox : Array[Outgoing]
   offline : Bool
+  /// its station down, the line over the composer (why, and that what is sent goes once it is reached)
+  offline_note : String?
   archived : Bool
   archivable : Bool
   pending : Bool
@@ -449,6 +451,7 @@ pub fn chat_view(v : Json) -> ChatView {
       }
     }),
     offline: flag(s, "offline"),
+    offline_note: opt_text(s, "offlineNote"),
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),
     asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),

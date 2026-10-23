@@ -976,6 +976,7 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String"],
     ["message", opt("String")],
     ["retrying", opt("bool"), { doc: "Found offline and tried again just now (a person's 重试, or the device back): still taken for down\nuntil the try reaches it, its 重试 turning meanwhile." }],
+    ["cause", opt("String"), { doc: "Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the\ncloud says it is not online) | unreached (the cloud says it is). Absent otherwise, and from a core before it." }],
   ], { doc: "A station's mesh link: connecting | online | offline | error." }),
   StationState: struct([
     ["station", "String"],
@@ -983,6 +984,7 @@ export const SHAPES: Record<string, Shape> = {
     ["name", "String"],
     ["state", "String", { doc: "online | connecting | offline | error" }],
     ["message", opt("String")],
+    ["cause", opt("String"), { doc: "Offline, why as the device can tell (Link's `cause`). Absent otherwise." }],
   ]),
   StationTrouble: struct([
     ["text", "String"],
@@ -2379,6 +2381,7 @@ export const SHAPES: Record<string, Shape> = {
     ["outbox", vec("Outgoing")],
     ["link", "Link"],
     ["offline", "bool"],
+    ["offlineNote", opt("String"), { doc: "Its station taken for down, the line over the composer: why, and that what is sent goes once it is\nreached (the composer stays open). Absent otherwise, and from a core before it." }],
     ["watch", opt("RowWatch"), { doc: "One of its agents keeps watch: archiving it by hand asks first. Absent otherwise." }],
     ["pending", "bool", { default: true, doc: "A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox." }],
     ["key", opt("String"), { doc: "The key its station gave a chat asked for here, once made: the page, opened under the core's key, goes by it." }],

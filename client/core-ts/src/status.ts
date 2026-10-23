@@ -131,10 +131,21 @@ export class Status {
   /// An account's events socket failed to open or dropped; it is tried again at `retryAt`.
   socketDown(account: string, message: string, retryAt: number): void {
     const before = this.#sockets.get(account);
+    const was = this.cloudDown();
     this.#sockets.set(account, { since: before?.since ?? this.now(), retryAt, message, tries: (before?.tries ?? 0) + 1 });
     this.changed();
     this.#tick();
+    if (!was) this.onCloud?.();
   }
+
+  /// Whether still.fail cloud is not reached now (an account's events socket is down): the device's network, most
+  /// likely, and not its stations.
+  cloudDown(): boolean {
+    return this.#sockets.size > 0;
+  }
+
+  /// Called as still.fail cloud stops being reached, or is reached again (`cloudDown`).
+  onCloud: (() => void) | null = null;
 
   /// What the accounts' databases say now (data.ts notes).
   setDb(notes: Map<string, { kind: string; detail: string | null }>): void {
@@ -144,7 +155,9 @@ export class Status {
 
   /// An account's events socket is open, or no longer wanted.
   socketUp(account: string): void {
-    if (this.#sockets.delete(account)) this.changed();
+    if (!this.#sockets.delete(account)) return;
+    this.changed();
+    if (!this.cloudDown()) this.onCloud?.();
   }
 
   #tick(): void {

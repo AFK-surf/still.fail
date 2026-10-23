@@ -42,7 +42,7 @@
   "android-chat.chat.working": "Working",
   "android-chat.composer.archived": "Archived. Restore to send messages. ",
   "android-chat.composer.archived.placeholder": "Restore to send",
-  "android-chat.composer.offline": "Station offline. Showing previously loaded content; can't send messages for now.",
+  "android-chat.composer.offline": "Can't reach the station right now. Showing previously loaded content; messages you send are delivered once it is reached.",
   "android-chat.composer.restore": "Restore",
   "android-chat.composer.restoring": "Restoring",
   "android-chat.composer.send": "Send",

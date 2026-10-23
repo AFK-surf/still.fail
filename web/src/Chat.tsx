@@ -156,10 +156,10 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       {quoting.pop}
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
-      {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
+      {chat.offline && <p className={css.offlineNotice} role="status">{chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}
-        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
+        locked={!!chat.archived} offline={chat.offline} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
     </section>
   );
 }
@@ -1633,6 +1633,9 @@ export interface ComposerProps {
   placeholder?: string;
   /** While true (a new chat being made) nothing can be sent. */
   locked?: boolean;
+  /** Its station taken for down: what is written waits in the outbox until it is reached, and no file is taken in
+   * (files go up to the station first). */
+  offline?: boolean;
   /** Text above, toolbar below, even for one line (a new chat, whose toolbar holds choices). */
   roomy?: boolean;
   /** Whose draft it shows: changing it keeps what is typed for the one before and brings back the next one's. */
@@ -1653,7 +1656,7 @@ export function Composer(props: ComposerProps) {
 const LET_GO_MS = 300;
 
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = draft.focusQuote, onFocused = draft.quoteFocused, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = draft.focusQuote, onFocused = draft.quoteFocused, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, offline = false, roomy = false, draftKey }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1666,7 +1669,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   // Typing starts the session's runtime, so a cold start overlaps the writing.
   const warmed = useRef(0);
   const warm = () => {
-    if (locked || !sessionKey || Date.now() - warmed.current < 60_000) return;
+    if (locked || offline || !sessionKey || Date.now() - warmed.current < 60_000) return;
     warmed.current = Date.now();
     void api.warm(sessionKey).catch(() => {});
   };
@@ -1706,13 +1709,14 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   // Nothing focused, the box says which key brings the cursor back (its key changed here, or none).
   useKeymap();
   const hint = useSpaceHint(locked);
-  useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
+  const noFiles = locked || offline;
+  useShortcut("composer.file", noFiles ? null : () => { picker.current?.click(); });
   const ready = draft.ready && !locked;
   const submit = () => {
     if (ready) void send();
   };
   const multiline = roomy || focused || text !== "" || files.length > 0 || quotes.length > 0;
-  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder: hint ?? placeholder, className: css.composerText, layout: multiline, onType: warm, onSubmit: submit });
+  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, noFiles, placeholder: hint ?? placeholder, className: css.composerText, layout: multiline, onType: warm, onSubmit: submit });
   // Capsule ⇄ box, in one motion (morph.ts); laid out for another page (a new chat's roomy box ⇄ a chat's foot), the
   // dock moves it (dock.tsx).
   const box = useRef<HTMLFormElement>(null);
@@ -1735,18 +1739,18 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
           letGo.current = setTimeout(() => setFocused(false), LET_GO_MS);
         }}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
-        // Locked (its station offline), no file is taken in.
+        // Locked, or its station down, no file is taken in.
         // Over a chat's page the page shows where they go (ChatPage.tsx useChatDrop); the composer is not marked then.
-        onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !locked) { e.preventDefault(); if (pageOver === null) setDragging(true); } }}
+        onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !noFiles) { e.preventDefault(); if (pageOver === null) setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           // Dropped on a chat's page, the page takes it (ChatPage.tsx useChatDrop: its marks fly here).
           if (pageOver !== null) return;
           // A station's files (the chat's 文件 tab): named by their path there, until switched to files.
-          if (carriesDrive(e.dataTransfer)) { e.preventDefault(); setDragging(false); if (!locked) draft.addDropped(droppedOf(e.dataTransfer).map(droppedFrom)); return; }
+          if (carriesDrive(e.dataTransfer)) { e.preventDefault(); setDragging(false); if (!noFiles) draft.addDropped(droppedOf(e.dataTransfer).map(droppedFrom)); return; }
           if (e.dataTransfer.files.length) {
             e.preventDefault(); setDragging(false);
-            if (locked) return;
+            if (noFiles) return;
             // From Finder on a machine that is a station: named by their path there, as a station's files are.
             const named = droppedFromFinder(e.dataTransfer, here);
             if (named) draft.addDropped(named); else add(e.dataTransfer.files);
@@ -1755,7 +1759,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
         {field}
         <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-        <ComposerTools picker={picker} locked={locked} toolbar={toolbar} ready={ready} starting={draft.starting} />
+        <ComposerTools picker={picker} locked={noFiles} toolbar={toolbar} ready={ready} starting={draft.starting} />
       </form>
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
@@ -1815,8 +1819,10 @@ export function sendDraft(draft: Draft, to: ChatTo | null, ensureChat: (() => Pr
  * starts a line); with nothing typed, ↑ / ↓ go to the chat above or below. What a preview's marks offer the draft
  * `draftKey` comes in. Answers the box and the menu of chats (put over the composer), for the composer to place.
  */
-export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines, layout, enterSends = true, onType, onSubmit }: {
+export function useComposerText({ draft, input, draftKey, sessionKey, locked, noFiles = locked, placeholder, className, lines, layout, enterSends = true, onType, onSubmit }: {
   draft: Draft; input: RefObject<HTMLTextAreaElement | null>; draftKey: string | undefined; sessionKey: string | null; locked: boolean;
+  /** No file is taken in (pasted), though it may be written: its station down. Locked, none is. */
+  noFiles?: boolean;
   placeholder: string; className: string; lines?: number; layout?: unknown; enterSends?: boolean; onType(): void; onSubmit(): void;
 }): { menu: ReactNode; field: ReactNode } {
   const { text, setText, add } = draft;
@@ -1988,9 +1994,9 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
         onBlur={() => setReference(null)}
         onPaste={(e) => {
           if (draft.starting) return;
-          if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); return; }
+          if (e.clipboardData.files.length) { e.preventDefault(); if (!noFiles) add(e.clipboardData.files); return; }
           const pasted = e.clipboardData.getData("text/plain");
-          if (!locked && pasted.length >= PASTE_THRESHOLD) {
+          if (!noFiles && pasted.length >= PASTE_THRESHOLD) {
             e.preventDefault();
             add([makePastedFile(pasted)], pastedInfo(pasted));
             onType();

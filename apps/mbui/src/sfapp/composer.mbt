@@ -1172,8 +1172,10 @@ fn composer(
     Some(v) => v.archived
     None => false
   }
-  // while the chat is read the first time it takes words, but nothing goes (Chat.kt: its spec sends nothing yet)
-  let locked = offline || archived
+  // while the chat is read the first time it takes words, but nothing goes (Chat.kt: its spec sends nothing yet); its
+  // station down, what is sent waits in the outbox until it is reached, and no file is taken in (Composer.kt
+  // draft.offline: files go up to the station first)
+  let locked = archived
   let focused = c.editor_focused(field_key)
   // the words kept, or put back, into the field (put there, not written: no link in it taken as pasted, chat_refs.mbt)
   match d.put_text {
@@ -1278,7 +1280,7 @@ fn composer(
           None => ()
         }
         draft_extras(c, src, r, d, locked)
-        composer_bar(c, src, r, v, d, expanded, locked, fresh)
+        composer_bar(c, src, r, v, d, expanded, locked, locked || offline, fresh)
         match d.error {
           Some(e) =>
             c.box(padx=6.0, fn() { c.text(e, size=12.0, color=t.p.red, line=16.0) |> ignore })
@@ -1438,7 +1440,7 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
   }
   if v.offline {
     c.box(padx=8.0, pady=2.0, fn() {
-      c.text(tr("android-chat.composer.offline"), size=13.0, color=t.p.muted, line=18.0) |> ignore
+      c.text(v.offline_note.unwrap_or(tr("android-chat.composer.offline")), size=13.0, color=t.p.muted, line=18.0) |> ignore
     })
     |> ignore
   }
@@ -1455,6 +1457,7 @@ fn composer_bar(
   d : Draft,
   expanded : Bool,
   locked : Bool,
+  no_files : Bool,
   fresh : Fresh?,
 ) -> Unit {
   let t = @sf.theme()
@@ -1464,7 +1467,7 @@ fn composer_bar(
   let ready = draft_ready(d, locked)
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
-  if c.clicked(plus) && !locked && (v is Some(_) || fresh is Some(_)) {
+  if c.clicked(plus) && !no_files && (v is Some(_) || fresh is Some(_)) {
     cui.attach = true
     c.blur()
   }
@@ -1500,15 +1503,15 @@ fn composer_bar(
       justify=JCenter,
       id=plus,
       fn() {
-        @sf.icon(c, "plus", size=18.0, color=if locked { @sf.alpha(t.p.text, 0.35) } else { t.p.text })
+        @sf.icon(c, "plus", size=18.0, color=if no_files { @sf.alpha(t.p.text, 0.35) } else { t.p.text })
         |> ignore
         // Composer.kt: clip(CircleShape).clickable (not when locked)
-        if !locked {
+        if !no_files {
           @motion.ripple(c, plus, 18.0)
         }
       },
     )
-    c.semantics(b, Button, id=plus, label=tr("android-chat.attach.title"), disabled=locked)
+    c.semantics(b, Button, id=plus, label=tr("android-chat.attach.title"), disabled=no_files)
     part(b, "plus")
   }
   let send_button = fn() {
@@ -1576,7 +1579,7 @@ fn composer_bar(
           caret_color=t.p.accent,
           // at a desktop's width Enter sends and ⇧Enter is a new line (the web's); on a phone Enter is a new line
           enter_sends=wide_on.val,
-          paste_limit=if locked { 0 } else { paste_threshold },
+          paste_limit=if no_files { 0 } else { paste_threshold },
           // references to other chats drawn as marks (chat_refs.mbt RefMarks)
           look=ref_look(t.p.accent),
           // the draft's words, its own (another chat's draft: another field)
@@ -1602,7 +1605,7 @@ fn composer_bar(
           d.text = res.text
           // typing starts the agent's runtime, so a cold start overlaps the writing (once a minute)
           match v {
-            Some(view) if !locked && !src.read_only && view.agents.length() > 0 &&
+            Some(view) if !locked && !view.offline && !src.read_only && view.agents.length() > 0 &&
               warm_due => {
               d.warm_n += 1
               (src.call)(

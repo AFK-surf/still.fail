@@ -181,6 +181,7 @@ export class Local {
     for (const m of chat.queue) {
       m.state = "sending";
       m.error = null;
+      delete m.unreached;
     }
     this.#savePending(key);
     this.onChange({ kind: "pending", key });
@@ -192,7 +193,7 @@ export class Local {
     const chat = this.#pending.get(key);
     if (!chat || chat.made) return null;
     const id = this.#nextId();
-    chat.queue.push({ ...message, id, after: 0, createdAt: Math.round(this.#now()), state: chat.failed !== null ? "failed" : "sending", error: chat.failed });
+    chat.queue.push({ ...message, id, after: 0, createdAt: Math.round(this.#now()), state: chat.failed !== null ? "failed" : "sending", error: chat.failed, ...(chat.failed !== null && chat.unsent === true ? { unreached: true } : {}) });
     this.#savePending(key);
     this.onChange({ kind: "pending", key });
     return id;
@@ -229,6 +230,8 @@ export class Local {
       for (const m of chat.queue) {
         m.state = "failed";
         m.error = error;
+        if (unsent) m.unreached = true;
+        else delete m.unreached;
       }
       this.#savePending(key);
     }

@@ -178,8 +178,8 @@
     "other": "{n} new messages"
   },
   "web-main.chat.notSent": "Not sent",
-  "web-main.chat.offline": "Station offline. Showing the last loaded content; messages can't be sent for now.",
-  "web-main.chat.offline.named": "\"{name}\" is offline. Showing the last loaded content; messages can't be sent for now.",
+  "web-main.chat.offline": "Can't reach the station right now. Showing previously loaded content; messages you send are delivered once it is reached.",
+  "web-main.chat.offline.named": "Can't reach “{name}” right now. Showing previously loaded content; messages you send are delivered once it is reached.",
   "web-main.chat.pin": "Pin",
   "web-main.chat.pinFailed": "Couldn't pin: {error}",
   "web-main.chat.quote": "Quote",

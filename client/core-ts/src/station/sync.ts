@@ -167,6 +167,11 @@ export class StationsSync {
     this.#links.networkBack();
   }
 
+  /// Why each station down is not reached is said anew (link.ts `recause`).
+  recause(): void {
+    this.#links.recause();
+  }
+
   /// Opens the station's stream for what it is wanted for now, unless the one open gives that (or `anew`).
   openEvents(address: string, anew: boolean): void {
     this.#links.openEvents(address, anew);
