@@ -1039,7 +1039,7 @@ export const SLACK_DAYS = [0, 3, 7, 30];
 
 /// Days, as a choice says them: none is never.
 function daysText(n: number): string {
-  return n <= 0 ? t("core-views.archiving.never") : t("core-views.archiving.days", { n });
+  return n <= 0 ? t("web-pages.archiving.never") : t("web-pages.archiving.days", { n });
 }
 
 /// The days offered, with the one kept when it is none of them.
@@ -1054,11 +1054,11 @@ export function archiving(view: J): J {
   const days = typeof view.days === "number" ? view.days : 0;
   const slack = typeof view.slackDays === "number" ? view.slackDays : 0;
   const mode = days <= 0 ? "off" : view.reviewed === true ? "reviewed" : "idle";
-  const how = mode === "off" ? t(`core-views.archiving.mode.${mode}`) : `${t(`core-views.archiving.mode.${mode}`)} · ${daysText(days)}`;
+  const how = mode === "off" ? t(`web-pages.archiving.mode.${mode}`) : `${t(`web-pages.archiving.mode.${mode}`)} · ${daysText(days)}`;
   return {
     ...view,
     mode,
-    summaryText: t("core-views.archiving.summary", { how, slack: daysText(slack) }),
+    summaryText: t("web-pages.archiving.summary", { how, slack: daysText(slack) }),
     daysOffered: daysOffered(days, IDLE_DAYS),
     slackDaysOffered: daysOffered(slack, SLACK_DAYS),
   };
