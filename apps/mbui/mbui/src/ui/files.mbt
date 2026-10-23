@@ -19,9 +19,9 @@ priv struct FakePick {
 }
 
 ///|
-/// Asks the system for files of `kind` (@hostapi.pick): None when this host cannot. Under a Tester, what the test said the
-/// pickers give (Tester::picks), from the next frame.
-pub fn pick(kind : @hostapi.PickKind) -> Pick? {
+/// Asks the system for files of `kind` (@hostapi.pick; `hold`: one too big to be read whole may be held by the host):
+/// None when this host cannot. Under a Tester, what the test said the pickers give (Tester::picks), from the next frame.
+pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
   match fake.val {
     Some(f) => {
       f.pick_asks.push({ kind, frame: g().frame_no, taken: false })
@@ -31,7 +31,7 @@ pub fn pick(kind : @hostapi.PickKind) -> Pick? {
       Some(p)
     }
     None =>
-      match @hostapi.pick(kind) {
+      match @hostapi.pick(kind, hold~) {
         Some(h) => {
           let p : Pick = { host: Some(h), fake: -1 }
           p.wait("a pick")
@@ -113,7 +113,7 @@ fn Pick::answer(self : Pick) -> Array[@hostapi.Picked]? {
 pub fn Tester::picks(self : Tester, files : Array[(String, Bytes)]) -> Unit {
   self.fake.picks.clear()
   for f in files {
-    self.fake.picks.push({ name: f.0, bytes: f.1 })
+    self.fake.picks.push({ name: f.0, bytes: f.1, held: 0, size: f.1.length().to_double(), src: "" })
   }
 }
 

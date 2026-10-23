@@ -39,7 +39,7 @@ static jmethodID m_reduce_motion;
 static jmethodID m_text_menu;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
-    m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
+    m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes, m_pk_info,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_v_tell, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
@@ -141,6 +141,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_pk_state = (*env)->GetStaticMethodID(env, picks_cls, "state", "(I)I");
   m_pk_count = (*env)->GetStaticMethodID(env, picks_cls, "count", "(I)I");
   m_pk_name = (*env)->GetStaticMethodID(env, picks_cls, "name", "(II)Ljava/lang/String;");
+  m_pk_info = (*env)->GetStaticMethodID(env, picks_cls, "info", "(II)Ljava/lang/String;");
   m_pk_bytes = (*env)->GetStaticMethodID(env, picks_cls, "bytes", "(II)[B");
   m_pk_end = (*env)->GetStaticMethodID(env, picks_cls, "end", "(I)V");
   keeps_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Keeps"));
@@ -1644,6 +1645,15 @@ int32_t mb_host_pick_count(int32_t id) {
 moonbit_string_t mb_host_pick_name(int32_t id, int32_t i) {
   JNIEnv *env = env_();
   jstring s = (jstring)(*env)->CallStaticObjectMethod(env, picks_cls, m_pk_name, id, i);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+// a file held (Picks.java: too big to read whole): its id, size and address, a tab between; "" for one read whole
+moonbit_string_t mb_host_pick_info(int32_t id, int32_t i) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, picks_cls, m_pk_info, id, i);
   moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
   if (s) (*env)->DeleteLocalRef(env, s);
   return out;

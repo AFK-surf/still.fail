@@ -673,6 +673,9 @@ extern "C" fn pk_name(id : Int, i : Int) -> String = "mb_host_pick_name"
 extern "C" fn pk_bytes(id : Int, i : Int) -> Bytes = "mb_host_pick_bytes"
 
 ///|
+extern "C" fn pk_info(id : Int, i : Int) -> String = "mb_host_pick_info"
+
+///|
 extern "C" fn pk_end(id : Int) -> Unit = "mb_host_pick_end"
 
 // Files kept on the device (keep.mbt): Keeps.java on Android, apple_views.m on macOS and iOS, win_app.c on Windows.

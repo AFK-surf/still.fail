@@ -5,7 +5,7 @@ let recent_now : Int64 = 1_792_245_000L
 
 ///|
 fn photo(id : Int64, added : Int64, modified : Int64, taken : Int64) -> @hostapi.GalleryPhoto {
-  { id, src: "content://media/external/images/media/\{id}", added, modified, taken }
+  { id, src: "content://media/external/images/media/\{id}", added, modified, taken, video: false }
 }
 
 ///|

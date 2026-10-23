@@ -110,6 +110,7 @@ pub(open) trait Host {
   pk_count(Self, Int) -> Int = _
   pk_name(Self, Int, Int) -> String = _
   pk_bytes(Self, Int, Int) -> Bytes = _
+  pk_info(Self, Int, Int) -> String = _
   pk_end(Self, Int) -> Unit = _
   kp_begin(Self, String, String, Int) -> Int = _
   kp_append(Self, Int, Bytes) -> Int = _
@@ -656,6 +657,11 @@ impl Host with pk_name(_, _, _) {
 ///|
 impl Host with pk_bytes(_, _, _) {
   b""
+}
+
+///|
+impl Host with pk_info(_, _, _) {
+  ""
 }
 
 ///|
@@ -1675,6 +1681,11 @@ fn pk_count(id : Int) -> Int {
 ///|
 fn pk_name(id : Int, i : Int) -> String {
   current.val.pk_name(id, i)
+}
+
+///|
+fn pk_info(id : Int, i : Int) -> String {
+  current.val.pk_info(id, i)
 }
 
 ///|

@@ -49,6 +49,40 @@ test "a file goes to the core whole, named by its content, and says how far the 
 }
 
 ///|
+test "a big file the host holds (a video): to the core by the host's id, read from there as it goes up; its tile the host's still" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, made~, ups~)
+  let d = the_draft()
+  let video : @hostapi.Picked = {
+    name: "录屏.mp4",
+    bytes: b"",
+    held: 7,
+    size: 300_000_000.0,
+    src: "content://media/external/video/media/42",
+  }
+  add_held_file(made.val.unwrap(), d, "ws1/st1", video)
+  t.draw()
+  let adds = named(calls, "composer.add")
+  assert_eq(adds.length(), 1)
+  // nothing beside the call: the host's file, its size and kind (the core reads it a part at a time: picked.read)
+  assert_true(adds[0].bytes is None)
+  let blob = field(handed(adds[0]), "blob")
+  assert_eq(field(blob, "hostFile"), Some(Json::number(7.0)))
+  assert_eq(field(blob, "size"), Some(Json::number(300_000_000.0)))
+  assert_eq(text(blob, "type"), "video/mp4")
+  assert_eq(d.files[0].image, "content://media/external/video/media/42")
+  // as far as the core has sent it up, then up
+  going_up(ups, adds[0], 75_000_000)
+  t.draw()
+  assert_eq(d.files[0].sent, 75_000_000)
+  upped(ups, adds[0])
+  t.draw()
+  assert_true(d.files[0].done is Some(_))
+}
+
+///|
 test "sent while a file is going up: the message names it (uploads) and the core sends it once it is up" {
   let calls : Array[Made] = []
   let made : Ref[Source?] = Ref(None)

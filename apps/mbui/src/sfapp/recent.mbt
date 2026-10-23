@@ -1,5 +1,6 @@
-// ＋'s recent photos (still.fail's Android app, chat/screens/Attach.kt RecentPhotos, latest): the gallery's latest
-// photos across the top of the sheet after the camera, a tap putting one in the message (most of what goes to an agent
+// ＋'s recent photos and videos (still.fail's Android app, chat/screens/Attach.kt RecentPhotos, latest): the gallery's
+// latest across the top of the sheet after the camera, a video's tile marked with a play badge in its corner, a tap
+// putting one in the message (most of what goes to an agent
 // is a screenshot just taken); read again as the sheet opens and on each answer of the gallery's (@hostapi.gallery_*).
 // Without leave to read the gallery the strip's last tile asks for it (显示最近照片); with only the photos chosen for
 // the app (Android 14 on), it chooses more (选择更多照片). A host with no gallery (macOS, iOS, Windows) keeps the
@@ -147,12 +148,25 @@ fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   }
   let off = a.get()
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
-    c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pt=4.0, pb=12.0, gap=6.0, clip=true, fn() {
+    c.box(style=recent_strip_row, fn() {
       c.box(dir=Row, gap=6.0, tx=off, fn() {
         recent_tile(c, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
         for p in photos {
           recent_tile(c, fn() {
             c.image(p.src, w=Px(92.0), h=Px(122.0), radius=14.0, fit=FitCover, bg=0L) |> ignore
+            // a video's still, its play mark in its corner (Attach.kt Thumbnail: 22 round, black at 45%, 6 in)
+            if p.video {
+              c.layer(fn() {
+                c.box(style=recent_video_room, fn() {
+                  c.box(w=Px(22.0), h=Px(22.0), radius=11.0, bg=0x00000073L, align=ACenter, justify=JCenter, fn() {
+                    @sf.icon(c, "play", size=14.0, color=0xFFFFFFFFL) |> ignore
+                  })
+                  |> ignore
+                })
+                |> ignore
+              })
+              |> ignore
+            }
           })
         }
         match ask {
@@ -173,6 +187,17 @@ fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// The strip's row: 12 in from the sheet's sides, 4 under its top, 12 over its foot, its tiles 6 apart (Attach.kt
+/// RecentPhotos' contentPadding and spacing).
+// kept across runs: a value (no field of it changes)
+let recent_strip_row : @ui.Style = @ui.style(row=true, w=Full, pl=S3, pr=S3, pt=S1, pb=S3, gap=S1_5, clip=true)
+
+///|
+/// Where a video's play mark sits on its tile: its lower start, 6 in.
+// kept across runs: a value (no field of it changes)
+let recent_video_room : @ui.Style = @ui.style(w=Full, h=Full, p=S1_5, justify=JEnd, align=AStart)
 
 ///|
 /// A tile of the strip (92 × 122, the chip's grey under it).

@@ -1,6 +1,6 @@
-// The device's gallery, for a picker's recent photos (still.fail's Android app, chat/screens/Attach.kt RecentPhotos):
-// how much of it the app may read (Android: READ_MEDIA_IMAGES, or on Android 14 and later the photos the person chose
-// for it, READ_MEDIA_VISUAL_USER_SELECTED; below 13 READ_EXTERNAL_STORAGE), asking for it (the system's dialog; asked
+// The device's gallery, for a picker's recent photos and videos (still.fail's Android app, chat/screens/Attach.kt
+// RecentPhotos): how much of it the app may read (Android: READ_MEDIA_IMAGES and READ_MEDIA_VIDEO, or on Android 14 and
+// later the ones the person chose for it, READ_MEDIA_VISUAL_USER_SELECTED; below 13 READ_EXTERNAL_STORAGE), asking for it (the system's dialog; asked
 // and turned down for good, the app's page of the system's settings, where it is allowed), and its photos with what
 // the gallery says of when each came (read off the app's thread; the view ranks them). A photo's `src` is an image
 // source of its own (Android: its content:// address, drawn by `Ctx::image` as the gallery's thumbnail at the size
@@ -43,14 +43,15 @@ pub fn gallery_answers() -> Int {
 }
 
 ///|
-/// A photo of the gallery: its own id, its image source, and when it came as the gallery says it, in seconds (-1
-/// where it says nothing; possibly wrong: written in milliseconds, or ahead of now).
+/// A photo (or a `video`) of the gallery: its own id, its image source (a video's: its still), and when it came as
+/// the gallery says it, in seconds (-1 where it says nothing; possibly wrong: written in milliseconds, or ahead of now).
 pub(all) struct GalleryPhoto {
   id : Int64
   src : String
   added : Int64
   modified : Int64
   taken : Int64
+  video : Bool
 }
 
 ///|
@@ -88,7 +89,15 @@ pub fn GalleryRead::photos(self : GalleryRead) -> Array[GalleryPhoto]? {
         if f.length() < 5 {
           continue
         }
-        out.push({ id: ga_int(f[0]), src: f[1].to_owned(), added: ga_int(f[2]), modified: ga_int(f[3]), taken: ga_int(f[4]) })
+        out.push({
+          id: ga_int(f[0]),
+          src: f[1].to_owned(),
+          added: ga_int(f[2]),
+          modified: ga_int(f[3]),
+          taken: ga_int(f[4]),
+          // (a host that says nothing of it: a photo)
+          video: f.length() > 5 && f[5] == "1",
+        })
       }
       Some(out)
     }

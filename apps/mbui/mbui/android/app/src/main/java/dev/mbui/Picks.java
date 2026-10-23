@@ -20,17 +20,39 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Files picked through the system's own pickers (src/hostapi/pick.mbt, as still.fail's Android app's Attach.kt has
- * them): the photo picker (ACTION_PICK_IMAGES where there is one, else the documents UI on images), the documents UI
- * on any file (ACTION_OPEN_DOCUMENT), a photo taken now (ACTION_IMAGE_CAPTURE's picture, as TakePicturePreview). Read
- * off the main thread once picked; MoonBit asks after them each frame (android_host.c).
+ * them): the photo picker on photos and videos (ACTION_PICK_IMAGES where there is one, else the documents UI on
+ * images and videos), the documents UI on any file (ACTION_OPEN_DOCUMENT), a photo taken now (ACTION_IMAGE_CAPTURE's
+ * picture, as TakePicturePreview). Read off the main thread once picked; MoonBit asks after them each frame
+ * (android_host.c). One bigger than WHOLE (a video) is not read whole but held by its address (Held): the app's core
+ * reads it a part at a time as it goes up ({@link #read}, {@link #hash}, {@link #release}: CoreHost's picked.*, as
+ * still.fail's Android app's PickedFiles.kt).
  */
 final class Picks {
-    /** An ask: 0 asking, 1 answered, -1 called off or unreadable; what was picked. */
+    /** An ask: 0 asking, 1 answered, -1 called off or unreadable; what was picked (a file held: its info, else ""). */
     static final class Ask {
         volatile int state;
         final List<String> names = new ArrayList<>();
         final List<byte[]> bytes = new ArrayList<>();
+        final List<String> infos = new ArrayList<>();
+        /** a file bigger than WHOLE may be held (the asker sends it up through the core), else each is read whole */
+        boolean hold;
     }
+
+    /** A file held by its address, too big to be read whole: its size, read a part at a time. */
+    static final class Held {
+        final Uri uri;
+        final long size;
+
+        Held(Uri uri, long size) {
+            this.uri = uri;
+            this.size = size;
+        }
+    }
+
+    /** Files read whole up to this; bigger ones held (a Java array of a video's size is more than the heap gives). */
+    static final long WHOLE = 16L << 20;
+    static final ConcurrentHashMap<Integer, Held> held = new ConcurrentHashMap<>();
+    private static int nextHeld = 1;
 
     static final ConcurrentHashMap<Integer, Ask> asks = new ConcurrentHashMap<>();
     private static int next = 1;
@@ -40,14 +62,17 @@ final class Picks {
 
     static synchronized int start(int kind) {
         int id = next++;
-        asks.put(id, new Ask());
+        Ask ask = new Ask();
+        ask.hold = (kind & 16) != 0;
+        int what = kind & 15;
+        asks.put(id, ask);
         String given = android.system.Os.getenv("MBUI_PICK_FILES");
         if (given != null && !given.isEmpty()) {
             // scripted runs (as on macOS): every ask answered at once with these files (paths the app can read, as
             // its own files'), no picker
             new Thread(() -> given(id, given.split("\\|")), "mbui-pick").start();
         } else {
-            Host.main.post(() -> open(id, kind));
+            Host.main.post(() -> open(id, what));
         }
         return id;
     }
@@ -64,6 +89,7 @@ final class Picks {
                 synchronized (k) {
                     k.names.add(f.getName());
                     k.bytes.add(out.toByteArray());
+                    k.infos.add("");
                 }
             } catch (Exception e) {
                 Host.log("pick: " + p + ": " + e);
@@ -78,11 +104,12 @@ final class Picks {
         if (kind == 1) {
             if (Build.VERSION.SDK_INT >= 33
                     || (Build.VERSION.SDK_INT >= 30 && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.R) >= 2)) {
+                // (no type: photos and videos, as Attach.kt's PickVisualMedia.ImageAndVideo)
                 i = new Intent(MediaStore.ACTION_PICK_IMAGES);
-                i.setType("image/*");
                 i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit());
             } else {
-                i = documents("image/*");
+                i = documents("*/*");
+                i.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"image/*", "video/*"});
             }
         } else if (kind == 2) {
             i = documents("*/*");
@@ -135,6 +162,7 @@ final class Picks {
                 synchronized (k) {
                     k.names.add("photo-" + System.currentTimeMillis() + ".jpg");
                     k.bytes.add(out.toByteArray());
+                    k.infos.add("");
                 }
             }
             read(cr, k, uris);
@@ -143,7 +171,7 @@ final class Picks {
         return true;
     }
 
-    /** Each of `uris` read whole into the ask (one over 1 GB left out). */
+    /** Each of `uris` read whole into the ask, or held where it is bigger than WHOLE (one over 1 GB left out). */
     private static void read(ContentResolver cr, Ask k, List<Uri> uris) {
         for (Uri u : uris) {
             String name = "file";
@@ -157,6 +185,19 @@ final class Picks {
                 Host.log("pick: " + e);
             }
             if (size > MAX) continue;
+            if (k.hold && size > WHOLE) {
+                int h;
+                synchronized (Picks.class) {
+                    h = nextHeld++;
+                }
+                held.put(h, new Held(u, size));
+                synchronized (k) {
+                    k.names.add(name);
+                    k.bytes.add(new byte[0]);
+                    k.infos.add(h + "\t" + size + "\t" + u);
+                }
+                continue;
+            }
             try (InputStream in = cr.openInputStream(u)) {
                 if (in == null) continue;
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -169,6 +210,7 @@ final class Picks {
                 synchronized (k) {
                     k.names.add(name);
                     k.bytes.add(out.toByteArray());
+                    k.infos.add("");
                 }
             } catch (Exception e) {
                 Host.log("pick: " + name + ": " + e);
@@ -181,6 +223,8 @@ final class Picks {
         if (Host.activity == null) return 0;
         int id = next++;
         Ask k = new Ask();
+        // (the composer's: a video of the gallery goes up through the core a part at a time)
+        k.hold = true;
         asks.put(id, k);
         ContentResolver cr = Host.activity.getContentResolver();
         new Thread(() -> {
@@ -212,7 +256,54 @@ final class Picks {
         return k == null || i < 0 || i >= k.bytes.size() ? new byte[0] : k.bytes.get(i);
     }
 
+    static String info(int id, int i) {
+        Ask k = asks.get(id);
+        return k == null || i < 0 || i >= k.infos.size() ? "" : k.infos.get(i);
+    }
+
     static void end(int id) {
         asks.remove(id);
+    }
+
+    // ── a file held, as the core reads it going up (CoreHost: picked.read, picked.hash, picked.release) ──
+
+    /** Bytes [start, end) of a file held: as many as there are (fewer at its end). */
+    static byte[] read(int file, long start, long end) throws java.io.IOException {
+        Held h = held.get(file);
+        if (h == null) throw new java.io.IOException("no such file picked: " + file);
+        int n = (int) Math.max(0, Math.min(end, h.size) - start);
+        byte[] out = new byte[n];
+        try (android.os.ParcelFileDescriptor fd = Host.activity.getContentResolver().openFileDescriptor(h.uri, "r");
+             java.io.FileInputStream in = new java.io.FileInputStream(fd.getFileDescriptor())) {
+            java.nio.channels.FileChannel ch = in.getChannel();
+            java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(out);
+            long at = start;
+            while (buf.hasRemaining()) {
+                int r = ch.read(buf, at);
+                if (r <= 0) break;
+                at += r;
+            }
+            return buf.position() == n ? out : java.util.Arrays.copyOf(out, buf.position());
+        }
+    }
+
+    /** A file held's SHA-256 (lowercase hex), read through once. */
+    static String hash(int file) throws Exception {
+        Held h = held.get(file);
+        if (h == null) throw new java.io.IOException("no such file picked: " + file);
+        java.security.MessageDigest d = java.security.MessageDigest.getInstance("SHA-256");
+        try (InputStream in = Host.activity.getContentResolver().openInputStream(h.uri)) {
+            if (in == null) throw new java.io.IOException("not readable");
+            byte[] buf = new byte[1 << 20];
+            for (int r; (r = in.read(buf)) > 0; ) d.update(buf, 0, r);
+        }
+        StringBuilder s = new StringBuilder();
+        for (byte b : d.digest()) s.append(String.format("%02x", b & 0xff));
+        return s.toString();
+    }
+
+    /** A file held let go of (gone up, or taken out of the message). */
+    static void release(int file) {
+        held.remove(file);
     }
 }

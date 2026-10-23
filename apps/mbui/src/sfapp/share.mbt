@@ -639,7 +639,7 @@ fn share_opened(
   if files.length() > 0 {
     let list = shared_into.get(key).unwrap_or([])
     for f in files {
-      list.push({ name: f.name, bytes: f.bytes })
+      list.push({ name: f.name, bytes: f.bytes, held: 0, size: f.bytes.length().to_double(), src: "" })
     }
     shared_into[key] = list
   }
