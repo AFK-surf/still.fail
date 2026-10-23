@@ -51,6 +51,50 @@ test "a page pushed slides in from the right, the one under it out to the left" 
 }
 
 ///|
+test "a page from the left comes in from there, the one under it out to the right; back and swiped back, that way" {
+  // page 1 is to the left of page 0 (still.fail's settings, its gear at the list's top left: App.kt transition)
+  let nav = @ui.Nav::new(0, from_left=fn(i) { i == 1 })
+  let t = @ui.Tester::new(nav_view(nav))
+  t.tap_text("open 1")
+  t.run_for(@ui.nav_push_ms / 2.0)
+  // halfway: coming from the left, page 0 going out to the right beside it
+  let x1 = t.rect_of("title 1").unwrap().0
+  let x0 = t.rect_of("title 0").unwrap().0
+  assert_true(x1 < 0.0 && x1 > -390.0)
+  assert_eq((x0 - x1).round(), 390.0)
+  t.run_for(@ui.nav_push_ms / 2.0)
+  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  // a page pushed over it comes from the right as any does, page 1 going out to the left
+  t.tap_text("open 2")
+  t.run_for(@ui.nav_push_ms / 2.0)
+  assert_true(t.rect_of("title 2").unwrap().0 > 0.0)
+  assert_true(t.rect_of("title 1").unwrap().0 < 0.0)
+  t.run_for(@ui.nav_push_ms / 2.0)
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  // back from page 1: it goes back out to the left, page 0 coming from the right
+  t.back()
+  t.run_for(@ui.nav_push_ms / 2.0)
+  let x1 = t.rect_of("title 1").unwrap().0
+  let x0 = t.rect_of("title 0").unwrap().0
+  assert_true(x1 < 0.0 && x0 > 0.0)
+  assert_eq((x0 - x1).round(), 390.0)
+  t.run_for(@ui.nav_push_ms / 2.0)
+  assert_eq(nav.depth(), 1)
+  // swiped back: as far as the finger has gone, to the left, page 0 beside it on the right
+  t.tap_text("open 1")
+  t.run_for(@ui.nav_push_ms)
+  t.hold_drag(5.0, 400.0, 200.0, 400.0)
+  assert_eq(t.rect_of("title 1").unwrap().0, -195.0)
+  assert_eq(t.rect_of("title 0").unwrap().0, 195.0)
+  t.release(200.0, 400.0)
+  t.run_for(@ui.nav_let_go_ms)
+  assert_eq(nav.depth(), 1)
+  assert_eq(t.rect_of("title 0").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
 test "back pops; the page under keeps where its list was scrolled" {
   let left = []
   let nav = @ui.Nav::new(0, on_leave=fn(p) { left.push(p) })

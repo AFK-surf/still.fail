@@ -515,19 +515,104 @@ let list_ground : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radiu
 ///|
 /// A row of a list card (Parts.kt ListRow): its ground concentric with the card's (LIST_ROW_CORNER), its words 12 and
 /// 12 in (CARD_PAD less LIST_PAD: 20 from the card's edge), what it holds 12 apart; tapped when `key` is given. True on
-/// the frame after a tap.
-fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
+/// the frame after a tap. `piece`: the row a block of the page's list of its own, a piece of its card (card_piece:
+/// whether it is the card's first row, its last).
+fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, Bool)) -> Bool {
   let id = if key == "" { 0 } else { c.id(key) }
-  c.box(style=list_line, id~, fn() {
-    body()
-    // Parts.kt ListRow: clickable over its clip, Smooth(LIST_ROW_CORNER)
-    if id != 0 {
-      @motion.ripple(c, id, @sf.row_corner)
-    }
-  })
-  |> ignore
+  let row = fn(style) {
+    c.box(style~, id~, fn() {
+      body()
+      // Parts.kt ListRow: clickable over its clip, Smooth(LIST_ROW_CORNER)
+      if id != 0 {
+        @motion.ripple(c, id, @sf.row_corner)
+      }
+    })
+    |> ignore
+  }
+  match piece {
+    None => row(list_line)
+    Some((first, last)) => card_piece(c, first, last, fn() { row(list_piece_line) })
+  }
   id != 0 && hit(c, id)
 }
+
+///|
+/// A piece of a list card, a block of a page's list of its own (scroll_page lays out only the blocks in view: a card
+/// of many rows, 本机缓存's chats, builds only the rows shown, not all of them each frame): the card's sides and
+/// ground, 8 in above its first row and under its last, its corners there (the halves that are no end of the card
+/// squared again by a patch of its ground), the card's 10 under it.
+fn card_piece(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit) -> Unit {
+  c.box(style=if last { card_room } else { card_piece_room }, fn() {
+    let ground = match (first, last) {
+      (true, true) => list_ground_open
+      (true, false) => list_piece_first
+      (false, true) => list_piece_last
+      (false, false) => list_piece_ground
+    }
+    c.box(style=ground, fn() {
+      c.layer(fn() { c.box(style=list_piece_fill, fn() {  }) |> ignore }) |> ignore
+      // (the card's corner, 30.5 high wholly smooth, is within half of a row's 62: a patch leaves the other end's)
+      if !first {
+        c.layer(fn() {
+          c.box(style=list_piece_patch, fn() {  }) |> ignore
+          c.spacer()
+        })
+        |> ignore
+      }
+      if !last {
+        c.layer(fn() {
+          c.spacer()
+          c.box(style=list_piece_patch, fn() {  }) |> ignore
+        })
+        |> ignore
+      }
+      let was = on_card.val
+      on_card.val = true
+      body()
+      on_card.val = was
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A card's piece's room on the page but its last: 12 from its sides, nothing under it.
+// kept across runs: a value (no field of it changes)
+let card_piece_room : @ui.Style = @ui.style(w=Full, px=S3)
+
+///|
+/// A list card's piece: its rows 8 in from its sides (LIST_PAD); 8 above the card's first, under its last.
+// kept across runs: a value (no field of it changes)
+let list_piece_ground : @ui.Style = @ui.style(w=Full, px=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_piece_first : @ui.Style = @ui.style(w=Full, px=S2, pt=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_piece_last : @ui.Style = @ui.style(w=Full, px=S2, pb=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_ground_open : @ui.Style = @ui.style(w=Full, p=S2)
+
+///|
+/// A list card's piece's ground: the card's, its corners (LIST_CARD_CORNER).
+// kept across runs: a value (no field of it changes)
+let list_piece_fill : @ui.Style = @ui.style(w=Full, h=Full, radius=@sf.list_card_radius, bg=Card)
+
+///|
+/// Half of a card's piece squared again (Full: as the spacer beside it grows), the card's ground.
+// kept across runs: a value (no field of it changes)
+let list_piece_patch : @ui.Style = @ui.style(w=Full, h=Full, bg=Card)
+
+///|
+/// A row of a card's piece: ListRow's line, its corner the card's less 8 said (LIST_ROW_CORNER 18, Xl2 on the scale:
+/// what `Inner` works out on a whole card; a piece's ground is no container of it, squared where it is no end of it).
+// kept across runs: a value (no field of it changes)
+let list_piece_line : @ui.Style = list_line.then(@ui.style(radius=Xl2))
 
 ///|
 /// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.

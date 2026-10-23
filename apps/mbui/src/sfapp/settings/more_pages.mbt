@@ -1011,10 +1011,19 @@ fn since_words(now : Double, at : Double) -> String {
 }
 
 ///|
-/// A row of a size (SizeRow): what, a line under it, its size; tapped when `key` is given.
-fn size_row(c : @ui.Ctx, key : String, title : String, sub : String, size : Double, more? : Bool = false) -> Bool {
+/// A row of a size (SizeRow): what, a line under it, its size; tapped when `key` is given; `piece`: a piece of its card
+/// (list_row).
+fn size_row(
+  c : @ui.Ctx,
+  key : String,
+  title : String,
+  sub : String,
+  size : Double,
+  more? : Bool = false,
+  piece? : (Bool, Bool),
+) -> Bool {
   let t = @sf.theme()
-  list_row(c, key~, fn() {
+  list_row(c, key~, piece?, fn() {
     row_lines(c, title, sub)
     c.text(size_words(size), size=14.0, color=t.p.muted, wrap=false) |> ignore
     if more {
@@ -1047,31 +1056,40 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
       if chats.length() == 0 {
         blocks.push(fn() { page_note(c, tr("android-settings.files.none")) })
       } else {
-        blocks.push(fn() {
-          list_card(c, fn() {
-            for x in chats {
-              let xv = Some(x)
-              let title = match text(xv, "title") {
-                "" => fill("android-settings.files.untitled", [("n", count(xv, "thread").to_string())])
-                s => s
-              }
-              let files = items(xv, "files")
-              let messages = size_words(number(xv, "bytes"))
-              let sub = if files.length() == 0 {
-                fill("android-settings.files.chat.messages", [("size", messages)])
-              } else {
-                fill("android-settings.files.chat.both", [
-                  ("size", messages),
-                  ("n", files.length().to_string()),
-                  ("files", size_words(files_bytes(files))),
-                ])
-              }
-              if size_row(c, "kept/" + text(xv, "station") + "/" + count(xv, "thread").to_string(), title, sub, chat_bytes(x), more=true) {
-                (core.push)(KeptChat(text(xv, "station"), count(xv, "thread")))
-              }
+        // a block each, one card's pieces: of many chats only the rows in view are laid out (one block of them all was
+        // built whole each frame, every row's words with it)
+        let n = chats.length()
+        for i, x in chats {
+          blocks.push(fn() {
+            let xv = Some(x)
+            let title = match text(xv, "title") {
+              "" => fill("android-settings.files.untitled", [("n", count(xv, "thread").to_string())])
+              s => s
+            }
+            let files = items(xv, "files")
+            let messages = size_words(number(xv, "bytes"))
+            let sub = if files.length() == 0 {
+              fill("android-settings.files.chat.messages", [("size", messages)])
+            } else {
+              fill("android-settings.files.chat.both", [
+                ("size", messages),
+                ("n", files.length().to_string()),
+                ("files", size_words(files_bytes(files))),
+              ])
+            }
+            if size_row(
+                c,
+                "kept/" + text(xv, "station") + "/" + count(xv, "thread").to_string(),
+                title,
+                sub,
+                chat_bytes(x),
+                more=true,
+                piece=(i == 0, i == n - 1),
+              ) {
+              (core.push)(KeptChat(text(xv, "station"), count(xv, "thread")))
             }
           })
-        })
+        }
       }
       // what is of no chat (KeptFiles.kt 其他): files of no chat known, the drives' files opened (文件浏览), each to
       // delete when there are some
@@ -1147,8 +1165,8 @@ fn kept_file_clear(core : Core, station : String, f : Json) -> Unit {
 
 ///|
 /// A file kept (KeptChatScreen's row): its name, how much and when it was last opened (未下载完成 when only a part of
-/// it came), deleted by its bin (a 36 circle, its 18 icon muted).
-fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json) -> Unit {
+/// it came), deleted by its bin (a 36 circle, its 18 icon muted); a piece of its card (list_row).
+fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (Bool, Bool)) -> Unit {
   let t = @sf.theme()
   let fv = Some(f)
   let name = text(fv, "name")
@@ -1158,7 +1176,7 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json) -> Unit {
   } else {
     fill("android-settings.files.meta", [("size", size_words(bytes)), ("opened", since_words((core.now)(), number(fv, "opened")))])
   }
-  list_row(c, key="", fn() {
+  list_row(c, key="", piece~, fn() {
     row_lines(c, name, sub)
     let id = c.id("kept-file/" + station + "/" + text(fv, "key") + "/" + name)
     let b = c.box(style=kept_bin, id~, fn() {
@@ -1231,13 +1249,11 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
           start=S6,
         )
       })
-      blocks.push(fn() {
-        list_card(c, fn() {
-          for f in files {
-            kept_file_row(c, core, if loose { text(Some(f), "station") } else { station }, f)
-          }
-        })
-      })
+      // a block each, one card's pieces (as the chats' on 本机缓存): of many only those in view laid out
+      let n = files.length()
+      for i, f in files {
+        blocks.push(fn() { kept_file_row(c, core, if loose { text(Some(f), "station") } else { station }, f, (i == 0, i == n - 1)) })
+      }
     }
     let all = messages + files_bytes(files)
     if all > 0.0 {
