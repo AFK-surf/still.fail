@@ -257,3 +257,64 @@ let mine_filter_lit_words : @ui.TextStyle = mine_filter_words.then(@ui.text_styl
 ///|
 // kept across runs: a value (no field of it changes)
 let mine_filter_on_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=AccentText))
+
+///|
+/// A dialog over a desktop page (parts.tsx Dialog: the library's): its title, what it is about, what it holds, its
+/// buttons at its foot; each given what closes it.
+priv struct DeskDialog {
+  key : String
+  title : String
+  description : String
+  body : (@ui.Ctx, () -> Unit) -> Unit
+  foot : (@ui.Ctx, () -> Unit) -> Unit
+}
+
+///|
+/// The dialog up ("None": none), and the last one put up, drawn as it goes.
+// kept across runs: said by open_dialog and its close; core.mbt's reset empties them
+let desk_dialog : Ref[DeskDialog?] = Ref(None)
+
+///|
+// kept across runs: said by open_dialog; core.mbt's reset empties it
+let desk_dialog_last : Ref[DeskDialog?] = Ref(None)
+
+///|
+/// How many dialogs were put up (a dialog's fields' keys, new each time it opens).
+// kept across runs: counted by open_dialog; core.mbt's reset puts it back
+let desk_dialogs : Ref[Int] = Ref(0)
+
+///|
+/// Puts up a dialog over the page.
+fn open_dialog(
+  key : String,
+  title : String,
+  body : (@ui.Ctx, () -> Unit) -> Unit,
+  foot : (@ui.Ctx, () -> Unit) -> Unit,
+  description? : String = "",
+) -> Unit {
+  let d = { key, title, description, body, foot }
+  desk_dialogs.val += 1
+  desk_dialog.val = Some(d)
+  desk_dialog_last.val = Some(d)
+}
+
+///|
+/// The dialog, over everything the page shows (sheet.mbt overlay): while up, and as it goes.
+fn desk_dialog_overlay(c : @ui.Ctx) -> Unit {
+  match desk_dialog_last.val {
+    Some(d) => {
+      let shut = fn() { desk_dialog.val = None }
+      let open = match desk_dialog.val {
+        Some(now) => now.key == d.key
+        None => false
+      }
+      let still = @sf.dialog(c, d.key, open, d.title, fn() { (d.body)(c, shut) }, description=d.description, close_label=tr("common.close"), footer=fn() {
+        (d.foot)(c, shut)
+      })
+      if open && !still {
+        shut()
+      }
+    }
+    None => ()
+  }
+}

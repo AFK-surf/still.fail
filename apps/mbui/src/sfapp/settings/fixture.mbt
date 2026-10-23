@@ -182,6 +182,10 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-recover" => up("vault-recover", "", 0)
     "settings-add-people" => up("add-people", "", 0)
     "settings-workspace-mark" => up("workspace-mark", "", 0)
+    // the desktop's 安全 with a dialog up (web_security.mbt): a device's code to confirm, MBA to take in, turning it off
+    "settings-security-confirm" => up("lock-confirm", "", 0)
+    "settings-security-join" => up("lock-join", "", 0)
+    "settings-security-off" => up("lock-off", "", 0)
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
     "settings-run-models" => {
       fx_many_models.val = true
@@ -226,6 +230,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"
+    "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
     "settings-station" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
@@ -1559,6 +1564,13 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
     "vault-editor" => open_vault_editor(core, "ws1", "v1", None, kind="token")
     "vault-recover" => open_vault_recover(core, "ws1")
     "add-people" => open_add_people(core, here, workspace_view(core, here).value)
+    "lock-confirm" =>
+      match items((core.topic)("lock", { "workspace": str("ws1") }).value, "requests") {
+        [r, ..] => confirm_dialog(core, "ws1", r)
+        _ => ()
+      }
+    "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
+    "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })
     "add" | "add-existing" | "add-command" => {
       open_add_station(core, here, ["st1", "st2"], existing=what == "add-existing")
