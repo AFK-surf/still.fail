@@ -13,7 +13,8 @@ on:
       - "apps/mbui/mbui/android/app/src/main/java/dev/mbui/Images.java"
       - "apps/mbui/mbui/android/apk.json"
       - "apps/mbui/mbui/android/apk.lock"
-      - "apps/mbui/mbui/scripts/apk.py"
+      - "apps/mbui/mbui/tools/apk/**"
+      - "apps/mbui/mbui/scripts/apk"
       - "apps/mbui/mbui/scripts/android.sh"
       - "apps/mbui/mbui/src/render/**"
       - "apps/mbui/mbui/src/ui/drawlist.mbt"
@@ -50,7 +51,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      # (the APK without Gradle: mbui/scripts/apk.py; its dependencies and their dex kept by the lock)
+      # (the APK without Gradle: mbui/scripts/apk (tools/apk); its dependencies and their dex kept by the lock)
       - uses: ./.github/actions/mbui-apk
       - uses: ./.github/actions/mbui-moonbit
       - name: The draw list and the APK (scripts/render_android.sh build)

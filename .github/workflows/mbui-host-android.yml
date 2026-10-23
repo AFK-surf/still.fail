@@ -80,7 +80,8 @@ jobs:
               - "android/app/src/main/java/dev/mbui/Host.java"
               - "android/apk.json"
               - "android/apk.lock"
-              - "scripts/apk.py"
+              - "tools/apk/**"
+              - "scripts/apk"
               - "src/host/marks.mbt"
               - "src/host/host_native.mbt"
               - "src/kitdemo/gallery/markscheck.mbt"
@@ -94,7 +95,7 @@ jobs:
         run: python3 scripts/ci_paths.py
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      # (the APK without Gradle: mbui/scripts/apk.py; its dependencies and their dex kept by the lock)
+      # (the APK without Gradle: mbui/scripts/apk (tools/apk); its dependencies and their dex kept by the lock)
       - uses: ./.github/actions/mbui-apk
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo's APK for an x86_64 emulator
