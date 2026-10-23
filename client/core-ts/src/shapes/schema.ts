@@ -332,7 +332,7 @@ export const SHAPES: Record<string, Shape> = {
     ["card", opt("MessageCard"), { doc: "The card. A core before cards says none: an options card." }],
     ["deferred", opt("bool"), { doc: "Set aside (待定) on this device: last in the list, still pending." }],
     ["text", "String", { doc: "奏 · <the post's first line>" }],
-    ["question", opt("String"), { doc: "What it asks, uncut: the need its agent ended need_human with, else the post's first line. A core before it says\nnone." }],
+    ["question", "String", { doc: "What it asks, uncut: the need its agent ended need_human with, else the post's first line." }],
   ], { doc: "One card on the 奏 page: where it is, the post that asks (as a chat shows messages, with its card) and the messages\njust before it, the card (an options card's options as shown, also as `options`), and whether the viewer set it\naside on this device. An options card is answered with `decision.answer`, a text card with `decision.reply`." }),
   ChatThread: struct([
     ["id", "i64", { client: "I54" }],
@@ -1684,6 +1684,7 @@ export const SHAPES: Record<string, Shape> = {
     ["thread", opt("u64")],
     ["title", "String"],
     ["text", "String", { doc: "Its row's state line: 奏 · …, 要你帮忙：…, 出问题：…" }],
+    ["what", "String", { doc: "The same without its lead (奏 · , 需要你处理：, 出错：): what it asks, what it needs, why it stopped." }],
     ["seq", opt("u64"), { doc: "The waiting card's post (`decision.dismiss`), for `wait`." }],
     ["seen", "bool", { default: true, doc: "Looked at since it came to want them: listed, not counted in the badge." }],
     ["at", "i64"],

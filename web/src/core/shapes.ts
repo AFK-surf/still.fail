@@ -2583,11 +2583,8 @@ export interface DecisionItem {
 	deferred?: boolean;
 	/** 奏 · <the post's first line> */
 	text: string;
-	/**
-	 * What it asks, uncut: the need its agent ended need_human with, else the post's first line. A core before it says
-	 * none.
-	 */
-	question?: string;
+	/** What it asks, uncut: the need its agent ended need_human with, else the post's first line. */
+	question: string;
 }
 
 /**
@@ -3810,6 +3807,8 @@ export interface MarkItem {
 	title: string;
 	/** Its row's state line: 奏 · …, 要你帮忙：…, 出问题：… */
 	text: string;
+	/** The same without its lead (奏 · , 需要你处理：, 出错：): what it asks, what it needs, why it stopped. */
+	what: string;
 	/** The waiting card's post (`decision.dismiss`), for `wait`. */
 	seq?: number;
 	/** Looked at since it came to want them: listed, not counted in the badge. */

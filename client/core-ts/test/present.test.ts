@@ -244,6 +244,13 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：登录失效");
   assert.equal(words({ outcome: "aborted" }), "出错：被停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
+  // Without its lead (the 待处理 list's line, its dot says that much): what it needs, why it stopped.
+  const what = (turn: J) => p.rowStateLine({ agents: [p.session({ process: "warm", lastTurn: turn })] })?.[2];
+  assert.equal(what({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "要 Stripe 的测试 key");
+  assert.equal(what({ declared: "block", outcome: "completed" }), "需要你处理");
+  assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "登录失效");
+  assert.equal(what({ outcome: "aborted" }), "被停止");
+  assert.equal(what({ outcome: "completed" }), "意外停止");
   let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
   decided = p.session(decided);
   assert.equal(decided.mark, "block");
@@ -310,13 +317,13 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const asked = row([done], false);
   asked.card = card;
   // A line that asks for a decision is about no message: the chat leads to what it asks.
-  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null]]);
+  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null, "域名用哪个？"]]);
   asked.agents = [agent(null, "running")];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [waits];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [helped];
-  assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null]);
+  assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null, "要 key"]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
   assert.equal(p.rowStateText(asked), "出错：登录失效");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
@@ -334,12 +341,12 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const about = (a: J) => agent({ declared: "final", ending: "all_done", need: "已合进 main", about: a, outcome: "completed" }, "warm");
   const here = row([about({ thread: 7, seq: 12, ts: "1.2" })], false);
   here.thread = 7;
-  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", 12]);
+  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", 12, "已完成：已合进 main"]);
   here.agents = [about({ thread: 8, seq: 12, ts: "1.2" })];
-  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", null]);
+  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", null, "已完成：已合进 main"]);
   const waiting = row([agent({ declared: "waiting", ending: "waiting", waitFor: "CI", about: { thread: 7, seq: 3, ts: "1.1" }, outcome: "completed", endedAt: 5 }, "warm")], false);
   waiting.thread = 7;
-  assert.deepEqual(p.rowStateLine(waiting), ["等待：CI", 3]);
+  assert.deepEqual(p.rowStateLine(waiting), ["等待：CI", 3, "等待：CI"]);
 });
 
 test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {

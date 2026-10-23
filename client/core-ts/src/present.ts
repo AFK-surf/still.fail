@@ -346,14 +346,20 @@ export function stateAbout(agent: J, thread: number | null): number | null {
 
 /// Where a chat stands, in words, and the message that is about. A line that asks for a decision (奏 · …, 要你帮忙：…)
 /// is about none: the line only says so, and the chat leads to what it asks (`ChatView.asks`).
-export function rowStateLine(row: J): [string, number | null] | null {
+export function rowStateLine(row: J): [string, number | null, string] | null {
   const thread = u64(get(row, "thread")) ?? null;
   const p = decisions.pending(row);
-  const card: [string, number | null] | null = p
-    ? [str(p.text) ?? decisions.line(str(get(p.message, "text")) ?? ""), null]
+  const lead = t("core-logic.decisions.line", { text: "" });
+  const given = str(p?.text);
+  const card: [string, number | null, string] | null = p
+    ? [given ?? decisions.line(str(get(p.message, "text")) ?? ""), null, given !== undefined ? (given.startsWith(lead) ? given.slice(lead.length) : given) : decisions.question(str(get(p.message, "text")) ?? "")]
     : null;
   const agents: J[] = arr(get(row, "agents")) ?? [];
   const textOf = (a: J): string | null => str(get(a, "statusText")) ?? null;
+  const said = (a: J, about: number | null): [string, number | null, string] | null => {
+    const text = textOf(a);
+    return text === null ? null : [text, about, stateWhat(a) ?? text];
+  };
   const atWork = agents.some((a) => shownStatus(a) === "queued" || (shownStatus(a) === "running" && waiting(a) === null));
   if (!atWork) {
     // What it asks let go by the viewer (忽略): its agent asking says nothing on their row.
@@ -361,22 +367,15 @@ export function rowStateLine(row: J): [string, number | null] | null {
     if (blocked) {
       const need = nonEmpty(get(get(blocked, "lastTurn"), "need")) !== null;
       if (card && !need) return card;
-      const text = textOf(blocked);
-      return text === null ? null : [text, null];
+      return said(blocked, null);
     }
     const failed = agents.find((a) => ["failed", "unexpected", "aborted"].includes(shownStatus(a)));
-    if (failed) {
-      const text = textOf(failed);
-      return text === null ? null : [text, stateAbout(failed, thread)];
-    }
+    if (failed) return said(failed, stateAbout(failed, thread));
   }
   if (card) return card;
   if (atWork) return null;
   const waits = agents.find((a) => waiting(a) !== null);
-  if (waits) {
-    const text = textOf(waits);
-    return text === null ? null : [text, stateAbout(waits, thread)];
-  }
+  if (waits) return said(waits, stateAbout(waits, thread));
   if (!settled(row)) return null;
   const done = agents.find((a) => nonEmpty(get(get(a, "lastTurn"), "need")) !== null);
   const text = (done && textOf(done)) ?? t("core-views.present.done");
@@ -387,7 +386,25 @@ export function rowStateLine(row: J): [string, number | null] | null {
       if (about !== null) break;
     }
   }
-  return [text, about];
+  return [text, about, text];
+}
+
+export function rowStateText(row: J): string | null {
+  return rowStateLine(row)?.[0] ?? null;
+}
+
+/// An agent's state line without its lead (需要你处理：, 出错：): what it needs, why it stopped; else the line as it is.
+function stateWhat(a: J): string | null {
+  const status = shownStatus(a);
+  const said = (k: string) => nonEmpty(get(get(a, "lastTurn"), k));
+  if (waiting(a) === null) {
+    const need = said("need");
+    if (status === "block" && need !== null) return need;
+    if (status === "failed") return format.failureText(said("detail") ?? "");
+    if (status === "aborted") return t("core-logic.format.status.aborted.what");
+    if (status === "unexpected") return t("core-logic.format.status.unexpected.what");
+  }
+  return str(get(a, "statusText")) ?? null;
 }
 
 /// What a chat's agents are doing, for the 奏 page's 正在办.
@@ -406,9 +423,6 @@ export function workingLine(row: J): string | null {
   return null;
 }
 
-export function rowStateText(row: J): string | null {
-  return rowStateLine(row)?.[0] ?? null;
-}
 
 /// Whether a person is the viewer.
 export function isViewer(me: J, person: string, slackUsers: string[]): boolean {
