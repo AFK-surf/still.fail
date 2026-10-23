@@ -23,7 +23,17 @@ fn font_row(c : @ui.Ctx, core : Core) -> Unit {
     }
   }
   let value = if names.is_empty() { tr("web-pages.appearance.fonts.default") } else { names.join(" · ") }
-  if go_row(c, "appearance/fonts", tr("web-pages.appearance.fonts.title"), value~) {
+  // (the wide frame's under its section's head 字体: its row names what it chooses for)
+  let title = if wide.val {
+    [
+      tr("web-pages.appearance.fonts.ui"),
+      tr("web-pages.appearance.fonts.text"),
+      tr("web-pages.appearance.fonts.code"),
+    ].join(" · ")
+  } else {
+    tr("web-pages.appearance.fonts.title")
+  }
+  if go_row(c, "appearance/fonts", title, value~) {
     (core.push)(Fonts)
   }
 }

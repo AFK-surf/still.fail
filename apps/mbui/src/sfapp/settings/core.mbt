@@ -523,6 +523,7 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  notify_page_reset()
   login_marked.val = None
   station_parts.clear()
   lock_prompts_reset()

@@ -13,6 +13,13 @@
 let notify_kinds : Array[String] = ["wait", "failed", "done", "message"]
 
 ///|
+/// As at the start (core.mbt reset): no kind opened, nothing chosen.
+fn notify_page_reset() -> Unit {
+  kind_open.val = ""
+  kinds_chosen.clear()
+}
+
+///|
 /// The kind opened on the page to show its ways ("" none).
 let kind_open : Ref[String] = Ref("")
 
@@ -117,6 +124,8 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
       }
       c.cursor(id, Hand)
       let lit = on && action == ""
+      // (two to a line, as the web's tiles are: its badge's beside it, which this app has none of)
+      c.box(style=way_tiles, fn() {
       c.box(style=if lit { way_tile_on } else { way_tile }, id~, fn() {
         c.box(style=way_picture, fn() { c.box(style=way_banner, fn() {  }) |> ignore }) |> ignore
         c.text(tr("web-pages.notifications.ways.banner"), style=way_name) |> ignore
@@ -132,6 +141,9 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
           c.text(tr(if on { "web-pages.notifications.on" } else { "web-pages.notifications.off" }), style=wide_meta)
           |> ignore
         }
+      })
+      |> ignore
+      c.box(style=way_tile_room, fn() {  }) |> ignore
       })
       |> ignore
     })
@@ -202,7 +214,8 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool) 
             at,
           )
           if picked != at && on {
-            set_kind(core, "done", str(ways[picked]))
+            // (told once the frame's builds are over)
+            c.after_build("notify-done", fn() { set_kind(core, "done", str(ways[picked])) })
           }
         })
         |> ignore
@@ -610,7 +623,7 @@ fn days_offered(kept : Double, base : Array[Double]) -> Array[Double] {
 /// round it while on.
 // kept across runs: a value (no field of it changes)
 let way_tile : @ui.Style = @ui.style(
-  w=Full,
+  w=@sf.grow,
   py=S4,
   gap=S1_5,
   align=ACenter,
@@ -619,6 +632,14 @@ let way_tile : @ui.Style = @ui.style(
   border=B2,
   border_color=Clear,
 )
+
+///|
+// kept across runs: a value (no field of it changes)
+let way_tiles : @ui.Style = @ui.style(row=true, w=Full, gap=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let way_tile_room : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
