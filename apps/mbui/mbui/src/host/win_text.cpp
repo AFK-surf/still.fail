@@ -569,6 +569,12 @@ static void rasterize(int key) {
   l->Release();
 }
 
+// (a glyph drawn as it is first asked for: nothing ahead)
+extern "C" void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
+  (void)keys;
+  (void)n;
+}
+
 extern "C" void mb_host_glyph(int32_t key, double *out) {
   if (key < 0 || key >= n_entries) {
     for (int i = 0; i < 7; i++) out[i] = 0;

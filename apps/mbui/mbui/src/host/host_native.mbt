@@ -49,6 +49,9 @@ extern "C" fn ffi_text_key(
 #borrow(out)
 extern "C" fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit = "mb_host_glyph"
 
+#borrow(keys)
+extern "C" fn ffi_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit = "mb_host_glyphs_ahead"
+
 #borrow(path)
 extern "C" fn ffi_face_add(face : Int, path : String, weight : Int) -> Int = "mb_host_face_add"
 
@@ -333,6 +336,13 @@ fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
 ///|
 fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   ffi_glyph(key, out)
+}
+
+///|
+/// The glyphs of the first `n` of `keys` drawn ahead, off the frames' thread (Android's MBText.ahead); the other
+/// hosts draw a glyph as it is first asked for.
+fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  ffi_glyphs_ahead(keys, n)
 }
 
 ///|

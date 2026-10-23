@@ -78,6 +78,7 @@ fn words_forgotten() -> Unit {
   text_cache.fonts.clear()
   text_cache.metrics.clear()
   text_cache.glyphs.clear()
+  text_cache.fresh.clear()
   text_cache.generation = -1
 }
 
