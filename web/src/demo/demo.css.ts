@@ -19,3 +19,5 @@ globalStyle("#demo *", { overscrollBehavior: "auto" });
 // The phone's app has no status bar above it here: its bars keep a status bar's room at the top all the same, rather
 // than pressing against the box's round corners.
 globalStyle(`#demo ${m}`, { vars: { "--m-top": "24px" } });
+// Drawn in a phone's shell (the site's page: site/OneComputer.tsx), a status bar's room under its camera island.
+globalStyle(`#demo[data-phone] ${m}`, { vars: { "--m-top": "54px" } });

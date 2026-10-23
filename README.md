@@ -2,7 +2,7 @@
 
 <h1 align="center">still.fail</h1>
 
-<p align="center"><b>Coding agents in your team's chats, running on machines you control.</b></p>
+<p align="center"><b>Your own machines, connected to wherever you are.</b></p>
 
 <p align="center">
 <a href="https://still.fail">Website</a> ·
@@ -18,16 +18,15 @@
 <img alt="Clients: web, macOS, Windows, Android" src="https://img.shields.io/badge/clients-web%20·%20macOS%20·%20Windows%20·%20Android-555">
 </p>
 
-still.fail turns a Slack thread, a Feishu chat or a chat in its own app into a persistent coding-agent session. The agent runs on a **station**, a machine you choose, with a runtime already signed in there: Claude Code, Codex, DeepSeek Harness or Grok Build. It keeps its workspace, history and background jobs between messages, and when it needs someone to decide something, the question goes to that person's list of decisions.
+still.fail connects the machines you choose to wherever you are. Each runs a **station**, and you use it from the web, desktop and Android apps, a Slack thread or a Feishu chat: its files, its browser and desktop, and the runtimes signed in there (Claude Code, Codex, DeepSeek Harness or Grok Build), which keep their workspace, history and background jobs between messages. A workspace's stations work as one, and conversations stay on them: clients reach stations peer to peer.
 
 ## Features
 
+- **Your machine, from anywhere.** Browse and share its files, see and drive its browser or desktop, finish a CLI's sign-in from a card in the app, or lend the station your Android phone over adb.
+- **Machines that work as one.** Stations run on macOS, Linux and Windows and use the runtimes and subscriptions signed in on that machine. Stations of a workspace work together: agents run tasks and open chats on other stations, and stations can lend each other profiles and skills.
 - **Where your team already talks.** Mention the bot in a Slack thread or a Feishu (Lark) group, or open a chat in the web, desktop or Android app. Everyone in the conversation works with the same agent.
 - **Sessions that persist.** Each chat keeps its working directory, history and memory. Builds, watches and web previews keep running as jobs and services after the turn ends, and report back when they finish.
-- **Decisions reach the right person.** An agent that needs input ends its turn with a question, optionally with options to tap. It appears in the assignee's **Decisions** list and notifications on every device.
-- **Your machines, your accounts.** Stations run on macOS, Linux and Windows and use the runtimes and subscriptions signed in on that machine. Stations of a workspace work together: agents run tasks and open chats on other stations, and stations can lend each other profiles and skills.
 - **Peer-to-peer.** Clients connect to stations over [iroh](https://github.com/n0-computer/iroh), directly on the local network or through a relay. Conversations are stored on stations, not in the cloud.
-- **The station's machine, from anywhere.** Browse and share its files, see and drive its browser or desktop, finish a CLI's sign-in from a card in the app, or lend the station your Android phone over adb.
 - **Security mode.** Optionally, members, devices and stations are accepted only when signed by trusted devices, so the cloud alone cannot grant access. In that mode, a vault keeps the credentials agents use encrypted, and hands them out only after a person approves.
 
 ## How it works

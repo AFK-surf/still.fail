@@ -26,8 +26,8 @@ const call = (activity: string, name: string, hint: string, input: object, resul
   activity, ms, step: step(name, hint, input, result, ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`, failed),
 });
 
-// The main chat: a request that says nothing ("that thing, do that to it"), the agent working out what was meant and
-// doing it, "still no good", and then "what the hell did you do": still.fail and youdid.wtf, played out.
+// The main chat: a page that looks wrong on a phone, the agent finding why and fixing it, then two follow-ups from the
+// person who asked, each taken on in the same chat.
 const FIRST = {
   calls: [
     call("查看最近的讨论", "Bash", "git log --since=yesterday", { command: "git log --since=yesterday --oneline" }, "9d2e1f0 登录页：按钮样式调整\n41c7a2b 登录页：手机上的布局", 300),
@@ -36,17 +36,15 @@ const FIRST = {
     call("编辑 src/auth/LoginForm.tsx", "Edit", "src/auth/LoginForm.tsx", { file_path: "src/auth/LoginForm.tsx", old_string: "width={320}", new_string: "block" }, "The file has been updated.", 10),
     call("截图 登录页 375px", "Bash", "pnpm shot /login --width 375", { command: "pnpm shot /login --width 375" }, "saved shots/login-375.png", 1600),
   ],
-  thought: "昨天的提交都在动登录页，手机上按钮是写死的 320px 宽，最可能说的是这个。",
+  thought: "昨天的提交都在动登录页，手机上按钮是写死的 320px 宽，会超出屏幕。",
   answer: [
-    "我猜你说的是登录页那个按钮：手机上它是写死的 320px，超出屏幕了。",
+    "登录按钮在手机上写死了 320px 宽，超出了屏幕。",
     "",
     "- 改成撑满容器，375px 宽下截图看过了，不再超出",
     "- 分支 `fix/login-button`",
-    "",
-    "如果你说的「那个」不是这个，告诉我是哪个页面就行。",
   ].join("\n"),
 };
-const FOLLOW_UP = "还是不行";
+const FOLLOW_UP = "表单看着还是有点偏";
 const SECOND = {
   calls: [
     call("截图 登录页 375px", "Bash", "pnpm shot /login --width 375", { command: "pnpm shot /login --width 375" }, "saved shots/login-375.png", 1500),
@@ -57,7 +55,7 @@ const SECOND = {
   thought: "按钮不超出了，但整个表单左右留白不对称，看着还是歪的。",
   answer: "再看了一遍 375px 的截图：表单左右留白是 8px 和 24px，所以按钮看着还是歪的。改成左右各 16px，现在居中了，测试都过了。",
 };
-const WTF = "你干的什么 JB？？我说的是深色模式！按钮都看不见了！";
+const DARK = "深色模式下登录按钮也看不见";
 const THIRD = {
   calls: [
     call("截图 登录页 深色", "Bash", "pnpm shot /login --theme dark", { command: "pnpm shot /login --theme dark" }, "saved shots/login-dark.png", 1500),
@@ -66,14 +64,14 @@ const THIRD = {
     call("截图 浅色 / 深色", "Bash", "pnpm shot /login --theme light,dark", { command: "pnpm shot /login --theme light,dark" }, "saved shots/login-light.png, shots/login-dark.png", 1700),
   ],
   thought: "深色模式下按钮的字和底色都写死成 #111，所以整个按钮看不见。",
-  answer: "明白了，是深色模式：登录按钮的文字和背景都写死成 `#111`，深色下整个按钮都看不见。改成跟着主题走的颜色，浅色、深色都截图核对过了，两张图在 PR 里。之前那两处改动也保留着，一起在 `fix/login-button`。",
+  answer: "深色模式下登录按钮的文字和背景都写死成 `#111`，深色下整个按钮都看不见。改成跟着主题走的颜色，浅色、深色都截图核对过了，两张图在 PR 里。之前那两处改动也保留着，一起在 `fix/login-button`。",
 };
 /** Where the opening frame stands in the second turn: at its tests. */
 const OPENING_AT = 3;
 
 /**
  * The chats as the demo opens (and as the site is built to HTML: the same frame): the main chat well under way —
- * asked, answered, "still no good", its agent at the tests of its second go. The story goes on from there.
+ * asked, answered, followed up, its agent at the tests of its second go. The story goes on from there.
  */
 export function openingChats(): DemoChat[] {
   const chats = startingChats();
@@ -161,12 +159,12 @@ export function makeStory(stage: Stage) {
     say(SAFARI_KEY, LIN, FOLLOW_UP);
     await wait(700);
     await turn(SAFARI_KEY, SECOND.calls, SECOND.thought, SECOND.answer);
-    await wtf();
+    await dark();
   }
 
-  async function wtf() {
+  async function dark() {
     await wait(2200);
-    say(SAFARI_KEY, LIN, WTF);
+    say(SAFARI_KEY, LIN, DARK);
     await wait(700);
     await turn(SAFARI_KEY, THIRD.calls, THIRD.thought, THIRD.answer);
   }
@@ -190,7 +188,7 @@ export function makeStory(stage: Stage) {
         // First where the opening frame left off (openingChats): the second turn, at its tests.
         await wait(1200);
         await turn(SAFARI_KEY, SECOND.calls, SECOND.thought, SECOND.answer, { from: OPENING_AT });
-        await wtf();
+        await dark();
         await deps();
         await wait(4000);
         if (stopped) return;

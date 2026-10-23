@@ -3,29 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>still.fail · 还是不行！干的什么 JB！</title>
-<meta name="description" content="还是不行？你干的什么 JB？still.fail 让 Claude Code 和 Codex 跑在你自己的机器上，你在聊天里指挥，它们一直干活。">
-<meta property="og:title" content="still.fail · 还是不行！干的什么 JB！">
-<meta property="og:description" content="Claude Code 和 Codex 跑在你自己的机器上，你在聊天里指挥，它们一直干活。">
+<!-- A browser not in Chinese goes to the English page, unless this visitor chose a language (the bar's switch:
+     web/src/site/Site.tsx). -->
+<script>try{var l=localStorage.getItem("stillfail.site.lang");if(l!=="zh"&&(l==="en"||!/^zh/i.test(navigator.language||"")))location.replace("/en/"+location.search)}catch(e){}</script>
+<title>still.fail · One devices.</title>
+<meta name="description" content="still.fail 把你的手机、电脑和服务器连成一台电脑：在任何一台上，用所有设备。">
+<meta property="og:title" content="still.fail · One devices.">
+<meta property="og:description" content="在任何一台上，用所有设备。">
 <meta property="og:image" content="https://still.fail/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" hreflang="en" href="https://still.fail/en/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: dark when none was;
+<!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: light when none was;
      "system" leaves it to the system. The demo's app follows the same data-theme. -->
-<script>try{var t=localStorage.getItem("stillfail.site.theme");if(t===null){t=localStorage.getItem("ember.site.theme");if(t!==null)localStorage.setItem("stillfail.site.theme",t)}if(t!=="system")document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
-<!-- Which of the site's domains the page was opened on: the title lights that one (web/src/site/Site.tsx). A preview
-     elsewhere can ask for one with ?host=youdid.wtf. -->
-<script>if(/(^|\.)youdid\.wtf$/.test(location.hostname)||new URLSearchParams(location.search).get("host")==="youdid.wtf")document.documentElement.dataset.host="youdid.wtf"</script>
+<script>try{var t=localStorage.getItem("stillfail.site.theme");if(t===null){t=localStorage.getItem("ember.site.theme");if(t!==null)localStorage.setItem("stillfail.site.theme",t)}if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
 <!-- What the visitor is on, for the downloads to offer (web/src/site/Site.tsx): mac, android, ios, or desktop (the
      rest). An iPad says it is a Mac, and has a touch screen. A preview can ask for one with ?platform=. -->
 <script>(function(){var u=navigator.userAgent,p=new URLSearchParams(location.search).get("platform");if(!p)p=/Android/i.test(u)?"android":/iPhone|iPad|iPod/.test(u)||/Macintosh/.test(u)&&navigator.maxTouchPoints>1?"ios":/Macintosh/.test(u)?"mac":/Mobi/i.test(u)?"":"desktop";if(p)document.documentElement.dataset.platform=p})()</script>
-<!-- Script will move the first screen (web/src/site/motion.ts): what it brings in waits unseen for it (and is shown
-     as it rests if the script fails to load). -->
-<script>if(!matchMedia("(prefers-reduced-motion: reduce)").matches){document.documentElement.dataset.motion="";addEventListener("error",function(e){var s=e.target;if(s&&s.tagName==="SCRIPT"&&s.type==="module")delete document.documentElement.dataset.motion},true)}</script>
+<!-- Which idea of the page shows (web/src/site/Site.tsx): ?v=2 the second, else the first. -->
+<script>document.documentElement.dataset.v=new URLSearchParams(location.search).get("v")==="2"?"2":"1"</script>
 <meta name="color-scheme" content="light dark">
 </head>
 <body>

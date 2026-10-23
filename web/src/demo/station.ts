@@ -102,6 +102,39 @@ export const stationView = () => {
   const base = now(data.station);
   return { ...base, station: STATION, host: withMeters(base.host), way: { path: NET.path, via: NET.via }, overview: overview() };
 };
+
+/** The workspace's other machines, beside the station the chats are on: its station page lists them all. */
+const OTHERS = [
+  { id: "mini", name: "Mini", icon: "glyph:mini:blue", cpu: "Apple M4", summary: "Apple M4 · 空闲", line: "macOS 26.6.2 · 10 核 · 16 GB · 已运行 6 天", running: 0,
+    net: { path: "直连", via: "direct" as const, rtt: "18 ms" }, left: [["空闲 88%", "88"], ["剩 6.2 G", "6.2"], ["剩 214 G", "214"]] },
+  { id: "laptop", name: "笔记本", icon: "glyph:laptop:purple", cpu: "Apple M3 Pro", summary: "Apple M3 Pro · 空闲", line: "macOS 26.6.2 · 12 核 · 36 GB · 已运行 2 天", running: 0,
+    net: { path: "直连", via: "direct" as const, rtt: "9 ms" }, left: [["空闲 92%", "92"], ["剩 14.1 G", "14.1"], ["剩 388 G", "388"]] },
+  { id: "server", name: "服务器", icon: "glyph:database:green", cpu: "AMD EPYC", summary: "AMD EPYC · 1 个任务正在运行", line: "Ubuntu 24.04 · 32 核 · 128 GB · 已运行 41 天", running: 1,
+    net: { path: "中继", via: "relay" as const, rtt: "46 ms" }, left: [["空闲 63%", "63"], ["剩 71 G", "71"], ["剩 1.4 T", "1.4"]] },
+];
+
+/** How this device reaches a station of stationViews (the `stationNet` view): the chats' one as NET, the others their own. */
+export const netOf = (key: string) => {
+  const o = OTHERS.find((x) => `${WORKSPACE}/${x.id}` === key);
+  return o ? { ...NET, path: o.net.path, via: o.net.via, rtt: { text: o.net.rtt, level: "ok" as const } } : NET;
+};
+
+/** Every station of the workspace, as the site's page shows them (each with its icon): the chats' own, then the others. */
+export const stationViews = () => {
+  const own = { ...stationView(), icon: "glyph:desktop:orange" };
+  return [own, ...OTHERS.map((o) => ({
+    ...own, id: o.id, station: `${WORKSPACE}/${o.id}`, name: o.name, icon: o.icon, summary: o.summary,
+    way: { path: o.net.path, via: o.net.via },
+    overview: { ...own.overview, counts: { ...own.overview.counts, running: o.running } },
+    host: { ...own.host, cpuModel: o.cpu, line: o.line, meters: own.host.meters.map((base, i) => {
+      // As withMeters has them, with the words it adds.
+      const m = base as typeof base & { remaining: string; big: string; left: number };
+      const [remaining, big] = o.left[i] ?? [m.remaining, m.big];
+      const left = Number.parseFloat(remaining!.replace(/[^0-9.]/g, "")) || m.left;
+      return { ...m, remaining, big, left: i === 0 ? left : m.left, percent: i === 0 ? 100 - left : m.percent };
+    }) },
+  }))];
+};
 /** What a Claude agent's model control offers and the account it runs on. */
 export const runs = (): Runs => ({ choices: stationView().models as Runs["choices"], profile: overview().profiles[0] as unknown as Runs["profile"] });
 /** A connect's Slack app, as the station reads it from Slack: here, with no configuration token to read it with. */
@@ -229,7 +262,7 @@ export function usage(days: number) {
         item("deps", "每周依赖升级", 0.31, "Studio · Sonnet 5.5", { chat: { station: STATION, session: "ember:c-demo-deps" } }),
         item("p99", "排查 API p99 变慢", 0.24, "Studio · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-p99" } }),
         item("csv", "订单导出支持 CSV", 0.19, "Studio · GPT-5.5", { chat: { station: STATION, session: "ember:c-demo-csv" } }),
-        item("safari", "把那个弄一下", 0.15, "Studio · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-safari" } }),
+        item("safari", "登录页手机适配", 0.15, "Studio · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-safari" } }),
         item("docs", "补一下部署文档", 0.11, "Studio · Opus 5.5"),
       ] },
       { key: "people", title: "按人", items: people.map((p, k) => item(p.id, p.name, [0.5, 0.33, 0.17][k]!, undefined, { person: p })) },

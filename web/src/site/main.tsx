@@ -9,4 +9,6 @@ import { followMotion } from "@stillfail/ui/motion.ts";
 
 // The demo in it moves as the system asks (the site's own motion goes by its media query: site.css.ts).
 followMotion();
-hydrateRoot(document.getElementById("site")!, <StrictMode><Site mountDemo={mountDemo} /></StrictMode>);
+// The page's language, as it was built (site/index.html, site/en/index.html).
+const lang = document.documentElement.lang === "en" ? "en" : "zh";
+hydrateRoot(document.getElementById("site")!, <StrictMode><Site mountDemo={mountDemo} lang={lang} /></StrictMode>);

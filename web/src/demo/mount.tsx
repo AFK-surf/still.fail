@@ -22,6 +22,7 @@ import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView
 import { makeStory, openingChats } from "./story.ts";
 import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
+import { inEnglish } from "./english.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
 import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
@@ -63,6 +64,12 @@ const extensions: DemoExtension[] = [];
 export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
 
 function valueOf(topic: Topic): unknown {
+  // On the site's English page, what the demo makes up is said in English too (english.ts).
+  if (language === "en") return inEnglish(chineseValueOf(topic));
+  return chineseValueOf(topic);
+}
+
+function chineseValueOf(topic: Topic): unknown {
   const value = extendedValueOf(topic);
   if (topic.topic !== "chat" || !value || value instanceof CoreError) return value;
   const chat = value as ChatView;
@@ -85,7 +92,7 @@ function demoValueOf(topic: Topic): unknown {
     case "status": return { items: [] };
     case "connection": return { items: [] };
     // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
-    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts) };
+    case "prefs": return { ...(language ? { lang: language } : {}), ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts) };
     case "doing": return { doing: [] };
     // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
     case "composer": return composerView(String(topic.key ?? ""));
@@ -96,9 +103,10 @@ function demoValueOf(topic: Topic): unknown {
     case "history": return chat ? historyView(chat) : null;
     case "agentCard": return chat ? agentCardView(chat) : null;
     case "host": return station.host();
-    case "stationNet": return station.NET;
+    case "stationNet": return start === "stations" && typeof topic.station === "string" ? station.netOf(topic.station) : station.NET;
     case "connects": return station.connects();
-    case "stations": return [station.stationView()];
+    // The site's page that shows the workspace's machines together has them all; elsewhere the chats' one.
+    case "stations": return start === "stations" ? station.stationViews() : [station.stationView()];
     case "archive": return station.archive(topic.q, topic.limit);
     case "profiles": return station.profiles();
     case "usage": return station.usage(topic.days ?? 7);
@@ -471,18 +479,20 @@ const chatPath = (key: string) => `/w/${ENTRY.id}/s/local/chats/${encodeURICompo
 /** The demo's own width (not the window's) says which app it is: the phone's below this, as mobile/ is for phones. */
 const PHONE_BELOW = 700;
 
-function useDemoWidth(): number {
-  const [width, setWidth] = useState(() => root.clientWidth);
+/** Whether the demo is the phone's app, kept as its width changes (the site's frame changes it as it is scrolled):
+ *  the app is drawn again only when that changes, not at every width. */
+function useDemoPhone(): boolean {
+  const [phone, setPhone] = useState(() => root.clientWidth < PHONE_BELOW);
   useEffect(() => {
-    const observer = new ResizeObserver(() => setWidth(root.clientWidth));
+    const observer = new ResizeObserver(() => setPhone(root.clientWidth < PHONE_BELOW));
     observer.observe(root);
     return () => observer.disconnect();
   }, []);
-  return width;
+  return phone;
 }
 
 function Demo() {
-  return <DemoApp phone={useDemoWidth() < PHONE_BELOW} />;
+  return <DemoApp phone={useDemoPhone()} />;
 }
 
 /** The demo as the phone's app or the desktop's, opened on the chat in view (so switching between them keeps it). */
@@ -492,7 +502,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
   return (
     <ToastProvider>
       <Tooltip.Provider delayDuration={400}>
-        <MemoryRouter key={phone ? "phone" : "wide"} initialEntries={[`/w/${ENTRY.id}`, chatPath(key)]} initialIndex={1}>
+        <MemoryRouter key={phone ? "phone" : "wide"} initialEntries={start === "stations" ? [`/w/${ENTRY.id}/settings/stations`] : [`/w/${ENTRY.id}`, chatPath(key)]} initialIndex={start === "stations" ? 0 : 1}>
           <Director />
           <GoKeeper />
           <Routes><Route path="/w/:ws/*" element={phone ? <MobileWorkspace entry={ENTRY} /> : <WorkspaceShell entry={ENTRY} />} /></Routes>
@@ -513,9 +523,17 @@ export function endDemo(): void {
   story.end();
 }
 
-export function mountDemo(element: HTMLElement): void {
+/** Where the demo opens: on its chat, the story played (the default); or on the stations' page, as the page that shows
+ *  all of the workspace's machines together, no story played. */
+let start: "chat" | "stations" = "chat";
+/** The language the demo is in: the app's and what it makes up (the site's English page: "en"); else as the app's own. */
+let language: "zh" | "en" | undefined;
+
+export function mountDemo(element: HTMLElement, options: { start?: "chat" | "stations"; lang?: "zh" | "en" } = {}): void {
   if (mounted) return;
   mounted = true;
+  start = options.start ?? "chat";
+  language = options.lang;
   root = element;
   // What the page was built with (its opening frame, as HTML) gives way to the demo itself.
   root.replaceChildren();
@@ -563,17 +581,12 @@ export function mountDemo(element: HTMLElement): void {
     story.stop();
   }, true);
 
-  // Played once the demo is seen: most of it in view, and not before the site's opening (its title's motion, which
-  // tells when it is done; a page without it has none) has handed over to it.
-  const opened = document.documentElement.dataset.motion === undefined ? Promise.resolve() : new Promise<void>((done) => {
-    window.addEventListener("stillfail-site-opened", () => done(), { once: true });
-    setTimeout(done, 8000);
-  });
-  void opened.then(() => new IntersectionObserver((entries, observer) => {
+  // Played once the demo is seen: most of it in view.
+  if (start === "chat") new IntersectionObserver((entries, observer) => {
     if (!entries.some((e) => e.isIntersecting)) return;
     observer.disconnect();
     void story.play();
-  }, { threshold: 0.6 }).observe(root));
+  }, { threshold: 0.6 }).observe(root);
 
   createRoot(app).render(
     <StrictMode>
