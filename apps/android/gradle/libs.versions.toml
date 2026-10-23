@@ -22,6 +22,8 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 # The engine of the core (core/src/main/cpp): React Native's Hermes, its jsi built beside it from the same release.
 hermes-android = { module = "com.facebook.react:hermes-android", version.ref = "hermes" }
+# What loads Hermes's own libraries for its Java classes (fbjni's, at the version Hermes's fbjni 0.7.0 brings): Engine.kt sets it up.
+soloader-nativeloader = { module = "com.facebook.soloader:nativeloader", version = "0.10.5" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-activity = { module = "androidx.activity:activity", version.ref = "activity" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }

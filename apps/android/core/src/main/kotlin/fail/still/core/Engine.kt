@@ -2,6 +2,8 @@ package fail.still.core
 
 import android.content.Context
 import android.util.Log
+import com.facebook.soloader.nativeloader.NativeLoader
+import com.facebook.soloader.nativeloader.SystemDelegate
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +48,10 @@ internal interface HermesListener {
 /** The engine's JNI (cpp/engine.cpp): Hermes running the core in TypeScript, its IO in the Rust shell (client/shell). */
 internal object HermesNative {
     init {
+        // Hermes answers String's normalize, localeCompare and toLocale…Case, and Intl, in Java (AndroidUnicodeUtils, its
+        // Intl classes), whose classes load their library through NativeLoader as they load: not set up, the first
+        // formula's letter (MathJax normalizes each) failed to load AndroidUnicodeUtils and the core's thread aborted.
+        if (!NativeLoader.isInitialized()) NativeLoader.init(SystemDelegate())
         System.loadLibrary("stillfail_hermes")
     }
 

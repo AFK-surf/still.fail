@@ -459,6 +459,29 @@ std::string utf8(JNIEnv* env, jstring s) {
   return out;
 }
 
+/// Hermes's methods that Android answers in Java (String's normalize, localeCompare and toLocale…Case, Date's and
+/// Number's toLocaleString, Intl) find their Java classes (Hermes's AndroidUnicodeUtils, its Intl ones) by FindClass
+/// the first time one runs, and keep them. On the core's thread, made here and not by Java, FindClass looks in the
+/// system's class loader, which has none of the app's: the class is not found and the core ends (a formula's first
+/// letter: MathJax's isLatinOrGreekChar, normalize("NFD")). Each run once in a runtime of its own, on the app's thread
+/// that starts the first engine, finds and keeps them for every engine after (NativeLoader set up first: Engine.kt).
+void findJavaClasses() {
+  static std::once_flag once;
+  std::call_once(once, [] {
+    static const std::string touch =
+        "'\\u00e9'.normalize('NFD'); 'a'.localeCompare('b'); 'A'.toLocaleLowerCase(); 'a'.toLocaleUpperCase();"
+        "new Date(0).toLocaleString(); (1.5).toLocaleString();"
+        "new Intl.Collator().compare('a', 'b'); new Intl.DateTimeFormat().format(0); new Intl.NumberFormat().format(1);";
+    try {
+      auto config = ::hermes::vm::RuntimeConfig::Builder().withIntl(true).build();
+      std::unique_ptr<facebook::hermes::HermesRuntime> rt = facebook::hermes::makeHermesRuntime(config);
+      rt->evaluateJavaScript(std::make_shared<jsi::StringBuffer>(touch), "classes.js");
+    } catch (const std::exception& e) {
+      __android_log_print(ANDROID_LOG_ERROR, TAG, "Hermes's Java classes not found: %s", e.what());
+    }
+  });
+}
+
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL Java_fail_still_core_HermesNative_start(JNIEnv* env, jobject, jbyteArray script, jstring url, jstring dataDir, jstring cloudOrigin, jboolean beta, jobject listener) {
@@ -467,6 +490,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_fail_still_core_HermesNative_start(JNIEn
   jsize n = env->GetArrayLength(script);
   std::string bytes(size_t(n), '\0');
   env->GetByteArrayRegion(script, 0, n, reinterpret_cast<jbyte*>(bytes.data()));
+  findJavaClasses();
   auto* engine = new Engine(vm, env->NewGlobalRef(listener), std::move(bytes), utf8(env, url), utf8(env, dataDir), utf8(env, cloudOrigin), beta == JNI_TRUE);
   engine->start();
   return reinterpret_cast<jlong>(engine);
