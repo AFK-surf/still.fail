@@ -350,9 +350,11 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   let (ex, _, _, _) = t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect
   assert_eq(ex, rail_w + wide.side_w - edge_half)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  // halfway: the list not moved across, the block's edges round it (its top row's 8 giving way to the bar's 6 above)
+  // halfway: the edge on its way with the block, the list not moved across, the block's edges round it (its top row's
+  // 8 giving way to the bar's 6 above)
   t.run_for(side_move_ms / 2.0)
-  assert_true(rail_ws.fold_e > 0.0 && rail_ws.fold_e < 1.0, msg=rail_ws.fold_e.to_string())
+  let (hx, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
+  assert_true(hx > closed_edge && hx < ex, msg=hx.to_string())
   let (x1, y1, _, _) = t.rect_of("新建对话").unwrap()
   assert_eq(x1, x0)
   assert_true((y1 - y0).abs() <= 2.0, msg=y1.to_string())
@@ -366,4 +368,27 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
   assert_eq(px, closed_edge + wide.side_w)
   assert_true(rail_ws.bar_mr >= 0.0)
+}
+
+///|
+test "wide: shown a while, the page moves aside as far as what it shows is from clearing the sidebar 16 past its edge, as Rail.tsx peekShift works it out from the page folded" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  t.move(1000.0, 400.0)
+  t.run_for(side_move_ms)
+  // folded: what the page shows across (its bar left out), and where its field is
+  let (left, right) = t.ctx().shown_across(t.ctx().id("main-page"), but="page-bar").unwrap()
+  let (x0, _, _, _) = t.rect_of("按空格输入").unwrap()
+  // the pointer on the bar: shown a while, the page moved aside as far as that needs, no further than the room on its
+  // right or the sidebar's width
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.run_for(side_move_ms)
+  let reach = closed_bar_in + rail_closed_w + wide.side_w + peek_gap
+  let room = 1280.0 - 2.0 * peek_gap - right
+  let want = dmax(0.0, dmin(wide.side_w, dmin(room, reach - left))).round()
+  assert_true(want > 0.0, msg="\{left} \{right}")
+  let (x1, _, _, _) = t.rect_of("按空格输入").unwrap()
+  assert_eq(x1 - x0, want)
 }

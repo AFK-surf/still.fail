@@ -306,6 +306,10 @@ pub struct Ctx {
   words_reads : Map[String, Bool]
   laid_watch : Map[Int, Int]
   laid_rects : Map[Int, (Double, Double, Double, Double)]
+  /// the boxes whose parts shown across are asked (Ctx::shown_across): when last, and the name of the boxes whose parts
+  /// are left out; what the last layout showed across in each
+  shown_watch : Map[Int, (Int, String)]
+  shown_spans : Map[Int, (Double, Double)]
   /// the boxes whose presses another takes (Ctx::presses_to), by node: that one's id and where it was said
   press_owners : Map[Int, (Int, SourceLoc)]
   mut nav_rest : Double
@@ -502,6 +506,8 @@ fn Ctx::new() -> Ctx {
     words_reads: Map::new(),
     laid_watch: Map::new(),
     laid_rects: Map::new(),
+    shown_watch: Map::new(),
+    shown_spans: Map::new(),
     press_owners: Map::new(),
     nav_rest: -1.0,
     clear: (0.961, 0.961, 0.969),

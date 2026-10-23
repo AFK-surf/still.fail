@@ -13,12 +13,22 @@ priv struct RailWs {
   mut peeking : Bool
   /// the sidebar being drawn in the closed bar (what the web's sidebar does there, at once)
   mut in_bar : Bool
-  /// how far the rail and the sidebar are on their way to the closed bar this frame (0 open, 1 folded)
-  mut fold_e : Double
-  /// the page's bars' margins while the folded sidebar is shown a while: from its edge (the sidebar less 8 less how far
-  /// the page moved) to the window's (how far it moved), as far on their way as it is shown
+  /// the state the block was last built in (closed, shown a while, the sidebar's width): a move sets out as it changes
+  mut moved_as : (Bool, Bool, Double)?
+  /// where the move has got to this frame (wide_frame): the sidebar's top row's height, its frosted bands' ground (0
+  /// the sidebar's, 1 the closed bar's), the lists' marks on the rail (0 gone, 1 in)
+  mut brand_h : Double
+  mut band : Double
+  mut mark : Double
+  /// the page's bars' padding at its left (clear of the closed bar) and their margins while the folded sidebar is shown
+  /// a while: from its edge (the sidebar less 8 less how far the page moved) to the window's (how far it moved)
+  mut bar_pl : Double
   mut bar_ml : Double
   mut bar_mr : Double
+  /// how far the page moves aside while the folded sidebar is shown a while (worked out as it is shown: peek_shift),
+  /// and where the page started as the last frame laid it out
+  mut peek_shift : Double
+  mut page_from : Double
   /// the services left up long, their panel open from the lists' foot
   mut jobs_open : Bool
   /// the rail being changed (自定义侧边条): its places outlined, each with its −, what can be added beside it
@@ -37,7 +47,13 @@ let rail_ws : RailWs = {
   kept_folded: false,
   peeking: false,
   in_bar: false,
-  fold_e: 0.0,
+  moved_as: None,
+  brand_h: 0.0,
+  band: 0.0,
+  mark: 0.0,
+  bar_pl: 0.0,
+  peek_shift: 0.0,
+  page_from: 0.0,
   bar_ml: 0.0,
   bar_mr: 0.0,
   jobs_open: false,
@@ -54,7 +70,13 @@ fn rail_ws_reset() -> Unit {
   rail_ws.kept_folded = false
   rail_ws.peeking = false
   rail_ws.in_bar = false
-  rail_ws.fold_e = 0.0
+  rail_ws.moved_as = None
+  rail_ws.brand_h = 0.0
+  rail_ws.band = 0.0
+  rail_ws.mark = 0.0
+  rail_ws.bar_pl = 0.0
+  rail_ws.peek_shift = 0.0
+  rail_ws.page_from = 0.0
   rail_ws.bar_ml = 0.0
   rail_ws.bar_mr = 0.0
   rail_ws.jobs_open = false
