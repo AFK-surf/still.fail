@@ -8,7 +8,7 @@
 // the row in the list again, where it is drawn the same. Nothing fades in or out to cover a change. The phone is a
 // device from the start, the phone's app running in it, small; it comes to the front at the end while the computer
 // steps back, both seen all along. On a narrow screen the window is the phone's app itself, and the devices its cards.
-import { type CSSProperties, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
 import { useSay, useSiteLang } from "./words.ts";
@@ -258,8 +258,14 @@ export function OneComputer(props: DemoProps) {
       for (let p = 0; p < ends.length; p++) for (let q = p + 1; q < ends.length; q++) {
         paths[n++]?.setAttribute("d", `M${ends[p]!.x} ${ends[p]!.y} L${ends[q]!.x} ${ends[q]!.y}`);
       }
-      // What the steps say, one under another: the next comes up as this one goes, about the middle of the way.
-      words.current?.style.setProperty("--at", `${i + ease(clamp((t - 0.4) / 0.2))}`);
+      // Each step's words where the scene is: the step's own going up a little and out as the next comes up into its
+      // place, about the middle of the way, the one gone before the other comes.
+      const at = i + clamp((t - 0.4) / 0.2);
+      words.current?.querySelectorAll<HTMLElement>(":scope > *").forEach((say, k) => {
+        const p = clamp(at - k + 1, 0, 2);
+        const shown = p <= 1 ? clamp(2 * p - 1) : clamp(3 - 2 * p), rise = p <= 1 ? (1 - p) * 16 : -(p - 1) * 16;
+        Object.assign(say.style, { opacity: `${shown}`, transform: `translateY(${rise}px)`, visibility: shown > 0 ? "visible" : "hidden" });
+      });
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
     const resized = () => { leave(); ask(); };
@@ -297,8 +303,8 @@ export function OneComputer(props: DemoProps) {
         <div className={css.sceneStick}>
           <div className={css.stepWords}>
             <div className={css.stepTrack} ref={words}>
-              {say.steps.map((s, k) => (
-                <div key={s.title} className={css.stepSay} style={{ "--i": k } as CSSProperties}>
+              {say.steps.map((s) => (
+                <div key={s.title} className={css.stepSay}>
                   <b>{s.title}</b><span>{s.text}</span>
                 </div>
               ))}
