@@ -51,7 +51,7 @@ test("a chat's places: the connects that can start a conversation, each bot's ch
 test("a chat's places: of the bots in one Slack workspace, the one running what the chat's agent runs", async () => {
   const { r } = relayRig();
   const offered = async (thread: Parameters<typeof relayPlaces>[1]) => (await relayPlaces(r.hub, thread)).map((c) => c.id);
-  Object.assign(r.gptChat, { places: async () => [{ id: "C1", name: "cue-dev", kind: "channel" }], begin: r.chat.begin });
+  Object.assign(r.gptChat, { places: async () => [{ id: "C1", name: "cue-dev", kind: "channel" }], begin: async (channel: string) => ({ thread: { channel, threadTs: "1700.000200" }, ts: "1700.000200" }) });
   // (the Claude bot and the Codex bot both in T1)
   const [, claude] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
   const [, codex] = newSession(r.hub, { runtime: "codex", createdBy: "ada@x.com" });

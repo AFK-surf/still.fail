@@ -49,7 +49,7 @@ function connectsFor(hub: Hub, session: string): { id: string; chat: ChatSurface
     .flatMap((c) => {
       const chat = hub.chatOf(c.id);
       if (chat === undefined || !chat.places || !chat.begin) return [];
-      const kind = c.kind === "feishu" ? (chat instanceof FeishuSurface && chat.domain === "lark" ? "lark" : "feishu") : "slack";
+      const kind: RelayConnect["kind"] = c.kind === "feishu" ? (chat instanceof FeishuSurface && chat.domain === "lark" ? "lark" : "feishu") : "slack";
       return [{ id: c.id, chat, kind, bind: c.bind }];
     });
   const platform = (c: (typeof all)[number]) => `${c.kind}/${c.chat.workspace() ?? c.id}`;
