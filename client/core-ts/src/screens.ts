@@ -579,6 +579,13 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (access) state.access = access;
                 if (Array.isArray(s.viewers)) onIt = names(s.viewers);
                 if (Array.isArray(s.controlledBy)) driving = names(s.controlledBy);
+                if (isObject(s.video) && typeof s.video.capture === "string") {
+                  state.video = {
+                    capture: s.video.capture.slice(0, 80),
+                    ...(typeof s.video.encoder === "string" ? { encoder: s.video.encoder.slice(0, 200) } : {}),
+                    ...(typeof s.video.hardware === "boolean" ? { hardware: s.video.hardware } : {}),
+                  };
+                }
                 const scale = scaleOf(s.scale);
                 if (scale) displayScale = scale;
                 if (s.ended !== undefined && s.ended !== null && s.ended !== false) {

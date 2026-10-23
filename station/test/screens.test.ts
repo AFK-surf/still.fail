@@ -667,6 +667,8 @@ test("Windows' desktop: a stillfail-screen process a view, asked for each frame,
   await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: [] }), (e: ScreenRefused) => e.status === 415);
   const view = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264", "jpeg"] });
   assert.deepEqual(started.at(-1), ["view"]);
+  // How its pictures are made, as its info named the encoder (none says "software": the hardware's).
+  assert.deepEqual(view.video?.(), { capture: "Windows.Graphics.Capture", encoder: "fake", hardware: true });
   assert.deepEqual(await view.next(), { key: true, ts: 1000, data: new Uint8Array([0, 0, 0, 1, 1]), config: { codec: "h264", width: 1280, height: 800, description: new Uint8Array([1, 66, 0, 31]) } });
   await view.input({ t: "key", kind: "down", key: "c", code: "KeyC", mods: 0 });
   await view.input({ t: "pointer", kind: "down", x: 0.25, y: 0.5, buttons: 1 });

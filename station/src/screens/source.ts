@@ -47,6 +47,8 @@ export interface ScreenView {
   /// Its pictures from now on fitted into these bounds (a config first: docs/remote-screens.md, "Pace"); one without it
   /// keeps those it opened with.
   bounds?(maxWidth: number, maxHeight: number): void;
+  /// How its pictures are made (once it opened); none: not said.
+  video?(): ScreenVideo;
   /// Stops capturing; a pending `next` resolves null.
   close(): void;
   /// The source's clipboard set (of a type its `clipboard()` names), then, with `paste`, pasted where its focus is (the
@@ -65,6 +67,11 @@ export interface ScreenView {
 }
 
 export type ScreenKind = "desktop" | "browser";
+
+/// How a view's pictures are made, as its statistics show it: what captures them (ScreenCaptureKit,
+/// Windows.Graphics.Capture, Chrome's screencast), the encoder's name as it says it, and whether it is the hardware's
+/// (none: a JPEG a picture, nothing to say).
+export type ScreenVideo = { capture: string; encoder?: string; hardware?: boolean };
 
 /// Where a screen's pointer is, 0..1 of the frame, and its shape as CSS names it.
 export type ScreenCursor = { x: number; y: number; shape: string };

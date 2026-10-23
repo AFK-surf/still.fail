@@ -4702,6 +4702,16 @@ export interface ScreenScale {
 	steps: number[];
 }
 
+/** How a screen view's pictures are made (docs/remote-screens.md `video`), as its statistics show it. */
+export interface ScreenVideo {
+	/** What captures the screen's pictures: ScreenCaptureKit, Windows.Graphics.Capture, Chrome screencast. */
+	capture: string;
+	/** The encoder as the station names it. */
+	encoder?: string;
+	/** Whether that encoder is the hardware's; none: a JPEG a picture. */
+	hardware?: boolean;
+}
+
 /** A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is. */
 export interface ScreenViewState {
 	/**
@@ -4743,6 +4753,8 @@ export interface ScreenViewState {
 	clipboard?: string[];
 	/** While driving it: where a file dropped into the view goes (none while only looking, or from a station before files). */
 	drop?: ScreenDrop;
+	/** How its pictures are made, as the station said as the view opened (none from a station before it). */
+	video?: ScreenVideo;
 	/**
 	 * While driving it: its display's scale, set with `screen.input` `{t: "scale", percent}` and put back as it was
 	 * once nobody views it (a Windows station's desktop; none elsewhere, or while only looking).

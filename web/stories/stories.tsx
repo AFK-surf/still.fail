@@ -1100,6 +1100,7 @@ export const stories: Story[] = [
   { id: "screen-denied", group: "屏幕", title: "屏幕 · 没有权限", ...screenView("denied") },
   { id: "screen-failed", group: "屏幕", title: "屏幕 · 没连上", ...screenView("failed") },
   { id: "screen-phone", group: "屏幕", title: "屏幕 · 手机", phone: true, ...screenView("live", true) },
+  { id: "screen-stats", group: "屏幕", title: "屏幕 · 连接统计（采集方式、硬编）", ...screenView("live", false, true), steps: [...toTheBar, { click: '[aria-label="连接"]' }] },
   { id: "screen-scale", group: "屏幕", title: "屏幕 · Windows · 控制中心 › 缩放", ...screenView("windows"), steps: [...toTheBar, { click: 'button:has-text("控制中心")' }, { click: '[role="menuitem"]:has-text("缩放")' }] },
   { id: "screen-phone-scale", group: "屏幕", title: "屏幕 · Windows · 手机 · 缩放", phone: true, ...screenView("windows", true), steps: [{ click: '[aria-label="缩放"]' }] },
   { id: "screen-phone-full", group: "屏幕", title: "屏幕 · 手机 · 全屏", phone: true, ...screenView("live", true), steps: [{ click: '[aria-label="全屏"]' }] },

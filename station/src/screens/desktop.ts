@@ -21,7 +21,7 @@ import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -236,8 +236,14 @@ export class HelperView implements ScreenView {
   /// What it was asked for, then what it encodes (its `info`).
   #codec: Codec;
 
-  constructor(codec: Codec, socket: HelperPipe, gone: () => void, input: InputOps = new MacInput()) {
+  /// What captures its pictures (still.fail Helper's ScreenCaptureKit, stillfail-screen's Windows.Graphics.Capture), and
+  /// the encoder as its info named it.
+  readonly #capture: string;
+  #encoder = "";
+
+  constructor(codec: Codec, socket: HelperPipe, gone: () => void, input: InputOps = new MacInput(), capture = "ScreenCaptureKit") {
     this.#codec = codec;
+    this.#capture = capture;
     this.#socket = socket;
     this.#input = input;
     this.#gone = gone;
@@ -272,6 +278,7 @@ export class HelperView implements ScreenView {
           // before H.265 says nothing and makes H.264 of anything but JPEG).
           this.#codec = info.codec === "h265" || info.codec === "h264" || info.codec === "jpeg" ? info.codec : this.#codec === "jpeg" ? "jpeg" : "h264";
           log.info("screens", "a view of the desktop opened", { width: info.width, height: info.height, encoder: info.encoder });
+          if (typeof info.encoder === "string") this.#encoder = info.encoder.slice(0, 200);
           this.#settle.resolve({ width: info.width, height: info.height });
         }
         return;
@@ -326,6 +333,12 @@ export class HelperView implements ScreenView {
 
   keyframe() {
     this.#send(TO_HELPER.keyframe);
+  }
+
+  video(): ScreenVideo {
+    // The helpers name a software encoder so ("software", "Microsoft H.264 (software)"); a JPEG is no encoder's.
+    if (this.#codec === "jpeg" || this.#encoder === "") return { capture: this.#capture, ...(this.#encoder ? { encoder: this.#encoder } : {}) };
+    return { capture: this.#capture, encoder: this.#encoder, hardware: !/software/i.test(this.#encoder) };
   }
 
   rate(bitsPerSecond: number) {

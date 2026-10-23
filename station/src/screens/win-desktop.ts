@@ -16,7 +16,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
-import type { Clip, ClipType, Codec, Frame, ScreenAccess, ScreenCursor, ScreenInput, ScreenScale, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
+import type { Clip, ClipType, Codec, Frame, ScreenAccess, ScreenCursor, ScreenInput, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
 import { WinInput } from "./win-input.ts";
 
 export const SCREEN_BINARY = "stillfail-screen.exe";
@@ -210,7 +210,7 @@ export class WindowsDesktop implements ScreenSource {
   async #start(binary: string, ask: { codec: Codec; maxWidth: number; maxHeight: number; bitrate?: number }, input: WinInput): Promise<HelperView> {
     const child = (this.#o.start ?? start)(binary, ["view"]);
     child.stdin!.write(`${JSON.stringify(ask)}\n`);
-    const view = new HelperView(ask.codec, childPipe(child), () => {}, input);
+    const view = new HelperView(ask.codec, childPipe(child), () => {}, input, "Windows.Graphics.Capture");
     try {
       await view.ready;
       return view;
@@ -299,6 +299,10 @@ export class LastingView implements ScreenView {
 
   keyframe() {
     this.#view.keyframe();
+  }
+
+  video(): ScreenVideo {
+    return this.#view.video();
   }
 
   rate(bitsPerSecond: number) {

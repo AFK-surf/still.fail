@@ -290,6 +290,10 @@ async function play(story: ViewStory, h264: boolean, params: Record<string, unkn
   // An agent drives it as it opens: the core opens it to look (no `control` asked), 接管 at hand.
   const agent = story === "agent";
   if (TRANSFER.includes(story)) Object.assign(state, { clipboard: ["text", "png"], drop: DROP });
+  // How its pictures are made, as a station says it: a Mac's desktop on the hardware encoder, a Windows one's, a tab's.
+  state.video = browser ? { capture: "Chrome screencast", encoder: "JPEG" }
+    : story === "windows" ? { capture: "Windows.Graphics.Capture", encoder: "NVIDIA HEVC Encoder MFT, H.265 main, 1500000 bps", hardware: true }
+    : { capture: "ScreenCaptureKit", encoder: "hardware, low latency, HEVC_Main_AutoLevel, 1500000 bps", hardware: true };
   if (story === "windows") state.scale = { percent: 300, recommended: 150, steps: [100, 125, 150, 175, 200, 225, 250, 300, 350] };
   if (agent) Object.assign(state, { control: false, others: [AGENT, "张三"], controllers: [AGENT], takeOver: true });
   const say = () => { state.line = lineOf(state, agent); emit({ state: { ...state, others: [...state.others], controllers: [...(state.controllers ?? [])] } }); };

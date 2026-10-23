@@ -65,7 +65,8 @@ function useRate(meter: MutableRefObject<Meter>, on: boolean): { fps: number; bp
 
 /** How the view goes, as a remote desktop's window says it: the signal mark (its bars and colour as the round trip is)
  * and how long it has been seen; pressed, the whole of it under the round trip: frames and bits a second, packets
- * lost; the way and the station's system; the picture's size and codec. */
+ * lost; the way and the station's system; the picture's size and codec, what captures it and whether it is encoded on
+ * the hardware. */
 export function NetChip({ net, shown, meter, os }: { net: StationNet | null; shown: Omit<ScreenViewState, "cursor"> | null; meter: MutableRefObject<Meter>; os: string | undefined }) {
   const [open, setOpen] = useState(false);
   const rate = useRate(meter, open);
@@ -84,6 +85,9 @@ export function NetChip({ net, shown, meter, os }: { net: StationNet | null; sho
     [
       [t("web-pages.screen.stat.picture"), shown?.width && shown.height ? `${shown.width}×${shown.height}` : "—"],
       [t("web-pages.screen.stat.codec"), shown?.codec ? (shown.codec === "h264" ? "H.264" : shown.codec === "h265" ? "H.265" : shown.codec.toUpperCase()) : "—"],
+      [t("web-pages.screen.stat.capture"), shown?.video?.capture ?? "—"],
+      [t("web-pages.screen.stat.encoder"), shown?.video?.hardware === undefined ? "—"
+        : <span title={shown.video.encoder}>{t(shown.video.hardware ? "web-pages.screen.stat.hardware" : "web-pages.screen.stat.software")}</span>],
     ],
   ];
   return (
