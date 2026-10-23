@@ -32,7 +32,7 @@
       "applicationId": "fail.still.android.beta",
       "minify": true,
       "res": ["app/src/still/res", "app/src/beta/res"],
-      "placeholders": {"appLabel": "youdid.wtf", "mbuiEnv": "MBUI_UPDATE_FEED=android/beta;MBUI_BETA=1;MBUI_OWN=1"}
+      "placeholders": {"appLabel": "youdid.wtf", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_BETA=1;MBUI_OWN=1"}
     },
     "debug": {
       "applicationIdSuffix": ".debug",
