@@ -96,7 +96,7 @@ fn wide_head(
       }
     }
     c.box(style=title_line, fn() {
-      c.box(style=if about == "" { @sf.full_width } else { title_about }, fn() {
+      c.box(style=if about == "" { title_words } else { title_about }, fn() {
         c.text(title, size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
         if about != "" {
           @sf.about(c, "settings-about", about, label=tr("web-main.about"))
@@ -157,7 +157,13 @@ let title_line : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter
 ///|
 /// A title with what it is for beside it.
 // kept across runs: a value (no field of it changes)
-let title_about : @ui.Style = @sf.full_width.then(@ui.style(row=true, gap=S1_5, align=ACenter))
+let title_about : @ui.Style = title_words.then(@ui.style(row=true, gap=S1_5, align=ACenter))
+
+///|
+/// The title's words, the room its line has left beside what follows them (pageHead: the title grows, its actions at
+/// its end).
+// kept across runs: a value (no field of it changes)
+let title_words : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// A gap of `h` (Spacer).
@@ -443,12 +449,18 @@ fn large_title(
   lead? : () -> Unit,
   about? : String = "",
   says? : String = "",
+  trailing? : () -> Unit,
 ) -> Unit {
   if wide.val {
     ignore(lead)
+    // what stands at the title's end: given here (a desktop page's actions), else as top_back left it
+    let trailing = match trailing {
+      Some(f) => Some(f)
+      None => top_trailing.val
+    }
     match frame_core.val {
       Some(core) =>
-        wide_head(c, core, top_label.val, big, trailing?=top_trailing.val, inside=true, on_back?=top_on_back.val, about~, lead=says)
+        wide_head(c, core, top_label.val, big, trailing?, inside=true, on_back?=top_on_back.val, about~, lead=says)
       None => ()
     }
     top_trailing.val = None

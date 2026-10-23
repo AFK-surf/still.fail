@@ -55,6 +55,10 @@ fn how_line(mode : String, hosts : Array[String]) -> String {
 
 ///|
 fn vault_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  // the desktop's: the web's (web_vault.mbt)
+  if wide.val {
+    return vault_page_wide(c, core, here)
+  }
   let ws = here.workspace
   let topic = (core.topic)("vaults", { "workspace": str(ws) })
   let v = topic.value

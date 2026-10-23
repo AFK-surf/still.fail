@@ -2172,3 +2172,156 @@ pub fn resize_handle(
   edge_tip(c, key, id, words, side=if edge is Left { Left } else { Right })
   said
 }
+
+// ---------------------------------------------------------------------------
+// A card of options (SettingParts.kt DecisionOptions; Decisions.css.ts options, choice)
+
+///|
+/// How far in the card of options' rows stand, how far a row's number stands in it, its disc's size: the first disc is
+/// in the card's corner, and the card's corner is drawn round it (docs/ui-panels.md: a whole circle stays round, the
+/// container follows it).
+let options_card_pad : Double = 8.0
+
+///|
+let options_row_pad : Double = 7.0
+
+///|
+let option_disc : Double = 22.0
+
+///|
+/// An option's measures: its number's disc and how far in it stands (7 from the row's top and side, 22 across); its
+/// label's size and line, its detail's. The wide frame's as the web's (Decisions.css.ts choice: a 20 disc 8 in, 13 on
+/// 20 over 12 on 18).
+priv struct OptionType {
+  disc : Double
+  pad_in : Double
+  label : Double
+  label_line : Double
+  detail : Double
+  detail_line : Double
+}
+
+///|
+fn option_type(wide : Bool) -> OptionType {
+  if wide {
+    { disc: 20.0, pad_in: 8.0, label: 13.0, label_line: 20.0, detail: 12.0, detail_line: 18.0 }
+  } else {
+    { disc: option_disc, pad_in: options_row_pad, label: 15.0, label_line: 21.0, detail: 13.0, detail_line: 18.0 }
+  }
+}
+
+///|
+/// The card of options in the wide frame: as wide as what it says, 460 at least (Decisions.css.ts options); on a phone
+/// as wide as where it is.
+let options_least_wide : Double = 460.0
+
+///|
+/// The card's width: as wide as its widest label or detail with its number and paddings, 460 at least, `room` at most
+/// (the web's `width: fit-content; min-width: min(100%, 460px)`); on a phone where it is's.
+fn options_w(options : Array[(String, String, Bool)], ot : OptionType, wide : Bool, room : Double) -> @ui.Size {
+  if !wide {
+    return Fill(1.0)
+  }
+  let mut words = 0.0
+  for o in options {
+    words = dmax(words, @ui.text_advance(o.0, size=ot.label, weight=500))
+    words = dmax(words, @ui.text_advance(o.1, size=ot.detail, weight=400))
+  }
+  // (the card's 8 each side, the row's number in by 8 and 12 after it, the row's 12 at its end)
+  Px(dmin(room, dmax(options_least_wide, options_card_pad * 2.0 + ot.pad_in + ot.disc + 12.0 + words + 12.0)).ceil())
+}
+
+///|
+let options_card_radius : Double = around(options_card_pad + options_row_pad, option_disc / 2.0)
+
+///|
+/// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger 8 in
+/// from the card's edge, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
+/// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
+/// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole). The wide frame's as the web's (`wide`:
+/// as wide as what it says, `room` at most, on the text at 5%, its row's ground under the pointer). The option
+/// tapped, on the frame after.
+pub fn options_card(
+  c : @ui.Ctx,
+  key : String,
+  options : Array[(String, String, Bool)],
+  enabled : Bool,
+  busy : Int?,
+  chosen? : Int? = None,
+  wide? : Bool = false,
+  room? : Double = 0.0,
+) -> Int? {
+  let t = theme()
+  let free = enabled && busy is None
+  let mut picked : Int? = None
+  let ot = option_type(wide)
+  // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
+  c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
+    c.box(w=options_w(options, ot, wide, room), radius=options_card_radius, bg=if wide { alpha(t.p.text, 0.05) } else { t.p.chip }, pad=options_card_pad, fn() {
+      // (nothing drawn between two: SettingParts.kt DecisionOptions)
+      for i, o in options {
+        let id = c.id(key + "/" + i.to_string())
+        if c.clicked(id) && free {
+          picked = Some(i)
+        }
+        // under the pointer its row's ground, in the wide frame (Decisions.css.ts choice:hover)
+        if wide && free {
+          c.cursor(id, Hand)
+        }
+        let hot = wide && free && c.hovered(id)
+        c.box(
+          dir=Row,
+          w=Fill(1.0),
+          pl=ot.pad_in,
+          pr=12.0,
+          pt=ot.pad_in,
+          pb=ot.pad_in,
+          gap=12.0,
+          align=AStart,
+          radius=18.0,
+          bg=if hot { t.p.hover } else { 0L },
+          opacity=if enabled || chosen == Some(i) { 1.0 } else { 0.5 },
+          id~,
+          fn() {
+            c.box(
+              w=Px(ot.disc),
+              h=Px(ot.disc),
+              radius=ot.disc / 2.0,
+              bg=if o.2 { t.p.accent } else { alpha(t.p.text, 0.09) },
+              align=ACenter,
+              justify=JCenter,
+              fn() {
+                let color = if o.2 { 0xFFFFFFFFL } else { t.p.muted }
+                if i < 6 {
+                  icon(c, "option-\{i + 1}", size=ot.disc, color~) |> ignore
+                } else {
+                  c.text("\{i + 1}", size=12.0, weight=600, color~, wrap=false) |> ignore
+                }
+              },
+            )
+            |> ignore
+            c.box(w=Fill(1.0), fn() {
+              c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
+              if o.1 != "" {
+                c.text(o.1, size=ot.detail, color=t.p.muted, line=ot.detail_line) |> ignore
+              }
+            })
+            |> ignore
+            if busy == Some(i) {
+              c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore })
+              |> ignore
+            }
+            // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
+            if free {
+              @motion.ripple(c, id, 18.0, ink=alpha(t.p.text, 0.1))
+            }
+          },
+        )
+        |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+  picked
+}

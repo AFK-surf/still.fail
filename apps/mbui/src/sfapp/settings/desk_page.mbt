@@ -19,12 +19,13 @@ fn desk_page(
   actions? : () -> Unit,
   head? : () -> Unit,
 ) -> Unit {
-  let blocks : Array[() -> Unit] = [fn() { top_back(c, core, back, trailing?=actions) }]
+  // (its actions given to its title's head itself: which of the list's rows is built first is the list's)
+  let blocks : Array[() -> Unit] = [fn() { top_back(c, core, back) }]
   // a head of its own in place of the title (an account's: who it is), as the page's first block
   match head {
     // as far down as a title's head stands (wide_head_top)
     Some(h) => blocks.push(fn() { c.box(style=desk_own_head, fn() { h() }) |> ignore })
-    None => blocks.push(fn() { large_title(c, title, about~, says=lead) })
+    None => blocks.push(fn() { large_title(c, title, about~, says=lead, trailing?=actions) })
   }
   for i, b in content {
     blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
