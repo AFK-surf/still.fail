@@ -1,4 +1,4 @@
-# The wide frame's right click, as the desktop app's (wide_context.mbt): a link's menu, an image's, the composer's.
+# The wide frame's right click, as the desktop app's (sfdesk/context_menu.mbt): a link's menu, an image's, the composer's.
 timeout 20000
 until 按空格输入
 wait 400

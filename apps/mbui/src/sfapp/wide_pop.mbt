@@ -7,8 +7,8 @@
 ///|
 /// Everything open over the wide frame, drawn after it.
 fn wide_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  // a right click's menu (wide_context.mbt)
-  wide_context_menu(c)
+  // a right click's menu (sfdesk/context_menu.mbt)
+  @sfdesk.context_menu(c)
   row_menu(c, src)
   rail_menu(c, src, w)
   rail_adder(c, src, w)

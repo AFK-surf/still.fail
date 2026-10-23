@@ -18,7 +18,8 @@
   "globals": {
     "roots": [
       "src/sfapp",
-      "src/sfbase"
+      "src/sfbase",
+      "src/sfdesk"
     ]
   },
   "flows": [
