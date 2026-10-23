@@ -47,10 +47,10 @@ fn side_top(c : @ui.Ctx) -> Unit {
 
 ///|
 /// The band's first row's height: the window's buttons' row (44) where they are in the app's top row, else a margin
-/// (8); none in the closed bar, which starts under that row (Sidebar.css.ts brand, closed): as far on its way as the
-/// block is (moved with it, brand.tsx moveSidebar).
+/// (8); none in the closed bar, which starts under that row (Sidebar.css.ts brand, closed): where the block's move has
+/// got to (wide_frame's --brand).
 fn side_top_h() -> Double {
-  (if @ui.window_inset() { side_top_inset } else { side_top_web }) * (1.0 - rail_ws.fold_e)
+  rail_ws.brand_h
 }
 
 ///|
@@ -279,7 +279,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let (view, _) = chats_of(src, w.id, "all")
   // (in the closed bar, its ground the bar's: shell.css.ts dock, closed, sets the sidebar's ground to a panel's)
   // (its ground the block's: shell.css.ts dock, closed, a panel's; moved with it)
-  c.box(w=Fill(1.0), glass=@sf.glass_floating(tint=@sf.mix(closed_ground(), rail_ws.fold_e, t.p.sidebar)), fn() {
+  c.box(w=Fill(1.0), glass=@sf.glass_floating(tint=@sf.mix(closed_ground(), rail_ws.band, t.p.sidebar)), fn() {
     side_top(c)
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)

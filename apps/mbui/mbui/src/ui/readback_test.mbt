@@ -305,3 +305,33 @@ test "words kept on a row dragged that nothing reads are built once a frame" {
     assert_eq((f, n), (f, 1))
   }
 }
+
+///|
+test "what a box shows across: its innermost parts that show something, inside it, but those of a box named" {
+  let seen : Array[(Double, Double)?] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      let page = c.id("page")
+      seen.push(c.shown_across(page, but="bar"))
+      c.box(dir=Row, w=Px(300.0), h=Px(200.0), id=page, fn() {
+        c.column(fn() {
+          // its bar, across it whole: not counted
+          c.box(w=Px(300.0), moves="bar", fn() { c.text("the bar across", wrap=false) |> ignore }) |> ignore
+          // a ground reaching past what is in it: only the words in it count
+          c.box(w=Px(260.0), h=Px(40.0), pl=40.0, bg=0x112233FFL, fn() { c.text("shown", wrap=false) |> ignore })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  // the first frame asks before anything was laid out: none; the next, the words', from their left at 40
+  assert_eq(seen[0], None)
+  t.frame()
+  let (x, _, w, _) = t.rect_of("shown").unwrap()
+  assert_eq(seen[seen.length() - 1], Some((x, x + w)))
+  assert_eq(x, 40.0)
+}

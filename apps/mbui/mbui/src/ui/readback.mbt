@@ -45,6 +45,75 @@ pub fn Ctx::laid_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
 }
 
 ///|
+/// What box `id` shows across, as the last frame laid it out (x of the left of what is leftmost, of the right of what
+/// is rightmost): its innermost parts that show something (words, a field, a picture, a drawing; not an empty box,
+/// whose ground may reach past what is drawn), those of them inside the box, none in a box moved by the name `but`
+/// (Ctx::box `moves`: a page's bar, across it whole). None where it showed nothing, or was not laid out last frame.
+/// The web's measure of a page's content (Rail.tsx peekShift). Not read back: for what is said once from it as a state
+/// changes, not for what is built by it every frame (that reads Ctx::laid_rect). Asked every frame it may be wanted: a
+/// frame that does not ask it lets it go.
+pub fn Ctx::shown_across(self : Ctx, id : Int, but? : String = "") -> (Double, Double)? {
+  if building.val {
+    self.shown_watch[id] = (self.frame_no, but)
+  }
+  self.shown_spans.get(id)
+}
+
+///|
+/// What node `i`'s innermost parts that show something span across, inside (left, right), none of them in a box moved
+/// by `but` (Ctx::shown_across).
+fn Ctx::shown_span(self : Ctx, i : Int, left : Double, right : Double, but : String) -> (Double, Double)? {
+  let top = self.nodes[i].y
+  let foot = top + self.nodes[i].fh
+  let lo = Ref(1.0e9)
+  let hi = Ref(-1.0e9)
+  fn walk(k : Int) -> Unit {
+    let n = self.nodes[k]
+    if (but != "" && n.moves == but) || n.opacity <= 0.0 {
+      return
+    }
+    if n.first >= 0 {
+      let mut c = n.first
+      while c >= 0 {
+        walk(c)
+        c = self.nodes[c].next
+      }
+      return
+    }
+    // (words, a field, a picture, a native view, a drawing)
+    let shows = if n.kind == kind_text || n.kind == kind_rich {
+      n.text != "" || n.rich is Some(_)
+    } else if n.kind == kind_editor || n.kind == kind_image || n.kind == kind_native {
+      true
+    } else {
+      n.shapes.length() > 0 || n.lines.length() > 0
+    }
+    let r = n.x + n.fw
+    let b = n.y + n.fh
+    if !shows || n.fw <= 0.0 || n.fh <= 0.0 || b <= top || n.y >= foot || r <= left || n.x >= right {
+      return
+    }
+    if n.x < lo.val {
+      lo.val = n.x
+    }
+    if r > hi.val {
+      hi.val = r
+    }
+  }
+
+  let mut c = self.nodes[i].first
+  while c >= 0 {
+    walk(c)
+    c = self.nodes[c].next
+  }
+  if hi.val < lo.val {
+    None
+  } else {
+    Some((lo.val, hi.val))
+  }
+}
+
+///|
 /// Once laid out: the rects of the boxes read kept (those a frame before this did not read, let go), and what was read
 /// looked at again; what is not as it was read is a layout read back that moved, said as what it is.
 fn Ctx::reads_after_layout(self : Ctx) -> Unit {
@@ -59,6 +128,26 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       let n = self.nodes[i]
       if n.id != 0 && self.laid_watch.contains(n.id) {
         self.laid_rects[n.id] = (n.x, n.y, n.fw, n.fh)
+      }
+    }
+  }
+  // what the boxes asked show across (Ctx::shown_across), those no frame before this asked let go
+  if !self.shown_watch.is_empty() {
+    let gone = []
+    self.shown_watch.each(fn(id, at) { if at.0 < self.frame_no { gone.push(id) } })
+    for id in gone {
+      self.shown_watch.remove(id)
+      self.shown_spans.remove(id)
+    }
+    for i in 0..<self.count {
+      let n = self.nodes[i]
+      match self.shown_watch.get(n.id) {
+        Some((_, but)) if n.id != 0 =>
+          match self.shown_span(i, n.x, n.x + n.fw, but) {
+            Some(s) => self.shown_spans[n.id] = s
+            None => self.shown_spans.remove(n.id)
+          }
+        _ => ()
       }
     }
   }
