@@ -52,6 +52,55 @@ test "a row tapped pushes its chat, its title in the bar; back comes home" {
 }
 
 ///|
+/// How many rows are drawn on the ground a row has held (ChatRowBody's: the ink at 5%), and whether one is under `y`.
+fn rows_lit(t : @ui.Tester, y? : Double = -1.0) -> Int {
+  let ground = @sf.alpha(@sf.theme().p.text, 0.05)
+  t
+  .drawn_rects()
+  .filter(fn(r) {
+    let (_, ry, _, rh, color) = r
+    color == ground && (rh - chat_row_h).abs() < 0.5 && (y < 0.0 || (ry <= y && y <= ry + rh))
+  })
+  .length()
+}
+
+///|
+/// Home on Android (a press in what scrolls shows once it is not the list's: Ctx::pressed).
+fn android_home() -> @ui.Tester {
+  reset()
+  let src = fixture("home")
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+}
+
+///|
+test "a row pressed: on the ground it has held once the press is not the list's (the tap timeout)" {
+  // one that cannot be archived, one that can (swiped left)
+  for title in ["夜里的构建又失败了", "把旧的截图都换成新的"] {
+    let t = android_home()
+    t.scroll_to(12)
+    t.draw()
+    let (x, y) = t.find(title).unwrap()
+    t.press_at(x, y)
+    assert_eq(rows_lit(t), 0)
+    t.run_for(@ui.tap_indication_ms)
+    assert_eq(rows_lit(t, y~), 1)
+    assert_eq(rows_lit(t), 1)
+    // let go, its chat
+    t.release(x, y)
+    assert_eq(app.nav.depth(), 2)
+  }
+}
+
+///|
+test "a row a finger scrolls the list from: not lit" {
+  let t = android_home()
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.hold_drag(x, y, x, y - 160.0)
+  t.run_for(@ui.tap_indication_ms)
+  assert_eq(rows_lit(t), 0)
+}
+
+///|
 test "the workspaces' sheet: another workspace tapped is the one in view" {
   let t = tester("home")
   t.tap_text("星火工作室")

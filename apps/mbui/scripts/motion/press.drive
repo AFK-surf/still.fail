@@ -1,0 +1,11 @@
+# A row pressed a moment and let go (a tap held short of a long press): lit once the press is not the list's (100 ms
+# in), its chat opened as it is let go; back home, a finger scrolling the list from a row lights none.
+timeout 20000
+until 整理发布清单
+wait 600
+hold 380 夜里的构建又失败了
+wait 1200
+back
+wait 1000
+drag 195 420 0 -200 400
+wait 1000
