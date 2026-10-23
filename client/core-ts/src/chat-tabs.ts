@@ -1,11 +1,12 @@
 // A chat's side panel (web/src/pages/ChatPage.tsx, the mbui app's wide_panel.mbt): the tabs open beside it and the one in
 // front, kept on this device for each chat (prefs `chatTabs`, by `<station>:<session>` as its page names it; `new:<workspace>`
 // for a workspace's new chat). What a client draws is the chat view's `tabs`: those kept that the chat has, and the one
-// in front; it changes them with `chat.tabs.open/close/front/clear`, which keep the result.
-import { get, isObject } from "./util.ts";
+// in front; it changes them with `chat.tabs.open/close/front/clear`, which keep the result. Self-contained: the web's
+// demo shows and changes its chats' tabs with it, typechecked as the web is.
 
-// deno-lint-ignore no-explicit-any
-type J = any;
+type Obj = Record<string, unknown>;
+const isObject = (v: unknown): v is Obj => v !== null && typeof v === "object" && !Array.isArray(v);
+const get = (v: unknown, k: string): unknown => (isObject(v) ? v[k] : undefined);
 
 /// The tabs that are not an agent's history: its agents' services and jobs (任务), the stations' files (文件), the
 /// letters its agents and other chats wrote each other (往来).
@@ -31,13 +32,17 @@ function isFile(key: string): boolean {
 }
 
 /// The agents' session keys and their jobs' ids, as the chat view has them.
-function chatHas(agents: J[]): { histories: Set<string>; jobs: Set<string> } {
+function chatHas(agents: readonly unknown[]): { histories: Set<string>; jobs: Set<string> } {
   const histories = new Set<string>();
   const jobs = new Set<string>();
   for (const a of agents) {
     const key = get(get(a, "session"), "key");
     if (typeof key === "string") histories.add(key);
-    for (const j of Array.isArray(get(a, "jobs")) ? a.jobs : []) if (typeof get(j, "id") === "string") jobs.add(j.id);
+    const js = get(a, "jobs");
+    for (const j of Array.isArray(js) ? js : []) {
+      const id = get(j, "id");
+      if (typeof id === "string") jobs.add(id);
+    }
   }
   return { histories, jobs };
 }
@@ -47,10 +52,10 @@ function chatHas(agents: J[]): { histories: Set<string>; jobs: Set<string> } {
 /// panel holds its place); the one in front: the one kept so, else the first. None kept: none, but where its agent has
 /// no chat yet (`noChat`, by its `session`) its history, opened by itself (`auto`: a client where the panel would lie
 /// over the chat shows none).
-export function tabsOf(kept: unknown, agents: J[], noChat: boolean, session: string | null): Tabs {
+export function tabsOf(kept: unknown, agents: readonly unknown[], noChat: boolean, session: string | null): Tabs {
   const chosen = isObject(kept) && Array.isArray(kept.tabs) ? strings(kept.tabs) : null;
   const auto = chosen === null && noChat && session !== null;
-  const tabs = chosen ?? (auto ? [session!] : []);
+  const tabs = chosen ?? (auto && session !== null ? [session] : []);
   const has = chatHas(agents);
   const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || isFile(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
   const open = agents.length ? tabs.filter(known) : tabs;
@@ -65,7 +70,7 @@ export type Change = { action: "open" | "close" | "front" | "clear"; tab: string
 /// itself, which it goes from); null when nothing changes. Opened: in front, an agent's history after the histories
 /// open (before the other tabs), any other last. Closed: the one in front, if it was, the last left. In front: as said.
 /// Cleared (the panel closed): none, the one in front kept as it was.
-export function changed(kept: unknown, agents: J[], noChat: boolean, session: string | null, change: Change): Kept | null {
+export function changed(kept: unknown, agents: readonly unknown[], noChat: boolean, session: string | null, change: Change): Kept | null {
   const now = tabsOf(kept, agents, noChat, session);
   const open = now.auto && !change.auto ? [] : now.open;
   const shown = now.auto && !change.auto ? null : now.shown ?? null;
