@@ -4692,6 +4692,16 @@ export interface ScreenItem {
 	link: string;
 }
 
+/** A screen's display scale (docs/remote-screens.md `scale`): what makes its windows and text larger or smaller on it. */
+export interface ScreenScale {
+	/** Now, in percent (Windows' Settings › Display › Scale). */
+	percent: number;
+	/** The one its system recommends. */
+	recommended: number;
+	/** Those it takes, lowest first. */
+	steps: number[];
+}
+
 /** A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is. */
 export interface ScreenViewState {
 	/**
@@ -4733,6 +4743,11 @@ export interface ScreenViewState {
 	clipboard?: string[];
 	/** While driving it: where a file dropped into the view goes (none while only looking, or from a station before files). */
 	drop?: ScreenDrop;
+	/**
+	 * While driving it: its display's scale, set with `screen.input` `{t: "scale", percent}` and put back as it was
+	 * once nobody views it (a Windows station's desktop; none elsewhere, or while only looking).
+	 */
+	scale?: ScreenScale;
 }
 
 /** A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts). */

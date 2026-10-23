@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntSize
 import fail.still.android.data.ScreenDrop
+import fail.still.android.data.ScreenScale
 import fail.still.android.data.ScreenViewState
 import fail.still.android.data.decode
 import fail.still.core.CoreException
@@ -128,6 +129,9 @@ class ScreenSession(
      */
     val clipTypes: List<String> get() = if (driving) state?.clipboard.orEmpty() else emptyList()
 
+    /** The screen's display scale, while driving one whose station changes it (a Windows station's desktop). */
+    val scale: ScreenScale? get() = if (driving) state?.scale?.takeIf { it.steps.isNotEmpty() } else null
+
     /** The phone's clipboard is pasted into the screen (`screen.clipboard`): driving it, and the station carries some. */
     val pastes: Boolean get() = clipTypes.any { it == "text" || it == "png" }
 
@@ -200,6 +204,9 @@ class ScreenSession(
         if (!driving) return
         core.tell("screen.input", buildJsonObject { put("view", view); put("input", input) })
     }
+
+    /** Its display's scale set to one of its steps (`screen.input` scale); the station says it back. */
+    fun setScale(percent: UInt) = input(buildJsonObject { put("t", "scale"); put("percent", percent.toLong()) })
 
     /** `text` onto the screen's clipboard and pasted where its focus is (`screen.clipboard`). Throws [CoreException]. */
     suspend fun paste(text: String) {

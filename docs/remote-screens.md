@@ -83,9 +83,9 @@ JPEG frames are all key frames and their config has no `description`.
 |---|---|---|
 | 1 `config` | station → client | JSON `{codec:"h265"\|"h264"\|"jpeg", width, height, description?}`: `description` is the hvcC (H.265) or avcC (H.264), base64. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
 | 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.265 or H.264 as length-prefixed NALs (parameter sets in the config only), or one JPEG. |
-| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], ended?: reason}`: first `{title, control, access?}` (`control`: whether this view's input is taken), then what changes; `cursor`: the screen's pointer (0..1 of the frame, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
+| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], scale?: {percent, recommended, steps}, ended?: reason}`: first `{title, control, access?}` (`control`: whether this view's input is taken), then what changes; `scale`, to a view that drives a screen whose display scale is changed (Windows' desktop), as it opens and after each change it asked; `cursor`: the screen's pointer (0..1 of the frame, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
 | 4 `clipboard` | station → client | 1 byte type (1 text in UTF-8, 2 PNG), the content: the screen's clipboard each time it changes (a copy made on it), only to a view that drives it; not what it held as the view opened. |
-| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
+| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"scale", percent}` (the display's scale, one of the `steps` its `scale` said; from a view that drives it), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
 | 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded (drawn). What the station sends next goes by them (Pace, below). |
 | 18 `keyframe` | client → station | empty: decoder lost its state, send a key frame |
 | 19 `clipboard` | client → station | 1 byte flags (bit 0: paste it), 1 byte type (1 text, 2 PNG), the content: sets the screen's clipboard and, with paste, pastes it where its focus is. Only from a view that drives it, of a type its `clipboard` names; text at most 1 MB, a PNG 8 MB (a larger frame ends the view, as any client frame past its bound does) |
@@ -178,6 +178,14 @@ modifiers not pressed before it, as a phone's keys row sends it, has them presse
 key), text as Unicode. Opening a view wakes a display gone to sleep (a pointer nudge) and keeps it on while it is open
 (`SetThreadExecutionState`). What Windows keeps from any app in the session is not had: the sign-in and UAC's secure
 desktop are not captured, and windows of apps run as administrator take no input.
+
+The display's scale (Settings › Display › Scale) is a person's to change from the view, as UU Remote has it: on a phone
+the desktop's windows and text are made larger, readable at the phone's size. `stillfail-screen scale [percent]` reads
+the main display's (`{percent, recommended, steps}`) and sets it as Settings does (DisplayConfigSetDeviceInfo's DPI
+scale, relative to the recommended step; it takes at once, nobody signed out). The station tells a view that drives it
+the scale as it opens, sets it as asked (`{t:"scale", percent}`), and, once the last view of the desktop ended, puts it
+back as it was before the first change, so the machine is not left at a phone's scale. The clients offer it while
+driving: 控制中心 › 缩放 with a mouse, a button in the foot (and 全屏's tools) on a phone.
 
 The same app opens the drive's folders macOS protects (`files.*`, docs/drive.md): its window then shows only the rows
 asked for (`permissions.show {grants}`), a folder's row asking macOS's own prompt (the only way a folder is granted).

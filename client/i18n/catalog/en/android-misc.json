@@ -479,6 +479,8 @@
   "android-misc.screen.look": "View",
   "android-misc.screen.drive": "Control",
   "android-misc.screen.keyboard": "Keyboard",
+  "android-misc.screen.scale": "Scale",
+  "android-misc.screen.scaleRecommended": "{percent}% (recommended)",
   "android-misc.screen.full": "Full screen",
   "android-misc.screen.unfull": "Exit full screen",
   "android-misc.screen.tools": "Tools",

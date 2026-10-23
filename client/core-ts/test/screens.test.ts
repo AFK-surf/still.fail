@@ -371,6 +371,21 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   said(host, log);
   const now = lastState(log, 1);
   assert.deepEqual([now.others, now.line, now.cursor], [["Bob"], "控制 · Bob 也在查看", { x: 0.1, y: 0.2, shape: "text" }]);
+  assert.equal(now.scale, undefined, "a station that says no scale: none");
+  // Its display's scale, as the station says it, to a view that drives it; set with the input it takes.
+  const steps = [100, 125, 150, 175, 200];
+  v!.send(stateFrame({ scale: { percent: 200, recommended: 150, steps } }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(lastState(log, 1).scale, { percent: 200, recommended: 150, steps });
+  call(core, ui, 7, "screen.input", { view: "v", input: { t: "scale", percent: 150 } });
+  await host.settle();
+  assert.deepEqual(v!.got.at(-1), { input: { t: "scale", percent: 150 } });
+  // Not a scale: told as any bad input is.
+  call(core, ui, 8, "screen.input", { view: "v", input: { t: "scale", percent: 99 } });
+  await host.settle();
+  said(host, log);
+  assert.equal(log.find((m) => m.id === 8)?.error?.code, "invalid_params");
   // The page goes: the stream closes.
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();

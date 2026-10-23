@@ -452,6 +452,8 @@
   "android-misc.screen.look": "只看",
   "android-misc.screen.drive": "控制",
   "android-misc.screen.keyboard": "键盘",
+  "android-misc.screen.scale": "缩放",
+  "android-misc.screen.scaleRecommended": "{percent}%（推荐）",
   "android-misc.screen.full": "全屏",
   "android-misc.screen.unfull": "退出全屏",
   "android-misc.screen.tools": "工具",

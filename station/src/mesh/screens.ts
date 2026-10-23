@@ -68,6 +68,12 @@ export function parseClip(payload: Buffer): { clip: Clip; paste: boolean } | nul
   return clip !== null && clipFits(clip) ? { clip, paste } : null;
 }
 
+/// What a client's input frame asks of the display's scale (`{t: "scale", percent}`): the percent, or null when it is
+/// not that.
+export function parseScale(v: any): number | null {
+  return v !== null && typeof v === "object" && v.t === "scale" && Number.isInteger(v.percent) && v.percent >= 100 && v.percent <= 500 ? v.percent : null;
+}
+
 /// What a client's input frame asks of the file manager (`{t: "reveal", path}`): the path, or null when it is not that.
 export function parseReveal(v: any): string | null {
   return v !== null && typeof v === "object" && v.t === "reveal" && typeof v.path === "string" && v.path !== "" && v.path.length <= 4096 ? v.path : null;
@@ -310,6 +316,12 @@ class ViewSession {
         if (!this.#closed) void this.#state({ cursor });
       });
     }
+    // The display's scale, to a person who drives it (a source whose scale is changed: Windows' desktop).
+    if (this.control && this.source.scale) {
+      void this.source.scale().then((scale) => {
+        if (scale !== null && !this.#closed) void this.#state({ scale });
+      });
+    }
     void this.stream.stopped().then(
       () => this.#stop(null),
       () => this.#stop(null),
@@ -392,6 +404,19 @@ class ViewSession {
             try {
               raw = JSON.parse(got.payload.toString("utf8"));
             } catch {}
+            const percent = parseScale(raw);
+            if (percent !== null) {
+              const source = this.source;
+              if (source.setScale) {
+                this.#then(() =>
+                  source.setScale!(percent).then(
+                    (scale) => void this.#state({ scale }),
+                    (error) => log.info("screens", "the display's scale was not set", { screen: this.id, percent, error: (error as Error).message }),
+                  ),
+                );
+              }
+              break;
+            }
             const reveal = parseReveal(raw);
             if (reveal !== null) {
               if (this.source.reveal && this.view.reveal) this.#then(() => this.view.reveal!(reveal));

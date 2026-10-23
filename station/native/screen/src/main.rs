@@ -3,6 +3,9 @@
 // output, in the helper's messages (station/src/screens/desktop.ts `TO_HELPER`, native/helper's ScreenView.swift):
 //
 //   stillfail-screen status   one JSON line: {ok, display: {id, width, height}, capture} (the main display, in pixels)
+//   stillfail-screen scale [percent]
+//                             one JSON line: the main display's scale {percent, recommended, steps: [percent…]}, set to
+//                             `percent` first when it is given (one of its steps); or {error}
 //   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, encoder?: "software"},
 //                             then messages
 //                             (a kind byte, the payload's length in 4 bytes big-endian, the payload) both ways until
@@ -47,6 +50,7 @@ mod encode;
 mod image;
 #[cfg(windows)]
 mod input;
+mod scale;
 #[cfg(windows)]
 mod view;
 
@@ -110,13 +114,18 @@ fn main() {
     view::dpi_aware();
     match std::env::args().nth(1).as_deref() {
         Some("status") => println!("{}", view::status()),
+        // The main display's scale; with a percent, set to it first.
+        Some("scale") => match std::env::args().nth(2) {
+            Some(percent) => println!("{}", percent.parse().map(scale::set).unwrap_or_else(|_| serde_json::json!({ "error": "not a percent" }))),
+            None => println!("{}", scale::read()),
+        },
         Some("view") => {
             let mut input = std::io::stdin().lock();
             let Some(request) = request_line(&mut input) else { std::process::exit(2) };
             view::run(&request, &mut input, Out::new());
         }
         _ => {
-            eprintln!("usage: stillfail-screen status | view");
+            eprintln!("usage: stillfail-screen status | view | scale [percent]");
             std::process::exit(2);
         }
     }

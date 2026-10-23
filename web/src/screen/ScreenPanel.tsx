@@ -1,11 +1,11 @@
 // What the screen's bar has (ScreenViewer.tsx) with a mouse, beside 只看/控制, as a remote desktop's window has it: how
 // the view goes (a signal mark and how long it has been seen; pressed, the whole of it under the round trip), and 控制中心, a menu of what can be done with the view: 画质 (how
-// large a picture is asked for), 组合键 (the keys this device's own system would take for itself: ⌘Tab, Alt+Tab, the
+// large a picture is asked for), 缩放 (the screen's own display scale, where its station changes it: Windows), 组合键 (the keys this device's own system would take for itself: ⌘Tab, Alt+Tab, the
 // Windows key…, sent to the screen), sending files, a window of its own, 全屏, and 断开.
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
-import type { ScreenViewState, StationNet } from "../core/shapes.ts";
-import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, Trash, Upload } from "@stillfail/ui/icons.tsx";
+import type { ScreenScale, ScreenViewState, StationNet } from "../core/shapes.ts";
+import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, TextSize, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { t } from "../i18n.ts";
 import type { Quality } from "./frames.ts";
@@ -135,10 +135,47 @@ function Bars({ level, size = 14 }: { level: string | undefined; size?: number }
   );
 }
 
-/** 控制中心: what can be done with the view, as a menu (画质 and 组合键 open beside it). */
-export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
+/** A scale as the menu says it: 150%, and 推荐 beside the one its system recommends. */
+function scaleWords(percent: number, scale: ScreenScale): string {
+  return percent === scale.recommended ? t("web-pages.screen.scaleRecommended", { percent }) : `${percent}%`;
+}
+
+/** The scale's steps as radio items, the one now checked. */
+function ScaleItems({ scale, onScale, item }: { scale: ScreenScale; onScale: (percent: number) => void; item: string }) {
+  return (
+    <DropdownMenu.RadioGroup value={String(scale.percent)} onValueChange={(v) => onScale(Number(v))}>
+      {scale.steps.map((p) => (
+        <DropdownMenu.RadioItem key={p} value={String(p)} className={item}>
+          <span className={css.menuCheck}><DropdownMenu.ItemIndicator><Check size={14} /></DropdownMenu.ItemIndicator></span>
+          <span className={css.menuWords}>{scaleWords(p, scale)}</span>
+        </DropdownMenu.RadioItem>
+      ))}
+    </DropdownMenu.RadioGroup>
+  );
+}
+
+/** A phone's 缩放: its button in the viewer's foot, the steps above it. */
+export function ScaleButton({ scale, onScale, className }: { scale: ScreenScale; onScale: (percent: number) => void; className: string }) {
+  const item = `${controlsCss.menuItem} ${css.menuItem}`;
+  return (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger className={className} aria-label={t("web-pages.screen.scale")}><TextSize size={18} /></DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.menu}`} side="top" sideOffset={6} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
+          <ScaleItems scale={scale} onScale={onScale} item={item} />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** 控制中心: what can be done with the view, as a menu (画质, 缩放 and 组合键 open beside it). */
+export function ControlCenter({ quality, onQuality, scale, onScale, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
   quality: Quality;
   onQuality: (q: Quality) => void;
+  /** The screen's display scale, while driving one whose station changes it. */
+  scale?: ScreenScale | undefined;
+  onScale: (percent: number) => void;
   /** None while it is not driven. */
   combos: Combo[];
   onCombo: (c: Combo) => void;
@@ -183,6 +220,19 @@ export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onW
               </DropdownMenu.SubContent>
             </DropdownMenu.Portal>
           </DropdownMenu.Sub>
+          {scale && (
+            <DropdownMenu.Sub>
+              <DropdownMenu.SubTrigger className={item}>
+                <TextSize size={16} /><span className={css.menuWords}>{t("web-pages.screen.scale")}</span>
+                <span className={css.menuEnd}>{scale.percent}%</span><ChevronRight size={14} />
+              </DropdownMenu.SubTrigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.SubContent className={list} sideOffset={6} collisionPadding={8}>
+                  <ScaleItems scale={scale} onScale={onScale} item={item} />
+                </DropdownMenu.SubContent>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Sub>
+          )}
           {combos.length > 0 && (
             <DropdownMenu.Sub>
               <DropdownMenu.SubTrigger className={item}>
