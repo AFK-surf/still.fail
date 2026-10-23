@@ -776,6 +776,8 @@ priv struct VizFull {
   session : String
   /// opened by a link within a sentence (VizOpen): its wait said under the words till it covers the screen
   linked : Bool
+  /// a mermaid chart's source instead of a file (Viz.kt Mermaid): nothing to fetch, nothing kept, no words to send
+  mermaid : String?
 }
 
 ///|
@@ -784,7 +786,22 @@ let viz_full : Ref[VizFull?] = Ref(None)
 ///|
 fn viz_open_full(name : String, station : String, key : String, path : String, here : Here, linked? : Bool = false) -> Unit {
   viz_close("full/")
-  viz_full.val = Some({ name, station, key, path, session: here.session, linked })
+  viz_full.val = Some({ name, station, key, path, session: here.session, linked, mermaid: None })
+}
+
+///|
+/// A mermaid chart over the whole screen (Viz.kt Mermaid: VizFull("Mermaid", …)).
+fn viz_open_mermaid(code : String) -> Unit {
+  viz_close("full/")
+  viz_full.val = Some({
+    name: "Mermaid",
+    station: "",
+    key: "",
+    path: "",
+    session: "",
+    linked: false,
+    mermaid: Some(code),
+  })
 }
 
 ///|
@@ -801,7 +818,11 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
     Some(v) => v
     None => return
   }
-  match viz_load(c, src, v.station, v.key, v.path) {
+  let loaded = match v.mermaid {
+    Some(code) => Some(Ok((viz_mermaid_document(code, full=true), None)))
+    None => viz_load(c, src, v.station, v.key, v.path)
+  }
+  match loaded {
     // fetched once; a link's wait is said under its words (viz_opening)
     None => return
     Some(Err(_)) => {
@@ -811,6 +832,7 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
       return
     }
     Some(Ok((html, state))) => {
+      let chart = v.mermaid is Some(_)
       let t = @sf.theme()
       c.on_back(fn() { viz_close_full() })
       c.layer(fn() {
@@ -833,13 +855,13 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=viz_full_page, fn() {
             viz_frame(
               c,
-              "full/" + v.station + "/" + v.key + "/" + v.path,
+              if chart { "full/mermaid/" + html } else { "full/" + v.station + "/" + v.key + "/" + v.path },
               html,
               state,
               {
-                keep: Some(fn(s) { viz_keep(src, v.station, v.key, v.path, s) }),
+                keep: if chart { None } else { Some(fn(s) { viz_keep(src, v.station, v.key, v.path, s) }) },
                 failed: None,
-                follow_up: Some(viz_follow_up(v.station, v.session)),
+                follow_up: if chart { None } else { Some(viz_follow_up(v.station, v.session)) },
               },
               fill=true,
               ground=t.p.bg,
@@ -904,14 +926,21 @@ fn viz_opening(c : @ui.Ctx, src : Source, here : Here) -> Unit {
 let viz_mermaid : String = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
 
 ///|
-/// A mermaid chart's page: the source, drawn by mermaid in the web's colours, drawn again when the theme changes.
-fn viz_mermaid_document(code : String) -> String {
+/// A mermaid chart's page (Viz.kt mermaidDocument): the source, drawn by mermaid in the web's colours, drawn again when
+/// the theme changes, once the page has a width. In a message fitted to its width but never smaller than 0.8 (wider
+/// than that it scrolls sideways); `full`: over the whole screen, fitted to it, pinched and moved by the page itself.
+fn viz_mermaid_document(code : String, full? : Bool = false) -> String {
   "<pre class=\"mermaid-src\" hidden>" +
   code.replace_all(old="&", new="&amp;").replace_all(old="<", new="&lt;") +
-  "</pre><div id=\"chart\" style=\"display:flex;justify-content:center\"></div>\n" +
+  "</pre><div id=\"chart\"></div>\n<style>" +
+  (if full { "html{overflow:hidden}#chart{position:relative;height:calc(100vh - 4px);overflow:hidden;touch-action:none}" } else { "#chart{overflow-x:auto}" }) +
+  "</style>\n" +
   "<script type=\"module\">\n" +
   "  const post = (m) => parent.postMessage({ emberViz: true, ...m }, \"*\");\n" +
   "  const source = document.querySelector(\".mermaid-src\").textContent;\n" +
+  "  const FULL = " +
+  (if full { "true" } else { "false" }) +
+  ", READABLE = 0.8;\n" +
   "  let mermaid;\n" +
   "  try { mermaid = (await import(\"" +
   viz_mermaid +
@@ -921,9 +950,66 @@ fn viz_mermaid_document(code : String) -> String {
   "  const pixel = document.createElement(\"canvas\").getContext(\"2d\", { willReadFrequently: true });\n" +
   "  const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = \"#000\"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return \"rgb(\" + r + \", \" + g + \", \" + b + \")\"; };\n" +
   "  const v = (name) => { const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return name === \"--font-sans\" ? value : rgb(value); };\n" +
-  "  let n = 0;\n" +
+  "  const chart = document.getElementById(\"chart\");\n" +
+  "  let n = 0, waiting = false, width = 0;\n" +
+  "  const fit = (w) => Math.min(1, chart.clientWidth / w);\n" +
+  "  async function render(s) {\n" +
+  "    const { svg } = await mermaid.render(\"chart-\" + ++n, s);\n" +
+  "    const box = document.createElement(\"div\");\n" +
+  "    box.innerHTML = svg;\n" +
+  "    return box.querySelector(\"svg\");\n" +
+  "  }\n" +
+  "  // Over the whole screen: the chart fitted to the screen (`base`), zoomed `k` times that (1 to `most`), its corner at x, y.\n" +
+  "  let base = 1, most = 4, k = 1, x = 0, y = 0;\n" +
+  "  function show() {\n" +
+  "    const svg = chart.querySelector(\"svg\");\n" +
+  "    if (!svg) return;\n" +
+  "    const { width: w, height: h } = svg.viewBox.baseVal;\n" +
+  "    const s = base * k, cw = chart.clientWidth, ch = chart.clientHeight;\n" +
+  "    // In the middle while it is smaller than the screen; else its edges kept on the screen.\n" +
+  "    x = w * s <= cw ? (cw - w * s) / 2 : Math.min(0, Math.max(cw - w * s, x));\n" +
+  "    y = h * s <= ch ? (ch - h * s) / 2 : Math.min(0, Math.max(ch - h * s, y));\n" +
+  "    svg.style.width = w * s + \"px\";\n" +
+  "    svg.style.height = h * s + \"px\";\n" +
+  "    svg.style.left = x + \"px\";\n" +
+  "    svg.style.top = y + \"px\";\n" +
+  "  }\n" +
+  "  function zoom(to, px, py) {\n" +
+  "    to = Math.min(most, Math.max(1, to));\n" +
+  "    x = px - (px - x) * to / k;\n" +
+  "    y = py - (py - y) * to / k;\n" +
+  "    k = to;\n" +
+  "    show();\n" +
+  "  }\n" +
+  "  // The chart at its size: as written (its viewBox) scaled to fit, no smaller than READABLE in a message.\n" +
+  "  function place() {\n" +
+  "    const svg = chart.querySelector(\"svg\");\n" +
+  "    if (!svg) return;\n" +
+  "    const { width: w, height: h } = svg.viewBox.baseVal;\n" +
+  "    if (!w || !h) return;\n" +
+  "    svg.removeAttribute(\"width\");\n" +
+  "    svg.removeAttribute(\"height\");\n" +
+  "    svg.style.maxWidth = \"none\";\n" +
+  "    svg.style.display = \"block\";\n" +
+  "    if (FULL) {\n" +
+  "      svg.style.position = \"absolute\";\n" +
+  "      base = Math.min(1, chart.clientWidth / w, chart.clientHeight / h);\n" +
+  "      // Up to twice its size as written, or 4 times the screen's fit if more.\n" +
+  "      most = Math.max(4, 2 / base);\n" +
+  "      k = 1;\n" +
+  "      show();\n" +
+  "      return;\n" +
+  "    }\n" +
+  "    const scale = Math.max(fit(w), READABLE);\n" +
+  "    svg.style.margin = \"0 auto\";\n" +
+  "    svg.style.width = w * scale + \"px\";\n" +
+  "    svg.style.height = h * scale + \"px\";\n" +
+  "  }\n" +
   "  async function draw() {\n" +
   "    if (!mermaid) return;\n" +
+  "    if (!chart.clientWidth) { waiting = true; return; }\n" +
+  "    waiting = false;\n" +
+  "    width = chart.clientWidth;\n" +
   "    try {\n" +
   "      mermaid.initialize({ startOnLoad: false, securityLevel: \"strict\", theme: \"base\", fontFamily: v(\"--font-sans\"), themeVariables: {\n" +
   "        darkMode: document.documentElement.dataset.theme === \"dark\", fontSize: \"14px\",\n" +
@@ -932,13 +1018,59 @@ fn viz_mermaid_document(code : String) -> String {
   "        noteBkgColor: v(\"--accent\"), noteTextColor: v(\"--foreground\"), noteBorderColor: v(\"--brand\"),\n" +
   "        actorBkg: v(\"--card\"), actorBorder: v(\"--border-strong\"), actorTextColor: v(\"--foreground\"), signalColor: v(\"--foreground\"), signalTextColor: v(\"--foreground\"),\n" +
   "      } });\n" +
-  "      const { svg } = await mermaid.render(\"chart-\" + ++n, source);\n" +
-  "      document.getElementById(\"chart\").innerHTML = svg;\n" +
+  "      chart.replaceChildren(await render(source));\n" +
+  "      place();\n" +
   "    } catch (e) { post({ type: \"failed\", message: String(e?.message ?? e) }); }\n" +
   "  }\n" +
   "  addEventListener(\"ember-viz:theme\", draw);\n" +
+  "  // A new width (the screen turned): drawn now if it was waiting for one, else sized again. After the observer's turn:\n" +
+  "  // drawing in it changes the layout it reports on.\n" +
+  "  new ResizeObserver(() => {\n" +
+  "    if (!chart.clientWidth || chart.clientWidth === width) return;\n" +
+  "    if (waiting) setTimeout(draw); else { width = chart.clientWidth; setTimeout(place); }\n" +
+  "  }).observe(chart);\n" +
+  "  if (FULL) {\n" +
+  "    // Pinched with two fingers, moved with one; a double tap zooms in to its size as written there, or back out. The\n" +
+  "    // page's own, the same in every app: a WebView's own zoom is not there on every host.\n" +
+  "    const at = (e) => { const r = chart.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };\n" +
+  "    const fingers = new Map();\n" +
+  "    let tap = null;\n" +
+  "    chart.addEventListener(\"pointerdown\", (e) => { chart.setPointerCapture(e.pointerId); fingers.set(e.pointerId, at(e)); });\n" +
+  "    chart.addEventListener(\"pointermove\", (e) => {\n" +
+  "      if (!fingers.has(e.pointerId)) return;\n" +
+  "      const was = [...fingers.values()];\n" +
+  "      fingers.set(e.pointerId, at(e));\n" +
+  "      const now = [...fingers.values()];\n" +
+  "      if (now.length === 1) { x += now[0].x - was[0].x; y += now[0].y - was[0].y; show(); return; }\n" +
+  "      const mid = (p) => ({ x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 });\n" +
+  "      const far = (p) => Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1;\n" +
+  "      const m0 = mid(was), m1 = mid(now);\n" +
+  "      x += m1.x - m0.x;\n" +
+  "      y += m1.y - m0.y;\n" +
+  "      zoom(k * far(now) / far(was), m1.x, m1.y);\n" +
+  "    });\n" +
+  "    const up = (e) => {\n" +
+  "      const p = fingers.get(e.pointerId);\n" +
+  "      const alone = fingers.size === 1;\n" +
+  "      fingers.delete(e.pointerId);\n" +
+  "      if (!p || !alone || e.type !== \"pointerup\") return;\n" +
+  "      if (tap && e.timeStamp - tap.t < 300 && Math.hypot(p.x - tap.x, p.y - tap.y) < 30) {\n" +
+  "        zoom(k > 1.01 ? 1 : Math.max(2, 1 / base), p.x, p.y);\n" +
+  "        tap = null;\n" +
+  "      } else tap = { t: e.timeStamp, x: p.x, y: p.y };\n" +
+  "    };\n" +
+  "    chart.addEventListener(\"pointerup\", up);\n" +
+  "    chart.addEventListener(\"pointercancel\", up);\n" +
+  "    // A mouse's wheel moves it; with ctrl (a trackpad's pinch), zooms it.\n" +
+  "    chart.addEventListener(\"wheel\", (e) => {\n" +
+  "      e.preventDefault();\n" +
+  "      const p = at(e);\n" +
+  "      if (e.ctrlKey) zoom(k * Math.exp(-e.deltaY / 100), p.x, p.y);\n" +
+  "      else { x -= e.deltaX; y -= e.deltaY; show(); }\n" +
+  "    }, { passive: false });\n" +
+  "  }\n" +
   "  draw();\n" +
-  "</script>"
+  "</script>\n"
 }
 
 ///|
@@ -946,7 +1078,8 @@ fn viz_mermaid_document(code : String) -> String {
 let viz_unmade : Map[String, Bool] = Map([])
 
 ///|
-/// A ```mermaid block: drawn as a chart (`place`: the message it is in); shown as code while it will not draw.
+/// A ```mermaid block: drawn as a chart (`place`: the message it is in), with a way under it to open it over the whole
+/// screen; shown as code while it will not draw.
 fn viz_mermaid_block(c : @ui.Ctx, place : String, code : String) -> Unit {
   if viz_unmade.contains(code) {
     @sf.code_block(c, code, "mermaid")
@@ -958,6 +1091,15 @@ fn viz_mermaid_block(c : @ui.Ctx, place : String, code : String) -> Unit {
       failed: Some(fn(_why) { viz_unmade[code] = true }),
       follow_up: None,
     })
+    // under the chart, out of its way, as a placed file has it
+    c.box(style=viz_ways, fn() {
+      let full = c.id("viz/full/" + place + "/mermaid/" + code)
+      if c.clicked(full) {
+        viz_open_mermaid(code)
+      }
+      viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"))
+    })
+    |> ignore
   })
   |> ignore
 }
