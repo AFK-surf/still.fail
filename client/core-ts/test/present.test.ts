@@ -422,6 +422,24 @@ test("bound_subscriptions_hide_only_the_same_machine_account", () => {
   assert.ok(o.machineLogins.every((l: J) => l.offered === true));
 });
 
+test("how_a_station_archives_on_its_own_is_said_and_offered_by_the_core", () => {
+  const topic = { topic: "overview", station: "w/s" };
+  const c = { now: 0, offsetMin: 0 };
+  const shown = (archiving: J): J => (p.decorate(topic, { archiving }, c) as J).archiving;
+  const off = shown({ days: 0, slackDays: 3, reviewed: true, canEdit: true });
+  assert.deepEqual([off.mode, off.summaryText], ["off", "不自动归档 · Slack：3 天"]);
+  assert.deepEqual([off.daysOffered, off.slackDaysOffered], [[1, 3, 7, 30], [0, 3, 7, 30]]);
+  const idle = shown({ days: 1, slackDays: 0, reviewed: false, canEdit: false });
+  assert.deepEqual([idle.mode, idle.summaryText], ["idle", "空闲就归档 · 1 天 · Slack：不归档"]);
+  // The days kept are offered among the others, in order, when they are none of them.
+  const reviewed = shown({ days: 14, slackDays: 60, reviewed: true, canEdit: true });
+  assert.deepEqual([reviewed.mode, reviewed.summaryText], ["reviewed", "按模型判断 · 14 天 · Slack：60 天"]);
+  assert.deepEqual([reviewed.daysOffered, reviewed.slackDaysOffered], [[1, 3, 7, 14, 30], [0, 3, 7, 30, 60]]);
+  assert.ok("ok" in conform("ArchivingView", reviewed), JSON.stringify(conform("ArchivingView", reviewed)));
+  // A station from before it: none.
+  assert.equal("archiving" in (p.decorate(topic, { counts: {} }, c) as J), false);
+});
+
 test("what_the_clients_show_is_put_in_here", () => {
   const c = { now: 1_790_467_200_000, offsetMin: 480 };
   let s: J = { runtime: "codex", model: "gpt-6-astra", effort: "medium", process: "warm", lastTurn: { declared: "block" }, firstText: "<@U1> 看看 CI" };

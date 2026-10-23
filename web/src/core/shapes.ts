@@ -364,6 +364,17 @@ export interface ArchivingView {
 	reviewed: boolean;
 	/** The viewer manages the station: may change it. */
 	canEdit: boolean;
+	/**
+	 * How it archives on its own (core): `off` (no days), `idle`, or `reviewed` (once idle and recommended by its
+	 * review).
+	 */
+	mode?: string;
+	/** That in a line with Slack's, as its row in 设置 › 归档 says it (core). */
+	summaryText?: string;
+	/** The days idle offered to choose from, the one kept among them when it is none of them (core). */
+	daysOffered?: number[];
+	/** The same of `slackDays` (core). */
+	slackDaysOffered?: number[];
 }
 
 export interface Attachment {
@@ -3092,6 +3103,11 @@ export interface HistoryItem {
 	body: HistoryBody;
 	/** On the item a turn begins with (the prompt that woke the agent); left out of the others. */
 	turn?: HistoryTurn;
+	/**
+	 * The agent's own work (its steps and thoughts, and the words it says to itself): what 只看收发 leaves out.
+	 * Absent otherwise.
+	 */
+	work?: boolean;
 }
 
 export interface HistoryLive {

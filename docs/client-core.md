@@ -197,7 +197,7 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `workspaces` | — | every workspace of every account, with its account and pending invitations |
 | `workspace` | `workspace` | the workspace view (members, stations) |
 | `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s; every 10 minutes while still.fail cloud says the station is not online or after 12 tries in a row missed, and at once when the cloud says it is back, still.fail cloud's socket opens after a try at it failed (the device's network back), the UI comes back or the station answers a request; streams that end before the station's first keepalive (25 s) wait 2 s doubling to 8 s, cut short by the station answering or the link's pings answering again, as each goes on from where it was (a station tells a stream read afresh where its log is, an id alone); those that would read the whole station again (a station from before that) back off to 60 s, until one holds or the UI comes back; one that was up is tried as coming back for its first 3 misses whatever the cloud says; `reconnecting` too while a stream is open and every way to the station has missed 3 pings in a row (`online` again as one answers or the stream brings anything)) / `error` + message |
-| `overview` | `station` | the admin API's `/overview` |
+| `overview` | `station` | the admin API's `/overview`; its `archiving` with what the core makes of it (present.ts `archiving`): `mode` (`off`, no days; `idle`; `reviewed`), that in a line with Slack's (`summaryText`), and the days each choice offers, the one kept among them (`daysOffered`, `slackDaysOffered`) |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
 | `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats. Read only while a page shows it (every chat ever archived: read with each snapshot and archiving, it was a large part of what a slow link carried): again after `chat.archive`, `session.delete` while shown, else marked to be read as it is next shown |
 | `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
@@ -393,6 +393,10 @@ the views.
 
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.
+
+The `history` view (`station`, `key`; history.ts) is an agent's execution history as every client draws it, put
+together from its `live`: each item the transcript entries it draws, what it is (`body`), and on the agent's own work
+(its steps and thoughts, and the words it says to itself) `work`, what 只看收发 leaves out.
 
 ```jsonc
 // chats
@@ -617,6 +621,7 @@ The core's modules (`client/core-ts/src`):
 - `entries.ts` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `workspace.ts` — the workspaces, each with what is its own. `notices.ts`, `attend.ts` (`client.focus`, `notify`), `status.ts`, `pill.ts`, `doing.ts`, `adb.ts`.
 - `activity.ts`, `history.ts`, `present.ts`, `format.ts`, `decisions.ts`, `jobs.ts`, `looks.ts`, `changelog.ts` — what the clients show, decided once for every client.
+- `refLinks.ts` — still.fail's links as what is written names them (a reference to a chat, the link a chat is given away by, the chat, screen or 共享调试 a link names): read as a message or a draft is drawn, so the web imports it as it is, as it does `markdown.ts`, `mdWords.ts`, `placed.ts`; `refs.ts` keeps a mark's link until it is sent (`chat.ref`).
 - `views/` — the view topics (chats, chat, stations, decisions, usage, admin…; `views/memberships.ts`, a station in several workspaces), and `views/local.ts`, the local overlays (outbox, pending chats, renames and pins under way).
 - `choose.ts`, `forms.ts` — the new-chat and model pickers, the forms (automatic decisions, Slack tokens, the connect wizard, adding a profile).
 - `trace.ts` — traces of user actions (docs/telemetry.md). `testing.ts` — a host for tests.

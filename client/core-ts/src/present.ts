@@ -1000,6 +1000,7 @@ function overview(value: J, c: Clock, station: string | null): J {
     if (isObject(decided.policy)) shown.policy = archivePolicy(decided.policy as J, c);
     v.automaticDecisions = shown;
   }
+  if (isObject(v.archiving)) v.archiving = archiving(v.archiving as J);
   const processes = arr(v.processes);
   if (processes) {
     let mb = 0;
@@ -1044,6 +1045,37 @@ function overview(value: J, c: Clock, station: string | null): J {
     });
   }
   return v;
+}
+
+/// The days a station's automatic archiving offers to wait (设置 › 归档): once idle, and heard only in Slack (0: never).
+export const IDLE_DAYS = [1, 3, 7, 30];
+export const SLACK_DAYS = [0, 3, 7, 30];
+
+/// Days, as a choice says them: none is never.
+function daysText(n: number): string {
+  return n <= 0 ? t("web-pages.archiving.never") : t("web-pages.archiving.days", { n });
+}
+
+/// The days offered, with the one kept when it is none of them.
+export function daysOffered(kept: number, base: number[]): number[] {
+  return kept > 0 && !base.includes(kept) ? [...base, kept].sort((a, b) => a - b) : base;
+}
+
+/// How a station archives on its own, as its row and its page in 设置 › 归档 say it: `mode`, never (no days), once
+/// idle, or once idle and recommended by its review (`off`, `idle`, `reviewed`); that in a line with Slack's
+/// (`summaryText`); and the days each choice offers (`daysOffered`, `slackDaysOffered`).
+export function archiving(view: J): J {
+  const days = typeof view.days === "number" ? view.days : 0;
+  const slack = typeof view.slackDays === "number" ? view.slackDays : 0;
+  const mode = days <= 0 ? "off" : view.reviewed === true ? "reviewed" : "idle";
+  const how = mode === "off" ? t(`web-pages.archiving.mode.${mode}`) : `${t(`web-pages.archiving.mode.${mode}`)} · ${daysText(days)}`;
+  return {
+    ...view,
+    mode,
+    summaryText: t("web-pages.archiving.summary", { how, slack: daysText(slack) }),
+    daysOffered: daysOffered(days, IDLE_DAYS),
+    slackDaysOffered: daysOffered(slack, SLACK_DAYS),
+  };
 }
 
 /// The archive policy's lines: the checks it counted, and who changed it last, where, when and what.
