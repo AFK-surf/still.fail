@@ -16,6 +16,29 @@ test "signed out: the sign-in page" {
 }
 
 ///|
+test "signed out in a desktop's window: 登录或注册 no wider than the desktop app's; a phone's across the page" {
+  reset()
+  let pressed = Ref::new(0)
+  let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
+  let (mid, at) = (x + w / 2.0, y + h / 2.0)
+  // beside it, where it ended when it was as wide as the page: nothing
+  t.tap(mid - 160.0, at)
+  t.tap(mid + 160.0, at)
+  assert_eq(pressed.val, 0)
+  // on it, near its end
+  t.tap(mid + 140.0, at)
+  assert_eq(pressed.val, 1)
+  // a phone's: as wide as the page less its sides
+  reset()
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
+  t.tap(x + w / 2.0 + 160.0, y + h / 2.0)
+  assert_eq(pressed.val, 2)
+}
+
+///|
 test "Home: the workspace's name, the search, the days and their rows" {
   let t = tester("home")
   assert_true(t.find("星火工作室") is Some(_))

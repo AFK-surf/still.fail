@@ -1067,6 +1067,10 @@ let splash_float_ms : Double = 1800.0
 let splash_waited : Ref[Bool] = { val: false }
 
 ///|
+/// The sign-in button's width at most in a desktop's window, as the desktop app's.
+let sign_in_wide_w : Double = 300.0
+
+///|
 /// Signed out (SignIn.kt SignInScreen): the illustration, what still.fail is for, and 登录或注册.
 fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
   // inside the bars (SignIn.kt: windowInsetsPadding(systemBars))
@@ -1124,6 +1128,8 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
       c.box(
         dir=Row,
         w=Fill(1.0),
+        // a desktop's no wider than the desktop app's (web cloud/gate.css.ts `ways`)
+        max_w=if is_wide(c) { sign_in_wide_w } else { c.width },
         h=Px(50.0),
         radius=25.0,
         bg=t.p.text,

@@ -2,10 +2,10 @@
 // The core itself is linked into the app (its native stub includes apple_engine.m or android_engine.c from here);
 // this is what the app's MoonBit does with it.
 //
-// Signing in: where the host has a browser session (Apple's ASWebAuthenticationSession), through it
-// (@core.sign_in); elsewhere (Android) as a command-line tool does (@hostapi.browser_login, which knows nothing of
-// still.fail): auth.begin with a loopback address, the page in the browser (a Custom Tab), auth.complete with what
-// comes back.
+// Signing in: where the host has a browser session (iOS's ASWebAuthenticationSession), through it (@core.sign_in);
+// elsewhere (Android, macOS, Windows) as a command-line tool does (@hostapi.browser_login, which knows nothing of
+// still.fail): auth.begin with a loopback address, the page in the browser (a Custom Tab; the default browser),
+// auth.complete with what comes back.
 //
 // The environment's say, read once at `start`:
 // - MBUI_CORE_SIGNIN=1 presses 登录 once the accounts are read (scripted runs; with MBUI_AUTH_DRY=1 the browser
@@ -261,6 +261,8 @@ fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
       @hostapi.log("No browser opened: open the address above")
     }
     login.val = Some((l, done))
+    // the page out: 登录 a button again, as the desktop app's (its page may be closed: a press starts it again)
+    state.busy = false
   })
 }
 
@@ -273,6 +275,8 @@ fn login_back() -> Unit {
   l.end()
   // (not the query: its code is the sign-in's)
   @hostapi.log("Back from the browser at " + l.redirect + ": auth.complete")
+  // busy again till it is done (`done` says so)
+  state.busy = true
   let params : Map[String, Json] = { "query": Json::string(@core.query_of(back)) }
   @core.call("auth.complete", params=Json::object(params), on_done=fn(r) {
     match r {
@@ -311,8 +315,8 @@ fn login_command() -> Unit {
 }
 
 ///|
-/// 登录: through the host's browser session where it has one, else the browser login (a second press starts that
-/// again: the tab may have been closed).
+/// 登录: through the host's browser session where it has one, else the browser login (busy until its page is out; a
+/// second press starts it again: the page may have been closed).
 pub fn sign_in() -> Unit {
   if !@core.has_browser_session() {
     if login.val is Some((l, _)) {
