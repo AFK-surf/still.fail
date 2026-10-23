@@ -117,6 +117,7 @@ import fail.still.android.ui.rememberBreath
 import fail.still.android.ui.NavBack
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
+import fail.still.android.ui.FILL_CHIP_CORNER
 import fail.still.android.ui.MeterChips
 import fail.still.android.ui.MeterDials
 import fail.still.android.ui.HostDetails
@@ -218,7 +219,7 @@ private fun StationBody(s: StationView) {
                 Text(t("android-settings.stations.silent", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         } else {
-            if (host == null) Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
+            if (host == null) Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, FILL_CHIP_CORNER) } }
             if (net == null) Row(Modifier.matchParentSize().padding(top = 30.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(34.dp); Bar(96.dp) }
                 Column(verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(132.dp); Bar(132.dp) }
@@ -242,7 +243,7 @@ private fun StationFigures(s: StationView, peek: Boolean = false) {
         // What it is: on its page, under the page's title; in a chat's card, in the line above.
         if (peek) Box(Modifier.padding(vertical = 4.dp).height(20.dp)) {
             if (host != null) MeterChips(host.meters)
-            else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
+            else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, FILL_CHIP_CORNER) } }
         }
         // Not read yet: laid out unseen as when it is, grey bars over it, so nothing below moves as it comes.
         else Box(Modifier.padding(top = 4.dp)) {

@@ -28,9 +28,12 @@ export const quotaReset = style({ fontSize: vars.textMeta, color: vars.subtle })
 /** A window of an allowance, compact: a rounded box, what is left written in it and its edge drawn as far as is left. */
 /** The boxes side by side, onto a second line rather than squeezed where the room is narrow (a hover card). */
 export const quotaChips = style({ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: "6px 8px", flex: "none", minWidth: "0" });
+/** A chip's corner: near a capsule's on its 20 (a small one's a capsule); in a list row's corner, 12 in, the row's 18 is
+ * concentric round it (8.4 + 12 / 1.25). As Android's FILL_CHIP_CORNER. */
+export const CHIP_CORNER = `calc(8.4px * ${vars.cornerScale})`;
 export const quotaChip = style({
   position: "relative", display: "inline-flex", alignItems: "center", flex: "none", whiteSpace: "nowrap", height: "20px", padding: "0 8px",
-  overflow: "hidden", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.neutralBg,
+  overflow: "hidden", borderRadius: CHIP_CORNER, cornerShape: vars.cornerShape, background: vars.neutralBg,
   color: vars.green, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "1", fontVariantNumeric: "tabular-nums",
   cursor: "default",
   selectors: {

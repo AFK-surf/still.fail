@@ -136,7 +136,8 @@ let unread_meters : Array[Double] = [46.0, 52.0, 50.0]
 let unread_meter_h : Double = 20.0
 
 ///|
-let unread_meter_r : Double = 6.0
+/// (where a chip goes, its corner)
+let unread_meter_r : Double = @sf.fill_chip_corner
 
 ///|
 /// Its network 6 under the boxes; until it is read, as tall as a real one but unseen, grey bars over it.

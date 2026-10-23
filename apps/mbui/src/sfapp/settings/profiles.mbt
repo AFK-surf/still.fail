@@ -29,7 +29,7 @@ fn access_label(kind : String) -> String {
 ///|
 /// A profile's allowance in a line (Parts.kt QuotaChips): a box per window, what is left in it, its mark when there is
 /// more than one; `small`, a lower line (a chat's agents, an execution's notes).
-pub fn quota_chips(c : @ui.Ctx, q : Json?, corner? : Double = fill_chip_radius, small? : Bool = false) -> Unit {
+pub fn quota_chips(c : @ui.Ctx, q : Json?, small? : Bool = false) -> Unit {
   if text(q, "state") != "ok" {
     return
   }
@@ -48,7 +48,6 @@ pub fn quota_chips(c : @ui.Ctx, q : Json?, corner? : Double = fill_chip_radius, 
         if windows.length() == 1 { "" } else { text(wv, "mark") },
         left.to_string() + "%",
         small~,
-        corner~,
       )
     }
   })
@@ -254,10 +253,8 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                   c.text(line, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
                   // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
-                    // (in its row's corner: concentric with it, the row's 12 in)
-                    c.box(style=quota_line, fn() {
-                      quota_chips(c, field(p, "quota"), corner=@ui.concentric(@sf.row_corner, quota_row_inset))
-                    })
+                    // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
+                    c.box(style=quota_line, fn() { quota_chips(c, field(p, "quota")) })
                     |> ignore
                   }
                 })
@@ -1006,10 +1003,6 @@ let models_add_row : @ui.Style = @ui.style(row=true, w=Full, px=S6, pb=S2, gap=S
 /// A grouped profile's allowance, a line under its words (Profiles.kt: padding top 6).
 // kept across runs: a value (no field of it changes)
 let quota_line : @ui.Style = @ui.style(pt=S1_5)
-
-///|
-/// How far a list row's words are in from its edges (list_line's 12).
-let quota_row_inset : Double = 12.0
 
 ///|
 /// Whose the machine's own login is, 14 under where it stands (Profiles.kt: padding(top = 14)).
