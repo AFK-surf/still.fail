@@ -33,7 +33,7 @@ case "${1:?usage: release.sh station|android|modules}" in
     mkdir -p "$dir/android"
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$dir/android/debug.keystore"
     export ANDROID_USER_HOME="$dir/android"
-    # (scripts/release.sh verifies the APK, the Kotlin stable's or mbui's beta, and that it is signed with studio's key
+    # (scripts/release.sh verifies the APK, mbui's stable or beta, and that it is signed with studio's key
     # before putting it, and prints the certificate)
     sh scripts/release.sh ${beta:+$beta} android
     ;;

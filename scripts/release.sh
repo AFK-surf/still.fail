@@ -130,20 +130,17 @@ for platform in $platforms; do
       # beta app is mbui's (apps/mbui) in the place of the one in Kotlin (apps/android): the same package, signed with
       # the same key, so an installed beta updates to it, its files and sign-ins taken as they are (apps/mbui's
       # CoreHost); built as apps/mbui's own beta is (scripts/beta.sh: MoonBit, the engine and shell prebuilt), warm in
-      # a cache of its own. The stable app is the Kotlin one frozen at 0.1.4520 (2026-10-23, as asked: the Kotlin app no
-      # longer built or checked) until it is said to become mbui's (apk.json's `stable` variant): none released here.
-      if [ -n "$beta" ]; then
-        mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-beta}
-        MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
-        node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
-        node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
-        MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=beta RELEASE_DIR="$out/mbui" \
-          bash "$root/apps/mbui/scripts/beta.sh" build
-        apk="$out/mbui/android/app-beta.apk"
-      else
-        echo "release.sh: the stable Android app is frozen at 0.1.4520 (the Kotlin app, 2026-10-23): not released" >&2
-        exit 1
-      fi
+      # a cache of its own. The stable app is mbui's too since 2026-10-24 (as asked; the Kotlin one stopped at
+      # 0.1.4520): apk.json's `stable` variant, fail.still.android, the same key, updating the Kotlin app in place.
+      variant=${beta:+beta}
+      variant=${variant:-stable}
+      mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-beta}
+      MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
+      node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
+      node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
+      MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
+        bash "$root/apps/mbui/scripts/beta.sh" build
+      apk="$out/mbui/android/app-$variant.apk"
       # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
       # and passed over, until 2026-10-20)
       apksigner="${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner"
