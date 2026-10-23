@@ -39,7 +39,7 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
 /// app's top row, their row (44), which drags the window.
 fn side_top(c : @ui.Ctx) -> Unit {
   let id = c.id("side/top")
-  if @ui.window_inset() && !rail_ws.in_bar {
+  if @ui.window_inset() && !wide.folded {
     c.window_drag(id)
   }
   c.box(w=Fill(1.0), h=Px(side_top_h()), id~, fn() {  }) |> ignore
@@ -47,16 +47,17 @@ fn side_top(c : @ui.Ctx) -> Unit {
 
 ///|
 /// The band's first row's height: the window's buttons' row (44) where they are in the app's top row, else a margin
-/// (8); none in the closed bar, which starts under that row (Sidebar.css.ts brand, closed).
+/// (8); none in the closed bar, which starts under that row (Sidebar.css.ts brand, closed): as far on its way as the
+/// block is (moved with it, brand.tsx moveSidebar).
 fn side_top_h() -> Double {
-  if rail_ws.in_bar {
-    0.0
-  } else if @ui.window_inset() {
-    44.0
-  } else {
-    8.0
-  }
+  (if @ui.window_inset() { side_top_inset } else { side_top_web }) * (1.0 - rail_ws.fold_e)
 }
+
+///|
+let side_top_inset : Double = 44.0
+
+///|
+let side_top_web : Double = 8.0
 
 ///|
 /// A row of a sidebar's list (Sidebar.css.ts navRow): 32 high at least, 6 by 10 in, its corner the nav's; the
@@ -81,19 +82,32 @@ fn nav_row(
     gap=8.0,
     align~,
     radius=12.0,
-    bg=if on {
-      t.p.selected
-    } else if c.hovered(id) || c.pressed(id) {
-      t.p.hover
-    } else {
-      0L
-    },
+    bg=nav_ground(c, key, c.hovered(id) || c.pressed(id), on),
     id~,
     body,
   )
   |> ignore
   c.clicked(id)
 }
+
+///|
+/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
+/// 140ms` ease out): the pointer's ground in and out, the lit one's, as the state changes.
+fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool) -> Int64 {
+  let t = @sf.theme()
+  let h = @kit.animate(c, key + "/hover", if hover { 1.0 } else { 0.0 }, transition=nav_fade)
+  let o = @kit.animate(c, key + "/on", if on { 1.0 } else { 0.0 }, transition=nav_fade)
+  if h <= 0.0 && o <= 0.0 {
+    0L
+  } else {
+    @sf.over(@sf.alpha(t.p.hover, h * (1.0 - o)), @sf.alpha(t.p.selected, o))
+  }
+}
+
+///|
+/// What a state's ground changes over (vars.dur: 140 ms, ease out).
+// kept across runs: a value (no field of it changes)
+let nav_fade : @motion.Spec = @motion.tween(@sf.dur_ms, ease=Out)
 
 ///|
 /// A heading over a part of a list (Sidebar.css.ts navHeading): 12 on 18, muted, 14 above, 4 under.
@@ -252,7 +266,7 @@ fn pin_moved(key : String, days : Array[ChatDay]) -> Bool {
 fn side_held(c : @ui.Ctx, key : String) -> Bool {
   let (px, _, _) = c.pointer()
   c.list_moving(key) ||
-  rail_ws.peeking ||
+  (rail_ws.peeking && px >= closed_bar_in + rail_closed_w && px < closed_bar_in + rail_closed_w + wide.side_w) ||
   (!wide.folded && px >= rail_w - 8.0 && px < rail_w + wide.side_w)
 }
 
@@ -264,7 +278,8 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let filter = filter_of(src, w.id)
   let (view, _) = chats_of(src, w.id, "all")
   // (in the closed bar, its ground the bar's: shell.css.ts dock, closed, sets the sidebar's ground to a panel's)
-  c.box(w=Fill(1.0), glass=@sf.glass_floating(tint=if wide.folded { closed_ground() } else { t.p.sidebar }), fn() {
+  // (its ground the block's: shell.css.ts dock, closed, a panel's; moved with it)
+  c.box(w=Fill(1.0), glass=@sf.glass_floating(tint=@sf.mix(closed_ground(), rail_ws.fold_e, t.p.sidebar)), fn() {
     side_top(c)
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
@@ -347,6 +362,9 @@ fn filter_button(c : @ui.Ctx, filter : String, narrowed : Bool, in_bar : Bool) -
     wide.menu = None
   }
   let narrowed = narrowed || filter != "all"
+  // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
+  let hot = @kit.animate(c, "side/filter/hover", if c.hovered(id) || wide.filter_open { 1.0 } else { 0.0 }, transition=nav_fade)
+  let lit = @kit.animate(c, "side/filter/on", if narrowed { 1.0 } else { 0.0 }, transition=nav_fade)
   c.box(
     w=Px(32.0),
     h=Px(32.0),
@@ -354,28 +372,10 @@ fn filter_button(c : @ui.Ctx, filter : String, narrowed : Bool, in_bar : Bool) -
     radius=if in_bar { rail_ground_r } else { 12.0 },
     align=ACenter,
     justify=JCenter,
-    bg=if narrowed {
-      t.p.accent_bg
-    } else if c.hovered(id) || wide.filter_open {
-      t.p.hover
-    } else {
-      0L
-    },
+    bg=@sf.over(@sf.alpha(t.p.hover, hot * (1.0 - lit)), @sf.alpha(t.p.accent_bg, lit)),
     id~,
     fn() {
-      @sf.icon(
-        c,
-        "filter",
-        size=16.0,
-        color=if narrowed {
-          t.p.accent_text
-        } else if c.hovered(id) {
-          t.p.text
-        } else {
-          t.p.muted
-        },
-      )
-      |> ignore
+      @sf.icon(c, "filter", size=16.0, color=@sf.mix(t.p.accent_text, lit, @sf.mix(t.p.text, hot, t.p.muted))) |> ignore
     },
   )
   |> ignore
@@ -445,13 +445,7 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
       gap=8.0,
       align=AStart,
       radius=12.0,
-      bg=if on {
-        t.p.selected
-      } else if hover || c.pressed(id) {
-        t.p.hover
-      } else {
-        0L
-      },
+      bg=nav_ground(c, "side/row/" + key, hover || c.pressed(id), on),
       id~,
       fn() {
         c.box(w=Fill(1.0), gap=2.0, opacity=if item.settled { 0.45 } else { 1.0 }, fn() {

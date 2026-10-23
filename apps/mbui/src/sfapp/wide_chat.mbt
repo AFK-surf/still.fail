@@ -266,7 +266,9 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
   if @ui.window_inset() {
     c.window_drag(bar)
   }
-  c.box(dir=Row, w=Fill(1.0), h=Px(wide_bar_h), pl=12.0, pr=12.0, pb=1.0, gap=16.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
+  // (beside the rail its room as the block moves: page_bar_room)
+  let (room_l, room_r) = page_bar_room()
+  c.box(dir=Row, w=Fill(1.0), h=Px(wide_bar_h), pl=room_l, pr=room_r, pb=1.0, gap=16.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
     // (the title, its people and agents 10 apart, 8 in from the bar's padding: session.css.ts pageBarTitle)
     c.box(dir=Row, w=Fill(1.0), pl=bar_title_in, gap=bar_title_gap, align=ACenter, fn() {
       let title = match v {
@@ -516,7 +518,8 @@ fn page_bar_wide(c : @ui.Ctx, title : String, back : Bool, trailing : () -> Unit
     c.window_drag(bar)
   }
   let mut went = false
-  c.box(dir=Row, w=Fill(1.0), h=Px(wide_bar_h), pl=12.0, pr=12.0, pb=1.0, gap=8.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
+  let (room_l, room_r) = page_bar_room()
+  c.box(dir=Row, w=Fill(1.0), h=Px(wide_bar_h), pl=room_l, pr=room_r, pb=1.0, gap=8.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
     if back {
       went = icon_button(c, "page-bar/back", "chevron-left")
     }

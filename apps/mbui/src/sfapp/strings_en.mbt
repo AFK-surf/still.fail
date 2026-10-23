@@ -482,6 +482,7 @@ let en : Map[String, String] = {
   "web-main.sidebar.noneMine": "No chats you're in",
   "web-main.sidebar.noneWatching": "No chats you're watching",
   "web-main.sidebar.open": "Show sidebar",
+  "web-pages.workspace.resizeSidebar": "Resize sidebar",
   "web-main.sidebar.resize": "Resize sidebar",
   "web-main.switcher.chats": "Chats",
   "web-main.switcher.noMatch": "No results",

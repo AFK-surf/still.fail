@@ -11,8 +11,14 @@ priv struct RailWs {
   mut kept_w : Double
   mut kept_folded : Bool
   mut peeking : Bool
-  /// the sidebar being drawn in the closed bar (no top row there)
+  /// the sidebar being drawn in the closed bar (what the web's sidebar does there, at once)
   mut in_bar : Bool
+  /// how far the rail and the sidebar are on their way to the closed bar this frame (0 open, 1 folded)
+  mut fold_e : Double
+  /// the page's bars' margins while the folded sidebar is shown a while: from its edge (the sidebar less 8 less how far
+  /// the page moved) to the window's (how far it moved), as far on their way as it is shown
+  mut bar_ml : Double
+  mut bar_mr : Double
   /// the services left up long, their panel open from the lists' foot
   mut jobs_open : Bool
   /// the rail being changed (自定义侧边条): its places outlined, each with its −, what can be added beside it
@@ -31,6 +37,9 @@ let rail_ws : RailWs = {
   kept_folded: false,
   peeking: false,
   in_bar: false,
+  fold_e: 0.0,
+  bar_ml: 0.0,
+  bar_mr: 0.0,
   jobs_open: false,
   editing: false,
   gone: [],
@@ -45,6 +54,9 @@ fn rail_ws_reset() -> Unit {
   rail_ws.kept_folded = false
   rail_ws.peeking = false
   rail_ws.in_bar = false
+  rail_ws.fold_e = 0.0
+  rail_ws.bar_ml = 0.0
+  rail_ws.bar_mr = 0.0
   rail_ws.jobs_open = false
   rail_ws.editing = false
   rail_ws.gone.clear()
@@ -132,7 +144,9 @@ fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b 
     return
   }
   let (px, py, _) = c.pointer()
-  let over = px >= bar_x && px < bar_r && py >= bar_y && py < bar_b
+  // on it, or on its edge at its right (Rail.tsx PEEK_ON: the dock, the edge, what pops up from it)
+  let over = (px >= bar_x && px < bar_r && py >= bar_y && py < bar_b) ||
+    (rail_ws.peeking && px >= bar_r - 2.0 && px < bar_r + 10.0)
   if over && !rail_ws.peeking && px < bar_x + rail_closed_w {
     rail_ws.peeking = true
   }

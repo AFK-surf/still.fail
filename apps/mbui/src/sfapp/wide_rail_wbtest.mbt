@@ -341,3 +341,29 @@ test "wide: 已归档 from the lists' filter: its place at the rail's foot while
   t.run_for(list_slide_ms)
   assert_true(t.query(Button, label="已归档") is Some(_))
 }
+
+///|
+test "wide: folding moves the block as the web's: the list where it was as the block's edges close round it; folded, the edge between the bar and the page; shown a while, at the sidebar's edge, the page moved aside" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (x0, y0, _, _) = t.rect_of("新建对话").unwrap()
+  let (ex, _, _, _) = t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect
+  assert_eq(ex, rail_w + wide.side_w - edge_half)
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  // halfway: the list not moved across, the block's edges round it (its top row's 8 giving way to the bar's 6 above)
+  t.run_for(side_move_ms / 2.0)
+  assert_true(rail_ws.fold_e > 0.0 && rail_ws.fold_e < 1.0, msg=rail_ws.fold_e.to_string())
+  let (x1, y1, _, _) = t.rect_of("新建对话").unwrap()
+  assert_eq(x1, x0)
+  assert_true((y1 - y0).abs() <= 2.0, msg=y1.to_string())
+  t.run_for(side_move_ms)
+  let (fx, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
+  assert_eq(fx, closed_edge)
+  // the pointer on the bar: shown a while, its edge at the sidebar's
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.run_for(side_move_ms)
+  let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
+  assert_eq(px, closed_edge + wide.side_w)
+  assert_true(rail_ws.bar_mr >= 0.0)
+}

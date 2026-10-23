@@ -270,33 +270,96 @@ let closed_bar_in : Double = 6.0
 let closed_bar_top : Double = 44.0
 
 ///|
-/// The rail folded into a bar of its own over the page (shell.css.ts dock, closed: a floating panel's ground, its line
-/// and a faint shadow; its corner concentric with its places' grounds, 6 in); shown a while (`peek` of the way), the
-/// sidebar beside the rail in it, over the page, with a floating panel's shadow.
-fn closed_bar(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], top : Double, peek : Double) -> Unit {
+/// The rail's column's room between the closed bar and the page (the dock's margin-right closed: 8).
+let closed_bar_gap : Double = 8.0
+
+///|
+/// The rail's places' ground's corner (Rail.css.ts item: 9), what the closed bar's is concentric with.
+let rail_ground_r : Double = 9.0
+
+///|
+/// The closed bar's line (shell.css.ts dock::after: inset 1px) and shadows: none open (0 8px 24px, clear), faint by
+/// the page closed (0 2px 10px, the shadow's colour at 30%), a floating panel's shown a while (0 8px 24px).
+let closed_line : Double = 1.0
+
+///|
+let open_shadow : (Double, Double) = (24.0, 8.0)
+
+///|
+let closed_shadow : (Double, Double) = (10.0, 2.0)
+
+///|
+let closed_peek_shadow : (Double, Double) = (24.0, 8.0)
+
+///|
+let closed_shadow_k : Double = 0.3
+
+///|
+/// How far the page clears the folded sidebar shown a while, and stays from the window's edge (Rail.tsx PEEK_GAP).
+let peek_gap : Double = 16.0
+
+///|
+/// `open` at `e` of the way to `closed`.
+fn fold_at(open : Double, closed : Double, e : Double) -> Double {
+  open + (closed - open) * e
+}
+
+///|
+/// The rail and the sidebar as one block (shell.css.ts dock) `e` of the way from open (0: the sidebar's ground, the
+/// window's whole height, the rail's column and the sidebar's) to the closed bar (1: 6 from the window's edges, under
+/// its buttons' row, as wide as the rail, a floating panel's ground, its line and a faint shadow, its corner concentric
+/// with the places' grounds 6 in), its sidebar shown a while beside the rail `p` of the way (over the page, a floating
+/// panel's shadow). Every part of it on the one clock and ease (brand.tsx moveSidebar), the sidebar in it not moved: the
+/// block's edges close round it. `s`: the sidebar's width; `col`: the column the page starts after; `top`, `foot`: a
+/// phone's or a tablet's bars.
+fn dock(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  all : Array[Workspace],
+  e : Double,
+  p : Double,
+  s : Double,
+  col : Double,
+  top : Double,
+  foot : Double,
+) -> Unit {
   let t = @sf.theme()
-  let reach = rail_closed_w + wide.side_w * peek
-  let high = c.height - top - closed_bar_in
-  let (shadow, shadow_y) = if peek > 0.0 { closed_peek_shadow } else { closed_shadow }
+  let left = closed_bar_in * e
+  let above = top + (if @ui.window_inset() { closed_bar_top } else { closed_bar_in }) * e
+  let below = foot + closed_bar_in * e
+  let right = col - closed_bar_gap * e + s * p
+  let (ob, oy) = open_shadow
+  let (cb, cy) = closed_shadow
+  let (pb, py) = closed_peek_shadow
+  let blur = fold_at(fold_at(ob, cb, e), pb, p)
+  let shadow_y = fold_at(fold_at(oy, cy, e), py, p)
+  let shadow_k = fold_at(closed_shadow_k * e, 1.0, p)
+  let rail_box = fold_at(rail_w - 8.0, rail_closed_w, e)
+  // the sidebar beside the rail: its own width open (reaching 8 into the rail's), the group's in the bar; drawn while
+  // any of it shows
+  let side = (fold_at(s + 8.0, s, e) + 0.5).floor()
+  let shows = right - left - rail_box > 0.5
   c.layer(fn() {
-    c.box(style=if top == closed_bar_top { closed_frame_under } else { closed_frame }, fn() {
+    c.box(w=Fill(1.0), h=Fill(1.0), pl=left, pt=above, pb=below, fn() {
       c.box(
         dir=Row,
-        w=Px(reach),
-        h=Px(high),
-        radius=@ui.concentric_out(rail_ground_r, closed_bar_in),
-        bg=closed_ground(),
+        w=Px(dmax(0.0, right - left)),
+        h=Fill(1.0),
+        radius=@ui.concentric_out(rail_ground_r, closed_bar_in) * e,
+        bg=@sf.mix(closed_ground(), e, t.p.sidebar),
         border=closed_line,
-        border_color=t.p.line,
-        shadow~,
+        border_color=@sf.alpha(t.p.line, e),
+        shadow=blur,
         shadow_y~,
-        shadow_color=t.p.shadow,
+        shadow_color=@sf.alpha(t.p.shadow, shadow_k),
         clip=true,
         fn() {
-          rail(c, src, w, all, closed=true)
-          if peek > 0.0 {
-            rail_ws.in_bar = true
-            c.box(w=Px(wide.side_w), h=Px(high), fn() { sidebar(c, src, w, wide.side_w) }) |> ignore
+          rail(c, src, w, all, e)
+          if shows && s > 0.0 {
+            // (in the bar: what the web's sidebar does there, at once, as the bar starts out)
+            rail_ws.in_bar = wide.folded
+            c.box(w=Px(side), h=Fill(1.0), fn() { sidebar(c, src, w, side) }) |> ignore
             rail_ws.in_bar = false
           }
         },
@@ -309,28 +372,26 @@ fn closed_bar(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], 
 }
 
 ///|
-/// The closed bar 6 from the window's edges; under the window's buttons' row where they are in the app's top row.
-// kept across runs: a value (no field of it changes)
-let closed_frame : @ui.Style = @ui.style(w=Full, h=Full, pl=S1_5, pt=S1_5, pb=S1_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let closed_frame_under : @ui.Style = @ui.style(w=Full, h=Full, pl=S1_5, pt=S11, pb=S1_5)
-
-///|
-/// The rail's places' ground's corner (Rail.css.ts item: 9), what the closed bar's is concentric with.
-let rail_ground_r : Double = 9.0
-
-///|
-/// The closed bar's line (shell.css.ts dock::after: inset 1px) and shadows: faint by the page (0 2px 10px), a floating
-/// panel's shown a while (0 8px 24px).
-let closed_line : Double = 1.0
-
-///|
-let closed_shadow : (Double, Double) = (10.0, 2.0)
-
-///|
-let closed_peek_shadow : (Double, Double) = (24.0, 8.0)
+/// How far the page moves aside for the folded sidebar shown a while (Rail.tsx peekShift, shell.css.ts main's
+/// --peek-shift): as far as what it shows is from clearing the sidebar 16 past its edge, but no further than the room on
+/// its right allows (16 from the window's edge) nor than the sidebar is wide; moved, not laid out anew. What it shows: a
+/// chat's column, a new chat's; any other page is across the pane, no room to move it.
+fn peek_shift(c : @ui.Ctx, main_w : Double, s : Double) -> Double {
+  let shown = match app.nav.top() {
+    Chat(_) => Some(dmin(main_w - 24.0, column_w + 44.0))
+    NewChat => Some(dmin(new_column_w, main_w - new_column_side))
+    _ => None
+  }
+  match shown {
+    Some(cw) if cw > 0.0 => {
+      let left = rail_w + (main_w - cw) / 2.0
+      let reach = closed_bar_in + rail_closed_w + s + peek_gap
+      let room = c.width - 2.0 * peek_gap - (left + cw)
+      dmax(0.0, dmin(s, dmin(room, reach - left))).round()
+    }
+    _ => 0.0
+  }
+}
 
 ///|
 /// The wide frame (WorkspaceShell): the rail and the sidebar on the sidebar's ground, the page in the rest; over them
@@ -357,44 +418,38 @@ fn wide_frame(
   side_follow(src, w.id)
   // (on a fold standing upright, the sidebar ends on it while it is not folded away)
   let on_fold = if wide.folded { None } else { side_on_fold() }
-  // open or folded, moved as the web moves it (brand.tsx moveSidebar: 380 ms, ease out); folded, the rail a bar of
-  // its own over the page (shell.css.ts dock, closed), the sidebar shown a while beside it as the pointer comes
   let own = !gated && !bare
-  let open_t = @kit.animate(c, "side/open", if wide.folded || !own { 0.0 } else { 1.0 }, transition=side_move)
-  let closed = own && wide.folded && open_t <= 0.0
-  let bar_y = if @ui.window_inset() { closed_bar_top } else { closed_bar_in }
-  side_peek(
-    c,
-    closed_bar_in,
-    bar_y,
-    closed_bar_in + rail_closed_w + (if rail_ws.peeking { wide.side_w } else { 0.0 }),
-    c.height - closed_bar_in,
-  )
-  let peek_t = @kit.animate(c, "side/peek", if closed && rail_ws.peeking { 1.0 } else { 0.0 }, transition=side_move)
-  let side = if own { on_fold.unwrap_or(wide.side_w * open_t) } else { 0.0 }
-  let main_w = dmax(0.0, c.width - rail_w - side)
-  // a phone's or a tablet's screen: under the status bar and over the navigation bar (the host's `bars`), the frame's
-  // grounds under them
+  // folded to the rail's bar (and a page with no sidebar of its own: Rail.tsx showSidebar), shown a while beside it as
+  // the pointer comes; every part moved as the web moves it (brand.tsx moveSidebar: 380 ms, ease out), together
+  let bar = (own && wide.folded) || bare
+  let e = @kit.animate(c, "side/fold", if bar { 1.0 } else { 0.0 }, transition=side_move)
+  rail_ws.fold_e = e
+  let s = if gated { 0.0 } else { on_fold.unwrap_or(wide.side_w) }
+  let col = rail_w + s * (1.0 - e)
   let top = status_top()
   let foot = nav_foot()
+  let left = closed_bar_in * e
+  let above = top + (if @ui.window_inset() { closed_bar_top } else { closed_bar_in }) * e
+  side_peek(c, left, above, col - closed_bar_gap * e + (if rail_ws.peeking { s } else { 0.0 }), c.height - foot - closed_bar_in * e)
+  let p = @kit.animate(c, "side/peek", if own && wide.folded && rail_ws.peeking { 1.0 } else { 0.0 }, transition=side_move)
+  let main_w = dmax(0.0, c.width - col)
+  // shown a while, the page aside out of its way, its bars from the sidebar's edge to the window's (brand.css.ts)
+  let full = if p > 0.0 { peek_shift(c, main_w, s) } else { 0.0 }
+  let shift = full * p
+  rail_ws.bar_ml = dmax(0.0, s - closed_bar_gap - full) * p
+  rail_ws.bar_mr = shift
   // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
   land(src, w)
   // what the page or the sidebar takes back for (a sheet, a menu, a step of a page's) goes back before the stack does
   let took = c.took_back(fn() {
     c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-      c.box(dir=Row, w=Px(rail_w + side), h=Fill(1.0), bg=if closed { t.p.bg } else { t.p.sidebar }, clip=true, pt=top, pb=foot, fn() {
-        if !closed {
-          rail(c, src, w, all)
-        }
-        if side > 0.0 {
-          c.box(w=Px(side + 8.0), h=Fill(1.0), fn() { sidebar(c, src, w, side + 8.0) }) |> ignore
-        }
-      })
-      |> ignore
+      // the rail's and the sidebar's column (the block over it, below)
+      c.box(w=Px(col), h=Fill(1.0), fn() {  }) |> ignore
       let page_id = c.id("main-page")
       // a right click in it: what is picked copied (wide_context.mbt)
       wide_context_page(c, page_id)
-      c.box(w=Px(main_w), h=Fill(1.0), clip=true, pt=top, pb=foot, id=page_id, fn() {
+      // (moved aside as wide as it was: its room at its left, the window cutting what goes past its edge)
+      c.box(dir=Row, w=Px(main_w + shift), h=Fill(1.0), clip=true, pl=shift, pt=top, pb=foot, id=page_id, fn() {
         c.sized(main_w, c.height - top - foot, fn() {
           let page = fn() {
             if gated {
@@ -416,22 +471,53 @@ fn wide_frame(
         })
       })
       |> ignore
+    })
+    |> ignore
+    dock(c, src, w, all, e, p, s, col, top, foot)
   })
-  |> ignore
-  })
-  // folded: the rail in a bar of its own over the page, the sidebar beside it while shown a while
-  if closed {
-    closed_bar(c, src, w, all, bar_y, peek_t)
-  }
-  // (the sidebar's edge dragged, unless it is on the fold)
+  // (the sidebar's edge: on its right edge open, between the bar and the page folded, at the edge of the sidebar shown
+  // a while; dragged, unless it is on the fold)
   if !bare && on_fold is None {
-    sidebar_edge(c, side)
+    sidebar_edge(c, fold_at(rail_w + s - edge_half, closed_edge, e) + s * p)
   }
   // back (⌘[, a mouse's back button) a page of the stack, where there is one
   if app.nav.depth() > 1 && !took && !app.menu && !sheet_open() {
     c.take_back(fn() { app.nav.pop() |> ignore })
   }
 }
+
+///|
+/// A page's bar's padding beside the rail (styles/sidebar.css.ts pageBar: 12; brand.css.ts, railed, closed: 28 in a
+/// window with its buttons in the app's top row, which reach 12 past the rail), and its margins while the folded
+/// sidebar is shown a while (from its edge to the window's): what it leaves at its left and at its right, moved with the
+/// block (brand.tsx moveSidebar).
+fn page_bar_room() -> (Double, Double) {
+  let closed = if @ui.window_inset() { bar_closed_inset } else { bar_in }
+  (fold_at(bar_in, closed, rail_ws.fold_e) + rail_ws.bar_ml, bar_in + rail_ws.bar_mr)
+}
+
+///|
+/// At the end of a page's bar that has no padding of its own there (a new chat's): as wide as its right margin while the
+/// folded sidebar is shown a while (page_bar_room), its end by the window's.
+fn page_bar_end(c : @ui.Ctx) -> Unit {
+  if rail_ws.bar_mr > 0.0 {
+    c.box(w=Px(rail_ws.bar_mr), fn() {  }) |> ignore
+  }
+}
+
+///|
+let bar_in : Double = 12.0
+
+///|
+let bar_closed_inset : Double = 28.0
+
+///|
+/// The sidebar's edge's strip: 12 wide, its middle on the edge (6 each side); folded, from 46 (its bar between the
+/// closed bar at 48 and the page at 56: Rail.css.ts edge, closed).
+let edge_half : Double = 6.0
+
+///|
+let closed_edge : Double = 46.0
 
 ///|
 /// The chats' place with nothing open: the chat the core says was open last in this workspace, else a new chat
@@ -557,29 +643,33 @@ fn lit_place() -> String {
 ///|
 /// The rail: its top (in a window with its buttons in the app's top row, their row, dragging the window), the places,
 /// then the workspaces and settings at its foot.
-fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], closed? : Bool = false) -> Unit {
+fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], e : Double) -> Unit {
   let t = @sf.theme()
   let lit = lit_place()
-  // its places centred on its 56; the sidebar reaches 8 into it (Sidebar.css.ts), so its own box is 48; in the closed
-  // bar as narrow as it (42), its places 2 from its edges (their grounds 6), no top row (the bar is under it)
+  // its places centred on its 56; the sidebar reaches 8 into it (Sidebar.css.ts), so its own box is 48, its top row
+  // (41 under the window's buttons, else 5) and 6 over its first place; `e` of the way to the closed bar as narrow as
+  // it (42), its places 2 from its edges (their grounds 6), no top row (the bar is under it): Rail.css.ts rail, top
   let rail_id = c.id("rail")
   match c.right_clicked(rail_id) {
     Some((x, y)) if wide.rail_menu is None => wide.rail_menu = Some(("", x, y))
     _ => ()
   }
-  let (edge, head, foot, top_h) = if closed {
-    (2.0, 2.0, 2.0, 0.0)
-  } else {
-    (9.0, 0.0, 9.0, if @ui.window_inset() { 41.0 } else { 5.0 })
-  }
-  c.box(w=Px(if closed { rail_closed_w } else { rail_w - 8.0 }), h=Fill(1.0), pl=edge, pt=head, pb=foot, gap=6.0, align=AStart, id=rail_id, fn() {
-    let top = c.id("rail/top")
-    if @ui.window_inset() && !closed {
+  let top_row = if @ui.window_inset() { rail_top_inset } else { rail_top_web }
+  c.box(
+    w=Px(fold_at(rail_w - 8.0, rail_closed_w, e)),
+    h=Fill(1.0),
+    pl=fold_at(rail_in, rail_closed_in, e),
+    pt=fold_at(top_row + rail_gap, rail_closed_in, e),
+    pb=fold_at(rail_in, rail_closed_in, e),
+    gap=rail_gap,
+    align=AStart,
+    id=rail_id,
+    fn() {
+    // its top row drags the window (the macOS app's buttons in it), not in the closed bar
+    if @ui.window_inset() && e < 1.0 {
+      let top = c.id("rail/top")
       c.window_drag(top)
-    }
-    // (in the closed bar none, nor the gap after it: its places as far from its top as from its sides)
-    if !closed {
-      c.box(w=Px(38.0), h=Px(top_h), id=top, fn() {  }) |> ignore
+      c.layer(fn() { c.box(w=Fill(1.0), h=Px(top_row * (1.0 - e)), id=top, fn() {  }) |> ignore }) |> ignore
     }
     let places = rail_items(src, w.id)
     // a list's place lit while its list is the one shown (Rail.tsx `on`): 我参与的, 监控中 by the filter when they are
@@ -628,23 +718,38 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], closed
     rail_ground(c, gear, lit == "settings", fn(color) {
       @sf.icon(c, "settings", size=20.0, color~) |> ignore
     })
-  })
+  },
+  )
   |> ignore
 }
+
+///|
+/// The rail's places 9 from its edges open, 2 in the closed bar; 6 apart; its top row 41 under the window's buttons,
+/// else 5.
+let rail_in : Double = 9.0
+
+///|
+let rail_closed_in : Double = 2.0
+
+///|
+let rail_gap : Double = 6.0
+
+///|
+let rail_top_inset : Double = 41.0
+
+///|
+let rail_top_web : Double = 5.0
 
 ///|
 /// A place's 38 to press, its ground (hovered, lit) 30 square under the icon (Rail.css.ts item).
 fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit, label? : String = "") -> Unit {
   let t = @sf.theme()
   let hover = c.hovered(id)
+  // its ground and its icon's colour moved over 140 ms (Rail.css.ts item: transition background, color)
+  let key = "rail/ground/" + id.to_string()
+  let ink = @kit.animate(c, key + "/ink", if on || hover { 1.0 } else { 0.0 }, transition=nav_fade)
   let b = c.box(w=Px(38.0), h=Px(38.0), align=ACenter, justify=JCenter, id~, fn() {
-    rail_square(c, if on {
-      t.p.selected
-    } else if hover {
-      t.p.hover
-    } else {
-      0L
-    }, fn() { body(if on || hover { t.p.text } else { t.p.muted }) })
+    rail_square(c, nav_ground(c, key, hover, on), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
     |> ignore
   })
   // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right)
@@ -665,16 +770,22 @@ fn rail_square(c : @ui.Ctx, ground : Int64, body : () -> Unit, id? : Int) -> Int
 /// A dot at a square's top right corner, `out` past it (4: Rail.css.ts mark, a workspace's; 1: listMark, a list's,
 /// 3 in from its place's 38), cut out of the rail's ground: what waits in another workspace or a list (its tone), an
 /// invitation.
-fn rail_corner_mark(c : @ui.Ctx, tone : String, out? : Double = 4.0) -> Unit {
+fn rail_corner_mark(c : @ui.Ctx, tone : String, out? : Double = 4.0, shown? : Double = 1.0) -> Unit {
   let t = @sf.theme()
   c.layer(align=AEnd, fn() {
-    c.box(tx=out, ty=-out, radius=6.0, bg=if rail_ws.in_bar || wide.folded { closed_ground() } else { t.p.sidebar }, pad=2.0, fn() {
+    let i = c.box(tx=out, ty=-out, radius=6.0, bg=if rail_ws.in_bar || wide.folded { closed_ground() } else { t.p.sidebar }, pad=2.0, fn() {
       chat_mark(c, tone)
     })
-    |> ignore
+    // a list's, `shown` of the way in as the sidebar folds (listMark: from clear at 40%, moved with it)
+    if shown < 1.0 {
+      c.look(i, @ui.look(alpha=shown, scale=fold_at(mark_folded_from, 1.0, shown)))
+    }
   })
   |> ignore
 }
+
+///|
+let mark_folded_from : Double = 0.4
 
 ///|
 /// The closed bar's ground (a floating panel's: the canvas, raised in the dark).
@@ -882,8 +993,8 @@ fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Boo
       "watching" => text(field(field(marks.value, "workspaces"), w.id), "watchingTone")
       _ => ""
     }
-    if tone != "" && wide.folded {
-      rail_corner_mark(c, tone, out=1.0)
+    if tone != "" && rail_ws.fold_e > 0.0 {
+      rail_corner_mark(c, tone, out=1.0, shown=rail_ws.fold_e)
     }
     if dot {
       c.layer(align=AEnd, fn() {
@@ -1088,9 +1199,11 @@ fn rail_menu_add(c : @ui.Ctx, place : String, hot : Bool) -> Bool {
   let id = c.id("rail-menu/add/" + place)
   c.cursor(id, Hand)
   let over = c.hovered(id)
+  // in on its row pointed at (Rail.css.ts menuAdd: transition opacity 140 ms)
+  let shown = @kit.animate(c, "rail-menu/add-shown/" + place, if hot || over { 1.0 } else { 0.0 }, transition=nav_fade)
   let b = c.box(style=if over { rail_menu_plus_on } else { rail_menu_plus }, id~, fn() {
-    if hot || over {
-      @sf.icon(c, "plus", size=14.0, color=if over { t.p.text } else { t.p.muted }) |> ignore
+    if shown > 0.0 {
+      @sf.icon(c, "plus", size=14.0, color=@sf.alpha(if over { t.p.text } else { t.p.muted }, shown)) |> ignore
     }
   })
   c.semantics(b, Button, id~, label=fill("web-main.rail.add", [("name", rail_label(place))]))
@@ -1157,17 +1270,19 @@ fn open_settings() -> Unit {
 ///|
 /// The sidebar's edge (Rail.tsx SidebarEdge): a strip over its right edge, dragged to resize it (180 to 480), pressed
 /// alone to fold it to the rail or open it again; its line and its grip show while the pointer is on it.
-fn sidebar_edge(c : @ui.Ctx, side : Double) -> Unit {
+fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
   let t = @sf.theme()
   let id = c.id("sidebar-edge")
   let (px, _, down) = c.pointer()
+  // its width dragged open, and shown a while (the same width as open); folded, only pressed
+  let sized = !wide.folded || rail_ws.peeking
   c.cursor(id, if wide.folded { Hand } else { ResizeX })
   if c.pressed(id) {
     if wide.edge_x < 0.0 {
       wide.edge_x = px
       wide.edge_w = wide.side_w
       wide.edge_moved = false
-    } else if !wide.folded {
+    } else if sized {
       let d = px - wide.edge_x
       if d.abs() >= 3.0 {
         wide.edge_moved = true
@@ -1183,38 +1298,110 @@ fn sidebar_edge(c : @ui.Ctx, side : Double) -> Unit {
   if !down {
     wide.edge_x = -1.0
   }
-  let shown = c.hovered(id) || c.pressed(id)
+  let dragging = c.pressed(id) && wide.edge_moved
+  let over = c.hovered(id) || c.focus_shown(id)
+  // its bar: 24 to 48 high and in as it is pointed at (180 ms, a quick start and a soft landing), the darker grey
+  // pressed (150 ms); its line, open, pointed at or dragged (140 ms): Rail.css.ts edge ::after, ::before
+  let grip = @kit.animate(c, "edge/grip", if over || dragging { 1.0 } else { 0.0 }, transition=edge_grip_move)
+  let pressed = @kit.animate(c, "edge/press", if c.pressed(id) || dragging { 1.0 } else { 0.0 }, transition=edge_press_move)
+  let line = @kit.animate(
+    c,
+    "edge/line",
+    if (over && !wide.folded) || dragging { 1.0 } else { 0.0 },
+    transition=edge_line_move,
+  )
   c.layer(fn() {
     c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-      c.box(w=Px(rail_w + side - 6.0 - (if wide.folded { 4.0 } else { 0.0 })), fn() {  }) |> ignore
-      c.box(w=Px(12.0), h=Fill(1.0), align=AStart, justify=JCenter, id~, fn() {
-        if shown {
-          c.layer(fn() {
-            c.box(w=Fill(1.0), h=Fill(1.0), pl=6.0, pt=8.0, pb=8.0, fn() {
-              c.box(w=Px(1.0), h=Fill(1.0), bg=t.p.line_strong, fn() {  }) |> ignore
-            })
-            |> ignore
-          })
+      c.box(w=Px(at), fn() {  }) |> ignore
+      let strip = c.box(style=edge_strip, id~, fn() {
+        if line > 0.0 {
+          c.layer(fn() { edge_line(c, line) })
           |> ignore
         }
         c.box(style=edge_bar_at, fn() {
           c.box(
-            w=Px(5.0),
-            h=Px(if shown { 48.0 } else { 24.0 }),
-            radius=2.5,
-            bg=if shown { t.p.line_strong } else { 0L },
+            w=Px(edge_grip_w),
+            h=Px(fold_at(edge_grip_low, edge_grip_high, grip)),
+            radius=edge_grip_w / 2.0,
+            bg=@sf.alpha(@sf.mix(c.theme().field_hover, pressed, t.p.line_strong), grip),
             fn() {  },
           )
           |> ignore
         })
         |> ignore
       })
-      |> ignore
+      let words = if wide.folded {
+        tr("web-main.sidebar.open")
+      } else {
+        tr("web-pages.workspace.resizeSidebar") + " · " + tr("web-main.sidebar.close")
+      }
+      c.semantics(strip, Button, id~, label=words)
+      if !dragging {
+        @kit.tooltip(c, "sidebar-edge/tip", id, words, side=Right) |> ignore
+      }
     })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// The edge's line: a hairline 8 from the window's top and foot, clear at its ends and the field's grey at its middle
+/// (a linear gradient: clear to 10%, grey at 50%, clear from 90%), `k` of the way in.
+fn edge_line(c : @ui.Ctx, k : Double) -> Unit {
+  let ink = c.theme().field_hover
+  c.box(w=Fill(1.0), h=Fill(1.0), pl=edge_half, pt=edge_line_in, pb=edge_line_in, fn() {
+    for i in 0..<edge_line_steps {
+      let y = (i.to_double() + 0.5) / edge_line_steps.to_double()
+      // (clear to 10% and from 90%, the grey whole at the middle, straight between)
+      let a = if y <= 0.1 || y >= 0.9 { 0.0 } else if y < 0.5 { (y - 0.1) / 0.4 } else { (0.9 - y) / 0.4 }
+      c.box(w=Px(1.0), h=Fill(1.0), bg=@sf.alpha(ink, a * k), fn() {  }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The edge's strip: 12 wide, the window's height, its bar in its middle (4 in: edge_bar_at).
+// kept across runs: a value (no field of it changes)
+let edge_strip : @ui.Style = @ui.style(w=S3, h=Full, align=AStart, justify=JCenter)
+
+///|
+/// The edge's bar 5 wide, 24 high, 48 pointed at; its line in 40 steps of its gradient, 8 from the ends.
+let edge_grip_w : Double = 5.0
+
+///|
+let edge_grip_low : Double = 24.0
+
+///|
+let edge_grip_high : Double = 48.0
+
+///|
+let edge_line_in : Double = 8.0
+
+///|
+let edge_line_steps : Int = 40
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_grip_move : @motion.Spec = @motion.tween(edge_grip_ms, ease=Soft)
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_press_move : @motion.Spec = @motion.tween(edge_press_ms, ease=Out)
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_line_move : @motion.Spec = @motion.tween(edge_line_ms, ease=Out)
+
+///|
+let edge_grip_ms : Double = 180.0
+
+///|
+let edge_press_ms : Double = 150.0
+
+///|
+let edge_line_ms : Double = 140.0
 
 ///|
 /// A new chat (新建对话, ⌘N): its page beside the list.
