@@ -26,7 +26,7 @@ pub(all) struct Alert {
 ///|
 /// `key`'s dialog (see the file's head), `open` or not, `w` wide, titled `title` (named so for the semantics tree)
 /// over `description` ("" none) and what `body` builds; a close button named `close_label` in its corner unless it
-/// is "". Whether it is open now (closed by Escape, the back, a press outside, the close button).
+/// is "". Whether it is open now (closed by Escape, the back, a press outside unless not `outside`, the close button).
 pub fn dialog(
   c : @ui.Ctx,
   key : String,
@@ -35,6 +35,7 @@ pub fn dialog(
   description? : String = "",
   w? : Double = 520.0,
   modal? : Bool = true,
+  outside? : Bool = true,
   close_label? : String = "关闭",
   look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit = dialog_look,
   body : () -> Unit,
@@ -43,7 +44,7 @@ pub fn dialog(
   let mut now = open
   if p.built {
     let st = { title, description, t: p.t, w, closes: close_label != "" }
-    let o = c.overlay(key, modal~, scrim=pick(modal, faded(c.theme().scrim, p.t), 0L), inert=p.leaving(), fn() {
+    let o = c.overlay(key, modal~, outside~, scrim=pick(modal, faded(c.theme().scrim, p.t), 0L), inert=p.leaving(), fn() {
       centered(c, key, p.t, Dialog, title, description, modal, fn() {
         look(c, st, fn() {
           body()

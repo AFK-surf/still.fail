@@ -597,7 +597,7 @@ fn files_clash_dialog(c : @ui.Ctx) -> Unit {
       (a.done)(a.answers)
     }
   }
-  let d = @kit.dialog(
+  let d = @sf.dialog(
     c,
     "files-clash",
     now is Some(_),
@@ -608,17 +608,7 @@ fn files_clash_dialog(c : @ui.Ctx) -> Unit {
       _ => ""
     },
     w=dmin(fclash_w, c.width - fgo_margin),
-    close_label="",
-    look=fn(c, s, body) {
-      c.box(style=fgo_panel.then(@ui.style(w=Fixed(s.w))), fn() {
-        c.text(s.title, style=fgo_title) |> ignore
-        if s.description != "" {
-          c.text(s.description, style=fgo_note) |> ignore
-        }
-        body()
-      })
-      |> ignore
-    },
+    close_label=tr("common.close"),
     fn() {
       match (asking, now) {
         (Some(a), Some(n)) => {
@@ -669,7 +659,7 @@ fn files_clash_dialog(c : @ui.Ctx) -> Unit {
       }
     },
   )
-  if !d.value && now is Some(_) {
+  if !d && now is Some(_) {
     // let go (Escape, a press outside): nothing goes
     fdrag.asking = None
   }

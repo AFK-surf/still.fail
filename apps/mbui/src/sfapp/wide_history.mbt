@@ -277,14 +277,21 @@ fn wh_context_menu(c : @ui.Ctx, src : Source, r : ChatRef, key : String, me : St
     }
     _ => ()
   }
-  match wide_confirm(c, "clear-context/" + me, wide.clear_asking == me, tr("web-pages.chat.clearConfirm"), [tr("web-pages.chat.clearBody")], tr("web-pages.chat.clear"), false, true) {
-    Some(yes) => {
-      wide.clear_asking = ""
-      if yes {
-        act(src, tr("web-pages.chat.clear"), context_key("session.clear", r.station, key), "session.clear", params)
-      }
-    }
-    None => ()
+  // asked as the web asks it (ChatPage.tsx: Confirm)
+  let asked = @sf.confirm(
+    c,
+    "clear-context/" + me,
+    wide.clear_asking == me,
+    tr("web-pages.chat.clearConfirm"),
+    tr("web-pages.chat.clearBody"),
+    tr("web-pages.chat.clear"),
+    cancel=tr("common.cancel"),
+  )
+  if asked.confirmed {
+    wide.clear_asking = ""
+    act(src, tr("web-pages.chat.clear"), context_key("session.clear", r.station, key), "session.clear", params)
+  } else if wide.clear_asking == me && !asked.open {
+    wide.clear_asking = ""
   }
 }
 

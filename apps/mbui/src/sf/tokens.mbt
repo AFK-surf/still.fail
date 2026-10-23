@@ -36,6 +36,13 @@ pub(all) struct Palette {
   warn_ink : Int64
   red : Int64
   red_bg : Int64
+  /// the grounds of a pill in a tone (parts.css.ts pill: --green-bg, --blue-bg, --amber-bg; the amber's ink is
+  /// warn_ink)
+  green_bg : Int64
+  blue_bg : Int64
+  amber_bg : Int64
+  /// a station online (--online: a status dot, parts.css.ts statusDot)
+  online : Int64
   /// placeholders' grey (waiting), a quiet pill's ground
   neutral_bg : Int64
   overlay : Int64
@@ -213,6 +220,10 @@ let wide_light : Palette = {
   warn_ink: 0x7F5306FFL,
   red: 0xA12F35FFL,
   red_bg: 0xFFF0EFFFL,
+  green_bg: 0xE7F6EDFFL,
+  blue_bg: 0xEAF2FFFFL,
+  amber_bg: 0xFEF4E0FFL,
+  online: 0x45B164FFL,
   neutral_bg: 0xEDEFF1FFL,
   overlay: 0x13161B33L,
   shadow: 0x13161B1AL,
@@ -251,6 +262,10 @@ let wide_dark : Palette = {
   warn_ink: 0xE6B55DFFL,
   red: 0xF68482FFL,
   red_bg: 0x442322FFL,
+  green_bg: 0x1B3426FFL,
+  blue_bg: 0x1F2E47FFL,
+  amber_bg: 0x403012FFL,
+  online: 0x45B164FFL,
   neutral_bg: 0x2A2B2FFFL,
   overlay: 0x00000080L,
   shadow: 0x00000073L,
@@ -794,7 +809,6 @@ pub let face_status_most : @ui.Len = Fixed(140.0)
 /// A Slack app's icon as it is in its look (SlackApp.kt AppLook: 72 square), off the scale.
 pub let app_icon_side : @ui.Len = Fixed(72.0)
 
-
 ///|
 /// A choice's line on a card (Parts.kt PickLine): 11 over and under (as files_gap), rounded 10 (as custom_field_r),
 /// its check in a room 18 wide at its end.
@@ -866,3 +880,110 @@ pub let hover_tile_least : @ui.Len = Fixed(220.0)
 
 ///|
 pub let agent_card_w : @ui.Len = Fixed(288.0)
+
+///|
+/// parts.tsx's measures off the scale (parts.css.ts, own.css.ts, styles/spinner.css.ts): a switch (36 by 22, its thumb
+/// 2 in; small 26 by 16), a pill (22 high, 9 in), a status dot's ring (1.5), a section's note (3 under its title, 52em
+/// of its 12 at most), the first one (480 at most, its line 34em of its 13), a spinner (14; in a line of small text 12).
+pub let switch_w : Double = 36.0
+
+///|
+pub let switch_h : Double = 22.0
+
+///|
+pub let switch_small_w : Double = 26.0
+
+///|
+pub let switch_small_h : Double = 16.0
+
+///|
+pub let switch_in : Double = 2.0
+
+///|
+pub let pill_h : Double = 22.0
+
+///|
+pub let pill_in : Double = 9.0
+
+///|
+pub let status_ring : Double = 1.5
+
+///|
+pub let section_note_gap : Double = 3.0
+
+///|
+pub let section_note_most : @ui.Len = Fixed(624.0)
+
+///|
+pub let first_most : @ui.Len = Fixed(480.0)
+
+///|
+pub let first_lead_most : @ui.Len = Fixed(442.0)
+
+///|
+pub let spinner_size : Double = 14.0
+
+///|
+pub let spinner_inline : Double = 12.0
+
+///|
+/// A dialog's widths (parts.css.ts dialog 520, dialogWide 640), how far short of the window's it stays at most (32),
+/// and its close button (32 round).
+pub let dialog_w : Double = 520.0
+
+///|
+pub let dialog_wide_w : Double = 640.0
+
+///|
+pub let dialog_margin : Double = 32.0
+
+///|
+pub let dialog_close : Double = 32.0
+
+///|
+/// A dialog's corner (DIALOG_PAD 24 and a pill's half height 18) and shadow (0 24px 64px: a blur's deviation half its
+/// CSS radius).
+pub let dialog_r : Double = 42.0
+
+///|
+pub let dialog_shadow : Double = 32.0
+
+///|
+pub let dialog_shadow_y : Double = 24.0
+
+///|
+/// A select (parts.css.ts select: 200 wide by default; its chevron 14), choices 8 apart; a confirm (dialogAlert, 420
+/// wide); a small panel's icon button's icon (16); a chooser's chevron (12); a copy's check (1.6 s).
+pub let select_w : Double = 200.0
+
+///|
+pub let select_chevron : Double = 14.0
+
+///|
+pub let choice_gap : Double = 8.0
+
+///|
+pub let confirm_w : Double = 420.0
+
+///|
+pub let panel_icon_size : Double = 16.0
+
+///|
+pub let chooser_chevron : Double = 12.0
+
+///|
+pub let command_copied_ms : Double = 1600.0
+
+///|
+/// A menu's item at least (controls.css.ts menuItem: 34 high).
+pub let menu_row_min : Double = 34.0
+
+///|
+/// Nothing under it, no ring round it.
+pub let no_ground : Int64 = 0L
+
+///|
+pub let no_ring : Double = 0.0
+
+
+
