@@ -4,11 +4,21 @@
 // the overview and its tools for the agents. Nothing registers itself: a part is in the station because main.ts names
 // it, and says what it adds as it is made. What is said here is read as it is asked for (a request, an agent's tool
 // list), so the admin API and the agents, made before the parts, take what they add.
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Duplex } from "node:stream";
 import type { Route, Tools } from "./api/admin.ts";
 import type { Connection } from "./mesh/native.ts";
 import type { Lang } from "./ops/i18n.ts";
 import type { Viewer } from "./mesh/credential.ts";
 import type { Tool } from "./tools/mcp.ts";
+
+/// A part's place on the agents' door (tools/http.ts): the requests under `/<prefix>/` and their WebSockets, from
+/// programs on this machine only (the door refuses the rest before they come here).
+export type DoorRoute = {
+  prefix: string;
+  request(req: IncomingMessage, res: ServerResponse): Promise<void>;
+  upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void>;
+};
 
 export class StationParts {
   readonly #routes: (Route[] | ((tools: Tools) => Route[]))[] = [];
@@ -18,6 +28,9 @@ export class StationParts {
   readonly #viewerMay: ((r: { method: string; path: string }) => boolean)[] = [];
   readonly #overview = new Map<string, (viewer: Viewer, lang: Lang) => unknown>();
   readonly #tools: Tool[] = [];
+  readonly #door: DoorRoute[] = [];
+  readonly #ended: ((session: string) => void)[] = [];
+  #doorUrl: string | null = null;
 
   /// A part's routes of the admin API (after the platform's own); made with what the admin API's routes are given
   /// (its readers, the store, the events), where they need it.
@@ -47,7 +60,34 @@ export class StationParts {
     this.#tools.push(...tools);
   }
 
+  /// A part's routes on the agents' door.
+  door(route: DoorRoute): void {
+    this.#door.push(route);
+  }
+
+  /// What a part does when a session is archived or deleted (its chat's things closed with it).
+  sessionEnded(ended: (session: string) => void): void {
+    this.#ended.push(ended);
+  }
+
   // ── what is asked of them ──
+
+  doorRoutes(): readonly DoorRoute[] {
+    return this.#door;
+  }
+
+  /// Where agents reach the door now (`http://127.0.0.1:<port>/mcp`), once it is open: told by the agents' side.
+  doorUrl(): string | null {
+    return this.#doorUrl;
+  }
+  doorOpen(url: string): void {
+    this.#doorUrl = url;
+  }
+
+  /// A session was archived or deleted.
+  endSession(session: string): void {
+    for (const ended of this.#ended) ended(session);
+  }
 
   allRoutes(tools: Tools): readonly Route[] {
     let made = this.#made.get(tools);

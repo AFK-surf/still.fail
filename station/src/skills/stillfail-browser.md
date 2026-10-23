@@ -6,12 +6,16 @@ description: Use the station's own Chrome for web work that needs a login or sho
 # The station's browser
 
 Each station keeps one real Google Chrome with its own persistent profile: whatever someone signs into there stays
-signed in, for every session on the station. Get it with the `browser` tool (it starts it if needed) and drive it
-with your own client:
+signed in, for every session on the station. Get it with the `browser` tool (it starts it if needed): it gives this
+chat's own address of it, `ws://127.0.0.1:<port>/browser/<…>`. Drive it there with your own client:
 
-- chrome-devtools-mcp: `npx -y chrome-devtools-mcp@latest --browserUrl http://127.0.0.1:<port>`
-- Playwright: `chromium.connectOverCDP("http://127.0.0.1:<port>")`, then `browser.contexts()[0].newPage()` (the
-  default context has the sign-ins; a new context has none).
+- chrome-devtools-mcp: `npx -y chrome-devtools-mcp@latest --wsEndpoint <that address>`
+- Playwright: `chromium.connectOverCDP("<that address>")`, then `browser.contexts()[0].newPage()` (the default
+  context has the sign-ins; a new context has none).
+
+Tabs opened through that address (and the popups they open) are this chat's: people see in their app which chat
+opened a tab, can close it there, and the tabs close when this chat is archived. Chrome's own port works too, but the
+tabs opened there are nobody's.
 
 Rules:
 
@@ -19,8 +23,8 @@ Rules:
   the sign-ins, and sites often refuse to sign in an automated one.
 - It is shared. Open a tab of your own and close it when done; leave other tabs alone; do not close the browser.
 - `browser` with action `tabs` lists the tabs; `stop` closes it for everyone (only when it is stuck).
-- It is closed after an hour unused and restarted if it dies while in use; call `browser` again when your
-  connection drops (the address usually stays).
+- It is closed after an hour unused and restarted if it dies while in use; when your connection drops (that, or the
+  station restarted), connect again to the same address.
 
 ## Its tabs as screens (the `computer` tool)
 

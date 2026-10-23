@@ -1113,6 +1113,7 @@ export const stories: Story[] = [
   { id: "app-station-screens-lacking", group: "屏幕", title: "station · 屏幕 · 缺权限", app: true, demo: screensDemo("live", SCREENS_LACKING), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-screens-outdated", group: "屏幕", title: "station · 屏幕 · 要更新", app: true, demo: screensDemo("live", OUTDATED), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-screen", group: "屏幕", title: "station · 打开屏幕", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/desktop"]' }, ...toTheBar] },
+  { id: "app-screen-tab-menu", group: "屏幕", title: "station · 浏览器标签页 · 控制中心", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/browser%3A7F3A9C"]' }, { click: 'button:has-text("控制中心")' }] },
   { id: "app-chat-screen-links", group: "屏幕", title: "对话里的屏幕链接", app: true, demo: screenLinksDemo },
   { id: "phone-chat-screen-links", group: "屏幕", title: "手机 · 对话里的屏幕链接", app: true, phone: true, demo: screenLinksDemo },
   { id: "app-chat-adb-link", group: "屏幕", title: "对话里的共享调试链接", app: true, demo: adbLinksDemo(false) },

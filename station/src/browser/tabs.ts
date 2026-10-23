@@ -1,12 +1,14 @@
 // The tabs of the station's browser, as its DevTools tell of them (Target.setDiscoverTargets on the station's own
 // connection): listed to the agents, and each a screen source (`browser:<targetId>`) in the station's Screens while it
-// is there (docs/remote-screens.md).
+// is there, saying the session that opened it (owners.ts) and closed from a person's app (docs/remote-screens.md).
 import type { ClipType, ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
 import { wall } from "../ops/fibers.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
+import type { Owners } from "./owners.ts";
 import { TabView, viewportOf } from "./view.ts";
 
-export type TabInfo = { id: string; title: string; url: string; attached: boolean };
+/// `session`: the session that opened it, when known.
+export type TabInfo = { id: string; title: string; url: string; attached: boolean; session?: string };
 
 /// What the tabs need of the browser.
 export type TabsParts = {
@@ -22,6 +24,8 @@ export type TabsParts = {
   activity(): void;
   /// `f` once, `ms` from now (Chrome's time: the machine's); the function returned calls it off.
   later?(ms: number, f: () => void): () => void;
+  /// Which session opened each tab; none: not known.
+  owners?: Owners;
 };
 
 /// Chrome tells of a tab's new address, not of its title, which the page sets after (Chrome 155): the titles are read
@@ -66,6 +70,14 @@ class Tab implements ScreenSource {
   open(options: ViewOptions): Promise<ScreenView> {
     return this.#tabs.open(this, options);
   }
+
+  openedBy(): string | undefined {
+    return this.#tabs.ownerOf(this.info.targetId);
+  }
+
+  discard(): Promise<void> {
+    return this.#tabs.closeTab(this.info.targetId);
+  }
 }
 
 export class Tabs {
@@ -87,10 +99,38 @@ export class Tabs {
     this.#unlisten = this.#p.cdp.on((e) => this.#heard(e));
     await this.#p.cdp.send("Target.setDiscoverTargets", { discover: true });
     this.#ready = true;
+    // Those of tabs closed while no station process watched are forgotten.
+    this.#p.owners?.keep(new Set(this.#tabs.keys()));
   }
 
   list(): TabInfo[] {
-    return [...this.#tabs.values()].map(({ tab }) => ({ id: tab.info.targetId, title: tab.info.title, url: tab.info.url, attached: tab.info.attached }));
+    return [...this.#tabs.values()].map(({ tab }) => {
+      const session = this.ownerOf(tab.info.targetId);
+      return { id: tab.info.targetId, title: tab.info.title, url: tab.info.url, attached: tab.info.attached, ...(session ? { session } : {}) };
+    });
+  }
+
+  /// The session that opened tab `targetId`, when known.
+  ownerOf(targetId: string): string | undefined {
+    return this.#p.owners?.of(targetId);
+  }
+
+  /// Tab `targetId` was opened by `session` (its connection said so): the screens' watchers hear, once it is there.
+  owned(targetId: string, session: string) {
+    if (this.#p.owners?.set(targetId, session) !== true) return;
+    const known = this.#tabs.get(targetId);
+    if (known !== undefined) this.#retitled(known);
+  }
+
+  /// The tabs `session` opened that are there now.
+  ofSession(session: string): string[] {
+    return (this.#p.owners?.ofSession(session) ?? []).filter((id) => this.#tabs.has(id));
+  }
+
+  /// Closes tab `targetId` (it leaves the screens as Chrome tells it went).
+  async closeTab(targetId: string): Promise<void> {
+    if (this.#closed || !this.#tabs.has(targetId)) throw new Error("This tab is closed.");
+    await this.#p.cdp.send("Target.closeTarget", { targetId });
   }
 
   /// How many views of the tabs are open.
@@ -144,6 +184,9 @@ export class Tabs {
       case "Target.targetCreated":
         if (info?.type !== "page") return;
         if (!this.#tabs.has(info.targetId)) {
+          // A tab a page opened (a link to a new window, a popup) is its opener's session's.
+          const opener = typeof info.openerId === "string" ? this.ownerOf(info.openerId) : undefined;
+          if (opener !== undefined) this.#p.owners?.set(info.targetId, opener);
           const tab = new Tab(this, { targetId: info.targetId, title: info.title ?? "", url: info.url ?? "", attached: Boolean(info.attached) });
           const remove = this.#p.screens?.add(tab) ?? (() => {});
           this.#tabs.set(info.targetId, { tab, remove });
@@ -164,6 +207,7 @@ export class Tabs {
         const known = this.#tabs.get(e.params.targetId);
         if (known === undefined) return;
         this.#tabs.delete(e.params.targetId);
+        this.#p.owners?.drop(e.params.targetId);
         known.remove();
         activity();
         return;

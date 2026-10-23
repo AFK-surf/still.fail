@@ -78,6 +78,7 @@ export interface OperationParams {
   "job.get": { id: string };
   "job.log": { id: string; lines: number };
   "job.stop": { id: string };
+  "screen.close": { screen: string };
   "job.clearEnded": { session: string };
   "memory.get": {  };
   "footprint.scan": {  };
@@ -215,6 +216,7 @@ export function bindStationOperations(call: Call) {
     jobGet: <T = unknown>(params: OperationParams["job.get"]) => call("job.get", params) as Promise<T>,
     jobLog: <T = unknown>(params: OperationParams["job.log"]) => call("job.log", params) as Promise<T>,
     jobStop: <T = unknown>(params: OperationParams["job.stop"]) => call("job.stop", params) as Promise<T>,
+    screenClose: <T = unknown>(params: OperationParams["screen.close"]) => call("screen.close", params) as Promise<T>,
     jobClearEnded: <T = unknown>(params: OperationParams["job.clearEnded"]) => call("job.clearEnded", params) as Promise<T>,
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
     footprintScan: <T = unknown>(params: OperationParams["footprint.scan"] = {}) => call("footprint.scan", params) as Promise<T>,

@@ -201,13 +201,28 @@ function listed(names: string[]): string {
   return names.length <= 2 ? names.join(t("core-views.screen.and")) : t("core-views.screen.many", { names: names.slice(0, 2).join(t("core-views.screen.and")), more: names.length - 2 });
 }
 
-/// What a screen is, in words: its kind, its size, who is on it.
+/// What a screen is, in words: its kind, its size, the chat that opened it, who is on it.
 function itemLine(item: J): string {
   const parts = [item.kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop")];
   if (item.width > 0 && item.height > 0) parts.push(`${item.width}×${item.height}`);
+  if (item.chat) parts.push(t("core-views.screen.openedBy", { title: item.chat.title }));
   const on = names(item.viewers);
   if (on.length > 0) parts.push(t("core-views.screen.on", { names: listed(on) }));
   return parts.join(" · ");
+}
+
+/// The chat a session is in among the viewer's chats of the station (its `chatRows`): the session's own chat over one it
+/// only takes part in; null when the viewer has none with it (archived, another workspace's, not read yet).
+export function chatOf(inner: Inner, station: string, session: string): { id: string; title: string; link: string } | null {
+  const rows = inner.data.shared({ topic: "chatRows", station });
+  if (!Array.isArray(rows)) return null;
+  const has = (row: J) => Array.isArray(get(row, "agents")) && (get(row, "agents") as J[]).some((a) => get(a, "key") === session);
+  const row = rows.find((r) => get(r, "session") === session) ?? rows.find(has);
+  const id = get(row, "id");
+  if (typeof id !== "string" || id === "") return null;
+  const title = typeof get(row, "title") === "string" && get(row, "title") !== "" ? (get(row, "title") as string) : t("core-views.screen.someChat");
+  const addr = StationAddr.parse(station);
+  return { id, title, link: `/w/${encode(addr.workspace)}/s/${encode(addr.station)}/chats/${encode(id)}` };
 }
 
 /// A screen's page in the app, as an agent's `screen` tool links it.
@@ -229,7 +244,14 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const width = size(get(s, "width"));
     const height = size(get(s, "height"));
     const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop");
-    const item = { id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy: names(get(s, "controlledBy")), ...(get(s, "peek") === true ? { peek: true } : {}) };
+    const by = get(s, "openedBy");
+    const chat = typeof by === "string" && by !== "" ? chatOf(inner, station, by) : null;
+    const item = {
+      id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy: names(get(s, "controlledBy")), ...(get(s, "peek") === true ? { peek: true } : {}),
+      // Closed from here by a member who may drive it (a read-only one only looks).
+      ...(get(s, "closable") === true && control ? { closable: true } : {}),
+      ...(chat ? { chat } : {}),
+    };
     const access = accessOf(get(s, "access"));
     const clipboard = clipTypesOf(get(s, "clipboard"));
     const drop = dropOf(get(s, "drop"));

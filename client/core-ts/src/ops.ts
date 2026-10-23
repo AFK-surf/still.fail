@@ -133,6 +133,7 @@ export const PARAMS: Record<string, string> = {
   "job.get": "id:string",
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
+  "screen.close": "screen:string",
   "job.clearEnded": "session:string",
   "memory.get": "",
   "footprint.scan": "",
@@ -474,6 +475,10 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => `/jobs/${p.at("id")}/log?lines=${p.u64("lines")}`, null, NONE);
     case "job.stop":
       return op("POST", () => `/jobs/${p.at("id")}/stop`, null, { kind: "job" });
+    // A screen closed for good (a tab of the station's browser, docs/remote-screens.md): it leaves the station's list as
+    // the station tells it (`screens` on its stream).
+    case "screen.close":
+      return op("POST", () => `/screens/${p.at("screen")}/close`, null, NONE);
     case "job.clearEnded":
       return op("DELETE", () => `/sessions/${p.at("session")}/jobs`, null, session("session"));
     case "memory.get":

@@ -7,11 +7,15 @@ import type { AdbCard, ScreenCard, ScreensView, ScreenViewState } from "../src/c
 
 const LINK = "/w/demo/s/local/screen";
 
-/** The demo station's screens: its desktop, and a tab of its browser someone else is on. */
+/** The demo station's screens: its desktop, and a tab of its browser an agent opened that someone else is on. */
 export const SCREENS: ScreensView = {
   screens: [
     { id: "desktop", kind: "desktop", title: "桌面", width: 3024, height: 1890, viewers: [], line: "桌面 · 3024×1890", link: `${LINK}/desktop` },
-    { id: "browser:7F3A9C", kind: "browser", title: "登录 · GitHub", width: 1600, height: 1000, viewers: ["张三"], line: "浏览器标签页 · 1600×1000 · 张三 正在查看", link: `${LINK}/browser%3A7F3A9C` },
+    // Opened by an agent of one of the viewer's chats: it leads there, and is closed from here.
+    {
+      id: "browser:7F3A9C", kind: "browser", title: "登录 · GitHub", width: 1600, height: 1000, viewers: ["张三"], line: "浏览器标签页 · 1600×1000 · 由「部署 staging」打开 · 张三 正在查看", link: `${LINK}/browser%3A7F3A9C`,
+      closable: true, chat: { id: "c1", title: "部署 staging", link: "/w/demo/s/local/chats/c1" },
+    },
   ],
   outdated: false, control: true, known: true,
 };

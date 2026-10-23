@@ -8,6 +8,7 @@ import { log } from "../ops/log.ts";
 import type { Screens } from "../screens/source.ts";
 import type { Cdp } from "./cdp.ts";
 import { type ChromeHost, type Running, readState, writeState } from "./chrome.ts";
+import { Owners } from "./owners.ts";
 import { type TabInfo, Tabs } from "./tabs.ts";
 
 /// Unused this long (no agent asking for it, no tab coming, going or navigated, no one watching), it is closed.
@@ -62,9 +63,12 @@ export class StationBrowser {
   /// Closing on purpose (stopped, idle, or this station process ending): its end is not a death.
   #leaving = false;
   #closed = false;
+  /// Which session opened each tab (owners.ts).
+  readonly #owners: Owners;
 
   constructor(o: BrowserOptions) {
     this.#o = o;
+    this.#owners = new Owners(o.dir);
     this.#fibers = new Fibers("browser", o.clock);
     this.#idleMs = o.idleMs ?? IDLE_MS;
     this.#lastUse = readState(o.dir).lastUse ?? 0;
@@ -94,6 +98,22 @@ export class StationBrowser {
   tabs(): TabInfo[] {
     if (this.#up) this.used();
     return this.#up?.tabs.list() ?? [];
+  }
+
+  /// Tab `targetId` was opened by `session` (on its own connection, proxy.ts).
+  own(targetId: string, session: string) {
+    if (this.#up) this.#up.tabs.owned(targetId, session);
+    else this.#owners.set(targetId, session);
+  }
+
+  /// Closes the tabs `session` opened (its chat archived or deleted); the browser stays.
+  async closeOf(session: string): Promise<void> {
+    const up = this.#up;
+    if (up === null) return;
+    const ids = up.tabs.ofSession(session);
+    if (ids.length === 0) return;
+    log.info("browser", "closing the tabs of a session that ended", { session, tabs: ids.length });
+    await Promise.all(ids.map((id) => up.tabs.closeTab(id).catch(() => {})));
   }
 
   status(): BrowserStatus {
@@ -168,6 +188,7 @@ export class StationBrowser {
     const cdp = await chrome.connect(running.ws);
     const tabs = new Tabs({
       cdp, screens, connect: () => chrome.connect(running.ws), now: () => this.#fibers.now(), activity: () => this.used(), later: this.#o.later,
+      owners: this.#owners,
     });
     try {
       await tabs.start();
