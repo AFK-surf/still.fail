@@ -212,6 +212,10 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
     assert.equal(await latest("android"), "/releases/android/stillfail-1.apk");
     await bucket.put("android/beta/latest.json", JSON.stringify({ versionCode: 2, file: "android/stillfail-beta-2.apk" }));
     assert.equal(await latest("android-beta"), "/releases/android/stillfail-beta-2.apk");
+    // The beta apps that ask their feed's beta twice (#1194 to #1263) are answered the beta feed.
+    const betaFeed = JSON.stringify({ versionCode: 2, file: "android/stillfail-beta-2.apk" });
+    assert.equal(await script(h.fetch("/releases/android/beta/beta/latest.json")), betaFeed);
+    assert.equal(await script(h.fetchBeta("/releases/android/beta/beta/latest.json")), betaFeed);
     assert.equal(await latest("android-mbui"), null, "none before its first build");
     await bucket.put("android/mbui/latest.json", JSON.stringify({ versionCode: 3, file: "android/stillfail-mbui-3.apk" }));
     assert.equal(await latest("android-mbui"), "/releases/android/stillfail-mbui-3.apk");
