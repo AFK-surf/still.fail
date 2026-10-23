@@ -51,6 +51,7 @@ pub(open) trait Host {
   env(Self, String) -> String = _
   set_app_state(Self, FuncRef[(Int) -> Unit]) -> Unit = _
   system_dark(Self) -> Bool = _
+  font_scale(Self) -> Double = _
   set_dark(Self, Bool) -> Unit = _
   set_sideways(Self, Bool) -> Unit = _
   share(Self, String, String, String, Bytes) -> Bool = _
@@ -357,6 +358,11 @@ impl Host with env(_, _) {
 ///|
 impl Host with set_app_state(_, _) {
   ()
+}
+
+///|
+impl Host with font_scale(_) {
+  1.0
 }
 
 ///|
@@ -1250,6 +1256,13 @@ pub fn env(name : String) -> String {
 /// shown and in front.
 pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
   current.val.set_app_state(f)
+}
+
+///|
+/// How much bigger the system's setting for the size of words makes them (Android's fontScale: 1 as it is, 1.3 the
+/// largest of most phones' steps): words are drawn that much bigger, as Compose's sp are; lengths are not.
+pub fn font_scale() -> Double {
+  current.val.font_scale()
 }
 
 ///|

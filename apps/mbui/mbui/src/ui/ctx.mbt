@@ -175,6 +175,8 @@ pub struct Ctx {
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int
+  /// the system's size of words this frame (font_scale): every word's size and line times it, as Compose's sp
+  mut font_scale : Double
   /// how many times a frame has been built (frame_body's passes, over every frame): what is said of a build, said
   /// again by the next (motion's keyed nodes, by node: another pass's nodes are other nodes)
   mut build_no : Int
@@ -400,6 +402,7 @@ fn Ctx::new() -> Ctx {
     dt: 16.0,
     last_now: -1.0,
     frame_no: 0,
+    font_scale: 1.0,
     build_no: 0,
     sideways_depth: 0,
     epoch: 0,
@@ -972,15 +975,16 @@ pub fn Ctx::text(
   let n = self.nodes[i]
   n.center = first(center, st.center).unwrap_or(false)
   n.text = s
-  n.font_size = first(size, s_size).unwrap_or(15.0)
-  n.line_h = first(line, s_line).unwrap_or(self.theme.text_line * n.font_size)
+  // (sizes as the original's sp: the system's size of words applied, fontscale.mbt)
+  n.font_size = self.sp(first(size, s_size).unwrap_or(15.0))
+  n.line_h = first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * n.font_size)
   n.line_trim = trim
   n.weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   n.color = first(color, opt_color(self.theme, st.color)).unwrap_or(self.theme.fg)
   n.wrap = first(wrap, st.wrap).unwrap_or(true)
   n.w = first(w, opt_size(st.w)).unwrap_or(Auto)
   n.spacing = match (tracking, st.tracking) {
-    (Some(v), _) => v
+    (Some(v), _) => self.sp(v)
     (None, Some(t)) => t.px(n.font_size)
     (None, None) => 0.0
   }

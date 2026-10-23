@@ -1043,6 +1043,9 @@ static void tell_state(void) {
 
 // Whether the system's appearance is dark (@hostapi.system_dark): the app's own (NSApp.appearance is never set, so this is
 // the system's even while the window is made to look otherwise below).
+// Words as the app sizes them (@hostapi.font_scale): the system's own size of words not followed here yet.
+double mb_host_font_scale(void) { return 1.0; }
+
 int32_t mb_host_system_dark(void) {
   NSAppearanceName n = [NSApp.effectiveAppearance
       bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];

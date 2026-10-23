@@ -6,10 +6,11 @@
 // sets the later ones again at their place (its fake host's: Tester::set_reduce_motion,
 // set_reduce_transparency, set_dark, set_window_inset), so a run is drawn again by the settings it was drawn by.
 //
-//   ENV {"motion":0|1,"glass":0|1,"dark":0|1,"inset":0|1,"h264":0|1,"feed":0|1,"ime":H,"copy":0|1}    motion reduced,
+//   ENV {"motion":0|1,"glass":0|1,"dark":0|1,"inset":0|1,"h264":0|1,"feed":0|1,"ime":H,"copy":0|1,"font":S}    motion reduced,
 //       transparency reduced (glass solid), dark, the window's inset, H.264 decoded (a tape without it: not), its
 //       decoder driven from here (stream_feed.mbt; a tape without it: not), the soft
-//       keyboard's height (points; each step of its motion a line), the system saying a copy itself (device.mbt)
+//       keyboard's height (points; each step of its motion a line), the system saying a copy itself (device.mbt), the
+//       system's size of words (font_scale; said only when not 1, a line without it: 1)
 
 ///|
 /// The settings last kept on the tape ("" none yet).
@@ -30,6 +31,10 @@ fn env_at_frame() -> Unit {
     "feed": Json::number(if h_stream_feeds() { 1.0 } else { 0.0 }),
     "ime": Json::number(g().dev.ime_inset),
     "copy": Json::number(if copy_shown() { 1.0 } else { 0.0 }),
+  }
+  let fs = font_scale()
+  if fs != 1.0 {
+    m["font"] = Json::number(fs)
   }
   let line = "ENV " + Json::object(m).stringify()
   if line != env_kept.val {
@@ -60,6 +65,10 @@ fn replay_env(f : FakeHost, line : String) -> Unit {
   match m.get("ime") {
     Some(Number(d, ..)) => f.dev.ime_inset = d
     _ => ()
+  }
+  f.font_scale = match m.get("font") {
+    Some(Number(d, ..)) if d > 0.0 => d
+    _ => 1.0
   }
   f.wants = true
 }

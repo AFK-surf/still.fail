@@ -46,6 +46,12 @@ final class Host {
 
     /** The system in night mode (MainActivity: its configuration's uiMode, kept as it changes): @hostapi.system_dark. */
     static volatile boolean systemDark;
+    /** The system's size of words (MainActivity: its configuration's fontScale, kept as it changes): @hostapi.font_scale. */
+    static volatile float fontScale = 1f;
+
+    static float fontScale() {
+        return fontScale;
+    }
 
     static boolean systemDark() {
         return systemDark;

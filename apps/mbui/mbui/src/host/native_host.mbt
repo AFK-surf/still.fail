@@ -211,6 +211,11 @@ impl @hostapi.Host for Native with system_dark(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with font_scale(_) {
+  font_scale()
+}
+
+///|
 impl @hostapi.Host for Native with set_dark(_, dark) {
   set_dark(dark)
 }

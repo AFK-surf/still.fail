@@ -50,6 +50,16 @@ pub fn system_dark() -> Bool {
 }
 
 ///|
+/// How much bigger the system's setting makes words (@hostapi.font_scale; a Tester's `set_font_scale`): what Ctx's words
+/// are drawn at, times their size.
+pub fn font_scale() -> Double {
+  match fake.val {
+    Some(f) => f.font_scale
+    None => @hostapi.font_scale()
+  }
+}
+
+///|
 /// Whether the window's buttons are in the app's top row now (@hostapi.window_inset; a Tester's `window_inset`).
 pub fn window_inset() -> Bool {
   match fake.val {
@@ -85,6 +95,13 @@ pub fn app_version() -> Int {
 /// The system set to dark or light from the next frame on.
 pub fn Tester::set_dark(self : Tester, dark : Bool) -> Unit {
   self.fake.dark = dark
+  self.fake.wants = true
+}
+
+///|
+/// The system's size of words (as Android's fontScale), from the next frame on.
+pub fn Tester::set_font_scale(self : Tester, scale : Double) -> Unit {
+  self.fake.font_scale = scale
   self.fake.wants = true
 }
 

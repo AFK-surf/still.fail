@@ -740,10 +740,12 @@ fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
             })
             |> ignore
           } else {
-            bullet(c, depth, s, self.lh(s), ink)
+            // (on the first line's middle: the line as the words are set, at the system's size of words; Markdown.kt
+            // Bullet's lh(textSize).toDp())
+            bullet(c, depth, s, c.sp(self.lh(s)), ink)
           }
           match task {
-            Some(done) => task_box(c, done, self.lh(s))
+            Some(done) => task_box(c, done, c.sp(self.lh(s)))
             None => ()
           }
           c.box(w=Fill(1.0), fn() { stack(c, inner, false) }) |> ignore
@@ -784,12 +786,17 @@ fn bullet(c : @ui.Ctx, depth : Int, size : Double, line : Double, ink : Int64) -
 }
 
 ///|
+/// A task's box's room, in words' size (Markdown.kt's Placeholder(25.sp, ..)).
+let task_room : Double = 25.0
+
+///|
 /// A task's box, as a browser draws a disabled checkbox: 13 across, 4
-/// before it and 8 after, faint grey, filled and ticked when done.
+/// before it and 8 after, faint grey, filled and ticked when done (its room
+/// task_room across at the system's size of words).
 fn task_box(c : @ui.Ctx, done : Bool, line : Double) -> Unit {
   let t = theme()
   let faint = if t.dark { 0xA0A0A066L } else { 0x7676764DL }
-  c.box(h=Px(line), pl=4.0, pr=8.0, justify=JCenter, fn() {
+  c.box(w=Px(c.sp(task_room)), h=Px(line), pl=4.0, pr=8.0, justify=JCenter, align=ACenter, fn() {
     c.box(
       w=Px(13.0),
       h=Px(13.0),
@@ -1110,7 +1117,8 @@ fn Md::table(self : Md, t : MdTable) -> Unit {
           let w = cell_images_width(images)
           (w, w)
         }
-        None => cell_widths(md_plain(row[k]), size, weight)
+        // (measured as they are set: at the system's size of words)
+        None => cell_widths(md_plain(row[k]), c.sp(size), weight)
       }
       if lo + 24.0 > mins[k] {
         mins[k] = lo + 24.0
