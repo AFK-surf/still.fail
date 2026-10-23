@@ -1363,6 +1363,8 @@ let en : Map[String, String] = {
   "web-pages.automaticDecisions.adminOnly": "Only administrators can configure automatic decisions and view checks",
   "web-pages.automaticDecisions.completion": "Archive suggestions",
   "web-pages.automaticDecisions.disabled": "Off",
+  "web-pages.archivePolicy.counts": "Whether it suggests archiving",
+  "web-pages.archivePolicy.more": "{n} more",
   "web-pages.automaticDecisions.enabledWith": "Enabled · {model}",
   "web-pages.automaticDecisions.noModels": "No models available",
   "web-pages.automaticDecisions.refresh": "Rediscover models",

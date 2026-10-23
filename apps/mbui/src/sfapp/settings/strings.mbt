@@ -1328,6 +1328,8 @@ let zh : Map[String, String] = {
   "web-pages.automaticDecisions.adminOnly": "只有管理员可以配置自动决策和查看记录",
   "web-pages.automaticDecisions.completion": "归档建议",
   "web-pages.automaticDecisions.disabled": "未启用",
+  "web-pages.archivePolicy.counts": "是否推荐归档",
+  "web-pages.archivePolicy.more": "还有 {n} 个",
   "web-pages.automaticDecisions.enabledWith": "已启用 · {model}",
   "web-pages.automaticDecisions.noModels": "暂无可用模型",
   "web-pages.automaticDecisions.refresh": "重新发现模型",

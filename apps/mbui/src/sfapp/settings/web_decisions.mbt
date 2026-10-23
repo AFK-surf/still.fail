@@ -325,3 +325,450 @@ let dc_dot_room : @ui.Style = @ui.style(w=@sf.dot_size)
 ///|
 // kept across runs: a value (no field of it changes)
 let dc_spin : @ui.Style = @ui.style(pr=S1)
+
+///|
+/// A station's archive policy (AutomaticDecisionPolicy, ArchivePolicy): its words (pressed, edited in a dialog), its
+/// options in their two groups, each with how many chats the checks put there (pressed, edited in a dialog: its name,
+/// what it means, which group, the chats it got; 删除), 添加选项 under each; what changed and what the checks said under
+/// them. Each dialog edits the core's draft (`policyForm`), back to the station's first.
+fn policy_page_wide(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit {
+  let s = station_of(core, here, station)
+  let view = if flag(s, "online") { field(field(s, "overview"), "automaticDecisions") } else { None }
+  let policy = field(view, "policy")
+  let name = text(s, "name")
+  let title = if name == "" {
+    tr("web-pages.archivePolicy.title")
+  } else {
+    tr("web-pages.archivePolicy.title") + " · " + name
+  }
+  let body : Array[() -> Unit] = []
+  if policy is Some(Object(_)) && flag(view, "canEdit") {
+    body.push(fn() { policy_body(c, core, station, policy) })
+  } else {
+    body.push(fn() {
+      c.text(
+        tr(
+          if !flag(s, "online") {
+            "web-pages.automaticDecisions.offline"
+          } else if view is Some(Object(_)) && !flag(view, "canEdit") {
+            "web-pages.automaticDecisions.adminOnly"
+          } else {
+            "web-pages.automaticDecisions.upgrade"
+          },
+        ),
+        style=desk_note,
+      )
+      |> ignore
+    })
+  }
+  desk_page(
+    c,
+    core,
+    "auto-policy/" + station,
+    title,
+    about=tr("web-pages.archivePolicy.textLead"),
+    back=tr("web-pages.automaticDecisions.completion"),
+    body,
+  )
+}
+
+///|
+/// The policy's draft (`policyForm`), opened once (by the frame's builds' end) and kept by station.
+fn policy_form(c : @ui.Ctx, core : Core, station : String) -> String {
+  match policy_forms.get(station) {
+    Some(f) => f
+    None => {
+      let f = policy_form_name(station)
+      // (opened once the frame's builds are over: the build that first comes to it alone)
+      c.tell("policy-open/" + f, fn() {
+        act(core, tr("web-pages.archivePolicy.readAction"), "automaticDecisions.policy.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
+      })
+      f
+    }
+  }
+}
+
+///|
+/// The policy's draft's name for `station`, made the first time it is asked.
+fn policy_form_name(station : String) -> String {
+  match policy_forms.get(station) {
+    Some(f) => f
+    None => {
+      profile_forms.val += 1
+      let f = "mbui-policy-" + profile_forms.val.to_string()
+      policy_forms[station] = f
+      f
+    }
+  }
+}
+
+///|
+/// The dialog a fixture's mode puts up over the policy ("" none, "text", "option": its first option's).
+// kept across runs: said by fixture_page; core.mbt's reset empties it
+let fx_policy_up : Ref[String] = Ref("")
+
+///|
+/// The policy (ArchivePolicy): see policy_page_wide.
+fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Unit {
+  let t = @sf.theme()
+  let form = policy_form(c, core, station)
+  let call = fn(action : String, input : Array[(String, Json)], then : (Json) -> Unit) {
+    (core.call)("automaticDecisions.policy." + action, obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), fn(r) {
+      match r {
+        Ok(v) => then(v)
+        Err(e) => (core.say)(fill("android-misc.act.failed", [("what", tr("web-pages.archivePolicy.editAction")), ("error", error_text(e))]))
+      }
+    })
+  }
+  let d = (core.topic)("policyForm", { "station": str(station), "form": str(form) }).value
+  let busy = !(d is Some(Object(_))) || flag(d, "pending")
+  let saving = is_doing(core, ["automaticDecisions.policy.save"], [("station", station), ("form", form)])
+  let failed = failed_of(core, ["automaticDecisions.policy.save"], [("station", station), ("form", form)])
+  // back to the station's first (what an earlier dialog left unsaved is gone), then the dialog
+  let open = fn(id : String, ov : Json?) {
+    call("edit", [("reset", Json::boolean(true))], fn(_) { policy_dialog(core, station, form, policy, id, "", ov) })
+  }
+  let add = fn(archive : Bool) {
+    call("edit", [("reset", Json::boolean(true))], fn(_) {
+      call("edit", [("add", Json::boolean(archive))], fn(made) {
+        match items(Some(made), "options").last() {
+          Some(o) => policy_dialog(core, station, form, policy, "", text(Some(o), "key"), None)
+          None => ()
+        }
+      })
+    })
+  }
+  // a fixture's dialog (MBUI_FIXTURE=settings-policy-text, settings-policy-option), once the page is built
+  if fx_policy_up.val != "" {
+    let what = fx_policy_up.val
+    fx_policy_up.val = ""
+    c.after_build("policy-fixture", fn() {
+      if what == "text" {
+        policy_dialog(core, station, form, policy, "", "", None)
+      } else {
+        match items(policy, "options") {
+          [o, ..] => policy_dialog(core, station, form, policy, text(Some(o), "id"), "", Some(o))
+          _ => ()
+        }
+      }
+    })
+  }
+  c.box(style=pol_box, fn() {
+    if saving || failed is Some(_) {
+      c.box(style=pol_head, fn() {
+        if saving {
+          @sf.spinner(c) |> ignore
+        }
+        match failed {
+          Some(why) => c.text(why, style=dc_error) |> ignore
+          None => ()
+        }
+      })
+      |> ignore
+    }
+    let wid = c.id("policy-text")
+    if !busy {
+      c.cursor(wid, Hand)
+      if hit(c, wid) {
+        c.after_build("policy-text", fn() { open("", None) })
+      }
+    }
+    c.box(style=if busy { pol_words_box } else { pol_words_live }, id=wid, fn() {
+      c.text(text(policy, "text"), style=pol_words) |> ignore
+    })
+    |> ignore
+    for archive in [true, false] {
+      c.box(style=pol_group, fn() {
+        c.box(style=pol_group_head, fn() {
+          c.text(tr(if archive { "web-pages.archivePolicy.archive" } else { "web-pages.archivePolicy.keep" }), style=pol_group_name)
+          |> ignore
+        })
+        |> ignore
+        for o in items(policy, "options").filter(fn(x) { flag(Some(x), "archive") == archive }) {
+          let ov = Some(o)
+          let oid = c.id("policy-option/" + text(ov, "id"))
+          if !busy {
+            c.cursor(oid, Hand)
+            if hit(c, oid) {
+              c.after_build("policy-option/" + text(ov, "id"), fn() { open(text(ov, "id"), ov) })
+            }
+          }
+          c.box(style=if busy { pol_option } else { pol_option_live }, id=oid, fn() {
+            c.box(style=pol_option_name_box, fn() { c.text(text(ov, "name"), style=pol_option_name) |> ignore }) |> ignore
+            c.box(style=pol_option_rubric_box, fn() { c.text(text(ov, "rubric"), style=pol_option_rubric) |> ignore }) |> ignore
+            c.box(style=pol_option_count_box, fn() { c.text(count(ov, "count").to_string(), style=pol_option_count) |> ignore })
+            |> ignore
+          })
+          |> ignore
+        }
+        let aid = c.id("policy-add/" + archive.to_string())
+        if !busy {
+          c.cursor(aid, Hand)
+          if hit(c, aid) {
+            c.after_build("policy-add/" + archive.to_string(), fn() { add(archive) })
+          }
+        }
+        c.box(style=if busy { pol_add } else { pol_add_live }, id=aid, fn() {
+          @sf.icon(c, "plus", size=pol_plus, color=t.p.muted) |> ignore
+          c.text(tr("web-pages.archivePolicy.add"), style=pol_add_words) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+    let change = text(policy, "changeText")
+    c.box(style=desk_said_line, fn() {
+      if change != "" {
+        c.text(change + " · ", style=dc_aside) |> ignore
+      }
+      c.text(text(policy, "summaryText"), style=if count(policy, "failed") > 0 { dc_error_line } else { dc_aside }) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A part of the policy edited in a dialog (PolicyDialog): its words (`id` and `key` ""), an option of the station's
+/// (`id`, with what the checks put there: `ov`), or a new one (`key`, its draft's). 保存 closes it and saves on under the
+/// policy (a spinner, or what went wrong); 取消 and closing put the draft back.
+fn policy_dialog(core : Core, station : String, form : String, policy : Json?, id : String, key : String, ov : Json?) -> Unit {
+  let edit = fn(input : Array[(String, Json)]) {
+    (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), fn(_) {  })
+  }
+  let save = fn() {
+    act(
+      core,
+      tr("web-pages.archivePolicy.saveAction"),
+      "automaticDecisions.policy.save",
+      obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]),
+      done=tr("web-pages.archivePolicy.saved"),
+    )
+  }
+  let draft = fn() { (core.topic)("policyForm", { "station": str(station), "form": str(form) }).value }
+  let serial = (desk_dialogs.val + 1).to_string()
+  let filled : Map[String, Bool] = {}
+  // a field's words put in once, as the dialog opens; then what is typed is the draft's
+  let words_of = fn(part : String, value : String) -> @ui.Field {
+    let f = field_of("policy/" + serial + "/" + part)
+    if !filled.contains(part) {
+      filled[part] = true
+      f.set(value)
+    }
+    f
+  }
+  // `remove`: the option of the station's (its id) 删除 takes out and saves; "" none
+  let foot = fn(remove : String) {
+    fn(c : @ui.Ctx, shut : () -> Unit) {
+      if remove != "" &&
+        @sf.button(c, tr("web-pages.archivePolicy.remove"), key="policy-remove", tone=GhostDanger, icon="trash") {
+        shut()
+        (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj([("remove", str(remove))]))]), fn(
+          _,
+        ) {
+          save()
+        })
+      }
+      c.spacer()
+      if @sf.button(c, tr("web-pages.archivePolicy.cancel"), key="policy-cancel", tone=Ghost) {
+        c.blur()
+        shut()
+        edit([("reset", Json::boolean(true))])
+      }
+      if @sf.button(c, tr("web-pages.archivePolicy.save"), key="policy-save", tone=Primary, disabled=!flag(draft(), "dirty")) {
+        c.blur()
+        shut()
+        save()
+      }
+    }
+  }
+  if id == "" && key == "" {
+    open_dialog(
+      "policy/" + serial,
+      tr("web-pages.archivePolicy.title"),
+      description=tr("web-pages.archivePolicy.textLead"),
+      wide=true,
+      fn(c, _) {
+        let d = draft()
+        let f = words_of("policy", text(d, "policy"))
+        let words = @sf.textarea(c, "policy/" + serial + "/policy", rows=8, field=f)
+        if d is Some(Object(_)) && words != text(d, "policy") {
+          c.after_build("policy-words", fn() { edit([("policy", str(words))]) })
+        }
+      },
+      foot(""),
+    )
+    return
+  }
+  let fresh = key != ""
+  open_dialog(
+    "policy/" + serial,
+    if fresh {
+      tr("web-pages.archivePolicy.newOption")
+    } else {
+      text(ov, "name")
+    },
+    fn(c, shut) {
+      let d = draft()
+      let o = items(d, "options").iter().find_first(fn(x) { if fresh { text(Some(x), "key") == key } else { text(Some(x), "id") == id } })
+      guard o is Some(oj) else { return }
+      let o = Some(oj)
+      let okey = text(o, "key")
+      @sf.field(c, tr("web-pages.archivePolicy.name"), fn() {
+        let n = @sf.input(c, "policy/" + serial + "/name", field=words_of("name", text(o, "name"))).text
+        if n != text(o, "name") {
+          c.after_build("policy-name", fn() { edit([("option", str(okey)), ("name", str(n))]) })
+        }
+      })
+      @sf.field(c, tr("web-pages.archivePolicy.rubric"), fn() {
+        let r = @sf.textarea(c, "policy/" + serial + "/rubric", rows=3, field=words_of("rubric", text(o, "rubric")))
+        if r != text(o, "rubric") {
+          c.after_build("policy-rubric", fn() { edit([("option", str(okey)), ("rubric", str(r))]) })
+        }
+      })
+      @sf.field(c, tr("web-pages.archivePolicy.counts"), fn() {
+        let i = @sf.segmented(
+          c,
+          "policy/" + serial + "/archive",
+          [tr("web-pages.archivePolicy.archive"), tr("web-pages.archivePolicy.keep")],
+          if flag(o, "archive") { 0 } else { 1 },
+        )
+        if (i == 0) != flag(o, "archive") {
+          c.after_build("policy-archive", fn() { edit([("option", str(okey)), ("archive", Json::boolean(i == 0))]) })
+        }
+      })
+      // the chats the checks put there, each to its chat
+      if count(ov, "count") > 0 {
+        c.box(style=pol_chats, fn() {
+          c.text(fill("web-pages.archivePolicy.chats", [("days", count(policy, "days").to_string())]), style=pol_group_name) |> ignore
+          for ch in items(ov, "chats") {
+            let cid = c.id("policy-chat/" + text(Some(ch), "session"))
+            c.cursor(cid, Hand)
+            if hit(c, cid) {
+              shut()
+              edit([("reset", Json::boolean(true))])
+              (core.open_chat)(station, text(Some(ch), "session"), text(Some(ch), "title"))
+            }
+            c.box(id=cid, style=pol_chat_box, fn() { c.text(text(Some(ch), "title"), style=pol_chat) |> ignore }) |> ignore
+          }
+          let more = count(ov, "count") - items(ov, "chats").length()
+          if more > 0 {
+            c.text(fill("web-pages.archivePolicy.more", [("n", more.to_string())]), style=dc_aside) |> ignore
+          }
+        })
+        |> ignore
+      }
+    },
+    foot(if fresh { "" } else { id }),
+  )
+}
+
+///|
+/// (policy: its parts 12 apart)
+// kept across runs: a value (no field of it changes)
+let pol_box : @ui.Style = @ui.style(w=Full, gap=S3)
+
+///|
+/// (policyHead: a spinner, or what went wrong, 28 high at least)
+// kept across runs: a value (no field of it changes)
+let pol_head : @ui.Style = @ui.style(row=true, w=Full, min_h=S7, gap=S2, align=ACenter)
+
+///|
+/// (policyWords: 8 above and under, 10 out to each side with its ground, the field's corner, the list's ground pointed
+/// at)
+// kept across runs: a value (no field of it changes)
+let pol_words_box : @ui.Style = @sf.outset(pol_out).then(@ui.style(px=S2_5, py=S2, radius=Xl))
+
+///|
+let pol_out : Double = 10.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_words_live : @ui.Style = pol_words_box.then(@ui.style(hovered=@ui.patch(bg=ListGround)))
+
+///|
+/// (its words: the list's size, lines 1.6 of it, as they were written)
+// kept across runs: a value (no field of it changes)
+let pol_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
+
+///|
+/// (policyGroup: its rows 2 apart; policyGroupName: 12, 600, muted, 4 above and under)
+// kept across runs: a value (no field of it changes)
+let pol_group : @ui.Style = @ui.style(w=Full, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_group_name : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Semibold, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_group_head : @ui.Style = @ui.style(py=S1)
+
+///|
+/// (option: its name, what it means, its count in a line, 12 apart, 8 above and under, 10 out to each side)
+// kept across runs: a value (no field of it changes)
+let pol_option : @ui.Style = pol_words_box.then(@ui.style(row=true, gap=S3, align=AStart))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_option_live : @ui.Style = pol_option.then(@ui.style(hovered=@ui.patch(bg=ListGround)))
+
+///|
+/// (optionName: 120 wide, the list's words)
+// kept across runs: a value (no field of it changes)
+let pol_option_name_box : @ui.Style = @ui.style(w=Fixed(pol_name_w))
+
+///|
+let pol_name_w : Double = 120.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_option_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_option_rubric_box : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+/// (optionRubric: 12, muted, lines 1.5 of it)
+// kept across runs: a value (no field of it changes)
+let pol_option_rubric : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+
+///|
+/// (optionCount: 2 of its digits wide at least, at its end)
+// kept across runs: a value (no field of it changes)
+let pol_option_count_box : @ui.Style = @ui.style(min_w=S6, align=AEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_option_count : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+
+///|
+/// (addOption: a plus 14 and its words, muted, 6 apart)
+// kept across runs: a value (no field of it changes)
+let pol_add : @ui.Style = pol_words_box.then(@ui.style(row=true, gap=S1_5, align=ACenter))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_add_live : @ui.Style = pol_add.then(@ui.style(hovered=@ui.patch(bg=ListGround)))
+
+///|
+let pol_plus : Double = 14.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_add_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+/// (optionChats: 6 apart, 8 over them)
+// kept across runs: a value (no field of it changes)
+let pol_chats : @ui.Style = @ui.style(w=Full, pt=S2, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pol_chat_box : @ui.Style = @ui.style(w=Full)
+
+///|
+/// (optionChat: the list's words, cut short, underlined pointed at)
+// kept across runs: a value (no field of it changes)
+let pol_chat : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wrap=false, w=Full)

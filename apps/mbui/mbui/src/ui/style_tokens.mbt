@@ -447,6 +447,9 @@ pub(all) enum Color {
   /// a sidebar's ground beside the page (still.fail's Sidebar.css.ts vars.sidebar): what stands in it is cut out of it
   /// (a row's people's pictures, RowPicture.css.ts --mark-around)
   Sidebar
+  /// a list's ground, a step off the page (still.fail's --list): what a row of words to press lights to under the
+  /// pointer (AutomaticDecisions.css.ts policyWords)
+  ListGround
   /// a field's edge pointed at or written in, a column's edge in hand (still.fail's --field-hover)
   FieldHover
   A(Color, Opacity)

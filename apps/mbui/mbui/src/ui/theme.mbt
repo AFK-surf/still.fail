@@ -92,6 +92,8 @@ pub(all) struct Theme {
   wash : Int64
   /// a sidebar's ground beside the page (Color's Sidebar)
   sidebar : Int64
+  /// a list's ground, a step off the page (Color's ListGround)
+  list : Int64
   /// the sizes of words with their lines' heights (style.mbt's TextSize), the lines' heights said on their own
   /// (Leading), and the corners (Radius)
   text : TextScale
@@ -223,6 +225,8 @@ pub fn Theme::light() -> Theme {
     // #322D24 at 6.5%
     wash: 0x322D2411L,
     sidebar: 0xF6F5F1FFL,
+    // oklch(98.5% .002 85)
+    list: 0xFBFAF9FFL,
     text: TextScale::tailwind(),
     leading: LeadingScale::tailwind(),
     text_line: 0.0,
@@ -263,6 +267,7 @@ pub fn Theme::dark() -> Theme {
     neutral: 0x2A2B2FFFL,
     selected: 0x323338FFL,
     sidebar: 0x19191BFFL,
+    list: 0x1C1D20FFL,
     link: 0x81AEFAFFL,
     lifted: 0x3A3B40FFL,
     // white at 5%
@@ -372,6 +377,7 @@ pub fn Theme::ios_light() -> Theme {
     // #322D24 at 6.5%
     wash: 0x322D2411L,
     sidebar: 0xF2F2F7FFL,
+    list: 0xFFFFFFFFL,
     text: TextScale::tailwind(),
     leading: LeadingScale::tailwind(),
     text_line: 0.0,
@@ -509,6 +515,7 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
     Lifted => self.lifted
     Wash => self.wash
     Sidebar => self.sidebar
+    ListGround => self.list
     FieldHover => self.field_hover
     Theater => 0x000000FFL
     A(c, o) => alpha(self.color(c), o.value())

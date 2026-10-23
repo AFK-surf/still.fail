@@ -25,6 +25,8 @@ pub(all) enum Tone {
   Ghost
   Danger
   DangerSolid
+  /// a ghost's in the red (controls.css.ts btnGhost with btnDanger: 删除 beside a dialog's other buttons)
+  GhostDanger
 } derive(Eq)
 
 ///|
@@ -52,6 +54,7 @@ pub fn button(
       DangerSolid => (p.red, p.red, 0xFFFFFFFFL)
       Danger => (p.chip, p.chip, p.red)
       Ghost => (alpha(p.hover, h), 0L, p.text)
+      GhostDanger => (alpha(p.hover, h), 0L, p.red)
       Plain => (p.chip, p.chip, p.text)
     }
   } else {
@@ -65,6 +68,7 @@ pub fn button(
         (g, g, 0xFFFFFFFFL)
       }
       Ghost => (alpha(p.hover, h), 0L, p.text)
+      GhostDanger => (alpha(p.hover, h), 0L, p.red)
       Danger => (over(p.canvas, alpha(p.hover, h)), p.line_strong, p.red)
       Plain => (over(p.canvas, alpha(p.hover, h)), p.line_strong, p.text)
     }
@@ -1263,6 +1267,66 @@ pub fn input(
     c.box(id=s.id, style=if s.hovered || s.focused { input_box_hot } else { input_box }, editor) |> ignore
   })
 }
+
+///|
+/// Lines to type in (controls.css.ts input as a textarea: --r-field round, not a pill; 12 by 7 in, the strong grey's
+/// line, the field's hover grey pointed at or written in, on the canvas; its words 14 on lines 1.6 of them), at least
+/// `rows` lines high and growing to `most`; `field`: what it holds, the view's own. What is in it now.
+pub fn textarea(
+  c : @ui.Ctx,
+  key : String,
+  rows? : Int = 3,
+  most? : Int = 16,
+  placeholder? : String = "",
+  field? : @ui.Field,
+) -> String {
+  let t = theme()
+  let box_id = c.id(key + "/frame")
+  let hot = c.hovered(box_id) || c.has_focus(c.id(key))
+  let mut words = ""
+  let tall = @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in))
+  c.box(id=box_id, style=(if hot { textarea_box_hot } else { textarea_box }).then(tall), fn() {
+    words = c.editor(
+      key,
+      field?,
+      placeholder~,
+      font_size=input_size,
+      max_lines=most,
+      plain=true,
+      line=textarea_line,
+      color=t.p.text,
+      placeholder_color=t.p.subtle,
+      caret_color=t.p.accent,
+      enter_sends=false,
+    ).text
+  })
+  |> ignore
+  words
+}
+
+///|
+/// A textarea's lines (AutomaticDecisions.css.ts policyText: 1.6 of the words), and what its frame adds over them (7
+/// and 1 above and under).
+let textarea_line : Double = 22.4
+
+///|
+let textarea_in : Double = 16.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let textarea_box : @ui.Style = @ui.style(
+  w=Full,
+  px=S3,
+  py=S2,
+  radius=Xl,
+  bg=Surface,
+  border=B1,
+  border_color=Border,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let textarea_box_hot : @ui.Style = textarea_box.then(@ui.style(border_color=FieldHover))
 
 ///|
 /// What is typed in: as what is read (global.css.ts --text-input), on the line of a list's words.

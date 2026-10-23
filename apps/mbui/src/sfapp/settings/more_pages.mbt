@@ -270,6 +270,10 @@ let policy_forms : Map[String, String] = Map([])
 /// groups (to archive, to keep), each with how many chats the checks put there; a tap edits what it is on in a sheet
 /// (the core's draft `policyForm`): the words, an option (with the chats it got), a new option.
 fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit {
+  // the desktop's: the web's (web_decisions.mbt)
+  if wide.val {
+    return policy_page_wide(c, core, here, station)
+  }
   let t = @sf.theme()
   let s = station_of(core, here, station)
   let view = if flag(s, "online") { field(field(s, "overview"), "automaticDecisions") } else { None }
