@@ -203,6 +203,10 @@ export const netPanel = style([popover, panelCard, {
 }]);
 export const netHead = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textBody, lineHeight: vars.leadingBody });
 globalStyle(`${netHead} > b`, { fontWeight: "600", fontVariantNumeric: "tabular-nums" });
+export const netCopy = style({
+  justifySelf: "start", padding: "0", border: "0", background: "none", color: vars.muted, font: "inherit", cursor: "pointer",
+  selectors: { "&:hover": { color: vars.text } },
+});
 export const netHeadMark = style({ display: "inline-grid", color: vars.muted, selectors: levels });
 export const netRows = style({
   display: "grid", gap: "4px", margin: "0", paddingTop: "10px",

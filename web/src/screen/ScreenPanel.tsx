@@ -8,11 +8,12 @@ import type { ScreenScale, ScreenViewState, StationNet } from "../core/shapes.ts
 import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, TextSize, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { t } from "../i18n.ts";
-import type { Quality } from "./frames.ts";
+import type { DecodeStats, Quality } from "./frames.ts";
 import * as css from "./ScreenViewer.css.ts";
 
-/** What came of the view so far: frames and their bytes (counted as they come; read each second while shown). */
-export type Meter = { frames: number; bytes: number };
+/** What came of the view so far: frames and their bytes (counted as they come; read each second while shown), and how
+ * the page's decoder goes. */
+export type Meter = { frames: number; bytes: number; decode?: () => DecodeStats };
 
 /** A key sent with modifiers (bit 0 Alt, 1 Ctrl, 2 Meta, 3 Shift: input.ts), as the screen's system names it. */
 export type Combo = { name: string; keys: string; key: string; code: string; mods: number };
@@ -72,10 +73,15 @@ export function NetChip({ net, shown, meter, os }: { net: StationNet | null; sho
   const rate = useRate(meter, open);
   const since = useSince();
   const level = net?.rtt?.level;
+  // Read again each second while open (the rate's ticks draw it anew).
+  const decode = open ? meter.current.decode?.() : undefined;
+  const [copied, setCopied] = useState(false);
   const groups: [string, ReactNode][][] = [
     [
       [t("web-pages.screen.stat.frameLatency"), shown?.latency ? `${shown.latency.frame} ms` : "—"],
       [t("web-pages.screen.stat.beforeSent"), shown?.latency ? `${shown.latency.before} ms` : "—"],
+      [t("web-pages.screen.stat.decode"), decode?.ms != null
+        ? <>{decode.ms} ms{decode.held > 0 && <span className={css.figure} data-level="amber">{` · ${t("web-pages.screen.stat.held", { count: decode.held })}`}</span>}</> : "—"],
       [t("web-pages.screen.stat.fps"), rate ? String(Math.round(rate.fps)) : "—"],
       [t("web-pages.screen.stat.bitrate"), rate ? bitrate(rate.bps) : "—"],
       [t("web-pages.screen.stat.loss"), net?.loss ? <span className={css.figure} data-level={net.loss.level}>{net.loss.text}</span> : "0%"],
@@ -112,6 +118,15 @@ export function NetChip({ net, shown, meter, os }: { net: StationNet | null; sho
               {group.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
             </dl>
           ))}
+          <button type="button" className={css.netCopy} onClick={() => {
+            // Everything above as figures (no screen, no names), for a report.
+            const said = {
+              rtt: net?.rtt?.text, loss: net?.loss?.text ?? "0%", path: net?.path, system: os, fps: rate ? Math.round(rate.fps) : null,
+              bps: rate ? Math.round(rate.bps) : null, picture: shown?.width ? `${shown.width}x${shown.height}` : null, codec: shown?.codec,
+              latency: shown?.latency ?? null, video: shown?.video ?? null, decode: decode ?? null, agent: navigator.userAgent,
+            };
+            void navigator.clipboard?.writeText(JSON.stringify(said)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }, () => {});
+          }}>{t(copied ? "web-pages.screen.stat.copied" : "web-pages.screen.stat.copy")}</button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

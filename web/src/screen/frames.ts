@@ -6,7 +6,10 @@
 
 export type Codec = "h265" | "h264" | "jpeg";
 
-/** An H.265 decoder failed before it drew anything (said to play it, it did not): H.264 from then on, on this page. */
+/**
+ * An H.265 decoder failed before it drew anything (said to play it, it did not), or held frames back as the view began:
+ * H.264 from then on, on this page.
+ */
 let h265Failed = false;
 
 /** Whether WebCodecs plays this codec here (with the hardware where the browser has it). */
@@ -83,6 +86,18 @@ export interface FramesHooks {
   unplayable?(): void;
 }
 
+/**
+ * A decoded frame not out after this long, with no frame after it given to the decoder (the screen still): held back
+ * until the next comes (some decoders keep one), so every change on the screen shows a step late.
+ */
+const HELD_MS = 500;
+/** H.265 held back this many times while a view's first frames come: it is opened again in H.264. */
+const HELD_TO_FALL_BACK = 2;
+const FIRST_FRAMES = 120;
+
+/** How the page's decoder goes: how long a frame takes in it (the median of the latest), and how often it held one back. */
+export type DecodeStats = { ms: number | null; held: number; frames: number };
+
 /** Draws a view's frames on `canvas` as they come, in the order they come. `close` when the view is gone. */
 export class ScreenFrames {
   readonly #canvas: HTMLCanvasElement;
@@ -101,6 +116,12 @@ export class ScreenFrames {
   /** A frame came out of a decoder of this view's. */
   #played = false;
   #size = { width: 0, height: 0 };
+  /** The frames given to the decoder and not out of it yet: when each went in. */
+  readonly #inside = new Map<number, number>();
+  /** How long the latest frames took in the decoder; how many it held back; how many went in. */
+  #decodeMs: number[] = [];
+  #held = 0;
+  #decoded = 0;
 
   constructor(canvas: HTMLCanvasElement, hooks: FramesHooks) {
     this.#canvas = canvas;
@@ -131,9 +152,33 @@ export class ScreenFrames {
     try {
       this.#decoder!.decode(new EncodedVideoChunk({ type: head.key ? "key" : "delta", timestamp: head.ts, data: bytes }));
       this.#needKey = false;
+      this.#watch(head.ts);
     } catch {
       this.#lost();
     }
+  }
+
+  /** How the decoder goes (the statistics' 解码). */
+  stats(): DecodeStats {
+    const xs = [...this.#decodeMs].sort((a, b) => a - b);
+    return { ms: xs.length ? Math.round(xs[Math.floor(xs.length / 2)]!) : null, held: this.#held, frames: this.#decoded };
+  }
+
+  /** A frame went into the decoder: held back if it is not out HELD_MS on while none went in after it. */
+  #watch(ts: number): void {
+    this.#inside.set(ts, performance.now());
+    this.#decoded++;
+    const decoder = this.#decoder;
+    setTimeout(() => {
+      if (this.#closed || decoder !== this.#decoder || !this.#inside.has(ts) || [...this.#inside.keys()].some((t) => t > ts)) return;
+      this.#held++;
+      // H.265 that holds frames back while the view starts: H.264, which this decoder gives out at once, instead.
+      if (this.#config?.codec === "h265" && this.#held >= HELD_TO_FALL_BACK && this.#decoded <= FIRST_FRAMES) {
+        h265Failed = true;
+        this.#dropDecoder();
+        this.#hooks.unplayable?.();
+      }
+    }, HELD_MS);
   }
 
   close(): void {
@@ -148,6 +193,9 @@ export class ScreenFrames {
         if (this.#closed || decoder !== this.#decoder) { frame.close(); return; }
         this.#played = true;
         const ts = frame.timestamp;
+        const at = this.#inside.get(ts);
+        for (const t of [...this.#inside.keys()]) if (t <= ts) this.#inside.delete(t);
+        if (at !== undefined) this.#decodeMs = [...this.#decodeMs.slice(-59), performance.now() - at];
         this.#draw(frame, frame.displayWidth, frame.displayHeight);
         frame.close();
         this.#hooks.ack(ts);
@@ -172,6 +220,7 @@ export class ScreenFrames {
   }
 
   #dropDecoder(): void {
+    this.#inside.clear();
     const d = this.#decoder;
     this.#decoder = null;
     if (d && d.state !== "closed") d.close();

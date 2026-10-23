@@ -190,10 +190,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
     setFailure(null);
     const abort = new AbortController();
     let open = true;
-    const frames = new ScreenFrames(c, {
+    const frames: ScreenFrames = new ScreenFrames(c, {
       ack: (ts) => tell("screen.ack", { view: name, ts }),
       keyframe: () => tell("screen.keyframe", { view: name }),
-      // H.265 said to play here and did not: opened again, H.264 now.
+      // H.265 said to play here and did not (or held frames back): opened again, H.264 now.
       unplayable: () => { if (open) setAttempt((n) => n + 1); },
       drawn: (width, height) => {
         // Another size of frame: fitted again.
@@ -203,6 +203,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
         setDrawn(true);
       },
     });
+    meter.current.decode = () => frames.stats();
     // A copy made on the screen: on this device's clipboard at once where the browser lets it, else offered.
     const copiedThere = (clip: Clip) => {
       putClip(clip).then(() => { if (open) { setCopied(null); toastRef.current(t("web-pages.screen.copied")); } }, () => { if (open) setCopied(clip); });
