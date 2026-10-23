@@ -154,3 +154,73 @@ test "words sent are seen every frame from the field to their bubble: not gone t
   }
   assert_true(send_flight.val is None)
 }
+
+///|
+test "the core's row joined to the viewer's last as the words fly: the rows above go on up with them, never put up at once" {
+  // as the core says it (views.ts drawn): words sent soon after the viewer's last are joined to it, its time going
+  // under them; what was sent from here is drawn apart (LocalSent) until the core has it, a frame or two later
+  let has = Ref::new(false)
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    match (name, tp.value) {
+      ("chat", Some(Object(m))) => {
+        let v = m.copy()
+        let messages = match m.get("messages") {
+          Some(Array(a)) => a.copy()
+          _ => []
+        }
+        let mine : Map[String, Json] = { "mine": true, "author": "lin@example.com" }
+        if has.val {
+          mine["followed"] = true
+          v["outbox"] = [
+            {
+              "id": "out-1",
+              "text": "看看怎么回事",
+              "attachments": [],
+              "quotes": [],
+              "createdAt": 0,
+              "state": "sending",
+              "joined": true,
+            },
+          ]
+        }
+        messages.push(msg(12, "person", by_person("林"), "先看一下列表", "刚刚", mine))
+        v["messages"] = Json::array(messages)
+        { ..tp, value: Some(Json::object(v)), version: if has.val { 2 } else { 1 } }
+      }
+      _ => tp
+    }
+  })
+  t.tap_text("发消息")
+  t.type_text("看看怎么回事")
+  t.draw()
+  let (_, was) = seen_once(t, "先看一下列表")
+  tap_send(t)
+  t.draw()
+  // the core has it: its row, joined, shorter than what was sent from here (and the one before without its time)
+  has.val = true
+  t.frame()
+  let lands = match send_flight.val {
+    Some(f) => {
+      assert_true(f.key == "o:out-1")
+      f.way.ends()
+    }
+    None => fail("nothing flies")
+  }
+  let (_, y) = seen_once(t, "先看一下列表")
+  assert_true((y - was).abs() < 0.5, msg="put up at once: \{was} → \{y}")
+  // every frame on the words' way, up from where it was to where it is at the end, never past it nor back down
+  let ys = [y]
+  while t.time() < lands + 50.0 {
+    t.frame()
+    ys.push(seen_once(t, "先看一下列表").1)
+  }
+  let end = ys[ys.length() - 1]
+  assert_true(end < was - 10.0)
+  for i, y in ys {
+    assert_true(y >= end - 0.5, msg="past its place at frame \{i}: \{y} < \{end}")
+    if i > 0 {
+      assert_true(y <= ys[i - 1] + 0.5, msg="back down at frame \{i}: \{ys[i - 1]} → \{y}")
+    }
+  }
+}
