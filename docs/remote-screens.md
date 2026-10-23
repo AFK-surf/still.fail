@@ -218,14 +218,14 @@ asks the browser's full screen and, where it lets a page, to turn sideways. The 
 corner (the letterbox, for a screen wider than the phone).
 
 With a mouse (the desktop app, the web on a computer) the viewer's bar is always there and the picture is fitted below
-it, so the top of the screen (its windows' title bars) is never under it. Its line says how the view goes: 只看/控制, who
-else is on it, and this device's way to the station as the `stationNet` view says it (直连 or the relay, the round trip,
-packets lost). Its panel (web/src/screen/ScreenPanel.tsx) holds 画质, the picture's bounds this device asks for
-(`prefs.screenQuality`: 自动 as the window is, 流畅 1280×720, 高清 1920×1080, 原画 the screen's own size; another opens
-the view again), 组合键 while driving (the keys this device's system keeps for itself, as the station's system names
-them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del cannot be sent, Windows keeps it from
-any app), 全屏, and the view's figures (the way and round trip, frames and bits a second as they came, the picture's size
-and codec). 在新窗口打开 moves the view to a window of its own (`?window`: back closes it).
+it, so the top of the screen (its windows' title bars) is never under it. Its line says 只看/控制 and who else is on it.
+Beside 只看/控制 (web/src/screen/ScreenPanel.tsx), as a remote desktop's window has them: a signal mark with this
+device's round trip to the station (the `stationNet` view, in its colour), which opens the view's figures (frames and
+bits a second as they came, packets lost, the way, the picture's size and codec); and 控制中心, a menu: 画质, the
+picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is, 流畅 1280×720, 高清 1920×1080, 原画
+the screen's own size; another opens the view again), 组合键 while driving (the keys this device's system keeps for
+itself, as the station's system names them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del
+cannot be sent, Windows keeps it from any app), sending files, a window of its own, 全屏 and 断开. 在新窗口打开 moves the view to a window of its own (`?window`: back closes it).
 
 ### Asking a person to take over
 
