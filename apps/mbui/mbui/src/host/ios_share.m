@@ -12,6 +12,8 @@
 @interface MBShareController : UIViewController
 @property(nonatomic, strong) UILabel *said;
 @property(nonatomic, strong) UIButton *done;
+// what became of it: 0 being kept, 1 kept, -1 not
+@property(nonatomic) int state;
 @end
 
 static NSString *words(NSString *key, NSString *otherwise) {
@@ -51,7 +53,6 @@ static BOOL heic_as_jpeg(NSURL *from, NSURL *to) {
   [super viewDidLoad];
   self.view.backgroundColor = UIColor.systemBackgroundColor;
   self.said = [UILabel new];
-  self.said.text = words(@"MBUIShareTaking", @"…");
   self.said.numberOfLines = 0;
   self.said.textAlignment = NSTextAlignmentCenter;
   self.said.font = [UIFont systemFontOfSize:17];
@@ -59,9 +60,9 @@ static BOOL heic_as_jpeg(NSURL *from, NSURL *to) {
   self.done = [UIButton buttonWithType:UIButtonTypeSystem];
   [self.done setTitle:words(@"MBUIShareDone", @"OK") forState:UIControlStateNormal];
   self.done.titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
-  self.done.enabled = NO;
   self.done.translatesAutoresizingMaskIntoConstraints = NO;
   [self.done addTarget:self action:@selector(finish) forControlEvents:UIControlEventTouchUpInside];
+  [self show];
   [self.view addSubview:self.said];
   [self.view addSubview:self.done];
   UILayoutGuide *g = self.view.safeAreaLayoutGuide;
@@ -72,7 +73,19 @@ static BOOL heic_as_jpeg(NSURL *from, NSURL *to) {
     [self.done.topAnchor constraintEqualToAnchor:self.said.bottomAnchor constant:24],
     [self.done.centerXAnchor constraintEqualToAnchor:g.centerXAnchor],
   ]];
+}
+
+// The request, as the system hands it over (before the view is shown, or with none): what is shared kept now.
+- (void)beginRequestWithExtensionContext:(NSExtensionContext *)context {
+  [super beginRequestWithExtensionContext:context];
   [self take];
+}
+
+- (void)show {
+  self.said.text = self.state == 0 ? words(@"MBUIShareTaking", @"…")
+                   : self.state > 0 ? words(@"MBUIShareTaken", @"OK")
+                                    : words(@"MBUIShareFailed", @"—");
+  self.done.enabled = self.state != 0;
 }
 
 - (void)finish {
@@ -81,8 +94,8 @@ static BOOL heic_as_jpeg(NSURL *from, NSURL *to) {
 
 - (void)told:(BOOL)ok {
   dispatch_async(dispatch_get_main_queue(), ^{
-    self.said.text = ok ? words(@"MBUIShareTaken", @"OK") : words(@"MBUIShareFailed", @"—");
-    self.done.enabled = YES;
+    self.state = ok ? 1 : -1;
+    if (self.isViewLoaded) [self show];
   });
 }
 
