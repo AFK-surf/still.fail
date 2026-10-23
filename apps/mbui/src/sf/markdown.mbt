@@ -1009,7 +1009,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           padx=7.0,
           gap=4.0,
           align=ACenter,
-          radius=@ui.concentric(block_radius, key_inset),
+          radius=inner_corner(block_radius, key_inset),
           bg=alpha(t.p.canvas, 0.8),
           id~,
           fn() {
@@ -1030,7 +1030,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
             )
             |> ignore
             // Markdown.kt: clip(Smooth(concentric(12, 4))).clickable
-            @motion.ripple(c, id, @ui.concentric(block_radius, key_inset))
+            @motion.ripple(c, id, inner_corner(block_radius, key_inset))
           },
         )
         |> ignore
@@ -1307,4 +1307,4 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
 
 ///|
 /// The table head's tint's corner: concentric with the table's frame (20), 1 in from its edge.
-let table_head_radius : Double = @ui.concentric(20.0, 1.0)
+let table_head_radius : Double = inner_corner(20.0, 1.0)

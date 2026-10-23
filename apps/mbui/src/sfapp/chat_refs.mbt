@@ -555,7 +555,7 @@ fn chat_ref_menu(c : @ui.Ctx, src : Source, d : Draft, station : String, here : 
                   c.text(item.ago, style=ref_menu_ago) |> ignore
                 }
                 // Composer.kt ChatRefMenu: clip(Smooth(concentric(ComposerCorner, 12))).clickable
-                @motion.ripple(c, id, composer_corner - 12.0 / @sf.smooth_scale)
+                @motion.ripple(c, id, @sf.inner_corner(composer_corner, 12.0))
               })
               |> ignore
             }

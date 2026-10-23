@@ -101,7 +101,7 @@ let info_row_radius : Double = 14.0
 ///|
 /// An info card round its rows, INFO_PAD (6.dp) in: Android ChatInfo.kt InfoList, Smooth(concentricOut(INFO_ROW,
 /// INFO_PAD)).
-let info_list_radius : Double = @sf.concentric_out(info_row_radius, 6.0)
+let info_list_radius : Double = @sf.surface_corner(6.0, info_row_radius)
 
 ///|
 /// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows INFO_PAD (6) in, the ink at 5%.

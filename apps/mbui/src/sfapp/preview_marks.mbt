@@ -1168,7 +1168,7 @@ let note_box_corner : Double = 26.0
 
 ///|
 /// The bars' corner over a picture (ImageMarks.kt PictureBar: concentric out of a key's 12 by the bar's 6).
-let picture_bar_corner : Double = @sf.concentric_out(picture_key, 6.0)
+let picture_bar_corner : Double = @sf.surface_corner(6.0, picture_key)
 
 ///|
 /// Between the tools' groups (ImageMarks.kt Gap): a line 1 by 18, white at 10%, 4 either side.

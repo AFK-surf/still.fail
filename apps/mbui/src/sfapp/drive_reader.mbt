@@ -1135,7 +1135,7 @@ fn reader_text_key(c : @ui.Ctx, key : String, label : String, p : PaperInk, on :
     padx=12.0,
     pady=6.0,
     // (上一章 and 下一章 stand in the bar's top corners: as far from both edges, concentric with it)
-    radius=@ui.concentric(reader_bar_radius, reader_bar_inset),
+    radius=@sf.inner_corner(reader_bar_radius, reader_bar_inset),
     bg=@sf.alpha(p.ink, if on { 0.07 } else { 0.04 }),
     id=if on { id } else { 0 },
     fn() {
@@ -1143,7 +1143,7 @@ fn reader_text_key(c : @ui.Ctx, key : String, label : String, p : PaperInk, on :
       |> ignore
       // Reader.kt: clip(Smooth(concentric(BAR_CORNER, BAR_PAD))).clickable
       if on {
-        @motion.ripple(c, id, @ui.concentric(reader_bar_radius, reader_bar_inset))
+        @motion.ripple(c, id, @sf.inner_corner(reader_bar_radius, reader_bar_inset))
       }
     },
   )
@@ -1166,7 +1166,7 @@ fn reader_tool(c : @ui.Ctx, key : String, icon : String, label : String, p : Pap
       @sf.icon(c, icon, size=20.0, color=p.ink) |> ignore
       c.text(label, size=11.0, color=p.muted, wrap=false) |> ignore
       // Reader.kt: a tool, clip(Smooth(concentric(BAR_CORNER, BAR_PAD))).clickable
-      @motion.ripple(c, id, @ui.concentric(reader_bar_radius, reader_bar_inset))
+      @motion.ripple(c, id, @sf.inner_corner(reader_bar_radius, reader_bar_inset))
     },
   )
   |> ignore

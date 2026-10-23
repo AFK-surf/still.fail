@@ -359,7 +359,7 @@ fn controls(
       let speed_key = c.box(
         h=Px(speed_h),
         min_w=44.0,
-        radius=if speed_last { @ui.concentric(bar_radius, speed_inset) } else { speed_corner },
+        radius=if speed_last { @sf.inner_corner(bar_radius, speed_inset) } else { speed_corner },
         padx=8.0,
         bg=if p.speed() != 1.0 { 0xFFFFFF24L } else { 0xFFFFFF0FL },
         align=ACenter,
@@ -369,7 +369,7 @@ fn controls(
           c.text(speed_label(p.speed()), size=12.0, weight=600, color=ink, wrap=false) |> ignore
           // Player.kt SpeedKey: clickable over its clip
           if on {
-            @motion.ripple(c, sid, if speed_last { @ui.concentric(bar_radius, speed_inset) } else { speed_corner })
+            @motion.ripple(c, sid, if speed_last { @sf.inner_corner(bar_radius, speed_inset) } else { speed_corner })
           }
         },
       )

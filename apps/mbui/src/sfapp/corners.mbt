@@ -253,7 +253,7 @@ fn recent_panel(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
         c.text(tr("android-misc.wide.all"), style=recent_all_words) |> ignore
         @sf.icon(c, "chevron-right", size=16.0, color=@sf.theme().p.accent_text) |> ignore
         // Wide.kt Recent: 全部 clickable over its clip, Smooth(concentric(PANEL_PAD + 16, PANEL_PAD))
-        @motion.ripple(c, id, 22.0 - 6.0 / @sf.smooth_scale)
+        @motion.ripple(c, id, @sf.inner_corner(22.0, 6.0))
       })
       |> ignore
     })

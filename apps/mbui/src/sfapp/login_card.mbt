@@ -360,7 +360,7 @@ fn login_step_button(c : @ui.Ctx, key : String, label : String, solid : Bool, bu
         @sf.icon(c, "arrow-up-right", size=16.0, color=ink) |> ignore
       }
       // LoginCards.kt StepButton: its ripple in its words' colour, STEP_CORNER (concentric(CARD_CORNER, CARD_PAD))
-      @motion.ripple(c, id, 22.0 - 8.0 / @sf.smooth_scale, ink=@sf.alpha(ink, 0.1))
+      @motion.ripple(c, id, @sf.inner_corner(22.0, 8.0), ink=@sf.alpha(ink, 0.1))
     })
     |> ignore
   })
@@ -572,7 +572,7 @@ fn login_paste_steps(c : @ui.Ctx, src : Source, station : String, l : Json?) -> 
             c.text(tr("web-main.logins.finish"), style=login_finish_words) |> ignore
           }
           // LoginCards.kt: 完成 in the page's colour, the step's corner less 6
-          @motion.ripple(c, go, 22.0 - 8.0 / @sf.smooth_scale - 6.0, ink=@sf.alpha(t.p.bg, 0.1))
+          @motion.ripple(c, go, @sf.inner_corner(22.0, 8.0) - 6.0, ink=@sf.alpha(t.p.bg, 0.1))
         })
         |> ignore
       }

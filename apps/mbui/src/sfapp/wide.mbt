@@ -345,7 +345,7 @@ fn dock(
         dir=Row,
         w=Px(dmax(0.0, right - left)),
         h=Fill(1.0),
-        radius=@ui.concentric_out(rail_ground_r, closed_bar_in) * e,
+        radius=@sf.surface_corner(closed_bar_in, rail_ground_r) * e,
         bg=@sf.mix(closed_ground(), e, t.p.sidebar),
         border=closed_line,
         border_color=@sf.alpha(t.p.line, e),

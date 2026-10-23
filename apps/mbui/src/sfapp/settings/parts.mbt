@@ -1119,7 +1119,7 @@ fn seg(
       c.box(
         w=Px(w),
         h=Px(h),
-        radius=@ui.concentric(radius, inset),
+        radius=@sf.inner_corner(radius, inset),
         bg=thumb,
         border=0.5,
         border_color=t.p.line,

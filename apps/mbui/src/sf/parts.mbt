@@ -338,7 +338,7 @@ pub fn menu_item(
     gap=if panel { panel_row_gap } else { menu_row_gap },
     align=ACenter,
     bg=if c.hovered(id) { t.p.hover } else { 0L },
-    radius=@ui.concentric(r_menu, panel_pad),
+    radius=small_panel_inner(r_menu),
     id~,
     fn() {
       if panel && (icon != "" || word != "") {
@@ -762,7 +762,7 @@ pub fn menu_row(
     pady=7.0,
     gap=if chooser { chooser_gap } else { menu_gap },
     align=ACenter,
-    radius=@ui.concentric(20.0, 6.0),
+    radius=small_panel_inner(r_menu),
     bg=if s.hot { t.p.hover } else { 0L },
     fn() {
       if chooser {
@@ -1373,7 +1373,7 @@ pub fn select(
       c.box(
         style=select_item,
         min_h=menu_row_min,
-        radius=@ui.concentric(r_menu, panel_pad),
+        radius=small_panel_inner(r_menu),
         bg=if s.hot { t.p.hover } else { no_ground },
         fn() {
         c.text(s.entry.label, style=menu_words) |> ignore

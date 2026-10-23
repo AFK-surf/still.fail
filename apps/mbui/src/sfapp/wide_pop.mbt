@@ -328,7 +328,7 @@ fn attention_item(
   let ink = if kind == "alert" { t.p.red } else { t.p.warn_ink }
   let b = c.box(
     style=att_item,
-    radius=@ui.concentric(@sf.r_menu, @sf.panel_pad),
+    radius=@sf.small_panel_inner(@sf.r_menu),
     bg=if hover { t.p.hover } else { 0L },
     id~,
     fn() {
