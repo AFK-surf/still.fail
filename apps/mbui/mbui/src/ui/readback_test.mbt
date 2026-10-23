@@ -278,3 +278,30 @@ test "what is built from a list's end alone is built again as it gets there, not
   assert_true(t.rect_of("at its end") is Some(_))
   assert_eq(seen.values().filter(fn(n) { n > 1 }).count(), 1)
 }
+
+///|
+test "words kept on a row dragged that nothing reads are built once a frame" {
+  let seen : Map[Int, Int] = {}
+  let t = @ui.Tester::new(
+    fn(c) {
+      builds_a_frame(seen, c)
+      c.list("rows", 60, 40.0, fn(i) {
+        let b = c.box(w=Fill(1.0), h=Px(40.0), fn() { c.rich([@ui.plain("row \{i}")], size=10.0) |> ignore })
+        // (as a message's under a finger is kept, for a long press to pick from)
+        if i == 3 {
+          c.words(b, "w")
+        }
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=300.0,
+  )
+  seen.clear()
+  // the row moves with the list, in view all the way
+  t.drag(100.0, 280.0, 100.0, 200.0, steps=4)
+  assert_true(t.ctx().words_of("w") is Some(_))
+  for f, n in seen {
+    assert_eq((f, n), (f, 1))
+  }
+}

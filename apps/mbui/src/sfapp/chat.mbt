@@ -751,8 +751,8 @@ fn messages(
       _ => ()
     }
     // (read back by what the page builds from it: not at every step of a scroll, which changes none of that)
-    let asks_shown = !(v.archived || v.thread is None) && v.asks.length() > 0
-    let info = c.list_info_as(key, fn(i) { list_made(i, n, asks_shown) })
+    let ask_rows = ask_rows_of(v, list)
+    let info = c.list_info_as(key, fn(i) { list_made(i, n, ask_rows) })
     // near the top: the page before comes in, once per page
     match (info, v.thread) {
       (Some(i), Some(thread)) if v.more && rd.placed && i.first >= 0 && i.first <= 3 => {
@@ -848,7 +848,7 @@ fn messages(
     }
     jump_to_latest(c, src, r, v, rd, away || v.newer)
     // what waits to be decided and does not show: a bell over the way to the end (Chat.kt JumpToAsk)
-    rd.ask = jump_to_ask(c, r, v, list, info, away || v.newer)
+    rd.ask = jump_to_ask(c, r, v, ask_rows, info, away || v.newer)
     // the avatar flying out of an activity to its message and back, over the list
     emit_flyer(c, ek, em, v)
     chat_bench(c, key, rd, v.more, n)
@@ -1164,19 +1164,20 @@ fn sent_local_gone(rk : String, key : String) -> Unit {
 
 ///|
 /// What the chat's page builds from where its list is (messages): whether it is laid out, near its top (the page
-/// before asked for) or its end (the page after), at its end, away from it (the way to the newest), and, while asks
-/// wait, the rows in view (the bell over them). A scroll changing none of that builds nothing again.
+/// before asked for) or its end (the page after), at its end, away from it (the way to the newest), and whether the
+/// asks waiting are all in view (the bell over the way to the end, jump_to_ask). A scroll changing none of that builds
+/// nothing again.
 priv struct ListMade {
   laid : Bool
   near_top : Bool
   near_end : Bool
   at_end : Bool
   away : Bool
-  rows : (Int, Int)
+  asks_seen : Bool
 } derive(Eq)
 
 ///|
-fn list_made(info : @ui.ListInfo?, n : Int, asks : Bool) -> ListMade {
+fn list_made(info : @ui.ListInfo?, n : Int, ask_rows : Array[Int]) -> ListMade {
   match info {
     Some(i) =>
       {
@@ -1185,10 +1186,42 @@ fn list_made(info : @ui.ListInfo?, n : Int, asks : Bool) -> ListMade {
         near_end: i.last >= n - 4,
         at_end: i.at_end,
         away: i.first >= 0 && i.below > 120.0 && !i.gliding,
-        rows: if asks { (i.first, i.last) } else { (0, 0) },
+        asks_seen: asks_in_view(ask_rows, info),
       }
-    None => { laid: false, near_top: false, near_end: false, at_end: false, away: false, rows: (0, 0) }
+    None => { laid: false, near_top: false, near_end: false, at_end: false, away: false, asks_seen: false }
   }
+}
+
+///|
+/// The rows of the asks waiting in the chat (its cards to decide; none in a chat archived or not made yet): -1 for one
+/// not in the list.
+fn ask_rows_of(v : ChatView, list : Array[Entry]) -> Array[Int] {
+  let asks = if v.archived || v.thread is None { [] } else { v.asks }
+  asks.map(fn(seq) {
+    let mut at = -1
+    for i, e in list {
+      match e {
+        Said(m) if m.seq == seq => {
+          at = i
+          break
+        }
+        _ => ()
+      }
+    }
+    at
+  })
+}
+
+///|
+/// Whether there are asks waiting and every one is in view.
+fn asks_in_view(ask_rows : Array[Int], info : @ui.ListInfo?) -> Bool {
+  ask_rows.length() > 0 &&
+  ask_rows.iter().all(fn(at) {
+    match info {
+      Some(i) => at >= 0 && at >= i.first && at <= i.last
+      None => false
+    }
+  })
 }
 
 ///|
@@ -1828,30 +1861,13 @@ fn jump_to_ask(
   c : @ui.Ctx,
   r : ChatRef,
   v : ChatView,
-  list : Array[Entry],
+  ask_rows : Array[Int],
   info : @ui.ListInfo?,
   to_end : Bool,
 ) -> Bool {
   let t = @sf.theme()
   let asks = if v.archived || v.thread is None { [] } else { v.asks }
-  let in_view = asks.length() > 0 &&
-    asks.iter().all(fn(seq) {
-      let mut at = -1
-      for i, e in list {
-        match e {
-          Said(m) if m.seq == seq => {
-            at = i
-            break
-          }
-          _ => ()
-        }
-      }
-      match info {
-        Some(i) => at >= 0 && at >= i.first && at <= i.last
-        None => false
-      }
-    })
-  let shown = asks.length() > 0 && !in_view
+  let shown = asks.length() > 0 && !asks_in_view(ask_rows, info)
   let look = match
     @motion.presence(
       c,
