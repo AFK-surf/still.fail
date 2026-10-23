@@ -56,7 +56,7 @@ fn fpane_reset() -> Unit {
 ///|
 /// The row chosen, when it is in this side's folder or under it: the folder it is in and its entry as listed there.
 fn fpane_chosen(src : Source, at : DriveAt, root : String) -> (String, DvEntry, Array[DvEntry])? {
-  let parts = wide.files_chosen.split("\u{1}").map(fn(p) { p.to_string() }).collect()
+  let parts = files_chosen_now().split("\u{1}").map(fn(p) { p.to_string() }).collect()
   if parts.length() != 3 || parts[0] != at.station || parts[1] != root {
     return None
   }
@@ -159,9 +159,10 @@ fn fpane_read(src : Source, station : String, root : String, path : String, e : 
 
 ///|
 /// The preview beside a side's list (DrivePane): the row chosen in it, else what to do to see one.
-fn files_preview_pane(c : @ui.Ctx, src : Source, st : DvStation, at : DriveAt, root : String) -> Unit {
-  c.box(style=files_column_rule, fn() {  }) |> ignore
-  c.box(style=fpane_box, fn() {
+fn files_preview_pane(c : @ui.Ctx, src : Source, st : DvStation, at : DriveAt, root : String, below? : Bool = false) -> Unit {
+  // (under the list in a chat's 文件 tab: as wide as it, at most half the window high)
+  c.box(style=if below { files_bar_rule } else { files_column_rule }, fn() {  }) |> ignore
+  c.box(style=if below { fpane_below } else { fpane_box }, fn() {
     match fpane_chosen(src, at, root) {
       None => c.text(tr("web-pages.files.previewNone"), style=fpane_none) |> ignore
       Some((dir, e, shown)) => {
@@ -171,7 +172,7 @@ fn files_preview_pane(c : @ui.Ctx, src : Source, st : DvStation, at : DriveAt, r
         let way = fpane_way(e)
         fpane_read(src, at.station, root, path, e, way)
         let open = fn() { drive_open(c, src, in_place, root, e, shown) }
-        fpane_body(c, e, way, open)
+        fpane_body(c, e, way, open, room=c.height * (if below { fpane_below_tall } else { fpane_most_tall }), fixed=below)
         c.box(style=fpane_about, fn() {
           c.text(e.name, style=fpane_name) |> ignore
           // what it is, as a grid of two columns: what is said, then its value
@@ -226,9 +227,8 @@ fn files_preview_pane(c : @ui.Ctx, src : Source, st : DvStation, at : DriveAt, r
 ///|
 /// What the file is, shown as it can be here (DrivePane.tsx Body): its picture, its text's start, else its kind's mark
 /// and how to open it (pressed, it opens).
-fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit) -> Unit {
+fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ : Double, fixed? : Bool = false) -> Unit {
   let t = @sf.theme()
-  let room = c.height * fpane_most_tall
   if fpane.failed {
     c.box(style=fpane_body_box, fn() { c.text(tr("web-pages.files.previewFailed"), style=fpane_none) |> ignore })
     |> ignore
@@ -253,7 +253,8 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit) -> Unit
         None => c.box(style=fpane_picture_box, fn() { c.box(style=fpane_waiting, fn() {  }) |> ignore }) |> ignore
         Some(words) => {
           let cut = e.size > fpane_text_part.to_double()
-          c.box(style=fpane_text_box.then(@ui.style(max_h=Fixed(room))), fn() {
+          // (as tall as the pane has room for, at most `room`; under a list, `room` itself)
+          c.box(style=fpane_text_box.then(if fixed { @ui.style(h=Fixed(room)) } else { @ui.style(max_h=Fixed(room)) }), fn() {
             if e.kind == "markdown" {
               c.list("files/preview/text", 1, room, fn(_) {
                 c.box(style=fpane_prose, fn() {
@@ -311,6 +312,14 @@ let fpane_w : Double = 300.0
 
 ///|
 let fpane_inner : Double = 276.0
+
+///|
+/// Under a chat's 文件 tab's list (below: at most half the window, what it shows a quarter).
+let fpane_below_tall : Double = 0.25
+
+///|
+// kept across runs: a value (no field of it changes)
+let fpane_below : @ui.Style = @ui.style(w=Full, p=S3, gap=S3)
 
 ///|
 /// A picture or a text no taller than this much of the window (body: 60vh); a text as tall as the pane has room for

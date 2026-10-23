@@ -101,6 +101,10 @@ fn files_start(s : DvStation) -> String? {
 ///|
 /// A folder opened in the pane (the stack's page above the place, in place of what was open).
 fn files_go(at : DriveAt) -> Unit {
+  if ftab.building {
+    ftab_go(at.station, at.root.unwrap_or(""), at.path)
+    return
+  }
   wide.files_chosen = ""
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
@@ -1397,10 +1401,11 @@ fn files_list(
   front_it : () -> Unit,
   write? : Bool = false,
   transfers? : Bool = false,
+  compact? : Bool = false,
 ) -> Unit {
   let (entries, error) = files_entries(src, at.station, root, path)
-  // the files going up into it (UploadRow), over its rows
-  if depth == 0 {
+  // the files going up into it (UploadRow), over its rows (not a chat's 文件 tab's)
+  if depth == 0 && !compact {
     for u in dv.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == path }) {
       files_upload_row(c, src, u, entries.unwrap_or([]))
     }
@@ -1412,12 +1417,12 @@ fn files_list(
       c.box(style=files_note_box, fn() { c.text(tr("web-pages.drive.emptyFolder"), style=place_meta) |> ignore }) |> ignore
     (Some(list), _) => {
       // a list's heads (ListView): its order by a press on one, the one it is in marked
-      if !tree && depth == 0 {
+      if !tree && depth == 0 && !compact {
         files_heads(c, src)
       }
       for e in list {
         let full = dv_join(path, e.name)
-        let okey = "tree/" + at.station + "/" + root + "/" + full
+        let okey = files_owner() + "tree/" + at.station + "/" + root + "/" + full
         let open = tree && e.dir && wide.files_open.contains(okey)
         wide_row(
           c,
@@ -1439,9 +1444,10 @@ fn files_list(
           },
           write~,
           transfers~,
+          compact~,
         )
         if open {
-          files_list(c, src, at, root, full, depth + 1, true, front_it, write~, transfers~)
+          files_list(c, src, at, root, full, depth + 1, true, front_it, write~, transfers~, compact~)
         }
       }
     }
@@ -1490,8 +1496,9 @@ fn files_columns(
   front_it : () -> Unit,
   write? : Bool = false,
   transfers? : Bool = false,
+  halves? : Bool = false,
 ) -> Unit {
-  let ckey = at.station + "\u{1}" + root + "\u{1}" + at.path
+  let ckey = files_owner() + at.station + "\u{1}" + root + "\u{1}" + at.path
   let open = wide.files_cols.get(ckey).unwrap_or("")
   let parts = if open == "" { [] } else { open.split("/").map(fn(p) { p.to_string() }).collect() }
   let paths = [at.path]
@@ -1501,7 +1508,14 @@ fn files_columns(
     paths.push(so_far)
   }
   // the last ones the pane holds (each as wide as it is set, an edge after it)
-  let widths = paths.map(fn(p) { fcols_width(src, at.station + "\u{1}" + root + "\u{1}" + p) })
+  // (a chat's 文件 tab: two at a time, the one open and the one before it, halves of it)
+  let widths = paths.map(fn(p) {
+    if halves {
+      pane / 2.0 - fcols_edge_w
+    } else {
+      fcols_width(src, at.station + "\u{1}" + root + "\u{1}" + p)
+    }
+  })
   let mut from = paths.length() - 1
   let mut used = widths[from] + fcols_edge_w
   while from > 0 && used + widths[from - 1] + fcols_edge_w <= pane {
@@ -1531,7 +1545,7 @@ fn files_columns(
           (Some(list), _) =>
             for e in list {
               let along = next == Some(e.name)
-              wide_row(c, src, at, root, path, e, list, 0, None, front_it, fn() {  }, along~, column=true, write~, transfers~, open_beside=fn() {
+              wide_row(c, src, at, root, path, e, list, 0, None, front_it, fn() {  }, along~, column=true, compact=halves, write~, transfers~, open_beside=fn() {
                 // (what is opened under the column's folder: its way down from where the columns start)
                 let below = if at.path == "" {
                   dv_join(path, e.name)
@@ -1545,7 +1559,11 @@ fn files_columns(
       })
       |> ignore
       let names = files_entries(src, at.station, root, path).0.unwrap_or([]).map(fn(e) { (e.name, e.dir) })
-      files_column_edge(c, src, wkey, cid, widths[i], names)
+      if halves {
+        c.box(style=fcols_edge, fn() {  }) |> ignore
+      } else {
+        files_column_edge(c, src, wkey, cid, widths[i], names)
+      }
     }
   })
   |> ignore
@@ -1571,13 +1589,14 @@ fn wide_row(
   open_beside? : () -> Unit = fn() {  },
   write? : Bool = false,
   transfers? : Bool = false,
+  compact? : Bool = false,
 ) -> Unit {
   let t = @sf.theme()
   let rkey = at.station + "\u{1}" + root + "\u{1}" + dv_join(dir, e.name)
-  let id = c.id("files/row/" + rkey)
-  let did = c.id("files/row-open/" + rkey)
+  let id = c.id("files/row/" + files_owner() + rkey)
+  let did = c.id("files/row-open/" + files_owner() + rkey)
   c.cursor(id, Hand)
-  let chosen = wide.files_chosen == rkey
+  let chosen = files_chosen_now() == rkey
   let in_place : DriveAt = { station: at.station, root: Some(root), path: dir }
   // pressed, it may be dragged (wide_files_drag.mbt): what it carries
   let full = dv_join(dir, e.name)
@@ -1613,16 +1632,28 @@ fn wide_row(
     front_it()
   }
   // its menu (the drive's sheet of an entry: open, share, rename, move, delete…) from a right click, chosen
-  if c.right_clicked(id) is Some(_) {
-    wide.files_chosen = rkey
-    dv_open(c, Entry(in_place, e, shown.map(fn(x) { x.name })))
+  match c.right_clicked(id) {
+    Some((mx, my)) => {
+      files_choose(rkey)
+      if ftab.building {
+        // a chat's 文件 tab: its own menu (添加到消息, 复制路径, 下载, pin)
+        ftab_menu_at(at.station, root, full, e, mx, my)
+      } else {
+        dv_open(c, Entry(in_place, e, shown.map(fn(x) { x.name })))
+      }
+    }
+    None => ()
   }
   if c.clicked(did) {
     toggle()
   } else if c.double_clicked(id) {
-    drive_open(c, src, in_place, root, e, shown)
+    if ftab.building && e.dir {
+      ftab_go(at.station, root, full)
+    } else {
+      drive_open(c, src, in_place, root, e, shown)
+    }
   } else if c.clicked(id) {
-    wide.files_chosen = rkey
+    files_choose(rkey)
     if column && e.dir {
       open_beside()
     }
@@ -1644,8 +1675,10 @@ fn wide_row(
     if column && e.dir {
       @sf.icon(c, "chevron-right", size=files_icon, color=t.p.subtle) |> ignore
     }
-    // a list's and a tree's: its size and when it changed, in their columns
-    if !column {
+    // a list's and a tree's: its size and when it changed, in their columns (a chat's 文件 tab: its size alone)
+    if compact && !e.dir {
+      c.box(style=files_size_cell, fn() { c.text(e.size_text, style=files_cell_words) |> ignore }) |> ignore
+    } else if !column && !compact {
       c.box(style=files_size_cell, fn() { c.text(e.size_text, style=files_cell_words) |> ignore }) |> ignore
       c.box(style=files_time_cell, fn() { c.text(e.time_text, style=files_cell_words) |> ignore }) |> ignore
       c.box(style=files_row_end, fn() {  }) |> ignore
