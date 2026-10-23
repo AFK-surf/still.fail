@@ -1877,7 +1877,7 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 
 ///|
 /// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, the page's actions
-/// (`@settings.root_bar_actions`), a hairline under; frosted over what runs under it.
+/// (`@settings.root_bar_actions`); frosted over what runs under it, no line under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
   // the wide frame's page bar (wide_chat.mbt): the rail is the way to the others
@@ -1903,7 +1903,6 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
       }
     })
     |> ignore
-    c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })
   |> ignore
 }

@@ -218,7 +218,7 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   let top = status_top() + chat_bar_h + 8.0
   let over = first.1 - 52.0
   let y = if over < top { last.1 + last.3 + 28.0 } else { over }
-  let y = dmax(top, dmin(y, dmax(c.height - composer_room_of(c) - 48.0, top)))
+  let y = dmax(top, dmin(y, dmax(c.height - dmax(composer_room_of(c), tabletop_clear(c)) - 48.0, top)))
   let x = if lines.length() > 1 { c.width / 2.0 } else { first.0 + first.2 / 2.0 }
   let x = dmax(130.0, dmin(x, dmax(c.width - 130.0, 130.0)))
   let everything = pk.sel.a == 0 && pk.sel.b >= words.text.length()

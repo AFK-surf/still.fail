@@ -1186,6 +1186,22 @@ fn composer_room_of(c : @ui.Ctx) -> Double {
 }
 
 ///|
+/// The room the composer of chat `key` takes as it is drawn (composer_room_with), not the least a list keeps for it
+/// (composer_room): how far it stays over the keyboard on a device half open (tabletop.mbt). The least until it is
+/// laid out.
+fn composer_own_room(c : @ui.Ctx, key : String, v : ChatView?) -> Double {
+  let room = match drafts.get(key) {
+    Some(d) => composer_room_with(c, d, v)
+    None => 0.0
+  }
+  if room > 0.0 {
+    room
+  } else {
+    composer_room
+  }
+}
+
+///|
 /// The composer's room for draft `d` (composer_room_for).
 fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
   let natural = composer_natural(c)
@@ -1738,7 +1754,7 @@ fn composer_bar(
     (Some(f), _) => f.placeholder
     (_, Some(view)) if view.archived => tr("android-chat.composer.archived.placeholder")
     // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx)
-    _ if wide_on.val && !c.field_focused() =>
+    _ if wide_on.val && !@sf.touch_system() && !c.field_focused() =>
       fill("web-main.composer.pressToTypeCjk", [("key", tr("web-main.keymap.space"))])
     _ => tr("android-chat.chat.placeholder")
   }

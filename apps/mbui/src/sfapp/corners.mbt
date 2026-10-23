@@ -1,14 +1,13 @@
-// A phone's or a tablet's screen wider than a phone's (still.fail's Android app, chat/screens/Wide.kt, as the web's
-// mobile/app.tsx WIDE draws it: an opened foldable, a phone on its side, a film turned sideways): the phone's pages
-// the screen's whole width, no bottom bar under them; at the screen's bottom left, level with the composer and as
+// A phone's or a tablet's window the system classes as regular in width (@ui.system_size_class: an opened foldable
+// such as an iPhone Duo's inner screen whichever way it is held, an Android phone on its side; still.fail's Android
+// app, chat/screens/Wide.kt, as the web's mobile/app.tsx WIDE draws it): the phone's pages the window's whole width, no
+// bottom bar under them; at the screen's bottom left, level with the composer and as
 // tall, a button raises the latest chats over the page (a chat's composer starts beside it); on Home, 奏 and the
 // new-chat button at its bottom right, the stations at a glance in its top bar. A new chat keeps a column in the
 // middle. The drive's reader and player take the whole screen: nothing at their corners. Not the desktop's wide frame
-// (wide.mbt): no rail, no sidebar, the phone's theme, a finger drags the lists as on a phone.
-
-///|
-/// From this width on, a phone's or a tablet's screen is wide (Wide.kt WideAt).
-let corners_from : Double = 680.0
+// (wide.mbt): no rail, no sidebar, the phone's theme, a finger drags the lists as on a phone. Chosen by what the
+// system says of the window, not by a width of the app's own (Wide.kt's 680): a window as wide that the system calls
+// compact (an app beside another on the screen) keeps the phone's pages.
 
 ///|
 /// Whether this frame is drawn as Android's wide screen.
@@ -22,9 +21,10 @@ let recent_open : Ref[Bool] = Ref(false)
 let recent_over : Ref[Page?] = Ref(None)
 
 ///|
-/// Whether a window this wide is drawn as Android's wide screen: a phone's or a tablet's (a desktop's is wide.mbt's).
-pub fn is_corners(c : @ui.Ctx) -> Bool {
-  c.width >= corners_from && @sf.touch_system()
+/// Whether this frame is drawn as Android's wide screen: a phone's or a tablet's window the system classes as regular
+/// in width (a desktop's is wide.mbt's, by its width: no system there says more of a window).
+pub fn is_corners() -> Bool {
+  @sf.touch_system() && @ui.system_size_class() is Some({ width: Regular, .. })
 }
 
 ///|
@@ -86,6 +86,8 @@ fn wide_corners(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   match top {
     Home => home_corner(c, src, w)
     Decisions | DriveRead(_) | DrivePlay(_) => ()
+    // a chat half open has the latest chats under its composer (tabletop.mbt)
+    Chat(_) if @ui.system_tabletop() is Some(_) => ()
     _ => recent_corner(c, src, w, top)
   }
 }
@@ -227,7 +229,6 @@ let recent_button_open : @ui.Style = recent_button.then(
 /// The panel (Wide.kt Recent): 340 wide, 560 tall at most, in the capsules' glass; its new-chat button round in its
 /// corner, its rows' grounds and its foot's 6 in, concentric with it.
 fn recent_panel(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
-  let (view, error) = chats_of(src, w.id, "all")
   c.box(style=recent_panel_box, fn() {
     c.box(style=recent_head, fn() {
       c.text(tr("android-misc.wide.recent"), style=recent_title) |> ignore
@@ -240,45 +241,7 @@ fn recent_panel(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
       c.semantics(node, Button, id~, label=tr("android-misc.wide.newChat"))
     })
     |> ignore
-    match view {
-      None => waiting(c, recent_waiting, None, error)
-      // no rows: what the list says in their place (the core's `note`), as Home does: its rows to come while read, or
-      // what could not be; else that there are none
-      Some(v) if v.days.is_empty() =>
-        match v.note {
-          Some(note) if note.reading || note.failing.length() > 0 => waiting(c, recent_waiting, Some(note), None)
-          _ => c.text(tr("android-misc.wide.empty"), style=recent_empty) |> ignore
-        }
-      Some(v) => {
-        let items : Array[ChatItem] = []
-        for d in v.days {
-          for it in d.items {
-            if items.length() < recent_chats_most {
-              items.push(it)
-            }
-          }
-        }
-        c.box(style=recent_rows, fn() {
-          for item in items {
-            let here = match top {
-              Chat(r) => r.station == item.station && r.session == item.session
-              _ => false
-            }
-            c.box(style=if here { recent_row_here } else { recent_row }, fn() {
-              chat_row(c, src, item, v.leading, found=true, opened=fn(r) {
-                recent_open.val = false
-                if !here {
-                  open_in_place(Chat(r))
-                }
-              })
-              |> ignore
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-      }
-    }
+    recent_list(c, src, w, top)
     c.box(style=recent_rule, fn() {  }) |> ignore
     c.box(style=recent_foot, fn() {
       let id = c.id("wide/recent-all")
@@ -297,6 +260,53 @@ fn recent_panel(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// The latest chats (the list's first six, the one open marked; one picked takes the place of the page open:
+/// AppState.open), or what the list says in their place: in the panel the latest chats' button raises, and under a
+/// chat's composer on a device half open (tabletop.mbt).
+fn recent_list(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
+  let (view, error) = chats_of(src, w.id, "all")
+  match view {
+    None => waiting(c, recent_waiting, None, error)
+    // no rows: what the list says in their place (the core's `note`), as Home does: its rows to come while read, or
+    // what could not be; else that there are none
+    Some(v) if v.days.is_empty() =>
+      match v.note {
+        Some(note) if note.reading || note.failing.length() > 0 => waiting(c, recent_waiting, Some(note), None)
+        _ => c.text(tr("android-misc.wide.empty"), style=recent_empty) |> ignore
+      }
+    Some(v) => {
+      let items : Array[ChatItem] = []
+      for d in v.days {
+        for it in d.items {
+          if items.length() < recent_chats_most {
+            items.push(it)
+          }
+        }
+      }
+      c.box(style=recent_rows, fn() {
+        for item in items {
+          let here = match top {
+            Chat(r) => r.station == item.station && r.session == item.session
+            _ => false
+          }
+          c.box(style=if here { recent_row_here } else { recent_row }, fn() {
+            chat_row(c, src, item, v.leading, found=true, opened=fn(r) {
+              recent_open.val = false
+              if !here {
+                open_in_place(Chat(r))
+              }
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    }
+  }
 }
 
 ///|

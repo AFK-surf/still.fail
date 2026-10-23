@@ -4,7 +4,9 @@
 # them (2026-10-23: apps/android `:app:dependencies --configuration releaseRuntimeClasspath`, the closure of those roots),
 # and kotlin-stdlib as AGP 9 added it; and the Java of Hermes (hermes-android 0.81.4: the Hermes the engine runs,
 # its classes only, the libraries are scripts/android-core.sh's), fbjni and nativeloader, which Hermes answers
-# String's normalize, Intl and the rest in (CoreHost.java). A change: edit the coordinates, then `scripts/apk lock apk.json`.
+# String's normalize, Intl and the rest in (CoreHost.java); window-java 1.5.1 (Folds.java: Jetpack WindowManager, the
+# device's fold) and what it needs past those, as its POMs say. A change: edit the coordinates, then
+# `scripts/apk lock apk.json`.
 androidx.activity:activity:1.12.3 aar 840cd28f79556b23177363f2c43bf398a8b77a2950950dd359341d5f3a62b975
 androidx.annotation:annotation:1.9.1 jar 38322afa7345c37e29c65ec8852178ae1c26e23096a0634d07a4a3893931f58c
 androidx.annotation:annotation-experimental:1.4.1 aar 6bd4c7c7476f8260cd3bdbb81183583e93fc9f790c27dea7dc314181cbf87aa0
@@ -68,6 +70,10 @@ androidx.tracing:tracing:1.3.0 aar 87064cb2cf8c115f2938512dcb136967302c6c925012b
 androidx.tracing:tracing-android:1.3.0 aar f59782bbe3470a6b0c531cef262dd1fc9d9a0233490bb5e6d553e1fe6a1816b2
 androidx.versionedparcelable:versionedparcelable:1.1.1 aar 57e8d93260d18d5b9007c9eed3c64ad159de90c8609ebfc74a347cbd514535a4
 androidx.viewpager:viewpager:1.0.0 aar 147af4e14a1984010d8f155e5e19d781f03c1d70dfed02a8e0d18428b8fc8682
+androidx.window:window:1.5.1 aar 3c3061966f012fc22f2e99701f683e82e732435ae2f2a1d5b2f99d82bb7b8864
+androidx.window:window-core:1.5.1 jar 46021e4e764e11b7674089942d9a5dbaad0a88deb84c245dabdb850f24d4823b
+androidx.window:window-core-android:1.5.1 aar b289ce85090f1f976569fa92bbac84011f54ba1b21f0ce883655b34c8f9f9eea
+androidx.window:window-java:1.5.1 aar ac1e1515590ac3f26f2fef898b8eca0418723eb0bc73fec5349dfaf60d9545af
 com.facebook.fbjni:fbjni:0.7.0 aar 7e319ae110ac5e5ef18904170aea5c3e753e915d196699d7fd39d36c8e1dfe36
 com.facebook.react:hermes-android:0.81.4:release aar c883c5e24b1361d30a0c2f21cc40be41291648f19598f70f2a018e910d96b041
 com.facebook.soloader:nativeloader:0.10.5 jar 971ded86009c0ac56fb2275e128f852e7dcbc41a40cd799688f8a1aebde5195d

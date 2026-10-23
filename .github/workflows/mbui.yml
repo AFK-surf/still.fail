@@ -207,15 +207,24 @@ jobs:
             .ci/hbc
           key: ${{ env.STORE_KEY }}
 
+  # Built with iOS 27.1's SDK: an app built with an older one runs on an iPhone Duo's inner screen letterboxed, black
+  # bars either side, and is told nothing of its hinge (UIHingeInteraction, its fold's reserved regions: ios_app.m).
+  # GitHub's xcode-27 image has Xcode 27.1 beside its default 27.0 (2026-10-23); the SDK is checked, not trusted.
   ios:
     needs: what
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes'
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 10
     env:
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
+      - name: iOS's SDK 27.1 or later
+        run: |
+          v=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iOS SDK $v ($(xcodebuild -version | head -1))"
+          case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit

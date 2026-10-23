@@ -105,7 +105,6 @@ fn files_top_bar(c : @ui.Ctx) -> Unit {
       |> ignore
     })
     |> ignore
-    c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })
   |> ignore
 }
