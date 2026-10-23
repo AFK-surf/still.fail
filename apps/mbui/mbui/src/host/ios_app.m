@@ -1517,11 +1517,15 @@ void mb_host_pick_end(int32_t pid) { [picks removeObjectForKey:@(pid)]; }
 static int gallery_answers_n;
 
 int32_t mb_host_gallery_access(void) {
-  switch ([PHPhotoLibrary authorizationStatusForAccessLevel:PHAccessLevelReadWrite]) {
-    case PHAuthorizationStatusAuthorized: return 1;
-    case PHAuthorizationStatusLimited: return 2;
-    default: return 0;
+  PHAuthorizationStatus st = [PHPhotoLibrary authorizationStatusForAccessLevel:PHAccessLevelReadWrite];
+  int32_t a = st == PHAuthorizationStatusAuthorized ? 1 : st == PHAuthorizationStatusLimited ? 2 : 0;
+  // (said as it changes: 1 all, 2 chosen, 0 none; the system's own status beside it)
+  static int32_t said = -1;
+  if (a != said) {
+    said = a;
+    say([NSString stringWithFormat:@"gallery: access %d (status %ld)", a, (long)st]);
   }
+  return a;
 }
 
 static void gallery_answered(void) {
