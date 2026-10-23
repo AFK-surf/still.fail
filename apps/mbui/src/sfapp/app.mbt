@@ -676,6 +676,15 @@ fn page_view(
         })
         |> ignore
       }
+      // in a window with its buttons in the app's top row, their band drags it (as a title bar does)
+      if @ui.window_inset() && !wide_on.val {
+        c.layer(fn() {
+          let id = c.id("window-band")
+          c.window_drag(id)
+          c.box(style=@ui.style(w=Full, h=Fixed(window_band)), id~, fn() {  }) |> ignore
+        })
+        |> ignore
+      }
     },
   )
   |> ignore

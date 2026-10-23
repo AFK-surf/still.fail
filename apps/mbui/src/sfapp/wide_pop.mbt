@@ -100,6 +100,7 @@ fn wide_menu(
 /// Everything open over the wide frame, drawn after it.
 fn wide_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   row_menu(c, src)
+  rail_menu(c, src, w)
   wide_filter_menu(c, src, w)
   attention_panel(c, src, w)
   switcher(c, src, w)

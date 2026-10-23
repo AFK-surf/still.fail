@@ -37,7 +37,11 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     neighbour(src, w, 1)
   }
   if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
-    if wide.switcher {
+    if wide.switcher && sw.kind != "" {
+      // one kind's list: back to all of them
+      sw.kind = ""
+      wide.chosen = 0
+    } else if wide.switcher {
       // (its field let go: the keyboard goes nowhere until another is pressed)
       wide.switcher = false
       c.blur()
@@ -103,14 +107,15 @@ fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
 let focus_composer : Ref[Bool] = Ref(false)
 
 ///|
-/// A chat's row's menu (Sidebar.tsx ContextMenu): 固定 / 取消固定, 重命名, 保留 / 取消保留, 复制会话链接, 归档; at where
+/// A chat's row's menu (Sidebar.tsx ContextMenu): 固定 / 取消固定, 重命名, 保留 / 取消保留, 复制会话链接, 复制 session 文件
+/// 路径, 归档; at where
 /// the row was right clicked (mbui's dropdown menu there).
 fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
   let (key, item, x, y) = match wide.menu {
     Some(m) => m
     // (closed: told so, for its going)
     None => {
-      wide_menu(c, "row-menu", false, 0, [], {}, 200.0) |> ignore
+      wide_menu(c, "row-menu", false, 0, [], {}, row_menu_w) |> ignore
       return
     }
   }
@@ -129,10 +134,18 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
   if link != "" {
     entries.push(@kit.menu_item("link", label=tr("web-main.chat.copyLink")))
   }
+  entries.push(@kit.menu_item("transcript", label=tr("web-main.chat.copyTranscript")))
   entries.push(@kit.menu_item("archive", label=tr("web-main.chat.archive")))
-  let icons = { "pin": "pin", "rename": "edit", "keep": "shield-check", "link": "copy", "archive": "archive" }
+  let icons = {
+    "pin": "pin",
+    "rename": "edit",
+    "keep": "shield-check",
+    "link": "copy",
+    "transcript": "file",
+    "archive": "archive",
+  }
   // (its top left at the pointer, as the web's context menu opens)
-  let m = wide_menu(c, "row-menu", true, 0, entries, icons, 200.0, offset=0.0, at=(x, y, 0.0, 0.0))
+  let m = wide_menu(c, "row-menu", true, 0, entries, icons, row_menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
   if !m.open {
     wide.menu = None
   }
@@ -172,8 +185,60 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
         None => ()
       }
     Some("link") => copy_chat_link(c, item.title, link)
+    Some("transcript") =>
+      copy_transcripts(c, src, item.station, match item.agents.map(fn(a) { a.key }).filter(fn(k) { k != "" }) {
+        [] => [item.session]
+        keys => keys
+      })
     Some("archive") => archive_row(c, src, item)
     _ => ()
+  }
+}
+
+///|
+/// The row's menu's width: as wide as 复制 session 文件路径 needs.
+let row_menu_w : Double = 224.0
+
+///|
+/// Where a chat's agents' sessions are kept on their station's machine (ChatRef.tsx useCopyTranscripts:
+/// `session.transcript` each), copied one a line; said if none is written yet.
+fn copy_transcripts(c : @ui.Ctx, src : Source, station : String, keys : Array[String]) -> Unit {
+  let paths : Array[String?] = keys.map(fn(_) { None })
+  let mut left = keys.length()
+  let mut failed : String? = None
+  let done = fn() {
+    match failed {
+      Some(e) => say(c, fill("web-main.chat.copyFailed", [("error", e)]))
+      None => {
+        let found = paths.filter_map(fn(p) { p })
+        if found.length() == 0 {
+          say(c, tr("web-main.chat.transcriptNone"))
+        } else {
+          c.copy_text(found.join("\n"))
+          say(c, if found.length() > 1 {
+            fill("web-main.chat.transcriptsCopied", [("n", found.length().to_string())])
+          } else {
+            tr("web-main.chat.transcriptCopied")
+          })
+        }
+      }
+    }
+  }
+  for i, key in keys {
+    (src.call)("session.transcript", { "station": Json::string(station), "key": Json::string(key) }, fn(r) {
+      match r {
+        Ok(v) =>
+          match text(Some(v), "path") {
+            "" => ()
+            p => paths[i] = Some(p)
+          }
+        Err(e) => failed = Some(text(Some(e), "message"))
+      }
+      left = left - 1
+      if left == 0 {
+        done()
+      }
+    })
   }
 }
 
@@ -190,40 +255,51 @@ let side_rename_field : @ui.Field = @ui.Field::new()
 
 ///|
 /// ⌘K (Switcher.tsx ChatSwitcher): over a scrim, 14% down the window, 560 wide at most: a field (搜索全部内容和操作), the
-/// chats whose titles hold what is typed (all of them, newest first, while nothing is), ↑ / ↓ to choose, Enter or a
-/// press to open; Esc or a press outside closes it.
+/// list of what the words find and what can be done (wide_switcher.mbt), ↑ / ↓ to choose, Enter or a press to open;
+/// Esc (in one kind's list: back to all of them) or a press outside closes it.
 fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if !wide.switcher {
+    sw_reset()
     return
   }
   let t = @sf.theme()
   let query = switcher_query.val.trim(chars=" ").to_string()
-  let rows : Array[ChatItem] = []
-  match chats_of(src, w.id, "all") {
-    (Some(v), _) =>
-      for d in v.days {
-        for item in d.items {
-          if query == "" || lower(item.title).contains(lower(query)) {
-            rows.push(item)
-          }
-        }
-      }
-    _ => ()
+  let lines = sw_lines(c, src, w, query)
+  let picks : Array[Int] = []
+  // each line's place among those chosen (-1 a heading's)
+  let pick_of : Array[Int] = []
+  for i, l in lines {
+    if sw_pickable(l) {
+      pick_of.push(picks.length())
+      picks.push(i)
+    } else {
+      pick_of.push(-1)
+    }
   }
-  let shown = if rows.length() > 12 { rows[:12].to_array() } else { rows }
-  if wide.chosen >= shown.length() {
-    wide.chosen = dmax(0.0, (shown.length() - 1).to_double()).to_int()
+  if wide.chosen >= picks.length() {
+    wide.chosen = dmax(0.0, (picks.length() - 1).to_double()).to_int()
   }
-  if c.key_pressed(@ui.key_code_down, in_field=true) && wide.chosen < shown.length() - 1 {
+  let mut keyed = false
+  if c.key_pressed(@ui.key_code_down, in_field=true) && wide.chosen < picks.length() - 1 {
     wide.chosen += 1
+    keyed = true
   }
   if c.key_pressed(@ui.key_code_up, in_field=true) && wide.chosen > 0 {
     wide.chosen -= 1
+    keyed = true
   }
-  let open = fn(item : ChatItem) {
-    wide.switcher = false
-    c.blur()
-    open_row(item)
+  // the list as tall as its lines (as much as the panel holds), scrolled to the line the keys chose
+  let est = lines.fold(init=0.0, fn(h, l) { h + sw_line_h(l) })
+  let list_h = dmin(dmin(480.0, c.height * 0.72) - sw_panel_rest, est)
+  if keyed {
+    match picks.get(wide.chosen) {
+      Some(k) => c.list_scroll_to("switcher/list", if k > sw_lead { k - sw_lead } else { 0 })
+      None => ()
+    }
+  }
+  let words = match sw.kept {
+    Some(v) => v.words
+    None => []
   }
   let width = dmin(560.0, c.width - 32.0)
   let panel = c.id("switcher")
@@ -246,7 +322,6 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       id=panel,
       fn() {
         c.box(dir=Row, w=Fill(1.0), h=Px(48.0), padx=10.0, gap=10.0, align=ACenter, fn() {
-          @sf.icon(c, "search", size=18.0, color=t.p.muted) |> ignore
           let res = c.editor(
             "switcher/field",
             placeholder=tr("web-main.switcher.search"),
@@ -268,63 +343,52 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             wide.chosen = 0
           }
           match res.submitted {
-            Some(words) => {
-              switcher_field.set(words)
-              if wide.chosen < shown.length() {
-                open(shown[wide.chosen])
+            Some(typed) => {
+              switcher_field.set(typed)
+              match picks.get(wide.chosen) {
+                Some(k) => sw_go(c, lines[k], words)
+                None => ()
               }
             }
             None => ()
           }
         })
         |> ignore
-        if shown.length() == 0 {
-          c.box(w=Fill(1.0), padx=10.0, pady=10.0, fn() {
+        if picks.length() == 0 {
+          c.box(style=sw_head, fn() {
             c.text(
               tr(if query == "" { "web-main.switcher.none" } else { "web-main.switcher.noMatch" }),
-              size=13.0,
-              color=t.p.muted,
-              wrap=false,
+              style=sw_title_muted,
             )
             |> ignore
           })
           |> ignore
-        } else {
-          c.box(padx=10.0, pt=6.0, pb=2.0, fn() {
-            c.text(tr("web-main.switcher.chats"), size=12.0, color=t.p.muted, wrap=false) |> ignore
-          })
-          |> ignore
         }
-        for k, item in shown {
-          let id = c.id("switcher/row/" + item.station + "/" + item.id)
-          c.cursor(id, Hand)
-          if c.clicked(id) {
-            open(item)
-          }
-          if c.hovered(id) {
-            wide.chosen = k
-          }
-          c.box(
-            dir=Row,
-            w=Fill(1.0),
-            min_h=38.0,
-            padx=10.0,
-            gap=8.0,
-            align=ACenter,
-            radius=12.0,
-            bg=if k == wide.chosen { @sf.alpha(t.p.text, 0.07) } else { 0L },
-            id~,
-            fn() {
-              @sf.icon(c, "chat", size=16.0, color=t.p.muted) |> ignore
-              c.box(w=Fill(1.0), fn() {
-                c.text(item.title, size=13.0, color=t.p.text, wrap=false, line=20.0) |> ignore
-              })
-              |> ignore
-              c.text(item.station_name, size=12.0, color=t.p.subtle, wrap=false) |> ignore
-            },
-          )
-          |> ignore
-        }
+        c.list(
+          "switcher/list",
+          lines.length(),
+          sw_row_est,
+          fn(i) {
+            let line = lines[i]
+            let key = "switcher/row/" + sw_key(line)
+            let k = pick_of[i]
+            if k >= 0 {
+              let id = c.id(key)
+              c.cursor(id, Hand)
+              if c.clicked(id) {
+                sw_go(c, line, words)
+              }
+              if c.hovered(id) {
+                wide.chosen = k
+              }
+              sw_line(c, key, line, k == wide.chosen)
+            } else {
+              sw_line(c, key, line, false)
+            }
+          },
+          h=Px(list_h),
+        )
+        |> ignore
       },
     )
     c.place_by_size(i, fn(pw, _) { ((c.width - pw) / 2.0, c.height * 0.14) })

@@ -234,3 +234,37 @@ test "place: below its anchor, flipped above when there is no room, kept in the 
   // start is the right: their right edges line up
   assert_eq(out[3], (120.0, 134.0, Bottom))
 }
+
+///|
+test "a layer dismissed as the view closed it its own way is not dismissed by that when it opens again" {
+  let open = Ref(true)
+  let log = []
+  let t = Tester::new(fn(c) {
+    c.column(gap=4.0, fn() {
+      if btn(c, "open").clicked {
+        open.val = true
+      }
+      // closes the layer itself (as a key of the view's own would), the press outside it dismissing it too
+      if btn(c, "close").clicked {
+        open.val = false
+      }
+      if open.val {
+        let o = c.overlay("layer", fn() {
+          c.box(tx=100.0, ty=200.0, pad=10.0, bg=0xFFFFFFFFL, fn() { btn(c, "inside") |> ignore }) |> ignore
+        })
+        if o.dismissed is Some(d) {
+          log.push("dismissed \{d}")
+          open.val = false
+        }
+      }
+    })
+    |> ignore
+  })
+  t.click(Button, label="close")
+  assert_false(open.val)
+  t.click(Button, label="open")
+  t.frame()
+  assert_true(open.val, msg="open again")
+  assert_true(t.query(Button, label="inside") is Some(_))
+  assert_eq(log, [])
+}

@@ -340,6 +340,13 @@ pub fn open_mode(mode : String) -> Unit {
           } : Json).stringify()
       _ => ()
     }
+  } else if mode == "switcher" || mode == "switcher-found" {
+    // ⌘K in the wide frame (wide_switcher.mbt): with nothing typed, and with 签名 typed (what the search finds)
+    wide.switcher = true
+    if mode == "switcher-found" {
+      switcher_query.val = "签名"
+      switcher_field.set("签名")
+    }
   } else if mode == "home-sheet" {
     raise_sheet(Workspaces)
   }
