@@ -226,3 +226,92 @@ test "wide: Station and Profile a list of their own beside their page; 连接 an
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("添加 station") is None && t.find("添加 Profile") is None && t.find("新建对话") is None)
 }
+
+///|
+test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享 in the sidebar; a row chosen by a click, opened by a double click; the bar's ways and 收藏" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Files)
+  t.run_for(@ui.nav_push_ms)
+  for label in ["个人收藏", "团队共享", "Station"] {
+    assert_true(t.find(label) is Some(_), msg=label)
+  }
+  // a station opened: its places (drive.folders), read once
+  t.click(Button, label="展开 Studio")
+  t.frame()
+  assert_eq(named(calls, "drive.folders").length(), 1)
+  assert_true(t.find("外接硬盘") is Some(_))
+  t.frame()
+  assert_eq(named(calls, "drive.folders").length(), 1)
+  // a shared folder opens in the pane, in columns
+  t.tap_text("文档")
+  t.run_for(@ui.nav_push_ms)
+  match app.nav.top() {
+    Drive(at) => assert_eq(at.root, Some(fix_docs))
+    _ => fail("no folder open")
+  }
+  assert_true(t.query(Button, label="分栏") is Some(_))
+  // in columns a folder pressed opens beside its column
+  t.tap_text("设计稿")
+  assert_true(t.find("配色说明.md") is Some(_), msg="设计稿 beside")
+  // a list: a click chooses, a double click goes in
+  t.click(Button, label="列表")
+  assert_eq(wide.files_view, Some("list"))
+  assert_true(named(calls, "prefs.set").length() > 0)
+  t.tap_text("会议记录")
+  match app.nav.top() {
+    Drive(at) => assert_eq(at.path, "")
+    _ => fail("left the folder")
+  }
+  t.tap_text("会议记录")
+  match app.nav.top() {
+    Drive(at) => assert_eq(at.path, "会议记录")
+    _ => fail("no folder open")
+  }
+  // 收藏: in the sidebar's 个人收藏 then
+  let before = named(calls, "prefs.set").length()
+  t.click(Button, label="把「会议记录」加入个人收藏")
+  assert_eq(named(calls, "prefs.set").length(), before + 1)
+  assert_true(t.query(Button, label="从个人收藏移除「会议记录」") is Some(_))
+}
+
+///|
+test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two folders side by side, a press in the other side puts it in front; kept (prefs.set filesTabs)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Files)
+  app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  t.run_for(@ui.nav_push_ms)
+  // one tab: none shown
+  assert_true(t.query(Button, label="关闭标签") is None)
+  t.key(@ui.key_of_char('t'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(t.query(Button, label="关闭标签") is Some(_), msg="two tabs shown")
+  let kept = named(calls, "prefs.set").filter(fn(m) { text(Some(m.params), "filesTabs") != "" || field(Some(m.params), "filesTabs") is Some(_) })
+  assert_true(kept.length() > 0)
+  // split: the same folder on both sides, the right one in front
+  t.click(Button, label="左右分栏")
+  t.frame()
+  assert_true(t.query(Button, label="取消分栏") is Some(_))
+  // in a list (in columns a half's room holds one column: a folder pressed is beside it, in its place), the other
+  // side's 会议记录 pressed twice: that side in front, gone into
+  t.click(Button, label="列表")
+  t.frame()
+  let rows = t.locate("会议记录")
+  assert_eq(rows.length(), 2)
+  let (x, y) = rows[0]
+  t.tap(x, y)
+  t.tap(x, y)
+  match app.nav.top() {
+    Drive(at) => assert_eq(at.path, "会议记录")
+    _ => fail("no folder open")
+  }
+  // the other side still 文档
+  assert_true(t.find("长篇小说.txt") is Some(_))
+  // one again: the side in front kept
+  t.click(Button, label="取消分栏")
+  t.frame()
+  assert_true(t.query(Button, label="左右分栏") is Some(_))
+  assert_true(t.find("说明.txt") is Some(_))
+  assert_true(t.find("长篇小说.txt") is None)
+}

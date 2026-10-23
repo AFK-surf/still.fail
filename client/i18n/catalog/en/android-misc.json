@@ -547,5 +547,6 @@
   "android-misc.permissions.request": "Request",
   "android-misc.permissions.requestWhat": "request {name}",
   "android-misc.permissions.requestLabel": "Request {name}",
-  "android-misc.permissions.missing": "Not allowed"
+  "android-misc.permissions.missing": "Not allowed",
+  "android-misc.files.favoritesHint": "Star a folder from the toolbar"
 }

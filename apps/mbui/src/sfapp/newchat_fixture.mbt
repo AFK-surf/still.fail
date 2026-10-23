@@ -304,6 +304,42 @@ pub fn open_mode(mode : String) -> Unit {
     // a place of the rail's in the wide frame (wide_places.mbt): place-stations, place-profiles, place-connects,
     // place-usage
     app.nav.replace(Place(mode.view(start_offset=6).to_string()))
+  } else if mode.has_prefix("files-") {
+    // the files' page in the wide frame (wide_files.mbt) at Studio's 文档: files-columns (设计稿 open beside it, chosen),
+    // files-tree (设计稿 opened in place), files-list, files-split (two tabs, the one shown split)
+    let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
+    app.nav.push(Files)
+    app.nav.push(Drive(docs))
+    match mode {
+      "files-columns" => {
+        wide.files_cols["ws1/st1\u{1}" + fix_docs + "\u{1}"] = "设计稿"
+        wide.files_chosen = "ws1/st1\u{1}" + fix_docs + "\u{1}设计稿"
+      }
+      "files-tree" => {
+        wide.files_view = Some("tree")
+        wide.files_open["tree/ws1/st1/" + fix_docs + "/设计稿"] = true
+        wide.files_open["station/ws1/st1"] = true
+      }
+      "files-list" => wide.files_view = Some("list")
+      // two tabs, the one shown split: 文档 in front, the home beside it
+      "files-split" =>
+        wide.tabs_set["ws1"] = (
+          {
+            "tabs": [
+              {
+                "id": "t0",
+                "panes": [
+                  { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "" },
+                  { "station": "ws1/st1", "root": Json::string(fix_home), "path": "" },
+                ],
+                "front": 0,
+              },
+              { "id": "t1", "panes": [{ "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" }], "front": 0 },
+            ],
+            "current": "t0",
+          } : Json).stringify()
+      _ => ()
+    }
   } else if mode == "home-sheet" {
     raise_sheet(Workspaces)
   }

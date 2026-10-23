@@ -216,6 +216,10 @@ pub struct Ctx {
   mut active : Int
   mut focus : Int
   clicked : Array[Int]
+  /// what was clicked twice since the last frame, the second within double_click_ms of the first and where it was
+  /// (Ctx::double_clicked); the last click (its id, when, where), for the next to be the second of two
+  double_clicked : Array[Int]
+  mut last_click : (Int, Double, Double, Double)
   mut drag_scroll : Int
   /// what scrolls or is dragged under the press, innermost first (claim.mbt): until one claims it (`claimed`), the
   /// press is none of theirs; `drag_scroll` is the innermost meanwhile
@@ -433,6 +437,8 @@ fn Ctx::new() -> Ctx {
     active: 0,
     focus: 0,
     clicked: [],
+    double_clicked: [],
+    last_click: (0, 0.0, 0.0, 0.0),
     drag_scroll: 0,
     press_chain: [],
     claimed: true,
@@ -1047,6 +1053,20 @@ let no_text_patch : TextPatch = text_patch()
 
 // ---------------------------------------------------------------------------
 // Interaction
+
+///|
+/// Whether `id` was clicked twice in a row since the last frame (a desktop's double click: the second within
+/// double_click_ms of the first, both on it, as near as double_click_slop). Its first click was `clicked` too.
+pub fn Ctx::double_clicked(self : Ctx, id : Int) -> Bool {
+  id != 0 && self.double_clicked.contains(id)
+}
+
+///|
+/// How soon after the first the second of two clicks is (macOS's default: 500 ms), and how near it (4).
+pub let double_click_ms : Double = 500.0
+
+///|
+pub let double_click_slop : Double = 4.0
 
 ///|
 pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {

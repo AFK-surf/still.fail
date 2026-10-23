@@ -242,6 +242,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)
     c.clicked.clear()
+    c.double_clicked.clear()
     c.tapped = None
     desk.keys.clear()
     desk.menus.clear()
@@ -733,6 +734,15 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
+      // the second of two (Ctx::double_clicked): on the same, soon enough and near enough; then none is first
+      let (was, at, ax, ay) = c.last_click
+      if was == c.active && t - at <= double_click_ms && (x - ax).abs() <= double_click_slop &&
+        (y - ay).abs() <= double_click_slop {
+        c.double_clicked.push(c.active)
+        c.last_click = (0, 0.0, 0.0, 0.0)
+      } else {
+        c.last_click = (c.active, t, x, y)
+      }
     }
     // a tap wherever it lands (Ctx::tapped_anywhere), not a drag, not a press the app took
     if !c.dragging && c.taken_at != c.press_at {
