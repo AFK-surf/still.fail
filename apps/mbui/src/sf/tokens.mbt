@@ -1049,3 +1049,28 @@ pub let toast_shadow_y : Double = 8.0
 ///|
 pub let toast_rise : Double = 8.0
 
+
+///|
+/// A column's edge (parts.css.ts resizeHandle, own.css.ts): a strip 7 wide, 4 of it past the column's edge; its bar 5
+/// wide, 24 high and 48 on the strip; its line 8 short of the strip's ends, in 40 steps of its fade; dragged once 3
+/// from where it went down.
+pub let handle_w : Double = 7.0
+
+///|
+pub let handle_out : Double = 4.0
+
+///|
+pub let edge_bar_w : Double = 5.0
+
+///|
+pub let edge_line_steps : Int = 40
+
+///|
+pub let handle_slop : Double = 3.0
+
+///|
+/// A tip that follows the pointer along an edge (usePointerTip): 300 ms after the pointer comes, 14 beside it.
+pub let edge_tip_ms : Double = 300.0
+
+///|
+pub let edge_tip_gap : Double = 14.0

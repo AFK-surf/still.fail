@@ -112,7 +112,8 @@ pub let tooltip_skip_ms : Double = 300.0
 ///|
 /// `key`'s tooltip (see the file's head) for the trigger `trigger` (its id), saying `text`: shown once a mouse has
 /// rested on it `delay` ms (at once within `skip` ms of another closing), or at once while it has the focus by the
-/// keyboard. Whether it shows.
+/// keyboard; beside the trigger, or beside `at` (a rect in the window: a point, the pointer, for a tip that follows
+/// it along a tall thin trigger, the web's usePointerTip). Whether it shows.
 pub fn tooltip(
   c : @ui.Ctx,
   key : String,
@@ -124,6 +125,7 @@ pub fn tooltip(
   along? : @ui.Along = Middle,
   offset? : Double = 6.0,
   look? : (@ui.Ctx, PopState, String) -> Unit = tooltip_look,
+  at? : (Double, Double, Double, Double),
 ) -> Bool {
   install()
   let id = c.id(key)
@@ -146,7 +148,7 @@ pub fn tooltip(
   let p = presence(c, key, open, enter=@motion.tween(100.0, ease=Out))
   if p.built {
     let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=p.leaving(), fn() {
-      beside(c, key, trigger, side, along, offset, p.t, Tooltip, text, fn(c, s, _) { look(c, s, text) }, fn() {  })
+      beside(c, key, trigger, side, along, offset, p.t, Tooltip, text, fn(c, s, _) { look(c, s, text) }, fn() {  }, at?=at)
     })
     if o.dismissed is Some(_) {
       kit.val.shut[id] = true
