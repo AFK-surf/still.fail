@@ -5,45 +5,16 @@ import {
 
 import {
   "moonbitlang/core/json",
-  "moonbitlang/core/env",
   "stillfail/sf",
   "stillfail/sfkept",
 } for "wbtest"
 
 options(
-  targets: { "android_ref_env_js_wbtest.mbt": [ "js" ], "android_ref_env_native_wbtest.mbt": [ "native" ] },
   "pre-build": [
     {
       "input": "../../screens/text-mac.textrec",
       "output": "text_mac_wbtest.mbt",
       "command": ":embed -i $input -o $output --name text_mac_kept",
-    },
-    // still.fail's screens as the core's JSON gives them, both apps drawing each (scripts/android-ref.sh), and the
-    // Android host's text as it recorded it for each (android_ref_wbtest.mbt; a new screen: one more here)
-    {
-      "input": "../../screens/text-android.textrec",
-      "output": "text_android_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name text_android_kept",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/chat-cards.json",
-      "output": "screen_chat_cards_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_chat_cards",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/history.json",
-      "output": "screen_history_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_history",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/settings.json",
-      "output": "screen_settings_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_settings",
-    },
-    {
-      "input": "../../../../client/fixtures/screens/home.json",
-      "output": "screen_home_wbtest.mbt",
-      "command": ":embed -i $input -o $output --name screen_home",
     },
   ],
 )

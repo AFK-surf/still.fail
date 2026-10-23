@@ -32,21 +32,8 @@ jobs:
           RELEASE_REVISION: ${{ inputs.revision }}
         run: python3 .github/stable-plan.py
 
-  android:
-    needs: plan
-    runs-on: [self-hosted, mini1]
-    environment: production
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
-      - uses: ./.github/actions/setup-mac
-      - name: Publish stable Android with its original signing key
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
-          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
-        run: sh .github/release.sh --stable android
+  # (No Android app: the Kotlin app frozen at 0.1.4520 on the stable channel since 2026-10-23, as asked, until it is said
+  # to become mbui's; the beta channel's is mbui's, the pipeline's android job.)
 
   desktop:
     needs: plan
@@ -69,7 +56,7 @@ jobs:
         run: python3 .github/release-desktop.py --stable
 
   web:
-    needs: [plan, android, desktop]
+    needs: [plan, desktop]
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -138,7 +125,7 @@ jobs:
         run: sh .github/deploy.sh site
 
   done:
-    needs: [plan, android, desktop, web, station, modules, site]
+    needs: [plan, desktop, web, station, modules, site]
     runs-on: [self-hosted, mini1]
     timeout-minutes: 10
     permissions:

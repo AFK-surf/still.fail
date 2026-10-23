@@ -13,7 +13,7 @@ src/sfscreens embeds it (moon.pkg's pre-build) and gives each screen's Tester it
 numbered in the order it met them (and placed in its atlas so), so each screen keeps its own run's.
 
   scripts/screens.py keep MODE LOG [KEPT]     LOG's lines kept as MODE's section (scripts/screens.sh rec; KEPT another
-                                              host's: screens/text-android.textrec, scripts/android-ref.sh text)
+                                              host's)
 """
 import os, sys
 

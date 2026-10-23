@@ -5,7 +5,7 @@
 name: cache-prune
 on:
   workflow_run:
-    workflows: [mbui, mbui-ios, mbui-windows, mbui-check, mbui-android-ref, pipeline]
+    workflows: [mbui, mbui-ios, mbui-windows, mbui-check, pipeline]
     types: [completed]
   schedule:
     - cron: "7,37 * * * *"

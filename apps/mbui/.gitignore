@@ -5,6 +5,3 @@ out/
 /engine/target/
 # made from screens/text-mac.textrec by moon (src/sfscreens/moon.pkg: pre-build)
 /src/sfscreens/text_mac_wbtest.mbt
-# made by moon from screens/text-android.textrec and client/fixtures/screens (src/sfscreens/moon.pkg: pre-build)
-/src/sfscreens/text_android_wbtest.mbt
-/src/sfscreens/screen_*_wbtest.mbt
