@@ -407,6 +407,7 @@
   "station.updates.moduleBadPackage": "包打不开，没有安装（{why}）",
   "station.updates.moduleWentBack": "{version} 没能启动，已退回 {back}",
   "station.updates.noInstaller": "当前版本不含安装脚本，请使用安装命令重新安装",
+  "station.updates.noApplicableUpdate": "{program} 暂无可在此安装的更新（其源可能还没有最新版本），未做改动：{said}",
   "station.updates.notNewer": "{program} 已完成，但 {command} 仍是 {version}（最新为 {latest}）：可能安装到了其他位置，PATH 中的不是新版本",
   "station.updates.notOnPath": "{program} 已完成，但 station 的 PATH 中仍找不到 {command}：可能安装到了其他位置",
   "station.updates.npmRootUnknown": "无法确定 {path} 的 npm 全局安装目录，需在该机器上手动更新",

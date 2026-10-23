@@ -146,8 +146,8 @@ export type Platform = {
   /// Starts `script` (the installer the running release carries, docs/release-signing.md) apart from the station, run
   /// from a copy in `runDir`, its exit to run/update.exit and what it said to run/update.log. Whether it was started.
   startInstaller(script: string, runDir: string, env: Record<string, string>, app: string): Promise<boolean>;
-  /// How a runtime found as a package manager's shim of this machine's kind is updated (Windows: Vite+'s beside
-  /// vp.exe, npm's .cmd in its prefix), none for the shared rules.
+  /// How a runtime found as a package manager's of this machine's kind is updated (Windows: winget's package, Vite+'s
+  /// shim beside vp.exe, npm's .cmd in its prefix), none for the shared rules.
   shimUpdate(found: Found, pkg: string, env: Env): How | "no-npm" | null;
   /// `command` (a command npm installed in its global prefix) linked into `dir` under its name, where nothing of that
   /// name is: whether it now is (not on Windows: npm's .cmd finds its package beside itself, and its prefix is on PATH).
