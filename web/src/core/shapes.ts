@@ -364,6 +364,17 @@ export interface ArchivingView {
 	reviewed: boolean;
 	/** The viewer manages the station: may change it. */
 	canEdit: boolean;
+	/**
+	 * How it archives on its own (core): `off` (no days), `idle`, or `reviewed` (once idle and recommended by its
+	 * review).
+	 */
+	mode?: string;
+	/** That in a line with Slack's, as its row in 设置 › 归档 says it (core). */
+	summaryText?: string;
+	/** The days idle offered to choose from, the one kept among them when it is none of them (core). */
+	daysOffered?: number[];
+	/** The same of `slackDays` (core). */
+	slackDaysOffered?: number[];
 }
 
 export interface Attachment {

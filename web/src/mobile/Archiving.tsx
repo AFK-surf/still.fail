@@ -5,7 +5,7 @@ import type { ArchivingView, StationView } from "../core/shapes.ts";
 import { useStations } from "../api.ts";
 import { t } from "../i18n.ts";
 import { StationNamed } from "../StationNamed.tsx";
-import { HINTS, IDLE_DAYS, MODES, SLACK_DAYS, daysLabel, daysOffered, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, summaryOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
+import { HINTS, MODES, daysLabel, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { useApp } from "./app.tsx";
 import { LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
@@ -52,7 +52,7 @@ function StationRow({ s }: { s: StationView }) {
   const view = s.online ? s.overview?.archiving : undefined;
   const stalled = view !== undefined && view.reviewed && view.days > 0 && !reviewOf(s).on;
   const note = !view ? (!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("common.connecting") : t("web-pages.archiving.upgrade"))
-    : stalled ? t("web-pages.archiving.stalled") : summaryOf(view);
+    : stalled ? t("web-pages.archiving.stalled") : view.summaryText;
   return (
     <ListRow onClick={view ? () => app.push(app.at(`/settings/archive/${encodeURIComponent(s.station)}`)) : undefined}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
@@ -89,8 +89,8 @@ function StationArchivingForm({ s, view }: { s: StationView; view: ArchivingView
   const review = reviewOf(s);
   const mode = modeOf(view);
   const locked = !view.canEdit || busy;
-  const idle = daysOffered(view.days, IDLE_DAYS);
-  const slack = daysOffered(view.slackDays, SLACK_DAYS);
+  const idle = view.daysOffered ?? [];
+  const slack = view.slackDaysOffered ?? [];
   const decisions = app.at("/settings/automatic-decisions/completion");
   return <>
     {!view.canEdit && <div className={css.mSegNote}>{t("web-pages.archiving.adminOnly")}</div>}

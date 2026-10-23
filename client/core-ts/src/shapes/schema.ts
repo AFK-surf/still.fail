@@ -2896,6 +2896,10 @@ export const SHAPES: Record<string, Shape> = {
     ["slackDays", "f64", { doc: "Days idle before a session heard only in Slack goes even stopped at a block; 0: never." }],
     ["reviewed", "bool", { doc: "Only chats the archive review recommended go (none while the review is off)." }],
     ["canEdit", "bool", { doc: "The viewer manages the station: may change it." }],
+    ["mode", "String", { default: true, doc: "How it archives on its own (core): `off` (no days), `idle`, or `reviewed` (once idle and recommended by its\nreview)." }],
+    ["summaryText", "String", { default: true, doc: "That in a line with Slack's, as its row in 设置 › 归档 says it (core)." }],
+    ["daysOffered", vec("f64"), { default: true, doc: "The days idle offered to choose from, the one kept among them when it is none of them (core)." }],
+    ["slackDaysOffered", vec("f64"), { default: true, doc: "The same of `slackDays` (core)." }],
   ], { keepNone: true }),
   ArchivePolicyView: struct([
     ["text", "String", { doc: "The policy in words: what the decision model is told." }],
