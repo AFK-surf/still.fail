@@ -107,6 +107,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   const [attempt, setAttempt] = useState(0);
   /** How large a picture is asked for (its panel's 画质; a phone's is as its window is): another opens the view again. */
   const quality: Quality = phone ? "auto" : usePrefs((p) => p.screenQuality) as Quality | undefined ?? "auto";
+  /** The codec asked (its panel's 编码): `h264` only, or the best both ends have. Another opens the view again. */
+  const codec: "auto" | "h264" = usePrefs((p) => p.screenCodec) === "h264" ? "h264" : "auto";
   /** What came of the view: its panel reads the frames and bits a second from it. */
   const meter = useRef<Meter>({ frames: 0, bytes: 0 });
   const [shown, setShown] = useState<Shown | null>(null);
@@ -216,7 +218,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
       const { cursor: _, ...rest } = state;
       setShown((was) => (was && JSON.stringify(was) === JSON.stringify(rest) ? was : rest));
     };
-    void decodable().then((codecs) => {
+    void decodable(codec === "h264").then((codecs) => {
       if (!open) return;
       core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(quality) }, (value, bytes) => {
         if (!open) return;
@@ -243,7 +245,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
       abort.abort();
       frames.close();
     };
-  }, [station, screen, attempt, quality, place, drawPointer]);
+  }, [station, screen, attempt, quality, codec, place, drawPointer]);
 
   // What is done over the picture, while driving.
   useEffect(() => {
@@ -365,6 +367,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
     <>
       {live && <NetChip net={net} shown={shown} meter={meter} os={os} />}
       <ControlCenter quality={quality} onQuality={(q) => setPrefs({ screenQuality: q === "auto" ? null : q })} scale={scale} onScale={setScale}
+        codec={codec} onCodec={(c) => setPrefs({ screenCodec: c === "auto" ? null : c })}
         combos={driving ? combosFor(os) : []} onCombo={sendCombo} onSend={drop ? () => files.current?.click() : undefined}
         onWindow={onWindow} full={full} onFull={goFull} chat={tab.chat} onClose={tab.close} onLeave={onBack} />
     </>

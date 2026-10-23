@@ -4379,6 +4379,11 @@ export interface PrefsView {
 	 */
 	screenQuality?: string;
 	/**
+	 * The codec a station's screen is asked in on this device: `h264` (H.264 only), or (none) the best both ends
+	 * have (H.265 where they do).
+	 */
+	screenCodec?: string;
+	/**
 	 * The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
 	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
 	 */
