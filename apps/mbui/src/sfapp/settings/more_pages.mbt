@@ -172,7 +172,7 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
     list_card(c, fn() {
       if list_row(c, key=if busy { "" } else { "auto-enabled/" + station }, fn() {
           row_title(c, tr("web-pages.automaticDecisions.enabled"))
-          switch(c, flag(d, "enabled"))
+          switch(c, "auto-enabled/" + station, flag(d, "enabled"))
         }) {
         call("edit", [("enabled", Json::boolean(!flag(d, "enabled")))])
       }

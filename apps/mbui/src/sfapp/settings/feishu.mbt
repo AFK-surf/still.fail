@@ -190,7 +190,7 @@ fn feishu_own_app(
       c.text(tr("web-mobile.connects.feishu.larkNote"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
     })
     |> ignore
-    switch(c, lark)
+    switch(c, "feishu-app/" + form + "/lark", lark)
   })
   |> ignore
   let identity = field(f, "identity")

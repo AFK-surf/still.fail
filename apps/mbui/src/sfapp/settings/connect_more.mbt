@@ -249,7 +249,7 @@ fn mode_choices(c : @ui.Ctx, key : String, mode : String, mention : Bool, kind? 
           |> ignore
         })
         |> ignore
-        switch(c, mention)
+        switch(c, key + "/mention", mention)
       })
       |> ignore
     }

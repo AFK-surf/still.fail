@@ -1,0 +1,9 @@
+# A settings switch turned off and on again (the vault editor's 允许 agent 申请: its own, no core asked): the knob
+# across and back, the ground with it.
+timeout 20000
+until 允许 agent 申请
+wait 600
+tap 允许 agent 申请
+wait 700
+tap 允许 agent 申请
+wait 900
