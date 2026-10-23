@@ -1,9 +1,9 @@
-// The still.fail core's engine for the mbui app where no platform glue is needed around it (Windows: stillfail_engine.dll,
-// scripts/native.ts part `engine` win32-x64): Hermes 0.81.4, the same as Android's, running the core's bytecode
-// (client/core-ts hosts/hermes-start.ts, by apps/mbui/scripts/core.sh hermes) on one thread of its own, with its tasks,
-// timers and microtasks, and `__native` on the Rust shell (client/shell). Android's engine
-// (apps/android/core/src/main/cpp/engine.cpp) without JNI: what it says, and the calls only the app can do (`secure.*`,
-// `listen.*`), go to the host through a C API, so a host in C (src/host/win_core.c) needs no C++ of its own.
+// The still.fail core's engine for the mbui app (scripts/native.ts part `engine`: Windows' stillfail_engine.dll, Android's
+// libstillfail_hermes.so): Hermes 0.81.4 running the core's bytecode (client/core-ts hosts/hermes-start.ts, by
+// apps/mbui/scripts/core.sh hermes) on one thread of its own, with its tasks, timers and microtasks, and `__native` on
+// the Rust shell (client/shell). What it says, and the calls only the app can do (`secure.*`, `listen.*`; Android's
+// `picked.*`), go to the host through a C API, so a host in C (src/host/win_core.c, android_core.c) needs no C++ of its
+// own.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -55,6 +55,16 @@ SF_ENGINE_API void sf_engine_complete(sf_engine *engine, uint64_t id, const char
 /// Ends the core and waits for its thread; the shell's answers still on their way are let go. Nothing is called on the
 /// host after it returns, and `engine` is gone. Not from the core's thread.
 SF_ENGINE_API void sf_engine_stop(sf_engine *engine);
+
+#ifdef __ANDROID__
+/// The core's JS sampled for `seconds` (the runtime is made registered for it; nothing is sampled until this is asked),
+/// its trace (Chrome's format) written to `path` then: what the core spends its time on, in the app as shipped.
+SF_ENGINE_API void sf_engine_profile(int seconds, const char *path);
+
+/// What the Rust shell has been asked so far, as JSON (client/shell sf_shell_stats), NUL-terminated, `len` bytes before
+/// the NUL; free() it.
+SF_ENGINE_API char *sf_engine_shell_stats(size_t *len);
+#endif
 
 #ifdef __cplusplus
 }

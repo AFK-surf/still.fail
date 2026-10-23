@@ -48,7 +48,7 @@ import * as ffmpeg from "./ffmpeg.ts";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /// The Rust every part is built with (rustup installs it on first use): part of each key, so a newer one is a rebuild.
 const TOOLCHAIN = "1.95.0";
-/// The NDK and the lowest Android API the app supports (apps/android/build.py has the same).
+/// The NDK and the lowest Android API the app supports.
 const NDK = "28.2.13676358";
 const ANDROID_API = 29;
 /// zig, for the Linux builds from a Mac (cargo-zigbuild): only its own version builds what gets published.
@@ -60,8 +60,9 @@ const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
 const STORE = process.env.STILLFAIL_NATIVE_STORE ?? "https://app.still.fail/releases/natives";
 const HELPER_ICON = "apps/desktop/icon.png";
 const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/noq-udp", "vendor/swarm-discovery"];
-/// The Hermes Windows' engine is built from (there is no prebuilt one with its C++ API): facebook/hermes at the tag React
-/// Native's Hermes is, the one Android's hermes-android (apps/android/gradle/libs.versions.toml `hermes`) is made from.
+/// The Hermes of the core's engine: React Native's `rn` (on Android its hermes-android, libhermes.so and its headers, as
+/// apps/mbui/scripts/android-core.sh packs it), and on Windows, which has no prebuilt one with its C++ API,
+/// facebook/hermes at the tag that Hermes is made from.
 const HERMES = { rn: "0.81.4", tag: "hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782" };
 /// How Hermes and the engine are built on Windows: clang-cl (MSVC's own fails on HadesGC.cpp at this tag), CMake and
 /// Ninja, as a release with no debugger.
@@ -224,31 +225,20 @@ const PARTS: Record<string, Part> = {
       copyFileSync(join(target, "aarch64-linux-android/release/libstillfail_shell.so"), join(out, "libstillfail_shell.so"));
     },
   },
-  // The core's engine: Hermes and the core's loop on it, linked to the shell. Android's (apps/android/core/src/main/cpp):
-  // Hermes with the JSI built beside it, Gradle's CMake build, as :core does it, with the release's build type. The
-  // mbui app's on Windows (apps/mbui/engine): Hermes built from its source (HERMES) with clang-cl, static, in one DLL
-  // with the loop, whose C API (engine.h) the app calls; with that build's hermesc, for the core's bytecode.
+  // The core's engine (apps/mbui/engine: one source, its C API engine.h the mbui app calls): Hermes and the core's loop
+  // on it, linked to the shell. Android's: hermes-android's libhermes.so (HERMES.rn) with the JSI built beside it, the
+  // NDK's CMake (apps/mbui/engine/android). Windows': Hermes built from its source (HERMES) with clang-cl, static, in one
+  // DLL with the loop; with that build's hermesc, for the core's bytecode.
   engine: {
     // With the NDK's C++ runtime it was linked against, which the CMake build packs.
     files: (t) => (t === "win32-x64" ? ["stillfail_engine.dll", "stillfail_engine.lib", "hermesc.exe"] : ["libjsi.so", "libstillfail_hermes.so", "libc++_shared.so"]),
     targets: ["android-arm64", "win32-x64"],
     msvc: true,
-    inputs: (t) => (t === "win32-x64" ? ["apps/mbui/engine"] : ["apps/android/core/src/main/cpp", "apps/android/core/build.gradle.kts"]),
-    recipe: (t) => (t === "win32-x64" ? { hermes: HERMES, cmake: HERMES_CMAKE, targets: ["stillfail_engine", "hermesc"] } : { ndk: NDK, hermes: tomlVersion("hermes"), agp: tomlVersion("agp"), task: ":core:externalNativeBuildRelease" }),
+    inputs: ["apps/mbui/engine"],
+    recipe: (t) => (t === "win32-x64" ? { hermes: HERMES, cmake: HERMES_CMAKE, targets: ["stillfail_engine", "hermesc"] } : { ndk: NDK, api: ANDROID_API, hermes: HERMES.rn, cmake: ENGINE_ANDROID_CMAKE }),
     build(t, out) {
       if (t === "win32-x64") return engineWin(out);
-      const app = join(ROOT, "apps/android");
-      const jni = join(app, "core/build/generated/jniLibs/arm64-v8a");
-      mkdirSync(jni, { recursive: true });
-      copyFileSync(join(ensure("shell", "android-arm64"), "libstillfail_shell.so"), join(jni, "libstillfail_shell.so"));
-      const cxx = join(app, "core/build/intermediates/cxx");
-      rmSync(cxx, { recursive: true, force: true });
-      run(join(app, "gradlew"), ["-p", app, "--console=plain", "--no-watch-fs", ":core:externalNativeBuildRelease"], { env: { ...process.env, ...androidEnv() } });
-      for (const name of P("engine").files("android-arm64")) {
-        const found = findFile(cxx, (p) => p.endsWith(`/obj/arm64-v8a/${name}`));
-        if (!found) throw new Error(`${name} is not in ${cxx}`);
-        copyFileSync(found, join(out, name));
-      }
+      engineAndroid(out);
     },
   },
   // The desktop app's dock (apps/desktop/dock, docs/desktop-dock.md): a SwiftUI helper, built with the Xcode the Mac
@@ -396,7 +386,6 @@ function shellWin(out: string) {
 /// is not needed to build it). The checkout and the build stay in the part's target directory, so a change to the loop
 /// alone compiles only it.
 function engineWin(out: string) {
-  if (tomlVersion("hermes") !== HERMES.rn) throw new Error(`Android's Hermes is ${tomlVersion("hermes")}, Windows' tag is React Native ${HERMES.rn}'s: move HERMES with it`);
   // natively on Windows; on a Mac with clang-cl and xwin's SDK (cargo-xwin's), Hermes's own tools built for the Mac
   const cross = osPlatform() === "darwin";
   const work = cross ? join(BUILD(), "hermes") : targetDir(join(ROOT, "apps/mbui/engine/target"), "engine");
@@ -424,6 +413,53 @@ function engineWin(out: string) {
   run("cmake", ["--build", build, "--target", "stillfail_engine", "hermesc"]);
   for (const f of ["stillfail_engine.dll", "stillfail_engine.lib"]) copyFileSync(join(build, "stillfail-engine", f), join(out, f));
   copyFileSync(join(build, "bin", "hermesc.exe"), join(out, "hermesc.exe"));
+}
+/// How Android's engine is built (apps/mbui/engine/android): the NDK's toolchain for arm64, its C++ runtime shared, a
+/// release.
+const ENGINE_ANDROID_CMAKE = ["-G", "Ninja", "-DANDROID_ABI=arm64-v8a", "-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release"];
+/// Android's engine: hermes-android's AAR (HERMES.rn: Gradle's cache, else Maven Central) for libhermes.so and its
+/// headers, the shell this target's, and the SDK's CMake with the NDK's toolchain; the NDK's libc++_shared.so beside.
+function engineAndroid(out: string) {
+  const sdk = androidHome();
+  const ndk = join(sdk, "ndk", NDK);
+  const work = join(BUILD(), "engine-android");
+  mkdirSync(work, { recursive: true });
+  const hermes = join(work, `hermes-android-${HERMES.rn}`);
+  if (!existsSync(join(hermes, "jni/arm64-v8a/libhermes.so"))) {
+    rmSync(hermes, { recursive: true, force: true });
+    mkdirSync(hermes, { recursive: true });
+    run("unzip", ["-q", "-o", hermesAar(work), "jni/arm64-v8a/libhermes.so", "prefab/modules/libhermes/include/*", "-d", hermes]);
+  }
+  const shell = join(ensure("shell", "android-arm64"), "libstillfail_shell.so");
+  const cmakeDir = readdirSync(join(sdk, "cmake")).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).pop();
+  if (!cmakeDir) throw new Error(`no CMake in ${join(sdk, "cmake")}: install the SDK's cmake`);
+  const bin = join(sdk, "cmake", cmakeDir, "bin");
+  const build = join(work, "build");
+  rmSync(build, { recursive: true, force: true });
+  run(join(bin, "cmake"), ["-S", join(ROOT, "apps/mbui/engine/android"), "-B", build, ...ENGINE_ANDROID_CMAKE,
+    `-DCMAKE_MAKE_PROGRAM=${join(bin, "ninja")}`, `-DCMAKE_TOOLCHAIN_FILE=${join(ndk, "build/cmake/android.toolchain.cmake")}`,
+    `-DANDROID_PLATFORM=android-${ANDROID_API}`, `-DHERMES_SO=${join(hermes, "jni/arm64-v8a/libhermes.so")}`,
+    `-DHERMES_INCLUDE=${join(hermes, "prefab/modules/libhermes/include")}`, `-DSHELL_SO=${shell}`]);
+  run(join(bin, "cmake"), ["--build", build]);
+  for (const name of ["libstillfail_hermes.so", "libjsi.so"]) copyFileSync(join(build, name), join(out, name));
+  const sysroot = join(ndk, "toolchains/llvm/prebuilt", osPlatform() === "darwin" ? "darwin-x86_64" : "linux-x86_64", "sysroot");
+  copyFileSync(join(sysroot, "usr/lib/aarch64-linux-android/libc++_shared.so"), join(out, "libc++_shared.so"));
+}
+/// hermes-android's AAR at HERMES.rn: Gradle's cache where it has it, else downloaded once into `work`.
+function hermesAar(work: string): string {
+  const name = `hermes-android-${HERMES.rn}-release.aar`;
+  const cache = join(homedir(), ".gradle/caches/modules-2/files-2.1/com.facebook.react/hermes-android", HERMES.rn);
+  if (existsSync(cache)) {
+    const found = findFile(cache, (p) => p.endsWith(`/${name}`));
+    if (found) return found;
+  }
+  const aar = join(work, name);
+  if (!existsSync(aar)) {
+    run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", "--retry-delay", "5", "-o", `${aar}.part`,
+      `https://repo1.maven.org/maven2/com/facebook/react/hermes-android/${HERMES.rn}/${name}`]);
+    renameSync(`${aar}.part`, aar);
+  }
+  return aar;
 }
 /// Hermes for Windows from a Mac: the hermesc it compiles its own JS with built for the Mac first (Hermes's cross build
 /// imports it), then a CMake toolchain of clang-cl, lld-link and llvm-lib on xwin's SDK and CRT (the release CRT: xwin
@@ -475,10 +511,6 @@ const defaultTarget = (part: string): Target => {
 
 function git(args: string[], input?: string): string {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", input, maxBuffer: 64 << 20 });
-}
-function tomlVersion(name: string): string {
-  const toml = readFileSync(join(ROOT, "apps/android/gradle/libs.versions.toml"), "utf8");
-  return toml.match(new RegExp(`^${name}\\s*=\\s*"([^"]+)"`, "m"))?.[1] ?? "";
 }
 /// Each input file and its content's git hash: as committed or staged, and as it is in the worktree when it differs
 /// there (an edit not yet committed is another key), new files not ignored included.

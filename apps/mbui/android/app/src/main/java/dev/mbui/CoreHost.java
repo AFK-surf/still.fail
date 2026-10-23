@@ -29,11 +29,10 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * The still.fail core's listener (src/host/android_core.c): what ember's engine (its engine.cpp, prebuilt as
- * libstillfail_hermes.so) calls back with on the core's thread. What the core says goes straight back to C
- * ({@link #onBytes}, {@link #onFrame}); the calls only the app does ({@code secure.*}, {@code listen.*}) are answered
- * here on a thread of their own and handed to the engine's {@code complete}, which android_core.c binds to
- * {@link #complete}. One per running core.
+ * The still.fail core's calls only the app does (src/host/android_core.c, on the core's thread; the engine is
+ * apps/mbui/engine, prebuilt as libstillfail_hermes.so): {@code secure.*}, {@code listen.*}, {@code picked.*}, answered
+ * here on a thread of their own and handed to the engine's {@code sf_engine_complete}, which android_core.c binds to
+ * {@link #complete}. What the core says goes to C, not through here. One per running core.
  */
 final class CoreHost {
     // The device as the core names it to the people who approve it (sfcore's `client.device`, as still.fail's Android
@@ -79,11 +78,7 @@ final class CoreHost {
         this.dataDir = dataDir;
     }
 
-    native void onBytes(byte[] json);
-
-    native void onFrame(byte[] json, byte[] bytes);
-
-    /** The engine's HermesNative.complete: {@code error} null when the call succeeded. */
+    /** The engine's sf_engine_complete: {@code error} null when the call succeeded. */
     static native void complete(long handle, long id, String json, String error, byte[] bytes);
 
     synchronized void started(long h) {

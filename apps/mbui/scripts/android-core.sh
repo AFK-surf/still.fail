@@ -1,6 +1,6 @@
 # Sourced by scripts/android.sh for an app with the still.fail core in it (coredemo, stillfail; MBUI_ANDROID_HOOK):
-# the core as still.fail's own Android app runs it (src/sfcore/android_engine.c, which includes android_core.c). Into
-# out/android/apk, which Gradle packs: still.fail's prebuilt engine and shell (EMBER: still.fail's checkout, as
+# the core on the app's engine (src/sfcore/android_engine.c, which includes android_core.c; its C API apps/mbui/engine's
+# engine.h). Into out/android/apk, which Gradle packs: the prebuilt engine and shell (EMBER: still.fail's checkout, as
 # scripts/core.sh has it; `node scripts/native.ts path engine|shell android-arm64` there, prebuilt or built by it),
 # libhermes.so from React Native's hermes-android (the Hermes the engine is built against: Gradle's cache, else Maven
 # Central), and the core as Hermes bytecode (scripts/core.sh hermes; ENTRY picks the core's entry, by default the one
@@ -14,6 +14,8 @@ APP_KIND=core
 # mbui/core's queue and the app's engine (src/<app>/android_engine.c, which includes src/sfcore/android_engine.c)
 APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/android_engine.c"
 APP_LINK="-L$jni -lstillfail_hermes"
+# (the engine's C API, engine.h)
+CFLAGS="$CFLAGS -I$H/../engine"
 
 # A .so of an AAR on Maven Central (GROUP/ARTIFACT VERSION FILE LIB SHA-256), fetched once and checked (mbui's
 # scripts/apk fetch: kept in $APK_CACHE), into $jni.
