@@ -63,6 +63,14 @@ pub fn pick(kind : PickKind, hold? : Bool = false) -> Pick? {
 }
 
 ///|
+/// Files let go on the window from outside (the host's `mbui.drop` message names the pick their reading is: ui's
+/// drop.mbt), as an ask of the system's: read whole, a folder's by their way down from where it was dropped
+/// ("照片/2026/a.jpg"), each folder itself named with a "/" at its end and no bytes.
+pub fn dropped_pick(id : Int) -> Pick {
+  { id, }
+}
+
+///|
 /// A photo of the gallery (gallery.mbt's `src`) read whole, as a pick of it: None where the host has no gallery.
 pub fn pick_photo(src : String) -> Pick? {
   match pk_photo(src) {

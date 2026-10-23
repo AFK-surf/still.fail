@@ -367,6 +367,34 @@ pub fn open_mode(mode : String) -> Unit {
         wide.files_open["station/ws1/st1"] = true
       }
       "files-list" => wide.files_view = Some("list")
+      // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
+      "files-clash" =>
+        fdrag.asking = Some({
+          into: { station: "ws1/st1", root: Some(fix_docs), path: "会议记录" },
+          into_name: "会议记录",
+          total: 1,
+          clashes: [
+            {
+              name: "说明.txt",
+              dir: false,
+              size: 2048.0,
+              station: "MBA",
+              there: dv_entry(fix_entry("说明.txt", false, 320, "10/01")),
+            },
+          ],
+          answers: {},
+          all: false,
+          done: fn(_) {  },
+        })
+      // the bar's 传输 open: a copy to MBA going (as the core says it)
+      "files-transfers" => {
+        fix_transfer({
+          "from": { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "", "names": ["演示录屏.mp4"] },
+          "to": { "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" },
+          "move": false,
+        })
+        fgo.transfers = true
+      }
       // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
       "files-preview" => {
         wide.files_preview = Some(true)

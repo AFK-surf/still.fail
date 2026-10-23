@@ -449,17 +449,22 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home), its station's but
 }
 
 ///|
-test "wide: what goes up or down a chip in the files' bar (N 个传输 · P%), pressed each with how far" {
+test "wide: files going up are rows of the folder (Drive.tsx UploadRow): how far, a name taken (替换, 保留两者), why one failed (重试)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="drive-upload")
   // (what the mode opens: 文档 with a file going up, one taken, one failed)
   app.nav.replace(Home)
   open_drive_fixture("drive-upload")
+  wide.files_view = Some("list")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.query(Button, label="传输") is Some(_), msg="the chip")
-  t.click(Button, label="传输")
-  t.frame()
-  assert_true(t.words().iter().any(fn(w) { w.0.contains("%") }), msg="each with how far")
+  assert_true(t.find("旅行照片.zip") is Some(_))
+  assert_true(t.find("2.5 MB / 6.0 MB") is Some(_), msg="how far")
+  assert_true(t.find("已有同名文件") is Some(_), msg="a name taken")
+  assert_true(t.query(Button, label="保留两者") is Some(_))
+  assert_true(t.find("上传失败：station 已离线") is Some(_), msg="why one failed")
+  assert_true(t.query(Button, label="重试") is Some(_))
+  // no copy between stations asked: no 传输 on the bar
+  assert_true(t.find("传输") is None)
 }
 
 ///|
@@ -655,4 +660,125 @@ test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its star
   t.frame()
   assert_true(t.find("双击打开文件夹") is None)
   assert_true(t.query(Button, label="显示预览 ⌘⇧P") is Some(_))
+}
+
+///|
+/// The files' page at Studio's 文档 in a list (or as `view` says), its calls kept in `calls`.
+fn files_dragging(calls : Array[Made], view? : String = "list") -> @ui.Tester {
+  let t = wide_tester(calls)
+  app.nav.replace(Files)
+  app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  wide.files_view = Some(view)
+  t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+test "wide: 文件's rows dragged as Finder's: onto a folder moved there within its station (a rename), ⌥ a copy; a folder onto 个人收藏 kept" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  let (x0, y0) = t.find("长篇小说.txt").unwrap()
+  let (x1, y1) = t.find("会议记录").unwrap()
+  // over the folder: it says so (the row lit), let go: moved into it
+  t.drag(x0, y0, x1, y1)
+  let moved = named(calls, "drive.rename")
+  assert_eq(moved.length(), 1)
+  assert_eq(text(Some(moved[0].params), "from"), "长篇小说.txt")
+  assert_eq(text(Some(moved[0].params), "to"), "会议记录/长篇小说.txt")
+  assert_eq(text(Some(moved[0].params), "root"), fix_docs)
+  // ⌥ held: a copy (the stations' transfer, into the same station)
+  t.hold_mods(@ui.mod_alt)
+  let (x0, y0) = t.find("发布清单.md").unwrap()
+  let (x1, y1) = t.find("会议记录").unwrap()
+  t.drag(x0, y0, x1, y1)
+  t.hold_mods(0)
+  t.frame()
+  let copied = named(calls, "drive.transfer")
+  assert_eq(copied.length(), 1)
+  assert_false(flag(Some(copied[0].params), "move"))
+  assert_eq(text(field(Some(copied[0].params), "to"), "path"), "会议记录")
+  assert_eq(items(field(Some(copied[0].params), "from"), "names").length(), 1)
+  // the bar's 传输: it goes (as the core says), its list on a press
+  assert_true(t.find("1 个传输 · 37%") is Some(_), msg="the transfers' chip")
+  // a folder onto 个人收藏: kept there
+  let (x0, y0) = t.find("设计稿").unwrap()
+  let (x1, y1) = t.find("个人收藏").unwrap()
+  t.drag(x0, y0, x1, y1)
+  let kept = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "driveFavorites") is Some(_) })
+  assert_true(kept.length() > 0)
+  assert_true(t.query(Button, label="从个人收藏移除「设计稿」") is Some(_))
+}
+
+///|
+test "wide: 文件 dragged to another station's folder (the sidebar's) is copied there by the stations; ⌘ moves it" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  let (x0, y0) = t.find("首页截图.png").unwrap()
+  let (x1, y1) = t.find_last("照片").unwrap()
+  t.drag(x0, y0, x1, y1)
+  let sent = named(calls, "drive.transfer")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(field(Some(sent[0].params), "from"), "station"), "ws1/st1")
+  assert_eq(text(field(Some(sent[0].params), "to"), "station"), "ws1/st2")
+  assert_eq(text(field(Some(sent[0].params), "to"), "root"), "/Users/lin/照片")
+  assert_false(flag(Some(sent[0].params), "move"))
+  t.hold_mods(@ui.mod_cmd)
+  let (x0, y0) = t.find("季度数据.csv").unwrap()
+  let (x1, y1) = t.find_last("照片").unwrap()
+  t.drag(x0, y0, x1, y1)
+  t.hold_mods(0)
+  assert_true(flag(Some(named(calls, "drive.transfer")[1].params), "move"))
+}
+
+///|
+test "wide: 文件 moved onto a folder that has its name: asked first (跳过, 保留两者, 替换), kept beside it named as a copy" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls, view="tree")
+  // 会议记录 and 设计稿 › 旧版 opened in place: each has a 说明.txt
+  for open in ["会议记录", "设计稿", "设计稿/旧版"] {
+    wide.files_open["tree/ws1/st1/" + fix_docs + "/" + open] = true
+  }
+  t.frame()
+  let notes = t.locate("说明.txt")
+  assert_eq(notes.length(), 2)
+  let (x1, y1) = t.find("旧版").unwrap()
+  // (the one in 会议记录: not the row under 旧版, its own)
+  let (x0, y0) = if (notes[0].1 - y1).abs() > (notes[1].1 - y1).abs() { notes[0] } else { notes[1] }
+  t.drag(x0, y0, x1, y1)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("「旧版」里已有「说明.txt」") is Some(_), msg="asked")
+  assert_eq(named(calls, "drive.rename").length(), 0)
+  t.click(Button, label="保留两者")
+  t.frame()
+  let moved = named(calls, "drive.rename")
+  assert_eq(moved.length(), 1)
+  assert_eq(text(Some(moved[0].params), "to"), "设计稿/旧版/说明 2.txt")
+}
+
+///|
+test "wide: 文件 from the computer held over the folder say where they go; let go, a folder of them made and filled, each file up" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  let (x, y) = t.find("合同草稿.pdf").unwrap()
+  // under the rows, over the folder shown
+  let at = (x, y + 120.0)
+  t.hold_files(Some(at))
+  t.frame()
+  t.frame()
+  assert_true(t.find("松开上传到「文档」") is Some(_), msg="where they go")
+  t.drop_files(at.0, at.1, [
+    ("新的/", Bytes::new(0)),
+    ("新的/记录.txt", @utf8.encode("一行字\n")),
+    ("清单.txt", @utf8.encode("另一行\n")),
+  ])
+  t.frame()
+  t.frame()
+  t.frame()
+  assert_true(t.find("松开上传到「文档」") is None)
+  let made = named(calls, "drive.mkdir")
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].params), "path"), "新的")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("清单.txt") is Some(_), msg="up")
+  assert_true(t.find("新的") is Some(_), msg="its folder made")
 }

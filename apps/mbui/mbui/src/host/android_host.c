@@ -2098,6 +2098,9 @@ moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0)
 void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
 // (the desktop's dock: the macOS app's only)
 int32_t mb_host_dock_available(void) { return 0; }
+
+// The keys held now (@hostapi.mods_held): none read here.
+int32_t mb_host_mods_held(void) { return 0; }
 void mb_host_dock_send(moonbit_string_t l) { (void)l; }
 void mb_host_dock_stop(void) {}
 moonbit_string_t mb_host_dock_kept(void) { return moonbit_make_string_raw(0); }

@@ -51,6 +51,11 @@ impl @hostapi.Host for Native with dock_available(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with mods_held(_) {
+  mods_held()
+}
+
+///|
 impl @hostapi.Host for Native with dock_send(_, l) {
   dock_send(l)
 }

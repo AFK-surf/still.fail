@@ -23,6 +23,7 @@ pub(open) trait Host {
   dock_stop(Self) -> Unit = _
   dock_kept(Self) -> String = _
   dock_keep(Self, String) -> Unit = _
+  mods_held(Self) -> Int = _
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
   wall_ms(Self) -> Double = _
@@ -214,6 +215,11 @@ impl Host with local_station_act(_, _) {
 ///|
 impl Host with dock_available(_) {
   false
+}
+
+///|
+impl Host with mods_held(_) {
+  0
 }
 
 ///|
@@ -1069,6 +1075,13 @@ pub fn local_station_act(action : String) -> Unit {
 /// Whether there is a dock here (macOS: the desktop's SwiftUI helper, apps/desktop/dock, on macOS 14 or later).
 pub fn dock_available() -> Bool {
   current.val.dock_available()
+}
+
+///|
+/// The keys held down now that change what a press or a drag does (shift 1, control 2, option/alt 4, command 8: as a
+/// key's own modifiers are told): what a drag let go does by them (Finder's ⌥ a copy). None where there is no keyboard.
+pub fn mods_held() -> Int {
+  current.val.mods_held()
 }
 
 ///|

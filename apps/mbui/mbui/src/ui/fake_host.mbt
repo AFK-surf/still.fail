@@ -299,6 +299,11 @@ impl @hostapi.Host for FakeHost with dock_available(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with mods_held(_) {
+  mods_held()
+}
+
+///|
 impl @hostapi.Host for FakeHost with dock_send(_, a0) {
   dock_send(a0)
 }

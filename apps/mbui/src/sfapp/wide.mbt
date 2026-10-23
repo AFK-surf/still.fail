@@ -237,6 +237,7 @@ fn wide_reset() -> Unit {
   wide.files_chosen = ""
   wide.files_preview = None
   fpane_reset()
+  fdrag_reset()
   wide.tabs_set.clear()
   fgo_reset()
   wide_on.val = false

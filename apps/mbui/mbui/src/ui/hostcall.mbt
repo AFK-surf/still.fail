@@ -68,6 +68,8 @@ struct FakeHost {
   dock_lines : Array[String]
   mut dock_stops : Int
   mut dock_kept : String
+  /// the keys held down as the test says (Tester::hold_mods)
+  mut mods : Int
   /// the URLs handed to the system (Ctx::open_url), oldest first
   opened : Array[String]
   /// what the app reads of where it runs (hostread.mbt): the system dark, the window's buttons in the app's top row,

@@ -158,6 +158,7 @@ fn dv_reset() -> Unit {
   dv_reads.clear()
   fix_folders.clear()
   fix_places.clear()
+  fix_transfers.clear()
   fix_reads.clear()
   draft_refs.clear()
   sfs.open = false

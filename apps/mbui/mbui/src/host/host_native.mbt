@@ -266,6 +266,14 @@ fn local_station_act(a : String) -> Unit {
 extern "C" fn ffi_dock_available() -> Int = "mb_host_dock_available"
 
 ///|
+extern "C" fn ffi_mods_held() -> Int = "mb_host_mods_held"
+
+///|
+fn mods_held() -> Int {
+  ffi_mods_held()
+}
+
+///|
 #borrow(l)
 extern "C" fn ffi_dock_send(l : String) -> Unit = "mb_host_dock_send"
 
