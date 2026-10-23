@@ -40,16 +40,19 @@ try {
   // comes late: the demo's next line), then by `still_ms` more in steps, each step's transitions and finite animations
   // taken to their ends (they run on the browser's own clock: finished, not waited for; spinners go on), so that what
   // the app times by them (a row's turn after the one before it, listQueue.ts) comes as it would.
+  // (the clock's moves on the page's own controller, what page.clock.runFor asks of it: page.clock's each add a script
+  // to the context, run again in every page it opens after, and a context here opens the stories one after another)
+  const tick = (page, ms) => page.evaluate((ms) => globalThis.__pwClock.controller.runFor(ms), ms);
   const settle = async (page, ms) => {
     await page.evaluate(() => Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]));
-    await page.clock.runFor(ms);
+    await tick(page, ms);
     for (let t = 0; t < still_ms; t += 100) {
       await page.evaluate(async () => {
         const going = document.getAnimations().filter((a) => (a.playState === 'running' || a.pending) && a.effect?.getTiming().iterations !== Infinity);
         for (const a of going) a.finish();
         await Promise.all(going.map((a) => a.finished.catch(() => {})));
       });
-      await page.clock.runFor(100);
+      await tick(page, 100);
     }
   };
 
@@ -70,9 +73,16 @@ try {
 
   const wrong = [];
   /** A page with the story in it, taken to its state by its steps; whether it got there. */
-  const open = async (story) => {
-    const page = await browser.newPage({ viewport: story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN', reducedMotion: 'no-preference' });
-    await page.clock.install();
+  const open = async (story, context) => {
+    // What the story before it kept in the browser gone (its storage, its cookies): only what the context's cache holds
+    // stays, the app's scripts compiled once a context rather than once a story (a page opened 30% sooner, Studio,
+    // 2026-10-23). The clock is the context's, each page's from the same moment.
+    await context.clearCookies();
+    const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Storage.clearDataForOrigin', { origin: new URL(base).origin, storageTypes: 'all' });
+    await cdp.detach();
+    await page.setViewportSize(story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`${base}?story=${story.id}&theme=light`);
@@ -93,7 +103,7 @@ try {
           const cdp = await page.context().newCDPSession(page);
           await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }] });
-          await page.clock.runFor(800);
+          await tick(page, 800);
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
         }
         await settle(page, 450);
@@ -105,8 +115,8 @@ try {
     }
     return { page, errors, reached };
   };
-  const take = async (story) => {
-    const { page, errors, reached } = await open(story);
+  const take = async (story, context) => {
+    const { page, errors, reached } = await open(story, context);
     if (reached) {
       const c = await page.evaluate(corners);
       const p = await page.evaluate(panels);
@@ -119,7 +129,7 @@ try {
       // The clock's time held where it is from here on (its timers and frames still run, so what moves gets to its end):
       // what reads the time (a wait's minutes and seconds) says the same at each look. Run on, a counter's width matched
       // with motion twice and not without, by chance (run 39732288569).
-      await page.clock.setFixedTime(await page.evaluate(() => Date.now()));
+      await page.evaluate(() => globalThis.__pwClock.controller.setFixedTime(Date.now()));
       const at = async (reducedMotion) => {
         await page.emulateMedia({ reducedMotion });
         await steady(page);
@@ -162,9 +172,14 @@ try {
     for (const e of errors) console.log(`${story.id}: page error ${e}`);
     await page.close();
   };
-  // Several at once, each in a page of its own.
+  // Several at once, each in a page of its own, each line of them in a context of its own.
   const queue = [...stories];
-  await Promise.all(Array.from({ length: Number(process.env.PAGES) || 6 }, async () => { while (queue.length) await take(queue.shift()); }));
+  await Promise.all(Array.from({ length: Number(process.env.PAGES) || 6 }, async () => {
+    const context = await browser.newContext({ deviceScaleFactor: 1, locale: 'zh-CN', reducedMotion: 'no-preference' });
+    await context.clock.install();
+    while (queue.length) await take(queue.shift(), context);
+    await context.close();
+  }));
   const distinct = [...new Set(wrong)];
   if (process.env.REPORT) { console.log(`\n${distinct.length} off:`); for (const w of distinct) console.log('  ' + w); }
   else assert.deepEqual(distinct, []);
