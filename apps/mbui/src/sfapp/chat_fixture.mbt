@@ -400,6 +400,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_md_message(rich_chat(f.older))
           } else if f.mode == "chat-viz" {
             with_viz_message(rich_chat(f.older))
+          } else if f.mode == "chat-file-links" {
+            with_file_links(rich_chat(f.older))
           } else if f.mode == "chat-screens" {
             with_message(rich_chat(f.older), screens_answer)
           } else if f.mode == "chat-update" {
@@ -1204,6 +1206,50 @@ let viz_answer : String =
   #|```mermaid
   #|graph LR; 构建-->签名-->发布
   #|```
+
+///|
+/// MBUI_FIXTURE=chat-file-links: a last message naming two of its files by links within a sentence, written escaped
+/// as the station sends them (`release%2Ehtml`), its Markdown tree with it (file_links_md).
+fn with_file_links(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), file_links_answer, "1 分钟前", {
+          "attachments": [file("release.html", 0, 0, 1200), file("界面草图.png", 600, 400, 18000)],
+          "placed": ["release.html", "界面草图.png"],
+          "md": file_links_md,
+          "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+let file_links_answer : String = "这周的[发布节奏](release%2Ehtml)，草图在[界面草图](%E7%95%8C%E9%9D%A2%E8%8D%89%E5%9B%BE.png)。"
+
+///|
+/// file_links_answer's tree as the core reads it: its words by where they are in it.
+let file_links_md : Json = [
+  [
+    "p",
+    [
+      [0, 3],
+      ["a", [[4, 8]], { "href": "release%2Ehtml" }],
+      [25, 29],
+      ["a", [[30, 34]], { "href": "%E7%95%8C%E9%9D%A2%E8%8D%89%E5%9B%BE.png" }],
+      [77, 78],
+    ],
+  ],
+]
 
 ///|
 /// MBUI_FIXTURE=chat-viz's visualization: a fragment, as the viz skill has agents write them.
