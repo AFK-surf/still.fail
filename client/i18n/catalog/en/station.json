@@ -413,6 +413,7 @@
   "station.updates.moduleBadPackage": "The package can't be opened; not installed ({why})",
   "station.updates.moduleWentBack": "{version} didn't start; back on {back}",
   "station.updates.noInstaller": "This release has no installer; reinstall with the install command",
+  "station.updates.noApplicableUpdate": "{program} has no update it can apply here yet (its sources may not have the latest version); nothing changed: {said}",
   "station.updates.notNewer": "{program} finished, but {command} is still {version} (latest {latest}); it may have been installed somewhere other than the one on PATH",
   "station.updates.notOnPath": "{program} finished, but {command} still isn't on the station's PATH; it may have been installed elsewhere",
   "station.updates.npmRootUnknown": "Can't determine the npm global install directory for {path}; update it manually on that machine",

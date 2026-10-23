@@ -142,11 +142,11 @@ describe("updates", { concurrency: true }, () => {
     const env: Env = { PATH: "/usr/bin:/bin" };
     const steps: string[] = [];
     const program = "console.log('==> Downloading https://x'); console.log('==> Pouring codex'); console.error('Warning: x'); process.exitCode = 3";
-    const [ok, said] = await runLines(process.execPath, ["-e", program], env, 10_000, (line) => {
+    const [ok, said, code] = await runLines(process.execPath, ["-e", program], env, 10_000, (line) => {
       const s = stepOf(line);
       if (s) steps.push(say(s, "zh"));
     });
-    assert.equal(ok, false);
+    assert.deepEqual([ok, code], [false, 3]);
     assert.deepEqual(steps, ["正在下载", say(INSTALLING, "zh")]);
     // Both streams kept (their order between them is not known).
     assert.ok(said.includes("==> Pouring codex") && said.includes("Warning: x"));
@@ -782,6 +782,27 @@ END
       program: join(apps, "winget.exe"),
       args: ["upgrade", "--id", "Anthropic.ClaudeCode", "--exact", "--silent", "--disable-interactivity", "--accept-source-agreements", "--accept-package-agreements"],
     });
+  });
+
+  test("on Windows winget with no update to apply says so, not that the update failed", { skip: !WINDOWS && "Windows'" }, async (t) => {
+    const [registry, server] = await serve((path) => (path === "/@anthropic-ai/claude-code/latest" ? { body: JSON.stringify({ version: "2.2.0" }) } : null));
+    t.after(() => server.close());
+    const dir = temp();
+    const pkg = join(dir, "WinGet", "Packages", "Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe");
+    mkdirSync(pkg, { recursive: true });
+    writeFileSync(join(pkg, "claude.cmd"), "@echo 2.1.0 (Claude Code)\r\n");
+    const apps = join(dir, "apps");
+    mkdirSync(apps);
+    // winget's APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE, as cmd exits with it.
+    writeFileSync(join(apps, "winget.cmd"), "@echo No available upgrade found.\r\n@exit /b -1978335189\r\n");
+    const updates = installed(dir, "1300", null, { registry, env: { PATH: [pkg, apps, withSystem(dir)].join(";"), USERPROFILE: dir } });
+    t.after(() => updates.close());
+    await updates.check();
+    const claude = () => updates.get("zh").find((v) => v.id === "claude")!;
+    assert.deepEqual([claude().version, claude().latest, claude().updatable], ["2.1.0", "2.2.0", true]);
+    await updates.update("claude", "zh");
+    await until("failed", () => claude().state === "failed");
+    assert.equal(claude().message, "winget 暂无可在此安装的更新（其源可能还没有最新版本），未做改动：No available upgrade found.");
   });
 
   test("vite shims update the package with their own vp", { skip: WINDOWS && "Windows' Vite+ commands are shims of their own (the test before)" }, async () => {

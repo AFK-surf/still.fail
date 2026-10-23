@@ -68,6 +68,10 @@ export function wingetPackage(real: string): string | null {
   return parts.length >= 3 ? parts.slice(0, -2).join("_") : null;
 }
 
+/// winget's APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE: no version its sources have applies (none newer, or a newer
+/// one not for this machine), so nothing was changed.
+const WINGET_UPDATE_NOT_APPLICABLE = 0x8a15002b;
+
 /// winget as PATH finds it, else where Windows puts it (an app execution alias in WindowsApps, which a stat of it may
 /// not take for a file, though it runs).
 function wingetCommand(env: Env): string {
@@ -497,7 +501,10 @@ export const windows: Platform = {
   /// the package in node_modules beside it.
   shimUpdate(found, pkg, env) {
     const winget = wingetPackage(found.real);
-    if (winget !== null) return { program: wingetCommand(env), args: ["upgrade", "--id", winget, "--exact", "--silent", "--disable-interactivity", "--accept-source-agreements", "--accept-package-agreements"] };
+    if (winget !== null) {
+      const args = ["upgrade", "--id", winget, "--exact", "--silent", "--disable-interactivity", "--accept-source-agreements", "--accept-package-agreements"];
+      return { program: wingetCommand(env), args, noUpdate: WINGET_UPDATE_NOT_APPLICABLE };
+    }
     const dir = dirname(found.onPath);
     if (existsSync(join(dir, "vp.exe"))) return { program: join(dir, "vp.exe"), args: ["install", "-g", `${pkg}@latest`] };
     if (/\.cmd$/i.test(found.onPath) && existsSync(join(dir, "node_modules", ...pkg.split("/")))) {
