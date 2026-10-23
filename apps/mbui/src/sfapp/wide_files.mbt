@@ -320,17 +320,25 @@ fn files_disk(c : @ui.Ctx, disk : Json?) -> Unit {
   if total <= 0.0 {
     return
   }
-  let used = 1.0 - number(disk, "freeBytes") / total
-  let fill = (if used >= files_disk_full { files_disk_warn } else { files_disk_used }).then(
+  let free = number(disk, "freeBytes")
+  let used = 1.0 - free / total
+  let part = (if used >= files_disk_full { files_disk_warn } else { files_disk_used }).then(
     @ui.style(w=Fixed(files_disk_w * used)),
   )
-  c.box(style=files_disk_bar, fn() {
-    c.box(style=fill, fn() {
+  let bar = c.box(style=files_disk_bar, fn() {
+    c.box(style=part, fn() {
       ()
     })
     |> ignore
   })
-  |> ignore
+  // what it says (FilesNav.tsx DiskBar's label): what is left, in GB, and how much is used
+  let gb = free / 1.0e9
+  let left = if free >= 1.0e11 { gb.round().to_int().to_string() } else { one_decimal(gb, 1) }
+  c.semantics(
+    bar,
+    Image,
+    label=fill("web-pages.files.diskLeft", [("free", left + " GB"), ("percent", (used * 100.0).round().to_int().to_string())]),
+  )
 }
 
 // ── a folder (FolderView) ───────────────────────────────────────────────
@@ -587,6 +595,11 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
   if c.key_pressed(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
     fgo_open()
   }
+  // ⌘⇧P: the preview beside the list, shown or not
+  let previewing = files_previewing(src)
+  if c.key_pressed(@ui.key_of_char('p'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
+    files_set_preview(src, !previewing)
+  }
   let (name, _) = files_pane_parts(here, stations)
   let favs = files_favs(src, w.id)
   let faved = files_is_fav(favs, at.station, root, at.path)
@@ -622,6 +635,15 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
         }
       })
       |> ignore
+      if files_lit_button(
+          c,
+          "files/preview",
+          if previewing { "panel-close" } else { "panel-open" },
+          tr(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
+          previewing,
+        ) {
+        files_set_preview(src, !previewing)
+      }
       if can.write && icon_button(c, "files/upload", "upload", label=tr("web-pages.drive.upload")) {
         dv_upload(c, here)
       }
@@ -1319,13 +1341,22 @@ fn folder_pane(
     }
   })
   |> ignore
+  let previewing = files_previewing(src)
   let total = c.width - rail_w - (if wide.folded { 0.0 } else { wide.side_w })
-  let room = if split_on { total / 2.0 - files_body_in_half } else { total - files_body_in }
+  let side = if split_on { total / 2.0 - files_body_in_half } else { total - files_body_in }
+  let room = if previewing { side - fpane_w } else { side }
+  // the list, the preview beside it (⌘⇧P) under the head
   c.box(style=if split_on { files_pane_half } else { files_pane }, fn() {
-    match files_view(src) {
-      "list" => files_list(c, src, at, root, at.path, 0, false, front_it)
-      "tree" => files_list(c, src, at, root, at.path, 0, true, front_it)
-      _ => files_columns(c, src, at, root, room, front_it)
+    c.box(style=files_pane_list, fn() {
+      match files_view(src) {
+        "list" => files_list(c, src, at, root, at.path, 0, false, front_it)
+        "tree" => files_list(c, src, at, root, at.path, 0, true, front_it)
+        _ => files_columns(c, src, at, root, room, front_it)
+      }
+    })
+    |> ignore
+    if previewing {
+      files_preview_pane(c, src, st, at, root)
     }
   })
   |> ignore
@@ -1562,21 +1593,26 @@ fn wide_row(
 }
 
 ///|
-/// A column (Drive.css.ts column: 240 wide), a tree's step in (16), a disk's bar (24).
+/// A column (Drive.css.ts column: 240 wide), a tree's step in (16).
 let files_column_w : Double = 240.0
 
 ///|
 let files_indent : Double = 16.0
 
 ///|
-/// A row's mark (16, as the web's rows) and the folder's room in from the pane's sides (32 each).
+/// A row's mark (16, as the web's rows) and the folder's room in from the pane's sides (32 before it, 40 after: the
+/// page's, as the preview beside it ends where the head does).
 let files_icon : Double = 16.0
 
 ///|
-let files_body_in : Double = 64.0
+let files_body_in : Double = 72.0
 
 ///|
-let files_disk_w : Double = 24.0
+/// A disk's bar (FilesNav.css.ts disk: 28 by 3, its corner 2, how much is used filled from its start).
+let files_disk_w : Double = 28.0
+
+///|
+let files_disk_h : Double = 3.0
 
 ///|
 /// Past this the disk's bar is amber (FilesNav DiskBar).
@@ -1584,11 +1620,11 @@ let files_disk_full : Double = 0.9
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_disk_used : @ui.Style = @ui.style(h=Full, radius=Full, bg=Muted)
+let files_disk_used : @ui.Style = @ui.style(h=Full, bg=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_disk_warn : @ui.Style = @ui.style(h=Full, radius=Full, bg=Warn)
+let files_disk_warn : @ui.Style = @ui.style(h=Full, bg=Warn)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1651,7 +1687,7 @@ let files_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, colo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_pane : @ui.Style = @ui.style(w=Full, h=Full, px=S8, clip=true)
+let files_pane : @ui.Style = @ui.style(row=true, w=Full, h=Full, pl=S8, pr=S10, clip=true)
 
 ///|
 /// Split, a side's room in from its sides (24 each and its rows' 16).
@@ -1764,7 +1800,12 @@ let files_head_half : @ui.Style = @ui.style(w=Full, px=S6, pt=S3, pb=S3, gap=S1_
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_pane_half : @ui.Style = @ui.style(w=Full, h=Full, px=S4, clip=true)
+let files_pane_half : @ui.Style = @ui.style(row=true, w=Full, h=Full, px=S4, clip=true)
+
+///|
+/// A side's list, the preview beside it (wide_files_pane.mbt) in from the side's edge as the list is.
+// kept across runs: a value (no field of it changes)
+let files_pane_list : @ui.Style = @ui.style(w=@sf.grow, h=Full, clip=true)
 
 ///|
 /// A list's columns (ListView): its size's (96) and its time's (116), right-aligned, and the room after them for its
@@ -1867,4 +1908,4 @@ let files_place_in : @ui.Style = @ui.style(w=Full, pl=S5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_disk_bar : @ui.Style = @ui.style(w=Fixed(files_disk_w), h=S1, radius=Full, bg=Line, clip=true)
+let files_disk_bar : @ui.Style = @ui.style(w=Fixed(files_disk_w), h=Fixed(files_disk_h), radius=Sm, bg=Line, clip=true)

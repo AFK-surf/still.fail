@@ -94,6 +94,8 @@ priv struct Wide {
   files_places : Map[String, Array[Json]]
   files_cols : Map[String, String]
   mut files_chosen : String
+  /// the preview beside the list shown or not, as chosen here until the prefs say (wide_files_pane.mbt)
+  mut files_preview : Bool?
   /// the files' tabs kept here (by workspace), until the prefs say
   tabs_set : Map[String, String]
 }
@@ -146,6 +148,7 @@ let wide : Wide = {
   files_places: {},
   files_cols: {},
   files_chosen: "",
+  files_preview: None,
   tabs_set: {},
 }
 
@@ -203,6 +206,8 @@ fn wide_reset() -> Unit {
   wide.files_places.clear()
   wide.files_cols.clear()
   wide.files_chosen = ""
+  wide.files_preview = None
+  fpane_reset()
   wide.tabs_set.clear()
   fgo_reset()
   wide_on.val = false
