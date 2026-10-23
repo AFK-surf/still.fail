@@ -159,7 +159,7 @@ case "${1:-build}" in
       for p in $APPDIR/Info.plist $EXT/Info.plist; do plutil -replace MBUIAppGroup -string group.$BID $p; done
       ENT=$OUT/app.entitlements
       if [ -n "$APP_ENTITLEMENTS" ]; then cp "$APP_ENTITLEMENTS" $ENT; else plutil -create xml1 $ENT; fi
-      /usr/libexec/PlistBuddy -c "Delete :com.apple.security.application-groups" $ENT > /dev/null 2>&1
+      /usr/libexec/PlistBuddy -c "Delete :com.apple.security.application-groups" $ENT > /dev/null 2>&1 || true
       /usr/libexec/PlistBuddy -c "Add :com.apple.security.application-groups array" \
         -c "Add :com.apple.security.application-groups:0 string group.$BID" $ENT
     fi
