@@ -17,9 +17,19 @@
   debuggable browser (`--disable-blink-features=AutomationControlled`), and headless says `HeadlessChrome` in its user
   agent (given the headful one's). With either, Google's sign-in answers "This browser or app may not be secure";
   without them it goes on to the next step, headful or headless, with Playwright attached (Chrome 155, 2026-10-17).
-- Agents get its CDP endpoint (`http://127.0.0.1:<port>`, and the `ws://127.0.0.1:<port>/devtools/browser/<id>` it
-  names) from the `browser` tool and drive it with chrome-devtools-mcp (`--browserUrl`/`--wsEndpoint`) or Playwright
-  (`connectOverCDP`). Sessions share the browser (and its logins) and open their own tabs.
+- Agents get a CDP endpoint of it from the `browser` tool, their session's own (below), and drive it with
+  chrome-devtools-mcp (`--wsEndpoint`) or Playwright (`connectOverCDP`). Sessions share the browser (and its logins)
+  and open their own tabs.
+- **Whose a tab is.** The `browser` tool gives each session its own address of the browser on the agents' door,
+  `ws://127.0.0.1:<door>/browser/<session key, base64url>` (`station/src/browser/proxy.ts`): a WebSocket passed through
+  to Chrome's DevTools as it is, from which the station learns the tabs the session opens (a `Target.createTarget`
+  asked on it and the `targetId` its answer gives; a tab one of those opens, by its `openerId`, is the session's too).
+  It is kept in `<data>/browser/owners.json` beside the profile, so the next station process taking the browser up
+  still knows, and forgotten as a tab goes. The address stays when Chrome is started again or another station process
+  takes the door (the door's socket is the launcher's), so a client that lost its connection connects to it again;
+  connecting starts the browser if it is not running. Only programs on this machine reach it (the door's rule for
+  `/peer`). A tab opened at Chrome's own port is nobody's. When a session is archived or deleted, the tabs it opened
+  are closed.
 - Every tab is a screen source (`browser:<targetId>`): CDP screencast for frames, `Input.dispatch*` for input, on a
   CDP connection of the view's own. Chrome draws (and casts) only the front tab of a window, so a view brings its tab
   to the front when it opens, when a key frame is asked for and when the person clicks.
@@ -44,7 +54,7 @@ JPEG frames are all key frames and their config has no `description`.
 ### Wire (member link, ALPN `stillfail/admin/1`)
 
 - **List**: `GET /admin/api/screens` →
-  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?}]}`; changes come on
+  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?, closable?, openedBy?}]}`; changes come on
   the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it open;
   `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
   `{capture, control, message, app?, path?}` (`message` in the asker's language says what to turn on where; the desktop
@@ -52,7 +62,10 @@ JPEG frames are all key frames and their config has no `description`.
   both ways (`"text"`, `"png"`; the desktop both, a browser tab text); `drop`: `{folder, reveal}`, where a file a person
   drops into a view is put on the machine (with the drive's upload, `root` the folder: docs/drive.md) and whether the
   view can show it in the machine's file manager. `peek`: it can be previewed (a tab of the browser). A station from
-  before them says none of these: clients offer none. An old station answers this route 404: a client
+  before them says none of these: clients offer none. `closable`: a member (not a viewer) may close it, a tab of the
+  browser: **Close** `POST /admin/api/screens/<id>/close` → `{}` (404 no such screen, 405 not closed from here, 502
+  the browser refused), and it leaves the list as Chrome tells it went. `openedBy`: the session that opened it (whose
+  a tab is, above); clients show the chat that session is in, among the viewer's chats, and open it. An old station answers this route 404: a client
   opens a view only on a station that listed the screen (an old one would read the view's head as a request whose
   body never ends).
 - **View**: a stream whose head line carries a `screen` object:

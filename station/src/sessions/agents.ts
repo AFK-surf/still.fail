@@ -279,6 +279,7 @@ export const AgentsLive = (control: Control) =>
         remote.closeSession(session);
         computer.closeSession(session);
         forwards.closeSession(session);
+        parts.endSession(session);
       });
       // How busy this station is, told to the others' station_list (`describe`): the host page's measurements, the
       // GPUs (looked at once now, so the first to ask need not wait), what runs here and the relay.
@@ -528,6 +529,7 @@ export const AgentsLive = (control: Control) =>
 
       let door: AgentsDoor | null = null;
       const peerRoute = () => peers.route;
+      const partRoutes = () => parts.doorRoutes();
       let handing = false;
       // Taken up once the previous process is gone; then the door opens, and what was cut off resumes.
       const start = async () => {
@@ -544,15 +546,15 @@ export const AgentsLive = (control: Control) =>
         // remembered (the agents left running know it), 4750 on the machine's own data directory, any free one.
         const named = config.raw()?.http?.port;
         const notified = (authorization: string | undefined, body: Buffer) => notifyEndpoint(jobs, authorization, body);
-        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified, peerRoute);
+        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified, peerRoute, partRoutes);
         // Behind the launcher's entrance (launcher.ts `ports`): any port here, its port the one agents are told.
-        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified, peerRoute);
+        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified, peerRoute, partRoutes);
         else {
           const remembered = rememberedMcpPort(data);
           const tries = portsToTry(named === undefined ? undefined : Number(named), remembered, 4750, ownData(data));
           for (const [i, port] of tries.entries()) {
             try {
-              door = await openAgentsDoor({ port }, mcp, notified, peerRoute);
+              door = await openAgentsDoor({ port }, mcp, notified, peerRoute, partRoutes);
               break;
             } catch (error) {
               // The one remembered is passed over whatever keeps it; the usual one only when it is taken.
@@ -571,6 +573,7 @@ export const AgentsLive = (control: Control) =>
         log.info("station", "agents' door open", { url: opened.url });
         // Processes taken up that were told another address start again (the port could not be had again).
         hub.toolsAt(opened.url);
+        parts.doorOpen(opened.url);
         taken = true;
         if (inWorkspace) {
           for (const a of along) await a.taken?.();

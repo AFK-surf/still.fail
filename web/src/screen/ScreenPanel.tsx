@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
 import type { ScreenViewState, StationNet } from "../core/shapes.ts";
-import { Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, Upload } from "@stillfail/ui/icons.tsx";
+import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { t } from "../i18n.ts";
 import type { Quality } from "./frames.ts";
@@ -136,7 +136,7 @@ function Bars({ level, size = 14 }: { level: string | undefined; size?: number }
 }
 
 /** 控制中心: what can be done with the view, as a menu (画质 and 组合键 open beside it). */
-export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onWindow, full, onFull, onLeave }: {
+export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
   quality: Quality;
   onQuality: (q: Quality) => void;
   /** None while it is not driven. */
@@ -148,6 +148,10 @@ export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onW
   onWindow?: (() => void) | undefined;
   full: boolean;
   onFull: (on: boolean) => void;
+  /** The chat that opened it (a tab of the station's browser), and going there. */
+  chat?: { title: string; open: () => void } | undefined;
+  /** Closes it for good (a tab of the station's browser). */
+  onClose?: (() => void) | undefined;
   /** 断开: back where it was opened from. */
   onLeave: () => void;
 }) {
@@ -206,7 +210,13 @@ export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onW
           <DropdownMenu.Item className={item} onSelect={() => onFull(!full)}>
             {full ? <Shrink size={16} /> : <Expand size={16} />}<span className={css.menuWords}>{full ? t("web-pages.screen.unfull") : t("web-pages.screen.full")}</span>
           </DropdownMenu.Item>
+          {chat && (
+            <DropdownMenu.Item className={item} onSelect={chat.open}><Chat size={16} /><span className={css.menuWords}>{t("web-pages.screen.openChat", { title: chat.title })}</span></DropdownMenu.Item>
+          )}
           <DropdownMenu.Separator className={controlsCss.menuSep} />
+          {onClose && (
+            <DropdownMenu.Item className={item} data-danger onSelect={onClose}><Trash size={16} /><span className={css.menuWords}>{t("web-pages.screen.close")}</span></DropdownMenu.Item>
+          )}
           <DropdownMenu.Item className={item} data-danger onSelect={onLeave}><Close size={16} /><span className={css.menuWords}>{t("web-pages.screen.leave")}</span></DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

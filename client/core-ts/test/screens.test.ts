@@ -228,6 +228,34 @@ each("a_stations_screens_are_listed_and_kept_as_its_events_say", async (seed) =>
   core.close();
 });
 
+test("a_tab_says_the_chat_that_opened_it_and_is_closed_by_a_member_not_a_reader", async () => {
+  const answers = { ...base(), "GET /screens": { screens: [SCREENS.screens[0], { ...SCREENS.screens[1], viewers: [], closable: true, openedBy: "k1" }, { id: "browser:T2", kind: "browser", title: "x", width: 0, height: 0, closable: true, openedBy: "gone" }] }, "POST /screens/browser%3AT1/close": {} };
+  const { host, core, ui } = await viewing(1, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  await host.settle();
+  apply(host, values);
+  const [desktop, tab, other] = (values.get(1) as J).screens;
+  assert.equal(desktop.closable, false, "the desktop is not closed from here");
+  assert.equal(tab.closable, true);
+  assert.deepEqual(tab.chat, { id: "7", title: "部署", link: "/w/ws/s/st/chats/7" });
+  assert.equal(tab.line, "浏览器标签页 · 1280×800 · 由「部署」打开");
+  assert.equal(other.chat, undefined, "a session none of the viewer's chats has");
+  call(core, ui, 2, "screen.close", { station: "ws/st", screen: "browser:T1" });
+  await host.settle();
+  assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith("/screens/browser%3AT1/close")));
+  core.close();
+
+  // A read-only member only looks: nothing to close.
+  const reader = await viewing(1, answers, "viewer");
+  const seen = new Map<number, unknown>();
+  subscribe(reader.core, reader.ui, 1, { topic: "screens", station: "ws/st" });
+  await reader.host.settle();
+  apply(reader.host, seen);
+  assert.equal((seen.get(1) as J).screens[1].closable, false);
+  reader.core.close();
+});
+
 each("a_link_to_a_screen_shows_it_as_its_list_has_it_and_as_gone_once_the_list_has_it_no_more", async (seed) => {
   const { host, core, ui, push } = await viewing(seed);
   const values = new Map<number, unknown>();

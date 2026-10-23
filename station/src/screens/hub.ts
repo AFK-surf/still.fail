@@ -153,10 +153,19 @@ export class ScreenHub implements Screens {
     for (const stop of [...this.#stopping]) stop();
   }
 
+  /// POST /admin/api/screens/<id>/close: a screen closed from a person's app (a tab of the browser).
+  async closeScreen(id: string): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.discard === undefined) throw new ScreenRefused(405, "station.screen.notClosed");
+    await source.discard();
+  }
+
   /// GET /admin/api/screens, in `lang`: `{screens: [{id, kind, title, width, height, viewers, controlledBy, access?,
-  /// clipboard?, peek?, drop?}]}`: `clipboard`, the types a view that drives it carries both ways; `peek`, it can be
-  /// previewed (ViewOptions.peek); `drop`, where a file
-  /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`).
+  /// clipboard?, peek?, drop?, closable?, openedBy?}]}`: `clipboard`, the types a view that drives it carries both ways;
+  /// `peek`, it can be previewed (ViewOptions.peek); `drop`, where a file
+  /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`);
+  /// `closable`, a person may close it (POST …/close); `openedBy`, the session that opened it (an agent's tab).
   listed(lang: Lang): { screens: Record<string, unknown>[] } {
     const folder = this.#o.drop?.() ?? null;
     return {
@@ -164,10 +173,13 @@ export class ScreenHub implements Screens {
         const { width, height } = s.size();
         const access = accessShown(s.access?.(), lang);
         const clipboard = s.clipboard?.() ?? [];
+        const by = s.openedBy?.();
         return {
           id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
           ...(clipboard.length > 0 ? { clipboard } : {}),
           ...(s.peek ? { peek: true } : {}),
+          ...(s.discard ? { closable: true } : {}),
+          ...(by ? { openedBy: by } : {}),
           ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
         };
       }),

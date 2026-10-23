@@ -535,6 +535,11 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["id"] = JsonPrimitive(id)
         return call("job.stop", JsonObject(values))
     }
+    suspend fun screenClose(screen: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["screen"] = JsonPrimitive(screen)
+        return call("screen.close", JsonObject(values))
+    }
     suspend fun jobClearEnded(session: String): JsonElement {
         val values = mutableMapOf<String, JsonElement>()
         values["session"] = JsonPrimitive(session)

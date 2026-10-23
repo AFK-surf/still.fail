@@ -81,6 +81,10 @@ export class StationTopics implements Owner {
     sync.wanted = (address) => this.#wanted(address);
     sync.onChange = (address, what, key) => this.#changed(address, what, key);
     sync.onTold = (address, id, entries) => this.tell(address, id, entries);
+    // A screen says the chat that opened it as the viewer's chats have it: those read again, it is said again.
+    core.data.onChange((topic) => {
+      if (topic.topic === "chatRows" || topic.topic === "*") core.store.invalidateAll((t) => (t.topic === "screens" || t.topic === "screenCard") && (topic.topic === "*" || t.station === topic.station));
+    });
     core.data.onLogChange((table, station, id) => {
       const topics = core.store.liveTopics().filter((t) => t.station === station && ((table === "entry" && (t.topic === "thread" || t.topic === "letters") && String(t.thread) === id) || (table === "transcript" && t.topic === "live" && t.key === id)));
       for (const topic of topics) core.store.changed(topic);

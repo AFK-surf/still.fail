@@ -78,6 +78,10 @@ export interface ScreenSource {
   readonly reveal?: boolean;
   /// It can be previewed (`ViewOptions.peek`): a tab of the browser, not the desktop (whose view wakes its display).
   readonly peek?: boolean;
+  /// The session that opened it (a tab of the browser an agent opened), when known.
+  openedBy?(): string | undefined;
+  /// Closes it for good (a tab of the browser); none: it is not closed from a person's app (the desktop).
+  discard?(): Promise<void>;
 }
 
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.

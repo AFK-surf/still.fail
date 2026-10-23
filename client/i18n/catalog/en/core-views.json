@@ -448,6 +448,8 @@
   "core-views.screen.kind.desktop": "Desktop",
   "core-views.screen.kind.browser": "Browser tab",
   "core-views.screen.on": "{names} viewing",
+  "core-views.screen.openedBy": "Opened by “{title}”",
+  "core-views.screen.someChat": "a chat",
   "core-views.screen.outdated": "Update this station to see its screens",
   "core-views.screen.gone": "This screen is gone",
   "core-views.screen.remote": "Remote screen",
