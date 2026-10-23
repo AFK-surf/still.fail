@@ -731,6 +731,20 @@ pub let custom_field_r : @ui.Radius = Exact(10.0)
 // them.
 
 ///|
+/// A chat's row in the wide frame's sidebar (Sidebar.css.ts navSession: two lines, 20 and 18, 2 apart, 7 above and
+/// under).
+pub let side_row_h : @ui.Len = Fixed(54.0)
+
+///|
+/// A person's picture after the first at a sidebar row's end (RowPicture.css.ts: 16 across, 3 over the one before):
+/// the room it takes.
+pub let side_face_step : @ui.Len = Fixed(13.0)
+
+///|
+/// The dot before a chat that wants the viewer in 待处理's panel (Attention.css.ts dot): 7 across.
+pub let attention_dot : @ui.Len = Fixed(7.0)
+
+///|
 /// The side rail (60), a file's key (34), a progress track's height (3), the bounds of what floats over the frame
 /// (接管 480, the rail's line 280, what an ended view says 320).
 pub let rail_w : @ui.Len = Fixed(60.0)

@@ -425,6 +425,9 @@ pub(all) enum Color {
   /// a quiet wash under what comes onto it (still.fail's Android app's way of the web's --hover: a screen's preview
   /// before its picture, ScreenLinks.kt; the offline note, Chat.kt), the same on every width
   Wash
+  /// a sidebar's ground beside the page (still.fail's Sidebar.css.ts vars.sidebar): what stands in it is cut out of it
+  /// (a row's people's pictures, RowPicture.css.ts --mark-around)
+  Sidebar
   A(Color, Opacity)
   Over(Color, Color)
   Exact(Int64)

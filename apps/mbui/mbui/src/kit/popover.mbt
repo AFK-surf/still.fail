@@ -15,9 +15,9 @@ pub(all) struct PopState {
 }
 
 ///|
-/// `key`'s popover (see the file's head), `open` or not, by the trigger `anchor` (its id), on its `side` (lined up
-/// `along` it, `offset` away), named `label` for the semantics tree; `modal`: the page under it takes no press and
-/// Tab stays in it. Whether it is open now.
+/// `key`'s popover (see the file's head), `open` or not, by the trigger `anchor` (its id; or by the rectangle `at`, a
+/// Radix Popover.Anchor apart from its trigger), on its `side` (lined up `along` it, `offset` away), named `label` for
+/// the semantics tree; `modal`: the page under it takes no press and Tab stays in it. Whether it is open now.
 pub fn popover(
   c : @ui.Ctx,
   key : String,
@@ -29,13 +29,14 @@ pub fn popover(
   label? : String = "",
   modal? : Bool = false,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,
+  at? : (Double, Double, Double, Double),
   body : () -> Unit,
 ) -> @ui.Changed[Bool] {
   let p = presence(c, key, open)
   let mut now = open
   if p.built {
     let o = c.overlay(key, modal~, anchor~, initial_focus=-1, inert=p.leaving(), fn() {
-      beside(c, key, anchor, side, along, offset, p.t, Dialog, label, look, body)
+      beside(c, key, anchor, side, along, offset, p.t, Dialog, label, look, body, at?)
     })
     if o.dismissed is Some(_) {
       now = false
@@ -186,9 +187,13 @@ fn beside(
   label : String,
   look : (@ui.Ctx, PopState, () -> Unit) -> Unit,
   body : () -> Unit,
+  at? : (Double, Double, Double, Double),
 ) -> Unit {
   let pid = c.id(key + "/panel")
-  let ar = c.rect_of(anchor).unwrap_or((0.0, 0.0, 0.0, 0.0))
+  let ar = match at {
+    Some(r) => r
+    None => c.rect_of(anchor).unwrap_or((0.0, 0.0, 0.0, 0.0))
+  }
   // the side it went on as laid out last frame (its first: the side asked for); its place is worked out as it is laid
   // out, from its size then
   let went = match c.rect_of(pid) {

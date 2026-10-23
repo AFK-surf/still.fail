@@ -277,17 +277,20 @@ let field_frame : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5, radius=Xl, bg=Ca
 ///|
 /// A small panel's ground (controls.css.ts popover): the canvas (the raised
 /// grey in dark), a line round it, its shadow; padded panel_pad, its corner
-/// the menu's.
+/// the menu's. `min_w`: as wide as what it holds, at least that (a menu's,
+/// controls.css.ts menuList).
 pub fn panel(
   c : @ui.Ctx,
   w? : @ui.Size = Auto,
   h? : @ui.Size = Auto,
+  min_w? : Double,
   body : () -> Unit,
 ) -> Int {
   let t = theme()
   c.box(
     w~,
     h~,
+    min_w?,
     pad=panel_pad,
     bg=if t.dark { t.p.raised } else { t.p.canvas },
     radius=r_menu,
@@ -303,7 +306,10 @@ pub fn panel(
 
 ///|
 /// A row of a small panel (menuItem): at its padding, words text_in in, its
-/// ground under the pointer, concentric with the panel.
+/// ground under the pointer, concentric with the panel. `panel`: a panel's
+/// row (parts.tsx PanelRow): its icon 18 in a column 20 wide (`word` in its
+/// place, a word for an icon: 奏), 10 from its words, `end` an icon at its
+/// end, quiet.
 pub fn menu_item(
   c : @ui.Ctx,
   label : String,
@@ -312,6 +318,9 @@ pub fn menu_item(
   danger? : Bool = false,
   on? : Bool = false,
   note? : String = "",
+  panel? : Bool = false,
+  word? : String = "",
+  end? : String = "",
 ) -> Bool {
   let t = theme()
   let id = c.id(if key == "" { "sf-mi/" + label } else { key })
@@ -321,13 +330,22 @@ pub fn menu_item(
     min_h=34.0,
     padx=text_in,
     pady=7.0,
-    gap=8.0,
+    gap=if panel { panel_row_gap } else { menu_row_gap },
     align=ACenter,
     bg=if c.hovered(id) { t.p.hover } else { 0L },
     radius=@ui.concentric(r_menu, panel_pad),
     id~,
     fn() {
-      if icon != "" {
+      if panel && (icon != "" || word != "") {
+        c.box(style=panel_row_icon, fn() {
+          if word != "" {
+            c.text(word, style=panel_row_word) |> ignore
+          } else {
+            draw_icon(c, icon, panel_icon, t.p.muted)
+          }
+        })
+        |> ignore
+      } else if icon != "" {
         draw_icon(c, icon, 16.0, if danger { t.p.red } else { t.p.muted })
       }
       c.text(
@@ -343,11 +361,38 @@ pub fn menu_item(
       if note != "" {
         c.text(note, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
       }
+      if end != "" {
+        draw_icon(c, end, panel_end_icon, t.p.subtle)
+      }
     },
   )
   |> ignore
   c.clicked(id)
 }
+
+///|
+/// Between a menu item's icon and its words (menuItem: 8), a panel row's (panelRow: 10); a panel row's icon (18) and
+/// what is at its end (14).
+let menu_row_gap : Double = 8.0
+
+///|
+let panel_row_gap : Double = 10.0
+
+///|
+let panel_icon : Double = 18.0
+
+///|
+let panel_end_icon : Double = 14.0
+
+///|
+/// A panel row's icon's column (parts.css.ts panelRowIcon): 20 wide, the icon in its middle.
+// kept across runs: a value (no field of it changes)
+let panel_row_icon : @ui.Style = @ui.style(w=S5, align=ACenter)
+
+///|
+/// A word for an icon in a panel's row (Rail.css.ts zouSmall: 14 on 18, 600).
+// kept across runs: a value (no field of it changes)
+let panel_row_word : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L5, wrap=false)
 
 // ---------------------------------------------------------------------------
 // Pages (styles/pages.css.ts)

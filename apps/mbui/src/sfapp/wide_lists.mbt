@@ -1,0 +1,879 @@
+// The chats' sidebar as the web's lists (ember web/src/Sidebar.tsx ChatList, Sidebar.css.ts navSlider, navTrack;
+// pages/Archive.tsx ArchiveRows, ArchivePage; Archive.css.ts): under the band (新建对话 and the filter), one track of
+// the lists side by side, 全部, 我参与的, 监控中, 奏 and 已归档, slid from one to another as the list shown changes
+// (240 ms, ease out); only those in view are drawn. 已归档 is a list of the sidebar's like the others: a field to look
+// for one, its days, each archived chat a row (put back or deleted while pointed at), pressed its chat beside the
+// list; opened, the newest of them is open beside it, or with none what the archive is.
+
+///|
+/// The archive's list as it is looked at: the words looked for, how many asked for, the last read (shown while
+/// another is asked for); whether the newest was opened beside it since the archive was opened.
+priv struct ArchiveSide {
+  mut q : String
+  mut limit : Int
+  mut last : Json?
+  mut landed : Bool
+}
+
+///|
+let archive_side : ArchiveSide = { q: "", limit: archive_side_page, last: None, landed: false }
+
+///|
+/// How many the archive's list shows at first, and how many more each time it is scrolled near its end (Archive.tsx
+/// ARCHIVE_PAGE).
+let archive_side_page : Int = 60
+
+///|
+fn archive_side_reset() -> Unit {
+  archive_side.q = ""
+  archive_side.limit = archive_side_page
+  archive_side.last = None
+  archive_side.landed = false
+}
+
+///|
+/// How the track slides (Sidebar.css.ts navTrack: transform 240ms ease-out).
+// kept across runs: a value (no field of it changes)
+let list_slide : @motion.Spec = @motion.tween(list_slide_ms, ease=Out)
+
+///|
+let list_slide_ms : Double = 240.0
+
+///|
+/// Which of the lists is shown: 全部 0, 我参与的 1, 监控中 2 (the filter), 奏 3, 已归档 4.
+fn list_mode(src : Source, w : Workspace) -> Int {
+  if app.nav.pages().contains(Archived) {
+    4
+  } else if lit_place() == "decisions" {
+    3
+  } else {
+    match filter_of(src, w.id) {
+      "mine" => 1
+      "watching" => 2
+      _ => 0
+    }
+  }
+}
+
+///|
+/// The chats' sidebar `width` wide: the band over the track of lists.
+fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
+  let mode = list_mode(src, w)
+  if mode != 4 {
+    archive_side.landed = false
+  }
+  let x = @kit.animate(c, "side/lists", mode.to_double(), transition=list_slide)
+  let from = x.floor().to_int()
+  let to = x.ceil().to_int()
+  c.box(style=lists_fill, fn() {
+    for p in from..=to {
+      if p < 0 || p > 4 {
+        continue
+      }
+      c.layer(fn() {
+        c.box(style=lists_fill, tx=(p.to_double() - x) * width, fn() {
+          match p {
+            0 => chats_pane(c, src, w, "all")
+            1 => chats_pane(c, src, w, "mine")
+            2 => chats_pane(c, src, w, "watching")
+            3 => decisions_pane(c, src, w)
+            _ => archive_pane(c, src, w)
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+    c.layer(fn() { lists_band(c, src, w) }) |> ignore
+    // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
+    // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
+    if !rail_items(src, w.id).contains("attention") {
+      c.layer(fn() { lists_foot(c, src, w) }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The lists' foot band (Sidebar.css.ts navFoot, navFootStatus): what is wrong with the stations (StationTrouble: their
+/// glyph and its words, red while one fails, leading to them; beside the rail only then), and 运行中 N (OpenJobsChip:
+/// the services left up long, their panel over it). Nothing when neither is, nor with the bell in the rail (they are in
+/// its panel).
+fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let t = @sf.theme()
+  // with the bell in the rail, they are in its panel (workspace.tsx WorkspaceSidebarFooter)
+  if rail_items(src, w.id).contains("attention") {
+    return
+  }
+  let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
+  let trouble = field(chats, "trouble")
+  let jobs = long_jobs(src, w)
+  if trouble is None && jobs == 0 {
+    return
+  }
+  c.box(style=foot_fill, fn() {
+    c.box(style=foot_band, glass=@sf.glass_floating(tint=if wide.folded { closed_ground() } else { t.p.sidebar }), fn() {
+      match trouble {
+        Some(Object(_)) => {
+          let go = c.id("side/station-trouble")
+          c.cursor(go, Hand)
+          if c.clicked(go) {
+            rail_go(c, src, w, "stations")
+          }
+          c.box(style=foot_trouble, id=go, fn() {
+            @sf.station_glyph(c, stations_at_glance(src, w.id).0, 18.0, t.p.text, t.p.red) |> ignore
+            c.text(
+              text(trouble, "text"),
+              style=if text(trouble, "state") == "error" { foot_trouble_red } else { foot_trouble_words },
+            )
+            |> ignore
+          })
+          |> ignore
+        }
+        _ => ()
+      }
+      if jobs > 0 {
+        let chip = c.id("side/open-jobs")
+        c.cursor(chip, Hand)
+        if c.clicked(chip) {
+          rail_ws.jobs_open = !rail_ws.jobs_open
+        }
+        let b = c.box(style=foot_chip, id=chip, fn() {
+          c.box(style=foot_chip_dot, fn() {  }) |> ignore
+          c.text(fill("web-main.jobs.chip", [("n", jobs.to_string())]), style=foot_chip_words) |> ignore
+        })
+        c.semantics(b, Button, id=chip, label=tr("web-main.jobs.long"))
+        let p = @kit.popover(
+          c,
+          "side/open-jobs",
+          rail_ws.jobs_open,
+          chip,
+          side=Top,
+          along=End,
+          offset=6.0,
+          look=fn(c, _, body) { wide_panel(c, 320.0, body) },
+          fn() { open_jobs(c, src, w) },
+        )
+        rail_ws.jobs_open = p.value
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_fill : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd)
+
+///|
+/// 8 in, its line and the chip 6 apart (Sidebar.css.ts navFoot, navFootStatus).
+// kept across runs: a value (no field of it changes)
+let foot_band : @ui.Style = @ui.style(row=true, w=Full, p=S2, gap=S1_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_trouble : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  min_h=S8,
+  px=S2_5,
+  gap=S2,
+  align=ACenter,
+  radius=Xl,
+  hovered=@ui.patch(bg=Hover),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_trouble_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_trouble_red : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_chip : @ui.Style = @ui.style(
+  row=true,
+  h=S6,
+  px=S2,
+  gap=S1_5,
+  align=ACenter,
+  bg=Hover,
+  radius=Full,
+  hovered=@ui.patch(bg=Selected),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_chip_dot : @ui.Style = @ui.style(w=S1_5, h=S1_5, bg=Positive, radius=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_chip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+
+///|
+/// An archive's line.
+priv enum ArchiveLine {
+  Top
+  Search
+  Failing(String)
+  Waiting
+  Said(String)
+  Day(String)
+  Row(Json)
+}
+
+///|
+/// 已归档 as one of the lists (ArchiveRows): what to look for, its days, a row each; the newest open beside it as it
+/// opens.
+fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let params : Map[String, Json] = { "scope": Json::string(w.id), "limit": Json::number(archive_side.limit.to_double()) }
+  if archive_side.q != "" {
+    params["q"] = Json::string(archive_side.q)
+  }
+  let topic = (src.topic)("archive", params)
+  match topic.value {
+    Some(_) => archive_side.last = topic.value
+    None => ()
+  }
+  let view = archive_side.last
+  let days = items(view, "days")
+  let lines : Array[ArchiveLine] = [Top, Search]
+  if view is None {
+    lines.push(
+      match topic.error {
+        Some(e) => Failing(text(Some(e), "message"))
+        None => Waiting
+      },
+    )
+  } else {
+    for e in items(view, "errors") {
+      lines.push(Failing(text(Some(e), "text")))
+    }
+    if days.length() == 0 && text(view, "note") != "" {
+      lines.push(Said(text(view, "note")))
+    }
+    for d in days {
+      lines.push(Day(text(Some(d), "label")))
+      for it in items(Some(d), "items") {
+        lines.push(Row(it))
+      }
+    }
+  }
+  // opened: its newest chat beside it (ArchivePage)
+  if app.nav.top() == Archived && !archive_side.landed && archive_side.q == "" {
+    match days.get(0) {
+      Some(d) =>
+        match items(Some(d), "items").get(0) {
+          Some(it) => {
+            archive_side.landed = true
+            archive_open(it)
+          }
+          None => ()
+        }
+      None => if view is Some(_) { archive_side.landed = true }
+    }
+  }
+  // near its end, the next ones
+  match c.list_info("side/archive/" + w.id) {
+    Some(info) =>
+      if flag(view, "more") && info.last >= info.count - 12 && topic.value is Some(_) && info.count == lines.length() {
+        archive_side.limit += archive_side_page
+      }
+    None => ()
+  }
+  // (read now: the rows are made as the list is laid out, after the closed bar's drawing is over)
+  let band = band_h(src, w)
+  c.list("side/archive/" + w.id, lines.length(), 54.0, fn(i) {
+    c.box(style=lists_inset, fn() {
+      match lines[i] {
+        Top => side_space(c, band + 4.0)
+        // (its 4 under it, as the web's margins: in a heading's 14 over it, not on top of it)
+        Search => archive_search_side(c, i + 1 < lines.length() && lines[i + 1] is (Waiting | Row(_)))
+        Failing(words) => side_said(c, words, true)
+        Waiting => side_breathing(c)
+        Said(words) => side_said(c, words, false)
+        Day(label) => nav_heading(c, label)
+        Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// An archived chat's page beside the list: over the archive, in place of another's.
+fn archive_open(it : Json) -> Unit {
+  let v = Some(it)
+  let r : ChatRef = {
+    station: text(v, "station"),
+    session: text(v, "session"),
+    title: text(v, "title"),
+    station_name: text(v, "place"),
+  }
+  match app.nav.top() {
+    Chat(open) if open.station == r.station && open.session == r.session => ()
+    Chat(_) => app.nav.replace(Chat(r))
+    _ => app.nav.push(Chat(r))
+  }
+}
+
+///|
+/// Looking for one (Archive.css.ts search): a field as tall as a row at the list's top, on the pointer's ground.
+fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
+  let t = @sf.theme()
+  c.box(style=if gap { arch_field_box } else { arch_field_alone }, fn() {
+    c.box(style=arch_field, fn() {
+      @sf.icon(c, "search", size=14.0, color=t.p.muted) |> ignore
+      let r = c.editor(
+        "side/archive-q",
+        placeholder=tr("web-pages.archive.search"),
+        font_size=13.0,
+        max_lines=1,
+        plain=true,
+        line=20.0,
+        color=t.p.text,
+        placeholder_color=t.p.subtle,
+        caret_color=t.p.accent,
+      )
+      let q = r.text.trim(chars=" \t\n").to_string()
+      if q != archive_side.q {
+        archive_side.q = q
+        archive_side.limit = archive_side_page
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// An archived chat's row (ArchiveRow): its title (its station's mark at its end, with several), the last thing said
+/// under it, when it was archived there while pointed at (how, on hover); over the title's end then, putting it back
+/// and deleting it (one under way: turning). Pressed, its chat beside the list.
+fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
+  let t = @sf.theme()
+  let v = Some(it)
+  let station = text(v, "station")
+  let session = text(v, "session")
+  let title = text(v, "title")
+  let key = station + "/" + session
+  let id = c.id("side/archived/" + key)
+  let back = c.id("side/archived-back/" + key)
+  let drop = c.id("side/archived-drop/" + key)
+  c.cursor(id, Hand)
+  if c.clicked(id) {
+    archive_open(it)
+  }
+  let on = match app.nav.top() {
+    Chat(r) => r.station == station && r.session == session
+    _ => false
+  }
+  let busy = archive_doing(src, station, session)
+  let over = c.hovered(id) || c.hovered(back) || c.hovered(drop) || busy
+  c.box(style=if more { arch_wrap } else { arch_wrap_last }, fn() {
+    c.box(style=arch_row, selected=on, id~, fn() {
+      c.box(style=arch_text, fn() {
+        c.box(style=if over { arch_head_room } else { arch_head }, fn() {
+          c.text(title, style=arch_title) |> ignore
+          if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
+            c.box(style=side_kind, fn() {
+              @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), 12.0, t.p.muted)
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+        c.box(style=arch_meta, fn() {
+          c.text(text(v, "last"), style=arch_last) |> ignore
+          if c.hovered(id) {
+            c.text(text(v, "clock"), style=arch_clock) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    // 恢复 and 删除 over the title's end while pointed at (or one under way)
+    if over {
+      c.layer(fn() {
+        c.box(style=arch_actions, fn() {
+          c.cursor(back, Hand)
+          if c.clicked(back) && !busy {
+            archive_restore(c, src, it)
+          }
+          let b = c.box(style=arch_action, id=back, fn() {
+            if busy {
+              @sf.spinner(c, size=12.0) |> ignore
+            } else {
+              @sf.icon(c, "retry", size=14.0, color=if c.hovered(back) { t.p.text } else { t.p.muted }) |> ignore
+            }
+          })
+          c.semantics(b, Button, id=back, label=fill("web-pages.archive.restoreNamed", [("title", title)]))
+          @kit.tooltip(c, "side/archived-back-tip/" + key, back, tr("web-pages.archive.restore")) |> ignore
+          if flag(v, "deletable") {
+            c.cursor(drop, Hand)
+            if c.clicked(drop) && !busy {
+              @settings.confirm(
+                fill("web-pages.archive.deleteConfirm", [("title", title)]),
+                tr("web-pages.archive.deleteText"),
+                tr("common.delete"),
+                danger=true,
+                fn() {
+                  act(src, tr("common.delete"), "", "session.delete", {
+                    "station": Json::string(station),
+                    "key": Json::string(session),
+                  }, done=tr("web-pages.archive.deleted"))
+                },
+              )
+            }
+            let d = c.box(style=arch_action, id=drop, fn() {
+              @sf.icon(c, "trash", size=14.0, color=if c.hovered(drop) { t.p.red } else { t.p.muted }) |> ignore
+            })
+            c.semantics(d, Button, id=drop, label=fill("web-pages.archive.deleteNamed", [("title", title)]))
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Put back in the list (`chat.archive` with archived false), said once done.
+fn archive_restore(c : @ui.Ctx, src : Source, it : Json) -> Unit {
+  ignore(c)
+  let v = Some(it)
+  let p : Map[String, Json] = {
+    "station": Json::string(text(v, "station")),
+    "session": Json::string(text(v, "session")),
+    "archived": Json::boolean(false),
+  }
+  match field(v, "thread") {
+    Some(Number(_, ..) as n) => p["thread"] = n
+    _ => ()
+  }
+  act(src, tr("web-pages.archive.restore"), "", "chat.archive", Json::object(p), done=tr("web-pages.archive.restored"))
+}
+
+///|
+/// Whether an archived chat's putting back or deleting is under way (the core's `doing`).
+fn archive_doing(src : Source, station : String, session : String) -> Bool {
+  for d in items((src.topic)("doing", {}).value, "doing") {
+    let call = text(Some(d), "call")
+    let p = field(Some(d), "params")
+    if text(Some(d), "stage") == "failed" || text(p, "station") != station {
+      continue
+    }
+    if (call == "chat.archive" && text(p, "session") == session) || (call == "session.delete" && text(p, "key") == session) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// The archive open with none of its chats beside it (ArchivePage): what it is.
+fn archive_main(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let note = text(archive_side.last, "note")
+  ignore(src)
+  ignore(w)
+  c.box(style=arch_empty, fn() {
+    c.text(tr("web-pages.archive.title"), style=arch_empty_title) |> ignore
+    if note != "" {
+      c.text(note, style=arch_empty_words) |> ignore
+    }
+    c.text(tr("web-pages.archive.about"), style=arch_empty_words) |> ignore
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let lists_fill : @ui.Style = @ui.style(w=Full, h=Full)
+
+///|
+/// A list's lines 8 in from the sidebar's sides (Sidebar.css.ts navScroll).
+// kept across runs: a value (no field of it changes)
+let lists_inset : @ui.Style = @ui.style(w=Full, px=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_field_box : @ui.Style = @ui.style(w=Full, pb=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_field_alone : @ui.Style = @ui.style(w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_field : @ui.Style = @ui.style(row=true, w=Full, h=S8, px=S2_5, gap=S2, align=ACenter, bg=Hover, radius=Xl)
+
+///|
+/// A row 2 from the next (Sidebar.css.ts navSessionWrap).
+// kept across runs: a value (no field of it changes)
+let arch_wrap : @ui.Style = @ui.style(w=Full, pb=S0_5)
+
+///|
+/// The last of a day's rows: its heading's 14 under it alone.
+// kept across runs: a value (no field of it changes)
+let arch_wrap_last : @ui.Style = @ui.style(w=Full)
+
+///|
+/// A chat's row's shape (Sidebar.css.ts navRow, navSession): 54 high, 10 in, its corner the nav's; the pointer's ground
+/// on hover, the selected one's when its chat is beside the list.
+// kept across runs: a value (no field of it changes)
+let arch_row : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  h=@sf.side_row_h,
+  px=S2_5,
+  align=ACenter,
+  radius=Xl,
+  hovered=@ui.patch(bg=Hover),
+  selected=@ui.patch(bg=Selected),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_text : @ui.Style = @ui.style(w=Full, gap=S0_5)
+
+///|
+/// The title's line, 20 high; pointed at, room at its end for the two buttons (Archive.css.ts head: 52).
+// kept across runs: a value (no field of it changes)
+let arch_head : @ui.Style = @ui.style(row=true, w=Full, h=S5, gap=S1_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_head_room : @ui.Style = @ui.style(row=true, w=Full, h=S5, pr=S12, gap=S1_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_meta : @ui.Style = @ui.style(row=true, w=Full, h=S4_5, gap=S1_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_title : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_last : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_clock : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, leading=L5, wrap=false)
+
+///|
+/// The buttons, centred on the title line (Archive.css.ts actions: 5 down, 6 in, 2 apart).
+// kept across runs: a value (no field of it changes)
+let arch_actions : @ui.Style = @ui.style(row=true, w=Full, pt=S1_25, pr=S1_5, gap=S0_5, justify=JEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_action : @ui.Style = @ui.style(
+  w=S6,
+  h=S6,
+  align=ACenter,
+  justify=JCenter,
+  radius=Lg,
+  hovered=@ui.patch(bg=Hover),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_empty : @ui.Style = @ui.style(w=Full, h=Full, px=S10, gap=S2, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_empty_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let arch_empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true, leading=L6)
+
+///|
+/// 待处理 under 新建对话 where the rail has no bell (Attention.tsx AttentionEntry, not the rail's): the bell, its
+/// words, how many came since they were looked at (a small red count) or, all looked at, how many there are, quiet;
+/// pressed, the panel of them under it. Nothing while there is nothing.
+fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let t = @sf.theme()
+  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
+  let all = todo_all(src, w)
+  let n = count(marks, "badge")
+  if !todo_shown(src, w) {
+    return
+  }
+  c.box(style=todo_box, fn() {
+    if nav_row(c, "side/attention", wide.attention_open, fn() {
+        @sf.icon(c, "bell", size=16.0, color=t.p.muted) |> ignore
+        nav_words(c, tr("web-main.attention.entry"))
+        c.box(style=todo_slot, fn() {
+          if n > 0 {
+            c.box(style=todo_count, fn() { c.text(n.to_string(), style=todo_count_words) |> ignore }) |> ignore
+          } else {
+            c.text(all.to_string(), style=todo_quiet) |> ignore
+          }
+        })
+        |> ignore
+      }) {
+      wide.attention_open = !wide.attention_open
+      wide.menu = None
+    }
+  })
+  |> ignore
+}
+
+///|
+/// 待处理's row in the band: 2 above it, 8 in, 8 under (Sidebar.css.ts navTodo).
+// kept across runs: a value (no field of it changes)
+let todo_box : @ui.Style = @ui.style(w=Full, pt=S0_5, px=S2, pb=S2)
+
+///|
+/// Its count's place, as wide as the lists' menu button above it, centred under it.
+// kept across runs: a value (no field of it changes)
+let todo_slot : @ui.Style = @ui.style(w=S8, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let todo_count : @ui.Style = @ui.style(min_w=S4, h=S4, px=S1, align=ACenter, justify=JCenter, bg=Danger, radius=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let todo_count_words : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, color=OnPrimary, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let todo_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// How many want the person in every workspace (the core's marks' items).
+fn todo_all(src : Source, w : Workspace) -> Int {
+  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
+  let mut all = 0
+  match field(marks, "workspaces") {
+    Some(Object(by)) =>
+      for _, v in by {
+        all += items(Some(v), "items").length()
+      }
+    _ => ()
+  }
+  all
+}
+
+///|
+/// Whether 待处理 is under 新建对话: no bell in the rail, and something there (or its panel open).
+fn todo_shown(src : Source, w : Workspace) -> Bool {
+  !rail_items(src, w.id).contains("attention") && (todo_all(src, w) > 0 || wide.attention_open)
+}
+
+///|
+/// The band's height over the lists: its top row, 新建对话's (6 + 32 + 2; in the closed bar 6 + 32 + 6), 待处理's when
+/// there (2 + 32 + 8).
+fn band_h(src : Source, w : Workspace) -> Double {
+  side_top_h() +
+  side_new_h +
+  (if rail_ws.in_bar { bar_band_in - side_new_under } else { 0.0 }) +
+  (if todo_shown(src, w) { side_todo_h } else { 0.0 })
+}
+
+///|
+/// 新建对话's row's room under it (2), and in the closed bar from its side and under it (6: Sidebar.css.ts navNew, closed).
+let side_new_under : Double = 2.0
+
+///|
+let bar_band_in : Double = 6.0
+
+///|
+let side_new_h : Double = 40.0
+
+///|
+let side_todo_h : Double = 42.0
+
+///|
+/// A place of the rail as it is drawn, `moved` with its drag; while the rail is changed (自定义侧边条), outlined, its
+/// − at its top left corner (Rail.css.ts editing, remove).
+fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, moved : Double, body : () -> Unit) -> Unit {
+  if !rail_ws.editing {
+    c.box(ty=moved, body) |> ignore
+    return
+  }
+  let t = @sf.theme()
+  let rm = c.id("rail/remove/" + place)
+  c.cursor(rm, Hand)
+  let items = rail_items(src, w.id)
+  if c.clicked(rm) && items.length() > 1 {
+    rail_keep(src, w.id, items.filter(fn(i) { i != place }))
+  }
+  c.box(ty=moved, fn() {
+    c.box(style=rail_editing, body) |> ignore
+    // its outline dashed, 1.5 wide, a pixel in from its edge (Rail.css.ts editing: outline-offset -1)
+    c.layer(fn() {
+      c.box(tx=rail_dash_at, ty=rail_dash_at, fn() {
+        @sf.dashed_frame(c, rail_dash_side, rail_dash_side, rail_dash_r, rail_dash_line, t.p.line_strong) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    c.layer(fn() {
+      c.box(style=rail_remove_at, tx=rail_remove_out, ty=rail_remove_out, fn() {
+        let b = c.box(style=rail_remove, id=rm, fn() { @sf.icon(c, "minus", size=12.0, color=t.p.sidebar) |> ignore })
+        c.semantics(b, Button, id=rm, label=fill("web-main.rail.remove", [("name", rail_label(place))]))
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Beside the rail while it is changed (Rail.tsx's Popover): what can be added, by kind, each pressed into the rail;
+/// pressing anywhere but the rail (or Esc) ends the change.
+fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let items = rail_items(src, w.id)
+  // beside the rail (its 56: the sidebar reaches over its last 8), 8 past it, clear of the window's buttons' row
+  // (Rail.tsx: Popover.Anchor the rail, collisionPadding top 52)
+  let p = @kit.popover(
+    c,
+    "rail/adder",
+    rail_ws.editing,
+    c.id("rail"),
+    side=Right,
+    along=Start,
+    offset=rail_adder_off,
+    at=(0.0, rail_menu_clear, rail_w, 0.0),
+    look=fn(c, _, body) { wide_panel(c, rail_adder_w, fn() { c.box(style=adder_body, body) |> ignore }) },
+    fn() {
+      c.box(style=adder_head, fn() {
+        c.text(tr("web-main.rail.customize"), style=adder_title) |> ignore
+        c.text(tr("web-main.rail.customizeLead"), style=adder_lead) |> ignore
+      })
+      |> ignore
+      let kinds = [
+        ("web-main.rail.kind.places", ["files", "stations", "profiles", "connects", "usage"]),
+        ("web-main.rail.kind.lists", ["chats", "mine", "watching", "archive", "decisions"]),
+        ("web-main.rail.kind.attention", ["attention"]),
+      ]
+      let mut none = true
+      for k in kinds {
+        let hidden = k.1.filter(fn(i) { !items.contains(i) })
+        if hidden.length() == 0 {
+          continue
+        }
+        none = false
+        c.box(style=adder_kind, fn() {
+          c.box(style=adder_group, fn() { c.text(tr(k.0), style=adder_label) |> ignore }) |> ignore
+          for i in hidden {
+            if adder_row(c, i) {
+              let next = items.copy()
+              next.push(i)
+              rail_keep(src, w.id, next)
+            }
+          }
+        })
+        |> ignore
+      }
+      if none {
+        c.box(style=adder_group, fn() { c.text(tr("web-main.rail.allIn"), style=adder_lead) |> ignore }) |> ignore
+      }
+    },
+  )
+  // (pressing in the rail does not end it: its places are moved and taken out there)
+  if !p.value {
+    let (px, _, _) = c.pointer()
+    if px >= rail_w || !rail_ws.editing {
+      rail_ws.editing = false
+    }
+  }
+}
+
+///|
+/// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon (奏 its word), its ＋ at its end.
+/// True on the frame after it was pressed.
+fn adder_row(c : @ui.Ctx, place : String) -> Bool {
+  @sf.menu_item(
+    c,
+    rail_label(place),
+    key="rail/add/" + place,
+    panel=true,
+    icon=rail_icon(place),
+    word=if place == "decisions" { "奏" } else { "" },
+    end="plus",
+  )
+}
+
+///|
+/// A kind's label and its rows, 2 apart (parts.css.ts panelGroup).
+// kept across runs: a value (no field of it changes)
+let adder_kind : @ui.Style = @ui.style(w=Full, gap=S0_5)
+
+///|
+/// The adder's panel: 248 wide, 8 past the rail (Rail.css.ts adder).
+let rail_adder_w : Double = 248.0
+
+///|
+let rail_adder_off : Double = 8.0
+
+///|
+/// The − 5 out past the place's top left corner (Rail.css.ts remove).
+let rail_remove_out : Double = -5.0
+
+///|
+/// A place's dashed outline while the rail is changed: 1.5 wide from a pixel in to half a pixel out of its 38 (its
+/// middle 0.25 in: 37.5 across, its corner 12's less as much), drawn from 0.75 further out.
+let rail_dash_line : Double = 1.5
+
+///|
+let rail_dash_side : Double = 37.5
+
+///|
+let rail_dash_r : Double = 11.75
+
+///|
+let rail_dash_at : Double = -0.5
+
+///|
+/// A place while the rail is changed: outlined, its corner the editing frame's (Rail.css.ts editing: 12).
+// kept across runs: a value (no field of it changes)
+let rail_editing : @ui.Style = @ui.style(radius=Xl)
+
+///|
+// kept across runs: a value (no field of it changes)
+let rail_remove_at : @ui.Style = @ui.style(w=Full)
+
+///|
+/// The −: 18 round in the words' colour, the rail's ground round it (Rail.css.ts remove).
+// kept across runs: a value (no field of it changes)
+let rail_remove : @ui.Style = @ui.style(w=S4_5, h=S4_5, align=ACenter, justify=JCenter, bg=Fg, radius=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let adder_head : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let adder_group : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S0_5)
+
+///|
+/// The adder's head and its kinds 8 apart (Rail.css.ts adder: a grid, gap 8).
+// kept across runs: a value (no field of it changes)
+let adder_body : @ui.Style = @ui.style(w=Full, gap=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let adder_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, leading=L6)
+
+///|
+// kept across runs: a value (no field of it changes)
+let adder_lead : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5)
+
+///|
+/// A kind's label in the adder (parts.css.ts panelLabel: 12, muted, on the page's line, 1.55 of it).
+// kept across runs: a value (no field of it changes)
+let adder_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75)

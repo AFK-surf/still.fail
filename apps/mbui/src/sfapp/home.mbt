@@ -1258,11 +1258,8 @@ fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double
 }
 
 ///|
-/// Who is in a chat, small at its second line's end (RowPicture.kt RowAside): its agents (a mark per maker) and its
-/// people, those that lead first; the people only when they lead or someone other than the viewer is in it.
-fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_size? : Double = 18.0) -> Unit {
-  let t = @sf.theme()
-  // those that look the same (one maker's models) drawn once
+/// A row's agents by their mark: those that look the same (one maker's models) once (RowPicture agentGroups).
+fn row_agent_groups(item : ChatItem) -> Array[RowAgent] {
   let groups : Array[RowAgent] = []
   for a in item.agents {
     let key = if a.maker != "" { a.maker } else { a.runtime }
@@ -1270,6 +1267,15 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
       groups.push(a)
     }
   }
+  groups
+}
+
+///|
+/// Who is in a chat, small at its second line's end (RowPicture.kt RowAside): its agents (a mark per maker) and its
+/// people, those that lead first; the people only when they lead or someone other than the viewer is in it.
+fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_size? : Double = 18.0) -> Unit {
+  let t = @sf.theme()
+  let groups = row_agent_groups(item)
   let people = item.people
   let with_people = people.length() > 0 &&
     (lead == "people" || people.iter().any(fn(p) { !p.mine }))

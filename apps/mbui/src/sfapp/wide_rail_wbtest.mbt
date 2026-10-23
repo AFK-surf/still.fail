@@ -1,0 +1,343 @@
+// The wide frame's rail and its sidebar as the web's (Rail.tsx, brand.tsx, shell.css.ts dock): folded, the rail a bar
+// of its own and the list shown a while as the pointer comes onto it; each sidebar's width and folding kept on the
+// device; the lit place pressed again folds or opens; ⌃1 … ⌃9 the workspaces; a row's menu relays it.
+
+///|
+/// The latest `prefs.set` that said this of the sidebars, by `<workspace>\n<group>`.
+fn sidebar_kept(calls : Array[Made], key : String) -> Json? {
+  let mut out : Json? = None
+  for m in calls {
+    if m.name == "prefs.set" {
+      match field(field(Some(m.params), "sidebars"), key) {
+        Some(v) => out = Some(v)
+        None => ()
+      }
+    }
+  }
+  out
+}
+
+///|
+test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on it shows the list a while over the page, folded again 400 ms after it left; kept (prefs.set sidebars)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  assert_true(t.find("新建对话") is Some(_))
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  t.run_for(side_move_ms)
+  assert_true(t.find("新建对话") is None, msg="folded")
+  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string("closed")))
+  // the bar's rail, 6 from the window's edge: its places 2 in
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  assert_eq(rx, closed_bar_in + 2.0)
+  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.run_for(side_move_ms)
+  assert_true(t.find("新建对话") is Some(_), msg="shown a while")
+  // off it: still there for a moment, then folded again
+  t.move(1000.0, 400.0)
+  t.frame()
+  assert_true(rail_ws.peeking)
+  t.run_for(peek_leave_ms)
+  t.frame()
+  assert_false(rail_ws.peeking)
+  t.run_for(side_move_ms)
+  assert_true(t.find("新建对话") is None)
+  // ⌘\ again: open, kept so
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  t.run_for(side_move_ms)
+  assert_true(t.find("新建对话") is Some(_))
+  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::null()))
+}
+
+///|
+test "wide: the lit place pressed again folds its sidebar, shown a while (the pointer is on the rail); its width dragged is kept" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (rx, ry, rw, rh) = t.query(Button, label="对话").unwrap().rect
+  t.tap(rx + rw / 2.0, ry + rh / 2.0)
+  t.run_for(side_move_ms)
+  assert_true(wide.folded)
+  assert_true(rail_ws.peeking)
+  // pressed in the bar: open again
+  let (bx, by, bw, bh) = t.query(Button, label="对话").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  t.run_for(side_move_ms)
+  assert_false(wide.folded)
+  // its edge dragged 60 to the right: 300, kept once let go
+  let edge = rail_w + 240.0
+  t.drag(edge, 400.0, edge + 60.0, 400.0)
+  t.frame()
+  // (as far as the pointer went once it was pressed on the edge)
+  assert_true(wide.side_w > 280.0 && wide.side_w <= 300.0, msg=wide.side_w.to_string())
+  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string(wide.side_w.round().to_int().to_string())))
+}
+
+///|
+test "wide: ⌃2 goes to the second workspace (prefs.set workspace)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.key(@ui.key_of_char('2'), mods=@ui.mod_ctrl)
+  t.frame()
+  assert_eq(app.picked, "ws2")
+  assert_true(named(calls, "prefs.set").iter().any(fn(m) { text(Some(m.params), "workspace") == "ws2" }))
+}
+
+///|
+test "wide: a row's menu has 接力到频道… for a chat with an agent" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.right_click(x, y)
+  t.frame()
+  assert_true(t.find("接力到频道…") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+}
+
+///|
+test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its field, the newest open beside it; 恢复 puts one back (chat.archive, archived false)" {
+  let calls : Array[Made] = []
+  reset()
+  let base = fixture("home")
+  let row = fn(id : String, title : String) -> Json {
+    {
+      "station": "ws1/st1",
+      "id": id,
+      "session": "s-" + id,
+      "thread": 2,
+      "title": title,
+      "last": "说完了",
+      "at": 0,
+      "clock": "14:05",
+      "how": "手动归档",
+      "deletable": true,
+    }
+  }
+  let archive : Json = { "days": [{ "label": "今天", "items": [row("a1", "整理上个月的发票"), row("a2", "试一下新的图标尺寸")] }] }
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "archive" {
+        { value: Some(archive), error: None, version: 1 }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.frame()
+  app.nav.push(Archived)
+  t.frame()
+  t.run_for(list_slide_ms)
+  assert_true(t.find("搜索归档") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("试一下新的图标尺寸") is Some(_))
+  // the newest beside the list
+  match app.nav.top() {
+    Chat(r) => assert_eq(r.session, "s-a1")
+    _ => fail("the newest not open")
+  }
+  // pointed at, 恢复
+  let (x, y) = t.find("试一下新的图标尺寸").unwrap()
+  t.move(x, y)
+  t.frame()
+  let (bx, by, bw, bh) = t.query(Button, label="恢复「试一下新的图标尺寸」").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  t.frame()
+  assert_true(
+    calls.iter().any(fn(m) {
+      m.name == "chat.archive" && text(Some(m.params), "session") == "s-a2" && field(Some(m.params), "archived") == Some(Json::boolean(false))
+    }),
+  )
+}
+
+///|
+test "wide: 自定义侧边条 from the rail's menu: what can be added beside the rail, by kind; one pressed is put in (prefs.set rails); Esc ends it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  t.right_click(rx + rw / 2.0, ry + rh / 2.0)
+  t.frame()
+  let (mx, my) = t.find("自定义侧边条").unwrap()
+  t.tap(mx, my)
+  t.frame()
+  assert_true(rail_ws.editing)
+  assert_true(t.find("对话列表") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  let (ax, ay) = t.find("我参与的").unwrap()
+  t.tap(ax, ay)
+  t.frame()
+  match field(field(Some(named(calls, "prefs.set").last().unwrap().params), "rails"), "ws1") {
+    Some(Array(a)) => assert_true(a.contains(Json::string("mine")))
+    _ => fail("no rails kept")
+  }
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_false(rail_ws.editing)
+}
+
+///|
+/// The wide frame over the home fixture with what the core would say of `changed` topics, the prefs set kept as the
+/// core keeps them (a `trouble` set: there at once).
+fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
+  reset()
+  let base = fixture("home")
+  let kept : Map[String, Json] = {}
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      match changed.get(name) {
+        Some(v) => { value: Some(v), error: None, version: 1 }
+        None if name == "prefs" =>
+          match (base.topic)(name, params).value {
+            Some(Object(m)) => {
+              let p = m.copy()
+              p["trouble"] = Json::object(kept)
+              { value: Some(Json::object(p)), error: None, version: 2 + kept.length() }
+            }
+            v => { value: v, error: None, version: 1 }
+          }
+        None => (base.topic)(name, params)
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      if name == "prefs.set" {
+        match field(Some(params), "trouble") {
+          Some(Object(t)) =>
+            for k, v in t {
+              if v == Json::null() {
+                kept.remove(k)
+              } else {
+                kept[k] = v
+              }
+            }
+          _ => ()
+        }
+      }
+      (base.call)(name, params, done)
+    },
+  }
+  @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+}
+
+///|
+/// The home fixture's chats of ws1 with what is wrong with its stations.
+fn chats_in_trouble() -> Json {
+  match (fixture("home").topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value {
+    Some(Object(m)) => {
+      let v = m.copy()
+      v["trouble"] = { "text": "MBA 连不上了", "state": "error" }
+      Json::object(v)
+    }
+    _ => Json::null()
+  }
+}
+
+///|
+test "wide: with the bell in the rail, the stations' trouble is in 待处理's panel, not under the list: looked at as it opens (prefs.set trouble seen); 忽略 lets it go (prefs.set trouble gone)" {
+  let calls : Array[Made] = []
+  let t = wide_with(calls, { "chats": chats_in_trouble() })
+  t.frame()
+  assert_true(t.find("MBA 连不上了") is None, msg="not in the lists' foot")
+  let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  t.frame()
+  let (x, y) = t.find("MBA 连不上了").unwrap()
+  // 10 past the bell
+  assert_true(x >= bx + bw + 10.0, msg=x.to_string())
+  assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("MBA 连不上了")))
+  t.move(x, y)
+  t.frame()
+  let (dx, dy) = t.find("忽略").unwrap()
+  t.tap(dx, dy)
+  t.frame()
+  assert_eq(trouble_said(calls, "ws1\ngone"), Some(Json::string("MBA 连不上了")))
+  assert_true(t.find("MBA 连不上了") is None, msg="let go")
+}
+
+///|
+/// The latest `prefs.set` of the stations' trouble's `key`.
+fn trouble_said(calls : Array[Made], key : String) -> Json? {
+  let mut out : Json? = None
+  for m in calls {
+    if m.name == "prefs.set" {
+      match field(field(Some(m.params), "trouble"), key) {
+        Some(v) => out = Some(v)
+        None => ()
+      }
+    }
+  }
+  out
+}
+
+///|
+test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on its row pointed at lets it go (decision.dismiss), gone from the panel at once" {
+  let calls : Array[Made] = []
+  let marks : Json = {
+    "badge": 1,
+    "workspaces": {
+      "ws1": {
+        "items": [
+          {
+            "station": "ws1/st1",
+            "session": "s-c1",
+            "thread": 12,
+            "seq": 5,
+            "title": "整理发布清单",
+            "kind": "wait",
+            "text": "要你帮忙：选一个发布日期",
+            "workspaceName": "Acme",
+          },
+        ],
+      },
+    },
+  }
+  let t = wide_with(calls, { "workspaceMarks": marks })
+  t.frame()
+  let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  t.frame()
+  let (x, y) = t.find("选一个发布日期").unwrap()
+  t.move(x, y)
+  t.frame()
+  let (dx, dy) = t.find("忽略").unwrap()
+  t.tap(dx, dy)
+  t.frame()
+  let d = named(calls, "decision.dismiss")
+  assert_eq(d.length(), 1)
+  assert_eq(field(Some(d[0].params), "thread"), Some(Json::number(12.0)))
+  assert_eq(field(Some(d[0].params), "seq"), Some(Json::number(5.0)))
+  assert_true(t.find("选一个发布日期") is None)
+}
+
+///|
+test "wide: the rail's menu beside the place right clicked, 8 past it; a place's ＋ there puts it in the rail (prefs.set rails) and the rail is changed from there" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  t.right_click(rx + rw / 2.0, ry + rh / 2.0)
+  t.frame()
+  let (mx, my) = t.find("我参与的").unwrap()
+  assert_true(mx > rx + rw + 8.0, msg=mx.to_string())
+  t.move(mx, my)
+  t.frame()
+  let (px, py, pw, ph) = t.query(Button, label="将我参与的添加到侧边条").unwrap().rect
+  t.tap(px + pw / 2.0, py + ph / 2.0)
+  t.frame()
+  match field(field(Some(named(calls, "prefs.set").last().unwrap().params), "rails"), "ws1") {
+    Some(Array(a)) => assert_true(a.contains(Json::string("mine")))
+    _ => fail("not put in")
+  }
+  assert_true(rail_ws.editing)
+}
+
+///|
+test "wide: 已归档 from the lists' filter: its place at the rail's foot while it is shown, lit; the filter in the accent's ground" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  assert_true(t.query(Button, label="已归档") is None)
+  app.nav.push(Archived)
+  t.frame()
+  t.run_for(list_slide_ms)
+  assert_true(t.query(Button, label="已归档") is Some(_))
+}

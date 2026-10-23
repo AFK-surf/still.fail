@@ -4388,6 +4388,16 @@ export interface PrefsView {
 	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
 	 */
 	previewSizes?: Record<string, string>;
+	/**
+	 * Each sidebar of the wide frame as it was left on this device, by its workspace and its group
+	 * (`<workspace>\n<chats|settings|files|profiles|stations>`): its width, `<width>,closed` folded at that width, or `closed`.
+	 */
+	sidebars?: Record<string, string>;
+	/**
+	 * What this device did with a workspace's stations' trouble in the rail's bell, by `<workspace>\n<seen|gone>`:
+	 * the trouble's words as they were when it was looked at (no longer lighting the bell) or let go (no longer listed).
+	 */
+	trouble?: Record<string, string>;
 	/** A service's page's toolbar folded away on this device (held down; the bar's size button opens it again). */
 	previewFolded?: boolean;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
