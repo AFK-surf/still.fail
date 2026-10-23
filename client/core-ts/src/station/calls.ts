@@ -8,7 +8,7 @@ import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { base64, fromBase64 } from "../util.ts";
 import { Beside } from "../protocol.ts";
-import { chatKeptId, keptId } from "../drive-kept.ts";
+import { chatKeptId, keptId, sentKeptId } from "../drive-kept.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
@@ -137,19 +137,28 @@ export function install(): void {
         },
       ),
     );
-    if (c.keep === null) return Effect.map(read, ([type, bytes]) => new Beside({ type }, bytes));
-    // With `keep`: what is kept of it answered whole without asking the station; read whole, kept with its chat once
-    // answered (drive-kept.ts `chat`).
-    const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
-    return Effect.gen(function* () {
-      const held = yield* inner.driveKept.read(id, 0, size, 0, size);
-      if (held !== null) {
-        if (c.progress) progress({ loaded: size, total: size });
-        return new Beside({ type: held.type }, held.bytes);
-      }
-      const [type, bytes] = yield* read;
-      if (bytes.length === size) inner.runner.fork(inner.driveKept.keep(id, "chat", 0, size, type, 0, bytes));
-      return new Beside({ type }, bytes);
+    const station = () => {
+      if (c.keep === null) return Effect.map(read, ([type, bytes]) => new Beside({ type }, bytes));
+      // With `keep`: what is kept of it answered whole without asking the station; read whole, kept with its chat once
+      // answered (drive-kept.ts `chat`).
+      const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
+      return Effect.gen(function* () {
+        const held = yield* inner.driveKept.read(id, 0, size, 0, size);
+        if (held !== null) {
+          if (c.progress) progress({ loaded: size, total: size });
+          return new Beside({ type: held.type }, held.bytes);
+        }
+        const [type, bytes] = yield* read;
+        if (bytes.length === size) inner.runner.fork(inner.driveKept.keep(id, "chat", 0, size, type, 0, bytes));
+        return new Beside({ type }, bytes);
+      });
+    };
+    // One sent up from here is answered as it went, for its thumbnail too (drive-kept.ts `sent`): not read back from the
+    // station it went to.
+    return Effect.flatMap(inner.driveKept.held(sentKeptId(c.station, c.name)), (sent) => {
+      if (sent === null) return station();
+      if (c.progress) progress({ loaded: sent.size, total: sent.size });
+      return Effect.succeed(new Beside({ type: sent.type }, sent.bytes));
     });
   };
   // `progress`: the bytes of the part so far, as they come (a part is megabytes: its end alone is too seldom to show).
@@ -163,20 +172,26 @@ export function install(): void {
       Effect.flatMap(parse(c.station), (addr) =>
         inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, heard, sink && pieces ? (piece) => (pieces.push(piece), sink(piece)) : sink),
       );
-    if (c.keep === null) return Effect.map(read(null), (got) => partAnswer(c, { type: got.type, total: got.total }, got.bytes));
-    const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
-    return Effect.gen(function* () {
-      const held = yield* inner.driveKept.read(id, 0, size, c.offset, c.length);
-      if (held !== null) {
-        if (sink) sink(held.bytes);
-        else heard?.(held.bytes.length);
-        return partAnswer(c, { type: held.type, total: size }, held.bytes);
-      }
-      const pieces: Uint8Array[] = [];
-      const got = yield* read(pieces);
-      if (got.total === size) inner.runner.fork(inner.driveKept.keep(id, "chat", 0, size, got.type, c.offset, sink ? joined(pieces) : got.bytes));
-      return partAnswer(c, { type: got.type, total: got.total }, got.bytes);
-    });
+    // What is kept here of it, answered as the station would.
+    const here = (got: { type: string; bytes: Uint8Array }, total: number) => {
+      if (sink) sink(got.bytes);
+      else heard?.(got.bytes.length);
+      return partAnswer(c, { type: got.type, total }, got.bytes);
+    };
+    const station = () => {
+      if (c.keep === null) return Effect.map(read(null), (got) => partAnswer(c, { type: got.type, total: got.total }, got.bytes));
+      const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
+      return Effect.gen(function* () {
+        const kept = yield* inner.driveKept.read(id, 0, size, c.offset, c.length);
+        if (kept !== null) return here(kept, size);
+        const pieces: Uint8Array[] = [];
+        const got = yield* read(pieces);
+        if (got.total === size) inner.runner.fork(inner.driveKept.keep(id, "chat", 0, size, got.type, c.offset, sink ? joined(pieces) : got.bytes));
+        return partAnswer(c, { type: got.type, total: got.total }, got.bytes);
+      });
+    };
+    // One sent up from here: as `station.file`'s.
+    return Effect.flatMap(inner.driveKept.held(sentKeptId(c.station, c.name), c.offset, c.length), (sent) => (sent === null ? station() : Effect.succeed(here(sent, sent.size))));
   };
   handlers.stationPoster = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPoster" }>;
