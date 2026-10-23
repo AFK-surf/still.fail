@@ -47,6 +47,8 @@ export type Call =
   | { kind: "decisionAnswer"; station: string; thread: number; seq: number; option: string }
   | { kind: "decisionReply"; station: string; thread: number; seq: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown }
   | { kind: "decisionDefer"; station: string; thread: number; seq: number }
+  | { kind: "decisionDismiss"; op: ops.Request; station: string; thread: number; seq: number }
+  | { kind: "decisionShow"; workspace: string; station: string; thread: number; seq: number }
   | { kind: "chatRetryIn"; station: string; session: string; id: string }
   | { kind: "chatDiscardIn"; station: string; session: string; id: string }
   | { kind: "chatRetry"; station: string; thread: number; id: string }
@@ -215,6 +217,7 @@ export function counts(call: Call, name: string): boolean {
       return true;
     case "decisionAnswer":
     case "decisionReply":
+    case "decisionDismiss":
       return true;
     case "wake":
       return call.retry;
@@ -465,6 +468,15 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         throw CoreError.invalid(t("core-misc.call.bad_update_notice"));
       }
       return { kind: "stationUpdateNotice", station: p.station as string, action, version };
+    }
+    case "decision.show": {
+      const p = read(params, [
+        ["workspace", S, "req"],
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["seq", "u64", "req"],
+      ]);
+      return { kind: "decisionShow", workspace: p.workspace as string, station: p.station as string, thread: p.thread as number, seq: p.seq as number };
     }
     case "decision.defer": {
       const p = read(params, [
@@ -940,6 +952,11 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     const session = get(p, "session");
     const thread = get(p, "thread");
     return { kind: "chatArchive", op, thread: typeof thread === "number" && Number.isInteger(thread) && thread >= 0 ? thread : null, session: typeof session === "string" ? session : "", archived: get(p, "archived") === true };
+  }
+  if (name === "decision.dismiss") {
+    const p = orEmpty(params);
+    const op = ops.request(name, p)!;
+    return { kind: "decisionDismiss", op, station: "station" in op.target ? op.target.station : "", thread: get(p, "thread") as number, seq: get(p, "seq") as number };
   }
   if (name === "chat.rename" || name === "chat.pin" || name === "chat.keep") {
     const p = orEmpty(params);
