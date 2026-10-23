@@ -123,7 +123,7 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
       c.box(id~, fn() {
         c.text(
           if absolute_times.val { s.full } else { s.ago },
-          size=10.0,
+          size=if wide_on.val { web_time } else { 10.0 },
           color=ink().muted,
           wrap=false,
           line=16.0,
@@ -134,6 +134,32 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
     }
   }
 }
+
+///|
+/// A chat's words on a desktop's width, as the web's (styles/global.css.ts, conversation.css.ts): a message's 14 (its
+/// head's name too), its time 11; the viewer's bubble 14 on 22, 10 by 16 in, 20 round, 640 wide at most.
+let web_body : Double = 14.0
+
+///|
+let web_time : Double = 11.0
+
+///|
+let web_bubble_line : Double = 22.0
+
+///|
+let web_bubble_w : Double = 640.0
+
+///|
+let web_bubble_share : Double = 0.78
+
+///|
+let web_bubble_px : Double = 16.0
+
+///|
+let web_bubble_py : Double = 10.0
+
+///|
+let web_bubble_r : Double = 20.0
 
 ///|
 /// A message's picture (Chat.kt MessageAvatar): an agent's maker on the round grey ground, still.fail's mark, or a
@@ -284,7 +310,8 @@ fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) 
   let k = ink()
   c.box(dir=Row, w=Fill(1.0), pl=25.0, min_h=24.0, gap=6.0, align=ACenter, fn() {
     c.box(max_w=240.0, id~, fn() {
-      c.text(name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0) |> ignore
+      c.text(name, size=if wide_on.val { web_body } else { 15.0 }, weight=650, color=k.name, wrap=false, line=21.0)
+      |> ignore
     })
     |> ignore
     message_time(c, key, time)
@@ -655,7 +682,7 @@ fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
   c.rich(
     @sf.found_weight(ref_runs(words), found_words_of(ts)),
     key="words/" + ts,
-    size=15.0,
+    size=if wide_on.val { web_body } else { 15.0 },
     color=ink().text,
     line=23.0,
     link_color=t.p.blue,
@@ -680,13 +707,21 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   // gone to (a notification's), the bubble takes the accent's ground as it flashes (Chat.kt Bubble: lit)
   let lit = if flashing.val.0 == ts { flashing.val.1 } else { 0.0 }
   let neutral = if lit > 0.0 { @sf.mix(flash_ground(), lit, k.neutral) } else { k.neutral }
-  let b = c.box(max_w=c.width - 36.0, padx=14.0, pady=8.0, radius=18.0, bg=@sf.alpha(neutral, ground), fn() {
+  // (the web's on a desktop's width: conversation.css.ts msgBubble, 78% of the column and 640 at most, 10 by 16 in, 20
+  // round)
+  let b = c.box(
+    max_w=if wide_on.val { dmin(c.width * web_bubble_share, web_bubble_w) } else { c.width - 36.0 },
+    padx=if wide_on.val { web_bubble_px } else { 14.0 },
+    pady=if wide_on.val { web_bubble_py } else { 8.0 },
+    radius=if wide_on.val { web_bubble_r } else { 18.0 },
+    bg=@sf.alpha(neutral, ground),
+    fn() {
     c.rich(
       @sf.found_weight(ref_runs(words), found_words_of(ts)),
       key="bubble/" + ts,
-      size=16.0,
+      size=if wide_on.val { web_body } else { 16.0 },
       color=k.text,
-      line=21.0,
+      line=if wide_on.val { web_bubble_line } else { 21.0 },
       // (SendTextStyle's lines: a TextStyle of its own, no LineHeightStyle)
       trim=true,
       link_color=t.p.blue,
@@ -735,7 +770,7 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
         m.text,
         tree=m.md,
         key="md/" + m.ts,
-        size=15.0,
+        size=if wide_on.val { web_body } else { 15.0 },
         ink=ink().text,
         on_link=fn(h) {
           // a link within a sentence to a visualization it places: opened over the whole screen (Prose.kt OpenedFile)

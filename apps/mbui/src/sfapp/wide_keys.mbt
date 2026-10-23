@@ -41,6 +41,9 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       // (its field let go: the keyboard goes nowhere until another is pressed)
       wide.switcher = false
       c.blur()
+    } else if wide.find_chat != "" {
+      find_forget()
+      c.blur()
     } else if wide.keys_open {
       wide.keys_open = false
     } else if wide.menu is Some(_) || wide.filter_open || wide.attention_open {
@@ -354,6 +357,7 @@ fn keys_dialog(c : @ui.Ctx) -> Unit {
         (tr("web-main.keymap.shortcuts"), cmd + "/"),
       ],
     ),
+    (tr("web-main.keymap.group.chat"), [(tr("web-main.keymap.chat.find"), cmd + "F")]),
     (
       tr("web-main.shortcuts.group.composer"),
       [

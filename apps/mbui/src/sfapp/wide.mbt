@@ -51,6 +51,32 @@ priv struct Wide {
   mut jobs_open : Bool
   /// the job picked in the 任务 tab ("" the first)
   mut job_picked : String
+  /// ⌘F's bar (wide_find.mbt): the chat it is open in ("" closed), its field, what is typed, what the core found
+  /// (None nothing asked yet), the time the reader is at (which of its messages, which time in it), whether what is
+  /// not on the device is being read, the message the chat's window was last moved about for it
+  mut find_chat : String
+  find_field : @ui.Field
+  mut find_query : String
+  mut found : Found?
+  mut find_at : Int
+  mut find_k : Int
+  mut bringing : Bool
+  mut find_around : Double
+  /// a model control's panel open (model_triple.mbt): its station and pick ("" none), its accounts' panel beside it,
+  /// its filter's field and words; the borrowing it asks to confirm ("" none)
+  mut triple : String
+  mut triple_accounts : Bool
+  triple_field : @ui.Field
+  mut triple_query : String
+  mut borrow_asking : String
+  /// an agent's history in the side panel (wide_history.mbt): 只看收发, its details folded; where its runtime keeps
+  /// each session's transcript (by station and session; "" none), asked once; its context's 管理 menu open, clearing
+  /// it asked to confirm (its session's key, "" none)
+  mut history_io : Bool
+  mut history_shut : Bool
+  transcripts : Map[String, String]
+  mut context_menu : String
+  mut clear_asking : String
 }
 
 ///|
@@ -73,6 +99,24 @@ let wide : Wide = {
   info_open: false,
   jobs_open: false,
   job_picked: "",
+  find_chat: "",
+  find_field: @ui.Field::new(),
+  find_query: "",
+  found: None,
+  find_at: -1,
+  find_k: 0,
+  bringing: false,
+  find_around: -1.0,
+  triple: "",
+  triple_accounts: false,
+  triple_field: @ui.Field::new(),
+  triple_query: "",
+  borrow_asking: "",
+  history_io: false,
+  history_shut: false,
+  transcripts: {},
+  context_menu: "",
+  clear_asking: "",
 }
 
 ///|
@@ -107,6 +151,17 @@ fn wide_reset() -> Unit {
   wide.info_open = false
   wide.jobs_open = false
   wide.job_picked = ""
+  find_forget()
+  wide.triple = ""
+  wide.triple_accounts = false
+  wide.triple_field.set("")
+  wide.triple_query = ""
+  wide.borrow_asking = ""
+  wide.history_io = false
+  wide.history_shut = false
+  wide.transcripts.clear()
+  wide.context_menu = ""
+  wide.clear_asking = ""
   wide_on.val = false
   corners_on.val = false
   recent_open.val = false

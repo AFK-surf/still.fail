@@ -76,6 +76,12 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
     }
     Some(_) => ()
   }
+  // in the wide frame, the web's head (wide_history.mbt)
+  if wide_on.val {
+    wide_history_head(c, src, r, key, a)
+    c.box(style=wh_fill, fn() { history_steps(c, src, r, key, entry) }) |> ignore
+    return
+  }
   let s = field(a, "session")
   c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, gap=6.0, align=ACenter, fn() {
     model_mark_big(
@@ -270,13 +276,17 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : I
     history_edge(c, text(h, "edge"))
     return
   }
-  let its = items(h, "items")
+  // 只看收发 (the wide frame's, History.tsx onlyIo): its steps and its own words left out
+  let io = wide_on.val && wide.history_io
+  let its = items(h, "items").filter(fn(i) { !io || !history_work(Some(i)) })
   let lines : Array[HLine] = [HEdge]
   for i in its {
     lines.push(HItem(i))
   }
-  for l in items(h, "live") {
-    lines.push(HLive(l))
+  if !io {
+    for l in items(h, "live") {
+      lines.push(HLive(l))
+    }
   }
   match field(h, "phase") {
     Some(Object(_) as p) => lines.push(HPhase(p))
@@ -2201,4 +2211,13 @@ fn tool_result(c : @ui.Ctx, name : String, call : String, result : String, faile
   })
   |> ignore
   ignore(call)
+}
+
+///|
+/// An item of its own work (History.tsx isWork): its steps, and the words it says to itself; what 只看收发 leaves out.
+fn history_work(item : Json?) -> Bool {
+  match text(field(item, "body"), "kind") {
+    "group" | "text" => true
+    _ => false
+  }
 }

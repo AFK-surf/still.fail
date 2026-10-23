@@ -22,13 +22,17 @@ fn found_start(rd : Reading) -> Unit {
 }
 
 ///|
-/// The words to mark in message `ts` in the chat drawn now (none for any other).
+/// In the chat drawn now, while ⌘F's bar is open in it (wide_find.mbt): what it found, marked in every message drawn.
+let find_marking : Ref[Array[String]] = Ref([])
+
+///|
+/// The words to mark in message `ts` in the chat drawn now (none for any other): the search's, or ⌘F's in all.
 fn found_words_of(ts : String) -> Array[String] {
   let (at, words, _) = found_marking.val
   if at != "" && at == ts {
     words
   } else {
-    []
+    find_marking.val
   }
 }
 
@@ -43,7 +47,9 @@ fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
     Some(w) => {
       rd.found_centre = false
       let ranges = @sf.find_words(w.text, rd.found_words)
-      match ranges.get(0) {
+      // (⌘F's: the time the reader is at in it)
+      let k = if wide.find_chat != "" { wide.find_k } else { 0 }
+      match ranges.get(if k < ranges.length() { k } else { 0 }) {
         Some((a, b)) =>
           match w.rects(a, b).get(0) {
             Some((_, y, _, h)) => {
@@ -67,8 +73,17 @@ fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
 ///|
 /// The strokes under the words a search opened the chat at in message `ts`'s words (box `key`, as laid out), drawn
 /// in a layer of the box at `(bx, by)` in the window, behind its words: each of its paragraphs' own, one a line of a
-/// word that wraps, 4 under the baseline, 2 past the word's ends, 2.5 wide (TextMark.kt).
-fn found_strokes(c : @ui.Ctx, key : String, words : Array[String], drawn : Double, bx : Double, by : Double) -> Unit {
+/// word that wraps, 4 under the baseline, 2 past the word's ends, 2.5 wide (TextMark.kt). `faint`: ⌘F's in a message
+/// other than the one the reader is at, drawn whole and lighter (ChatFind.css.ts: .45).
+fn found_strokes(
+  c : @ui.Ctx,
+  key : String,
+  words : Array[String],
+  drawn : Double,
+  bx : Double,
+  by : Double,
+  faint? : Bool = false,
+) -> Unit {
   let w = match c.words_of(key) {
     Some(w) => w
     None => return
@@ -88,7 +103,7 @@ fn found_strokes(c : @ui.Ctx, key : String, words : Array[String], drawn : Doubl
               line = l
             }
           }
-          let part = @sf.stroke_part(drawn, i)
+          let part = if faint { 1.0 } else { @sf.stroke_part(drawn, i) }
           i = i + 1
           if part <= 0.0 {
             continue
@@ -97,7 +112,8 @@ fn found_strokes(c : @ui.Ctx, key : String, words : Array[String], drawn : Doubl
           let right = p.x - bx + rx + rw + 2.0
           let y = p.y - by + lay.line_y[line] + lay.line_base[line] + 4.0
           c.box(tx=left - cx, ty=y - cy, fn() {
-            @sf.hand_stroke(c, @sf.message_stroke, right - left, part, t.p.accent) |> ignore
+            let ink = if faint { @sf.alpha(t.p.accent, find_faint) } else { t.p.accent }
+            @sf.hand_stroke(c, @sf.message_stroke, right - left, part, ink) |> ignore
           })
           |> ignore
         }
