@@ -129,7 +129,7 @@ test("a video's parts are kept as played, a stream's too; the page of what the d
 
 test("past their bound the least lately read go, never the one just read nor one being written", async () => {
   const host = new FakeHost();
-  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY });
+  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY, sent: 100 });
   const run = <A>(e: Effect.Effect<A>) => Effect.runPromise(e);
   const ids = ["one", "two", "three"].map((n) => keptId(ST, ROOT, n));
   for (const id of ids) {

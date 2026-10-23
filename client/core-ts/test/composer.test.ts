@@ -5,11 +5,11 @@ import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { Core } from "../src/core.ts";
 import { dbName, SOON_MS } from "../src/data.ts";
-import { apply, call, subscribe, v } from "./helpers.ts";
+import { answers, apply, call, subscribe, v } from "./helpers.ts";
 import { CoreFiles, PageFiles } from "../src/hosts/file-port.ts";
 import { FileSource } from "../src/file-source.ts";
 import { CoreError } from "../src/error.ts";
-import { stationReplies, started } from "./station-fixture.ts";
+import { Raw, stationReplies, started } from "./station-fixture.ts";
 import { HostWire } from "../src/station/wire.ts";
 
 /// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
@@ -44,6 +44,54 @@ test("desktop_upload_retry_keeps_its_source_after_a_station_failure", async () =
   assert.deepEqual(received, [[1, 2, 3], [1, 2, 3]]);
   assert.deepEqual(released, [1]);
   bridge.close(); t.core.close();
+});
+
+test("an_image_sent_up_from_here_is_shown_and_opened_from_the_device_not_read_back_from_its_station", async () => {
+  const t = await setup();
+  const png = Uint8Array.from({ length: 40 }, (_, i) => i);
+  // The station keeps each under a name of its own, kept as it moves it into the chat's uploads.
+  const stored = (name: string) => `2026-10-24T08-00-00-0a1b2c-${name}`;
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) =>
+    Effect.succeed({ have: bytes.length, file: { name: q.name, path: `/data/uploads/${stored(q.name)}`, size: bytes.length } });
+  const asked: string[] = [];
+  stationReplies(t.host, (req) => {
+    const u = new URL(req.url);
+    if (!u.pathname.includes("/sessions/k1/")) return undefined;
+    asked.push(`${u.pathname.split("/").at(-1)} ${u.searchParams.get("name")}`);
+    return new Raw({ status: 200, headers: [["content-type", "text/plain"]], body: new Uint8Array([9]) });
+  });
+  await t.watch(1, "ws/st:k");
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [
+    { id: "shot", name: "shot.png", size: png.length, blob: new Blob([png], { type: "image/png" }) },
+    { id: "notes", name: "notes.txt", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])], { type: "text/plain" }) },
+  ] });
+  await t.settle();
+  assert.deepEqual(v(t.values, 1).files.map((f: J) => f.done?.path), [`/data/uploads/${stored("shot.png")}`, `/data/uploads/${stored("notes.txt")}`]);
+  // In whichever chat its message is, as its station names it there.
+  const file = async (id: number, op: string, name: string, params: J = {}) => {
+    call(t.core, t.ui, id, op, { station: "ws/st", key: "k1", name, ...params });
+    await t.host.settle();
+    return answers(t.host.takeEmitted(), id) as { ok: { type: string; total?: number }; bytes: Uint8Array };
+  };
+  const thumb = await file(201, "station.file", stored("shot.png"), { thumb: true });
+  assert.deepEqual([thumb.ok, [...thumb.bytes]], [{ type: "image/png" }, [...png]]);
+  const whole = await file(202, "station.file", stored("shot.png"));
+  assert.deepEqual([...whole.bytes], [...png]);
+  const part = await file(203, "station.file.part", stored("shot.png"), { offset: 10, length: 8 });
+  assert.deepEqual([part.ok, [...part.bytes]], [{ type: "image/png", total: 40 }, [...png.slice(10, 18)]]);
+  assert.deepEqual(asked, [], "its station not asked");
+  // What is not an image is read from its station as before.
+  await file(204, "station.file", stored("notes.txt"));
+  assert.deepEqual(asked, [`files ${stored("notes.txt")}`]);
+  // Counted and let go with the drives' files: then read from its station.
+  call(t.core, t.ui, 205, "cache.usage", {});
+  await t.host.settle();
+  assert.equal((answers(t.host.takeEmitted(), 205)?.ok as { drive: number }).drive, png.length);
+  call(t.core, t.ui, 206, "drive.kept.clear", {});
+  await t.host.settle();
+  await file(207, "station.file", stored("shot.png"), { thumb: true });
+  assert.deepEqual(asked, [`files ${stored("notes.txt")}`, `files ${stored("shot.png")}`]);
+  t.core.close();
 });
 
 test("a_failed_upload_goes_up_again_from_the_composer", async () => {
