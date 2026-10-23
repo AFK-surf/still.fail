@@ -153,9 +153,9 @@ pub let workspace_tile : @ui.Style = @ui.style(
 pub let workspace_tile_mark : Double = 26.0
 
 ///|
-/// A workspace's first letter in its square, where it has no mark: 22 (Xl3, near the account's initial beside it, half
-/// its picture), semibold, muted (Rail.css.ts workspaceItem).
-pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Muted, wrap=false)
+/// A workspace's first letter in its square, where it has no mark: 22 on a line of 22 (Xl3, L7: SettingsHome.kt's
+/// lineHeight, near the account's initial beside it, half its picture), semibold, muted (Rail.css.ts workspaceItem).
+pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Xl3, leading=L7, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 /// A chip whose ground fills from the left (an allowance's, a machine's load, a download's: Parts.kt FILL_CHIP_CORNER):

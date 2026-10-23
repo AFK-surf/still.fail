@@ -381,14 +381,13 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 /// The account's card and the workspace's (SettingsHome.kt): what it is by (`lead`: a picture, a mark), its name, a line
 /// under it, a chevron; tapped, true the frame after.
 fn identity_card(c : @ui.Ctx, key : String, lead : () -> Unit, name : String, line : String) -> Bool {
-  let t = @sf.theme()
   card(c, key~, fn() {
-    c.box(dir=Row, w=Fill(1.0), gap=14.0, align=ACenter, fn() {
+    c.box(style=identity_row, fn() {
       lead()
-      c.box(w=Fill(1.0), fn() {
-        c.text(name, size=16.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
+      c.box(style=@sf.full_width, fn() {
+        c.text(name, style=identity_name) |> ignore
         if line != "" {
-          c.text(line, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+          c.text(line, style=identity_line) |> ignore
         }
       })
       |> ignore
@@ -397,6 +396,22 @@ fn identity_card(c : @ui.Ctx, key : String, lead : () -> Unit, name : String, li
     |> ignore
   })
 }
+
+///|
+/// A card's row (SettingsHome.kt): what it is by, its words, its chevron, 14 apart, centred across it.
+// kept across runs: a value (no field of it changes)
+let identity_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3_5, align=ACenter)
+
+///|
+/// The name on the account's card and the workspace's: 16 bold on one line, its line the theme's (1.4em: 22.4), as
+/// Android's Text says none of its own.
+// kept across runs: a value (no field of it changes)
+let identity_name : @ui.TextStyle = @ui.text_style(size=Xl, weight=Bold, color=Fg, wrap=false, w=Full)
+
+///|
+/// The line under it: 13 in the muted, one line, the theme's line (18.2).
+// kept across runs: a value (no field of it changes)
+let identity_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Full)
 
 ///|
 /// The workspace's mark on its card (SettingsHome.kt WorkspaceTile), as the account's picture is on its own: a picture
