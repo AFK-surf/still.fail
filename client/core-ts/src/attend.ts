@@ -60,6 +60,9 @@ type Visit = {
   resumedAt: number | null;
   statuses: Map<string, string>;
   started: Set<string>;
+  /// Made here as it showed (its station had no thread for it yet): an agent first seen at work in it started while it
+  /// shows, as none was there before; until it is out of view.
+  made: boolean;
 };
 
 /// What a chat's value asks of the core once computed: a read position recorded (its end shown on a page in front).
@@ -77,6 +80,9 @@ export class Attend {
   readonly visits = new Map<string, Visit>();
   readonly #reads = new Map<string, number>();
   #show: [J, number][] = [];
+  /// Chats being made, shown before their station has a thread for them, by station and session: their agents, once
+  /// there, start while they show.
+  readonly #making = new Set<string>();
 
   private constructor(host: Host, settings: Settings) {
     this.#host = host;
@@ -206,10 +212,15 @@ export class Attend {
         v.said.clear();
         v.started.clear();
         v.statuses.clear();
+        v.made = false;
         if (visible) v.resumedAt = this.#host.nowMs();
         v.visible = visible;
       }
       if (showing.length === 0) this.visits.delete(key);
+    }
+    for (const key of [...this.#making]) {
+      const at = key.indexOf("\u0001");
+      if (!focus.some((f) => f.visible && f.chat !== null && is(f.chat, key.slice(0, at), null, key.slice(at + 1)))) this.#making.delete(key);
     }
   }
 
@@ -222,7 +233,11 @@ export class Attend {
   chat(station: string, session: string | null, value: J): { due: Due[]; value: J } {
     const due: Due[] = [];
     const thread = value?.thread?.id;
-    if (typeof thread !== "number") return { due, value };
+    if (typeof thread !== "number") {
+      // (being made, shown: its agents, there once it is made, start while it shows)
+      if (session !== null && this.#showing(station, null, session).some((f) => f.visible)) this.#making.add(`${station}\u0001${session}`);
+      return { due, value };
+    }
     const shown = this.#showing(station, thread, session);
     const known = typeof value.thread.read === "number" ? value.thread.read : 0;
     const messages: J[] = Array.isArray(value.messages) ? value.messages : [];
@@ -243,7 +258,8 @@ export class Attend {
     const newest = messages.length > 0 ? seq(messages[messages.length - 1]) : 0;
     let visit = this.visits.get(key);
     if (!visit) {
-      visit = { at: now, read: known, session, top: newest, said: new Set(), visible: shown.some((f) => f.visible), resumedAt: null, statuses: new Map(), started: new Set() };
+      const made = session !== null && this.#making.delete(`${station}\u0001${session}`);
+      visit = { at: now, read: known, session, top: newest, said: new Set(), visible: shown.some((f) => f.visible), resumedAt: null, statuses: new Map(), started: new Set(), made };
       this.visits.set(key, visit);
     }
     const caught = typeof value.caught === "number" ? value.caught : 0;
@@ -263,7 +279,8 @@ export class Attend {
       const was = visit.statuses.get(k);
       visit.statuses.set(k, status);
       if (!running) visit.started.delete(k);
-      else if (was !== undefined && visit.visible && was !== "running" && (visit.resumedAt === null || (typeof a.since === "number" && a.since >= visit.resumedAt))) visit.started.add(k);
+      // (one first seen at work: at work already as the chat came into view, unless the chat was made as it showed)
+      else if ((was === undefined ? visit.made : was !== "running") && visit.visible && (visit.resumedAt === null || (typeof a.since === "number" && a.since >= visit.resumedAt))) visit.started.add(k);
       if (visit.started.has(k)) started.push(a);
     }
     if (started.length > 0) out.agents = agents.map((a) => (started.includes(a) ? { ...a, started: true } : a));
