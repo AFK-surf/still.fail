@@ -140,26 +140,10 @@ fn screen_dump(mode : String, at : Double) -> Result[Json, String] {
     "calls": Json::array(calls),
   }
   // what Android's test waits to see before its moment (ScreensRefTest `shows`): the screen drawn again from this very
-  // JSON, as the comparison draws it (src/sfscreens/android_ref_wbtest.mbt to_shows): the two longest words there as
-  // its data is first drawn and at its moment, their first six characters (a line cut short there all the same)
-  let json = screen.stringify()
-  let again : Ref[Source?] = Ref::new(None)
-  let t2 = @ui.Tester::new(
-    fn(c) {
-      let s = match again.val {
-        Some(s) => s
-        None => {
-          let s = fixture_json_app(json)
-          again.val = Some(s)
-          s
-        }
-      }
-      view(c, s)
-    },
-    w=390.0,
-    h=844.0,
-    platform=2,
-  )
+  // JSON, its pages alone, as the comparison draws it (src/sfscreens/android_ref_wbtest.mbt to_shows): the two longest
+  // words there as its data is first drawn and at its moment, their first six characters (a line cut short there all
+  // the same); before what is open over the pages is opened (`ui`), after its pages' words are there
+  let t2 = json_tester(screen.stringify())
   t2.draw()
   t2.finish_all()
   let first : Array[String] = []
@@ -169,9 +153,6 @@ fn screen_dump(mode : String, at : Double) -> Result[Json, String] {
     }
   }
   t2.run_for(at)
-  if t2.drawlist() != drawn {
-    return Err("its JSON alone draws it otherwise: what the mode opens over its pages or in them")
-  }
   let seen : Array[String] = []
   for w in t2.words() {
     let s = w.0.trim(chars=" \n").to_string()
@@ -179,13 +160,77 @@ fn screen_dump(mode : String, at : Double) -> Result[Json, String] {
       seen.push(s)
     }
   }
+  let alone = t2.drawlist()
   seen.sort_by(fn(a, b) { b.length().compare(a.length()) })
   let shows = seen[:@cmp.minimum(2, seen.length())].to_array().map(fn(s) { Json::string(s.view(end_offset=@cmp.minimum(6, s.length())).to_owned()) })
   match screen {
     Object(m) => m["shows"] = Json::array(shows)
     _ => ()
   }
+  if alone == drawn {
+    return Ok(screen)
+  }
+  // drawn otherwise from its pages alone: what the mode opens over them, where Android's test opens that too
+  if !android_opens.contains(mode) {
+    return Err("its JSON alone draws it otherwise: what the mode opens over its pages or in them, which Android's test does not open")
+  }
+  match screen {
+    Object(m) => m["ui"] = Json::string(mode)
+    _ => ()
+  }
+  let t3 = json_tester(screen.stringify())
+  t3.run_for(at)
+  if t3.drawlist() != drawn {
+    return Err("its JSON with what it opens (`ui`) draws it otherwise")
+  }
+  // what is said to be shown is there at the moment too, with what is open over the pages (a tab of its own: the
+  // details' words in the steps' place)
+  let then : Array[String] = []
+  for w in t3.words() {
+    let s = w.0.trim(chars=" \n").to_string()
+    if w.5 > 0.0 && s.length() >= 4 && !then.contains(s) && first.contains(s) {
+      then.push(s)
+    }
+  }
+  then.sort_by(fn(a, b) { b.length().compare(a.length()) })
+  match screen {
+    Object(m) =>
+      m["shows"] = Json::array(
+        then[:@cmp.minimum(2, then.length())].to_array().map(fn(s) { Json::string(s.view(end_offset=@cmp.minimum(6, s.length())).to_owned()) }),
+      )
+    _ => ()
+  }
   Ok(screen)
+}
+
+///|
+/// The fixture modes whose sheet, menu or state over their pages Android's ScreensRefTest opens (its `opens`): a
+/// screen's JSON says it as `ui`.
+// kept across runs: a list, never written
+let android_opens : Array[String] = [
+  "chat-info", "chat-jobs", "chat-job", "chat-agent", "home-sheet", "history-details", "place",
+]
+
+///|
+/// A Tester of the app over a screen's JSON (fixture_json_app), from its start.
+fn json_tester(json : String) -> @ui.Tester {
+  let made : Ref[Source?] = Ref::new(None)
+  @ui.Tester::new(
+    fn(c) {
+      let s = match made.val {
+        Some(s) => s
+        None => {
+          let s = fixture_json_app(json)
+          made.val = Some(s)
+          s
+        }
+      }
+      view(c, s)
+    },
+    w=390.0,
+    h=844.0,
+    platform=2,
+  )
 }
 
 ///|

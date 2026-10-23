@@ -21,7 +21,11 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.platform.graphics.HardwareRendererCompat
 import fail.still.android.AppState
@@ -32,6 +36,10 @@ import fail.still.android.Updates
 import fail.still.android.data.ChatOf
 import fail.still.android.data.I18n
 import fail.still.android.data.PrefsView
+import fail.still.android.data.t
+import fail.still.android.screens.openJob
+import fail.still.android.screens.openJobs
+import fail.still.android.screens.openWorkspaces
 import fail.still.android.ui.LocalUi
 import fail.still.android.ui.StillFailTheme
 import java.io.File
@@ -142,7 +150,12 @@ class ScreensRefTest(private val name: String) {
         rule.waitUntil(20_000) { barsKnown() }
         fail.still.android.ui.FaceFiles.init(activity)
         val app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(activity, "http://127.0.0.1:9", fake.core), PrefsView())
-        for (p in screen["open"]?.jsonArray.orEmpty()) app.push(page(p.jsonObject))
+        // what it has open over its pages (`ui`: the mbui fixture mode's, opened as this app opens it: `opens`), and the
+        // pages: a place from the bar is the stack's only page, not pushed over Home
+        val ui = screen["ui"]?.jsonPrimitive?.content
+        val open = ui?.let { opens[it] ?: error("$name: \"$it\" is open over its pages, which this test does not open (opens)") }
+        if (ui == "place") app.place(Screen.Files)
+        else for (p in screen["open"]?.jsonArray.orEmpty()) app.push(page(p.jsonObject))
         // the test's clock alone from the first frame: what moves (a spinner's turn, a list's glide) is where the
         // moment has it, not where the machine's speed left it before the clock stopped
         rule.mainClock.autoAdvance = false
@@ -164,6 +177,12 @@ class ScreensRefTest(private val name: String) {
         val limit = android.os.SystemClock.uptimeMillis() + 20_000
         while (!shown() && android.os.SystemClock.uptimeMillis() < limit) rule.runOnUiThread { rule.mainClock.advanceTimeByFrame() }
         rule.waitForIdle()
+        // then what is open over them, opened as a person opens it here (its sheet's rise ends long before the moment)
+        if (open != null) {
+            open(app)
+            rule.runOnUiThread { rule.mainClock.advanceTimeByFrame() }
+            rule.waitForIdle()
+        }
         val at = screen["at"]?.jsonPrimitive?.long ?: 3000L
         rule.runOnUiThread { rule.mainClock.advanceTimeBy(maxOf(0L, start + at - rule.mainClock.currentTime)) }
         // the window as composed at that moment (PixelCopy of the composition just drawn: not the display's last
@@ -234,6 +253,23 @@ class ScreensRefTest(private val name: String) {
             for (root in roots) walk(root.semanticsOwner.unmergedRootSemanticsNode)
         }.toString()
     }
+
+    /**
+     * What a screen's file has open over its pages (`ui`: the mbui app's fixture mode that has it, src/sfapp
+     * screen_dump_wbtest.mbt android_opens), opened as this app opens it: a tap where a person taps, or what that tap
+     * calls; the made-up chat ws1/st1's s-c1, its job j-ci.
+     */
+    private val opens: Map<String, (AppState) -> Unit> = mapOf(
+        "chat-info" to { _ -> rule.onNodeWithContentDescription(t("android-chat.info.title")).performClick() },
+        "chat-jobs" to { app -> rule.runOnUiThread { openJobs(app, "ws1/st1", ChatOf.Session("s-c1")) } },
+        "chat-job" to { app -> rule.runOnUiThread { openJob(app, "ws1/st1", ChatOf.Session("s-c1"), "j-ci") } },
+        // the agent's mark in the bar, "<agent> · <station>"
+        "chat-agent" to { _ -> rule.onAllNodes(hasContentDescription(" · Studio", substring = true)).onFirst().performClick() },
+        "home-sheet" to { app -> rule.runOnUiThread { openWorkspaces(app) } },
+        "history-details" to { _ -> rule.onAllNodesWithText(t("android-chat.history.tab.details")).onFirst().performClick() },
+        // (before its first frame: the bar's place, above)
+        "place" to { _ -> },
+    )
 
     /**
      * A page the screen's file opens (apps/mbui src/sfapp/screen_dump_wbtest.mbt page_json, the mbui app's page as

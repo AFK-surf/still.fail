@@ -3,6 +3,7 @@
 // (apps/android ScreensRefTest), so the two are compared over one set of made-up data (scripts/android-ref.sh).
 //   { "workspace": "ws1",
 //     "open": [{"page": "chat", "station": …, "session": …} | {"page": "history", …, "key": …} | {"page": "settings"}],
+//     "ui": "chat-info" (what is open over the pages: the fixture mode's, ScreensRefTest's `opens`; none: the pages alone),
 //     "at": 3000, "shows": ["words on the screen then"],
 //     "topics": [{"topic": {"topic": NAME, …params}, "value": …}],
 //     "calls": [{"call": NAME, "params": {…}, "ok": …}] }
@@ -52,11 +53,17 @@ pub fn fixture_json(json : String) -> Source {
       }
     },
   }
-  for p in items(Some(screen), "open") {
-    match json_page(p) {
-      Some(page) => app.nav.push(page)
-      None => ()
-    }
+  // what it has open over its pages or in them (`ui`: the fixture mode it was made from, opened as sffix opens it:
+  // its pages and the sheet, the menu, the word picked, as Android's test opens them), else its pages
+  match text(Some(screen), "ui") {
+    "" =>
+      for p in items(Some(screen), "open") {
+        match json_page(p) {
+          Some(page) => app.nav.push(page)
+          None => ()
+        }
+      }
+    mode => open_fixture_mode(mode)
   }
   src
 }
