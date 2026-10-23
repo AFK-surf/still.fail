@@ -620,6 +620,7 @@ The core's modules (`client/core-ts/src`):
 - `entries.ts` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `workspace.ts` — the workspaces, each with what is its own. `notices.ts`, `attend.ts` (`client.focus`, `notify`), `status.ts`, `pill.ts`, `doing.ts`, `adb.ts`.
 - `activity.ts`, `history.ts`, `present.ts`, `format.ts`, `decisions.ts`, `jobs.ts`, `looks.ts`, `changelog.ts` — what the clients show, decided once for every client.
+- `refLinks.ts` — still.fail's links as what is written names them (a reference to a chat, the link a chat is given away by, the chat, screen or 共享调试 a link names): read as a message or a draft is drawn, so the web imports it as it is, as it does `markdown.ts`, `mdWords.ts`, `placed.ts`; `refs.ts` keeps a mark's link until it is sent (`chat.ref`).
 - `views/` — the view topics (chats, chat, stations, decisions, usage, admin…; `views/memberships.ts`, a station in several workspaces), and `views/local.ts`, the local overlays (outbox, pending chats, renames and pins under way).
 - `choose.ts`, `forms.ts` — the new-chat and model pickers, the forms (automatic decisions, Slack tokens, the connect wizard, adding a profile).
 - `trace.ts` — traces of user actions (docs/telemetry.md). `testing.ts` — a host for tests.
