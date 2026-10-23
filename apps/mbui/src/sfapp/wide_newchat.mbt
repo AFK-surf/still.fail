@@ -5,11 +5,21 @@
 // the machine's own sessions to go on with.
 
 ///|
-/// The page on a station, at a desktop's width.
-fn new_chat_page_wide(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json?) -> Unit {
+/// The page on a station, at a desktop's width; `held`, while its stations are read (newchat.mbt new_chat_on): what
+/// is said of the station and the choices breathing, the composer taking words but sending nothing.
+fn new_chat_page_wide(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  v : Json?,
+  station : Json?,
+  held? : Bool = false,
+  error? : String? = None,
+) -> Unit {
   let t = @sf.theme()
-  let address = text(station, "station")
+  let address = if held { held_address(w, v) } else { text(station, "station") }
   let name = text(station, "name")
+  let breathing = error is None
   let here = if name == "" { tr("web-main.newChat.thisMachine") } else { name }
   let col = dmin(new_column_w, c.width - new_column_side)
   // (the composer's own 10 at its sides outside the column: its capsule as wide as the column)
@@ -20,7 +30,12 @@ fn new_chat_page_wide(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
       c.box(style=new_wide_title_box, fn() { c.text(tr("web-main.newChat.title"), style=new_wide_title) |> ignore })
       |> ignore
       c.box(style=new_wide_sub_box, fn() {
-        c.text(fill("web-main.newChat.sub", [("name", here)]), style=new_wide_sub) |> ignore
+        // (held: its line breathing, the station's name in it not known yet)
+        if held {
+          held_line(c, new_held_sub_w, breathing)
+        } else {
+          c.text(fill("web-main.newChat.sub", [("name", here)]), style=new_wide_sub) |> ignore
+        }
       })
       |> ignore
       // its station went as it was written in, or what is sent waits for its quota: said, the page staying
@@ -32,17 +47,29 @@ fn new_chat_page_wide(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
         None => ()
       }
       let r : ChatRef = { station: address, session: "", title: "", station_name: name }
-      c.box(style=new_wide_composer, fn() {
-        c.sized(room, c.height, fn() {
-          composer(c, src, r, None, fresh=Some({
-            key: "new:" + address,
-            placeholder: tr("web-main.newChat.placeholder"),
-            send: fn(d) { send_first(c, src, w, v, address, name, d) },
-            tools: Some(fn() { new_tools(c, src, w, v, station) }),
-          }))
+      // (held with no station to hold it on, its first value not come yet: no draft asked for)
+      if !held || address != "" {
+        c.box(style=new_wide_composer, fn() {
+          c.sized(room, c.height, fn() {
+            composer(c, src, r, None, fresh=Some({
+              key: "new:" + address,
+              placeholder: tr("web-main.newChat.placeholder"),
+              send: fn(d) { send_first(c, src, w, v, address, name, d) },
+              tools: Some(fn() {
+                if held {
+                  // where it runs and what it runs on, breathing in their places
+                  @sf.bar(c, Px(held_station_w), new_chooser_h, breathing~)
+                  @sf.bar(c, Px(held_model_w), new_chooser_h, breathing~)
+                } else {
+                  new_tools(c, src, w, v, station)
+                }
+              }),
+              held,
+            }))
+          })
         })
-      })
-      |> ignore
+        |> ignore
+      }
       let combos = items(v, "frequent")
       if combos.length() > 0 {
         c.box(style=new_wide_frequent, fn() {
@@ -56,8 +83,12 @@ fn new_chat_page_wide(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
         })
         |> ignore
       }
-      // what it waits for, in a line of its own
-      if flag(v, "waiting") || field(v, "model") is None {
+      // what it waits for, in a line of its own; why its stations could not be read
+      match error {
+        Some(e) => c.text(e, style=new_wide_error) |> ignore
+        None => ()
+      }
+      if !held && (flag(v, "waiting") || field(v, "model") is None) {
         match opt_text(v, "problem") {
           Some(p) => c.text(p, style=new_wide_meta_wrap) |> ignore
           None => ()
@@ -109,9 +140,11 @@ fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json
     }
     None => ()
   }
-  // what it runs on
+  // what it runs on: breathing while its profiles are read (the core's `waiting`), not said to be missing
   let p = field(v, "pick")
-  if p is None || items(p, "options").length() == 0 || text(v, "runtime") == "" || field(v, "model") is None {
+  if flag(v, "waiting") {
+    @sf.bar(c, Px(held_model_w), new_chooser_h, breathing=true)
+  } else if p is None || items(p, "options").length() == 0 || text(v, "runtime") == "" || field(v, "model") is None {
     let id = c.id("new/no-models")
     c.cursor(id, Hand)
     if c.clicked(id) {
@@ -179,6 +212,18 @@ let new_wide_frequent : @ui.Style = @ui.style(w=Full, py=S3, gap=S2, align=ACent
 ///|
 // kept across runs: a value (no field of it changes)
 let new_wide_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let new_wide_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, center=true, w=Full)
+
+///|
+/// The line of what it does breathing while its station is not known (its words one line at this width).
+let new_held_sub_w : Double = 360.0
+
+///|
+/// A chooser's height in the composer's row (new_chooser: S7).
+let new_chooser_h : Double = 28.0
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -1,0 +1,7 @@
+# A new chat opened from 令 while its stations are still being read (MBUI_FIXTURE=stations-slow: read 1.2 s after the
+# page asks): what the page shows meanwhile, then its station's parts as they come.
+timeout 20000
+until 整理发布清单
+wait 600
+tap icon:ling
+wait 2600
