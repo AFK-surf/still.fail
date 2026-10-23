@@ -21,6 +21,25 @@ static NSString *words(NSString *key, NSString *otherwise) {
   return [s isKindOfClass:NSString.class] && s.length ? s : otherwise;
 }
 
+// the app's page ground, light and dark (its Info.plist's MBUIGround, "#RRGGBB,#RRGGBB", as the app's own), else the
+// system's
+static UIColor *ground(void) {
+  NSString *g = words(@"MBUIGround", @"");
+  NSArray<NSString *> *two = [g componentsSeparatedByString:@","];
+  if (two.count != 2) return UIColor.systemBackgroundColor;
+  unsigned light = 0, dark = 0;
+  if (![[NSScanner scannerWithString:[two[0] stringByReplacingOccurrencesOfString:@"#" withString:@""]] scanHexInt:&light] ||
+      ![[NSScanner scannerWithString:[two[1] stringByReplacingOccurrencesOfString:@"#" withString:@""]] scanHexInt:&dark])
+    return UIColor.systemBackgroundColor;
+  UIColor *(^rgb)(unsigned) = ^(unsigned v) {
+    return [UIColor colorWithRed:((v >> 16) & 0xFF) / 255.0 green:((v >> 8) & 0xFF) / 255.0 blue:(v & 0xFF) / 255.0 alpha:1];
+  };
+  UIColor *l = rgb(light), *d = rgb(dark);
+  return [UIColor colorWithDynamicProvider:^(UITraitCollection *t) {
+    return t.userInterfaceStyle == UIUserInterfaceStyleDark ? d : l;
+  }];
+}
+
 // a file's name for the inbox: its own, not a path, never empty
 static NSString *safe_name(NSString *n, NSString *otherwise) {
   n = [n.lastPathComponent stringByReplacingOccurrencesOfString:@":" withString:@"-"];
@@ -51,7 +70,7 @@ static BOOL heic_as_jpeg(NSURL *from, NSURL *to) {
 
 - (void)viewDidLoad {
   [super viewDidLoad];
-  self.view.backgroundColor = UIColor.systemBackgroundColor;
+  self.view.backgroundColor = ground();
   self.said = [UILabel new];
   self.said.numberOfLines = 0;
   self.said.textAlignment = NSTextAlignmentCenter;

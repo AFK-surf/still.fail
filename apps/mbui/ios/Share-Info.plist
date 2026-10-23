@@ -32,6 +32,7 @@
       </dict>
     </dict>
   </dict>
+  <key>MBUIGround</key><string>#F5F3EF,#1B1C1F</string>
   <key>MBUIShareTaking</key><string>正在收下…</string>
   <key>MBUIShareTaken</key><string>已收下。打开 still.fail mbui，选要发到的对话。</string>
   <key>MBUIShareFailed</key><string>没能收下，再分享一次试试。</string>
