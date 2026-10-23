@@ -293,12 +293,24 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 // (a key catcher has none, but says it has: the keyboard's delete then deletes, as Backspace, on the screen it types into)
 - (BOOL)hasText { return key_catching || self.doc.length > 0; }
 
+// What the keyboard does is also done here to the field's text as the keyboard sees it (`doc`, `sel`), as the field
+// will do it: the keyboard reads its words round the caret between keys (its suggestions, its corrections) before the
+// field says them back (mb_host_set_ime), which tells the keyboard of a change only where the field's differ.
+- (void)echo:(NSRange)r with:(NSString *)t {
+  NSUInteger n = self.doc.length;
+  NSUInteger a = MIN(r.location, n), b = MIN(r.location + r.length, n);
+  self.doc = [self.doc stringByReplacingCharactersInRange:NSMakeRange(a, b - a) withString:t];
+  self.sel = NSMakeRange(a + t.length, 0);
+}
+
 - (void)insertText:(NSString *)text {
   if ([text isEqualToString:@"\n"]) {
     if (self.marked.location != NSNotFound) send_text(2, @"", 0, 0);
+    self.marked = NSMakeRange(NSNotFound, 0);
     mb_cb.key(7, 0);
     return;
   }
+  [self echo:self.marked.location != NSNotFound ? self.marked : self.sel with:text];
   self.marked = NSMakeRange(NSNotFound, 0);
   send_text(0, text, 0, 0);
 }
@@ -306,9 +318,13 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 - (void)deleteBackward {
   if (self.marked.location != NSNotFound) {
     send_text(1, @"", 0, 0);
+    [self echo:self.marked with:@""];
     self.marked = NSMakeRange(NSNotFound, 0);
     return;
   }
+  if (!key_catching && self.sel.length > 0) [self echo:self.sel with:@""];
+  else if (!key_catching && self.sel.location > 0 && self.sel.location <= self.doc.length)
+    [self echo:[self.doc rangeOfComposedCharacterSequenceAtIndex:self.sel.location - 1] with:@""];
   mb_cb.key(1, 0);
 }
 
@@ -321,6 +337,7 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 
 - (void)replaceRange:(UITextRange *)range withText:(NSString *)text {
   MBRange *r = (MBRange *)range;
+  [self echo:NSMakeRange(r.a, r.b - r.a) with:text];
   send_text(3, @"", (int)r.a, (int)r.b);
   send_text(0, text, 0, 0);
 }
@@ -829,11 +846,21 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
   BOOL was = v.imeActive;
   v.imeActive = active != 0;
   v.caretRect = CGRectMake(x, y, w, h);
+  // the field's text and selection as it has them: the keyboard told only of what differs from what it did itself
+  // (MBView's echo), a change of the field's own (a tap, a paste, a send)
   if (v.marked.location == NSNotFound) {
-    [v.inputDelegate textWillChange:v];
-    v.doc = mb_ns_from_string(text);
-    v.sel = NSMakeRange(a, b - a);
-    [v.inputDelegate textDidChange:v];
+    NSString *t = mb_ns_from_string(text);
+    NSRange sel = NSMakeRange(a, b - a);
+    if (![t isEqualToString:v.doc]) {
+      [v.inputDelegate textWillChange:v];
+      v.doc = t;
+      v.sel = sel;
+      [v.inputDelegate textDidChange:v];
+    } else if (!NSEqualRanges(sel, v.sel)) {
+      [v.inputDelegate selectionWillChange:v];
+      v.sel = sel;
+      [v.inputDelegate selectionDidChange:v];
+    }
   }
   if (v.imeActive && !was) [v becomeFirstResponder];
   if (!v.imeActive && was) [v resignFirstResponder];
@@ -999,13 +1026,15 @@ static void watch_shown(void) {
 
 // The soft keyboard put away by the person (an iPad's key, a hardware keyboard come, dragged down), not by the app:
 // what was typed into lets go of the focus, as Android's (MainActivity: Native.text 7); the app's own hiding comes
-// after its focus went (imeActive off by then), and one as the app leaves the front is the system's.
+// after its focus went (imeActive off by then), and one as the app leaves the front, or as something of the system's
+// comes over it (a picker, Safari's view, the share sheet: Android's window losing its focus), is the system's.
 static void watch_keyboard(void) {
   [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillHideNotification object:nil
                                                    queue:NSOperationQueue.mainQueue
                                               usingBlock:^(NSNotification *n) {
     MBView *v = the_view;
     if (!v.imeActive || key_catching || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+    if (the_controller.presentedViewController || !v.isFirstResponder) return;
     send_text(7, @"", 0, 0);
     [v requestFrame];
   }];
