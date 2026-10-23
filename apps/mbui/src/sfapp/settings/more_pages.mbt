@@ -16,13 +16,17 @@ fn decisions_page(c : @ui.Ctx, core : Core) -> Unit {
     fn() {
       list_card(c, fn() {
         if list_row(c, key="auto-completion", fn() {
-            c.box(w=Fill(1.0), gap=5.0, fn() {
-              c.text(tr("web-pages.automaticDecisions.completion"), size=15.0, color=@sf.theme().p.text, w=Fill(1.0), line=21.0)
+            if wide.val {
+              row_lines(c, tr("web-pages.automaticDecisions.completion"), tr("web-pages.automaticDecisions.completionShort"))
+            } else {
+              c.box(w=Fill(1.0), gap=5.0, fn() {
+                c.text(tr("web-pages.automaticDecisions.completion"), size=15.0, color=@sf.theme().p.text, w=Fill(1.0), line=21.0)
+                |> ignore
+                c.text(tr("web-pages.automaticDecisions.completionShort"), size=13.0, color=@sf.theme().p.muted, w=Fill(1.0), line=18.0)
+                |> ignore
+              })
               |> ignore
-              c.text(tr("web-pages.automaticDecisions.completionShort"), size=13.0, color=@sf.theme().p.muted, w=Fill(1.0), line=18.0)
-              |> ignore
-            })
-            |> ignore
+            }
             chevron(c)
           }) {
           (core.push)(AutoCompletion)

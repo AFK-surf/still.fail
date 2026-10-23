@@ -413,6 +413,22 @@ fn section_header(
   start? : @ui.Space = S5,
   mark? : (() -> Unit)? = None,
 ) -> Unit {
+  // the wide frame's (page.css.ts sectionHead): 13 in 600 at the column's edge, 28 over it
+  if wide.val {
+    c.box(style=wide_section_line, fn() {
+      match mark {
+        Some(m) => m()
+        None => ()
+      }
+      c.text(title, style=wide_section_title) |> ignore
+      c.spacer()
+      if trailing != "" {
+        c.text(trailing, style=wide_meta) |> ignore
+      }
+    })
+    |> ignore
+    return
+  }
   c.box(style=section_line.then(@ui.style(pl=start)), fn() {
     match mark {
       // a mark before the title, on the middle of its words (SectionHeader's mark)
@@ -447,14 +463,73 @@ let section_line : @ui.Style = @ui.style(row=true, w=Full, pl=S5, pr=S5, pt=S3_5
 let section_marked : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
 
 ///|
+/// The wide frame's section head: in a line, 16 in as the title is, 28 over it, 2 under (its note, or what it holds,
+/// 10 under it then).
+// kept across runs: a value (no field of it changes)
+let wide_section_line : @ui.Style = @ui.style(row=true, w=Full, px=S4, pt=S7, pb=S0_5, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_section_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// What a section is about, under its head where the wide frame says it (page.css.ts sectionSub: 12, muted, 3 under
+/// the head, 10 over what it holds); none on a phone, whose pages say it under what it holds.
+fn section_note(c : @ui.Ctx, words : String) -> Unit {
+  if !wide.val || words == "" {
+    return
+  }
+  c.box(style=wide_section_note, fn() { c.text(words, style=wide_note_words) |> ignore }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_section_note : @ui.Style = @ui.style(w=Full, px=S4, pt=S0_5, pb=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_note_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+
+///|
+/// What stands at the column's edge in the wide frame, 16 in as the title is (a section's control); 12 on a phone.
+fn inset(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.box(style=if wide.val { wide_inset } else { phone_inset }, body) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_inset : @ui.Style = @ui.style(w=Full, px=S4)
+
+///|
+// kept across runs: a value (no field of it changes)
+let phone_inset : @ui.Style = @ui.style(w=Full, px=S3)
+
+///|
 /// A page's note under its title, in a line or two (SettingParts.kt PageNote).
 fn page_note(c : @ui.Ctx, words : String) -> Unit {
+  if wide.val {
+    c.box(style=wide_page_note, fn() { c.text(words, style=wide_lead) |> ignore }) |> ignore
+    return
+  }
   c.box(style=page_note_box, fn() {
     // SettingParts.kt:266 (13sp)
     c.text(words, style=@sf.secondary.then(@sf.full_words)) |> ignore
   })
   |> ignore
 }
+
+///|
+/// The wide frame's lead under the title (pages.css.ts pageHead p: 13, muted).
+// kept across runs: a value (no field of it changes)
+let wide_page_note : @ui.Style = @ui.style(w=Full, px=S4, pb=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_lead : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, w=Full)
 
 ///|
 /// PageNote's room: 24 in, 10 under it.
@@ -471,7 +546,7 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false
     Some(r) => card_ground.then(@ui.style(radius=r))
     None => if foot { card_foot_ground } else { card_ground }
   }
-  c.box(style=card_room, fn() {
+  c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
     c.box(style=ground, id~, fn() {
       body()
       // Parts.kt Card: clickable over its clip (Smooth: its corner, or a foot's)
@@ -486,9 +561,14 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false
 }
 
 ///|
-/// A card's room on the page: 12 from its sides, 10 under it.
+/// A card's room on the page: 12 from its sides, 10 under it; in the wide frame its edge at the column's, where the
+/// title stands (16 in).
 // kept across runs: a value (no field of it changes)
 let card_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_card_room : @ui.Style = @ui.style(w=Full, px=S4, pb=S2_5)
 
 ///|
 /// A card: 20 in (CARD_PAD), 22 round (CARD_CORNER); rippled where it is tapped (an id).
@@ -503,9 +583,12 @@ let card_foot_ground : @ui.Style = card_ground.then(@ui.style(radius=@sf.card_fo
 ///|
 /// Rows on one rounded card, no lines between them (Parts.kt ListCard, RowsCard): its rows know they are on one
 /// (`on_card`, LocalOnCard).
-fn list_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=card_room, fn() {
-    c.box(style=list_ground, fn() {
+/// In the wide frame the web's list (pages.css.ts list, listRow): its rows on the page, no ground under them but the
+/// pointer's, their words at the column's edge; `boxed`, on its ground still (a card of rows: listCard).
+fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
+  let flat = wide.val && !boxed
+  c.box(style=if flat { wide_list_room } else if wide.val { wide_card_room } else { card_room }, fn() {
+    c.box(style=if flat { wide_list_ground } else { list_ground }, fn() {
       let was = on_card.val
       on_card.val = true
       body()
@@ -515,6 +598,15 @@ fn list_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// The wide frame's list on the page: its rows' words 16 in (the row's own 12), as the title's.
+// kept across runs: a value (no field of it changes)
+let wide_list_room : @ui.Style = @ui.style(w=Full, px=S1, pb=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_list_ground : @ui.Style = @ui.style(w=Full, gap=SPx)
 
 ///|
 /// Whether what is being drawn is on a list card (Parts.kt LocalOnCard): a PickRow's ground is then the card's
@@ -544,7 +636,7 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, 
     |> ignore
   }
   match piece {
-    None => row(list_line)
+    None => row(if wide.val { wide_list_line } else { list_line })
     Some((first, last)) => card_piece(c, first, last, fn() { row(list_piece_line) })
   }
   id != 0 && hit(c, id)
@@ -629,6 +721,21 @@ let list_piece_patch : @ui.Style = @ui.style(w=Full, h=Full, bg=Card)
 let list_piece_line : @ui.Style = list_line.then(@ui.style(radius=Xl2))
 
 ///|
+/// The wide frame's row (pages.css.ts listRow): 52 high at least, 10 by 12 in, the field's corner under the pointer.
+// kept across runs: a value (no field of it changes)
+let wide_list_line : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  min_h=S12,
+  px=S3,
+  py=S2_5,
+  gap=S3,
+  radius=Xl,
+  align=ACenter,
+  hovered=@ui.patch(bg=Hover),
+)
+
+///|
 /// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.
 // kept across runs: a value (no field of it changes)
 let list_line : @ui.Style = @ui.style(row=true, w=Full, px=S3, py=S3, gap=S3, radius=Inner, align=ACenter)
@@ -636,9 +743,30 @@ let list_line : @ui.Style = @ui.style(row=true, w=Full, px=S3, py=S3, gap=S3, ra
 ///|
 /// A row's main words, as wide as the row lets them, cut to one line.
 fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
-  // SettingParts.kt:255 (15sp)
-  c.text(words, style=row_title_words, color?) |> ignore
+  // SettingParts.kt:255 (15sp); the wide frame's 13 (pages.css.ts cardRowText)
+  c.text(words, style=if wide.val { wide_row_title } else { row_title_words }, color?) |> ignore
 }
+
+///|
+/// The wide frame's row words (pages.css.ts listRow, cardRowText: 13; what is under them 12).
+// kept across runs: a value (no field of it changes)
+let wide_row_title : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_row_sub : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_row_sub_lines : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_value : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 /// A row's title: the body's words on one line, as wide as the row lets them.
@@ -670,10 +798,30 @@ fn row_lines(
 ) -> Unit {
   c.box(style=@sf.full_width, fn() {
     // Connects.kt:231, Security.kt:191 (15sp)
-    c.text(title, style=if wrap_title { row_title_lines } else { row_title_words }, color?=title_color) |> ignore
+    c.text(
+      title,
+      style=match (wide.val, wrap_title) {
+        (true, true) => wide_row_title_lines
+        (true, false) => wide_row_title
+        (false, true) => row_title_lines
+        (false, false) => row_title_words
+      },
+      color?=title_color,
+    )
+    |> ignore
     if sub != "" {
       // Connects.kt:232, Security.kt:192 (13sp)
-      c.text(sub, style=if wrap_sub { row_sub_lines } else { row_sub_line }, color?=sub_color) |> ignore
+      c.text(
+        sub,
+        style=match (wide.val, wrap_sub) {
+          (true, true) => wide_row_sub_lines
+          (true, false) => wide_row_sub
+          (false, true) => row_sub_lines
+          (false, false) => row_sub_line
+        },
+        color?=sub_color,
+      )
+      |> ignore
     }
   })
   |> ignore
@@ -723,7 +871,8 @@ fn go_row(
           presence_dot(c, "error")
         }
         // SettingParts.kt:258 (14sp)
-        c.text(value, style=if bad { @sf.value.then(@sf.bad) } else { @sf.value }) |> ignore
+        let look = if wide.val { wide_value } else { @sf.value }
+        c.text(value, style=if bad { look.then(@sf.bad) } else { look }) |> ignore
       })
       |> ignore
     }
@@ -851,7 +1000,8 @@ fn seg(
           // Parts.kt:424 (14sp filling, else 13sp)
           c.text(
             st.label,
-            style=@ui.text_style(size=if fill { Base } else { Sm }, color=if st.on { Fg } else { Muted }, wrap=false),
+            // (the wide frame's 13: its scale's Lg, settings' page takes it down there)
+            style=@ui.text_style(size=if pill { Lg } else if fill { Base } else { Sm }, color=if st.on { Fg } else { Muted }, wrap=false),
           )
           |> ignore
         },

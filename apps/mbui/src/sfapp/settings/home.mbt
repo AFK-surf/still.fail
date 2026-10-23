@@ -22,8 +22,24 @@ pub fn page(
   root_top.val = if root { top } else { 0.0 }
   left_core.val = Some(core)
   fixture_sheet(core, here)
-  route_page(c, core, here, route)
+  // the wide frame's words as the web's settings pages size them (their rows 13, what is under them 12): the scale's
+  // body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them
+  if wide.val {
+    let t = c.theme()
+    c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body } }, fn() {
+      route_page(c, core, here, route)
+    })
+  } else {
+    route_page(c, core, here, route)
+  }
 }
+
+///|
+/// The wide frame's body words (the web's text-ui: 13 on 20) and what is under them (text-meta: 12 on 18).
+let wide_body : (Double, Double) = (13.0, 20.0)
+
+///|
+let wide_small : (Double, Double) = (12.0, 18.0)
 
 ///|
 fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
@@ -62,6 +78,10 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     Changelog => changelog_page(c, core)
     About => about_page(c, core)
+    Notifications => notify_page(c, core)
+    Permissions => permissions_page(c, core)
+    Archiving => archiving_page(c, core, here)
+    StationArchiving(s) => station_archiving_page(c, core, here, s)
     UsagePrices(days) => prices_page(c, core, here, days)
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
@@ -569,7 +589,11 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
     note : String,
   ) {
     [
-      fn() { section_header(c, title, start=S6) },
+      fn() {
+        section_header(c, title, start=S6)
+        // (the wide frame's says what it is about under its head, as the web's; a phone's under its switch)
+        section_note(c, note)
+      },
       fn() {
         let mut at = fallback
         for i, o in options {
@@ -577,14 +601,13 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
             at = i
           }
         }
-        c.box(w=Fill(1.0), padx=12.0, fn() {
+        inset(c, fn() {
           let picked = seg(c, key, options.map(fn(o) { tr(o.1) }), at, fill=true, height=34.0)
           if picked != at {
             set_pref(core, key, options[picked].0)
           }
         })
-        |> ignore
-        if note != "" {
+        if note != "" && !wide.val {
           seg_note(c, note)
         }
       },
@@ -599,10 +622,24 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("android-settings.appearance.title")) },
   ]
-  blocks.append(choice("appearance", tr("android-settings.appearance.theme"), themes, appearance(prefs), 0, ""))
+  blocks.append(
+    choice(
+      "appearance",
+      tr("android-settings.appearance.theme"),
+      themes,
+      appearance(prefs),
+      0,
+      if wide.val { tr("web-pages.appearance.theme.description") } else { "" },
+    ),
+  )
   // SettingsHome.kt: 12 under the theme's switch, the faces' row on a card of its own
   blocks.push(fn() {
-    gap(c, 12.0)
+    if wide.val {
+      section_header(c, tr("web-pages.appearance.fonts.title"))
+      section_note(c, tr("web-pages.appearance.fonts.description"))
+    } else {
+      gap(c, 12.0)
+    }
     list_card(c, fn() { font_row(c, core) })
   })
   blocks.append(
@@ -626,9 +663,11 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
       [("", "common.language.system"), ("zh", "common.language.zh"), ("en", "common.language.en")],
       pref(core, "language"),
       0,
-      "",
+      if wide.val { tr("web-pages.appearance.language.description") } else { "" },
     ),
   )
+  // (the wide frame's is on 归档's page, as the web's: archiving_page)
+  if !wide.val {
   blocks.append(
     choice(
       "archiveHint",
@@ -643,6 +682,7 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
       tr("web-pages.appearance.archive." + hint_key + "Hint"),
     ),
   )
+  }
   blocks.push(fn() { gap(c, 30.0) })
   scroll_page(c, "appearance", blocks)
 }

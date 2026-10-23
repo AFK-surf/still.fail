@@ -141,6 +141,12 @@ pub(all) enum Route {
   Changelog
   /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
   About
+  /// the wide frame's pages as the web's has them (web_pages.mbt): 通知, 权限, 归档 (whether a done chat suggests
+  /// archiving it, each station's own), a station's archiving
+  Notifications
+  Permissions
+  Archiving
+  StationArchiving(String)
   /// the prices the usage is counted at, over its days (UsagePricesScreen)
   UsagePrices(Int)
   /// how a chat's agent runs (RunSettingsScreen): its station, its session's key
@@ -517,6 +523,7 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  notify_page_reset()
   login_marked.val = None
   station_parts.clear()
   lock_prompts_reset()
@@ -650,6 +657,9 @@ pub fn route_of(name : String) -> Route? {
     "kept" => Some(KeptFiles)
     "changelog" => Some(Changelog)
     "about" => Some(About)
+    "notifications" => Some(Notifications)
+    "permissions" => Some(Permissions)
+    "archiving" => Some(Archiving)
     _ =>
       match name.find(":") {
         Some(i) => {
@@ -669,6 +679,7 @@ pub fn route_of(name : String) -> Route? {
             "slack-app" => Some(SlackApp(address, id))
             "vault-item" => Some(VaultItem(address, id))
             "policy" => Some(AutoPolicy(arg))
+            "archiving" => Some(StationArchiving(arg))
             "prices" => Some(UsagePrices(int_of(arg, 7)))
             "run" => Some(RunSettings(address, id))
             "memory" => Some(Memory(arg))

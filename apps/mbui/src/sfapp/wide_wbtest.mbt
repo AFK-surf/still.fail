@@ -180,3 +180,33 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
   t.frame()
   assert_false(wide.station_menu)
 }
+
+///|
+test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权限, 归档 (the hint, each station's), a station's archiving" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
+  // the sidebar has them all
+  for label in ["权限", "更新日志", "关于", "自动决策"] {
+    assert_true(t.find(label) is Some(_), msg=label)
+  }
+  app.nav.push(Setting(@settings.Route::Notifications))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("提醒方式") is Some(_))
+  assert_true(t.find("通知类别") is Some(_))
+  assert_true(t.find("待你决定") is Some(_))
+  assert_true(t.find("横幅（离开时）") is Some(_), msg="a done turn's banner while away")
+  app.nav.push(Setting(@settings.Route::Permissions))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("已允许") is Some(_))
+  app.nav.push(Setting(@settings.Route::Archiving))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("提示归档") is Some(_))
+  assert_true(t.find("自动归档") is Some(_))
+  assert_true(t.find("Studio") is Some(_))
+  // a station's own (the settings' fixture's Studio: idle a day, Slack's three)
+  let t = settings_tester("archiving:ws1/st1")
+  assert_true(t.find("怎么自动归档") is Some(_))
+  assert_true(t.find("空闲多久") is Some(_))
+  assert_true(t.find("只在 Slack 里的对话") is Some(_))
+}

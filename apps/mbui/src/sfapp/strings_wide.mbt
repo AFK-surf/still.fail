@@ -3,6 +3,10 @@
 
 ///|
 let zh_wide : Map[String, String] = {
+  "web-pages.automaticDecisions.title": "自动决策",
+  "web-pages.settings.nav.about": "关于",
+  "web-pages.settings.nav.changelog": "更新日志",
+  "web-pages.settings.nav.permissions": "权限",
   "common.confirm": "确定",
   "web-main.chat.copyFailed": "无法复制：{error}",
   "web-main.chat.transcriptCopied": "已复制 session 文件路径",
