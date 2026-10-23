@@ -758,7 +758,7 @@ let usage_row_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_row_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false, w=Full)
+let usage_row_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -774,7 +774,7 @@ let usage_row_cost : @ui.Style = @ui.style(gap=SPx, align=AEnd)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_cost : @ui.TextStyle = @ui.text_style(size=Sm, weight=Bold, color=Fg, wrap=false)
+let usage_cost : @ui.TextStyle = @ui.text_style(size=Lg, weight=Bold, color=Fg, wrap=false)
 
 ///|
 /// The share's bar: from the row's words on (its lead's 20 and the 12 after it), 4 high on the hover's ground, what

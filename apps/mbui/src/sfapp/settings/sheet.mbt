@@ -349,7 +349,7 @@ let filter_chip_on : @ui.Style = filter_chip_box.then(@ui.style(bg=AccentBg))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let filter_chip_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let filter_chip_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

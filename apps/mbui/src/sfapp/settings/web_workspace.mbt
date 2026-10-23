@@ -446,9 +446,9 @@ let ws_avatar : Double = 28.0
 let ws_more_icon : Double = 16.0
 
 ///|
-/// Its head (workspaceHead: 8 over, 36 under, 16 between its mark and its words).
+/// Its head (workspaceHead: 8 under the page's 40 top, 36 under it, 16 between its mark and its words).
 // kept across runs: a value (no field of it changes)
-let ws_head : @ui.Style = @ui.style(row=true, w=Full, px=S4, pt=S10, pb=S9, gap=S4, align=ACenter)
+let ws_head : @ui.Style = @ui.style(row=true, w=Full, px=S4, pt=S12, pb=S9, gap=S4, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -478,11 +478,11 @@ let ws_facts : @ui.Style = @ui.style(row=true, px=S2, gap=S2, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_fact : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let ws_fact : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_fact_dot : @ui.TextStyle = @ui.text_style(size=Sm, color=Subtle, wrap=false)
+let ws_fact_dot : @ui.TextStyle = @ui.text_style(size=Lg, color=Subtle, wrap=false)
 
 ///|
 /// A section (section: 28 under; its head 10 over what it holds, its title the body's 14 on 22 in 600, how many 8 after
@@ -532,11 +532,11 @@ let ws_row_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+let ws_row_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -575,7 +575,7 @@ let ws_group_box : @ui.Style = @ui.style(row=true, w=Full, pt=S4, pb=SPx, gap=S2
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_group_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+let ws_group_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A card (pages.css.ts card: 20 in, its corner the card's, the card's ground; its rows 14 apart).
@@ -588,7 +588,7 @@ let ws_card_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_card_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, w=@sf.grow, wrap=false)
+let ws_card_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, w=@sf.grow, wrap=false)
 
 ///|
 /// 退出与删除 (dangerList: 18 apart, 4 over and under).
@@ -597,4 +597,4 @@ let ws_danger_list : @ui.Style = @ui.style(w=Full, py=S1, gap=S4)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_danger_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+let ws_danger_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
