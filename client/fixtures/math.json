@@ -1,5 +1,5 @@
 {
-  "text": "Inline $E=mc^2$ stays with the words.\n\nFraction $\\frac{1}{2}$ and $a+\\text{你好}$ keep the baseline.\n\n$$\n\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}\n$$\n\n$$\n\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}\n$$\n\n$$\n\\sum_{k=1}^{n} x_k = x_1 + x_2 + x_3 + x_4 + x_5 + x_6 + x_7 + x_8 + x_9 + x_{10}\n$$\n\nInvalid $\\unknowncommand{x}$ stays readable. Code: `$x$`.\n",
+  "text": "Inline \\(E=mc^2\\) stays with the words.\n\nFraction \\(\\frac{1}{2}\\) and \\(a+\\text{你好}\\) keep the baseline.\n\n$$\n\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}\n$$\n\n$$\n\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}\n$$\n\n$$\n\\sum_{k=1}^{n} x_k = x_1 + x_2 + x_3 + x_4 + x_5 + x_6 + x_7 + x_8 + x_9 + x_{10}\n$$\n\nInvalid \\(\\unknowncommand{x}\\) stays readable. Code: `$x$`.\n",
   "md": [
     [
       "p",
@@ -12,8 +12,8 @@
           "code",
           {
             "content": [
-              8,
-              14
+              9,
+              15
             ],
             "math": true,
             "drawing": {
@@ -64,8 +64,8 @@
           }
         ],
         [
-          15,
-          37
+          17,
+          39
         ]
       ]
     ],
@@ -73,15 +73,15 @@
       "p",
       [
         [
-          39,
-          48
+          41,
+          50
         ],
         [
           "code",
           {
             "content": [
-              49,
-              60
+              52,
+              63
             ],
             "math": true,
             "drawing": {
@@ -118,15 +118,15 @@
           }
         ],
         [
-          61,
-          66
+          65,
+          70
         ],
         [
           "code",
           {
             "content": [
-              67,
-              78
+              72,
+              83
             ],
             "math": true,
             "drawing": {
@@ -164,8 +164,8 @@
           }
         ],
         [
-          79,
-          98
+          85,
+          104
         ]
       ]
     ],
@@ -173,8 +173,8 @@
       "pre",
       {
         "code": [
-          103,
-          133
+          109,
+          139
         ],
         "math": true,
         "drawing": {
@@ -290,8 +290,8 @@
       "pre",
       {
         "code": [
-          141,
-          177
+          147,
+          183
         ],
         "math": true,
         "drawing": {
@@ -352,8 +352,8 @@
       "pre",
       {
         "code": [
-          185,
-          266
+          191,
+          272
         ],
         "math": true,
         "drawing": {
@@ -638,36 +638,36 @@
       "p",
       [
         [
-          271,
-          279
+          277,
+          285
         ],
         [
           "code",
           {
             "content": [
-              280,
-              298
+              287,
+              305
             ],
             "math": true,
             "drawing": null
           }
         ],
         [
-          299,
-          322
+          307,
+          330
         ],
         [
           "code",
           {
             "content": [
-              323,
-              326
+              331,
+              334
             ]
           }
         ],
         [
-          327,
-          328
+          335,
+          336
         ]
       ]
     ]

@@ -60,15 +60,15 @@ test("markdown_is_read_once_while_it_is_kept", () => {
 });
 
 test("math_is_code_with_a_rendering_hint_and_keeps_its_source_runs", () => {
-  const text = "预测 $p_7 = p_1 + r$。\n\n$$\n\\frac{y_7-y_1}{y_1}\n$$";
+  const text = "预测 \\(p_7 = p_1 + r\\)。\n\n$$\n\\frac{y_7-y_1}{y_1}\n$$";
   assert.deepEqual(read(text), [
     ["p", ["预测 ", ["code", { content: "p_7 = p_1 + r", math: true }], "。"]],
     ["pre", { code: "\\frac{y_7-y_1}{y_1}", math: true }],
   ]);
   assert.equal(plainOf(parse(text), text), "预测 p_7 = p_1 + r。\n\n\\frac{y_7-y_1}{y_1}");
-  assert.deepEqual(withoutDrawing(parse("中 $x$")), [["p", [[0, 2], ["code", { content: [3, 4], math: true }]]]]);
+  assert.deepEqual(withoutDrawing(parse("中 \\(x\\)")), [["p", [[0, 2], ["code", { content: [4, 5], math: true }]]]]);
   // A dollar inside TeX must not be mistaken for the opening delimiter.
-  assert.deepEqual(read("值 $$ $ $$"), [["p", ["值 ", ["code", { content: "$", math: true }]]]]);
+  assert.deepEqual(read("值 \\(\\$\\)"), [["p", ["值 ", ["code", { content: "\\$", math: true }]]]]);
   assert.deepEqual(read("$$\n\\sum_{i=1}^n x_i\n$$"), [["pre", { code: "\\sum_{i=1}^n x_i", math: true }]]);
 });
 
@@ -78,7 +78,7 @@ test("math_leaves_escaped_dollars_code_and_unmatched_inline_delimiters_alone", (
     ["p", [["code", { content: "$x$" }]]],
     ["pre", { code: "$$x$$", lang: "tex" }],
   ]);
-  assert.deepEqual(read("| 预测 |\n|---|\n| $x^2$ |"), [
+  assert.deepEqual(read("| 预测 |\n|---|\n| \\(x^2\\) |"), [
     ["table", [["tr", [["th", ["预测"]]]], ["tr", [["td", [["code", { content: "x^2", math: true }]]]]]], { align: [null] }],
   ]);
 });
@@ -107,7 +107,7 @@ test("markdown_words_are_runs_of_the_text_so_they_go_once", () => {
 
 
 test("core markdown includes the formula layout while copying keeps the TeX source", () => {
-  const text = "中 $x^2$\n\n$$\n\\frac{1}{2}\n$$";
+  const text = "中 \\(x^2\\)\n\n$$\n\\frac{1}{2}\n$$";
   const trees = markdown(text);
   const seen: Record<string, unknown>[] = [];
   const walk = (value: unknown): void => {
@@ -126,4 +126,31 @@ test("core markdown includes the formula layout while copying keeps the TeX sour
     assert(!("paths" in d));
   }
   assert.equal(plainOf(trees, text), "中 x^2\n\n\\frac{1}{2}");
+});
+
+test("formula delimiters leave dollar amounts and shell variables as prose", () => {
+  for (const text of ["$5 and $10", "$5/月，$10/月", "$100–$200", "$HOME and $PATH", "$x^2$", "inline $$x^2$$"])
+    assert.deepEqual(read(text), [["p", [text]]]);
+});
+
+test("bracket display math uses the same block as dollar fences, including containers", () => {
+  const code = "\\frac{1}{2}";
+  const want = [["pre", { code, math: true }]];
+  for (const text of [`\\[${code}\\]`, `\\[\n${code}\n\\]`, `\\[\r\n${code}\r\n\\]`, `$$\n${code}\n$$`])
+    assert.deepEqual(read(text), want);
+  assert.deepEqual(read(`> \\[\n> ${code}\n> \\]`), [["quote", want]]);
+  assert.deepEqual(read(`- \\[\n  ${code}\n  \\]`), [["list", [["li", want]]]]);
+  assert.deepEqual(read(`before\n\\[${code}\\]\nafter`), [["p", ["before"]], ...want, ["p", ["after"]]]);
+  assert.deepEqual(withoutDrawing(parse("\\[x\\]")), [["pre", { code: [2, 3], math: true }]]);
+});
+
+test("bracket math respects code, escaped delimiters, TeX escapes and missing closers", () => {
+  assert.deepEqual(read("`\\(x\\)` and `\\[x\\]`"), [["p", [["code", { content: "\\(x\\)" }], " and ", ["code", { content: "\\[x\\]" }]]]]);
+  assert.deepEqual(read("```\n\\[x\\]\n```"), [["pre", { code: "\\[x\\]" }]]);
+  assert.deepEqual(read(String.raw`\\(x\\)`), [["p", [String.raw`\(x\)`]]]);
+  assert.deepEqual(read(String.raw`\(x\\) + y\)`), [["p", [["code", { content: String.raw`x\\) + y`, math: true }]]]]);
+  assert.deepEqual(read(String.raw`未完成 \(x`), [["p", ["未完成 (x"]]]);
+  assert.deepEqual(read("\\[\nx"), [["p", ["[\nx"]]]);
+  assert.deepEqual(read(String.raw`\(x\]`), [["p", ["(x]"]]]);
+  assert.deepEqual(read("\\(x\\) 与 \\(y\\)"), [["p", [["code", { content: "x", math: true }], " 与 ", ["code", { content: "y", math: true }]]]]);
 });
