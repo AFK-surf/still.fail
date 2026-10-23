@@ -266,7 +266,6 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   open_setting("home")
   t.draw()
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("任务完成、需要处理、出错或有新消息时通知你") is Some(_))
   // the row below the fold on a 844 high screen since the cards keep Android's room (20 in): the page at its end
   t.scroll_to_end()
   t.draw()
@@ -274,8 +273,9 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   let set = named(calls, "notify.set")
   assert_eq(set.length(), 1)
   assert_true(set[0].params.stringify().contains("\"on\":false"))
-  // switched at once, a spinner while the core has not answered
-  assert_true(t.find("不接收通知") is Some(_))
+  // switched at once, a spinner while the core has not answered: not switched again meanwhile
+  t.tap_text("通知")
+  assert_eq(named(calls, "notify.set").length(), 1)
   notify.val = { "on": false, "asked": true, "push": false, "show": [] }
   (set[0].done)(Ok(notify.val))
   t.draw()
@@ -303,7 +303,7 @@ test "settings: usage statistics and error reports switched off on this device, 
   let notify : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] })
   let t = notify_core(calls, sys, notify~)
   // (a host that sends none: a build without PostHog's key, macOS, the web)
-  open_setting("home")
+  open_setting("about")
   t.draw()
   t.run_for(@ui.nav_push_ms)
   t.scroll_to_end()

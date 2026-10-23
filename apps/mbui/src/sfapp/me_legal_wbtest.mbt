@@ -1,4 +1,4 @@
-// The account's foot and the settings' legal rows (settings/home.mbt; Me.kt, SettingsHome.kt Legal).
+// The account's foot and 关于's legal rows (settings/home.mbt; Me.kt, SettingsHome.kt Legal).
 
 ///|
 test "the account: 注销账号 at its foot asks first, saying what goes" {
@@ -12,8 +12,8 @@ test "the account: 注销账号 at its foot asks first, saying what goes" {
 }
 
 ///|
-test "settings: 服务条款 and 隐私政策 open still.fail's pages" {
-  let t = settings_tester("home")
+test "关于: 服务条款 and 隐私政策 open still.fail's pages" {
+  let t = settings_tester("about")
   shown_on_page(t, "隐私政策")
   t.tap_text("服务条款")
   assert_true(t.opened().contains("https://still.fail/terms"))

@@ -1,8 +1,9 @@
 // Settings on a narrow screen, one page from the gear on Home (as the Android app has it, apps/android/…/screens/
-// SettingsHome.kt): who is signed in, then the workspace's (its people, stations, connects, profiles, memory), then this
-// device's (how it looks, whether it notifies, whether it sends usage statistics), then still.fail's terms and privacy
-// policy. Each row says how things stand at its end, what is wrong in red, so the page is worth a look before anything
-// is opened.
+// SettingsHome.kt): who is signed in and the workspace in view, each a card; then the workspace's in small groups (who
+// may do what; its stations and what they run; its agents), then this device's (how it looks, its bar, its language,
+// whether it notifies), then 关于 (what changed, whether it sends usage statistics, still.fail's terms and privacy
+// policy). Each row has its icon, and says how things stand at its end, what is wrong in red, so the page is worth a
+// look before anything is opened.
 import { useState, type ReactNode } from "react";
 import { useDoing } from "../doing.ts";
 import { useStations, useConnects } from "../api.ts";
@@ -10,7 +11,10 @@ import { useWorkspace } from "../cloud/api.ts";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useLock } from "../cloud/Security.tsx";
 import { useVaults, vaultStatus } from "../vault.ts";
-import { ArrowUpRight, ChevronRight } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Bell, Brain, Chart, Check, ChevronRight, Im, Info, Key, Quota, Refresh, Server, ShieldCheck, Sliders, ViewColumns, Web, type IconProps } from "@stillfail/ui/icons.tsx";
+import type { ComponentType } from "react";
+import { WorkspaceMark, marked } from "../WorkspaceMark.tsx";
+import { isPicture } from "../StationMark.tsx";
 import { useAppearance, useMotionSetting, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { HAS_TELEMETRY, setTelemetry, useTelemetryOn } from "../telemetry.ts";
@@ -44,10 +48,16 @@ export function languages(): ["zh" | "en" | null, string][] {
   return [[null, t("common.language.system")], ["zh", t("common.language.zh")], ["en", t("common.language.en")]];
 }
 
-/** A row that opens a page: its name, how things stand (`bad` in red), a chevron. */
-export function GoRow({ title, value, bad = false, lead, onClick }: { title: string; value?: ReactNode; bad?: boolean; lead?: ReactNode; onClick: () => void }) {
+/** A settings row's icon, before its name (Android's RowIcon): the line art in the muted ink. */
+export function RowIcon({ icon: I }: { icon: ComponentType<IconProps> }) {
+  return <I size={22} className={css.mRowIcon} />;
+}
+
+/** A row that opens a page: its icon (settings' rows), its name, how things stand (`bad` in red), a chevron. */
+export function GoRow({ title, value, bad = false, icon, lead, onClick }: { title: string; value?: ReactNode; bad?: boolean; icon?: ComponentType<IconProps>; lead?: ReactNode; onClick: () => void }) {
   return (
     <ListRow onClick={onClick}>
+      {icon && <RowIcon icon={icon} />}
       {lead}
       <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{title}</span>
       {value !== undefined && <span className={`${css.mValue} ${bad ? partsCss.mRed : ""}`}>{value}</span>}
@@ -89,34 +99,71 @@ export function SettingsScreen() {
           <ChevronRight size={14} className={partsCss.mSubtle} />
         </span>
       </Card>
-      <SectionHeader title={view ? t("web-mobile.settings.workspaceRole", { workspace: view.name, role: ROLE_LABEL[view.role] }) : app.entry.name} start={24} />
+      {/* The workspace as the account is: its mark, its name, the viewer's role in it and its people. */}
+      <Card onClick={at("/settings/workspace")}>
+        <span className={css.mMe}>
+          <span className={css.mWorkspace} data-marked={(view && marked(view)) || undefined} data-picture={(view && isPicture(view.icon)) || undefined}>
+            <WorkspaceMark w={view ?? app.entry} size={26} picture={46} />
+          </span>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+            <b>{view?.name ?? app.entry.name}</b>
+            <span className={listsCss.mRowNote}>{[view ? ROLE_LABEL[view.role] : null, view ? (manager && waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })) : null].filter(Boolean).join(" · ")}</span>
+          </span>
+          <ChevronRight size={14} className={partsCss.mSubtle} />
+        </span>
+      </Card>
+      {/* Who may do what: security mode, where the workspace has it, and the vault. */}
       <ListCard>
-        <GoRow title="Workspace" value={view ? (manager && waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })) : undefined} onClick={at("/settings/workspace")} />
-        {lock?.available && <GoRow title={t("web-pages.security.title")} bad={lock.attention > 0} value={lock.locked ? (lock.attention > 0 ? t("web-mobile.settings.securityWaiting", { n: lock.attention }) : t("web-mobile.settings.securityOn")) : t("web-mobile.settings.securityOff")} onClick={at("/settings/security")} />}
-        <GoRow title={t("web-pages.vault.title")} bad={vault?.bad ?? false} value={vault?.text} onClick={at("/settings/vault")} />
-        <GoRow title="Station" value={stations ? <>{troubled && <Presence state="error" />}{t("web-mobile.settings.stationsOnline", { online, n: stations.length })}</> : undefined} onClick={at("/settings/stations")} />
-        <GoRow title={t("web-mobile.settings.connects")} bad={failing > 0} value={connects ? (failing ? t("web-mobile.settings.connectsFailing", { n: failing }) : t("web-mobile.settings.connectsCount", { n: connects.items.length })) : undefined} onClick={at("/settings/connects")} />
-        <GoRow title="Profile" bad={short > 0} value={stations ? (short ? t("web-mobile.settings.profilesShort", { n: short }) : t("web-mobile.settings.profilesCount", { n: profiles.length })) : undefined} onClick={at("/settings/profiles")} />
-        <GoRow title={t("web-pages.archiving.title")} onClick={at("/settings/archive")} />
-        <GoRow title={t("web-pages.automaticDecisions.title")} onClick={at("/settings/automatic-decisions")} />
-        <GoRow title={t("web-mobile.settings.memory")} onClick={at("/settings/memory")} />
-        <GoRow title={t("web-mobile.settings.usage")} onClick={at("/settings/usage")} />
+        {lock?.available && <GoRow icon={ShieldCheck} title={t("web-pages.security.title")} bad={lock.attention > 0} value={lock.locked ? (lock.attention > 0 ? t("web-mobile.settings.securityWaiting", { n: lock.attention }) : t("web-mobile.settings.securityOn")) : t("web-mobile.settings.securityOff")} onClick={at("/settings/security")} />}
+        <GoRow icon={Key} title={t("web-pages.vault.title")} bad={vault?.bad ?? false} value={vault?.text} onClick={at("/settings/vault")} />
+      </ListCard>
+      {/* Its stations and what they run: the chats' ways in and the agents' accounts. */}
+      <ListCard>
+        <GoRow icon={Server} title="Station" value={stations ? <>{troubled && <Presence state="error" />}{t("web-mobile.settings.stationsOnline", { online, n: stations.length })}</> : undefined} onClick={at("/settings/stations")} />
+        <GoRow icon={Im} title={t("web-mobile.settings.connects")} bad={failing > 0} value={connects ? (failing ? t("web-mobile.settings.connectsFailing", { n: failing }) : t("web-mobile.settings.connectsCount", { n: connects.items.length })) : undefined} onClick={at("/settings/connects")} />
+        <GoRow icon={Quota} title="Profile" bad={short > 0} value={stations ? (short ? t("web-mobile.settings.profilesShort", { n: short }) : t("web-mobile.settings.profilesCount", { n: profiles.length })) : undefined} onClick={at("/settings/profiles")} />
+      </ListCard>
+      {/* Its agents: when their chats are archived, what they decide by themselves, what they remember, what they used. */}
+      <ListCard>
+        <GoRow icon={Archive} title={t("web-pages.archiving.title")} onClick={at("/settings/archive")} />
+        <GoRow icon={Check} title={t("web-pages.automaticDecisions.title")} onClick={at("/settings/automatic-decisions")} />
+        <GoRow icon={Brain} title={t("web-mobile.settings.memory")} onClick={at("/settings/memory")} />
+        <GoRow icon={Chart} title={t("web-mobile.settings.usage")} onClick={at("/settings/usage")} />
       </ListCard>
       <SectionHeader title={t("web-mobile.settings.device")} start={24} />
       <ListCard>
-        <GoRow title={t("web-mobile.settings.appearance.title")} value={themes().find(([v]) => v === appearance)?.[1]} onClick={at("/settings/appearance")} />
-        <GoRow title={t("web-mobile.bar.title")} value={bars.sets.length > 1 ? t("web-mobile.bar.count", { n: bars.sets.length }) : bars.sets[0]!.map((k) => railLabel(k as BarPlace)).join("、")} onClick={at("/settings/bar")} />
-        <GoRow title={t("common.language")} value={languages().find(([v]) => v === language)?.[1]} onClick={at("/settings/language")} />
+        <GoRow icon={Sliders} title={t("web-mobile.settings.appearance.title")} value={themes().find(([v]) => v === appearance)?.[1]} onClick={at("/settings/appearance")} />
+        <GoRow icon={ViewColumns} title={t("web-mobile.bar.title")} value={bars.sets.length > 1 ? t("web-mobile.bar.count", { n: bars.sets.length }) : bars.sets[0]!.map((k) => railLabel(k as BarPlace)).join("、")} onClick={at("/settings/bar")} />
+        <GoRow icon={Web} title={t("common.language")} value={languages().find(([v]) => v === language)?.[1]} onClick={at("/settings/language")} />
         <Notify />
-        <Telemetry />
-        <GoRow title={t("web-mobile.settings.changelog")} value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/changelog")} />
-        {/* On an Android phone's browser, this channel's app. */}
-        {downloadsOffered() && onAndroid() && <GoRow title={t("web-mobile.settings.downloadAndroid")} onClick={() => { location.href = download("android"); }} />}
         {/* An app on the home screen has no browser round it to reload the page: here it can. */}
-        {standalone() && <ListRow onClick={() => reload("button")}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("common.reload")}</span></ListRow>}
+        {standalone() && <ListRow onClick={() => reload("button")}><RowIcon icon={Refresh} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("common.reload")}</span></ListRow>}
       </ListCard>
-      {/* On still.fail's site, in a tab of their own. */}
-      <SectionHeader title={t("web-pages.settings.nav.about")} start={24} />
+      <ListCard>
+        <GoRow icon={Info} title={t("web-pages.settings.nav.about")} value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/about")} />
+      </ListCard>
+      <div style={{ height: 30 }} />
+    </div>
+  );
+}
+
+/**
+ * About still.fail, as the wide screen's 关于 and Android's: what changed (this build's number), this channel's Android
+ * app on an Android phone's browser, whether usage statistics are sent, and the terms and privacy policy on still.fail's
+ * site, in a tab of their own.
+ */
+export function AboutScreen() {
+  const app = useApp();
+  const build = useChangelog().value?.build;
+  return (
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
+      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
+      <LargeTitle small="" big={t("web-pages.settings.nav.about")} />
+      <ListCard>
+        <GoRow title={t("web-mobile.settings.changelog")} value={build != null ? `0.1.${build}` : undefined} onClick={() => app.push(app.at("/settings/changelog"))} />
+        {downloadsOffered() && onAndroid() && <GoRow title={t("web-mobile.settings.downloadAndroid")} onClick={() => { location.href = download("android"); }} />}
+      </ListCard>
+      {HAS_TELEMETRY && <ListCard><Telemetry /></ListCard>}
       <ListCard>
         {legalPages().map(([page, label]) => (
           <ListRow key={page} onClick={() => { window.open(legalUrl(page), "_blank", "noopener"); }}>
@@ -141,7 +188,8 @@ function Notify() {
   if (!CAN_NOTIFY) return null;
   const busy = asked !== null || setting;
   const on = asked ?? state === "on";
-  const note = state === "denied" ? t("web-mobile.settings.notify.denied") : t("web-mobile.settings.notify.note");
+  // (its switch says whether: a note only where the browser refused it)
+  const note = state === "denied" ? t("web-mobile.settings.notify.denied") : null;
   return (
     <ListRow onClick={busy ? undefined : () => {
       if (state === "denied" || state === "unsupported") return;
@@ -152,9 +200,10 @@ function Notify() {
         else if ((now === "on") !== want) app.toast(t(want ? "web-mobile.settings.notify.onFailed" : "web-mobile.settings.notify.offFailed"));
       }, (e: unknown) => app.toast(t(want ? "web-mobile.settings.notify.onFailedWhy" : "web-mobile.settings.notify.offFailedWhy", { error: e instanceof Error ? e.message : String(e) }))).finally(() => setAsked(null));
     }}>
+      <RowIcon icon={Bell} />
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}>{t("web-mobile.settings.notify.title")}</span>
-        <span className={listsCss.mRowNote}>{note}</span>
+        {note && <span className={listsCss.mRowNote}>{note}</span>}
       </span>
       {busy && <Spinner inline />}
       <span className={connectsCss.mSwitch} data-on={on || undefined} />

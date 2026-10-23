@@ -1,4 +1,4 @@
-// 88-workspace-people (e2e/traces/settings-workspace-people.trace): Workspace → ＋ (添加成员): an email, 添加
+// 88-workspace-people (e2e/traces/settings-workspace-people.trace): the workspace's card (Dev) → ＋ (添加成员): an email, 添加
 // (workspace.addMembers); 移除 (workspace.removeAdded); 图标: an emoji pasted, then 不使用图标.
 
 ///|
@@ -7,7 +7,7 @@ test "88-workspace-people" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-workspace-people"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
-    f.tap("=Workspace")
+    f.tap("=Dev")
     f.run_to(@ui.nav_rest())
     f.see("alice@example.test")
     f.tap("icon:user-plus")

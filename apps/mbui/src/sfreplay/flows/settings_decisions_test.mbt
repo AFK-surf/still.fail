@@ -7,7 +7,6 @@ test "86-decisions" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-decisions"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
-    f.wheel_at("Workspace", 300.0)
     f.tap("=自动决策")
     f.run_to(@ui.nav_rest())
     f.tap("归档建议")

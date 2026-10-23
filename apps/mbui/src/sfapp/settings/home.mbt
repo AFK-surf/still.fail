@@ -1,7 +1,9 @@
-// Settings from the gear (app/screens/SettingsHome.kt SettingsScreen): who is signed in, then the workspace's (its
-// people, security, the vault, stations, connects, profiles, memory, usage), then this device's (how it looks, its
-// notifications, this build). Each row says how things stand at its end, what is wrong in red. And how this device
-// shows still.fail (AppearanceScreen), and the account (Me.kt).
+// Settings from the gear (app/screens/SettingsHome.kt SettingsScreen): who is signed in and the workspace in view, each
+// a card; then the workspace's in small groups (security and the vault; its stations, connects and profiles; its
+// agents' automatic decisions, memory and usage), then this device's (how it looks, its bar, its notifications, what it
+// keeps), then 关于 (AboutScreen: this build, the changelog, the reports, the terms). Each row has its icon, and says how
+// things stand at its end, what is wrong in red. And how this device shows still.fail (AppearanceScreen), and the
+// account (Me.kt).
 
 ///|
 /// A page of the settings, by its route: call for the page the app's stack shows. `root`: a place of the bottom
@@ -59,6 +61,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     Changelog => changelog_page(c, core)
+    About => about_page(c, core)
     UsagePrices(days) => prices_page(c, core, here, days)
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
@@ -146,7 +149,6 @@ pub fn dark(prefs : Json?, system_dark : Bool) -> Bool {
 ///|
 /// Settings (SettingsScreen).
 fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let t = @sf.theme()
   let w = workspace_view(core, here)
   let v = w.value
   let stations = stations_of(core, here).value
@@ -161,84 +163,87 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let members = items(v, "members").length()
   let waiting = items(v, "added").length() + items(v, "invitations").length()
   let me_name = if here.person != "" { here.person } else { here.email }
+  let people = match v {
+    Some(_) =>
+      if manager && waiting > 0 {
+        fill("android-settings.members.waiting", [("n", members.to_string()), ("waiting", waiting.to_string())])
+      } else {
+        fill("android-settings.members.count", [("n", members.to_string())])
+      }
+    None => ""
+  }
   scroll_page(c, "home", [
     fn() { top_back(c, core, tr("android-settings.home.back")) },
     fn() { large_title(c, tr("android-settings.title")) },
     fn() {
-      if card(c, key="me-card", fn() {
-          c.box(dir=Row, w=Fill(1.0), gap=14.0, align=ACenter, fn() {
-            avatar(c, core, here.email, me_name, 46.0, picture=here.picture)
-            c.box(w=Fill(1.0), fn() {
-              c.text(me_name, size=16.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
-              c.text(here.email, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
-            })
-            |> ignore
-            chevron(c)
-          })
-          |> ignore
-        }) {
+      if identity_card(
+          c,
+          "me-card",
+          fn() { avatar(c, core, here.email, me_name, @sf.identity_mark, picture=here.picture) },
+          me_name,
+          here.email,
+        ) {
         (core.push)(Me)
       }
     },
+    // the workspace as the account is (SettingsHome.kt): its mark, its name, the viewer's role in it and its people
     fn() {
-      section_header(
-        c,
-        match v {
-          Some(_) =>
-            fill("android-settings.home.workspace", [("name", text(v, "name")), ("role", role_label(text(v, "role")))])
-          None => here.name
-        },
-        start=S6,
-      )
+      let name = match v {
+        Some(_) => text(v, "name")
+        None => here.name
+      }
+      let line = match v {
+        Some(_) => role_label(text(v, "role")) + " · " + people
+        None => ""
+      }
+      if identity_card(c, "workspace-card", fn() { workspace_tile(c, name, text(v, "emoji"), text(v, "icon")) }, name, line) {
+        (core.push)(Workspace)
+      }
     },
+    // who may do what: security mode and the vault, where the workspace has them
+    fn() {
+      if flag(lock, "available") || vaults is Some(_) {
+        list_card(c, fn() {
+          if flag(lock, "available") {
+            let attention = count(lock, "attention")
+            let said = if !flag(lock, "locked") {
+              tr("web-mobile.settings.securityOff")
+            } else if attention > 0 {
+              fill("web-mobile.settings.securityWaiting", [("n", attention.to_string())])
+            } else {
+              tr("web-mobile.settings.securityOn")
+            }
+            if go_row(c, "go-security", tr("web-pages.security.title"), value=said, bad=attention > 0, icon="shield-check") {
+              (core.push)(Security)
+            }
+          }
+          // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off
+          match vaults {
+            Some(_) => {
+              let n = items(vaults, "requests").length()
+              let said = if n > 0 {
+                fill("android-settings.vault.waiting", [("n", n.to_string())])
+              } else if items(vaults, "vaults").length() > 0 {
+                let mut total = 0
+                for x in items(vaults, "vaults") {
+                  total += count(Some(x), "items")
+                }
+                fill("android-settings.vault.items", [("n", total.to_string())])
+              } else {
+                tr("android-settings.vault.off")
+              }
+              if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0, icon="key") {
+                (core.push)(Vault)
+              }
+            }
+            None => ()
+          }
+        })
+      }
+    },
+    // its stations and what they run: the chats' ways in and the agents' accounts
     fn() {
       list_card(c, fn() {
-        let people = match v {
-          Some(_) =>
-            if manager && waiting > 0 {
-              fill("android-settings.members.waiting", [("n", members.to_string()), ("waiting", waiting.to_string())])
-            } else {
-              fill("android-settings.members.count", [("n", members.to_string())])
-            }
-          None => ""
-        }
-        if go_row(c, "go-workspace", "Workspace", value=people) {
-          (core.push)(Workspace)
-        }
-        if flag(lock, "available") {
-          let attention = count(lock, "attention")
-          let said = if !flag(lock, "locked") {
-            tr("web-mobile.settings.securityOff")
-          } else if attention > 0 {
-            fill("web-mobile.settings.securityWaiting", [("n", attention.to_string())])
-          } else {
-            tr("web-mobile.settings.securityOn")
-          }
-          if go_row(c, "go-security", tr("web-pages.security.title"), value=said, bad=attention > 0) {
-            (core.push)(Security)
-          }
-        }
-        // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off
-        match vaults {
-          Some(_) => {
-            let n = items(vaults, "requests").length()
-            let said = if n > 0 {
-              fill("android-settings.vault.waiting", [("n", n.to_string())])
-            } else if items(vaults, "vaults").length() > 0 {
-              let mut total = 0
-              for x in items(vaults, "vaults") {
-                total += count(Some(x), "items")
-              }
-              fill("android-settings.vault.items", [("n", total.to_string())])
-            } else {
-              tr("android-settings.vault.off")
-            }
-            if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0) {
-              (core.push)(Vault)
-            }
-          }
-          None => ()
-        }
         let (online, troubled, profiles, short) = match st {
           Some(a) => {
             let mut on = 0
@@ -263,7 +268,7 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           Some(a) => fill("android-settings.home.online", [("online", online.to_string()), ("total", a.length().to_string())])
           None => ""
         }
-        if go_row(c, "go-stations", "Station", value=st_value, dot=troubled) {
+        if go_row(c, "go-stations", "Station", value=st_value, dot=troubled, icon="server") {
           (core.push)(Stations)
         }
         let mut failing = 0
@@ -281,7 +286,7 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             }
           None => ""
         }
-        if go_row(c, "go-connects", tr("android-settings.connects.title"), value=cn_value, bad=failing > 0) {
+        if go_row(c, "go-connects", tr("android-settings.connects.title"), value=cn_value, bad=failing > 0, icon="im") {
           (core.push)(Connects(""))
         }
         let pr_value = match st {
@@ -293,16 +298,21 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             }
           None => ""
         }
-        if go_row(c, "go-profiles", "Profile", value=pr_value, bad=short > 0) {
+        if go_row(c, "go-profiles", "Profile", value=pr_value, bad=short > 0, icon="quota") {
           (core.push)(Profiles(""))
         }
-        if go_row(c, "go-decisions", tr("web-pages.automaticDecisions.title")) {
+      })
+    },
+    // its agents: what they decide by themselves, what they remember, what they used
+    fn() {
+      list_card(c, fn() {
+        if go_row(c, "go-decisions", tr("web-pages.automaticDecisions.title"), icon="check") {
           (core.push)(AutoDecisions)
         }
-        if go_row(c, "go-memory", tr("android-settings.memory")) {
+        if go_row(c, "go-memory", tr("android-settings.memory"), icon="brain") {
           (core.push)(Memories)
         }
-        if go_row(c, "go-usage", tr("android-settings.home.usage")) {
+        if go_row(c, "go-usage", tr("android-settings.home.usage"), icon="chart") {
           (core.push)(Usage)
         }
       })
@@ -317,24 +327,16 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             said = tr(th.1)
           }
         }
-        if go_row(c, "go-appearance", tr("android-settings.appearance.title"), value=said) {
+        if go_row(c, "go-appearance", tr("android-settings.appearance.title"), value=said, icon="sliders") {
           (core.push)(Appearance)
         }
         // this device's bottom bars: none on a wide screen (SettingsHome.kt: !LocalWide)
-        if !no_bar.val && go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core)) {
+        if !no_bar.val && go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core), icon="view-columns") {
           (core.push)(BarSettings)
         }
-        // what this device keeps, in all (SettingsHome.kt: KeptFiles.read's total), once the core has said
-        kept_read(c, core)
-        let kept_value = match kept.chats {
-          Some(chats) => size_words(chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") }))
-          None => ""
-        }
-        if go_row(c, "go-files", tr("android-settings.files.title"), value=kept_value) {
-          (core.push)(KeptFiles)
-        }
         // notifications on this device, local notices and pushes alike (SettingsHome.kt Notify): as the core's
-        // `notify` says, or as switched while `notify.set` is out (a spinner, not switched again meanwhile)
+        // `notify` says, or as switched while `notify.set` is out (a spinner, not switched again meanwhile); its
+        // switch says whether, no note under it
         let notify = (core.topic)("notify", Map::new()).value
         let pending = is_doing(core, ["notify.set"], []) || notify_switched.val is Some(_)
         let on = match notify_switched.val {
@@ -342,21 +344,8 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           None => notify is None || flag(notify, "on")
         }
         if list_row(c, key=if pending { "" } else { "notify" }, fn() {
-          c.box(w=Fill(1.0), fn() {
-            c.text(tr("android-settings.notify.title"), size=15.0, color=t.p.text, line=21.0) |> ignore
-            c.text(
-              if on {
-                tr("android-settings.notify.on")
-              } else {
-                tr("android-settings.notify.off")
-              },
-              size=13.0,
-              color=t.p.muted,
-              line=18.0,
-            )
-            |> ignore
-          })
-          |> ignore
+          row_icon(c, "bell")
+          row_title(c, tr("android-settings.notify.title"))
           if pending {
             spinner(c)
           }
@@ -364,21 +353,80 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }) {
           use_notify(core, !on)
         }
-        // usage statistics and error reports from this device (SettingsHome.kt Reporting): not where nothing is sent
-        match (core.reporting)() {
-          Some(on) =>
-            if list_row(c, key="reporting", fn() {
-                c.box(style=@sf.full_width, fn() {
-                  c.text(tr("android-settings.telemetry.title"), style=@sf.body) |> ignore
-                  c.text(fill("android-settings.telemetry.note", [("app", "still.fail")]), style=@sf.meta) |> ignore
-                })
-                |> ignore
-                switch(c, on)
-              }) {
-              (core.set_reporting)(!on)
-            }
-          None => ()
+        // what this device keeps, in all (SettingsHome.kt: KeptFiles.read's total), once the core has said
+        kept_read(c, core)
+        let kept_value = match kept.chats {
+          Some(chats) => size_words(chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") }))
+          None => ""
         }
+        if go_row(c, "go-files", tr("android-settings.files.title"), value=kept_value, icon="disk") {
+          (core.push)(KeptFiles)
+        }
+      })
+    },
+    // 关于 (SettingsHome.kt AboutRow): this build, or the newer one there is
+    fn() {
+      list_card(c, fn() {
+        let (words, newer) = (core.version_words)()
+        if go_row(c, "go-about", tr("web-pages.settings.nav.about"), value=if newer { words } else { build_version() }, icon="info") {
+          (core.push)(About)
+        }
+      })
+    },
+    fn() { gap(c, 30.0) },
+  ])
+}
+
+///|
+/// The account's card and the workspace's (SettingsHome.kt): what it is by (`lead`: a picture, a mark), its name, a line
+/// under it, a chevron; tapped, true the frame after.
+fn identity_card(c : @ui.Ctx, key : String, lead : () -> Unit, name : String, line : String) -> Bool {
+  let t = @sf.theme()
+  card(c, key~, fn() {
+    c.box(dir=Row, w=Fill(1.0), gap=14.0, align=ACenter, fn() {
+      lead()
+      c.box(w=Fill(1.0), fn() {
+        c.text(name, size=16.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
+        if line != "" {
+          c.text(line, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+        }
+      })
+      |> ignore
+      chevron(c)
+    })
+    |> ignore
+  })
+}
+
+///|
+/// The workspace's mark on its card (SettingsHome.kt WorkspaceTile), as the account's picture is on its own: a picture
+/// put up fills the square; one of still.fail's icons or an emoji on the chips' ground; else its first letter, muted,
+/// as the web's rail has it.
+fn workspace_tile(c : @ui.Ctx, name : String, emoji : String, icon : String) -> Unit {
+  let t = @sf.theme()
+  let picture = icon.has_prefix("https://") || icon.has_prefix("http://") || icon.has_prefix("data:image/")
+  c.box(style=@sf.workspace_tile.then(@ui.style(bg=Data(if picture { t.p.card } else { t.p.chip }))), fn() {
+    if picture {
+      @sf.station_mark(c, emoji, icon, @sf.identity_mark, t.p.text)
+    } else if @sf.has_station_mark(emoji, icon) {
+      @sf.station_mark(c, emoji, icon, @sf.workspace_tile_mark, t.p.text)
+    } else {
+      c.text(@sf.initial(name), style=@sf.workspace_letter) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// About this app (SettingsHome.kt AboutScreen), from settings' 关于: this build and the way to a newer one, the
+/// changelog; whether it reports; the terms and privacy policy on the web.
+fn about_page(c : @ui.Ctx, core : Core) -> Unit {
+  let t = @sf.theme()
+  let blocks : Array[() -> Unit] = [
+    fn() { top_back(c, core, tr("android-settings.title")) },
+    fn() { large_title(c, tr("web-pages.settings.nav.about")) },
+    fn() {
+      list_card(c, fn() {
         // this build (Version): its name and version, and the way to a newer one (tapped: installed, or asked now)
         let (words, newer) = (core.version_words)()
         if list_row(c, key="version", fn() {
@@ -392,17 +440,43 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         if go_row(c, "go-changelog", tr("android-settings.changelog.title")) {
           (core.push)(Changelog)
         }
-        // still.fail's terms and privacy policy, on the web (SettingsHome.kt Legal)
-        if go_row(c, "go-terms", tr("android-settings.legal.terms")) {
-          (core.open_link)(legal_url("terms"))
-        }
-        if go_row(c, "go-privacy", tr("android-settings.legal.privacy")) {
-          (core.open_link)(legal_url("privacy"))
-        }
       })
     },
-    fn() { gap(c, 30.0) },
-  ])
+  ]
+  // usage statistics and error reports from this device (SettingsHome.kt Reporting): not where nothing is sent
+  match (core.reporting)() {
+    Some(on) =>
+      blocks.push(fn() {
+        list_card(c, fn() {
+          if list_row(c, key="reporting", fn() {
+              c.box(style=@sf.full_width, fn() {
+                c.text(tr("android-settings.telemetry.title"), style=@sf.body) |> ignore
+                c.text(fill("android-settings.telemetry.note", [("app", "still.fail")]), style=@sf.meta) |> ignore
+              })
+              |> ignore
+              switch(c, on)
+            }) {
+            (core.set_reporting)(!on)
+          }
+        })
+      })
+    None => ()
+  }
+  // still.fail's terms and privacy policy, on the web, the arrow out (SettingsHome.kt Legal)
+  blocks.push(fn() {
+    list_card(c, fn() {
+      for l in [("terms", "android-settings.legal.terms"), ("privacy", "android-settings.legal.privacy")] {
+        if list_row(c, key="go-" + l.0, fn() {
+            row_title(c, tr(l.1))
+            @sf.icon(c, "arrow-up-right", size=14.0, color=t.p.subtle) |> ignore
+          }) {
+          (core.open_link)(legal_url(l.0))
+        }
+      }
+    })
+  })
+  blocks.push(fn() { gap(c, 30.0) })
+  scroll_page(c, "about", blocks)
 }
 
 ///|

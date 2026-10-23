@@ -139,6 +139,8 @@ pub(all) enum Route {
   KeptChat(String, Int)
   /// what changed in still.fail (ChangelogScreen)
   Changelog
+  /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
+  About
   /// the prices the usage is counted at, over its days (UsagePricesScreen)
   UsagePrices(Int)
   /// how a chat's agent runs (RunSettingsScreen): its station, its session's key
@@ -647,6 +649,7 @@ pub fn route_of(name : String) -> Route? {
     "bars" => Some(BarSettings)
     "kept" => Some(KeptFiles)
     "changelog" => Some(Changelog)
+    "about" => Some(About)
     _ =>
       match name.find(":") {
         Some(i) => {
