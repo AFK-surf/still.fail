@@ -1568,6 +1568,7 @@
   "web-pages.screen.clipboardUnread": "Can't read the clipboard",
   "web-pages.screen.paste": "Paste",
   "web-pages.screen.sendFile": "Send files",
+  "web-pages.screen.window": "Open in new window",
   "web-pages.screen.sends": "Files sent",
   "web-pages.screen.sendsTo": "To {folder}",
   "web-pages.screen.pastePath": "Paste path",

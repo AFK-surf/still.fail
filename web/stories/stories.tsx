@@ -339,9 +339,9 @@ const fullStation = (): DemoExtension => together(
  * H.264 where the browser encodes it. */
 const screenView = (story: ViewStory, phone = false, h264 = false): Pick<Story, "render" | "demo"> => ({
   demo: screensDemo(story, undefined, h264),
-  render: () => stage(<ScreenViewer station="demo/local" screen="desktop" backLabel="返回" onBack={noop} phone={phone} />),
+  render: () => stage(<ScreenViewer station="demo/local" screen="desktop" backLabel="返回" onBack={noop} onWindow={phone ? undefined : noop} phone={phone} />),
 });
-/** With a mouse, the pointer brought to the top: the bar there while the view is live. */
+/** With a mouse, the pointer brought to the bar at the top. */
 const toTheBar: Step[] = [{ move: [640, 20] }];
 /** A chat row of the demo's, the made-up ones copied from (kept from its first view, whatever is typed later). */
 let shareRowLike: ShareInView["items"][number] | undefined;

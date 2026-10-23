@@ -1493,6 +1493,7 @@
   "web-pages.screen.clipboardUnread": "无法读取剪贴板",
   "web-pages.screen.paste": "粘贴",
   "web-pages.screen.sendFile": "发送文件",
+  "web-pages.screen.window": "在新窗口打开",
   "web-pages.screen.sends": "已发送的文件",
   "web-pages.screen.sendsTo": "发送到 {folder}",
   "web-pages.screen.pastePath": "粘贴路径",
