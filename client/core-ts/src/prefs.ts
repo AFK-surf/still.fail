@@ -6,6 +6,7 @@ import { conform } from "./conform.ts";
 import type { Data } from "./data.ts";
 import { CoreError } from "./error.ts";
 import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
+import * as keymap from "./keymap.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
@@ -81,11 +82,12 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
   return { sets, current: Math.min(sets.length - 1, Math.max(0, n)) };
 }
 
-/// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), and the faces.
+/// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), the faces, and the
+/// keymap.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts) };
+  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v) };
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -131,6 +133,12 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
         }
         // A workspace's bottom bars, kept as they read (as `bars`).
         if (field === "barsBy") entry = barsOf(entry);
+        // An action's keys, each a binding as the keymap has it (keymap.ts); one that is none is refused.
+        if (field === "keys") {
+          const keys = Array.isArray(entry) ? entry.map(keymap.binding) : [null];
+          if (keys.includes(null)) throw CoreError.invalid(t("core-misc.params.invalid", { error: `keys.${key}` }));
+          entry = [...new Set(keys)];
+        }
         if (field === "chatTabs" && isObject(entry)) {
           const last = Object.values(map).reduce<number>((m, v) => (isObject(v) && typeof v.at === "number" ? Math.max(m, v.at) : m), 0);
           entry = { ...entry, at: Math.max(now, last + 1) };
@@ -243,7 +251,8 @@ export function device(data: Data, facts: unknown): void {
   const b = build === "" ? "" : ` ${build}`;
   const from = app === "web" ? `web${b} (${phone ? "phone" : "pc"})` : `${app}${b}`;
   const prefs = kept(data);
-  const told: Map_ = { app, phone, handoff: app === "web" && !phone, sentFrom: from };
+  // `mac`: keys are said as on a Mac (⌘, ⌥), as an Apple device's keyboard has them (keymap.ts)
+  const told: Map_ = { app, phone, handoff: app === "web" && !phone, sentFrom: from, mac: app === "ios" || has(["Mac OS X", "iPhone", "iPad"]) };
   const locale = said("locale");
   if (locale !== "") told.locale = locale;
   prefs.device = told;

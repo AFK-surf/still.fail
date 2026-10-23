@@ -3414,6 +3414,63 @@ export interface KeptTabs {
 	active?: string;
 }
 
+/** An action keys do (keymap.ts ACTIONS). */
+export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close";
+
+/** Where an action works: anywhere in the app, or in a chat. */
+export type KeyGroupName = "global" | "chat";
+
+/**
+ * Whether an action works with the cursor in a text field: always (a binding with ⌘ or ⌥ does nothing there),
+ * never (it is a key the field types), or when the field is empty (the key moves the cursor in text).
+ */
+export type KeyTyping = "yes" | "no" | "empty";
+
+export interface KeyAction {
+	action: KeyActionName;
+	group: KeyGroupName;
+	/** What it does, in words. */
+	name: string;
+	typing: KeyTyping;
+	/**
+	 * The bindings that do it here: modifiers in the order Ctrl, Alt, Shift, Mod, then the key, joined by `+`
+	 * (`Shift+Mod+H`). The key is where it is on the keyboard: a letter, a digit, F1…, Up/Down/Left/Right, Space, Escape,
+	 * Enter, or one of \ [ ] . , / ;.
+	 */
+	keys: string[];
+	/** Each of `keys` as a key cap shows it here: ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere. */
+	labels: string[];
+	/** Its keys in words, as the list of shortcuts says them (`labels` with " / ", or 未设置). */
+	text: string;
+	/** Its keys were changed on this device. */
+	changed: boolean;
+	/** Listed among the shortcuts here: those only the desktop app has keys for are not shown elsewhere. */
+	listed: boolean;
+}
+
+export interface KeyGroup {
+	group: KeyGroupName;
+	/** Its name, as the list of shortcuts heads it. */
+	name: string;
+}
+
+/** The app's keyboard shortcuts (client/core-ts/src/keymap.ts): a client turns a key press into a binding and looks it up here. */
+export interface KeymapView {
+	/** Keys can be changed here (`keys.set`): the desktop app; elsewhere `keys` is not gone by. */
+	changeable: boolean;
+	/** Keys are said as on a Mac: Mod is ⌘ and Ctrl a key of its own (else Mod is Ctrl). */
+	mac: boolean;
+	/** Where the actions work, in the order they are listed. */
+	groups: KeyGroup[];
+	/** Every action, in the order they are listed. */
+	actions: KeyAction[];
+	/**
+	 * The keys that switch to the workspace at each place (from 0) of its menu, as shown: ⌃1…⌃9, Alt+1…9 elsewhere
+	 * (not changeable).
+	 */
+	workspace: string[];
+}
+
 /**
  * What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
  * item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution
@@ -4479,6 +4536,8 @@ export interface PrefsView {
 	fonts?: FontChoices;
 	/** The faces each place is set in and those there are to choose (the core's, from `fonts`; none from a core before them). */
 	faces?: FontsView;
+	/** The keyboard shortcuts here (the core's, from `keys` and `device`; none from a core before it). */
+	keymap?: KeymapView;
 }
 
 /** Providers of one group, as the picker lists them. */
