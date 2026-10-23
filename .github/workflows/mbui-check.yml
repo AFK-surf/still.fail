@@ -69,10 +69,9 @@ jobs:
             ${{ env.MBC_STORE }}
             .ci/lto
           key: ${{ env.CACHE_PREFIX }}m-${{ github.sha }}
-          # (then any, newest: the units kept before main's were under m-)
-          restore-keys: |
-            ${{ env.CACHE_PREFIX }}m-
-            ${{ env.CACHE_PREFIX }}
+          # (m- only: GitHub looks through all the restore-keys on the branch before main's, and a fallback to any of the
+          # kind took the branch's own here too, main's never: mbui-wide-workspace, 39995406305, 234 s)
+          restore-keys: ${{ env.CACHE_PREFIX }}m-
       - if: github.ref != 'refs/heads/main'
         run: |
           mkdir -p "$MBC_STORE" .ci/lto
