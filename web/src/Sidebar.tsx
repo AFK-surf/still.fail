@@ -152,9 +152,9 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   );
 }
 
-/** What is wrong with the stations (the core's `trouble`: which, or how many; red while one fails), or nothing. */
-export function useStationTrouble(scope: string): ChatsView["trouble"] | undefined {
-  return useTopicSelect<ChatsView, ChatsView["trouble"] | undefined>(chatsTopic(scope, "all"), (s) => s.value?.trouble, (a, b) => a === b);
+/** What is wrong with the stations (the core's `trouble`: which, or how many; red while one fails): null when nothing, undefined before the list is read. */
+export function useStationTrouble(scope: string): ChatsView["trouble"] | null | undefined {
+  return useTopicSelect<ChatsView, ChatsView["trouble"] | null | undefined>(chatsTopic(scope, "all"), (s) => s.value ? s.value.trouble ?? null : undefined, (a, b) => a === b);
 }
 
 /**
