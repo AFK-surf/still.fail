@@ -502,6 +502,11 @@ const chatsWaiting = (state: "reading" | "failing"): DemoExtension => ({
       : { reading: false, failing: [{ station: "demo/local", text: "无法连接 Studio", message: "station 离线" }], empty: false },
   }),
 });
+/** Lab's Mini1 in this workspace, not reached: the bell's Station line, its mark before it (the core's `trouble`). */
+const stationDown: DemoExtension = together(memberships(true), {
+  then: (t, value) => (t.topic !== "chats" || !value ? undefined
+    : { ...(value as object), trouble: { text: "无法连接「Mini1」", state: "error", retry: false, station: "demo/mini1" } }),
+});
 /** 用量 not come yet: its stations still read. */
 const usageWaiting: DemoExtension = {
   then: (t, value) => (t.topic !== "usage" || !value ? undefined : { ...(value as object), empty: true, wait: { reading: true, text: "正在从 Studio 读取用量", failing: [], empty: false } }),
@@ -764,6 +769,7 @@ export const stories: Story[] = [
   { id: "app-new-chat-files", group: "应用", title: "新建对话 · Station 文件", app: true, steps: [{ text: "新建对话" }, { click: '[aria-label="Station 文件"]' }, { text: "Downloads" }] },
   { id: "app-new-chat-files-added", group: "应用", title: "新建对话 · Station 文件 · 发路径", app: true, steps: [{ text: "新建对话" }, { click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }] },
   { id: "app-todo", group: "应用", title: "待处理", app: true, steps: [{ click: '[aria-label="待处理"]' }] },
+  { id: "app-todo-station-down", group: "应用", title: "待处理 · station 连不上", app: true, demo: stationDown, steps: [{ click: '[aria-label="待处理"]' }] },
   { id: "app-files", group: "应用", title: "文件", app: true, steps: [{ click: '[aria-label="文件"]' }] },
   { id: "app-files-home", group: "应用", title: "文件 · 主目录", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }] },
   { id: "app-files-deep", group: "应用", title: "文件 · 分栏", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { text: "code" }, { text: "acme" }, { text: "web" }] },
