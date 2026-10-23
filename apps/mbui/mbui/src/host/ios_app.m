@@ -1514,6 +1514,8 @@ void mb_host_set_full_screen(int32_t on) { (void)on; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
 void mb_host_set_badge(int32_t n) { (void)n; }
+// The menu bar (@hostapi.menu_setup): none here.
+void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
 moonbit_string_t mb_host_local_station(void) { return mb_string_from_ns(@""); }
 void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
 // (the desktop's dock: the macOS app's only)

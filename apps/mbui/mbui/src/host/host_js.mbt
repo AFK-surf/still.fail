@@ -988,6 +988,12 @@ fn set_badge(n : Int) -> Unit {
 }
 
 ///|
+/// (no menu bar of the system's in a browser)
+fn menu_setup(json : String) -> Unit {
+  ignore(json)
+}
+
+///|
 /// (no station of this machine's to manage from a browser)
 fn local_station() -> String {
   ""

@@ -163,6 +163,8 @@ fn reset() -> Unit {
   desk_moves.clear()
   desk_fulled.clear()
   badge_told.val = -1
+  // the menu bar given (menu_bar.mbt)
+  menu_bar_given.val = ""
   dock_reset()
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
   kept_chats.clear()
@@ -1181,6 +1183,8 @@ fn system_said(json : String) -> Unit {
         (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
         update_check(src, false)
       }
+      // 检查更新 from the menu bar (menu_bar.mbt)
+      Menu("update.check") => update_from_menu(src)
       // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
       InstallAllow(..) => toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
       InstallFailed(error~, ..) => toast_later(pv_fill("android-chat.file.installFailed", [("error", error)]))
