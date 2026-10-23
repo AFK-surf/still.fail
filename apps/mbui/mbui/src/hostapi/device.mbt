@@ -137,8 +137,9 @@ pub fn haptic(kind : Int) -> Unit {
 
 ///|
 /// What the input method's action key does for the field it is about to type in (`ime_action_*`): Android's
-/// EditorInfo action (IME_ACTION_SEARCH: its Enter a search key, the field one line); nothing elsewhere yet. Said
-/// before the field takes the keyboard; Enter comes as a key, as any.
+/// EditorInfo action and input type (IME_ACTION_SEARCH, _GO, _DONE: its Enter that key, the field one line), iOS's
+/// keyboard and return key; nothing elsewhere yet. Said before the field takes the keyboard; Enter comes as a key, as
+/// any.
 pub fn ime_action(kind : Int) -> Unit {
   dv_ime_action(kind)
 }
@@ -150,6 +151,14 @@ pub let ime_action_none : Int = 0
 ///|
 /// A search field's (Compose's ImeAction.Search).
 pub let ime_action_search : Int = 1
+
+///|
+/// An address's: the keyboard's for addresses, its Enter a go key (Compose's ImeAction.Go, KeyboardType.Uri).
+pub let ime_action_go : Int = 2
+
+///|
+/// A number's: the keyboard's digits, its Enter a done key (Compose's ImeAction.Done, KeyboardType.Number).
+pub let ime_action_number : Int = 3
 
 ///|
 /// A long press taking something (Android LONG_PRESS, Compose's HapticFeedbackType.LongPress).
