@@ -2104,6 +2104,9 @@ void mb_host_set_badge(int32_t n) { (void)n; }
 void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
 // (this machine's station: managed from the macOS app only)
 moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
+// (the phone's faces are the files given: no family of the machine's, no list of them)
+int32_t mb_host_face_add_family(int32_t face, moonbit_string_t family) { (void)face; (void)family; return 0; }
+moonbit_string_t mb_host_local_font_families(void) { return moonbit_make_string_raw(0); }
 void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
 // (the desktop's dock: the macOS app's only)
 int32_t mb_host_dock_available(void) { return 0; }

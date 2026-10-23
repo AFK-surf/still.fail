@@ -65,6 +65,10 @@ struct FakeHost {
   /// this machine's station as its host would say it (Tester::set_local_station), what was done to it
   mut local_station : String
   local_acts : Array[String]
+  /// the font families installed as its host would say them (Tester::set_local_fonts), JSON; the families given to
+  /// faces, by face (@ui.face_add_family)
+  mut local_fonts : String
+  families_given : Map[Int, String]
   /// the dock: whether there is one, the lines sent to it, whether it was stopped, its settings as kept
   mut dock_on : Bool
   dock_lines : Array[String]
@@ -545,6 +549,18 @@ fn h_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
     Some({ live: Some(l), .. }) => l.host.face_add_bytes(face, data, weight)
     Some(_) => data.length() > 0
     None => @hostapi.face_add_bytes(face, data, weight)
+  }
+}
+
+///|
+fn h_face_add_family(face : Int, family : String) -> Bool {
+  match fake.val {
+    Some({ live: Some(l), .. }) => l.host.face_add_family(face, family)
+    Some(f) => {
+      f.families_given[face] = family
+      true
+    }
+    None => @hostapi.face_add_family(face, family)
   }
 }
 

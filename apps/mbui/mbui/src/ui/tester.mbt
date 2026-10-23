@@ -203,6 +203,8 @@ pub fn Tester::new(
     badge: 0,
     local_station: "",
     local_acts: [],
+    local_fonts: "",
+    families_given: {},
     dock_on: false,
     dock_lines: [],
     dock_stops: 0,
@@ -738,6 +740,18 @@ pub fn Tester::badge(self : Tester) -> Int {
 /// This machine's station as its host says it from now on (@ui.local_station), "" none.
 pub fn Tester::set_local_station(self : Tester, json : String) -> Unit {
   self.fake.local_station = json
+}
+
+///|
+/// The font families installed here from now on, as a JSON array of their names (@ui.local_font_families); "" none.
+pub fn Tester::set_local_fonts(self : Tester, json : String) -> Unit {
+  self.fake.local_fonts = json
+}
+
+///|
+/// The family of this machine's given to face `face` last (@ui.face_add_family), "" none.
+pub fn Tester::family_given(self : Tester, face : Int) -> String {
+  self.fake.families_given.get(face).unwrap_or("")
 }
 
 ///|

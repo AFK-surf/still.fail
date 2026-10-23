@@ -538,6 +538,9 @@ pub fn reset() -> Unit {
   lock_prompts_reset()
   fonts_at.val = 0
   fonts_trying.val = ""
+  local_try_given.val = ""
+  local_open.val = false
+  local_filter.set("")
   adb_reset()
   keyed_fields.clear()
   notify_switched.val = None

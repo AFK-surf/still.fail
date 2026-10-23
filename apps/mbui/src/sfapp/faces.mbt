@@ -69,6 +69,11 @@ fn inter_face() -> Bytes? {
 }
 
 ///|
+/// What a face of this machine's own is said as in the prefs' `fonts` (client/core-ts/src/fonts.ts LOCAL): `local:`
+/// and its family's name.
+let local_face : String = "local:"
+
+///|
 /// The places' faces as the prefs say them, given to the host as each is here (call each frame, before the pages).
 fn faces(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
@@ -80,15 +85,24 @@ fn faces(src : Source) -> Unit {
     let host_face = slot + 1
     let face = field(shown, place)
     let files = items(face, "files")
-    // text not chosen: as ui (what people wrote in the app's words' face); a face of the device's own (local:): not
-    // this app's to have
-    let id = if text(chosen, place) == "" || files.is_empty() { "" } else { text(face, "id") }
+    // text not chosen: as ui (what people wrote in the app's words' face); a face of the device's own (local:<family>):
+    // the host's, by its name
+    let picked = text(chosen, place)
+    let id = if picked.has_prefix(local_face) {
+      picked
+    } else if picked == "" || files.is_empty() {
+      ""
+    } else {
+      text(face, "id")
+    }
     if id != "" {
       wanted.push(id)
     }
     // the app's words with none chosen, in the wide frame: the desktop app's face (what people wrote follows them)
     let now = if id == "" {
       if host_face == @hostapi.face_ui && wide_on.val { desktop_face } else { "" }
+    } else if id.has_prefix(local_face) {
+      id
     } else {
       match face_had(src, id, files) {
         Some(_) => id
@@ -107,6 +121,12 @@ fn faces(src : Source) -> Unit {
       }
     } else if now == "" {
       if host_face == @hostapi.face_code {
+        ignore(@ui.face_add_bytes(host_face, @sf.code_face()))
+      }
+    } else if now.has_prefix(local_face) {
+      // the machine's family; none of that name here (another machine's choice): the app's own
+      if !@ui.face_add_family(host_face, now.unsafe_substring(start=local_face.length(), end=now.length())) &&
+        host_face == @hostapi.face_code {
         ignore(@ui.face_add_bytes(host_face, @sf.code_face()))
       }
     } else {

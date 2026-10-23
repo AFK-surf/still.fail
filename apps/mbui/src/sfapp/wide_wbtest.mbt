@@ -1483,3 +1483,27 @@ test "wide: 文件's rows as the core says them (driveBrowse, drive.browse): a p
   assert_eq(named(calls, "drive.arrange").length(), before + 1)
   assert_eq(text(Some(named(calls, "drive.arrange")[before].params), "by"), "size")
 }
+
+///|
+test "wide: 外观's 本机字体 lists the families installed here; one chosen is the place's face, the host's family" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_local_fonts("[\"Menlo\",\"Avenir Next\",\"Helvetica\"]")
+  app.nav.replace(Setting(@settings.Route::Appearance))
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="本机字体")
+  t.frame()
+  // every one listed, in the host's order (its person's language's: the app sorts nothing of its own)
+  let (_, ya) = t.find("Avenir Next").unwrap()
+  let (_, yh) = t.find("Helvetica").unwrap()
+  let (mx, my) = t.find("Menlo").unwrap()
+  assert_true(my < ya && ya < yh, msg="the host's order")
+  t.tap(mx, my)
+  t.frame()
+  let set = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "fonts") is Some(_) })
+  assert_eq(set.length(), 1)
+  assert_eq(field(field(Some(set[0].params), "fonts"), "ui"), Some(Json::string("local:Menlo")))
+  t.frame()
+  // the app's words in it: the host's family given to their face
+  assert_eq(t.family_given(@hostapi.face_ui), "Menlo")
+}
