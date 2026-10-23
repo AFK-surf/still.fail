@@ -58,12 +58,7 @@ fn sw_reset() -> Unit {
 fn sw_commands(c : @ui.Ctx, src : Source, query : String) -> Array[SwCommand] {
   // an action's first keys as shown (as kept on this device: settings' 快捷键)
   let prefs = (src.topic)("prefs", {}).value
-  let keys = fn(action : String) {
-    match @settings.keys_of(prefs, action) {
-      [b, ..] => @settings.key_label(b)
-      [] => ""
-    }
-  }
+  let keys = fn(action : String) { @settings.key_label(prefs, action) }
   let all : Array[SwCommand] = []
   match app.nav.top() {
     Chat(r) => {

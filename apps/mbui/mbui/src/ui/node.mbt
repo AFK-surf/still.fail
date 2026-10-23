@@ -165,6 +165,9 @@ struct Node {
   // content, at any depth (none of it shrinks to the box: Ctx::layout_node)
   mut sideways : Bool
   mut in_sideways : Bool
+  // kept to what is left of its column's room when that is short (Ctx::capped `shrinks`: CSS's flex-shrink with
+  // overflow: auto, a dialog's body under its maximum height), else as tall as what it holds
+  mut shrinks : Bool
   // as wide as its content in a row, not squeezed where the row is short (Ctx::box `keep`): only its siblings shrink
   mut keep : Bool
   // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
@@ -315,6 +318,7 @@ fn Node::new() -> Node {
     blocks: false,
     sideways: false,
     in_sideways: false,
+    shrinks: false,
     keep: false,
     flow: false,
     line_gap: -1.0,
@@ -393,6 +397,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.blocks = false
   self.sideways = false
   self.in_sideways = false
+  self.shrinks = false
   self.keep = false
   self.flow = false
   self.line_gap = -1.0

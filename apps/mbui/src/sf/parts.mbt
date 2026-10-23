@@ -1116,6 +1116,7 @@ pub fn dialog(
       c.box(
         style=dialog_box,
         w=Px(s.w),
+        max_h=c.height - dialog_room,
         radius=dialog_r,
         bg=panel_ground(),
         shadow=dialog_shadow,
@@ -1133,7 +1134,9 @@ pub fn dialog(
         if s.description != "" {
           c.box(style=dialog_lead_at, fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
         }
-        c.box(style=dialog_body, inner) |> ignore
+        // what it holds scrolls in itself when the dialog would be taller than the window leaves it (dialogBody's
+        // overflow: auto, its minimum 0): its title and its buttons stay
+        c.capped(key + "/body", c.height, shrinks=true, fn() { c.box(style=dialog_body, inner) |> ignore }) |> ignore
         match footer {
           Some(f) => c.box(style=dialog_foot, f) |> ignore
           None => c.box(style=dialog_end, fn() {  }) |> ignore
@@ -1146,6 +1149,10 @@ pub fn dialog(
   )
   d.value && !closed.val
 }
+
+///|
+/// What the window keeps round a dialog up and down (parts.css.ts dialog: at most 100dvh - 48 tall).
+let dialog_room : Double = 48.0
 
 ///|
 /// A dialog's frame: 24 in at its sides and over its title, a line round it (its corner, ground and shadow: dialog_r,

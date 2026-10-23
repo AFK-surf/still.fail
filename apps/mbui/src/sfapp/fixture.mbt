@@ -18,6 +18,8 @@ priv struct Fixture {
   /// the faces chosen (the prefs' `fonts`), and those whose files the core has (fonts_fixture.mbt)
   fonts : Map[String, String]
   fonts_fetched : Map[String, Bool]
+  /// the keys changed in 快捷键 (`keys.set`; the prefs' `keys`, the keymap's: keymap_fixture.mbt)
+  keys : Map[String, Array[String]]
   mut version : Int
   /// the first row's chat: how many older pages have come in
   mut older : Int
@@ -434,6 +436,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
         "appearance": Json::string(f.appearance),
         "fonts": fixture_fonts(f.fonts),
         "faces": fixture_faces(f.fonts),
+        "keys": fixture_keys(f.keys),
+        "keymap": fixture_keymap(f.keys),
       })
     }
     "fonts" => Some(fixture_fonts_topic(f))
@@ -566,6 +570,7 @@ pub fn fixture(mode : String) -> Source {
     filters: {},
     fonts: if mode == "settings-fonts-coming" { { "ui": "noto-sans-sc" } } else { {} },
     fonts_fetched: {},
+    keys: {},
     version: 1,
     older: 0,
     step: 0,
@@ -630,6 +635,11 @@ pub fn fixture(mode : String) -> Source {
         }
         // a screen's preview's frame taken (chat-screens): the fixture sends no other
         "screen.ack" => done(Ok(Json::object({})))
+        "keys.set" => {
+          let r = fixture_keys_set(f.keys, params)
+          f.version += 1
+          done(Ok(r))
+        }
         "prefs.set" => {
           match field(Some(params), "workspace") {
             Some(String(w)) => f.workspace = w
@@ -804,6 +814,10 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   // waiting page in the chats' place), lock-security (its security page)
   if mode == "lock-security" {
     open_setting(@settings.fixture_page("settings-security"))
+  }
+  // ⌘/'s shortcuts at a glance (wide_keys.mbt keys_dialog)
+  if mode == "keys-dialog" {
+    wide.keys_open = true
   }
 }
 
