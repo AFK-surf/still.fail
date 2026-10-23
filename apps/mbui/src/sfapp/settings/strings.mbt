@@ -1306,6 +1306,10 @@ let zh : Map[String, String] = {
   "desktop.local.byHand": "此 station 为手动启动，此处只能停止",
   "desktop.local.noService": "本机没有单独安装的 station",
   "android-misc.localStation.lead": "这台 Mac 上单独安装或手动启动的 station 在这里管理：启动、停止、重启，打开日志和数据。加入哪个 workspace 在各 workspace 的 Station 设置中设定。",
+  "web-pages.notifications.ways.dock": "桌面浮窗",
+  "web-pages.notifications.inDock": "显示在桌面浮窗",
+  "web-pages.dock.peek": "新内容从屏幕边缘探出",
+  "web-pages.dock.peekNote": "桌面浮窗：查看后才收起；关闭后仅在鼠标移到右边缘时显示",
 }
 
 ///|

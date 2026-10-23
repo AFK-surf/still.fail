@@ -982,6 +982,32 @@ fn local_station_act(a : String) -> Unit {
 }
 
 ///|
+/// (no dock in a browser)
+fn dock_available() -> Bool {
+  false
+}
+
+///|
+fn dock_send(l : String) -> Unit {
+  ignore(l)
+}
+
+///|
+fn dock_stop() -> Unit {
+  ()
+}
+
+///|
+fn dock_kept() -> String {
+  ""
+}
+
+///|
+fn dock_keep(j : String) -> Unit {
+  ignore(j)
+}
+
+///|
 extern "js" fn js_word_at(text : String, off : Int) -> Double =
   #|(t, o) => globalThis.__mbhost && globalThis.__mbhost.wordAt ? globalThis.__mbhost.wordAt(t, o) : -1
 

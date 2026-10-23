@@ -212,6 +212,22 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
       } else {
         c.box(style=way_tile_room, fn() {  }) |> ignore
       }
+      // 桌面浮窗 (the desktop's dock: the Mac's, dock_settings.mbt)
+      if @ui.dock_available() {
+        let did = c.id("notify-dock")
+        let dock_on = dock_setting("on")
+        c.cursor(did, Hand)
+        if hit(c, did) {
+          dock_set("on", !dock_on)
+        }
+        c.box(style=if dock_on { way_tile_on } else { way_tile }, id=did, fn() {
+          c.box(style=way_picture_dock, fn() { c.box(style=way_edge, fn() {  }) |> ignore }) |> ignore
+          c.text(tr("web-pages.notifications.ways.dock"), style=way_name) |> ignore
+          c.text(tr(if dock_on { "web-pages.notifications.on" } else { "web-pages.notifications.off" }), style=wide_meta)
+          |> ignore
+        })
+        |> ignore
+      }
       })
       |> ignore
     })
@@ -235,6 +251,18 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
         act(core, tr("web-pages.notifications.preview"), "notify.set", obj([("preview", Json::boolean(!preview))]))
       }
     })
+    // new ones peeking out of the dock, or only waiting at the edge
+    if @ui.dock_available() {
+      list_card(c, boxed=true, fn() {
+        let peek = dock_setting("peek")
+        if list_row(c, key=if dock_setting("on") { "dock-peek" } else { "" }, fn() {
+            row_lines(c, tr("web-pages.dock.peek"), tr("web-pages.dock.peekNote"), wrap_sub=true)
+            switch(c, "dock-peek", peek)
+          }) {
+          dock_set("peek", !peek)
+        }
+      })
+    }
     if @ui.platform() == 0 {
       section_note(c, fill("web-pages.notifications.sound", [("name", "still.fail")]))
     }
@@ -261,6 +289,9 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool) 
   }
   if badged {
     ways.push(tr("web-pages.notifications.ways.badge"))
+  }
+  if @ui.dock_available() && dock_setting("on") && dock_setting(kind) {
+    ways.push(tr("web-pages.notifications.ways.dock"))
   }
   let sum = if ways.length() == 0 { tr("web-pages.notifications.none") } else { ways.join(" · ") }
   let open = kind_open.val == kind
@@ -300,6 +331,16 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool) 
           switch(c, "notify-way/" + kind, banner)
         }) {
         set_kind(core, kind, Json::boolean(!banner))
+      }
+      // 显示在桌面浮窗: whether the dock holds it (off while the dock is)
+      if @ui.dock_available() {
+        let held = dock_setting(kind)
+        if list_row(c, key=if dock_setting("on") { "notify-dock/" + kind } else { "" }, fn() {
+            row_title(c, tr("web-pages.notifications.inDock"))
+            switch(c, "notify-dock/" + kind, held)
+          }) {
+          dock_set(kind, !held)
+        }
       }
       // 计入红点: whether the app's icon counts it (off while the badge is)
       if badge_here() {
@@ -743,6 +784,15 @@ let way_app : @ui.Style = @ui.style(w=S8, h=S8, p=SPx, align=AEnd, radius=Lg, bg
 ///|
 // kept across runs: a value (no field of it changes)
 let way_dot : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, bg=Danger)
+
+///|
+/// The dock's tile's picture: a screen, the dock's sliver at its right edge (Notifications.css.ts picEdge).
+// kept across runs: a value (no field of it changes)
+let way_picture_dock : @ui.Style = @ui.style(w=S16, h=S10, p=S1_5, align=AEnd, justify=JCenter, radius=Lg, bg=Bg, border=B1, border_color=Line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let way_edge : @ui.Style = @ui.style(w=S1, h=S5, radius=Full, bg=Link)
 
 ///|
 /// The tile's picture: a window, a banner in its corner.

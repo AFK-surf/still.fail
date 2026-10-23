@@ -199,6 +199,10 @@ pub fn Tester::new(
     badge: 0,
     local_station: "",
     local_acts: [],
+    dock_on: false,
+    dock_lines: [],
+    dock_stops: 0,
+    dock_kept: "",
     clipboard_secret: -1.0,
     back_on: false,
     platform,
@@ -733,6 +737,23 @@ pub fn Tester::set_local_station(self : Tester, json : String) -> Unit {
 /// What was done to this machine's station (@ui.local_station_act), oldest first.
 pub fn Tester::local_acts(self : Tester) -> Array[String] {
   self.fake.local_acts
+}
+
+///|
+/// Whether there is a dock here from now on (@ui.dock_available).
+pub fn Tester::set_dock(self : Tester, on : Bool) -> Unit {
+  self.fake.dock_on = on
+}
+
+///|
+/// The lines sent to the dock (@ui.dock_send), oldest first, and how often it was stopped.
+pub fn Tester::dock_lines(self : Tester) -> Array[String] {
+  self.fake.dock_lines
+}
+
+///|
+pub fn Tester::dock_stops(self : Tester) -> Int {
+  self.fake.dock_stops
 }
 
 ///|

@@ -63,6 +63,11 @@ struct FakeHost {
   /// this machine's station as its host would say it (Tester::set_local_station), what was done to it
   mut local_station : String
   local_acts : Array[String]
+  /// the dock: whether there is one, the lines sent to it, whether it was stopped, its settings as kept
+  mut dock_on : Bool
+  dock_lines : Array[String]
+  mut dock_stops : Int
+  mut dock_kept : String
   /// the URLs handed to the system (Ctx::open_url), oldest first
   opened : Array[String]
   /// what the app reads of where it runs (hostread.mbt): the system dark, the window's buttons in the app's top row,

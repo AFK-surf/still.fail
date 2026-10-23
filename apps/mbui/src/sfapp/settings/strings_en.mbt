@@ -1335,4 +1335,8 @@ let en : Map[String, String] = {
   "desktop.local.byHand": "This station was started manually and can only be stopped here",
   "desktop.local.noService": "No separately installed station on this machine",
   "android-misc.localStation.lead": "The station installed or started on this Mac is managed here: start, stop or restart it, open its log and its data. Which workspace it joins is set in each workspace’s Station settings.",
+  "web-pages.notifications.ways.dock": "Desktop dock",
+  "web-pages.notifications.inDock": "Show in the desktop dock",
+  "web-pages.dock.peek": "New ones peek out from the edge",
+  "web-pages.dock.peekNote": "Desktop dock: they stay out until seen; when off, they appear only when the pointer reaches the right edge",
 }

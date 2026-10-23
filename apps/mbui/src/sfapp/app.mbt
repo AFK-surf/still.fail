@@ -295,6 +295,7 @@ fn reset() -> Unit {
   links_reset()
   wide_reset()
   badge_told.val = -1
+  dock_reset()
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
   kept_chats.clear()
   fixture_pictures.clear()
@@ -519,6 +520,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
             _ => 0
           }
       }
+      // the desktop's dock (dock.mbt): every workspace's chats that want the person, on the screen's edge
+      dock_frame(c, src, all)
       if marks is Some(_) && badge != badge_told.val {
         c.after_build("badge", fn() {
           badge_told.val = badge

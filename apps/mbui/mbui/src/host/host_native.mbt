@@ -263,6 +263,48 @@ fn local_station_act(a : String) -> Unit {
 }
 
 ///|
+extern "C" fn ffi_dock_available() -> Int = "mb_host_dock_available"
+
+///|
+#borrow(l)
+extern "C" fn ffi_dock_send(l : String) -> Unit = "mb_host_dock_send"
+
+///|
+extern "C" fn ffi_dock_stop() -> Unit = "mb_host_dock_stop"
+
+///|
+extern "C" fn ffi_dock_kept() -> String = "mb_host_dock_kept"
+
+///|
+#borrow(j)
+extern "C" fn ffi_dock_keep(j : String) -> Unit = "mb_host_dock_keep"
+
+///|
+fn dock_available() -> Bool {
+  ffi_dock_available() != 0
+}
+
+///|
+fn dock_send(l : String) -> Unit {
+  ffi_dock_send(l)
+}
+
+///|
+fn dock_stop() -> Unit {
+  ffi_dock_stop()
+}
+
+///|
+fn dock_kept() -> String {
+  ffi_dock_kept()
+}
+
+///|
+fn dock_keep(j : String) -> Unit {
+  ffi_dock_keep(j)
+}
+
+///|
 fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],
