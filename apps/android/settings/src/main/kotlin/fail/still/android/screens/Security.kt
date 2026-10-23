@@ -521,7 +521,9 @@ private fun PairSteps(current: WorkspaceEntry, lock: LockView) {
                 failed != null -> Text(t("web-pages.security.requestFailed", "error" to failed), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
                 else -> Note(t(if (lock.me?.unsigned == true) "web-pages.security.upgradeNotAsked" else "web-pages.security.notAsked"))
             }
-            WideButton(t("web-pages.security.request"), primary = true) { app.lockCall(ws, "pair", t("web-pages.security.request")) }
+            // As wide as the column, as everywhere it is used (mbui's lock_wait too): wrapped to its words it had no room
+            // at its ends, the words touching the capsule's edges.
+            WideButton(t("web-pages.security.request"), primary = true, modifier = Modifier.fillMaxWidth()) { app.lockCall(ws, "pair", t("web-pages.security.request")) }
         }
     }
 }
