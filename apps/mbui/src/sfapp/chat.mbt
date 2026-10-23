@@ -2254,8 +2254,8 @@ fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
 }
 
 ///|
-/// How a station is reached (PageParts.kt StationViaDot): green direct, amber through the relay, red offline, a grey
-/// ring while it is being reached; ringed in the page's ground on a tile's corner.
+/// How a station is reached (StationLink.css.ts dot, cornerDot): the online green direct, amber through the relay, red
+/// offline, a grey ring while it is being reached; ringed in the page's ground on a tile's corner.
 fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
   let t = @sf.theme()
   let inner = size - ring * 2.0
@@ -2269,7 +2269,7 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
     fn() {
       match via {
         "direct" =>
-          c.box(w=Px(inner), h=Px(inner), radius=inner / 2.0, bg=t.p.green, fn() {  })
+          c.box(w=Px(inner), h=Px(inner), radius=inner / 2.0, bg=t.p.online, fn() {  })
           |> ignore
         "relay" =>
           c.box(w=Px(inner), h=Px(inner), radius=inner / 2.0, bg=0xD9962BFFL, fn() {  })

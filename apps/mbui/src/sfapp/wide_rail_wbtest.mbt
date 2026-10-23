@@ -286,6 +286,7 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
             "title": "整理发布清单",
             "kind": "wait",
             "text": "要你帮忙：选一个发布日期",
+            "what": "选一个发布日期",
             "workspaceName": "Acme",
           },
         ],
@@ -391,4 +392,23 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   assert_true(want > 0.0, msg="\{left} \{right}")
   let (x1, _, _, _) = t.rect_of("按空格输入").unwrap()
   assert_eq(x1 - x0, want)
+}
+
+///|
+test "wide: a newer build of the desktop app: 更新 at the open sidebar's top right, 12 in from its edge; folded, past the rail, the page bar's start clear of it (brand.css.ts sidebarUpdate)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  update.available = Some({ "versionName": "0.1.9999" })
+  t.frame()
+  t.frame()
+  let (x, y, w, _) = t.query(Button, label="更新").unwrap().rect
+  assert_eq(x + w, rail_w + wide.side_w - bar_in)
+  assert_eq(y, update_top)
+  // folded: 68 from the window's edge, the page bar's words clear of it (72 in)
+  t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
+  t.move(1000.0, 400.0)
+  t.run_for(side_move_ms)
+  let (fx, _, _, _) = t.query(Button, label="更新").unwrap().rect
+  assert_eq(fx, update_closed_in)
+  assert_eq(rail_ws.bar_pl, bar_update_in)
 }

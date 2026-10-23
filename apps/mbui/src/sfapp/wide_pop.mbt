@@ -465,18 +465,12 @@ let att_link : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_7
 let att_link_on : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, leading=L4_75, wrap=false)
 
 ///|
-/// A wanting chat's line without its lead (要你帮忙：, 出问题：, 奏 · ): the dot before it says that.
+/// A wanting chat's line without its lead (the core's `what`: 要你帮忙：, 出问题：, 奏 · taken off; the dot before it
+/// says that), else its station's name (Attention.tsx line).
 fn attention_line(v : Json?) -> String {
-  let s = text(v, "text")
-  for lead in ["要你帮忙：", "需要你处理：", "出问题：", "出错：", "奏 · "] {
-    if s.has_prefix(lead) {
-      return s.view(start_offset=lead.length()).to_owned()
-    }
-  }
-  if s == "" {
-    text(v, "stationName")
-  } else {
-    s
+  match text(v, "what") {
+    "" => text(v, "stationName")
+    s => s
   }
 }
 

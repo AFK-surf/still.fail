@@ -13,6 +13,8 @@ priv struct RailWs {
   mut peeking : Bool
   /// the sidebar being drawn in the closed bar (what the web's sidebar does there, at once)
   mut in_bar : Bool
+  /// the block closed to the bar this frame (the web's data-sidebar="closed"): what is drawn in it as there
+  mut closed : Bool
   /// the state the block was last built in (closed, shown a while, the sidebar's width): a move sets out as it changes
   mut moved_as : (Bool, Bool, Double)?
   /// where the move has got to this frame (wide_frame): the sidebar's top row's height, its frosted bands' ground (0
@@ -47,6 +49,7 @@ let rail_ws : RailWs = {
   kept_folded: false,
   peeking: false,
   in_bar: false,
+  closed: false,
   moved_as: None,
   brand_h: 0.0,
   band: 0.0,
@@ -70,6 +73,7 @@ fn rail_ws_reset() -> Unit {
   rail_ws.kept_folded = false
   rail_ws.peeking = false
   rail_ws.in_bar = false
+  rail_ws.closed = false
   rail_ws.moved_as = None
   rail_ws.brand_h = 0.0
   rail_ws.band = 0.0

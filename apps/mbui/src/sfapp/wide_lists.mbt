@@ -723,7 +723,7 @@ fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, mov
     c.layer(fn() {
       c.box(style=rail_remove_at, tx=rail_remove_out, ty=rail_remove_out, fn() {
         let b = c.box(style=rail_remove, id=rm, fn() { @sf.icon(c, "minus", size=12.0, color=t.p.sidebar) |> ignore })
-        c.semantics(b, Button, id=rm, label=fill("web-main.rail.remove", [("name", rail_label(place))]))
+        c.semantics(b, Button, id=rm, label=fill("web-main.rail.remove", [("name", rail_label(src, place))]))
       })
       |> ignore
     })
@@ -736,7 +736,7 @@ fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, mov
 /// Beside the rail while it is changed (Rail.tsx's Popover): what can be added, by kind, each pressed into the rail;
 /// pressing anywhere but the rail (or Esc) ends the change.
 fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let items = rail_items(src, w.id)
+  let kept = rail_items(src, w.id)
   // beside the rail (its 56: the sidebar reaches over its last 8), 8 past it, clear of the window's buttons' row
   // (Rail.tsx: Popover.Anchor the rail, collisionPadding top 52)
   let p = @kit.popover(
@@ -755,23 +755,22 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         c.text(tr("web-main.rail.customizeLead"), style=adder_lead) |> ignore
       })
       |> ignore
-      let kinds = [
-        ("web-main.rail.kind.places", ["files", "stations", "profiles", "connects", "usage"]),
-        ("web-main.rail.kind.lists", ["chats", "mine", "watching", "archive", "decisions"]),
-        ("web-main.rail.kind.attention", ["attention"]),
-      ]
+      // (by kind, as the core groups them: railView's `groups`)
+      let kinds = items(rail_view(src), "groups").map(fn(g) {
+        (text(Some(g), "label"), words_in(items(Some(g), "places")))
+      })
       let mut none = true
       for k in kinds {
-        let hidden = k.1.filter(fn(i) { !items.contains(i) })
+        let hidden = k.1.filter(fn(i) { !kept.contains(i) })
         if hidden.length() == 0 {
           continue
         }
         none = false
         c.box(style=adder_kind, fn() {
-          c.box(style=adder_group, fn() { c.text(tr(k.0), style=adder_label) |> ignore }) |> ignore
+          c.box(style=adder_group, fn() { c.text(k.0, style=adder_label) |> ignore }) |> ignore
           for i in hidden {
-            if adder_row(c, i) {
-              let next = items.copy()
+            if adder_row(c, i, rail_label(src, i)) {
+              let next = kept.copy()
               next.push(i)
               rail_keep(src, w.id, next)
             }
@@ -796,10 +795,10 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon (奏 its word), its ＋ at its end.
 /// True on the frame after it was pressed.
-fn adder_row(c : @ui.Ctx, place : String) -> Bool {
+fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
   @sf.menu_item(
     c,
-    rail_label(place),
+    label,
     key="rail/add/" + place,
     panel=true,
     icon=rail_icon(place),

@@ -1,7 +1,7 @@
 // The core's answers to its pure calls (`markdown`, `code.ink`, `reader.book`, `reader.text`, `reader.search`,
 // `commands.find`, a chat's side panel's tabs: chat-tabs.ts), and to each step of a device's browsing (drive-browse.ts
 // `Browsing`: a topic of it or a call, given what it held before and what it reads, answering with what it holds
-// after), worked
+// after; and the rail as drawn from the prefs kept, `railView`), worked
 // out by the real core and kept for the mbui app's runs without one (apps/mbui/src/sfkept: its Tester's tests, the
 // screenshots' app, the replays of tapes older than a call), so no client reads Markdown or code itself. What those
 // runs ask comes from their output, where an answer asked and not kept is said as `kept-answers-ask {…}`
@@ -15,6 +15,7 @@ import { inkKept } from "../src/highlight.ts";
 import { markdown } from "../src/markdown.ts";
 import { book, bookAnswer, searchBook } from "../src/reader.ts";
 import { find } from "../src/commands.ts";
+import { railView } from "../src/rail.ts";
 import { changed, tabsOf, type Change } from "../src/chat-tabs.ts";
 import { tr, type Lang } from "../src/i18n.ts";
 import { Browsing, withDrive, type BrowsingState, type Ordered } from "../src/drive-browse.ts";
@@ -36,6 +37,7 @@ type Kept = {
   "commands.find": Record<string, unknown>;
   "chat.tabs": Record<string, unknown>;
   browse: Record<string, unknown>;
+  railView: Record<string, unknown>;
 };
 const before = readFileSync(target, "utf8");
 const was = (fresh ? {} : JSON.parse(before.slice(before.indexOf("#|") + 2))) as Partial<Kept>;
@@ -49,6 +51,8 @@ for (const [key, entry] of Object.entries(was["reader.book"] ?? {})) searches.se
 const finds = new Set(Object.keys(was["commands.find"] ?? {}));
 // A chat's tabs: by what was asked (what is kept for it, its agents, whether it has a chat yet, its session, a change).
 const tabs = new Set(Object.keys(was["chat.tabs"] ?? {}));
+// the prefs a rail is drawn from, as JSON (the app's runs say them in Chinese, as its fixtures are)
+const rails = new Set(Object.keys(was.railView ?? {}));
 const bookKey = (md: unknown, text: unknown) => `${md === true ? "md" : "txt"}\u0001${String(text ?? "")}`;
 const steps = new Map<string, Step>(fresh ? [] : Object.entries(JSON.parse(readFileSync(browseAsks, "utf8")) as Record<string, Step>));
 let asked = 0;
@@ -67,6 +71,7 @@ for (const file of outputs) {
       searches.set(key, queries);
     } else if (ask.call === "commands.find") finds.add(String(ask.key ?? ""));
     else if (ask.call === "chat.tabs") tabs.add(String(ask.key ?? ""));
+    else if (ask.call === "railView") rails.add(JSON.stringify(ask.prefs ?? {}));
     else if (ask.call === "browse") {
       const { call: _call, key, ...step } = ask;
       steps.set(String(key), step as unknown as Step);
@@ -76,8 +81,9 @@ for (const file of outputs) {
 
 // Each worked out by the core as it is now.
 const sorted = (keys: Iterable<string>) => [...keys].sort();
-const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, browse: {} };
+const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, browse: {}, railView: {} };
 for (const text of sorted(texts)) kept.markdown[text] = markdown(text);
+for (const key of sorted(rails)) kept.railView[key] = railView(JSON.parse(key) as { rail?: unknown; rails?: unknown }, "zh");
 for (const key of sorted(codes)) {
   const cut = key.indexOf("\u0001");
   kept["code.ink"][key] = inkKept(key.slice(cut + 1), key.slice(0, cut));
@@ -114,7 +120,7 @@ for (const key of keys) kept.browse[key] = browseStep(steps.get(key)!);
 const content = HEAD + JSON.stringify(kept) + "\n";
 // (a step a line: what changes of them reads as the steps that came or went)
 const askedSteps = `{\n${keys.map((k) => `${JSON.stringify(k)}: ${JSON.stringify(steps.get(k))}`).join(",\n")}\n}\n`;
-const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs, ${steps.size} browsing steps`;
+const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs, ${steps.size} browsing steps, ${rails.size} rails`;
 if (check) {
   if (content !== before || askedSteps !== readFileSync(browseAsks, "utf8")) {
     console.error(`kept-answers: the core answers otherwise now than apps/mbui/src/sfkept/kept.mbt keeps: run client/core-ts/scripts/kept-answers.ts (${counts})`);
