@@ -1,11 +1,14 @@
-// The files' page (web/src/drive/tabsModel.ts, goto.ts, order.ts keptName): its tabs following the page's address,
-// opened, closed and split, kept as written and read back; a folder typed by its path worked out; a name kept beside
-// one there, as the station names it.
+// The files' page, as the core works it out for every client (client/core-ts/src/drive-browse.ts): its tabs following
+// the page's address, opened, closed and split, kept as written and read back; a folder typed by its path worked out; a
+// name kept beside one there, as the station names it.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { arrive, besides, closed, frontOf, fronted, MOST_TABS, opened, readTabs, shown, split, tabTitle, type FilesTabs, type Pane } from "../web/src/drive/tabsModel.ts";
-import { resolveTyped } from "../web/src/drive/goto.ts";
-import { keptName } from "../web/src/drive/order.ts";
+import { arrive as arriveWith, besides, closed, frontOf, fronted, keptName, MOST_TABS, opened as openedWith, readTabs, resolveTyped, shown, split, type FilesTabs, type Pane } from "../client/core-ts/src/drive-browse.ts";
+
+let ids = 0;
+const newId = () => `t${++ids}`;
+const arrive = (s: FilesTabs | null, p: Pane) => arriveWith(s, p, newId);
+const opened = (s: FilesTabs, p: Pane) => openedWith(s, p, newId);
 
 const pane = (station: string, root: string, path = ""): Pane => ({ station, root, path });
 const STUDIO = pane("w/studio", "/Users/lin");
@@ -47,7 +50,6 @@ test("tabs: split shows a second side (in front), unsplit keeps the one in front
   s = besides(s, pane("w/mba", "/Users/mei", "项目"));
   assert.deepEqual(s.tabs[0]!.panes.map((p) => p.path), ["", "项目"]);
   assert.equal(s.tabs[0]!.front, 1);
-  assert.equal(tabTitle(s.tabs[0]!, (p) => p.path || "home"), "home | 项目");
   s = split(s);
   assert.deepEqual(s.tabs[0]!.panes.map((p) => p.path), ["项目"]);
   // One tab alone, opened beside: split first.
@@ -68,9 +70,9 @@ test("tabs: kept as written and read back; what does not hold together let go; a
 
 test("a folder by its path: the station before a colon, ~ its home, a relative path under the folder shown", () => {
   const views = [
-    { station: "w/studio", name: "Studio", overview: { drive: { home: "/Users/lin" } } },
-    { station: "w/mba", name: "MBA", overview: { drive: { home: "/Users/mei" } } },
-    { station: "w/win", name: "Box", overview: { drive: { home: "C:\\Users\\me" } } },
+    { station: "w/studio", name: "Studio", home: "/Users/lin" },
+    { station: "w/mba", name: "MBA", home: "/Users/mei" },
+    { station: "w/win", name: "Box", home: "C:\\Users\\me" },
   ];
   const from = { station: "w/studio", abs: "/Users/lin/code" };
   assert.deepEqual(resolveTyped("mba:~/Pro", views, from), { station: "w/mba", abs: "/Users/mei/Pro", parent: "/Users/mei", partial: "Pro" });

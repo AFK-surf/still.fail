@@ -37,7 +37,9 @@
 //   sql.exec {id, sql}; sql.run {id, sql, params} → changes; sql.all {id, sql, params} → rows (arrays);
 //   sql.close {id}; sql.delete {name}; iroh.endpointId {id}; iroh.addAddr {id, addr};
 //   iroh.relayStatus {id}; conn.remoteId {id};
-//   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go).
+//   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go); text.collate {names} →
+//   each one's place in the order people read them (the system's collation; a shell without it: an error, and the
+//   core orders them by hand).
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { FileSource } from "../file-source.ts";
@@ -136,6 +138,20 @@ export class BridgeHost implements Host {
     this.#bridge = bridge;
     this.#origin = cloudOrigin.replace(/\/+$/, "");
     this.#beta = beta;
+  }
+
+  /// The shell's collation (`text.collate`), until it says it has none.
+  #collates = true;
+  collate(names: readonly string[]): number[] | null {
+    if (!this.#collates || names.length < 2) return null;
+    try {
+      const at = this.#bridge.sync("text.collate", { names });
+      if (Array.isArray(at) && at.length === names.length && at.every((n) => typeof n === "number")) return at as number[];
+    } catch {
+      // A shell from before it.
+    }
+    this.#collates = false;
+    return null;
   }
 
   cloudOrigin(): string {

@@ -77,7 +77,7 @@ export const TOPICS: Record<string, Spec> = {
   adminOverview: { account: S },
   adminRelays: { account: S, range: ["string", "skip"] },
   chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"] },
-  stations: { scope: S },
+  stations: { scope: S, drive: ["bool", "skipFalse"], here: ["string", "skip"] },
   profiles: { scope: S },
   connects: { scope: S, mine: ["bool", "def"] },
   chat: { station: S, thread: ["u64", "opt"], session: ["string", "opt"] },
@@ -132,6 +132,8 @@ export const TOPICS: Record<string, Spec> = {
   vaults: { workspace: S },
   vaultItems: { workspace: S, vault: S },
   driveTransfers: { workspace: S },
+  driveBrowse: { owner: S, place: S, view: S, station: S, root: S, path: ["string", "def"], write: ["bool", "skipFalse"] },
+  filesTabs: { workspace: S },
   vaultUses: { workspace: S, vault: S, item: S },
 };
 

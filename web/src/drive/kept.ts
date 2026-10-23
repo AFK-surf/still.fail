@@ -1,9 +1,10 @@
 // What the files keep as they are left, as a local file browser does, for this page's life (not stored): how far each
-// folder was scrolled (by where it is shown and how), the folders a tree had open, a column's width dragged, what was
-// last opened in each folder (marked when it is shown again), the folder last open in a workspace's files' page (the
-// rail's 文件 comes back to it) and in its chats' 文件 tab (the same over each chat, as the tab is kept while chats
-// change beside it).
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type RefObject } from "react";
+// folder was scrolled (by where it is shown and how), the folder last open in a workspace's files' page (the rail's 文件
+// comes back to it) and in its chats' 文件 tab (the same over each chat, as the tab is kept while chats change beside
+// it). The folders a tree had open, a column's width dragged and what was last opened in each folder (chosen when it is
+// shown again) are the core's (`drive.browse`, client/core-ts/src/views/browse.ts): `keepOpened` tells it.
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { core } from "../core/react.ts";
 import type { At } from "./model.ts";
 
 /** Where a folder is shown: the files' page, or a chat's 文件 tab. */
@@ -12,11 +13,8 @@ export type Owner = "page" | "tab";
 const keyOf = (owner: Owner, at: At, ...more: string[]) => [owner, at.station, at.root, at.path, ...more].join("\n");
 
 const scrolls = new Map<string, number>();
-const trees = new Map<string, ReadonlySet<string>>();
-const opened = new Map<string, string>();
 const lastFolder = new Map<string, string>();
 const tabs = new Map<string, unknown>();
-const widths = new Map<string, number>();
 
 /**
  * The element given the ref (or the one `scroller` finds from it: the page it is in) scrolled as far as when the folder
@@ -49,49 +47,9 @@ export function useKeptScroll<T extends HTMLElement>(owner: Owner, at: At, how: 
   return own;
 }
 
-/** The folders a tree has open under the folder at `at` (by their paths under its root), kept for when it is shown again. */
-export function keptTree(owner: Owner, at: At): ReadonlySet<string> {
-  return trees.get(keyOf(owner, at)) ?? NONE;
-}
-export function keepTree(owner: Owner, at: At, open: ReadonlySet<string>): void {
-  trees.set(keyOf(owner, at), open);
-  for (const f of treeWatchers) f();
-}
-/** A folder of the tree at `at` opened or closed (a click on its disclosure, → and ←). */
-export function toggleTree(owner: Owner, at: At, path: string, on?: boolean): void {
-  const next = new Set(keptTree(owner, at));
-  if (on ?? !next.has(path)) next.add(path); else next.delete(path);
-  keepTree(owner, at, next);
-}
-const NONE: ReadonlySet<string> = new Set();
-const treeWatchers = new Set<() => void>();
-export function useTree(owner: Owner, at: At): ReadonlySet<string> {
-  const key = keyOf(owner, at);
-  return useSyncExternalStore((f) => { treeWatchers.add(f); return () => { treeWatchers.delete(f); }; }, () => trees.get(key) ?? NONE, () => NONE);
-}
-
-/** The width a folder's column was dragged to (columns), kept for when it is shown again; none: as every column is. */
-export function useColumnWidth(owner: Owner, at: At): number | undefined {
-  const key = keyOf(owner, at, "width");
-  return useSyncExternalStore((f) => { widthWatchers.add(f); return () => { widthWatchers.delete(f); }; }, () => widths.get(key), () => undefined);
-}
-export function keepColumnWidth(owner: Owner, at: At, px: number): void {
-  widths.set(keyOf(owner, at, "width"), px);
-  for (const f of widthWatchers) f();
-}
-/** Every column of `owner` as wide as the rest again (all of them dragged at once). */
-export function forgetColumnWidths(owner: Owner): void {
-  for (const key of widths.keys()) if (key.startsWith(`${owner}\n`)) widths.delete(key);
-  for (const f of widthWatchers) f();
-}
-const widthWatchers = new Set<() => void>();
-
-/** What was last opened in the folder at `at` (a folder gone into, a file), by its name. */
-export function lastOpened(owner: Owner, at: At): string | undefined {
-  return opened.get(keyOf(owner, at));
-}
+/** What was opened in the folder at `at` (a folder gone into, a file), by its name: chosen as it is shown again. */
 export function keepOpened(owner: Owner, at: At, name: string): void {
-  opened.set(keyOf(owner, at), name);
+  void core().call("drive.browse", { act: "opened", owner, station: at.station, root: at.root, path: at.path, name }).catch(() => undefined);
 }
 
 /** The files' page last open in workspace `scope` (its path and query). */
