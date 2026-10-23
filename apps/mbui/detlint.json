@@ -45,6 +45,16 @@
       "src/sf/tokens.mbt"
     ]
   },
+  "library": {
+    "roots": [
+      "src/sf"
+    ],
+    "imports": [
+      "mbui/",
+      "moonbitlang/",
+      "stillfail/sfkept"
+    ]
+  },
   "counts": {
     "frame-request": {},
     "settle": {},
@@ -84,7 +94,7 @@
       "src/player/player.mbt": 100,
       "src/sf/glass.mbt": 4,
       "src/sf/markdown.mbt": 53,
-      "src/sf/parts.mbt": 68,
+      "src/sf/parts.mbt": 75,
       "src/sf/picture.mbt": 1,
       "src/sfapp/app.mbt": 35,
       "src/sfapp/bar.mbt": 28,
@@ -138,7 +148,7 @@
       "src/sfapp/wide.mbt": 52,
       "src/sfapp/wide_chat.mbt": 16,
       "src/sfapp/wide_keys.mbt": 34,
-      "src/sfapp/wide_pop.mbt": 10,
+      "src/sfapp/wide_pop.mbt": 3,
       "src/sfapp/wide_side.mbt": 114,
       "src/sfkit/glass.mbt": 49,
       "src/sfkit/kit.mbt": 29,
@@ -155,7 +165,7 @@
       "src/sf/avatar.mbt": 1,
       "src/sf/glass.mbt": 1,
       "src/sf/markdown.mbt": 31,
-      "src/sf/parts.mbt": 29,
+      "src/sf/parts.mbt": 30,
       "src/sf/picture.mbt": 2,
       "src/sfapp/app.mbt": 15,
       "src/sfapp/bar.mbt": 16,
@@ -210,7 +220,7 @@
       "src/sfapp/wide.mbt": 29,
       "src/sfapp/wide_chat.mbt": 9,
       "src/sfapp/wide_keys.mbt": 12,
-      "src/sfapp/wide_pop.mbt": 3,
+      "src/sfapp/wide_pop.mbt": 2,
       "src/sfapp/wide_side.mbt": 43,
       "src/sfkit/glass.mbt": 17,
       "src/sfkit/kit.mbt": 20,
@@ -224,7 +234,8 @@
     },
     "build-effect": {},
     "unsettled-ok": {},
-    "host-delay": {}
+    "host-delay": {},
+    "library-import": {}
   },
   "excused": {
     "frame-request": {},
@@ -255,6 +266,7 @@
     "style-exact": {},
     "build-effect": {},
     "unsettled-ok": {},
-    "host-delay": {}
+    "host-delay": {},
+    "library-import": {}
   }
 }

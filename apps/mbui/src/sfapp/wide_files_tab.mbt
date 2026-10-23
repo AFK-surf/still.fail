@@ -410,7 +410,7 @@ fn ftab_menu(c : @ui.Ctx, src : Source, w : Workspace, chat : String) -> Unit {
   let (item, e, x, y) = match ftab.menu {
     Some(m) => m
     None => {
-      wide_menu(c, "files-tab/menu", false, 0, [], {}, ftab_menu_w) |> ignore
+      @sf.menu(c, "files-tab/menu", false, 0, [], {}, ftab_menu_w) |> ignore
       return
     }
   }
@@ -433,7 +433,7 @@ fn ftab_menu(c : @ui.Ctx, src : Source, w : Workspace, chat : String) -> Unit {
   if item.dir && anywhere {
     entries.push(@kit.menu_item("pin", label=tr(if pinned { "web-pages.drive.unpin" } else { "web-pages.drive.pin" })))
   }
-  let m = wide_menu(
+  let m = @sf.menu(
     c,
     "files-tab/menu",
     true,

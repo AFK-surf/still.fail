@@ -206,7 +206,7 @@ fn rail_ws_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
     }
   }
   // beside it, its foot level with the ＋'s, 10 past it (side right, align end, sideOffset 10)
-  let m = wide_menu(c, "rail/ws-menu", rail_ws.add_open, add, entries, icons, rail_menu_w, side=Right, along=End, offset=10.0)
+  let m = @sf.menu(c, "rail/ws-menu", rail_ws.add_open, add, entries, icons, rail_menu_w, side=Right, along=End, offset=10.0)
   rail_ws.add_open = m.open
   match m.chosen {
     Some("create") => open_new_workspace()

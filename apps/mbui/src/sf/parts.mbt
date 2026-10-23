@@ -292,7 +292,7 @@ pub fn panel(
     h~,
     min_w?,
     pad=panel_pad,
-    bg=if t.dark { t.p.raised } else { t.p.canvas },
+    bg=panel_ground(),
     radius=r_menu,
     border=1.0,
     border_color=t.p.line,
@@ -649,3 +649,241 @@ pub fn sheet_grab(c : @ui.Ctx) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// How long the pointer rests on a control before its tip shows (the web's Tooltip.Provider delayDuration).
+pub let tip_delay_ms : Double = 400.0
+
+///|
+/// A tip over control `id` (parts.tsx Tip): `label` said beside it once the pointer has rested on it a moment (on
+/// `side`, under it by default), and with a `shortcut`, the keys that do the same after it, quieter (shortcuts.mbt).
+/// The only way anything explains itself on hover. With no label, none. `key` names it where it is asked.
+pub fn tip(
+  c : @ui.Ctx,
+  key : String,
+  id : Int,
+  label : String,
+  side? : @ui.Side = Bottom,
+  shortcut? : String = "",
+) -> Unit {
+  if label == "" || id == 0 {
+    return
+  }
+  let keys = shortcut_keys(shortcut)
+  @kit.tooltip(c, "tip/" + key, id, label, delay=tip_delay_ms, side~, look=fn(c, _, words) {
+    tip_look(c, words, keys)
+  })
+  |> ignore
+}
+
+///|
+/// A tip as the web draws it (parts.css.ts tooltip): small words on the primary ink, 5 by 10 in, 8 round, a soft
+/// shadow; the keys 8 after the words at 60% (tipKeys).
+pub fn tip_look(c : @ui.Ctx, words : String, keys : String) -> Unit {
+  c.box(style=tip_box, fn() {
+    c.box(style=tip_line, fn() {
+      c.text(words, style=tip_words) |> ignore
+      if keys != "" {
+        c.box(style=tip_quiet, fn() { c.text(keys, style=tip_keys) |> ignore }) |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let tip_box : @ui.Style = @ui.style(px=S2_5, py=S1_25, bg=Primary, radius=Lg, max_w=tip_max, shadow=Md)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tip_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=OnPrimary)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tip_keys : @ui.TextStyle = @ui.text_style(size=Xs, color=OnPrimary, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tip_quiet : @ui.Style = @ui.style(opacity=O60)
+
+///|
+/// A small panel's ground (glass.ts panel): the canvas in light, the raised grey in dark, a hairline round it.
+pub fn panel_ground() -> Int64 {
+  let t = theme()
+  if t.dark {
+    t.p.raised
+  } else {
+    t.p.canvas
+  }
+}
+
+///|
+/// How a small panel comes (controls.css.ts popover's popKeyframes): from 97% and clear to itself over 140 ms
+/// (--ease-out), from its top; it goes at once, as the web's does.
+// kept across runs: a value (no field of it changes)
+pub let pop_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, ox=0.5, oy=0.0, spec=@motion.tween(140.0, ease=Out))
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let pop_out : @motion.Trans = @motion.trans(spec=@motion.tween(0.0))
+
+///|
+/// A menu's item (controls.css.ts menuItem), as mbui's menus draw it: 34 high at least, 7 by 10 in, its icon (14,
+/// muted) and words (13), 8 apart; the pointer's or the keyboard's ground on it. In a menu of choices (`chooser`,
+/// parts.tsx ChooserItem) a column 14 wide before the words instead, the one chosen checked in it, 6 apart.
+pub fn menu_row(
+  c : @ui.Ctx,
+  s : @kit.MenuItemState,
+  icon_name : String,
+  chooser : Bool,
+  end : ((@ui.Ctx, @kit.MenuItemState) -> Unit)?,
+) -> Unit {
+  let t = theme()
+  let checked = match s.entry.kind {
+    Choice(true) | Check(true) => true
+    _ => false
+  }
+  c.box(
+    dir=Row,
+    w=Fill(1.0),
+    min_h=34.0,
+    padx=10.0,
+    pady=7.0,
+    gap=if chooser { chooser_gap } else { menu_gap },
+    align=ACenter,
+    radius=@ui.concentric(20.0, 6.0),
+    bg=if s.hot { t.p.hover } else { 0L },
+    fn() {
+      if chooser {
+        c.box(style=menu_check, fn() {
+          if checked {
+            icon(c, "check", size=14.0, color=t.p.text) |> ignore
+          }
+        })
+        |> ignore
+      } else if icon_name == "zou" {
+        // 奏 its word (Rail.css.ts zouSmall)
+        c.text("奏", style=menu_zou) |> ignore
+      } else if icon_name != "" {
+        icon(c, icon_name, size=14.0, color=t.p.muted) |> ignore
+      }
+      c.text(s.entry.label, style=menu_words) |> ignore
+      // what stands at its end (a ＋): pushed there
+      match end {
+        Some(f) => {
+          c.spacer()
+          f(c, s)
+        }
+        None => ()
+      }
+    },
+  )
+  |> ignore
+}
+
+///|
+/// Between an item's icon and its words (menuItem), its check's column and its words (chooserItem).
+let menu_gap : Double = 8.0
+
+///|
+let chooser_gap : Double = 6.0
+
+///|
+/// A chooser's check's column (controls.css.ts chooserCheck): 14 wide, the check in its middle.
+// kept across runs: a value (no field of it changes)
+let menu_check : @ui.Style = @ui.style(w=S3_5, align=ACenter)
+
+///|
+/// A menu item's words: as long as they are (the menu as wide as its longest, controls.css.ts menuList).
+// kept across runs: a value (no field of it changes)
+let menu_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L5, wrap=false)
+
+///|
+/// A heading among a menu's items (controls.css.ts menuLabel): 6 over, 4 under, 10 in; 12, muted.
+// kept across runs: a value (no field of it changes)
+let menu_heading : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let menu_heading_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75, wrap=false)
+
+///|
+/// 奏 as an icon in a menu or a panel's row: 14 on 18, 600 (Rail.css.ts zouSmall).
+// kept across runs: a value (no field of it changes)
+let menu_zou : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L5, wrap=false)
+
+///|
+/// A menu (parts.tsx Menu: mbui's dropdown menu, in the web's look): `entries` with their icons (by value), as wide as
+/// its longest and `w` at least (controls.css.ts menuList 180; a menu of choices chooserMenu, 220), `offset` on `side`
+/// of `trigger` (under it) lined up `along` it, or at `at`; what was chosen. The arrows, letters, Enter and Escape as a
+/// menu's; a press outside closes it.
+pub fn menu(
+  c : @ui.Ctx,
+  key : String,
+  open : Bool,
+  trigger : Int,
+  entries : Array[@kit.Entry],
+  icons : Map[String, String],
+  w : Double,
+  side? : @ui.Side = Bottom,
+  along? : @ui.Along = Start,
+  offset? : Double = 6.0,
+  at? : (Double, Double, Double, Double),
+  row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit,
+) -> @kit.Menu {
+  // (a menu of choices: each chosen or not, checked before its words)
+  let chooser = entries.iter().any(fn(e) { e.kind is Choice(_) })
+  @kit.dropdown_menu(
+    c,
+    key,
+    open,
+    trigger,
+    entries,
+    side~,
+    along~,
+    offset~,
+    min_w=w,
+    at?,
+    enter=pop_in,
+    exit=pop_out,
+    look=fn(c, w, body) { panel(c, min_w=w, body) |> ignore },
+    item_look=fn(c, s) { menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), chooser, row_end) },
+    heading_look=fn(c, label) {
+      c.box(style=menu_heading, fn() { c.text(label, style=menu_heading_words) |> ignore }) |> ignore
+    },
+  )
+}
+
+///|
+/// The least a menu is wide (controls.css.ts menuList), and a menu of choices (chooserMenu).
+pub let menu_w : Double = 180.0
+
+///|
+pub let chooser_menu_w : Double = 220.0
+
+///|
+/// What a thing is, said when the pointer rests on a quiet mark beside it (parts.tsx About, own.css.ts about: a 20
+/// circle, its ⓘ 14 in the subtle ink, the words' under the pointer; what it says in a tip under it, or on `side`).
+/// `label`: what a screen reader calls the mark (the app's word for 关于).
+pub fn about(c : @ui.Ctx, key : String, words : String, label~ : String, side? : @ui.Side = Bottom) -> Unit {
+  let t = theme()
+  let id = c.id(key)
+  let b = c.box(style=about_box, id~, fn() {
+    icon(c, "info", size=about_icon, color=if c.hovered(id) { t.p.text } else { t.p.subtle }) |> ignore
+  })
+  c.semantics(b, Button, id~, label~)
+  tip(c, key + "/tip", id, words, side~)
+}
+
+///|
+let about_icon : Double = 14.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let about_box : @ui.Style = @ui.style(w=S5, h=S5, radius=Full, align=ACenter, justify=JCenter)

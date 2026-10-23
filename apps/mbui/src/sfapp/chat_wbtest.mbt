@@ -148,9 +148,6 @@ test "images take their own proportions before they load" {
   assert_eq(image_box(a, 16.0), (139.0, 300.0, false))
   assert_eq(image_box({ ..a, width: 1600.0, height: 900.0 }, 16.0), (360.0, 203.0, false))
   assert_eq(image_box({ ..a, width: 0.0, height: 0.0 }, 16.0), (240.0, 160.0, false))
-  assert_eq(file_size(18432.0), "18 KB")
-  assert_eq(file_size(812000.0), "793 KB")
-  assert_eq(file_size(4.5 * 1048576.0), "4.5 MB")
   assert_eq(elapsed(200000.0), "3m 20s")
 }
 

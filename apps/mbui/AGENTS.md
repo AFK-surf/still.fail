@@ -14,6 +14,13 @@ particular to this app:
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
 
+## The component library
+
+- The parts pages are made of are the library's, `src/sf` (docs/library.md): the counterpart of the web's `web/ui`,
+  one of its files for each of the web's. A part used by both the phone's pages and the desktop's lives there once and
+  both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
+  what it needs of the app is given to it as the app starts.
+
 ## What is checked, and where
 
 - The app's screens are tested in the Tester: its draw list at the declared moment.

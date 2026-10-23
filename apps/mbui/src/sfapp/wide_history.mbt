@@ -30,7 +30,7 @@ fn wide_history_head(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : J
         |> ignore
       })
       c.semantics(b, Button, id=io, label=tr("web-main.history.onlyIo"))
-      @kit.tooltip(c, "history/only-io-tip", io, tr("web-main.history.onlyIoTip")) |> ignore
+      @sf.tip(c, "history/only-io-tip", io, tr("web-main.history.onlyIoTip"))
       let more = c.id("history/details")
       c.cursor(more, Hand)
       if c.clicked(more) {
@@ -261,7 +261,7 @@ fn wh_context_menu(c : @ui.Ctx, src : Source, r : ChatRef, key : String, me : St
   if clears {
     entries.push(@kit.menu_item("clear", label=tr("web-pages.chat.clear")))
   }
-  let m = wide_menu(c, "context-menu/" + me, open, anchor, entries, { "compact": "shrink", "clear": "refresh" }, 180.0)
+  let m = @sf.menu(c, "context-menu/" + me, open, anchor, entries, { "compact": "shrink", "clear": "refresh" }, 180.0)
   if open && !m.open {
     wide.context_menu = ""
   }

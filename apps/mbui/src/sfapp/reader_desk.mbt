@@ -175,7 +175,7 @@ fn desk_reader_chrome(
   let share = reader_fraction(r, novel)
   let pct = "\{(share * 100.0).round().to_int()}%"
   let meta = dv_words(
-    [if chapter >= 0 && has_chapters { novel.chapters[chapter].0 } else { "" }, pct, file_size(d.size)],
+    [if chapter >= 0 && has_chapters { novel.chapters[chapter].0 } else { "" }, pct, @sf.file_size(d.size)],
     " · ",
   )
   let ink = paper_viewer_ink(p, line)

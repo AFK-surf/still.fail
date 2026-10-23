@@ -95,6 +95,29 @@ fn find_chars(s : Array[Char], w : String) -> Int {
 }
 
 ///|
+/// A library's package (moon.pkg `rel`): each import it names that is not among `allowed` (prefixes).
+fn lint_library(rel : String, src : String, allowed : Array[String], out : Array[Finding]) -> Unit {
+  for n0, line in src.split("\n").to_array() {
+    let line = line.to_string()
+    let s = line.trim_start(chars=" \t\r\n\u{b}\u{c}").to_string()
+    if s.has_prefix("//") {
+      continue
+    }
+    // every quoted name with a slash in it: a package
+    let parts = line.split("\"").to_array()
+    let mut i = 1
+    while i < parts.length() {
+      let name = parts[i].to_string()
+      if name.contains("/") && !name.contains(" ") && !allowed.iter().any(fn(a) { name.has_prefix(a) }) {
+        out.push(finding("library-import", rel, n0 + 1, trim(line)))
+        break
+      }
+      i = i + 2
+    }
+  }
+}
+
+///|
 fn lint_lines(
   rel : String,
   src : String,
@@ -258,10 +281,14 @@ fn lint_sources(files : Array[(String, String)], cfg : Config) -> Array[Finding]
       texts[rel] = lines_of(src)
     }
     match kind {
-      1 =>
+      1 => {
         if !src.contains("is-main") {
           lint_lines(rel, src, "host-import", [host_import], findings, "//")
         }
+        if under(rel, cfg.library) {
+          lint_library(rel, src, cfg.library_imports, findings)
+        }
+      }
       2 => {
         let t0 = @env.now()
         mbts.push(MbtFile::new(rel, rel, src))

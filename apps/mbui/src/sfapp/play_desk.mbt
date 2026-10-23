@@ -136,7 +136,7 @@ fn desk_play(c : @ui.Ctx, p : @kit.Media, d : DeskPlaying) -> Unit {
     }
     // the bar along the top
     c.layer(fn() {
-      let meta = dv_words([if many && index >= 0 { "\{index + 1} / \{d.list.length()}" } else { "" }, file_size(d.size)], " · ")
+      let meta = dv_words([if many && index >= 0 { "\{index + 1} / \{d.list.length()}" } else { "" }, @sf.file_size(d.size)], " · ")
       if viewer_bar(c, key + "/bar", d.back, name, meta, !f.on && !listing, ink, fn() {
           if many && viewer_tool(c, key + "/list", "list", tr("web-pages.drive.player.list"), ink, on=listing) {
             desk_listing[key] = !listing
@@ -378,7 +378,7 @@ fn desk_play_key(
   })
   c.semantics(b, Button, id~, label~, disabled=!on, pressed=lit)
   if on {
-    @kit.tooltip(c, key + "/tip", id, label) |> ignore
+    @sf.tip(c, key + "/tip", id, label)
   }
   on && c.clicked(id)
 }

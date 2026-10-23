@@ -295,8 +295,8 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
               tr("android-misc.screen.sendWaiting")
             } else {
               fill("android-misc.drive.upload.going", [
-                ("sent", file_size(d.sent.to_double())),
-                ("size", file_size(size.to_double())),
+                ("sent", @sf.file_size(d.sent.to_double())),
+                ("size", @sf.file_size(size.to_double())),
               ])
             },
             style=drop_going_words,

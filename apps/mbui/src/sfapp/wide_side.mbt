@@ -486,7 +486,7 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
                   } else {
                     let mark = c.id("side/row-failed/" + key)
                     c.box(id=mark, fn() { chat_mark(c, "alert") }) |> ignore
-                    @kit.tooltip(c, "side/row-failed-tip/" + key, mark, why) |> ignore
+                    @sf.tip(c, "side/row-failed-tip/" + key, mark, why)
                   }
                 })
                 |> ignore

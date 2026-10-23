@@ -112,7 +112,7 @@ fn viewer_tool(
   })
   c.semantics(b, Button, id~, label~, pressed=on, disabled~)
   if live {
-    @kit.tooltip(c, key + "/tip", id, label, side=Bottom) |> ignore
+    @sf.tip(c, key + "/tip", id, label, side=Bottom)
   }
   live && c.clicked(id)
 }

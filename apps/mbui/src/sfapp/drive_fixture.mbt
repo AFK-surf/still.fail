@@ -55,7 +55,7 @@ fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
     "mtime": Json::number(1792300000000.0 - size.to_double()),
     "type": "",
     "kind": Json::string(kind),
-    "sizeText": Json::string(if dir { "" } else { file_size(size.to_double()) }),
+    "sizeText": Json::string(if dir { "" } else { @sf.file_size(size.to_double()) }),
     "timeText": Json::string(time),
   }
 }

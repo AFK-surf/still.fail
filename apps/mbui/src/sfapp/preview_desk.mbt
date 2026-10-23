@@ -112,7 +112,7 @@ fn Viewer::desk_meta(self : Viewer, src : Source) -> String {
   let (at, count) = self.place(src)
   let parts : Array[String] = []
   let first = if count > 1 && at >= 0 { "\{at + 1} / \{count} · " } else { "" }
-  parts.push(first + file_size(self.file.size))
+  parts.push(first + @sf.file_size(self.file.size))
   let kind = desk_kind_label(self.shown_kind())
   if kind != "" {
     parts.push(kind)
@@ -301,7 +301,7 @@ fn desk_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink
     |> ignore
   })
   c.semantics(b, Button, id~, label~)
-  @kit.tooltip(c, key + "/tip", id, label, side=Bottom) |> ignore
+  @sf.tip(c, key + "/tip", id, label, side=Bottom)
   c.clicked(id)
 }
 
@@ -366,7 +366,7 @@ fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx) -> Unit {
       upper(v.file.name.view(start_offset=i + 1).to_owned())
     _ => ""
   }
-  c.text(if ext == "" { file_size(v.file.size) } else { file_size(v.file.size) + " · " + ext }, style=desk_facts_words)
+  c.text(if ext == "" { @sf.file_size(v.file.size) } else { @sf.file_size(v.file.size) + " · " + ext }, style=desk_facts_words)
   |> ignore
   c.text(
     if v.shown_kind() is None {

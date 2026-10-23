@@ -356,7 +356,7 @@ fn files_disk(c : @ui.Ctx, disk : Json?) -> Unit {
   })
   // what it says (FilesNav.tsx DiskBar's label): what is left, in GB, and how much is used
   let gb = free / 1.0e9
-  let left = if free >= 1.0e11 { gb.round().to_int().to_string() } else { one_decimal(gb, 1) }
+  let left = if free >= 1.0e11 { gb.round().to_int().to_string() } else { @sf.to_fixed(gb, 1) }
   c.semantics(
     bar,
     Image,
@@ -1096,7 +1096,7 @@ fn files_switch_menu(c : @ui.Ctx, src : Source, stations : Array[DvStation], chi
   let entries = stations
     .filter(fn(s) { s.drive })
     .map(fn(s) { @kit.menu_radio(s.station, s.station == at.station, label=s.name, disabled=!s.online) })
-  let m = wide_menu(c, "files/switch/" + chip.to_string(), open, chip, entries, {}, fgo_menu_w)
+  let m = @sf.menu(c, "files/switch/" + chip.to_string(), open, chip, entries, {}, fgo_menu_w)
   if open && !m.open {
     fgo.switching = 0
   }

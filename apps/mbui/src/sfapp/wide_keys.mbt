@@ -147,7 +147,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
     Some(m) => m
     // (closed: told so, for its going)
     None => {
-      wide_menu(c, "row-menu", false, 0, [], {}, menu_w) |> ignore
+      @sf.menu(c, "row-menu", false, 0, [], {}, @sf.menu_w) |> ignore
       return
     }
   }
@@ -183,7 +183,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
     "archive": "archive",
   }
   // (its top left at the pointer, as the web's context menu opens)
-  let m = wide_menu(c, "row-menu", true, 0, entries, icons, menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
+  let m = @sf.menu(c, "row-menu", true, 0, entries, icons, @sf.menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
   if !m.open {
     wide.menu = None
   }
@@ -358,7 +358,7 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       pad=12.0,
       gap=4.0,
       radius=31.0,
-      bg=panel_ground(),
+      bg=@sf.panel_ground(),
       border=1.0,
       border_color=t.p.line,
       shadow=32.0,
@@ -482,7 +482,7 @@ fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
         pad=20.0,
         gap=6.0,
         radius=42.0,
-        bg=panel_ground(),
+        bg=@sf.panel_ground(),
         border=1.0,
         border_color=t.p.line,
         shadow=32.0,

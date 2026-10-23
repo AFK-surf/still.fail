@@ -754,7 +754,7 @@ fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit, label? 
   // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right)
   if label != "" {
     c.semantics(b, Button, id~, label~)
-    @kit.tooltip(c, "rail/tip/" + id.to_string(), id, label, side=Right) |> ignore
+    @sf.tip(c, "rail/tip/" + id.to_string(), id, label, side=Right)
   }
 }
 
@@ -844,7 +844,7 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
       id=add,
     )
     c.semantics(plus, Button, id=add, label=tr("web-main.rail.addWorkspace"))
-    @kit.tooltip(c, "rail/ws-add-tip", add, tr("web-main.rail.addWorkspace"), side=Right) |> ignore
+    @sf.tip(c, "rail/ws-add-tip", add, tr("web-main.rail.addWorkspace"), side=Right)
     for x in all {
       let id = c.id("rail/ws/" + x.id)
       c.cursor(id, Hand)
@@ -888,7 +888,7 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
       let said = text(field(marks, x.id), "label")
       let label = if on || said == "" { x.name } else { x.name + " · " + said }
       c.semantics(square, Button, id~, label~)
-      @kit.tooltip(c, "rail/ws-tip/" + x.id, id, label, side=Right) |> ignore
+      @sf.tip(c, "rail/ws-tip/" + x.id, id, label, side=Right)
     }
   })
   |> ignore
@@ -1119,7 +1119,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let (place, _, _) = match wide.rail_menu {
     Some(m) => m
     None => {
-      wide_menu(c, "rail-menu", false, 0, [], {}, menu_w) |> ignore
+      @sf.menu(c, "rail-menu", false, 0, [], {}, @sf.menu_w) |> ignore
       return
     }
   }
@@ -1151,14 +1151,14 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let (ax, ay, aw, ah) = by.unwrap_or((0.0, rail_menu_clear, rail_w - 8.0, 0.0))
   // a place's ＋: put in, the rail changed from there (once the menu has gone)
   let added : Ref[String] = Ref("")
-  let m = wide_menu(
+  let m = @sf.menu(
     c,
     "rail-menu",
     true,
     0,
     entries,
     icons,
-    menu_w,
+    @sf.menu_w,
     side=Right,
     offset=rail_menu_off,
     at=(ax, dmax(ay, rail_menu_clear), aw, ah),
@@ -1336,7 +1336,7 @@ fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
       }
       c.semantics(strip, Button, id~, label=words)
       if !dragging {
-        @kit.tooltip(c, "sidebar-edge/tip", id, words, side=Right) |> ignore
+        @sf.tip(c, "sidebar-edge/tip", id, words, side=Right)
       }
     })
     |> ignore

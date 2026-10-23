@@ -1,169 +1,8 @@
-// What opens over the wide frame (ember web/ui controls.css.ts popover and menuList, Switcher.tsx and Switcher.css.ts,
-// Attention.tsx, Shortcuts.tsx): a chat's row's menu (its right click), the lists' filter, 待处理's panel beside the
-// rail, ⌘K's switcher and ⌘/'s shortcuts over a scrim. Each is mbui's (@kit's menus, popover and dialog, the layer
-// under them: the keys a menu's, the focus kept in what is open, a screen reader told what it is) in the web's look.
-// A press outside one, or Esc, closes it.
-
-///|
-/// A small panel's ground (glass.ts panel): the canvas in light, the raised grey in dark, a hairline round it.
-fn panel_ground() -> Int64 {
-  let t = @sf.theme()
-  if t.dark {
-    t.p.raised
-  } else {
-    t.p.canvas
-  }
-}
-
-///|
-/// A small panel's look (controls.css.ts popover, @sf.panel) for mbui's menus and popovers, `w` wide.
-fn wide_panel(c : @ui.Ctx, w : Double, body : () -> Unit) -> Unit {
-  @sf.panel(c, w=Px(w), body) |> ignore
-}
-
-///|
-/// How a small panel comes (controls.css.ts popover's popKeyframes): from 97% and clear to itself over 140 ms
-/// (--ease-out), from its top; it goes at once, as the web's does.
-// kept across runs: a value (no field of it changes)
-let wide_pop_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, ox=0.5, oy=0.0, spec=@motion.tween(140.0, ease=Out))
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_pop_out : @motion.Trans = @motion.trans(spec=@motion.tween(0.0))
-
-///|
-/// A menu's item (controls.css.ts menuItem), as mbui's menus draw it: 34 high at least, 7 by 10 in, its icon (14,
-/// muted) and words (13), 8 apart; the pointer's or the keyboard's ground on it. In a menu of choices (`chooser`,
-/// parts.tsx ChooserItem) a column 14 wide before the words instead, the one chosen checked in it, 6 apart.
-fn wide_menu_row(
-  c : @ui.Ctx,
-  s : @kit.MenuItemState,
-  icon : String,
-  chooser : Bool,
-  end : ((@ui.Ctx, @kit.MenuItemState) -> Unit)?,
-) -> Unit {
-  let t = @sf.theme()
-  let checked = match s.entry.kind {
-    Choice(true) | Check(true) => true
-    _ => false
-  }
-  c.box(
-    dir=Row,
-    w=Fill(1.0),
-    min_h=34.0,
-    padx=10.0,
-    pady=7.0,
-    gap=if chooser { chooser_gap } else { menu_gap },
-    align=ACenter,
-    radius=@ui.concentric(20.0, 6.0),
-    bg=if s.hot { t.p.hover } else { 0L },
-    fn() {
-      if chooser {
-        c.box(style=wide_menu_check, fn() {
-          if checked {
-            @sf.icon(c, "check", size=14.0, color=t.p.text) |> ignore
-          }
-        })
-        |> ignore
-      } else if icon == "zou" {
-        // 奏 its word (Rail.css.ts zouSmall)
-        c.text("奏", style=wide_menu_zou) |> ignore
-      } else if icon != "" {
-        @sf.icon(c, icon, size=14.0, color=t.p.muted) |> ignore
-      }
-      c.text(s.entry.label, style=wide_menu_words) |> ignore
-      // what stands at its end (a ＋): pushed there
-      match end {
-        Some(f) => {
-          c.spacer()
-          f(c, s)
-        }
-        None => ()
-      }
-    },
-  )
-  |> ignore
-}
-
-///|
-/// Between an item's icon and its words (menuItem), its check's column and its words (chooserItem).
-let menu_gap : Double = 8.0
-
-///|
-let chooser_gap : Double = 6.0
-
-///|
-/// A chooser's check's column (controls.css.ts chooserCheck): 14 wide, the check in its middle.
-// kept across runs: a value (no field of it changes)
-let wide_menu_check : @ui.Style = @ui.style(w=S3_5, align=ACenter)
-
-///|
-/// A menu item's words: as long as they are (the menu as wide as its longest, controls.css.ts menuList).
-// kept across runs: a value (no field of it changes)
-let wide_menu_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L5, wrap=false)
-
-///|
-/// A heading among a menu's items (controls.css.ts menuLabel): 6 over, 4 under, 10 in; 12, muted.
-// kept across runs: a value (no field of it changes)
-let wide_menu_heading : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_menu_heading_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75, wrap=false)
-
-///|
-/// 奏 as an icon in a menu or a panel's row: 14 on 18, 600 (Rail.css.ts zouSmall).
-// kept across runs: a value (no field of it changes)
-let wide_menu_zou : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L5, wrap=false)
-
-///|
-/// A menu of the wide frame (mbui's dropdown menu, in the web's look): `entries` with their icons (by value), as wide as
-/// its longest and `w` at least (controls.css.ts menuList 180; a menu of choices chooserMenu, 220), `offset` on `side`
-/// of `trigger` (under it) lined up `along` it, or at `at`; what was chosen. The arrows, letters, Enter and Escape as a
-/// menu's; a press outside closes it.
-fn wide_menu(
-  c : @ui.Ctx,
-  key : String,
-  open : Bool,
-  trigger : Int,
-  entries : Array[@kit.Entry],
-  icons : Map[String, String],
-  w : Double,
-  side? : @ui.Side = Bottom,
-  along? : @ui.Along = Start,
-  offset? : Double = 6.0,
-  at? : (Double, Double, Double, Double),
-  row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit,
-) -> @kit.Menu {
-  // (a menu of choices: each chosen or not, checked before its words)
-  let chooser = entries.iter().any(fn(e) { e.kind is Choice(_) })
-  @kit.dropdown_menu(
-    c,
-    key,
-    open,
-    trigger,
-    entries,
-    side~,
-    along~,
-    offset~,
-    min_w=w,
-    at?,
-    enter=wide_pop_in,
-    exit=wide_pop_out,
-    look=fn(c, w, body) { @sf.panel(c, min_w=w, body) |> ignore },
-    item_look=fn(c, s) { wide_menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), chooser, row_end) },
-    heading_look=fn(c, label) {
-      c.box(style=wide_menu_heading, fn() { c.text(label, style=wide_menu_heading_words) |> ignore }) |> ignore
-    },
-  )
-}
-
-///|
-/// The least a menu is wide (controls.css.ts menuList), and a menu of choices (chooserMenu).
-let menu_w : Double = 180.0
-
-///|
-let chooser_menu_w : Double = 220.0
+// What opens over the wide frame (Switcher.tsx and Switcher.css.ts, Attention.tsx, Shortcuts.tsx): a chat's row's menu
+// (its right click), the lists' filter, 待处理's panel beside the rail, ⌘K's switcher and ⌘/'s shortcuts over a scrim.
+// Each is the library's (@sf.menu, @sf.panel: web/ui parts.tsx Menu, controls.css.ts popover and menuList) over mbui's
+// (@kit's menus, popover and dialog, the layer under them: the keys a menu's, the focus kept in what is open, a screen
+// reader told what it is). A press outside one, or Esc, closes it.
 
 ///|
 /// Everything open over the wide frame, drawn after it.
@@ -197,7 +36,7 @@ fn wide_filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   entries.push(@kit.menu_item("decisions", label=tr("web-main.rail.decisions")))
   entries.push(@kit.menu_separator())
   entries.push(@kit.menu_item("archived", label=tr("web-main.filter.archived")))
-  let m = wide_menu(c, "filter-menu", wide.filter_open, c.id("side/filter"), entries, {}, chooser_menu_w, along=End)
+  let m = @sf.menu(c, "filter-menu", wide.filter_open, c.id("side/filter"), entries, {}, @sf.chooser_menu_w, along=End)
   wide.filter_open = m.open
   match m.chosen {
     Some("decisions") => go_place(c, "decisions", [], -1)
@@ -244,7 +83,7 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     side=if railed { Right } else { Bottom },
     along=Start,
     offset=if railed { attention_off_rail } else { attention_off_side },
-    look=fn(c, _, body) { wide_panel(c, attention_w, fn() { c.box(style=att_list, body) |> ignore }) },
+    look=fn(c, _, body) { @sf.panel(c, w=Px(attention_w), fn() { c.box(style=att_list, body) |> ignore }) |> ignore },
     fn() { attention_rows(c, src, w, railed, close) },
   )
   wide.attention_open = p.value

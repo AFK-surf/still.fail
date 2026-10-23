@@ -481,7 +481,7 @@ fn sf_folder(c : @ui.Ctx, src : Source, p : SfPlace) -> Unit {
           c,
           "sf-e/" + e.name,
           e.name,
-          sub=dv_words([if e.size_text == "" { file_size(e.size) } else { e.size_text }, e.time_text], " · "),
+          sub=dv_words([if e.size_text == "" { @sf.file_size(e.size) } else { e.size_text }, e.time_text], " · "),
           icon=dv_kind_icon(e.kind),
           checked=sfs.ticked.contains(tick_key(r)),
         ) {
@@ -525,7 +525,7 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
       Some(p) =>
         match (p.error, p.done) {
           (Some(e), _) => e
-          (_, Some(done)) => file_size(number(Some(done), "size"))
+          (_, Some(done)) => @sf.file_size(number(Some(done), "size"))
           _ => uploading_text(p)
         }
       None => tr("common.uploading")
