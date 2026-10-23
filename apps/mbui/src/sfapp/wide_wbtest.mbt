@@ -348,6 +348,91 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
 }
 
 ///|
+test "wide: a right click on the composer's words as the desktop app's: 剪切, 复制, 粘贴, 全选 as they can be done" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.run_for(history_fade_ms)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
+  let (fx, fy) = match t.find("按空格输入") {
+    Some(at) => at
+    None => fail("no composer")
+  }
+  t.tap(fx, fy)
+  t.type_text("发布前再看一眼")
+  t.frame()
+  // (on the field's words, where its caret is: the composer opened to a box as it took the focus)
+  let field_at = fn() {
+    let (x, y, _, h) = t.ime_rect()
+    (x + 1.0, y + h / 2.0)
+  }
+  let (fx, fy) = field_at()
+  t.right_click(fx, fy)
+  t.frame()
+  // nothing picked: 剪切 and 复制 there, not to be chosen
+  assert_true(t.find("剪切") is Some(_) && t.find("全选") is Some(_))
+  t.tap_text("全选")
+  t.frame()
+  t.right_click(fx, fy)
+  t.frame()
+  t.tap_text("剪切")
+  t.frame()
+  assert_eq(t.clipboard(), "发布前再看一眼")
+  assert_eq(drafts.get(draft_key(r)).map(fn(d) { d.text }), Some(""))
+  // 粘贴: the clipboard read, its words put in
+  t.clipboard_gives("再看一眼签名")
+  let (fx, fy) = field_at()
+  t.right_click(fx, fy)
+  t.frame()
+  t.tap_text("粘贴")
+  t.frame()
+  t.frame()
+  assert_eq(drafts.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
+  // a picture on the clipboard: put in as a file, as ⌘V puts one
+  t.clipboard_gives_png(@pixels.png(2, 2, FixedArray::make(16, b'\xff')))
+  let (fx, fy) = field_at()
+  t.right_click(fx, fy)
+  t.frame()
+  t.tap_text("粘贴")
+  t.frame()
+  t.frame()
+  assert_eq(drafts.get(draft_key(r)).map(fn(d) { d.files.map(fn(f) { f.name }) }), Some(["image.png"]))
+}
+
+///|
+test "wide: a right click on a message's image: 复制图片, the picture on the clipboard as PNG" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.run_for(history_fade_ms)
+  // an image of the chat's in view, at the pane's middle
+  let mut at : (Double, Double)? = None
+  for _ in 0..<12 {
+    match t.drawn_images().iter().find_first(fn(i) { i[0] > 400.0 && i[2] > 100.0 && i[1] > 80.0 && i[1] + i[3] / 2.0 < 700.0 }) {
+      Some(i) => {
+        at = Some((i[0] + i[2] / 2.0, i[1] + dmin(i[3], 200.0) / 2.0))
+        break
+      }
+      None => t.wheel(900.0, 400.0, -200.0)
+    }
+  }
+  let (x, y) = match at {
+    Some(p) => p
+    None => fail("no image in view")
+  }
+  t.run_for(history_fade_ms)
+  t.right_click(x, y)
+  t.frame()
+  assert_true(wide_context.image != "", msg="its picture's source")
+  t.add_pixels(wide_context.image, 2, 2, FixedArray::make(16, b'\xff'))
+  t.tap_text("复制图片")
+  t.frame()
+  t.frame()
+  match t.clipboard_png() {
+    Some(png) => assert_true(@pixels.is_png(png))
+    None => fail("no picture copied")
+  }
+}
+
+///|
 test "wide: words picked in a message with the pointer: 引用 over them quotes them into the chat's draft" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")

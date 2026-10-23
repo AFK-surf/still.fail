@@ -243,8 +243,7 @@ fn wide_reset() -> Unit {
   ftab_reset()
   wide.tabs_set.clear()
   fgo_reset()
-  wide_context.open = false
-  wide_context.frame = -1
+  wide_context_reset()
   wide_switch_reset()
   wide_on.val = false
   corners_on.val = false

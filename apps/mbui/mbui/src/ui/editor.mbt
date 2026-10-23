@@ -877,6 +877,19 @@ fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
 }
 
 ///|
+/// Pastes what the clipboard holds into the field `id` (an edit menu's 粘贴), as ⌘V (Ctrl+V) with a picture on it
+/// does: read first, then the picture where the field takes pictures (Ctx::field_picture), else its words.
+pub fn Ctx::field_paste(self : Ctx, id : Int) -> Unit {
+  match clipboard_read() {
+    Some(r) => {
+      desk.pasting = Some((id, r))
+      self.focus_on(id)
+    }
+    None => ()
+  }
+}
+
+///|
 /// A picture pasted into the field `key` (one that takes pictures: Ctx::editor `pictures`) with ⌘V (Ctrl+V), as PNG:
 /// taken once, for the app to put in as a file (a page's paste takes a picture as one).
 pub fn Ctx::field_picture(self : Ctx, key : String) -> Bytes? {
@@ -996,6 +1009,68 @@ fn EditorState::sel_handle_to(self : EditorState, which : Int, x : Double, y : D
 }
 
 ///|
+/// What can be done to the field's words now (hostapi text_menu_*): cut and copy what is picked (not a secret's),
+/// paste always, select all unless all is picked.
+fn EditorState::can(self : EditorState) -> Int {
+  let (a, b) = self.sel()
+  let n = self.text.length()
+  (if a != b && !self.secret { @hostapi.text_menu_cut | @hostapi.text_menu_copy } else { 0 }) |
+  @hostapi.text_menu_paste |
+  (if n > 0 && !(a == 0 && b == n) { @hostapi.text_menu_select_all } else { 0 })
+}
+
+///|
+/// A field right clicked since the last frame (a desktop's secondary button): its id and where, the focus given it (the
+/// edit menu the app puts up there acts on it: field_can, field_edit). None when none was.
+pub fn Ctx::field_right_clicked(self : Ctx) -> (Int, Double, Double)? {
+  for m in desk.menus {
+    for id in m.0 {
+      if self.editors.contains(id) {
+        if self.focus != id {
+          self.focus_on(id)
+        }
+        return Some((id, m.1, m.2))
+      }
+    }
+  }
+  None
+}
+
+///|
+/// What can be done to field `id`'s words now (hostapi text_menu_*: cut, copy, paste, select all); 0 for no field.
+pub fn Ctx::field_can(self : Ctx, id : Int) -> Int {
+  match self.editors.get(id) {
+    Some(st) => st.can()
+    None => 0
+  }
+}
+
+///|
+/// Field `id`'s words cut, copied or all picked (text_menu_cut, _copy, _select_all: as ⌘X, ⌘C, ⌘A do them), or
+/// `paste` put in for what is picked (text_menu_paste: as ⌘V puts the clipboard's in); the focus its again (an edit
+/// menu's choice, the menu having had it).
+pub fn Ctx::field_edit(self : Ctx, id : Int, what : Int, paste? : String = "") -> Unit {
+  match self.editors.get(id) {
+    Some(st) => {
+      if what == @hostapi.text_menu_paste {
+        if paste != "" {
+          st.text_input(0, paste, 0, 0, self.now)
+        }
+      } else if what == @hostapi.text_menu_cut {
+        st.key(key_cut, 0, self.now)
+      } else if what == @hostapi.text_menu_copy {
+        st.key(key_copy, 0, self.now)
+      } else if what == @hostapi.text_menu_select_all {
+        st.key(key_select_all, 0, self.now)
+      }
+      self.focus_on(id)
+      self.read_changed("a field edited")
+    }
+    None => ()
+  }
+}
+
+///|
 /// Tells the host whether the floating text menu is up and over what (Android's: a field's picked words, or its caret
 /// when its handle was tapped): offering cut and copy over words picked (not a secret's), paste always, select all
 /// unless all is picked; each frame, said again only when it changed.
@@ -1005,7 +1080,6 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
       match st.tl {
         Some(tl) => {
           let (a, b) = st.sel()
-          let n = st.text.length()
           let (x0, l0) = tl.caret(a)
           let (x1, l1) = tl.caret(b)
           let top = st.oy + l0.to_double() * tl.line_h
@@ -1015,14 +1089,7 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
           } else {
             (st.ox, tl.w)
           }
-          let can = (if a != b && !st.secret {
-            @hostapi.text_menu_cut | @hostapi.text_menu_copy
-          } else {
-            0
-          }) |
-            @hostapi.text_menu_paste |
-            (if n > 0 && !(a == 0 && b == n) { @hostapi.text_menu_select_all } else { 0 })
-          Some((x, top, w, bottom - top, can))
+          Some((x, top, w, bottom - top, st.can()))
         }
         None => None
       }

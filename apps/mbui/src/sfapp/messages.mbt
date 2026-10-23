@@ -1323,6 +1323,10 @@ fn file_item(
       // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
       note_thumb(c, thumb, open, file_corner(), letterbox~)
+      // right clicked in the wide frame: 复制图片 (wide_context.mbt)
+      if wide_on.val {
+        wide_context_image(c, open, key)
+      }
       // held long where the list quotes: quoted, the press its (lifting it opens nothing), once a press
       match quote {
         Some(q) => {
@@ -1341,7 +1345,10 @@ fn file_item(
         c.cursor(open, Hand)
       }
       c.box(w=Px(w), h=Px(h), radius=file_corner(), clip=true, bg=if wide_on.val { t.p.neutral_bg } else { t.p.chip }, id=open, opacity=thumb_shows(thumb), fn() {
-        if key != "" && key != "!" {
+        if key != "" && key != "!" && wide_on.val && sent is None {
+          // brought in as the web's: brushed in from its top, blurred to sharp (image_reveal)
+          image_reveal(c, key, w, h, if letterbox { FitContain } else { FitCover }, a.thumbhash)
+        } else if key != "" && key != "!" {
           c.image(
             key,
             w=Px(w),
@@ -1353,10 +1360,9 @@ fn file_item(
           )
           |> ignore
         } else if key == "!" {
-          c.box(w=Fill(1.0), h=Fill(1.0), gap=6.0, align=ACenter, justify=JCenter, fn() {
+          c.box(style=no_preview_box, fn() {
             @sf.icon(c, "read", size=20.0, color=t.p.muted) |> ignore
-            c.text(tr("android-chat.file.noPreview"), size=12.0, color=t.p.muted, wrap=false)
-            |> ignore
+            c.text(tr("android-chat.file.noPreview"), style=no_preview_words) |> ignore
           })
           |> ignore
         } else {
@@ -1476,6 +1482,137 @@ fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// An image with no preview: its mark over its words, in its middle.
+// kept across runs: a value (no field of it changes)
+let no_preview_box : @ui.Style = @ui.style(w=Full, h=Full, gap=S1_5, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_preview_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// A message's image coming in at a desktop's width, as the web's (Chat.css.ts msgImageWait, msgImageReveal): until it
+/// is decoded what it waits on (its likeness, the ThumbHash sent with it, else the ground); once it is, brushed in from
+/// its top (an edge half its height deep going down it), blurred to sharp and from 1.04 its size to its own (1100 ms,
+/// the ease out), what it waited on fading out behind it (300 ms, from 800). One already decoded as it is first shown
+/// comes as it is.
+fn image_reveal(c : @ui.Ctx, key : String, w : Double, h : Double, fit : @ui.Fit, hash : String) -> Unit {
+  // (decoded at the size it is drawn at: Ctx::image's)
+  let px = dmin(dmax(w, h) * c.scale, 8192.0)
+  let ready = c.image_ready(key, px)
+  let way = match reveals.get(key) {
+    Some(a) => a
+    None => {
+      let a = if ready { None } else { Some(@motion.Anim::new(0.0)) }
+      reveals[key] = a
+      a
+    }
+  }
+  // its way in, said once as it is first seen decoded
+  let p = match way {
+    Some(a) if ready => {
+      if !a.moving() && a.get() == 0.0 {
+        a.animate(1.0, @motion.tween(reveal_ms, ease=Linear))
+      }
+      a.get()
+    }
+    Some(_) => 0.0
+    None => 1.0
+  }
+  let e = @motion.Out.at(p)
+  let img = c.image(key, w=Px(w), h=Px(h), fit~, radius=file_corner(), bg=0L, fade=false)
+  if p >= 1.0 {
+    return
+  }
+  c.look(img, @ui.look(alpha=if ready { 1.0 } else { 0.0 }, scale=1.0 + reveal_grow * (1.0 - e)))
+  // blurred to sharp: a frost over it and what it waits on (its edge's steps softened under it), its blur going
+  let frost = fn() {
+    let blur = reveal_blur * (1.0 - e)
+    if ready && blur > 0.25 {
+      c.layer(fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), glass=@ui.Glass::frosted(blur~, tint=0L, solid=0L), fn() {  }) |> ignore
+      })
+      |> ignore
+    }
+  }
+  // what it waits on, under the edge brushing down (its band in steps), fading out from 800 ms
+  let waited = if ready {
+    1.0 - dclamp((p * reveal_ms - reveal_wait_after_ms) / reveal_wait_out_ms, 0.0, 1.0)
+  } else {
+    1.0
+  }
+  if waited <= 0.0 {
+    frost()
+    return
+  }
+  let likeness = @gallery.thumbhash_image(hash)
+  // (each step on the screen's pixels: one meets the next with no seam)
+  let px_of = fn(y : Double) { (y * c.scale).round() / c.scale }
+  let wait = fn(y0 : Double, y1 : Double, alpha : Double) {
+    let y0 = px_of(dmax(0.0, y0))
+    let y1 = px_of(dmin(h, y1))
+    if y1 <= y0 || alpha <= 0.0 {
+      return
+    }
+    // (each laid out from the picture's top, as a layer is: not under the one before)
+    c.layer(fn() {
+      bar_room_box(c, y0)
+      let strip = c.box(style=@ui.style(w=Full, h=Fixed(y1 - y0), clip=true), fn() {
+        let inner = match likeness {
+          Some(l) => c.image(l, w=Px(w), h=Px(h), fit=FitCover, bg=0L, fade=false)
+          None => c.box(style=@ui.style(w=Fixed(w), h=Fixed(h), bg=Neutral), fn() {  })
+        }
+        c.look(inner, @ui.look(dy=-y0))
+      })
+      c.look(strip, @ui.look(alpha=alpha * waited))
+    })
+    |> ignore
+  }
+  c.layer(fn() {
+    if !ready {
+      // (not decoded yet: all of it)
+      wait(0.0, h, 1.0)
+    } else {
+      // the edge: half its height deep, from above it to past its foot
+      let band = h * 0.5
+      let top = -band + (h + band) * e
+      let step = band / reveal_steps.to_double()
+      for k in 0..<reveal_steps {
+        let y = top + k.to_double() * step
+        wait(y, y + step, (k.to_double() + 0.5) / reveal_steps.to_double())
+      }
+      wait(top + band, h, 1.0)
+    }
+  })
+  |> ignore
+  frost()
+}
+
+///|
+/// Each image's way in, by its source, while the run lasts (None: first shown decoded, as it is).
+let reveals : Map[String, @motion.Anim?] = {}
+
+///|
+/// How long it comes in, how blurred and how much larger it starts, and when and how fast what it waited on goes.
+let reveal_ms : Double = 1100.0
+
+///|
+let reveal_blur : Double = 14.0
+
+///|
+let reveal_grow : Double = 0.04
+
+///|
+let reveal_wait_after_ms : Double = 800.0
+
+///|
+let reveal_wait_out_ms : Double = 300.0
+
+///|
+/// The steps its edge is drawn in.
+let reveal_steps : Int = 16
 
 ///|
 /// A message's pictures' corner: 10 (ChatFiles.kt), the wide screen's as its file cards' (message_file_corner).
