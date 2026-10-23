@@ -34,11 +34,8 @@ export function openedAt(el: HTMLElement): void {
 /** Whether 奏 in the sidebar's foot was just pressed: its rows come out of it, and the sidebar does not slide. */
 export const openedRecently = (): boolean => !!openedFrom && performance.now() - openedFrom.at < 1000;
 
-/**
- * The question a decision asks, uncut (the row clamps it to two lines): what its agent said it needs, else its post's
- * first line; from a core before `question`, its line without 奏 · (Decision · in English).
- */
-const question = (d: DecisionItem) => d.question || d.text.replace(/^(?:奏|Decision) · /, "") || d.title;
+/** The question a decision asks, uncut (the row clamps it to two lines): the core's `question`. */
+const question = (d: DecisionItem) => d.question || d.title;
 
 type Desk = ReturnType<typeof useDesk>;
 const DeskContext = createContext<Desk | null>(null);
