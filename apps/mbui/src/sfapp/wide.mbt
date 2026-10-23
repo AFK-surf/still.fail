@@ -25,10 +25,8 @@ priv struct Wide {
   /// the sidebar's width, and whether it is folded to the rail (⌘\)
   mut side_w : Double
   mut folded : Bool
-  /// the sidebar's edge dragged: from where, from what width; and whether it moved (a press alone folds)
-  mut edge_x : Double
-  mut edge_w : Double
-  mut edge_moved : Bool
+  /// the sidebar's edge in hand (pressed or dragged): its width kept, and the block moved, once it is let go
+  mut edge_held : Bool
   /// a chat's row's menu open (its right click): its row's key, the item, where
   mut menu : (String, ChatItem, Double, Double)?
   /// a row being renamed in place: its key
@@ -104,9 +102,7 @@ priv struct Wide {
 let wide : Wide = {
   side_w: 240.0,
   folded: false,
-  edge_x: -1.0,
-  edge_w: 0.0,
-  edge_moved: false,
+  edge_held: false,
   menu: None,
   renaming: "",
   filter_open: false,
@@ -197,9 +193,7 @@ fn side_on_fold() -> Double? {
 fn wide_reset() -> Unit {
   wide.side_w = 240.0
   wide.folded = false
-  wide.edge_x = -1.0
-  wide.edge_w = 0.0
-  wide.edge_moved = false
+  wide.edge_held = false
   wide.menu = None
   wide.renaming = ""
   wide.filter_open = false
@@ -477,7 +471,7 @@ fn wide_frame(
   let shown = c.shown_across(page_id, but="page-bar")
   let state = (bar, peek, s)
   match rail_ws.moved_as {
-    Some(was) if was != state && wide.edge_x < 0.0 => {
+    Some(was) if was != state && !wide.edge_held => {
       // shown a while from now: how far the page moves aside, worked out once as it starts (Rail.tsx markPeek)
       if peek && !was.1 {
         rail_ws.peek_shift = peek_shift(c, shown, rail_ws.page_from, s)
@@ -986,11 +980,6 @@ let rail_bar_at : @ui.Style = @ui.style(pt=S2)
 let rail_dot_at : @ui.Style = @ui.style(pt=S1, pr=S1)
 
 ///|
-/// The sidebar's edge's bar, 4 into its strip (Rail.css.ts edge::after: left 4).
-// kept across runs: a value (no field of it changes)
-let edge_bar_at : @ui.Style = @ui.style(pl=S1)
-
-///|
 /// One place of the rail: its icon (奏 its word), what waits on it a dot at its corner; pressed, its page.
 fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Bool, places : Array[String]) -> Unit {
   let t = @sf.theme()
@@ -1340,138 +1329,57 @@ fn open_settings() -> Unit {
 }
 
 ///|
-/// The sidebar's edge (Rail.tsx SidebarEdge): a strip over its right edge, dragged to resize it (180 to 480), pressed
-/// alone to fold it to the rail or open it again; its line and its grip show while the pointer is on it. `at`: its left
+/// The sidebar's edge (Rail.tsx SidebarEdge, Rail.css.ts edge): a strip 12 wide over its right edge, the library's edge
+/// in it 3 in (its line on the sidebar's edge, its bar shown only with the pointer on the strip, its line not while the
+/// sidebar is folded): dragged, the sidebar's width (180 to 480), while it is open or shown a while; pressed without
+/// moving, the sidebar folded to the rail or opened again. Its words follow the pointer along it. `at`: its left
 /// (Rail.css.ts edge), moved with the block (side_moves).
 fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
-  let t = @sf.theme()
   let id = c.id("sidebar-edge")
-  let (px, _, down) = c.pointer()
-  // its width dragged open, and shown a while (the same width as open); folded, only pressed
+  // its width dragged open, and shown a while (the same width as open); folded, only pressed (any way it moves)
   let sized = !wide.folded || rail_ws.peeking
   c.cursor(id, if wide.folded { Hand } else { ResizeX })
-  if c.pressed(id) {
-    if wide.edge_x < 0.0 {
-      wide.edge_x = px
-      wide.edge_w = wide.side_w
-      wide.edge_moved = false
-    } else if sized {
-      let d = px - wide.edge_x
-      if d.abs() >= 3.0 {
-        wide.edge_moved = true
-      }
-      if wide.edge_moved {
-        wide.side_w = dmax(side_min, dmin(side_max, wide.edge_w + d))
-      }
-    }
+  let (least, most) = if sized { (side_min, side_max) } else { (wide.side_w, wide.side_w) }
+  let said = @sf.handle_drag(c, id, wide.side_w, min=least, max=most)
+  match said {
+    Dragging(w) => wide.side_w = w
+    Dropped(w) if sized => wide.side_w = w
+    // (folded: the web's moves go nowhere, so a press that moved is a press)
+    Dropped(_) | Pressed | Twice => wide.folded = !wide.folded
+    Untouched => ()
   }
-  if c.clicked(id) && !wide.edge_moved {
-    wide.folded = !wide.folded
+  let active = c.pressed(id) || said is Dragging(_)
+  wide.edge_held = active
+  let words = if wide.folded {
+    tr("web-main.sidebar.open")
+  } else {
+    tr("web-pages.workspace.resizeSidebar") + " · " + tr("web-main.sidebar.close")
   }
-  if !down {
-    wide.edge_x = -1.0
-  }
-  let dragging = c.pressed(id) && wide.edge_moved
-  let over = c.hovered(id) || c.focus_shown(id)
-  // its bar: 24 to 48 high and in as it is pointed at (180 ms, a quick start and a soft landing), the darker grey
-  // pressed (150 ms); its line, open, pointed at or dragged (140 ms): Rail.css.ts edge ::after, ::before
-  let grip = @kit.animate(c, "edge/grip", if over || dragging { 1.0 } else { 0.0 }, transition=edge_grip_move)
-  let pressed = @kit.animate(c, "edge/press", if c.pressed(id) || dragging { 1.0 } else { 0.0 }, transition=edge_press_move)
-  let line = @kit.animate(
-    c,
-    "edge/line",
-    if (over && !wide.folded) || dragging { 1.0 } else { 0.0 },
-    transition=edge_line_move,
-  )
   c.layer(fn() {
-    let strip = c.box(style=edge_strip, moves="edge", left=at, top=0.0, bottom=0.0, id~, fn() {
-      if line > 0.0 {
-        c.layer(fn() { edge_line(c, line) })
-        |> ignore
-      }
-      c.box(style=edge_bar_at, fn() {
-        c.box(
-          w=Px(edge_grip_w),
-          h=Px(fold_at(edge_grip_low, edge_grip_high, grip)),
-          radius=edge_grip_w / 2.0,
-          bg=@sf.alpha(@sf.mix(c.theme().field_hover, pressed, t.p.line_strong), grip),
-          fn() {  },
-        )
-        |> ignore
-      })
-      |> ignore
+    let strip = c.box(style=edge_strip, pl=edge_look_in, moves="edge", left=at, top=0.0, bottom=0.0, id~, fn() {
+      @sf.edge_look(
+        c,
+        "sidebar-edge",
+        over=false,
+        on=c.hovered(id) || c.focus_shown(id) || active,
+        active~,
+        line=!wide.folded,
+      )
     })
-    let words = if wide.folded {
-      tr("web-main.sidebar.open")
-    } else {
-      tr("web-pages.workspace.resizeSidebar") + " · " + tr("web-main.sidebar.close")
-    }
     c.semantics(strip, Button, id~, label=words)
-    if !dragging {
-      @sf.tip(c, "sidebar-edge/tip", id, words, side=Right)
-    }
+    @sf.edge_tip(c, "sidebar-edge", id, words)
   })
   |> ignore
 }
 
 ///|
-/// The edge's line: a hairline 8 from the window's top and foot, clear at its ends and the field's grey at its middle
-/// (a linear gradient: clear to 10%, grey at 50%, clear from 90%), `k` of the way in.
-fn edge_line(c : @ui.Ctx, k : Double) -> Unit {
-  let ink = c.theme().field_hover
-  c.box(w=Fill(1.0), h=Fill(1.0), pl=edge_half, pt=edge_line_in, pb=edge_line_in, fn() {
-    for i in 0..<edge_line_steps {
-      let y = (i.to_double() + 0.5) / edge_line_steps.to_double()
-      // (clear to 10% and from 90%, the grey whole at the middle, straight between)
-      let a = if y <= 0.1 || y >= 0.9 { 0.0 } else if y < 0.5 { (y - 0.1) / 0.4 } else { (0.9 - y) / 0.4 }
-      c.box(w=Px(1.0), h=Fill(1.0), bg=@sf.alpha(ink, a * k), fn() {  }) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// The edge's strip: 12 wide, the window's height (placed from its top to its foot), its bar in its middle (4 in:
-/// edge_bar_at).
+/// The edge's strip: 12 wide, the window's height (placed from its top to its foot), the library's 7-wide edge 3 in
+/// (Rail.css.ts edge: its line 6 in, its bar 4 in).
 // kept across runs: a value (no field of it changes)
-let edge_strip : @ui.Style = @ui.style(w=S3, align=AStart, justify=JCenter)
+let edge_strip : @ui.Style = @ui.style(w=S3)
 
 ///|
-/// The edge's bar 5 wide, 24 high, 48 pointed at; its line in 40 steps of its gradient, 8 from the ends.
-let edge_grip_w : Double = 5.0
-
-///|
-let edge_grip_low : Double = 24.0
-
-///|
-let edge_grip_high : Double = 48.0
-
-///|
-let edge_line_in : Double = 8.0
-
-///|
-let edge_line_steps : Int = 40
-
-///|
-// kept across runs: a value (no field of it changes)
-let edge_grip_move : @motion.Spec = @motion.tween(edge_grip_ms, ease=Soft)
-
-///|
-// kept across runs: a value (no field of it changes)
-let edge_press_move : @motion.Spec = @motion.tween(edge_press_ms, ease=Out)
-
-///|
-// kept across runs: a value (no field of it changes)
-let edge_line_move : @motion.Spec = @motion.tween(edge_line_ms, ease=Out)
-
-///|
-let edge_grip_ms : Double = 180.0
-
-///|
-let edge_press_ms : Double = 150.0
-
-///|
-let edge_line_ms : Double = 140.0
+let edge_look_in : Double = 3.0
 
 ///|
 /// A new chat (新建对话, ⌘N): its page beside the list.

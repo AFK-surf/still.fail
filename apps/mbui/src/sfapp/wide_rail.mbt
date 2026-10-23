@@ -141,7 +141,7 @@ fn side_follow(src : Source, ws : String) -> Unit {
     rail_ws.peeking = false
     return
   }
-  if wide.edge_x >= 0.0 || (wide.side_w == rail_ws.kept_w && wide.folded == rail_ws.kept_folded) {
+  if wide.edge_held || (wide.side_w == rail_ws.kept_w && wide.folded == rail_ws.kept_folded) {
     return
   }
   rail_ws.kept_w = wide.side_w

@@ -2037,8 +2037,9 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
       _ => edge_tips_away.remove(key)
     }
   }
-  // (put away, it is not drawn at all; its delay starts anew once the pointer is back on it)
-  if edge_tips_away.contains(key) {
+  // (put away, it is not drawn at all; its delay starts anew once the pointer is back on it. The press itself is told
+  // to the tip, so it is shut as it is pressed, not left open to show for a moment as the pointer leaves.)
+  if edge_tips_away.contains(key) && !c.pressed(id) && !c.clicked(id) {
     return
   }
   @kit.tooltip(
