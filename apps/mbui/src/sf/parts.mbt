@@ -1740,3 +1740,260 @@ let chooser_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, wrap=fal
 ///|
 // kept across runs: a value (no field of it changes)
 let chooser_words_lit : @ui.TextStyle = chooser_words.then(@ui.text_style(color=Fg))
+
+// ---------------------------------------------------------------------------
+// A column's edge (parts.tsx ResizeHandle, usePointerTip; Rail.tsx SidebarEdge and DriveViews.tsx ColumnEdge look as
+// it does and take the pointer as it does)
+
+///|
+/// What a column's edge was done with this frame.
+pub(all) enum Resized {
+  /// nothing
+  Untouched
+  /// dragged (once it went 3 from where it was pressed) to this width
+  Dragging(Double)
+  /// let go after it was dragged, at this width
+  Dropped(Double)
+  /// pressed and let go without moving (the web's `press`: a panel closing)
+  Pressed
+  /// the second of two clicks (the first was `Pressed`): its own width again, or as wide as what it holds needs
+  Twice
+} derive(Eq, Show, Debug)
+
+///|
+/// An edge in hand: where the press went down, its column's width then, whether it has gone past the slop.
+priv struct Handling {
+  x0 : Double
+  w0 : Double
+  mut moved : Bool
+}
+
+///|
+/// The edges in hand, by their ids.
+let handlings : Map[Int, Handling] = {}
+
+///|
+/// What the pointer does with the edge `id` of a column `width` wide, on its `edge`: pressed and gone 3 from where it
+/// went down, the width it is dragged to (the width it had then, the pointer's way on the right edge, the other way on
+/// the left, between `min` and `max` on whole pixels); let go, the width it ends at, or a press without moving, or the
+/// second of two clicks. The pointer is the edge's while it is pressed, over it or not.
+pub fn handle_drag(
+  c : @ui.Ctx,
+  id : Int,
+  width : Double,
+  min~ : Double,
+  max~ : Double,
+  edge? : @ui.Side = Right,
+) -> Resized {
+  let (px, _, down) = c.pointer()
+  let at = fn(h : Handling) {
+    let d = if edge is Left { h.x0 - px } else { px - h.x0 }
+    dmax(min, dmin(max, (h.w0 + d).round()))
+  }
+  if c.pressed(id) {
+    let h = match handlings.get(id) {
+      Some(h) => h
+      None => {
+        // (from where it went down: the frame that sees the press may see it moved already)
+        let h : Handling = { x0: c.press_x, w0: width, moved: false }
+        handlings[id] = h
+        h
+      }
+    }
+    h.moved = h.moved || (px - h.x0).abs() >= handle_slop
+    return if h.moved { Dragging(at(h)) } else { Untouched }
+  }
+  let held = if down { None } else { handlings.get(id) }
+  if !down {
+    handlings.remove(id)
+  }
+  if c.double_clicked(id) {
+    Twice
+  } else if held is Some(h) && h.moved {
+    Dropped(at(h))
+  } else if c.clicked(id) {
+    Pressed
+  } else {
+    Untouched
+  }
+}
+
+///|
+/// How an edge shows: its bar `over` its column, or `on` it (pointed at, focused, in hand), or `active` (pressed,
+/// dragged); the line along it on it or active, unless it has `line` false.
+fn edge_state(over : Bool, on : Bool, active : Bool, line : Bool) -> Int {
+  (if over || on || active { 1 } else { 0 }) |
+  (if on || active { 2 } else { 0 }) |
+  (if active { 4 } else { 0 }) |
+  (if (on && line) || active { 8 } else { 0 })
+}
+
+///|
+/// How each edge showed last, by its key: as it changes, its look moves to the new one (the web's transitions).
+let edges_shown : Map[String, Int] = {}
+
+///|
+/// A column's edge as it looks (parts.css.ts resizeHandle; Rail.css.ts edge the same), 7 wide and as high as what holds
+/// it: a bar 5 wide at its middle and a hairline through the bar's middle, 8 short of the ends, clear toward them
+/// (clear to 10%, the field's edge grey at 50%, clear from 90%). The bar shows, 24 high, while the pointer is `over` the
+/// column; 48 high while `on` the edge (pointed at, focused, in hand), in the field's edge grey while `active`
+/// (pressed, dragged), else the strong line's grey; the line while on the edge, unless `line` is false (the sidebar's
+/// edge, folded), and while active. Its bar's height and showing move over 180 ms (a quick start, a soft landing), its
+/// grey over 150 and its line over 140 on the ease-out.
+pub fn edge_look(
+  c : @ui.Ctx,
+  key : String,
+  over~ : Bool,
+  on~ : Bool,
+  active~ : Bool,
+  line? : Bool = true,
+) -> Unit {
+  let now = edge_state(over, on, active, line)
+  let bar = key + "/bar"
+  let hairline = key + "/line"
+  match edges_shown.get(key) {
+    Some(was) if was != now => {
+      c.move_state([(bar, ["height", "opacity"])], duration=edge_bar_ms, ease=fn(t) { @motion.Ease::Soft.at(t) })
+      c.move_state([(bar, ["background-color"])], duration=edge_ink_ms, curve=Out)
+      c.move_state([(hairline, ["opacity"])], duration=edge_line_ms, curve=Out)
+    }
+    _ => ()
+  }
+  edges_shown[key] = now
+  c.box(style=edge_box, fn() {
+    c.layer(fn() {
+      c.box(style=edge_line_place, fn() {
+        c.box(style=if (now & 8) != 0 { edge_line_on } else { edge_line }, moves=hairline, fn() {
+          for i in 0..<edge_line_steps {
+            let y = (i.to_double() + 0.5) / edge_line_steps.to_double()
+            // (clear to 10% and from 90%, the grey whole at the middle, straight between)
+            let a = if y <= 0.1 || y >= 0.9 { 0.0 } else if y < 0.5 { (y - 0.1) / 0.4 } else { (0.9 - y) / 0.4 }
+            c.look(c.box(style=edge_step, fn() {  }), @ui.look(alpha=a))
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    let look = if (now & 4) != 0 {
+      edge_bar_active
+    } else if (now & 2) != 0 {
+      edge_bar_on
+    } else if (now & 1) != 0 {
+      edge_bar_shown
+    } else {
+      edge_bar
+    }
+    c.box(style=look, moves=bar, fn() {  }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+let edge_bar_ms : Double = 180.0
+
+///|
+let edge_ink_ms : Double = 150.0
+
+///|
+let edge_line_ms : Double = 140.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_box : @ui.Style = @ui.style(row=true, w=Fixed(handle_w), h=Full, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_line_place : @ui.Style = @ui.style(row=true, w=Full, h=Full, py=S2, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_line : @ui.Style = @ui.style(w=SPx, h=Full, opacity=O0)
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_line_on : @ui.Style = edge_line.then(@ui.style(opacity=O100))
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_step : @ui.Style = @ui.style(w=Full, h=grow, bg=FieldHover)
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_bar : @ui.Style = @ui.style(w=Fixed(edge_bar_w), h=S6, radius=Full, bg=Border, opacity=O0)
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_bar_shown : @ui.Style = edge_bar.then(@ui.style(opacity=O100))
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_bar_on : @ui.Style = edge_bar_shown.then(@ui.style(h=S12))
+
+///|
+// kept across runs: a value (no field of it changes)
+let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.style(bg=FieldHover))
+
+///|
+/// A tip that follows the pointer along a tall thin thing (usePointerTip: an edge), `id`: shown 300 ms after the pointer
+/// comes onto it, 14 beside the pointer on `side`, its middle level with it, as the pointer moves along; gone as it
+/// leaves or presses, and pressed, until it has left and come again. Said each frame the thing is drawn.
+pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui.Side = Right) -> Unit {
+  if words == "" || id == 0 {
+    return
+  }
+  let (px, py, _) = c.pointer()
+  @kit.tooltip(
+    c,
+    "edge-tip/" + key,
+    id,
+    words,
+    delay=edge_tip_ms,
+    skip=0.0,
+    side~,
+    offset=edge_tip_gap,
+    at=(px, py, 0.0, 0.0),
+    look=fn(c, _, words) { tip_look(c, words, "") },
+  )
+  |> ignore
+}
+
+///|
+/// ResizeHandle (parts.tsx): a strip 7 wide over its column's `edge`, 4 of it past it (its line on the edge), the
+/// column's height, that drags the column's width (handle_drag: from `width`, between `min` and `max`), as edge_look
+/// shows it: its bar while the pointer is `over` the column (the page says), the line and the longer bar on it, and
+/// `active` while it, or another edge dragged with it, is in hand. Its words, `label` (and `press`'s after it, what a
+/// press without moving does), follow the pointer along it, gone as it is pressed until the pointer comes onto it
+/// again. Drawn last in its column's box (it is put by its edges, out of the column's flow). What was done with it
+/// comes back: the page keeps the width (the web's keptWidth and setKeptWidth: where it keeps what it keeps on the
+/// device), and a press or the second of two clicks is the page's.
+pub fn resize_handle(
+  c : @ui.Ctx,
+  key : String,
+  width : Double,
+  min~ : Double,
+  max~ : Double,
+  label~ : String,
+  edge? : @ui.Side = Right,
+  press? : String = "",
+  over? : Bool = false,
+  active? : Bool = false,
+) -> Resized {
+  let id = c.id(key)
+  c.cursor(id, ResizeX)
+  let said = handle_drag(c, id, width, min~, max~, edge~)
+  let held = active || (said is Dragging(_)) || c.pressed(id)
+  let on = c.hovered(id) || c.focus_shown(id) || held
+  let words = if press == "" { label } else { label + " · " + press }
+  let body = fn() { edge_look(c, key, over~, on~, active=held) }
+  let b = if edge is Left {
+    c.box(left=-handle_out, top=0.0, bottom=0.0, id~, body)
+  } else {
+    c.box(right=-handle_out, top=0.0, bottom=0.0, id~, body)
+  }
+  c.semantics(b, Separator, id~, label=words)
+  // (pressed, it goes until the pointer has left the edge and come again)
+  edge_tip(c, key, id, words, side=if edge is Left { Left } else { Right })
+  said
+}

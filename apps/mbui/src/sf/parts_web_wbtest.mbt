@@ -105,3 +105,124 @@ test "a dialog: 520 wide, its title and its lead, what it holds; its close butto
   t.click(Button, label="关闭")
   assert_true(!open.val)
 }
+
+///|
+/// A column 240 wide by a window's height with its edge (ResizeHandle) on its right, its width as the edge says; what
+/// the edge was done with, each time it was done with something.
+fn edge_view(width : Ref[Double], said : Array[Resized]) -> (@ui.Ctx) -> Unit {
+  wide_view(fn(c) {
+    c.box(dir=Row, h=Fill(1.0), fn() {
+      c.box(w=Px(width.val), h=Fill(1.0), fn() {
+        let r = resize_handle(c, "column", width.val, min=160.0, max=640.0, label="调整列宽", over=true)
+        match r {
+          Dragging(w) | Dropped(w) => width.val = w
+          _ => ()
+        }
+        if r != Untouched {
+          said.push(r)
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+}
+
+///|
+test "a column's edge: 7 wide, 4 past the column; dragged past 3, the width from where it was pressed, 160 to 640" {
+  let width = Ref(240.0)
+  let said : Array[Resized] = []
+  let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)
+  t.draw()
+  let e = t.get(Separator, label="调整列宽")
+  assert_eq((e.rect.0, e.rect.2, e.rect.3), (240.0 + handle_out - handle_w, handle_w, 800.0))
+  let x = e.rect.0 + 3.0
+  t.press_at(x, 400.0)
+  t.move(x + 2.0, 400.0)
+  assert_eq(width.val, 240.0)
+  assert_eq(said.length(), 0)
+  t.move(x + 50.0, 400.0)
+  assert_eq(width.val, 290.0)
+  t.move(x + 1000.0, 400.0)
+  assert_eq(width.val, 640.0)
+  t.move(x - 500.0, 400.0)
+  assert_eq(width.val, 160.0)
+  t.move(x + 60.4, 400.0)
+  assert_eq(width.val, 300.0)
+  t.release(x + 60.4, 400.0)
+  assert_eq(said[said.length() - 1], Dropped(300.0))
+  assert_eq(t.get(Separator, label="调整列宽").rect.0, 300.0 + handle_out - handle_w)
+}
+
+///|
+test "a column's edge pressed without moving is Pressed, the second of two clicks Twice" {
+  let width = Ref(240.0)
+  let said : Array[Resized] = []
+  let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)
+  t.draw()
+  let e = t.get(Separator, label="调整列宽")
+  t.tap(e.rect.0 + 3.0, 400.0)
+  assert_eq(said, [Pressed])
+  t.tap(e.rect.0 + 3.0, 400.0)
+  assert_eq(said, [Pressed, Twice])
+  assert_eq(width.val, 240.0)
+}
+
+///|
+test "a column's edge: its bar 24 high over the column, 48 on the edge once its move is done; its words by the pointer" {
+  let width = Ref(240.0)
+  let said : Array[Resized] = []
+  let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)
+  let bar = fn() {
+    t.drawn_rects().filter(fn(r) { r.2 == edge_bar_w }).map(fn(r) { r.3 })
+  }
+  t.move(100.0, 400.0)
+  t.run_for(edge_bar_ms)
+  assert_eq(bar(), [24.0])
+  assert_true(t.find("调整列宽") is None)
+  let e = t.get(Separator, label="调整列宽")
+  t.move(e.rect.0 + 3.0, 300.0)
+  t.run_for(edge_bar_ms)
+  assert_eq(bar(), [48.0])
+  // its words 300 ms after the pointer came (and in), 14 right of it, their middle level with it, following it down
+  t.run_for(edge_tip_ms)
+  t.run_for(edge_tip_ms)
+  match t.rect_of("调整列宽") {
+    Some((wx, wy, _, wh)) => {
+      assert_true(wx >= e.rect.0 + 3.0 + edge_tip_gap, msg=wx.to_string())
+      assert_true((wy + wh / 2.0 - 300.0).abs() <= 1.0, msg=(wy + wh / 2.0).to_string())
+    }
+    None => fail("no tip")
+  }
+  t.move(e.rect.0 + 3.0, 500.0)
+  t.frame()
+  match t.rect_of("调整列宽") {
+    Some((_, wy, _, wh)) => assert_true((wy + wh / 2.0 - 500.0).abs() <= 1.0, msg=(wy + wh / 2.0).to_string())
+    None => fail("the tip went")
+  }
+}
+
+///|
+test "a column's edge's words go as it is pressed, and come again only once the pointer has left it and come back" {
+  let width = Ref(240.0)
+  let said : Array[Resized] = []
+  let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)
+  t.draw()
+  let x = t.get(Separator, label="调整列宽").rect.0 + 3.0
+  t.move(x, 300.0)
+  t.run_for(edge_tip_ms)
+  t.run_for(edge_tip_ms)
+  assert_true(t.find("调整列宽") is Some(_))
+  t.press_at(x, 300.0)
+  t.move(x + 40.0, 300.0)
+  t.release(x + 40.0, 300.0)
+  t.run_for(edge_tip_ms)
+  t.run_for(edge_tip_ms)
+  assert_true(t.find("调整列宽") is None)
+  t.move(100.0, 300.0)
+  t.frame()
+  t.move(x + 40.0, 300.0)
+  t.run_for(edge_tip_ms)
+  t.run_for(edge_tip_ms)
+  assert_true(t.find("调整列宽") is Some(_))
+}
