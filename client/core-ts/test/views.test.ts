@@ -1312,6 +1312,7 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, { n: 42, kind: "edit", target: 41, text: "新的（改）", attachments: [], quotes: [], at: 42 }], last: 42 }));
   await t.read(u, 1);
   v = u.value;
+  assert.equal(v.lastEntry, 42, "an edit advances the entry cursor without adding a message");
   assert.deepEqual(v.messages.slice(-2).reverse().map((m: J) => [m.text, m.editedAt ?? null]), [["新的（改）", 42], ["第 40 条", null]]);
   t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...Array.from({ length: 10 }, (_, i) => entry(i + 1, "旧的")), ...(p as J).entries], first: 1 }));
   await t.read(u, 1);

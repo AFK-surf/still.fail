@@ -28,6 +28,8 @@ export type VirtualList = {
   after(): ReactNode;
   /** Told after anything changed where the pane is or what it shows; answers how to stop being told. */
   watch(told: () => void): () => void;
+  /** This render committed, its visible rows measured, and its anchor written to the pane. */
+  committed(): boolean;
   /** To the end, followed again: gliding there, or at once. */
   toEnd(atOnce?: boolean): void;
   /** To an item (model.ts `goto`); false while it is not among the items. */
@@ -57,6 +59,7 @@ type Made = {
   holds: boolean;
   /** Where the pane was last put, or seen to be. */
   written: number;
+  committed: Layout | null;
   kept: number;
   /** A glide's own step is being written: not a move made to keep the pane's place. */
   stepping: boolean;
@@ -99,7 +102,7 @@ export function useVirtualModel(key: string, gap: number, holds = true): Made {
 function fresh(model: Virtual, gap: number, holds: boolean): Made {
   return {
     model, holds,
-    gap, written: Number.NaN, kept: 0, stepping: false, drawn: "", born: performance.now(), watchers: new Set<() => void>(), frame: 0, last: 0, pulled: null, wide: false, shown: new Set<string>(),
+    gap, committed: null, written: Number.NaN, kept: 0, stepping: false, drawn: "", born: performance.now(), watchers: new Set<() => void>(), frame: 0, last: 0, pulled: null, wide: false, shown: new Set<string>(),
   };
 }
 
@@ -197,6 +200,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     let later = 0;
     // Only for rows made in this very commit (each reports once it is laid out); nor a pane never put yet (its own
     // size comes with the same report). Any other time the pane is put now: no report may be coming.
+    made.committed = layout;
     const fresh = layout.rows.some((r) => !made.shown.has(r.key));
     made.shown = new Set(layout.rows.map((r) => r.key));
     // (And not in a glide's own step: each step is where the pane is to be now.)
@@ -416,6 +420,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     // A spacer cancels the list's gap on the sides it has a neighbour: its height is all the room there is.
     above: (row, first) => (first ? (row.space > 0 ? spacer(`above ${row.key}`, row.space, "first") : null) : Math.abs(row.space - gap) > 0.5 ? spacer(`above ${row.key}`, row.space, "between") : null),
     after: () => (layout.after > 0 ? spacer("after", layout.after, layout.rows.length ? "last" : "only") : null),
+    committed: () => made.committed === layout && !model.guessed && Math.abs(made.written - model.layout().scrollTop) < 1,
     watch: (told) => { made.watchers.add(told); return () => { made.watchers.delete(told); }; },
     toEnd: (atOnce = false) => {
       const el = pane.current;
