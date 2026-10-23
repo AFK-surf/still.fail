@@ -119,9 +119,16 @@ export function OneComputer(props: DemoProps) {
       if (on === out) return;
       out = on;
       for (const r of rows) {
-        for (const h of r.holders) Object.assign(h.style, { overflow: on ? "visible" : "", contain: on ? "none" : "", clipPath: on ? "none" : "" });
+        // Out of their lists, and over all of the device while in the air (its camera island and its corners, at 2 in
+        // the window: site.css.ts): what holds them cuts nothing off, and each layer of its own they are in (the app's
+        // screen is fixed, its root moved by a transform) is lifted over those.
+        for (const h of r.holders) {
+          Object.assign(h.style, on
+            ? { overflow: "visible", contain: "none", clipPath: "none", zIndex: "3" }
+            : { overflow: "", contain: "", clipPath: "", zIndex: "" });
+        }
         Object.assign(r.el.style, on
-          ? { position: "relative", zIndex: "1", background: r.ground, transformOrigin: "0 0" }
+          ? { position: "relative", zIndex: "50", background: r.ground, transformOrigin: "0 0" }
           : { position: "", zIndex: "", background: "", transformOrigin: "", transform: "" });
       }
     };
