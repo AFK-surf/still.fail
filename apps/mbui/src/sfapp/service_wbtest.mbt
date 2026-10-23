@@ -44,7 +44,7 @@ test "the sizes' bar held still half a second: folded away, felt once (Preview.k
   t.press_at(x, y)
   t.run_for(svc_fold_hold_ms + 100.0)
   t.release(x, y)
-  assert_true(svc_folded.val)
+  assert_eq(svc_folded.val, Some(true))
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
 }
 
@@ -97,4 +97,33 @@ test "cookies: several in one header apart (an Expires date's comma kept), each 
   assert_eq(p.cookies.get("b"), Some("2"))
   service_keep_cookie(p, "a=; Max-Age=0")
   assert_eq(p.cookies.get("a"), None)
+}
+
+///|
+test "a size chosen and the toolbar folded: kept on the device (prefs), read as a page opens in a later run" {
+  reset()
+  let kept : Array[Json] = []
+  svc_keep.val = fn(patch) { kept.push(patch) }
+  keep_size(service_key("ws1/st1", "j-a"), Some({ width: 390, height: Some(844) }))
+  keep_size(service_key("ws1/st1", "j-b"), Some({ width: 1280, height: None }))
+  keep_size(service_key("ws1/st1", "j-c"), None)
+  keep_folded(true)
+  assert_eq(text(field(Some(kept[0]), "previewSizes"), "ws1/st1\nj-a"), "390x844")
+  assert_eq(text(field(Some(kept[1]), "previewSizes"), "ws1/st1\nj-b"), "1280")
+  assert_true(field(field(Some(kept[2]), "previewSizes"), "ws1/st1\nj-c") == Some(Json::null()))
+  assert_true(flag(Some(kept[3]), "previewFolded"))
+  // a later run: nothing chosen since it started, the pages open as the core kept them
+  reset()
+  let prefs : Json = {
+    "previewSizes": { "ws1/st1\nj-a": "390x844", "ws1/st1\nj-b": "1280", "ws1/st1\nj-d": "wide" },
+    "previewFolded": true,
+  }
+  let a = service_page_for("ws1/st1", "j-a", prefs=Some(prefs))
+  assert_true(a.viewport == Some({ width: 390, height: Some(844) }))
+  assert_true(a.folded)
+  let b = service_page_for("ws1/st1", "j-b", prefs=Some(prefs))
+  assert_true(b.viewport == Some({ width: 1280, height: None }))
+  // one that does not read: as big as the preview
+  let d = service_page_for("ws1/st1", "j-d", prefs=Some(prefs))
+  assert_true(d.viewport is None)
 }

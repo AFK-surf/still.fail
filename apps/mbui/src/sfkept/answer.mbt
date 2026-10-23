@@ -72,6 +72,17 @@ fn book_key(markdown : Bool, text : String) -> String {
 }
 
 ///|
+/// Whether the core's answer to `name` with its `params` is kept (a call answered here, not asked of a core): Markdown
+/// read and code coloured. Nothing is said on the output of one that is not.
+pub fn has(name : String, params : Json) -> Bool {
+  match name {
+    "markdown" => kept("markdown").contains(word(params, "text"))
+    "code.ink" => kept("code.ink").contains(word(params, "lang") + "\u{1}" + word(params, "code"))
+    _ => false
+  }
+}
+
+///|
 /// The core's answer to `name` (with its `params`, and the bytes beside the call) as the real core gave it, its bytes
 /// beside it; an error where it is not kept (said on the output); None for a call that is not one of these.
 pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Bytes?), Json]? {

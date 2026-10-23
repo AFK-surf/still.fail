@@ -1554,6 +1554,8 @@ export const SHAPES: Record<string, Shape> = {
     ["dropAs", opt("String"), { doc: "How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path." }],
     ["archiveHint", opt("String"), { doc: "When a done chat is offered to archive (drawn faded, below the rest of its day): `off`, never;\n`reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it\n(where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says." }],
     ["screenTouch", opt("String"), { doc: "How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a\ntrackpad (the finger moves the pointer, a tap clicks where it points)." }],
+    ["previewSizes", map("String"), { default: true, doc: "The size a service's page is shown at on this device (its preview's 尺寸), by its station and job\n(`<station>\\n<job>`): its width, or `<width>x<height>`; none: as big as the preview." }],
+    ["previewFolded", opt("bool"), { doc: "A service's page's toolbar folded away on this device (held down; the bar's size button opens it again)." }],
     ["resume", map("String"), { default: true, doc: "A Slack app made for a new connect, to go on with, by station (the Android app's)." }],
     ["stationUpdatesDismissed", map("String"), { default: true, doc: "Versions dismissed on this device, by workspace/station." }],
     ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead." }],

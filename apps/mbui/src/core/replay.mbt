@@ -238,9 +238,20 @@ pub fn Replay::parse(log : String) -> Replay {
 /// account a scripted run was given by its environment). Their answers are left out too.
 pub fn Replay::skip(self : Replay, call : String) -> Unit {
   self.skipped.push(call)
+  self.skip_where(fn(name, _) { name == call })
+}
+
+///|
+/// The run's calls `which` says yes to (by their name and params) not waited for, their answers left out too: what a
+/// test answers itself (the core's pure calls whose answers are kept: src/sfkept), not asking the run's core.
+pub fn Replay::skip_where(self : Replay, which : (String, Json) -> Bool) -> Unit {
   let gone : Array[Int] = []
   for e in self.evs {
-    if e.out && !e.done && e.msg is Object(m) && kind_of(m) == "call" && name_of(m) == call {
+    if e.out &&
+      !e.done &&
+      e.msg is Object(m) &&
+      kind_of(m) == "call" &&
+      which(name_of(m), m.get("params").unwrap_or(Json::null())) {
       e.done = true
       match id_of(m) {
         Some(id) => gone.push(id)

@@ -2132,7 +2132,7 @@ fn avatar(
   picture : String,
   size : Double,
 ) -> Unit {
-  @sf.avatar(c, id, name, if picture != "" { (src.picture)(picture, c.frame_no) } else { "" }, size)
+  @sf.avatar(c, id, name, if picture != "" { (src.picture)(picture, c.page_stint()) } else { "" }, size)
 }
 
 ///|

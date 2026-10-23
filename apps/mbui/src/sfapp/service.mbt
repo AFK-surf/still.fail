@@ -17,13 +17,12 @@
 // held down it folds away and the bar's size button opens it again. A service being started again is said over the
 // page, which loads anew once it is back; one stopped, or not found, is said in its place.
 //
-// The address is typed with the keyboard for addresses, its key 前往.
+// The size chosen and the toolbar folded are kept on the device (the core's prefs `previewSizes`, `previewFolded`;
+// Preview.kt keeps them in its own); the address is typed with the keyboard for addresses, its key 前往.
 //
-// Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): the size chosen
-// and the toolbar folded kept on the device across runs (kept while the app runs: there is no store of the device's
-// own), a marked picture's pin and edge as the page shows them (drawn as an image's marks are), and on Android the top
-// page's fetch() on its port (the WebView's cookies are not the app's to send along: it goes as the page's other
-// requests do).
+// Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): a marked picture's
+// pin and edge as the page shows them (drawn as an image's marks are), and on Android the top page's fetch() on its
+// port (the WebView's cookies are not the app's to send along: it goes as the page's other requests do).
 
 ///|
 // kept across runs: a table, never written
@@ -97,7 +96,7 @@ fn svc(key : String, args? : Array[(String, String)] = []) -> String {
 priv struct Viewport {
   width : Int
   height : Int?
-}
+} derive(Eq)
 
 ///|
 /// The sizes offered (Preview.kt PRESETS).
@@ -153,11 +152,62 @@ priv struct ServicePage {
 let service_pages : Map[String, ServicePage] = Map([])
 
 ///|
-/// The size chosen for each service, while the app runs (Preview.kt keeps it on the device).
+/// The size chosen for each service while the app runs, and whether the toolbar was folded (None: not chosen since it
+/// started): what the core keeps of them on the device (prefs `previewSizes`, `previewFolded`) is read only before.
 let svc_viewports : Map[String, Viewport?] = Map([])
 
 ///|
-let svc_folded : Ref[Bool] = Ref(false)
+let svc_folded : Ref[Bool?] = Ref(None)
+
+///|
+/// Puts a patch into the core's prefs (the page's source's `prefs.set`; nothing until a page has been shown).
+let svc_keep : Ref[(Json) -> Unit] = Ref(fn(_) {  })
+
+///|
+/// A size as the core keeps it: its width, or `<width>x<height>`.
+fn size_kept(v : Viewport?) -> Json {
+  match v {
+    None => Json::null()
+    Some({ width, height: None }) => Json::string(width.to_string())
+    Some({ width, height: Some(h) }) => Json::string(width.to_string() + "x" + h.to_string())
+  }
+}
+
+///|
+/// A size the core kept (size_kept's), within the sizes a page can take; None for none, or one that does not read.
+fn size_of_kept(s : String) -> Viewport? {
+  let parts = s.split("x").map(fn(x) { x.to_string() }).to_array()
+  let num = fn(x : String) -> Int? {
+    if x.length() > 4 {
+      None
+    } else {
+      size_of(x).map(clamp_size)
+    }
+  }
+  match parts {
+    [w] => num(w).map(fn(w) { { width: w, height: None } })
+    [w, h] =>
+      match (num(w), num(h)) {
+        (Some(w), Some(h)) => Some({ width: w, height: Some(h) })
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+/// A size chosen for a service: shown, and kept on the device.
+fn keep_size(key : String, v : Viewport?) -> Unit {
+  svc_viewports[key] = v
+  (svc_keep.val)(Json::object({ "previewSizes": Json::object(Map::from_array([(key, size_kept(v))])) }))
+}
+
+///|
+/// The toolbar folded away or opened again: kept on the device (null: opened, as none is).
+fn keep_folded(on : Bool) -> Unit {
+  svc_folded.val = Some(on)
+  (svc_keep.val)(Json::object({ "previewFolded": if on { Json::boolean(true) } else { Json::null() } }))
+}
 
 ///|
 fn service_key(station : String, job : String) -> String {
@@ -165,7 +215,7 @@ fn service_key(station : String, job : String) -> String {
 }
 
 ///|
-fn service_page_for(station : String, job : String) -> ServicePage {
+fn service_page_for(station : String, job : String, prefs? : Json? = None) -> ServicePage {
   let key = service_key(station, job)
   match service_pages.get(key) {
     Some(p) => p
@@ -176,8 +226,18 @@ fn service_page_for(station : String, job : String) -> ServicePage {
         site: None,
         port: 0,
         cookies: {},
-        viewport: svc_viewports.get(key).unwrap_or(None),
-        folded: svc_folded.val,
+        viewport: match svc_viewports.get(key) {
+          Some(v) => v
+          None =>
+            match field(field(prefs, "previewSizes"), key) {
+              Some(String(s)) => size_of_kept(s)
+              _ => None
+            }
+        },
+        folded: match svc_folded.val {
+          Some(on) => on
+          None => flag(prefs, "previewFolded")
+        },
         restarting: false,
         calls: {},
         asked: 0,
@@ -323,7 +383,8 @@ fn service_body(
   session : String,
   file? : FilePage? = None,
 ) -> Unit {
-  let p = service_page_for(station, job)
+  svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, fn(_) {  }) }
+  let p = service_page_for(station, job, prefs=(src.topic)("prefs", {}).value)
   p.port = port
   p.name = name
   p.session = session
@@ -1003,7 +1064,7 @@ fn service_page_bar(
       let sid = c.id("service/size")
       if c.clicked(sid) {
         p.folded = false
-        svc_folded.val = false
+        keep_folded(false)
       }
       c.box(
         dir=Row,
@@ -1401,13 +1462,13 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
     p.moving = false
     p.view.fit_now()
     p.viewport = v
-    svc_viewports[key] = v
+    keep_size(key, v)
   }
   let bar = c.id("service/toolbar")
   // held still half a second: folded away (the bar's size button opens it again)
   if @kit.after(c, "service/fold-hold", c.pressed(bar) || toolbar_child_pressed(c), svc_fold_hold_ms) {
     p.folded = true
-    svc_folded.val = true
+    keep_folded(true)
     feel_hold(c, "service/fold")
   }
   let ground = if sized { @sf.mix(t.p.chip, 0.55, t.p.card) } else { t.p.card }
@@ -1605,7 +1666,7 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
         match p {
           Some(x) => {
             x.viewport = v
-            svc_viewports[key] = v
+            keep_size(key, v)
           }
           None => ()
         }
@@ -1773,7 +1834,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
           p.moving = false
           p.view.fit_now()
           p.viewport = Some(v)
-          svc_viewports[key] = Some(v)
+          keep_size(key, Some(v))
         }
       }
       _ => ()
@@ -1828,7 +1889,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
           let v : Viewport = { width: h, height: Some(width) }
           p.view.fit_now()
           p.viewport = Some(v)
-          svc_viewports[key] = Some(v)
+          keep_size(key, Some(v))
         }
         _ => ()
       }

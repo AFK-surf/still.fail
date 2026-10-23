@@ -930,7 +930,7 @@ let seg_pill_line : @ui.Style = @ui.style(row=true, w=Full)
 ///|
 /// A person's picture (Parts.kt Avatar): theirs once it is here, else their initial on their colour.
 fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, picture? : String = "") -> Unit {
-  @sf.avatar(c, id, name, if picture == "" { "" } else { (core.picture)(picture, c.frame_no) }, size)
+  @sf.avatar(c, id, name, if picture == "" { "" } else { (core.picture)(picture, c.page_stint()) }, size)
 }
 
 ///|

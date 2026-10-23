@@ -4275,6 +4275,11 @@ data class PrefsView (
 	/// How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a
 	/// trackpad (the finger moves the pointer, a tap clicks where it points).
 	val screenTouch: String? = null,
+	/// The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
+	/// (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
+	val previewSizes: Map<String, String>? = null,
+	/// A service's page's toolbar folded away on this device (held down; the bar's size button opens it again).
+	val previewFolded: Boolean? = null,
 	/// A Slack app made for a new connect, to go on with, by station (the Android app's).
 	val resume: Map<String, String>? = null,
 	/// Versions dismissed on this device, by workspace/station.
