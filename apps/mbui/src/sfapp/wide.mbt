@@ -79,6 +79,10 @@ priv struct Wide {
   mut clear_asking : String
   /// the new chat's station chooser open (wide_newchat.mbt)
   mut station_menu : Bool
+  /// the rail's menu (Rail.tsx's, from its right click): the place right clicked ("" the rail), where
+  mut rail_menu : (String, Double, Double)?
+  /// a place of the rail dragged to another place in it: which, where the pointer went down, how far it went
+  mut rail_drag : (String, Double, Double)?
   /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
   place_pick : Map[String, @settings.Route]
   /// the files' page (wide_files.mbt): its way chosen here, the 个人收藏 kept here (by workspace), what is opened in
@@ -133,6 +137,8 @@ let wide : Wide = {
   context_menu: "",
   clear_asking: "",
   station_menu: false,
+  rail_menu: None,
+  rail_drag: None,
   place_pick: {},
   files_view: None,
   favs_set: {},
@@ -167,6 +173,7 @@ fn wide_reset() -> Unit {
   wide.filter_open = false
   wide.attention_open = false
   wide.switcher = false
+  sw_reset()
   wide.chosen = 0
   wide.keys_open = false
   wide.landed = ""
@@ -187,6 +194,8 @@ fn wide_reset() -> Unit {
   wide.context_menu = ""
   wide.clear_asking = ""
   wide.station_menu = false
+  wide.rail_menu = None
+  wide.rail_drag = None
   wide.place_pick.clear()
   wide.files_view = None
   wide.favs_set.clear()
@@ -195,6 +204,7 @@ fn wide_reset() -> Unit {
   wide.files_cols.clear()
   wide.files_chosen = ""
   wide.tabs_set.clear()
+  fgo_reset()
   wide_on.val = false
   corners_on.val = false
   recent_open.val = false
@@ -389,14 +399,20 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Uni
   let t = @sf.theme()
   let lit = lit_place()
   // its places centred on its 56; the sidebar reaches 8 into it (Sidebar.css.ts), so its own box is 48
-  c.box(w=Px(rail_w - 8.0), h=Fill(1.0), pl=9.0, pb=9.0, gap=6.0, align=AStart, fn() {
+  let rail_id = c.id("rail")
+  match c.right_clicked(rail_id) {
+    Some((x, y)) if wide.rail_menu is None => wide.rail_menu = Some(("", x, y))
+    _ => ()
+  }
+  c.box(w=Px(rail_w - 8.0), h=Fill(1.0), pl=9.0, pb=9.0, gap=6.0, align=AStart, id=rail_id, fn() {
     let top = c.id("rail/top")
     if @ui.window_inset() {
       c.window_drag(top)
     }
     c.box(w=Px(38.0), h=Px(if @ui.window_inset() { 41.0 } else { 5.0 }), id=top, fn() {  }) |> ignore
-    for place in rail_items(src, w.id) {
-      rail_place(c, src, w, place, lit == place)
+    let places = rail_items(src, w.id)
+    for place in places {
+      rail_place(c, src, w, place, lit == place, places)
     }
     c.spacer()
     // the workspaces, a square each (RailWorkspaces), the one in view marked at its left
@@ -460,10 +476,10 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Uni
 
 ///|
 /// A place's 38 to press, its ground (hovered, lit) 30 square under the icon (Rail.css.ts item).
-fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit) -> Unit {
+fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit, label? : String = "") -> Unit {
   let t = @sf.theme()
   let hover = c.hovered(id)
-  c.box(w=Px(38.0), h=Px(38.0), align=ACenter, justify=JCenter, id~, fn() {
+  let b = c.box(w=Px(38.0), h=Px(38.0), align=ACenter, justify=JCenter, id~, fn() {
     c.box(
       w=Px(30.0),
       h=Px(30.0),
@@ -481,16 +497,53 @@ fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit) -> Unit
     )
     |> ignore
   })
-  |> ignore
+  // named for a screen reader (Rail.tsx's aria-label)
+  if label != "" {
+    c.semantics(b, Button, id~, label~)
+  }
 }
 
 ///|
 /// One place of the rail: its icon (奏 its word), what waits on it a dot at its corner; pressed, its page.
-fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Bool) -> Unit {
+fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Bool, places : Array[String]) -> Unit {
   let t = @sf.theme()
   let id = c.id("rail/" + place)
   c.cursor(id, Hand)
-  if c.clicked(id) {
+  match c.right_clicked(id) {
+    Some((x, y)) => wide.rail_menu = Some((place, x, y))
+    None => ()
+  }
+  // dragged up or down (past a few points): to another place in the rail, the others as they were until let go
+  let (_, py, _) = c.pointer()
+  let dragged = match wide.rail_drag {
+    Some((p, y0, _)) if p == place =>
+      if c.pressed(id) {
+        wide.rail_drag = Some((p, y0, py - y0))
+        true
+      } else {
+        // let go: its place by how far it went
+        let dy = py - y0
+        let from = places.search_by(fn(x) { x == place }).unwrap_or(0)
+        let to = dmax(0.0, dmin((places.length() - 1).to_double(), from.to_double() + (dy / rail_pitch).round())).to_int()
+        wide.rail_drag = None
+        if dy.abs() > rail_slop && to != from {
+          let next = places.filter(fn(x) { x != place })
+          next.insert(to, place)
+          rail_keep(src, w.id, next)
+        }
+        dy.abs() > rail_slop
+      }
+    None if c.pressed(id) => {
+      wide.rail_drag = Some((place, py, 0.0))
+      false
+    }
+    _ => false
+  }
+  let moved = match wide.rail_drag {
+    Some((p, _, dy)) if p == place && dy.abs() > rail_slop => dy
+    _ => 0.0
+  }
+  if c.clicked(id) && !dragged {
     match place {
       "attention" => {
         wide.attention_open = !wide.attention_open
@@ -513,14 +566,14 @@ fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Boo
     "decisions" => count(field(field(marks.value, "workspaces"), w.id), "decisions") > 0
     _ => false
   }
-  c.box(fn() {
+  c.box(ty=moved, fn() {
     rail_ground(c, id, on || (place == "attention" && wide.attention_open), fn(color) {
       if place == "decisions" {
         c.text("奏", size=16.0, weight=600, color~, wrap=false, line=20.0) |> ignore
       } else {
         @sf.icon(c, rail_icon(place), size=20.0, color~) |> ignore
       }
-    })
+    }, label=rail_label(place))
     if dot {
       c.layer(align=AEnd, fn() {
         c.box(pt=4.0, pr=4.0, fn() {
@@ -539,6 +592,104 @@ fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Boo
 
 ///|
 /// A place's icon in the rail (Rail.tsx RAIL_ICONS; the stations' its glyph there, a server here).
+///|
+/// A place's name (Rail.tsx railLabel).
+fn rail_label(place : String) -> String {
+  match place {
+    "chats" => tr("web-main.rail.chats")
+    "decisions" => tr("web-main.rail.decisions")
+    "attention" => tr("web-main.attention.entry")
+    "files" => tr("web-pages.drive.title")
+    "stations" => "Station"
+    "profiles" => "Profile"
+    "connects" => tr("web-pages.settings.nav.connects")
+    "usage" => tr("web-pages.settings.nav.usage")
+    _ => place
+  }
+}
+
+///|
+/// The places the rail can hold (Rail.tsx's that this app has), in their kinds' order.
+// kept across runs: a table, never written
+let rail_known : Array[String] = [
+  "files", "stations", "profiles", "connects", "usage", "chats", "decisions", "attention",
+]
+
+///|
+/// The rail kept (`prefs.set {rails: {workspace: [...]}}`, on this device).
+fn rail_keep(src : Source, ws : String, items : Array[String]) -> Unit {
+  (src.call)(
+    "prefs.set",
+    { "rails": Json::object(Map::from_array([(ws, Json::array(items.map(fn(i) { Json::string(i) })))])) },
+    fn(_) {  },
+  )
+}
+
+///|
+/// The rail's menu (Rail.tsx's DropdownMenu, from a right click on it): the places not in it (pressed, their page;
+/// 将…添加到侧边条 puts one in it), 从侧边条移除 the place right clicked, 侧边条恢复默认 when it was changed.
+fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let (place, x, y) = match wide.rail_menu {
+    Some(m) => m
+    None => {
+      wide_menu(c, "rail-menu", false, 0, [], {}, rail_menu_w) |> ignore
+      return
+    }
+  }
+  let items = rail_items(src, w.id)
+  let away = rail_known.filter(fn(i) { !items.contains(i) })
+  let entries : Array[@kit.Entry] = []
+  let icons : Map[String, String] = {}
+  if away.length() > 0 {
+    entries.push(@kit.menu_label(tr("web-main.rail.away")))
+    // (提醒 is no page: only put in)
+    for i in away.filter(fn(i) { i != "attention" }) {
+      entries.push(@kit.menu_item("go:" + i, label=rail_label(i)))
+      icons["go:" + i] = rail_icon(i)
+    }
+    for i in away {
+      entries.push(@kit.menu_item("add:" + i, label=fill("web-main.rail.add", [("name", rail_label(i))])))
+      icons["add:" + i] = "plus"
+    }
+    entries.push(@kit.menu_separator())
+  }
+  if place != "" && items.contains(place) && items.length() > 1 {
+    entries.push(@kit.menu_item("remove", label=fill("web-main.rail.remove", [("name", rail_label(place))])))
+    icons["remove"] = "minus"
+  }
+  if items != rail_default {
+    entries.push(@kit.menu_item("reset", label=tr("web-main.rail.reset")))
+    icons["reset"] = "refresh"
+  }
+  let m = wide_menu(c, "rail-menu", true, 0, entries, icons, rail_menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
+  if !m.open {
+    wide.rail_menu = None
+  }
+  match m.chosen {
+    Some("remove") => rail_keep(src, w.id, items.filter(fn(i) { i != place }))
+    Some("reset") => rail_keep(src, w.id, rail_default)
+    Some(v) if v.has_prefix("add:") => {
+      let i = v.view(start_offset=4).to_string()
+      let next = items.copy()
+      next.push(i)
+      rail_keep(src, w.id, next)
+    }
+    Some(v) if v.has_prefix("go:") => go_place(c, v.view(start_offset=3).to_string(), [], -1)
+    _ => ()
+  }
+}
+
+///|
+let rail_menu_w : Double = 224.0
+
+///|
+/// A rail's place to the next (its 38 and the 6 between), and how far a press goes before it is a drag.
+let rail_pitch : Double = 44.0
+
+///|
+let rail_slop : Double = 4.0
+
+///|
 fn rail_icon(place : String) -> String {
   match place {
     "attention" => "bell"
@@ -714,11 +865,13 @@ fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 ///|
 /// The system's side of still.fail (before @ui.run). The desktop's window: 1280 by 820 at first, as still.fail's
 /// desktop app opens (apps/desktop main.ts), its size not kept (the desktop app keeps none either); at least 360 by
-/// 560, a phone's page below the breakpoint; its title bar the system's (macOS, Windows). On a phone the app is
+/// 560, a phone's page below the breakpoint; on macOS its title bar the app's (its buttons in its top row, as the
+/// desktop app's hiddenInset: the rail's and the sidebar's tops, a phone's page under their band), on Windows the
+/// system's. On a phone the app is
 /// Android's whatever the phone: on iOS too its lists fling, give at their edges and show no scroll bar as Android's,
 /// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
 pub fn host_setup() -> Unit {
-  @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0)
+  @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0, inset=true)
   if @ui.platform() == 1 {
     @ui.feel_as(2)
   }

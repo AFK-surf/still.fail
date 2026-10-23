@@ -246,6 +246,17 @@ fn Ctx::in_layer(self : Ctx, l : Layer, x : Double, y : Double) -> Bool {
 /// As the frame starts: Escape to the topmost layer; a press since the last frame dismisses the layers it was outside
 /// of, from the top down to the first it was in (or a modal one: what is under that never saw it).
 fn Ctx::layer_keys(self : Ctx) -> Unit {
+  // a dismissal of a layer the last frame did not build (the view closed it its own way meanwhile) is let go: opened
+  // again, the layer is not dismissed by it
+  let stale : Array[Int] = []
+  self.dismissals.each(fn(id, _) {
+    if !self.last_layers.iter().any(fn(l) { l.id == id }) {
+      stale.push(id)
+    }
+  })
+  for id in stale {
+    self.dismissals.remove(id)
+  }
   let top = self.top_layer()
   match top {
     Some(l) =>

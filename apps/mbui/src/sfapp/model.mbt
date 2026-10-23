@@ -54,6 +54,8 @@ pub fn items(v : Json?, key : String) -> Array[Json] {
 ///|
 /// An agent of a row, by what its mark shows: the model's maker, its runtime.
 pub(all) struct RowAgent {
+  /// its session's key
+  key : String
   maker : String
   runtime : String
   text : String
@@ -196,6 +198,7 @@ pub fn chat_item(v : Json) -> ChatItem {
     ago: text(time, "ago"),
     agents: items(s, "agents").map(fn(a) {
       {
+        key: text(Some(a), "key"),
         maker: text(field(Some(a), "maker"), "id"),
         runtime: text(Some(a), "runtime"),
         text: text(Some(a), "agentText"),

@@ -83,6 +83,17 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
 }
 
 ///|
+test "wide: a row's menu's 复制 session 文件路径 copies where each agent's session is kept (session.transcript)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.right_click(x, y)
+  t.tap_text("复制 session 文件路径")
+  assert_true(named(calls, "session.transcript").length() > 0)
+  assert_true(t.clipboard().has_suffix(".jsonl"), msg=t.clipboard())
+}
+
+///|
 test "wide: ⌘K's switcher narrows to what is typed and Enter opens it; Esc closes it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
@@ -314,4 +325,155 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
   assert_true(t.query(Button, label="左右分栏") is Some(_))
   assert_true(t.find("说明.txt") is Some(_))
   assert_true(t.find("长篇小说.txt") is None)
+}
+
+///|
+test "wide: ⌘K finds what the search finds (its messages under 消息) and what can be done by its name (新建对话, settings' pages typed)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  // nothing typed: the latest chats (what can be done under them)
+  assert_true(t.find("对话") is Some(_))
+  // what can be done, by its name
+  t.type_text("快捷键")
+  t.frame()
+  assert_true(t.find("通用") is Some(_))
+  assert_true(t.find("快捷键一览") is Some(_))
+  for _ in 0..<3 {
+    t.backspace()
+  }
+  t.type_text("签名")
+  t.frame()
+  assert_true(t.find("消息") is Some(_), msg="the messages found")
+}
+
+///|
+test "wide: ⌘K opens a settings page by its name" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.type_text("权限")
+  t.frame()
+  assert_true(t.find("设置") is Some(_), msg="the settings' part")
+  t.enter()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("搜索全部内容和操作") is None, msg="closed")
+  match app.nav.top() {
+    Setting(@settings.Route::Permissions) => ()
+    _ => fail("not 权限: " + t.words().map(fn(w) { w.0 }).join("|"))
+  }
+}
+
+///|
+test "wide: ⌘K and a row's menu open again right after Esc closed them" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.type_text("签名")
+  t.frame()
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_true(t.find("搜索全部内容和操作") is None, msg="closed")
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(t.find("搜索全部内容和操作") is Some(_), msg="open again")
+  t.type_text("权限")
+  t.frame()
+  t.enter()
+  t.run_for(@ui.nav_push_ms)
+  match app.nav.top() {
+    Setting(@settings.Route::Permissions) => ()
+    _ => fail("not 权限 after reopening: " + t.words().map(fn(w) { w.0 }).join("|"))
+  }
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.key(@ui.key_escape)
+  open_settings()
+  app.nav.replace(Home)
+  t.run_for(@ui.nav_push_ms)
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.right_click(x, y)
+  assert_true(t.find("重命名") is Some(_))
+  t.key(@ui.key_escape)
+  t.frame()
+  t.right_click(x, y)
+  assert_true(t.find("重命名") is Some(_), msg="the menu again: " + t.words().map(fn(w) { w.0 }).join("|"))
+}
+
+///|
+test "wide: the rail's menu from its right click: a place taken out of it, one not in it put in, back to how it was (prefs.set rails)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
+  t.right_click(x, y)
+  t.frame()
+  match t.find("从侧边条移除文件") {
+    Some((mx, my)) => t.tap(mx, my)
+    None => fail("no remove in " + t.words().map(fn(w) { w.0 }).join("|"))
+  }
+  let kept = named(calls, "prefs.set")
+  assert_true(kept.length() > 0)
+  let rails = field(field(Some(kept[kept.length() - 1].params), "rails"), "ws1")
+  match rails {
+    Some(Array(a)) => assert_false(a.contains(Json::string("files")))
+    _ => fail("no rails kept")
+  }
+}
+
+///|
+test "wide: ⌘⇧G goes to a folder by its path (~ the home), its station's button to another station's same folder or home" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Files)
+  app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  t.run_for(@ui.nav_push_ms)
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key)
+  t.frame()
+  assert_true(t.find("前往文件夹…") is Some(_))
+  t.type_text("~/项目")
+  t.frame()
+  assert_true(t.find("Studio › /Users/lin/项目") is Some(_), msg="where it goes")
+  t.enter()
+  t.run_for(@ui.nav_push_ms)
+  match app.nav.top() {
+    Drive(at) => assert_eq(at.root, Some("/Users/lin/项目"))
+    _ => fail("no folder open")
+  }
+  assert_true(t.find("前往文件夹…") is None, msg="closed")
+  // its station's button: the stations
+  t.click(Button, label="换 station")
+  t.frame()
+  assert_true(t.find("MBA") is Some(_))
+}
+
+///|
+test "wide: what goes up or down a chip in the files' bar (N 个传输 · P%), pressed each with how far" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="drive-upload")
+  // (what the mode opens: 文档 with a file going up, one taken, one failed)
+  app.nav.replace(Home)
+  open_drive_fixture("drive-upload")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.query(Button, label="传输") is Some(_), msg="the chip")
+  t.click(Button, label="传输")
+  t.frame()
+  assert_true(t.words().iter().any(fn(w) { w.0.contains("%") }), msg="each with how far")
+}
+
+///|
+test "wide: a place of the rail dragged up a place is kept there (prefs.set rails); pressed alone it opens its page" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
+  let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
+  t.drag(x, y, x, y - rail_pitch)
+  t.frame()
+  let kept = named(calls, "prefs.set")
+  assert_true(kept.length() > 0, msg="kept")
+  match field(field(Some(kept[kept.length() - 1].params), "rails"), "ws1") {
+    Some(Array(a)) => assert_eq(a[1], Json::string("files"))
+    _ => fail("no rails kept")
+  }
+  // not opened by the drag
+  assert_false(app.nav.top() == Files)
 }
