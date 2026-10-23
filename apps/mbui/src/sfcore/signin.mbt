@@ -89,7 +89,8 @@ pub fn begin() -> Unit {
 ///|
 /// What the device is, to the core (`client.device`, as still.fail's apps tell it): the name the people who approve it
 /// in a workspace's safe mode see (and a sign-in's device) is still.fail mbui's, not still.fail's own app's: "still.fail
-/// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui 桌面版 · macOS".
+/// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui iOS · iPhone17,1"
+/// (apple_engine.m's), "still.fail mbui 桌面版 · macOS".
 fn tell_device() -> Unit {
   let facts : Map[String, Json] = { "client": Json::string("still.fail mbui") }
   match @ui.platform() {
@@ -101,11 +102,15 @@ fn tell_device() -> Unit {
       facts["app"] = Json::string("desktop")
       facts["userAgent"] = Json::string("Macintosh; Mac OS X")
     }
+    1 => {
+      facts["app"] = Json::string("ios")
+      facts["model"] = Json::string(@ui.env("MBUI_DEVICE_MODEL"))
+    }
     3 => {
       facts["app"] = Json::string("desktop")
       facts["userAgent"] = Json::string("Windows")
     }
-    // (iOS and the browser: no kind of the core's for them yet)
+    // (the browser: no kind of the core's for it yet)
     _ => return
   }
   let version = @ui.app_version()

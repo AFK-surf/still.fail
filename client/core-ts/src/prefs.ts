@@ -226,12 +226,12 @@ export function device(data: Data, facts: unknown): void {
     return typeof v === "string" ? v.trim() : "";
   };
   const app = said("app");
-  if (!["web", "desktop", "android"].includes(app)) throw CoreError.invalid(t("core-misc.params.app"));
+  if (!["web", "desktop", "android", "ios"].includes(app)) throw CoreError.invalid(t("core-misc.params.app"));
   const build = said("build");
   const agent = said("userAgent");
   const model = said("model");
   const has = (words: string[]) => words.some((w) => agent.toLowerCase().includes(w.toLowerCase()));
-  const phone = app === "android" || (app === "web" && has(["Android", "iPhone", "iPad"]));
+  const phone = app === "android" || app === "ios" || (app === "web" && has(["Android", "iPhone", "iPad"]));
   const os = has(["iPhone", "iPad"]) ? "iOS" : agent.includes("Mac OS X") ? "macOS" : agent.includes("Windows") ? "Windows" : agent.includes("Android") ? "Android" : agent.includes("Linux") ? "Linux" : "";
   const browser = agent.includes("Edg/") ? "Edge" : agent.includes("Chrome/") ? "Chrome" : agent.includes("Firefox/") ? "Firefox" : agent.includes("Safari/") ? "Safari" : "";
   const withMore = (s: string) => (s === "" ? "" : ` · ${s}`);
@@ -249,6 +249,7 @@ export function device(data: Data, facts: unknown): void {
   const name = client !== "" ? client : brand.name();
   let deviceName: string;
   if (app === "android") deviceName = tr(lang, "core-misc.device.android", { brand: name, more: withMore(model) });
+  else if (app === "ios") deviceName = tr(lang, "core-misc.device.ios", { brand: name, more: withMore(model) });
   else if (app === "desktop") deviceName = tr(lang, "core-misc.device.desktop", { brand: name, more: withMore(os) });
   else deviceName = tr(lang, "core-misc.device.web", { brand: name, browser: browser === "" ? tr(lang, "core-misc.device.browser") : browser, more: withMore(os) });
   told.name = deviceName;

@@ -30,6 +30,6 @@ fn main {
   }
   // the faces the app carries (code's JetBrains Mono), as the app has them
   @sf.give_faces()
-  @sfapp.desktop_window()
+  @sfapp.host_setup()
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }

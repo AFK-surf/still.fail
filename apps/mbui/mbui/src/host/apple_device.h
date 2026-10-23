@@ -91,14 +91,11 @@ static int catch_key_down(NSEvent *e) {
 
 // ---- the soft keyboard ----
 
-// How far the keyboard reaches over the view's foot, in points: the view ends at the keyboard layout guide's top
-// (ios_app.m's MBController), which is the safe area's foot while it is down.
+// How far the keyboard reaches over the view's foot past the safe area's, in points, where it is on the screen now
+// (ios_app.m's ime_over: its motion followed frame by frame).
 double mb_host_ime_inset(void) {
 #if TARGET_OS_IPHONE
-  UIView *root = the_view.superview;
-  if (!root) return 0;
-  double over = root.bounds.size.height - root.safeAreaInsets.bottom - root.keyboardLayoutGuide.layoutFrame.origin.y;
-  return over > 0 ? over : 0;
+  return ime_over();
 #else
   return 0;
 #endif

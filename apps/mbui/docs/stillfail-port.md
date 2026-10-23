@@ -1180,7 +1180,7 @@ keyboard), and anything only a real agent runtime does.
 
 ## The PC (wide) frame (branch mbui-pc, 2026-10-19)
 
-On macOS and Windows the app is a desktop's window (@sfapp.desktop_window: 1280×820 at first, as still.fail's desktop app
+On macOS and Windows the app is a desktop's window (@sfapp.host_setup: 1280×820 at first, as still.fail's desktop app
 opens, at least 360×560, its size not kept, the system's title bar). Above the web's breakpoint (701 wide) it is the web
 app's wide frame (web/src/cloud/workspace.tsx WorkspaceShell), src/sfapp/wide*.mbt; below it the phone's pages as
 before, live as the window is resized: both draw the same stack (app.nav) over the same topics, the wide frame its top

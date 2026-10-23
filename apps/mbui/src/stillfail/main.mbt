@@ -354,7 +354,7 @@ fn main {
     })
   }
   if core_linked() == 0 || !@sfcore.start() {
-    @sfapp.desktop_window()
+    @sfapp.host_setup()
     @ui.run("still.fail", fn(c) {
       @sf.begin(c) |> ignore
       c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
@@ -398,7 +398,7 @@ fn main {
   @sfapp.use_core_markdown(core_source)
   // the faces the app carries (code's JetBrains Mono, as Android's): before its first frame
   @sf.give_faces()
-  @sfapp.desktop_window()
+  @sfapp.host_setup()
   @ui.run("still.fail", fn(c) {
     // (what the core said since the last frame is handed to @core.receive as the frame begins, before this: sfcore.start)
     let accounts = @core.subscribe("accounts")

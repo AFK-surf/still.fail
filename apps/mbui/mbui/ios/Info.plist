@@ -23,6 +23,13 @@
   </dict>
   <key>UILaunchScreen</key><dict/>
   <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
-  <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+  <key>UISupportedInterfaceOrientations</key><array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+  <key>NSPhotoLibraryUsageDescription</key><string>The gallery's recent photos, to pick from.</string>
+  <key>NSCameraUsageDescription</key><string>A photo taken now, to pick.</string>
+  <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key><true/>
 </dict>
 </plist>

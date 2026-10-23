@@ -9,6 +9,9 @@
 # An app of a module outside this repository (one whose moon.work names mbui as a member, as scripts/android.sh says):
 #   MBUI_APP_MOD     that module's directory (APP is its src/<APP>; out/ and _build/ are its own); default this repo
 #   MBUI_IOS_ID      the app's bundle id (default dev.mbui.demo); MBUI_IOS_PLIST its Info.plist (default ios/Info.plist)
+#   MBUI_IOS_BUILD   the build's number: its CFBundleVersion (@hostapi.app_version) and version 0.1.<it>
+#   MBUI_IOS_ASSETS  its asset catalog (an .xcassets: AppIcon its icon, the colours its Info.plist names), compiled into
+#     the app (actool), what that adds to the Info.plist with it
 #   MBUI_IOS_DEVICE  the simulator's name (default ios-mbui-sf, Mini1's: Studio's simulators open no app): one of our
 #     own, made when missing (the newest iOS runtime, an iPhone Pro); never another's
 #   MBUI_IOS_SDK     iphonesimulator (the default: the simulator's app, ad hoc signed) or iphoneos: a device's app, in
@@ -121,10 +124,21 @@ case "${1:-build}" in
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
     "$D/mbc" link --out=$APPDIR/mbui --stamp=$OUT/mbui.mbc-link -- $CC $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) -o $APPDIR/mbui -framework UIKit -framework Metal -framework QuartzCore \
       -framework CoreText -framework CoreGraphics -framework ImageIO -framework Foundation \
-      -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit -framework PhotosUI \
-      -framework UniformTypeIdentifiers -lm $APP_LINK
+      -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit -framework Photos -framework PhotosUI \
+      -framework SafariServices -framework UserNotifications -framework Network -framework UniformTypeIdentifiers \
+      -lm $APP_LINK
     cp ${MBUI_IOS_PLIST:-$ROOT/ios/Info.plist} $APPDIR/Info.plist
     plutil -replace CFBundleIdentifier -string $BID $APPDIR/Info.plist
+    if [ -n "${MBUI_IOS_BUILD:-}" ]; then
+      plutil -replace CFBundleVersion -string "$MBUI_IOS_BUILD" $APPDIR/Info.plist
+      plutil -replace CFBundleShortVersionString -string "0.1.$MBUI_IOS_BUILD" $APPDIR/Info.plist
+    fi
+    if [ -n "${MBUI_IOS_ASSETS:-}" ]; then
+      xcrun actool --compile $APPDIR --platform $IOS_SDK --minimum-deployment-target 17.0 --target-device iphone \
+        --app-icon AppIcon --output-partial-info-plist $OUT/assets-info.plist --errors --warnings \
+        "$MBUI_IOS_ASSETS" > $OUT/actool.log 2>&1 || { cat $OUT/actool.log; exit 1; }
+      /usr/libexec/PlistBuddy -c "Merge $OUT/assets-info.plist" $APPDIR/Info.plist > /dev/null
+    fi
     if [ $IOS_SDK = iphoneos ]; then
       plutil -replace CFBundleSupportedPlatforms -json '["iPhoneOS"]' $APPDIR/Info.plist
       plutil -replace DTPlatformName -string iphoneos $APPDIR/Info.plist
