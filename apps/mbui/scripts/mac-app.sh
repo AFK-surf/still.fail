@@ -95,30 +95,31 @@ cp "$ICON" "$APPDIR/Contents/Resources/AppIcon.icns"
 # the oldest macOS the program runs on, as it was linked: the one asked for
 MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" { print $2; exit }')
 [ "$MINOS" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "mac-app.sh: linked for macOS $MINOS, not $MACOSX_DEPLOYMENT_TARGET" >&2; exit 1; }
-python3 - "$APPDIR/Contents/Info.plist" "$N" "${MINOS:-13.0}" "$NAME" "$EXE" <<'PY'
-import plistlib, sys
-path, n, minos, name, exe = sys.argv[1:6]
-plistlib.dump({
-    "CFBundleIdentifier": "fail.still.mbui",
-    "CFBundleName": name,
-    "CFBundleDisplayName": name,
-    "CFBundleExecutable": exe,
-    "CFBundleIconFile": "AppIcon",
-    "CFBundlePackageType": "APPL",
-    "CFBundleInfoDictionaryVersion": "6.0",
-    "CFBundleShortVersionString": "0.1." + n,
-    "CFBundleVersion": n,
-    "CFBundleDevelopmentRegion": "zh_CN",
-    "LSMinimumSystemVersion": minos,
-    "LSApplicationCategoryType": "public.app-category.developer-tools",
-    "NSPrincipalClass": "NSApplication",
-    "NSHighResolutionCapable": True,
-    "NSSupportsAutomaticGraphicsSwitching": True,
-    # the core reaches stations on the local network directly when it can (as still.fail's desktop app says it)
-    "NSLocalNetworkUsageDescription": "still.fail mbui connects straight to your stations on the local network when it can.",
-}, open(path, "wb"))
-PY
-plutil -lint "$APPDIR/Contents/Info.plist" > /dev/null
+PLIST=$APPDIR/Contents/Info.plist
+plutil -create xml1 "$PLIST"
+put() { plutil -insert "$1" "$2" "$3" "$PLIST"; }
+put CFBundleIdentifier -string fail.still.mbui
+put CFBundleName -string "$NAME"
+put CFBundleDisplayName -string "$NAME"
+put CFBundleExecutable -string "$EXE"
+put CFBundleIconFile -string AppIcon
+put CFBundlePackageType -string APPL
+put CFBundleInfoDictionaryVersion -string 6.0
+put CFBundleShortVersionString -string "0.1.$N"
+put CFBundleVersion -string "$N"
+put CFBundleDevelopmentRegion -string zh_CN
+put LSMinimumSystemVersion -string "${MINOS:-13.0}"
+put LSApplicationCategoryType -string public.app-category.developer-tools
+put NSPrincipalClass -string NSApplication
+put NSHighResolutionCapable -bool YES
+put NSSupportsAutomaticGraphicsSwitching -bool YES
+# the core reaches stations on the local network directly when it can (as still.fail's desktop app says it)
+put NSLocalNetworkUsageDescription -string "still.fail mbui connects straight to your stations on the local network when it can."
+# where its newer builds come from (src/stillfail main: MBUI_UPDATE_FEED; the host installs them: mac_app.m Updates),
+# the feed beta.sh mac publishes; the system gives it to the app opened from the Finder, the Dock or `open`
+plutil -insert LSEnvironment -dictionary "$PLIST"
+put LSEnvironment.MBUI_UPDATE_FEED -string mac/mbui
+plutil -lint "$PLIST" > /dev/null
 
 # ad hoc for now: `sign` after (still.fail's identity in CI)
 codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
