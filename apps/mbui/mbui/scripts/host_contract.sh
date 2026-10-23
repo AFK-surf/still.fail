@@ -152,6 +152,9 @@ run() {
         --uid $(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
         --end "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done|FATAL EXCEPTION|Fatal signal" || r=1
       $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2"
+      # the system's events over the run (its activities stopped, destroyed, relaunched, its configuration changed, a
+      # dialog over it): kept beside the run's log, what says why when the system disturbed it
+      $ADB logcat -b events -d > "${2%.log}.events.log" 2>/dev/null || true
       return $r ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
@@ -260,6 +263,12 @@ case $CMD in
     set -o pipefail
     { moon_test_native src/kitdemo/gallery/textrec_${NAME}_wbtest.mbt 2>&1 || true; } | tr -d '\r' | grep -v '^TDUMP' | tail -20 | tee $O/test.txt
     if ! grep -q "passed: 1, failed: 0" $O/test.txt; then
+      # the system made the app's activity again during the run (sent behind, destroyed, restored): what it drew after
+      # is not what a Tester replays, and the run says so first (its events beside it: run.events.log)
+      if grep -aq "activity onCreate (restored)" $O/run.log; then
+        echo "host_contract: the system made the activity again during the run (sent behind, then restored); its events:"
+        grep -a -E "am_(on_stop|stop|destroy|relaunch|create|restart|focused|pause)_?|configuration_changed|wm_" $O/run.events.log 2>/dev/null | tail -20 || true
+      fi
       # the first frame as the host drew it (DRAWDUMP) beside a Tester's, over the run cut at that frame: where they part
       awk '/TEXTREC /{print; next} !d && (/INPUT / || /ENV \{/){print} !d && /DRAWHASH /{print; d=1}' $O/run.log > $O/first.log
       scripts/chk textrec $O/first.log ${NAME}_first $PAGE - - $PLATFORM >/dev/null
