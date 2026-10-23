@@ -532,6 +532,75 @@ fn draft_quote(d : Draft, author : String, words : String, ts : String, role : S
   d.focus = id
 }
 
+///|
+/// An image of a message quoted (Composer.kt Draft.quoteFile): a quote naming it, its comment line taking the focus;
+/// the file (`a`, as the station has it) goes again with the message, nothing going up, once however often it is
+/// quoted.
+fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : Json) -> Unit {
+  let s = Some(a)
+  let name = text(s, "name")
+  let path = text(s, "path")
+  let id = next_pending.val
+  next_pending.val += 1
+  d.quotes.push({ id, author, text: name, ts, role, file: name })
+  d.comments[id] = ""
+  if !d.files.iter().any(fn(f) { f.done is Some(_) && text(f.done, "path") == path }) {
+    let fid = next_pending.val
+    next_pending.val += 1
+    let size = number(s, "size").to_int()
+    d.files.push({
+      id: fid,
+      name,
+      size,
+      image: "",
+      width: number(s, "width").to_int(),
+      height: number(s, "height").to_int(),
+      pasted: None,
+      local: None,
+      done: Some(a),
+      sent: size,
+      error: None,
+      core_id: "",
+      retry: false,
+      retrying: false,
+    })
+  }
+  d.focus = id
+}
+
+///|
+/// A quote's own picture in the composer's quote card: 16 in, 6 under its words (Composer.kt DraftExtras).
+// kept across runs: a value (no field of it changes)
+let quote_picture_in : @ui.Style = @ui.style(pl=S4, pt=S1_5)
+
+///|
+/// The file going with a quote (a mark's screenshot, an image of a message quoted), shown in its card rather than
+/// with the files (Composer.kt Draft.fileOf): the one it names, by the name it went up as.
+fn quote_file_of(d : Draft, q : DraftQuote) -> Pending? {
+  if q.file == "" {
+    return None
+  }
+  d.files
+  .iter()
+  .find_first(fn(f) {
+    let up = text(f.done, "name")
+    (if up != "" { up } else { f.name }) == q.file
+  })
+}
+
+///|
+/// A quote taken out (Composer.kt Draft.unquote), with the file that went with it unless another quote names it too.
+fn draft_unquote(src : Source, d : Draft, q : DraftQuote) -> Unit {
+  let own = quote_file_of(d, q)
+  d.quotes.retain(fn(x) { x.id != q.id })
+  d.comments.remove(q.id)
+  match own {
+    Some(f) if !d.quotes.iter().any(fn(x) { quote_file_of(d, x).map(fn(g) { g.id }) == Some(f.id) }) =>
+      take_out(src, d, f)
+    _ => ()
+  }
+}
+
 // ── files ──────────────────────────────────────────────────────────────
 
 ///|
@@ -1691,8 +1760,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
       for q in d.quotes {
         let close = c.id("composer/unquote/\{q.id}")
         if c.clicked(close) {
-          d.quotes.retain(fn(x) { x.id != q.id })
-          d.comments.remove(q.id)
+          draft_unquote(src, d, q)
         }
         let key = "composer/quote/\{q.id}"
         let field = quote_field(d, q.id)
@@ -1723,6 +1791,17 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
             |> ignore
           })
           |> ignore
+          // its own picture (an image of a message quoted, a mark's screenshot) under what it quotes (Composer.kt
+          // DraftExtras: 56, the files' corner, 16 in and 6 under)
+          match quote_file_of(d, q) {
+            Some(f) => {
+              let picture = draft_picture_key(src, r, f)
+              if draft_is_picture(f, picture) {
+                c.box(style=quote_picture_in, fn() { picture_face(c, f, picture, 0) |> ignore }) |> ignore
+              }
+            }
+            None => ()
+          }
           c.box(w=Fill(1.0), pl=16.0, pr=16.0, pt=3.0, pb=10.0, fn() {
             let res = c.editor(
               key,
@@ -1785,9 +1864,10 @@ fn DraftItem::order(self : DraftItem) -> Int {
 }
 
 ///|
-/// The draft's files and its station files, as they were put in.
+/// The draft's files and its station files, as they were put in; those going with a quote are in its card.
 fn draft_items(d : Draft) -> Array[DraftItem] {
-  let all : Array[DraftItem] = d.files.map(fn(f) { AFile(f) })
+  let quoted = d.quotes.filter_map(fn(q) { quote_file_of(d, q).map(fn(f) { f.id }) })
+  let all : Array[DraftItem] = d.files.filter(fn(f) { !quoted.contains(f.id) }).map(fn(f) { AFile(f) })
   for x in refs_of(d.key) {
     all.push(ARef(x))
   }
@@ -1820,14 +1900,16 @@ fn draft_files_row(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : B
 
 ///|
 /// What a draft's picture shows: the one picked, or (a draft kept, which keeps no picture, only the file it went up
-/// as) the station's ("" while it comes or when it cannot be had); "" for a file that is no picture.
+/// as; an image of a message quoted) the station's, through the session keeping it (its `owner`, else the chat's)
+/// ("" while it comes or when it cannot be had); "" for a file that is no picture.
 fn draft_picture_key(src : Source, r : ChatRef, f : Pending) -> String {
   if f.image != "" {
     return f.image
   }
   match f.done {
     Some(a) if kind_of(f.name) == "image" && f.pasted is None => {
-      let k = (src.file)(r.station, r.session, text(Some(a), "name"))
+      let owner = text(Some(a), "owner")
+      let k = (src.file)(r.station, if owner != "" { owner } else { r.session }, text(Some(a), "name"))
       if k == "!" {
         ""
       } else {

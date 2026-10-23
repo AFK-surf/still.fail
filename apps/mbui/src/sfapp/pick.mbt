@@ -114,6 +114,7 @@ fn pickable(
     pk.sel.handle == 0 &&
     !(mine && pk.sel.widening) &&
     link_menu.at != press.frame &&
+    image_quoted_at.val != press.frame &&
     words.trim(chars=" \n\t") != ""
   if pk.sel.hold(c, key, holding) {
     pk.ts = ts
