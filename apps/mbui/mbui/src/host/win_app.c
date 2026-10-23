@@ -203,7 +203,17 @@ static void key_down(WPARAM vk) {
       case 'A': code = 12; break;
       case 'C': code = 13; break;
       case 'X': code = 14; break;
-      case 'V': paste(); return;
+      case 'V':
+        // a picture on it (PNG, or a bitmap; not files dropped there): the app's Ctrl+V (1000 + v), which reads the
+        // clipboard for it (@hostapi.clip_read), as a page's paste takes a picture as a file; else its words
+        if (!IsClipboardFormatAvailable(CF_HDROP) &&
+            (IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
+             IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP))) {
+          mb_cb.key(1000 + 'v', mods);
+        } else {
+          paste();
+        }
+        return;
     }
     // any other Ctrl key with a character: the app's shortcut (1000 + the character, lower case)
     if (!code) {

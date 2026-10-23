@@ -410,8 +410,16 @@ static NSCursor *cursor_of(int kind) {
     else if ([c isEqualToString:@"c"]) mb_cb.key(13, mods);
     else if ([c isEqualToString:@"x"]) mb_cb.key(14, mods);
     else if ([c isEqualToString:@"v"]) {
-      NSString *s = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
-      if (s.length) send_text(0, s, 0, 0);
+      NSPasteboard *pb = [NSPasteboard generalPasteboard];
+      // a picture on it (not a file's icon beside its name, as the Finder copies one): the app's ⌘V (1000 + v), which
+      // reads the clipboard for it (@hostapi.clip_read), as a page's paste takes a picture as a file; else its words
+      BOOL files = [pb canReadObjectForClasses:@[ NSURL.class ] options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+      if (!files && [pb canReadItemWithDataConformingToTypes:@[ NSPasteboardTypePNG, NSPasteboardTypeTIFF, @"public.image" ]]) {
+        mb_cb.key(1000 + 'v', mods);
+      } else {
+        NSString *s = [pb stringForType:NSPasteboardTypeString];
+        if (s.length) send_text(0, s, 0, 0);
+      }
     } else if (c.length == 1) {
       // any other ⌘ key: the app's shortcut (1000 + the character)
       mb_cb.key(1000 + [c characterAtIndex:0], mods);

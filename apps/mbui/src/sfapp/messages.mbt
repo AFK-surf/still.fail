@@ -351,20 +351,19 @@ fn said(
     c.layer(fn() {
       // one of the chat's agents': in the wide frame its card while the pointer rests on its picture (Chat.tsx
       // AgentAvatar, AgentHover)
-      let carded = wide_on.val &&
-        m.author_kind == "agent" &&
-        m.by.agent != "" &&
-        here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
+      let carded_agent = if wide_on.val && m.author_kind == "agent" && m.by.agent != "" {
+        here.view.agents.iter().find_first(fn(a) { a.key == m.by.agent })
+      } else {
+        None
+      }
+      let carded = carded_agent is Some(_)
       let hid = if carded { c.id("said-avatar/" + m.ts) } else { 0 }
       let av = said_avatar(c, id=hid, fn() { message_avatar(c, src, m) })
       if wide_on.val {
         c.stick(av, wide_avatar_held)
       }
-      if carded {
-        @kit.hover_card(c, "agent-hover/" + m.ts, hid, side=Bottom, along=Start, look=fn(c, _, body) {
-          wide_panel(c, 300.0, body)
-        }, fn() { agent_hover(c, src, ref_of(here), m.by.agent) })
-        |> ignore
+      if carded_agent is Some(a) {
+        wide_hover(c, "agent-hover/" + m.ts, hid, tile=true, fn() { agent_card(c, src, ref_of(here), a) }) |> ignore
       }
       if emit_goes(em, m.seq) {
         @motion.measure(c, av, "emit-landing/" + ek + "/" + seq_s(m.seq))

@@ -1606,6 +1606,11 @@ fn composer(
       }
     None => ()
   }
+  // a picture pasted into the field (⌘V with one on the clipboard), as a file, as the web's paste takes one
+  match c.field_picture(field_key) {
+    Some(png) => add_file(src, d, r.station, pasted_picture_name, png, None)
+    None => ()
+  }
   // what the 文件 tab's 添加到消息 put in for this chat (wide_files_tab.mbt), named by their paths or as files
   refs_put(src, d.key, files_tab_take_sent(d.key))
   // files another app shared into this chat (share.mbt), up as ＋'s are
@@ -1743,6 +1748,10 @@ fn composer(
   station_files_sheet(c, src, workspace_of(r.station), d.key)
   ref_sheet(c, src, d.key, r.station)
 }
+
+///|
+/// What a picture pasted is called (a browser's paste names one so).
+let pasted_picture_name : String = "image.png"
 
 ///|
 /// The system's file picker for draft `d` (the wide frame's ＋): what is picked comes in as the sheet's files do
@@ -2057,6 +2066,8 @@ fn composer_bar(
           // at a desktop's width Enter sends and ⇧Enter is a new line (the web's); on a phone Enter is a new line
           enter_sends=wide_on.val,
           paste_limit=if no_files { 0 } else { paste_threshold },
+          // ⌘V with a picture on the clipboard: it, as a file (Chat.tsx onPaste: the clipboard's files)
+          pictures=!no_files,
           // references to other chats drawn as marks (chat_refs.mbt RefMarks)
           look=ref_look(t.p.accent),
           // the draft's words, its own (another chat's draft: another field)

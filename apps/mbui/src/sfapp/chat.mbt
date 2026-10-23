@@ -2328,7 +2328,7 @@ fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
     c.box(
       w=Px(size),
       h=Px(size),
-      radius=6.0,
+      radius=mark_corner(size),
       bg=ground,
       border=line,
       border_color=t.p.line,
@@ -2423,6 +2423,16 @@ fn mark_ground() -> (Int64, Double) {
     (p.neutral_bg, 0.0)
   } else {
     (p.card, 1.0)
+  }
+}
+
+///|
+/// Its corner: 6; the wide screen's .3 of its side (ui.css.ts agentMark: 6 at 20, an agent's card's 28 at 8.4).
+fn mark_corner(side : Double) -> Double {
+  if wide_on.val {
+    side * 0.3
+  } else {
+    6.0
   }
 }
 

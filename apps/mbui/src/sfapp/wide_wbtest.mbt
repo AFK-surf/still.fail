@@ -12,7 +12,7 @@ fn wide_tester(calls : Array[Made], mode? : String = "home", w? : Double = 1280.
       (base.call)(name, params, done)
     },
   }
-  if mode == "chat" {
+  if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=0)
@@ -1141,4 +1141,169 @@ test "wide: 用量 as the web's: what it counts beside its title, who spent it t
   t.tap(bx, by)
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("整理发布清单") is Some(_), msg="the chats' list picked")
+}
+
+///|
+test "wide: ⌘V with a picture on the clipboard puts it in as a file (as a page's paste takes one); its words where it has none" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
+  t.tap_text("按空格输入")
+  // (the host's ⌘V with a picture on the clipboard: the app's key, mac_app.m)
+  t.clipboard_gives_png(@pixels.png(2, 2, FixedArray::make(16, b'\xff')))
+  t.key(@ui.key_of_char('v'), mods=@ui.mod_cmd)
+  t.frame()
+  t.frame()
+  match drafts.get(draft_key(r)) {
+    Some(d) => {
+      assert_eq(d.files.length(), 1)
+      assert_eq(d.files[0].name, "image.png")
+      assert_eq(d.text, "")
+    }
+    None => fail("no draft")
+  }
+  // words alone: put in as words
+  t.clipboard_gives("再看一眼签名")
+  t.key(@ui.key_of_char('v'), mods=@ui.mod_cmd)
+  t.frame()
+  t.frame()
+  assert_eq(drafts.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
+}
+
+///|
+test "wide: an agent's card over its picture beside its message (AgentCard.tsx), laid out as the web's over the window" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-agent-card")
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  // the last of its messages' names; its picture in the margin before it
+  let names = word("Claude")
+  let last = match names.iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+      match acc {
+        Some(a) if a.2 >= w.2 => acc
+        _ => Some(w)
+      }
+    }) {
+    Some(w) => w
+    None => fail("no agent's message")
+  }
+  assert_eq(word("Claude · Opus 5.5").length(), 0)
+  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.run_for(hover_open_ms * 2.0)
+  // its label, where it stands under it, its latest lines, the figures side by side, its account, the quiet line
+  let label = word("Claude · Opus 5.5")
+  assert_eq(label.length(), 1, msg="its label in its card")
+  let status = word("做完了 · 5 分钟前")
+  let lines = word("读了 src/ui/list.mbt")
+  let cost = word("$4.20")
+  let cache = word("91%")
+  let names_of = word("费用估算")
+  let account = word("林的 Max")
+  let quiet = word("8 轮 · 共干了 1 小时 12 分")
+  assert_true(
+    status.length() == 1 && lines.length() == 1 && cost.length() == 1 && cache.length() == 1 &&
+    account.length() == 1 &&
+    quiet.length() == 1 &&
+    names_of.length() == 1,
+    msg="\{(status, lines, cost, cache, account, quiet, names_of)}",
+  )
+  // 288 wide, its words 16 in from the panel's edge (its padding, 6, and a row's 10): the quiet line as wide as it
+  let left = quiet[0].1
+  assert_eq(quiet[0].3, 288.0)
+  // the label after its 28 mark, 10 apart; where it stands and its lines 14 in, after the dot
+  assert_eq(label[0].1, left + 38.0)
+  assert_eq(lines[0].1, left + 14.0)
+  assert_true(status[0].1 >= left + 14.0 && status[0].1 < left + 15.0, msg="\{status[0].1 - left}")
+  // the figures side by side on one line; each part under the one before
+  assert_eq(cost[0].2, cache[0].2)
+  assert_true(cache[0].1 > cost[0].1)
+  assert_true(
+    label[0].2 < status[0].2 &&
+    status[0].2 < lines[0].2 &&
+    lines[0].2 < cost[0].2 &&
+    cost[0].2 < account[0].2 &&
+    account[0].2 < quiet[0].2,
+  )
+  // in the window, by the picture: over it (no room under it), its start where the picture's is
+  assert_true(quiet[0].2 + quiet[0].4 < last.2, msg="over the picture")
+  assert_true(left - 16.0 >= 0.0 && left + 288.0 + 16.0 <= 1280.0)
+  // gone once the pointer has left it
+  t.move(900.0, 300.0)
+  t.run_for(hover_close_ms * 2.0)
+  assert_eq(word("Claude · Opus 5.5").length(), 0)
+}
+
+///|
+test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx useLinesMotion), the first gone leaving" {
+  reset()
+  let latest : Ref[(Array[(String, String)], Int)] = Ref(
+    ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
+  )
+  let base = fixture("chat-agent-card")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "agentCard" {
+        let (lines, v) = latest.val
+        {
+          value: Some({
+            "latest": Json::array(
+              lines.map(fn(l) { Json::object({ "key": Json::string(l.0), "text": Json::string(l.1) }) }),
+            ),
+            "attention": [],
+          }),
+          error: None,
+          version: v,
+        }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
+  let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+    match acc {
+      Some(a) if a.2 >= w.2 => acc
+      _ => Some(w)
+    }
+  })
+  guard last is Some(name) else { fail("no agent's message") }
+  t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
+  t.run_for(hover_open_ms * 2.0)
+  // where the three are at rest: a line apart
+  let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
+  let y_of = fn(s : String) { word(s)[0].2 }
+  let y1 = y_of("读了 src/ui/list.mbt")
+  let y2 = y_of("跑了列表的测试")
+  let y3 = y_of("改了 src/ui/list.mbt")
+  let pitch = y2 - y1
+  assert_true(pitch > 10.0 && near(y3 - y2, pitch), msg="\{(y1, y2, y3)}")
+  // one more done: the first goes, the next comes
+  latest.val = ([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2)
+  t.frame()
+  // as they were: those that stay where they were drawn, the new one faint a line beyond the last, the first's copy
+  // where it was, whole
+  assert_true(near(y_of("跑了列表的测试"), y2) && near(y_of("改了 src/ui/list.mbt"), y3))
+  assert_eq(word("提交了改动").length(), 0)
+  let gone = word("读了 src/ui/list.mbt")
+  assert_true(gone.length() == 1 && near(gone[0].2, y1) && gone[0].5 > 0.99, msg="\{gone}")
+  // half way: on their way up together, the copy with them
+  t.run_for(lines_ms / 2.0)
+  let mid = y_of("跑了列表的测试")
+  assert_true(mid < y2 - 1.0 && mid > y1 + 1.0, msg="\{mid}")
+  let (m3, m4, m1) = (y_of("改了 src/ui/list.mbt"), y_of("提交了改动"), y_of("读了 src/ui/list.mbt"))
+  assert_true(
+    near(m3 - mid, pitch) && near(m4 - mid, pitch * 2.0) && near(m1, mid - pitch),
+    msg="\{(mid, m3, m4, m1, pitch)}",
+  )
+  // there: a line up each, the new one whole, the copy gone
+  t.run_for(lines_ms / 2.0)
+  assert_true(near(y_of("跑了列表的测试"), y1) && near(y_of("改了 src/ui/list.mbt"), y2))
+  let new = word("提交了改动")
+  assert_true(near(new[0].2, y3) && new[0].5 > 0.99, msg="\{new}")
+  t.frame()
+  assert_eq(word("读了 src/ui/list.mbt").length(), 0)
 }
