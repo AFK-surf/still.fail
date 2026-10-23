@@ -5,6 +5,11 @@
 
 ///|
 fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  // (the wide frame's: the web's page, web_workspace.mbt)
+  if wide.val {
+    workspace_page_wide(c, core, here)
+    return
+  }
   let t = @sf.theme()
   let topic = workspace_view(core, here)
   let v = topic.value
