@@ -6,8 +6,8 @@
 # The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/),
 # `desktop-win` (build.sh --win, from the Mac too: the NSIS installer stillfail-<version>-x64-win.exe, its blockmap and
 # stillfail.yml, in desktop/; not signed yet) and
-# `android` (still.fail's Android app, mbui's in the place of the Kotlin one: apps/mbui/scripts/beta.sh build with
-# MBUI_VARIANT=stable or beta; stillfail-<n>.apk and latest.json, in android/). Their version is the
+# `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/; the beta app mbui's in the
+# Kotlin one's place: apps/mbui/scripts/beta.sh build, MBUI_VARIANT=beta). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
 # And `modules`: the packages of the modules stations install themselves (scripts/module-bundle.ts: each one's archive
 # in modules/<id>/, and its feed, modules/<id>/<id>.json or with --beta <id>-beta.json; any machine builds them).
@@ -127,18 +127,23 @@ for platform in $platforms; do
       ;;
     android)
       # fail.still.android on android/latest.json; with --beta fail.still.android.beta on android/beta/latest.json. The
-      # app is mbui's (apps/mbui) in the place of the one in Kotlin (apps/android): the same packages, signed with the
-      # same key, so an installed app updates to it, its files and sign-ins taken as they are (apps/mbui's CoreHost).
-      # Built as apps/mbui's own beta is (scripts/beta.sh: MoonBit, the engine and shell prebuilt), warm in a cache of
-      # each channel's own (the stable and the beta jobs may run on one machine at once).
-      variant=${beta:+beta}; variant=${variant:-stable}
-      mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-$variant}
-      MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
-      node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
-      node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
-      MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
-        bash "$root/apps/mbui/scripts/beta.sh" build
-      apk="$out/mbui/android/app-$variant.apk"
+      # beta app is mbui's (apps/mbui) in the place of the one in Kotlin (apps/android): the same package, signed with
+      # the same key, so an installed beta updates to it, its files and sign-ins taken as they are (apps/mbui's
+      # CoreHost); built as apps/mbui's own beta is (scripts/beta.sh: MoonBit, the engine and shell prebuilt), warm in
+      # a cache of its own. The stable app stays the Kotlin one until it is said otherwise (2026-10-23: the beta first;
+      # apk.json's `stable` variant is mbui's for then).
+      if [ -n "$beta" ]; then
+        mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-beta}
+        MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
+        node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
+        node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
+        MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=beta RELEASE_DIR="$out/mbui" \
+          bash "$root/apps/mbui/scripts/beta.sh" build
+        apk="$out/mbui/android/app-beta.apk"
+      else
+        ORG_GRADLE_PROJECT_stillfailBuild=$build python3 "$root/apps/android/build.py" --release --tasks :app:assembleRelease
+        apk="$root/apps/android/app/build/outputs/apk/release/app-release.apk"
+      fi
       # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
       # and passed over, until 2026-10-20)
       apksigner="${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner"
