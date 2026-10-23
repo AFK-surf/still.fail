@@ -180,6 +180,7 @@ let zh_wide : Map[String, String] = {
   "web-pages.files.favorite": "把「{name}」加入个人收藏",
   "web-pages.files.shared": "团队共享",
   "web-pages.files.reading": "正在读取…",
+  "web-pages.drive.resizeColumn": "调整栏宽",
   "web-pages.files.copyHere": "松开复制到「{name}」",
   "web-pages.files.moveHere": "松开移到「{name}」",
   "web-pages.drive.dropHere": "松开上传到「{name}」",

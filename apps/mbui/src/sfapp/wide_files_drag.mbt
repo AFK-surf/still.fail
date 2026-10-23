@@ -143,8 +143,8 @@ let fdrag_slop : Double = 4.0
 /// A row pressed: what it would carry, where the pointer went down.
 fn fdrag_press(c : @ui.Ctx, item : FDragged) -> Unit {
   if fdrag.press is None && fdrag.item is None {
-    let (x, y, _) = c.pointer()
-    fdrag.press = Some((item, x, y))
+    // (where it went down: the frame that sees the press may see it moved already)
+    fdrag.press = Some((item, c.press_x, c.press_y))
   }
 }
 
