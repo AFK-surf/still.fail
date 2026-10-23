@@ -1790,7 +1790,8 @@ let handlings : Map[Int, Handling] = {}
 /// What the pointer does with the edge `id` of a column `width` wide, on its `edge`: pressed and gone 3 from where it
 /// went down, the width it is dragged to (the width it had then, the pointer's way on the right edge, the other way on
 /// the left, between `min` and `max` on whole pixels); let go, the width it ends at, or a press without moving, or the
-/// second of two clicks. The pointer is the edge's while it is pressed, over it or not.
+/// second of two clicks. The pointer is the edge's while it is pressed, over it or not. A width that changes builds the
+/// frame again (Ctx::built_from_changed): the page takes it there, the column and its edge under the pointer at once.
 pub fn handle_drag(
   c : @ui.Ctx,
   id : Int,
@@ -1815,7 +1816,15 @@ pub fn handle_drag(
       }
     }
     h.moved = h.moved || (px - h.x0).abs() >= handle_slop
-    return if h.moved { Dragging(at(h)) } else { Untouched }
+    if !h.moved {
+      return Untouched
+    }
+    let w = at(h)
+    // (the column was built at `width`: built again at this one, the edge under the pointer in this frame)
+    if w != width {
+      c.built_from_changed("a column's edge dragged")
+    }
+    return Dragging(w)
   }
   let held = if down { None } else { handlings.get(id) }
   if !down {
@@ -1824,7 +1833,11 @@ pub fn handle_drag(
   if c.double_clicked(id) {
     Twice
   } else if held is Some(h) && h.moved {
-    Dropped(at(h))
+    let w = at(h)
+    if w != width {
+      c.built_from_changed("a column's edge let go")
+    }
+    Dropped(w)
   } else if c.clicked(id) {
     Pressed
   } else {
@@ -1950,14 +1963,38 @@ let edge_bar_on : @ui.Style = edge_bar_shown.then(@ui.style(h=S12))
 let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.style(bg=FieldHover))
 
 ///|
+/// The edges whose tip is put away, by their keys, and the last frame each was pressed in: pressed since the pointer
+/// came onto them (the web's tip.hide() as the pointer goes down: back only once it has left and come again).
+let edge_tips_away : Map[String, Int] = {}
+
+///|
 /// A tip that follows the pointer along a tall thin thing (usePointerTip: an edge), `id`: shown 300 ms after the pointer
 /// comes onto it, 14 beside the pointer on `side`, its middle level with it, as the pointer moves along; gone as it
-/// leaves or presses, and pressed, until it has left and come again. Said each frame the thing is drawn.
+/// leaves, and as it presses, until it has left and come again. Said each frame the thing is drawn.
 pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui.Side = Right) -> Unit {
   if words == "" || id == 0 {
     return
   }
-  let (px, py, _) = c.pointer()
+  let (px, py, down) = c.pointer()
+  let on = c.hovered(id) ||
+    (match c.rect_of(id) {
+      Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
+      None => false
+    })
+  let frame = c.frame_number()
+  if c.pressed(id) || c.clicked(id) {
+    edge_tips_away[key] = frame
+  } else if !on && !down {
+    match edge_tips_away.get(key) {
+      // (the frame it is let go in: the pointer may be past where the edge was last drawn, as it followed it)
+      Some(at) if at == frame || at == frame - 1 => ()
+      _ => edge_tips_away.remove(key)
+    }
+  }
+  // (put away, it is not drawn at all; its delay starts anew once the pointer is back on it)
+  if edge_tips_away.contains(key) {
+    return
+  }
   @kit.tooltip(
     c,
     "edge-tip/" + key,

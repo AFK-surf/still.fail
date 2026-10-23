@@ -6,4 +6,5 @@
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
   context_reset()
+  fcols_reset()
 }

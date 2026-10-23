@@ -1495,16 +1495,16 @@ fn files_columns(
   // (a chat's 文件 tab: two at a time, the one open and the one before it, halves of it)
   let widths = paths.map(fn(p) {
     if halves {
-      pane / 2.0 - fcols_edge_w
+      pane / 2.0 - @sfdesk.fcols_edge_w
     } else {
-      fcols_width(src, at.station + "\u{1}" + root + "\u{1}" + p)
+      @sfdesk.fcols_width(src, at.station + "\u{1}" + root + "\u{1}" + p)
     }
   })
   let mut from = paths.length() - 1
-  let mut used = widths[from] + fcols_edge_w
-  while from > 0 && used + widths[from - 1] + fcols_edge_w <= pane {
+  let mut used = widths[from] + @sfdesk.fcols_edge_w
+  while from > 0 && used + widths[from - 1] + @sfdesk.fcols_edge_w <= pane {
     from -= 1
-    used += widths[from] + fcols_edge_w
+    used += widths[from] + @sfdesk.fcols_edge_w
   }
   c.box(style=files_columns_row, fn() {
     for i in from..<paths.length() {
@@ -1544,9 +1544,9 @@ fn files_columns(
       |> ignore
       let names = files_entries(src, at.station, root, path).0.unwrap_or([]).map(fn(e) { (e.name, e.dir) })
       if halves {
-        c.box(style=fcols_edge, fn() {  }) |> ignore
+        c.box(style=@sfdesk.fcols_edge, fn() {  }) |> ignore
       } else {
-        files_column_edge(c, src, wkey, cid, widths[i], names)
+        @sfdesk.files_column_edge(c, src, wkey, cid, widths[i], names)
       }
     }
   })
@@ -1672,10 +1672,7 @@ fn wide_row(
 }
 
 ///|
-/// A column (Drive.css.ts column: 240 wide), a tree's step in (16).
-let files_column_w : Double = 240.0
-
-///|
+/// A tree's step in (16).
 let files_indent : Double = 16.0
 
 ///|
@@ -1946,7 +1943,7 @@ let files_columns_row : @ui.Style = @ui.style(row=true, w=Full, h=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_column : @ui.Style = @ui.style(w=Fixed(files_column_w), h=Full, px=S1, clip=true)
+let files_column : @ui.Style = @ui.style(w=Fixed(@sfdesk.files_column_w), h=Full, px=S1, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)

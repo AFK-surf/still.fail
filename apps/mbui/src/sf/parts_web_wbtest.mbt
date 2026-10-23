@@ -143,6 +143,8 @@ test "a column's edge: 7 wide, 4 past the column; dragged past 3, the width from
   assert_eq(said.length(), 0)
   t.move(x + 50.0, 400.0)
   assert_eq(width.val, 290.0)
+  // the edge under the pointer in the frame it moved in
+  assert_eq(t.get(Separator, label="调整列宽").rect.0, x + 50.0 - 3.0)
   t.move(x + 1000.0, 400.0)
   assert_eq(width.val, 640.0)
   t.move(x - 500.0, 400.0)
@@ -225,4 +227,22 @@ test "a column's edge's words go as it is pressed, and come again only once the 
   t.run_for(edge_tip_ms)
   t.run_for(edge_tip_ms)
   assert_true(t.find("调整列宽") is Some(_))
+}
+
+///|
+test "a column's edge's words stay away after it is dragged by many moves, the pointer resting on it" {
+  let width = Ref(240.0)
+  let said : Array[Resized] = []
+  let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)
+  t.draw()
+  let x = t.get(Separator, label="调整列宽").rect.0 + 3.0
+  t.move(x, 300.0)
+  t.run_for(edge_tip_ms)
+  t.run_for(edge_tip_ms)
+  assert_true(t.find("调整列宽") is Some(_))
+  t.drag(x, 300.0, x + 80.0, 300.0, steps=36)
+  assert_eq(width.val, 320.0)
+  t.run_for(edge_tip_ms)
+  t.run_for(edge_tip_ms)
+  assert_true(t.find("调整列宽") is None)
 }

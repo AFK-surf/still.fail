@@ -239,7 +239,6 @@ fn wide_reset() -> Unit {
   wide.files_preview = None
   fpane_reset()
   fdrag_reset()
-  fcols_reset()
   ftab_reset()
   wide.tabs_set.clear()
   fgo_reset()
