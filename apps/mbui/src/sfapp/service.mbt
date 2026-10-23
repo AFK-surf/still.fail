@@ -81,9 +81,13 @@ let svc_zh : Map[String, String] = {
 
 ///|
 fn svc(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = match svc_zh.get(key) {
+  let mut s = match english(key, args~) {
     Some(w) => w
-    None => tr(key)
+    None =>
+      match svc_zh.get(key) {
+        Some(w) => w
+        None => tr(key)
+      }
   }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)

@@ -89,6 +89,9 @@ let pv_zh : Map[String, String] = {
 
 ///|
 fn pv(key : String) -> String {
+  if english(key) is Some(s) {
+    return s
+  }
   match pv_zh.get(key) {
     Some(s) => s
     None => tr(key)
@@ -97,7 +100,10 @@ fn pv(key : String) -> String {
 
 ///|
 fn pv_fill(key : String, args : Array[(String, String)]) -> String {
-  let mut s = pv(key)
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => pv(key)
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }
@@ -2836,7 +2842,7 @@ fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> Unit
     v.note(c, fn() {
       c.text(
         pv_fill("android-chat.file.pdf.failed", [("error", if @ui.platform() == 3 || @ui.platform() == 4 {
- "此平台不能显示 PDF" } else { "" })]),
+ tr("android-chat.preview.noPdf") } else { "" })]),
         size=15.0,
         color=t.p.muted,
         center=true,

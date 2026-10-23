@@ -904,7 +904,7 @@ fn dv_upload(c : @ui.Ctx, at : DriveAt) -> Unit {
       dv.picking = Some(p)
       dv.picking_for = at
     }
-    None => say(c, "这个版本在这台设备上还不能选文件")
+    None => say(c, tr("android-chat.composer.noFiles"))
   }
 }
 

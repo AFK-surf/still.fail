@@ -117,6 +117,11 @@ fn tell_device() -> Unit {
   if version > 0 {
     facts["build"] = Json::string("0.1." + version.to_string())
   }
+  // the device's language (its host's MBUI_LOCALE, a BCP 47 tag): the core's `lang` when none is chosen (prefs.ts)
+  let locale = @ui.env("MBUI_LOCALE")
+  if locale != "" {
+    facts["locale"] = Json::string(locale)
+  }
   @core.call("client.device", params=Json::object(facts))
 }
 

@@ -37,10 +37,13 @@ import javax.crypto.spec.GCMParameterSpec;
  */
 final class CoreHost {
     // The device as the core names it to the people who approve it (sfcore's `client.device`, as still.fail's Android
-    // app tells it: maker and model), in the environment before the first core starts.
+    // app tells it: maker and model), and its language (the locale's tag: the core's `lang` when none is chosen, the
+    // app's words' until the core says: @sf.lang; a scripted run's own kept, e2e/android-flow.sh), in the environment
+    // before the first core starts.
     static {
         try {
             Os.setenv("MBUI_DEVICE_MODEL", android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL, true);
+            Os.setenv("MBUI_LOCALE", java.util.Locale.getDefault().toLanguageTag(), false);
         } catch (Exception e) {
             Host.log("device model: " + e);
         }

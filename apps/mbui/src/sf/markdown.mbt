@@ -1003,7 +1003,14 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
             icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted)
             |> ignore
             c.text(
-              if copied { "已复制" } else { "复制" },
+              // (common.copied, common.copy: the catalog's words, Markdown.kt's)
+              if language() == "en" {
+                if copied { "Copied" } else { "Copy" }
+              } else if copied {
+                "已复制"
+              } else {
+                "复制"
+              },
               size=11.0,
               color=w.muted,
               wrap=false,

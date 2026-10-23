@@ -159,7 +159,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
         Some(th) =>
           act(
             src,
-            tr("android-chat.chat.keep.verb"),
+            tr(if item.kept { "web-main.chat.unkeep.what" } else { "web-main.chat.keep.what" }),
             "keep/" + item.station + "/" + th.to_int64().to_string(),
             "chat.keep",
             {

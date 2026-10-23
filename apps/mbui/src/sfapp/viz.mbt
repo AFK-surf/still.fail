@@ -26,9 +26,13 @@ let viz_zh : Map[String, String] = {
 
 ///|
 fn viz_tr(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = match viz_zh.get(key) {
+  let mut s = match english(key, args~) {
     Some(w) => w
-    None => tr(key)
+    None =>
+      match viz_zh.get(key) {
+        Some(w) => w
+        None => tr(key)
+      }
   }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)

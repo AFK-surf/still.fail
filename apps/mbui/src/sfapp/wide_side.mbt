@@ -564,7 +564,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             |> ignore
           }
           for s in lending {
-            nav_heading(c, if s.online { s.name } else { s.name + " · 离线" })
+            nav_heading(c, if s.online { s.name } else { fill("android-settings.connects.offline", [("name", s.name)]) })
             if s.anywhere {
               let at : DriveAt = { station: s.station, root: None, path: "" }
               if nav_row(c, "files-nav/" + s.station + "/home", here == Some(at), fn() {
