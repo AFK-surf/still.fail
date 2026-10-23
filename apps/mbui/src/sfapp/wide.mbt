@@ -81,6 +81,17 @@ priv struct Wide {
   mut station_menu : Bool
   /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
   place_pick : Map[String, @settings.Route]
+  /// the files' page (wide_files.mbt): its way chosen here, the 个人收藏 kept here (by workspace), what is opened in
+  /// its sidebar and its tree, each station's places, the folders open in columns (by where the columns start), the
+  /// row chosen
+  mut files_view : String?
+  favs_set : Map[String, String]
+  files_open : Map[String, Bool]
+  files_places : Map[String, Array[Json]]
+  files_cols : Map[String, String]
+  mut files_chosen : String
+  /// the files' tabs kept here (by workspace), until the prefs say
+  tabs_set : Map[String, String]
 }
 
 ///|
@@ -123,6 +134,13 @@ let wide : Wide = {
   clear_asking: "",
   station_menu: false,
   place_pick: {},
+  files_view: None,
+  favs_set: {},
+  files_open: {},
+  files_places: {},
+  files_cols: {},
+  files_chosen: "",
+  tabs_set: {},
 }
 
 ///|
@@ -170,6 +188,13 @@ fn wide_reset() -> Unit {
   wide.clear_asking = ""
   wide.station_menu = false
   wide.place_pick.clear()
+  wide.files_view = None
+  wide.favs_set.clear()
+  wide.files_open.clear()
+  wide.files_places.clear()
+  wide.files_cols.clear()
+  wide.files_chosen = ""
+  wide.tabs_set.clear()
   wide_on.val = false
   corners_on.val = false
   recent_open.val = false
@@ -290,8 +315,9 @@ fn main_page(
     // a place of the rail's other than the chats': its page, under its title
     Place("stations" | "profiles" as p) => place_page_wide(c, src, w, p)
     Place(p) => wide_place(c, src, w, p)
-    // 文件: the stations' folders, under its bar (the phone's place has the bottom bar's room)
-    Files => files_page(c, src, w)
+    // 文件: a folder under its bar, as the web's (wide_files.mbt)
+    Files => files_landing(c, src, w)
+    Drive(at) => wide_folder(c, src, w, at)
     // a station's screen is over the whole window (app.mbt signed_in), not in the pane
     Screen(_) => ()
     _ => page_view(c, src, w, all, invited, page)

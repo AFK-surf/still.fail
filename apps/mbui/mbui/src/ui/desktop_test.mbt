@@ -295,3 +295,32 @@ test "a wheel's ease is solved for the time: in frames of 16 ms, of 8, or at onc
   }
   once.assert_idle()
 }
+
+///|
+test "desktop: two clicks on the same thing within double_click_ms are a double click; slower, two clicks" {
+  let clicks : Array[String] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      let id = c.id("thing")
+      c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  }) |> ignore
+      if c.clicked(id) {
+        clicks.push("click")
+      }
+      if c.double_clicked(id) {
+        clicks.push("double")
+      }
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.tap(20.0, 20.0)
+  t.tap(20.0, 20.0)
+  assert_eq(clicks, ["click", "click", "double"])
+  clicks.clear()
+  t.run_for(@ui.double_click_ms + 100.0)
+  t.tap(20.0, 20.0)
+  t.run_for(@ui.double_click_ms + 100.0)
+  t.tap(20.0, 20.0)
+  assert_eq(clicks, ["click", "click"])
+}
