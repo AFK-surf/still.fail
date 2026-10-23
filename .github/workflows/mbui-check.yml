@@ -67,9 +67,6 @@ jobs:
             !${{ env.MBC_STORE }}
           key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
           restore-keys: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-
-      - name: The mbui app's check (detlint, then native type-checked)
-        if: matrix.part == 'app' && !matrix.lto
-        run: moon version && bash apps/mbui/scripts/check.sh
       # The units main's newest run kept, and on a branch its own last run's beside them (a store by content: the two
       # together, nothing of one replaces the other's). A branch's own alone, after it took main's newer commits in
       # (a rebase), compiled again all main had changed since: 253 s of the app part where its push before was 82 s
@@ -110,6 +107,10 @@ jobs:
           # compiler's output only when it fails, and where a part's time went was not to be seen)
           export MBC_LOG="$RUNNER_TEMP/mbc.log"
           TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      - name: The mbui app's check (detlint, then native type-checked)
+        if: matrix.part == 'app' && !matrix.lto
+        # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23)
+        run: moon version && bash apps/mbui/scripts/check.sh
       - name: Where the build's time went (mbc)
         if: always()
         run: |
