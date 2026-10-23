@@ -494,8 +494,8 @@ jobs:
 
   # The test channel's releases are built beside the check (the builds are most of a release: before 2026-10-04 they
   # waited for the check and the API). The apps' files, named by their version, go in the bucket at once (nothing points
-  # at them yet); the station's (named the same each time: what installs get) and every feed are kept as this run's
-  # artifact and put by `put` once the check passed and the API is out (scripts/release-put.sh).
+  # at them yet); the station's (named the same each time: what installs get) go in at once under staged/, and with
+  # every feed they are put by `put` once the check passed and the API is out (scripts/release-put.sh).
 
   # The station's (darwin-arm64, linux-x64, linux-arm64, win32-x64): what a station on the test channel updates to.
   station:
@@ -519,6 +519,12 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh station
+      # Its files into the bucket from here, staged (scripts/release-put.sh --stage): put takes them back. In the run
+      # artifact they went up through the proxy mini1's DNS sends GitHub to, 40 MB a release (2026-10-23).
+      - name: Stage its files in the bucket
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/release-put.sh --stage "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@v4
         with: { name: "release-station-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 

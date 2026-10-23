@@ -4,7 +4,9 @@
 // blockmaps all stay (a few hundred KB each). A desktop app updates from the version it runs by fetching that
 // version's blockmap (when it has not kept it) and the new file's changed blocks: no old installer is needed, so a beta
 // up to 30 releases behind still updates by difference. The beta desktop app's web archives (docs/desktop-web-updates.md):
-// the one its feed names, any newer, and the newest 5. The stations', Node and the feeds are never touched.
+// the one its feed names, any newer, and the newest 5. What a station's job staged (staged/<when>-<commit>/:
+// scripts/release-put.sh --stage) and no put took back and deleted: after two days. The stations', Node and the feeds
+// are never touched.
 // CI runs it after `put` (.github/workflows/pipeline.yml).
 //   node scripts/release-prune.ts [--dry-run]
 // Needs CLOUDFLARE_API_TOKEN (and CLOUDFLARE_ACCOUNT_ID, else the token's first account).
@@ -23,6 +25,9 @@ const BETA_BLOCKMAPS = 30;
 const WEB_FEED = "desktop/web/stillfail-beta-web.json";
 const WEB_ARCHIVE = /^desktop\/web\/stillfail-beta-web-0\.1\.(\d+)\.tar\.gz$/;
 const WEB_ARCHIVES = 5;
+/** What a station's job staged, by when (seconds since 1970), and how long it may stay there. */
+const STAGED = /^staged\/(\d+)-/;
+const STAGED_SECONDS = 2 * 24 * 3600;
 
 const dryRun = process.argv.includes("--dry-run");
 const token = process.env.CLOUDFLARE_API_TOKEN;
@@ -94,6 +99,8 @@ const webNamed = webFeed.ok ? Number((await webFeed.json()).build) : null;
 const webBuilds = keys.map((key) => Number(key.match(WEB_ARCHIVE)?.[1])).filter((n) => Number.isSafeInteger(n)).sort((a, b) => b - a);
 
 const doomed = keys.filter((key) => {
+  const staged = Number(key.match(STAGED)?.[1]);
+  if (Number.isSafeInteger(staged)) return staged < Date.now() / 1000 - STAGED_SECONDS;
   const web = Number(key.match(WEB_ARCHIVE)?.[1]);
   if (Number.isSafeInteger(web)) return webNamed !== null && web < webNamed && webBuilds.indexOf(web) >= WEB_ARCHIVES;
   const file = installer(key);
@@ -103,7 +110,7 @@ const doomed = keys.filter((key) => {
   return versions.get(kind(key, file))!.indexOf(file.version) >= (file.map ? BETA_BLOCKMAPS : BETA_INSTALLERS);
 });
 
-console.log(`${keys.length} files, ${doomed.length} old installers and blockmaps to delete`);
+console.log(`${keys.length} files, ${doomed.length} old installers, blockmaps and staged files to delete`);
 if (dryRun) {
   for (const key of doomed) console.log(`  ${key}`);
   process.exit(0);
