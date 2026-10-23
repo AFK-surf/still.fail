@@ -666,7 +666,8 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// A paragraph of runs, wrapped as one text in `size` (the runs' sizes
 /// relative to it) with lines `line` high (0: the font's own). Links are
 /// drawn in `link_color` (unless a run has its own), with `pressed_bg`
-/// behind them while held; tapped, `on_link` is told where they lead. Code
+/// behind them while held; tapped, `on_link` is told where they lead; held a long press's time, or right clicked,
+/// `on_link_hold` (with the piece of line under the finger or the pointer). Code
 /// runs: the code face at `code_scale`, in `code_color` (0: the
 /// paragraph's) on `code_bg` (0: none). `key` keeps its links' ids apart
 /// from another paragraph's with the same words. `tracking`: letter spacing in pixels, in every run (a style's
@@ -722,6 +723,21 @@ pub fn Ctx::rich(
     if r.link != "" && self.clicked(link_id(base, k)) {
       on_link(r.link)
     }
+  }
+  // a link right clicked (a pointer's secondary button: a desktop's long press) told as held, at once
+  match on_link_hold {
+    Some(f) =>
+      for k, r in runs {
+        let id = link_id(base, k)
+        match (r.link, self.right_clicked(id)) {
+          ("", _) | (_, None) => ()
+          (link, Some((x, y))) => {
+            f(link, link_piece(self, id, x, y))
+            break
+          }
+        }
+      }
+    None => ()
   }
   // a link held still a long press's time: told where it leads and the piece of line held (in the window), once a
   // press, and the press is the hold's (no tap of the link as it lifts)

@@ -976,10 +976,14 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     } else {
       true
     })
-  // the copy key in the block's top right corner: as far from both edges, concentric with it
+  // the copy key in the block's top right corner: as far from both edges, concentric with it; on a desktop's width over
+  // the code, quiet (55%) until the pointer is on the block (Prose.css.ts codeBar), on a phone on a row of its own over
+  // it (a finger has no hover: `pointer: coarse`)
   let block_radius = 12.0
   let key_inset = 4.0
-  c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, fn() {
+  let over = !t.narrow
+  let block = c.id("sf-code-block/" + code)
+  let bar = fn() {
     c.box(
       dir=Row,
       pl=key_inset,
@@ -992,7 +996,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
         c.box(padx=6.0, fn() {
           c.text(
             if lang == "" { "text" } else { lang },
-            size=10.0,
+            size=if over { code_lang_wide } else { 10.0 },
             color=w.subtle,
             wrap=false,
           )
@@ -1032,8 +1036,12 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
         |> ignore
       },
     )
-    |> ignore
-    // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped
+  }
+  c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, id=if over { block } else { 0 }, fn() {
+    if !over {
+      bar() |> ignore
+    }
+    // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped (12 on 1.6 on a desktop's width)
     c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
       c.rich(
         match colours {
@@ -1042,16 +1050,28 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           None => [@ui.span(code, mono=true)]
         },
         size=12.0,
-        line=18.0,
+        line=if over { code_line_wide } else { 18.0 },
         wrap=false,
         color=t.p.text,
       )
       |> ignore
     })
     |> ignore
+    if over {
+      let b = c.layer(fn() { bar() |> ignore })
+      c.look(b, @ui.look(alpha=if c.hovered(block) || c.hovered(id) { 1.0 } else { 0.55 }))
+    }
   })
   |> ignore
 }
+
+///|
+/// A code block's lines and its language's size on a desktop's width (Prose.css.ts codePre: the meta size on 1.6;
+/// codeLang: the caption's 11).
+let code_line_wide : Double = 12.0 * 1.6
+
+///|
+let code_lang_wide : Double = 11.0
 
 // ── tables ──────────────────────────────────────────────────────────────
 

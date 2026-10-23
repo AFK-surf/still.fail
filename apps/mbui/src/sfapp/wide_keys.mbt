@@ -66,7 +66,32 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       c.blur()
     } else if pk.ts != "" {
       pick_clear()
+    } else {
+      // the chat's side panel closed (keymap.ts panel.close)
+      match app.nav.top() {
+        Chat(r) =>
+          for tab in side_tabs(r) {
+            side_close(r, tab)
+          }
+        _ => ()
+      }
     }
+  }
+  // ↑ / ↓ with the cursor in an empty composer: the chat above or below, as the list shows them now (Chat.tsx
+  // useComposerText goToNeighbour)
+  match app.nav.top() {
+    Chat(r) if c.editor_focused(field_key) && !wide.switcher =>
+      match drafts.get(draft_key(r)) {
+        Some(d) if d.text == "" => {
+          if c.key_pressed(@ui.key_code_up, in_field=true) {
+            neighbour(src, w, -1)
+          } else if c.key_pressed(@ui.key_code_down, in_field=true) {
+            neighbour(src, w, 1)
+          }
+        }
+        _ => ()
+      }
+    _ => ()
   }
   // Space with no field focused: back to the composer (回到输入框)
   if !c.field_focused() && pressed("composer.focus") && !wide.switcher {

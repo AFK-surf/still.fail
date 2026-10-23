@@ -383,6 +383,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.group_cur = 0
   c.count = 0
   c.cur = -1
+  c.stuck.clear()
   c.press_owners.clear()
   c.back_next = None
   c.back_node_next = -1
@@ -532,9 +533,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       h_window_drag()
       return
     }
-    // words picked with the pointer (desktop.mbt), not in a field
-    if !c.editors.contains(target) {
-      select_press(x, y)
+    // words picked with the pointer (desktop.mbt), not in a field, nor on what keeps them (Ctx::keeps_selection)
+    if !c.editors.contains(target) && !keeps_selection_on(target) {
+      select_press(x, y, t)
     }
     // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
     c.press_down = Some((x, y))

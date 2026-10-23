@@ -214,11 +214,22 @@ fn fix_new_chat(f : Fixture) -> Json {
     "medium" => "中"
     _ => "高"
   }
+  // (MBUI_FIXTURE=newchat-files: its stations lend their files, its 文件 tab open beside it)
+  let lend = fn(s : Json) -> Json {
+    match s {
+      Object(o) if f.mode == "newchat-files" => {
+        let m = o.copy()
+        m["overview"] = { "drive": field(Some(fixture_station_drive(true)), "drive").unwrap_or(Json::null()) }
+        Json::object(m)
+      }
+      _ => s
+    }
+  }
   {
     "kept": Json::string(n.station),
-    "stations": [fix_station("st1"), fix_station("st2")],
+    "stations": [lend(fix_station("st1")), lend(fix_station("st2"))],
     "any": true,
-    "station": fix_station(n.station),
+    "station": lend(fix_station(n.station)),
     "model": fix_model(n.model),
     "runtime": Json::string(n.runtime),
     "effort": Json::string(n.effort),

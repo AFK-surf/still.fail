@@ -186,6 +186,9 @@ struct Node {
   mut rl_for : Rich?
   // list rows: index of the item this child shows
   mut item : Int
+  // held this far below the top of the list it is in as its row scrolls past, within its parent (Ctx::stick; NaN:
+  // where it is laid out)
+  mut stick : Double
   // its node in the flex engine, and how the engine measures it as a leaf
   fl : @flex.Node
   mut leaf : ((Double, @flex.MeasureMode, Double, @flex.MeasureMode) -> (
@@ -304,6 +307,7 @@ fn Node::new() -> Node {
     rl_max: 0.0,
     rl_for: None,
     item: -1,
+    stick: 0.0 / 0.0,
     fl: @flex.Node::new(),
     leaf: None,
     lk_kind: -1,
@@ -361,6 +365,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.shapes = []
   // (its cut runs go with its layout, kept with it: rl, rl_for)
   self.item = -1
+  self.stick = 0.0 / 0.0
 }
 
 ///|

@@ -108,6 +108,9 @@ priv struct Desk {
   /// targets that drag the window (Ctx::window_drag), this frame's and the last one's
   next_drags : Array[Int]
   mut drags : Array[Int]
+  /// targets a press on keeps what is picked with the pointer (Ctx::keeps_selection), this frame's and the last one's
+  next_keeps : Array[Int]
+  mut keeps : Array[Int]
   /// lists dragged by the mouse as a finger drags them (true unless the app says not), as this frame's build says and
   /// as the last one's said
   mut next_mouse_drags : Bool
@@ -160,6 +163,8 @@ let desk : Desk = {
   shown: 0,
   next_drags: [],
   drags: [],
+  next_keeps: [],
+  keeps: [],
   next_mouse_drags: true,
   mouse_drags: true,
   selecting: false,
@@ -179,6 +184,8 @@ fn desk_reset() -> Unit {
   desk.shown = 0
   desk.next_drags.clear()
   desk.drags.clear()
+  desk.next_keeps.clear()
+  desk.keeps.clear()
   desk.next_mouse_drags = true
   desk.mouse_drags = true
   desk.selecting = false
@@ -187,6 +194,7 @@ fn desk_reset() -> Unit {
   picked.base = 0
   picked.dragging = false
   picked.target = None
+  select_last.val = (-1.0e9, 0.0, 0.0)
 }
 
 ///|
@@ -210,6 +218,7 @@ fn desk_frame_start() -> Unit {
 fn desk_build_start() -> Unit {
   desk.next_cursors.clear()
   desk.next_drags.clear()
+  desk.next_keeps.clear()
   desk.next_mouse_drags = true
   desk.next_sels.clear()
   desk.selecting = false
@@ -223,6 +232,7 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   desk.cursors = desk.next_cursors.copy()
   cs.clear()
   desk.drags = desk.next_drags.copy()
+  desk.keeps = desk.next_keeps.copy()
   desk.mouse_drags = desk.next_mouse_drags
   desk.sels = desk.next_sels.copy()
   if !self.down && self.px >= 0.0 {
@@ -499,18 +509,28 @@ fn sel_at(x : Double, y : Double) -> SelTarget? {
 }
 
 ///|
-/// A primary press at (x, y): on words that are picked with the pointer, picking starts there; elsewhere what was
-/// picked is let go.
-fn select_press(x : Double, y : Double) -> Unit {
+/// A primary press at (x, y) at `t`: on words that are picked with the pointer, picking starts there (the second of
+/// two quick presses there picks the word under it, as a browser's double click does); elsewhere what was picked is
+/// let go.
+fn select_press(x : Double, y : Double, t : Double) -> Unit {
+  let (was, ax, ay) = select_last.val
+  select_last.val = (t, x, y)
   match sel_at(x, y) {
-    Some(t) => {
-      let off = t.lay.offset_at(x - t.ox, y - t.oy)
-      picked.base = t.base
+    Some(target) => {
+      let off = target.lay.offset_at(x - target.ox, y - target.oy)
+      picked.base = target.base
       picked.a = off
       picked.b = off
       picked.dragging = true
-      picked.text = t.text
-      picked.target = Some(t)
+      picked.text = target.text
+      picked.target = Some(target)
+      if t - was <= double_click_ms && (x - ax).abs() <= double_click_slop && (y - ay).abs() <= double_click_slop {
+        let (s, e) = word_at(target.text, off)
+        picked.a = s
+        picked.b = e
+        picked.dragging = false
+        select_last.val = (-1.0e9, 0.0, 0.0)
+      }
     }
     None => {
       picked.base = 0
@@ -518,6 +538,64 @@ fn select_press(x : Double, y : Double) -> Unit {
       picked.target = None
     }
   }
+}
+
+///|
+/// A press on `id` keeps what is picked with the pointer (a button that does something with it, as a page's control
+/// whose press is not the words' with mousedown's preventDefault: a quote of what is picked). Said each frame it is
+/// drawn.
+pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
+  ignore(self)
+  desk.next_keeps.push(id)
+}
+
+///|
+/// Whether a press on `target` keeps what is picked (Ctx::keeps_selection).
+fn keeps_selection_on(target : Int) -> Bool {
+  desk.keeps.contains(target)
+}
+
+///|
+/// When and where the last press that could pick went down (a double click's first).
+let select_last : Ref[(Double, Double, Double)] = Ref((-1.0e9, 0.0, 0.0))
+
+///|
+/// Where what is picked with the pointer lies in the window, once the pointer has let it go (the box round its
+/// lines), or None: none picked, or still being dragged.
+pub fn Ctx::selection_box(self : Ctx) -> (Double, Double, Double, Double)? {
+  ignore(self)
+  if picked.base == 0 || picked.a == picked.b || picked.dragging {
+    return None
+  }
+  match picked.target {
+    Some(t) => {
+      let rects = selected_rects(t.base, t.lay)
+      if rects.length() == 0 {
+        return None
+      }
+      let mut x0 = 1.0e9
+      let mut y0 = 1.0e9
+      let mut x1 = -1.0e9
+      let mut y1 = -1.0e9
+      for r in rects {
+        x0 = dmin(x0, r.0)
+        y0 = dmin(y0, r.1)
+        x1 = dmax(x1, r.0 + r.2)
+        y1 = dmax(y1, r.1 + r.3)
+      }
+      Some((x0 + t.ox, y0 + t.oy, x1 - x0, y1 - y0))
+    }
+    None => None
+  }
+}
+
+///|
+/// What is picked with the pointer let go (a quote taken from it).
+pub fn Ctx::selection_clear(self : Ctx) -> Unit {
+  ignore(self)
+  picked.base = 0
+  picked.dragging = false
+  picked.target = None
 }
 
 ///|

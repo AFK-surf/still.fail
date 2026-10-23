@@ -815,3 +815,43 @@ pub let face_ink : Int64 = 0xFFFFFFFFL
 /// renderer draws it; its colour the palette's line, said where it is drawn).
 // kept across runs: a value (no field of it changes)
 pub let sheet_grabber : @ui.Style = @ui.style(w=Fixed(38.0), h=Fixed(5.0), radius=Full)
+
+///|
+/// A tip's widest (the web's parts.css.ts tooltip: 300).
+pub let tip_max : @ui.Len = Fixed(300.0)
+
+///|
+/// A login card's on a desktop's width (the web's MachineLogins.css.ts card): 360 at least, and its corner its padding
+/// and its × pill's half (8 + 12: the web's card's 20, as a visualization's).
+pub let login_card_least : @ui.Len = Fixed(360.0)
+
+///|
+pub let login_card_corner : @ui.Radius = viz_card_radius
+
+///|
+/// A file's card in a message on a desktop's width (the web's Chat.css.ts fileCard): its sheet (30 by 36) 7 in from its
+/// side, as the sheet's own 9.75 less the 2.75 it is drawn in (FILE_CARD_PAD); its corner the sheet's room and its own
+/// 3.25 (MESSAGE_FILE_CORNER, 13), a message's pictures' too.
+pub let file_sheet_in : @ui.Space = files_row_end
+
+///|
+pub let file_sheet_w : @ui.Len = Fixed(30.0)
+
+///|
+pub let file_sheet_h : @ui.Len = Fixed(36.0)
+
+///|
+/// A name over a message at its widest (Chat.css.ts msgHead msgName: 240).
+pub let name_max : @ui.Len = Fixed(240.0)
+
+///|
+/// A small square button beside a line (the web's activityStop, a file card's remove: 22).
+pub let small_button : @ui.Len = Fixed(22.0)
+
+///|
+/// The pill offering to quote what is picked (the web's Chat.css.ts quotePop: 26 high).
+pub let quote_pop_h : @ui.Len = Fixed(26.0)
+
+///|
+/// A page's bar in the wide frame (the web's sidebar.css.ts pageBar: 45 high).
+pub let wide_bar_h_size : @ui.Len = Fixed(45.0)

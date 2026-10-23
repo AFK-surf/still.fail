@@ -145,7 +145,7 @@ fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after? : B
 /// Words sent: on their way at once, whatever plays; what is asked after them waits for them to land (Turns::over).
 fn Turns::send(self : Turns, c : @ui.Ctx) -> Unit {
   self.sent_at = self.moment(c)
-  self.sent_until = self.sent_at + flight_wait_ms + flight_ms + turn_calm_ms
+  self.sent_until = self.sent_at + flight_wait_ms + flight_len() + turn_calm_ms
 }
 
 ///|

@@ -536,10 +536,21 @@ fn emit_out(c : @ui.Ctx, i : Int, e : Emits, seq : Double) -> Unit {
   match @motion.measured_rect(c, "emit-col/" + seq_s(seq)) {
     Some((_, _, cw, ch)) => {
       let s = 0.35 + 0.65 * k
-      c.look(i, @ui.look(alpha=if u < 0.35 { @motion.Ease::Out.at(u / 0.35) } else { 1.0 }, scale=s, ox=if cw > 0.0 { 12.0 / cw } else { 0.0 }, oy=if ch > 0.0 { 12.0 / ch } else { 0.0 }))
+      c.look(i, @ui.look(alpha=if u < 0.35 { @motion.Ease::Out.at(u / 0.35) } else { 1.0 }, scale=s, ox=if cw > 0.0 { emit_from_x() / cw } else { 0.0 }, oy=if ch > 0.0 { 12.0 / ch } else { 0.0 }))
       c.cut_to_top(i, ch * k)
     }
     None => c.look(i, @ui.look(alpha=0.0))
+  }
+}
+
+///|
+/// Where a message comes out from, across its column: its avatar's middle over the head's start (12), or out in the
+/// margin before it in the wide frame (Chat.css.ts msgRow[data-emitting] > msgMain: -16).
+fn emit_from_x() -> Double {
+  if wide_on.val {
+    -16.0
+  } else {
+    12.0
   }
 }
 

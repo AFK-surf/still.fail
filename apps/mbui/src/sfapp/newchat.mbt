@@ -22,8 +22,10 @@ priv struct FreshChat {
   mut starting : Bool
   /// the chat it became (its scene leaving over it: new_leave)
   mut became : ChatRef?
-  /// the scene's look as it left: the view it showed
+  /// the scene's look as it left: the view it showed; in the wide frame, how tall its composer's place was (what the
+  /// scene leaving keeps clear, so nothing of it moves)
   mut scene : Json?
+  mut room : Double
 }
 
 ///|
@@ -34,6 +36,7 @@ let fresh : FreshChat = {
   starting: false,
   became: None,
   scene: None,
+  room: 0.0,
 }
 
 ///|
@@ -47,6 +50,7 @@ fn new_chat(c : @ui.Ctx, in_place? : Bool = false) -> Unit {
   fresh.starting = false
   fresh.became = None
   fresh.scene = None
+  fresh.room = 0.0
   lower_sheet()
   app.menu = false
   if in_place && app.nav.depth() > 1 {
@@ -235,9 +239,9 @@ fn new_chat_on(
   if !fresh.sent && !fresh.starting && sig != fresh.made_sig {
     fresh.made = ""
   }
-  // at a desktop's width, the web's page (wide_newchat.mbt); once its first words are sent, the composer at the foot
-  // where the chat's is, as the web's goes to the chat's dock (the words fly from there into the chat: flight.mbt)
-  if wide_on.val && !leaving && !fresh.sent && !fresh.starting {
+  // at a desktop's width, the web's page (wide_newchat.mbt), as it is while the chat is made (the words sent where they
+  // were typed: flight.mbt carried); it leaves over the chat it became (new_chat_leaving_wide)
+  if wide_on.val && !leaving {
     new_chat_page_wide(c, src, w, v, station, held~, error~)
     return
   }
@@ -620,14 +624,9 @@ fn send_first(
   let taken_text = d.text
   let taken_files = d.files.copy()
   // the words stay where they were typed, the files where their tiles were, while the chat is made (flight.mbt:
-  // carried; NewChat.kt host.sending)
+  // carried; NewChat.kt host.sending; in the wide frame from the middle of the page, as the web's madeChat.ts)
   let here : ChatRef = { station, session: "", title: "", station_name }
-  // (not from the wide frame's composer in the middle of the page: the chat's list would be carried up from there,
-  // half a page, and its rows put where it is drawn would not stay put; the row is where it is, as with motion
-  // reduced, the page going as it goes)
-  if !wide_on.val {
-    flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
-  }
+  flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
@@ -675,6 +674,17 @@ fn send_first(
           fresh.scene = v
           fresh.became = Some(r)
           became_starts()
+          // in the wide frame the composer goes from its place in the page to the chat's foot (composer_page)
+          if wide_on.val {
+            fresh.room = @motion.measured(c, "new/composer").unwrap_or(0.0)
+            composer_page_starts(c, draft_key(r))
+            // its files open beside it stay open beside the chat (NewChat.tsx onSent: keepTabs)
+            if new_files_open(src, workspace_of(station)) {
+              wide.tabs[side_key(r)] = ["files"]
+              wide.front[side_key(r)] = "files"
+              keep_tabs(r)
+            }
+          }
           app.nav.become(Chat(r))
         }
       }
@@ -751,7 +761,7 @@ fn new_fade(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// The new chat became the chat: its scene leaves, from now.
+/// The new chat became the chat: its scene leaves, from now (the web's both on its EASE, madeChat.ts toMadeChat).
 fn became_starts() -> Unit {
   let c = @ui.current()
   let leave = new_leave(c)
@@ -759,7 +769,27 @@ fn became_starts() -> Unit {
   leave.animate(1.0, @motion.tween(new_leave_ms, ease=Arrive))
   let fade = new_fade(c)
   fade.snap(0.0)
-  fade.animate(1.0, @motion.tween(new_fade_ms, ease=LeaveFade))
+  fade.animate(1.0, @motion.tween(new_fade_ms, ease=if wide_on.val { Arrive } else { LeaveFade }))
+}
+
+///|
+/// Over the chat a new chat became, in the wide frame's pane (madeChat.ts toMadeChat, NewChat.tsx data-made-leave):
+/// the page as it was, but for its composer (gone to the chat's foot, its place kept): its scene going up out of view
+/// as it fades (140 ms), what is under the composer fading where it is (80 ms); then nothing.
+fn new_chat_leaving_wide(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
+  match fresh.became {
+    Some(b) if b == r => ()
+    _ => return
+  }
+  if !new_leave(c).moving() {
+    return
+  }
+  let v = fresh.scene
+  let l = c.layer(fn() {
+    new_chat_page_wide(c, src, w, v, field(v, "station"), going=Some((new_leave(c).get(), new_fade(c).get())))
+  })
+  // (drawn only, while it leaves)
+  c.draw_only(l)
 }
 
 // ── the sheets ─────────────────────────────────────────────────────────

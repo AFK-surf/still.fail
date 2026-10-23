@@ -14,8 +14,14 @@ let key_actions : Array[(String, String, Array[String])] = [
   ("settings", "global", ["Mod+,"]),
   ("shortcuts", "global", ["Mod+/"]),
   ("composer.focus", "chat", ["Space"]),
-  ("chat.find", "chat", ["Mod+F"]),
+  ("composer.file", "chat", ["Mod+U"]),
+  ("chat.stop", "chat", ["Mod+."]),
+  ("chat.history", "chat", ["Mod+Shift+H"]),
   ("chat.jobs", "chat", ["Mod+Shift+J"]),
+  ("chat.latest", "chat", ["Mod+Down"]),
+  ("chat.find", "chat", ["Mod+F"]),
+  ("chat.archive", "chat", ["Mod+Shift+E"]),
+  ("panel.close", "chat", ["Escape"]),
 ]
 
 ///|
