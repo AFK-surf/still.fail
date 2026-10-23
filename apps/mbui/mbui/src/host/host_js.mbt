@@ -220,6 +220,13 @@ fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
+/// (the page draws a glyph as it is first asked for: nothing ahead)
+fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  ignore(keys)
+  ignore(n)
+}
+
+///|
 /// A font file (at `path`: a URL the page can fetch) made part of face `face` (style.mbt), for `weight` (0: variable,
 /// every weight). The page loads it as it can (FontFace): drawn in it once loaded (atlas_generation moves on then).
 fn face_add(face : Int, path : String, weight : Int) -> Bool {

@@ -504,6 +504,16 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
+/// The glyphs of the first `n` of `keys` for the host to draw ahead (text.mbt glyphs_ahead): a Tester's hosts, fake
+/// or live, draw each as it is asked for.
+fn h_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  match fake.val {
+    Some(_) => ()
+    None => @hostapi.glyphs_ahead(keys, n)
+  }
+}
+
+///|
 /// A face's file given to the host (faces.mbt); a Tester's fake host takes any (its words measured as ever).
 fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
   match fake.val {

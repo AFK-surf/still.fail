@@ -27,6 +27,7 @@ pub(open) trait Host {
   shape(Self, String, Double, Int, Int, FixedArray[Double]) -> Int = _
   text_key(Self, String, Double, Int, Int) -> Int = _
   glyph(Self, Int, FixedArray[Double]) -> Unit = _
+  glyphs_ahead(Self, FixedArray[Int], Int) -> Unit = _
   face_add(Self, Int, String, Int) -> Bool = _
   face_add_bytes(Self, Int, Bytes, Int) -> Bool = _
   face_clear(Self, Int) -> Unit = _
@@ -244,6 +245,11 @@ impl Host with text_key(_, _, _, _, _) {
 
 ///|
 impl Host with glyph(_, _, _) {
+  ()
+}
+
+///|
+impl Host with glyphs_ahead(_, _, _) {
   ()
 }
 
@@ -1084,6 +1090,14 @@ pub fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int 
 ///|
 pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   current.val.glyph(key, out)
+}
+
+///|
+/// The glyphs of the first `n` of `keys`, shaped and not drawn yet (on a page still off the screen, or below what is
+/// shown), for the host to draw ahead, off the frames' thread, so that `glyph` finds them drawn when they come into
+/// view. What `glyph` answers is the same either way: only when the work is done changes. A host may do nothing.
+pub fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  current.val.glyphs_ahead(keys, n)
 }
 
 ///|

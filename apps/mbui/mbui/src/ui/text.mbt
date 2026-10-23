@@ -85,6 +85,8 @@ struct TextCache {
   // on whole pixels
   metrics : Map[Int64, (Double, Double, Double, Double, Double, Bool)]
   glyphs : Map[Int, Glyph]
+  // the glyphs of what was shaped in this frame that it has not drawn yet, for the host to draw ahead (glyphs_ahead)
+  fresh : Array[Int]
   mut generation : Int
   buf : FixedArray[Double]
   gbuf : FixedArray[Double]
@@ -96,6 +98,7 @@ let text_cache : TextCache = {
   shaped: 0,
   metrics: Map::new(),
   glyphs: Map::new(),
+  fresh: [],
   generation: -1,
   buf: FixedArray::make(4 * 8192, 0.0),
   gbuf: FixedArray::make(8, 0.0),
@@ -110,6 +113,7 @@ fn check_atlas() -> Unit {
     let first = text_cache.generation < 0
     text_cache.generation = g
     text_cache.glyphs.clear()
+    text_cache.fresh.clear()
     if !first {
       clear_shapes()
       text_cache.fonts.clear()
@@ -442,6 +446,12 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? 
       }
       shapes[text] = s
       text_cache.shaped = text_cache.shaped + 1
+      // its glyphs not drawn yet: drawn ahead unless this frame draws them (glyphs_ahead)
+      for k in keys {
+        if k >= 0 && text_cache.fresh.length() < glyphs_ahead_most && !text_cache.glyphs.contains(k) {
+          text_cache.fresh.push(k)
+        }
+      }
       s
     }
   }
@@ -594,6 +604,34 @@ fn bidi_offset_at(
     starts[right]
   } else {
     starts[right] + lens[right]
+  }
+}
+
+///|
+/// The most glyphs a frame asks its host to draw ahead.
+let glyphs_ahead_most : Int = 4096
+
+///|
+/// The glyphs of what the frame shaped and did not draw (a page pushed, still off the screen; the lines below what a
+/// list shows), handed to the host as the frame's painting is over, to draw them ahead, off the frames' thread: there
+/// when they come into view, a frame or more later, not all drawn in the frame they first show in. What is drawn is the
+/// same; only when the work is done changes (@hostapi.glyphs_ahead).
+fn glyphs_ahead() -> Unit {
+  let fresh = text_cache.fresh
+  if fresh.is_empty() {
+    return
+  }
+  let keys = FixedArray::make(fresh.length(), 0)
+  let mut n = 0
+  for k in fresh {
+    if !text_cache.glyphs.contains(k) {
+      keys[n] = k
+      n = n + 1
+    }
+  }
+  fresh.clear()
+  if n > 0 {
+    h_glyphs_ahead(keys, n)
   }
 }
 

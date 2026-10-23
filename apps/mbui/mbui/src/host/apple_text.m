@@ -596,6 +596,12 @@ static void rasterize(int key) {
   CFRelease(line);
 }
 
+// (a glyph drawn as it is first asked for: nothing ahead)
+void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
+  (void)keys;
+  (void)n;
+}
+
 void mb_host_glyph(int32_t key, double *out) {
   @autoreleasepool {
     if (key < 0 || key >= n_entries) {

@@ -283,6 +283,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.glass_frame()
   c.paint(root, 1.0)
   c.paint_overlays()
+  // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
+  glyphs_ahead()
   c.emit_segs()
   c.sync_views()
   // what the widgets are, for a screen reader reading them (a11y.mbt)
