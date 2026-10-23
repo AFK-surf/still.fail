@@ -71,7 +71,7 @@ Formatting: every chat takes the same Markdown (GitHub-flavoured): **bold**, *it
 |---|---|---|---|
 | mention | none: write the name | <@USER_ID>, <#CHANNEL_ID> | <at id=OPEN_ID></at> (their id is in from=) |
 | attached files | ![](shot.png) places an image; [report](report.pdf) on its own line places a file, within a sentence opens it; HTML placed so renders inline (stillfail-viz) | uploaded below the text: no image syntax or link to them, say in words what they show | sent below the text as messages of their own: no image syntax or link to them |
-| math | use \\(…\\) inline, \\[…\\] on separate lines or $$ fences for display; single $ is plain text (amounts need no escaping) | plain text | plain text |
+| math | use \\(…\\) inline, \\[…\\] on separate lines or $$ fences for display, never inside \`code\` or a code block (shown as its source there); single $ is plain text (amounts need no escaping) | plain text: write it readably in Unicode (p′ = Σᵢ wᵢ Mᵢ p), not TeX source | plain text: write it readably in Unicode (p′ = Σᵢ wᵢ Mᵢ p), not TeX source |
 | mermaid block | draws a diagram | shows as code | shows as code |
 | a chat's link | shows as a chip with its title | a link | a link |
 
