@@ -434,7 +434,8 @@ fn run_until_still(f : MbtFile) -> Array[Int] {
 // what a box and words look like said loosely (Ctx::box, row, column, layer, text, rich): box-loose; a number in
 // them, or anywhere in a style's constructors (style.mbt), style-literal
 let box_look : Array[String] = [
-  "dir", "w", "h", "pad", "padx", "pady", "pl", "pr", "pt", "pb", "gap", "align", "justify", "bg",
+  "dir", "w", "h", "pad", "padx", "pady", "pl", "pr", "pt", "pb", "m", "mx", "my", "ml", "mr", "mt", "mb",
+  "gap", "align", "justify", "bg",
   "radius", "border", "border_color", "shadow", "shadow_color", "shadow_y", "min_w", "max_w",
   "min_h", "max_h", "clip", "opacity",
 ]

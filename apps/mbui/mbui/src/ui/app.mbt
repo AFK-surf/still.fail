@@ -199,6 +199,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   fx_frame_start(c)
   // what is said to move, handed this frame's time, before the view reads where it is (motion_data.mbt)
   c.movers_sample()
+  // what the boxes moved by a move_state were shown as in the last frame: where a move set out now starts (move_state.mbt)
+  c.moves_frame_start()
   desk_frame_start()
   // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
   // overlay.mbt), before the view builds
@@ -377,6 +379,7 @@ let building : Ref[Bool] = Ref::new(false)
 /// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
 fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.inners.clear()
+  c.moves_build_start()
   c.arounds.clear()
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
   c.tells.clear()

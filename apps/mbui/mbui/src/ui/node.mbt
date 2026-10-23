@@ -7,6 +7,8 @@ pub(all) enum Size {
   Auto
   Px(Double)
   Fill(Double)
+  /// a share of the parent's room inside its padding, in percent (CSS's `width: 50%`)
+  Pct(Double)
 } derive(Eq)
 
 ///|
@@ -138,6 +140,19 @@ struct Node {
   mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
+  // its margins (CSS's: outside its border, below 0 pulling what is beside it over it)
+  mut mar_l : Double
+  mut mar_t : Double
+  mut mar_r : Double
+  mut mar_b : Double
+  // where it is put in its parent, out of the flow, from the parent's edges, its padding not kept (CSS's position:
+  // absolute with left, top, right, bottom; NaN: not said); any said, it is placed so
+  mut at_l : Double
+  mut at_t : Double
+  mut at_r : Double
+  mut at_b : Double
+  // the name it is moved by (Ctx::move_state: the web's moveState's selector), "" none
+  mut moves : String
   // a row laid out right to left (built where Ctx::rtl)
   mut rtl : Bool
   // its width over its height, its height following its width (0: none; Ctx::box `aspect`)
@@ -282,6 +297,15 @@ fn Node::new() -> Node {
     page_no: -1,
     pager: 0,
     layer: false,
+    mar_l: 0.0,
+    mar_t: 0.0,
+    mar_r: 0.0,
+    mar_b: 0.0,
+    at_l: 0.0 / 0.0,
+    at_t: 0.0 / 0.0,
+    at_r: 0.0 / 0.0,
+    at_b: 0.0 / 0.0,
+    moves: "",
     rtl: false,
     aspect: 0.0,
     portal: false,
@@ -352,6 +376,15 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.page_no = -1
   self.pager = 0
   self.layer = false
+  self.mar_l = 0.0
+  self.mar_t = 0.0
+  self.mar_r = 0.0
+  self.mar_b = 0.0
+  self.at_l = 0.0 / 0.0
+  self.at_t = 0.0 / 0.0
+  self.at_r = 0.0 / 0.0
+  self.at_b = 0.0 / 0.0
+  self.moves = ""
   self.portal = false
   self.blocks = false
   self.sideways = false
@@ -418,6 +451,12 @@ fn Node::reset_words(self : Node) -> Unit {
   self.line_trim = false
   self.spacing = 0.0
   self.max_lines = 0
+}
+
+///|
+/// Whether it is put in its parent by where it is said to be (`at_*`), out of the flow.
+fn Node::placed_at(self : Node) -> Bool {
+  !self.at_l.is_nan() || !self.at_t.is_nan() || !self.at_r.is_nan() || !self.at_b.is_nan()
 }
 
 ///|
