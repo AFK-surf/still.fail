@@ -37,7 +37,7 @@ test("a chat's places: the connects that can start a conversation, each bot's ch
   const connects = await relayPlaces(r.hub, thread);
   assert.deepEqual(connects, [
     {
-      id: "cl", kind: "slack", name: "ember", team: null,
+      id: "cl", kind: "slack", name: "ember", team: null, botImage: null,
       places: [{ id: "C1", name: "cue-dev", kind: "channel" }, { id: "C2", name: "design", kind: "channel", private: true }],
     },
   ], "the connects whose surface cannot start one (gpt, team here) are not offered");

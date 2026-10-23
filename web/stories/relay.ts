@@ -3,8 +3,11 @@
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { RelayConnect } from "../src/api.ts";
 
+/** A bot's picture as Slack gives one (its app's icon). */
+const BOT_IMAGE = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" fill="#d97757"/><path d="M24 10l3 11 11 3-11 3-3 11-3-11-11-3 11-3z" fill="#fff"/></svg>')}`;
+
 const CONNECTS: RelayConnect[] = [
-  { id: "cl", kind: "slack", name: "Claude", team: "AFK-surf", places: [
+  { id: "cl", kind: "slack", name: "Claude", team: "AFK-surf", botImage: BOT_IMAGE, places: [
     { id: "C1", name: "cue-dev", kind: "channel", used: 1_700_000_300_000 },
     { id: "C2", name: "design", kind: "channel", private: true },
     { id: "C3", name: "stillfail", kind: "channel", used: 1_700_000_100_000 },
@@ -23,7 +26,7 @@ const CONNECTS: RelayConnect[] = [
 
 /** One Slack workspace whose only bots run another runtime than the chat's agent: the station offers both (docs/relay.md). */
 export const TWO_BOTS: RelayConnect[] = [
-  { id: "cl", kind: "slack", name: "claude", team: "AFK AI", places: CONNECTS[0]!.places },
+  { id: "cl", kind: "slack", name: "claude", team: "AFK AI", botImage: BOT_IMAGE, places: CONNECTS[0]!.places },
   { id: "cx", kind: "slack", name: "codex", team: "AFK AI", places: CONNECTS[0]!.places.slice(0, 5) },
 ];
 

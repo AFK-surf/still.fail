@@ -841,7 +841,7 @@ data class RelayPlace(val id: String, val name: String, val kind: String, val pr
 
 /** A connect a chat can be relayed through (`kind` slack, feishu or lark), with its places; none, and why, when they could not be read. */
 @kotlinx.serialization.Serializable
-data class RelayConnect(val id: String, val kind: String, val name: String, val team: String? = null, val places: List<RelayPlace> = emptyList(), val error: String? = null)
+data class RelayConnect(val id: String, val kind: String, val name: String, val team: String? = null, val botImage: String? = null, val places: List<RelayPlace> = emptyList(), val error: String? = null)
 
 @kotlinx.serialization.Serializable
 private class RelayPlaces(val connects: List<RelayConnect> = emptyList())

@@ -31,6 +31,7 @@ import fail.still.android.data.RelayConnect
 import fail.still.android.data.RelayPlace
 import fail.still.android.data.errorText
 import fail.still.android.data.t
+import fail.still.android.ui.Avatar
 import fail.still.android.ui.Button
 import fail.still.android.ui.C
 import fail.still.android.ui.Field
@@ -115,7 +116,12 @@ internal fun openRelay(app: AppState, station: String, thread: Long) {
                 link != null -> PlaceRow(null, t("web-main.relay.thread"), null, t("web-main.relay.kind.thread"), on = true) {}
                 chosen != null -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     PlaceRow(markOf(chosen.connect), placeName(chosen.place), workspace(chosen.connect, (read as? Places.Ok)?.connects.orEmpty()), "${kindNote(chosen.place)} · ${t("web-main.relay.change")}", on = true) { picked = null }
-                    Text(t("web-main.relay.via", "bot" to chosen.connect.name), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 34.dp, end = 10.dp)) // in line with the row's name: its 10 in, its mark's 16, the 8 after
+                    // its picture under the row's mark, its words in line with the place's name
+                    Row(Modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val image = chosen.connect.botImage
+                        if (image != null) Avatar(chosen.connect.id, chosen.connect.name, 16.dp, picture = image) else SlackMark(16.dp, markOf(chosen.connect))
+                        Text(t("web-main.relay.via", "bot" to chosen.connect.name), fontSize = 12.sp, color = C.muted)
+                    }
                 }
                 shown is Places.Reading -> WaitLine(t("web-main.relay.reading"))
                 shown is Places.Failed -> Text(shown.error, fontSize = 13.sp, color = C.red)

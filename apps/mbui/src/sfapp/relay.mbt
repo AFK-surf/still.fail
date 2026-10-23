@@ -202,7 +202,8 @@ fn relay_arrange(connects : Array[Json], query : String, all : Bool) -> (Array[(
 priv enum RelayPart {
   Lead
   Search
-  Picked(String, String?, String, Bool, String?)
+  /// the place picked: its name, workspace, note, whether it can be changed, and the bot replying there (its words, connect, name, picture)
+  Picked(String, String?, String, Bool, (String, Json)?)
   Reading
   Failed(String)
   Note(String)
@@ -249,7 +250,7 @@ fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit 
           Some(relay_workspace(conn)),
           relay_kind_note(p) + " · " + tr("web-main.relay.change"),
           true,
-          Some(fill("web-main.relay.via", [("bot", text(Some(conn), "name"))])),
+          Some((fill("web-main.relay.via", [("bot", text(Some(conn), "name"))]), conn)),
         ),
       )
     (None, None) =>
@@ -425,14 +426,10 @@ let relay_place : @ui.Style = @ui.style(
 let relay_place_on : @ui.Style = relay_place.then(@ui.style(bg=AccentBg))
 
 ///|
-/// Which bot the agent speaks through there, under the place picked (Relay.kt): in line with the row's name, as far
-/// in as its 10, its mark's 16 and the 8 after it.
+/// Which bot the agent speaks through there, under the place picked (Relay.kt): its picture under the row's mark,
+/// its words in line with the place's name (10 in, 8 apart, as the row).
 // kept across runs: a value (no field of it changes)
-let relay_via : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, pt=S0_5, gap=S2)
-
-///|
-// kept across runs: a value (no field of it changes)
-let relay_via_mark : @ui.Style = @ui.style(w=S4)
+let relay_via : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, pt=S0_5, gap=S2, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -462,9 +459,17 @@ fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : Re
           change {
           relaying.picked = None
         }
-        if via is Some(words) {
+        if via is Some((words, conn)) {
           c.box(style=relay_via, fn() {
-            c.box(style=relay_via_mark, fn() {  }) |> ignore
+            match opt_text(Some(conn), "botImage") {
+              Some(picture) if picture != "" =>
+                avatar(c, src, text(Some(conn), "id"), text(Some(conn), "name"), picture, relay_mark)
+              _ =>
+                match text(Some(conn), "kind") {
+                  "feishu" | "lark" => @sf.feishu_mark(c, relay_mark) |> ignore
+                  _ => @sf.slack_mark(c, relay_mark) |> ignore
+                }
+            }
             c.text(words, style=relay_small) |> ignore
           })
           |> ignore

@@ -5,7 +5,7 @@
 // (mobile/Chat.tsx RelaySheet) picks the same way (useRelay).
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { stationApi, useStationCall, type RelayConnect, type RelayPlace } from "./api.ts";
-import { Button, Dialog, ElsewhereLogo, WaitLine } from "./ui.tsx";
+import { Button, ConnectAvatar, Dialog, ElsewhereLogo, WaitLine } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Relay.css.ts";
@@ -129,7 +129,7 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
     list = (
       <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
         {row(picked, true, <>{kindNote(picked.place)} · <span className={css.change}>{t("web-main.relay.change")}</span></>, () => setPicked(null))}
-        <p className={css.via}>{t("web-main.relay.via", { bot: picked.connect.name })}</p>
+        <p className={css.via}><ConnectAvatar connect={picked.connect} size={16} />{t("web-main.relay.via", { bot: picked.connect.name })}</p>
       </div>
     );
   } else if ("reading" in read) list = <WaitLine text={t("web-main.relay.reading")} />;

@@ -397,7 +397,7 @@ export interface MachineSaid { person: boolean; text: string; at: number | null 
 export interface RelayPlace { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean; used?: number }
 
 /** A connect a chat can be relayed through, with its places (none, and why, when they could not be read). */
-export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; places: RelayPlace[]; error?: string }
+export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; botImage?: string | null; places: RelayPlace[]; error?: string }
 
 /** Where a chat was relayed: the place's name, and its link where the platform has one. */
 export interface Relayed { thread: number; to: string; place: string; link: string | null }

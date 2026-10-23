@@ -22,6 +22,8 @@ export type RelayConnect = {
   kind: "slack" | "feishu" | "lark";
   name: string;
   team: string | null;
+  /// Its bot's picture as the platform shows it, once known.
+  botImage: string | null;
   places: RelayPlace[];
   error?: string;
 };
@@ -66,10 +68,10 @@ function connectsFor(hub: Hub, session: string): { id: string; chat: ChatSurface
     .map(({ id, chat, kind }) => ({ id, chat, kind }));
 }
 
-/// The team (Slack workspace, Feishu tenant) a surface's bot is in, once it is known.
-function teamOf(chat: ChatSurface): string | null {
-  const team = chat instanceof SlackSurface || chat instanceof FeishuSurface ? (chat.identity()?.team ?? "") : "";
-  return team === "" ? null : team;
+/// The team (Slack workspace, Feishu tenant) a surface's bot is in, and its bot's picture, once they are known.
+function identityOf(chat: ChatSurface): { team: string | null; botImage: string | null } {
+  const me = chat instanceof SlackSurface || chat instanceof FeishuSurface ? chat.identity() : null;
+  return { team: me?.team || null, botImage: me?.botImage || null };
 }
 
 /// Where a chat can be relayed to: each connect's places, read now (one that cannot be read says why), those relayed to
@@ -78,7 +80,7 @@ export async function relayPlaces(hub: Hub, thread: ThreadRow): Promise<RelayCon
   const session = agentOf(hub, thread);
   const out: RelayConnect[] = [];
   for (const c of connectsFor(hub, session)) {
-    const shown = { id: c.id, kind: c.kind, name: c.chat.botName?.() || c.id, team: teamOf(c.chat) };
+    const shown = { id: c.id, kind: c.kind, name: c.chat.botName?.() || c.id, ...identityOf(c.chat) };
     try {
       const used = hub.store.relayedTo(c.id);
       const places: RelayPlace[] = (await c.chat.places!()).map((p) => (used.has(p.id) ? { ...p, used: used.get(p.id)! } : p));
