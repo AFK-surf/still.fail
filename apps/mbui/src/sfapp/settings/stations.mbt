@@ -265,11 +265,6 @@ fn level_color(level : String) -> Int64 {
 }
 
 ///|
-/// The corner of a chip whose ground fills from the left (how far a download or a use has come): its fill a plain
-/// rectangle the chip's clip cuts along its corners (FillChip's drawRect in its clip), its end square where it stops.
-let fill_chip_radius : Double = 6.0
-
-///|
 /// A rounded box with a figure in it, its mark before it, its ground filled from the left as far as `fill` (0–100):
 /// grey while it is ok, faintly the level's colour once it is not, the figure then in that colour (Parts.kt FillChip).
 fn fill_chip(
@@ -279,14 +274,15 @@ fn fill_chip(
   mark : String,
   words : String,
   small? : Bool = false,
-  corner? : Double = fill_chip_radius,
 ) -> Unit {
   let t = @sf.theme()
   let tone = level_color(level)
   let low = level == "amber" || level == "red"
   let ground = if low || level == "progress" { @sf.alpha(tone, 0.2) } else { @sf.alpha(t.p.muted, 0.22) }
   let fs = if small { 10.0 } else { 11.0 }
-  c.box(h=Px(if small { 16.0 } else { 20.0 }), radius=corner, bg=t.p.chip, clip=true, justify=JCenter, fn() {
+  // (its fill a plain rectangle the chip's clip cuts along its corners, FillChip's drawRect in its clip; its end square
+  // where it stops)
+  c.box(h=Px(if small { 16.0 } else { 20.0 }), radius=@sf.fill_chip_corner, bg=t.p.chip, clip=true, justify=JCenter, fn() {
     if fill > 0 {
       c.layer(fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
@@ -452,7 +448,7 @@ fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
           c.layer(fn() {
             c.box(style=figures_dials_unread, fn() {
               for _ in 0..<3 {
-                @sf.bar(c, Px(unread_dial_w), unread_dial_h, radius=unread_meter_r, breathing=true)
+                @sf.bar(c, Px(unread_dial_w), unread_dial_h, radius=unread_dial_r, breathing=true)
               }
             })
             |> ignore
@@ -537,6 +533,9 @@ let unread_dial_w : Double = 90.0
 
 ///|
 let unread_dial_h : Double = 76.0
+
+///|
+let unread_dial_r : Double = 6.0
 
 ///|
 /// Its network 14 under the dials.

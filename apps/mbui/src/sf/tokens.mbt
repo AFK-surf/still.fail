@@ -129,6 +129,12 @@ pub let list_pad : Double = 8.0
 pub let row_corner : Double = 18.0
 
 ///|
+/// A chip whose ground fills from the left (an allowance's, a machine's load, a download's: Parts.kt FILL_CHIP_CORNER):
+/// near a capsule's on its 20 (a small one's 16 a capsule); in a list row's corner, 12 in, the row's corner is
+/// concentric round it (concentric_out(8.4, 12) = row_corner).
+pub let fill_chip_corner : Double = 8.4
+
+///|
 /// Corners (--r-*): a field's, a card's, a dialog's, the nav's, a menu's,
 /// an option's.
 pub let r_field : Double = 12.0

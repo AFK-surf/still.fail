@@ -283,6 +283,12 @@ private fun leftOf(left: Long) = left.coerceIn(0L, 100L)
 private fun usedOf(left: Long) = 100L - leftOf(left)
 
 /**
+ * A FillChip's corner: near a capsule's on its 20 (a small one's 16 a capsule). In a list row's corner, 12 in, the
+ * row's LIST_ROW_CORNER is concentric round it (concentricOut(8.4, 12) = 18). As the web's quotaChip.
+ */
+val FILL_CHIP_CORNER = 8.4.dp
+
+/**
  * A rounded box with a figure in it (its mark before it, when given) and its ground filled from the left as far as `fill`
  * (0–100): a quiet grey while it is ok, the colour of the core's level, faintly, once it is not, the figure then in that
  * colour too. Level `progress`: a download's share, in the accent, its fill moving smoothly to each new one. As the
@@ -295,7 +301,7 @@ private fun FillChip(fill: Long, level: String, mark: String?, text: String, sma
     val low = level == "amber" || level == "red"
     val drawn by animateFloatAsState(fill.coerceIn(0L, 100L).toFloat(), if (level == "progress") tween(500) else snap(), label = "fill")
     val ground = if (low || level == "progress") tone.copy(alpha = 0.2f) else c.muted.copy(alpha = 0.22f)
-    Box(Modifier.height(if (small) 16.dp else 20.dp).clip(Smooth(6.dp)).background(c.chip).drawBehind {
+    Box(Modifier.height(if (small) 16.dp else 20.dp).clip(Smooth(FILL_CHIP_CORNER)).background(c.chip).drawBehind {
         if (drawn > 0f) drawRect(ground, size = Size(size.width * drawn / 100f, size.height))
     }, contentAlignment = Alignment.Center) {
         Row(Modifier.padding(horizontal = if (small) 5.dp else 8.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
