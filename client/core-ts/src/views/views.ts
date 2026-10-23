@@ -528,6 +528,9 @@ export class Views implements Owner {
       case "archiving":
         this.#invalidate((v) => v.topic === "chats" || v.topic === "workspaceMarks" || v.topic === "decisions");
         return;
+      case "letGo":
+        this.#invalidate((v) => v.topic === "decisions");
+        return;
       case "changing":
         this.#invalidate((v) => ["chats", "chatSearch", "search", "archive", "workspaceMarks", "decisions"].includes(v.topic) || (v.topic === "chat" && v.station === change.station));
         return;
@@ -1811,6 +1814,35 @@ export class Views implements Owner {
 
   // ── the 奏 page ──
 
+  /// The decision the wide 奏 page shows, by workspace (`decision.show`): its key (none picked yet: null; "": the one in
+  /// the place of the one set aside), and where in the list it was last.
+  readonly #decisionShown = new Map<string, { key: string | null; at: number }>();
+
+  /// The one shown from now on (`decision.show`).
+  showDecision(workspace: string, station: string, thread: number, seq: number): void {
+    const was = this.#decisionShown.get(workspace);
+    this.#decisionShown.set(workspace, { key: decisions.deferralKey(station, thread, seq), at: was?.at ?? 0 });
+    this.#invalidate((v) => v.topic === "decisions" && v.workspace === workspace);
+  }
+
+  /// Set aside (`decision.defer`): if it is the one shown, the one now in its place shows (itself if it is the only one).
+  decisionDeferred(station: string, thread: number, seq: number): void {
+    const key = decisions.deferralKey(station, thread, seq);
+    for (const [workspace, shown] of this.#decisionShown) if (shown.key === key) this.#decisionShown.set(workspace, { key: "", at: shown.at });
+  }
+
+  /// Where the one shown is in `items`: the one picked while it is there, else the one now where it was (the last when
+  /// the list got shorter), which is then the one shown; null for none.
+  #shownDecision(workspace: string, items: J[]): number | null {
+    const keyOf = (d: J) => decisions.deferralKey(d.station, d.thread, d.seq);
+    const was = this.#decisionShown.get(workspace) ?? { key: null, at: 0 };
+    const found = was.key === null ? -1 : items.findIndex((d) => keyOf(d) === was.key);
+    const at = found >= 0 ? found : Math.min(was.at, items.length - 1);
+    // Nothing picked yet, the first shows, whichever it is.
+    this.#decisionShown.set(workspace, { key: was.key !== null && at >= 0 ? keyOf(items[at]) : was.key, at: Math.max(at, 0) });
+    return at >= 0 ? at : null;
+  }
+
   #decisions(scope: string): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
@@ -1855,10 +1887,12 @@ export class Views implements Owner {
         const thread = u64(row.thread);
         const seq = u64(d.seq);
         if (thread === null || seq === null) continue;
-        if (this.local.answered(s.address, thread, seq)) continue;
+        // Answered, let go or its vault request decided from here: gone at once (back if that could not be done).
+        if (this.local.answered(s.address, thread, seq) || this.local.lettingGo(s.address, thread, seq)) continue;
+        const card = decisions.labelAssignee(decisions.cardShown(d.card), me, members_, row.creator);
+        if (typeof card.vault === "string" && this.local.decidedVault(card.vault)) continue;
         const agents = arr(row.agents).map((a) => ({ session: present.session(a) }));
         const shown = (m: J): J => ({ ...shownMessage(m, agents, me, slackUsers, members_, [], row.creator), waiting: false });
-        const card = decisions.labelAssignee(decisions.cardShown(d.card), me, members_, row.creator);
         const options = card.options ?? [];
         const message = shown(d.message);
         if (decisions.kind(d.card) === "options") message.options = structuredClone(options);
@@ -1896,7 +1930,9 @@ export class Views implements Owner {
     const at = (v: J, k: string) => (typeof v[k] === "number" ? v[k] : 0);
     answered.sort((a, b) => at(b, "answeredAt") - at(a, "answeredAt"));
     working.sort((a, b) => at(b, "lastActiveAt") - at(a, "lastActiveAt"));
-    return { ok: { items: ordered.map((i) => i[0]), count: ordered.length, wait: looks.waitNote(waiting, failing, ordered.length === 0), answered, working } };
+    const list = ordered.map((i) => i[0]);
+    const shown = this.#shownDecision(scope, list);
+    return { ok: { items: list, count: ordered.length, ...(shown !== null ? { shown } : {}), wait: looks.waitNote(waiting, failing, ordered.length === 0), answered, working } };
   }
 
   // ── workspace marks ──

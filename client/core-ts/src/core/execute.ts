@@ -137,6 +137,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.succeed({ at: searchBook(book, call.query, call.limit) });
       }
       case "decisionDefer":
+        inner.views?.decisionDeferred(call.station, call.thread, call.seq);
         prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
         return Effect.succeed(null);
       case "draftPut": {

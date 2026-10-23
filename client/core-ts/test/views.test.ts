@@ -365,6 +365,93 @@ test("the_decisions_page_lists_those_waiting_for_the_viewer_set_aside_last", asy
   assert.deepEqual([v.items[1].deferred, v.items[0].deferred], [true, undefined]);
 });
 
+test("the_wide_decisions_page_shows_the_one_picked_and_once_it_goes_or_is_set_aside_the_one_in_its_place", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "decisions", workspace: "ws" });
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  // Oldest asked first: k1, k2, k3, k4.
+  const all = [deciding("k1", 1, 5, now - 4000, false), deciding("k2", 2, 5, now - 3000, false), deciding("k3", 3, 5, now - 2000, false), deciding("k4", 4, 5, now - 1000, false)];
+  t.set(rows("ws/st"), all);
+  await t.read(u, 1);
+  const shown = () => (u.value.shown === undefined ? null : u.value.items[u.value.shown].session);
+  // None picked: the first.
+  assert.equal(shown(), "k1");
+  t.views.showDecision("ws", "ws/st", 3, 5);
+  await t.read(u, 1);
+  assert.equal(shown(), "k3");
+  // One before it goes: still the one picked, wherever it now is.
+  t.set(rows("ws/st"), all.slice(1));
+  await t.read(u, 1);
+  assert.deepEqual([shown(), u.value.shown], ["k3", 1]);
+  // The one picked goes (answered elsewhere): the one now in its place.
+  t.set(rows("ws/st"), [all[1], all[3]]);
+  await t.read(u, 1);
+  assert.equal(shown(), "k4");
+  // Set aside, it goes last and the one now in its place shows: here the one before it (it was last).
+  t.set(rows("ws/st"), all);
+  t.views.showDecision("ws", "ws/st", 2, 5);
+  await t.read(u, 1);
+  t.views.decisionDeferred("ws/st", 2, 5);
+  t.set(prefs(), { decisionsDeferred: { [decisions.deferralKey("ws/st", 2, 5)]: now } });
+  await t.read(u, 1);
+  assert.deepEqual(u.value.items.map((i: J) => i.session), ["k1", "k3", "k4", "k2"]);
+  assert.equal(shown(), "k3");
+  // The only one, set aside: itself again.
+  t.set(prefs(), {});
+  t.set(rows("ws/st"), [all[0]]);
+  t.views.showDecision("ws", "ws/st", 1, 5);
+  t.views.decisionDeferred("ws/st", 1, 5);
+  t.set(prefs(), { decisionsDeferred: { [decisions.deferralKey("ws/st", 1, 5)]: now } });
+  await t.read(u, 1);
+  assert.equal(shown(), "k1");
+  // None left: none shown.
+  t.set(rows("ws/st"), []);
+  await t.read(u, 1);
+  assert.equal(u.value.shown, undefined);
+});
+
+test("a_decision_let_go_from_here_is_off_the_page_at_once_and_back_if_its_station_refused", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "decisions", workspace: "ws" });
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  const k1 = deciding("k1", 1, 5, now - 2000, false);
+  const k2 = deciding("k2", 2, 5, now - 1000, false);
+  k2.decision.card = { type: "options", options: k2.decision.options, assignee: "me@x.com", vault: { request: "r_1" } };
+  t.set(rows("ws/st"), [k1, k2]);
+  await t.read(u, 1);
+  const order = () => u.value.items.map((i: J) => i.session);
+  assert.deepEqual(order(), ["k1", "k2"]);
+  const local = t.views.local;
+  // Let go: off at once; refused, back.
+  local.letGo("ws/st", 1, 5);
+  await t.read(u, 1);
+  assert.deepEqual(order(), ["k2"]);
+  local.letGoEnded("ws/st", 1, 5, false, t.data.rowsRev("ws/st"));
+  await t.read(u, 1);
+  assert.deepEqual(order(), ["k1", "k2"]);
+  // Taken: off until the station's rows change (they then say it is dismissed).
+  local.letGo("ws/st", 1, 5);
+  local.letGoEnded("ws/st", 1, 5, true, t.data.rowsRev("ws/st"));
+  await t.read(u, 1);
+  assert.deepEqual(order(), ["k2"]);
+  t.set(rows("ws/st"), [deciding("k1", 1, 5, now - 2000, true), k2]);
+  await t.read(u, 1);
+  assert.deepEqual(order(), ["k2"]);
+  assert.equal(local.lettingGo("ws/st", 1, 5), false);
+  // A vault request decided here: its card is off.
+  local.vaultDecided("r_1");
+  await t.read(u, 1);
+  assert.deepEqual(order(), []);
+});
+
 test("the_decisions_page_has_the_starters_unassigned_cards_and_needs_without_one", async () => {
   const t = setup();
   const u = ui();

@@ -63,7 +63,8 @@ export type LocalChange =
   | { kind: "pending"; key: string }
   | { kind: "first"; station: string; key: string }
   | { kind: "changing"; station: string }
-  | { kind: "archiving" };
+  | { kind: "archiving" }
+  | { kind: "letGo" };
 
 /// The name a station keeps an upload under: the last part of its path, wherever it is moved.
 const keptName = (path: string) => path.split("/").at(-1)!;
@@ -93,6 +94,11 @@ export class Local {
   readonly #uploadedFrom = new Map<string, string>();
   /// Messages sent from here that their station has taken: station, thread, seq.
   readonly #sentIn: [string, number, number][] = [];
+  /// Cards let go from here (`decision.dismiss`): station, thread, seq, and once the station took it how often its rows
+  /// had changed then (data.rowsRev).
+  readonly #lettingGo: { station: string; thread: number; seq: number; done?: number }[] = [];
+  /// Vault requests decided here (their cards' `vault`): the latest few.
+  readonly #vaultDecided: string[] = [];
   onChange: (change: LocalChange) => void = () => {};
   onMade: (station: string, key: string) => void = () => {};
 
@@ -565,6 +571,40 @@ export class Local {
     return this.outbox(station, thread).some((m) => m.state !== "failed") || this.#sentIn.some(([s, t, n]) => s === station && t === thread && n > seq);
   }
 
+  /// A card let go from here (`decision.dismiss`): off the 奏 page at once. Refused (`ok` false), it is back; taken,
+  /// it stays off until its station's rows change from how they were then (`rev`), which then say it is dismissed.
+  letGo(station: string, thread: number, seq: number): void {
+    this.#lettingGo.push({ station, thread, seq });
+    this.onChange({ kind: "letGo" });
+  }
+
+  letGoEnded(station: string, thread: number, seq: number, ok: boolean, rev: number): void {
+    const i = this.#lettingGo.findIndex((l) => l.station === station && l.thread === thread && l.seq === seq && l.done === undefined);
+    if (i < 0) return;
+    if (ok) this.#lettingGo[i] = { ...this.#lettingGo[i], done: rev };
+    else {
+      this.#lettingGo.splice(i, 1);
+      this.onChange({ kind: "letGo" });
+    }
+  }
+
+  /// Whether the card at `seq` in a chat is let go from here.
+  lettingGo(station: string, thread: number, seq: number): boolean {
+    return this.#lettingGo.some((l) => l.station === station && l.thread === thread && l.seq === seq);
+  }
+
+  /// A vault request approved or turned down here: its card is off the 奏 page (its station says so as it tells it).
+  vaultDecided(request: string): void {
+    if (this.#vaultDecided.includes(request)) return;
+    this.#vaultDecided.push(request);
+    if (this.#vaultDecided.length > 64) this.#vaultDecided.shift();
+    this.onChange({ kind: "letGo" });
+  }
+
+  decidedVault(request: string): boolean {
+    return this.#vaultDecided.includes(request);
+  }
+
   // ── archiving and changing ──
 
   archiving(station: string, thread: number | null, session: string, on: boolean): void {
@@ -607,6 +647,10 @@ export class Local {
 
   /// Lets go of what is done that its station's rows have had since (they changed after it answered).
   settle(station: string, rev: number): void {
+    for (let i = this.#lettingGo.length - 1; i >= 0; i--) {
+      const l = this.#lettingGo[i];
+      if (l.station === station && l.done !== undefined && l.done !== rev) this.#lettingGo.splice(i, 1);
+    }
     for (let i = this.#changing.length - 1; i >= 0; i--) {
       const c = this.#changing[i];
       if (c.station !== station || c.done === undefined) continue;

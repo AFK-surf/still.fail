@@ -1213,8 +1213,9 @@ class Vaults {
     });
   }
 
-  /// A request answered here: no longer waiting (the station says so too, as it tells it).
+  /// A request answered here: no longer waiting (the station says so too, as it tells it), its card off the 奏 page.
   #settled(id: string): void {
+    this.#inner.views?.local.vaultDecided(id);
     change(this.#inner, this.ws, (h) => {
       delete h.requests[id];
       delete h.asked[id];

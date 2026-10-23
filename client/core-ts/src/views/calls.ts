@@ -368,6 +368,22 @@ export class ViewCalls {
         return yield* send(c.station, c.thread, outgoing(inner, c.station, text, c.attachments, [...quotes, ...arr(c.quotes)], null, c.uploads), ctx);
       });
     };
+    handlers.decisionDismiss = (_inner, call, progress, at, ctx) => {
+      const c = call as Of<"decisionDismiss">;
+      return Effect.gen(function* () {
+        local.letGo(c.station, c.thread, c.seq);
+        const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
+        local.letGoEnded(c.station, c.thread, c.seq, result._tag === "Success", inner.data.rowsRev(c.station));
+        return yield* settle(result);
+      });
+    };
+    handlers.decisionShow = (_inner, call) => {
+      const c = call as Of<"decisionShow">;
+      return Effect.sync(() => {
+        views.showDecision(c.workspace, c.station, c.thread, c.seq);
+        return null;
+      });
+    };
     handlers.chatRef = (_inner, call) => {
       const c = call as Of<"chatRef">;
       return Effect.sync(() => ({ mark: refs.mark(inner.data, c.base ?? inner.host.cloudOrigin(), c.station, c.id, c.title, c.into) }));

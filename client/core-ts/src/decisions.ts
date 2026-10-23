@@ -14,6 +14,7 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const trimmed = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 const lines = (text: string): string[] => text.split("\n").map((l) => l.replace(/\r$/, "").trim());
 
+/// A card on the 奏 page by its station, chat and post (also how the prefs keep it set aside).
 export function deferralKey(station: string, thread: number, seq: number): string {
   return `${station}\t${thread}\t${seq}`;
 }

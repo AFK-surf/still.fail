@@ -2625,6 +2625,11 @@ export interface DecisionsToday {
 export interface DecisionsView {
 	items: DecisionItem[];
 	count: number;
+	/**
+	 * Which of `items` the wide 奏 page shows: the one picked (`decision.show`) while it is listed; once it is
+	 * gone or set aside, the one now in its place (the last when it was last). Absent for none.
+	 */
+	shown?: number;
 	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
 	wait: ListNote;
 	/** The cards the viewer answered today, newest first. A core before them says none. */
