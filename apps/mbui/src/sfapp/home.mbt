@@ -872,8 +872,9 @@ fn row_opens_at(item : ChatItem, ry : Double, ty : Double) -> Double? {
 }
 
 ///|
-/// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; tapped, its chat is pushed (at the message its state line
-/// names, tapped there), or given to `opened` (the latest chats' panel on a wide screen: corners.mbt).
+/// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; pressed, on the ground it has held (a found one rippled);
+/// tapped, its chat is pushed (at the message its state line names, tapped there), or given to `opened` (the latest
+/// chats' panel on a wide screen: corners.mbt).
 fn chat_row(
   c : @ui.Ctx,
   src : Source,
@@ -938,6 +939,8 @@ fn chat_row(
   let busy = row_busy(item)
   let failed = row_failed(c, item)
   let row = fn(tx : Double) -> Int {
+    // pressed and where it rests (not swiped over its 归档)
+    let pressed_here = pressed && tx == 0.0
     c.box(
       dir=Row,
       w=Fill(1.0),
@@ -947,7 +950,9 @@ fn chat_row(
       pr=16.0,
       gap=6.0,
       align=ACenter,
-      bg=if held || row_menu_open(item) {
+      // held, its menu open, or pressed (once the press is not the list's: Ctx::pressed): Home.kt ChatRowBody
+      // `held || pressed`, as PlaceRow's pressed ground
+      bg=if held || row_menu_open(item) || pressed_here {
         @sf.alpha(t.p.text, 0.05)
       } else if lifted >= 0.0 {
         // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
@@ -1037,6 +1042,10 @@ fn chat_row(
           |> ignore
         })
         |> ignore
+        // a chat the search found, or in the latest chats' panel: ChatRowBody's clickable (Search.kt, Wide.kt)
+        if found {
+          @motion.ripple(c, id, 0.0)
+        }
       },
     )
   }
