@@ -39,8 +39,23 @@ function List() {
     {list.layout.rows.map((row, i) => <React.Fragment key={row.key}>{list.above(row, i === 0)}<div data-vk={row.key} style={{ flex: 'none', minHeight: row.key === 'reply' ? 80 : 36 }}>{row.key === 'letters' ? mode === 'edits' ? '同一条消息（编辑记录未增加消息行）' : last + ' 条其他会话的消息（折叠）' : row.key === 'newer' ? '加载中…' : '最新回复已加载'}</div></React.Fragment>)}{list.after()}
   </div>;
 }
+function LongList() {
+  const pane = useRef<HTMLDivElement>(null);
+  const [first, setFirst] = useState(151);
+  const made = useVirtualModel('long-pagination-check', 20);
+  const items = Array.from({ length: 201 - first }, (_, i) => ({ key: 'm:' + (first + i), estimate: 100 }));
+  const list = useVirtualList(pane, made, items, { short: true });
+  useLoadNear(list, 'top', first > 1, first, async () => {
+    window.loads.push(first);
+    setFirst(n => n - 50);
+  });
+  Object.assign(window, { model: list.model, last: first, committed: list.committed });
+  return <div id="pane" ref={pane} style={{ height: 650, width: 390, overflow: 'auto', overflowAnchor: 'none', display: 'flex', flexDirection: 'column', gap: 20, padding: 24, boxSizing: 'border-box' }}>
+    {list.layout.rows.map((row, i) => <React.Fragment key={row.key}>{list.above(row, i === 0)}<div data-vk={row.key} style={{ flex: 'none', height: 100 }}>{row.key}</div></React.Fragment>)}{list.after()}
+  </div>;
+}
 window.loads = [];
-createRoot(document.getElementById('root')!).render(<List />);
+createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).get('mode') === 'long' ? <LongList /> : <List />);
 `, { flag: 'wx' });
   writeFileSync(html, '<div id="root"></div><script type="module" src="/chat-pagination-check.tsx"></script>', { flag: 'wx' });
   server = await createServer({ configFile: false, cacheDir: fileURLToPath(new URL("../../node_modules/.vite-chat-pagination", import.meta.url)), optimizeDeps: { entries: [fileURLToPath(html)] }, root: fileURLToPath(new URL('../../web', import.meta.url)), plugins: [react(), vanillaExtractPlugin()], resolve: { alias: [uiAlias] }, server: { host: '127.0.0.1', port: 0 } });
@@ -84,8 +99,19 @@ createRoot(document.getElementById('root')!).render(<List />);
   await page.clock.runFor(1000);
   await page.waitForFunction(() => window.loads.length === 3, null, { polling: 50 });
   assert.deepEqual(await state(), { loads: [50, 100, 150], last: 150 });
+  await open('long');
+  await page.waitForFunction(() => window.last === 101 && window.committed(), null, { polling: 50 });
+  assert.deepEqual(await state(), { loads: [151], last: 101 }, 'restoring the anchor does not fetch another page');
+  console.log('PASS long-list anchor restored without another page');
+  await page.evaluate(() => {
+    const pane = document.querySelector('#pane');
+    pane.scrollTop = 0;
+    pane.dispatchEvent(new Event('scroll'));
+  });
+  await page.waitForFunction(() => window.last === 51, null, { polling: 50 });
+  assert.deepEqual(await state(), { loads: [151, 101], last: 51 }, 'a scroll replacing visible rows still fetches the next page');
   assert.deepEqual(errors, []);
-  console.log('PASS pagination: folded newer pages, older pages, edit-only pages, failure, and answer/commit ordering');
+  console.log('PASS pagination: folded newer pages, older pages, edit-only pages, failure, answer/commit ordering, and long-list scrolling');
 
 } finally {
   await browser?.close();

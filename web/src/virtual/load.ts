@@ -17,17 +17,24 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
     let asked: number | string | undefined;
     let busy: { at: number | string; answered: boolean } | null = null;
     let top = model.layout().scrollTop;
+    let moved = false;
     const check = (scrolled = false) => {
+      moved ||= scrolled;
       const now = latest.current;
       if (!live || !now.virtual.committed()) return;
       if (busy) {
         if (!busy.answered || now.at === busy.at) return;
         busy = null;
         // Restoring an anchor after a page is not an approach to an edge.
+        moved = false;
         if (!model.fits) return;
       }
+      // A scroll can replace the visible rows. Keep that approach until those rows
+      // are measured and committed; its notification may precede the commit.
+      const approached = moved;
+      moved = false;
       if (!now.can || now.at === undefined || asked === now.at) return;
-      if (asked !== undefined && !scrolled && !model.fits) return;
+      if (asked !== undefined && !approached && !model.fits) return;
       if (model.paneHeight <= 0 || (edge === "top" ? model.toStart : model.toEnd) > model.paneHeight) return;
       asked = now.at;
       const request: { at: number | string; answered: boolean } = { at: now.at, answered: false };
@@ -44,9 +51,9 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
     changed.current = () => check();
     const stop = virtual.watch(() => {
       const next = model.layout().scrollTop;
-      const moved = next !== top;
+      const scrolled = next !== top;
       top = next;
-      check(moved);
+      check(scrolled);
     });
     check();
     return () => { live = false; changed.current = null; stop(); };
