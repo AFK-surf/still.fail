@@ -287,8 +287,24 @@ globalStyle(`${oneWires} path`, {
 /** The window under its shadow (of what of it shows: the devices flying, then the window growing out of them). */
 export const oneLift = style({ position: "absolute", inset: "0", zIndex: 1, pointerEvents: "none", filter: "drop-shadow(0 30px 40px rgba(0, 0, 0, .18))" });
 export const oneWindow = style({ position: "absolute", transformOrigin: "0 0", pointerEvents: "auto" });
-/** What of the window shows: its clip, set by script (the rows, widening to the window). */
-export const oneScreen = style({ position: "absolute", inset: "0", background: vars.canvas });
+/** The screen: the app, its corners round within its shell's (as far in as the shell's edge is wide). */
+export const oneScreen = style({
+  position: "absolute", inset: "0", background: vars.canvas, clipPath: "inset(0 round 20px)",
+  "@media": { [NARROW]: { clipPath: "inset(0 round 36px)" } },
+});
+/** The shells (OneComputer.tsx SHELL): a laptop's edge round its screen and its base under it; on a narrow screen,
+ *  where the window is a phone, a phone's edge. */
+const BEZEL = "#1C1C1E";
+export const oneEdge = style({
+  position: "absolute", inset: "-14px", borderRadius: "34px", background: BEZEL, boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, .08)", // own corner: a laptop's
+  "@media": { [NARROW]: { inset: "-12px", borderRadius: "48px" } }, // own corner: a phone's
+});
+export const oneBase = style({
+  position: "absolute", left: "-78px", right: "-78px", top: "calc(100% + 14px)", height: "16px", borderRadius: "2px 2px 16px 16px", // own corner: a laptop's base
+  background: "linear-gradient(180deg, #E4E4E7, #A1A1AA)", boxShadow: "inset 0 1px 0 rgba(255, 255, 255, .7)",
+  selectors: { "&::before": { content: "\"\"", position: "absolute", left: "calc(50% - 64px)", top: "0", width: "128px", height: "6px", borderRadius: "0 0 8px 8px", background: "#A1A1AA" } }, // own corner: its notch
+  "@media": { [NARROW]: { display: "none" } },
+});
 /** The app in it: as large as the window. */
 export const oneDemo = style({});
 globalStyle(`${oneScreen} > ${oneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
@@ -296,7 +312,8 @@ globalStyle(`${oneScreen} > ${oneDemo}`, { height: "100%", clipPath: "none", "@m
 export const onePhone = style({
   // Its shadow a box shadow round its corners, not a filter: under a filter the phone bar's frosted glass loses its
   // shape (Chromium draws it as a plain rectangle).
-  position: "absolute", top: "0", left: "0", zIndex: 3, transformOrigin: "0 0", borderRadius: "44px", boxShadow: "0 24px 36px rgba(0, 0, 0, .22)", // own corner: a phone's
+  position: "absolute", top: "0", left: "0", zIndex: 3, transformOrigin: "0 0", boxSizing: "border-box", borderRadius: "56px", background: BEZEL, // own corner: a phone's
+  boxShadow: "0 24px 36px rgba(0, 0, 0, .22), inset 0 0 0 1px rgba(255, 255, 255, .08)",
   "@media": { [NARROW]: { display: "none" } },
 });
 /** Its screen: the phone's app, a page of its own (site/phone.html); its corners cut by a clip. */

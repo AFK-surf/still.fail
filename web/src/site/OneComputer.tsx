@@ -20,8 +20,15 @@ const STEPS = [
   { title: "在手机上也一样", text: "从任何一台设备打开，看到的都是所有设备" },
 ];
 
-/** The phone, as drawn: its screen's size (its app laid out at it), and how much of it shows at each step. */
+/** The phone, as drawn: its screen's size (its app laid out at it) and its shell's edge round it. */
 const PHONE = { w: 390, h: 760, r: 44 };
+/**
+ * The shells round the screens: a phone's edge (`edge` wide, all round); a laptop's, its edge round the screen and
+ * its base under it, `over` wider than the edge each side and `foot` high.
+ */
+const SHELL = { edge: 12, laptop: { edge: 14, over: 64, foot: 16 } };
+/** The phone with its shell. */
+const HAND = { w: PHONE.w + 2 * SHELL.edge, h: PHONE.h + 2 * SHELL.edge };
 
 interface Box { x: number; y: number; w: number; h: number }
 const clamp = (x: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
@@ -42,12 +49,15 @@ const rounded = ({ x, y, w, h }: Box, r: number) => {
  * fit, so that all its stations are in it; where it stands, drawn.
  */
 function windowAt(room: { w: number; h: number }, narrow: boolean): Box & { k: number } {
-  const w = narrow ? 380 : Math.min(1040, room.w - 48);
+  // What the shell adds round the screen: left, top, right and bottom.
+  const l = narrow ? SHELL.edge : SHELL.laptop.edge + SHELL.laptop.over, t = narrow ? SHELL.edge : SHELL.laptop.edge;
+  const b = narrow ? SHELL.edge : SHELL.laptop.edge + SHELL.laptop.foot;
+  const w = narrow ? 380 : Math.min(1040, room.w - 48 - 2 * l);
   // A phone's tall enough that its four stations stand clear of its bottom bar and its button (which would come over
   // the last one as the rest of the app shows).
-  const h = narrow ? 920 : Math.min(600, room.h - 24);
-  const k = narrow ? Math.min(1, (room.h - 16) / h, (room.w - 24) / w) : 1;
-  return { x: (room.w - w * k) / 2, y: (room.h - h * k) / 2, w, h, k };
+  const h = narrow ? 920 : Math.min(600, room.h - 24 - t - b);
+  const k = narrow ? Math.min(1, (room.h - 16) / (h + t + b), (room.w - 24) / (w + 2 * l)) : 1;
+  return { x: (room.w - w * k) / 2, y: (room.h - (h + t + b) * k) / 2 + t * k, w, h, k };
 }
 
 /**
@@ -118,6 +128,8 @@ export function OneComputer(props: DemoProps) {
       if (on === out) return;
       out = on;
       if (app) app.style.visibility = on ? "hidden" : "";
+      // The screen's round corners would cut them off as they go out of it.
+      inner.style.clipPath = on ? "none" : "";
       for (const r of rows) {
         r.el.style.visibility = on ? "visible" : "";
         for (const h of r.holders) Object.assign(h.style, { overflow: on ? "visible" : "", contain: on ? "none" : "", clipPath: on ? "none" : "" });
@@ -185,8 +197,12 @@ export function OneComputer(props: DemoProps) {
         return { x: at.x, y: at.y, w: r.box.w * scale, h: r.box.h * scale, r: r.radius * scale };
       });
       letOut(fly < 1);
-      const whole = { x: 0, y: 0, w: w.w, h: w.h }, corner = narrow ? 36 : 20;
-      inner.style.clipPath = `path('${(fly < 1
+      // Whole: the screen and its shell (a phone's edge; a laptop's edge and base), the shell coming as the rest does.
+      const whole = narrow
+        ? { x: -SHELL.edge, y: -SHELL.edge, w: w.w + 2 * SHELL.edge, h: w.h + 2 * SHELL.edge }
+        : { x: -(SHELL.laptop.edge + SHELL.laptop.over), y: -SHELL.laptop.edge, w: w.w + 2 * (SHELL.laptop.edge + SHELL.laptop.over), h: w.h + 2 * SHELL.laptop.edge + SHELL.laptop.foot };
+      const corner = narrow ? 36 + SHELL.edge : 0;
+      outer.style.clipPath = `path('${(fly < 1
         ? local.map((b) => rounded(b, b.r))
         : rows.map((r) => rounded(mix(r.box, whole, grow), lerp(r.radius, corner, grow)))).join(" ")}')`;
       const placed = local.map(inRoom);
@@ -194,13 +210,13 @@ export function OneComputer(props: DemoProps) {
       // The phone (a wide screen's): small among the devices, then beside the window, then in front at full size.
       let phoneAt: Box | undefined;
       if (!narrow) {
-        const small = Math.min(0.32, (size.h * 0.42) / PHONE.h), beside = Math.min(0.5, (w.h * 0.85) / PHONE.h), full = Math.min(1, (size.h - 24) / PHONE.h);
+        const small = Math.min(0.32, (size.h * 0.42) / HAND.h), beside = Math.min(0.5, (w.h * 0.85) / HAND.h), full = Math.min(1, (size.h - 24) / HAND.h);
         const p0 = { ...parts.phone, s: small };
         const p1 = { x: w.x + w.w - 20, y: w.y + w.h * 0.58, s: beside };
         const p2 = { x: size.w / 2 + size.w * 0.16, y: size.h / 2, s: full };
         const p = i === 0 ? { x: lerp(p0.x, p1.x, t), y: lerp(p0.y, p1.y, t), s: lerp(p0.s, p1.s, t) } : { x: lerp(p1.x, p2.x, front), y: lerp(p1.y, p2.y, front), s: lerp(p1.s, p2.s, front) };
-        hand.style.transform = `translate(${p.x - (PHONE.w * p.s) / 2}px, ${p.y - (PHONE.h * p.s) / 2}px) scale(${p.s})`;
-        phoneAt = { x: p.x - (PHONE.w * p.s) / 2, y: p.y - (PHONE.h * p.s) / 2, w: PHONE.w * p.s, h: PHONE.h * p.s };
+        hand.style.transform = `translate(${p.x - (HAND.w * p.s) / 2}px, ${p.y - (HAND.h * p.s) / 2}px) scale(${p.s})`;
+        phoneAt = { x: p.x - (HAND.w * p.s) / 2, y: p.y - (HAND.h * p.s) / 2, w: HAND.w * p.s, h: HAND.h * p.s };
       }
 
       // Every device joined to every other, under the window: as the devices come together the lines shorten, and the
@@ -254,12 +270,15 @@ export function OneComputer(props: DemoProps) {
             <svg className={css.oneWires} aria-hidden><g ref={lines}>{Array.from({ length: pairs }, (_, i) => <path key={i} />)}</g></svg>
             <div className={css.oneLift}>
               <div className={css.oneWindow} ref={win}>
+                {/* Its shell: a laptop's edge and base (a phone's edge on a narrow screen), under the screen. */}
+                <div className={css.oneEdge} />
+                <div className={css.oneBase} />
                 <div className={css.oneScreen} ref={screen}>
                   <Demo v="1" start="stations" className={css.oneDemo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
                 </div>
               </div>
             </div>
-            <div className={css.onePhone} ref={phone}>
+            <div className={css.onePhone} ref={phone} style={{ width: HAND.w, height: HAND.h, padding: SHELL.edge }}>
               <iframe className={css.onePhoneScreen} ref={phoneScreen} width={PHONE.w} height={PHONE.h} title="still.fail 手机版" tabIndex={-1} />
             </div>
           </div>
