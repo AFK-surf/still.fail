@@ -9,6 +9,13 @@
 // 下载 as the page's primary button.
 
 ///|
+/// Whether the wide frame is a desktop's, with a mouse (a click and a move are its own), not a wide touch screen's (an
+/// iPad's, a fold's inner screen: a finger's tap shows or hides the bars, as on a phone).
+fn desk_mouse() -> Bool {
+  wide_on.val && !@sf.touch_system()
+}
+
+///|
 /// Back to where it was opened from, by name (FilePreview.tsx backLabel): a drive's file its folder (mobile/Drive.tsx
 /// DrivePreview), a chat's its chat's title; 关闭 when neither is known.
 fn Viewer::desk_back(self : Viewer, src : Source) -> String {
@@ -156,10 +163,10 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
   let kind = v.shown_kind()
   // a mouse moving over it wakes what fades; resting on the bar, it stays
   let (px, py, _) = c.pointer()
-  if v.mouse_seen && (px != v.mouse_x || py != v.mouse_y) {
+  if desk_mouse() && v.mouse_seen && (px != v.mouse_x || py != v.mouse_y) {
     v.wake(rest_ms)
   }
-  if !v.awake && py >= 0.0 && py < viewer_bar_h && v.mouse_seen {
+  if desk_mouse() && !v.awake && py >= 0.0 && py < viewer_bar_h && v.mouse_seen {
     v.wake(rest_ms)
   }
   v.mouse_x = px

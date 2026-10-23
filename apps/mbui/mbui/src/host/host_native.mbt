@@ -90,6 +90,7 @@ extern "C" fn ffi_set_ime(
 extern "C" fn ffi_clipboard_set(s : String) -> Unit = "mb_host_clipboard_set"
 
 ///|
+#borrow(data)
 extern "C" fn ffi_clipboard_image(data : Bytes) -> Unit = "mb_host_clipboard_image"
 
 ///|

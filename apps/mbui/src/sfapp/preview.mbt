@@ -2373,8 +2373,9 @@ fn Viewer::gestures(
     v.pinched = false
   }
   // a desktop's mouse: a click round an image (not on it) closes it, one on it does nothing until a second makes it a
-  // double click (FilePreview.tsx ImageViewer onClick, useZoom onDoubleClick); the bars are the mouse's moves'
-  let desk = wide_on.val
+  // double click (FilePreview.tsx ImageViewer onClick, useZoom onDoubleClick); the bars are the mouse's moves' (a
+  // finger's tap, on a wide touch screen too, shows or hides them)
+  let desk = desk_mouse()
   let on_picture = match z.rect() {
     Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
     None => false
