@@ -9,7 +9,7 @@ frames it drew (MBUI_DRAW_LOG=1: their DRAWHASH lines), kept in screens/text-mac
   DRAWHASH FRAME TIME …                                (each frame it drew, in its place among them: when it drew
                                                        them, what a screen's Tester draws its frames at)
 
-src/sfapp embeds it (moon.pkg's pre-build) and gives each screen's Tester its own section: a run's glyphs are
+src/sfscreens embeds it (moon.pkg's pre-build) and gives each screen's Tester its own section: a run's glyphs are
 numbered in the order it met them (and placed in its atlas so), so each screen keeps its own run's.
 
   scripts/screens.py keep MODE LOG [KEPT]     LOG's lines kept as MODE's section (scripts/screens.sh rec; KEPT another

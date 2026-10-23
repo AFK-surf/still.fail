@@ -24,7 +24,8 @@ for t in ${TARGETS:-native}; do
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
   # side. The flows in one package, src/sfreplay/flows: each test package is a program of the whole app, its C
   # compiled apart, and five of them compiled the same change five times over; on CI's four cores the replay part was
-  # 194 s with them apart and 140 s together, 2026-10-22)
+  # 194 s with them apart and 140 s together, 2026-10-22; sfreplay's own two tests there too: its whitebox test was
+  # one more program of the whole app, linked with ThinLTO on main in 120 s beside the flows' 118, 2026-10-23)
   pkgs=""
   if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
     # (the screens' tests in sfapp's own, screens_wbtest.mbt: a package of their own was a second program of the whole

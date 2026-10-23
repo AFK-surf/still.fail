@@ -15,7 +15,7 @@ let tapes : Array[String] = [
 ///|
 test "Android's recordings replayed: where their words are drawn here, frame by frame" {
   for name in tapes {
-    match read_trace("../tapes/" + name) {
+    match @sfreplay.read_trace("../tapes/" + name) {
       Some(json) => {
         let diffs = @sfapp.tape_differences(json)
         println("TAPE \{name}: \{diffs.length()} words differ")

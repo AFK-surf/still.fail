@@ -1,0 +1,9 @@
+options(
+  "pre-build": [
+    {
+      "input": "../../screens/text-mac.textrec",
+      "output": "text_mac.mbt",
+      "command": ":embed -i $input -o $output --name text_mac_kept",
+    },
+  ],
+)

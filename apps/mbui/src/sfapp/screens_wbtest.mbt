@@ -27,14 +27,14 @@ let host_scale : Double = 1.0
 let nothing_opens : Double = 0.0
 
 ///|
-/// `mode`'s section of the Mac's text (screens/text-mac.textrec, embedded as text_mac_kept: moon.pkg's pre-build):
+/// `mode`'s section of the Mac's text (screens/text-mac.textrec, embedded by src/sfscreens):
 /// its TEXTREC lines (Tester::new's `text`) and the hash of the last frame sffix drew (its picture's).
 fn text_mac(mode : String) -> (String, String)? {
   let head = "# " + mode + " "
   let lines = []
   let mut hash = ""
   let mut inside = false
-  for v in text_mac_kept.split("\n") {
+  for v in @sfscreens.text_mac().split("\n") {
     if v.has_prefix("# ") {
       inside = v.has_prefix(head)
       if inside {
