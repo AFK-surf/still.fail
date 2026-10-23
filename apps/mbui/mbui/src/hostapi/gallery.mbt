@@ -4,7 +4,8 @@
 // and turned down for good, the app's page of the system's settings, where it is allowed), and its photos with what
 // the gallery says of when each came (read off the app's thread; the view ranks them). A photo's `src` is an image
 // source of its own (Android: its content:// address, drawn by `Ctx::image` as the gallery's thumbnail at the size
-// it is shown), and @hostapi.pick_photo reads it whole for a message. Android only: the others say NoGallery.
+// it is shown), and @hostapi.pick_photo reads it whole for a message. iOS: the photo library (Photos: all of it, or
+// the photos chosen, its picker of more asked; a photo's `src` ph://<its local identifier>). The others say NoGallery.
 
 ///|
 /// How much of the gallery the app may read.

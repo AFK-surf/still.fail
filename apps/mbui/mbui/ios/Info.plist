@@ -7,6 +7,9 @@
   <key>CFBundleName</key><string>MBUI</string>
   <key>CFBundleDisplayName</key><string>MoonBit UI</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
+  <key>CFBundleAllowMixedLocalizations</key><true/>
   <key>CFBundleShortVersionString</key><string>0.1</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleSupportedPlatforms</key><array><string>iPhoneSimulator</string></array>
@@ -23,6 +26,13 @@
   </dict>
   <key>UILaunchScreen</key><dict/>
   <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
-  <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+  <key>UISupportedInterfaceOrientations</key><array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+  <key>NSPhotoLibraryUsageDescription</key><string>The gallery's recent photos, to pick from.</string>
+  <key>NSCameraUsageDescription</key><string>A photo taken now, to pick.</string>
+  <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key><true/>
 </dict>
 </plist>

@@ -418,6 +418,28 @@ test("an_app_of_its_own_names_the_device_by_itself_not_by_still_fail", async () 
   core.close();
 });
 
+test("an_iphone_app_is_a_phone_named_by_its_model_and_its_messages_say_it", async () => {
+  // still.fail mbui on iOS: a phone as Android's, its device named so, a message going with the app it is sent from
+  const { host, core } = await started();
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 4 } : undefined));
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  call(core, ui, 2, "client.device", { app: "ios", build: "0.1.3700", model: "iPhone17,1", client: "still.fail mbui" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).device, { app: "ios", phone: true, handoff: false });
+  call(core, ui, 3, "auth.begin", { redirect_uri: "r", return_to: "/" });
+  await host.settle();
+  const emitted = host.takeEmitted().map(([, m]) => m as J);
+  const url = String(emitted.find((m) => m.id === 3 && "ok" in m).ok.url);
+  assert.ok(url.includes(`name=${encode("still.fail mbui iOS · iPhone17,1")}`), url);
+  call(core, ui, 4, "chat.send", { station: "ws/st", thread: 7, text: "hi" });
+  await host.settle();
+  assert.equal(posted(host)[0].client, "ios 0.1.3700");
+  core.close();
+});
+
 test("the_device_says_what_it_is_once_and_the_core_decides_what_follows", async () => {
   const { host, core } = await started();
   stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 4 } : undefined));

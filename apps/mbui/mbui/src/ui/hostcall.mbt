@@ -300,6 +300,29 @@ fn h_platform() -> Int {
 let host_platform : Ref[Int] = { val: -1 }
 
 ///|
+/// Whose system's touches and fields this app has (`feel_as`): the host's own unless the app said another's. A
+/// Tester's is the system it plays.
+fn h_feel() -> Int {
+  match fake.val {
+    Some(f) => f.platform
+    None => if feel_over.val >= 0 { feel_over.val } else { h_platform() }
+  }
+}
+
+///|
+/// The system whose touches and fields the app has from now on (as @hostapi.platform numbers them: 1 iOS's, 2
+/// Android's), whatever it runs on: a list's fling, its edges' give and its scroll bar, a field's tap, caret, handles
+/// and words picked by a finger. For an app held to one system's original on another (still.fail's Android app on
+/// iOS: 2). Its keys stay the system's own (⌘ on Apple's).
+pub fn feel_as(platform : Int) -> Unit {
+  feel_over.val = platform
+}
+
+///|
+// kept across runs: what the app's main said once (feel_as); a Tester never reads it (h_feel answers its fake's)
+let feel_over : Ref[Int] = { val: -1 }
+
+///|
 fn h_request_frame() -> Unit {
   match fake.val {
     Some(f) => f.wants = true

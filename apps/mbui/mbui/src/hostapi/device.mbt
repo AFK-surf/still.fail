@@ -116,7 +116,7 @@ pub fn key_catch(on : Bool) -> Unit {
 
 ///|
 /// How far the soft keyboard reaches over the window's foot, in points, as it moves (0: down, or none). The window
-/// is laid out above it already (Android's view, iOS's keyboard layout guide).
+/// is laid out above it already (Android's view; iOS's view, or the frame where the app is edge to edge).
 pub fn ime_inset() -> Double {
   dv_ime_inset()
 }

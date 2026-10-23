@@ -166,7 +166,7 @@ pub let scrollbar_fade_ms : Double = 300.0
 ///|
 /// Whether a list draws its scroll bar as it is scrolled: not on Android, whose lists (Compose's LazyColumn) have none.
 fn scrollbars_shown() -> Bool {
-  h_platform() != 2
+  h_feel() != 2
 }
 
 ///|

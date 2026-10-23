@@ -30,9 +30,10 @@
 // - `{"install": {"name": …, "error": …}}`: a package handed to the system's installer could not be installed
 //   (written, or the installer said it failed; the person's no is not a failure).
 //
-// Android's alone so far (dev.mbui.MainActivity); the other hosts post none. While the app is on screen, Android's
-// also holds a Wi-Fi multicast lock when its manifest asks for CHANGE_WIFI_MULTICAST_STATE (Android drops the multicast
-// that reaches the phone unless an app holds one: an mDNS lookup would hear no answer on the LAN).
+// Android's (dev.mbui.MainActivity) and iOS's (ios_app.m: `shown`, `link`, `network`, `bars` where its Info.plist's
+// MBUIEdge lays it out edge to edge, as Android's manifest's dev.mbui.edge); the other hosts post none. While the app is
+// on screen, Android's also holds a Wi-Fi multicast lock when its manifest asks for CHANGE_WIFI_MULTICAST_STATE (Android
+// drops the multicast that reaches the phone unless an app holds one: an mDNS lookup would hear no answer on the LAN).
 
 ///|
 /// The channel the system's say is posted on.

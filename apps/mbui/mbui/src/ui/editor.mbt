@@ -485,7 +485,7 @@ pub let caret_blink_android_ms : Double = 500.0
 ///|
 /// How long the caret is shown, and then hidden, here.
 fn caret_blink() -> Double {
-  if h_platform() == 2 {
+  if h_feel() == 2 {
     caret_blink_android_ms
   } else {
     caret_blink_ms
@@ -588,7 +588,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
       let top = st.oy + cl.to_double() * tl.line_h
       // Android's as Compose's text field draws it (TextFieldCursor.kt): from the caret rightwards (kept in the
       // field), its line's whole height, square; elsewhere about the caret, 2 short of each end, round
-      let (x, y, h, r) = if h_platform() == 2 {
+      let (x, y, h, r) = if h_feel() == 2 {
         (dmin(st.ox + cx, n.x + n.fw - caret_w), top, tl.line_h, 0.0)
       } else {
         (st.ox + cx - caret_w / 2.0, top + 2.0, tl.line_h - 4.0, 1.0)
@@ -609,7 +609,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   pop_clip()
   // Android's handle under the caret (Compose's cursor handle, TextFieldSelectionManager): a drop in the caret's colour
   // hanging from it, a circle 25 across under a corner turned to point up, over everything (a popup's: no box cuts it)
-  if focused && st.handle && h_platform() == 2 && a == b && ml == 0 && st.text.length() > 0 {
+  if focused && st.handle && h_feel() == 2 && a == b && ml == 0 && st.text.length() > 0 {
     let (cx, cl) = tl.caret(st.caret)
     let x = st.ox + cx
     let y = st.oy + (cl + 1).to_double() * tl.line_h
@@ -632,7 +632,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   }
   // Android's handles of words a finger picked (Compose's SelectionHandle, as large as the caret's): a drop hanging
   // from each end's foot, the start's corner up and to its right, the end's up and to its left, over everything
-  if focused && st.sel_handles && h_platform() == 2 && a != b && ml == 0 {
+  if focused && st.sel_handles && h_feel() == 2 && a != b && ml == 0 {
     let r = handle_r
     let (ax, al) = tl.caret(a)
     let (bx, bl) = tl.caret(b)

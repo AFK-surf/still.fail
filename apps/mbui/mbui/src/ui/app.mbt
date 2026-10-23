@@ -600,7 +600,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         c.drag_scroll = 0
       }
     }
-    c.press_late = h_platform() == 2 && c.drag_scroll != 0
+    c.press_late = h_feel() == 2 && c.drag_scroll != 0
     match c.lists.get(c.drag_scroll) {
       // a list moving on its own (flung, springing back from an end) is
       // caught: the finger drags it from there, and presses nothing in it
@@ -626,7 +626,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     match c.editors.get(target) {
       // Android's: a field takes the focus and the caret where it is tapped, the finger lifted where it came down
       // (Compose's tap); a finger that moves on drags what is under it (the list), the field untouched
-      Some(_) if h_platform() == 2 => c.editor_tap = target
+      Some(_) if h_feel() == 2 => c.editor_tap = target
       Some(st) => {
         c.focus = target
         c.editor_drag = true

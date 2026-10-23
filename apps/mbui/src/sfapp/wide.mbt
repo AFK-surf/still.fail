@@ -615,9 +615,14 @@ fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 }
 
 ///|
-/// The desktop's window for still.fail (before @ui.run): 1280 by 820 at first, as still.fail's desktop app opens
-/// (apps/desktop main.ts), its size not kept (the desktop app keeps none either); at least 360 by 560, a phone's page
-/// below the breakpoint. Its title bar the system's (macOS, Windows).
-pub fn desktop_window() -> Unit {
+/// The system's side of still.fail (before @ui.run). The desktop's window: 1280 by 820 at first, as still.fail's
+/// desktop app opens (apps/desktop main.ts), its size not kept (the desktop app keeps none either); at least 360 by
+/// 560, a phone's page below the breakpoint; its title bar the system's (macOS, Windows). On a phone the app is
+/// Android's whatever the phone: on iOS too its lists fling, give at their edges and show no scroll bar as Android's,
+/// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
+pub fn host_setup() -> Unit {
   @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0)
+  if @ui.platform() == 1 {
+    @ui.feel_as(2)
+  }
 }
