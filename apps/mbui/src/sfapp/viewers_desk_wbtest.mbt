@@ -1,4 +1,4 @@
-// The file viewers on a desktop (viewer_bar.mbt, preview_desk.mbt, reader_desk.mbt): over the wide frame's whole
+// The file viewers on a desktop (the library's viewer_bar.mbt, reader.mbt; preview_desk.mbt): over the wide frame's whole
 // window, as the desktop app's (FilePreview.tsx docked, viewer/Reader.tsx with a mouse).
 
 ///|
@@ -100,7 +100,7 @@ test "desk: a file told of says so, 下载 the page's button; the bar's own down
 ///|
 test "desk: a chat's Markdown reads in the reader on its paper, the preview's own bar not drawn; Esc closes it" {
   let t = desk_tester("chat-preview-md")
-  t.run_for(reader_place_ms)
+  t.run_for(@sf.reader_place_ms)
   // its words as a document's, its bar the reader's (no 预览 / 源码)
   assert_true(t.find("发布前要做的") is Some(_))
   assert_true(t.find("说明.md") is Some(_))
@@ -112,7 +112,7 @@ test "desk: a chat's Markdown reads in the reader on its paper, the preview's ow
 ///|
 test "desk: a drive's text over the whole window, back to its folder; 目录 docks at the right, Esc shuts it, then goes back" {
   let t = desk_tester("reader")
-  t.run_for(reader_place_ms)
+  t.run_for(@sf.reader_place_ms)
   assert_true(app.nav.top() is DriveRead(_))
   assert_true(t.find("长篇小说.txt") is Some(_))
   // over the sidebar: a press where its rows are is the reader's
@@ -120,11 +120,11 @@ test "desk: a drive's text over the whole window, back to its folder; 目录 doc
   assert_true(app.nav.top() is DriveRead(_))
   // 目录, the first of its four tools
   t.tap(desk_tool_x(3), 22.0)
-  let r = reading_for(reader_key({ station: "ws1/st1", root: Some(fix_docs), path: "长篇小说.txt" }))
-  assert_true(r.panel == Contents)
+  let r = @sf.reading_for(reader_key({ station: "ws1/st1", root: Some(fix_docs), path: "长篇小说.txt" }))
+  assert_true(r.panel == @sf.ReaderPanel::Contents)
   assert_true(t.find("在全文中搜索") is Some(_))
   t.key(@ui.key_escape)
-  assert_true(r.panel == NoPanel)
+  assert_true(r.panel == @sf.ReaderPanel::NoPanel)
   t.key(@ui.key_escape)
   assert_false(app.nav.top() is DriveRead(_))
 }

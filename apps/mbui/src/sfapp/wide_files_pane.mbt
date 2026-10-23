@@ -267,7 +267,7 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
               })
               |> ignore
             } else {
-              let (blocks, _) = chunk_text(words)
+              let (blocks, _) = @sf.chunk_text(words)
               c.list("files/preview/text", blocks.length() + (if cut { 1 } else { 0 }), fpane_block_est, fn(i) {
                 c.box(style=fpane_code, fn() {
                   if i < blocks.length() {

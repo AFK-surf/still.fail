@@ -93,7 +93,7 @@ pub fn view(
     None => ""
   }
   let index = list.search(name).unwrap_or(-1)
-  let next = next_in(name, list)
+  let next = @sf.next_in(name, list)
   let prev = if index > 0 { list.get(index - 1) } else { None }
   let glass = if audio { 0x1212149EL } else { 0x121214D9L }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=0x000000FFL, fn() {
@@ -297,8 +297,8 @@ fn controls(
     c.box(pl=10.0, fn() {
       c.rich(
         [
-          @ui.span(clock(at), color=ink, weight=600),
-          @ui.span(" / " + (if s.duration > 0.0 { clock(s.duration) } else { "--:--" })),
+          @ui.span(@sf.clock(at), color=ink, weight=600),
+          @ui.span(" / " + (if s.duration > 0.0 { @sf.clock(s.duration) } else { "--:--" })),
         ],
         size=12.0,
         color=muted,
@@ -366,7 +366,7 @@ fn controls(
         justify=JCenter,
         id=if on { sid } else { 0 },
         fn() {
-          c.text(speed_label(p.speed()), size=12.0, weight=600, color=ink, wrap=false) |> ignore
+          c.text(@sf.speed_label(p.speed()), size=12.0, weight=600, color=ink, wrap=false) |> ignore
           // Player.kt SpeedKey: clickable over its clip
           if on {
             @motion.ripple(c, sid, if speed_last { @sf.inner_corner(bar_radius, speed_inset) } else { speed_corner })

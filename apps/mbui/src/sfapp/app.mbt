@@ -80,8 +80,6 @@ fn reset() -> Unit {
   read_chats.clear()
   readings.clear()
   kept_places.clear()
-  playing.clear()
-  play_srcs.clear()
   screens_open.clear()
   screens_made.val = 0
   screen_uis.clear()
@@ -158,10 +156,8 @@ fn reset() -> Unit {
   faces_reset()
   links_reset()
   wide_reset()
-  // a desktop's player's 选集 and the pointer it last saw (play_desk.mbt)
-  desk_listing.clear()
-  desk_moves.clear()
-  desk_fulled.clear()
+  // the library's viewers: the texts read, the films played, a desktop's player's 选集 and the pointer it last saw
+  @sf.viewer_reset()
   badge_told.val = -1
   dock_reset()
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
@@ -283,6 +279,9 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
   // a tip's keys, as the core's prefs set them (wide_tip.mbt)
   @sf.set_shortcuts(tip_keys_of)
+  // the library's words, the app's catalog's; what its viewers ask of the page (viewer_host.mbt)
+  @sf.set_words(fill)
+  @sf.set_viewer_host(viewer_host_of(src))
   let t = @sf.begin(c)
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)

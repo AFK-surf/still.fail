@@ -1,5 +1,5 @@
-// What plays after what in a folder, which subtitle goes with a video, and how times and speeds are said (ember
-// apps/android drive/Playlist.kt, from zdrive's Playlist.kt and SideSubtitles.kt): plain functions over names.
+// A folder's names as a viewer reads them (web/ui viewer/names.ts): in their numbers' order (the playlist), and the
+// subtitle beside a video. Plain functions over names (zdrive's Playlist.kt and SideSubtitles.kt, as Android had them).
 
 ///|
 /// The playable names of a folder in the order a person would watch them: numbers as numbers (E2 before E10).
@@ -116,9 +116,9 @@ pub fn is_subtitle(name : String) -> Bool {
 }
 
 ///|
-/// The subtitle for the video `base`, out of the names beside it: `<base>.<ext>` or `<stem>.<ext>` (E01.srt for E01.mp4)
+/// The subtitle beside the video `base`, out of the names in its folder (sideSubtitle): `<base>.<ext>` or `<stem>.<ext>` (E01.srt for E01.mp4)
 /// first, then one with a tag between (`E01.zh.srt`), the whole name winning a tie.
-pub fn pick_subtitle(base : String, names : Array[String]) -> String? {
+pub fn side_subtitle(base : String, names : Array[String]) -> String? {
   let stem = match base.rev_find(".") {
     Some(i) => base.view(end_offset=i).to_owned()
     None => base
@@ -166,43 +166,5 @@ pub fn pick_subtitle(base : String, names : Array[String]) -> String? {
   match best {
     Some((n, _, _, _, _)) => Some(n)
     None => None
-  }
-}
-
-///|
-/// A speed as it is shown: 1×, 1.5×, 0.75×.
-pub fn speed_label(speed : Double) -> String {
-  let whole = speed.floor()
-  (if whole == speed { whole.to_int().to_string() } else { speed.to_string() }) +
-  "×"
-}
-
-///|
-/// `m:ss`, or `h:mm:ss` past an hour (Playlist.kt clock: rounded to the second).
-pub fn clock(ms : Double) -> String {
-  let total = ((if ms < 0.0 { 0.0 } else { ms }) + 500.0).to_int64() / 1000L
-  let h = total / 3600L
-  let m = total % 3600L / 60L
-  let s = total % 60L
-  if h > 0L {
-    "\{h}:\{two(m)}:\{two(s)}"
-  } else {
-    "\{m}:\{two(s)}"
-  }
-}
-
-///|
-/// `m:ss`, the seconds cut (VideoViewer.kt short: the chat's audio).
-pub fn short_clock(ms : Double) -> String {
-  let t = (if ms < 0.0 { 0.0 } else { ms }).to_int64()
-  "\{t / 60000L}:\{two(t / 1000L % 60L)}"
-}
-
-///|
-fn two(n : Int64) -> String {
-  if n < 10L {
-    "0\{n}"
-  } else {
-    "\{n}"
   }
 }

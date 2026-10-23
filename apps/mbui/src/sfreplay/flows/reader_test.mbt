@@ -17,7 +17,7 @@ test "98-reader" {
     f.see("读出来的字应当和写进去的一样")
     // a tap on the text: the bars
     f.tap_at(195.0, 420.0)
-    f.run_for(@sfapp.reader_bars_ms)
+    f.run_for(@sf.reader_bars_ms)
     f.tap("icon:download")
     f.see("已保存到「下载」")
     // the whole file kept, as the station has it (4454 bytes)

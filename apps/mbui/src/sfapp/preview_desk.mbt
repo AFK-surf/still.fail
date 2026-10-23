@@ -159,14 +159,14 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
   if v.desk_reads() || (wide_on.val && v.shown_kind() == Some(KAudio)) {
     return
   }
-  let ink = page_viewer_ink()
+  let ink = @sf.page_viewer_ink()
   let kind = v.shown_kind()
   // a mouse moving over it wakes what fades; resting on the bar, it stays
   let (px, py, _) = c.pointer()
   if desk_mouse() && v.mouse_seen && (px != v.mouse_x || py != v.mouse_y) {
     v.wake(rest_ms)
   }
-  if desk_mouse() && !v.awake && py >= 0.0 && py < viewer_bar_h && v.mouse_seen {
+  if desk_mouse() && !v.awake && py >= 0.0 && py < @sf.viewer_bar_h && v.mouse_seen {
     v.wake(rest_ms)
   }
   v.mouse_x = px
@@ -206,7 +206,7 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
   // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays
   let hidden = kind == Some(KImage) && !v.bars_shown()
   let n = c.box(style=desk_layer, fn() {
-    if viewer_bar(c, "preview/bar", v.desk_back(src), v.file.name, v.desk_meta(src), hidden, ink, fn() {
+    if @sf.viewer_bar(c, "preview/bar", v.desk_back(src), v.file.name, v.desk_meta(src), hidden, ink, fn() {
         v.desk_tools(c, ink)
       }) &&
       !v.closing {
@@ -219,7 +219,7 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
 ///|
 /// The bar's tools by what it shows (FilePreview.tsx: its `controls`, then copy and download): an image's zoom and its
 /// marks, a page's or a table's 预览 / 源码, download last.
-fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : ViewerInk) -> Unit {
+fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk) -> Unit {
   let v = self
   match v.shown_kind() {
     Some(KImage) if marking.on =>
@@ -227,13 +227,13 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : ViewerInk) -> Unit {
     Some(KImage) if !v.coming() => {
       let z = v.zoom
       c.box(style=desk_zoom, fn() {
-        if viewer_tool(c, "preview/zoom-out", "minus", tr("web-main.preview.zoomOutKey"), ink, disabled=z.scale <= z.min_scale() + desk_zoom_slack) {
+        if @sf.viewer_tool(c, "preview/zoom-out", "minus", tr("web-main.preview.zoomOutKey"), ink, disabled=z.scale <= z.min_scale() + desk_zoom_slack) {
           z.zoom_to(z.scale / desk_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
         }
         if desk_text_tool(c, "preview/zoom-reset", "\{(z.scale * 100.0).round().to_int()}%", tr("web-main.preview.fitKey"), ink, wide=true) {
           z.reset()
         }
-        if viewer_tool(c, "preview/zoom-in", "plus", tr("web-main.preview.zoomInKey"), ink, disabled=z.scale >= z.max_scale() - desk_zoom_slack) {
+        if @sf.viewer_tool(c, "preview/zoom-in", "plus", tr("web-main.preview.zoomInKey"), ink, disabled=z.scale >= z.max_scale() - desk_zoom_slack) {
           z.zoom_to(z.scale * desk_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
         }
         if desk_text_tool(c, "preview/zoom-actual", "1:1", tr("web-main.preview.actualKey"), ink) {
@@ -242,14 +242,14 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : ViewerInk) -> Unit {
       })
       |> ignore
       // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
-      if v.bytes is Some(_) && viewer_tool(c, "preview/mark", "edit", tr("web-main.annotate.image"), ink) {
+      if v.bytes is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", tr("web-main.annotate.image"), ink) {
         marks_start()
       }
       // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
       match v.bytes {
         Some(b) => {
           let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, desk_copied_ms)
-          if viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, tr(if shown { "common.copied" } else { "common.copy" }), ink) {
+          if @sf.viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, tr(if shown { "common.copied" } else { "common.copy" }), ink) {
             c.copy_image(b)
             v.copied += 1
           }
@@ -283,7 +283,7 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : ViewerInk) -> Unit {
     // what is here saved at once; one told of, or played as it comes, read whole first
     let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
     let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked)
-    if viewer_download(c, "preview/download", ink, disabled=!saving) {
+    if @sf.viewer_download(c, "preview/download", ink, disabled=!saving) {
       v.ask_save(c)
     }
   }
@@ -292,7 +292,7 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : ViewerInk) -> Unit {
 ///|
 /// A tool that says words (FilePreview.css.ts fpToolText: the zoom's per cent, 1:1): 32 high, 36 wide at least (52
 /// `wide`), 8 in, 12 in the quieter ink until pointed at.
-fn desk_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : ViewerInk, wide? : Bool = false) -> Bool {
+fn desk_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : @sf.ViewerInk, wide? : Bool = false) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
   let hot = c.hovered(id) || c.pressed(id)
@@ -583,28 +583,12 @@ let desk_text_side : Double = 32.0
 let desk_text_foot : Double = 64.0
 
 ///|
-/// A video's controls on a desktop (media.css.ts vvBar): 1080 wide at most, 16 in from the window's sides and foot,
-/// 6 in round what they hold (2 over the timeline), the raised ground at 72%; the speed's ground the words at 10%.
-let desk_video_most : Double = 1080.0
+/// As it is (a zoom of 1).
+let desk_whole : Double = 1.0
 
 ///|
-let desk_video_in : Double = 16.0
-
-///|
-let desk_video_pad : Double = 6.0
-
-///|
-let desk_video_share : Double = 0.72
-
-///|
-let desk_rate_share : Double = 0.1
-
-///|
-let desk_track_share : Double = 0.2
-
-///|
-/// A chat's song on a desktop (FilePreview.tsx: a sound opens in the player, viewer/Player.tsx): the player a drive's
-/// plays in, back to the chat, its download the preview's.
+/// A chat's song on a desktop (FilePreview.tsx: a sound opens in the player, viewer/Player.tsx): the library's player
+/// over the preview's (read through the core a part at a time), back to the chat, its download the preview's.
 fn Viewer::desk_song(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   let v = self
   match v.media {
@@ -614,16 +598,49 @@ fn Viewer::desk_song(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
         Some(p) => m.pin(p)
         None => ()
       }
-      desk_play(c, m, {
-        back: v.desk_back(src),
+      let file : @sf.ViewerFile = {
         name: v.file.name,
         size: v.file.size,
-        go_back: fn() { v.shut(c) },
+        mtime: 0.0,
+        mime: v.mime,
+        kind: "audio",
+        title: "",
+        key: "",
+        bytes: None,
+        read: fn(_, _, done) { done(Err("")) },
+        stream: None,
+        beside: None,
+        place: fn() { NeverLeft },
+        keep_place: fn(_, _) {  },
         save: fn() { v.ask_save(c) },
-        list: [],
-        open: fn(_) {  },
-      })
+      }
+      @sf.player_view(c, m, file, [], back_label=v.desk_back(src), on_back=fn() { v.shut(c) }, on_go=fn(_) {  })
     }
     None => ()
   }
+}
+
+///|
+/// A chat's text or Markdown open in its preview, read in the desktop's reader (FilePreview.tsx hands it to the same
+/// Reader): what the preview read of it given to the reader (its place not kept: a chat's file is no drive's).
+fn Viewer::desk_read(self : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
+  let v = self
+  let file = @sf.blob_file(b, v.file.name, v.file.size, mime=v.mime, save=fn() { v.ask_save(c) })
+  @sf.reader(
+    c,
+    "chat\n" + v.id(),
+    file,
+    markdown=v.shown_kind() == Some(KMarkdown),
+    back_label=v.desk_back(src),
+    on_back=fn() { v.shut(c) },
+  )
+}
+
+///|
+/// Whether a preview reads as a text on a desktop (FilePreview.tsx: a text and Markdown open in the reader).
+fn Viewer::desk_reads(self : Viewer) -> Bool {
+  wide_on.val &&
+  self.bytes is Some(_) &&
+  (self.shown_kind() == Some(KMarkdown) || self.shown_kind() == Some(KText)) &&
+  !self.told_of()
 }

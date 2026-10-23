@@ -153,9 +153,7 @@ fn dv_reset() -> Unit {
   dv.picker_denied = false
   dv.picker_serial = 0
   dv.picker_asking = false
-  reader_ui.clear()
   reader_set.clear()
-  dv_reads.clear()
   fix_folders.clear()
   fix_places.clear()
   fix_transfers.clear()

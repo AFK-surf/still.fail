@@ -465,16 +465,16 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
       app.nav.push(DriveRead(at))
-      let r = reading_for(reader_key(at))
+      let r = @sf.reading_for(reader_key(at))
       if mode != "reader" && mode != "reader-md" {
         r.chrome = true
       }
       if mode == "reader-contents" {
-        r.panel = Contents
+        r.panel = @sf.ReaderPanel::Contents
         r.contents_put = false
       }
       if mode == "reader-layout" {
-        r.panel = Layout
+        r.panel = @sf.ReaderPanel::Layout
         r.contents_put = false
       }
     }
