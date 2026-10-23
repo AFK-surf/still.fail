@@ -3,7 +3,7 @@
 # Apple apps (src/host/apple_core.mm) and Android's (src/host/android_core.c on still.fail's prebuilt engine): builds the
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
 #   scripts/core.sh deps | shell [TARGET] | hermes | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
-#                   | smoke [build|run] | listen | login-test | vectors | sizes | clean | all
+#                   | smoke [build|run] | listen | exit | login-test | vectors | sizes | clean | all
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -255,6 +255,17 @@ listen_test() {
   return $code
 }
 
+# exit() with the core's thread in a task (core/exit_test.m, with core/exit-test.js as bytecode in the core's place):
+# the core ends before the statics it runs on are destroyed (apple_core.mm's stop_at_exit).
+exit_test() {
+  core_program exit_test || return 1
+  hermes_script $ROOT/core/exit-test.js $OUT/exit-test.hbc || return 1
+  local dir=$(mktemp -d /tmp/mbui-core-exit.XXXXXX) code=0
+  MB_CORE_BUNDLE=$OUT/exit-test.hbc $OUT/exit_test "$dir" || code=1
+  rm -rf "$dir"
+  return $code
+}
+
 # The core demo's login command (scripts/mac.sh login, MBUI_AUTH_LOGIN: still.fail's sign-in on the host's
 # browser_login) as a station's remote login would run it, up to the person's browser step, against still.fail cloud: a fresh data directory, BROWSER a stand-in that keeps the
 # page's address. Nobody signs in: the browser that comes back is curl, with a state that is not the sign-in's.
@@ -325,6 +336,7 @@ case "${1:-all}" in
   engine) engine "${2:-aarch64-apple-darwin}" ;;
   apple) apple "${2:-aarch64-apple-darwin}" ;;
   listen) listen_test ;;
+  exit) exit_test ;;
   login-test) login_test ;;
   smoke)
     case "${2:-all}" in
@@ -336,5 +348,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | login-test | vectors | sizes | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | exit | login-test | vectors | sizes | clean | all"; exit 2 ;;
 esac
