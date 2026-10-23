@@ -49,6 +49,11 @@ fn security_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     security_open_page(c, core, here)
     return
   }
+  // the desktop's as the web's (web_security.mbt)
+  if wide.val {
+    security_page_wide(c, core, here)
+    return
+  }
   let topic = (core.topic)("lock", { "workspace": str(here.workspace) })
   let lock = topic.value
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {

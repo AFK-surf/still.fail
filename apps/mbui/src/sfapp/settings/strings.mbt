@@ -5,6 +5,14 @@
 ///|
 // kept across runs: a table, never written
 let zh : Map[String, String] = {
+  "web-pages.security.lead": "谁可以访问此 workspace 的 station 并在其上执行命令",
+  "web-pages.security.onLead": "添加成员、设备和 station 都需受信任设备批准；即使 still.fail 的服务器被攻破，也无法访问你的 station",
+  "web-pages.security.thenSafe": "即使服务器被攻破，攻击者也无法访问你的 station；最坏情况是暂时无法连接",
+  "web-pages.security.signsHere": "将由此设备批准",
+  "web-pages.security.check": "验证",
+  "web-pages.security.viewer": "只读",
+  "web-pages.security.upgradeTitle": "将此设备设为受信任设备",
+  "web-pages.roles.member": "成员",
   "web-main.filter.connects.all": "全部连接",
   "web-main.filter.connects.named": "筛选连接：{named}",
   "web-pages.notifications.sample.title": "示例对话",
