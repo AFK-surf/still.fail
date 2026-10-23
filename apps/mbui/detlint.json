@@ -252,7 +252,9 @@
     "literal-time": {},
     "stable-mode": {},
     "retired-api": {},
-    "app-clock": {},
+    "app-clock": {
+      "src/sfapp/browse_fixture.mbt": 1
+    },
     "wall-clock": {},
     "engine-math": {},
     "poll": {},
@@ -269,7 +271,10 @@
     "style-exact": {
       "src/sfapp/settings/web_security.mbt": 2
     },
-    "build-effect": {},
+    "build-effect": {
+      "src/sfbase/drive_keep.mbt": 1,
+      "src/sfbase/drive_upload.mbt": 1
+    },
     "unsettled-ok": {},
     "host-delay": {},
     "library-import": {}
