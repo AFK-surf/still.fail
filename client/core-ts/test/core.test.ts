@@ -492,6 +492,28 @@ test("a_service_page_s_size_and_folded_toolbar_are_kept_on_the_device", async ()
   assert.deepEqual(v(values, 1).previewSizes, { "ws/st\nj1": "390x844" });
 });
 
+test("a_screen_s_picture_size_is_kept_on_the_device", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).screenQuality, undefined);
+  call(core, ui, 2, "prefs.set", { screenQuality: "original" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenQuality, "original");
+  // only the sizes there are; none again is as the window is
+  call(core, ui, 3, "prefs.set", { screenQuality: "8k" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 3).length, 1);
+  call(core, ui, 4, "prefs.set", { screenQuality: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenQuality, undefined);
+});
+
 test("the_language_is_as_chosen_else_as_the_device_is", async () => {
   const { host, core } = await stationCore();
   const ui = core.connect();

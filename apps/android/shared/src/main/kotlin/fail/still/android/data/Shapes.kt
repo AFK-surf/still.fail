@@ -4275,6 +4275,10 @@ data class PrefsView (
 	/// How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a
 	/// trackpad (the finger moves the pointer, a tap clicks where it points).
 	val screenTouch: String? = null,
+	/// How large a picture of a station's screen this device asks for: `smooth` (at most 1280×720), `hd` (at
+	/// most 1920×1080), `original` (the screen's own size), or (none) as the window is (at most 1920×1080, 2560×1440 on
+	/// a screen that has more).
+	val screenQuality: String? = null,
 	/// The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
 	/// (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
 	val previewSizes: Map<String, String>? = null,

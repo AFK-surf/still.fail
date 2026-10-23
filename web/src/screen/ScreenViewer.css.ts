@@ -5,7 +5,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pictureGlass as glass } from "@stillfail/ui/styles/glass.ts";
-import { IN, PANEL_PAD, PANEL_PILL, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
 import { VIEWER_BAR } from "@stillfail/ui/viewer/ViewerBar.css.ts";
 
@@ -175,3 +175,19 @@ export const fullTools = style({
 export const figure = style({
   selectors: { '&[data-level="amber"]': { color: vars.amber }, '&[data-level="red"]': { color: vars.red } },
 });
+
+/** The screen's panel (ScreenPanel.tsx): a small panel under the bar's tool (docs/ui-panels.md). */
+export const panel = style([popover, panelCard, {
+  vars: { [IN]: pillInner(PANEL_PAD, PANEL_PILL, vars.cornerScale) },
+  zIndex: "1000", display: "grid", gap: "6px", width: "300px", boxSizing: "border-box", color: vars.text, fontSize: vars.textUi,
+  animation: "none",
+}]);
+/** What sits in a group as its rows' words do. */
+export const panelPad = style({ display: "grid", padding: `2px ${TEXT_IN}px` });
+/** The keys a combo presses, at a row's end. */
+export const keysShown = style({ fontFamily: "inherit", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
+/** The view's figures, a term and its value a line. */
+export const stats = style({ display: "grid", gap: "2px", margin: "0", padding: `2px ${TEXT_IN}px 4px`, fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
+globalStyle(`${stats} > div`, { display: "flex", justifyContent: "space-between", gap: "12px" });
+globalStyle(`${stats} dt`, { color: vars.muted });
+globalStyle(`${stats} dd`, { margin: "0", fontVariantNumeric: "tabular-nums", textAlign: "right" });
