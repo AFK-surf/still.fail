@@ -1055,9 +1055,11 @@ fn split_stable(
   // in each test and each build that has the same globals of that package, kept (MBC_STORE): one data.c was made
   // new by every program and every change
   let lit = b"moonbit_string_literal_"
-  // (which packages use each literal: its functions, its globals)
+  // (which packages use each literal: its functions, its globals; and the first by name of the source files whose
+  // functions use it)
   let lit_users : Map[Bytes, BSet] = Map::new()
-  let note_users = fn(text : Bytes, pkg : Bytes) {
+  let lit_file : Map[Bytes, Bytes] = Map::new()
+  let note_users = fn(text : Bytes, pkg : Bytes, file : Bytes?) {
     let mut p = 0
     while true {
       let s = find(text, lit, p)
@@ -1070,16 +1072,32 @@ fn split_stable(
         Some(u) => u.add(pkg)
         None => lit_users[n] = BSet::of([pkg])
       }
+      if file is Some(fl) {
+        match lit_file.get(n) {
+          Some(old) if bcmp(old, fl) <= 0 => ()
+          _ => lit_file[n] = fl
+        }
+      }
       p = e
     }
   }
   for f in rest {
-    note_users(f.text, package_of(f.name))
+    let file = match line_file(f.text) {
+      Some(path) => {
+        let mut s = path.length()
+        while s > 0 && path[s - 1] != b'/' && path[s - 1] != b'\\' {
+          s -= 1
+        }
+        Some(sub(path, s, path.length()))
+      }
+      None => None
+    }
+    note_users(f.text, package_of(f.name), file)
   }
-  note_users(init.text, b" init")
+  note_users(init.text, b" init", None)
   for k, n in data_names {
     if !starts(n, lit) {
-      note_users(data[k], package_of(n))
+      note_users(data[k], package_of(n), None)
     }
   }
   // (each global's group, and what places it in its group's pieces)
@@ -1090,7 +1108,11 @@ fn split_stable(
     } else if starts(n, lit) {
       let renamed = names.get_or_default(n, n)
       match lit_users.get(n) {
-        Some(u) if u.size() == 1 && u.items()[0] != b" init" => (u.items()[0], renamed)
+        // (a package's literal in its pieces by the source file using it: a test's places, `file.mbt:245:3-245:30`,
+        // move with every line put in above them, and by their names they were in every piece of the package: a
+        // change of 68 lines to one file made all 64 of sfapp's pieces new, 2026-10-23)
+        Some(u) if u.size() == 1 && u.items()[0] != b" init" =>
+          (u.items()[0], lit_file.get_or_default(n, renamed))
         _ => (b" strings", renamed)
       }
     } else {
@@ -1171,12 +1193,42 @@ fn split_stable(
   let results = run_jobs(jobs.length(), outdir, size_of, fn(i) {
     let (name, kind, entries) = jobs[i]
     if kind == 2 {
-      // (globals: in moonc's order, each defined here and declared nowhere else in the unit)
+      // (globals: by their names, each after those of the unit it uses, each defined here and declared nowhere else
+      // in the unit. In moonc's order, which moves with the program, a unit of the same globals was new text: 77 of
+      // sfapp's test's units after a change to one file, 2026-10-23)
       let used = BSet::new()
       let defines = BSet::new()
+      let at : Map[Bytes, Int] = Map::new()
+      for i, e in entries {
+        at[e.0] = i
+      }
+      let by_name = stable_sort(Array::makei(entries.length(), fn(i) { i }), fn(a, b) {
+        let c = bcmp(entries[a].0, entries[b].0)
+        if c != 0 {
+          c
+        } else {
+          bcmp(data_r[entries[a].1], data_r[entries[b].1])
+        }
+      })
+      let placed = Array::make(entries.length(), false)
       let texts = []
+      fn place(i : Int) -> Unit {
+        if placed[i] {
+          return
+        }
+        placed[i] = true
+        for id in sort_bytes(data_ids[entries[i].1].items()) {
+          match at.get(id) {
+            Some(j) if j != i => place(j)
+            _ => ()
+          }
+        }
+        texts.push(data_r[entries[i].1])
+      }
+      for i in by_name {
+        place(i)
+      }
       for e in entries {
-        texts.push(data_r[e.1])
         used.add_all(data_ids[e.1])
         defines.add(e.0)
       }
