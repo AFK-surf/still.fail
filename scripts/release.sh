@@ -154,6 +154,7 @@ for platform in $platforms; do
       want=a01a48b5e1a6d2abfbea3457b6c71d1257bc429793bd8b3ebef6be8ee155b56a
       have=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
       [ "$have" = "$want" ] || { echo "release.sh: $apk is signed with ${have:-no certificate}, not $want (studio's key): not released" >&2; exit 1; }
+      echo "$apk: signed with $have (SHA-256), studio's key"
       name="stillfail${beta:+-beta}-$build.apk"
       put "$apk" "android/$name" application/vnd.android.package-archive
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/%s","sha256":"%s","size":%s}\n' \
