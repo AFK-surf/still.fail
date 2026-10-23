@@ -57,8 +57,9 @@ jobs:
       - uses: ./.github/actions/mbui-moonbit
       # moon's own build (moonc's C and what it checked) as main's newest run left it: without, moonc made all of it
       # again each run, 46-53 s of the tests' build with every unit and link kept, and the check's type-check from
-      # nothing (2026-10-23, 40018743319); over it, moon makes again what changed, by content (every source touched
-      # as a checkout leaves it: 15 s against 60 on Studio). Main's only (~100 MB a part): a branch takes main's.
+      # nothing (2026-10-23, 40018743319); over it, moon makes again what changed (on a branch over its own: the app
+      # part's build 29 s to 20, the check 24 s to 5 after it, the replay's build 26 s to 13-17). Main's only (75-180 MB
+      # a part): a branch takes main's.
       - uses: actions/cache/restore@v4
         id: moon
         with:
@@ -140,7 +141,7 @@ jobs:
             ${{ env.MBC_STORE }}
             .ci/lto
           key: ${{ env.BUILD_KEY }}
-      - if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mbui-moon-build-cache') && steps.moon.outputs.cache-hit != 'true'
+      - if: always() && github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: |
