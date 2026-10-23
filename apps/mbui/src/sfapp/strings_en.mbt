@@ -552,6 +552,7 @@ let en : Map[String, String] = {
   "web-pages.files.favorite": "Add “{name}” to favorites",
   "web-pages.files.shared": "Shared with the team",
   "web-pages.files.reading": "Reading…",
+  "web-pages.drive.resizeColumn": "Resize column",
   "web-pages.files.copyHere": "Drop to copy to “{name}”",
   "web-pages.files.moveHere": "Drop to move to “{name}”",
   "web-pages.drive.dropHere": "Drop to upload to “{name}”",

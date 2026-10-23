@@ -1500,17 +1500,25 @@ fn files_columns(
     so_far = dv_join(so_far, p)
     paths.push(so_far)
   }
-  let room = dmax(1.0, (pane / files_column_w).floor())
-  let from = dmax(0.0, paths.length().to_double() - room).to_int()
+  // the last ones the pane holds (each as wide as it is set, an edge after it)
+  let widths = paths.map(fn(p) { fcols_width(src, at.station + "\u{1}" + root + "\u{1}" + p) })
+  let mut from = paths.length() - 1
+  let mut used = widths[from] + fcols_edge_w
+  while from > 0 && used + widths[from - 1] + fcols_edge_w <= pane {
+    from -= 1
+    used += widths[from] + fcols_edge_w
+  }
   c.box(style=files_columns_row, fn() {
     for i in from..<paths.length() {
       let path = paths[i]
       let next = parts.get(i)
+      let wkey = at.station + "\u{1}" + root + "\u{1}" + path
       // a column takes what is dropped on it into its folder
       let cid = c.id("files/column/" + at.station + "/" + root + "/" + path)
       let into : DriveAt = { station: at.station, root: Some(root), path }
       let lit = fdrag_target(c, cid, "column/" + at.station + "/" + root + "/" + path, Some(into), dv_name(dv_absolute(root, path)), write, transfers, 1)
-      c.box(style=if lit is Some(_) { files_column.then(files_column_drop) } else { files_column }, id=cid, fn() {
+      let sized = files_column.then(@ui.style(w=Fixed(widths[i])))
+      c.box(style=if lit is Some(_) { sized.then(files_column_drop) } else { sized }, id=cid, fn() {
         let (entries, error) = files_entries(src, at.station, root, path)
         match (entries, error) {
           (None, Some(e)) => c.text(e, style=place_trouble) |> ignore
@@ -1536,7 +1544,8 @@ fn files_columns(
         }
       })
       |> ignore
-      c.box(style=files_column_rule, fn() {  }) |> ignore
+      let names = files_entries(src, at.station, root, path).0.unwrap_or([]).map(fn(e) { (e.name, e.dir) })
+      files_column_edge(c, src, wkey, cid, widths[i], names)
     }
   })
   |> ignore

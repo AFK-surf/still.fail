@@ -782,3 +782,34 @@ test "wide: 文件 from the computer held over the folder say where they go; let
   assert_true(t.find("清单.txt") is Some(_), msg="up")
   assert_true(t.find("新的") is Some(_), msg="its folder made")
 }
+
+///|
+test "wide: 文件's columns as Finder's: an edge dragged makes its column wider (that one), with ⌥ every one (kept: prefs.set driveViews.column); pressed twice as wide as its names" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls, view="columns")
+  let (ex, ey, ew, eh) = t.query(Button, label="调整栏宽").unwrap().rect
+  let (x, y) = (ex + ew / 2.0, ey + eh / 2.0)
+  let (cx, _) = t.find("设计稿").unwrap()
+  // that column wider by 60
+  t.drag(x, y, x + 60.0, y)
+  t.frame()
+  let (ex2, _, _, _) = t.query(Button, label="调整栏宽").unwrap().rect
+  assert_eq((ex2 - ex).round().to_int(), 60)
+  assert_eq(named(calls, "prefs.set").filter(fn(m) { text(field(Some(m.params), "driveViews"), "column") != "" }).length(), 0)
+  // ⌥: every column, kept on this device
+  t.hold_mods(@ui.mod_alt)
+  t.drag(ex2 + ew / 2.0, y, ex2 + ew / 2.0 - 40.0, y)
+  t.hold_mods(0)
+  t.frame()
+  let kept = named(calls, "prefs.set").filter(fn(m) { text(field(Some(m.params), "driveViews"), "column") != "" })
+  assert_eq(kept.length(), 1)
+  assert_eq(text(field(Some(kept[0].params), "driveViews"), "column"), "260")
+  // pressed twice: as wide as its longest name needs (narrower here)
+  let (ex3, ey3, ew3, eh3) = t.query(Button, label="调整栏宽").unwrap().rect
+  t.tap(ex3 + ew3 / 2.0, ey3 + eh3 / 2.0)
+  t.tap(ex3 + ew3 / 2.0, ey3 + eh3 / 2.0)
+  t.frame()
+  let (ex4, _, _, _) = t.query(Button, label="调整栏宽").unwrap().rect
+  assert_true(ex4 < ex3, msg="fitted to its names")
+  ignore(cx)
+}
