@@ -1,10 +1,13 @@
+
 // What ⌘K's list offers besides what a search finds (`commands.find`, docs/client-core.md): of what a client can do
 // now (a key's action some page answers, updating, a settings page), those whose name, id or other words have what was
 // typed, by part, in the parts' order. The core names what every client offers alike (the keys' actions, updating,
 // relaying a chat) and which are worth a key alone; a client says which it can do now and names what is its own (its
 // settings pages), and does what is picked. Nothing here reads more than it is given (the words too: `say`), so the
 // web's demo answers with it as the core does.
-import { isObject } from "./util.ts";
+
+/// Its own isObject (the web's demo takes this file alone, and the web checks it more strictly than util.ts is written for).
+const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /// The words of a key in the person's language (i18n.ts `t`).
 export type Say = (key: string, args?: Record<string, string>) => string;
