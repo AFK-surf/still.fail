@@ -176,6 +176,11 @@ impl @hostapi.Host for Native with clipboard_set(_, s) {
 }
 
 ///|
+impl @hostapi.Host for Native with clipboard_set_image(_, data) {
+  clipboard_set_image(data)
+}
+
+///|
 impl @hostapi.Host for Native with clipboard_set_secret(_, s, clear_ms) {
   clipboard_set_secret(s, clear_ms~)
 }

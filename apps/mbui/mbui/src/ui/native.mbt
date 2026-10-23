@@ -496,6 +496,14 @@ pub fn NativeView::scrub(self : NativeView, on : Bool) -> Unit {
 }
 
 ///|
+/// How loud it plays, 0 (none) to 1 (as it is): a host with no say over it (a page's) plays it as it is.
+pub fn NativeView::volume(self : NativeView, volume : Double) -> Unit {
+  if self.id != 0 && !self.closed {
+    h_view_control(self.id, 10, volume)
+  }
+}
+
+///|
 /// Played at `rate` times its speed.
 pub fn NativeView::rate(self : NativeView, rate : Double) -> Unit {
   if self.id != 0 && !self.closed {

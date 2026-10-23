@@ -1399,6 +1399,10 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
   (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);
 }
 
+// A picture on the clipboard (@hostapi.clipboard_set_image): none here (Android's clipboard takes a picture only as a
+// content URI another app can read).
+void mb_host_clipboard_image(moonbit_bytes_t data) { (void)data; }
+
 void mb_host_clipboard_set(moonbit_string_t s) {
   JNIEnv *env = env_();
   jstring j = jstr(env, s);

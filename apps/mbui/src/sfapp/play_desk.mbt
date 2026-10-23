@@ -245,6 +245,7 @@ fn desk_play_controls(
     })
     |> ignore
     c.box(style=desk_controls_group, fn() {
+      desk_volume(c, p, on)
       // the speed, as a figure: a click goes to the next (1×, 1.25×, 1.5×, 2×, 0.5×, 0.75×)
       let sid = c.id(key + "/speed")
       if on {
@@ -266,6 +267,59 @@ fn desk_play_controls(
       }
     })
     |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The sound (Player.tsx VolumeControl): a button that mutes, and beside it a line 72 wide to press or drag along (in
+/// twentieths), how loud on it in the words, a 10 head.
+fn desk_volume(c : @ui.Ctx, p : @kit.Media, on : Bool) -> Unit {
+  let t = @sf.theme().p
+  let key = p.key()
+  let (volume, muted) = p.volume()
+  let silent = muted || volume == 0.0
+  c.box(style=desk_volume_row, fn() {
+    if desk_play_key(c, key + "/mute", if silent { "volume-x" } else { "volume" }, tr(if silent { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }), on, small=true) {
+      p.toggle_mute()
+      p.wake()
+    }
+    let id = c.id(key + "/volume")
+    if on {
+      c.cursor(id, Hand)
+    }
+    // pressed along it: as loud as where (told the player once the frame's builds are over)
+    match c.rect_of(id) {
+      Some((x, _, w, _)) if on && c.pressed(id) => {
+        let (px, _, _) = c.pointer()
+        let to = (dmin(desk_whole, dmax(desk_none, (px - x) / dmax(desk_whole, w))) * desk_volume_steps).round() / desk_volume_steps
+        c.after_build(key + "/volume", fn() {
+          p.set_volume(to)
+          p.wake()
+        })
+      }
+      _ => ()
+    }
+    let shown = if muted { desk_none } else { volume }
+    let b = c.box(style=desk_volume_line, id=if on { id } else { 0 }, fn() {
+      c.box(style=desk_track.then(@ui.style(bg=Data(@sf.alpha(t.text, desk_track_share)))), fn() {
+        c.layer(fn() { desk_share_bar(c, shown, t.text) }) |> ignore
+      })
+      |> ignore
+      c.layer(fn() {
+        c.box(style=desk_head_row, fn() {
+          c.box(style=@ui.style(w=Grow(shown)), fn() {  }) |> ignore
+          c.box(style=desk_volume_head_room, fn() {
+            c.box(style=desk_volume_head.then(@ui.style(bg=Data(t.text))), tx=-desk_volume_head_r, fn() {  }) |> ignore
+          })
+          |> ignore
+          c.box(style=@ui.style(w=Grow(desk_whole - shown)), fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    c.semantics(b, Slider, id~, label=tr("web-pages.drive.player.volume"), range=(desk_none, desk_whole, shown))
   })
   |> ignore
 }
@@ -419,6 +473,32 @@ let desk_head_r : Double = 6.0
 
 ///|
 let desk_came_share : Double = 0.22
+
+///|
+/// The sound's line: in twentieths; its head 10 across.
+let desk_volume_steps : Double = 20.0
+
+///|
+let desk_volume_head_r : Double = 5.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_volume_row : @ui.Style = @ui.style(row=true, pr=S1_5, gap=S0_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_volume_line : @ui.Style = @ui.style(w=Fixed(desk_volume_w), h=Fixed(desk_timeline_h), justify=JCenter)
+
+///|
+let desk_volume_w : Double = 72.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_volume_head_room : @ui.Style = @ui.style(w=S0, h=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_volume_head : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, shadow=Sm)
 
 ///|
 // kept across runs: a value (no field of it changes)

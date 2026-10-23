@@ -1189,6 +1189,15 @@ void mb_host_clipboard_set(moonbit_string_t s) {
 // A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) { mb_host_clipboard_set(s); }
 
+// A picture on the clipboard (@hostapi.clipboard_set_image): the image the bytes are, as other apps paste one.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  NSImage *img = [[NSImage alloc] initWithData:[NSData dataWithBytes:data length:Moonbit_array_length(data)]];
+  if (!img) return;
+  NSPasteboard *pb = [NSPasteboard generalPasteboard];
+  [pb clearContents];
+  [pb writeObjects:@[ img ]];
+}
+
 
 void mb_host_log(moonbit_string_t s) {
   fprintf(stdout, "%s\n", mb_ns_from_string(s).UTF8String);

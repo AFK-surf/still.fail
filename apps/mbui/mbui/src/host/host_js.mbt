@@ -281,6 +281,12 @@ fn clipboard_set(s : String) -> Unit {
 }
 
 ///|
+/// A picture on the clipboard (@hostapi.clipboard_set_image): a page's runs put none.
+fn clipboard_set_image(data : Bytes) -> Unit {
+  ignore(data)
+}
+
+///|
 /// A secret on the clipboard (see host_native.mbt): a page's as any words.
 fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   ignore(clear_ms)

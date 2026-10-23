@@ -90,6 +90,9 @@ extern "C" fn ffi_set_ime(
 extern "C" fn ffi_clipboard_set(s : String) -> Unit = "mb_host_clipboard_set"
 
 ///|
+extern "C" fn ffi_clipboard_image(data : Bytes) -> Unit = "mb_host_clipboard_image"
+
+///|
 #borrow(s)
 extern "C" fn ffi_clipboard_secret(s : String, clear_ms : Double) -> Unit = "mb_host_clipboard_secret"
 
@@ -466,6 +469,12 @@ fn set_ime(
 ///|
 fn clipboard_set(s : String) -> Unit {
   ffi_clipboard_set(s)
+}
+
+///|
+/// A picture put on the system's clipboard (@hostapi.clipboard_set_image).
+fn clipboard_set_image(data : Bytes) -> Unit {
+  ffi_clipboard_image(data)
 }
 
 ///|

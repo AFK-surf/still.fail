@@ -23,6 +23,8 @@ struct FakeHost {
   mut clipboard : String
   /// the last words put there were a secret: taken off this long after (Ctx::copy_secret); -1 not a secret
   mut clipboard_secret : Double
+  /// the picture last put on the clipboard (its bytes' length; -1 none)
+  mut clipboard_image : Int
   // whether the app takes back (a page to go back to), as last told
   mut back_on : Bool
   // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
@@ -626,6 +628,15 @@ fn h_clipboard_set(s : String) -> Unit {
       f.clipboard_secret = -1.0
     }
     None => @hostapi.clipboard_set(s)
+  }
+}
+
+///|
+/// A picture on the clipboard (@hostapi.clipboard_set_image); the fake host keeps how long it was (Tester::clipboard_image).
+fn h_clipboard_image(data : Bytes) -> Unit {
+  match fake.val {
+    Some(f) => f.clipboard_image = data.length()
+    None => @hostapi.clipboard_set_image(data)
   }
 }
 

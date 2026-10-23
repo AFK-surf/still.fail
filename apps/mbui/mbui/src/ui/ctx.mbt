@@ -1493,6 +1493,13 @@ pub fn Ctx::copy_text(self : Ctx, s : String) -> Unit {
 }
 
 ///|
+/// Puts the picture `data` (an image file's bytes) on the system's clipboard, as a picture other apps paste.
+pub fn Ctx::copy_image(self : Ctx, data : Bytes) -> Unit {
+  ignore(self)
+  h_clipboard_image(data)
+}
+
+///|
 /// Puts a secret on the system's clipboard: marked sensitive (Android masks its preview), taken off `clear_ms` later
 /// unless something else was copied meanwhile (the host's own timer: nothing the app waits on).
 pub fn Ctx::copy_secret(self : Ctx, s : String, clear_ms~ : Double) -> Unit {

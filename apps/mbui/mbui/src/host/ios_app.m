@@ -976,6 +976,12 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   UIPasteboard.generalPasteboard.string = mb_ns_from_string(s);
 }
 
+// A picture on the clipboard (@hostapi.clipboard_set_image): the image the bytes are, as other apps paste one.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  UIImage *img = [UIImage imageWithData:[NSData dataWithBytes:data length:Moonbit_array_length(data)]];
+  if (img) UIPasteboard.generalPasteboard.image = img;
+}
+
 // A secret on the clipboard (@hostapi.clipboard_set_secret, as Android's sensitive clip cleared later): kept to this
 // device (not handed to the person's other devices' universal clipboard), and gone from it `clear_ms` later.
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {

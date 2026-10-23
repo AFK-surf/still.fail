@@ -342,6 +342,8 @@ priv struct Viewer {
   mut mouse_seen : Bool
   /// a desktop's song: played in the player a drive's is (play_desk.mbt), not the phone's strip
   mut media : @kit.Media?
+  /// a desktop's image put on the clipboard: how many times (its check shown a while after each)
+  mut copied : Int
 }
 
 ///|
@@ -654,6 +656,7 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     mouse_y: 0.0,
     mouse_seen: false,
     media: None,
+    copied: 0,
   }
   v.bytes = kept_read(v.id())
   v

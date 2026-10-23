@@ -666,6 +666,29 @@ void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   mb_host_clipboard_set(s);
 }
 
+// A picture on the clipboard (@hostapi.clipboard_set_image): a PNG's bytes under the "PNG" format other programs paste
+// (Office, browsers, Paint.NET); what is not a PNG is put nowhere.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  int n = Moonbit_array_length(data);
+  static const unsigned char sig[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+  if (n < 8 || memcmp(data, sig, 8) != 0) return;
+  UINT png = RegisterClipboardFormatW(L"PNG");
+  HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, (size_t)n);
+  if (!png || !h) {
+    if (h) GlobalFree(h);
+    return;
+  }
+  memcpy(GlobalLock(h), data, (size_t)n);
+  GlobalUnlock(h);
+  if (!OpenClipboard(hwnd)) {
+    GlobalFree(h);
+    return;
+  }
+  EmptyClipboard();
+  if (!SetClipboardData(png, h)) GlobalFree(h);
+  CloseClipboard();
+}
+
 
 void mb_host_log(moonbit_string_t s) {
   int n = Moonbit_array_length(s);

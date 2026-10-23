@@ -45,6 +45,7 @@ pub(open) trait Host {
   text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
+  clipboard_set_image(Self, Bytes) -> Unit = _
   log(Self, String) -> Unit = _
   bench_mode(Self) -> Int = _
   set_outside(Self, FuncRef[(Int, Int, Int) -> Unit]) -> Bool = _
@@ -343,6 +344,11 @@ impl Host with clipboard_set(_, _) {
 
 ///|
 impl Host with clipboard_set_secret(_, _, _) {
+  ()
+}
+
+///|
+impl Host with clipboard_set_image(_, _) {
   ()
 }
 
@@ -1286,6 +1292,13 @@ pub fn clipboard_set(s : String) -> Unit {
 /// off `clear_ms` later unless something else was copied meanwhile (0: kept). Elsewhere as clipboard_set.
 pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   current.val.clipboard_set_secret(s, clear_ms)
+}
+
+///|
+/// A picture put on the system's clipboard (an image file's bytes: PNG, JPEG…), as a picture other apps paste. A host
+/// with no such clipboard (a browser's page, Android) puts nothing.
+pub fn clipboard_set_image(data : Bytes) -> Unit {
+  current.val.clipboard_set_image(data)
 }
 
 ///|

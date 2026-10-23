@@ -252,6 +252,7 @@ let zh_wide : Map[String, String] = {
   "web-main.preview.nextKey": "下一张（→）",
   "web-main.preview.loadFailed": "无法载入：{error}",
   "web-main.annotate.image": "标注图片",
+  "common.copied": "已复制",
   // a text read on a desktop (reader_desk.mbt; @stillfail/ui viewer/Reader.tsx)
   "web-pages.drive.reader.contents": "目录",
   "web-pages.drive.reader.find": "搜索",
@@ -288,6 +289,9 @@ let zh_wide : Map[String, String] = {
   "web-pages.drive.player.captionsOn": "显示字幕",
   "web-pages.drive.player.captionsOff": "隐藏字幕",
   "web-pages.drive.player.list": "选集",
+  "web-pages.drive.player.mute": "静音",
+  "web-pages.drive.player.unmute": "取消静音",
+  "web-pages.drive.player.volume": "音量",
   "web-main.video.pauseKey": "暂停（空格）",
   "web-main.video.playKey": "播放（空格）",
 }

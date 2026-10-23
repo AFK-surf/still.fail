@@ -222,6 +222,17 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : ViewerInk) -> Unit {
       if v.bytes is Some(_) && viewer_tool(c, "preview/mark", "edit", tr("web-main.annotate.image"), ink) {
         marks_start()
       }
+      // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
+      match v.bytes {
+        Some(b) => {
+          let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, desk_copied_ms)
+          if viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, tr(if shown { "common.copied" } else { "common.copy" }), ink) {
+            c.copy_image(b)
+            v.copied += 1
+          }
+        }
+        None => ()
+      }
     }
     Some(KCsv) | Some(KHtml) | Some(KMarkdown) if v.bytes is Some(_) => {
       let chosen = @sf.segmented(
@@ -405,6 +416,10 @@ let desk_pdf_foot : Double = 28.0
 ///|
 /// A table's words (fpTable: --text-ui, 13).
 let desk_cell_size : Double = 13.0
+
+///|
+/// A copy's check shown this long (CopyImage: 1.6 s).
+let desk_copied_ms : Double = 1600.0
 
 ///|
 /// The zoom's steps (a quarter more or less each), and the room for a scale's rounding at its ends.
