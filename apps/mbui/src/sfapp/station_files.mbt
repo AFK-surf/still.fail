@@ -433,8 +433,7 @@ fn sf_folder(c : @ui.Ctx, src : Source, p : SfPlace) -> Unit {
     "root": Json::string(p.root),
     "path": Json::string(p.path),
   })
-  let (sort, hidden) = dv_views(src)
-  let shown = dv_arranged(items(topic.value, "entries").map(dv_entry), sort, hidden)
+  let shown = dv_shown(src, p.station, p.root, p.path, items(topic.value, "entries").map(dv_entry)).unwrap_or([])
   let whole = draft_ref(p.station, p.station_name, p.root, p.path, if p.path == "" { p.root_name } else { dv_name(p.path) }, true)
   let tick_key = fn(r : DraftRef) { r.station + "\n" + r.path }
   let toggle = fn(r : DraftRef) {

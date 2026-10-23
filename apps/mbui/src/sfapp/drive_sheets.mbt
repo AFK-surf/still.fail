@@ -42,11 +42,8 @@ fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace, page : String) -> Unit {
         }
       })
     View(at, manage) => {
-      let (sort, hidden) = dv_views(src)
-      let by = match sort.find("-") {
-        Some(i) => sort.view(end_offset=i).to_owned()
-        None => sort
-      }
+      let a = dv_arrangement(src, at.station, at.root.unwrap_or(""), at.path)
+      let (by, hidden) = (a.by, a.hidden)
       dv_sheet_frame(
         c,
         tr("android-misc.drive.view"),
@@ -55,11 +52,11 @@ fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace, page : String) -> Unit {
         fn() {
           for k in ["name", "time", "size", "kind"] {
             if dv_pick_row(c, "view/" + k, tr("web-pages.drive.sortBy." + k), checked=by == k) {
-              dv_set_view(src, "sort", if k == "name" { None } else { Some(k) })
+              dv_arrange(src, by=k, down=false)
             }
           }
           if dv_pick_row(c, "view/hidden", tr("web-pages.drive.showHidden"), checked=hidden) {
-            dv_set_view(src, "hidden", if hidden { None } else { Some("shown") })
+            dv_arrange(src, hidden=!hidden)
           }
           if manage &&
             dv_pick_row(c, "view/roots", tr("android-misc.drive.roots.manage"), icon="folder") {

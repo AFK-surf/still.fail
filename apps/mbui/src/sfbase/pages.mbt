@@ -167,5 +167,9 @@ pub fn reset() -> Unit {
   app.held_long = false
   app.toast = ""
   left_pages.clear()
+  // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)
+  ups_reset()
+  dv_fetches.clear()
+  keepings.clear()
 }
 

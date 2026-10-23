@@ -1,0 +1,32 @@
+# The files' page browsed (DriveViews.tsx, Drive.tsx DriveRow, drive/browse.ts: the core's driveBrowse): MBUI_FIXTURE=drive
+# MBUI_WIN=1280x800. In columns a folder pressed opens beside its column, a row under the pointer (its ⋯), the arrows
+# moving what is chosen, a right click's menu; then the list (its heads, a head pressed orders it), the tree (a folder
+# opened in place), the preview beside it.
+timeout 20000
+until 设计稿
+wait 600
+tap 设计稿
+wait 900
+hover 配色说明.md
+wait 700
+key down
+wait 400
+key down
+wait 400
+key left
+wait 600
+rightclick 发布清单.md
+wait 900
+key escape
+wait 400
+tapxy 908 22
+wait 900
+tap 大小
+wait 800
+tapxy 879 22
+wait 900
+tapxy 947 22
+wait 600
+tap 发布清单.md
+wait 1200
+exit

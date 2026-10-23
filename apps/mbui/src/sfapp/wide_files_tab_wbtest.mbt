@@ -13,7 +13,11 @@ fn tab_tester(calls : Array[Made]) -> @ui.Tester {
   }
   let w : Workspace = { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "" }
   @ui.Tester::new(
-    fn(c) { c.box(w=Px(480.0), h=Fill(1.0), fn() { files_tab(c, src, w, "s-c1", "ws1/st1") }) |> ignore },
+    fn(c) {
+      // (a desktop's: the mouse drags no list, as the wide frame says)
+      c.mouse_drags_lists(false)
+      c.box(w=Px(480.0), h=Fill(1.0), fn() { files_tab(c, src, w, "s-c1", "ws1/st1") }) |> ignore
+    },
     w=1280.0,
     h=800.0,
     platform=0,
@@ -53,7 +57,6 @@ test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加�
   let calls : Array[Made] = []
   let t = tab_tester(calls)
   ftab.places["ws1"] = Some({ station: "ws1/st1", root: Some(fix_docs), path: "" })
-  wide.files_cols["tab\u{2}ws1/st1\u{1}" + fix_docs + "\u{1}"] = ""
   t.frame()
   let (x, y) = t.find("发布清单.md").unwrap()
   t.right_click(x, y)

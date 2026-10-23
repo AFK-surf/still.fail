@@ -6,6 +6,10 @@
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
   context_reset()
-  fcols_reset()
   switcher_reset()
+  browse_reset()
+  cols_reset()
+  kept_reset()
+  pane_reset()
+  drive_reset()
 }

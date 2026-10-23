@@ -1,5 +1,7 @@
 // The core's answers to its pure calls (`markdown`, `code.ink`, `reader.book`, `reader.text`, `reader.search`,
-// `commands.find`, a chat's side panel's tabs: chat-tabs.ts), worked
+// `commands.find`, a chat's side panel's tabs: chat-tabs.ts), and to each step of a device's browsing (drive-browse.ts
+// `Browsing`: a topic of it or a call, given what it held before and what it reads, answering with what it holds
+// after), worked
 // out by the real core and kept for the mbui app's runs without one (apps/mbui/src/sfkept: its Tester's tests, the
 // screenshots' app, the replays of tapes older than a call), so no client reads Markdown or code itself. What those
 // runs ask comes from their output, where an answer asked and not kept is said as `kept-answers-ask {…}`
@@ -15,8 +17,11 @@ import { book, bookAnswer, searchBook } from "../src/reader.ts";
 import { find } from "../src/commands.ts";
 import { changed, tabsOf, type Change } from "../src/chat-tabs.ts";
 import { tr, type Lang } from "../src/i18n.ts";
+import { Browsing, withDrive, type BrowsingState, type Ordered } from "../src/drive-browse.ts";
 
 const target = new URL("../../../apps/mbui/src/sfkept/kept.mbt", import.meta.url);
+// The browsing's steps asked, by their key (the made-up core's hash of the ask): what each is worked out from again.
+const browseAsks = new URL("../../../apps/mbui/src/sfkept/browse_asks.json", import.meta.url);
 const HEAD = "// Made by client/core-ts/scripts/kept-answers.ts with the real core, from what the app's runs asked (scripts/kept).\n///|\nlet kept_answers : String =\n  #|";
 
 const args = process.argv.slice(2);
@@ -30,6 +35,7 @@ type Kept = {
   "reader.book": Record<string, { answer?: unknown; text?: string; search?: Record<string, unknown> }>;
   "commands.find": Record<string, unknown>;
   "chat.tabs": Record<string, unknown>;
+  browse: Record<string, unknown>;
 };
 const before = readFileSync(target, "utf8");
 const was = (fresh ? {} : JSON.parse(before.slice(before.indexOf("#|") + 2))) as Partial<Kept>;
@@ -44,6 +50,7 @@ const finds = new Set(Object.keys(was["commands.find"] ?? {}));
 // A chat's tabs: by what was asked (what is kept for it, its agents, whether it has a chat yet, its session, a change).
 const tabs = new Set(Object.keys(was["chat.tabs"] ?? {}));
 const bookKey = (md: unknown, text: unknown) => `${md === true ? "md" : "txt"}\u0001${String(text ?? "")}`;
+const steps = new Map<string, Step>(fresh ? [] : Object.entries(JSON.parse(readFileSync(browseAsks, "utf8")) as Record<string, Step>));
 let asked = 0;
 for (const file of outputs) {
   for (const line of readFileSync(file === "-" ? 0 : file, "utf8").split("\n")) {
@@ -60,13 +67,16 @@ for (const file of outputs) {
       searches.set(key, queries);
     } else if (ask.call === "commands.find") finds.add(String(ask.key ?? ""));
     else if (ask.call === "chat.tabs") tabs.add(String(ask.key ?? ""));
-    else throw new Error(`kept-answers: no such pure call: ${line}`);
+    else if (ask.call === "browse") {
+      const { call: _call, key, ...step } = ask;
+      steps.set(String(key), step as unknown as Step);
+    } else throw new Error(`kept-answers: no such pure call: ${line}`);
   }
 }
 
 // Each worked out by the core as it is now.
 const sorted = (keys: Iterable<string>) => [...keys].sort();
-const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {} };
+const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, browse: {} };
 for (const text of sorted(texts)) kept.markdown[text] = markdown(text);
 for (const key of sorted(codes)) {
   const cut = key.indexOf("\u0001");
@@ -99,15 +109,73 @@ for (const key of sorted(tabs)) {
     kept["chat.tabs"][key] = { next, tabs: tabsOf(next ?? ask.kept, agents, noChat, session) };
   } else kept["chat.tabs"][key] = tabsOf(ask.kept, agents, noChat, session);
 }
+const keys = sorted(steps.keys());
+for (const key of keys) kept.browse[key] = browseStep(steps.get(key)!);
 const content = HEAD + JSON.stringify(kept) + "\n";
-const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs`;
+// (a step a line: what changes of them reads as the steps that came or went)
+const askedSteps = `{\n${keys.map((k) => `${JSON.stringify(k)}: ${JSON.stringify(steps.get(k))}`).join(",\n")}\n}\n`;
+const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs, ${steps.size} browsing steps`;
 if (check) {
-  if (content !== before) {
+  if (content !== before || askedSteps !== readFileSync(browseAsks, "utf8")) {
     console.error(`kept-answers: the core answers otherwise now than apps/mbui/src/sfkept/kept.mbt keeps: run client/core-ts/scripts/kept-answers.ts (${counts})`);
     process.exit(1);
   }
   console.log(`kept-answers: ${counts}, as the core answers them`);
 } else {
   writeFileSync(target, content);
+  writeFileSync(browseAsks, askedSteps);
   console.log(`kept-answers: ${asked} asked; ${counts} kept`);
+}
+
+// ── a step of a device's browsing ──
+
+/// A step as the made-up core asks it: what the browsing held before (null: nothing yet), the prefs it reads (`driveViews`,
+/// `filesTabs`), each folder's entries it was given (by station, root and path, a line between; null: not read), the
+/// workspaces' stations with a drive, the time, the number the next new id is made of; and what is done: a topic's value
+/// (`topic`: driveBrowse or filesTabs, its params) or a call (`name`, `params`); or the stations a workspace lists, those
+/// with a drive (`withDrive`, as the `stations` topic asked with `drive` gives them).
+interface Step {
+  state: BrowsingState | null;
+  prefs: Record<string, unknown>;
+  folders: Record<string, Ordered[] | null>;
+  stations: Record<string, { station: string; name: string; home: string | null }[]>;
+  now: number;
+  id: number;
+  op: { topic: Record<string, unknown> } | { name: string; params: Record<string, unknown> } | { withDrive: { stations: { station: string; overview?: unknown }[]; here: string | null } };
+}
+
+/// A step worked out: the topic's value or the call's answer (`error`: its message), what the browsing holds after it,
+/// the prefs it changed (each patch, in order); `need`: the folders it read that were not given (asked again with them,
+/// nothing else of it kept).
+function browseStep(step: Step): unknown {
+  // the stations with a drive, this machine's first (the `stations` topic asked with `drive`)
+  if ("withDrive" in step.op) return { value: withDrive(step.op.withDrive.stations, step.op.withDrive.here) };
+  const need = new Set<string>();
+  const patches: unknown[] = [];
+  let id = step.id;
+  const b = new Browsing({
+    prefs: () => step.prefs,
+    setPrefs: (patch) => void patches.push(patch),
+    entries: (station, root, path) => {
+      const key = [station, root, path].join("\n");
+      if (!(key in step.folders)) need.add(key);
+      return step.folders[key] ?? null;
+    },
+    stations: (ws) => step.stations[ws] ?? [],
+    now: () => step.now,
+    newId: () => `t${id++}`,
+    invalid: (what) => new Error(`invalid: ${what}`),
+    changed: () => {},
+  }, step.state ?? undefined);
+  let value: unknown;
+  let error: string | null = null;
+  try {
+    value = "topic" in step.op
+      ? (step.op.topic.topic === "filesTabs" ? b.tabsView(String(step.op.topic.workspace)) : b.view(step.op.topic))
+      : b.call(step.op.name, step.op.params);
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+  }
+  if (need.size) return { need: sorted(need) };
+  return { ...(error !== null ? { error } : { value: value ?? null }), state: b.snapshot(), prefs: patches, id };
 }

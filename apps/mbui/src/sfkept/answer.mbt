@@ -75,11 +75,14 @@ fn book_key(markdown : Bool, text : String) -> String {
 
 ///|
 /// Whether the core's answer to `name` with its `params` is kept (a call answered here, not asked of a core): Markdown
-/// read and code coloured. Nothing is said on the output of one that is not.
+/// read and code coloured; a text's book and what is asked of it (`reader.*`: always answered here, its text beside the
+/// call where params cannot say it; one not kept is said on the output and kept by scripts/kept). Nothing is said on
+/// the output of one that is not.
 pub fn has(name : String, params : Json) -> Bool {
   match name {
     "markdown" => kept("markdown").contains(word(params, "text"))
     "code.ink" => kept("code.ink").contains(word(params, "lang") + "\u{1}" + word(params, "code"))
+    "reader.book" | "reader.text" | "reader.search" => true
     _ => false
   }
 }
@@ -153,6 +156,7 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
         None => not_kept({ "call": "chat.tabs", "key": Json::string(key) })
       }
     }
+    "browse" => browse_answer(params)
     "reader.text" =>
       match book_of(params) {
         Some(key) => {

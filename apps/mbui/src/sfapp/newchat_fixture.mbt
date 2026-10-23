@@ -366,18 +366,29 @@ pub fn open_mode(mode : String) -> Unit {
     // tabs, the one shown split)
     let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
     app.nav.push(Files)
-    app.nav.push(Drive(docs))
-    match mode {
-      "files-columns" => {
-        wide.files_cols["ws1/st1\u{1}" + fix_docs + "\u{1}"] = "设计稿"
-        wide.files_chosen = "ws1/st1\u{1}" + fix_docs + "\u{1}设计稿"
+    // (in columns, 设计稿 open beside 文档: the page at it, chosen in the column before as coming to it chooses)
+    app.nav.push(Drive(if mode == "files-columns" { { ..docs, path: "设计稿" } } else { docs }))
+    // what the made-up core is told before the first frame: the way shown, a tree's folder open, what is chosen
+    let browse = fn(params : Map[String, Json]) {
+      let o : Map[String, Json] = {
+        "owner": "page",
+        "station": "ws1/st1",
+        "root": Json::string(fix_docs),
+        "path": "",
+        "place": Json::string(@sfdesk.place_name("page/0")),
       }
+      for k, v in params {
+        o[k] = v
+      }
+      fix_browse_do(None, mode, "drive.browse", Json::object(o)) |> ignore
+    }
+    match mode {
       "files-tree" => {
-        wide.files_view = Some("tree")
-        wide.files_open["tree/ws1/st1/" + fix_docs + "/设计稿"] = true
+        fix_browse_prefs_set({ "driveViews": { "page": "tree" } }) |> ignore
+        browse({ "act": "tree", "folder": "设计稿", "view": "tree" })
         wide.files_open["station/ws1/st1"] = true
       }
-      "files-list" => wide.files_view = Some("list")
+      "files-list" => fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
       // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
       "files-clash" =>
         fdrag.asking = Some({
@@ -408,8 +419,8 @@ pub fn open_mode(mode : String) -> Unit {
       }
       // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
       "files-preview" => {
-        wide.files_preview = Some(true)
-        wide.files_chosen = "ws1/st1\u{1}" + fix_docs + "\u{1}发布清单.md"
+        fix_browse_prefs_set({ "driveViews": { "preview": "shown" } }) |> ignore
+        browse({ "act": "choose", "view": "columns", "folder": "", "name": "发布清单.md" })
       }
       // two tabs, the one shown split: 文档 in front, the home beside it
       "files-split" =>

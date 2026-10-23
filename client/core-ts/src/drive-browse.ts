@@ -536,9 +536,20 @@ function keep<V>(m: Map<string, V>, key: string, value: V): void {
   }
 }
 
+/// What a device's browsing holds, as JSON keeps it (`Browsing.snapshot`): each of its maps as its entries, in their
+/// order (a typing never begun at null). A Browsing given it answers as the one it was taken of.
+export interface BrowsingState {
+  trees: [string, string[]][];
+  widths: [string, number][];
+  opened: [string, string][];
+  places: [string, { for: string; chosen: { folder: string; names: string[]; anchor: string | null; lead: string | null }; typing: { text: string; at: number | null } }][];
+  live: [string, number][];
+}
+
 /// How a device browses its stations' files: by owner (`page`, `tab`), station, root and folder, a tree's folders open,
 /// a column's width, what was last opened; by place what is chosen in it (let go as its topics go: `started`,
-/// `stopped`). Held in memory while it runs. The order and the tabs are the prefs'.
+/// `stopped`). Held in memory while it runs (`state`: as a snapshot of another left it). The order and the tabs are the
+/// prefs'.
 export class Browsing {
   readonly #d: Device;
   readonly #trees = new Map<string, readonly string[]>();
@@ -547,8 +558,32 @@ export class Browsing {
   readonly #places = new Map<string, PlaceState>();
   readonly #live = new Map<string, number>();
 
-  constructor(device: Device) {
+  constructor(device: Device, state?: BrowsingState) {
     this.#d = device;
+    if (state === undefined) return;
+    for (const [k, v] of state.trees) this.#trees.set(k, [...v]);
+    for (const [k, v] of state.widths) this.#widths.set(k, v);
+    for (const [k, v] of state.opened) this.#opened.set(k, v);
+    for (const [k, p] of state.places) {
+      const c = p.chosen;
+      this.#places.set(k, { for: p.for, chosen: { folder: c.folder, names: [...c.names], anchor: c.anchor, lead: c.lead }, typing: { text: p.typing.text, at: p.typing.at ?? -Infinity } });
+    }
+    for (const [k, v] of state.live) this.#live.set(k, v);
+  }
+
+  /// What it holds now, as JSON keeps it (BrowsingState).
+  snapshot(): BrowsingState {
+    return {
+      trees: [...this.#trees].map(([k, v]) => [k, [...v]]),
+      widths: [...this.#widths],
+      opened: [...this.#opened],
+      places: [...this.#places].map(([k, p]) => [k, {
+        for: p.for,
+        chosen: { folder: p.chosen.folder, names: [...p.chosen.names], anchor: p.chosen.anchor, lead: p.chosen.lead },
+        typing: { text: p.typing.text, at: Number.isFinite(p.typing.at) ? p.typing.at : null },
+      }]),
+      live: [...this.#live],
+    };
   }
 
   #need(v: unknown, field: string): string {

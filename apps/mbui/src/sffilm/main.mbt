@@ -14,6 +14,8 @@ fn main {
   // (the app made as sffix makes it, at the Tester's first frame: the code face it carries given then, to the
   // Tester's text, which is this Mac's)
   let src : Ref[@sfapp.Source?] = Ref::new(None)
+  // no core here: the real core's answers kept (src/sfkept), as sffix has them
+  @sf.kept_call.val = Some(@sfkept.answer)
   @film.run(fn(c) {
     let s = match src.val {
       Some(s) => s

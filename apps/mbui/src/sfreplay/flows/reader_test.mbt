@@ -12,7 +12,8 @@ test "98-reader" {
     f.tap("=e2e-105609")
     f.run_to(@ui.nav_rest())
     f.tap("旧小说-gb.txt")
-    f.run_to(@ui.nav_rest())
+    // (the reader in, its push over: a live run taps its text only then)
+    f.run_for(@ui.nav_push_ms)
     // its words as written (GB18030 read as such)
     f.see("读出来的字应当和写进去的一样")
     // a tap on the text: the bars
