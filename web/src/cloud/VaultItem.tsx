@@ -10,6 +10,7 @@ import { stationBase } from "../station.tsx";
 import { Editor, KindIcon, Secret } from "./Vault.tsx";
 import { fieldsOf, formOf, howLine, itemLasts, kindName, masked, modeName, useVaultCall, useVaultItems, useVaultUses, useVaults, type Kind, type Opened, type VaultUse } from "../vault.ts";
 import { t } from "../i18n.ts";
+import { StationInWords } from "../StationNamed.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Vault.css.ts";
@@ -45,7 +46,7 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
         <span className={pagesCss.mark} style={{ width: 48, height: 48 }}><KindIcon kind={row.kind} size={24} /></span>
         <div className={pagesCss.identityText}>
           <h1 className={pagesCss.identityName}>{row.name}</h1>
-          <p className={pagesCss.identitySub}>{[kindName(row.kind), t("web-pages.vault.storedOn", { station: v.stationName })].join(" · ")}</p>
+          <p className={pagesCss.identitySub}>{<StationInWords station={v.station} text={[kindName(row.kind), t("web-pages.vault.storedOn", { station: v.stationName })].join(" · ")} />}</p>
         </div>
         <Button variant="ghost" icon={Edit} busy={opening && editing} onClick={() => (opened ? setEditing(true) : open(() => setEditing(true)))}>{t("common.edit")}</Button>
       </header>
@@ -53,7 +54,7 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
       {plain && (
         <div className={`${pagesCss.card} ${css.lead}`}>
           <div className={css.state}><span className={css.riskTitle}>{t("web-pages.vault.risk.title")}</span></div>
-          <p className={css.sub}>{t("web-pages.vault.risk.body", { station: v.stationName })}</p>
+          <p className={css.sub}>{<StationInWords station={v.station} text={t("web-pages.vault.risk.body", { station: v.stationName })} />}</p>
           <div className={css.actions}><Link to={`/w/${entry.id}/settings/security`}><Button variant="primary">{t("web-pages.vault.lib.turnOn")}</Button></Link></div>
         </div>
       )}

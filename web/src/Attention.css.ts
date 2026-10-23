@@ -32,13 +32,10 @@ export const dot = style({
   selectors: { '&[data-kind="alert"]': { background: vars.red } },
 });
 globalStyle(`${item}[data-seen] ${dot}`, { background: "none", boxShadow: `inset 0 0 0 1.5px ${vars.muted}` });
-/** The station's mark and its line, the mark on the line's middle (as the dot is), nearer to it than the dot. */
-export const marked = style({ flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "5px" });
 export const itemText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column" });
 export const itemTitle = style({ fontSize: vars.textUi, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${item}:not([data-seen]) ${itemTitle}`, { fontWeight: "500" });
 globalStyle(`${item}[data-seen] ${itemTitle}`, { color: vars.muted });
-globalStyle(`${item}[data-seen] ${marked}`, { color: vars.muted });
 export const itemLine = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** 忽略: small words, only on the row pointed at (or focused); out of the row otherwise, so the titles run to the edge. */
 export const dismiss = style({

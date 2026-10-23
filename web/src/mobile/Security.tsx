@@ -7,7 +7,7 @@ import { useDoing } from "../doing.ts";
 import { stamp } from "../api.ts";
 import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
-import { StationNamedAt } from "../StationNamed.tsx";
+import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 import { CodeEntry, deviceName, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
@@ -166,7 +166,7 @@ function JoinSheet({ s }: { s: LockView["stations"][number] }) {
   const run = useRun();
   return (
     <div className={css.mSheet}>
-      <b className={css.mSheetTitle}>{t("web-pages.security.joinTitle", { name: s.name })}</b>
+      <b className={css.mSheetTitle}>{<StationInWords station={`${app.entry.id}/${s.id}`} text={t("web-pages.security.joinTitle", { name: s.name })} />}</b>
       <span className={partsCss.mSubtle}>{t("web-pages.security.joinBody")}</span>
       <div className={css.mPair}>
         <Button primary={false} label={t("common.cancel")} onClick={() => app.sheet(null)} />

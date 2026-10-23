@@ -34,7 +34,7 @@ import * as chatCss from "./styles/chat.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { StationMark } from "../StationMark.tsx";
-import { StationNamedAt } from "../StationNamed.tsx";
+import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 function useApi() {
   const station = useStation();
   const call = useStationCall(station.address);
@@ -245,7 +245,7 @@ function ShareRows({ p }: { p: Profile }) {
       <SheetGrab />
       <SheetHead title={t("web-pages.profiles.share.moveTitle")} />
       <div className={sheetsCss.mSheetScroll}>
-        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-pages.profiles.share.moveLead", { station: station.name })}</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{<StationInWords station={station.address} text={t("web-pages.profiles.share.moveLead", { station: station.name })} />}</p>
         {targets.map((x) => <PickRow key={x.id} label={x.name} sub={x.online ? undefined : t("web-mobile.profiles.offline")} enabled={x.online}
           onClick={() => { app.sheet(null); act(api.moveProfile(p.id, x.id), t("web-pages.profiles.share.move"), t("web-pages.profiles.share.moved", { station: x.name })); }} />)}
       </div>
@@ -258,7 +258,7 @@ function ShareRows({ p }: { p: Profile }) {
         <ListRow onClick={sharing ? undefined : () => act(api.shareProfile(p.id, !shared, null), t("web-pages.profiles.share.switch"), shared ? t("web-pages.profiles.share.unshared") : t("web-pages.profiles.share.shared"))}>
           <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
             <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.switch")}</span>
-            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{!shared ? t("web-pages.profiles.share.onlyHere", { station: station.name }) : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied")}</span>
+            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{!shared ? <StationInWords station={station.address} text={t("web-pages.profiles.share.onlyHere", { station: station.name })} /> : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied")}</span>
           </span>
           {sharing && <Spinner inline />}
           <span className={connectsCss.mSwitch} data-on={shared || undefined} />
@@ -552,7 +552,7 @@ function ProfileRecovery({ p }: { p: Profile }) {
     <div className={`${listsCss.mCard} ${settingsCss.mFormGroup}`}>
       <p className={`${partsCss.mSmall} ${settingsCss.mWrap}`}>{issue.detail}</p>
       <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{issue.next}</p>
-      {!station.online && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.stationOffline", { station: station.name })}</p>}
+      {!station.online && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{<StationInWords station={station.address} text={t("web-mobile.profiles.stationOffline", { station: station.name })} />}</p>}
       {issue.action === "command" && <CommandBox text={p.loginCommand} />}
       {issue.action !== "login" && <LinkButton label={issue.label} enabled={station.online}
         busy={checking || refreshing} failed={issue.action === "quota" ? quotaFailed : checkFailed} onClick={run} />}

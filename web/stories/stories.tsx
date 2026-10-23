@@ -502,10 +502,13 @@ const chatsWaiting = (state: "reading" | "failing"): DemoExtension => ({
       : { reading: false, failing: [{ station: "demo/local", text: "无法连接 Studio", message: "station 离线" }], empty: false },
   }),
 });
-/** Lab's Mini1 in this workspace, not reached: the bell's Station line, its mark before it (the core's `trouble`). */
+/** Lab's Mini1 in this workspace, not reached: the bell's Station line, its mark by its name (the core's `trouble`);
+ * Studio with an emoji, by its name where it is named. */
 const stationDown: DemoExtension = together(memberships(true), {
-  then: (t, value) => (t.topic !== "chats" || !value ? undefined
-    : { ...(value as object), trouble: { text: "无法连接「Mini1」", state: "error", retry: false, station: "demo/mini1" } }),
+  then: (t, value) => t.topic === "stations" && Array.isArray(value)
+    ? value.map((s: Record<string, unknown>) => (s.station === "demo/local" ? { ...s, emoji: "🖥️" } : s))
+    : t.topic !== "chats" || !value ? undefined
+    : { ...(value as object), trouble: { text: "无法连接「Mini1」", state: "error", retry: false, station: "demo/mini1" } },
 });
 /** 用量 not come yet: its stations still read. */
 const usageWaiting: DemoExtension = {

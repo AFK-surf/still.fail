@@ -10,16 +10,23 @@ export function StationNamed({ emoji, icon, name, size = 12 }: { emoji?: string 
 
 /**
  * Its mark alone, by its address, before words about it: as the workspace's stations list has it; nothing without one.
- * `alone`: a picture of its own (a row's), the server icon without one. `block`: a box of its own in a flex line, not
- * sitting in the words' line (whose baseline puts it a little low beside them).
+ * `alone`: a picture of its own (a row's), the server icon without one.
  */
-export function StationMarkAt({ station, size = 12, alone, block }: { station: string | null | undefined; size?: number; alone?: boolean; block?: boolean }) {
+export function StationMarkAt({ station, size = 12, alone }: { station: string | null | undefined; size?: number; alone?: boolean }) {
   const look = useStationLook(station ?? null);
   if (alone) return <StationMark emoji={look?.emoji} icon={look?.icon} size={size} />;
-  return look && (look.emoji || look.icon) ? <StationMark emoji={look.emoji} icon={look.icon} size={size} className={block ? css.block : css.inline} /> : null;
+  return look && (look.emoji || look.icon) ? <StationMark emoji={look.emoji} icon={look.icon} size={size} className={css.inline} /> : null;
 }
 
 /** Its name by its address, where only its name is at hand. */
 export function StationNamedAt({ station, name, size }: { station: string | null | undefined; name: string; size?: number }) {
   return <><StationMarkAt station={station} {...(size ? { size } : {})} />{name}</>;
+}
+
+/** Words about a station (无法连接「fly」), its mark put before its name where they name it; the words alone otherwise. */
+export function StationInWords({ station, text, size = 12 }: { station: string | null | undefined; text: string; size?: number }) {
+  const look = useStationLook(station ?? null);
+  const at = look && (look.emoji || look.icon) && look.name ? text.indexOf(look.name) : -1;
+  if (!look || at < 0) return <>{text}</>;
+  return <>{text.slice(0, at)}<StationNamed emoji={look.emoji} icon={look.icon} name={look.name} size={size} />{text.slice(at + look.name.length)}</>;
 }

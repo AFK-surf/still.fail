@@ -3,8 +3,6 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** Its icon in a line of text, before the station's name: on the text's middle, a space's width from the name. */
 export const inline = style({ display: "inline-block", verticalAlign: "-0.125em", marginRight: "0.3em" });
-/** Its icon as a box of its own in a flex line, centred by it. */
-export const block = style({ display: "block", flex: "none" });
 
 // The emoji drawn in an icon's box: as wide and tall as the icon it stands for, centred, not cut.
 export const emoji = style({

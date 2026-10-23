@@ -1,6 +1,7 @@
 import { Archive, ArrowUpRight, Copy, Edit, File, Pin, ShieldCheck, Unplug } from "@stillfail/ui/icons.tsx";
 import { openRelay } from "./Relay.tsx";
 import { StationMark } from "./StationMark.tsx";
+import { StationInWords } from "./StationNamed.tsx";
 import { useCopyChatLink, useCopyTranscripts } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
@@ -141,7 +142,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const row = (
     <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state ?? waiting?.state} data-retry={retry || undefined} aria-label={`Station：${trouble?.text ?? waiting?.text ?? view.glyph?.label ?? ""}`}>
       <span className={nav.stationTroubleMark}><StationGlyph counts={counts} size={18} /></span>
-      <span className={nav.stationTroubleText}>{text}</span>
+      <span className={nav.stationTroubleText}>{trouble ? <StationInWords station={trouble.station} text={text} /> : text}</span>
     </NavLink>
   );
   return (
