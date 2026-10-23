@@ -1,5 +1,6 @@
-// The bar along a viewer's top on a wide screen with a mouse (ViewerBar.tsx), in the stories: a picture (图片预览), a
-// film playing (播放器) and a screen driven (屏幕 · 控制), whose bars fade as the pointer rests. In the desktop app the bar
+// The bar along a viewer's top on a wide screen with a mouse (ViewerBar.tsx), in the stories: a picture (图片预览) and a
+// film playing (播放器), whose bars fade as the pointer rests, and a screen driven (屏幕 · 控制), whose bar is always there
+// with the picture below it (what is at the screen's top is never under it). In the desktop app the bar
 // drags the window, and where it does the page hears nothing of the pointer; so it drags only while the pointer is on
 // it (held): the bar stays then though nothing more is heard (macOS), or the page is told the pointer left it (Windows),
 // and lets go, fading again, once the pointer is heard back on what is shown. Gone, it neither drags nor takes the
@@ -26,9 +27,9 @@ try {
   const cases = [
     { story: 'preview-picture', shown: '[role=dialog] img' },
     { story: 'player', shown: 'video', start: () => { const v = document.querySelector('video'); v.muted = true; return v.play(); } },
-    { story: 'screen-live', shown: 'canvas' },
+    { story: 'screen-live', shown: 'canvas', stays: true },
   ];
-  for (const { story, shown, start } of cases) {
+  for (const { story, shown, start, stays } of cases) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN' });
     await page.goto(`${base}?story=${story}&theme=light`);
     await page.locator(shown).first().waitFor();
@@ -44,6 +45,25 @@ try {
       document.elementFromPoint(x, y).dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse', clientX: x, clientY: y, relatedTarget: null }));
     }, [x, y]);
 
+    if (stays) {
+      // Always there, the picture below it: on the bar it drags; back on the picture, not.
+      await page.mouse.move(640, 400);
+      await page.clock.runFor(REST);
+      await is({ hidden: false, drags: false }, 'there as the pointer rests on what is shown, dragging nothing');
+      await page.mouse.move(640, 20, { steps: 4 });
+      await is({ hidden: false, drags: true }, 'the pointer on it: dragging the window');
+      await page.clock.runFor(REST);
+      await leave(640, 20);
+      await is({ hidden: false, drags: true }, 'stays dragging as the page is told the pointer left it there');
+      await page.mouse.move(640, 400, { steps: 4 });
+      await is({ hidden: false, drags: false }, 'the pointer back on what is shown: no longer dragging');
+      const top = await page.locator(shown).first().evaluate((el) => el.getBoundingClientRect().top);
+      const bottom = await bar.evaluate((el) => el.getBoundingClientRect().bottom);
+      assert.ok(top >= bottom, `${story}: the picture starts below the bar (${top} < ${bottom})`);
+      await page.close();
+      console.log(`ok: ${story}: the bar is always there, above the picture, and drags while the pointer is on it`);
+      continue;
+    }
     // Woken by the pointer just under it (a screen driven wakes it only there), then at rest on what is shown.
     await page.mouse.move(640, 60);
     await page.mouse.move(640, 400);
@@ -52,7 +72,7 @@ try {
     // Onto the bar's middle (its name): heard coming, held, dragging; then nothing more is heard of the pointer.
     await page.mouse.move(640, 300);
     await page.mouse.move(640, 20, { steps: 4 });
-    // (A screen driven brings its bar only as the pointer gets there, and the pointer may stop there: it drags at once.)
+    // (It came back as the pointer got there, and the pointer may stop there: it drags at once.)
     await is({ hidden: false, drags: true }, 'the pointer on it: there, dragging the window');
     await page.mouse.move(644, 20);
     await is({ hidden: false, drags: true }, 'the pointer moving on it: still dragging');

@@ -5,25 +5,26 @@
 // the station's pointer are written straight into the page.
 //
 // With a mouse it is a file opened's page: the bar along the top (the way back, the screen's name, what the core says
-// of the view, 只看/控制), gone after a moment at rest while driving and back as the pointer comes to the top. On a
-// phone: frosted bars above and below the picture (the way back and the name; 只看/控制 and the keyboard), always there.
+// of the view and of the connection, 只看/控制, a window of its own), always there, the picture below it: what is at
+// the top of the screen (its windows' title bars) is never under it. On a phone: frosted bars above and below the
+// picture (the way back and the name; 只看/控制 and the keyboard), always there.
 //
 // While driving it, its clipboard goes both ways and files go to its machine (Transfer.tsx): a copy made on it comes
 // onto this device's clipboard, a paste here is pasted there, a file dropped on it (or picked) is put where it says.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, External, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { ViewerBar, ViewerTool, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { ViewerBar, ViewerTool } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
-import { REST_MS } from "@stillfail/ui/viewer/rest.ts";
 import { Button, PanelButton, Segmented, Tip, WaitPill } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead } from "./frames.ts";
 import { hearInput, type ScreenInput } from "./input.ts";
 import { PAD_SETTLE_MS, PadPointer, Zoom, fitIn } from "./zoom.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
+import { useStationNet } from "../cloud/StationCards.tsx";
 import { CopiedNote, DropVeil, SendsPanel, clipOf, pasted, putClip, useSends, type Clip } from "./Transfer.tsx";
 import * as css from "./ScreenViewer.css.ts";
 
@@ -39,13 +40,15 @@ const tell = (name: string, params: Record<string, unknown>) => { core().call(na
 
 const newName = () => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
 
-export function ScreenViewer({ station, screen, backLabel, onBack, phone = false }: {
+export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, phone = false }: {
   /** The station's address (`<workspace>/<id>`). */
   station: string;
   /** The screen's id on it (`desktop`, `browser:<target>`). */
   screen: string;
   backLabel: string;
   onBack: () => void;
+  /** Opens it in a window of its own (none where it is in one, or cannot be). */
+  onWindow?: (() => void) | undefined;
   /** The phone's way: bars above and below, fingers, the keyboard on asking. */
   phone?: boolean;
 }) {
@@ -311,26 +314,13 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
     <span className={css.controllers}><span className={css.controllersDot} aria-hidden="true" /><span className={css.controllersText}>{controlling}</span></span>
   );
 
-  // With a mouse, the bar goes after a moment at rest while live, and comes back as the pointer comes to the top (or
-  // anywhere, while only looking). A finger keeps it; so does someone else driving it (who, and 接管, stay in sight).
-  const [awake, setAwake] = useState(true);
-  const rest = useRef(0);
-  // The pointer on the bar (ViewerBar's onHeld): it stays.
-  const onBar = useRef(false);
-  const wake = useCallback(() => {
-    setAwake(true);
-    clearTimeout(rest.current);
-    rest.current = window.setTimeout(() => { if (!onBar.current) setAwake(false); }, REST_MS);
-  }, []);
-  useEffect(() => { wake(); return () => clearTimeout(rest.current); }, [wake]);
-  const touched = useRef(false);
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse") { touched.current = true; clearTimeout(rest.current); setAwake(true); return; }
-    touched.current = false;
-    if (!drivingRef.current || e.clientY < VIEWER_BAR_REACH) wake();
-  };
-
   const title = shown?.title || t("web-pages.screen.title");
+  // The window named after it while it is shown (a window of its own has the system's title bar).
+  useEffect(() => {
+    const was = document.title;
+    document.title = title;
+    return () => { document.title = was; };
+  }, [title]);
   // Over, the panel says why; while it cannot be driven, what to turn on follows who is on it.
   const line = over ? "" : [shown?.line, undrivable ? access?.message : undefined].filter(Boolean).join(" · ");
   const may = shown?.may ?? true;
@@ -339,6 +329,14 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   /** What happened, as the core says it (and what the station lacks, where it says). */
   const headline = OVER.has(phase) ? t(`web-pages.screen.over.${phase}`) : "";
   const why = [failure ?? shown?.message, access?.message].filter((w, i, all): w is string => !!w && w !== headline && all.indexOf(w) === i);
+  // How this device reaches the station while it is seen: the way (直连, a relay), its round trip and packets lost,
+  // each in its colour as it gets worse (the station page's figures, the `stationNet` view).
+  const net = useStationNet(live ? station : null);
+  const netParts = net ? [<span key="path">{net.path}</span>, ...[net.rtt, net.loss].flatMap((f, i) => (f ? [<span key={i} className={css.figure} data-level={f.level}>{f.text}</span>] : []))] : [];
+  const meta = line || netParts.length ? <>{[...(line ? [<span key="line">{line}</span>] : []), ...netParts].flatMap((part, i) => (i ? [" · ", part] : [part]))}</> : null;
+  const windowTool = onWindow && !over ? (
+    <ViewerTool label={t("web-pages.screen.window")} onClick={onWindow}><External size={18} /></ViewerTool>
+  ) : null;
   const sendTool = drop && !over ? (
     <ViewerTool label={t("web-pages.screen.sendFile")} onClick={() => files.current?.click()}><Upload size={18} /></ViewerTool>
   ) : null;
@@ -353,7 +351,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
 
   return (
     <div ref={viewerEl} className={css.viewer} data-phone={phone || undefined} data-full={(phone && full) || undefined}
-      data-keys={(phone && !over && driving && (!full || typing)) || undefined} data-phase={phase} onPointerMove={onPointerMove} onPointerDown={onPointerMove}
+      data-keys={(phone && !over && driving && (!full || typing)) || undefined} data-phase={phase}
       onDragOver={(e) => { if (drop && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
       onDrop={(e) => { if (!drop || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); sendFiles([...e.dataTransfer.files]); }}>
@@ -391,7 +389,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
         <>
           <header className={css.head}>
             <Tip label={backLabel}><button type="button" className={css.back} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
-            <span className={css.headText}><b>{title}</b>{line && <small>{line}</small>}</span>
+            <span className={css.headText}><b>{title}</b>{meta && <small>{meta}</small>}</span>
           </header>
           {!over && driving && (!full || typing) && (
             <div className={css.keysRow} role="toolbar" aria-label={t("web-pages.screen.keysRow")}>
@@ -479,10 +477,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
           )}
         </>
       ) : (
-        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={line}
-          onHeld={(on) => { onBar.current = on; if (on) { clearTimeout(rest.current); setAwake(true); } else wake(); }}
-          hidden={live && !awake && !touched.current && !takeOver && controllers.length === 0}
-          tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : <>{sendTool}{modes}</>} />
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={meta}
+          tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : <>{sendTool}{windowTool}{modes}</>} />
       )}
     </div>
   );
