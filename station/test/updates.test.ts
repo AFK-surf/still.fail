@@ -780,6 +780,7 @@ END
     const env: Env = { PATH: [dir, apps].join(";") };
     assert.deepEqual(howToUpdate("claude", findCommand("claude", env)!, env), {
       program: join(apps, "winget.exe"),
+      noUpdate: 0x8a15002b,
       args: ["upgrade", "--id", "Anthropic.ClaudeCode", "--exact", "--silent", "--disable-interactivity", "--accept-source-agreements", "--accept-package-agreements"],
     });
   });
