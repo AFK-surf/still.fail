@@ -16,9 +16,10 @@ fn desk_page(
   about? : String = "",
   lead? : String = "",
   back? : String = tr("android-settings.title"),
+  actions? : () -> Unit,
 ) -> Unit {
   let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, back) },
+    fn() { top_back(c, core, back, trailing?=actions) },
     fn() { large_title(c, title, about~, says=lead) },
   ]
   for i, b in content {
