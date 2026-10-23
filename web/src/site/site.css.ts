@@ -287,8 +287,14 @@ globalStyle(`${oneWires} path`, {
 /** The window under its shadow (of what of it shows: the devices flying, then the window growing out of them). */
 export const oneLift = style({ position: "absolute", inset: "0", zIndex: 1, pointerEvents: "none", filter: "drop-shadow(0 30px 40px rgba(0, 0, 0, .18))" });
 export const oneWindow = style({ position: "absolute", transformOrigin: "0 0", pointerEvents: "auto" });
-/** The screen: the app (its corners rounded by oneCorners, not cut: the rows fly out past them). */
-export const oneScreen = style({ position: "absolute", inset: "0", background: vars.canvas });
+/** The screen: the app, cut to the screen's corners, round within its shell's (as far in as the shell's edge is wide).
+ *  All of the app is in it; what flies in is over it until it lands (oneAir). */
+export const oneScreen = style({
+  position: "absolute", inset: "0", background: vars.canvas, clipPath: "inset(0 round 20px)", // own corner: a laptop's screen
+  "@media": { [NARROW]: { clipPath: "inset(0 round 36px)" } }, // own corner: a phone's screen
+});
+/** Over the devices: the rows while they fly, each the row as the app draws it, until it lands in its place. */
+export const oneAir = style({ position: "absolute", inset: "0", zIndex: 4, pointerEvents: "none" });
 /** The shells (OneComputer.tsx SHELL): a laptop's edge round its screen and its base under it; on a narrow screen,
  *  where the window is a phone, a phone's edge. */
 const BEZEL = "#060607";
@@ -309,18 +315,6 @@ export const oneEdge = style({
   // A phone's face round its screen (a narrow screen's window).
   "@media": { [NARROW]: { inset: "-12px", borderRadius: "48px", selectors: { "&::after": { display: "none" } } } }, // own corner: a phone's
 });
-/** Over all the app draws in the window (its own layers go up to 1000), the rows flying in alone over it
- *  (OneComputer.tsx). */
-const OVER_APP = 2000;
-/** The screen's corners, round within its shell's (as far in as the shell's edge is wide): the shell's black laid
- *  over them, not a clip (which would cut the rows off as they fly out past them). */
-const caps = (r: number) => [
-  `radial-gradient(circle at 100% 100%, transparent ${r}px, ${BEZEL} ${r + 0.5}px) top left / ${r}px ${r}px no-repeat`,
-  `radial-gradient(circle at 0 100%, transparent ${r}px, ${BEZEL} ${r + 0.5}px) top right / ${r}px ${r}px no-repeat`,
-  `radial-gradient(circle at 100% 0, transparent ${r}px, ${BEZEL} ${r + 0.5}px) bottom left / ${r}px ${r}px no-repeat`,
-  `radial-gradient(circle at 0 0, transparent ${r}px, ${BEZEL} ${r + 0.5}px) bottom right / ${r}px ${r}px no-repeat`,
-].join(", ");
-export const oneCorners = style({ position: "absolute", inset: "0", zIndex: OVER_APP, pointerEvents: "none", background: caps(20), "@media": { [NARROW]: { background: caps(36) } } });
 /** A laptop's base: metal, its hinge under the lid, the scoop in its front edge to lift the lid by. */
 export const oneBase = style({
   position: "absolute", left: "-84px", right: "-84px", top: "calc(100% + 18px)", height: "14px", background: ALU,
@@ -337,7 +331,7 @@ export const oneBase = style({
   "@media": { [NARROW]: { display: "none" } },
 });
 /** A phone's camera island at the top of its screen; `oneIslandInWindow` the one of a narrow screen's window. */
-const island = { position: "absolute", left: "calc(50% - 56px)", width: "112px", height: "32px", borderRadius: "16px", background: "#000", zIndex: OVER_APP, pointerEvents: "none" } as const; // own corner: an island
+const island = { position: "absolute", left: "calc(50% - 56px)", width: "112px", height: "32px", borderRadius: "16px", background: "#000", zIndex: 2, pointerEvents: "none" } as const; // own corner: an island
 export const oneIsland = style({ ...island, top: "23px" });
 export const oneIslandInWindow = style({ ...island, top: "11px", display: "none", "@media": { [NARROW]: { display: "block" } } });
 /** A phone's buttons on its metal edge: the volume keys on the left, the power key on the right. `oneKeysInWindow` the

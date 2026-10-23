@@ -1,11 +1,13 @@
 // The first idea: your devices, joined into one computer. Scrolled through, the devices first stand apart, each joined
 // to every other; then they go into one window and are its list of stations; last, the same on the phone.
 //
-// Nothing fades in or out to cover a change, and nothing is swapped for a look-alike: the devices are the app's own
-// rows (its station list, the live demo), moved out of their places and back. The window is not faded in: it shows
-// only where they are, then grows out of them (its clip, their boxes widening to its own). The phone is a device from the start, the phone's app
-// running in it, small; it comes to the front at the end while the computer's window steps back, both seen all along.
-// On a narrow screen the window is the phone's app itself, and the devices its station cards.
+// What is drawn over what is what lies over what: the wires, under the devices; each device, its shell, its screen
+// (its app, cut to the screen's corners) and its camera island on the glass; over them all, what is in the air. The
+// devices are the app's rows (its station list, the live demo): while one flies it is in the air, drawn as the app
+// draws it (every style of each part of it as the app has it), and its place in the list is empty; on landing it is
+// the row in the list again, where it is drawn the same. Nothing fades in or out to cover a change. The phone is a
+// device from the start, the phone's app running in it, small; it comes to the front at the end while the computer
+// steps back, both seen all along. On a narrow screen the window is the phone's app itself, and the devices its cards.
 import { useEffect, useRef } from "react";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
@@ -82,17 +84,45 @@ function alpha(c: string): number {
   return a === undefined ? 1 : a.endsWith("%") ? parseFloat(a) / 100 : parseFloat(a);
 }
 
-/** What an element is seen on: its colour and each laid under it on the way out, to the first that hides what is
- *  further out (a highlighted row is a tint over its list's colour), as one background. */
+/** What a row is seen on in its list: its own colour and each laid under it on the way out, to the first that hides
+ *  what is further out (a highlighted row is a tint over its list's colour), as one background. */
 function ground(el: HTMLElement): string {
-  const layers: string[] = [];
+  const tints: string[] = [];
   for (let at: HTMLElement | null = el; at; at = at.parentElement) {
     const c = getComputedStyle(at).backgroundColor, a = alpha(c);
     if (a === 0) continue;
-    if (a >= 1) return [...layers.map((t) => `linear-gradient(${t}, ${t})`), c].join(", ");
-    layers.push(c);
+    if (a >= 1) return [...tints.map((t) => `linear-gradient(${t}, ${t})`), c].join(", ");
+    tints.push(c);
   }
-  return layers.length ? layers.map((t) => `linear-gradient(${t}, ${t})`).join(", ") : "transparent";
+  return tints.length ? tints.map((t) => `linear-gradient(${t}, ${t})`).join(", ") : "transparent";
+}
+
+/**
+ * A row as the app draws it, to be drawn anywhere: each part of it with every style the app gives it written on it,
+ * its ::before and ::after too (in `sheet`, by a number of its own), so that nothing it is drawn in changes it.
+ */
+function drawnAs(row: HTMLElement, sheet: string[]): HTMLElement {
+  const out = row.cloneNode(true) as HTMLElement;
+  const all = (cs: CSSStyleDeclaration) => Array.from(cs, (p) => `${p}:${cs.getPropertyValue(p)}`).join(";");
+  const copy = (from: Element, to: Element) => {
+    (to as HTMLElement | SVGElement).style.cssText = all(getComputedStyle(from));
+    for (const pseudo of ["::before", "::after"]) {
+      const cs = getComputedStyle(from, pseudo);
+      if (cs.content === "none" || cs.content === "normal") continue;
+      const n = sheet.length;
+      to.setAttribute("data-air", String(n));
+      sheet.push(`[data-air="${n}"]${pseudo}{${all(cs)}}`);
+    }
+    for (let k = 0; k < from.children.length; k++) copy(from.children[k]!, to.children[k]!);
+  };
+  copy(row, out);
+  out.removeAttribute("id");
+  for (const e of out.querySelectorAll("[id]")) e.removeAttribute("id");
+  Object.assign(out.style, { position: "absolute", left: "0", top: "0", margin: "0", transformOrigin: "0 0", transition: "none", animation: "none", visibility: "visible" });
+  // Only drawn: nothing in it is clicked, focused or read out.
+  out.setAttribute("inert", "");
+  out.setAttribute("aria-hidden", "true");
+  return out;
 }
 
 export function OneComputer(props: DemoProps) {
@@ -107,70 +137,54 @@ export function OneComputer(props: DemoProps) {
   const phoneScreen = useRef<HTMLIFrameElement>(null);
   const lines = useRef<SVGGElement>(null);
   const words = useRef<HTMLDivElement>(null);
+  const air = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = scene.current, space = room.current, outer = win.current, inner = screen.current, hand = phone.current, wires = lines.current;
-    if (!el || !space || !outer || !inner || !hand || !wires) return;
+    if (!el || !space || !outer || !inner || !hand || !wires || !air.current) return;
     const narrow = innerWidth <= 860;
     // The phone's own app beside the computer's, a page of its own as wide as a phone (site/phone.html), so that it is
     // laid out as on one (its rules go by the screen's width); a wide screen only: on a narrow one the window is the phone.
     if (!narrow && el.offsetParent !== null && phoneScreen.current && !phoneScreen.current.src) phoneScreen.current.src = `/phone.html${lang === "en" ? "?lang=en" : ""}`;
 
-    // The rows themselves, where the app has them in the window (in its own size), what holds them in (the app's
-    // lists, cut at their edges), what they stand on and their corners; read again until the app is there, and when
-    // the room changes size.
-    interface Row { el: HTMLElement; box: Box; ground: string; holders: HTMLElement[] }
+    // The rows, where the app has them in the window (in its own size), and each as it is drawn there, for the air;
+    // read again until the app is there, and when the room changes size.
+    interface Row { el: HTMLElement; box: Box; flying: HTMLElement; shadow: string }
     let rows: Row[] = [];
-    // How large the window is drawn just now; whether the rows are out of their lists just now.
+    // How large the window is drawn just now; whether the rows are in the air just now.
     let drawn = 1, out = false;
-    // While they fly, the rows are let out of their lists and each laid on its own ground, over the rest of the app;
-    // home, all put back as it was.
-    let app: HTMLElement | null = null;
-    // What the holders' own styles were, to put back.
-    const was = new Map<HTMLElement, Partial<CSSStyleDeclaration>>();
-    const letOut = (on: boolean) => {
+    const sky = air.current!;
+    const leave = () => { for (const r of rows) r.el.style.visibility = ""; sky.replaceChildren(); rows = []; out = false; };
+    // In the air, or home: a row is drawn in one of the two, never both.
+    const fly = (on: boolean) => {
       if (on === out) return;
       out = on;
-      for (const r of rows) {
-        // Out of their lists, and over the device's camera island and its corners while in the air (at 2000 in the
-        // window: site.css.ts), the rest of the app under them as it was: what holds them cuts nothing off, nor keeps them in
-        // a layer of its own (a z-index, a transform that moves nothing; the app's screen, fixed, is placed as it was
-        // the other way: the app's root is what it is fixed to and what it is placed in).
-        for (const h of r.holders) {
-          if (on && !was.has(h)) {
-            const c = getComputedStyle(h);
-            const still = /^(none|matrix\(1, 0, 0, 1, 0, 0\)|matrix3d\(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1\))$/.test(c.transform);
-            const set: Partial<CSSStyleDeclaration> = {
-              overflow: "visible", contain: "none", clipPath: "none", zIndex: "auto", isolation: "auto", willChange: "auto",
-              ...(still ? { transform: "none" } : {}), ...(c.position === "fixed" ? { position: "absolute" } : {}),
-            };
-            was.set(h, Object.fromEntries(Object.keys(set).map((k) => [k, h.style[k as keyof typeof set]])) as Partial<CSSStyleDeclaration>);
-            Object.assign(h.style, set);
-          }
-          if (!on && was.has(h)) { Object.assign(h.style, was.get(h)); was.delete(h); }
-        }
-        Object.assign(r.el.style, on
-          ? { position: "relative", zIndex: "3000", background: r.ground, transformOrigin: "0 0" }
-          : { position: "", zIndex: "", background: "", transformOrigin: "", transform: "" });
-      }
+      for (const r of rows) { r.el.style.visibility = on ? "hidden" : ""; r.flying.style.display = on ? "" : "none"; }
     };
     const read = () => {
-      letOut(false);
-      app = inner.querySelector<HTMLElement>("#demo");
-      const found = app ? names.map((n) => rowOf(app!, n, narrow)) : [];
+      leave();
+      const app = inner.querySelector<HTMLElement>("#demo");
+      const found = app ? names.map((n) => rowOf(app, n, narrow)) : [];
       if (!app || found.some((r) => !r)) return false;
       // A phone's window (a narrow screen's) is in a phone's shell: a status bar's room under its camera island.
       if (narrow && app.dataset.phone === undefined) { app.dataset.phone = ""; return false; }
       const at = inner.getBoundingClientRect();
+      const sheet: string[] = [];
       rows = (found as HTMLElement[]).map((row) => {
         const b = row.getBoundingClientRect();
-        const holders: HTMLElement[] = [];
-        for (let h = row.parentElement; h && h !== inner; h = h.parentElement) holders.push(h);
-        return {
-          el: row, holders, ground: ground(row),
-          box: { x: (b.left - at.left) / drawn, y: (b.top - at.top) / drawn, w: b.width / drawn, h: b.height / drawn },
-        };
+        const box = { x: (b.left - at.left) / drawn, y: (b.top - at.top) / drawn, w: b.width / drawn, h: b.height / drawn };
+        // As it is drawn once it has changed, not on its way (the selected row's colour comes in by a transition).
+        const parts = [row, ...row.querySelectorAll<HTMLElement>("*")], was = parts.map((e) => e.style.transition);
+        for (const e of parts) e.style.transition = "none";
+        const flying = drawnAs(row, sheet);
+        Object.assign(flying.style, { background: ground(row), display: "none", boxSizing: "border-box", width: `${box.w}px`, height: `${box.h}px` });
+        const own = getComputedStyle(row).boxShadow;
+        parts.forEach((e, k) => { e.style.transition = was[k]!; });
+        return { el: row, flying, shadow: own === "none" ? "" : `, ${own}`, box };
       });
+      const style = document.createElement("style");
+      style.textContent = sheet.join("\n");
+      sky.replaceChildren(style, ...rows.map((r) => r.flying));
       return true;
     };
 
@@ -189,11 +203,11 @@ export function OneComputer(props: DemoProps) {
       const x = clamp((clamp(-el.getBoundingClientRect().top / Math.max(1, span)) - 0.06) / 0.88) * (steps.length - 1);
       const i = Math.min(Math.floor(x), steps.length - 2);
       const t = clamp(x - i);
-      // 0 → 1: the device comes up from below, its screen's list with its rows away (rise), and they fly into their
-      // places in it (fly), landing once it has come to rest. 1 → 2: the computer steps back as the phone comes to the
+      // 0 → 1: the device comes up from below, its screen's list with its rows' places empty (rise), and they fly into
+      // them (landing), coming down once it has come to rest. 1 → 2: the computer steps back as the phone comes to the
       // front (front). Everything only moves: nothing is cut out, shown or faded.
       const rise = i === 0 ? ease(clamp(t / 0.7)) : 1;
-      const fly = i === 0 ? ease(t) : 1;
+      const landing = i === 0 ? ease(t) : 1;
       const front = i === 1 ? t : 0;
 
       // The window, drawn at its size: up from below the room, then stepping back (about its centre) as the phone
@@ -206,19 +220,23 @@ export function OneComputer(props: DemoProps) {
       if (rows.length === 0 && !read()) { asked = requestAnimationFrame(draw); return; }
       const inRoom = (b: Box): Box => ({ x: w.x + tx + b.x * s, y: w.y + ty + b.y * s, w: b.w * s, h: b.h * s });
 
-      // The devices are the app's own rows: from where they stand apart (in the room, wherever the window is) to their
-      // places in its list.
+      // The devices are the app's rows: from where they stand apart (in the room) to their places in its list, in the
+      // air until they are there; a shadow under each, as under the devices, closing up as it comes down into the screen.
       const parts = apart(size, narrow);
-      const local = rows.map((r, k) => {
-        const from = parts.machines[k]!;
-        const scale = lerp(parts.scale / s, 1, fly);
-        const start = { x: (from.x - (r.box.w * parts.scale) / 2 - w.x - tx) / s, y: (from.y - (r.box.h * parts.scale) / 2 - w.y - ty) / s };
-        const at = { x: lerp(start.x, r.box.x, fly), y: lerp(start.y, r.box.y, fly) };
-        if (fly < 1) r.el.style.transform = `translate(${at.x - r.box.x}px, ${at.y - r.box.y}px) scale(${scale})`;
-        return { x: at.x, y: at.y, w: r.box.w * scale, h: r.box.h * scale };
+      const placed = rows.map((r, k) => {
+        const from = parts.machines[k]!, home = inRoom(r.box);
+        const scale = lerp(parts.scale, s, landing);
+        const x = lerp(from.x - (r.box.w * parts.scale) / 2, home.x, landing), y = lerp(from.y - (r.box.h * parts.scale) / 2, home.y, landing);
+        if (landing < 1) {
+          const up = 1 - landing;
+          Object.assign(r.flying.style, {
+            transform: `translate(${x}px, ${y}px) scale(${scale})`,
+            boxShadow: `0 ${(30 * up) / scale}px ${(40 * up) / scale}px rgba(0, 0, 0, ${0.18 * up})${r.shadow}`,
+          });
+        }
+        return { x, y, w: r.box.w * scale, h: r.box.h * scale };
       });
-      letOut(fly < 1);
-      const placed = local.map(inRoom);
+      fly(landing < 1);
 
       // The phone (a wide screen's): small among the devices, then beside the window, then in front at full size.
       let phoneAt: Box | undefined;
@@ -244,15 +262,22 @@ export function OneComputer(props: DemoProps) {
       words.current?.style.setProperty("--at", `${i + ease(clamp((t - 0.4) / 0.2))}`);
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
-    const resized = () => { letOut(false); rows = []; ask(); };
+    const resized = () => { leave(); ask(); };
+    // The rows drawn again in the air when the app is drawn otherwise: in the other theme (once it has taken it).
+    const restyled = () => requestAnimationFrame(() => requestAnimationFrame(resized));
+    const themes = new MutationObserver(restyled), dark = matchMedia("(prefers-color-scheme: dark)");
+    themes.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    dark.addEventListener("change", restyled);
     draw();
     addEventListener("scroll", ask, { passive: true });
     addEventListener("resize", resized);
     return () => {
+      themes.disconnect();
+      dark.removeEventListener("change", restyled);
       removeEventListener("scroll", ask);
       removeEventListener("resize", resized);
       cancelAnimationFrame(asked);
-      letOut(false);
+      leave();
     };
   }, [lang, names]);
 
@@ -290,7 +315,6 @@ export function OneComputer(props: DemoProps) {
                 <div className={css.oneScreen} ref={screen}>
                   <Demo v="1" start="stations" className={css.oneDemo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
                 </div>
-                <div className={css.oneCorners} />
                 <div className={css.oneIslandInWindow} />
               </div>
             </div>
@@ -299,6 +323,7 @@ export function OneComputer(props: DemoProps) {
               <i className={css.oneIsland} />
               <iframe className={css.onePhoneScreen} ref={phoneScreen} width={PHONE.w} height={PHONE.h} title={say.phoneTitle} tabIndex={-1} />
             </div>
+            <div className={css.oneAir} ref={air} />
           </div>
         </div>
       </section>
