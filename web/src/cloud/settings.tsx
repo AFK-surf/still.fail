@@ -20,6 +20,7 @@ import { MarkPick } from "./MarkPick.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import type { JoinableView, WorkspaceProfile } from "../core/shapes.ts";
 import { MarkOrLetter } from "../StationMark.tsx";
+import { StationNamedAt } from "../StationNamed.tsx";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
@@ -534,7 +535,7 @@ export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
               <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`}>
                 <StatusDot state={m.online ? "online" : "offline"} />
                 <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{m.stationName}</span>
+                  <span className={pagesCss.listRowTitle}><StationNamedAt station={m.station} name={m.stationName} /></span>
                   <span className={shellCss.muted}>{[m.about, m.usedBy > 0 ? t("web-pages.settings.profiles.usedBy", { n: m.usedBy }) : ""].filter(Boolean).join(" · ")}</span>
                 </span>
                 {!m.online ? <Pill tone="neutral">{t("web-pages.stations.offline")}</Pill> : !m.usable ? <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: found.hostName })}</Pill> : m.checkTone !== "green" && <Pill tone={m.checkTone as never}>{m.checkText}</Pill>}

@@ -1,8 +1,9 @@
 // What wants the viewer (the core's `workspaceMarks`), in the sidebar's foot: 待处理, with how many came since they
 // last looked (the badge, the Dock's number), and pressed, which chats: the cards and needs waiting for them (奏) and
 // the chats of theirs that went wrong, every workspace's, each leading to its chat. One looked at stays listed, quiet,
-// until it is answered or let go here (忽略, `decision.dismiss`).
-import { useState } from "react";
+// until it is answered or let go here (忽略, `decision.dismiss`). A station's trouble is the same: looked at, it no
+// longer lights the bell; let go, it is no longer listed, both until the trouble changes (kept on this device).
+import { useEffect, useState } from "react";
 import { Popover } from "radix-ui";
 import { NavLink, useNavigate } from "react-router";
 import type { MarkItem, WorkspaceMarksView } from "./core/shapes.ts";
@@ -11,6 +12,7 @@ import { stationBase } from "./station.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { useWorkspaceMarks } from "./lastChat.ts";
 import { useStationTrouble } from "./Sidebar.tsx";
+import { StationInWords } from "./StationNamed.tsx";
 import { OpenJobs, useLongJobs } from "./OpenJobs.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Bell } from "@stillfail/ui/icons.tsx";
@@ -37,6 +39,15 @@ function groups(marks: WorkspaceMarksView | undefined, scope: string): { workspa
     .filter((g) => g.items.length > 0);
 }
 
+/** What this device last did with a scope's station trouble, by its words: `seen` looked at, `gone` let go. */
+const troubleKey = (scope: string, what: "seen" | "gone") => `stillfail.trouble.${what}.${scope}`;
+const troubleRead = (scope: string, what: "seen" | "gone") => {
+  try { return localStorage.getItem(troubleKey(scope, what)); } catch { return null; }
+};
+const troubleKeep = (scope: string, what: "seen" | "gone", text: string) => {
+  try { localStorage.setItem(troubleKey(scope, what), text); } catch { /* private mode: for this page only */ }
+};
+
 /**
  * `rail`: drawn in the rail (Rail.tsx) as its bell, there even with none, a dot on it while some came since they last
  * looked (how many in its label) or a station is in trouble or services were left up long, which it lists too.
@@ -53,14 +64,40 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
   const goneFresh = groups(marks, scope).flatMap((g) => g.items).filter((i) => gone.has(keyOf(i)) && !i.seen).length;
   const n = Math.max(0, (marks?.badge ?? 0) - goneFresh);
   // In the rail's bell, besides: the stations' trouble and the services left up long (the sidebar's foot had them).
-  const trouble = useStationTrouble(scope);
+  const stationTrouble = useStationTrouble(scope);
+  const [troubleSeen, setTroubleSeen] = useState(() => troubleRead(scope, "seen"));
+  const [troubleGone, setTroubleGone] = useState(() => troubleRead(scope, "gone"));
+  const trouble = stationTrouble && stationTrouble.text !== troubleGone ? stationTrouble : undefined;
+  const troubleNew = !!trouble && trouble.text !== troubleSeen;
   const jobs = useLongJobs(scope, useToast()).groups.reduce((sum, g) => sum + g.jobs.length, 0);
   const more = !!rail && (!!trouble || jobs > 0);
+  const lit = !!rail && (troubleNew || jobs > 0);
+  // Looked at as the bell opens (kept at once), drawn as looked at once it closes: new while it is first read.
+  const opened = (on: boolean) => {
+    setOpen(on);
+    if (on && rail && trouble) troubleKeep(scope, "seen", trouble.text);
+    if (!on) setTroubleSeen(troubleRead(scope, "seen"));
+  };
+  // Its stations all reached again: a trouble later in the same words is new.
+  useEffect(() => {
+    if (stationTrouble !== null || (troubleSeen === null && troubleGone === null)) return;
+    for (const what of ["seen", "gone"] as const) try { localStorage.removeItem(troubleKey(scope, what)); } catch { /* not kept */ }
+    setTroubleSeen(null);
+    setTroubleGone(null);
+  }, [scope, stationTrouble, troubleSeen, troubleGone]);
+  const letTroubleGo = (text: string) => {
+    troubleKeep(scope, "gone", text);
+    setTroubleGone(text);
+  };
   if (!rail && (!marks || (all.length === 0 && !open))) return null;
   const several = listed.length > 1 || listed.some((g) => g.workspace !== scope);
   const go = (i: MarkItem) => {
     setOpen(false);
     navigate(`${stationBase(i.station)}/chats/${encodeURIComponent(i.session ?? `thread:${i.thread}`)}`);
+  };
+  const goStations = () => {
+    setOpen(false);
+    navigate(`/w/${scope}/settings/stations`);
   };
   const dismiss = (i: MarkItem) => {
     if (i.thread == null || i.seq == null) return;
@@ -72,12 +109,12 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
     }), t("web-main.decisions.dismissWhat"));
   };
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={opened}>
       <Popover.Trigger asChild>
         {rail ? (
           <button type="button" className={rail.item} data-on={open || undefined} title={rail.label} aria-label={n > 0 ? t("web-main.attention.label", { n }) : rail.label}>
             <Bell size={20} />
-            {(n > 0 || more) && <span className={rail.count} />}
+            {(n > 0 || lit) && <span className={rail.count} />}
           </button>
         ) : (
         <button type="button" className={`${nav.navRow} ${css.entry}`} aria-label={n > 0 ? t("web-main.attention.label", { n }) : t("web-main.attention.entry")}>
@@ -94,10 +131,13 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
           {rail && trouble && (
             <div className={css.group}>
               <div className={css.groupName}>Station</div>
-              <NavLink className={css.item} to={`/w/${scope}/settings/stations`} onClick={() => setOpen(false)}>
+              <div role="button" tabIndex={0} className={css.item} data-seen={!troubleNew || undefined}
+                onClick={() => goStations()} onKeyDown={(e) => { if (e.key === "Enter") goStations(); }}>
                 <span className={css.dot} data-kind="alert" role="img" aria-hidden="true" />
-                <span className={css.itemText}><span className={css.itemTitle}>{trouble.text}</span></span>
-              </NavLink>
+                <span className={css.itemText}><span className={css.itemTitle}><StationInWords station={trouble.station} text={trouble.text} /></span></span>
+                <button type="button" className={css.dismiss} title={t("web-main.attention.dismissTrouble")}
+                  onClick={(e) => { e.stopPropagation(); letTroubleGo(trouble.text); }}>{t("web-main.attention.dismiss")}</button>
+              </div>
             </div>
           )}
           {rail && jobs > 0 && <div className={css.group}><OpenJobs scope={scope} /></div>}

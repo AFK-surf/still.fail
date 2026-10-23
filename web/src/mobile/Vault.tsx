@@ -18,6 +18,7 @@ import {
   useVaultCall, useVaultItems, useVaults, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
+import { StationInWords } from "../StationNamed.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { confirm } from "./sheets.tsx";
 import { Button, LargeTitle, LinkButton, ListCard, ListRow, NavBar, NavButton, ProviderMark, SectionHeader, Seg, TopBack } from "./parts.tsx";
@@ -573,12 +574,12 @@ export function VaultItemScreen() {
   const edit = () => (opened ? openEditor(app, vault, formOf(opened, row), opened.id, plain) : open((o) => openEditor(app, vault, formOf(o, row), o.id, plain)));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <NavBar back={back} onBack={app.pop} title={row.name ?? ""} sub={<span>{[kindName(row.kind), t("web-pages.vault.storedOn", { station: v.stationName })].join(" · ")}</span>}
+      <NavBar back={back} onBack={app.pop} title={row.name ?? ""} sub={<span>{<StationInWords station={v.station} text={[kindName(row.kind), t("web-pages.vault.storedOn", { station: v.stationName })].join(" · ")} />}</span>}
         trailing={<NavButton icon={Edit} label={t("common.edit")} onClick={edit} />} />
       {plain && (
         <ListCard><div className={securityCss.mBody}>
           <div className={securityCss.mState}><span className={securityCss.mDot} data-tone="amber" />{t("web-pages.vault.risk.title")}</div>
-          <span className={partsCss.mSubtle}>{t("web-pages.vault.risk.body", { station: v.stationName })}</span>
+          <span className={partsCss.mSubtle}>{<StationInWords station={v.station} text={t("web-pages.vault.risk.body", { station: v.stationName })} />}</span>
           <LinkButton label={t("web-pages.vault.lib.turnOn")} className={css.mStart} onClick={() => app.push(app.at("/settings/security"))} />
         </div></ListCard>
       )}

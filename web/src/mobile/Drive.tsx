@@ -30,6 +30,7 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Drive.css.ts";
 import { t } from "../i18n.ts";
+import { StationNamedAt } from "../StationNamed.tsx";
 
 /** A sheet's share of the screen for a title and `rows` rows (a sheet is as tall as what it holds). */
 const fit = (rows: number) => Math.min(0.9, (96 + rows * 48 + 24) / window.innerHeight);
@@ -54,7 +55,7 @@ function RootsPage({ d }: { d: DriveState }) {
   const manage = () => app.sheet({ height: 0.7, draggable: true, content: () => <RootsSheet station={station.address} roots={d.roots} /> });
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={station.name} onBack={app.pop} title={t("web-pages.drive.title")}
+      <NavBar back={<StationNamedAt station={station.address} name={station.name} />} onBack={app.pop} title={t("web-pages.drive.title")}
         trailing={d.manage && d.offered && d.roots.length > 0 ? <NavButton icon={More} label={t("web-pages.drive.manage")} onClick={manage} /> : undefined} />
       <div className={pagesCss.mScroll}>
         {d.loading ? <Waiting count={3} error={d.error} />
@@ -120,7 +121,7 @@ function FolderPage({ d, root, path, top }: { d: DriveState; root: string; path:
   const uploads = useUploads(station.address, root, path);
   const at: At = { station: station.address, root, path };
   const name = path ? nameOf(path) : rootLabel(d.roots, root);
-  const back = top ? station.name : path ? (parentOf(path) ? nameOf(parentOf(path)) : rootLabel(d.roots, root)) : t("web-pages.drive.title");
+  const back = top ? <StationNamedAt station={station.address} name={station.name} /> : path ? (parentOf(path) ? nameOf(parentOf(path)) : rootLabel(d.roots, root)) : t("web-pages.drive.title");
   const [refreshing, setRefreshing] = useState(false);
   const act = useAct();
   const files = useRef<HTMLInputElement>(null);

@@ -13,6 +13,7 @@ import { useDoing, useDoingFailed } from "../doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { QuotaBars } from "../components.tsx";
+import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
 import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip, Progress, Spinner, Waiting, WaitLine } from "../ui.tsx";
@@ -59,7 +60,7 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   if (!offers.length) return null;
   return (
     <div className={css.machineLogins}>
-      <p className={css.machineLoginsHead}>{t("web-pages.profiles.machineSignedIn", { station: station.name || t("web-main.machine.this") })}</p>
+      <p className={css.machineLoginsHead}>{<StationInWords station={station.address} text={t("web-pages.profiles.machineSignedIn", { station: station.name || t("web-main.machine.this") })} />}</p>
       {offers.map((l) => (
         // A refused account is said so, with nothing to do with it here.
         <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable
@@ -211,7 +212,7 @@ function UsageSection({ profile, entry, workspace }: { profile: Profile; entry: 
   const item = usage.lists.find((l) => l.key === "profiles")?.items.find((i) => i.key === `${station.address}/${profile.id}`);
   const several = (entry?.members?.length ?? 0) > 1;
   return (
-    <Section title={several ? t("web-pages.profiles.usageHere", { station: station.name }) : t("web-pages.profiles.usage")}
+    <Section title={several ? <StationInWords station={station.address} text={t("web-pages.profiles.usageHere", { station: station.name })} /> : t("web-pages.profiles.usage")}
       actions={<Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={`/w/${workspace}/settings/usage`}><Chart {...ICON} />{t("web-pages.profiles.usageAll")}</Link>}>
       {item ? (
         <div className={`${usageCss.usage} ${usageCss.tiles} ${css.usageTiles}`}>
@@ -235,7 +236,7 @@ function StationsSection({ entry, here }: { entry: WorkspaceProfile; here: strin
             <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`} aria-current={m.station === here ? "page" : undefined}>
               <StatusDot state={m.online ? "online" : "offline"} />
               <span className={pagesCss.listRowText}>
-                <span className={pagesCss.listRowTitle}>{m.stationName}</span>
+                <span className={pagesCss.listRowTitle}><StationNamedAt station={m.station} name={m.stationName} /></span>
                 <span className={shellCss.muted}>{[m.about, m.usedBy > 0 ? t("web-pages.settings.profiles.usedBy", { n: m.usedBy }) : ""].filter(Boolean).join(" · ")}</span>
               </span>
               {!m.online ? <Pill tone="neutral">{t("web-pages.stations.offline")}</Pill> : !m.usable ? <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill> : m.checkTone !== "green" && <Pill tone={m.checkTone as never}>{m.checkText}</Pill>}
@@ -316,7 +317,7 @@ function ShareSection({ profile }: { profile: Profile }) {
   const allowed = share?.allow ?? null;
   const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join(t("web-main.list.separator"));
   const describe = !shared
-    ? t("web-pages.profiles.share.onlyHere", { station: station.name })
+    ? <StationInWords station={station.address} text={t("web-pages.profiles.share.onlyHere", { station: station.name })} />
     : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied");
   const targets = stations.filter((x) => x.id !== station.id);
   return (
@@ -327,7 +328,7 @@ function ShareSection({ profile }: { profile: Profile }) {
       {subscription && !profile.machine && (
         <div className={pagesCss.cardRow}>
           <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.signedIn")}</b></span>
-          <span className={css.shareValue}><StatusDot state="online" />{station.name}</span>
+          <span className={css.shareValue}><StatusDot state="online" /><StationNamedAt station={station.address} name={station.name} /></span>
           <Button variant="ghost" busy={moving} disabled={moving || targets.length === 0} onClick={() => setMoveOpen(true)}>{t("web-pages.profiles.share.move")}</Button>
         </div>
       )}
@@ -338,7 +339,7 @@ function ShareSection({ profile }: { profile: Profile }) {
         <Button variant="ghost" disabled={sharing} onClick={() => setPicking(true)}>{t("web-pages.profiles.share.change")}</Button>
       </div>
       </div>}
-      <Dialog open={moveOpen} onClose={() => setMoveOpen(false)} title={t("web-pages.profiles.share.moveTitle")} description={t("web-pages.profiles.share.moveLead", { station: station.name })}>
+      <Dialog open={moveOpen} onClose={() => setMoveOpen(false)} title={t("web-pages.profiles.share.moveTitle")} description={<StationInWords station={station.address} text={t("web-pages.profiles.share.moveLead", { station: station.name })} />}>
         <ul className={pagesCss.list}>
           {targets.map((x) => (
             <li key={x.id}>
@@ -389,7 +390,7 @@ function MachineAccount({ profile }: { profile: Profile }) {
   const runtime = RUNTIME_LABEL[profile.runtime];
   return (
     <Section title={t("web-pages.profiles.account")}>
-      <p>{station.name ? t("web-pages.profiles.machineLoginOn", { station: station.name, runtime }) : t("web-pages.profiles.machineLoginHere", { runtime })}<About>{t("web-pages.profiles.machineLoginAbout", { runtime })}</About></p>
+      <p>{<StationInWords station={station.address} text={station.name ? t("web-pages.profiles.machineLoginOn", { station: station.name, runtime }) : t("web-pages.profiles.machineLoginHere", { runtime })} />}<About>{t("web-pages.profiles.machineLoginAbout", { runtime })}</About></p>
     </Section>
   );
 }

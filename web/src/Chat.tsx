@@ -5,6 +5,7 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
+import { StationInWords, StationNamedAt } from "./StationNamed.tsx";
 import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "@stillfail/ui/icons.tsx";
 import { createContext, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
@@ -156,7 +157,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       {quoting.pop}
       {askedFile}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
-      {chat.offline && <p className={css.offlineNotice} role="status">{chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))}</p>}
+      {chat.offline && <p className={css.offlineNotice} role="status">{<StationInWords station={station.address} text={chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))} />}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}
         locked={!!chat.archived} offline={chat.offline} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
@@ -2169,7 +2170,7 @@ function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Dr
       <div className={css.refInfoHead}>
         <span className={css.refInfoText}>
           <span className={css.refInfoName}>{f.name}</span>
-          <span className={css.refInfoPath} title={ref.path}><bdi>{ref.stationName} · {where}</bdi></span>
+          <span className={css.refInfoPath} title={ref.path}><bdi><StationNamedAt station={ref.station} name={ref.stationName} /> · {where}</bdi></span>
         </span>
         {(!ref.dir || zips) && (
           <Segmented className={css.refInfoMode} label={t("web-main.file.sendAs")} value={ref.mode} onChange={(mode) => draft.setMode(f.id, mode)}

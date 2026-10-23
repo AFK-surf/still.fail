@@ -11,6 +11,7 @@ import { profilesPage, StationContext, stationBase, useOnlyMine, type Station } 
 import { About, Button, Confirm, ConnectAvatar, ConnectKindIcon, FirstOne, Menu, MobileBack, SlackLogo, StatusDot, Waiting, WaitMore } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
 import { DoingMark } from "../DoingMark.tsx";
+import { StationNamed, StationNamedAt } from "../StationNamed.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -35,7 +36,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
     id: s.id, name: s.name, base: stationBase(s.station), address: s.station, online: true, settings,
   }));
   // The Slack apps the viewer made that no connect has taken yet, each on its station: to be finished any time.
-  const waiting = (stations.value ?? []).flatMap((s) => (s.overview?.slackApps ?? []).map((app) => ({ app, station: targets.find((target) => target.address === s.station) ?? null, stationName: s.name })));
+  const waiting = (stations.value ?? []).flatMap((s) => (s.overview?.slackApps ?? []).map((app) => ({ app, station: targets.find((target) => target.address === s.station) ?? null, stationName: s.name, emoji: s.emoji, icon: s.icon })));
   // None at all yet (not only none of the viewer's): the page is about adding the first.
   const first = !loading && !connects.error && shown.length === 0 && !onlyMine && waiting.length === 0;
   // A connect runs a profile's model: with none on any station (each read), the first step is a profile.
@@ -78,13 +79,13 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
         <section className={pageCss.section} aria-label={t("web-pages.connects.waiting")}>
           <h2 className={css.sectionTitleQuiet}>{t("web-pages.connects.waiting")}</h2>
           <ul className={pagesCss.list}>
-            {waiting.map(({ app, station, stationName }) => (
+            {waiting.map(({ app, station, stationName, emoji, icon }) => (
               <li key={`${stationName}/${app.appId}`}>
                 {station ? (
                   <StationContext.Provider value={station}>
-                    <WaitingApp app={app} stationName={stationName} onGo={() => setAdding({ station, resume: app.appId })} />
+                    <WaitingApp app={app} stationName={stationName} emoji={emoji} icon={icon} onGo={() => setAdding({ station, resume: app.appId })} />
                   </StationContext.Provider>
-                ) : <WaitingApp app={app} stationName={stationName} onGo={null} />}
+                ) : <WaitingApp app={app} stationName={stationName} emoji={emoji} icon={icon} onGo={null} />}
               </li>
             ))}
           </ul>
@@ -104,7 +105,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
                   <span className={shellCss.muted}>{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
                 </span>
                 <span className={css.connectFacts}>
-                  <span className={cloudCss.stationTag}>{stationName}</span>
+                  <span className={cloudCss.stationTag}><StationNamedAt station={station} name={stationName} size={11} /></span>
                   <OwnerLabel owner={c.createdBy} />
                 </span>
                 <span className={css.navNote}>{c.statusText}</span>
@@ -131,7 +132,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
  * A Slack app made and not connected yet: where it stands (to install, or only its app-level token left), going on from
  * there (`onGo`, when its station is online), or dropping it (it stays in Slack).
  */
-function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName: string | null; onGo: (() => void) | null }) {
+function WaitingApp({ app, stationName, emoji, icon, onGo }: { app: MadeSlackApp; stationName: string | null; emoji?: string | undefined; icon?: string | undefined; onGo: (() => void) | null }) {
   const api = useApi();
   const [dropping, setDropping] = useState(false);
   const drop = useAction(() => api.dropSlackApp(app.appId));
@@ -143,7 +144,7 @@ function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName
         <span className={pagesCss.listRowTitle}>{app.name}{app.team && <span className={css.connectTeam}><SlackLogo size={11} />{app.team}</span>}</span>
         <span className={shellCss.muted}>{where}</span>
       </span>
-      {stationName && <span className={css.connectFacts}><span className={cloudCss.stationTag}>{stationName}</span></span>}
+      {stationName && <span className={css.connectFacts}><span className={cloudCss.stationTag}><StationNamed emoji={emoji} icon={icon} name={stationName} size={11} /></span></span>}
       {onGo ? <Button onClick={onGo}>{t("web-pages.connects.continue")}</Button> : <span className={css.navNote}>{t("web-pages.connects.stationOffline")}</span>}
       {/* Dropped from the Confirm, which closes at once: a ring in the menu's place until it is gone, a failure said by toast. */}
       <DoingMark calls="slack.dropApp" on={{ appId: app.appId }} label={t("web-main.activity.busy")} />

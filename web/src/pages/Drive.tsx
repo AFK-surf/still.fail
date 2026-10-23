@@ -51,6 +51,8 @@ import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Drive.css.ts";
 import { t } from "../i18n.ts";
+import { StationMark } from "../StationMark.tsx";
+import { StationNamedAt } from "../StationNamed.tsx";
 
 export function DrivePage() {
   const station = useStation();
@@ -113,7 +115,7 @@ export function useAddFolder(scope: string) {
         <div className={css.rootsList}>
           {stations.map((s) => (
             <button key={s.station} type="button" className={css.pickRow} onClick={() => { setChoosing(false); setPicking(s.station); }}>
-              <Server size={18} strokeWidth={1.6} className={css.icon} />
+              {s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={18} className={css.icon} /> : <Server size={18} strokeWidth={1.6} className={css.icon} />}
               <span className={css.name}>{s.name}</span>
               {!s.online && <span className={shellCss.muted}>{t("web-pages.stations.offline")}</span>}
             </button>
@@ -150,7 +152,7 @@ function Roots({ d }: { d: DriveState }) {
     <>
       <header className={pagesCss.pageHead}>
         <div className={css.headText}>
-          <span className={css.crumbs}><span>{station.name}</span></span>
+          <span className={css.crumbs}><span><StationNamedAt station={station.address} name={station.name} /></span></span>
           <h1>{t("web-pages.drive.title")}</h1>
         </div>
         {(d.manage || d.anywhere) && d.offered && d.roots.length > 0 && <div className={css.actions}><Menu items={[{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }]} /></div>}
@@ -425,7 +427,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
           </span>
           <h1>{name}</h1>
           <p className={css.headMeta}>
-            {station.name}
+            <StationNamedAt station={station.address} name={station.name} />
             {folder.value && <> · {folder.value.countText}{folder.value.truncated ? ` · ${t("web-pages.drive.truncated")}` : ""}</>}
           </p>
         </div>

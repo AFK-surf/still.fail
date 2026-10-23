@@ -2267,6 +2267,8 @@ export interface StationTrouble {
 	text: string;
 	state: string;
 	retry?: boolean;
+	/** The station's address when one alone is in trouble (its mark is shown with the line); absent with several, or from a core before it. */
+	station?: string;
 }
 
 /** Whose pictures lead the rows of a list (`ChatsView::leading`). */

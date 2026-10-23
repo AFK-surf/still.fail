@@ -40,6 +40,7 @@ import { notSent, sendingFirst } from "./madeChat.ts";
 import { OVER_DOCK } from "./Chat.tsx";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { t } from "./i18n.ts";
+import { StationInWords } from "./StationNamed.tsx";
 
 /** What a station is shown by (StationMark): its icon and emoji, none for a station not listed. */
 const markOf = (s: { emoji?: string | null | undefined; icon?: string | null | undefined } | undefined) => ({ emoji: s?.emoji, icon: s?.icon });
@@ -161,9 +162,10 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
         <div className={css.newChatInner}>
           {/* A station this workspace joined, none of whose profiles is open here: whom to ask, and nothing to do here. */}
           <FirstOne art={<Illustration name="no-profile" />}
-            title={blocked === "profile" ? t("web-main.newChat.addProfileFor", { name: station.name || t("web-main.newChat.thisMachine") })
-              : blocked === "shared" ? t("web-main.newChat.notShared", { name: station.name || t("web-main.newChat.thisMachine") }) : t("web-main.newChat.pickModels")}
-            lead={blocked === "profile" ? PROFILE_LEAD : blocked === "shared" ? choice.problem : t("web-main.newChat.noModelsLead", { name: station.name || t("web-main.newChat.thisMachine") })}>
+            title={<StationInWords station={station.address} text={blocked === "profile" ? t("web-main.newChat.addProfileFor", { name: station.name || t("web-main.newChat.thisMachine") })
+              : blocked === "shared" ? t("web-main.newChat.notShared", { name: station.name || t("web-main.newChat.thisMachine") }) : t("web-main.newChat.pickModels")} />}
+            lead={blocked === "profile" ? PROFILE_LEAD : blocked === "shared" ? choice.problem && <StationInWords station={station.address} text={choice.problem} />
+              : <StationInWords station={station.address} text={t("web-main.newChat.noModelsLead", { name: station.name || t("web-main.newChat.thisMachine") })} />}>
             {blocked === "profile"
               ? <Button variant="primary" icon={Plus} onClick={() => navigate(addProfilePath(workspace, station.address))}>{t("web-main.newChat.addProfile")}</Button>
               : blocked === "shared" ? null
@@ -196,9 +198,9 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
             {/* What leaves as the chat comes (../madeChat.ts): the scene above the composer out of view, what is by it where it is. */}
             <Illustration name="new-chat" data-made-leave="up" />
             <h1 className={css.newChatTitle} data-made-leave="up">{t("web-main.newChat.title")}</h1>
-            <p className={css.newChatSub} data-made-leave="up">{t("web-main.newChat.sub", { name: station.name || t("web-main.newChat.thisMachine") })}</p>
+            <p className={css.newChatSub} data-made-leave="up">{<StationInWords station={station.address} text={t("web-main.newChat.sub", { name: station.name || t("web-main.newChat.thisMachine") })} />}</p>
             {/* Its station went down as it was written in (the network went): the page stays, said so, with 重试. */}
-            {choice.down && <p className={css.spentNotice} role="status" data-made-leave="up">{t("web-main.newChat.down", { name: station.name || t("web-main.newChat.thisMachine") })} <RetryPill /></p>}
+            {choice.down && <p className={css.spentNotice} role="status" data-made-leave="up">{<StationInWords station={station.address} text={t("web-main.newChat.down", { name: station.name || t("web-main.newChat.thisMachine") })} />} <RetryPill /></p>}
             {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
             {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="up">{choice.spent}</p>}
             {composer}

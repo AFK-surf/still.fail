@@ -47,6 +47,7 @@ import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import { LookInWords } from "../StationNamed.tsx";
 
 export function StationsScreen() {
   const app = useApp();
@@ -502,7 +503,7 @@ export function MarkSheet({ s, set }: { s: { name: string; emoji?: string | null
   return (
     <>
       <SheetGrab />
-      <SheetHead title={t("web-mobile.stations.emojiTitle", { name: s.name })} />
+      <SheetHead title={<LookInWords look={s} text={t("web-mobile.stations.emojiTitle", { name: s.name })} />} />
       <div className={sheetsCss.mSheetScroll}>
         <div className={css.mMarkHead}>
           <Seg options={[t("web-pages.stations.mark.glyphs"), "Emoji"]} selected={kind === "glyph" ? 0 : 1} onSelect={(i) => setKind(i === 0 ? "glyph" : "emoji")} fill height={34} radius={17} />

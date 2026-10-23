@@ -119,6 +119,7 @@
   "web-main.attention.desk": "全部决定",
   "web-main.attention.dismiss": "忽略",
   "web-main.attention.dismissNote": "忽略：从待处理中移除（选项在对话中仍可使用）",
+  "web-main.attention.dismissTrouble": "忽略：不再列在这里，直到站点状况有变化",
   "web-main.attention.empty": "暂无待处理",
   "web-main.attention.entry": "待处理",
   "web-main.attention.label": "{n} 个待处理，点击查看",

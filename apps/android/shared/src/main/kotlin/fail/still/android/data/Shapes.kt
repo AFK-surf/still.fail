@@ -2189,7 +2189,9 @@ data class StationState (
 data class StationTrouble (
 	val text: String,
 	val state: String,
-	val retry: Boolean? = null
+	val retry: Boolean? = null,
+	/// The station's address when one alone is in trouble (its mark is shown with the line); absent with several, or from a core before it.
+	val station: String? = null
 )
 
 /// Whose pictures lead the rows of a list (`ChatsView::leading`).

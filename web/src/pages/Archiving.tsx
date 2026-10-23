@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import type { ArchivingView, StationView } from "../core/shapes.ts";
 import { useStations } from "../api.ts";
 import { t } from "../i18n.ts";
+import { StationNamed } from "../StationNamed.tsx";
 import { HINTS, IDLE_DAYS, MODES, SLACK_DAYS, daysLabel, daysOffered, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, summaryOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { MobileBack, Section, Segmented, StatusDot, Waiting } from "../ui.tsx";
@@ -40,7 +41,7 @@ export function ArchivingPage({ back, workspace }: { back: string; workspace: st
 /** A station's row: how it archives on its own, in a line; it opens the station's page once it can say. */
 function StationRow({ workspace, s }: { workspace: string; s: StationView }) {
   const view = s.online ? s.overview?.archiving : undefined;
-  const title = <span className={pagesCss.listRowTitle}>{s.name}</span>;
+  const title = <span className={pagesCss.listRowTitle}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>;
   if (!view) {
     return (
       <li className={pagesCss.listRow}>

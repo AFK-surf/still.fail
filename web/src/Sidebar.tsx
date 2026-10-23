@@ -1,6 +1,7 @@
 import { Archive, ArrowUpRight, Copy, Edit, File, Pin, ShieldCheck, Unplug } from "@stillfail/ui/icons.tsx";
 import { openRelay } from "./Relay.tsx";
 import { StationMark } from "./StationMark.tsx";
+import { StationInWords } from "./StationNamed.tsx";
 import { useCopyChatLink, useCopyTranscripts } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
@@ -141,7 +142,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const row = (
     <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble?.state ?? waiting?.state} data-retry={retry || undefined} aria-label={`Station：${trouble?.text ?? waiting?.text ?? view.glyph?.label ?? ""}`}>
       <span className={nav.stationTroubleMark}><StationGlyph counts={counts} size={18} /></span>
-      <span className={nav.stationTroubleText}>{text}</span>
+      <span className={nav.stationTroubleText}>{trouble ? <StationInWords station={trouble.station} text={text} /> : text}</span>
     </NavLink>
   );
   return (
@@ -152,9 +153,9 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   );
 }
 
-/** What is wrong with the stations (the core's `trouble`: which, or how many; red while one fails), or nothing. */
-export function useStationTrouble(scope: string): ChatsView["trouble"] | undefined {
-  return useTopicSelect<ChatsView, ChatsView["trouble"] | undefined>(chatsTopic(scope, "all"), (s) => s.value?.trouble, (a, b) => a === b);
+/** What is wrong with the stations (the core's `trouble`: which, or how many; red while one fails): null when nothing, undefined before the list is read. */
+export function useStationTrouble(scope: string): ChatsView["trouble"] | null | undefined {
+  return useTopicSelect<ChatsView, ChatsView["trouble"] | null | undefined>(chatsTopic(scope, "all"), (s) => s.value ? s.value.trouble ?? null : undefined, (a, b) => a === b);
 }
 
 /**

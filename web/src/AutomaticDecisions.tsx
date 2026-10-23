@@ -12,6 +12,7 @@ import type { Picking } from "./pick.ts";
 import { ChevronRight, Plus, Trash } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { stationBase } from "./station.tsx";
+import { StationNamed, StationNamedAt } from "./StationNamed.tsx";
 import * as pages from "./styles/pages.css.ts";
 import * as css from "./AutomaticDecisions.css.ts";
 
@@ -35,13 +36,13 @@ export function AutomaticDecisionCompletion({ workspace }: { workspace: string }
     {stations.value?.length === 0 && <p className={css.note}>{t("web-pages.automaticDecisions.addStation")}</p>}
     <ul className={pages.list}>{stations.value?.map(s => s.online && s.overview?.automaticDecisions
       ? <AutomaticDecisionPanel key={s.station} workspace={workspace} station={s.station} name={s.name} view={s.overview.automaticDecisions} />
-      : <li key={s.station} className={pages.listRow}><StatusDot state={s.online ? "online" : "offline"} /><span className={pages.listRowText}><span className={pages.listRowTitle}>{s.name}</span><span className={css.note}>{!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? <><Spinner inline />{" "}{t("common.connecting")}</> : t("web-pages.automaticDecisions.upgrade")}</span></span></li>)}</ul>
+      : <li key={s.station} className={pages.listRow}><StatusDot state={s.online ? "online" : "offline"} /><span className={pages.listRowText}><span className={pages.listRowTitle}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span><span className={css.note}>{!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? <><Spinner inline />{" "}{t("common.connecting")}</> : t("web-pages.automaticDecisions.upgrade")}</span></span></li>)}</ul>
   </div>;
 }
 
 function AutomaticDecisionPanel({ workspace, station, name, view }: { workspace: string; station: string; name: string; view: AutomaticDecisionView }) {
   const {d, state, saving, saveFailed, reviewing, reviewFailed, canReview, edit, save, review} = useAutomaticDecisionForm(station, view);
-  const status = (text: string, waiting = false) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}>{name}</span><span className={css.note}>{waiting && <><Spinner inline />{" "}</>}{text}</span></span></li>;
+  const status = (text: string, waiting = false) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}><StationNamedAt station={station} name={name} /></span><span className={css.note}>{waiting && <><Spinner inline />{" "}</>}{text}</span></span></li>;
   if (!view.canEdit) return status(t("web-pages.automaticDecisions.adminOnly"));
   if (!d) return state.error ? status(state.error.message) : status(t("web-pages.automaticDecisions.readingConfig"), true);
   const busy = d.pending || saving;
@@ -50,7 +51,7 @@ function AutomaticDecisionPanel({ workspace, station, name, view }: { workspace:
     <div className={pages.listRow}>
       <StatusDot state="online" label={t("web-pages.automaticDecisions.online")} />
       <span className={pages.listRowText}>
-        <span className={pages.listRowTitle}>{name}</span>
+        <span className={pages.listRowTitle}><StationNamedAt station={station} name={name} /></span>
         <span className={css.note}>{d.enabled ? t("web-pages.automaticDecisions.enabledWith", {model: chosen?.name ?? t("web-pages.automaticDecisions.noModels")}) : t("web-pages.automaticDecisions.disabled")}</span>
       </span>
       <span className={css.controls}>

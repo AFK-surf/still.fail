@@ -12,6 +12,8 @@ import type { StationView } from "../core/shapes.ts";
 import { stationBase } from "../station.tsx";
 import { useThisMachineAddress } from "../thisMachine.ts";
 import { ICON, Tip } from "../ui.tsx";
+import { StationMark } from "../StationMark.tsx";
+import { StationNamed } from "../StationNamed.tsx";
 import { ChevronRight, Close, Disk, Folder, Monitor, Pin, Plus, Server, Star } from "@stillfail/ui/icons.tsx";
 import { NavAction, NavItem, NavList, NavSection, NavTop } from "../SidebarList.tsx";
 import { drive, drivePath, folderName, type PickFolder } from "../drive/useDrive.ts";
@@ -115,9 +117,9 @@ function StationRow({ s, here, lit, root, path }: { s: StationView; here: boolea
           onClick={() => setOpen(!open)}><ChevronRight size={12} strokeWidth={2} /></button>
         {start !== null ? (
           <FolderRow s={s} root={start} path="" name={s.name} lit={inThis && root === start && path === ""} away={!s.online}
-            mark={here ? <Monitor {...ICON} /> : <Server {...ICON} />}
+            mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={ICON.size} /> : here ? <Monitor {...ICON} /> : <Server {...ICON} />}
             end={<>{here && <span className={css.here}>{t("web-pages.files.thisMachine")}</span>}{s.online ? <DiskBar s={s} /> : <span>{t("web-pages.stations.offline")}</span>}</>} />
-        ) : <span className={css.stationName}>{s.name}</span>}
+        ) : <span className={css.stationName}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>}
       </div>
       {open && (
         <div className={css.places}>
@@ -173,7 +175,7 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
               if (!s) return null;
               return (
                 <div key={`${f.station}\n${f.root}\n${f.path}`} className={css.favorite}>
-                  <FolderRow s={s} root={f.root} path={f.path} name={f.name} lit={lit(f.station, f.root, f.path)} away={!s.online} mark={<Folder {...ICON} />} end={<span>{s.name}</span>} />
+                  <FolderRow s={s} root={f.root} path={f.path} name={f.name} lit={lit(f.station, f.root, f.path)} away={!s.online} mark={<Folder {...ICON} />} end={<span><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>} />
                   <button type="button" className={css.unkeep} aria-label={t("web-pages.files.unfavorite", { name: f.name })} onClick={() => fav.remove(f)}><Close size={12} strokeWidth={2} /></button>
                 </div>
               );
@@ -189,7 +191,7 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
           <NavSection title={t("web-pages.files.shared")}>
             {pinned.map(({ s, r }) => (
               <FolderRow key={`${s.station}\n${r.path}`} s={s} root={r.path} path="" name={r.name || folderName(r.path)} lit={lit(s.station, r.path, "")} away={!s.online}
-                mark={<Pin {...ICON} />} end={<span>{s.name}</span>} />
+                mark={<Pin {...ICON} />} end={<span><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span>} />
             ))}
           </NavSection>
         )}

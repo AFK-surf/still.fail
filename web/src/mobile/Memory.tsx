@@ -22,6 +22,8 @@ import * as rootCss from "./styles/root.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import { t } from "../i18n.ts";
+import { StationMark } from "../StationMark.tsx";
+import { StationNamed, StationNamedAt } from "../StationNamed.tsx";
 
 /** A row that opens a page: its name (and whose), a line under it, how much is in it. */
 function MemoryRow({ title, sub, value, tags, open, onClick }: { title: string; sub?: string | undefined; value?: string | undefined; tags?: React.ReactNode; open?: boolean; onClick: () => void }) {
@@ -51,7 +53,7 @@ export function MemoryScreen() {
   const parts = memory && memoryParts(memory);
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back={station.name} onBack={app.pop} title={t("web-mobile.settings.memory")} sub={<span className={barsCss.mNavbarNote}>{t("web-mobile.memory.sub")}</span>} />
+      <NavBar back={<StationNamedAt station={station.address} name={station.name} />} onBack={app.pop} title={t("web-mobile.settings.memory")} sub={<span className={barsCss.mNavbarNote}>{t("web-mobile.memory.sub")}</span>} />
       {!memory || !parts ? <Waiting fill shape="cards" error={error ? MEMORY_TEXT.failed(error) : undefined} /> : (
         <div className={pagesCss.mScroll} style={{ paddingTop: 4 }}>
           <SectionHeader title={t("web-mobile.memory.global")} trailing={[t("web-main.memory.global.when"), memory.global.size].filter(Boolean).join(" · ")} start={24} />
@@ -138,8 +140,8 @@ export function MemoriesScreen() {
       {!stations ? <Waiting shape="cards" count={1} text={t("common.readingStations")} /> : (
         <ListCard>
           {stations.map((s) => s.online
-            ? <GoRow key={s.id} title={s.name} value={t("web-mobile.memory.both")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
-            : <ListRow key={s.id}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{s.name}</span><span className={listsCss.mRowNote}>{t("web-mobile.memory.offline")}</span></span></ListRow>)}
+            ? <GoRow key={s.id} title={s.name} lead={<StationMark emoji={s.emoji} icon={s.icon} size={16} />} value={t("web-mobile.memory.both")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
+            : <ListRow key={s.id}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span><span className={listsCss.mRowNote}>{t("web-mobile.memory.offline")}</span></span></ListRow>)}
         </ListCard>
       )}
       <div style={{ height: 30 }} />

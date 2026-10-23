@@ -639,7 +639,7 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.deepEqual([items[0].offline, items[1].offline], [undefined, "beta 离线"]);
   t.set(link("ws/b"), { state: "online" });
   await t.read(u, 1);
-  assert.deepEqual(u.value.trouble, { text: "gamma 离线", state: "offline", retry: false });
+  assert.deepEqual(u.value.trouble, { text: "gamma 离线", state: "offline", retry: false, station: "ws/c" });
   t.fail(rows("ws/a"), new CoreError("http_500", "坏了"));
   await t.read(u, 1);
   v = u.value;

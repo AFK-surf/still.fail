@@ -54,10 +54,11 @@ export function NavList({ children }: { children: ReactNode }) {
 }
 
 /** A section of a list, under its heading. */
-export function NavSection({ title, flip, children }: { title: string; flip?: string; children: ReactNode }) {
+/** `label`: what a screen reader calls it, where `title` is more than words (a station's mark by its name). */
+export function NavSection({ title, label, flip, children }: { title: ReactNode; label?: string; flip?: string; children: ReactNode }) {
   const phone = useContext(Phone);
   return (
-    <section aria-label={title}>
+    <section aria-label={label ?? (typeof title === "string" ? title : undefined)}>
       {phone ? <div className={css.phoneHeading}><b>{title}</b></div> : <div className={nav.navHeading} data-flip={flip}>{title}</div>}
       {children}
     </section>
