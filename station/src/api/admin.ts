@@ -4,7 +4,7 @@
 import { join } from "node:path";
 import type { ConfigFile } from "../ops/config.ts";
 import type { Cloud } from "../cloud/state.ts";
-import type { ScreenHub } from "../screens/hub.ts";
+import { type ScreenHub, ScreenRefused } from "../screens/hub.ts";
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
 import { type Answer, type Request, error, json, queryPairs } from "./request.ts";
@@ -40,6 +40,7 @@ import { liveClock } from "../ops/fibers.ts";
 import { readOnly } from "../mesh/credential.ts";
 import { elsewhere } from "./seen.ts";
 import { reviewUndecided } from "../sessions/review.ts";
+import { tr } from "../ops/i18n.ts";
 
 /// What a read-only member (a viewer, contract §4) may still ask besides reads: marks of their own (read, kept,
 /// dismissed), which change nothing anyone else sees.
@@ -173,7 +174,11 @@ export class Admin {
       ...(deps.grants ? permissions({ grants: deps.grants }) : []),
       // The screens members see and drive (docs/remote-screens.md); a view of one is a stream of its own (mesh/screens.ts).
       ...(deps.screens
-        ? [{ method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) }]
+        ? [
+            { method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) },
+            // A person closes one (a tab of the browser): it leaves the list as it goes (`screens` on the event stream).
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/close$/, handle: async (r: Request, [raw]: string[]) => closeScreen(deps.screens!, r, raw!) },
+          ]
         : []),
       // The agents' side's own (sessions/agents.ts says them as a part in the station; given whole, a test's).
       ...(given ? agentsRoutes(given, { store: deps.store, events: deps.events }) : []),
@@ -309,4 +314,21 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
       : []),
     ...(agents.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await agents.overview(r.viewer, r.lang))) }] : []),
   ];
+}
+
+/// POST /screens/<id>/close: 404 no such screen, 405 one not closed from here (the desktop), 502 the browser refused.
+async function closeScreen(screens: ScreenHub, r: Request, raw: string): Promise<Answer> {
+  let id: string;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    return error(404, tr(r.lang, "station.screen.notFound"));
+  }
+  try {
+    await screens.closeScreen(id);
+    return json(200, "{}");
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
+  }
 }

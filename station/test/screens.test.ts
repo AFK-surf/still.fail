@@ -1108,6 +1108,36 @@ test("reveal: a file shown in the file manager by a view that drives a source th
   await Promise.all([a.served, b.served]);
 });
 
+test("a tab is closed from a person's app (POST /screens/<id>/close) and says which session opened it; the desktop is not closed", async () => {
+  const hub = new ScreenHub();
+  const closed: string[] = [];
+  const tab = Object.assign(new FakeSource("browser:A"), { openedBy: () => "EMBER/1.2", discard: async () => void closed.push("browser:A") });
+  hub.add(tab);
+  hub.add(new Desktop({ supported: false, helper: null, changed: () => hub.changed(), title: () => "studio" }));
+  const [a, d] = hub.listed("en").screens;
+  assert.equal(a!.closable, true);
+  assert.equal(a!.openedBy, "EMBER/1.2");
+  assert.equal("closable" in d!, false);
+  assert.equal("openedBy" in d!, false);
+  const admin = new Admin({ names: new Map(), read: async () => "{}" } as any, { screens: hub });
+  const close = (id: string, viewer: Viewer, lang: "en" | "zh" = "en") =>
+    admin.handle({ method: "POST", path: `/screens/${encodeURIComponent(id)}/close`, query: [], search: "", headers: {}, body: Buffer.alloc(0), viewer, lang });
+  assert.equal((await close("browser:A", reader)).status, 403, "a read-only member only looks");
+  assert.deepEqual(closed, []);
+  assert.equal((await close("browser:A", member)).status, 200);
+  assert.deepEqual(closed, ["browser:A"]);
+  const desktop = await close("desktop", member, "zh");
+  assert.equal(desktop.status, 405);
+  assert.equal(JSON.parse((desktop.body as Buffer).toString()).error, "该画面不能在这里关闭");
+  assert.equal((await close("browser:gone", member)).status, 404);
+  tab.discard = async () => {
+    throw new Error("No target with given id found");
+  };
+  const refused = await close("browser:A", member);
+  assert.equal(refused.status, 502);
+  assert.match(JSON.parse((refused.body as Buffer).toString()).error, /No target/);
+});
+
 test("the list says what each screen carries: its clipboard's types, where a file dropped goes and whether it can be shown", () => {
   const hub = new ScreenHub({ drop: () => "/Users/pat/Downloads" });
   const tab = new FakeSource("tab");

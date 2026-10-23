@@ -1,6 +1,6 @@
 // The agents' door (server.rs `serve_mcp`): loopback only. /mcp is the MCP endpoint, /jobs/notify what a job says
 // (`stillfail-job notify`), /health that the station answers, /peer/<station>/<port>/… a web service on another station
-// of the workspace (mesh/peer-http.ts). Its socket is the launcher's (fd 3), so a handover has no gap: the old station
+// of the workspace (mesh/peer-http.ts), and the parts' own (parts.ts `door`: /browser/…, the station's browser). Its socket is the launcher's (fd 3), so a handover has no gap: the old station
 // stops taking connections and finishes the calls it has; the new one takes the next.
 import { type IncomingMessage, type Server, type ServerResponse, STATUS_CODES, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,6 +9,7 @@ import { log } from "../ops/log.ts";
 import { ownPorts } from "../ops/own.ts";
 import type { Tunnels } from "../mesh/peer-forward.ts";
 import type { McpEndpoint } from "./mcp.ts";
+import type { DoorRoute } from "../parts.ts";
 import { wall } from "../ops/fibers.ts";
 
 /// What /jobs/notify does with a job's words: a status and a body (jobs.ts `notifyEndpoint`).
@@ -96,8 +97,8 @@ function bodyOf(req: IncomingMessage, limit: number): Promise<Buffer | null> {
 
 /// Opens the door on the launcher's fd, or on `port` at 127.0.0.1 (0: any free one): with no launcher, or behind a
 /// launcher's entrance (`shown`, its port, is then the one agents are told: launcher.ts `ports`). `peers`: where /peer
-/// requests go, once there is a way (the mesh's).
-export function openAgentsDoor(at: { fd: number } | { port: number; shown?: number }, mcp: McpEndpoint, notified: Notified, peers: () => PeerRoute | null = () => null): Promise<AgentsDoor> {
+/// requests go, once there is a way (the mesh's). `parts`: the parts' routes (parts.ts `door`), as they are now.
+export function openAgentsDoor(at: { fd: number } | { port: number; shown?: number }, mcp: McpEndpoint, notified: Notified, peers: () => PeerRoute | null = () => null, parts: () => readonly DoorRoute[] = () => []): Promise<AgentsDoor> {
   let busy = 0;
   let idle: (() => void) | null = null;
   // The ports it is reached on (the entrance's first): known once it listens, before any request.
@@ -112,12 +113,26 @@ export function openAgentsDoor(at: { fd: number } | { port: number; shown?: numb
     if (route === null) return [503, "this station is not on the mesh yet; try again shortly"];
     return [route, target];
   };
+  /// A part's route for a request, or why it is refused; null when the path is no part's.
+  const partOf = (req: IncomingMessage): DoorRoute | string | null => {
+    const url = req.url ?? "/";
+    const route = parts().find((r) => url === `/${r.prefix}` || url.startsWith(`/${r.prefix}/`) || url.startsWith(`/${r.prefix}?`));
+    if (route === undefined) return null;
+    return notFromHere(req.headers, ports) === null ? route : "only programs on this machine reach this";
+  };
   const server: Server = createServer(async (req, res) => {
     // Another station's web service: as long as it streams, not a call the door waits for when it closes.
     if (req.url === "/peer" || req.url?.startsWith("/peer/")) {
       const [route, target] = peerOf(req);
       if (typeof route === "number") res.writeHead(route, { "content-type": "text/plain; charset=utf-8" }).end(target);
       else await route.request(req, res, target as PeerTarget).catch((error) => (log.warn("mcp", "a request to another station failed", { error: (error as Error).message }), res.destroy()));
+      return;
+    }
+    // A part's (the station's browser): as long as it lasts, as /peer's.
+    const part = partOf(req);
+    if (typeof part === "string") return void res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }).end(part);
+    if (part !== null) {
+      await part.request(req, res).catch((error) => (log.warn("mcp", "a part's request failed", { error: (error as Error).message }), res.destroy()));
       return;
     }
     busy++;
@@ -152,8 +167,16 @@ export function openAgentsDoor(at: { fd: number } | { port: number; shown?: numb
   server.keepAliveTimeout = 5_000;
   // An upload to another station's service takes as long as it takes.
   server.requestTimeout = 0;
-  // Another station's service's WebSocket; nothing else upgrades.
+  // Another station's service's WebSocket, or a part's (the station's browser); nothing else upgrades.
   server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const part = partOf(req);
+    if (typeof part === "string") return refuseUpgrade(socket, 403, part);
+    if (part !== null) {
+      return void part.upgrade(req, socket, head).catch((error) => {
+        log.warn("mcp", "a part's WebSocket failed", { error: (error as Error).message });
+        socket.destroy();
+      });
+    }
     if (!req.url?.startsWith("/peer/")) return refuseUpgrade(socket, 404, "");
     const [route, target] = peerOf(req);
     if (typeof route === "number") return refuseUpgrade(socket, route, target as string);

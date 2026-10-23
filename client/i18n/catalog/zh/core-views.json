@@ -373,6 +373,8 @@
   "core-views.screen.kind.desktop": "桌面",
   "core-views.screen.kind.browser": "浏览器标签页",
   "core-views.screen.on": "{names} 正在查看",
+  "core-views.screen.openedBy": "由「{title}」打开",
+  "core-views.screen.someChat": "一个对话",
   "core-views.screen.outdated": "此 station 需要更新才能远程查看屏幕",
   "core-views.screen.gone": "此屏幕已不存在",
   "core-views.screen.remote": "远程屏幕",

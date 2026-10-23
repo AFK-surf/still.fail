@@ -38,6 +38,7 @@
   "station.feishu.send": "Send",
   "station.feishu.sent": "Sent",
   "station.screen.notFound": "This screen is no longer on this station",
+  "station.screen.notClosed": "This screen can't be closed from here",
   "station.screen.unsupported": "Only macOS and Windows stations' own screens can be viewed for now",
   "station.screen.noHelper": "This station's release has no screen helper (stillfail-screen); update the station",
   "station.screen.codec": "This screen is sent as {codec}, which this app can't show",

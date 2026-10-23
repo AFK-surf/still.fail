@@ -4633,6 +4633,16 @@ export interface ScreenCard {
 	height: number;
 }
 
+/** The chat whose agent opened a screen (a tab of the station's browser). */
+export interface ScreenChat {
+	/** The chat's id on its station. */
+	id: string;
+	/** Its title, or words saying it has none. */
+	title: string;
+	/** Its page in the app: `/w/<workspace>/s/<station>/chats/<id>`. */
+	link: string;
+}
+
 /** Where a screen's pointer is, as its station says. */
 export interface ScreenCursor {
 	/** 0..1 of the frame's width. */
@@ -4672,7 +4682,11 @@ export interface ScreenItem {
 	drop?: ScreenDrop;
 	/** It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews. */
 	peek?: boolean;
-	/** What the core says of it under its title: what it is, its size, who is on it (core). */
+	/** The viewer may close it (`screen.close`): a tab of the station's browser, for a member who may drive it; none from a station before it. */
+	closable?: boolean;
+	/** The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station. */
+	chat?: ScreenChat;
+	/** What the core says of it under its title: what it is, its size, the chat that opened it, who is on it (core). */
 	line: string;
 	/** Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it. */
 	link: string;

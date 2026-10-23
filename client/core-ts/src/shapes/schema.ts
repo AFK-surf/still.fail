@@ -1477,9 +1477,16 @@ export const SHAPES: Record<string, Shape> = {
     ["clipboard", vec("String"), { default: true, doc: "The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them." }],
     ["drop", opt("ScreenDrop"), { doc: "Where a file dropped into a view of it is put on the station's machine; none from a station before files." }],
     ["peek", "bool", { default: true, doc: "It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews." }],
-    ["line", "String", { doc: "What the core says of it under its title: what it is, its size, who is on it (core)." }],
+    ["closable", "bool", { default: true, doc: "The viewer may close it (`screen.close`): a tab of the station's browser, for a member who may drive it; none from a station before it." }],
+    ["chat", opt("ScreenChat"), { doc: "The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station." }],
+    ["line", "String", { doc: "What the core says of it under its title: what it is, its size, the chat that opened it, who is on it (core)." }],
     ["link", "String", { doc: "Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it." }],
   ], { doc: "A screen of a station a person can see and drive (docs/remote-screens.md)." }),
+  ScreenChat: struct([
+    ["id", "String", { doc: "The chat's id on its station." }],
+    ["title", "String", { doc: "Its title, or words saying it has none." }],
+    ["link", "String", { doc: "Its page in the app: `/w/<workspace>/s/<station>/chats/<id>`." }],
+  ], { doc: "The chat whose agent opened a screen (a tab of the station's browser)." }),
   ScreensView: struct([
     ["screens", vec("ScreenItem")],
     ["outdated", "bool", { doc: "The station is from before screens: it has none to show until it is updated." }],

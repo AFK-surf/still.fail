@@ -4533,6 +4533,17 @@ data class ScreenCard (
 	val height: UInt
 )
 
+/// The chat whose agent opened a screen (a tab of the station's browser).
+@Serializable
+data class ScreenChat (
+	/// The chat's id on its station.
+	val id: String,
+	/// Its title, or words saying it has none.
+	val title: String,
+	/// Its page in the app: `/w/<workspace>/s/<station>/chats/<id>`.
+	val link: String
+)
+
 /// Where a screen's pointer is, as its station says.
 @Serializable
 data class ScreenCursor (
@@ -4575,7 +4586,11 @@ data class ScreenItem (
 	val drop: ScreenDrop? = null,
 	/// It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews.
 	val peek: Boolean? = null,
-	/// What the core says of it under its title: what it is, its size, who is on it (core).
+	/// The viewer may close it (`screen.close`): a tab of the station's browser, for a member who may drive it; none from a station before it.
+	val closable: Boolean? = null,
+	/// The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station.
+	val chat: ScreenChat? = null,
+	/// What the core says of it under its title: what it is, its size, the chat that opened it, who is on it (core).
 	val line: String,
 	/// Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it.
 	val link: String

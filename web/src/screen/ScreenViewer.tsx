@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Chat, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { ViewerBar } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
@@ -27,6 +27,7 @@ import { setPrefs, usePrefs } from "../prefs.ts";
 import { useStationNet } from "../cloud/StationCards.tsx";
 import { useStationOs } from "../api.ts";
 import { ControlCenter, NetChip, combosFor, type Combo, type Meter } from "./ScreenPanel.tsx";
+import { useScreens, useTabActions } from "./ScreenList.tsx";
 import { CopiedNote, DropVeil, SendsPanel, clipOf, pasted, putClip, useSends, type Clip } from "./Transfer.tsx";
 import * as css from "./ScreenViewer.css.ts";
 
@@ -346,6 +347,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   const netParts = phone && net ? [<span key="path">{net.path}</span>, ...[net.rtt, net.loss].flatMap((f, i) => (f ? [<span key={i} className={css.figure} data-level={f.level}>{f.text}</span>] : []))] : [];
   const meta = line || netParts.length ? <>{[...(line ? [<span key="line">{line}</span>] : []), ...netParts].flatMap((part, i) => (i ? [" · ", part] : [part]))}</> : null;
   const os = useStationOs(station);
+  // A tab of the station's browser: the chat that opened it, and closing it (then back where it was opened from).
+  const tab = useTabActions(station, useScreens(station)?.screens.find((s) => s.id === screen), onBack);
   const sendCombo = (c: Combo) => {
     for (const kind of ["down", "up"] as const) tell("screen.input", { view: view.current, input: { t: "key", kind, key: c.key, code: c.code, mods: c.mods } });
   };
@@ -354,7 +357,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
       {live && <NetChip net={net} shown={shown} meter={meter} os={os} />}
       <ControlCenter quality={quality} onQuality={(q) => setPrefs({ screenQuality: q === "auto" ? null : q })}
         combos={driving ? combosFor(os) : []} onCombo={sendCombo} onSend={drop ? () => files.current?.click() : undefined}
-        onWindow={onWindow} full={full} onFull={goFull} onLeave={onBack} />
+        onWindow={onWindow} full={full} onFull={goFull} chat={tab.chat} onClose={tab.close} onLeave={onBack} />
     </>
   ) : null;
   const modes = (
@@ -407,6 +410,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
           <header className={css.head}>
             <Tip label={backLabel}><button type="button" className={css.back} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
             <span className={css.headText}><b>{title}</b>{meta && <small>{meta}</small>}</span>
+            {tab.chat && <button type="button" className={css.back} aria-label={t("web-pages.screen.openChat", { title: tab.chat.title })} onClick={tab.chat.open}><Chat size={18} /></button>}
+            {tab.close && <button type="button" className={css.back} aria-label={t("web-pages.screen.close")} disabled={tab.closing} onClick={tab.close}><Trash size={18} /></button>}
           </header>
           {!over && driving && (!full || typing) && (
             <div className={css.keysRow} role="toolbar" aria-label={t("web-pages.screen.keysRow")}>

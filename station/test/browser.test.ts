@@ -12,7 +12,12 @@ import { TestClock } from "effect/testing";
 import { StationBrowser, IDLE_MS } from "../src/browser/browser.ts";
 import type { Cdp, CdpEvent } from "../src/browser/cdp.ts";
 import { type ChromeHost, type Running, chromeArgs, headfulAgent, parseActivePort, readState } from "../src/browser/chrome.ts";
+import { Owners } from "../src/browser/owners.ts";
+import { browserDoor, sessionOfPath, sessionPath } from "../src/browser/proxy.ts";
 import { Tabs } from "../src/browser/tabs.ts";
+import { openAgentsDoor } from "../src/tools/http.ts";
+import { McpEndpoint } from "../src/tools/mcp.ts";
+import WebSocket, { WebSocketServer } from "ws";
 import { TabView, jpegSize, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { browserTools, howTo } from "../src/tools/browser.ts";
@@ -252,7 +257,7 @@ test("a tab behind another is brought to the front when a view opens on it", asy
 });
 
 /// Tabs over a fake browser connection, into a registry; each view's connection a new fake.
-async function tabs() {
+async function tabs(owners?: Owners) {
   const cdp = new FakeCdp();
   const screens = makeScreens();
   const lists: string[][] = [];
@@ -263,7 +268,7 @@ async function tabs() {
   // The tabs' viewport as the page says it (Page.getLayoutMetrics).
   const viewport = { clientWidth: 1200, clientHeight: 845 };
   const t = new Tabs({
-    cdp, screens, now: () => 0, activity: () => used++,
+    cdp, screens, now: () => 0, activity: () => used++, ...(owners ? { owners } : {}),
     later: (ms, f) => {
       const timer = { ms, f };
       timers.push(timer);
@@ -409,7 +414,7 @@ test("the browser is started once however many ask at once, and its endpoint sai
   assert.deepEqual(chrome.calls, ["find", "launch"]);
   assert.equal(a.http, "http://127.0.0.1:9300");
   assert.equal(z.ws, "ws://127.0.0.1:9300/devtools/browser/1");
-  const text = howTo(a);
+  const text = howTo(a, null);
   assert.match(text, /--browserUrl http:\/\/127\.0\.0\.1:9300/);
   assert.match(text, /connectOverCDP\("http:\/\/127\.0\.0\.1:9300"\)/);
   assert.match(text, /`screen` tool/);
@@ -523,12 +528,142 @@ test("the browser tool: endpoint by default, tabs, status, stop", async () => {
   assert.equal(tool!.name, "browser");
   assert.equal((tool!.inputSchema as any).type, "object");
   assert.match(await tool!.run("s", { action: "status" }), /Not running/);
-  assert.match(await tool!.run("s", {}), /DevTools: http:\/\/127\.0\.0\.1:9300/);
+  assert.match(await tool!.run("s", {}), /DevTools for this chat: http:\/\/127\.0\.0\.1:9300/);
   chrome.made[0]!.emit("Target.targetCreated", { targetInfo: { targetId: "A", type: "page", title: "Docs", url: "https://docs/" } });
   assert.match(await tool!.run("s", { action: "tabs" }), /A "Docs" https:\/\/docs\//);
   assert.match(await tool!.run("s", { action: "status" }), /Running: http:\/\/127\.0\.0\.1:9300.*1 tab/);
   assert.match(await tool!.run("s", { action: "stop" }), /closed/);
   assert.equal(b.status().running, false);
   await assert.rejects(tool!.run("s", { action: "nope" }), /unknown action/);
+  await b.close();
+});
+
+test("a tab is the session's that opened it, and a tab it opens is too; a tab gone is forgotten", async () => {
+  const owners = new Owners(scratch());
+  const { cdp, screens, lists, t } = await tabs(owners);
+  const told = lists.length;
+  t.owned("A", "chat-1");
+  assert.equal(lists.length, told + 1, "the screens' watchers hear who opened it");
+  cdp.emit("Target.targetCreated", { targetInfo: { targetId: "P", type: "page", title: "", url: "https://login/", attached: false, openerId: "A" } });
+  cdp.emit("Target.targetCreated", { targetInfo: { targetId: "Q", type: "page", title: "", url: "https://other/", attached: false } });
+  assert.deepEqual(screens.list().map((s) => [s.id, s.openedBy?.()]), [["browser:A", "chat-1"], ["browser:P", "chat-1"], ["browser:Q", undefined]]);
+  assert.deepEqual(t.list().map((x) => x.session), ["chat-1", "chat-1", undefined]);
+  assert.deepEqual(t.ofSession("chat-1"), ["A", "P"]);
+  t.owned("A", "chat-1");
+  assert.equal(lists.length, told + 3, "the same again is no news (the two tabs came)");
+  cdp.emit("Target.targetDestroyed", { targetId: "P" });
+  assert.equal(owners.of("P"), undefined);
+  t.close();
+});
+
+test("a tab is closed from a person's app; the desktop's screen is not a tab", async () => {
+  const { cdp, screens, t } = await tabs();
+  const tab = screens.get("browser:A")!;
+  assert.ok(tab.discard);
+  await tab.discard!();
+  assert.deepEqual(cdp.of("Target.closeTarget").map((c) => c.params), [{ targetId: "A" }]);
+  cdp.emit("Target.targetDestroyed", { targetId: "A" });
+  await assert.rejects(tab.discard!(), /closed/);
+  t.close();
+});
+
+test("whose each tab is outlives the station process, and is forgotten for tabs no longer there", async () => {
+  const dir = scratch();
+  const first = new Owners(dir);
+  first.set("A", "chat-1");
+  first.set("Z", "chat-2");
+  const owners = new Owners(dir);
+  assert.equal(owners.of("A"), "chat-1");
+  const { t } = await tabs(owners);
+  assert.equal(owners.of("A"), "chat-1", "A is still there");
+  assert.equal(new Owners(dir).of("Z"), undefined, "Z closed while no station watched");
+  t.close();
+});
+
+test("a chat archived closes the tabs it opened, and only those", async () => {
+  const chrome = fakeChrome();
+  const { clock: c } = clock();
+  const b = new StationBrowser({ later: () => () => {}, dir: scratch(), chrome: chrome.host, clock: c });
+  await b.closeOf("chat-1");
+  await b.endpoint();
+  const cdp = chrome.made[0]!;
+  for (const id of ["A", "B", "C"]) cdp.emit("Target.targetCreated", { targetInfo: { targetId: id, type: "page", title: id, url: "https://x/" } });
+  b.own("A", "chat-1");
+  b.own("C", "chat-1");
+  b.own("B", "chat-2");
+  await b.closeOf("chat-1");
+  assert.deepEqual(cdp.of("Target.closeTarget").map((x) => x.params.targetId).sort(), ["A", "C"]);
+  await b.close();
+});
+
+test("a session's address of the browser: its key, and nothing else", () => {
+  for (const key of ["EMBER/1792746112.235000", "slack:C1/1.2", "中文"]) assert.equal(sessionOfPath(sessionPath(key)), key);
+  assert.equal(sessionOfPath(`${sessionPath("k")}/`), "k");
+  assert.equal(sessionOfPath("/browser/"), null);
+  assert.equal(sessionOfPath("/browser/a+b"), null);
+  assert.equal(sessionOfPath("/browser/a/devtools/browser/1"), null);
+});
+
+test("a session's connection through the door reaches the browser as it is, and the tabs it opens are its own", async () => {
+  // Chrome's DevTools of the test's making: answers Target.createTarget with a new tab, echoes the rest.
+  const chrome = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await new Promise<void>((r) => chrome.once("listening", () => r()));
+  chrome.on("connection", (ws) =>
+    ws.on("message", (raw) => {
+      const m = JSON.parse(raw.toString());
+      const result = m.method === "Target.createTarget" ? { targetId: `T${m.id}` } : { echo: m.params };
+      ws.send(JSON.stringify({ id: m.id, ...(m.sessionId ? { sessionId: m.sessionId } : {}), result }));
+    }));
+  const owned: [string, string][] = [];
+  const browser = {
+    endpoint: async () => ({ running: true, ws: `ws://127.0.0.1:${(chrome.address() as any).port}/devtools/browser/x` }),
+    own: (targetId: string, session: string) => owned.push([targetId, session]),
+  } as unknown as StationBrowser;
+  const route = browserDoor(browser);
+  const door = await openAgentsDoor({ port: 0 }, new McpEndpoint(() => undefined, []), () => ({ status: 404, body: {} }), () => null, () => [route]);
+  const at = `ws://127.0.0.1:${door.port}${sessionPath("EMBER/1.2")}`;
+  const client = new WebSocket(at);
+  await new Promise<void>((r, j) => (client.once("open", () => r()), client.once("error", j)));
+  const answers: any[] = [];
+  const answered = (n: number) => new Promise<void>((r) => {
+    const check = () => (answers.length >= n ? r() : client.once("message", (raw) => (answers.push(JSON.parse(raw.toString())), check())));
+    check();
+  });
+  client.send(JSON.stringify({ id: 1, method: "Browser.getVersion", params: { a: 1 } }));
+  client.send(JSON.stringify({ id: 2, method: "Target.createTarget", params: { url: "about:blank" } }));
+  client.send(JSON.stringify({ id: 2, sessionId: "S", method: "Target.createTarget", params: { url: "about:blank" } }));
+  await answered(3);
+  assert.deepEqual(answers[0], { id: 1, result: { echo: { a: 1 } } });
+  assert.deepEqual(owned, [["T2", "EMBER/1.2"], ["T2", "EMBER/1.2"]], "each asked on its own target session");
+
+  // Only programs on this machine: a web page (it says its Origin) is refused.
+  const page = new WebSocket(at, { headers: { origin: "https://evil.example" } });
+  const refused = await new Promise<number>((r) => page.once("unexpected-response", (_req, res) => r(res.statusCode!)));
+  assert.equal(refused, 403);
+  // Not a WebSocket: what to do with the address.
+  assert.equal((await fetch(`http://127.0.0.1:${door.port}${sessionPath("EMBER/1.2")}`)).status, 400);
+
+  client.close();
+  await door.close(0);
+  await new Promise<void>((r) => chrome.close(() => r()));
+});
+
+test("the browser tool gives each session its own address on the door, and says which tabs are its chat's", async () => {
+  const chrome = fakeChrome();
+  const { clock: c } = clock();
+  const b = new StationBrowser({ later: () => () => {}, dir: scratch(), chrome: chrome.host, clock: c });
+  const [tool] = browserTools(b, () => "http://127.0.0.1:4750/mcp");
+  const said = await tool!.run("EMBER/1.2", {});
+  const ws = `ws://127.0.0.1:4750${sessionPath("EMBER/1.2")}`;
+  assert.ok(said.includes(`--wsEndpoint ${ws}`), said);
+  assert.ok(said.includes(`connectOverCDP("${ws}")`), said);
+  assert.ok(!said.includes("9300"), "Chrome's own port is not given");
+  chrome.made[0]!.emit("Target.targetCreated", { targetInfo: { targetId: "A", type: "page", title: "Docs", url: "https://docs/" } });
+  chrome.made[0]!.emit("Target.targetCreated", { targetInfo: { targetId: "B", type: "page", title: "Mail", url: "https://mail/" } });
+  b.own("A", "EMBER/1.2");
+  b.own("B", "EMBER/9.9");
+  const listed = await tool!.run("EMBER/1.2", { action: "tabs" });
+  assert.match(listed, /A "Docs" https:\/\/docs\/ \(this chat's\)/);
+  assert.match(listed, /B "Mail" https:\/\/mail\/ \(another chat's\)/);
   await b.close();
 });
