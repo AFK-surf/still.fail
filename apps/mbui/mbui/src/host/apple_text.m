@@ -97,7 +97,19 @@ static CTFontRef face_font(int face, double size, int weight) {
     // 'wght': the variable file at this weight
     at = CTFontDescriptorCreateCopyWithVariation(d, (__bridge CFNumberRef)@(0x77676874), (CGFloat)weight);
   }
-  CTFontRef f = CTFontCreateWithFontDescriptor(at ? at : d, size, NULL);
+  // the app's words and what people wrote with the web's alternates (global.css.ts: font-feature-settings "cv11",
+  // "ss01": Inter's single-storey a, its open digits; a face without them is as it is)
+  CTFontDescriptorRef feat = NULL;
+  if (face == 1 || face == 2) {
+    NSArray *fs = @[
+      @{(__bridge id)kCTFontOpenTypeFeatureTag : @"cv11", (__bridge id)kCTFontOpenTypeFeatureValue : @1},
+      @{(__bridge id)kCTFontOpenTypeFeatureTag : @"ss01", (__bridge id)kCTFontOpenTypeFeatureValue : @1},
+    ];
+    feat = CTFontDescriptorCreateCopyWithAttributes(at ? at : d,
+                                                    (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : fs});
+  }
+  CTFontRef f = CTFontCreateWithFontDescriptor(feat ? feat : at ? at : d, size, NULL);
+  if (feat) CFRelease(feat);
   if (at) CFRelease(at);
   return f;
 }
