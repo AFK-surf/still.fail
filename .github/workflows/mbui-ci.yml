@@ -126,7 +126,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      # (the APK without Gradle: mbui/scripts/apk.py; its dependencies and their dex kept by the lock)
+      # (the APK without Gradle: mbui/scripts/apk (tools/apk); its dependencies and their dex kept by the lock)
       - uses: ./.github/actions/mbui-apk
       - uses: ./.github/actions/mbui-moonbit
       - name: "The differential text test's APK (APP=textdiff; it runs on an emulator, scripts/textdiff.sh android)"
@@ -160,7 +160,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      # (the APK without Gradle: mbui/scripts/apk.py; its dependencies and their dex kept by the lock)
+      # (the APK without Gradle: mbui/scripts/apk (tools/apk); its dependencies and their dex kept by the lock)
       - uses: ./.github/actions/mbui-apk
       - uses: ./.github/actions/mbui-moonbit
       # (AOSP's image, no Google Play services: on google_apis, just booted, their updates changed the assets' paths

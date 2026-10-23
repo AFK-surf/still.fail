@@ -28,7 +28,7 @@
 # MBUI_CACHE ($RUNNER_TEMP's).
 # Warm between runs on a machine of its own (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui kept outside the job's checkout (which the
 # other jobs' clean takes), so moonc's and the compiler's outputs and the link stay; core.hbc is kept by its inputs
-# (HBC_CACHE), the APK's dex by its own (mbui's scripts/apk.py: APK_CACHE).
+# (HBC_CACHE), the APK's dex by its own (mbui's scripts/apk: APK_CACHE).
 set -eo pipefail
 A=$(cd "$(dirname "$0")/.." && pwd)
 REPO=$(cd "$A/../.." && pwd)
@@ -158,7 +158,7 @@ build() {
   copy
   rm -rf "$RELEASE_DIR/android" && mkdir -p "$RELEASE_DIR/android/android/mbui"
   # every still.fail Android release's key (the debug keystore $ANDROID_USER_HOME holds, as the Android Gradle plugin's
-  # signingConfigs.debug had it: mbui's scripts/apk.py signs with it)
+  # signingConfigs.debug had it: mbui's scripts/apk signs with it)
   if [ -n "${ANDROID_DEBUG_KEYSTORE_B64:-}" ]; then
     export ANDROID_USER_HOME=$(mktemp -d "${RUNNER_TEMP:-/tmp}/mbui-key.XXXXXX")
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$ANDROID_USER_HOME/debug.keystore"

@@ -145,11 +145,11 @@ case "${1:-build}" in
     # (its failure is the build's: an APK of an earlier build must not pass for this one's)
     rm -f "${APK_OUT:?}"/*.apk
     if [ -f $PROJ/apk.json ]; then
-      # without Gradle (scripts/apk.py: R8's dex kept by what it is made of, the build's number in the manifest
+      # without Gradle (scripts/apk, tools/apk: R8's dex kept by what it is made of, the build's number in the manifest
       # alone); its number ORG_GRADLE_PROJECT_stillfailBuild, as Gradle's build took it
       mkdir -p $APK_OUT
       n=${ORG_GRADLE_PROJECT_stillfailBuild:-1}
-      python3 "$D/apk.py" build $PROJ/apk.json --variant $VARIANT --version-code $n --version-name 0.1.$n --abi $ABI \
+      "$D/apk" build $PROJ/apk.json --variant $VARIANT --version-code $n --version-name 0.1.$n --abi $ABI \
         --out $APK_FILE
     # (on CI the tasks that ran, by name, the log's times between them what each took; quiet elsewhere)
     elif [ -n "${GITHUB_ACTIONS:-}" ]; then

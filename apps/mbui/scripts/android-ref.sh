@@ -51,7 +51,7 @@ render_code() {
     apps/mbui/mbui/src/ui/drawlist.mbt apps/mbui/mbui/src/ui/scene.mbt apps/mbui/mbui/src/ui/line.mbt \
     apps/mbui/mbui/src/ui/smooth.mbt apps/mbui/mbui/android/app/src/main/java apps/mbui/mbui/android/app/src/main/res \
     apps/mbui/mbui/android/app/src/main/AndroidManifest.xml apps/mbui/mbui/android/apk.json \
-    apps/mbui/mbui/android/apk.lock apps/mbui/mbui/scripts/apk.py apps/mbui/mbui/scripts/android.sh \
+    apps/mbui/mbui/android/apk.lock apps/mbui/mbui/tools/apk/main.mbt apps/mbui/mbui/scripts/android.sh \
     apps/mbui/mbui/scripts/render_android_hook.sh apps/mbui/scripts/android-ref.sh apps/mbui/scripts/android_ref.py \
     -type f | LC_ALL=C sort | xargs shasum -a 256) || die "what draws the pictures not read"
 }

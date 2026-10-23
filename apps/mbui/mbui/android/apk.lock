@@ -1,6 +1,6 @@
-# mbui's apps' dependencies as they go in their APK (scripts/apk.py): media3-exoplayer and media3-datasource 1.8.0
+# mbui's apps' dependencies as they go in their APK (scripts/apk): media3-exoplayer and media3-datasource 1.8.0
 # (mbui's NativeViews: the video player) and what they need, at the versions Gradle's resolution picked for them
-# (2026-10-22), and kotlin-stdlib as AGP 9 added it. A change: edit the coordinates, then `apk.py lock apk.json`.
+# (2026-10-22), and kotlin-stdlib as AGP 9 added it. A change: edit the coordinates, then `scripts/apk lock apk.json`.
 androidx.annotation:annotation-experimental:1.3.1 aar e4d49dc3880b7b7437ea54ce71461e02897faa4e1ecc53e63ecadb1a14c20c9c
 androidx.annotation:annotation-jvm:1.6.0 jar 60b10b5ef5769b79570172e015b8159405c92f034ba88b9391a977589c9deb4e
 androidx.annotation:annotation:1.6.0 jar fbc64f5c44a7added8b6eab517cf7d70555e25153bf5d44a6ed9b0e5312f7de9
