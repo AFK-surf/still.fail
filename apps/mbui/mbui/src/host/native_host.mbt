@@ -46,6 +46,11 @@ impl @hostapi.Host for Native with set_badge(_, n) {
 }
 
 ///|
+impl @hostapi.Host for Native with menu_setup(_, json) {
+  menu_setup(json)
+}
+
+///|
 impl @hostapi.Host for Native with local_station(_) {
   local_station()
 }

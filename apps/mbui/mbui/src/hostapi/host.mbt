@@ -18,6 +18,7 @@ pub(open) trait Host {
   window_drag(Self) -> Unit = _
   set_cursor(Self, Int) -> Unit = _
   set_badge(Self, Int) -> Unit = _
+  menu_setup(Self, String) -> Unit = _
   local_station(Self) -> String = _
   local_station_act(Self, String) -> Unit = _
   dock_available(Self) -> Bool = _
@@ -212,6 +213,11 @@ impl Host with set_cursor(_, _) {
 
 ///|
 impl Host with set_badge(_, _) {
+  ()
+}
+
+///|
+impl Host with menu_setup(_, _) {
   ()
 }
 
@@ -1086,6 +1092,19 @@ pub fn set_cursor(kind : Int) -> Unit {
 /// shows none.
 pub fn set_badge(n : Int) -> Unit {
   current.val.set_badge(n)
+}
+
+///|
+/// The app's menus in the system's menu bar (macOS's), as JSON: an array of menus, each
+/// `{"title": …, "items": [item, …]}` (the first the app's own, its title the system's), an item
+/// `{"title": …, "role": …}` the system's own (`about`, `hide`, `hideOthers`, `showAll`, `quit`, `undo`, `redo`,
+/// `cut`, `copy`, `paste`, `selectAll`, `services`, `close`, `minimize`, `zoom`, `fullScreen`, `front`: their keys
+/// the system's),
+/// `{"title": …, "action": …}` the app's (chosen, said on `system_channel` as `{"menu": action}`), or
+/// `{"separator": true}`; a menu `"role": "window"` is the system's list of windows too. Given again as its words change
+/// (the language). Nothing where the system has no menu bar.
+pub fn menu_setup(json : String) -> Unit {
+  current.val.menu_setup(json)
 }
 
 ///|

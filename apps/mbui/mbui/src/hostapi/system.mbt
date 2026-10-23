@@ -44,10 +44,12 @@
 //   the app may not install apps yet: the system's page for that leave was opened instead.
 // - `{"install": {"name": …, "error": …}}`: a package handed to the system's installer could not be installed
 //   (written, or the installer said it failed; the person's no is not a failure).
+// - `{"menu": action}`: one of the app's items in the menu bar chosen (@hostapi.menu_setup: an item's `action`).
 //
-// Android's (dev.mbui.MainActivity) and iOS's (ios_app.m: `shown`, `link`, `network`, `size_class`, `fold`, `bars`
-// where its Info.plist's MBUIEdge lays it out edge to edge, as Android's manifest's dev.mbui.edge); the other hosts post
-// none. While the app is
+// Android's (dev.mbui.MainActivity), iOS's (ios_app.m: `shown`, `link`, `network`, `size_class`, `fold`, `bars`
+// where its Info.plist's MBUIEdge lays it out edge to edge, as Android's manifest's dev.mbui.edge) and macOS's (mac_app.m:
+// `shown` as its window comes back after it was closed and as the Mac wakes from sleep, `network`, `menu`); Windows's
+// posts none. While the app is
 // on screen, Android's also holds a Wi-Fi multicast lock when its manifest asks for CHANGE_WIFI_MULTICAST_STATE (Android
 // drops the multicast that reaches the phone unless an app holds one: an mDNS lookup would hear no answer on the LAN).
 
@@ -76,6 +78,8 @@ pub(all) enum SystemSaid {
   InstallAllow(name~ : String)
   /// a package could not be installed
   InstallFailed(name~ : String, error~ : String)
+  /// one of the app's items in the menu bar chosen (menu_setup's `action`)
+  Menu(String)
 } derive(Eq, Show)
 
 ///|
@@ -101,7 +105,7 @@ pub(all) enum Hinge {
 
 ///|
 /// What a message on `system_channel` says, in this order: the link, over or not, the bars, the size classes, the
-/// fold, shown, the installer, the network (what is not well formed left out).
+/// fold, shown, the installer, the network, the menu bar (what is not well formed left out).
 pub fn system_said(json : String) -> Array[SystemSaid] {
   let out : Array[SystemSaid] = []
   let v = @json.parse(json) catch { _ => return out }
@@ -170,6 +174,10 @@ pub fn system_said(json : String) -> Array[SystemSaid] {
   }
   if m.get("network") is Some(True) {
     out.push(Network)
+  }
+  match m.get("menu") {
+    Some(String(action)) => out.push(Menu(action))
+    _ => ()
   }
   out
 }

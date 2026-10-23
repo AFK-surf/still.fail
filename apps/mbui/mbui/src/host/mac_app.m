@@ -4,6 +4,7 @@
 // the native views' (apple_views.m) and, over them, the canvas's.
 #import <Cocoa/Cocoa.h>
 #import <UserNotifications/UserNotifications.h>
+#import <Network/Network.h>
 #import <CommonCrypto/CommonDigest.h>
 #import <Security/Security.h>
 #include <dlfcn.h>
@@ -11,6 +12,10 @@
 #import "apple.h"
 #include "post.h"
 #include "done_watch.h"
+
+// (Network's path monitor, below: the framework asked of the linker by this file, as an app of mbui's links what its
+// own moon.pkg names, which need not be Network)
+__asm__(".linker_option \"-framework\", \"Network\"");
 
 mb_callbacks mb_cb;
 
@@ -54,6 +59,7 @@ static NSEvent *down_event;
 static int down_secondary;
 static const char *shot_path;
 static void tell_state(void);
+static void bring_back(void);  // the window out again (below: the app's life on the Mac)
 static const char *script;
 
 // A scripted run in stable mode (MBUI_SCRIPT with MBUI_BENCH=-1: screenshots) is settled, not paced: its frames are
@@ -90,6 +96,20 @@ CTFontRef mb_platform_font(double size, int weight, int mono) {
 
 static void send_text(int kind, NSString *s, int a, int b) {
   mb_cb.text(kind, mb_string_from_ns(s ?: @""), a, b);
+}
+
+// ⌘V (the key, or the menu bar's 粘贴): a picture on the clipboard (not a file's icon beside its name, as the Finder
+// copies one) is the app's ⌘V (1000 + v), which reads the clipboard for it (@hostapi.clip_read), as a page's paste takes
+// a picture as a file; else its words, typed
+static void paste_now(int mods) {
+  NSPasteboard *pb = [NSPasteboard generalPasteboard];
+  BOOL files = [pb canReadObjectForClasses:@[ NSURL.class ] options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  if (!files && [pb canReadItemWithDataConformingToTypes:@[ NSPasteboardTypePNG, NSPasteboardTypeTIFF, @"public.image" ]]) {
+    mb_cb.key(1000 + 'v', mods);
+  } else {
+    NSString *s = [pb stringForType:NSPasteboardTypeString];
+    if (s.length) send_text(0, s, 0, 0);
+  }
 }
 
 static void run_script_step(int step);
@@ -394,6 +414,33 @@ static NSCursor *cursor_of(int kind) {
 
 // ---- keys ----
 
+// A key with ⌘ is the view's first, as it was before the app had a menu bar (the app's shortcuts, a field's editing
+// keys, a key catcher's): only those the menu bar keeps for the system go on to it (⌘Q, ⌘W, ⌘H, ⌥⌘H, ⌘M, ⌃⌘F), and
+// with no menu bar given (a bare run) they come back here as keys (keyDown).
+- (BOOL)performKeyEquivalent:(NSEvent *)e {
+  if (e.type != NSEventTypeKeyDown || !(e.modifierFlags & NSEventModifierFlagCommand) || self.window.firstResponder != self)
+    return [super performKeyEquivalent:e];
+  NSEventModifierFlags m = e.modifierFlags & (NSEventModifierFlagShift | NSEventModifierFlagControl |
+                                              NSEventModifierFlagOption | NSEventModifierFlagCommand);
+  NSString *c = e.charactersIgnoringModifiers.lowercaseString;
+  NSEventModifierFlags cmd = NSEventModifierFlagCommand;
+  BOOL system = (m == cmd && ([c isEqualToString:@"q"] || [c isEqualToString:@"w"] || [c isEqualToString:@"h"] ||
+                              [c isEqualToString:@"m"])) ||
+                (m == (cmd | NSEventModifierFlagOption) && [c isEqualToString:@"h"]) ||
+                (m == (cmd | NSEventModifierFlagControl) && [c isEqualToString:@"f"]);
+  if (system && NSApp.mainMenu) return NO;
+  [self keyDown:e];
+  return YES;
+}
+
+// The menu bar's editing items (the system's Edit menu, mb_host_menu_setup): each the key it names, pressed.
+- (void)cut:(id)sender { mb_cb.key(14, 8); }
+- (void)copy:(id)sender { mb_cb.key(13, 8); }
+- (void)paste:(id)sender { paste_now(8); }
+- (void)selectAll:(id)sender { mb_cb.key(12, 8); }
+- (void)undo:(id)sender { mb_cb.key(1000 + 'z', 8); }
+- (void)redo:(id)sender { mb_cb.key(1000 + 'z', 9); }
+
 - (void)keyDown:(NSEvent *)e {
   // a key catcher's focus (apple_device.h): its keys (a composition under way keeps them)
   if (key_catching && self.imeActive && self.markedLen == 0 && catch_key_down(e)) return;
@@ -412,18 +459,8 @@ static NSCursor *cursor_of(int kind) {
     else if ([c isEqualToString:@"a"]) mb_cb.key(12, mods);
     else if ([c isEqualToString:@"c"]) mb_cb.key(13, mods);
     else if ([c isEqualToString:@"x"]) mb_cb.key(14, mods);
-    else if ([c isEqualToString:@"v"]) {
-      NSPasteboard *pb = [NSPasteboard generalPasteboard];
-      // a picture on it (not a file's icon beside its name, as the Finder copies one): the app's ⌘V (1000 + v), which
-      // reads the clipboard for it (@hostapi.clip_read), as a page's paste takes a picture as a file; else its words
-      BOOL files = [pb canReadObjectForClasses:@[ NSURL.class ] options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
-      if (!files && [pb canReadItemWithDataConformingToTypes:@[ NSPasteboardTypePNG, NSPasteboardTypeTIFF, @"public.image" ]]) {
-        mb_cb.key(1000 + 'v', mods);
-      } else {
-        NSString *s = [pb stringForType:NSPasteboardTypeString];
-        if (s.length) send_text(0, s, 0, 0);
-      }
-    } else if (c.length == 1) {
+    else if ([c isEqualToString:@"v"]) paste_now(mods);
+    else if (c.length == 1) {
       // any other ⌘ key: the app's shortcut (1000 + the character)
       mb_cb.key(1000 + [c characterAtIndex:0], mods);
     }
@@ -846,10 +883,7 @@ static void dock_heard(NSData *line) {
   // a chat opened from it: the app's window in front, as the desktop app's (app.focus)
   NSString *s = [[NSString alloc] initWithData:line encoding:NSUTF8StringEncoding];
   if ([s containsString:@"\"type\":\"open\""]) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [NSApp activateIgnoringOtherApps:YES];
-      [the_view.window makeKeyAndOrderFront:nil];
-    });
+    dispatch_async(dispatch_get_main_queue(), ^{ bring_back(); });
   }
   mb_post("dock", (const char *)line.bytes, line.length, NULL, 0);
 }
@@ -1062,6 +1096,173 @@ void mb_host_set_cursor(int32_t kind) {
   [cursor_of(kind) set];
 }
 
+// ---- The app's life on the Mac, and what the system says of it ----
+// As still.fail's desktop app is on macOS (Electron's): closing the window puts it away and the app goes on (its core,
+// its notifications, the Dock's badge, the dock's helper); the Dock's icon clicked, the app opened again, a
+// notification or the dock's helper opening a chat brings it back; ⌘Q (the menu bar's 退出) quits. A program run bare
+// (not an app's bundle: a developer's run, a script's, a test's) ends as its window closes, as before. Said to the app
+// on the system's channel (hostapi's system.mbt): `shown` with how long it was away as the window comes back, and as
+// the Mac wakes from sleep (a clock that counts the sleep, as iOS's and Android's); `network` as the default network
+// becomes another one (Network's path monitor, as iOS's); `menu` as one of the app's items in the menu bar is chosen.
+
+static void say_system(NSDictionary *said) {
+  NSData *json = [NSJSONSerialization dataWithJSONObject:said options:0 error:NULL];
+  if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
+}
+
+static BOOL in_bundle(void) {
+  NSBundle *b = NSBundle.mainBundle;
+  return b.bundleIdentifier && [b.bundlePath.pathExtension isEqualToString:@"app"];
+}
+
+static uint64_t put_away_at;  // CLOCK_MONOTONIC's ns as the window was closed (0: it is out)
+static uint64_t asleep_at;    // as the Mac went to sleep (0: awake)
+
+static void say_shown(uint64_t since) {
+  double away = (clock_gettime_nsec_np(CLOCK_MONOTONIC) - since) / 1e6;
+  say_system(@{@"shown" : @{@"away" : @(away)}});
+}
+
+static void bring_back(void) {
+  NSWindow *w = the_view.window;
+  if (!w) return;
+  if (w.isMiniaturized) [w deminiaturize:nil];
+  [w makeKeyAndOrderFront:nil];
+  [NSApp activateIgnoringOtherApps:YES];
+  if (put_away_at) {
+    say_shown(put_away_at);
+    put_away_at = 0;
+  }
+}
+
+@interface MBAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
+@end
+@implementation MBAppDelegate
+- (BOOL)windowShouldClose:(NSWindow *)w {
+  if (!in_bundle()) return YES;
+  [w orderOut:nil];
+  if (!put_away_at) put_away_at = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+  return NO;
+}
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible {
+  bring_back();
+  return NO;
+}
+// one of the app's items in the menu bar (mb_host_menu_setup)
+- (void)menuChosen:(NSMenuItem *)item {
+  if ([item.representedObject isKindOfClass:NSString.class]) say_system(@{@"menu" : item.representedObject});
+}
+@end
+static MBAppDelegate *app_delegate;
+
+// The default network as it changes: another one than before (Wi-Fi to a cable, back online after none), not the
+// first seen (ios_app.m's network_start)
+static nw_path_monitor_t network_monitor;
+static void network_start(void) {
+  network_monitor = nw_path_monitor_create();
+  nw_path_monitor_set_queue(network_monitor, dispatch_get_main_queue());
+  static NSString *was;
+  nw_path_monitor_set_update_handler(network_monitor, ^(nw_path_t path) {
+    NSMutableString *now = [NSMutableString string];
+    if (nw_path_get_status(path) == nw_path_status_satisfied) {
+      nw_path_enumerate_interfaces(path, ^bool(nw_interface_t i) {
+        [now appendFormat:@"%s/%d", nw_interface_get_name(i), (int)nw_interface_get_type(i)];
+        return false;  // the first: the one used
+      });
+    }
+    BOOL changed = was && ![was isEqualToString:now] && now.length > 0;
+    was = now;
+    if (changed) {
+      fprintf(stdout, "mac: network now %s\n", now.UTF8String);
+      fflush(stdout);
+      say_system(@{@"network" : @YES});
+    }
+  });
+  nw_path_monitor_start(network_monitor);
+}
+
+// The Mac asleep and awake again: how long, to the app (a sleep whose start was not seen is taken as a minute's, as
+// the desktop app's followSleep)
+static void watch_sleep(void) {
+  NSNotificationCenter *ws = NSWorkspace.sharedWorkspace.notificationCenter;
+  [ws addObserverForName:NSWorkspaceWillSleepNotification object:nil queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification *n) { asleep_at = clock_gettime_nsec_np(CLOCK_MONOTONIC); }];
+  [ws addObserverForName:NSWorkspaceDidWakeNotification object:nil queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification *n) {
+                say_shown(asleep_at ? asleep_at : clock_gettime_nsec_np(CLOCK_MONOTONIC) - 60000000000ull);
+                asleep_at = 0;
+              }];
+}
+
+// ---- The menu bar (@hostapi.menu_setup) ----
+// The app's menus with its words: the system's items by their role (their actions AppKit's, or the view's for the
+// editing ones: MBView's cut: …), with the keys macOS gives them; the app's own said back on the system's channel.
+static NSMenuItem *menu_item(NSDictionary *it) {
+  if (![it isKindOfClass:NSDictionary.class] || [it[@"separator"] isEqual:@YES]) return [NSMenuItem separatorItem];
+  // (`{app}` in its words: the app's name, as the system shows it)
+  NSString *title = [it[@"title"] isKindOfClass:NSString.class] ? it[@"title"] : @"";
+  title = [title stringByReplacingOccurrencesOfString:@"{app}"
+                                           withString:NSRunningApplication.currentApplication.localizedName ?: @""];
+  NSString *role = it[@"role"], *action = it[@"action"];
+  NSEventModifierFlags cmd = NSEventModifierFlagCommand;
+  // role: its action, its key, the modifiers with it
+  NSDictionary<NSString *, NSArray *> *roles = @{
+    @"about" : @[ @"orderFrontStandardAboutPanel:", @"", @0 ],
+    @"hide" : @[ @"hide:", @"h", @(cmd) ],
+    @"hideOthers" : @[ @"hideOtherApplications:", @"h", @(cmd | NSEventModifierFlagOption) ],
+    @"showAll" : @[ @"unhideAllApplications:", @"", @0 ],
+    @"quit" : @[ @"terminate:", @"q", @(cmd) ],
+    @"undo" : @[ @"undo:", @"z", @(cmd) ],
+    @"redo" : @[ @"redo:", @"z", @(cmd | NSEventModifierFlagShift) ],
+    @"cut" : @[ @"cut:", @"x", @(cmd) ],
+    @"copy" : @[ @"copy:", @"c", @(cmd) ],
+    @"paste" : @[ @"paste:", @"v", @(cmd) ],
+    @"selectAll" : @[ @"selectAll:", @"a", @(cmd) ],
+    @"close" : @[ @"performClose:", @"w", @(cmd) ],
+    @"minimize" : @[ @"performMiniaturize:", @"m", @(cmd) ],
+    @"zoom" : @[ @"performZoom:", @"", @0 ],
+    @"fullScreen" : @[ @"toggleFullScreen:", @"f", @(cmd | NSEventModifierFlagControl) ],
+    @"front" : @[ @"arrangeInFront:", @"", @0 ],
+  };
+  if ([role isKindOfClass:NSString.class] && [role isEqualToString:@"services"]) {
+    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
+    item.submenu = [[NSMenu alloc] initWithTitle:title];
+    NSApp.servicesMenu = item.submenu;
+    return item;
+  }
+  NSArray *r = [role isKindOfClass:NSString.class] ? roles[role] : nil;
+  if (r) {
+    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:NSSelectorFromString(r[0]) keyEquivalent:r[1]];
+    item.keyEquivalentModifierMask = [r[2] unsignedIntegerValue];
+    return item;
+  }
+  // (to whoever takes it: the app's delegate, last of those asked)
+  NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:@selector(menuChosen:) keyEquivalent:@""];
+  item.representedObject = [action isKindOfClass:NSString.class] ? action : @"";
+  return item;
+}
+
+void mb_host_menu_setup(moonbit_string_t json_s) {
+  [NSApplication sharedApplication];
+  NSData *d = [mb_ns_from_string(json_s) dataUsingEncoding:NSUTF8StringEncoding];
+  NSArray *menus = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL] : nil;
+  if (![menus isKindOfClass:NSArray.class]) return;
+  NSMenu *bar = [NSMenu new];
+  for (NSDictionary *m in menus) {
+    if (![m isKindOfClass:NSDictionary.class]) continue;
+    NSString *title = [m[@"title"] isKindOfClass:NSString.class] ? m[@"title"] : @"";
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:title];
+    if ([m[@"items"] isKindOfClass:NSArray.class])
+      for (NSDictionary *it in m[@"items"]) [menu addItem:menu_item(it)];
+    NSMenuItem *top = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
+    top.submenu = menu;
+    [bar addItem:top];
+    // the window menu: the system's list of windows in it
+    if ([m[@"role"] isEqual:@"window"]) NSApp.windowsMenu = menu;
+  }
+  NSApp.mainMenu = bar;
+}
+
 void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointer,
                  mb_wheel_fn wheel, mb_key_fn key, mb_text_fn text) {
   mb_cb = (mb_callbacks){frame, pointer, wheel, key, text};
@@ -1074,6 +1275,9 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    // the app's life (put away as its window closes, back from the Dock) and its menu bar's items: MBAppDelegate
+    if (!app_delegate) app_delegate = [MBAppDelegate new];
+    NSApp.delegate = app_delegate;
     notice_start();
     // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)
     // (else the app's own, @hostapi.window_setup; else 900×720)
@@ -1159,10 +1363,14 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       }
     }
     [NSApp activateIgnoringOtherApps:YES];
+    // closed, the program ends (an app's bundle's window is put away instead: MBAppDelegate windowShouldClose)
+    w.delegate = app_delegate;
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillCloseNotification
                                                       object:w
                                                        queue:nil
                                                   usingBlock:^(NSNotification *n) { exit(0); }];
+    watch_sleep();
+    network_start();
     for (NSNotificationName name in @[ NSWindowDidBecomeKeyNotification, NSWindowDidResignKeyNotification,
                                        NSWindowDidMiniaturizeNotification, NSWindowDidDeminiaturizeNotification,
                                        NSWindowDidChangeOcclusionStateNotification ]) {
@@ -1800,8 +2008,7 @@ static BOOL notice_system(void) { return NSBundle.mainBundle.bundleIdentifier !=
     }]];
     fprintf(stdout, "NOTICE TAP %s\n", tag.UTF8String);
     fflush(stdout);
-    [NSApp activateIgnoringOtherApps:YES];
-    [the_view.window makeKeyAndOrderFront:nil];
+    bring_back();
     [the_view requestFrame];
   });
   done();
