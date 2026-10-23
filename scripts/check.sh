@@ -341,11 +341,12 @@ if [ $full = 1 ]; then
   # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
   # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
   # docs/list-motion.md), a viewer's bar dragging the window only while pointed at (test/browser/viewer-bar.mjs, the motion's last share)
-  # nothing dragging it under a folded sidebar shown a while (test/browser/peek-drag.mjs, there too)
+  # nothing dragging it under a folded sidebar shown a while (test/browser/peek-drag.mjs, there too),
+  # a folder dropped in the files' columns leaving nothing said over the list (test/browser/drive-drop.mjs, there too)
   # and a chat's side panel giving way to the chat once the window narrows (test/browser/side-panel-width.mjs, there too):
   # on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
   # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
-  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|peek-drag|side-panel-width)\.mjs$'; }; then
+  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|peek-drag|drive-drop|side-panel-width)\.mjs$'; }; then
     if command -v google-chrome >/dev/null 2>&1; then
       prep root deps .
       wasm_pkg
@@ -355,8 +356,8 @@ if [ $full = 1 ]; then
       share=${STILLFAIL_BROWSER#* }; [ "$share" = "${STILLFAIL_BROWSER:-}" ] && share=1/1
       case "${STILLFAIL_BROWSER:-}" in
         stories*) step "web: stories measured (${STILLFAIL_BROWSER#stories })" after root after core sh -c "$chrome SHARD='${STILLFAIL_BROWSER#stories }'; node test/browser/stories.mjs" ;;
-        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || { node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/side-panel-width.mjs; }; }" ;;
-        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/side-panel-width.mjs" ;;
+        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || { node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/drive-drop.mjs && node test/browser/side-panel-width.mjs; }; }" ;;
+        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/drive-drop.mjs && node test/browser/side-panel-width.mjs" ;;
       esac
     else
       later "web: stories measured, the message list's motion watched (no Chrome here)"
