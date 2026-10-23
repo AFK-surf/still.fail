@@ -754,6 +754,42 @@ final class CoreHost {
     // ── for android_core.c, on the UI's (GL) thread ──
 
     /**
+     * A call only the app answers, at once, on the core's thread (android_core.c engine_app_sync, the engine's app_sync):
+     * `text.collate {names}` the order people read the names in, the system's (ICU's collator in the device's language:
+     * 中文 by pinyin, case and accents aside, digits by their value), each name's place in it, equal names one place:
+     * {"value": [place, …]}. Null for anything else (the shell's answer), or a name that is no string (the core then
+     * orders them by hand).
+     */
+    static String sync(String op, String json) {
+        if (!"text.collate".equals(op)) return null;
+        try {
+            JSONArray names = new JSONObject(json).getJSONArray("names");
+            int n = names.length();
+            String[] s = new String[n];
+            Integer[] order = new Integer[n];
+            for (int i = 0; i < n; i++) {
+                Object v = names.get(i);
+                if (!(v instanceof String)) return null;
+                s[i] = (String) v;
+                order[i] = i;
+            }
+            android.icu.text.Collator c = android.icu.text.Collator.getInstance(android.icu.util.ULocale.getDefault());
+            c.setStrength(android.icu.text.Collator.PRIMARY);
+            if (c instanceof android.icu.text.RuleBasedCollator) ((android.icu.text.RuleBasedCollator) c).setNumericCollation(true);
+            java.util.Arrays.sort(order, (x, y) -> c.compare(s[x], s[y]));
+            int[] place = new int[n];
+            for (int k = 0; k < n; k++) {
+                place[order[k]] = k > 0 && c.compare(s[order[k - 1]], s[order[k]]) == 0 ? place[order[k - 1]] : k;
+            }
+            JSONArray out = new JSONArray();
+            for (int p : place) out.put(p);
+            return new JSONObject().put("value", out).toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Where the core keeps its files: the app's own files, never another app's. Where still.fail's Android app kept its
      * core's (this app having taken its place: the same package; apps/android StillFailCore.kt, <files>/stillfail-core,
      * the same core and shell, so the same files), they become this one's, as they are: its account, its chats, its

@@ -35,7 +35,7 @@ static struct {
   int ready;
   jclass host, core_host, string, adb_core;
   jmethodID adb_says;
-  jmethodID data_dir, asset, init, started, closing, string_init, secure_test, on_app, get_bytes;
+  jmethodID data_dir, asset, init, started, closing, string_init, secure_test, on_app, get_bytes, sync;
   jstring utf8_name;
   jobject listener;  // this core's CoreHost
   sf_engine *engine;
@@ -192,6 +192,24 @@ static void engine_thread(void *ctx) {
   core_env();
 }
 
+// A call only the app answers at once (engine.h `app_sync`: `text.collate`, the order people read names in), its
+// CoreHost.sync's answer: malloc'd JSON, or NULL (none: the shell's).
+static char *engine_app_sync(void *ctx, const char *op, const char *json, size_t len) {
+  (void)ctx;
+  if (!A.sync) return NULL;
+  JNIEnv *env = core_env();
+  jstring name = (*env)->NewStringUTF(env, op);
+  jstring ask = jstring_utf8(env, json, len);
+  jstring said = (jstring)(*env)->CallStaticObjectMethod(env, A.core_host, A.sync, name, ask);
+  (*env)->DeleteLocalRef(env, name);
+  (*env)->DeleteLocalRef(env, ask);
+  if (cleared(env) || !said) return NULL;
+  size_t n = 0;
+  char *out = utf8_of(env, said, &n);
+  (*env)->DeleteLocalRef(env, said);
+  return out;
+}
+
 // What the app's Java asks the core (AdbCore.send): the UI's client, the core's thread takes it in order.
 static void JNICALL java_send(JNIEnv *env, jclass cls, jstring json) {
   if (!A.engine || !json) return;
@@ -254,6 +272,7 @@ static int core_init(JNIEnv *env) {
   A.closing = (*env)->GetMethodID(env, A.core_host, "closing", "()V");
   A.secure_test = (*env)->GetStaticMethodID(env, A.core_host, "secureTest", "()V");
   A.on_app = (*env)->GetMethodID(env, A.core_host, "onApp", "(JLjava/lang/String;[B[B)V");
+  A.sync = (*env)->GetStaticMethodID(env, A.core_host, "sync", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
   A.get_bytes = (*env)->GetMethodID(env, A.string, "getBytes", "(Ljava/lang/String;)[B");
   JNINativeMethod natives[] = {
       {"complete", "(JJLjava/lang/String;Ljava/lang/String;[B)V", (void *)host_complete},
@@ -328,7 +347,7 @@ static void core_start(const char *data_dir, const char *cloud_origin, int beta,
   A.listener = (*env)->NewGlobalRef(env, listener);
   jsize size = (*env)->GetArrayLength(env, script);
   jbyte *code = (*env)->GetByteArrayElements(env, script, NULL);
-  sf_engine_host host = {NULL, engine_say, engine_app_call, engine_log, engine_thread};
+  sf_engine_host host = {NULL, engine_say, engine_app_call, engine_log, engine_thread, engine_app_sync};
   A.engine = sf_engine_start((const uint8_t *)code, (size_t)size, "core.hbc", data_dir, cloud_origin, beta, "android", &host);
   (*env)->ReleaseByteArrayElements(env, script, code, JNI_ABORT);
   if (!A.engine) {

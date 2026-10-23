@@ -20,6 +20,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <functional>
@@ -280,6 +281,14 @@ class Engine {
     fn("callSync", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       std::string op = a[0].asString(rt).utf8(rt);
       std::string json = a[1].asString(rt).utf8(rt);
+      // what only the app answers (its system's order of names): the host's, when it gives one
+      if (host_.app_sync && op.rfind("text.", 0) == 0) {
+        if (char* said = host_.app_sync(host_.ctx, op.c_str(), json.data(), json.size())) {
+          jsi::String s = jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(said), std::strlen(said));
+          std::free(said);
+          return s;
+        }
+      }
       size_t len = 0;
       uint8_t* out = sf_shell_call_sync(shell_, op.c_str(), reinterpret_cast<const uint8_t*>(json.data()), json.size(), &len);
       jsi::String s = jsi::String::createFromUtf8(rt, out, len);
