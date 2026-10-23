@@ -7,15 +7,21 @@ export const body = style({ display: "grid", gap: "12px", minWidth: "0" });
 export const list = style({ display: "grid", gap: "2px", maxHeight: "300px", overflowY: "auto", minHeight: "0" });
 /** 「最近用过」 over the places relayed to before. */
 export const groupHead = style({ padding: "2px 8px", fontSize: vars.textMeta, color: vars.muted });
-/** The workspaces to look in, when there are several: all, or one, each with its platform's mark. */
+/** The bots to go on through, when there are several: each its picture and name, the one gone on through filled. */
 export const scopes = style({ display: "flex", flexWrap: "wrap", gap: "6px" });
 export const scope = style({
   display: "inline-flex", alignItems: "center", gap: "5px", height: "26px", padding: "0 10px", border: "none",
-  borderRadius: "999px", background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.muted,
+  borderRadius: "999px", background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,
   fontSize: vars.textMeta, cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}`,
+  selectors: { "&[data-on]": { background: vars.text } },
+});
+/** A bot's name on its chip: coloured on its own, as the phone's buttons take their words' colour from around them
+ * (mobile/styles/root.css.ts). */
+export const scopeName = style({
+  color: vars.muted,
   selectors: {
-    "&:hover:not([data-on])": { color: vars.text },
-    "&[data-on]": { background: vars.text, color: vars.canvas },
+    [`${scope}:hover:not([data-on]) &`]: { color: vars.text },
+    [`${scope}[data-on] &`]: { color: vars.canvas },
   },
 });
 /** A place to pick: its platform's mark, its name, its workspace (among several), and what relaying there does. */
@@ -30,10 +36,6 @@ export const place = style({
   },
 });
 export const placeName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const placeWhere = style({
-  flex: "none", fontSize: vars.textMeta, color: vars.muted,
-  selectors: { [`${place}[data-on] &`]: { color: vars.accentText } },
-});
 export const placeNote = style({
   flex: "none", marginLeft: "auto", fontSize: vars.textMeta, color: vars.muted,
   selectors: { [`${place}[data-on] &`]: { color: vars.accentText } },

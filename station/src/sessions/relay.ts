@@ -10,6 +10,7 @@ import { threadAddress } from "../agents/instructions.ts";
 import { FeishuSurface } from "../feishu/surface.ts";
 import { SlackSurface } from "../slack/surface.ts";
 import type { ChatSurface, Place, ThreadRef } from "./chat.ts";
+import type { Connect } from "./config.ts";
 import type { Hub } from "./hub.ts";
 
 /// A place a chat can be relayed to, with when one was last relayed there (absent if never).
@@ -24,6 +25,8 @@ export type RelayConnect = {
   team: string | null;
   /// Its bot's picture as the platform shows it, once known.
   botImage: string | null;
+  /// The bot the chat goes on through unless another is picked (one of them at most): see `preferredOf`.
+  preferred: boolean;
   places: RelayPlace[];
   error?: string;
 };
@@ -38,14 +41,11 @@ function agentOf(hub: Hub, thread: ThreadRow): string {
   return member.session;
 }
 
-/// The connects of the session's workspace that are on and connected, with the surface each speaks through: of the
-/// bots in one Slack workspace or Feishu tenant, the chat's own (the session's connect), else those running what the
-/// chat's agent runs (its runtime, and its model where one of them is bound to it); all of them where none does.
-function connectsFor(hub: Hub, session: string): { id: string; chat: ChatSurface; kind: RelayConnect["kind"] }[] {
+/// The connects of the session's workspace that are on and connected, with the surface each speaks through.
+function connectsFor(hub: Hub, session: string): { id: string; chat: ChatSurface; kind: RelayConnect["kind"]; bind: Connect["bind"] }[] {
   const home = hub.workspaces()[0] ?? null;
   const ws = hub.wsOf(session);
-  const row = hub.store.getSession(session);
-  const all = hub
+  return hub
     .config()
     .connects.filter((c) => c.enabled && (home === null || (c.workspace ?? home) === ws))
     .flatMap((c) => {
@@ -54,18 +54,21 @@ function connectsFor(hub: Hub, session: string): { id: string; chat: ChatSurface
       const kind: RelayConnect["kind"] = c.kind === "feishu" ? (chat instanceof FeishuSurface && chat.domain === "lark" ? "lark" : "feishu") : "slack";
       return [{ id: c.id, chat, kind, bind: c.bind }];
     });
-  const platform = (c: (typeof all)[number]) => `${c.kind}/${c.chat.workspace() ?? c.id}`;
-  return all
-    .filter((c) => {
-      const there = all.filter((o) => platform(o) === platform(c));
-      if (row === null || there.length === 1) return true;
-      if (there.some((o) => o.id === row.connect)) return c.id === row.connect;
-      const runs = there.filter((o) => o.bind.runtime === row.runtime);
-      const model = runs.filter((o) => row.model !== null && o.bind.model === row.model);
-      const kept = model.length > 0 ? model : runs.length > 0 ? runs : there;
-      return kept.includes(c);
-    })
-    .map(({ id, chat, kind }) => ({ id, chat, kind }));
+}
+
+/// The bot a chat goes on through unless another is picked: the chat's own (its session's connect), else the first
+/// bound to the profile its agent runs on, else to its runtime and model, else to its runtime; none where no bot runs
+/// what its agent runs.
+function preferredOf(hub: Hub, session: string, connects: { id: string; bind: Connect["bind"] }[]): string | null {
+  const row = hub.store.getSession(session);
+  if (row === null) return null;
+  const runs = connects.filter((c) => c.bind.runtime === row.runtime);
+  const found =
+    connects.find((c) => c.id === row.connect) ??
+    runs.find((c) => c.bind.profile === row.profile) ??
+    runs.find((c) => row.model !== null && c.bind.model === row.model) ??
+    runs[0];
+  return found?.id ?? null;
 }
 
 /// The team (Slack workspace, Feishu tenant) a surface's bot is in, and its bot's picture, once they are known.
@@ -79,8 +82,10 @@ function identityOf(chat: ChatSurface): { team: string | null; botImage: string 
 export async function relayPlaces(hub: Hub, thread: ThreadRow): Promise<RelayConnect[]> {
   const session = agentOf(hub, thread);
   const out: RelayConnect[] = [];
-  for (const c of connectsFor(hub, session)) {
-    const shown = { id: c.id, kind: c.kind, name: c.chat.botName?.() || c.id, ...identityOf(c.chat) };
+  const connects = connectsFor(hub, session);
+  const preferred = preferredOf(hub, session, connects);
+  for (const c of connects) {
+    const shown = { id: c.id, kind: c.kind, name: c.chat.botName?.() || c.id, ...identityOf(c.chat), preferred: c.id === preferred };
     try {
       const used = hub.store.relayedTo(c.id);
       const places: RelayPlace[] = (await c.chat.places!()).map((p) => (used.has(p.id) ? { ...p, used: used.get(p.id)! } : p));
@@ -98,8 +103,8 @@ export async function relayPlaces(hub: Hub, thread: ThreadRow): Promise<RelayCon
 const placeName = (place: Place) => (place.kind === "channel" ? `#${place.name}` : place.name);
 
 /// Where a person relays a chat: a connect's place (a new conversation there), or a link to a message of a thread
-/// in one (that thread).
-export type RelayTarget = { connect: string; channel: string } | { link: string };
+/// in one (that thread; through the connect named, when it is in that workspace, else the first that is).
+export type RelayTarget = { connect: string; channel: string } | { link: string; connect?: string };
 
 /// Relays a chat by `by` (a person's name), with their `note`.
 export async function relay(hub: Hub, thread: ThreadRow, by: string, target: RelayTarget, note: string): Promise<Relayed> {
@@ -108,7 +113,8 @@ export async function relay(hub: Hub, thread: ThreadRow, by: string, target: Rel
   let c: (typeof connects)[number] | undefined;
   let existing: ThreadRef | null = null;
   if ("link" in target) {
-    for (const candidate of connects) {
+    const named = connects.filter((o) => o.id === target.connect);
+    for (const candidate of [...named, ...connects.filter((o) => o.id !== target.connect)]) {
       existing = candidate.chat.threadOf?.(target.link) ?? null;
       if (existing !== null) {
         c = candidate;

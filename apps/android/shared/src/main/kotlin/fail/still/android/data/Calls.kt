@@ -448,7 +448,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun relay(thread: Long, connect: String?, channel: String?, link: String?, note: String): String =
         decode(Relayed.serializer(), op("chat.relay") {
             put("thread", thread)
-            if (link != null) put("link", link) else { put("connect", connect); put("channel", channel) }
+            if (link != null) { put("link", link); if (connect != null) put("connect", connect) } else { put("connect", connect); put("channel", channel) }
             if (note.isNotBlank()) put("note", note)
         }).place
     /** Shares this station's chat `id` with one workspace more (`workspace`), telling its station `prefer` first. */
@@ -841,7 +841,7 @@ data class RelayPlace(val id: String, val name: String, val kind: String, val pr
 
 /** A connect a chat can be relayed through (`kind` slack, feishu or lark), with its places; none, and why, when they could not be read. */
 @kotlinx.serialization.Serializable
-data class RelayConnect(val id: String, val kind: String, val name: String, val team: String? = null, val botImage: String? = null, val places: List<RelayPlace> = emptyList(), val error: String? = null)
+data class RelayConnect(val id: String, val kind: String, val name: String, val team: String? = null, val botImage: String? = null, val preferred: Boolean = false, val places: List<RelayPlace> = emptyList(), val error: String? = null)
 
 @kotlinx.serialization.Serializable
 private class RelayPlaces(val connects: List<RelayConnect> = emptyList())

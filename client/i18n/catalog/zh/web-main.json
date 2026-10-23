@@ -761,9 +761,8 @@
   "web-main.relay.kind.thread": "已有 thread · agent 先读之前的消息",
   "web-main.relay.recent": "最近接力过",
   "web-main.relay.showAll": "显示全部 {count} 个",
-  "web-main.relay.workspaces": "在哪个 workspace 里找",
-  "web-main.relay.allWorkspaces": "全部",
   "web-main.relay.change": "更换",
+  "web-main.relay.bots": "用哪个 bot",
   "web-main.relay.via": "那里由 {bot} 回复",
   "web-main.relay.goTo": "接力到 {place}"
 }

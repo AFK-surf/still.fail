@@ -397,7 +397,7 @@ export interface MachineSaid { person: boolean; text: string; at: number | null 
 export interface RelayPlace { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean; used?: number }
 
 /** A connect a chat can be relayed through, with its places (none, and why, when they could not be read). */
-export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; botImage?: string | null; places: RelayPlace[]; error?: string }
+export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; botImage?: string | null; preferred?: boolean; places: RelayPlace[]; error?: string }
 
 /** Where a chat was relayed: the place's name, and its link where the platform has one. */
 export interface Relayed { thread: number; to: string; place: string; link: string | null }
@@ -432,7 +432,7 @@ export function stationApi(t: StationCall) {
     /** Where the chat can be relayed: each connect's channels and groups its bot is in. */
     relayPlaces: (thread: number) => ops.chatRelayPlaces<{ connects: RelayConnect[] }>({ thread }),
     /** The chat relayed to a connect's channel or group, or the Slack thread of a message's link, with the person's note; its agent goes on there too. */
-    relay: (thread: number, to: { connect: string; channel: string } | { link: string }, note: string) =>
+    relay: (thread: number, to: { connect: string; channel: string } | { link: string; connect?: string }, note: string) =>
       ops.chatRelay<Relayed>(note.trim() === "" ? { thread, ...to } : { thread, ...to, note }),
     deleteSession: (key: string) => ops.sessionDelete<{ ok: true }>({ key }),
     evict: (key: string) => ops.sessionEvict<{ ok: true }>({ key }),

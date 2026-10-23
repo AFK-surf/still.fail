@@ -836,9 +836,8 @@
   "web-main.relay.kind.thread": "Existing thread · the agent reads it first",
   "web-main.relay.recent": "Relayed to before",
   "web-main.relay.showAll": "Show all {count}",
-  "web-main.relay.workspaces": "Workspaces to look in",
-  "web-main.relay.allWorkspaces": "All",
   "web-main.relay.change": "Change",
+  "web-main.relay.bots": "Which bot",
   "web-main.relay.via": "{bot} replies there",
   "web-main.relay.goTo": "Relay to {place}"
 }
