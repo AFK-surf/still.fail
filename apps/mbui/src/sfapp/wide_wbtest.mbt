@@ -210,3 +210,19 @@ test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权�
   assert_true(t.find("空闲多久") is Some(_))
   assert_true(t.find("只在 Slack 里的对话") is Some(_))
 }
+
+///|
+test "wide: Station and Profile a list of their own beside their page; 连接 and 用量 across the pane, no sidebar" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("添加 station") is Some(_))
+  assert_true(t.find("新建对话") is None, msg="not the chats' list")
+  app.nav.replace(Place("profiles"))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("添加 Profile") is Some(_))
+  app.nav.replace(Place("usage"))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("添加 station") is None && t.find("添加 Profile") is None && t.find("新建对话") is None)
+}

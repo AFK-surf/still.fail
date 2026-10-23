@@ -300,6 +300,10 @@ pub fn open_mode(mode : String) -> Unit {
     bar.open_panel(true)
   } else if mode == "place" {
     app.nav.replace(Files)
+  } else if mode.has_prefix("place-") {
+    // a place of the rail's in the wide frame (wide_places.mbt): place-stations, place-profiles, place-connects,
+    // place-usage
+    app.nav.replace(Place(mode.view(start_offset=6).to_string()))
   } else if mode == "home-sheet" {
     raise_sheet(Workspaces)
   }
