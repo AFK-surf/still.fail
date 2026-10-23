@@ -169,8 +169,12 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
     // Driven as a trackpad: where the finger has moved it (ahead of the station's word), in the station's shape.
     const at = padRef.current && drivingRef.current && station ? { ...station, x: padPointer.current.x, y: padPointer.current.y } : padRef.current && drivingRef.current ? { x: padPointer.current.x, y: padPointer.current.y, shape: "" } : station;
     if (el) {
-      el.hidden = !at || (hovering.current && drivingRef.current);
+      // Hidden on the screen too ("none"), or while this mouse is its pointer (then shown in its shape, below).
+      el.hidden = !at || at.shape === "none" || (hovering.current && drivingRef.current);
       if (at) { el.style.left = `${at.x * 100}%`; el.style.top = `${at.y * 100}%`; }
+      // As large as a pointer on the screen would look at the picture's size: smaller on a phone, never past 18 px.
+      const shown = picture.current?.clientWidth ?? 0;
+      if (shown > 0) el.style.setProperty("--pointer", `${Math.round(Math.min(18, Math.max(10, shown / 90)))}px`);
     }
     if (stage.current) stage.current.style.cursor = drivingRef.current && at?.shape ? at.shape : "";
   }, []);
@@ -525,7 +529,7 @@ const ROW_KEYS: { label: string; name?: string; key?: string; code?: string; mod
 /** The station's pointer: an arrow, its tip at the point. */
 function Arrow() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+    <svg viewBox="0 0 18 18" aria-hidden="true">
       <path d="M4 2L14.5 10.2L9.6 10.9L7.2 15.6Z" fill="#fff" stroke="#000" strokeWidth="1.2" strokeLinejoin="round" />
     </svg>
   );

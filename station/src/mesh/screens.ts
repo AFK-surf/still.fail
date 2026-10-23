@@ -214,6 +214,7 @@ class ViewSession {
   #leave: () => void = () => {};
   #unwatch: () => void = () => {};
   #unclip: () => void = () => {};
+  #unpoint: () => void = () => {};
   #title: string;
   /// The bit rate the source was last asked for.
   #rate: number | null = null;
@@ -266,6 +267,7 @@ class ViewSession {
     if (this.#closed) return;
     this.#closed = true;
     this.#unclip();
+    this.#unpoint();
     this.view.close();
     this.#leave();
     this.#unwatch();
@@ -300,6 +302,12 @@ class ViewSession {
     if (types.length > 0 && this.view.watchClipboard) {
       this.#unclip = this.view.watchClipboard((clip) => {
         if (!this.#closed && types.includes(clip.type) && clipFits(clip)) void this.#send(KIND.clipboard, clipPayload(clip));
+      });
+    }
+    // The pointer, where the source's pictures leave it out (a video of the desktop): the client draws it.
+    if (this.view.watchCursor) {
+      this.#unpoint = this.view.watchCursor((cursor) => {
+        if (!this.#closed) void this.#state({ cursor });
       });
     }
     void this.stream.stopped().then(

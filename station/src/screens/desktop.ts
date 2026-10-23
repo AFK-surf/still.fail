@@ -21,7 +21,7 @@ import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -191,7 +191,8 @@ type HelperError = Error & { code?: string };
 /// To it: 1 next, 2 keyframe, 3 input, 4 clipboard (flags: bit 0 paste; type: 1 text, 2 PNG; the bytes), 5 watch the
 /// clipboard (1 on, 0 off), 6 reveal (the path), 7 rate (bits a second, 4 bytes), 8 bounds (JSON {maxWidth, maxHeight});
 /// a helper from before 7 and 8 lets them be.
-/// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes).
+/// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes), 6 cursor (JSON {x, y, shape}: a video's
+/// pictures leave the pointer out).
 export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 
@@ -228,6 +229,9 @@ export class HelperView implements ScreenView {
   readonly #gone: () => void;
   /// Who hears the clipboard as it changes, while it is watched.
   #clipboard: ((clip: Clip) => void) | null = null;
+  /// Who hears the pointer, and the last it said (told at once to one who starts to hear it).
+  #cursor: ((cursor: ScreenCursor) => void) | null = null;
+  #lastCursor: ScreenCursor | null = null;
 
   /// What it was asked for, then what it encodes (its `info`).
   #codec: Codec;
@@ -287,6 +291,17 @@ export class HelperView implements ScreenView {
       case 4:
         log.info("screens", "still.fail Helper", { said: payload.toString() });
         return;
+      case 6: {
+        let said: any = null;
+        try {
+          said = JSON.parse(payload.toString());
+        } catch {}
+        const unit = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1;
+        if (said === null || !unit(said.x) || !unit(said.y)) return;
+        this.#lastCursor = { x: said.x, y: said.y, shape: typeof said.shape === "string" && /^[a-z-]{1,24}$/.test(said.shape) ? said.shape : "default" };
+        this.#cursor?.(this.#lastCursor);
+        return;
+      }
       case 5: {
         const body = payload.subarray(1);
         const clip: Clip | null = payload[0] === 1 ? { type: "text", text: body.toString("utf8") } : payload[0] === 2 ? { type: "png", data: new Uint8Array(body) } : null;
@@ -344,6 +359,14 @@ export class HelperView implements ScreenView {
 
   async reveal(path: string): Promise<void> {
     this.#send(TO_HELPER.reveal, Buffer.from(path, "utf8"));
+  }
+
+  watchCursor(heard: (cursor: ScreenCursor) => void): () => void {
+    this.#cursor = heard;
+    if (this.#lastCursor) heard(this.#lastCursor);
+    return () => {
+      if (this.#cursor === heard) this.#cursor = null;
+    };
   }
 
   close() {
