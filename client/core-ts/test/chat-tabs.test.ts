@@ -75,7 +75,7 @@ test("the_calls_read_the_chat_and_the_tab", () => {
 test("a_chats_view_says_its_tabs_as_the_calls_change_them", async () => {
   const { host, core } = await started();
   const ui = core.connect();
-  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
   subscribe(core, ui, 2, { topic: "prefs" });
   await host.settle();
   await host.settle();
@@ -83,14 +83,14 @@ test("a_chats_view_says_its_tabs_as_the_calls_change_them", async () => {
   apply(host, values);
   assert.deepEqual(v(values, 1).agents.map((a: J) => a.session.key), ["k1"]);
   assert.deepEqual(v(values, 1).tabs, { open: [] });
-  call(core, ui, 3, "chat.tabs.open", { chat: "ws/st:k1", tab: "jobs" });
+  call(core, ui, 3, "chat.tabs.open", { chat: "ws/st:7", tab: "jobs" });
   await host.settle();
-  call(core, ui, 4, "chat.tabs.open", { chat: "ws/st:k1", tab: "k1" });
+  call(core, ui, 4, "chat.tabs.open", { chat: "ws/st:7", tab: "k1" });
   await host.settle();
   apply(host, values);
   assert.deepEqual(v(values, 1).tabs, { open: ["k1", "jobs"], shown: "k1" });
-  assert.deepEqual([v(values, 2).chatTabs["ws/st:k1"].tabs, v(values, 2).chatTabs["ws/st:k1"].active], [["k1", "jobs"], "k1"]);
-  call(core, ui, 5, "chat.tabs.close", { chat: "ws/st:k1", tab: "k1" });
+  assert.deepEqual([v(values, 2).chatTabs["ws/st:7"].tabs, v(values, 2).chatTabs["ws/st:7"].active], [["k1", "jobs"], "k1"]);
+  call(core, ui, 5, "chat.tabs.close", { chat: "ws/st:7", tab: "k1" });
   await host.settle();
   apply(host, values);
   assert.deepEqual(v(values, 1).tabs, { open: ["jobs"], shown: "jobs" });
