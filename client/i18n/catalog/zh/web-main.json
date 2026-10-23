@@ -565,7 +565,6 @@
   "web-main.usage.seePrices": "查看价目表 →",
   "web-main.usage.showAll": "显示全部 {n} 个",
   "web-main.usage.today": "今天",
-  "web-main.usage.top": "单日最高 {cost}",
   "web-main.versions.auto": "自动更新",
   "web-main.versions.autoTip": "有新版本时 station 自动更新，agent 不中断",
   "web-main.versions.autoIdleTip": "有客户端连接或 agent 工作时不自动更新，连续空闲 5 分钟后更新",

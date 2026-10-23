@@ -4937,6 +4937,14 @@ data class UsageSeries (
 	val name: String
 )
 
+/// A line of the scale the bars stand in, at `value` dollars.
+@Serializable
+data class UsageTick (
+	val value: Double,
+	/// 2k
+	val label: String
+)
+
 /// 折合费用 $1,911 (按 API 价算).
 @Serializable
 data class UsageTile (
@@ -4958,8 +4966,12 @@ data class UsageView (
 	val tiles: List<UsageTile>,
 	val series: List<UsageSeries>,
 	val daily: List<UsageDay>,
-	/// The most a day cost (what the bars are drawn against).
+	/// The most a day cost.
 	val max: Double,
+	/// What the bars are drawn against: a round number at or above `max` (views/usage.ts scale), 0 when nothing was spent.
+	val top: Double,
+	/// The scale's lines, the last at `top`.
+	val ticks: List<UsageTick>,
 	val lists: List<UsageList>,
 	val notes: List<String>,
 	val basis: String,

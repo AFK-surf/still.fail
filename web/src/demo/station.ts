@@ -5,6 +5,7 @@
 import data from "./station.json";
 import { CHEN, LIN, stamp, STATION, ZHOU, type Runs } from "./fixtures.ts";
 import type { ArchiveDay, ArchiveView, Connect, ConnectsView, DriveEntry, DriveFolder, DriveKind, Person } from "../core/shapes.ts";
+import { scale } from "../../../client/core-ts/src/views/scale.ts";
 
 const TIME = /^(at|checkedAt|resetsAt|startedAt|createdAt|endedAt|lastActiveAt|updatedAt)$/;
 
@@ -222,7 +223,7 @@ export function usage(days: number) {
       { label: "token", value: `${(total * 0.52).toFixed(1)}M`, sub: `${Math.round(total * 41).toLocaleString("en-US")} 次调用` },
     ],
     series: people.map((p) => ({ key: p.email ?? p.id, name: p.name })),
-    daily, max: Math.max(...daily.map((d) => d.cost)),
+    daily, max: Math.max(...daily.map((d) => d.cost)), ...scale(Math.max(...daily.map((d) => d.cost))),
     lists: [
       { key: "chats", title: "按对话", items: [
         item("deps", "每周依赖升级", 0.31, "Studio · Sonnet 5.5", { chat: { station: STATION, session: "ember:c-demo-deps" } }),

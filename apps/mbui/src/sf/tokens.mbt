@@ -517,6 +517,26 @@ pub let list_card_radius : @ui.Radius = Exact(concentric_out(row_corner, list_pa
 pub let seg_card_radius : @ui.Radius = Exact(concentric_out(10.0, card_pad))
 
 ///|
+/// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 16 wide at most (BAR), how far a line of the
+/// scale's words stand over it (their line, Xs3's 14, and 2), and a part's corner (4; 2 with many days: Base, Sm).
+pub let usage_plot : Double = 150.0
+
+///|
+pub let usage_plot_h : @ui.Len = Fixed(usage_plot)
+
+///|
+pub let usage_bar_max : @ui.Len = Fixed(16.0)
+
+///|
+pub let usage_tick_rise : Double = 16.0
+
+///|
+pub let usage_part_r : Double = 4.0
+
+///|
+pub let usage_part_r_many : Double = 2.0
+
+///|
 /// A small dot's side, how a thing stands (7: PageParts.kt:465 PresenceDot, Security.kt:101 Dot).
 pub let dot_size : @ui.Len = Fixed(7.0)
 

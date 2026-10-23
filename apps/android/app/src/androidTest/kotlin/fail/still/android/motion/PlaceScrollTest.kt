@@ -89,7 +89,7 @@ class PlaceScrollTest {
         h.fake.put(Topics.connects(Fixtures.WS, false), ConnectsView(Me("alice", "alice@example.com"), stations.flatMap { st ->
             (0 until 2).map { j -> ConnectItem(st.station, st.name, connect("${st.id}-$j", "conn-${st.id}-$j"), emptyList(), null, emptyList(), 0) }
         }, wait = Fixtures.NO_WAIT))
-        h.fake.put(Topics.usage(Fixtures.WS, 7), UsageView(7u, Fixtures.NO_WAIT, true, emptyList(), emptyList(), emptyList(), 0.0, emptyList(), (0 until 60).map { "note-$it" }, "basis"))
+        h.fake.put(Topics.usage(Fixtures.WS, 7), UsageView(7u, Fixtures.NO_WAIT, true, emptyList(), emptyList(), emptyList(), 0.0, 0.0, emptyList(), emptyList(), (0 until 60).map { "note-$it" }, "basis"))
         h.fake.put(Topics.archive(Fixtures.WS), ArchiveView(listOf(ArchiveDay("今天", (0 until 30).map {
             ArchiveItem(Fixtures.STATION, "a-$it", "ember:a-$it", 300L + it, "archived-$it", "说过的话", Fixtures.NOW.toDouble(), "10:00", "手动归档", true)
         })), emptyList(), wait = Fixtures.NO_WAIT))

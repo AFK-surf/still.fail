@@ -8,6 +8,9 @@ import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
+import { scale } from "./scale.ts";
+
+export { scale };
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -338,7 +341,8 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     notes.push(t("core-views.usage.note.since", { month, day }));
   }
   if (total.unpriced > 0) notes.push(t("core-views.usage.note.unpriced", { n: count(total.unpriced) }));
-  return { days, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, series, daily, max, lists, notes, basis: t("core-views.usage.basis") };
+  const { top: scaleTop, ticks } = scale(max);
+  return { days, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, series, daily, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };
