@@ -108,6 +108,7 @@ let zh_wide : Map[String, String] = {
   "web-main.sidebar.noneMine": "暂无你参与的会话",
   "web-main.sidebar.noneWatching": "暂无监控中的会话",
   "web-main.sidebar.open": "展开侧边栏",
+  "web-pages.workspace.resizeSidebar": "调整侧边栏宽度",
   "web-main.sidebar.resize": "调整侧边栏宽度",
   "web-main.switcher.chats": "对话",
   "web-main.switcher.noMatch": "未找到结果",

@@ -41,6 +41,8 @@ fn new_chat_page_wide(
             if icon_button(c, "new/files", "folder", label=tr("web-pages.chat.files")) {
               new_files_set(src, w.id, panel <= 0.0)
             }
+            // (its end by the window's while the page is moved aside for the sidebar shown a while)
+            page_bar_end(c)
           })
           |> ignore
         })

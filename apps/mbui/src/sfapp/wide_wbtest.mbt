@@ -411,7 +411,8 @@ test "wide: Station and Profile a list of their own beside their page; 连接 an
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("添加 Profile") is Some(_))
   app.nav.replace(Place("usage"))
-  t.run_for(@ui.nav_push_ms)
+  // (the sidebar closing to the rail's bar as the web's: brand.tsx moveSidebar)
+  t.run_for(side_move_ms)
   assert_true(t.find("添加 station") is None && t.find("添加 Profile") is None && t.find("新建对话") is None)
 }
 
@@ -433,8 +434,9 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
   assert_true(t.find("外接硬盘") is Some(_))
   t.frame()
   assert_eq(named(calls, "drive.folders").length(), 1)
-  // a shared folder opens in the pane, in columns
-  t.tap_text("文档")
+  // a shared folder opens in the pane, in columns (the sidebar's 文档, not the pane's)
+  let (dx, dy) = t.locate("文档").filter(fn(p) { p.0 < rail_w + wide.side_w })[0]
+  t.tap(dx, dy)
   t.run_for(@ui.nav_push_ms)
   match app.nav.top() {
     Drive(at) => assert_eq(at.root, Some(fix_docs))
@@ -1131,7 +1133,8 @@ test "wide: 用量 as the web's: what it counts beside its title, who spent it t
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("usage"))
-  t.run_for(@ui.nav_push_ms)
+  // (the chats' sidebar closing to the rail's bar meanwhile, as the web's)
+  t.run_for(side_move_ms)
   assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
   assert_true(t.find("整理发布清单") is None, msg="not the chats' list first: " + t.words().map(fn(w) { w.0 }).join("|"))
   let (bx, by) = t.find_last("按对话").unwrap()

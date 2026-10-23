@@ -112,7 +112,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   c.box(style=foot_fill, fn() {
-    c.box(style=foot_band, glass=@sf.glass_floating(tint=if wide.folded { closed_ground() } else { t.p.sidebar }), fn() {
+    c.box(style=foot_band, glass=@sf.glass_floating(tint=@sf.mix(closed_ground(), rail_ws.fold_e, t.p.sidebar)), fn() {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")
