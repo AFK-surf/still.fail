@@ -1264,7 +1264,8 @@ pub fn set_dark(dark : Bool) -> Unit {
 ///|
 /// Turned sideways for a film (still.fail's player, Player.kt): landscape asked for (a phone with rotation locked
 /// turns too) and the system's bars out of the way (a swipe brings them for a while); `false`, upright as it was.
-/// Android does it (the activity's requested orientation, its window's insets controller); elsewhere nothing turns.
+/// Android does it (the activity's requested orientation, its window's insets controller), and iOS (the scene's
+/// orientations, the status bar and the home indicator hidden); elsewhere nothing turns.
 pub fn set_sideways(on : Bool) -> Unit {
   current.val.set_sideways(on)
 }
@@ -1566,7 +1567,7 @@ pub fn over_done(open_app~ : Bool) -> Unit {
 
 ///|
 /// A page shown in a browser's tab over the app, the app under it (Android's Custom Tab, the system's browser where
-/// none takes one); elsewhere as open_url. False when nothing took it.
+/// none takes one; iOS's SFSafariViewController); elsewhere as open_url. False when nothing took it.
 pub fn open_tab(url : String) -> Bool {
   current.val.open_tab(url)
 }
