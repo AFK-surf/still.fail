@@ -351,7 +351,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   };
   const viewTools = !over ? (
     <>
-      {live && <NetChip net={net} shown={shown} meter={meter} />}
+      {live && <NetChip net={net} shown={shown} meter={meter} os={os} />}
       <ControlCenter quality={quality} onQuality={(q) => setPrefs({ screenQuality: q === "auto" ? null : q })}
         combos={driving ? combosFor(os) : []} onCombo={sendCombo} onSend={drop ? () => files.current?.click() : undefined}
         onWindow={onWindow} full={full} onFull={goFull} onLeave={onBack} />

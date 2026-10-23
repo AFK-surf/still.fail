@@ -163,7 +163,8 @@ export function useStationLook(address: string | null): StationLook | undefined 
   }, (a, b) => a === b || (!!a && !!b && a.name === b.name && a.emoji === b.emoji && a.icon === b.icon));
 }
 
-/** The system a station runs on (its host's `os`: macos, windows, linux), by its address; undefined until known. */
+/** The system a station runs on, in words (its host's `os`: macOS 26.6.2, Windows 11 Pro…), by its address; undefined
+ * until known. */
 export function useStationOs(address: string): string | undefined {
   const scope = address.split("/")[0];
   return useTopicSelect<StationView[], string | undefined>(scope ? { topic: "stations", scope } : null, (s) => s.value?.find((x) => x.station === address)?.host?.os || undefined, (a, b) => a === b);

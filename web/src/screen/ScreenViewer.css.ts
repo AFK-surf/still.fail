@@ -176,30 +176,36 @@ export const figure = style({
   selectors: { '&[data-level="amber"]': { color: vars.amber }, '&[data-level="red"]': { color: vars.red } },
 });
 
-/** How the view goes, in the bar: the signal mark and the round trip, in its colour; pressed, its panel. */
+/** How the view goes, in the bar: the signal mark on its tile and how long it has been seen; pressed, its panel. */
 export const netChip = style({
-  display: "inline-flex", alignItems: "center", gap: "6px", height: "32px", padding: "0 10px", border: "0", borderRadius: "999px",
-  background: "none", color: vars.green, font: "inherit", fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums", cursor: "pointer",
-  selectors: {
-    "&:hover, &[data-state=open]": { background: vars.hover },
-    '&[data-level="amber"]': { color: vars.amber }, '&[data-level="red"]': { color: vars.red },
-    "&:not([data-level])": { color: `var(--viewer-muted, ${vars.muted})` },
-  },
+  display: "inline-flex", alignItems: "center", gap: "8px", height: "32px", padding: "0 10px 0 4px", border: "0", borderRadius: "999px",
+  background: "none", color: `var(--viewer-muted, ${vars.muted})`, font: "inherit", cursor: "pointer",
+  selectors: { "&:hover, &[data-state=open]": { background: vars.hover } },
 });
-/** The view's figures, a small panel of words: the round trip at its head, then a group of lines each. */
+const levels = {
+  '&[data-level="ok"]': { color: vars.green }, '&[data-level="amber"]': { color: vars.amber }, '&[data-level="red"]': { color: vars.red },
+};
+/** The bars on a small tile, coloured as the round trip is. */
+export const netMark = style({
+  display: "inline-grid", placeItems: "center", width: "24px", height: "24px", borderRadius: "4px",
+  background: `color-mix(in srgb, ${vars.text} 8%, transparent)`, color: vars.muted, selectors: levels,
+});
+export const netTime = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums", letterSpacing: "0.04em" });
+/** The view's figures, a small panel of words: the round trip at its head, then groups of a name and its value a line. */
 export const netPanel = style([popover, panelCard, {
-  zIndex: "1000", display: "grid", gap: "8px", width: "240px", boxSizing: "border-box", color: vars.text, fontSize: vars.textMeta,
-  lineHeight: vars.leadingMeta, animation: "none",
+  zIndex: "1000", display: "grid", gap: "10px", width: "280px", boxSizing: "border-box", color: vars.text, fontSize: vars.textUi,
+  lineHeight: vars.leadingUi, animation: "none",
 }]);
-export const netHead = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textUi, lineHeight: vars.leadingUi, fontWeight: "500" });
-globalStyle(`${netHead} > b`, { marginLeft: "auto", fontVariantNumeric: "tabular-nums" });
+export const netHead = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textBody, lineHeight: vars.leadingBody });
+globalStyle(`${netHead} > b`, { fontWeight: "600", fontVariantNumeric: "tabular-nums" });
+export const netHeadMark = style({ display: "inline-grid", color: vars.muted, selectors: levels });
 export const netRows = style({
-  display: "grid", gap: "2px", margin: "0", paddingTop: "8px",
+  display: "grid", gap: "4px", margin: "0", paddingTop: "10px",
   boxShadow: `inset 0 1px 0 color-mix(in srgb, ${vars.text} 10%, transparent)`,
 });
-globalStyle(`${netRows} > div`, { display: "flex", justifyContent: "space-between", gap: "12px" });
+globalStyle(`${netRows} > div`, { display: "grid", gridTemplateColumns: "88px minmax(0, 1fr)", gap: "12px" });
 globalStyle(`${netRows} dt`, { color: vars.muted });
-globalStyle(`${netRows} dd`, { margin: "0", fontVariantNumeric: "tabular-nums", textAlign: "right" });
+globalStyle(`${netRows} dd`, { margin: "0", minWidth: "0", fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere" });
 
 /** 控制中心, in the bar: words beside its mark, as a tool that opens a menu. */
 export const centerButton = style({
