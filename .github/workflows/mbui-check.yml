@@ -94,7 +94,14 @@ jobs:
         run: |
           set -o pipefail
           touch "$RUNNER_TEMP/start"
+          # (mbc's account of each program's build, its units compiled and its link, said after: moon shows a
+          # compiler's output only when it fails, and where a part's time went was not to be seen)
+          export MBC_LOG="$RUNNER_TEMP/mbc.log"
           MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      - name: Where the build's time went (mbc)
+        if: always()
+        run: |
+          grep -E ' compiled \(|^mbc: linked' "$RUNNER_TEMP/mbc.log" | cut -c1-220 || true
       # (the units this run used, older ones gone, kept under a key by what they are: main's, and a branch's for its next
       # push, which restores its own with main's: without, each push compiled all the branch had changed again, 125 of
       # 282 units of sfapp's tests for a branch on it, 108 s of the app part's 151, 2026-10-23)
