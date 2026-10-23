@@ -1,28 +1,50 @@
 // The menu bar on the Mac (still.fail's desktop app's, apps/desktop/src/main.ts setMenu): the app's menu (关于, 检查更新,
-// 服务, 隐藏, 退出), 编辑 and 窗口 in the app's words, given to the host (@hostapi.menu_setup) as the app starts and again
-// as its language changes; `{app}` in them is the app's name, the host's to put in. Its items are the system's (their
-// keys macOS's) but 检查更新, which asks now as the settings' 版本 row does (updates.mbt; said back as the system's
-// `menu`: app.mbt system_said). The pages' own actions are not in it yet (the desktop app's 文件, 显示, 前往, 对话).
+// 设置, 服务, 隐藏, 退出), 文件, 编辑, 显示, 前往, 对话, 窗口 and 帮助 in the app's words, given to the host
+// (@hostapi.menu_setup) as the app starts and again as what it shows changes (the language, the keys changed in 快捷键, a
+// chat open or not); `{app}` in them is the app's name, the host's to put in. The system's items are the system's (their
+// keys macOS's); the pages' own (keymap.mbt's actions) show the keys they have here, which the pages take before the
+// menu does (as the desktop app's), and chosen, are those keys pressed (said back as the system's `menu`: app.mbt
+// system_said, @settings.ask_action); those of a chat only while one is open. 检查更新 asks now as the settings' 版本
+// row does (updates.mbt).
 
 ///|
 // kept across runs: a table, never written
 let menu_zh : Map[String, String] = {
   "desktop.menu.about": "关于 {app}",
   "desktop.menu.checkUpdates": "检查更新…",
+  "desktop.menu.settings": "设置…",
   "desktop.menu.services": "服务",
   "desktop.menu.hide": "隐藏 {app}",
   "desktop.menu.hideOthers": "隐藏其他",
   "desktop.menu.showAll": "全部显示",
   "desktop.menu.quit": "退出 {app}",
+  "desktop.menu.file": "文件",
+  "desktop.menu.chat.new": "新建对话",
+  "desktop.menu.chat.switch": "快速切换对话…",
+  "desktop.menu.composer.file": "发送文件…",
   "desktop.menu.edit": "编辑",
   "desktop.menu.undo": "撤销",
   "desktop.menu.redo": "重做",
+  "desktop.menu.view": "显示",
+  "desktop.menu.sidebar.toggle": "收起/展开侧边栏",
+  "desktop.menu.chat.history": "执行历史",
+  "desktop.menu.chat.jobs": "服务和后台任务",
+  "desktop.menu.go": "前往",
+  "desktop.menu.chat.prev": "上一个对话",
+  "desktop.menu.chat.next": "下一个对话",
+  "desktop.menu.chat.latest": "跳到最新",
+  "desktop.menu.chat.find": "在对话中查找",
+  "desktop.menu.chat": "对话",
+  "desktop.menu.chat.stop": "停止当前任务",
+  "desktop.menu.chat.archive": "归档对话",
   "desktop.menu.window": "窗口",
   "desktop.menu.minimize": "最小化",
   "desktop.menu.zoom": "缩放",
   "desktop.menu.fullScreen": "进入/退出全屏",
   "desktop.menu.close": "关闭窗口",
   "desktop.menu.front": "前置全部窗口",
+  "desktop.menu.help": "帮助",
+  "desktop.menu.shortcuts": "快捷键一览",
 }
 
 ///|
@@ -35,14 +57,28 @@ fn menu_tr(key : String) -> String {
 }
 
 ///|
-/// The language the menu bar was last given in ("": not yet).
+/// What the menu bar was last given for ("": not yet): its language, whether a chat was open, the keys changed here.
 let menu_bar_given : Ref[String] = Ref("")
 
 ///|
-/// The menu bar, as JSON (@hostapi.menu_setup's).
-fn menu_bar_json() -> String {
+/// The menu bar, as JSON (@hostapi.menu_setup's): `prefs` the core's (the keys changed in 快捷键), `in_chat` whether a chat
+/// is open (its actions can be done).
+fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
   let role = fn(key : String, role : String) -> Json {
     { "title": Json::string(menu_tr(key)), "role": Json::string(role) }
+  }
+  // one of the pages' actions: its words, its first key here, whether it can be done now
+  let act = fn(action : String, enabled : Bool) -> Json {
+    let o : Map[String, Json] = {
+      "title": Json::string(menu_tr("desktop.menu." + action)),
+      "action": Json::string(action),
+      "enabled": Json::boolean(enabled),
+    }
+    match @settings.keys_of(prefs, action) {
+      [first, ..] => o["keys"] = Json::string(first)
+      [] => ()
+    }
+    Json::object(o)
   }
   let sep : Json = { "separator": true }
   let menu = fn(key : String, role : String, items : Array[Json]) -> Json {
@@ -61,6 +97,8 @@ fn menu_bar_json() -> String {
       role("desktop.menu.about", "about"),
       check,
       sep,
+      act("settings", true),
+      sep,
       role("desktop.menu.services", "services"),
       sep,
       role("desktop.menu.hide", "hide"),
@@ -68,6 +106,12 @@ fn menu_bar_json() -> String {
       role("desktop.menu.showAll", "showAll"),
       sep,
       role("desktop.menu.quit", "quit"),
+    ]),
+    menu("desktop.menu.file", "actions", [
+      act("chat.new", true),
+      act("chat.switch", true),
+      sep,
+      act("composer.file", in_chat),
     ]),
     menu("desktop.menu.edit", "", [
       role("desktop.menu.undo", "undo"),
@@ -78,6 +122,24 @@ fn menu_bar_json() -> String {
       role("desktop.contextMenu.paste", "paste"),
       role("desktop.contextMenu.selectAll", "selectAll"),
     ]),
+    menu("desktop.menu.view", "actions", [
+      act("sidebar.toggle", true),
+      sep,
+      act("chat.history", in_chat),
+      act("chat.jobs", in_chat),
+    ]),
+    menu("desktop.menu.go", "actions", [
+      act("chat.prev", true),
+      act("chat.next", true),
+      sep,
+      act("chat.latest", in_chat),
+      act("chat.find", in_chat),
+    ]),
+    menu("desktop.menu.chat", "actions", [
+      act("chat.stop", in_chat),
+      sep,
+      act("chat.archive", in_chat),
+    ]),
     menu("desktop.menu.window", "window", [
       role("desktop.menu.minimize", "minimize"),
       role("desktop.menu.zoom", "zoom"),
@@ -87,18 +149,25 @@ fn menu_bar_json() -> String {
       sep,
       role("desktop.menu.front", "front"),
     ]),
+    menu("desktop.menu.help", "actions", [act("shortcuts", true)]),
   ]).stringify()
 }
 
 ///|
-/// Each frame: the menu bar given to the host once the frame is built, and again as the language changes (nothing
-/// else changes it).
-pub fn menu_bar(c : @ui.Ctx) -> Unit {
-  let lang = @sf.language()
-  if lang != menu_bar_given.val {
+/// Each frame: the menu bar given to the host once the frame is built, and again as what it shows changes (the
+/// language, the keys, a chat open or not).
+fn menu_bar(c : @ui.Ctx, src : Source) -> Unit {
+  let prefs = (src.topic)("prefs", {}).value
+  let in_chat = app.nav.top() is Chat(_)
+  let keys = match field(prefs, "keys") {
+    Some(k) => k.stringify()
+    None => ""
+  }
+  let given = "\{@sf.language()}|\{in_chat}|\{keys}"
+  if given != menu_bar_given.val {
     c.after_build("menu-bar", fn() {
-      menu_bar_given.val = lang
-      @hostapi.menu_setup(menu_bar_json())
+      menu_bar_given.val = given
+      @hostapi.menu_setup(menu_bar_json(prefs, in_chat))
     })
   }
 }

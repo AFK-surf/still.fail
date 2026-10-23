@@ -356,8 +356,6 @@ fn main {
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()
     @ui.run("still.fail", fn(c) {
-      // the Mac's menu bar, in the app's words (menu_bar.mbt)
-      @sfapp.menu_bar(c)
       @sf.begin(c) |> ignore
       c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
         c.text("这个版本没有链接内核（APP=stillfail scripts/mac.sh build）", size=13.0, color=@sf.theme().p.muted)

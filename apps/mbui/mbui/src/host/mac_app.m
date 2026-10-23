@@ -1416,8 +1416,46 @@ static NSMenuItem *menu_item(NSDictionary *it) {
   // (to whoever takes it: the app's delegate, last of those asked)
   NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:@selector(menuChosen:) keyEquivalent:@""];
   item.representedObject = [action isKindOfClass:NSString.class] ? action : @"";
+  // its keys as the app has them ("Mod+Shift+H", "Alt+Up", "Mod+\\"): shown; the view takes them before the menu does
+  // (an app's menu is MBShownKeysMenu, below), so the app does what they say once
+  if ([it[@"keys"] isKindOfClass:NSString.class]) {
+    NSArray<NSString *> *parts = [it[@"keys"] componentsSeparatedByString:@"+"];
+    NSEventModifierFlags mods = 0;
+    for (NSUInteger i = 0; i + 1 < parts.count; i++) {
+      NSString *p = parts[i];
+      if ([p isEqualToString:@"Mod"]) mods |= NSEventModifierFlagCommand;
+      else if ([p isEqualToString:@"Alt"]) mods |= NSEventModifierFlagOption;
+      else if ([p isEqualToString:@"Shift"]) mods |= NSEventModifierFlagShift;
+      else if ([p isEqualToString:@"Ctrl"]) mods |= NSEventModifierFlagControl;
+    }
+    NSDictionary *named = @{
+      @"Up" : [NSString stringWithFormat:@"%C", (unichar)NSUpArrowFunctionKey],
+      @"Down" : [NSString stringWithFormat:@"%C", (unichar)NSDownArrowFunctionKey],
+      @"Left" : [NSString stringWithFormat:@"%C", (unichar)NSLeftArrowFunctionKey],
+      @"Right" : [NSString stringWithFormat:@"%C", (unichar)NSRightArrowFunctionKey],
+      @"Space" : @" ",
+      @"Escape" : @"\e",
+      @"Enter" : @"\r",
+    };
+    NSString *key = parts.lastObject;
+    NSString *k = named[key] ?: key.lowercaseString;
+    if (k.length) {
+      item.keyEquivalent = k;
+      item.keyEquivalentModifierMask = mods;
+    }
+  }
+  // (what cannot be done now, greyed: the app says)
+  if ([it[@"enabled"] isEqual:@NO]) item.enabled = NO;
   return item;
 }
+
+// A menu of the app's own actions: its keys shown, never taken (the view has them first, MBView performKeyEquivalent:,
+// and does what they say: a key it let go of is no action of the menu's either)
+@interface MBShownKeysMenu : NSMenu
+@end
+@implementation MBShownKeysMenu
+- (BOOL)performKeyEquivalent:(NSEvent *)e { return NO; }
+@end
 
 void mb_host_menu_setup(moonbit_string_t json_s) {
   [NSApplication sharedApplication];
@@ -1428,7 +1466,10 @@ void mb_host_menu_setup(moonbit_string_t json_s) {
   for (NSDictionary *m in menus) {
     if (![m isKindOfClass:NSDictionary.class]) continue;
     NSString *title = [m[@"title"] isKindOfClass:NSString.class] ? m[@"title"] : @"";
-    NSMenu *menu = [[NSMenu alloc] initWithTitle:title];
+    // (`"role": "actions"`: one of the app's actions only, MBShownKeysMenu; what is enabled the app says, not AppKit)
+    NSMenu *menu = [m[@"role"] isEqual:@"actions"] ? [[MBShownKeysMenu alloc] initWithTitle:title]
+                                                   : [[NSMenu alloc] initWithTitle:title];
+    menu.autoenablesItems = NO;
     if ([m[@"items"] isKindOfClass:NSArray.class])
       for (NSDictionary *it in m[@"items"]) [menu addItem:menu_item(it)];
     NSMenuItem *top = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
