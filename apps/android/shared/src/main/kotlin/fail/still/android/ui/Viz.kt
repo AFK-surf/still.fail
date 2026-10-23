@@ -1,6 +1,7 @@
 // Inline visualizations (web/src/Viz.tsx): an HTML file an agent attached and placed in its message's text
 // (`[title](figure.html)` on a line of its own), drawn there in a WebView instead of shown as a card; a ```mermaid block
-// is drawn the same way, by mermaid (from the CDN the web loads it from) in a page of its own.
+// is drawn the same way, by mermaid (from the CDN the web loads it from) in a page of its own, and opens over the whole
+// screen to pinch.
 //
 // The page is the web's: its stylesheet and bridge (web/src/viz/ember-viz.css, bridge.js, the app's assets), the
 // web's tokens for the theme shown (as --e-*), the same CSP (scripts and styles from a few public CDNs, no requests
@@ -374,19 +375,88 @@ fun VizFull(name: String, html: String, state: JsonElement?, keep: (JsonElement)
 
 private const val MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
 
-/** A mermaid chart's page: the source, drawn by mermaid in the web's colours, drawn again when the theme changes (web/src/Viz.tsx). */
-private fun mermaidDocument(code: String): String = """<pre class="mermaid-src" hidden>${code.replace("&", "&amp;").replace("<", "&lt;")}</pre><div id="chart" style="display:flex;justify-content:center"></div>
+/**
+ * A mermaid chart's page: the source, drawn by mermaid in the web's colours, drawn again when the theme changes
+ * (web/src/Viz.tsx), once the page has a width (drawn before, mermaid measures every label as nothing).
+ *
+ * In a message a chart is fitted to the message's width, but never made smaller than READABLE (its words at about 11px):
+ * one wider than that scrolls sideways in its place. A flowchart drawn sideways (LR, RL) that would need to be made
+ * smaller than that is drawn upright (TD) instead when that fits better, as a long chain of steps does on a phone.
+ * `full`: over the whole screen, as written, fitted to the screen, in the middle of it, pinched and moved by the page itself.
+ */
+private fun mermaidDocument(code: String, full: Boolean): String = """<pre class="mermaid-src" hidden>${code.replace("&", "&amp;").replace("<", "&lt;")}</pre><div id="chart"></div>
+<style>${if (full) "html{overflow:hidden}#chart{position:relative;height:calc(100vh - 4px);overflow:hidden;touch-action:none}" else "#chart{overflow-x:auto}"}</style>
 <script type="module">
   const post = (m) => parent.postMessage({ emberViz: true, ...m }, "*");
   const source = document.querySelector(".mermaid-src").textContent;
+  const FULL = $full, READABLE = 0.8;
   let mermaid;
   try { mermaid = (await import("$MERMAID")).default; } catch (e) { post({ type: "failed", message: "${t("android-misc.viz.mermaidFailed")}" }); }
   const pixel = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = "#000"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return "rgb(" + r + ", " + g + ", " + b + ")"; };
   const v = (name) => { const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return name === "--font-sans" ? value : rgb(value); };
-  let n = 0;
+  const chart = document.getElementById("chart");
+  const upright = source.replace(/^(\s*(?:flowchart|graph)\s+)(?:LR|RL)\b/m, "$1TD");
+  // What is drawn: the source, or (decided on the first drawing) the source upright.
+  let shown = null, n = 0, waiting = false, width = 0;
+  const fit = (w) => Math.min(1, chart.clientWidth / w);
+  async function render(s) {
+    const { svg } = await mermaid.render("chart-" + ++n, s);
+    const box = document.createElement("div");
+    box.innerHTML = svg;
+    return box.querySelector("svg");
+  }
+  // Over the whole screen: the chart fitted to the screen (`base`), zoomed `k` times that (1 to `most`), its corner at x, y.
+  let base = 1, most = 4, k = 1, x = 0, y = 0;
+  function show() {
+    const svg = chart.querySelector("svg");
+    if (!svg) return;
+    const { width: w, height: h } = svg.viewBox.baseVal;
+    const s = base * k, cw = chart.clientWidth, ch = chart.clientHeight;
+    // In the middle while it is smaller than the screen; else its edges kept on the screen.
+    x = w * s <= cw ? (cw - w * s) / 2 : Math.min(0, Math.max(cw - w * s, x));
+    y = h * s <= ch ? (ch - h * s) / 2 : Math.min(0, Math.max(ch - h * s, y));
+    svg.style.width = w * s + "px";
+    svg.style.height = h * s + "px";
+    svg.style.left = x + "px";
+    svg.style.top = y + "px";
+  }
+  function zoom(to, px, py) {
+    to = Math.min(most, Math.max(1, to));
+    x = px - (px - x) * to / k;
+    y = py - (py - y) * to / k;
+    k = to;
+    show();
+  }
+  // The chart at its size: as written (its viewBox) scaled to fit, no smaller than READABLE in a message.
+  function place() {
+    const svg = chart.querySelector("svg");
+    if (!svg) return;
+    const { width: w, height: h } = svg.viewBox.baseVal;
+    if (!w || !h) return;
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+    svg.style.maxWidth = "none";
+    svg.style.display = "block";
+    if (FULL) {
+      svg.style.position = "absolute";
+      base = Math.min(1, chart.clientWidth / w, chart.clientHeight / h);
+      // Up to twice its size as written, or 4 times the screen's fit if more.
+      most = Math.max(4, 2 / base);
+      k = 1;
+      show();
+      return;
+    }
+    const scale = Math.max(fit(w), READABLE);
+    svg.style.margin = "0 auto";
+    svg.style.width = w * scale + "px";
+    svg.style.height = h * scale + "px";
+  }
   async function draw() {
     if (!mermaid) return;
+    if (!chart.clientWidth) { waiting = true; return; }
+    waiting = false;
+    width = chart.clientWidth;
     try {
       mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", fontFamily: v("--font-sans"), themeVariables: {
         darkMode: document.documentElement.dataset.theme === "dark", fontSize: "14px",
@@ -395,24 +465,89 @@ private fun mermaidDocument(code: String): String = """<pre class="mermaid-src" 
         noteBkgColor: v("--accent"), noteTextColor: v("--foreground"), noteBorderColor: v("--brand"),
         actorBkg: v("--card"), actorBorder: v("--border-strong"), actorTextColor: v("--foreground"), signalColor: v("--foreground"), signalTextColor: v("--foreground"),
       } });
-      const { svg } = await mermaid.render("chart-" + ++n, source);
-      document.getElementById("chart").innerHTML = svg;
+      let svg = await render(shown ?? source);
+      if (shown === null) {
+        shown = source;
+        const across = fit(svg.viewBox.baseVal.width);
+        if (!FULL && across < READABLE && upright !== source) {
+          const up = await render(upright);
+          if (fit(up.viewBox.baseVal.width) > across) { svg = up; shown = upright; }
+        }
+      }
+      chart.replaceChildren(svg);
+      place();
     } catch (e) { post({ type: "failed", message: String(e?.message ?? e) }); }
   }
   addEventListener("ember-viz:theme", draw);
+  // A new width (the screen turned): drawn now if it was waiting for one, else sized again. After the observer's turn:
+  // drawing in it changes the layout it reports on.
+  new ResizeObserver(() => {
+    if (!chart.clientWidth || chart.clientWidth === width) return;
+    if (waiting) setTimeout(draw); else { width = chart.clientWidth; setTimeout(place); }
+  }).observe(chart);
+  if (FULL) {
+    // Pinched with two fingers, moved with one; a double tap zooms in to its size as written there, or back out. The
+    // page's own, the same in every app: a WebView's own zoom is not there on every host.
+    const at = (e) => { const r = chart.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const fingers = new Map();
+    let tap = null;
+    chart.addEventListener("pointerdown", (e) => { chart.setPointerCapture(e.pointerId); fingers.set(e.pointerId, at(e)); });
+    chart.addEventListener("pointermove", (e) => {
+      if (!fingers.has(e.pointerId)) return;
+      const was = [...fingers.values()];
+      fingers.set(e.pointerId, at(e));
+      const now = [...fingers.values()];
+      if (now.length === 1) { x += now[0].x - was[0].x; y += now[0].y - was[0].y; show(); return; }
+      const mid = (p) => ({ x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 });
+      const far = (p) => Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1;
+      const m0 = mid(was), m1 = mid(now);
+      x += m1.x - m0.x;
+      y += m1.y - m0.y;
+      zoom(k * far(now) / far(was), m1.x, m1.y);
+    });
+    const up = (e) => {
+      const p = fingers.get(e.pointerId);
+      const alone = fingers.size === 1;
+      fingers.delete(e.pointerId);
+      if (!p || !alone || e.type !== "pointerup") return;
+      if (tap && e.timeStamp - tap.t < 300 && Math.hypot(p.x - tap.x, p.y - tap.y) < 30) {
+        zoom(k > 1.01 ? 1 : Math.max(2, 1 / base), p.x, p.y);
+        tap = null;
+      } else tap = { t: e.timeStamp, x: p.x, y: p.y };
+    };
+    chart.addEventListener("pointerup", up);
+    chart.addEventListener("pointercancel", up);
+    // A mouse's wheel moves it; with ctrl (a trackpad's pinch), zooms it.
+    chart.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const p = at(e);
+      if (e.ctrlKey) zoom(k * Math.exp(-e.deltaY / 100), p.x, p.y);
+      else { x -= e.deltaX; y -= e.deltaY; show(); }
+    }, { passive: false });
+  }
   draw();
 </script>"""
 
 /** Charts that would not draw (mermaid not reachable, or the source does not parse): shown as code from then on. */
 private val unmade = HashSet<String>()
 
-/** A ```mermaid block: drawn as a chart; shown as code while it will not draw. */
+/** A ```mermaid block: drawn as a chart, with a way under it to open it over the whole screen; shown as code while it will not draw. */
 @Composable
 fun Mermaid(code: String) {
     var failed by remember(code) { mutableStateOf(code in unmade) }
     if (failed) return CodeBlock(code, "mermaid")
-    val html = remember(code) { mermaidDocument(code) }
-    Box(Modifier.fillMaxWidth()) { VizFrame(html, onError = { unmade += code; failed = true }) }
+    val html = remember(code) { mermaidDocument(code, full = false) }
+    var full by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        VizFrame(html, onError = { unmade += code; failed = true })
+        // Under the chart, out of its way, as a placed file has it (VizFiles.kt).
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp).height(22.dp), horizontalArrangement = Arrangement.End) {
+            Box(Modifier.size(22.dp).clip(Smooth(6.dp)).semantics { contentDescription = t("android-misc.viz.fullscreen") }.clickable { full = true }, contentAlignment = Alignment.Center) {
+                IconIn(Icons.Expand, 14.dp, webSubtle)
+            }
+        }
+    }
+    if (full) VizFull("Mermaid", remember(code) { mermaidDocument(code, full = true) }, null, {}) { full = false }
 }
 
 /**
