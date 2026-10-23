@@ -124,10 +124,15 @@ fn slack_link(s : String) -> Bool {
 }
 
 ///|
-/// A connect as people know it: its workspace (Slack) or tenant (Feishu), else its bot's name.
+/// A connect as people know it: its workspace (Slack) or tenant (Feishu), else its bot's name; with its bot's name too
+/// when another of the connects read (several bots in one workspace) has the same workspace.
 fn relay_workspace(conn : Json) -> String {
   match opt_text(Some(conn), "team") {
-    Some(t) if t != "" => t
+    Some(t) if t != "" => {
+      let id = text(Some(conn), "id")
+      let shared = relaying.connects.iter().any(fn(o) { text(Some(o), "id") != id && opt_text(Some(o), "team") == Some(t) })
+      if shared { t + " · " + text(Some(conn), "name") } else { t }
+    }
     _ => text(Some(conn), "name")
   }
 }

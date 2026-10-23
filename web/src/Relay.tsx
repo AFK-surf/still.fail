@@ -47,8 +47,10 @@ const kindNote = (p: RelayPlace) => t(p.kind === "channel" ? "web-main.relay.kin
 /** Whether what was typed is a link to a Slack message (the station finds its workspace among its connects'). */
 const slackLink = (typed: string) => /^https?:\/\/[^/\s]+\/archives\/[A-Z0-9]+\/p\d{16}/.test(typed.trim());
 
-/** A connect as people know it: its workspace (Slack) or tenant (Feishu), else its bot's name. */
-const workspace = (c: RelayConnect) => c.team ?? c.name;
+/** A connect as people know it: its workspace (Slack) or tenant (Feishu), else its bot's name; with its bot's name too
+ * when another of `connects` (several bots in one workspace) has the same workspace. */
+const workspace = (c: RelayConnect, connects: RelayConnect[]) =>
+  c.team !== null && connects.some((o) => o.id !== c.id && o.team === c.team) ? `${c.team} · ${c.name}` : (c.team ?? c.name);
 
 const placeName = (p: RelayPlace) => (p.kind === "channel" ? `${p.private ? "🔒 " : ""}#${p.name}` : p.name);
 
@@ -108,7 +110,7 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
     <button key={`${r.connect.id}/${r.place.id}`} type="button" role="option" aria-selected={on} className={css.place} data-on={on || undefined} onClick={onClick}>
       <ElsewhereLogo kind={r.connect.kind === "slack" ? "slack" : "feishu"} size={16} />
       <span className={css.placeName}>{placeName(r.place)}</span>
-      {several && scope === null && <span className={css.placeWhere}>{workspace(r.connect)}</span>}
+      {several && scope === null && <span className={css.placeWhere}>{workspace(r.connect, connects)}</span>}
       <span className={css.placeNote} title={r.place.kind === "group" ? t("web-main.relay.kind.groupNote") : undefined}>{end}</span>
     </button>
   );
@@ -140,7 +142,7 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
             <button type="button" className={css.scope} data-on={scope === null || undefined} aria-pressed={scope === null} onClick={() => setScope(null)}>{t("web-main.relay.allWorkspaces")}</button>
             {connects.map((c) => (
               <button key={c.id} type="button" className={css.scope} data-on={scope === c.id || undefined} aria-pressed={scope === c.id} onClick={() => setScope(c.id)}>
-                <ElsewhereLogo kind={c.kind === "slack" ? "slack" : "feishu"} size={13} />{workspace(c)}
+                <ElsewhereLogo kind={c.kind === "slack" ? "slack" : "feishu"} size={13} />{workspace(c, connects)}
               </button>
             ))}
           </div>
@@ -150,7 +152,7 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
           {rows.map((r) => row(r, false, r.place.kind === "channel" ? null : kindNote(r.place), () => setPicked(r)))}
           {rows.length === 0 && <p className={css.empty}>{query.trim() === "" ? t("web-main.relay.noPlaces") : t("web-main.relay.noMatch")}</p>}
           {recent && total > rows.length && <button type="button" className={css.more} onClick={() => setAll(true)}>{t("web-main.relay.showAll", { count: total })}</button>}
-          {looked.filter((c) => c.error).map((c) => <p key={c.id} className={css.unread}>{several ? `${workspace(c)} · ` : ""}{t("web-main.relay.unread", { error: c.error! })}</p>)}
+          {looked.filter((c) => c.error).map((c) => <p key={c.id} className={css.unread}>{several ? `${workspace(c, connects)} · ` : ""}{t("web-main.relay.unread", { error: c.error! })}</p>)}
         </div>
       </>
     );

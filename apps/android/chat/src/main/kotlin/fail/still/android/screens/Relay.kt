@@ -55,8 +55,10 @@ private val SLACK_LINK = Regex("""^https?://[^/\s]+/archives/[A-Z0-9]+/p\d{16}""
 /** How a place says what relaying there does: a new thread, a new topic, or the group's conversation taken over. */
 private fun kindNote(p: RelayPlace) = t(when (p.kind) { "channel" -> "web-main.relay.kind.channel"; "topics" -> "web-main.relay.kind.topics"; else -> "web-main.relay.kind.group" })
 
-/** A connect as people know it: its workspace (Slack) or tenant (Feishu), else its bot's name. */
-private fun workspace(c: RelayConnect) = c.team ?: c.name
+/** A connect as people know it: its workspace (Slack) or tenant (Feishu), else its bot's name; with its bot's name too
+ * when another of `connects` (several bots in one workspace) has the same workspace. */
+private fun workspace(c: RelayConnect, connects: List<RelayConnect>) =
+    if (c.team != null && connects.any { it.id != c.id && it.team == c.team }) "${c.team} · ${c.name}" else c.team ?: c.name
 
 private fun placeName(p: RelayPlace) = if (p.kind == "channel") "${if (p.private) "🔒 " else ""}#${p.name}" else p.name
 
@@ -111,7 +113,7 @@ internal fun openRelay(app: AppState, station: String, thread: Long) {
             val shown = read
             when {
                 link != null -> PlaceRow(null, t("web-main.relay.thread"), null, t("web-main.relay.kind.thread"), on = true) {}
-                chosen != null -> PlaceRow(markOf(chosen.connect), placeName(chosen.place), workspace(chosen.connect), "${kindNote(chosen.place)} · ${t("web-main.relay.change")}", on = true) { picked = null }
+                chosen != null -> PlaceRow(markOf(chosen.connect), placeName(chosen.place), workspace(chosen.connect, (read as? Places.Ok)?.connects.orEmpty()), "${kindNote(chosen.place)} · ${t("web-main.relay.change")}", on = true) { picked = null }
                 shown is Places.Reading -> WaitLine(t("web-main.relay.reading"))
                 shown is Places.Failed -> Text(shown.error, fontSize = 13.sp, color = C.red)
                 shown is Places.Ok && shown.connects.isEmpty() -> Text(t("web-main.relay.noConnects"), fontSize = 13.sp, color = C.muted)
@@ -120,21 +122,21 @@ internal fun openRelay(app: AppState, station: String, thread: Long) {
                     if (several) {
                         Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             ScopeChip(false, null, t("web-main.relay.allWorkspaces"), scope == null) { scope = null }
-                            shown.connects.forEach { c -> ScopeChip(true, markOf(c), workspace(c), scope == c.id) { scope = c.id } }
+                            shown.connects.forEach { c -> ScopeChip(true, markOf(c), workspace(c, shown.connects), scope == c.id) { scope = c.id } }
                         }
                     }
                     val looked = shown.connects.filter { scope == null || it.id == scope }
                     val (rows, recent, total) = arrange(looked, query, all)
                     if (recent) Text(t("web-main.relay.recent"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                     rows.forEach { r ->
-                        PlaceRow(markOf(r.connect), placeName(r.place), if (several && scope == null) workspace(r.connect) else null, if (r.place.kind == "channel") null else kindNote(r.place), on = false) { picked = r }
+                        PlaceRow(markOf(r.connect), placeName(r.place), if (several && scope == null) workspace(r.connect, shown.connects) else null, if (r.place.kind == "channel") null else kindNote(r.place), on = false) { picked = r }
                     }
                     if (rows.isEmpty()) Text(if (query.isBlank()) t("web-main.relay.noPlaces") else t("web-main.relay.noMatch"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                     if (recent && total > rows.size) {
                         Text(t("web-main.relay.showAll", "count" to total), fontSize = 13.sp, color = C.link, modifier = Modifier.clip(Smooth(8.dp)).clickable { all = true }.padding(horizontal = 8.dp, vertical = 6.dp))
                     }
                     looked.forEach { c ->
-                        c.error?.let { Text((if (several) "${workspace(c)} · " else "") + t("web-main.relay.unread", "error" to it), fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) }
+                        c.error?.let { Text((if (several) "${workspace(c, shown.connects)} · " else "") + t("web-main.relay.unread", "error" to it), fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) }
                     }
                 }
             }
