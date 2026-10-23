@@ -14,6 +14,9 @@ Without the keychain's secrets (a maintainer's own Mac), nothing is set up: the 
     python3 .github/mac_signing.py run -- COMMAND…   COMMAND with MAC_SIGN_IDENTITY, STILLFAIL_SIGNING_KEYCHAIN and
                                                      STILLFAIL_NOTARY_PROFILE in its environment, the secrets not
     python3 .github/mac_signing.py notarize APP      APP (a signed .app) notarized and its ticket stapled to it
+    python3 .github/mac_signing.py notarize APP --no-staple
+                                                     notarized only: Gatekeeper asks Apple for its ticket as it
+                                                     opens downloaded (the mbui app: below)
 """
 import base64
 import contextlib
@@ -105,7 +108,7 @@ def signing_env(opened, env=None):
     return env
 
 
-def notarize(app):
+def notarize(app, staple=True):
     """Sends `app` to Apple's notary service, waits for its verdict (its log printed when not Accepted) and staples the
     ticket to it, so Gatekeeper lets it open downloaded, offline too. In `run`'s keychain (STILLFAIL_NOTARY_PROFILE)."""
     profile = os.environ.get('STILLFAIL_NOTARY_PROFILE')
@@ -124,13 +127,16 @@ def notarize(app):
     # (staple validates what it stapled: "The staple and validate action worked!". Validating again asked Apple's
     # CloudKit once more, and a connection it dropped failed main's beta with the app notarized and stapled, run
     # 39682975188)
-    run(['xcrun', 'stapler', 'staple', app])
+    if staple:
+        run(['xcrun', 'stapler', 'staple', app])
     run(['spctl', '--assess', '--type', 'execute', '-vv', app])
 
 
 if __name__ == '__main__':
     if sys.argv[1:2] == ['notarize'] and len(sys.argv) == 3:
         notarize(sys.argv[2])
+    elif sys.argv[1:2] == ['notarize'] and sys.argv[3:] == ['--no-staple']:
+        notarize(sys.argv[2], staple=False)
     elif sys.argv[1:3] == ['run', '--'] and len(sys.argv) > 3:
         with keychain() as opened:
             code = subprocess.run(sys.argv[3:], env=signing_env(opened)).returncode

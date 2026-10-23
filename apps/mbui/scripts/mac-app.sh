@@ -6,7 +6,10 @@
 # (Frameworks/hermes.framework, React Native 0.81.4's, as Android's; scripts/core.sh hermes-apple), its icon
 # (scripts/mac-icon.swift), an Info.plist of its own. Signed with MAC_SIGN_IDENTITY (CI: still.fail's, imported by
 # .github/mac_signing.py), else ad hoc; checked with codesign's strict verify. Signed with a Developer ID, it is
-# notarized and its ticket stapled before it is zipped (mac_signing.py notarize): Gatekeeper lets it open downloaded.
+# notarized before it is zipped (mac_signing.py notarize): Gatekeeper lets it open downloaded. Its ticket is not
+# stapled: stapling fetches it from Apple's CloudKit, whose connection from CI's Mac dropped in most of main's runs
+# (Error 68, the app notarized), and nothing needs it there: a download is opened online (Gatekeeper asks Apple for the
+# ticket then), and the app's own updates are not quarantined.
 #   apps/mbui/scripts/mac-app.sh            build and bundle it, then sign it (below)
 #   apps/mbui/scripts/mac-app.sh build      build and bundle it only (signed ad hoc)
 #   apps/mbui/scripts/mac-app.sh sign       sign it (MAC_SIGN_IDENTITY, else ad hoc), check it, zip it:
@@ -61,7 +64,7 @@ sign() {
   codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR"
   codesign --verify --deep --strict --verbose=2 "$APPDIR" 2>&1 | sed 's/^/codesign: /'
   codesign -dvv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
-  case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) python3 "$EMBER/.github/mac_signing.py" notarize "$APPDIR" ;; esac
+  case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) python3 "$EMBER/.github/mac_signing.py" notarize "$APPDIR" --no-staple ;; esac
   spctl --assess --type execute -vv "$APPDIR" 2>&1 | sed 's/^/spctl: /' || true
   rm -f "$ZIP"
   (cd "$OUT" && ditto -c -k --sequesterRsrc --keepParent "$NAME.app" "$(basename "$ZIP")")
