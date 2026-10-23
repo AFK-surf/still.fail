@@ -147,7 +147,7 @@ export const SHAPES: Record<string, Shape> = {
     ["comment", "String"],
     ["ts", opt("String")],
     ["role", opt("String"), { doc: "agent | person | page (a mark on a previewed page) | image (a numbered mark on an image)" }],
-    ["file", opt("String"), { doc: "The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot)." }],
+    ["file", opt("String"), { doc: "The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot; an image of the quoted message, sent again with this one)." }],
   ]),
   MessageBy: struct([
     ["name", "String"],

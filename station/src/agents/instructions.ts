@@ -149,8 +149,8 @@ export function parseThreadAddress(value: string): [string, string] | null {
 
 const escapeAttr = (value: string) => value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
 
-/// A message's words as the agent reads them: quotes (which message, whose, the passage as a blockquote, then the
-/// comment), then the words, then the files as paths.
+/// A message's words as the agent reads them: quotes (which message, whose, the file of it quoted, the passage as a
+/// blockquote, then the comment), then the words, then the files as paths.
 export function messageForAgent(m: MessageRow): string {
   const parts = m.quotes.map((q) => {
     let whose: string;
@@ -163,7 +163,10 @@ export function messageForAgent(m: MessageRow): string {
         : `a web page shown in the chat's preview (${q.author}), marked with its number in the attached screenshot`;
     } else if (q.role === "image") whose = `an image marked in the chat (${q.author}), its number pinned on the marked image attached`;
     else whose = `a message from ${q.author}`;
-    const which = q.ts !== null && q.ts !== undefined ? `${whose} ${q.ts} in this conversation` : whose;
+    let which = q.ts !== null && q.ts !== undefined ? `${whose} ${q.ts} in this conversation` : whose;
+    // A file of that message quoted (an image held in the chat): the message carries it again, as it is there.
+    const quoted = q.file && q.role !== "page" && q.role !== "image" ? m.attachments.find((a) => a.name === q.file) : undefined;
+    if (quoted) which += `, its file ${quoted.path}`;
     const passage = q.text.split("\n").map((l) => `> ${l}`);
     const comment = q.comment === "" ? "" : `\nTheir comment on it: ${q.comment}`;
     return `[Quote] From ${which}:\n${passage.join("\n")}${comment}`;

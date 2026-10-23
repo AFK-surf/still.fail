@@ -1222,11 +1222,12 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
     if (ctx.mine(m)) {
         // A finger held on the words picks a passage of them, here (MessagePick.kt).
         val (hold, words) = messagePick(m.ts, t("android-chat.annotate.you"), "person", m.text)
-        // Flashing, your words' bubble takes the accent's ground (it is the message); with no words, the row does.
-        Column(Modifier.joined(m.joined == true).fillMaxWidth().flashed(motion, m.ts.takeIf { m.text.isEmpty() }, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            QuoteCards(m.quotes, jump, Alignment.End)
+        // Flashing, your words' bubble takes the accent's ground (it is the message); with no words, the row does. Its
+        // images held are quoted (MessagePick.kt).
+        QuotesImages(m.ts, t("android-chat.annotate.you"), "person") { Column(Modifier.joined(m.joined == true).fillMaxWidth().flashed(motion, m.ts.takeIf { m.text.isEmpty() }, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            QuoteCards(ctx, m.quotes, m.attachments, jump, Alignment.End)
             if (m.text.isNotEmpty()) CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) { Bubble(m.text, hold, m.ts) }
-            Files(ctx, m.attachments, mine = true)
+            Files(ctx, besideQuotes(m.quotes, m.attachments), mine = true)
             // Not taken by its agents yet: after a second it says it waits. Your next message soon after: under that one
             // instead, close under this.
             if (m.followed == true) {}
@@ -1234,15 +1235,16 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             else if (waitingNow) UnderWay(t("android-chat.chat.waitingAgent"))
             // Coming in with the words, when they fly here from the composer.
             else LocalFlight.current.let { f -> MessageTime(m.time?.get("createdAt"), if (f == null) Modifier else Modifier.graphicsLayer { alpha = f.e() }) }
-        }
+        } }
         return
     }
     // Someone else's: the avatar and name in line over what they say (web: the phone's inline heads), the name an
     // agent's opens its card (AgentSheet.kt).
     val agent = m.by.agent?.let { ctx.agent(it) }
     val who = m.by.name
-    val (hold, words) = messagePick(m.ts, who, if (m.authorKind == "agent") "agent" else "person", m.text)
-    Box(Modifier.fillMaxWidth().flashed(motion, m.ts, flash)) {
+    val role = if (m.authorKind == "agent") "agent" else "person"
+    val (hold, words) = messagePick(m.ts, who, role, m.text)
+    QuotesImages(m.ts, who, role) { Box(Modifier.fillMaxWidth().flashed(motion, m.ts, flash)) {
         // Where a message out of an agent's avatar lands: its own avatar, hidden while the flying one is over it.
         Box(
             Modifier.padding(top = 3.dp).onGloballyPositioned { motion?.landings?.set(m.seq, it) }
@@ -1264,14 +1266,14 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
                 )
                 MessageTime(m.time?.get("createdAt"))
             }
-            QuoteCards(m.quotes, jump, Alignment.Start)
+            QuoteCards(ctx, m.quotes, m.attachments, jump, Alignment.Start)
             Box(hold) { CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
                 if (m.authorKind == "person") { if (m.text.isNotEmpty()) PersonWords(m.text) }
                 else AgentWords(ctx, m.text, m.attachments, m.placed.orEmpty(), draft, md = m.md)
             } }
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
-            if (m.authorKind == "person") Files(ctx, m.attachments)
+            if (m.authorKind == "person") Files(ctx, besideQuotes(m.quotes, m.attachments))
             // A decision it asks (its options): them under it, a line saying how it went once it has.
             // Answered (or let go), what is under it for that closes in one turn among what changes the list's height
             // (ListTurns.kt), its options and 忽略 together, after the answer has come in (Chat: an option picked).
@@ -1280,7 +1282,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             // It asks what no one has decided (the core's `asked`): letting it go, right under it (web Chat.tsx AskDismiss).
             if (decide) AskDismiss(ctx, m, asking)
         }
-    }
+    } }
 }
 
 /** The session a chat is archived by: the page's, the one its station made of it, else its first agent's. */
@@ -1490,9 +1492,9 @@ private fun Out(ctx: Here, o: Outgoing) {
     Column(Modifier.joined(o.joined == true).fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Not sent: what was written faded.
         Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if (failed) 0.55f else 1f }, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            QuoteCards(o.quotes, null, Alignment.End)
+            QuoteCards(ctx, o.quotes, o.attachments, null, Alignment.End)
             if (o.text.isNotEmpty()) Bubble(o.text, Modifier)
-            Files(ctx, o.attachments, mine = true)
+            Files(ctx, besideQuotes(o.quotes, o.attachments), mine = true)
             // Still going up: it is sent once they are (the core sends it), as the web's says.
             o.uploads?.forEach { u -> FileCard(u.name, u.size, if (failed) o.error ?: t("android-chat.file.failed") else uploadingText(u.sent, u.size), busy = !failed) }
         }
@@ -1606,26 +1608,43 @@ internal fun quoteMark(): Map<String, androidx.compose.foundation.text.InlineTex
  * grey, leading back to it; then what was said about it.
  */
 @Composable
-private fun QuoteCards(quotes: List<Quote>, onJump: ((String, String) -> Unit)?, side: Alignment.Horizontal) {
+private fun QuoteCards(ctx: Here, quotes: List<Quote>, files: List<Attachment>, onJump: ((String, String) -> Unit)?, side: Alignment.Horizontal) {
     if (quotes.isEmpty()) return
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val most = minOf(380.dp, maxWidth * 0.88f)
         Column(Modifier.fillMaxWidth(), horizontalAlignment = side, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            quotes.forEach { q -> QuoteCard(q, onJump, Modifier.widthIn(max = most)) }
+            quotes.forEach { q -> QuoteCard(ctx, q, fileOf(q, files), onJump, Modifier.widthIn(max = most)) }
         }
     }
 }
 
+/** The file among `files` that is a quote's own (an image of a message quoted, a mark's screenshot), shown in its card. */
+private fun fileOf(q: Quote, files: List<Attachment>): Attachment? = q.file?.let { name -> files.firstOrNull { it.name == name } }
+
+/** A message's files but those shown in its quotes' cards (web Chat.tsx besideQuotes). */
+private fun besideQuotes(quotes: List<Quote>, files: List<Attachment>): List<Attachment> {
+    val own = quotes.mapNotNull { it.file }.toSet()
+    return if (own.isEmpty()) files else files.filter { it.name !in own }
+}
+
 @Composable
-private fun QuoteCard(q: Quote, onJump: ((String, String) -> Unit)?, modifier: Modifier) {
+private fun QuoteCard(ctx: Here, q: Quote, own: Attachment?, onJump: ((String, String) -> Unit)?, modifier: Modifier) {
     val ink = chatInk()
     Column(modifier.clip(Smooth(12.dp)).background(ink.card)) {
         val ts = q.ts
         Text(
             quoteLine(q.author, q.text), inlineContent = quoteMark(), fontSize = 13.sp, lineHeight = 19.5.sp, color = ink.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.let { if (ts != null && onJump != null) it.clickable { onJump(ts, q.text) } else it }
-                .padding(start = 11.dp, end = 11.dp, top = 7.dp, bottom = if (q.comment.isEmpty()) 7.dp else 0.dp),
+                .padding(start = 11.dp, end = 11.dp, top = 7.dp, bottom = if (q.comment.isEmpty() && own == null) 7.dp else 0.dp),
         )
+        // Its own picture under what it quotes (web: quoteCardPicture), at most 120 high; a tap opens it.
+        if (own != null) Box(Modifier.padding(start = 11.dp, end = 11.dp, top = 6.dp, bottom = if (q.comment.isEmpty()) 8.dp else 0.dp)) {
+            val box = imageBox(own)
+            val scale = minOf(1f, 120f / box.height)
+            val key = ctx.owner(own)
+            if (key != null && isImage(own.name)) StationImage(ctx.station, key, own, Modifier.size((box.width * scale).dp, (box.height * scale).dp))
+            else Files(ctx, listOf(own))
+        }
         if (q.comment.isNotEmpty()) Text(q.comment, fontSize = 15.sp, lineHeight = 22.5.sp, color = ink.text, modifier = Modifier.padding(start = 11.dp, end = 11.dp, top = 3.dp, bottom = 8.dp))
     }
 }

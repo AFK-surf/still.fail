@@ -321,9 +321,14 @@ export class Composers {
     return this.append(key, words);
   }
 
-  quote(key: string, quote: ComposerQuote, focus: boolean): number {
+  /// A passage quoted; or a file of a message (`attachment`, already on the station: it goes again with the message,
+  /// nothing goes up; `fileId`, the page's id for it), the quote naming it (`file`).
+  quote(key: string, quote: ComposerQuote, focus: boolean, attachment?: J, fileId?: string): number {
     const s = this.#state(key);
     s.quotes = [...s.quotes, quote];
+    if (attachment && quote.file && !s.files.some((f) => f.done?.path === attachment.path)) {
+      s.files = [...s.files, { id: fileId ?? localId("quoted"), name: String(attachment.name ?? ""), size: Number(attachment.size ?? 0), done: attachment, error: null }];
+    }
     if (focus) s.focus = quote.id;
     return this.#changed(key, s);
   }
@@ -685,7 +690,9 @@ export function parseComposer(name: string, params: unknown): Call | null {
       const q = p.quote;
       if (!isObject(q) || typeof q.author !== "string" || typeof q.text !== "string") throw CoreError.invalid(t("core-misc.params.missing", { field: "quote" }));
       const quote = { ...(q as J), id: str(p, "id"), comment: typeof q.comment === "string" ? q.comment : "" } as ComposerQuote;
-      return { kind: "composer", key, act: { quote, focus: p.focus === true } };
+      const attachment = isObject(p.attachment) && typeof (p.attachment as J).path === "string" && quote.file ? p.attachment as J : undefined;
+      const fileId = typeof p.fileId === "string" && p.fileId !== "" ? p.fileId : undefined;
+      return { kind: "composer", key, act: { quote, focus: p.focus === true, ...(attachment ? { attachment, ...(fileId ? { fileId } : {}) } : {}) } };
     }
     case "comment":
       return { kind: "composer", key, act: { comment: str(p, "id"), words: strOr(p, "comment") ?? "" } };
@@ -741,7 +748,7 @@ export function parseComposer(name: string, params: unknown): Call | null {
 
 /// What a `composer.*` call does.
 export type ComposerAct =
-  | { text: string } | { append: string } | { quote: ComposerQuote; focus: boolean } | { comment: string; words: string }
+  | { text: string } | { append: string } | { quote: ComposerQuote; focus: boolean; attachment?: J; fileId?: string } | { comment: string; words: string }
   | { unquote: string } | { focused: true } | { error: string | null } | { starting: boolean } | { add: FileIn[]; station: string }
   | { remove: string } | { retry: string } | { mode: "path" | "file"; file: string } | { take: true } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string } | { move: string };
 
@@ -753,7 +760,7 @@ export function install(): void {
     return Effect.sync(() => {
       if ("text" in a) return { version: all.text(c.key, a.text) };
       if ("append" in a) return { version: all.append(c.key, a.append) };
-      if ("quote" in a) return { version: all.quote(c.key, a.quote, a.focus) };
+      if ("quote" in a) return { version: all.quote(c.key, a.quote, a.focus, a.attachment, a.fileId) };
       if ("comment" in a) return { version: all.comment(c.key, a.comment, a.words) };
       if ("unquote" in a) return { version: all.unquote(c.key, a.unquote) };
       if ("focused" in a) return { version: all.focused(c.key) };

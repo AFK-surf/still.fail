@@ -25,6 +25,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -433,7 +436,14 @@ private fun ChatImage(station: String, key: String?, file: Attachment, size: Mod
     val box = imageBox(file)
     // Letterboxed only in its own box (one given it is filled).
     val fit = box.fit.takeIf { size == null }
-    MediaBox(box, Modifier.clickable(enabled = key != null && (image != null || failed), onClick = onOpen), background = if (fit != null && !failed) Color.Transparent else C.chip, size = size, thumb = Modifier.viewerThumb(thumb, radius, letterbox = fit != null) { image }) {
+    // Held, in a list that quotes (MessagePick.kt): quoted, its file going again with the message (it is the station's already).
+    val quote = LocalImageQuote.current?.takeIf { key != null }
+    val haptics = LocalHapticFeedback.current
+    val open = Modifier.combinedClickable(
+        enabled = key != null && (image != null || failed), onClick = onOpen,
+        onLongClick = quote?.let { q -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); q(if (file.owner == null) file.copy(owner = key) else file) } },
+    )
+    MediaBox(box, open, background = if (fit != null && !failed) Color.Transparent else C.chip, size = size, thumb = Modifier.viewerThumb(thumb, radius, letterbox = fit != null) { image }) {
         if (!instant) Waiting(file.thumbhash, loaded = image != null, still = failed, fit = fit)
         if (failed) Unavailable(20.dp, null)
         image?.let { Revealed(it, file.name, reveal, if (fit != null) ContentScale.Fit else ContentScale.Crop) }
