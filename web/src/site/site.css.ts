@@ -258,20 +258,14 @@ export const scene = style({ position: "relative" });
 export const sceneStick = style({
   position: "sticky", top: "64px", height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", padding: "16px 0 28px",
 });
-/** What the step in view says, above the room: the steps' words one under another in a window one step high, moved
- *  up as the scene is scrolled (--at, the step it is at: OneComputer.tsx), each coming up as the one before goes. */
-const SAY = { wide: 64, narrow: 112 };
-export const stepWords = style({
-  height: `${SAY.wide}px`, overflow: "hidden", padding: "0 24px", marginTop: "8px",
-  "@media": { [NARROW]: { height: `${SAY.narrow}px` } },
-});
-export const stepTrack = style({
-  transform: `translateY(calc(var(--at, 0) * -${SAY.wide}px))`,
-  "@media": { [NARROW]: { transform: `translateY(calc(var(--at, 0) * -${SAY.narrow}px))` } },
-});
+/** What the step in view says, above the room: in a window as tall as the longest step's words (however they wrap),
+ *  each step's words one under another, moved up as the scene is scrolled (--at, the step it is at: OneComputer.tsx;
+ *  --i, a step's own place), each coming up as the one before goes. */
+export const stepWords = style({ overflow: "hidden", padding: "0 24px", marginTop: "8px" });
+export const stepTrack = style({ display: "grid" });
 export const stepSay = style({
-  height: `${SAY.wide}px`, display: "grid", alignContent: "center", justifyItems: "center", gap: "4px", textAlign: "center",
-  "@media": { [NARROW]: { height: `${SAY.narrow}px` } },
+  gridArea: "1 / 1", display: "grid", alignContent: "center", justifyItems: "center", gap: "4px", textAlign: "center",
+  transform: "translateY(calc((var(--i) - var(--at, 0)) * 100%))",
 });
 globalStyle(`${stepSay} > b`, { fontSize: vars.textHeading, fontWeight: 700, color: FG });
 globalStyle(`${stepSay} > span`, { fontSize: vars.textTitle, color: "var(--s-muted)" });

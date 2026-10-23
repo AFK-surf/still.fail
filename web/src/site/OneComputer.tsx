@@ -8,7 +8,7 @@
 // the row in the list again, where it is drawn the same. Nothing fades in or out to cover a change. The phone is a
 // device from the start, the phone's app running in it, small; it comes to the front at the end while the computer
 // steps back, both seen all along. On a narrow screen the window is the phone's app itself, and the devices its cards.
-import { useEffect, useRef } from "react";
+import { type CSSProperties, useEffect, useRef } from "react";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
 import { useSay, useSiteLang } from "./words.ts";
@@ -297,8 +297,8 @@ export function OneComputer(props: DemoProps) {
         <div className={css.sceneStick}>
           <div className={css.stepWords}>
             <div className={css.stepTrack} ref={words}>
-              {say.steps.map((s) => (
-                <div key={s.title} className={css.stepSay}>
+              {say.steps.map((s, k) => (
+                <div key={s.title} className={css.stepSay} style={{ "--i": k } as CSSProperties}>
                   <b>{s.title}</b><span>{s.text}</span>
                 </div>
               ))}
