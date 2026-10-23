@@ -1,8 +1,9 @@
 // A player's ways (media.mbt) over the fake host (every view there ready, 10 s long, 640 × 360, paused): a double tap's
-// third and its note said a moment, the speed stepped, the timeline dragged and the player sent there once let go.
+// third and its note said a moment, the speed stepped, the timeline dragged: the player paused and sent along with the
+// finger, its seeks one after another until let go.
 
 ///|
-test "a player: a double tap on the right third jumps on, said a moment; the speed steps; a drag on the timeline seeks once let go" {
+test "a player: a double tap on the right third jumps on, said a moment; the speed steps; a drag on the timeline seeks as it goes" {
   let m = @kit.Media::new()
   let last : Ref[@kit.MediaFrame?] = Ref(None)
   let t = @ui.Tester::new(
@@ -34,12 +35,16 @@ test "a player: a double tap on the right third jumps on, said a moment; the spe
   // the speed after 1×
   m.step_speed()
   assert_eq(m.speed(), 1.25)
-  // dragged to the timeline's middle: followed, then sent there once let go
+  // dragged to the timeline's middle: paused, its seeks one after another, sent there as it goes; let go, as before
+  let told = fn(said : String) { t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(said) }) }
   t.press_at(10.0, 20.0)
   t.move(195.0, 20.0)
   assert_true(m.scrubbing() is Some(ms) && (ms - 5000.0).abs() < 100.0)
+  assert_true(told(" 2 0"))
+  assert_true(told(" 9 1"))
+  assert_true(told(" 3 5000"))
   t.release(195.0, 20.0)
   t.draw()
   assert_true(m.scrubbing() is None)
-  assert_true(t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" 3 5000") }))
+  assert_true(told(" 9 0"))
 }

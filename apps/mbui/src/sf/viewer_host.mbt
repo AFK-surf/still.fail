@@ -1,7 +1,7 @@
 // What a viewer (reader.mbt, player.mbt) asks of the page it is drawn on, told once as the app starts (web/ui
-// viewer/host.ts setViewerHost): whether it is a phone's (narrow), what a link in Markdown opens, where the reader's
-// layout is kept, and the page's core reading a text for the reader. With none told: a wide page's, its layout kept
-// here, a text as it is. (The theme is the library's own: @sf.theme().)
+// viewer/host.ts setViewerHost): whether it is a phone's (narrow), how far its bars reach in, a phone's sheets, what a
+// link in Markdown opens, where the reader's layout is kept, and the page's core reading a text for the reader. With
+// none told: a wide page's, its layout kept here, a text as it is. (The theme is the library's own: @sf.theme().)
 
 ///|
 /// A chapter heading: its words and where it starts in the text.
@@ -25,9 +25,29 @@ pub(all) struct ReadBook {
 }
 
 ///|
+/// A phone's sheet over the page (host.ts ViewerSheet): its title and what is said beside it, how much of the page it
+/// takes, whether its grabber drags it, what is in it; drawn each frame while it is open and while it sinks away
+/// (`closing`), `close` asking it to go, `gone` told once it has.
+pub(all) struct ViewerSheet {
+  title : String
+  trailing : String
+  height : Double
+  draggable : Bool
+  closing : Bool
+  close : () -> Unit
+  gone : () -> Unit
+  body : () -> Unit
+}
+
+///|
 /// What the viewer asks of the page (ViewerHost).
 pub(all) struct ViewerHost {
   narrow : () -> Bool
+  /// how far the page's own bars reach in over a viewer, at its top and at its foot (the web's --m-top, --m-foot: a
+  /// phone's status and navigation bars)
+  room : () -> (Double, Double)
+  /// a phone's sheet drawn (None where there are none: the panels are drawn beside the text)
+  sheet : ((@ui.Ctx, ViewerSheet) -> Unit)?
   /// a link in a text's Markdown opened
   on_link : (String) -> Unit
   /// how the reader lays text out on this device, and one of it changed
@@ -37,6 +57,10 @@ pub(all) struct ViewerHost {
   read_book : (String, Bool, (Result[ReadBook, String]) -> Unit) -> Unit
   /// where words are in a book the core read (`reader.search`)
   search_book : (Int, String, (Array[Int]) -> Unit) -> Unit
+  /// bytes kept on the device as a file (its name, its type): a frame saved
+  keep : (String, String, Bytes) -> Unit
+  /// a word said a moment (the page's toast)
+  say : (String) -> Unit
 }
 
 ///|
@@ -49,12 +73,16 @@ let style_here : Ref[ReaderStyle] = Ref(reader_style_default)
 fn viewer_host_default() -> ViewerHost {
   {
     narrow: fn() { false },
+    room: fn() { (0.0, 0.0) },
+    sheet: None,
     on_link: fn(_) {  },
     reader_style: fn() { style_here.val },
     set_reader_style: fn(change) { style_here.val = style_here.val.changed(change) },
     // (no core: the text as it is, nothing found in it)
     read_book: fn(text, _, done) { done(Ok({ id: 0, text, wrapped: 0, chapters: [], heads: [], md: [] })) },
     search_book: fn(_, _, done) { done([]) },
+    keep: fn(_, _, _) {  },
+    say: fn(_) {  },
   }
 }
 

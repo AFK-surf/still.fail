@@ -117,7 +117,7 @@ fn Viewer::desk_meta(self : Viewer, src : Source) -> String {
   if kind != "" {
     parts.push(kind)
   }
-  match self.video {
+  match self.view() {
     Some(n) if self.shown_kind() == Some(KVideo) => {
       let (w, h) = n.natural()
       if w > 0.0 && h > 0.0 {
@@ -156,7 +156,7 @@ fn desk_clock(ms : Double) -> String {
 fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = self
   // read in the reader, played in the player: their own bars
-  if v.desk_reads() || (wide_on.val && v.shown_kind() == Some(KAudio)) {
+  if v.desk_reads() || v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo) {
     return
   }
   let ink = @sf.page_viewer_ink()
@@ -585,40 +585,6 @@ let desk_text_foot : Double = 64.0
 ///|
 /// As it is (a zoom of 1).
 let desk_whole : Double = 1.0
-
-///|
-/// A chat's song on a desktop (FilePreview.tsx: a sound opens in the player, viewer/Player.tsx): the library's player
-/// over the preview's (read through the core a part at a time), back to the chat, its download the preview's.
-fn Viewer::desk_song(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
-  let v = self
-  match v.media {
-    Some(m) => {
-      // (a fixture's: how it stands pinned, the same on every run)
-      match v.pinned {
-        Some(p) => m.pin(p)
-        None => ()
-      }
-      let file : @sf.ViewerFile = {
-        name: v.file.name,
-        size: v.file.size,
-        mtime: 0.0,
-        mime: v.mime,
-        kind: "audio",
-        title: "",
-        key: "",
-        bytes: None,
-        read: fn(_, _, done) { done(Err("")) },
-        stream: None,
-        beside: None,
-        place: fn() { NeverLeft },
-        keep_place: fn(_, _) {  },
-        save: fn() { v.ask_save(c) },
-      }
-      @sf.player_view(c, m, file, [], back_label=v.desk_back(src), on_back=fn() { v.shut(c) }, on_go=fn(_) {  })
-    }
-    None => ()
-  }
-}
 
 ///|
 /// A chat's text or Markdown open in its preview, read in the desktop's reader (FilePreview.tsx hands it to the same

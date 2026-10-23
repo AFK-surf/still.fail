@@ -1,13 +1,30 @@
 // The app's reader and player (src/sf reader.mbt, player.mbt): what they ask of the page told them as the app builds
-// (@sf.set_viewer_host, as the web's web/src/viewer/whole.ts): whether it is a phone's, what a link in a text's
-// Markdown opens, the reader's layout in the core's prefs (`prefs.reader`, the same on every page that reads), the core
+// (@sf.set_viewer_host, as the web's web/src/viewer/whole.ts): whether it is a phone's, how far its bars reach in, its
+// sheets, what a link in a text's Markdown opens, the reader's layout in the core's prefs (`prefs.reader`, the same on every page that reads), the core
 // reading a text for the reader (`reader.book`, `reader.text`) and finding words in it (`reader.search`).
 
 ///|
 /// What the app gives its viewers over `src`.
-fn viewer_host_of(src : Source) -> @sf.ViewerHost {
+fn viewer_host_of(c : @ui.Ctx, src : Source) -> @sf.ViewerHost {
   {
     narrow: fn() { !wide_on.val },
+    room: fn() { if wide_on.val { (0.0, 0.0) } else { (status_top(), nav_foot()) } },
+    // a phone's: the drive's reader sheet (drive_parts.mbt dv_sheet_frame)
+    sheet: Some(fn(c, s) {
+      dv_sheet_frame(
+        c,
+        s.title,
+        c.height * s.height,
+        s.body,
+        closing=s.closing,
+        reader=true,
+        close=Some(s.close),
+        gone=s.gone,
+        trailing=s.trailing,
+      )
+    }),
+    keep: fn(name, mime, bytes) { keep_bytes(c, name, mime, bytes) },
+    say: fn(words) { say(c, words) },
     on_link: open_link,
     reader_style: fn() { reader_prefs(src) },
     set_reader_style: fn(change) { reader_put(src, change) },

@@ -1272,6 +1272,8 @@
   "web-pages.drive.player.captionsOn": "显示字幕",
   "web-pages.drive.player.captionsOff": "隐藏字幕",
   "web-pages.drive.player.full": "全屏",
+  "web-pages.drive.player.held": "2× 播放中",
+  "web-pages.drive.player.nextIn": "{n} 秒后播放",
   "web-pages.drive.player.unfull": "退出全屏",
   "web-pages.drive.player.list": "选集",
   "web-pages.drive.player.mute": "静音",
