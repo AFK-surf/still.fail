@@ -4,10 +4,12 @@ import { run } from "./run.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Accounts, LOGIN_KEY, STORAGE_KEY, challenge, decodeComponent, encodeComponent, parseQuery, view, type StoredAccount } from "../src/accounts.ts";
+import { stillfailAccountProvider } from "../src/account-provider.ts";
 import { HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Runner } from "../src/runtime.ts";
 import { FakeHost, flush, jsonResponse } from "../src/testing.ts";
+import { Status } from "../src/status.ts";
 import { Tracer } from "../src/trace.ts";
 import { parseJson } from "../src/util.ts";
 import type { HttpRequest } from "../src/host.ts";
@@ -118,6 +120,33 @@ test("sign_in_survives_a_failed_profile_and_sanitises_return_to", async () => {
     assert.equal(v.picture, "");
     assert.equal(to, expected);
   }
+});
+
+test("a_profile_missed_at_sign_in_comes_with_the_next_me", async () => {
+  const host = new FakeHost();
+  const expires = now(host) + 3600;
+  let profile = false;
+  host.onFetch((req) => {
+    if (req.url.endsWith("/v1/me")) {
+      if (!profile) throw new HostError("offline");
+      return jsonResponse(200, { user: { sub: "sub1", email: "a@x.com", name: "阿一", picture: "https://pic/1" }, workspaces: [] });
+    }
+    return jsonResponse(200, tokens("acc", "ref", expires));
+  });
+  const provider = await run(stillfailAccountProvider({ host, tracer: new Tracer(host, new Runner(host.time.clock), 0), status: new Status(host, new Runner(host.time.clock)) }));
+  const accounts = provider.accounts;
+  const url = await run(accounts.beginSignIn("https://stillfail.test/auth/callback", "/", "dev"));
+  await run(accounts.completeSignIn(`code=c&state=${queryOf(url).state}`));
+  assert.equal(accounts.list()[0].picture, "");
+  let changes = 0;
+  accounts.onChange(() => changes++);
+  profile = true;
+  await run(provider.me("sub1"));
+  assert.deepEqual(accounts.list(), [{ sub: "sub1", email: "a@x.com", name: "阿一", picture: "https://pic/1" }]);
+  assert.equal((stored(host, STORAGE_KEY) as StoredAccount[])[0].picture, "https://pic/1");
+  // The same again changes nothing.
+  await run(provider.me("sub1"));
+  assert.equal(changes, 1);
 });
 
 test("sign_in_failures", async () => {
