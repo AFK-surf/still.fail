@@ -48,7 +48,7 @@ import { softwareDemo } from "./software.ts";
 import { lockDemo } from "./lock.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { relaysDemo } from "./relays.ts";
-import { relayDemo } from "./relay.ts";
+import { relayDemo, TWO_BOTS } from "./relay.ts";
 import { Console } from "../src/admin/console.tsx";
 import { ACCOUNT } from "../src/demo/station.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
@@ -755,7 +755,7 @@ export const stories: Story[] = [
   { id: "app-chat-relay", group: "应用", title: "对话 · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }] },
   { id: "app-chat-relay-picked", group: "应用", title: "对话 · 接力到频道 · 选中一个", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "#cue-dev" }] },
   { id: "app-chat-relay-all", group: "应用", title: "对话 · 接力到频道 · 显示全部", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "显示全部 10 个" }] },
-  { id: "app-chat-relay-workspace", group: "应用", title: "对话 · 接力到频道 · 只看一个 workspace", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="在哪个 workspace 里找"] button:nth-child(3)' }] },
+  { id: "app-chat-relay-bot", group: "应用", title: "对话 · 接力到频道 · 换一个 bot", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="用哪个 bot"] button:nth-child(2)' }] },
   { id: "app-chat-relay-search", group: "应用", title: "对话 · 接力到频道 · 搜索", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="搜索频道或群"]' }, { key: "d" }] },
   { id: "app-chat-relay-none", group: "应用", title: "对话 · 接力到频道 · 没有连接", app: true, demo: relayDemo([]), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }] },
   { id: "app-sidebar-folded", group: "应用", title: "侧栏收起", app: true, steps: [{ click: '[aria-label="对话"]' }] },
@@ -1143,6 +1143,8 @@ export const stories: Story[] = [
   { id: "phone-chat-history-turns", group: "手机", title: "执行历史 · 一轮一轮", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "历史" }], demo: historyTurns },
   { id: "phone-chat-history-steps", group: "手机", title: "执行历史 · 展开的一组", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "历史" }, { text: "读取 Win11 上 pnpm shot 的输出 · 共 8 项" }], demo: historyTurns },
   { id: "phone-chat-info", group: "手机", title: "对话信息", app: true, phone: true, steps: [{ click: '[aria-label="对话信息"]' }] },
+  { id: "phone-chat-relay-one", group: "手机", title: "对话 · 接力到频道 · 只有一个 bot", app: true, phone: true, demo: relayDemo(TWO_BOTS.slice(0, 1)), steps: [{ click: '[aria-label="对话信息"]' }, { text: "接力到频道…" }] },
+  { id: "phone-chat-relay-two-bots", group: "手机", title: "对话 · 接力到频道 · 一个 workspace 两个 bot（选中这个对话的）", app: true, phone: true, demo: relayDemo(TWO_BOTS), steps: [{ click: '[aria-label="对话信息"]' }, { text: "接力到频道…" }] },
   { id: "phone-chat-relay", group: "手机", title: "对话 · 接力到频道", app: true, phone: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { text: "接力到频道…" }, { text: "#cue-dev" }] },
   { id: "phone-files", group: "手机", title: "文件", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="文件"]' }] },
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },

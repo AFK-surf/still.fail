@@ -4,7 +4,6 @@
 ///|
 let zh : Map[String, String] = {
   "web-main.relay.action": "接力到频道…",
-  "web-main.relay.allWorkspaces": "全部",
   "web-main.relay.change": "更换",
   "web-main.relay.done": "已接力到 {place}",
   "web-main.relay.go": "接力",
@@ -30,7 +29,7 @@ let zh : Map[String, String] = {
   "web-main.relay.title": "接力到频道",
   "web-main.relay.unread": "读取失败：{error}",
   "web-main.relay.verb": "接力",
-  "web-main.relay.workspaces": "在哪个 workspace 里找",
+  "web-main.relay.via": "那里由 {bot} 回复",
   "common.link.open": "打开链接",
   "common.link.copy": "复制链接",
   "common.link.copied": "已复制链接",

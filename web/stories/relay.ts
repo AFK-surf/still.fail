@@ -3,8 +3,11 @@
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { RelayConnect } from "../src/api.ts";
 
+/** A bot's picture as Slack gives one (its app's icon). */
+const BOT_IMAGE = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" fill="#d97757"/><path d="M24 10l3 11 11 3-11 3-3 11-3-11-11-3 11-3z" fill="#fff"/></svg>')}`;
+
 const CONNECTS: RelayConnect[] = [
-  { id: "cl", kind: "slack", name: "Claude", team: "AFK-surf", places: [
+  { id: "cl", kind: "slack", name: "Claude", team: "AFK-surf", botImage: BOT_IMAGE, preferred: true, places: [
     { id: "C1", name: "cue-dev", kind: "channel", used: 1_700_000_300_000 },
     { id: "C2", name: "design", kind: "channel", private: true },
     { id: "C3", name: "stillfail", kind: "channel", used: 1_700_000_100_000 },
@@ -13,12 +16,20 @@ const CONNECTS: RelayConnect[] = [
     { id: "C6", name: "ops", kind: "channel" },
     { id: "C7", name: "random", kind: "channel" },
     { id: "C8", name: "releases", kind: "channel" },
+    { id: "C9", name: "support", kind: "channel" },
+    { id: "C10", name: "infra", kind: "channel" },
   ] },
   { id: "fs", kind: "feishu", name: "Codex 机器人", team: "Cue 团队", places: [
     { id: "oc_1", name: "产品讨论", kind: "topics", used: 1_700_000_200_000 },
     { id: "oc_2", name: "Android 小组", kind: "group" },
   ] },
   { id: "lk", kind: "lark", name: "Codex", team: "Cue Global", places: [], error: "missing_scope: im:chat:readonly" },
+];
+
+/** One Slack workspace with two bots, the chat's own (Codex) preferred. */
+export const TWO_BOTS: RelayConnect[] = [
+  { id: "cl", kind: "slack", name: "claude", team: "AFK AI", botImage: BOT_IMAGE, places: CONNECTS[0]!.places },
+  { id: "cx", kind: "slack", name: "codex", team: "AFK AI", preferred: true, places: CONNECTS[0]!.places.slice(0, 5) },
 ];
 
 /** The dialog's calls, with `connects` as the station's. */

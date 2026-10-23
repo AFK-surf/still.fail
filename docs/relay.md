@@ -9,12 +9,13 @@
 
 ## 选择框
 
-- 列出这个 chat 所在 workspace 里、开着并连上的连接的 bot 已经加入的频道和群，混在一个列表里（Slack、飞书、Lark：Lark 是 `domain: lark` 的飞书连接），每行前面是平台的图标；bot 没加入的不列：在那里开不了会话。
+- 先选 bot，再选它加入的频道和群。这个 chat 所在 workspace 里开着并连上的连接（Slack、飞书、Lark：Lark 是 `domain: lark` 的飞书连接）多于一个时，最上面一排 bot 按钮（头像和名字；连接在几个 Slack workspace / 飞书租户时名字后面带上 workspace），点哪个就列哪个 bot 的频道；只有一个时不出现。
+- 打开时选中这个对话自己的 bot（站点给的 `preferred`）：对话本来就在其中一个连接上的，用它；否则是绑定和对话的 agent 同一个 runtime、同一个 profile 的，再是同一个模型的，再是同一个 runtime 的第一个；都没有就是第一个。
+- 列表里只有选中的 bot 已经加入的频道和群，每行前面是平台的图标；bot 没加入的不列：在那里开不了会话。
 - 站点记得每个频道和群最近一次被接力过去的时间（`relayed_to` 表），接力过的排在前面（最近的在前），其余按名字排。打开时一共超过 8 个、又有接力过的，先只列最近接力过的 5 个，下面「显示全部 N 个」；一输入就在全部里搜，名字以输入开头的在前。
-- 连接（Slack 的 workspace、飞书/Lark 的租户）多于一个时，搜索框下面一排按 workspace 筛的按钮（全部，或其中一个），每行也写它在哪个 workspace；只有一个连接时都不出现。
 - 每一项说接力过去会怎样：Slack 频道是「新 thread」（最常见，选中后才写）；飞书话题群是「新话题」；飞书普通群是「接管群会话」：普通群本来就是一个会话（docs/feishu.md「会话怎么分」），接力等于在群里开新会话，群里之后的话都归这个对话，原来的会话照常留着。
-- 搜索框里粘一条 Slack 消息的链接（频道里的消息，或 thread 里的回复，带 `thread_ts` 的那种），列表换成「接力到这个 Slack thread」：接到那条消息所在的 thread。站点按链接的工作区找连接；bot 不在那个频道、那个 thread 已经有别的对话的 agent 在（和 `slack_api` 的规则一样），都拒绝。
-- 选中一个后列表收起，只剩选中的那一行（「更换」回到列表），下面才出现可选的「开头附一句」，跟着第一条消息发出去（比如 @ 某人）；按钮写明去向（「接力到 #频道」）。
+- 搜索框里粘一条 Slack 消息的链接（频道里的消息，或 thread 里的回复，带 `thread_ts` 的那种），列表换成「接力到这个 Slack thread」：接到那条消息所在的 thread。用选中的 bot，它不在链接的工作区时站点按工作区找别的连接；bot 不在那个频道、那个 thread 已经有别的对话的 agent 在（和 `slack_api` 的规则一样），都拒绝。
+- 选中一个后列表收起，只剩选中的那一行（「更换」回到列表），下面一行「那里由 [头像] bot 名 回复」写明在那边发言的 bot，再下面才出现可选的「开头附一句」，跟着第一条消息发出去（比如 @ 某人）；按钮写明去向（「接力到 #频道」）。
 
 ## 接力时站点做什么（`station/src/sessions/relay.ts`）
 
@@ -25,7 +26,7 @@
 
 ## 接口
 
-- `GET /threads/:id/relay`：`{connects: [{id, kind: slack|feishu|lark, name, team, places: [{id, name, kind: channel|topics|group, private?, used?}], error?}]}`，`used` 是最近一次接力到那里的时间（毫秒），每个连接的 places 按上面的顺序排。读不出某个连接的频道时，那一组带 `error`，其余照给。
-- `POST /threads/:id/relay`：`{connect, channel, note?}` 或 `{link, note?}`，答 `{thread, to, place, link}`。
+- `GET /threads/:id/relay`：`{connects: [{id, kind: slack|feishu|lark, name, team, botImage, preferred, places: [{id, name, kind: channel|topics|group, private?, used?}], error?}]}`，`used` 是最近一次接力到那里的时间（毫秒），每个连接的 places 按上面的顺序排。读不出某个连接的频道时，那一组带 `error`，其余照给。
+- `POST /threads/:id/relay`：`{connect, channel, note?}` 或 `{link, connect?, note?}`，答 `{thread, to, place, link}`。
 - core 的操作：`chat.relayPlaces {thread}`、`chat.relay {thread, connect?, channel?, link?, note?}`。
 - 平台的部分在 `ChatSurface` 上：`places()`、`begin(channel, message)`、`threadOf(link)`、`permalink(thread)`；Slack 和飞书各自实现，再加平台只要实现这几个。
