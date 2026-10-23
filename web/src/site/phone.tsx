@@ -5,4 +5,7 @@ import { mountDemo } from "../demo/mount.tsx";
 import { followMotion } from "@stillfail/ui/motion.ts";
 
 followMotion();
-mountDemo(document.getElementById("demo")!, { start: "stations" });
+const root = document.getElementById("demo")!;
+// In a phone's shell: its status bar's room under the camera island (demo/demo.css.ts).
+root.dataset.phone = "";
+mountDemo(root, { start: "stations" });

@@ -294,17 +294,54 @@ export const oneScreen = style({
 });
 /** The shells (OneComputer.tsx SHELL): a laptop's edge round its screen and its base under it; on a narrow screen,
  *  where the window is a phone, a phone's edge. */
-const BEZEL = "#1C1C1E";
+const BEZEL = "#060607";
+/** A metal edge round a device's black face: dark where it meets the glass, light on its face, dark at its rim. */
+const METAL = "0 0 0 1.5px #2C2C2F, 0 0 0 3.5px #B8B8BE, 0 0 0 4.5px #6E6E74";
+/** Metal, lit from above: buttons, a laptop's base. */
+const ALU = "linear-gradient(180deg, #F4F4F6 0%, #DCDCE0 38%, #B7B7BD 78%, #8C8C92 100%)";
 export const oneEdge = style({
-  position: "absolute", inset: "-14px", borderRadius: "34px", background: BEZEL, boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, .08)", // own corner: a laptop's
-  "@media": { [NARROW]: { inset: "-12px", borderRadius: "48px" } }, // own corner: a phone's
+  // A laptop's lid round its screen, its camera at the top of its frame.
+  position: "absolute", inset: "-14px", borderRadius: "34px", background: BEZEL, // own corner: a laptop's
+  boxShadow: `${METAL}, inset 0 0 0 1px rgba(255, 255, 255, .06)`,
+  selectors: {
+    "&::after": {
+      content: "\"\"", position: "absolute", top: "4px", left: "calc(50% - 3px)", width: "6px", height: "6px", borderRadius: "50%",
+      background: "radial-gradient(circle at 40% 35%, #3A4A5E, #0B0F14 70%)", boxShadow: "0 0 0 1px #1A1A1C",
+    },
+  },
+  // A phone's face round its screen (a narrow screen's window).
+  "@media": { [NARROW]: { inset: "-12px", borderRadius: "48px", selectors: { "&::after": { display: "none" } } } }, // own corner: a phone's
 });
+/** A laptop's base: metal, its hinge under the lid, the scoop in its front edge to lift the lid by. */
 export const oneBase = style({
-  position: "absolute", left: "-78px", right: "-78px", top: "calc(100% + 14px)", height: "16px", borderRadius: "2px 2px 16px 16px", // own corner: a laptop's base
-  background: "linear-gradient(180deg, #E4E4E7, #A1A1AA)", boxShadow: "inset 0 1px 0 rgba(255, 255, 255, .7)",
-  selectors: { "&::before": { content: "\"\"", position: "absolute", left: "calc(50% - 64px)", top: "0", width: "128px", height: "6px", borderRadius: "0 0 8px 8px", background: "#A1A1AA" } }, // own corner: its notch
+  position: "absolute", left: "-84px", right: "-84px", top: "calc(100% + 18px)", height: "14px", background: ALU,
+  borderRadius: "3px 3px 18px 18px / 3px 3px 12px 12px", boxShadow: "inset 0 1px 0 #FFFFFF, 0 2px 3px rgba(0, 0, 0, .18)", // own corner: a laptop's base
+  selectors: {
+    // The hinge, dark, under the lid.
+    "&::before": { content: "\"\"", position: "absolute", left: "12%", right: "12%", top: "-4px", height: "4px", background: "linear-gradient(180deg, #1E1E21, #4A4A4F)" },
+    // The scoop.
+    "&::after": {
+      content: "\"\"", position: "absolute", left: "calc(50% - 70px)", top: "0", width: "140px", height: "6px", borderRadius: "0 0 10px 10px", // own corner: the scoop
+      background: "linear-gradient(180deg, #9C9CA2, #C9C9CE)",
+    },
+  },
   "@media": { [NARROW]: { display: "none" } },
 });
+/** A phone's camera island at the top of its screen; `oneIslandInWindow` the one of a narrow screen's window. */
+const island = { position: "absolute", left: "calc(50% - 56px)", width: "112px", height: "32px", borderRadius: "16px", background: "#000", zIndex: 2, pointerEvents: "none" } as const; // own corner: an island
+export const oneIsland = style({ ...island, top: "23px" });
+export const oneIslandInWindow = style({ ...island, top: "11px", display: "none", "@media": { [NARROW]: { display: "block" } } });
+/** A phone's buttons on its metal edge: the volume keys on the left, the power key on the right. `oneKeysInWindow` the
+ *  ones of a narrow screen's window (its edge outside its screen). */
+const keys = (out: number) => ({
+  position: "absolute", inset: `0 -${out}px`, pointerEvents: "none",
+  selectors: {
+    "&::before": { content: "\"\"", position: "absolute", left: "0", top: "170px", width: "4px", height: "128px", borderRadius: "2px", background: `linear-gradient(180deg, transparent 0 0, #9A9AA0 0 46%, transparent 46% 54%, #9A9AA0 54%)` }, // own corner: a key
+    "&::after": { content: "\"\"", position: "absolute", right: "0", top: "220px", width: "4px", height: "92px", borderRadius: "2px", background: "linear-gradient(90deg, #8C8C92, #D2D2D7)" }, // own corner: a key
+  },
+} as const);
+export const oneKeys = style(keys(8));
+export const oneKeysInWindow = style({ ...keys(20), display: "none", "@media": { [NARROW]: { display: "block" } } });
 /** The app in it: as large as the window. */
 export const oneDemo = style({});
 globalStyle(`${oneScreen} > ${oneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
@@ -313,7 +350,7 @@ export const onePhone = style({
   // Its shadow a box shadow round its corners, not a filter: under a filter the phone bar's frosted glass loses its
   // shape (Chromium draws it as a plain rectangle).
   position: "absolute", top: "0", left: "0", zIndex: 3, transformOrigin: "0 0", boxSizing: "border-box", borderRadius: "56px", background: BEZEL, // own corner: a phone's
-  boxShadow: "0 24px 36px rgba(0, 0, 0, .22), inset 0 0 0 1px rgba(255, 255, 255, .08)",
+  boxShadow: `${METAL}, inset 0 0 0 1px rgba(255, 255, 255, .06), 0 30px 50px -12px rgba(0, 0, 0, .35)`,
   "@media": { [NARROW]: { display: "none" } },
 });
 /** Its screen: the phone's app, a page of its own (site/phone.html); its corners cut by a clip. */

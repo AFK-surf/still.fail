@@ -26,7 +26,7 @@ const PHONE = { w: 390, h: 760, r: 44 };
  * The shells round the screens: a phone's edge (`edge` wide, all round); a laptop's, its edge round the screen and
  * its base under it, `over` wider than the edge each side and `foot` high.
  */
-const SHELL = { edge: 12, laptop: { edge: 14, over: 64, foot: 16 } };
+const SHELL = { edge: 12, laptop: { edge: 14, over: 70, foot: 18 } };
 /** The phone with its shell. */
 const HAND = { w: PHONE.w + 2 * SHELL.edge, h: PHONE.h + 2 * SHELL.edge };
 
@@ -143,6 +143,8 @@ export function OneComputer(props: DemoProps) {
       app = inner.querySelector<HTMLElement>("#demo");
       const found = app ? NAMES.map((n) => rowOf(app!, n, narrow)) : [];
       if (!app || found.some((r) => !r)) return false;
+      // A phone's window (a narrow screen's) is in a phone's shell: a status bar's room under its camera island.
+      if (narrow && app.dataset.phone === undefined) { app.dataset.phone = ""; return false; }
       const at = inner.getBoundingClientRect();
       rows = (found as HTMLElement[]).map((row) => {
         const b = row.getBoundingClientRect();
@@ -198,10 +200,12 @@ export function OneComputer(props: DemoProps) {
       });
       letOut(fly < 1);
       // Whole: the screen and its shell (a phone's edge; a laptop's edge and base), the shell coming as the rest does.
+      // (A little past the shell: its metal edge, a phone's keys.)
+      const past = 10;
       const whole = narrow
-        ? { x: -SHELL.edge, y: -SHELL.edge, w: w.w + 2 * SHELL.edge, h: w.h + 2 * SHELL.edge }
-        : { x: -(SHELL.laptop.edge + SHELL.laptop.over), y: -SHELL.laptop.edge, w: w.w + 2 * (SHELL.laptop.edge + SHELL.laptop.over), h: w.h + 2 * SHELL.laptop.edge + SHELL.laptop.foot };
-      const corner = narrow ? 36 + SHELL.edge : 0;
+        ? { x: -SHELL.edge - past, y: -SHELL.edge - past, w: w.w + 2 * (SHELL.edge + past), h: w.h + 2 * (SHELL.edge + past) }
+        : { x: -(SHELL.laptop.edge + SHELL.laptop.over), y: -SHELL.laptop.edge - past, w: w.w + 2 * (SHELL.laptop.edge + SHELL.laptop.over), h: w.h + 2 * SHELL.laptop.edge + SHELL.laptop.foot + past * 2 };
+      const corner = 0;
       outer.style.clipPath = `path('${(fly < 1
         ? local.map((b) => rounded(b, b.r))
         : rows.map((r) => rounded(mix(r.box, whole, grow), lerp(r.radius, corner, grow)))).join(" ")}')`;
@@ -273,12 +277,16 @@ export function OneComputer(props: DemoProps) {
                 {/* Its shell: a laptop's edge and base (a phone's edge on a narrow screen), under the screen. */}
                 <div className={css.oneEdge} />
                 <div className={css.oneBase} />
+                <div className={css.oneKeysInWindow} />
                 <div className={css.oneScreen} ref={screen}>
                   <Demo v="1" start="stations" className={css.oneDemo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
                 </div>
+                <div className={css.oneIslandInWindow} />
               </div>
             </div>
             <div className={css.onePhone} ref={phone} style={{ width: HAND.w, height: HAND.h, padding: SHELL.edge }}>
+              <i className={css.oneKeys} />
+              <i className={css.oneIsland} />
               <iframe className={css.onePhoneScreen} ref={phoneScreen} width={PHONE.w} height={PHONE.h} title="still.fail 手机版" tabIndex={-1} />
             </div>
           </div>
