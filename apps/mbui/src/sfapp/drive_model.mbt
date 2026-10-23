@@ -2,13 +2,6 @@
 // topic's DriveFolder of DriveEntry, `drivePlace`'s DrivePlace; the prefs' `driveViews` and `reader`), read into what
 // the drive's pages draw (ember apps/android drive/Files.kt, DriveScreen.kt; shared data/Drives.kt).
 
-///|
-/// Where a page of a drive is: a station, one of its roots (None: the drive itself, its roots), a path under it.
-pub(all) struct DriveAt {
-  station : String
-  root : String?
-  path : String
-} derive(Eq)
 
 ///|
 /// A file of a drive handed to the viewer that previews it (open_file): where it is and what it is.

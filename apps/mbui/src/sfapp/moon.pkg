@@ -15,6 +15,7 @@ import {
   "mbui/hostapi",
   "mbui/zip",
   "stillfail/sfapp/settings",
+  "stillfail/sfbase",
 }
 
 import { "stillfail/sfkept" } for "wbtest"

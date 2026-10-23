@@ -20,7 +20,7 @@ pub fn text(v : Json?, key : String) -> String {
 }
 
 ///|
-fn opt_text(v : Json?, key : String) -> String? {
+pub fn opt_text(v : Json?, key : String) -> String? {
   match field(v, key) {
     Some(String(s)) => Some(s)
     _ => None
@@ -36,7 +36,7 @@ pub fn flag(v : Json?, key : String) -> Bool {
 }
 
 ///|
-fn number(v : Json?, key : String) -> Double {
+pub fn number(v : Json?, key : String) -> Double {
   match field(v, key) {
     Some(Number(n, ..)) => n
     _ => 0.0
@@ -147,7 +147,7 @@ pub(all) struct ChatsView {
 }
 
 ///|
-fn person_of(p : Json) -> Person {
+pub fn person_of(p : Json) -> Person {
   let shown = field(Some(p), "shown")
   {
     id: text(Some(p), "id"),

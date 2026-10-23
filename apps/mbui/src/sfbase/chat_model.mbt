@@ -3,7 +3,7 @@
 // into MoonBit, the fields the page draws. A field the view leaves out reads as nothing, as Shapes.kt decodes it.
 
 ///|
-fn opt_number(v : Json?, key : String) -> Double? {
+pub fn opt_number(v : Json?, key : String) -> Double? {
   match field(v, key) {
     Some(Number(n, ..)) => Some(n)
     _ => None
@@ -18,7 +18,7 @@ pub(all) struct Stamp {
 } derive(Eq)
 
 ///|
-fn stamp_of(v : Json?, key : String) -> Stamp? {
+pub fn stamp_of(v : Json?, key : String) -> Stamp? {
   match field(field(v, "time"), key) {
     Some(Object(_)) as s => Some({ ago: text(s, "ago"), full: text(s, "full") })
     _ => None
@@ -42,7 +42,7 @@ pub(all) struct Attachment {
 }
 
 ///|
-fn attachment_of(a : Json) -> Attachment {
+pub fn attachment_of(a : Json) -> Attachment {
   let s = Some(a)
   {
     name: text(s, "name"),
@@ -71,7 +71,7 @@ pub(all) struct Quote {
 }
 
 ///|
-fn quote_of(q : Json) -> Quote {
+pub fn quote_of(q : Json) -> Quote {
   let s = Some(q)
   {
     author: text(s, "author"),
@@ -92,7 +92,7 @@ pub(all) struct Choice {
 }
 
 ///|
-fn choices_of(v : Json?, key : String) -> Array[Choice]? {
+pub fn choices_of(v : Json?, key : String) -> Array[Choice]? {
   match field(v, key) {
     Some(Array(a)) =>
       Some(
@@ -143,7 +143,7 @@ pub(all) struct By {
 }
 
 ///|
-fn by_of(v : Json?) -> By {
+pub fn by_of(v : Json?) -> By {
   let b = field(v, "by")
   {
     name: text(b, "name"),
@@ -178,7 +178,7 @@ pub(all) struct Elsewhere {
 }
 
 ///|
-fn elsewhere_of(e : Json) -> Elsewhere {
+pub fn elsewhere_of(e : Json) -> Elsewhere {
   let s = Some(e)
   {
     key: text(s, "key"),
@@ -214,7 +214,7 @@ pub(all) struct Install {
 }
 
 ///|
-fn install_of(v : Json?, key : String) -> Install? {
+pub fn install_of(v : Json?, key : String) -> Install? {
   match field(v, key) {
     Some(Object(_)) as i =>
       Some({
@@ -269,7 +269,7 @@ pub(all) struct Message {
 }
 
 ///|
-fn message_of(m : Json) -> Message {
+pub fn message_of(m : Json) -> Message {
   let s = Some(m)
   {
     seq: number(s, "seq"),
@@ -369,7 +369,7 @@ pub(all) struct Agent {
 }
 
 ///|
-fn agent_of(a : Json) -> Agent {
+pub fn agent_of(a : Json) -> Agent {
   let s = Some(a)
   let session = field(s, "session")
   {

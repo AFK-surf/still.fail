@@ -273,7 +273,7 @@ test "a chat left lets go of all that holds its thread at the core: its view and
     ..base,
     leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
   }
-  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.run_for(@ui.nav_push_ms)
@@ -304,7 +304,7 @@ test "left short of its end, a chat opens again where it was left, though the co
       (base.call)(name, params, done)
     },
   }
-  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.draw()
   open_chat(r)

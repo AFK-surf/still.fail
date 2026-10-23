@@ -21,6 +21,15 @@ particular to this app:
   both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
   what it needs of the app is given to it as the app starts.
 
+## What the app's packages are
+
+- `src/sf`: the component library (above). `src/sfbase`: what both frames read and the stack they show — the core's
+  topics and calls (`Source`), a workspace, the chats' and a chat's views, the pages (`Page`, `ChatRef`, `DriveAt`,
+  `app.nav`); it imports the library and the settings' routes, nothing of the pages. `src/sfapp`: the pages, the
+  phone's and the desktop's still together (`wide_on` branches); it takes `sfbase`'s names in by `pub using`
+  (`sfapp/base.mbt`), so a page says `Source` or `app.nav` as before. The desktop's pages are pulled out of `sfapp`
+  into a package of their own as each is ported from the web's file, its `wide_on` branches going with it.
+
 ## What is checked, and where
 
 - The app's screens are tested in the Tester: its draw list at the declared moment.
