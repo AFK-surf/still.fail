@@ -43,8 +43,16 @@ for t in ${TARGETS:-native}; do
     done
   fi
   out=$(mktemp)
+  # (TIMES=1, as CI's: built first on its own, then run, each said with how long it took; its errors shown by the run)
+  if [ -n "${TIMES:-}" ]; then
+    s=$(date +%s)
+    moon test $mode $pkgs --build-only > /dev/null 2>&1
+    echo "test.sh: built in $(( $(date +%s) - s )) s"
+    s=$(date +%s)
+  fi
   moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | tee "$out" | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
+  [ -z "${TIMES:-}" ] || echo "test.sh: run in $(( $(date +%s) - s )) s"
   # (the core's answers a test asked and found not kept, src/sfkept: scripts/kept has the core work them out; KEPT_ASKS:
   # where it takes them from)
   asks=$(grep -c 'kept-answers-ask {' "$out")
