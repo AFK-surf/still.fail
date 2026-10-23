@@ -10,42 +10,23 @@
 ///|
 /// The automatic decisions (AutomaticDecisionsScreen): its rules, each a row to its page (one: completion).
 fn decisions_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  // the desktop's: the web's (web_decisions.mbt)
+  if wide.val {
+    return decisions_page_wide(c, core, here)
+  }
   scroll_page(c, "auto-decisions", [
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("web-pages.automaticDecisions.title"), about=tr("web-pages.automaticDecisions.choosePoint")) },
     fn() {
       list_card(c, fn() {
         if list_row(c, key="auto-completion", fn() {
-            // the wide frame's as the web's (AutomaticDecisions.tsx): what it does under its name, how many stations
-            // have it on at its end
-            if wide.val {
-              row_lines(c, tr("web-pages.automaticDecisions.completion"), tr("web-pages.automaticDecisions.completionNote"))
-              match stations_of(core, here).value {
-                Some(Array(a)) => {
-                  let on = a.filter(fn(s) {
-                      flag(field(field(field(field(Some(s), "overview"), "automaticDecisions"), "settings"), "completion"), "enabled")
-                    }).length()
-                  c.text(
-                    if on > 0 {
-                      fill("web-pages.automaticDecisions.stationsOn", [("n", on.to_string())])
-                    } else {
-                      tr("web-pages.automaticDecisions.off")
-                    },
-                    style=wide_meta,
-                  )
-                  |> ignore
-                }
-                _ => ()
-              }
-            } else {
-              c.box(w=Fill(1.0), gap=5.0, fn() {
-                c.text(tr("web-pages.automaticDecisions.completion"), size=15.0, color=@sf.theme().p.text, w=Fill(1.0), line=21.0)
-                |> ignore
-                c.text(tr("web-pages.automaticDecisions.completionShort"), size=13.0, color=@sf.theme().p.muted, w=Fill(1.0), line=18.0)
-                |> ignore
-              })
+            c.box(w=Fill(1.0), gap=5.0, fn() {
+              c.text(tr("web-pages.automaticDecisions.completion"), size=15.0, color=@sf.theme().p.text, w=Fill(1.0), line=21.0)
               |> ignore
-            }
+              c.text(tr("web-pages.automaticDecisions.completionShort"), size=13.0, color=@sf.theme().p.muted, w=Fill(1.0), line=18.0)
+              |> ignore
+            })
+            |> ignore
             chevron(c)
           }) {
           (core.push)(AutoCompletion)
@@ -65,6 +46,10 @@ fn note_wait(c : @ui.Ctx, words : String, error? : Bool = false) -> Unit {
 /// The completion rule's page (AutomaticDecisionCompletionScreen): each station's settings of it, or why there are
 /// none (offline, older, not read yet).
 fn completion_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  // the desktop's: the web's (web_decisions.mbt)
+  if wide.val {
+    return completion_page_wide(c, core, here)
+  }
   let topic = stations_of(core, here)
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("web-pages.automaticDecisions.title")) },
@@ -124,19 +109,7 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
   if !flag(view, "canEdit") {
     return [fn() { section_header(c, name, start=S6) }, fn() { page_note(c, tr("web-pages.automaticDecisions.adminOnly")) }]
   }
-  let form = match decision_forms.get(station) {
-    Some(f) => f
-    None => {
-      profile_forms.val += 1
-      let f = "mbui-decision-" + profile_forms.val.to_string()
-      decision_forms[station] = f
-      // (opened once the frame's builds are over: the build that first comes to it alone)
-      c.tell("decision-open/" + f, fn() {
-        act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
-      })
-      f
-    }
-  }
+  let form = decision_form(c, core, station)
   let call = fn(action : String, input : Array[(String, Json)]) {
     act(
       core,
