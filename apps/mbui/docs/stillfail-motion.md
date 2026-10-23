@@ -65,7 +65,7 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | The filter's lists switch | 全部 / 我参与的 / 监控中 | the three panes side by side, x | tween(240, FastOutSlowIn) | chat/Home.kt:163, 192-194 | yes (`home_page`) |
 | Search opens | the field at the list's top | the lists up 56 dp and out; the bars fade | open tween(280, Arrive), close tween(240, Standard) | chat/Home.kt:181-199; chat/Search.kt:149-157 | yes (search.mbt) |
 
-Android's recordings of these (HomeMotionTest: e2e/tapes/home-*.trace) are replayed over the app (src/sfreplay/tapes_wbtest.mbt), each frame's words held to where Android drew them.
+Android's recordings of these (HomeMotionTest: e2e/tapes/home-*.trace) are replayed over the app (src/sfreplay/flows/tapes_test.mbt), each frame's words held to where Android drew them.
 
 ## A chat's list (chat/Chat.kt)
 

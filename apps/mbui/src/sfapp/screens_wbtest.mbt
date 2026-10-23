@@ -1,6 +1,6 @@
 // still.fail's screens as sffix shows them for its screenshots (scripts/shots.sh: MBUI_FIXTURE=MODE MBUI_SCRIPT=shot in
 // a phone's window), drawn by a Tester instead of a window: over the Mac host's text as it recorded it for the screen
-// (screens/text-mac.textrec, scripts/screens.sh rec), the app opened as sffix opens it (@sfapp.fixture_app), drawn when
+// (screens/text-mac.textrec, scripts/screens.sh rec), the app opened as sffix opens it (fixture_app), drawn when
 // the Mac drew its frames (their times kept with its text), to the one its picture is of, which comes no sooner than
 // what the screen declares it opens with ends; idle then, its corners by the rule (screen_check). What it draws is
 // not compared with mbui's own drawing of it (a reference kept, the Mac's frame): what it is checked against is
@@ -27,14 +27,14 @@ let host_scale : Double = 1.0
 let nothing_opens : Double = 0.0
 
 ///|
-/// `mode`'s section of the Mac's text (screens/text-mac.textrec, embedded as text_mac_kept: moon.pkg's pre-build):
+/// `mode`'s section of the Mac's text (screens/text-mac.textrec, embedded by src/sfscreens):
 /// its TEXTREC lines (Tester::new's `text`) and the hash of the last frame sffix drew (its picture's).
 fn text_mac(mode : String) -> (String, String)? {
   let head = "# " + mode + " "
   let lines = []
   let mut hash = ""
   let mut inside = false
-  for v in text_mac_kept.split("\n") {
+  for v in @sfscreens.text_mac().split("\n") {
     if v.has_prefix("# ") {
       inside = v.has_prefix(head)
       if inside {
@@ -78,18 +78,18 @@ fn screen(mode : String, opening : Double) -> @ui.Tester raise {
   }
   // (the app made as sffix makes it at its first frame, the Tester's fake host in place: what it hands over then, a
   // made-up file's picture, is the Tester's to keep, not dropped as the Tester begins)
-  let src : Ref[@sfapp.Source?] = Ref::new(None)
+  let src : Ref[Source?] = Ref::new(None)
   let t = @ui.Tester::new(
     fn(c) {
       let s = match src.val {
         Some(s) => s
         None => {
-          let s = @sfapp.fixture_app(mode)
+          let s = fixture_app(mode)
           src.val = Some(s)
           s
         }
       }
-      @sfapp.view(c, s)
+      view(c, s)
     },
     w=window_w,
     h=window_h,
@@ -155,9 +155,9 @@ fn screen_check(t : @ui.Tester, mode : String) -> Unit raise {
     fail(
       "\{mode}: \{faults.length()} corners break the rule, \{known} known: " +
       (if faults.length() < known {
-        "fewer, the bar comes down: src/sfscreens/corners_known_wbtest.mbt, \{line}"
+        "fewer, the bar comes down: src/sfapp/corners_known_wbtest.mbt, \{line}"
       } else {
-        "more than its bar (src/sfscreens/corners_known_wbtest.mbt): fix them, the bar only falls"
+        "more than its bar (src/sfapp/corners_known_wbtest.mbt): fix them, the bar only falls"
       }) +
       "\n" +
       faults.join("\n"),
@@ -173,7 +173,7 @@ fn check(mode : String, opening : Double) -> Unit raise {
 }
 
 // The settings' pages (shots.sh's SETTINGS_PAGES): pushed over Home before the first frame, settings and the page
-// together (@sfapp.open_setting), each push nav_push_ms.
+// together (open_setting), each push nav_push_ms.
 
 ///|
 test "settings-home" {

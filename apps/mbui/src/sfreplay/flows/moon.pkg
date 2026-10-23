@@ -1,4 +1,5 @@
 import {
+  "stillfail/core",
   "stillfail/sfreplay",
   "stillfail/sfapp",
   "stillfail/sf",

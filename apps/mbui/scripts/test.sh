@@ -1,6 +1,6 @@
 #!/bin/bash
 # This module's tests against mbui's fake host (no window): still.fail's design system, its pages (over the fixtures),
-# the media screens' parts and the core client's, the screens (src/sfscreens, scripts/screens.sh), then the flows seen
+# the media screens' parts and the core client's, the screens (src/sfapp/screens_wbtest.mbt, scripts/screens.sh), then the flows seen
 # again over their runs' cores (src/sfreplay/steps.mbt). UPDATE=1 refreshes snapshots. TARGETS: the targets they run
 # on (native by default, as the apps are built; CI's check-mbui: native on Linux, and on macOS on main). PARTS: which
 # of the two (app: the design system, the pages, the screens, gallery and player; replay: the core and the flows seen
@@ -24,11 +24,13 @@ for t in ${TARGETS:-native}; do
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
   # side. The flows in one package, src/sfreplay/flows: each test package is a program of the whole app, its C
   # compiled apart, and five of them compiled the same change five times over; on CI's four cores the replay part was
-  # 194 s with them apart and 140 s together, 2026-10-22)
+  # 194 s with them apart and 140 s together, 2026-10-22; sfreplay's own two tests there too: its whitebox test was
+  # one more program of the whole app, linked with ThinLTO on main in 120 s beside the flows' 118, 2026-10-23)
   pkgs=""
   if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
+    # (the screens' tests in sfapp's own, screens_wbtest.mbt: a package of their own was a second program of the whole
+    # app, compiled again on every change, 88 s of a branch's app part with sfapp's own 92, 2026-10-23)
     pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
-    pkgs="$pkgs -p stillfail/sfscreens"
   fi
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"

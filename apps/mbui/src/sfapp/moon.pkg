@@ -18,4 +18,4 @@ import {
   "stillfail/sfbase",
 }
 
-import { "stillfail/sfkept" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"

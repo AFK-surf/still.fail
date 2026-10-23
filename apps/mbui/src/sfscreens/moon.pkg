@@ -1,19 +1,8 @@
-import {
-  "mbui/ui",
-  "stillfail/sfapp",
-}
-
-import {
-  "moonbitlang/core/json",
-  "stillfail/sf",
-  "stillfail/sfkept",
-} for "wbtest"
-
 options(
   "pre-build": [
     {
       "input": "../../screens/text-mac.textrec",
-      "output": "text_mac_wbtest.mbt",
+      "output": "text_mac.mbt",
       "command": ":embed -i $input -o $output --name text_mac_kept",
     },
   ],
