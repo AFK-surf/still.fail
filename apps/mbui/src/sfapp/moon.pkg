@@ -16,6 +16,7 @@ import {
   "mbui/zip",
   "stillfail/sfapp/settings",
   "stillfail/sfbase",
+  "stillfail/sfdesk",
 }
 
 import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"

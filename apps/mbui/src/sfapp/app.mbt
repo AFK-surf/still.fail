@@ -43,6 +43,8 @@ fn reset() -> Unit {
   attention.src = None
   // the stack and what the app keeps of it (src/sfbase)
   @sfbase.reset()
+  // the desktop's own (src/sfdesk)
+  @sfdesk.reset()
   home_rows.val = []
   steadies.clear()
   sheet_host.kind = NoSheet

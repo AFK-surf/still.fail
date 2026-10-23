@@ -243,7 +243,6 @@ fn wide_reset() -> Unit {
   ftab_reset()
   wide.tabs_set.clear()
   fgo_reset()
-  wide_context_reset()
   wide_switch_reset()
   wide_on.val = false
   corners_on.val = false
@@ -445,8 +444,8 @@ fn wide_frame(
       // the rail's and the sidebar's column (the block over it, below)
       c.box(w=Px(col), h=Fill(1.0), fn() {  }) |> ignore
       let page_id = c.id("main-page")
-      // a right click in it: what is picked copied (wide_context.mbt)
-      wide_context_page(c, page_id)
+      // a right click in it: what is picked copied (sfdesk/context_menu.mbt)
+      @sfdesk.context_page(c, page_id)
       // (moved aside as wide as it was: its room at its left, the window cutting what goes past its edge)
       c.box(dir=Row, w=Px(main_w + shift), h=Fill(1.0), clip=true, pl=shift, pt=top, pb=foot, id=page_id, fn() {
         c.sized(main_w, c.height - top - foot, fn() {

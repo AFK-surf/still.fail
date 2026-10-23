@@ -25,10 +25,14 @@ particular to this app:
 
 - `src/sf`: the component library (above). `src/sfbase`: what both frames read and the stack they show — the core's
   topics and calls (`Source`), a workspace, the chats' and a chat's views, the pages (`Page`, `ChatRef`, `DriveAt`,
-  `app.nav`); it imports the library and the settings' routes, nothing of the pages. `src/sfapp`: the pages, the
-  phone's and the desktop's still together (`wide_on` branches); it takes `sfbase`'s names in by `pub using`
-  (`sfapp/base.mbt`), so a page says `Source` or `app.nav` as before. The desktop's pages are pulled out of `sfapp`
-  into a package of their own as each is ported from the web's file, its `wide_on` branches going with it.
+  `app.nav`); it imports the library and the settings' routes, nothing of the pages. `src/sfdesk`: the desktop's own
+  pages and what they hold. `src/sfapp`: the phone's pages, and the desktop's not yet in `sfdesk` (`wide_on`
+  branches); it takes `sfbase`'s names in by `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
+- The desktop and the phone are two apps that share the library's parts, its tools and its tokens, and what `sfbase`
+  reads. A desktop page ported from the web's file goes into `sfdesk`, its `wide_on` branches with it out of `sfapp`.
+  `sfdesk` imports the library, `sfbase` and mbui, never `sfapp` (which imports it): what a desk page needs of a phone
+  file that is not a page (a call to the core, a model, a tool) moves down into `sfbase` or the library, once, for
+  both; a phone page is not reused for the desktop, the web's is ported. Its words are `@sf.t` (the app's tables).
 
 ## What is checked, and where
 

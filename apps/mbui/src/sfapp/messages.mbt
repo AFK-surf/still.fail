@@ -1300,9 +1300,9 @@ fn file_item(
       // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
       note_thumb(c, thumb, open, file_corner(), letterbox~)
-      // right clicked in the wide frame: 复制图片 (wide_context.mbt)
+      // right clicked in the wide frame: 复制图片 (sfdesk/context_menu.mbt)
       if wide_on.val {
-        wide_context_image(c, open, key)
+        @sfdesk.context_image(c, open, key)
       }
       // held long where the list quotes: quoted, the press its (lifting it opens nothing), once a press
       match quote {
