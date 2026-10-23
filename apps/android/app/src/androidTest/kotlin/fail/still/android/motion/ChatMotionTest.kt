@@ -407,9 +407,10 @@ class ChatMotionTest {
 
     /**
      * Sends `text` with `files` already up in the composer (an image as it was picked, `true`: its preview), the station
-     * answering for its thumbnail; the outbox has it at once, the chat's message a moment later.
+     * answering for its thumbnail; the outbox has it at once, the chat's message a moment later. `picked`: an image's
+     * bytes kept with it, as one picked on the phone has them; `thumbnails` false: the station gives none (yet).
      */
-    private fun sentWithFiles(name: String, text: String, files: List<Pair<fail.still.android.data.Attachment, Boolean>>) {
+    private fun sentWithFiles(name: String, text: String, files: List<Pair<fail.still.android.data.Attachment, Boolean>>, picked: Boolean = false, thumbnails: Boolean = true): Harness {
         val h = Harness(rule)
         val big = picture()
         val preview = android.graphics.Bitmap.createScaledBitmap(big, 240, 160, true).asImageBitmap()
@@ -420,7 +421,7 @@ class ChatMotionTest {
         h.fake.answer = { call, _ ->
             when (call) {
                 "chat.send" -> { h.fake.put(topic, withAgent(Fixtures.chat(talk, listOf(out)))); JsonNull }
-                "station.file" -> buildJsonObject { put("type", "image/png"); put("bytes", android.util.Base64.encodeToString(png, android.util.Base64.NO_WRAP)) }
+                "station.file" -> if (thumbnails) buildJsonObject { put("type", "image/png"); put("bytes", android.util.Base64.encodeToString(png, android.util.Base64.NO_WRAP)) } else JsonNull
                 else -> JsonNull
             }
         }
@@ -428,8 +429,9 @@ class ChatMotionTest {
         rule.runOnUiThread {
             val draft = fail.still.android.screens.Drafts.of(rule.activity, h.fake.core, "${Fixtures.STATION}:thread:${Fixtures.THREAD}")
             files.forEachIndexed { i, (a, image) ->
-                draft.files.add(fail.still.android.screens.Pending(900L + i, a.name, a.size, if (image) preview else null).apply { done = a })
-                if (image) fail.still.android.screens.FileData.keepSent(Fixtures.STATION, a.path, preview)
+                val bytes = png.takeIf { image && picked }
+                draft.files.add(fail.still.android.screens.Pending(900L + i, a.name, a.size, if (image) preview else null, bytes).apply { done = a })
+                if (image) fail.still.android.screens.FileData.keepSent(Fixtures.STATION, a.path, preview, bytes)
             }
         }
         if (text.isNotEmpty()) h.type(text)
@@ -440,6 +442,7 @@ class ChatMotionTest {
         h.fake.put(topic, withAgent(Fixtures.chat(talk + Fixtures.mine(5, text, said = true).copy(outgoing = "out-1", attachments = atts))))
         r.frames(52)
         r.end()
+        return h
     }
 
     private val photo = fail.still.android.data.Attachment("safari.png", "uploads/safari.png", 48_213, width = 1200, height = 800)
@@ -447,7 +450,18 @@ class ChatMotionTest {
 
     /** Words and a picture: the picture from its square tile in the composer to its place under the bubble, opening out. */
     @Test
-    fun sentWithAPicture() = sentWithFiles("sent-with-picture", "Safari 上是这样的，帮我看一下", listOf(photo to true))
+    fun sentWithAPicture() { sentWithFiles("sent-with-picture", "Safari 上是这样的，帮我看一下", listOf(photo to true)) }
+
+    /**
+     * A picture picked on the phone, its station not giving its thumbnail yet: drawn from the bytes picked at its size in
+     * the message, sharp as it flies there and once it has (not the composer's tile-sized picture, soft at that size,
+     * until the station's came), and not asked of the station.
+     */
+    @Test
+    fun sentPictureFromItsBytes() {
+        val h = sentWithFiles("sent-picture-picked", "Safari 上是这样的，帮我看一下", listOf(photo to true), picked = true, thumbnails = false)
+        assertEquals("its thumbnail not asked of the station", 0, h.fake.calls.count { it.first == "station.file" })
+    }
 
     /**
      * A picture sent into a new chat the station is still making (no agent keeps its files yet) shows the picture it had
@@ -486,9 +500,9 @@ class ChatMotionTest {
 
     /** A picture with no words: it flies on its own; the row comes in where it is. */
     @Test
-    fun sentPictureAlone() = sentWithFiles("sent-picture-alone", "", listOf(photo to true))
+    fun sentPictureAlone() { sentWithFiles("sent-picture-alone", "", listOf(photo to true)) }
 
     /** Words and a file: the card from the composer to its place under the bubble. */
     @Test
-    fun sentWithAFile() = sentWithFiles("sent-with-file", "日志在这里", listOf(notes to false))
+    fun sentWithAFile() { sentWithFiles("sent-with-file", "日志在这里", listOf(notes to false)) }
 }

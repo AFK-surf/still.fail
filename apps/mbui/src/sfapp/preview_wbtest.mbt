@@ -100,6 +100,7 @@ test "a video in the chat: the station's still of it (its poster) on the black, 
     height: 720.0,
     thumbhash: "",
     owner: "s-c1",
+    upload: "",
   }
   let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
   let t = @ui.Tester::new(fn(c) { file_item(c, src, here, a, 300.0) }, w=390.0, h=844.0)
@@ -228,6 +229,7 @@ fn video_in_chat() -> @ui.Tester {
     height: 720.0,
     thumbhash: "",
     owner: "s-c1",
+    upload: "",
   }
   let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
   let t = @ui.Tester::new(
@@ -336,6 +338,7 @@ fn posterless(size : Double) -> @ui.Tester {
     height: 720.0,
     thumbhash: "",
     owner: "s-c1",
+    upload: "",
   }
   let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
   let t = @ui.Tester::new(fn(c) { file_item(c, src, here, a, 300.0) }, w=390.0, h=844.0)

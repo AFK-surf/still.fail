@@ -36,6 +36,9 @@ pub(all) struct Attachment {
   thumbhash : String
   /// the session whose workspace keeps it (its preview and download go through it)
   owner : String
+  /// the id of this device's upload it is (`composer.add`), sent before it was up: its picture is still here
+  /// (composer.mbt sent_picture); "" for any other
+  upload : String
 }
 
 ///|
@@ -49,6 +52,7 @@ fn attachment_of(a : Json) -> Attachment {
     height: number(s, "height"),
     thumbhash: text(s, "thumbhash"),
     owner: text(s, "owner"),
+    upload: text(s, "upload"),
   }
 }
 

@@ -304,6 +304,8 @@ class Draft {
         val links = named.mapNotNull { it.link }.map { l -> listOfNotNull(l.title?.takeIf { it.isNotEmpty() }, l.url).joinToString("\n") }
         val words = (listOf(text.trim()) + links + named.mapNotNull { f -> f.ref?.let { pathWords(it) } }).filter { it.isNotEmpty() }.joinToString("\n")
         val taken = Taken(words, files.filter { !it.named }, quotes.toList(), text, named)
+        // Pictures still going up: their message draws them from here once they are, by their uploads' ids.
+        for (f in taken.files) { val id = f.coreId ?: continue; if (f.done == null) f.preview?.let { FileData.keepUpload(id, it, f.local) } }
         text = ""; files.clear(); quotes.clear(); error = null; refClosed = null
         save()
         return taken
@@ -683,7 +685,9 @@ suspend fun readPicked(context: Context, uri: Uri): Picked? = withContext(Dispat
     if (bytes != null && bytes.size <= IN_MEMORY) {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, it) }
         val image = bounds.outWidth > 0
-        val preview = if (image) BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = maxOf(1, bounds.outWidth / 160) })?.asImageBitmap() else null
+        // Turned as the photo's EXIF says, as the station's copy of it will be (one ImageDecoder cannot read, as it is).
+        val preview = if (!image) null else decodeTurned(bytes, 320)
+            ?: BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = maxOf(1, bounds.outWidth / 160) })?.asImageBitmap()
         return@withContext Picked(name, bytes, bounds.outWidth.takeIf { image }, bounds.outHeight.takeIf { image }, preview)
     }
     // Big: its size as read when the provider did not say (counted, not kept), its picture from a pass of its own.
@@ -755,7 +759,7 @@ private suspend fun AppState.follow(draft: Draft, station: String, picked: Picke
         when {
             done != null -> {
                 p.done = if (done.width == null && picked.width != null && picked.height != null) done.copy(width = picked.width.toLong(), height = picked.height.toLong()) else done
-                picked.preview?.let { FileData.keepSent(station, done.path, it) }
+                picked.preview?.let { FileData.keepSent(station, done.path, it, p.local) }
                 draft.save()
                 true
             }

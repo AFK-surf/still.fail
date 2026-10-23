@@ -1037,7 +1037,12 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
     "image" => {
       let (bw, bh, letterbox) = image_box(a, 16.0)
       let h = bh * w / bw
-      let key = (src.file)(here.station, owner_of(here, a), base_name(a.path))
+      // one sent from here: the picture it was picked as, which flew in to it (not its likeness, then the station's)
+      let sent = sent_picture(here.station, a)
+      let key = match sent {
+        Some(k) => k
+        None => (src.file)(here.station, owner_of(here, a), base_name(a.path))
+      }
       // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
       note_thumb(c, thumb, open, 10.0, letterbox~)
@@ -1050,6 +1055,7 @@ fn file_item(c : @ui.Ctx, src : Source, here : Here, a : Attachment, w : Double)
             fit=if letterbox { FitContain } else { FitCover },
             radius=10.0,
             bg=0L,
+            fade=sent is None,
           )
           |> ignore
         } else if key == "!" {

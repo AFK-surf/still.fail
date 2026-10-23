@@ -10,7 +10,7 @@
 /// The made-up files, by the name the preview fetches them by: the file as a message has it, and its bytes.
 fn preview_files() -> Array[(Attachment, () -> Bytes)] {
   let at = fn(name : String, size : Double, w : Double, h : Double) -> Attachment {
-    { name, path: "uploads/fx/" + name, size, width: w, height: h, thumbhash: "", owner: "s-c1" }
+    { name, path: "uploads/fx/" + name, size, width: w, height: h, thumbhash: "", owner: "s-c1", upload: "" }
   }
   [
     (at("界面草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
