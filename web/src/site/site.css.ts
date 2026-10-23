@@ -194,6 +194,11 @@ export const links = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "48px", margin: "56px 0 0", padding: "0", listStyle: "none",
   "@media": { [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)", gap: "40px", marginTop: "40px" } },
 });
+/** What it is for (OneComputer.tsx): four across, two on a middling screen, one under another on a phone. */
+export const scenes = style({
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "40px",
+  "@media": { "(max-width: 1080px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }, [NARROW]: { gridTemplateColumns: "minmax(0, 1fr)" } },
+});
 export const link = style({ paddingTop: "24px", borderTop: `1px solid ${ink(14)}` });
 export const linkNumber = style({ display: "block", fontFamily: vars.fontMono, fontSize: vars.textUi, color: ORANGE });
 export const linkTitle = style({ margin: "14px 0 0", fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "-.01em", color: FG });
@@ -250,7 +255,6 @@ export const sameTitle = style({
   margin: "0", fontSize: "clamp(40px, 5.6vw, 76px)", lineHeight: "1.12", letterSpacing: "-.02em", fontWeight: "700", color: "var(--s-title)",
   animation: `${fadeUp} .8s .05s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
 });
-export const sameLede = style({ maxWidth: "36em", margin: "22px auto 0", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: "1.65", color: "var(--s-muted)", textWrap: "balance", wordBreak: "keep-all" });
 export const sameActions = style({ marginTop: "32px" });
 
 /** The scene: as tall as its places, the stage held in view while it is scrolled through. */
@@ -258,16 +262,6 @@ export const scene = style({ position: "relative" });
 export const sceneStick = style({
   position: "sticky", top: "64px", height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", padding: "16px 0 28px",
 });
-/** What the step in view says, above the room: each step's words in one place, as tall as the longest of them however
- *  they wrap; the one in view shown, the next coming up in its place as it goes (OneComputer.tsx). Before the script
- *  runs, the first. */
-export const stepWords = style({ padding: "0 24px", marginTop: "8px" });
-export const stepTrack = style({ display: "grid" });
-export const stepSay = style({
-  gridArea: "1 / 1", display: "grid", alignContent: "center", justifyItems: "center", gap: "4px", textAlign: "center",
-  selectors: { "&:not(:first-child)": { opacity: 0, visibility: "hidden" } },
-});
-globalStyle(`${stepSay} > b`, { fontSize: vars.textHeading, fontWeight: 700, color: FG, textWrap: "balance" });
 /** Where the devices and the window are placed (OneComputer.tsx). */
 export const oneRoom = style({ position: "relative", flex: "1", minHeight: "0", marginTop: "12px" });
 export const oneWires = style({ position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" });

@@ -13,7 +13,7 @@ import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
 import { useSay, useSiteLang } from "./words.ts";
 
-/** How many steps there are (what they say: words.ts). */
+/** How many steps the scene is scrolled through. */
 const STEPS = 3;
 
 /**
@@ -136,7 +136,6 @@ export function OneComputer(props: DemoProps) {
   const phone = useRef<HTMLDivElement>(null);
   const phoneScreen = useRef<HTMLIFrameElement>(null);
   const lines = useRef<SVGGElement>(null);
-  const words = useRef<HTMLDivElement>(null);
   const air = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -258,14 +257,6 @@ export function OneComputer(props: DemoProps) {
       for (let p = 0; p < ends.length; p++) for (let q = p + 1; q < ends.length; q++) {
         paths[n++]?.setAttribute("d", `M${ends[p]!.x} ${ends[p]!.y} L${ends[q]!.x} ${ends[q]!.y}`);
       }
-      // Each step's words where the scene is: the step's own going up a little and out as the next comes up into its
-      // place, about the middle of the way, the one gone before the other comes.
-      const at = i + clamp((t - 0.4) / 0.2);
-      words.current?.querySelectorAll<HTMLElement>(":scope > *").forEach((say, k) => {
-        const p = clamp(at - k + 1, 0, 2);
-        const shown = p <= 1 ? clamp(2 * p - 1) : clamp(3 - 2 * p), rise = p <= 1 ? (1 - p) * 16 : -(p - 1) * 16;
-        Object.assign(say.style, { opacity: `${shown}`, transform: `translateY(${rise}px)`, visibility: shown > 0 ? "visible" : "hidden" });
-      });
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
     const resized = () => { leave(); ask(); };
@@ -294,22 +285,12 @@ export function OneComputer(props: DemoProps) {
       <header className={css.sameHero}>
         <div className={css.wrap}>
           <h1 className={css.sameTitle}>{say.title}</h1>
-          <p className={css.sameLede}>{say.lede}</p>
           <div className={css.sameActions}><Button href={APP} kind="primary" large>{say.start}</Button></div>
         </div>
       </header>
 
       <section className={css.scene} ref={scene} style={{ height: `${STEPS * 100}vh` }}>
         <div className={css.sceneStick}>
-          <div className={css.stepWords}>
-            <div className={css.stepTrack} ref={words}>
-              {say.steps.map((s) => (
-                <div key={s} className={css.stepSay}>
-                  <b>{s}</b>
-                </div>
-              ))}
-            </div>
-          </div>
           <div className={css.oneRoom} ref={room}>
             <svg className={css.oneWires} aria-hidden><g ref={lines}>{Array.from({ length: pairs }, (_, i) => <path key={i} />)}</g></svg>
             <div className={css.oneLift}>
@@ -331,6 +312,22 @@ export function OneComputer(props: DemoProps) {
             </div>
             <div className={css.oneAir} ref={air} />
           </div>
+        </div>
+      </section>
+
+      {/* What it is for. */}
+      <section className={css.section}>
+        <div className={css.wrap}>
+          <h2 className={css.headingTitle}>{say.scenesTitle}</h2>
+          <ol className={`${css.links} ${css.scenes}`}>
+            {say.scenes.map((p, k) => (
+              <li key={p.title} className={css.link}>
+                <span className={css.linkNumber}>{String(k + 1).padStart(2, "0")}{p.soon ? ` · ${say.soon}` : ""}</span>
+                <h3 className={css.linkTitle}>{p.title}</h3>
+                <p className={css.linkText}>{p.text}</p>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
     </>
