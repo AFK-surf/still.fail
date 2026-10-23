@@ -66,7 +66,8 @@ export const newToken = () => randomBytes(24).toString("base64url");
 /// turns once the drain ends either.
 /// - drain: a restart or handover is coming.
 /// - unbound: the station is in no workspace (never joined one, or removed from it): it does no work until it is.
-export type Hold = "drain" | "unbound";
+/// - starting: the agents' door (their MCP endpoint) is not open yet: a runtime started now has no station tools.
+export type Hold = "drain" | "unbound" | "starting";
 
 /// A chat of another workspace shared with this one, as chat_list lists it (xshare/index.ts `Borrowed`).
 export type OutsideChat = { workspace: string; workspaceName: string; station: string; chat: string; title: string; link: string; write: boolean };

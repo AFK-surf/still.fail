@@ -74,7 +74,7 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 
 - 每个会话有自己的 token，MCP 服务按 token 识别会话。agent 无法冒充其他会话。
 - Claude：启动时用 `--mcp-config` 传入 MCP 服务，header 为 `Authorization: Bearer ${STILLFAIL_MCP_TOKEN}`；token 作为该会话进程的环境变量注入。
-- Codex：MCP 服务不写进账号配置，而是在 `thread/start` / `thread/resume` 的 `config` 里按 thread 传 `mcp_servers.stillfail.url` 和 `mcp_servers.stillfail.http_headers`，因为同一个 app-server 进程承载多个会话。
+- Codex：MCP 服务不写进账号配置，而是在 `thread/start` / `thread/resume` 的 `config` 里按 thread 传 `mcp_servers.stillfail.url` 和 `mcp_servers.stillfail.http_headers`，因为同一个 app-server 进程承载多个会话。仍加载着的 thread 被 `thread/resume` 原样接回，`config` 不再生效；它的 MCP 连接若已失败（当时 station 的 MCP 端点未开），站点先 `thread/unsubscribe` 再 `thread/resume`，让它重新连接。MCP 端点打开前，station 不开始任何轮次。
 
 ## 7. 结束状态约定
 
