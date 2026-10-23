@@ -180,6 +180,10 @@ fn vault_foot(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
 /// 添加 in the library (addSheet): a subscription or a model's key (a profile, added from the Profile list), or a secret
 /// of a kind (its editor, the kind fixed); not locked, that such a secret is kept in the clear.
 fn open_vault_add(_core : Core, here : Here) -> Unit {
+  // the desktop's: the web's dialog (web_vault_dialogs.mbt)
+  if wide.val {
+    return vault_add_dialog(_core, here)
+  }
   let ws = here.workspace
   open_sheet(0.55, fn(c, core) {
     let t = @sf.theme()
@@ -624,6 +628,10 @@ let vault_serial : Ref[Int] = Ref(0)
 /// saved (the system's prompt may come up): turned down, nothing lost; refused, why under it. 删除这一条 for one there.
 /// `editing`: the item's row and what it holds as opened.
 fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json, Json)?, kind? : String = "", plain? : Bool = false) -> Unit {
+  // the desktop's: the web's dialog (web_vault_dialogs.mbt)
+  if wide.val {
+    return vault_editor_dialog(_core, ws, vault, editing, kind~, plain~, kinds=kind == "")
+  }
   vault_serial.val += 1
   let was = match editing {
     Some((_, p)) => Some(p)
@@ -842,44 +850,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
       if button(c, key("save"), tr("common.save"), true, busy=e.saving, enabled=ready) {
         e.saving = true
         e.error = ""
-        let fields : Array[(String, Json)] = []
-        for f in vault_fields(k) {
-          // a private key as pasted (its last line break is part of it); the rest without the spaces around them
-          let v = if f == "private_key" { words.get(f).unwrap_or("") } else { got(f) }
-          if v.trim(chars=" \n") != "" {
-            fields.push((f, str(v)))
-          }
-        }
-        let plain_item = obj([
-          ("kind", str(k)),
-          ("name", str(name)),
-          ("fields", obj(fields)),
-          ("domains", Json::array(strings(was, "domains").map(str))),
-          ("notes", str(text(was, "notes"))),
-        ])
-        let params = [("vault", str(vault)), ("plain", plain_item)]
-        match row {
-          Some(r) => params.push(("id", str(text(Some(r), "id"))))
-          None => ()
-        }
-        if e.agent {
-          let modes = if k == "ssh_key" { ["ssh"] } else { [e.mode] }
-          let listing = [
-            ("name", str(name)),
-            ("kind", str(k)),
-            ("modes", Json::array(modes.map(str))),
-            ("hosts", Json::array((if modes == ["proxy"] { host_list } else { [] }).map(str))),
-          ]
-          let env = got("env")
-          if env != "" && k != "ssh_key" {
-            listing.push(("env", str(env)))
-          }
-          // its own longest grant (none: its vault's)
-          if vault_lasts[e.lasts] != "default" {
-            listing.push(("lasts", str(vault_lasts[e.lasts])))
-          }
-          params.push(("listing", obj(listing)))
-        }
+        let params = vault_put_params(vault, row, was, k, words, e.agent, e.mode, vault_lasts[e.lasts])
         c.blur()
         vault_act(
           core,
@@ -914,9 +885,103 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
 }
 
 ///|
+/// What `vault.putItem` is given for an item (Vault.tsx putOf): the vault, the item's id where it is one already, what
+/// it holds (`words`: its fields' words by name, as typed), and, where agents may ask for it, how (`mode`, its hosts,
+/// its variable) and its longest grant (`lasts`: "default" its vault's).
+fn vault_put_params(
+  vault : String,
+  row : Json?,
+  was : Json?,
+  k : String,
+  words : Map[String, String],
+  agent : Bool,
+  mode : String,
+  lasts : String,
+) -> Array[(String, Json)] {
+  let got = fn(f : String) { words.get(f).unwrap_or("").trim(chars=" \n").to_owned() }
+  let name = words.get("name").unwrap_or("").trim(chars=" ").to_owned()
+  let fields : Array[(String, Json)] = []
+  for f in vault_fields(k) {
+    // a private key as pasted (its last line break is part of it); the rest without the spaces around them
+    let v = if f == "private_key" { words.get(f).unwrap_or("") } else { got(f) }
+    if v.trim(chars=" \n") != "" {
+      fields.push((f, str(v)))
+    }
+  }
+  let plain_item = obj([
+    ("kind", str(k)),
+    ("name", str(name)),
+    ("fields", obj(fields)),
+    ("domains", Json::array(strings(was, "domains").map(str))),
+    ("notes", str(text(was, "notes"))),
+  ])
+  let params = [("vault", str(vault)), ("plain", plain_item)]
+  match row {
+    Some(r) => params.push(("id", str(text(Some(r), "id"))))
+    None => ()
+  }
+  if agent {
+    let modes = if k == "ssh_key" { ["ssh"] } else { [mode] }
+    let listing = [
+      ("name", str(name)),
+      ("kind", str(k)),
+      ("modes", Json::array(modes.map(str))),
+      ("hosts", Json::array((if modes == ["proxy"] { vault_hosts(words) } else { [] }).map(str))),
+    ]
+    let env = got("env")
+    if env != "" && k != "ssh_key" {
+      listing.push(("env", str(env)))
+    }
+    // its own longest grant (none: its vault's)
+    if lasts != "default" {
+      listing.push(("lasts", str(lasts)))
+    }
+    params.push(("listing", obj(listing)))
+  }
+  params
+}
+
+///|
+/// The hosts typed (`words`' hosts: by commas, spaces or lines).
+fn vault_hosts(words : Map[String, String]) -> Array[String] {
+  let out : Array[String] = []
+  for h in words.get("hosts").unwrap_or("").replace_all(old=",", new=" ").replace_all(old="\n", new=" ").split(" ") {
+    if h != "" {
+      out.push(h.to_owned())
+    }
+  }
+  out
+}
+
+///|
+/// Whether an item's words can be saved (Vault.tsx formProblem): its name, what its kind needs, and the hosts where a
+/// proxy gives it; the problem's name, or "" none.
+fn vault_problem(k : String, words : Map[String, String], agent : Bool, mode : String) -> String {
+  let got = fn(f : String) { words.get(f).unwrap_or("").trim(chars=" \n").to_owned() }
+  let filled_in = match k {
+    "token" => got("value") != ""
+    "ssh_key" => got("private_key") != ""
+    _ => got("username") != "" || got("password") != ""
+  }
+  if got("name") == "" {
+    "name"
+  } else if !filled_in {
+    "fields"
+  } else if agent && mode == "proxy" && k != "ssh_key" && vault_hosts(words).length() == 0 {
+    "hosts"
+  } else {
+    ""
+  }
+}
+
+///|
 /// This device keyed into the person's vaults again by their 24 recovery words (recoverSheet: `vault.recover`); the
 /// words typed are this sheet's only while it is up.
 fn open_vault_recover(_core : Core, ws : String) -> Unit {
+  // the desktop's: the web's dialog (web_vault_dialogs.mbt)
+  if wide.val {
+    return vault_recover_dialog(_core, ws)
+  }
   vault_serial.val += 1
   let key = "vault-recover/" + vault_serial.val.to_string()
   let state : Ref[(Bool, String)] = Ref((false, ""))
