@@ -9,16 +9,10 @@
 import { useEffect, useRef } from "react";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
+import { useSay, useSiteLang } from "./words.ts";
 
-/** The workspace's machines, by the names the demo's stations have (demo/station.ts stationViews). */
-const NAMES = ["笔记本", "Studio", "Mini", "服务器"];
-
-/** What the steps say, in order. */
-const STEPS = [
-  { title: "设备之间点对点连接", text: "手机、笔记本、台式机和服务器两两直连，无法直连时经加密中继转发" },
-  { title: "用起来像一台电脑", text: "所有设备在同一个 still.fail 里，每台的文件、订阅和任务都能用" },
-  { title: "在手机上也一样", text: "从任何一台设备打开，看到的都是所有设备" },
-];
+/** How many steps there are (what they say: words.ts). */
+const STEPS = 3;
 
 /**
  * A phone's screen, the one beside the computer and a narrow screen's window alike (the same app, drawn the same):
@@ -37,15 +31,8 @@ interface Box { x: number; y: number; w: number; h: number }
 const clamp = (x: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
 const ease = (t: number) => t * t * (3 - 2 * t);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const mix = (a: Box, b: Box, t: number): Box => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), w: lerp(a.w, b.w, t), h: lerp(a.h, b.h, t) });
 const centre = (b: Box) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
 
-/** A rounded rectangle as a path, for the window's clip. */
-const rounded = ({ x, y, w, h }: Box, r: number) => {
-  const q = Math.max(0, Math.min(r, w / 2, h / 2));
-  return `M${x + q} ${y}H${x + w - q}A${q} ${q} 0 0 1 ${x + w} ${y + q}V${y + h - q}A${q} ${q} 0 0 1 ${x + w - q} ${y + h}`
-    + `H${x + q}A${q} ${q} 0 0 1 ${x} ${y + h - q}V${y + q}A${q} ${q} 0 0 1 ${x + q} ${y}Z`;
-};
 
 /**
  * The window: a computer's, or (on a narrow screen) a phone's, laid out at a phone's size and drawn smaller (`k`) to
@@ -98,6 +85,9 @@ function ground(el: HTMLElement): string {
 }
 
 export function OneComputer(props: DemoProps) {
+  const say = useSay(), lang = useSiteLang();
+  // The workspace's machines, by the names the demo's stations have in the page's language.
+  const names = say.machines;
   const scene = useRef<HTMLElement>(null);
   const room = useRef<HTMLDivElement>(null);
   const win = useRef<HTMLDivElement>(null);
@@ -113,12 +103,12 @@ export function OneComputer(props: DemoProps) {
     const narrow = innerWidth <= 860;
     // The phone's own app beside the computer's, a page of its own as wide as a phone (site/phone.html), so that it is
     // laid out as on one (its rules go by the screen's width); a wide screen only: on a narrow one the window is the phone.
-    if (!narrow && el.offsetParent !== null && phoneScreen.current && !phoneScreen.current.src) phoneScreen.current.src = "/phone.html";
+    if (!narrow && el.offsetParent !== null && phoneScreen.current && !phoneScreen.current.src) phoneScreen.current.src = `/phone.html${lang === "en" ? "?lang=en" : ""}`;
 
     // The rows themselves, where the app has them in the window (in its own size), what holds them in (the app's
     // lists, cut at their edges), what they stand on and their corners; read again until the app is there, and when
     // the room changes size.
-    interface Row { el: HTMLElement; box: Box; ground: string; radius: number; holders: HTMLElement[] }
+    interface Row { el: HTMLElement; box: Box; ground: string; holders: HTMLElement[] }
     let rows: Row[] = [];
     // How large the window is drawn just now; whether the rows are out of their lists just now.
     let drawn = 1, out = false;
@@ -128,11 +118,7 @@ export function OneComputer(props: DemoProps) {
     const letOut = (on: boolean) => {
       if (on === out) return;
       out = on;
-      if (app) app.style.visibility = on ? "hidden" : "";
-      // The screen's round corners would cut them off as they go out of it.
-      inner.style.clipPath = on ? "none" : "";
       for (const r of rows) {
-        r.el.style.visibility = on ? "visible" : "";
         for (const h of r.holders) Object.assign(h.style, { overflow: on ? "visible" : "", contain: on ? "none" : "", clipPath: on ? "none" : "" });
         Object.assign(r.el.style, on
           ? { position: "relative", zIndex: "1", background: r.ground, transformOrigin: "0 0" }
@@ -142,7 +128,7 @@ export function OneComputer(props: DemoProps) {
     const read = () => {
       letOut(false);
       app = inner.querySelector<HTMLElement>("#demo");
-      const found = app ? NAMES.map((n) => rowOf(app!, n, narrow)) : [];
+      const found = app ? names.map((n) => rowOf(app!, n, narrow)) : [];
       if (!app || found.some((r) => !r)) return false;
       // A phone's window (a narrow screen's) is in a phone's shell: a status bar's room under its camera island.
       if (narrow && app.dataset.phone === undefined) { app.dataset.phone = ""; return false; }
@@ -152,7 +138,7 @@ export function OneComputer(props: DemoProps) {
         const holders: HTMLElement[] = [];
         for (let h = row.parentElement; h && h !== inner; h = h.parentElement) holders.push(h);
         return {
-          el: row, holders, ground: ground(row), radius: Number.parseFloat(getComputedStyle(row).borderTopLeftRadius) || 0,
+          el: row, holders, ground: ground(row),
           box: { x: (b.left - at.left) / drawn, y: (b.top - at.top) / drawn, w: b.width / drawn, h: b.height / drawn },
         };
       });
@@ -174,22 +160,25 @@ export function OneComputer(props: DemoProps) {
       const x = clamp((clamp(-el.getBoundingClientRect().top / Math.max(1, span)) - 0.06) / 0.88) * (steps.length - 1);
       const i = Math.min(Math.floor(x), steps.length - 2);
       const t = clamp(x - i);
-      // 0 → 1: the devices fly to their rows (fly), then the window grows out of the rows (grow), the one taking over
-      // from the other at the same pace. 1 → 2: the computer's window steps back as the phone comes to the front.
-      const fly = i === 0 ? clamp(t / 0.55) : 1;
-      const grow = i === 0 ? clamp((t - 0.55) / 0.45) : 1;
+      // 0 → 1: the device comes up from below, its screen's list with its rows away (rise), and they fly into their
+      // places in it (fly), landing once it has come to rest. 1 → 2: the computer steps back as the phone comes to the
+      // front (front). Everything only moves: nothing is cut out, shown or faded.
+      const rise = i === 0 ? ease(clamp(t / 0.7)) : 1;
+      const fly = i === 0 ? ease(t) : 1;
       const front = i === 1 ? t : 0;
 
-      // The window, drawn at its size, stepping back (about its centre) as the phone comes forward.
+      // The window, drawn at its size: up from below the room, then stepping back (about its centre) as the phone
+      // comes forward.
       const back = lerp(1, 0.8, front), s = w.k * back;
-      const tx = lerp(0, -size.w * 0.14, front) + (w.w * w.k * (1 - back)) / 2, ty = (w.h * w.k * (1 - back)) / 2;
+      const below = size.h - w.y + 60;
+      const tx = lerp(0, -size.w * 0.14, front) + (w.w * w.k * (1 - back)) / 2, ty = (w.h * w.k * (1 - back)) / 2 + lerp(below, 0, rise);
       outer.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
       drawn = s;
       if (rows.length === 0 && !read()) { asked = requestAnimationFrame(draw); return; }
       const inRoom = (b: Box): Box => ({ x: w.x + tx + b.x * s, y: w.y + ty + b.y * s, w: b.w * s, h: b.h * s });
 
-      // The devices are the app's own rows: moved from apart to where they stand, the window shown only where they are
-      // (its clip, their boxes); home, the window grows out of them (their boxes widening to its own).
+      // The devices are the app's own rows: from where they stand apart (in the room, wherever the window is) to their
+      // places in its list.
       const parts = apart(size, narrow);
       const local = rows.map((r, k) => {
         const from = parts.machines[k]!;
@@ -197,19 +186,9 @@ export function OneComputer(props: DemoProps) {
         const start = { x: (from.x - (r.box.w * parts.scale) / 2 - w.x - tx) / s, y: (from.y - (r.box.h * parts.scale) / 2 - w.y - ty) / s };
         const at = { x: lerp(start.x, r.box.x, fly), y: lerp(start.y, r.box.y, fly) };
         if (fly < 1) r.el.style.transform = `translate(${at.x - r.box.x}px, ${at.y - r.box.y}px) scale(${scale})`;
-        return { x: at.x, y: at.y, w: r.box.w * scale, h: r.box.h * scale, r: r.radius * scale };
+        return { x: at.x, y: at.y, w: r.box.w * scale, h: r.box.h * scale };
       });
       letOut(fly < 1);
-      // Whole: the screen and its shell (a phone's edge; a laptop's edge and base), the shell coming as the rest does.
-      // (A little past the shell: its metal edge, a phone's keys.)
-      const past = 10;
-      const whole = narrow
-        ? { x: -SHELL.edge - past, y: -SHELL.edge - past, w: w.w + 2 * (SHELL.edge + past), h: w.h + 2 * (SHELL.edge + past) }
-        : { x: -(SHELL.laptop.edge + SHELL.laptop.over), y: -SHELL.laptop.edge - past, w: w.w + 2 * (SHELL.laptop.edge + SHELL.laptop.over), h: w.h + 2 * SHELL.laptop.edge + SHELL.laptop.foot + past * 2 };
-      const corner = 0;
-      outer.style.clipPath = `path('${(fly < 1
-        ? local.map((b) => rounded(b, b.r))
-        : rows.map((r) => rounded(mix(r.box, whole, grow), lerp(r.radius, corner, grow)))).join(" ")}')`;
       const placed = local.map(inRoom);
 
       // The phone (a wide screen's): small among the devices, then beside the window, then in front at full size.
@@ -246,7 +225,7 @@ export function OneComputer(props: DemoProps) {
       cancelAnimationFrame(asked);
       letOut(false);
     };
-  }, []);
+  }, [lang, names]);
 
   // Every pair of the four machines and the phone.
   const pairs = 10;
@@ -254,17 +233,17 @@ export function OneComputer(props: DemoProps) {
     <>
       <header className={css.sameHero}>
         <div className={css.wrap}>
-          <h1 className={css.sameTitle}><span className={css.phrase}>把你的设备</span><span className={css.phrase}>连成一台电脑</span></h1>
-          <p className={css.sameLede}>手机、笔记本、台式机和服务器之间点对点连接。在任何一台上，都能打开其他设备的文件、使用它们的订阅、把任务交给它们运行。</p>
-          <div className={css.sameActions}><Button href={APP} kind="primary" large>开始使用</Button></div>
+          <h1 className={css.sameTitle}><span className={css.phrase}>{say.title[0]}</span>{lang === "en" ? " " : ""}<span className={css.phrase}>{say.title[1]}</span></h1>
+          <p className={css.sameLede}>{say.lede}</p>
+          <div className={css.sameActions}><Button href={APP} kind="primary" large>{say.start}</Button></div>
         </div>
       </header>
 
-      <section className={css.scene} ref={scene} style={{ height: `${STEPS.length * 100}vh` }}>
+      <section className={css.scene} ref={scene} style={{ height: `${STEPS * 100}vh` }}>
         <div className={css.sceneStick}>
           <div className={css.stepWords}>
             <div className={css.stepTrack} ref={words}>
-              {STEPS.map((s) => (
+              {say.steps.map((s) => (
                 <div key={s.title} className={css.stepSay}>
                   <b>{s.title}</b><span>{s.text}</span>
                 </div>
@@ -282,13 +261,14 @@ export function OneComputer(props: DemoProps) {
                 <div className={css.oneScreen} ref={screen}>
                   <Demo v="1" start="stations" className={css.oneDemo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
                 </div>
+                <div className={css.oneCorners} />
                 <div className={css.oneIslandInWindow} />
               </div>
             </div>
             <div className={css.onePhone} ref={phone} style={{ width: HAND.w, height: HAND.h, padding: SHELL.edge }}>
               <i className={css.oneKeys} />
               <i className={css.oneIsland} />
-              <iframe className={css.onePhoneScreen} ref={phoneScreen} width={PHONE.w} height={PHONE.h} title="still.fail 手机版" tabIndex={-1} />
+              <iframe className={css.onePhoneScreen} ref={phoneScreen} width={PHONE.w} height={PHONE.h} title={say.phoneTitle} tabIndex={-1} />
             </div>
           </div>
         </div>

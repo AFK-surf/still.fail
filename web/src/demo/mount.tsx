@@ -22,6 +22,7 @@ import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView
 import { makeStory, openingChats } from "./story.ts";
 import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
+import { inEnglish } from "./english.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
 import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
@@ -63,6 +64,12 @@ const extensions: DemoExtension[] = [];
 export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
 
 function valueOf(topic: Topic): unknown {
+  // On the site's English page, what the demo makes up is said in English too (english.ts).
+  if (language === "en") return inEnglish(chineseValueOf(topic));
+  return chineseValueOf(topic);
+}
+
+function chineseValueOf(topic: Topic): unknown {
   const value = extendedValueOf(topic);
   if (topic.topic !== "chat" || !value || value instanceof CoreError) return value;
   const chat = value as ChatView;
@@ -85,7 +92,7 @@ function demoValueOf(topic: Topic): unknown {
     case "status": return { items: [] };
     case "connection": return { items: [] };
     // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
-    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts) };
+    case "prefs": return { ...(language ? { lang: language } : {}), ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts) };
     case "doing": return { doing: [] };
     // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
     case "composer": return composerView(String(topic.key ?? ""));
@@ -519,11 +526,14 @@ export function endDemo(): void {
 /** Where the demo opens: on its chat, the story played (the default); or on the stations' page, as the page that shows
  *  all of the workspace's machines together, no story played. */
 let start: "chat" | "stations" = "chat";
+/** The language the demo is in: the app's and what it makes up (the site's English page: "en"); else as the app's own. */
+let language: "zh" | "en" | undefined;
 
-export function mountDemo(element: HTMLElement, options: { start?: "chat" | "stations" } = {}): void {
+export function mountDemo(element: HTMLElement, options: { start?: "chat" | "stations"; lang?: "zh" | "en" } = {}): void {
   if (mounted) return;
   mounted = true;
   start = options.start ?? "chat";
+  language = options.lang;
   root = element;
   // What the page was built with (its opening frame, as HTML) gives way to the demo itself.
   root.replaceChildren();

@@ -9,6 +9,7 @@ import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
 import { OneComputer } from "./OneComputer.tsx";
 import { Distance } from "./Distance.tsx";
+import { SiteLangContext, useSay, useSiteLang, type SiteLang } from "./words.ts";
 
 declare const __SITE_BETA__: boolean;
 /**
@@ -53,14 +54,15 @@ const showing = (v: string) => (document.documentElement.dataset.v ?? "1") === v
  */
 export function Demo({ mount, frame, v, className, start }: { mount?: DemoProps["mountDemo"]; frame?: { wide: string; phone: string }; v: string; className?: string; start?: "chat" | "stations" }) {
   const root = useRef<HTMLDivElement>(null);
+  const lang = useSiteLang();
   useEffect(() => {
-    if (root.current && mount && showing(v)) mount(root.current, start ? { start } : {});
-  }, [mount, v, start]);
+    if (root.current && mount && showing(v)) mount(root.current, { ...(start ? { start } : {}), lang });
+  }, [mount, v, start, lang]);
   const html = frame ? `<div class="${css.frameWide}">${frame.wide}</div><div class="${css.framePhone}">${frame.phone}</div>` : "";
   return <div className={`${css.demo} ${className ?? ""}`} id="demo" ref={root} dangerouslySetInnerHTML={{ __html: html }} suppressHydrationWarning />;
 }
 
-export interface DemoProps { mountDemo?: (root: HTMLElement, options?: { start?: "chat" | "stations" }) => void; demo?: { wide: string; phone: string } }
+export interface DemoProps { mountDemo?: (root: HTMLElement, options?: { start?: "chat" | "stations"; lang?: "zh" | "en" }) => void; demo?: { wide: string; phone: string } }
 
 /** What it promises about where things are. */
 const PROMISES = [
@@ -85,32 +87,42 @@ export function Promises() {
 
 // ---- The rest ----
 
-export function Site({ mountDemo, demo }: DemoProps) {
+export function Site({ mountDemo, demo, lang = "zh" }: DemoProps & { lang?: SiteLang }) {
+  return <SiteLangContext.Provider value={lang}><Page {...(mountDemo ? { mountDemo } : {})} {...(demo ? { demo } : {})} /></SiteLangContext.Provider>;
+}
+
+/** The other language's page, chosen: kept, so that the page at / does not send this visitor on again (site/index.html). */
+const chooseLang = (to: SiteLang) => () => { try { localStorage.setItem("stillfail.site.lang", to); } catch { /* not kept */ } };
+
+function Page({ mountDemo, demo }: DemoProps) {
+  const say = useSay(), lang = useSiteLang();
   return (
     <div className={css.page}>
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
-          <a href="/" className={css.brand} aria-label={NAME.head + NAME.tail}><Themed name="mark" className={css.logo} /><span>{NAME.head}<span className={css.brandTail}>{NAME.tail}</span></span></a>
+          <a href={lang === "en" ? "/en/" : "/"} className={css.brand} aria-label={NAME.head + NAME.tail}><Themed name="mark" className={css.logo} /><span>{NAME.head}<span className={css.brandTail}>{NAME.tail}</span></span></a>
           {/* The apps, for the device the page is on (data-platform, set before the first paint by site/index.html): on
               Android the app itself; on a computer a card under the word, with the Mac's, Windows' and a code to scan for Android. */}
-          <a className={`${css.navLink} ${css.forAndroid}`} href={ANDROID}>下载</a>
+          <a className={`${css.navLink} ${css.forAndroid}`} href={ANDROID}>{say.download}</a>
           <span className={`${css.menu} ${css.forComputer}`}>
-            <button type="button" className={css.navLink}>下载</button>
+            <button type="button" className={css.navLink}>{say.download}</button>
             <span className={css.menuCard}>
               <a className={css.menuItem} href={MAC}>
-                <b>Mac</b><span>Apple 芯片</span><span className={css.menuGo}>下载 →</span>
+                <b>Mac</b><span>{say.appleSilicon}</span><span className={css.menuGo}>{say.downloadGo}</span>
               </a>
               <a className={css.menuItem} href={WINDOWS}>
-                <b>Windows</b><span>x64</span><span className={css.menuGo}>下载 →</span>
+                <b>Windows</b><span>x64</span><span className={css.menuGo}>{say.downloadGo}</span>
               </a>
               <span className={css.menuItem}>
-                <img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt="下载 Android 版的二维码" width={33} height={33} />
-                <span>Android 扫码下载</span>
+                <img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt={say.androidQr} width={33} height={33} />
+                <span>{say.androidScan}</span>
               </span>
             </span>
           </span>
+          {/* The page in the other language (on a phone, in the footer: the bar has no room). */}
+          <a className={`${css.navLink} ${css.navButton}`} href={say.otherHref} lang={lang === "en" ? "zh" : "en"} onClick={chooseLang(lang === "en" ? "zh" : "en")}>{say.other}</a>
           <ThemeSwitch />
-          <Button href={APP} kind="primary" className={css.navButton}>打开 {NAME.head + NAME.tail}</Button>
+          <Button href={APP} kind="primary" className={css.navButton}>{say.open} {NAME.head + NAME.tail}</Button>
         </div>
       </nav>
 
@@ -120,15 +132,15 @@ export function Site({ mountDemo, demo }: DemoProps) {
       <section id="start" className={css.section}>
         <div className={`${css.wrap} ${css.install}`}>
           <div>
-            <h2 className={css.headingTitle}><span className={css.phrase}>一条命令</span><span className={css.phrase}>接入一台电脑</span></h2>
-            <p className={css.headingLede}>在要接入的电脑上运行，使用它已登录的账号和订阅</p>
+            <h2 className={css.headingTitle}><span className={css.phrase}>{say.install[0]}</span>{lang === "en" ? " " : ""}<span className={css.phrase}>{say.install[1]}</span></h2>
+            <p className={css.headingLede}>{say.installLede}</p>
           </div>
           <div className={css.terminal}>
             <div className={css.terminalBody}>
               <span className={css.command}><span className={css.prompt}>$ </span><span className={css.typed} style={{ "--chars": `${INSTALL.length}ch`, "--steps": INSTALL.length } as CSSProperties}>{INSTALL}</span></span>
-              <span className={css.output} data-at="1">→ 下载 still.fail station · 加入 workspace「Acme」</span>
-              <span className={css.output} data-at="2">→ 注册为登录启动的服务</span>
-              <span className={css.output} data-at="3" data-ok>✓ station 已上线</span>
+              <span className={css.output} data-at="1">{say.installSteps[0]}</span>
+              <span className={css.output} data-at="2">{say.installSteps[1]}</span>
+              <span className={css.output} data-at="3" data-ok>{say.installSteps[2]}</span>
             </div>
           </div>
         </div>
@@ -137,15 +149,16 @@ export function Site({ mountDemo, demo }: DemoProps) {
       <footer className={css.footer}>
         <div className={`${css.wrap} ${css.footerRow}`}>
           <span className={css.footerFirst}>© 2026 {NAME.head + NAME.tail}</span>
-          <a className={css.navLink} href={APP}>网页版</a>
+          <a className={css.navLink} href={APP}>{say.web}</a>
           <a className={css.navLink} href={MAC}>Mac</a>
           <a className={css.navLink} href={WINDOWS}>Windows</a>
           <a className={css.navLink} href={ANDROID}>Android</a>
           <a className={css.navLink} href="https://github.com/AFK-surf/still.fail">GitHub</a>
           {/* The legal pages: static files in web/public (terms.html, privacy.html, trademark.html; en/ their English). */}
-          <a className={css.navLink} href="/terms">服务条款</a>
-          <a className={css.navLink} href="/privacy">隐私政策</a>
-          <a className={css.navLink} href="/trademark">商标</a>
+          <a className={css.navLink} href={`${say.legal}/terms`}>{say.terms}</a>
+          <a className={css.navLink} href={`${say.legal}/privacy`}>{say.privacy}</a>
+          <a className={css.navLink} href={`${say.legal}/trademark`}>{say.trademark}</a>
+          <a className={css.navLink} href={say.otherHref} lang={lang === "en" ? "zh" : "en"} onClick={chooseLang(lang === "en" ? "zh" : "en")}>{say.other}</a>
         </div>
       </footer>
     </div>

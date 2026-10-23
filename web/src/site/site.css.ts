@@ -287,11 +287,8 @@ globalStyle(`${oneWires} path`, {
 /** The window under its shadow (of what of it shows: the devices flying, then the window growing out of them). */
 export const oneLift = style({ position: "absolute", inset: "0", zIndex: 1, pointerEvents: "none", filter: "drop-shadow(0 30px 40px rgba(0, 0, 0, .18))" });
 export const oneWindow = style({ position: "absolute", transformOrigin: "0 0", pointerEvents: "auto" });
-/** The screen: the app, its corners round within its shell's (as far in as the shell's edge is wide). */
-export const oneScreen = style({
-  position: "absolute", inset: "0", background: vars.canvas, clipPath: "inset(0 round 20px)",
-  "@media": { [NARROW]: { clipPath: "inset(0 round 36px)" } },
-});
+/** The screen: the app (its corners rounded by oneCorners, not cut: the rows fly out past them). */
+export const oneScreen = style({ position: "absolute", inset: "0", background: vars.canvas });
 /** The shells (OneComputer.tsx SHELL): a laptop's edge round its screen and its base under it; on a narrow screen,
  *  where the window is a phone, a phone's edge. */
 const BEZEL = "#060607";
@@ -312,6 +309,15 @@ export const oneEdge = style({
   // A phone's face round its screen (a narrow screen's window).
   "@media": { [NARROW]: { inset: "-12px", borderRadius: "48px", selectors: { "&::after": { display: "none" } } } }, // own corner: a phone's
 });
+/** The screen's corners, round within its shell's (as far in as the shell's edge is wide): the shell's black laid
+ *  over them, not a clip (which would cut the rows off as they fly out past them). */
+const caps = (r: number) => [
+  `radial-gradient(circle at 100% 100%, transparent ${r}px, ${BEZEL} ${r + 0.5}px) top left / ${r}px ${r}px no-repeat`,
+  `radial-gradient(circle at 0 100%, transparent ${r}px, ${BEZEL} ${r + 0.5}px) top right / ${r}px ${r}px no-repeat`,
+  `radial-gradient(circle at 100% 0, transparent ${r}px, ${BEZEL} ${r + 0.5}px) bottom left / ${r}px ${r}px no-repeat`,
+  `radial-gradient(circle at 0 0, transparent ${r}px, ${BEZEL} ${r + 0.5}px) bottom right / ${r}px ${r}px no-repeat`,
+].join(", ");
+export const oneCorners = style({ position: "absolute", inset: "0", zIndex: 2, pointerEvents: "none", background: caps(20), "@media": { [NARROW]: { background: caps(36) } } });
 /** A laptop's base: metal, its hinge under the lid, the scoop in its front edge to lift the lid by. */
 export const oneBase = style({
   position: "absolute", left: "-84px", right: "-84px", top: "calc(100% + 18px)", height: "14px", background: ALU,

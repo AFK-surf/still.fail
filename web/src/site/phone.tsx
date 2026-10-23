@@ -8,4 +8,5 @@ followMotion();
 const root = document.getElementById("demo")!;
 // In a phone's shell: its status bar's room under the camera island (demo/demo.css.ts).
 root.dataset.phone = "";
-mountDemo(root, { start: "stations" });
+// In the page's language (?lang=en from the English page).
+mountDemo(root, { start: "stations", ...(new URLSearchParams(location.search).get("lang") === "en" ? { lang: "en" as const } : {}) });

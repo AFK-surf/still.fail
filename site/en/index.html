@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>still.fail · Join your devices into one computer</title>
+<meta name="description" content="still.fail connects your phone, laptops, desktops and servers peer to peer. From any one of them, open the others' files, use their subscriptions and hand them tasks.">
+<meta property="og:title" content="still.fail · Join your devices into one computer">
+<meta property="og:description" content="Your phone, laptops, desktops and servers, connected peer to peer and used as one computer.">
+<meta property="og:image" content="https://still.fail/og-image-en.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" hreflang="zh" href="https://still.fail/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: light when none was;
+     "system" leaves it to the system. The demo's app follows the same data-theme. -->
+<script>try{var t=localStorage.getItem("stillfail.site.theme");if(t===null){t=localStorage.getItem("ember.site.theme");if(t!==null)localStorage.setItem("stillfail.site.theme",t)}if(t!=="system")document.documentElement.dataset.theme=t==="dark"?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}</script>
+<!-- What the visitor is on, for the downloads to offer (web/src/site/Site.tsx): mac, android, ios, or desktop (the
+     rest). An iPad says it is a Mac, and has a touch screen. A preview can ask for one with ?platform=. -->
+<script>(function(){var u=navigator.userAgent,p=new URLSearchParams(location.search).get("platform");if(!p)p=/Android/i.test(u)?"android":/iPhone|iPad|iPod/.test(u)||/Macintosh/.test(u)&&navigator.maxTouchPoints>1?"ios":/Macintosh/.test(u)?"mac":/Mobi/i.test(u)?"":"desktop";if(p)document.documentElement.dataset.platform=p})()</script>
+<!-- Which idea of the page shows (web/src/site/Site.tsx): ?v=2 the second, else the first. -->
+<script>document.documentElement.dataset.v=new URLSearchParams(location.search).get("v")==="2"?"2":"1"</script>
+<meta name="color-scheme" content="light dark">
+</head>
+<body>
+<!-- The page, built to HTML here by web/site-prerender.mjs (pnpm build:site); the browser takes it over (web/src/site/main.tsx). -->
+<div id="site"><!--site--></div>
+<script type="module" src="../main.ts"></script>
+</body>
+</html>

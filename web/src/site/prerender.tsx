@@ -3,7 +3,9 @@
 import { renderToString } from "react-dom/server";
 import { renderDemo } from "../demo/prerender.tsx";
 import { Site } from "./Site.tsx";
+import type { SiteLang } from "./words.ts";
 
-export function render(): string {
-  return renderToString(<Site demo={renderDemo()} />);
+/** The page in a language: Chinese at /, English at /en/. */
+export function render(lang: SiteLang): string {
+  return renderToString(<Site demo={renderDemo()} lang={lang} />);
 }

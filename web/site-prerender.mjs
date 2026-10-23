@@ -27,11 +27,15 @@ Object.defineProperty(globalThis, "navigator", { configurable: true, value: { us
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));
 const { render } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);
 // STILLFAIL_SITE=beta: the test channel's site, youdid.wtf (web/vite.demo.config.ts).
-const page = dist(process.env.STILLFAIL_SITE === "beta" ? "site-beta/index.html" : "site/index.html");
-const html = readFileSync(page, "utf8");
-if (!html.includes("<!--site-->")) throw new Error(`${page} has no <!--site--> to fill`);
-writeFileSync(page, html.replace("<!--site-->", render()));
+// The page in Chinese at /, in English at /en/.
+const root = process.env.STILLFAIL_SITE === "beta" ? "site-beta" : "site";
+for (const [lang, file] of [["zh", "index.html"], ["en", "en/index.html"]]) {
+  const page = dist(`${root}/${file}`);
+  const html = readFileSync(page, "utf8");
+  if (!html.includes("<!--site-->")) throw new Error(`${page} has no <!--site--> to fill`);
+  writeFileSync(page, html.replace("<!--site-->", render(lang)));
+  console.log(`prerendered ${page}`);
+}
 rmSync(dist("site-ssr"), { recursive: true, force: true });
-console.log(`prerendered ${page}`);
 // What the app started (timers, the demo's lingering topics) has nothing more to do.
 process.exit(0);
