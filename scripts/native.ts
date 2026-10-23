@@ -221,7 +221,7 @@ const PARTS: Record<string, Part> = {
     targets: ["android-arm64", "win32-x64"],
     msvc: true,
     inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", ...VENDORED],
-    recipe: (t) => (t === "win32-x64" ? { cargo: shellWinCommand(), tests: SHELL_TESTS, xwin: XWIN } : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS }),
+    recipe: (t) => (t === "win32-x64" ? { cargo: SHELL_TESTS, xwin: XWIN } : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS }),
     build(t, out) {
       const target = targetDir(join(ROOT, "client/target"), "shell");
       if (t === "win32-x64") return shellWin(out);
@@ -342,9 +342,9 @@ const shellCommand = () => [
   // Named by its file (SONAME): the engine that links it is then given its name, not where it was built.
   "--", "-C", "link-arg=-Wl,-soname,libstillfail_shell.so",
 ];
-/// The Windows shell: the crate's cdylib (a DLL with its import library, which the engine links); and its tests, built
-/// beside it, not run (a Mac builds them; CI's Windows runs them).
-const shellWinCommand = () => ["rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", "x86_64-pc-windows-msvc", "--release"];
+/// The Windows shell: the crate's cdylib (a DLL with its import library, which the engine links) and its tests, in one
+/// build, the tests' (whose library is the DLL: the crate has no dev-dependency to build what is below it with other
+/// features), not run (a Mac builds them; CI's Windows runs them). Two builds took 2 of the 8 minutes, 2026-10-23.
 const SHELL_TESTS = ["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc", "--no-run", "--message-format=json-render-diagnostics"];
 /// cargo-xwin, which cross-builds the Windows parts on a Mac with the Windows SDK and MSVC's CRT (Microsoft's, which it
 /// downloads: xwin), clang-cl and lld-link (Homebrew's llvm and lld).
@@ -369,10 +369,7 @@ function shellWin(out: string) {
   const target = cross ? join(BUILD(), "target") : targetDir(join(ROOT, "client/target"), "shell");
   const env = { CARGO_TARGET_DIR: target, ...(cross ? xwinEnv() : {}) };
   const xwin = (args: string[]) => (cross ? ["xwin", ...args] : args);
-  cargo(xwin(shellWinCommand()), join(ROOT, "client"), env);
-  const release = join(target, "x86_64-pc-windows-msvc/release");
-  for (const f of ["stillfail_shell.dll", "stillfail_shell.dll.lib"]) copyFileSync(existsSync(join(release, f)) ? join(release, f) : join(release, "deps", f), join(out, f));
-  // the tests' executables, from cargo's own account of what it built
+  // the library and the tests' executables, from cargo's own account of what it built
   rustTarget("x86_64-pc-windows-msvc");
   const done = spawnSync("cargo", xwin(SHELL_TESTS), { cwd: join(ROOT, "client"), env: rustEnv(env), encoding: "utf8", maxBuffer: 256 << 20, stdio: ["ignore", "pipe", "inherit"] });
   if (done.status !== 0) throw new Error(`cargo ${xwin(SHELL_TESTS).join(" ")}: exit ${done.status}`);
@@ -380,9 +377,14 @@ function shellWin(out: string) {
   for (const line of done.stdout.split("\n")) {
     if (!line.startsWith("{")) continue;
     const m = JSON.parse(line);
-    if (m.reason !== "compiler-artifact" || !m.profile?.test || !m.executable) continue;
+    if (m.reason !== "compiler-artifact") continue;
+    // the library (not its tests): the DLL, and its import library beside it
+    const dll = (m.filenames as string[]).find((f) => basename(f) === "stillfail_shell.dll");
+    if (!m.profile?.test && dll) for (const f of ["stillfail_shell.dll", "stillfail_shell.dll.lib"]) copyFileSync(join(dirname(dll), f), join(out, f));
+    if (!m.profile?.test || !m.executable) continue;
     copyFileSync(m.executable, join(out, "tests", `${m.target.kind.includes("lib") ? "lib" : m.target.name}.exe`));
   }
+  if (!existsSync(join(out, "stillfail_shell.dll"))) throw new Error("the shell's DLL was not built");
   if (readdirSync(join(out, "tests")).length === 0) throw new Error("the shell's tests were not built");
 }
 /// The Windows engine (apps/mbui/engine) in Hermes's own CMake build (its libhermes, static, linked into the DLL),
