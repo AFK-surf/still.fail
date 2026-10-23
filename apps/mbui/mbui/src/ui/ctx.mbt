@@ -1198,6 +1198,16 @@ fn Ctx::read_changed(self : Ctx, what : String, loc~ : SourceLoc) -> Unit {
 }
 
 ///|
+/// What the view built from changed as it was built, by what it took of the pointer (a column's edge dragged: the
+/// column, built before its edge, built at the width it had): the frame is built again from it before it is drawn, as
+/// for what mbui's own parts change (Ctx::read_changed), so what the pointer moved is under it in the frame it moved in.
+/// Said only when it did change: the frame built again finds it as it is now and says nothing.
+#callsite(autofill(loc))
+pub fn Ctx::built_from_changed(self : Ctx, what : String, loc~ : SourceLoc) -> Unit {
+  self.read_changed(what, loc~)
+}
+
+///|
 /// A motion set out between frames (Ctx::set_out): a frame is owed to show it, the host told now, as a frame asked
 /// between frames is.
 fn Ctx::owe_frame(self : Ctx) -> Unit {
