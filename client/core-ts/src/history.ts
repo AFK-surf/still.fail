@@ -448,7 +448,10 @@ export function presentHistory(live: J, cx: Context): J {
     }
     const kind = v.kind ?? null;
     delete v.kind;
-    return { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } } as J;
+    const out: J = { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } };
+    // Its own work (its steps and thoughts, and the words it says to itself): what 只看收发 leaves out.
+    if (kind === "group" || kind === "text") out.work = true;
+    return out;
   });
 
   // Turns: each prompt that woke the agent (not one of a sub-agent's) begins one, on its item, saying when and what the

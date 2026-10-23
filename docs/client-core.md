@@ -394,6 +394,10 @@ the views.
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.
 
+The `history` view (`station`, `key`; history.ts) is an agent's execution history as every client draws it, put
+together from its `live`: each item the transcript entries it draws, what it is (`body`), and on the agent's own work
+(its steps and thoughts, and the words it says to itself) `work`, what 只看收发 leaves out.
+
 ```jsonc
 // chats
 {

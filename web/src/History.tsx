@@ -45,8 +45,8 @@ function readOnlyIo(): boolean {
 function keepOnlyIo(on: boolean): void {
   try { if (on) localStorage.setItem(ONLY_IO, "1"); else localStorage.removeItem(ONLY_IO); } catch { /* not kept */ }
 }
-/** What "只看收发" leaves out: the work (calls and thinking) and the agent's own words. */
-const isWork = (item: HistoryItem) => item.body.kind === "group" || item.body.kind === "text";
+/** What "只看收发" leaves out: the work (calls and thinking) and the agent's own words, as the core says (`work`). */
+const isWork = (item: HistoryItem) => item.work === true;
 
 /** About how many Latin letters a line of the pane holds: what a fold says it hides, of words it has not measured. */
 const Per = createContext(70);

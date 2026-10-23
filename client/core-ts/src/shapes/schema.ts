@@ -2731,6 +2731,7 @@ export const SHAPES: Record<string, Shape> = {
     ["entries", vec("i64"), { client: vec("I54") }],
     ["body", "HistoryBody"],
     ["turn", opt("HistoryTurn"), { skipNone: true, doc: "On the item a turn begins with (the prompt that woke the agent); left out of the others." }],
+    ["work", opt("bool"), { skipNone: true, doc: "The agent's own work (its steps and thoughts, and the words it says to itself): what 只看收发 leaves out.\nAbsent otherwise." }],
   ], { doc: "One item of an execution history, and the transcript entries it draws (`entries`: first, last).", keepNone: true }),
   HistoryLive: struct([
     ["id", "String"],

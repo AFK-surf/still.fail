@@ -3101,6 +3101,11 @@ export interface HistoryItem {
 	body: HistoryBody;
 	/** On the item a turn begins with (the prompt that woke the agent); left out of the others. */
 	turn?: HistoryTurn;
+	/**
+	 * The agent's own work (its steps and thoughts, and the words it says to itself): what 只看收发 leaves out.
+	 * Absent otherwise.
+	 */
+	work?: boolean;
 }
 
 export interface HistoryLive {
