@@ -1,4 +1,6 @@
 import { t } from "../i18n.ts";
+import { StationMark } from "../StationMark.tsx";
+import { useStationLook } from "../api.ts";
 import { Fragment, type ReactNode } from "react";
 import { useParams } from "react-router";
 import { useAutomaticDecisionForm, usePolicyDraft, usePolicyForm } from "../AutomaticDecisions.tsx";
@@ -40,7 +42,7 @@ export function AutomaticDecisionCompletionScreen() {
     {stations.value?.map(s => <Fragment key={s.station}>
       {s.online && s.overview?.automaticDecisions
         ? <DecisionPanel station={s.station} name={s.name} view={s.overview.automaticDecisions} />
-        : <><SectionHeader title={s.name} start={24} />{s.online && !s.overview ? <WaitLine className={settings.mPageNote} text={t("common.connecting")} />
+        : <><SectionHeader title={s.name} start={24} mark={(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={14} />} />{s.online && !s.overview ? <WaitLine className={settings.mPageNote} text={t("common.connecting")} />
           : <p className={settings.mPageNote}>{!s.online ? t("web-pages.automaticDecisions.offlineNote") : t("web-pages.automaticDecisions.upgrade")}</p>}</>}
     </Fragment>)}
     <div style={{height:30}} />
@@ -48,6 +50,7 @@ export function AutomaticDecisionCompletionScreen() {
 }
 function DecisionPanel({station,name,view}:{station:string;name:string;view:AutomaticDecisionView}) {
   const app=useApp();
+  const look=useStationLook(station);
   const {d,state,saving,refreshing,saveFailed,refreshFailed,reviewing,reviewFailed,canReview,edit,save,refresh,review}=useAutomaticDecisionForm(station,view);
   if (!view.canEdit) return <p className={settings.mPageNote}>{t("web-pages.automaticDecisions.adminOnly")}</p>;
   if (!d) return <WaitLine className={settings.mPageNote} text={state.error?.message ?? t("web-pages.automaticDecisions.readingConfig")} error={!!state.error} />;
@@ -58,7 +61,7 @@ function DecisionPanel({station,name,view}:{station:string;name:string;view:Auto
     {d.pick && <ModelList models={d.pick.options} runtime="codex" picked={d.model} onPick={model=>{app.sheet(null);edit({model});}} />}
   </>});
   return <>
-    <div className={css.stationHead}><div className={css.stationName}><SectionHeader title={name} start={24} /></div>{refreshing ? <Spinner /> : <NavButton icon={Refresh} label={t("web-pages.automaticDecisions.refresh")} onClick={refresh} />}</div>
+    <div className={css.stationHead}><div className={css.stationName}><SectionHeader title={name} start={24} mark={(look?.emoji || look?.icon) && <StationMark emoji={look.emoji} icon={look.icon} size={14} />} /></div>{refreshing ? <Spinner /> : <NavButton icon={Refresh} label={t("web-pages.automaticDecisions.refresh")} onClick={refresh} />}</div>
     {refreshFailed && <p className={`${settings.mPageNote} ${parts.mRed}`}>{refreshFailed}</p>}
     <ListCard>
       <ListRow onClick={busy ? undefined : ()=>edit({enabled:!d.enabled})}>

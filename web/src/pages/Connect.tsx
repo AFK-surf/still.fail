@@ -29,6 +29,7 @@ import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import { StationNamedAt } from "../StationNamed.tsx";
 const tr = t;
 export function ConnectPage() {
   const { id } = useParams();
@@ -105,7 +106,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
                 : <><StatusDot state={connect.presence} />{connect.statusText}</>}
             </span>
             <span className={css.kindTag}><ConnectKindIcon kind={connect.kind} size={13} />{connect.team ?? (feishu ? (connect.feishu?.domain === "lark" ? "Lark" : t("web-pages.connect.feishu.name")) : "Slack")}</span>
-            {station.name && <span className={cloudCss.stationTag}>{station.name}</span>}
+            {station.name && <span className={cloudCss.stationTag}><StationNamedAt station={station.address} name={station.name} size={11} /></span>}
             <span className={css.ownerLine}>{t("web-pages.connect.owner")} <OwnerLabel owner={connect.createdBy} /></span>
           </p>
         </div>

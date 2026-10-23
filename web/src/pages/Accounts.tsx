@@ -13,6 +13,7 @@ import { useDoing, useDoingFailed } from "../doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { QuotaBars } from "../components.tsx";
+import { StationNamedAt } from "../StationNamed.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
 import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip, Progress, Spinner, Waiting, WaitLine } from "../ui.tsx";
@@ -235,7 +236,7 @@ function StationsSection({ entry, here }: { entry: WorkspaceProfile; here: strin
             <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`} aria-current={m.station === here ? "page" : undefined}>
               <StatusDot state={m.online ? "online" : "offline"} />
               <span className={pagesCss.listRowText}>
-                <span className={pagesCss.listRowTitle}>{m.stationName}</span>
+                <span className={pagesCss.listRowTitle}><StationNamedAt station={m.station} name={m.stationName} /></span>
                 <span className={shellCss.muted}>{[m.about, m.usedBy > 0 ? t("web-pages.settings.profiles.usedBy", { n: m.usedBy }) : ""].filter(Boolean).join(" · ")}</span>
               </span>
               {!m.online ? <Pill tone="neutral">{t("web-pages.stations.offline")}</Pill> : !m.usable ? <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill> : m.checkTone !== "green" && <Pill tone={m.checkTone as never}>{m.checkText}</Pill>}
@@ -327,7 +328,7 @@ function ShareSection({ profile }: { profile: Profile }) {
       {subscription && !profile.machine && (
         <div className={pagesCss.cardRow}>
           <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.signedIn")}</b></span>
-          <span className={css.shareValue}><StatusDot state="online" />{station.name}</span>
+          <span className={css.shareValue}><StatusDot state="online" /><StationNamedAt station={station.address} name={station.name} /></span>
           <Button variant="ghost" busy={moving} disabled={moving || targets.length === 0} onClick={() => setMoveOpen(true)}>{t("web-pages.profiles.share.move")}</Button>
         </div>
       )}

@@ -37,6 +37,8 @@ import * as newChatCss from "./styles/new-chat.css.ts";
 import { NAME } from "../channel.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { t } from "../i18n.ts";
+import { StationMark } from "../StationMark.tsx";
+import { StationNamedAt } from "../StationNamed.tsx";
 /** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
 export function Presence({ state }: { state: string }) {
   return <span className={settingsCss.mPresence} data-state={state} />;
@@ -168,7 +170,7 @@ export function ConnectsScreen() {
         if (s.online && here.length === 0 && waiting.length === 0 && mine && !one) return null;
         return (
           <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
-            {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
+            {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} mark={(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={14} />} />}
             <ListCard>
               {!s.online && here.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.connects.offlineList")}</span></ListRow>
                 : here.length === 0 && waiting.length === 0 ? <ListRow>{failing ? <WaitLine text={failing.text} error />
@@ -218,7 +220,7 @@ function ConnectPage({ item }: { item: ConnectItem }) {
           <ConnectAvatar connect={connect} size={44} />
           <span className={partsCss.mGrow}>
             <span className={listsCss.mRowTitle}>{placeOf(connect)}</span>
-            <span className={listsCss.mRowNote}>{station.name}{connect.createdBy ? t("web-mobile.connects.owner", { owner: connect.createdBy.shown?.display ?? connect.createdBy.name }) : ""}</span>
+            <span className={listsCss.mRowNote}><StationNamedAt station={station.address} name={station.name} />{connect.createdBy ? t("web-mobile.connects.owner", { owner: connect.createdBy.shown?.display ?? connect.createdBy.name }) : ""}</span>
           </span>
         </div>
         {(c.state === "no_tokens" || c.state === "error" || (c.state === "reconnecting" && c.lastError)) && (

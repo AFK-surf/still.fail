@@ -33,6 +33,8 @@ import * as chatCss from "./styles/chat.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import { StationMark } from "../StationMark.tsx";
+import { StationNamedAt } from "../StationNamed.tsx";
 function useApi() {
   const station = useStation();
   const call = useStationCall(station.address);
@@ -71,7 +73,7 @@ export function ProfilesScreen() {
       {/* A station's own (?station=): its stations read first; the workspace's list waits on its own (WorkspaceList). */}
       {!stations ? (only ? <Waiting shape="cards" count={2} text={t("common.readingStations")} /> : null) : stations.filter(() => !!one).map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
-          {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
+          {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} mark={(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={14} />} />}
           {!s.overview || s.overview.profiles.length === 0 ? (
             <ListCard>
               <ListRow>{!s.overview && s.online ? <WaitLine />
@@ -186,7 +188,7 @@ export function ProfileAccountScreen() {
           {hosts(e).map((m) => (
             <ListRow key={`${m.station}/${m.profileId}`} onClick={() => app.push(app.at(`/s/${m.stationId}/settings/accounts/${encodeURIComponent(m.profileId)}`))}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> {m.stationName}</span>
+                <span className={listsCss.mRowTitle}><Presence state={!m.online ? "offline" : !m.usable ? "error" : toneDot(m.checkTone)} /> <StationNamedAt station={m.station} name={m.stationName} /></span>
                 <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{m.online ? m.about : t("web-mobile.profiles.offline")}</span>
               </span>
               <ChevronRight size={14} className={partsCss.mSubtle} />
@@ -265,7 +267,7 @@ function ShareRows({ p }: { p: Profile }) {
           <ListRow onClick={moving || targets.length === 0 ? undefined : move}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.profiles.share.signedIn")}</span>
             {moving && <Spinner inline />}
-            <span className={listsCss.mRowNote}>{station.name}</span>
+            <span className={listsCss.mRowNote}><StationNamedAt station={station.address} name={station.name} /></span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
         )}
@@ -316,7 +318,7 @@ export function PickStation({ title, stations, to }: { title: string; stations: 
       <SheetHead title={title} />
       <div className={sheetsCss.mSheetScroll}>
         <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-mobile.profiles.whichStation")}</p>
-        {stations.map((s) => <PickRow key={s.id} label={s.name} onClick={() => { app.sheet(null); app.push(app.at(to(s))); }} />)}
+        {stations.map((s) => <PickRow key={s.id} label={s.name} leading={<StationMark emoji={s.emoji} icon={s.icon} size={22} />} onClick={() => { app.sheet(null); app.push(app.at(to(s))); }} />)}
       </div>
     </>
   );

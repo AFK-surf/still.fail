@@ -7,6 +7,7 @@ import { useDoing } from "../doing.ts";
 import { stamp } from "../api.ts";
 import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
+import { StationNamedAt } from "../StationNamed.tsx";
 import { CodeEntry, deviceName, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
@@ -118,7 +119,7 @@ function On({ lock }: { lock: LockView }) {
             <ListRow key={s.id} onClick={join ? () => app.sheet({ height: 0.4, content: () => <JoinSheet s={s} /> }) : undefined}>
               <span className={css.mDot} data-on={s.protected} data-tone={s.protected ? undefined : "amber"} />
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}>{s.name}</span>
+                <span className={listsCss.mRowTitle}><StationNamedAt station={`${app.entry.id}/${s.id}`} name={s.name} /></span>
                 {!s.protected && <span className={listsCss.mRowNote}>{t("web-pages.security.unprotectedWhy")}</span>}
               </span>
               {s.protected ? <span className={partsCss.mSubtle}>{t("web-pages.security.protected")}</span>

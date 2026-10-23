@@ -10,6 +10,7 @@ import { useDoing } from "../doing.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { Button, Dialog, Field, IconButton, MobileBack, Section, Time, Spinner, Waiting } from "../ui.tsx";import { t } from "../i18n.ts";
+import { StationNamedAt } from "../StationNamed.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -190,7 +191,7 @@ function StationRow({ entry, s, canJoin, onJoin }: { entry: WorkspaceEntry; s: L
   return (
     <div className={css.row}>
       <span className={css.dot} data-on={s.protected} data-tone={s.protected ? undefined : "amber"} />
-      <div className={css.rowText}><span className={css.rowName}>{s.name}</span>{!s.protected && <span className={css.rowMeta}>{t("web-pages.security.unprotectedWhy")}</span>}</div>
+      <div className={css.rowText}><span className={css.rowName}><StationNamedAt station={`${entry.id}/${s.id}`} name={s.name} /></span>{!s.protected && <span className={css.rowMeta}>{t("web-pages.security.unprotectedWhy")}</span>}</div>
       {s.protected ? <span className={css.rowMeta}>{t("web-pages.security.protected")}</span>
         : canJoin ? <Button variant="ghost" busy={joiningNow} onClick={onJoin}>{t("web-pages.security.join")}</Button>
         : <span className={css.warn}>{t("web-pages.security.unprotected")}</span>}
@@ -341,7 +342,7 @@ export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
           {draft.stations.map((s) => (
             <label key={s.id} className={css.row}>
               <input type="checkbox" className={css.check} checked={s.on} disabled={s.fixed} onChange={() => toggle(s.id)} />
-              <div className={css.rowText}><span className={css.rowName}>{s.name}</span>
+              <div className={css.rowText}><span className={css.rowName}><StationNamedAt station={`${entry.id}/${s.id}`} name={s.name} /></span>
                 {s.state !== "ok" && <span className={css.rowMeta}>{s.state === "asking" ? t("web-pages.security.asking") : s.state === "old" ? t("web-pages.security.tooOld") : t("web-pages.security.offline")}</span>}</div>
               {s.version && <span className={s.state === "old" ? css.warn : css.rowMeta}>{s.version}</span>}
             </label>

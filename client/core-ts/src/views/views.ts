@@ -1041,7 +1041,7 @@ export class Views implements Owner {
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const hint = archiveHintOf(this.ok({ topic: "prefs" }) ?? null);
     const states: J[] = [];
-    const troubles: [string, string, boolean?][] = [];
+    const troubles: [string, string, boolean, string][] = [];
     const rows: J[] = [];
     let loading = false;
     const unread: string[] = [];
@@ -1100,15 +1100,15 @@ export class Views implements Owner {
           else state = "connecting";
         }
       }
-      if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network"]);
-      else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name })]);
-      else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name })]);
+      if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network", s.address]);
+      else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name }), false, s.address]);
+      else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name }), false, s.address]);
       const cause = state === "offline" ? get(this.link(s.address), "cause") : undefined;
       states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}) });
     }
     const days = this.#days(rows);
     let trouble: J = null;
-    if (troubles.length === 1) trouble = { text: troubles[0][1], state: troubles[0][0], retry: false };
+    if (troubles.length === 1) trouble = { text: troubles[0][1], state: troubles[0][0], retry: false, station: troubles[0][3] };
     else if (troubles.length > 1) {
       const worst = ["error", "offline", "reconnecting"].find((w) => troubles.some(([s]) => s === w)) ?? "offline";
       // Every one down as the device's network is: that, once, and not as so many stations amiss.

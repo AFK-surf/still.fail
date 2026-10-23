@@ -12,6 +12,7 @@ import { stationBase } from "./station.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { useWorkspaceMarks } from "./lastChat.ts";
 import { useStationTrouble } from "./Sidebar.tsx";
+import { StationMarkAt } from "./StationNamed.tsx";
 import { OpenJobs, useLongJobs } from "./OpenJobs.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Bell } from "@stillfail/ui/icons.tsx";
@@ -134,7 +135,7 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
               <div role="button" tabIndex={0} className={css.item} data-seen={!troubleNew || undefined}
                 onClick={() => goStations()} onKeyDown={(e) => { if (e.key === "Enter") goStations(); }}>
                 <span className={css.dot} data-kind="alert" role="img" aria-hidden="true" />
-                <span className={css.itemText}><span className={css.itemTitle}>{trouble.text}</span></span>
+                <span className={css.itemText}><span className={css.itemTitle}><StationMarkAt station={trouble.station} />{trouble.text}</span></span>
                 <button type="button" className={css.dismiss} title={t("web-main.attention.dismissTrouble")}
                   onClick={(e) => { e.stopPropagation(); letTroubleGo(trouble.text); }}>{t("web-main.attention.dismiss")}</button>
               </div>

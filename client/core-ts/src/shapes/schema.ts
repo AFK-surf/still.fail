@@ -990,6 +990,7 @@ export const SHAPES: Record<string, Shape> = {
     ["text", "String"],
     ["state", "String"],
     ["retry", opt("bool")],
+    ["station", opt("String"), { doc: "The station's address when one alone is in trouble (its mark is shown with the line); absent with several, or from a core before it." }],
   ], { doc: "What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.\n`retry`: always false now (a station down is tried again from the stations' page); true from older cores while down." }),
   StationsGlyph: struct([
     ["online", "i64", { client: "I54" }],

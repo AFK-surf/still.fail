@@ -22,6 +22,8 @@ import * as rootCss from "./styles/root.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import { t } from "../i18n.ts";
+import { StationMark } from "../StationMark.tsx";
+import { StationNamed } from "../StationNamed.tsx";
 
 /** A row that opens a page: its name (and whose), a line under it, how much is in it. */
 function MemoryRow({ title, sub, value, tags, open, onClick }: { title: string; sub?: string | undefined; value?: string | undefined; tags?: React.ReactNode; open?: boolean; onClick: () => void }) {
@@ -138,8 +140,8 @@ export function MemoriesScreen() {
       {!stations ? <Waiting shape="cards" count={1} text={t("common.readingStations")} /> : (
         <ListCard>
           {stations.map((s) => s.online
-            ? <GoRow key={s.id} title={s.name} value={t("web-mobile.memory.both")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
-            : <ListRow key={s.id}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{s.name}</span><span className={listsCss.mRowNote}>{t("web-mobile.memory.offline")}</span></span></ListRow>)}
+            ? <GoRow key={s.id} title={s.name} lead={<StationMark emoji={s.emoji} icon={s.icon} size={16} />} value={t("web-mobile.memory.both")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />
+            : <ListRow key={s.id}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}><StationNamed emoji={s.emoji} icon={s.icon} name={s.name} /></span><span className={listsCss.mRowNote}>{t("web-mobile.memory.offline")}</span></span></ListRow>)}
         </ListCard>
       )}
       <div style={{ height: 30 }} />
