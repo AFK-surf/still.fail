@@ -277,4 +277,17 @@ let zh_wide : Map[String, String] = {
   "web-pages.drive.reader.flush": "顶格",
   "web-pages.drive.reader.less": "减小{what}",
   "web-pages.drive.reader.more": "增大{what}",
+  // a film or a song played on a desktop (play_desk.mbt; @stillfail/ui viewer/Player.tsx)
+  "web-pages.drive.player.buffering": "正在缓冲",
+  "web-pages.drive.player.failed": "无法播放：{error}",
+  "web-pages.drive.player.prev": "上一个",
+  "web-pages.drive.player.next": "下一个",
+  "web-pages.drive.player.back15": "后退 15 秒",
+  "web-pages.drive.player.forward15": "前进 15 秒",
+  "web-pages.drive.player.rate": "播放速度",
+  "web-pages.drive.player.captionsOn": "显示字幕",
+  "web-pages.drive.player.captionsOff": "隐藏字幕",
+  "web-pages.drive.player.list": "选集",
+  "web-main.video.pauseKey": "暂停（空格）",
+  "web-main.video.playKey": "播放（空格）",
 }

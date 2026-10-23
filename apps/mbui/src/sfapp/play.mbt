@@ -183,9 +183,31 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     .map(fn(e) { e.name }),
     fn(_) { true },
   )
-  @player.view(pl.player, c, list~, top=status_top(), foot=nav_foot(), fn() { app.nav.pop() |> ignore }, fn(other) {
+  let open = fn(other : String) {
     app.nav.replace(DrivePlay({ station: at.station, root: at.root, path: dv_join(dir, other) }))
-  })
+  }
+  // a desktop's over the whole window, with the bar every file opened has (play_desk.mbt)
+  if wide_on.val {
+    let root = at.root.unwrap_or("")
+    let size = match entries.iter().find_first(fn(e) { e.name == name && !e.dir }) {
+      Some(e) => e.size
+      None => 0.0
+    }
+    desk_play(c, pl.player, {
+      back: viewer_folder_label(src, at.station, root, dir),
+      name,
+      size,
+      go_back: fn() { app.nav.pop() |> ignore },
+      save: fn() {
+        say(c, fill("android-misc.drive.downloading", [("name", name)]))
+        download_drive_file(c, src, at.station, root, at.path, name, "")
+      },
+      list,
+      open,
+    })
+    return
+  }
+  @player.view(pl.player, c, list~, top=status_top(), foot=nav_foot(), fn() { app.nav.pop() |> ignore }, open)
 }
 
 ///|

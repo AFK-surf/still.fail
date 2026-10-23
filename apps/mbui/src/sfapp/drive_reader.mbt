@@ -594,26 +594,9 @@ fn reader_book(
       r.hit = -1
     } else if @kit.after(c, "reader-search/\{r.typed_n}", true, reader_search_ms) {
       // the core finds it (`reader.search`: in a Markdown file, its words as drawn), each place where it is in the text
+      // (asked once the frame's builds are over: what the last of them typed)
       let query = r.query
-      r.searched = query
-      r.hit = -1
-      (src.call)("reader.search", { "id": Json::number(novel.id.to_double()), "query": Json::string(query) }, fn(res) {
-        if r.searched == query {
-          r.matches = match res {
-            Ok(found) =>
-              items(Some(found), "at").map(fn(j) {
-                let (k, o) = novel.at(
-                  match j {
-                    Number(n, ..) => n.to_int()
-                    _ => 0
-                  },
-                )
-                { chunk: k, start: o, length: query.length() }
-              })
-            Err(_) => []
-          }
-        }
-      })
+      c.after_build("reader-search", fn() { reader_search(src, r, novel, query) })
     }
   }
   let size = prefs.size.to_double()
@@ -648,7 +631,7 @@ fn reader_book(
       } else if i == n + 1 {
         c.box(h=Px(foot), fn() {  }) |> ignore
       } else {
-        reader_chunk(c, r, novel, i - 1, prefs, p, size, line, left, mark, mark_now, right~)
+        reader_chunk(c, r, novel, i - 1, prefs, p, size, line, left, mark, mark_now, right~, headings=desk is Some(_))
       }
     })
     |> ignore
@@ -703,6 +686,30 @@ fn reader_book(
 }
 
 ///|
+/// `query` looked for in the text (`reader.search`): the places it is, kept as long as it is still what was asked.
+fn reader_search(src : Source, r : TextReading, novel : Novel, query : String) -> Unit {
+  r.searched = query
+  r.hit = -1
+  (src.call)("reader.search", { "id": Json::number(novel.id.to_double()), "query": Json::string(query) }, fn(res) {
+    if r.searched == query {
+      r.matches = match res {
+        Ok(found) =>
+          items(Some(found), "at").map(fn(j) {
+            let (k, o) = novel.at(
+              match j {
+                Number(n, ..) => n.to_int()
+                _ => 0
+              },
+            )
+            { chunk: k, start: o, length: query.length() }
+          })
+        Err(_) => []
+      }
+    }
+  })
+}
+
+///|
 /// A block's text as drawn: its paragraphs indented (Markdown: as long as its source, its share of it at its share of
 /// the height).
 fn reader_drawn_len(novel : Novel, k : Int, indent : Bool) -> Int {
@@ -738,6 +745,7 @@ fn reader_chunk(
   mark : Int64,
   mark_now : Int64,
   right? : Double,
+  headings? : Bool = false,
 ) -> Unit {
   let right = right.unwrap_or(margin)
   let raw = novel.chunks[k]
@@ -773,6 +781,8 @@ fn reader_chunk(
       )
     } else {
       let runs = [@ui.plain(render_chunk(raw, novel.starts[k], novel.heads, prefs.indent))]
+      // a desktop's headings in 600 and a fifth larger (Reader.css.ts piece p[data-heading])
+      let runs = if headings { desk_headings(runs, raw, novel.starts[k], novel.heads, prefs.indent) } else { runs }
       let runs = if mine.length() == 0 {
         runs
       } else {

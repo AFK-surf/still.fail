@@ -148,8 +148,8 @@ fn desk_clock(ms : Double) -> String {
 /// fades (`shown`), and as the pointer rests over an image; its tools by what it shows. The pointer's moves wake it.
 fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = self
-  // read in the reader: its own bar
-  if v.desk_reads() {
+  // read in the reader, played in the player: their own bars
+  if v.desk_reads() || (wide_on.val && v.shown_kind() == Some(KAudio)) {
     return
   }
   let ink = page_viewer_ink()
@@ -552,3 +552,29 @@ let desk_rate_share : Double = 0.1
 
 ///|
 let desk_track_share : Double = 0.2
+
+///|
+/// A chat's song on a desktop (FilePreview.tsx: a sound opens in the player, viewer/Player.tsx): the player a drive's
+/// plays in, back to the chat, its download the preview's.
+fn Viewer::desk_song(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
+  let v = self
+  match v.media {
+    Some(m) => {
+      // (a fixture's: how it stands pinned, the same on every run)
+      match v.pinned {
+        Some(p) => m.pin(p)
+        None => ()
+      }
+      desk_play(c, m, {
+        back: v.desk_back(src),
+        name: v.file.name,
+        size: v.file.size,
+        go_back: fn() { v.shut(c) },
+        save: fn() { v.ask_save(c) },
+        list: [],
+        open: fn(_) {  },
+      })
+    }
+    None => ()
+  }
+}

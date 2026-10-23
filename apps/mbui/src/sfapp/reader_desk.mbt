@@ -504,15 +504,16 @@ fn desk_layout(c : @ui.Ctx, src : Source, r : TextReading, prefs : ReaderPrefs, 
     let lines = desk_slider_row(c, "reader/lines", tr("web-pages.drive.reader.lines"), prefs.line, desk_lines_min, desk_lines_max, desk_lines_step, p, r, fn(v) {
       "\{(v * 100.0).round().to_int()}%"
     })
+    // (kept once the frame's builds are over: as the pointer let it go)
     match lines {
-      Some(v) => reader_put(src, "line", Json::number(v))
+      Some(v) => c.after_build("reader/lines", fn() { reader_put(src, "line", Json::number(v)) })
       None => ()
     }
     let margins = desk_slider_row(c, "reader/margin", tr("web-pages.drive.reader.margin"), prefs.margin.to_double(), desk_margin_min, desk_margin_max, desk_margin_step, p, r, fn(v) {
       "\{v.round().to_int()}"
     })
     match margins {
-      Some(v) => reader_put(src, "margin", Json::number(v.round()))
+      Some(v) => c.after_build("reader/margin", fn() { reader_put(src, "margin", Json::number(v.round())) })
       None => ()
     }
     c.box(style=desk_layout_block, fn() {
@@ -685,12 +686,11 @@ fn desk_slider_row(
       if down && c.pressed(c.id(key)) {
         r.drafts[key] = v
       } else {
+        // let go (or stepped by the keys): kept, the draft let go with it once the frame's builds are over
         match draft {
           Some(d) => {
-            r.drafts.remove(key)
-            if d != value {
-              kept = Some(d)
-            }
+            kept = Some(d)
+            c.after_build(key + "/let-go", fn() { r.drafts.remove(key) })
           }
           None => if v != value { kept = Some(v) }
         }
@@ -756,6 +756,69 @@ fn desk_drive_reading(c : @ui.Ctx, src : Source, at : DriveAt, r : TextReading) 
     },
   }
 }
+
+///|
+/// A block's heading lines (where the core says the text's headings start) in 600 and a fifth larger, as drawn
+/// (render_chunk's text: `runs`, one run of it).
+fn desk_headings(runs : Array[@ui.Run], raw : String, start : Int, heads : Map[Int, Bool], indent : Bool) -> Array[@ui.Run] {
+  // each heading's drawn range
+  let ranges : Array[(Int, Int)] = []
+  let n = raw.length()
+  let mut index = 0
+  while index < n {
+    let newline = tx_nl(raw, index)
+    let end = if newline < 0 { n } else { newline }
+    if heads.contains(start + index) {
+      let lead = tx_lead(raw, index, end)
+      let from = render_offset(raw, start, heads, index + lead, indent)
+      let to = render_offset(raw, start, heads, end, indent)
+      if to > from {
+        ranges.push((from, to))
+      }
+    }
+    if newline < 0 {
+      break
+    }
+    index = newline + 1
+  }
+  if ranges.length() == 0 {
+    return runs
+  }
+  let out = []
+  let mut at = 0
+  for run in runs {
+    let len = run.text.length()
+    let cuts = [0, len]
+    for g in ranges {
+      if g.0 > at && g.0 < at + len {
+        cuts.push(g.0 - at)
+      }
+      if g.1 > at && g.1 < at + len {
+        cuts.push(g.1 - at)
+      }
+    }
+    cuts.sort()
+    for i in 0..<(cuts.length() - 1) {
+      let a = cuts[i]
+      let b = cuts[i + 1]
+      if b <= a {
+        continue
+      }
+      let heading = ranges.iter().any(fn(g) { at + a >= g.0 && at + a < g.1 })
+      let text = run.text.view(start_offset=a, end_offset=b).to_owned()
+      out.push(if heading { { ..run, text, weight: desk_heading_weight, scale: desk_heading_scale } } else { { ..run, text } })
+    }
+    at += len
+  }
+  out
+}
+
+///|
+/// A heading's (Reader.css.ts piece p[data-heading]: 600, 1.2 of the text's size).
+let desk_heading_weight : Int = 600
+
+///|
+let desk_heading_scale : Double = 1.2
 
 ///|
 /// The column's room above the text (the bar's 45 and 40) and under it (72), on a desktop.

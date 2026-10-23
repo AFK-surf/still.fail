@@ -340,6 +340,8 @@ priv struct Viewer {
   mut mouse_x : Double
   mut mouse_y : Double
   mut mouse_seen : Bool
+  /// a desktop's song: played in the player a drive's is (play_desk.mbt), not the phone's strip
+  mut media : @kit.Media?
 }
 
 ///|
@@ -651,6 +653,7 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     mouse_x: 0.0,
     mouse_y: 0.0,
     mouse_seen: false,
+    media: None,
   }
   v.bytes = kept_read(v.id())
   v
@@ -771,6 +774,13 @@ fn Viewer::let_go(self : Viewer) -> Unit {
   }
   match self.video {
     Some(n) => n.close()
+    None => ()
+  }
+  match self.media {
+    Some(m) => {
+      m.close()
+      desk_listing.remove(m.key())
+    }
     None => ()
   }
   match self.page {
@@ -1004,6 +1014,33 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     return
   }
   match v.shown_kind() {
+    // a desktop's song: in the player a drive's plays in (play_desk.mbt), read through the core a part at a time
+    Some(KAudio) if wide_on.val => {
+      if v.media is None {
+        let m = @player.player(key="preview-song")
+        m.open({
+          name: v.file.name,
+          mime: v.mime,
+          audio: true,
+          read: fn(offset, length, answer) {
+            v.read_part(src, offset, length, "played", fn(r) {
+              match r {
+                Ok((answer_json, bytes)) =>
+                  answer(bytes, match field(Some(answer_json), "total") {
+                    Some(Number(t, ..)) => t
+                    _ => -1.0
+                  })
+                Err(_) => answer(b"", -2.0)
+              }
+            })
+          },
+        })
+        v.media = Some(m)
+      }
+      if !v.asked {
+        return
+      }
+    }
     Some(KVideo) | Some(KAudio) => {
       if v.video is None {
         let n = @ui.NativeView::video(v.mime, fn(offset, length, answer) {
@@ -1468,6 +1505,7 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
   match kind {
     Some(KImage) if v.file.size <= big_file => v.image_stage(c, src, stage)
     Some(KVideo) => v.video_stage(c, src, stage)
+    Some(KAudio) if wide_on.val => v.desk_song(c, src)
     Some(KAudio) => v.audio_stage(c, stage)
     _ =>
       if v.desk_reads() {
