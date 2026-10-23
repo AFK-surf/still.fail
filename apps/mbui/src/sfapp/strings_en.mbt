@@ -346,6 +346,8 @@ let en : Map[String, String] = {
   "android-settings.vault.approve.onceDetail": "For this one command; the next use asks again",
   "android-settings.vault.approve.hour": "This chat, for 1 hour",
   "android-settings.vault.approve.hourDetail": "Used again in this chat for 1 hour without asking",
+  "android-settings.vault.approve.chat": "This chat, until archived",
+  "android-settings.vault.approve.chatDetail": "Used in this chat until it is archived or deleted, 30 days at most",
   "android-settings.vault.approve.deny": "Refuse",
   "android-settings.vault.approve.denyDetail": "The agent is notified",
   "android-settings.vault.approve.what": "approve",
