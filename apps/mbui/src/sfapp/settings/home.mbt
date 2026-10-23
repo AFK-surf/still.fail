@@ -40,7 +40,7 @@ pub fn page(
 /// sizes, as the web's, not the wide scale taken down for the pages still made of the phone's parts.
 fn desk_ported(route : Route) -> Bool {
   match route {
-    Notifications | Permissions | Archiving | StationArchiving(_) | Connects("") | Workspace | Security | Shortcuts | AutoDecisions | AutoCompletion | AutoPolicy(_) | Memories | Memory(_) => true
+    Notifications | Permissions | Archiving | StationArchiving(_) | Connects("") | Workspace | Security | Shortcuts | AutoDecisions | AutoCompletion | AutoPolicy(_) | Memories | Memory(_) | Me => true
     _ => false
   }
 }
@@ -790,6 +790,10 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
 /// The account (Me.kt MeScreen): who is signed in, the accounts on this device (signing each out, adding another), and
 /// where it is signed in (Devices).
 fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  // the desktop's: the web's (web_account.mbt)
+  if wide.val {
+    return me_page_wide(c, core, here)
+  }
   let t = @sf.theme()
   let accounts = match (core.topic)("accounts", Map::new()).value {
     Some(Array(a)) => a
