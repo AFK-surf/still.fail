@@ -39,7 +39,7 @@
   "android-chat.chat.working": "处理中",
   "android-chat.composer.archived": "已归档，还原后才能发送消息。 ",
   "android-chat.composer.archived.placeholder": "还原对话后才能发送",
-  "android-chat.composer.offline": "此 station 已离线：当前显示的是之前读取的内容，暂时无法发送消息",
+  "android-chat.composer.offline": "暂时连不上此 station：当前显示的是之前读取的内容，发出的消息会在连上后送达",
   "android-chat.composer.restore": "还原对话",
   "android-chat.composer.restoring": "正在还原",
   "android-chat.composer.send": "发送",

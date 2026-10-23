@@ -38,8 +38,10 @@ export interface HostComposer {
   /** The session its chat's files are kept by (null: none yet, a new chat). */
   session?: string | null;
   placeholder: string;
-  /** Nothing can be sent (its station offline), and it says why. */
+  /** Its station taken for down, and it says why (`offlineNote`, the core's words): what is written waits in the outbox
+   * until it is reached, and no file is taken in (files go up to the station first). */
   offline: boolean;
+  offlineNote?: string;
   archived?: boolean;
   restore?(): Promise<unknown>;
   /** Sends what the draft holds now (given at the moment it is sent: never a draft from an earlier render). */
@@ -67,7 +69,7 @@ export function draftKeyOf(station: string, chat: string): string {
   return `${station}:${openedAs(chat)}`;
 }
 
-type Shown = Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "archived">;
+type Shown = Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "offlineNote" | "archived">;
 
 export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const { station: id, chat } = useParams();
@@ -76,8 +78,8 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const [shown, setShown] = useState<Shown | null>(null);
   const use = useCallback((spec: HostComposer) => {
     latest.current = spec;
-    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived ? was
-      : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
+    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.offlineNote === spec.offlineNote && was.archived === spec.archived ? was
+      : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.offlineNote !== undefined ? { offlineNote: spec.offlineNote } : {}), ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
   }, []);
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
   // The host is outside the chat's StationContext: what it writes goes to the station the page says (a new chat's, as
@@ -117,7 +119,8 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
 }) {
   const app = useApp();
   const upload = draft.add;
-  const locked = shown.offline || !!shown.archived || draft.starting;
+  const locked = !!shown.archived || draft.starting;
+  const noFiles = locked || shown.offline;
   const capsule = useRef<HTMLDivElement>(null);
   // The capsule itself, the box that changes shape (useMorph, below).
   const frame = useRef<HTMLDivElement>(null);
@@ -157,7 +160,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
     return () => { observer.disconnect(); held?.(); };
   }, [root]);
   const { menu, bar, expanded } = useComposerBar({
-    draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,
+    draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked, noFiles,
     onPlus: (plus) => openAttach(app, plus, upload, () => openStationFiles(app, shown.station, (items) => now.current.addDropped(items))), onType: () => latest.current?.type?.(), onSend: () => {
       // What it refers to of other workspaces is shared first, when the viewer says (Chat.tsx sendSharing).
       const spec = latest.current;
@@ -172,10 +175,10 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
       {menu}
       {/* Files dropped in go with the message, as ＋ adds them (pasted ones, the text box takes); offline, nothing goes to the station. */}
       <div ref={frame} className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} data-made-composer onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
-        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) e.preventDefault(); }}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!locked) upload(e.dataTransfer.files); } }}>
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !noFiles) e.preventDefault(); }}
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!noFiles) upload(e.dataTransfer.files); } }}>
         {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
-        {shown.offline && <p className={css.mComposerOffline}>{t("web-mobile.chat.offline")}</p>}
+        {shown.offline && <p className={css.mComposerOffline}>{shown.offlineNote ?? t("web-mobile.chat.offline")}</p>}
         <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus}
           onRef={(f) => openRefSheet(app, f, {
             // A folder goes as a zip only from the chat's own station (zipped there).

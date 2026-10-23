@@ -103,6 +103,8 @@ export class ViewCalls {
           entry = this.#local.outboxGet(station, thread, id)!;
         }
         if (!this.#local.outboxGet(station, thread, id)) return null;
+        // Its station down: not tried (each try waits for a station that is not there), sent once it is reached.
+        if (!this.#inner.stations.reachable(station)) return yield* Effect.fail(new CoreError("mesh", t("core-misc.call.waitingStation")));
         yield* parse(station);
         this.#local.outboxDelivering(station, thread, id);
         return yield* this.#inner.stations.post(station, thread, sentAs(entry), ctx, typeof entry.idem === "string" ? entry.idem : undefined);

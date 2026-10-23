@@ -2053,7 +2053,10 @@ data class Link (
 	val message: String? = null,
 	/// Found offline and tried again just now (a person's 重试, or the device back): still taken for down
 	/// until the try reaches it, its 重试 turning meanwhile.
-	val retrying: Boolean? = null
+	val retrying: Boolean? = null,
+	/// Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the
+	/// cloud says it is not online) | unreached (the cloud says it is). Absent otherwise, and from a core before it.
+	val cause: String? = null
 )
 
 /// A chat's link to its station while it is not as it should be: `tone` trouble (down; `detail` why) | busy (coming
@@ -2138,6 +2141,9 @@ data class ChatView (
 	val outbox: List<Outgoing>,
 	val link: Link,
 	val offline: Boolean,
+	/// Its station taken for down, the line over the composer: why, and that what is sent goes once it is
+	/// reached (the composer stays open). Absent otherwise, and from a core before it.
+	val offlineNote: String? = null,
 	/// One of its agents keeps watch: archiving it by hand asks first. Absent otherwise.
 	val watch: RowWatch? = null,
 	/// A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox.
@@ -2172,7 +2178,9 @@ data class StationState (
 	val name: String,
 	/// online | connecting | offline | error
 	val state: String,
-	val message: String? = null
+	val message: String? = null,
+	/// Offline, why as the device can tell (Link's `cause`). Absent otherwise.
+	val cause: String? = null
 )
 
 /// What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.

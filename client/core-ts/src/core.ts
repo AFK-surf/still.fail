@@ -192,6 +192,8 @@ export class Core {
         } else store.changed(topic);
       });
       inner.status.onChange(() => store.invalidateAll((t) => t.topic === "status"));
+      // Why a station down is not reached is said again as still.fail cloud is reached, or no longer is.
+      inner.status.onCloud = () => inner.stations?.recause();
       inner.scheduler = new Scheduler(inner.runner, inner.runner.root);
       inner.cloudSync = new CloudSync(inner);
       inner.status.setNames((address) => inner.cloudSync.nameOf(address));

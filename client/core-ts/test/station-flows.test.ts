@@ -2197,7 +2197,8 @@ test("how_a_station_was_last_time_is_there_as_its_link_starts_and_an_old_file_of
   subscribe(again, ui, 1, { topic: "link", station: ST });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(values.get(1), { state: "connecting", last: "offline" }, "as it was, from the start");
+  // Why, as the device can tell before it tries: still.fail cloud is reached and lists it online.
+  assert.deepEqual(values.get(1), { state: "connecting", last: "offline", cause: "unreached" }, "as it was, from the start");
   again.inner.data.forgetRecord("link", ST);
   await run(again.inner.data.written);
   again.close();

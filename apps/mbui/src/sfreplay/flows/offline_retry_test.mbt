@@ -11,7 +11,7 @@ test "12-offline-retry" {
     f.tap("发消息")
     f.type_text("断网时发出的消息 082947")
     // (the station out of reach as it goes, before the app knows it: a live run's step beside the app; once it knows,
-    // the composer is locked, Composer.kt's `locked = offline || archived`)
+    // what is sent waits for it in the outbox, 连上后发出, and goes once it is reached)
     f.peer("freeze")
     f.tap("icon:arrow-up")
     f.run_for(@sfapp.flight_ms)

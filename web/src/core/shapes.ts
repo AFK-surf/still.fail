@@ -2106,6 +2106,11 @@ export interface Link {
 	 * until the try reaches it, its 重试 turning meanwhile.
 	 */
 	retrying?: boolean;
+	/**
+	 * Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the
+	 * cloud says it is not online) | unreached (the cloud says it is). Absent otherwise, and from a core before it.
+	 */
+	cause?: string;
 }
 
 /**
@@ -2205,6 +2210,11 @@ export interface ChatView {
 	outbox: Outgoing[];
 	link: Link;
 	offline: boolean;
+	/**
+	 * Its station taken for down, the line over the composer: why, and that what is sent goes once it is
+	 * reached (the composer stays open). Absent otherwise, and from a core before it.
+	 */
+	offlineNote?: string;
 	/** One of its agents keeps watch: archiving it by hand asks first. Absent otherwise. */
 	watch?: RowWatch;
 	/** A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox. */
@@ -2245,6 +2255,8 @@ export interface StationState {
 	/** online | connecting | offline | error */
 	state: string;
 	message?: string;
+	/** Offline, why as the device can tell (Link's `cause`). Absent otherwise. */
+	cause?: string;
 }
 
 /**

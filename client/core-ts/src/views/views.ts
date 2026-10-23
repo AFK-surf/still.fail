@@ -81,6 +81,15 @@ export function down(link: J): boolean {
   return state === "offline" || (state === "connecting" && get(link, "last") === "offline");
 }
 
+/// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or
+/// the way between them.
+export function downWords(link: J, name: string): string {
+  const cause = get(link, "cause");
+  if (cause === "network") return t("core-views.station.offline_network", { name });
+  if (cause === "unreached") return t("core-views.station.unreachable", { name });
+  return t("core-views.station.offline", { name });
+}
+
 /// Whether a station's versions offer the 测试版 switch.
 export function betaOffered(overview: J, accountInBeta: () => boolean): boolean {
   const station = arr(get(overview, "updates")).find((v) => get(v, "id") === "station");
@@ -791,7 +800,8 @@ export class Views implements Owner {
     const v = this.value({ topic: "link", station });
     if (v === undefined) return { state: "connecting", message: null };
     if ("err" in v) return { state: "error", message: v.err.message };
-    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}) };
+    const cause = get(v.ok, "cause");
+    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}) };
   }
 
   #clock(): present.Clock {
@@ -847,6 +857,10 @@ export class Views implements Owner {
     const dismissed = get(get(prefs, "stationUpdatesDismissed"), station);
     v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager, this.stationName(station));
     if (Array.isArray(v.outbox)) v.outbox = looks.outboxWaits(v.outbox, v.stationUpdate);
+    if (v.offline === true) {
+      v.offlineNote = looks.offlineNote(v.link, this.stationName(station));
+      if (Array.isArray(v.outbox)) v.outbox = looks.outboxHeld(v.outbox);
+    }
     // Its sharing with the viewer's other workspaces, as asked here meanwhile.
     const shared = xshare.shown({ places: this.#core.places?.() ?? [], asked: (session) => this.#core.xshareAsked?.(station, session), me: str(get(v.me, "email")) }, station, v.thread);
     if (shared !== null) v.xshare = shared;
@@ -1027,7 +1041,7 @@ export class Views implements Owner {
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const hint = archiveHintOf(this.ok({ topic: "prefs" }) ?? null);
     const states: J[] = [];
-    const troubles: [string, string][] = [];
+    const troubles: [string, string, boolean?][] = [];
     const rows: J[] = [];
     let loading = false;
     const unread: string[] = [];
@@ -1049,7 +1063,7 @@ export class Views implements Owner {
         const link = this.link(s.address);
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
-        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, me, slackUsers, members_, watching, hint]);
+        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint]);
         for (const listedRaw of [...asked.rows, ...listed]) {
           const raw = asked.titled.get(get(listedRaw, "id")) ?? listedRaw;
           if (mine && get(raw, "mine") !== true) continue;
@@ -1086,17 +1100,20 @@ export class Views implements Owner {
           else state = "connecting";
         }
       }
-      if (state === "offline") troubles.push(["offline", t("core-views.station.offline", { name: s.name })]);
+      if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network"]);
       else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name })]);
       else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name })]);
-      states.push({ station: s.address, id: s.id, name: s.name, state, message });
+      const cause = state === "offline" ? get(this.link(s.address), "cause") : undefined;
+      states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}) });
     }
     const days = this.#days(rows);
     let trouble: J = null;
     if (troubles.length === 1) trouble = { text: troubles[0][1], state: troubles[0][0], retry: false };
     else if (troubles.length > 1) {
       const worst = ["error", "offline", "reconnecting"].find((w) => troubles.some(([s]) => s === w)) ?? "offline";
-      trouble = { text: t("core-views.station.troubles", { n: troubles.length }), state: worst, retry: false };
+      // Every one down as the device's network is: that, once, and not as so many stations amiss.
+      const network = troubles.every(([, , n]) => n === true);
+      trouble = { text: network ? t("core-views.station.network") : t("core-views.station.troubles", { n: troubles.length }), state: worst, retry: false };
     }
     const glyph = looks.glyph(states, days);
     const note = looks.listNote(states, days, loading, unread);
@@ -1183,7 +1200,7 @@ export class Views implements Owner {
     row.stationName = s.name;
     if (mark?.emoji) row.stationEmoji = mark.emoji;
     if (mark?.icon) row.stationIcon = mark.icon;
-    if (!s.online) row.offline = t("core-views.station.offline", { name: s.name });
+    if (!s.online) row.offline = downWords(this.link(s.address), s.name);
     else {
       const state = str(this.link(s.address).state) ?? "connecting";
       if (state === "error") row.reconnecting = t("core-views.station.retrying", { name: s.name });
@@ -1289,7 +1306,10 @@ export class Views implements Owner {
       const host = hostRaw === undefined ? null : present.host(hostRaw);
       const shown = overview === undefined ? null : present.decorate({ topic: "overview", station: s.address }, structuredClone(overview), c);
       let summary: string;
-      if (!s.online) {
+      const cause = get(this.link(s.address), "cause");
+      if (!s.online && cause === "network") summary = t("core-views.station.network");
+      else if (!s.online && cause === "unreached") summary = t("core-views.station.unreachable_short");
+      else if (!s.online) {
         summary = typeof s.lastSeen === "number" ? t("core-views.station.offline_since", { ago: format.relativeTime(s.lastSeen * 1000, c.now, c.offsetMin) }) : t("core-views.station.offline_short");
       } else if (host !== null) {
         const running = u64(get(get(overview, "counts"), "running")) ?? 0;

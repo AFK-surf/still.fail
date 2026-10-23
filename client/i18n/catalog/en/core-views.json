@@ -352,6 +352,9 @@
     "other": "{n} stations with issues"
   },
   "core-views.station.unreachable": "Can't reach {name}",
+  "core-views.station.unreachable_short": "Can't reach",
+  "core-views.station.offline_network": "No network: can't reach {name}",
+  "core-views.station.network": "No network connection",
   "core-views.station.not_listed": "This station isn't in the list",
   "core-views.unsent": "Not sent: {text}",
   "core-views.usage.archived": "Archived",

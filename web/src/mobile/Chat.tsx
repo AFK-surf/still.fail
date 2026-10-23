@@ -450,8 +450,10 @@ export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: 
  * a touch keyboard), and a round send button (a spinner while a new chat is made). The menu of chats goes over the
  * capsule (`menu`).
  */
-export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locked = false, onPlus, onType, onSend }: {
+export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locked = false, noFiles = locked, onPlus, onType, onSend }: {
   draft: Draft; draftKey: string | undefined; sessionKey: string | null; placeholder: string; locked?: boolean;
+  /** No file is taken in, though it may be written (its station down). */
+  noFiles?: boolean;
   onPlus: (plus: HTMLElement) => void; onType: () => void; onSend: () => void;
 }): { menu: ReactNode; bar: ReactNode; expanded: boolean } {
   const input = useRef<HTMLTextAreaElement>(null);
@@ -460,13 +462,13 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
   const ready = draft.ready && !locked;
   useEffect(() => { if (draft.focus > 0) input.current?.focus(); }, [draft.focus]);
   const { menu, field } = useComposerText({
-    draft, input, draftKey, sessionKey, locked, placeholder, className: css.mComposerField, lines: 6, layout: expanded,
+    draft, input, draftKey, sessionKey, locked, noFiles, placeholder, className: css.mComposerField, lines: 6, layout: expanded,
     enterSends: window.matchMedia("(hover: hover)").matches, onType, onSubmit: () => { if (ready) onSend(); },
   });
   const bar = (
     <div className={css.mComposerBar} data-expanded={expanded || undefined}
       onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
-      <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget)} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
+      <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget)} disabled={noFiles} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
       {field}
       <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label={t("web-mobile.chat.send")}>
         {draft.starting ? <Spinner className={partsCss.mSpinOnColor} /> : <ArrowUp size={18} />}
@@ -499,7 +501,7 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
     void sendDraft(draft, to, undefined);
   };
   useLayoutEffect(() => use({
-    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, archived: !!view.archived, send,
+    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived, send,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
