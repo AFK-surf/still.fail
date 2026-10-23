@@ -26,6 +26,7 @@ import * as station from "./station.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
 import { railView } from "../../../client/core-ts/src/rail.ts";
 import { lang } from "../i18n.ts";
+import { changed, tabsOf } from "../../../client/core-ts/src/chat-tabs.ts";
 import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
 import * as keymap from "../../../client/core-ts/src/keymap.ts";
@@ -98,7 +99,7 @@ function demoValueOf(topic: Topic): unknown {
     // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
     case "composer": return composerView(String(topic.key ?? ""));
     case "chats": return chatsView(chats);
-    case "chat": return chat ? chatView(chat, station.runs()) : null;
+    case "chat": return chat ? withTabs(chatView(chat, station.runs()), `${String(topic.station)}:${chat.key}`, chat.key) : null;
     case "slackApp": return station.slackApp();
     case "live": return chat ? liveView(chat) : null;
     case "history": return chat ? historyView(chat) : null;
@@ -286,6 +287,12 @@ const prefs: Record<string, unknown> = {};
 /** This device as a core told it would have it (prefs.ts device): what its keymap goes by. */
 const DEVICE = { app: window.stillfailDesktop ? "desktop" : "web", mac: /Mac|iPhone|iPad/.test(navigator.platform) };
 
+/** A chat's side-panel tabs, as the core says them (client/core-ts/src/chat-tabs.ts): from what is kept for it here. */
+function withTabs(view: ChatView, key: string, session: string): ChatView {
+  const kept = (prefs.chatTabs as Record<string, unknown> | undefined)?.[key];
+  return { ...view, tabs: tabsOf(kept, view.agents, view.noChat === true, session) };
+}
+
 /** A message no longer asking anything of the viewer. */
 const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
 
@@ -320,6 +327,23 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
     else delete prefs.keys;
     setTimeout(publish, 0);
     return { moved, said };
+  }
+  // A chat's tabs changed as the core changes them (chat-tabs.ts), kept with the prefs (`chatTabs`).
+  if (name.startsWith("chat.tabs.") && typeof params.chat === "string") {
+    const action = name.slice("chat.tabs.".length);
+    if (action !== "open" && action !== "close" && action !== "front" && action !== "clear") return null;
+    const key = params.chat;
+    const at = key.indexOf(":");
+    const session = at > 0 ? key.slice(at + 1) : "";
+    const chat = key.startsWith("new:") ? undefined : chats.find((c) => c.key === session);
+    const view = chat ? chatView(chat, station.runs()) : undefined;
+    const tabs = (prefs.chatTabs ?? {}) as Record<string, unknown>;
+    const next = changed(tabs[key], view?.agents ?? [], view?.noChat === true, view ? session : null, { action, tab: typeof params.tab === "string" ? params.tab : null, auto: params.auto !== false });
+    if (next) {
+      prefs.chatTabs = { ...tabs, [key]: next };
+      setTimeout(publish, 0);
+    }
+    return null;
   }
   if (name === "shareIn.open" && typeof params.source === "string") {
     return shareOpen(params.source, String(params.station), params.id as string | undefined, params.title as string | undefined, typeof params.key === "string" && params.key.startsWith("new:") ? params.key : undefined);

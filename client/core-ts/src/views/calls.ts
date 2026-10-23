@@ -6,6 +6,7 @@ import { Deferred, Effect } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers, hooks } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
+import * as chatTabs from "../chat-tabs.ts";
 import * as decisions from "../decisions.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
@@ -65,6 +66,20 @@ export class ViewCalls {
 
   get #local() {
     return this.#views.local;
+  }
+
+  /// The chat a side panel's tabs are kept by (`<station>:<session>`, or its thread's id), as its view has it now, and
+  /// its session; none for one not shown (a workspace's new chat's, `new:<workspace>`).
+  #chatOf(key: string): [J, string | null] {
+    const at = key.indexOf(":");
+    const station = at > 0 ? key.slice(0, at) : "";
+    if (!station.includes("/")) return [null, null];
+    const rest = key.slice(at + 1);
+    // As its pages subscribe to it: by its agent's key, or by its thread.
+    const bySession = this.#views.ok({ topic: "chat", station, session: rest }) ?? this.#views.ok({ topic: "chat", station, thread: null, session: rest });
+    if (bySession !== undefined) return [bySession, rest];
+    const thread = /^[0-9]+$/.test(rest) ? (this.#views.ok({ topic: "chat", station, thread: Number(rest) }) ?? this.#views.ok({ topic: "chat", station, thread: Number(rest), session: null })) : undefined;
+    return [thread ?? null, null];
   }
 
   /// Posts an outgoing message into a chat: it leaves the outbox as the chat's entries reach it; a failure leaves it
@@ -404,6 +419,19 @@ export class ViewCalls {
         const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
         inner.data.endModels(station, c.id);
         return yield* settle(result);
+      });
+    };
+    handlers.chatTabs = (_inner, call) => {
+      const c = call as Of<"chatTabs">;
+      return Effect.try({
+        try: () => {
+          const kept = get(get(inner.data.get({ topic: "prefs" }), "chatTabs"), c.chat);
+          const [chat, session] = this.#chatOf(c.chat);
+          const next = chatTabs.changed(kept, arr(get(chat, "agents")), get(chat, "noChat") === true, session, { action: c.action, tab: c.tab, auto: c.auto });
+          if (next !== null) prefs.set(inner.data, { chatTabs: { [c.chat]: next } }, false, inner.host.nowMs());
+          return null;
+        },
+        catch: asCoreError,
       });
     };
     hooks.updateNoticeOpen = (_inner, station, open) => views.updateNoticeOpen(station, open);

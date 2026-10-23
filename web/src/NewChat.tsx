@@ -19,7 +19,7 @@ import { addProfilePath } from "./pages/AddProfile.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
-import { keepTabs } from "./chatTabs.ts";
+import { changeTabs } from "./chatTabs.ts";
 import { usePrefs } from "./prefs.ts";
 import { useShortcut } from "./keymap.ts";
 import { DriveTab } from "./pages/DriveTab.tsx";
@@ -124,9 +124,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
   const open = drive && kept?.tabs.includes(FILES) ? [FILES] : [];
   const side = useSidePanel(open, open[0] ?? null);
   const setFiles = (on: boolean) => {
-    const next = on ? [FILES] : [];
-    side.changing(next);
-    keepTabs(tabsKey, { tabs: next, active: on ? FILES : null });
+    side.changing(on);
+    changeTabs(tabsKey, on ? "open" : "close", FILES);
   };
   useShortcut("panel.close", open.length ? () => setFiles(false) : null);
   const drop = useChatDrop(draftKey, station.address);
@@ -150,7 +149,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
         carry(`${station.address}:${key}`);
         // Made here, the chat opens without its agent's history beside: it is opened from the agent when wanted. The
         // files open here stay open beside it.
-        keepTabs(`${station.address}:${key}`, open.length ? { tabs: [FILES], active: FILES } : { tabs: [], active: null });
+        changeTabs(`${station.address}:${key}`, "clear");
+        if (open.length) changeTabs(`${station.address}:${key}`, "open", FILES);
         onCreated(station.address, key);
       }} />
   );
@@ -211,7 +211,7 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
             {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
             <div className={css.newChatOffer} data-made-leave="fade">
               <MachineSessions name={station.name} models={view.models} onContinued={(key) => {
-                keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
+                changeTabs(`${station.address}:${key}`, "clear");
                 onCreated(station.address, key);
               }} />
             </div>

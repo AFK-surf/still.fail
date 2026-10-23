@@ -15,7 +15,7 @@ import { memo, useEffect, useRef, useState, type ReactElement, type ReactNode } 
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
-import { keepTabs } from "../chatTabs.ts";
+import { changeTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
 import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
@@ -114,18 +114,19 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   const agents = chatView.value?.agents ?? [];
   // One history tab per agent, by its session's key (a chat may have several agents, each with its own): opened from
   // the agent (its avatar, its name, a row of what it does), closed alone, and with no tab open the panel goes away.
-  // Each chat keeps its own tabs. One not opened before opens none (its agents' histories open from them when wanted),
-  // except an agent with no chat yet, here or in Slack (the core's `noChat`): its page shows its history. Where the
-  // panel would lie over the chat (the styles' `max-width: 1100px`), none opens by itself: the chat comes first.
+  // Each chat keeps its own tabs. Which are open and in front is the core's (the chat's `tabs`: those kept for it that
+  // it has, client/core-ts/src/chat-tabs.ts), as are the changes (`chat.tabs.*`, changeTabs). One not opened before
+  // opens none (its agents' histories open from them when wanted), except an agent with no chat yet, here or in Slack:
+  // its page shows its history (`tabs.auto`). Where the panel would lie over the chat (the styles' `max-width: 1100px`),
+  // none opens by itself: the chat comes first.
   const chatKey = `${station.address}:${"thread" in of ? of.thread : of.session}`;
-  // Kept by the core for each chat (its prefs' `chatTabs`): read from there, written there (keepTabs).
-  const kept = usePrefs((p) => p.chatTabs[chatKey]);
-  const chosen = kept?.tabs ?? null;
   const [folded] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
-  const view = chatView.value;
-  const tabs = chosen ?? (view?.noChat && !folded && "session" in of ? [of.session] : []);
-  const active = kept?.active ?? null;
-  // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
+  const said = chatView.value?.tabs;
+  const bare = !!said?.auto && folded;
+  // The tabs as last left while the chat is not read yet: the page holds the panel's place instead of it coming in later.
+  const kept = usePrefs((p) => (said ? undefined : p.chatTabs[chatKey]?.tabs));
+  const open = said ? (bare ? NO_TABS : said.open) : kept ?? NO_TABS;
+  const shown = said && !bare ? said.shown ?? null : null;
   // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.
   const jobs = agents.flatMap((a) => a.jobs ?? []);
   // As its pages show them (the core's `chatJobs`).
@@ -134,29 +135,18 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   useEffect(() => {
     for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
-  const known = agents.length ? tabs.filter((key) => key === JOBS || key === FILES || key === LETTERS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   const isAgent = (key: string) => agents.some((a) => a.session.key === key);
-  const open = known;
   // The job picked in the 任务 tab.
   const [jobPicked, pickJob] = useState<string | null>(null);
-  const shown = active && open.includes(active) ? active : open[0] ?? null;
   const sidePanel = useSidePanel(open, shown);
   const { pageRef, panelRef, leaving } = sidePanel;
-  // Tabs and the one in front change together, and are kept for this chat in one write.
-  const commit = (next: string[], front: string | null) => {
-    sidePanel.changing(next);
-    keepTabs(chatKey, { tabs: next, active: front });
+  // Asked of the core, the panel told first whether any tab will be open (it slides in or out as they come).
+  const change = (action: "open" | "close" | "front" | "clear", key: string | undefined, any: boolean) => {
+    sidePanel.changing(any);
+    changeTabs(chatKey, action, key, !folded);
   };
-  const saveTabs = (next: string[]) => commit(next, active);
-  const setActive = (key: string | null) => commit(open, key);
-  const openTab = (key: string) => {
-    // An agent's history goes after the histories already open, before the other tabs.
-    if (isAgent(key) && !open.includes(key)) {
-      const at = open.findLastIndex(isAgent) + 1;
-      return commit([...open.slice(0, at), key, ...open.slice(at)], key);
-    }
-    commit(open.includes(key) ? open : [...open, key], key);
-  };
+  const setActive = (key: string) => change("front", key, true);
+  const openTab = (key: string) => change("open", key, true);
   // A web service's or a visualization's tab closed ends it: not left small in the corner (Previews.tsx).
   const endPreview = (key: string) => {
     const file = fileOf(key);
@@ -165,13 +155,12 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   };
   const closeTab = (key: string) => {
     endPreview(key);
-    const next = open.filter((tab) => tab !== key);
-    commit(next, shown === key ? next.at(-1) ?? null : active);
+    change("close", key, open.some((tab) => tab !== key));
   };
   // The panel closed closes all its tabs.
   const closePanel = () => {
     for (const key of open) endPreview(key);
-    saveTabs([]);
+    change("clear", undefined, false);
   };
   const openJobs = (job?: string) => {
     if (job) pickJob(job);
@@ -561,6 +550,8 @@ function useChatAgent(station: string, session: string, key: string): ChatAgent 
   return useTopicSelect<ChatView, ChatAgent | undefined>({ topic: "chat", station, session }, (s) => s.value?.agents.find((a) => a.session.key === key));
 }
 
+/** No tab open. */
+const NO_TABS: string[] = [];
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
 /** The agent 往来 tab's key: what the chat's agents and other chats' wrote each other (Letters.tsx). */

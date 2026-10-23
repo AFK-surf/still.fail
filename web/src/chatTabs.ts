@@ -1,17 +1,14 @@
-// Which history tabs each chat has open, and which one is in front: each chat keeps its own (the core keeps the latest
-// 200 chats'), by `station:session` (or `station:thread`), as its page names it. Kept on this device (prefs.ts).
-import { prefs, setPrefs } from "./prefs.ts";
+// Which side-panel tabs each chat has open, and which one is in front: the core's (client/core-ts/src/chat-tabs.ts).
+// Each chat keeps its own on this device (prefs `chatTabs`, the latest 200 chats'), by `station:session` (or
+// `station:thread`) as its page names it, `new:<workspace>` a workspace's new chat's; a chat's view says which of them
+// are open and in front (`tabs`). These ask the core to change them.
+import { core } from "./core/react.ts";
 
-export type Kept = { tabs: string[]; active: string | null };
-
-export function keepTabs(chat: string, kept: Kept): void {
-  setPrefs({ chatTabs: { [chat]: { tabs: kept.tabs, ...(kept.active ? { active: kept.active } : {}) } } });
-}
-
-/** Closes the tab `tab` of `chat`'s, while its page is not in view (the one in front, if it was, the last left). */
-export function dropTab(chat: string, tab: string): void {
-  const now = prefs().chatTabs[chat];
-  if (!now?.tabs.includes(tab)) return;
-  const tabs = now.tabs.filter((k) => k !== tab);
-  keepTabs(chat, { tabs, active: now.active === tab ? tabs.at(-1) ?? null : now.active ?? null });
+/**
+ * Changes `chat`'s tabs: `tab` opened (in front), closed (the one in front, if it was, the last left) or brought to the
+ * front, or all closed (`clear`). `auto: false` where the panel would lie over the chat: it goes from none of those the
+ * chat opens by itself (its view's `tabs.auto`), as it shows none of them.
+ */
+export function changeTabs(chat: string, action: "open" | "close" | "front" | "clear", tab?: string, auto = true): void {
+  core().call(`chat.tabs.${action}`, { chat, ...(tab !== undefined ? { tab } : {}), ...(auto ? {} : { auto: false }) }).catch(() => undefined);
 }

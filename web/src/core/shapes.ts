@@ -2010,6 +2010,23 @@ export interface ChatShare {
 	places: ChatSharePlace[];
 }
 
+/** A chat's side panel (`chat.tabs.open/close/front/clear` change it). */
+export interface ChatTabs {
+	/**
+	 * The tabs open beside it, in their order, of those kept the ones it has (an agent's history by its session's key,
+	 * `service:<job>` one of its agents' services, `jobs`, `files`, `letters`, `file:[…]` a visualization); all kept while its
+	 * agents are not known. None kept: none, or where its agent has no chat yet its history (`auto`).
+	 */
+	open: string[];
+	/** The one in front: as kept, else the first; none with none open. */
+	shown?: string;
+	/**
+	 * None kept: `open` is what the chat opens by itself (its agent's history, it having no chat yet). A client where
+	 * the panel would lie over the chat shows none, and changes them with `auto: false`.
+	 */
+	auto?: boolean;
+}
+
 /** Who is looking: the account that reaches the workspace, by its email. */
 export interface Me {
 	id?: string;
@@ -2258,6 +2275,11 @@ export interface ChatView {
 	xshare?: ChatShare;
 	/** Its public snapshots (docs/public-share.md); absent while it has no chat. */
 	publish?: ChatPublish;
+	/**
+	 * Its side panel's tabs as this device keeps them for it (prefs `chatTabs`, chat-tabs.ts); absent from a core
+	 * before it.
+	 */
+	tabs?: ChatTabs;
 }
 
 export interface StationState {
