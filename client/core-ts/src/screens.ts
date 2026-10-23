@@ -120,6 +120,13 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
 }
 
 /// A person's input as the station takes it (station/src/screens/source.ts `ScreenInput`), or why it is none.
+/// A display's scale as a station says it (`state.scale`), checked: null when it is not one.
+function scaleOf(v: unknown): { percent: number; recommended: number; steps: number[] } | null {
+  const pct = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 100 && n <= 500;
+  if (!isObject(v) || !pct(v.percent) || !pct(v.recommended) || !Array.isArray(v.steps) || v.steps.length === 0 || !v.steps.every(pct)) return null;
+  return { percent: v.percent, recommended: v.recommended, steps: [...v.steps] };
+}
+
 export function checkInput(input: unknown): J {
   const bad = () => CoreError.invalid(t("core-misc.screen.badInput"));
   if (!isObject(input)) throw bad();
@@ -146,6 +153,10 @@ export function checkInput(input: unknown): J {
     case "text":
       if (typeof input.text !== "string" || input.text === "" || input.text.length > TEXT_MAX) throw bad();
       return { t: "text", text: input.text };
+    // The display's scale, one of its steps (a screen whose state says `scale`).
+    case "scale":
+      if (!finite(input.percent) || !Number.isInteger(input.percent) || input.percent < 100 || input.percent > 500) throw bad();
+      return { t: "scale", percent: input.percent };
     // A file dropped into the view, shown in the machine's file manager (a screen whose `drop` says `reveal`).
     case "reveal":
       if (typeof input.path !== "string" || input.path === "" || input.path.length > 4096) throw bad();
@@ -385,6 +396,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     const state: J = { phase: "connecting", title: "", control: false, may, others: [], line: "" };
     // Who is on it as the view's own stream says (else as the station's list does).
     let onIt: string[] | null = null;
+    // Its display's scale as the stream last said (a Windows station's desktop, to a view that drives it).
+    let displayScale: { percent: number; recommended: number; steps: number[] } | null = null;
     let driving: string[] | null = null;
     // Decided once the station's list is read (below) for a view opened with no `control` asked.
     let wanted = c.ask.control && may;
@@ -427,7 +440,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       state.clipboard = clipboard;
       if (drop) state.drop = drop;
       else delete state.drop;
-      progress({ state: { ...state, others: [...others], controllers: [...controllers], clipboard: [...clipboard], ...(drop ? { drop: { ...drop } } : {}) } });
+      const scale = state.control ? displayScale : null;
+      if (scale) state.scale = scale;
+      else delete state.scale;
+      progress({ state: { ...state, others: [...others], controllers: [...controllers], clipboard: [...clipboard], ...(drop ? { drop: { ...drop } } : {}), ...(scale ? { scale: { ...scale, steps: [...scale.steps] } } : {}) } });
     };
     const write = (bytes: Uint8Array) => {
       if (out !== null) Queue.offerUnsafe(out, bytes);
@@ -563,6 +579,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (access) state.access = access;
                 if (Array.isArray(s.viewers)) onIt = names(s.viewers);
                 if (Array.isArray(s.controlledBy)) driving = names(s.controlledBy);
+                const scale = scaleOf(s.scale);
+                if (scale) displayScale = scale;
                 if (s.ended !== undefined && s.ended !== null && s.ended !== false) {
                   // The station stopping (an update, a restart): opened again once it is back.
                   if (s.ended === "stopping") return { dropped: true, seen } as Outcome;

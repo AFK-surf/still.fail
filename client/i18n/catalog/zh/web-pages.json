@@ -1499,6 +1499,8 @@
   "web-pages.screen.window": "在新窗口打开",
   "web-pages.screen.panel": "控制中心",
   "web-pages.screen.quality": "画质",
+  "web-pages.screen.scale": "缩放",
+  "web-pages.screen.scaleRecommended": "{percent}%（推荐）",
   "web-pages.screen.quality.auto": "自动",
   "web-pages.screen.quality.smooth": "流畅",
   "web-pages.screen.quality.hd": "高清",

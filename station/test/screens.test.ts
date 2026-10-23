@@ -238,6 +238,42 @@ test("the pointer a source says beside its pictures goes to the view as its stat
   assert.equal(view.pointer, null, "no longer heard once the view ended");
 });
 
+test("the display's scale: told to a person who drives it, set as they ask; a read-only member neither hears nor sets it", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  let scale = { percent: 300, recommended: 150, steps: [100, 125, 150, 175, 200, 225, 250, 300, 350] };
+  const set: number[] = [];
+  Object.assign(source, {
+    scale: async () => scale,
+    setScale: async (percent: number) => (set.push(percent), (scale = { ...scale, percent })),
+  });
+  hub.add(source);
+  const driver = await open(hub, member);
+  const states: any[] = [];
+  await until(driver.frames, KIND.video, states);
+  while (!states.some((s) => s.scale)) states.push(json(await until(driver.frames, KIND.state)));
+  assert.deepEqual(states.find((s) => s.scale).scale, { percent: 300, recommended: 150, steps: scale.steps });
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "scale", percent: 150 }))));
+  // Not a percent Windows has, or not a number: dropped before the source.
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "scale", percent: 1000 }))));
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "scale", percent: "150" }))));
+  for (;;) {
+    const got = await driver.frames.next();
+    if (got?.kind === KIND.state && json(got.payload).scale?.percent === 150) break;
+  }
+  assert.deepEqual(set, [150]);
+  const viewer = await open(hub, reader, { codecs: ["h264"], control: true });
+  const seen: any[] = [];
+  await until(viewer.frames, KIND.video, seen);
+  await viewer.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "scale", percent: 100 }))));
+  await settle();
+  assert.deepEqual(set, [150]);
+  assert.ok(!seen.some((s) => s.scale));
+  await driver.stream.finish();
+  await viewer.stream.finish();
+  await Promise.all([driver.served, viewer.served]);
+});
+
 test("input reaches the source from a member who asked to drive, checked; a read-only member's is dropped", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
@@ -572,6 +608,15 @@ const FAKE_SCREEN = `
 const fs = require("node:fs");
 const [mode, log] = process.argv.slice(2);
 if (mode === "status") { console.log(JSON.stringify({ ok: true, display: { id: 1, width: 2560, height: 1600 }, capture: true })); process.exit(0); }
+if (mode === "scale") {
+  const kept = log + ".scale", steps = [100, 125, 150, 175, 200, 225, 250, 300, 350], asked = process.argv[4];
+  if (asked !== undefined) {
+    if (!steps.includes(Number(asked))) { console.log(JSON.stringify({ error: asked + "% is not a step of this display" })); process.exit(0); }
+    fs.writeFileSync(kept, asked); fs.appendFileSync(log, JSON.stringify({ scale: Number(asked) }) + "\\n");
+  }
+  console.log(JSON.stringify({ percent: fs.existsSync(kept) ? Number(fs.readFileSync(kept, "utf8")) : 300, recommended: 150, steps }));
+  process.exit(0);
+}
 const out = (kind, payload) => { const head = Buffer.alloc(5); head[0] = kind; head.writeUInt32BE(payload.length, 1); process.stdout.write(Buffer.concat([head, payload])); };
 let carry = Buffer.alloc(0), request = null, n = 0;
 process.stdin.on("data", (chunk) => {
@@ -669,6 +714,35 @@ test("Windows' desktop: a view whose process ends by itself goes on in a new one
   view.close();
   assert.equal(await view.next(), null);
   assert.equal(views, 4);
+  await desktop.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("Windows' desktop: the display's scale set while viewed, put back as it was once the last view ends", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sf-winscreen-"));
+  const script = join(dir, "fake-screen.cjs");
+  const log = join(dir, "log");
+  writeFileSync(script, FAKE_SCREEN);
+  writeFileSync(log, "");
+  const start = (_binary: string, args: string[]) => spawn(process.execPath, [script, args[0]!, log, ...args.slice(1)], { stdio: ["pipe", "pipe", "inherit"] });
+  const desktop = new WindowsDesktop({ binary: "stillfail-screen.exe", changed: () => {}, start });
+  const steps = [100, 125, 150, 175, 200, 225, 250, 300, 350];
+  assert.deepEqual(await desktop.scale(), { percent: 300, recommended: 150, steps });
+  const a = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264"] });
+  const b = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264"] });
+  assert.deepEqual(await desktop.setScale(150), { percent: 150, recommended: 150, steps });
+  assert.deepEqual(await desktop.setScale(125), { percent: 125, recommended: 150, steps });
+  // Not one of its steps: refused as stillfail-screen says, nothing changed.
+  await assert.rejects(desktop.setScale(130), /130% is not a step/);
+  assert.equal((await desktop.scale())?.percent, 125);
+  // One view left: as it was set.
+  a.close();
+  assert.equal((await desktop.scale())?.percent, 125);
+  // The last one gone: as it was before the first change (300%, not 150%).
+  b.close();
+  assert.equal((await desktop.scale())?.percent, 300);
+  const scales = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((l) => "scale" in l).map((l) => l.scale);
+  assert.deepEqual(scales, [150, 125, 300]);
   await desktop.close();
   rmSync(dir, { recursive: true, force: true });
 });

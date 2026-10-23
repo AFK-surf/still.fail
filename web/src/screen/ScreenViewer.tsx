@@ -26,7 +26,7 @@ import { PAD_SETTLE_MS, PadPointer, Zoom, fitIn } from "./zoom.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { useStationNet } from "../cloud/StationCards.tsx";
 import { useStationOs } from "../api.ts";
-import { ControlCenter, NetChip, combosFor, type Combo, type Meter } from "./ScreenPanel.tsx";
+import { ControlCenter, NetChip, ScaleButton, combosFor, type Combo, type Meter } from "./ScreenPanel.tsx";
 import { useScreens, useTabActions } from "./ScreenList.tsx";
 import { CopiedNote, DropVeil, SendsPanel, clipOf, pasted, putClip, useSends, type Clip } from "./Transfer.tsx";
 import * as css from "./ScreenViewer.css.ts";
@@ -358,10 +358,13 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   const sendCombo = (c: Combo) => {
     for (const kind of ["down", "up"] as const) tell("screen.input", { view: view.current, input: { t: "key", kind, key: c.key, code: c.code, mods: c.mods } });
   };
+  // The screen's display scale, while driving one whose station changes it (Windows): set there, said back.
+  const scale = driving ? shown?.scale : undefined;
+  const setScale = (percent: number) => tell("screen.input", { view: view.current, input: { t: "scale", percent } });
   const viewTools = !over ? (
     <>
       {live && <NetChip net={net} shown={shown} meter={meter} os={os} />}
-      <ControlCenter quality={quality} onQuality={(q) => setPrefs({ screenQuality: q === "auto" ? null : q })}
+      <ControlCenter quality={quality} onQuality={(q) => setPrefs({ screenQuality: q === "auto" ? null : q })} scale={scale} onScale={setScale}
         combos={driving ? combosFor(os) : []} onCombo={sendCombo} onSend={drop ? () => files.current?.click() : undefined}
         onWindow={onWindow} full={full} onFull={goFull} chat={tab.chat} onClose={tab.close} onLeave={onBack} />
     </>
@@ -459,6 +462,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
                   <Keyboard size={18} />
                 </button>
               </Tip>
+              {scale && <ScaleButton scale={scale} onScale={setScale} className={css.keyboard} />}
               {clipTypes.includes("text") && (
                 <Tip label={t("web-pages.screen.paste")}>
                   <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.paste")} onClick={pasteHere}><Paste size={18} /></button>

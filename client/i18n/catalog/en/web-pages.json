@@ -1574,6 +1574,8 @@
   "web-pages.screen.window": "Open in new window",
   "web-pages.screen.panel": "Controls",
   "web-pages.screen.quality": "Quality",
+  "web-pages.screen.scale": "Scale",
+  "web-pages.screen.scaleRecommended": "{percent}% (recommended)",
   "web-pages.screen.quality.auto": "Auto",
   "web-pages.screen.quality.smooth": "Smooth",
   "web-pages.screen.quality.hd": "HD",

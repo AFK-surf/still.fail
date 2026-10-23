@@ -98,7 +98,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -486,9 +492,46 @@ private fun FullTools(session: ScreenSession, typing: Boolean, keyboard: () -> U
             ) { session.control(!session.controlling) }
             if (session.driving) PadButton(session, tools)
             ClipButtons(session, tools)
+            ScaleButton(session)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
             FullButton(tools)
         }
+    }
+}
+
+/**
+ * 缩放: the screen's display scale (a Windows station's), its steps in a list over the button (under it when it is
+ * high on the screen), the one now checked, 推荐 beside the one its system recommends.
+ */
+@Composable
+private fun ScaleButton(session: ScreenSession) {
+    val scale = session.scale ?: return
+    var open by remember { mutableStateOf(false) }
+    Box {
+        RoundButton(Icons.TextSize, t("android-misc.screen.scale"), pressed = open) { open = !open }
+        if (open) Popup(popupPositionProvider = AboveOrBelow, onDismissRequest = { open = false }, properties = PopupProperties(focusable = true)) {
+            Column(Modifier.width(168.dp).shadow(18.dp, Smooth(20.dp)).clip(Smooth(20.dp)).background(C.surface).padding(6.dp)) {
+                for (step in scale.steps) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(Smooth(14.dp)).clickable { open = false; session.setScale(step) }.padding(horizontal = 10.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(if (step == scale.recommended) t("android-misc.screen.scaleRecommended", "percent" to step.toString()) else "$step%", fontSize = 15.sp, color = C.ink)
+                        if (step == scale.percent) IconIn(Icons.Check, 16.dp) else Box(Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A list over its button, or under it when the button is in the window's upper half. */
+private object AboveOrBelow : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+        val x = (anchorBounds.center.x - popupContentSize.width / 2).coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val below = anchorBounds.center.y < windowSize.height / 2
+        val y = if (below) anchorBounds.bottom else anchorBounds.top - popupContentSize.height
+        return IntOffset(x, y.coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0)))
     }
 }
 
@@ -506,6 +549,7 @@ private fun Foot(session: ScreenSession, held: HeldKeys, typing: Boolean, keyboa
     ) {
         PadButton(session, tools)
         KeysRow(session, held, Modifier.weight(1f))
+        ScaleButton(session)
         RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
     }
 }
@@ -578,6 +622,7 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
             ) { session.control(!session.controlling) }
             if (session.driving) PadButton(session, tools)
             ClipButtons(session, tools)
+            ScaleButton(session)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
             if (open(session)) FullButton(tools)
         }
