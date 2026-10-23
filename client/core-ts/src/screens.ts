@@ -579,6 +579,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (access) state.access = access;
                 if (Array.isArray(s.viewers)) onIt = names(s.viewers);
                 if (Array.isArray(s.controlledBy)) driving = names(s.controlledBy);
+                const ms = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 600_000;
+                if (isObject(s.latency) && ms(s.latency.frame) && ms(s.latency.before)) state.latency = { frame: Math.round(s.latency.frame), before: Math.round(s.latency.before) };
                 if (isObject(s.video) && typeof s.video.capture === "string") {
                   state.video = {
                     capture: s.video.capture.slice(0, 80),

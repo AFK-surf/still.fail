@@ -1521,6 +1521,8 @@
   "web-pages.screen.stats": "连接",
   "web-pages.screen.stat.path": "连接方式",
   "web-pages.screen.stat.loss": "丢包率",
+  "web-pages.screen.stat.frameLatency": "帧延时",
+  "web-pages.screen.stat.beforeSent": "采集到发出",
   "web-pages.screen.stat.fps": "帧率",
   "web-pages.screen.stat.bitrate": "带宽占用",
   "web-pages.screen.stat.picture": "分辨率",

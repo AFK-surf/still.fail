@@ -74,6 +74,8 @@ export function NetChip({ net, shown, meter, os }: { net: StationNet | null; sho
   const level = net?.rtt?.level;
   const groups: [string, ReactNode][][] = [
     [
+      [t("web-pages.screen.stat.frameLatency"), shown?.latency ? `${shown.latency.frame} ms` : "—"],
+      [t("web-pages.screen.stat.beforeSent"), shown?.latency ? `${shown.latency.before} ms` : "—"],
       [t("web-pages.screen.stat.fps"), rate ? String(Math.round(rate.fps)) : "—"],
       [t("web-pages.screen.stat.bitrate"), rate ? bitrate(rate.bps) : "—"],
       [t("web-pages.screen.stat.loss"), net?.loss ? <span className={css.figure} data-level={net.loss.level}>{net.loss.text}</span> : "0%"],

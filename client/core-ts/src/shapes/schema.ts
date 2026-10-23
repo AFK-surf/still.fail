@@ -1520,6 +1520,10 @@ export const SHAPES: Record<string, Shape> = {
     ["y", "f64", { doc: "0..1 of the frame's height." }],
     ["shape", opt("String"), { doc: "A CSS cursor name (`default`, `pointer`, `text`…)." }],
   ], { doc: "Where a screen's pointer is, as its station says." }),
+  ScreenLatency: struct([
+    ["frame", "u32", { doc: "From a picture's capture to its drawing on this device, in ms (the median of the last 2 s)." }],
+    ["before", "u32", { doc: "Of it, from the capture to its going out of the station: waiting to be asked for, encoded." }],
+  ], { doc: "How late a screen view's frames are, as its station measures them from their acknowledgements." }),
   ScreenVideo: struct([
     ["capture", "String", { doc: "What captures the screen's pictures: ScreenCaptureKit, Windows.Graphics.Capture, Chrome screencast." }],
     ["encoder", opt("String"), { doc: "The encoder as the station names it." }],
@@ -1548,6 +1552,7 @@ export const SHAPES: Record<string, Shape> = {
     ["access", opt("ScreenAccess"), { doc: "What the station lacks for it, when it says (with `denied`, or while it is seen but cannot be driven)." }],
     ["clipboard", vec("String"), { default: true, doc: "While driving it: the clipboard types it carries both ways (`text`, `png`): a paste goes with\n`screen.clipboard`, a copy made on it comes as the call's `{clipboard}` value. None while only looking." }],
     ["drop", opt("ScreenDrop"), { doc: "While driving it: where a file dropped into the view goes (none while only looking, or from a station before files)." }],
+    ["latency", opt("ScreenLatency"), { doc: "How late its frames are, said each second while they come (none from a station before it)." }],
     ["video", opt("ScreenVideo"), { doc: "How its pictures are made, as the station said as the view opened (none from a station before it)." }],
     ["scale", opt("ScreenScale"), { doc: "While driving it: its display's scale, set with `screen.input` `{t: \"scale\", percent}` and put back as it was\nonce nobody views it (a Windows station's desktop; none elsewhere, or while only looking)." }],
   ], { doc: "A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is." }),

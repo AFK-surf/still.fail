@@ -1596,6 +1596,8 @@
   "web-pages.screen.stats": "Connection",
   "web-pages.screen.stat.path": "Route",
   "web-pages.screen.stat.loss": "Packet loss",
+  "web-pages.screen.stat.frameLatency": "Frame latency",
+  "web-pages.screen.stat.beforeSent": "Capture to sent",
   "web-pages.screen.stat.fps": "Frame rate",
   "web-pages.screen.stat.bitrate": "Bandwidth",
   "web-pages.screen.stat.picture": "Resolution",

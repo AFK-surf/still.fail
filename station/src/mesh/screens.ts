@@ -19,7 +19,7 @@ import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "..
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenInput, type ScreenSource, type ScreenView, CLIP_PNG_MAX, clipFits } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
-import { Pacer, START_RATE, Sizer, ownRate } from "./screen-pace.ts";
+import { FrameLatency, Pacer, START_RATE, Sizer, ownRate } from "./screen-pace.ts";
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
@@ -239,6 +239,8 @@ class ViewSession {
   readonly access: AccessShown | undefined;
   readonly pacer: Pacer;
   readonly sizer: Sizer;
+  /// How late its frames are (the statistics' 帧延时).
+  readonly latency = new FrameLatency();
   /// The picture's size, as its latest config said (H.264, H.265: what the bounds go by).
   #size: { width: number; height: number } | null = null;
 
@@ -373,6 +375,7 @@ class ViewSession {
         void this.#send(KIND.config, configPayload(next.config));
       }
       this.pacer.sent(next.ts, next.data.length);
+      this.latency.sent(next.ts);
       await this.#send(KIND.video, videoPayload(next));
     }
   }
@@ -392,7 +395,11 @@ class ViewSession {
         switch (got.kind) {
           case KIND.ack: {
             if (got.payload.length < 8) break;
-            this.pacer.acked(Number(got.payload.readBigUInt64BE(0)));
+            const acked = Number(got.payload.readBigUInt64BE(0));
+            this.pacer.acked(acked);
+            this.latency.acked(acked, this.pacer.rtt() ?? 0);
+            const latency = this.latency.take();
+            if (latency) void this.#state({ latency });
             this.#pace();
             this.#wake();
             break;

@@ -200,3 +200,58 @@ export class Sizer {
     return this.#low ? { ...LOW_BOUNDS } : { ...this.#asked };
   }
 }
+
+/// How late a view's frames are, said every LATENCY_EVERY_MS while frames go: from a picture's capture to its drawing on
+/// the device (`frame`; the acknowledgement's arrival less half the link's quickest round trip, the way back), and from
+/// its capture to its going out (`before`: waiting to be asked for, encoded; an encoder that holds a picture back until
+/// the next comes shows here). Medians of the last LATENCY_WINDOW_MS. A frame's timestamp is its capture time on the
+/// host's own clock (still.fail Helper's mach time, stillfail-screen's QPC: what `now` reads here); one off it by more
+/// than 10 s (a source with a clock of its own) is not counted.
+export const LATENCY_EVERY_MS = 1000;
+export const LATENCY_WINDOW_MS = 2000;
+
+/// The host's clock in ms, as the helpers stamp frames (process.hrtime: mach_absolute_time, QueryPerformanceCounter).
+export const hostNow = () => Number(process.hrtime.bigint()) / 1e6;
+
+export class FrameLatency {
+  readonly #now: () => number;
+  readonly #out = new Map<number, { capture: number; sent: number }>();
+  #samples: { at: number; frame: number; before: number }[] = [];
+  #said = -Infinity;
+  constructor(now: () => number = hostNow) {
+    this.#now = now;
+  }
+
+  /// A frame of capture time `ts` (µs) went out now.
+  sent(ts: number) {
+    const now = this.#now();
+    const capture = ts / 1000;
+    if (now - capture < 0 || now - capture > 10_000) return;
+    this.#out.set(ts, { capture, sent: now });
+  }
+
+  /// The client drew every frame up to `ts`; `rtt`: the link's quickest round trip (ms), the way back its half.
+  acked(ts: number, rtt: number) {
+    const now = this.#now();
+    let newest: { capture: number; sent: number } | null = null;
+    for (const [t, f] of this.#out) {
+      if (t > ts) continue;
+      if (t === ts) newest = f;
+      this.#out.delete(t);
+    }
+    if (newest === null) return;
+    this.#samples.push({ at: now, frame: Math.max(0, now - rtt / 2 - newest.capture), before: newest.sent - newest.capture });
+    while (this.#samples.length > 0 && this.#samples[0]!.at < now - LATENCY_WINDOW_MS) this.#samples.shift();
+  }
+
+  /// What to say now (once each LATENCY_EVERY_MS, when there are frames to say it of): the medians, in whole ms.
+  take(): { frame: number; before: number } | null {
+    const now = this.#now();
+    // A still screen sends nothing: what is older than the window is not said again.
+    while (this.#samples.length > 0 && this.#samples[0]!.at < now - LATENCY_WINDOW_MS) this.#samples.shift();
+    if (this.#samples.length === 0 || now - this.#said < LATENCY_EVERY_MS) return null;
+    this.#said = now;
+    const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
+    return { frame: Math.round(median(this.#samples.map((s) => s.frame))), before: Math.round(median(this.#samples.map((s) => s.before))) };
+  }
+}
