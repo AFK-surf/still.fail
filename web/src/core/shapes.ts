@@ -2320,6 +2320,28 @@ export interface ChatsView {
 	note?: ListNote;
 }
 
+export interface FoundCommand {
+	/** As offered: what the client does when it is picked. */
+	id: string;
+	label: string;
+}
+
+export interface CommandGroup {
+	/** chat | update | global | settings */
+	group: string;
+	/** Its heading. */
+	title: string;
+	commands: FoundCommand[];
+}
+
+/**
+ * What ⌘K's list offers of what a client can do now (`commands.find`), by part in the list's order; a part with
+ * none is left out.
+ */
+export interface CommandsFound {
+	groups: CommandGroup[];
+}
+
 /** A passage quoted in what is being written, with what is said about it. */
 export interface ComposerQuote {
 	/** Names it while it is written (`composer.comment`, `composer.unquote`). */
@@ -4820,6 +4842,29 @@ export interface ScreensView {
 	note?: string;
 }
 
+/**
+ * Where something found opens, as every client has a page for it (views/search.ts `openOf`); each client
+ * goes there its own way.
+ */
+export interface SearchOpen {
+	/**
+	 * chat | service (its chat, its page over it) | task (its chat, it picked) | station (its page) | members (the
+	 * workspace's) | files (its station's)
+	 */
+	to: string;
+	/** Its station's address (empty: the members). */
+	station: string;
+	/** The chat (its key in its station's list): its page is `chats/<chat>`. */
+	chat?: string;
+	/** A service's or task's id. */
+	job?: string;
+	/** Files: the folder they are under, `path` where under it. */
+	root?: string;
+	path?: string;
+	/** Files: read (a text) | play (a video, a song); absent, the folder `path` is shown. */
+	how?: string;
+}
+
 /** A thing a search found besides chats and messages (`SearchGroup.items`), and what opens it. */
 export interface SearchItem {
 	kind: string;
@@ -4860,6 +4905,8 @@ export interface SearchItem {
 	createdAt?: number;
 	/** Its times in words, by field (`createdAt`). */
 	time?: Record<string, Stamp>;
+	/** Where it opens; absent where it opens nowhere (no chat, no path), and from older cores. */
+	open?: SearchOpen;
 }
 
 export interface SearchGroup {

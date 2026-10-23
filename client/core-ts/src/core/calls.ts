@@ -121,6 +121,7 @@ export type Call =
   | { kind: "prefsSet"; patch: unknown; fill: boolean }
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
+  | { kind: "commandsFind"; query: string; offered: unknown[] }
   /// A face's files on a device that keeps none of its own (font-files.ts): fetched, kept, given back.
   | { kind: "fonts"; call: FontsCall }
   | { kind: "ask"; ask: Ask }
@@ -692,6 +693,13 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       return { kind: "clientDevice", facts: orEmpty(params) };
     case "changelog.seen":
       return { kind: "changelogSeen" };
+    case "commands.find": {
+      const p = read(params, [
+        ["query", S, "default"],
+        ["offered", "values", "default"],
+      ]);
+      return { kind: "commandsFind", query: p.query as string, offered: p.offered as unknown[] };
+    }
     case "fonts.fetch":
     case "fonts.preview": {
       const id = read(params, [["id", S, "req"]]).id as string;

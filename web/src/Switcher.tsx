@@ -6,18 +6,19 @@ import { memo, useEffect, useRef, useState, useSyncExternalStore, type Component
 import { useNavigate } from "react-router";
 import { useGo } from "./go.ts";
 import { useSearch, type ChatItem } from "./api.ts";
-import type { FoundMessage, SearchItem } from "./core/shapes.ts";
+import type { CommandGroup, CommandsFound, FoundMessage, SearchItem, SearchOpen } from "./core/shapes.ts";
+import { useCall } from "./core/react.ts";
 import { Marked } from "./Marked.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import { Mark, useAppUpdate } from "./brand.tsx";
 import { commands, useCommands, type Command } from "./commands.ts";
 import { webUpdates } from "./core/webUpdates.ts";
 import { Archive, ArrowLeft, Command as CommandIcon, Compose, Download, File, Folder, More, PanelOpen, Refresh, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
-import { ACTIONS, availableActions, labelOf, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
+import { availableActions, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { RelayHost } from "./Relay.tsx";
 import { stationBase } from "./station.tsx";
-import { fileOpen } from "./searchOpen.ts";
+import { filesPath } from "./searchOpen.ts";
 import { ModelLogo, Time } from "./ui.tsx";
 import { StationMark } from "./StationMark.tsx";
 import * as markCss from "./StationMark.css.ts";
@@ -56,10 +57,10 @@ function useUpdateCommands(settings: string): Command[] {
   const app = useAppUpdate();
   const updates = window.stillfailDesktop?.appUpdate;
   return [
-    ...(page ? [{ id: "update.page", group: "update" as const, words: "update refresh", label: t("web-main.webUpdate.foundRefresh"), icon: Refresh, run: webUpdates.refresh }] : []),
+    ...(page ? [{ id: "update.page", icon: Refresh, run: webUpdates.refresh }] : []),
     ...(updates && app && (app.phase === "available" || app.phase === "failed")
-      ? [{ id: "update.app", group: "update" as const, words: "update", label: t("web-pages.version.updateTo", { version: app.version }), icon: Download, run: () => updates.start() }] : []),
-    ...(updates?.check && !app ? [{ id: "update.check", group: "update" as const, words: "check update", label: t("web-pages.version.check"), icon: Refresh, typed: true, run: () => navigate(`${settings}/version?check`) }] : []),
+      ? [{ id: "update.app", version: app.version, icon: Download, run: () => updates.start() }] : []),
+    ...(updates?.check && !app ? [{ id: "update.check", icon: Refresh, run: () => navigate(`${settings}/version?check`) }] : []),
   ];
 }
 
@@ -97,37 +98,48 @@ type Found =
   | { more: string; chat?: undefined; command?: undefined; item?: undefined }
   | { back: true; chat?: undefined; command?: undefined; item?: undefined };
 
-/** A command as the list shows it: under its part, with the keys that do it too when it is a key's action. */
-type Listed = Omit<Command, "group"> & { group: Group; keys?: string | null };
+/** What can be done, as offered here: with the keys that do it too when it is a key's action. */
+type Offered = Command & { keys?: string | null };
 
-/** The parts of what can be done, in the list's order: this chat's, updates, the app's, settings' pages. */
-type Group = "chat" | "update" | "global" | "settings";
-const GROUPS: Group[] = ["chat", "update", "global", "settings"];
-
-/**
- * The keys' actions not offered in the list: ⌘K itself, Esc (which closes the list), and the moves that are only worth
- * a key (back, forward, the chat above or below, the composer, the latest message).
- */
-const UNLISTED: Action[] = ["chat.switch", "panel.close", "nav.back", "nav.forward", "chat.prev", "chat.next", "composer.focus", "chat.latest"];
+/** A command as the list shows it: its name and its part (`group`, headed `heading`), as the core says. */
+type Listed = { id: string; group: string; heading: string; label: string; icon: ComponentType<IconProps>; keys?: string | null; run(): void };
 
 const ACTION_ICON: Partial<Record<Action, ComponentType<IconProps>>> = {
   "chat.new": Compose, "settings": Settings, "shortcuts": CommandIcon, "sidebar.toggle": PanelOpen,
   "composer.file": File, "chat.stop": Stop, "chat.history": Thread, "chat.jobs": Web, "chat.archive": Archive,
 };
 
-const keyCommand = (action: Action): Listed => ({
-  id: action, group: ACTIONS[action].group, label: labelOf(action), icon: ACTION_ICON[action] ?? CommandIcon, keys: shortcutOf(action), run: () => runAction(action),
-});
+/** What can be done now: the keys' actions the page answers (which of them are worth listing is the core's), and what it offers. */
+function offered(): Offered[] {
+  return [...availableActions().map((action) => ({ id: action, icon: ACTION_ICON[action] ?? CommandIcon, keys: shortcutOf(action), run: () => runAction(action) })), ...commands()];
+}
+
+/** The last answer, so the list opened again has it at once while the core answers anew. */
+let kept: { asked: string; groups: CommandGroup[] } | null = null;
 
 /**
- * What can be done now whose name (or its id, "chat.archive", or its other words) has what was typed, part by part
- * (GROUPS); with nothing typed, all but what is only found by typing (a settings page).
+ * What of what can be done now the core lists for what was typed (`commands.find`: by name, id or other words, part by
+ * part; with nothing typed all but what is only found by typing), each with its name; while it answers anew, what it
+ * listed last.
  */
-function commandsFor(query: string): Listed[] {
-  const q = query.trim().toLowerCase();
-  const all: Listed[] = [...availableActions().filter((a) => !UNLISTED.includes(a)).map(keyCommand), ...commands()];
-  const found = q ? all.filter((c) => [c.label, c.id, c.words ?? ""].some((w) => w.toLowerCase().includes(q))) : all.filter((c) => !c.typed);
-  return GROUPS.flatMap((group) => found.filter((c) => c.group === group));
+function useFoundCommands(query: string, all: Offered[]): Listed[] {
+  const call = useCall();
+  const asked = JSON.stringify({ query, offered: all.map(({ id, label, group, words, typed, version, station }) => ({ id, label, group, words, typed, version, station })) });
+  const [groups, setGroups] = useState<CommandGroup[]>(() => (kept?.asked === asked ? kept.groups : []));
+  useEffect(() => {
+    let live = true;
+    call("commands.find", JSON.parse(asked)).then((found) => {
+      const got = (found as CommandsFound).groups;
+      kept = { asked, groups: got };
+      if (live) setGroups(got);
+    }, () => undefined);
+    return () => { live = false; };
+  }, [asked, call]);
+  const byId = new Map(all.map((c) => [c.id, c]));
+  return groups.flatMap((group) => group.commands.flatMap((found) => {
+    const c = byId.get(found.id);
+    return c ? [{ id: c.id, group: group.group, heading: group.title, label: found.label, icon: c.icon, keys: c.keys ?? null, run: c.run }] : [];
+  }));
 }
 
 /**
@@ -144,7 +156,8 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
   const search = useSearch({ scope, query, kind });
   const view = search.value;
   const typed = !!query.trim();
-  const actions = kind ? [] : commandsFor(query);
+  const listed = useFoundCommands(query, offered());
+  const actions = kind ? [] : listed;
   const chats = view?.items ?? [];
   const messages = typed ? view?.messages ?? [] : [];
   const groups = typed ? view?.groups ?? [] : [];
@@ -160,14 +173,14 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
   const heading = (text: string) => lines.push({ heading: text });
   if (kind) add({ back: true }, "back");
   if (typed) actions.forEach((command, k) => {
-    if (command.group !== actions[k - 1]?.group) heading(t(`web-main.switcher.group.${command.group}`));
+    if (command.group !== actions[k - 1]?.group) heading(command.heading);
     add({ command }, command.id);
   });
   if (chats.length > 0 && (actions.length > 0 || typed)) heading(t("web-main.switcher.chats"));
   for (const chat of chats) add({ chat }, `c\u0001${chat.station}\u0001${chat.id}`);
   if (typed && !kind && view?.chatsMore) add({ more: "chat" }, "more:chat");
   if (!typed) actions.forEach((command, k) => {
-    if (command.group !== actions[k - 1]?.group) heading(t(`web-main.switcher.group.${command.group}`));
+    if (command.group !== actions[k - 1]?.group) heading(command.heading);
     add({ command }, command.id);
   });
   if (messages.length > 0) heading(t("web-main.switcher.messages"));
@@ -197,7 +210,7 @@ function Finder({ scope, settings, onClose, onCommand, escape }: { scope: string
     if ("back" in pick) return setKind(null);
     if ("more" in pick) return setKind(pick.more);
     if (pick.item) {
-      const to = openOf(pick.item, settings);
+      const to = pick.item.open ? pathOf(pick.item.open, settings) : null;
       if (to === null) return;
       onClose();
       return navigate(to);
@@ -332,20 +345,22 @@ function ItemRow({ item, ...rest }: { item: SearchItem } & Record<string, unknow
   );
 }
 
-/** Where something found opens: its chat (a service, a task), a station's page, the workspace's members. */
-export function openOf(item: SearchItem, settings: string): string | null {
-  const at = item.station.indexOf("/");
-  const id = encodeURIComponent(at < 0 ? item.station : item.station.slice(at + 1));
-  const chat = item.chat ? `${stationBase(item.station)}/chats/${encodeURIComponent(item.chat)}` : null;
-  switch (item.kind) {
-    case "job":
-      return chat && item.job ? `${chat}?${item.port != null ? "service" : "job"}=${encodeURIComponent(item.job)}` : chat;
+/** The page where something found opens (`SearchItem.open`, the core's): its chat (a service's page over it, a task
+ *  picked), a station's page, the workspace's members, a place in a station's files. */
+export function pathOf(open: SearchOpen, settings: string): string | null {
+  const at = open.station.indexOf("/");
+  const id = encodeURIComponent(at < 0 ? open.station : open.station.slice(at + 1));
+  const chat = open.chat ? `${stationBase(open.station)}/chats/${encodeURIComponent(open.chat)}` : null;
+  switch (open.to) {
+    case "service":
+    case "task":
+      return chat && open.job ? `${chat}?${open.to === "service" ? "service" : "job"}=${encodeURIComponent(open.job)}` : chat;
     case "station":
       return `${settings}/stations/${id}`;
-    case "member":
+    case "members":
       return `${settings}/workspace`;
-    case "file":
-      return item.path ? fileOpen(stationBase(item.station), item) : null;
+    case "files":
+      return filesPath(stationBase(open.station), open);
     default:
       return chat;
   }

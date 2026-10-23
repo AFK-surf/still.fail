@@ -298,7 +298,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // Relayed to a channel (docs/relay.md): a chat with an agent to go on there, from ⌘K and the title bar.
   const relayable = thread !== null && agents.length > 0 && !chatView.value?.archived && !chatView.value?.offline;
   const relay = () => { if (thread !== null) openRelay(station.address, thread); };
-  useCommands(relayable ? [{ id: "chat.relay", group: "chat", words: "relay slack feishu lark channel thread 接力 jieli 频道", label: t("web-main.relay.action"), icon: ArrowUpRight, run: relay }] : []);
+  useCommands(relayable ? [{ id: "chat.relay", icon: ArrowUpRight, run: relay }] : []);
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>{t("web-pages.chat.loadFailed", { error: chatView.error.message })}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
