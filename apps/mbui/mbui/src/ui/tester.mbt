@@ -205,6 +205,7 @@ pub fn Tester::new(
     image_loads: [],
     images: {},
     bold: 0.0,
+    ui_face: 0.0,
     views: [],
     view_ids: 0,
     view_ready: {},
@@ -1440,6 +1441,13 @@ pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool) -> Unit 
 /// host's shapes ignore weight otherwise).
 pub fn Tester::bold_wider(self : Tester, em : Double) -> Unit {
   self.fake.bold = em
+}
+
+///|
+/// What is set in the app's words' face `em` ems wider a character once one is given (face_add @hostapi.face_ui) than
+/// in the system's, from now on (the fake host's shapes ignore faces otherwise).
+pub fn Tester::ui_face_wider(self : Tester, em : Double) -> Unit {
+  self.fake.ui_face = em
 }
 
 ///|

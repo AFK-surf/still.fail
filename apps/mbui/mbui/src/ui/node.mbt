@@ -204,6 +204,8 @@ struct Node {
   mut lk_wrap : Bool
   mut lk_spacing : Double
   mut lk_max_lines : Int
+  // the faces as they were given when its words were laid out (faces.mbt words_shaped_in)
+  mut lk_shaped : Int
   mut lk_rich : Rich?
   mut lk_iw : Double
   mut lk_ih : Double
@@ -313,6 +315,7 @@ fn Node::new() -> Node {
     lk_wrap: false,
     lk_spacing: 0.0,
     lk_max_lines: 0,
+    lk_shaped: -1,
     lk_rich: None,
     lk_iw: -1.0,
     lk_ih: -1.0,
