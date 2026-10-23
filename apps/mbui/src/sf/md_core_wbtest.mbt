@@ -52,9 +52,12 @@ test "a core link first appears with its working hit region" {
   markdown_read.val = Some(fn(_, done) { answer.val = Some(done) })
   t.draw()
   assert_true(t.find("example.com") is None)
+  // meanwhile said to be laid out, as Markdown.kt's 正在排版
+  assert_true(t.find("正在排版") is Some(_))
   let tree : Json = [["p", ["详见 ", ["a", ["https://example.com/e2e"], {"href":"https://example.com/e2e"}]]]]
   (answer.val.unwrap())(Some(tree))
   t.draw()
+  assert_true(t.find("正在排版") is None)
   t.tap_run("example.com")
   assert_eq(opened,["https://example.com/e2e"])
 }

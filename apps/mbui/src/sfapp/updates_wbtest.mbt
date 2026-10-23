@@ -59,3 +59,10 @@ test "no source: nothing is asked" {
   update_check(fixture("home"), true, done=fn(w) { said.push(w) })
   assert_eq(said.length(), 0)
 }
+
+///|
+test "an update's download answered otherwise: its status in Updates.kt's words" {
+  assert_eq(update_error("status 404"), "下载返回 404")
+  assert_eq(update_error("incomplete"), "下载的文件不完整，请重试")
+  assert_eq(update_error("no space"), "no space")
+}
