@@ -279,6 +279,21 @@ impl @hostapi.Host for FakeHost with set_cursor(_, a0) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with set_badge(_, a0) {
+  set_badge(a0)
+}
+
+///|
+impl @hostapi.Host for FakeHost with local_station(_) {
+  local_station()
+}
+
+///|
+impl @hostapi.Host for FakeHost with local_station_act(_, a0) {
+  local_station_act(a0)
+}
+
+///|
 impl @hostapi.Host for FakeHost with window_drag(_) {
   h_window_drag()
 }

@@ -209,4 +209,7 @@ let zh_wide : Map[String, String] = {
   "web-pages.files.notThere": "{name} 上没有这个文件夹，已打开它的主目录",
   "web-pages.files.transfers": "传输",
   "web-pages.files.transfersGoing": "{n} 个传输 · {percent}%",
+  "web-pages.settings.nav.shortcuts": "快捷键",
+  "web-pages.settings.nav.version": "版本",
+  "web-pages.localStation.title": "本机 Station",
 }

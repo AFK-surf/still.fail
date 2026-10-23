@@ -15,6 +15,9 @@ pub(open) trait Host {
   window_inset(Self) -> Bool = _
   window_drag(Self) -> Unit = _
   set_cursor(Self, Int) -> Unit = _
+  set_badge(Self, Int) -> Unit = _
+  local_station(Self) -> String = _
+  local_station_act(Self, String) -> Unit = _
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
   wall_ms(Self) -> Double = _
@@ -185,6 +188,21 @@ impl Host with window_drag(_) {
 
 ///|
 impl Host with set_cursor(_, _) {
+  ()
+}
+
+///|
+impl Host with set_badge(_, _) {
+  ()
+}
+
+///|
+impl Host with local_station(_) {
+  ""
+}
+
+///|
+impl Host with local_station_act(_, _) {
   ()
 }
 
@@ -994,6 +1012,27 @@ pub fn window_drag() -> Unit {
 /// 5 an open hand. Nothing where there is no pointer.
 pub fn set_cursor(kind : Int) -> Unit {
   current.val.set_cursor(kind)
+}
+
+///|
+/// The number on the app's icon (macOS's Dock tile: what waits for the person); 0 none. Nothing where the system
+/// shows none.
+pub fn set_badge(n : Int) -> Unit {
+  current.val.set_badge(n)
+}
+
+///|
+/// This machine's station as the system says it (macOS: its data ~/.stillfail, whether it runs and by what, its release,
+/// the workspace its data is in, what is being done to it and what failed last), as JSON; "" where there is none or no
+/// way to it.
+pub fn local_station() -> String {
+  current.val.local_station()
+}
+
+///|
+/// Something done to this machine's station: start, stop, restart (as `local_station` then says), log, folder (opened).
+pub fn local_station_act(action : String) -> Unit {
+  current.val.local_station_act(action)
 }
 
 ///|

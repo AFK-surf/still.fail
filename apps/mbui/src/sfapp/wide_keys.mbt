@@ -6,7 +6,10 @@
 /// The web app's shortcuts, at a desktop's width: ⌘K the switcher, ⌘N a new chat, ⌥↑ / ⌥↓ the chat before or after,
 /// ⌘\ the sidebar folded or opened, ⌘, settings, ⌘/ the shortcuts, Esc what is open closed.
 fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  if c.shortcut('k') {
+  // (as kept on this device: settings' 快捷键, keymap.mbt)
+  let prefs = (src.topic)("prefs", {}).value
+  let pressed = fn(action : String) { @settings.action_pressed(c, prefs, action) }
+  if pressed("chat.switch") {
     if wide.switcher {
       c.blur()
     }
@@ -17,24 +20,26 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     wide.menu = None
     wide.attention_open = false
   }
-  if c.shortcut('n') {
+  if pressed("chat.new") {
     new_chat_wide()
   }
-  if c.shortcut('\\') {
+  if pressed("sidebar.toggle") {
     wide.folded = !wide.folded
   }
-  if c.shortcut(',') {
+  if pressed("settings") {
     open_settings()
   }
-  if c.shortcut('/') {
+  if pressed("shortcuts") {
     wide.keys_open = !wide.keys_open
   }
-  let alt = @ui.mod_alt
-  if c.key_pressed(@ui.key_code_up, mods=alt) || c.key_pressed(@ui.key_code_up, mods=alt, in_field=true) {
+  if @settings.action_pressed(c, prefs, "chat.prev", in_field=true) {
     neighbour(src, w, -1)
   }
-  if c.key_pressed(@ui.key_code_down, mods=alt) || c.key_pressed(@ui.key_code_down, mods=alt, in_field=true) {
+  if @settings.action_pressed(c, prefs, "chat.next", in_field=true) {
     neighbour(src, w, 1)
+  }
+  if pressed("chat.jobs") && app.nav.top() is Chat(_) {
+    wide.jobs_open = !wide.jobs_open
   }
   if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
     if wide.switcher && sw.kind != "" {
@@ -62,7 +67,7 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
   }
   // Space with no field focused: back to the composer (回到输入框)
-  if !c.field_focused() && c.key_pressed(@ui.key_of_char(' ')) && !wide.switcher {
+  if !c.field_focused() && pressed("composer.focus") && !wide.switcher {
     if app.nav.top() is Chat(_) {
       focus_composer.val = true
     }
@@ -402,32 +407,24 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// ⌘/ (Shortcuts.tsx ShortcutsDialog): the shortcuts this app keeps, by group, in mbui's dialog (over a scrim, in the
 /// window's middle; Esc, back or a press outside close it) in the web's look.
-fn keys_dialog(c : @ui.Ctx) -> Unit {
+fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let mac = @ui.platform() == 0
-  let cmd = if mac { "⌘" } else { "Ctrl+" }
-  let alt = if mac { "⌥" } else { "Alt+" }
   let shift = if mac { "⇧" } else { "Shift+" }
+  let prefs = (src.topic)("prefs", {}).value
+  let keys = fn(action : String) { (tr("web-main.keymap." + action), @settings.keys_text(prefs, action)) }
   let groups : Array[(String, Array[(String, String)])] = [
     (
       tr("web-main.keymap.group.global"),
-      [
-        (tr("web-main.keymap.chat.switch"), cmd + "K"),
-        (tr("web-main.keymap.chat.new"), cmd + "N"),
-        (tr("web-main.keymap.chat.prev"), alt + "↑"),
-        (tr("web-main.keymap.chat.next"), alt + "↓"),
-        (tr("web-main.keymap.sidebar.toggle"), cmd + "\\"),
-        (tr("web-main.keymap.settings"), cmd + ","),
-        (tr("web-main.keymap.shortcuts"), cmd + "/"),
-      ],
+      ["chat.switch", "chat.new", "chat.prev", "chat.next", "sidebar.toggle", "settings", "shortcuts"].map(keys),
     ),
-    (tr("web-main.keymap.group.chat"), [(tr("web-main.keymap.chat.find"), cmd + "F")]),
+    (tr("web-main.keymap.group.chat"), ["chat.find", "chat.jobs"].map(keys)),
     (
       tr("web-main.shortcuts.group.composer"),
       [
         (tr("web-main.shortcuts.send"), "Enter"),
         (tr("web-main.shortcuts.newline"), shift + "Enter"),
-        (tr("web-main.keymap.composer.focus"), tr("web-main.keymap.space")),
+        keys("composer.focus"),
       ],
     ),
   ]

@@ -141,6 +141,11 @@ pub(all) enum Route {
   Changelog
   /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
   About
+  /// the desktop's own pages (keymap.mbt): 快捷键, each action's keys changed here; 版本, this build and a newer one
+  Shortcuts
+  Version
+  /// this machine's station (local_station.mbt)
+  LocalStation
   /// the wide frame's pages as the web's has them (web_pages.mbt): 通知, 权限, 归档 (whether a done chat suggests
   /// archiving it, each station's own), a station's archiving
   Notifications
@@ -523,6 +528,7 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  keymap_reset()
   notify_page_reset()
   login_marked.val = None
   station_parts.clear()
@@ -657,6 +663,9 @@ pub fn route_of(name : String) -> Route? {
     "kept" => Some(KeptFiles)
     "changelog" => Some(Changelog)
     "about" => Some(About)
+    "shortcuts" => Some(Shortcuts)
+    "version" => Some(Version)
+    "local-station" => Some(LocalStation)
     "notifications" => Some(Notifications)
     "permissions" => Some(Permissions)
     "archiving" => Some(Archiving)

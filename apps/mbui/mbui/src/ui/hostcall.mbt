@@ -58,6 +58,11 @@ struct FakeHost {
   /// the pointer's shape as last told (desktop.mbt), and how often the window was asked to be dragged
   mut cursor : Int
   mut window_drags : Int
+  /// the number on the app's icon as last told (@ui.set_badge)
+  mut badge : Int
+  /// this machine's station as its host would say it (Tester::set_local_station), what was done to it
+  mut local_station : String
+  local_acts : Array[String]
   /// the URLs handed to the system (Ctx::open_url), oldest first
   opened : Array[String]
   /// what the app reads of where it runs (hostread.mbt): the system dark, the window's buttons in the app's top row,

@@ -1427,6 +1427,9 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
 int32_t mb_host_window_inset(void) { return 0; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
+void mb_host_set_badge(int32_t n) { (void)n; }
+moonbit_string_t mb_host_local_station(void) { return mb_string_from_ns(@""); }
+void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
 
 // ---- files picked (pick.mbt) ----
 // Pictures (kind 1) from the system's photo picker (PHPickerViewController: no leave to ask for), any file (kind 2) from

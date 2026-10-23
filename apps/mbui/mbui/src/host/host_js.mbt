@@ -965,6 +965,23 @@ fn set_cursor(kind : Int) -> Unit {
 }
 
 ///|
+/// (no icon of the app's in a browser to put a number on)
+fn set_badge(n : Int) -> Unit {
+  ignore(n)
+}
+
+///|
+/// (no station of this machine's to manage from a browser)
+fn local_station() -> String {
+  ""
+}
+
+///|
+fn local_station_act(a : String) -> Unit {
+  ignore(a)
+}
+
+///|
 extern "js" fn js_word_at(text : String, off : Int) -> Double =
   #|(t, o) => globalThis.__mbhost && globalThis.__mbhost.wordAt ? globalThis.__mbhost.wordAt(t, o) : -1
 

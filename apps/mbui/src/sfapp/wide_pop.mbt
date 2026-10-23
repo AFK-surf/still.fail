@@ -104,7 +104,7 @@ fn wide_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   wide_filter_menu(c, src, w)
   attention_panel(c, src, w)
   switcher(c, src, w)
-  keys_dialog(c)
+  keys_dialog(c, src)
 }
 
 ///|

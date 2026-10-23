@@ -196,6 +196,9 @@ pub fn Tester::new(
     text_menu: (false, 0.0, 0.0, 0.0, 0.0, 0),
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
+    badge: 0,
+    local_station: "",
+    local_acts: [],
     clipboard_secret: -1.0,
     back_on: false,
     platform,
@@ -712,6 +715,24 @@ pub fn Tester::ime_rect(self : Tester) -> (Double, Double, Double, Double) {
 ///|
 pub fn Tester::clipboard(self : Tester) -> String {
   self.fake.clipboard
+}
+
+///|
+/// The number on the app's icon as the app last told it (@ui.set_badge).
+pub fn Tester::badge(self : Tester) -> Int {
+  self.fake.badge
+}
+
+///|
+/// This machine's station as its host says it from now on (@ui.local_station), "" none.
+pub fn Tester::set_local_station(self : Tester, json : String) -> Unit {
+  self.fake.local_station = json
+}
+
+///|
+/// What was done to this machine's station (@ui.local_station_act), oldest first.
+pub fn Tester::local_acts(self : Tester) -> Array[String] {
+  self.fake.local_acts
 }
 
 ///|
