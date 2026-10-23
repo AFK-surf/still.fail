@@ -221,9 +221,11 @@ let zh : Map[String, String] = {
   "web-main.outside.failed": "分享失败：{error}",
   // a vault request on its card (vault_approval.mbt)
   "android-settings.vault.approve.once": "仅本次",
-  "android-settings.vault.approve.onceDetail": "单次有效",
+  "android-settings.vault.approve.onceDetail": "只给这一条命令用，下次还要再批准",
   "android-settings.vault.approve.hour": "本对话 1 小时内",
-  "android-settings.vault.approve.hourDetail": "期间无需再次批准",
+  "android-settings.vault.approve.hourDetail": "1 小时内这个对话可以反复使用，不用再批准",
+  "android-settings.vault.approve.chat": "本对话直到归档",
+  "android-settings.vault.approve.chatDetail": "这个对话归档或删除前都能用，最长 30 天",
   "android-settings.vault.approve.deny": "拒绝",
   "android-settings.vault.approve.denyDetail": "通知 agent 已拒绝",
   "android-settings.vault.approve.what": "批准",

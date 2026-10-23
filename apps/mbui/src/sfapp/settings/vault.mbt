@@ -295,8 +295,18 @@ fn profile_groups(list : Array[Json]) -> Array[(String, Array[Json])] {
 }
 
 ///|
+/// The grants an approval offers for an item whose longest is `lasts` (Vault.kt scopesUpTo: every one where it names
+/// none), shortest first; the longest of them the one recommended.
+pub fn vault_scopes_up_to(lasts : String) -> Array[String] {
+  match vault_scopes.search(lasts) {
+    Some(i) => vault_scopes[:i + 1].to_array()
+    None => vault_scopes.copy()
+  }
+}
+
+///|
 /// A request waiting on the viewer (Vault.kt RequestCard): what it is for, its command, how it is given, its chat; the
-/// three answers under it (VaultOptions).
+/// answers under it (VaultOptions): its grants up to the item's longest, the longest recommended, and refused.
 fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> Unit {
   let t = @sf.theme()
   let rv = Some(r)
@@ -341,29 +351,27 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
   })
   c.box(w=Fill(1.0), padx=12.0, pb=10.0, fn() {
     let on = [("workspace", ws), ("request", id)]
-    let options = [
-      (tr("android-settings.vault.approve.once"), tr("android-settings.vault.approve.onceDetail"), true),
-      (tr("android-settings.vault.approve.hour"), tr("android-settings.vault.approve.hourDetail"), false),
-      (tr("android-settings.vault.approve.deny"), tr("android-settings.vault.approve.denyDetail"), false),
-    ]
-    let busy = if is_doing(core, ["vault.approve"], [("workspace", ws), ("request", id), ("scope", "once")]) {
-      0
-    } else if is_doing(core, ["vault.approve"], [("workspace", ws), ("request", id), ("scope", "hour")]) {
-      1
-    } else if is_doing(core, ["vault.deny"], on) {
-      2
-    } else {
-      -1
+    let scopes = vault_scopes_up_to(text(rv, "lasts"))
+    let options = scopes.mapi(fn(i, s) {
+      (tr("android-settings.vault.approve." + s), tr("android-settings.vault.approve." + s + "Detail"), i == scopes.length() - 1)
+    })
+    options.push((tr("android-settings.vault.approve.deny"), tr("android-settings.vault.approve.denyDetail"), false))
+    let deny = scopes.length()
+    let mut busy = if is_doing(core, ["vault.deny"], on) { deny } else { -1 }
+    for i, s in scopes {
+      if is_doing(core, ["vault.approve"], [("workspace", ws), ("request", id), ("scope", s)]) {
+        busy = i
+      }
     }
     match decision_options(c, "vault-options/" + id, options, busy) {
-      Some(2) =>
+      Some(k) if k == deny =>
         act(core, tr("android-settings.vault.approve.denyWhat"), "vault.deny", obj([("workspace", str(ws)), ("request", str(id))]))
       Some(k) =>
         act(
           core,
           tr("android-settings.vault.approve.what"),
           "vault.approve",
-          obj([("workspace", str(ws)), ("request", str(id)), ("scope", str(if k == 0 { "once" } else { "hour" }))]),
+          obj([("workspace", str(ws)), ("request", str(id)), ("scope", str(scopes[k]))]),
         )
       None => ()
     }

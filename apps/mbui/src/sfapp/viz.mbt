@@ -17,7 +17,7 @@ let viz_zh : Map[String, String] = {
   "android-misc.viz.cantRead": "无法读取此文件",
   "android-misc.viz.cantSend": "此对话当前无法发送消息",
   "android-misc.viz.followupDrafted": "已添加到输入框，确认后发送",
-  "android-misc.viz.fullscreen": "全屏",
+  "android-misc.viz.fullscreen": "全屏打开",
   "android-misc.viz.mermaidFailed": "mermaid 加载失败",
   "android-misc.viz.openAside": "在侧边打开",
   "android-chat.preview.unreadable": "无法读取「{name}」",
