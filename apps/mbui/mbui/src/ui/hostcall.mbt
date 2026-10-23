@@ -40,6 +40,9 @@ struct FakeHost {
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
   mut bold : Double
+  // what the app's words' face (face_ui), once given, adds to a cluster's advance in what is set in it, in ems (0 by
+  // default: a face given measures as the system's)
+  mut ui_face : Double
   // native views: what was asked of them, a line each ("open 1 video/mp4", "place 1 0 0 390 220 shown"…)
   views : Array[String]
   mut view_ids : Int
@@ -420,6 +423,7 @@ fn h_shape(
           size
         }
         let adv = if weight >= 600 && c != 10 { adv + size * f.bold } else { adv }
+        let adv = if f.ui_face != 0.0 && c != 10 && in_ui_face(style) { adv + size * f.ui_face } else { adv }
         out[k * 4] = i.to_double()
         out[k * 4 + 1] = len.to_double()
         out[k * 4 + 2] = adv
@@ -443,6 +447,15 @@ fn h_shape(
       k
     }
   }
+}
+
+///|
+/// Whether words in `style` are set in the app's words' face (face_ui) as a host sets them: one is given and the style
+/// names no other (code's, the serif one, what people wrote's, one by its number).
+fn in_ui_face(style : Int) -> Bool {
+  face_given(@hostapi.face_ui) &&
+  @hostapi.face_of_style(style) == 0 &&
+  (style & (@hostapi.style_mono | @hostapi.style_serif | @hostapi.style_words)) == 0
 }
 
 ///|

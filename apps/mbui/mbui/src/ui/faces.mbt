@@ -66,7 +66,8 @@ fn faces_style(words : Bool, face : Int) -> Int {
 }
 
 ///|
-/// How many times the faces changed: a paragraph laid out before (its node's layout kept) is laid out again.
+/// How many times the faces changed: words laid out before (a text's or a paragraph's, its node's layout kept) are laid
+/// out again.
 let words_shaped_in : Ref[Int] = Ref::new(0)
 
 ///|

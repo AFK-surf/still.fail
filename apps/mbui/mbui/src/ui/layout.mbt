@@ -482,7 +482,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_trim != n.line_trim ||
         n.lk_wrap != n.wrap ||
         n.lk_spacing != n.spacing ||
-        n.lk_max_lines != n.max_lines {
+        n.lk_max_lines != n.max_lines ||
+        n.lk_shaped != words_shaped_in.val {
         n.lk_text = n.text
         n.lk_size = n.font_size
         n.lk_weight = n.weight
@@ -491,6 +492,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_wrap = n.wrap
         n.lk_spacing = n.spacing
         n.lk_max_lines = n.max_lines
+        n.lk_shaped = words_shaped_in.val
         n.full = None
         ch = true
       }
