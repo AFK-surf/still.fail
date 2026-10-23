@@ -178,6 +178,8 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   const drawn: number[] = [];
   let bytes = 0;
   let codec = "";
+  /// The station's own measure of how late the frames were, as it last said it.
+  let said: { frame: number; before: number } | null = null;
   /// The picture's heights, as each config said them.
   const heights: number[] = [];
   const kept: Buffer[] = [];
@@ -188,6 +190,10 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   while (now() < end) {
     const f = await frames.next();
     if (f === null) break;
+    if (f.kind === KIND.state) {
+      const state = JSON.parse(f.payload.toString());
+      if (state.latency) said = state.latency;
+    }
     if (f.kind === KIND.config) {
       const config = JSON.parse(f.payload.toString());
       codec = config.codec;
@@ -219,6 +225,7 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
     fps: +(drawn.length / span).toFixed(1),
     lateP50: Math.round(pct(late, 0.5)),
     lateP95: Math.round(pct(late, 0.95)),
+    stationSaid: said,
     stalls: stalls.length,
     stalledMs: Math.round(stalls.reduce((a, b) => a + b, 0)),
     mbps: +((bytes * 8) / span / 1e6).toFixed(2),

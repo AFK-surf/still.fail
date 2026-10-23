@@ -20,11 +20,11 @@ async function plays(codec: string): Promise<boolean> {
 
 /**
  * What the page decodes, best first: H.265 (Main, as the station encodes it on a Mac) and H.264 (Baseline) where
- * WebCodecs plays them, JPEG anywhere.
+ * WebCodecs plays them, JPEG anywhere; `only264`: no H.265 (chosen in 控制中心 › 编码).
  */
-export async function decodable(): Promise<Codec[]> {
+export async function decodable(only264 = false): Promise<Codec[]> {
   if (typeof VideoDecoder === "undefined") return ["jpeg"];
-  const [h265, h264] = await Promise.all([!h265Failed && plays("hvc1.1.6.L153.B0"), plays("avc1.42E01F")]);
+  const [h265, h264] = await Promise.all([!only264 && !h265Failed && plays("hvc1.1.6.L153.B0"), plays("avc1.42E01F")]);
   return [...(h265 ? ["h265" as const] : []), ...(h264 ? ["h264" as const] : []), "jpeg"];
 }
 

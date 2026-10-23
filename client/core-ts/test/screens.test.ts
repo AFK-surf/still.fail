@@ -372,6 +372,11 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   const now = lastState(log, 1);
   assert.deepEqual([now.others, now.line, now.cursor], [["Bob"], "控制 · Bob 也在查看", { x: 0.1, y: 0.2, shape: "text" }]);
   assert.equal(now.scale, undefined, "a station that says no scale: none");
+  // How late its frames are, as the station measures them.
+  v!.send(stateFrame({ latency: { frame: 87, before: 12 } }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(lastState(log, 1).latency, { frame: 87, before: 12 });
   // How its pictures are made, as the station says it.
   v!.send(stateFrame({ video: { capture: "ScreenCaptureKit", encoder: "hardware, low latency, HEVC_Main_AutoLevel", hardware: true } }));
   await host.settle();

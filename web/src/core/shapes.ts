@@ -4379,6 +4379,11 @@ export interface PrefsView {
 	 */
 	screenQuality?: string;
 	/**
+	 * The codec a station's screen is asked in on this device: `h264` (H.264 only), or (none) the best both ends
+	 * have (H.265 where they do).
+	 */
+	screenCodec?: string;
+	/**
 	 * The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
 	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
 	 */
@@ -4692,6 +4697,14 @@ export interface ScreenItem {
 	link: string;
 }
 
+/** How late a screen view's frames are, as its station measures them from their acknowledgements. */
+export interface ScreenLatency {
+	/** From a picture's capture to its drawing on this device, in ms (the median of the last 2 s). */
+	frame: number;
+	/** Of it, from the capture to its going out of the station: waiting to be asked for, encoded. */
+	before: number;
+}
+
 /** A screen's display scale (docs/remote-screens.md `scale`): what makes its windows and text larger or smaller on it. */
 export interface ScreenScale {
 	/** Now, in percent (Windows' Settings › Display › Scale). */
@@ -4753,6 +4766,8 @@ export interface ScreenViewState {
 	clipboard?: string[];
 	/** While driving it: where a file dropped into the view goes (none while only looking, or from a station before files). */
 	drop?: ScreenDrop;
+	/** How late its frames are, said each second while they come (none from a station before it). */
+	latency?: ScreenLatency;
 	/** How its pictures are made, as the station said as the view opened (none from a station before it). */
 	video?: ScreenVideo;
 	/**

@@ -74,6 +74,8 @@ export function NetChip({ net, shown, meter, os }: { net: StationNet | null; sho
   const level = net?.rtt?.level;
   const groups: [string, ReactNode][][] = [
     [
+      [t("web-pages.screen.stat.frameLatency"), shown?.latency ? `${shown.latency.frame} ms` : "—"],
+      [t("web-pages.screen.stat.beforeSent"), shown?.latency ? `${shown.latency.before} ms` : "—"],
       [t("web-pages.screen.stat.fps"), rate ? String(Math.round(rate.fps)) : "—"],
       [t("web-pages.screen.stat.bitrate"), rate ? bitrate(rate.bps) : "—"],
       [t("web-pages.screen.stat.loss"), net?.loss ? <span className={css.figure} data-level={net.loss.level}>{net.loss.text}</span> : "0%"],
@@ -174,9 +176,12 @@ export function ScaleButton({ scale, onScale, className }: { scale: ScreenScale;
 }
 
 /** 控制中心: what can be done with the view, as a menu (画质, 缩放 and 组合键 open beside it). */
-export function ControlCenter({ quality, onQuality, scale, onScale, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
+export function ControlCenter({ quality, onQuality, codec, onCodec, scale, onScale, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
   quality: Quality;
   onQuality: (q: Quality) => void;
+  /** The codec asked: the best both ends have, or H.264 only. */
+  codec: "auto" | "h264";
+  onCodec: (c: "auto" | "h264") => void;
   /** The screen's display scale, while driving one whose station changes it. */
   scale?: ScreenScale | undefined;
   onScale: (percent: number) => void;
@@ -218,6 +223,25 @@ export function ControlCenter({ quality, onQuality, scale, onScale, combos, onCo
                       <span className={css.menuCheck}><DropdownMenu.ItemIndicator><Check size={14} /></DropdownMenu.ItemIndicator></span>
                       <span className={css.menuWords}>{t(`web-pages.screen.quality.${q}`)}</span>
                       <span className={css.menuEnd}>{t(`web-pages.screen.qualityHint.${q}`)}</span>
+                    </DropdownMenu.RadioItem>
+                  ))}
+                </DropdownMenu.RadioGroup>
+              </DropdownMenu.SubContent>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Sub>
+          <DropdownMenu.Sub>
+            <DropdownMenu.SubTrigger className={item}>
+              <Monitor size={16} /><span className={css.menuWords}>{t("web-pages.screen.codec")}</span>
+              <span className={css.menuEnd}>{t(`web-pages.screen.codec.${codec}`)}</span><ChevronRight size={14} />
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.SubContent className={list} sideOffset={6} collisionPadding={8}>
+                <DropdownMenu.RadioGroup value={codec} onValueChange={(v) => onCodec(v as "auto" | "h264")}>
+                  {(["auto", "h264"] as const).map((c) => (
+                    <DropdownMenu.RadioItem key={c} value={c} className={item}>
+                      <span className={css.menuCheck}><DropdownMenu.ItemIndicator><Check size={14} /></DropdownMenu.ItemIndicator></span>
+                      <span className={css.menuWords}>{t(`web-pages.screen.codec.${c}`)}</span>
+                      <span className={css.menuEnd}>{t(`web-pages.screen.codecHint.${c}`)}</span>
                     </DropdownMenu.RadioItem>
                   ))}
                 </DropdownMenu.RadioGroup>

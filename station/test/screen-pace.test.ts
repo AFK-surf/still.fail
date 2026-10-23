@@ -2,7 +2,7 @@
 // is asked for, from the acknowledgements alone, on a clock the test moves.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DOWN, DOWNSIZE_MS, DOWNSIZE_SHARE, HOLD_MS, LOW_BOUNDS, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UP, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate } from "../src/mesh/screen-pace.ts";
+import { DOWN, DOWNSIZE_MS, FrameLatency, DOWNSIZE_SHARE, HOLD_MS, LOW_BOUNDS, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UP, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate } from "../src/mesh/screen-pace.ts";
 
 function paced() {
   let now = 0;
@@ -152,4 +152,26 @@ test("the picture made smaller while the link carries a quarter of its own rate 
   // A view asked no larger than the small bounds is never made smaller.
   const phone = new Sizer(() => now, { maxWidth: 1280, maxHeight: 720 });
   for (let i = 0; i < 100; i++, now += 100) assert.equal(phone.step(MIN_RATE, MIN_RATE, small), null);
+});
+
+test("frame latency: capture to drawn (the acknowledgement less half the round trip) and capture to sent, as medians, once a second", () => {
+  let now = 10_000;
+  const latency = new FrameLatency(() => now);
+  // Captured at 9 990 ms, sent at 10 000 ms, acknowledged at 10 060 with a 40 ms round trip: drawn at about 10 040.
+  latency.sent(9_990_000);
+  now = 10_060;
+  latency.acked(9_990_000, 40);
+  assert.deepEqual(latency.take(), { frame: 50, before: 10 });
+  // Said once a second at most.
+  latency.sent(10_050_000);
+  now = 10_100;
+  latency.acked(10_050_000, 40);
+  assert.equal(latency.take(), null);
+  now = 11_100;
+  assert.deepEqual(latency.take(), { frame: 50, before: 10 }, "the median of the two");
+  // A timestamp not on this clock (10 s off) is not counted.
+  latency.sent(1_000);
+  now = 12_200;
+  latency.acked(1_000, 40);
+  assert.equal(latency.take(), null);
 });
