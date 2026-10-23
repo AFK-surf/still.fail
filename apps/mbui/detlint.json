@@ -94,7 +94,7 @@
       "src/player/player.mbt": 100,
       "src/sf/glass.mbt": 4,
       "src/sf/markdown.mbt": 53,
-      "src/sf/parts.mbt": 80,
+      "src/sf/parts.mbt": 78,
       "src/sf/picture.mbt": 1,
       "src/sfapp/app.mbt": 35,
       "src/sfapp/bar.mbt": 28,
@@ -230,7 +230,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 23
+      "src/sf/tokens.mbt": 22
     },
     "build-effect": {},
     "unsettled-ok": {},

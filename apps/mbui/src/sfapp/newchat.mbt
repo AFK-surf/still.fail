@@ -908,7 +908,7 @@ fn cascade_option(
         @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
       }
       // NewChat.kt: the cascade's row, clip(Smooth(concentric(CASCADE_CORNER, CASCADE_PAD))).clickable
-      @motion.ripple(c, id, 14.0 - 4.0 / @sf.smooth_scale)
+      @motion.ripple(c, id, @sf.inner_corner(14.0, 4.0))
     },
   )
   |> ignore

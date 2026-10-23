@@ -95,20 +95,7 @@ pub(all) struct Theme {
 // ---------------------------------------------------------------------------
 // Measures (docs/ui-panels.md; styles/align.ts, pages.css.ts)
 
-///|
-/// A small panel's padding: as far as what has a ground of its own (a row,
-/// a button) stands from its edge.
-pub let panel_pad : Double = 6.0
-
-///|
-/// Words stand in from a row's ground by this, so a panel's words and its
-/// rows' words are on one line, panel_pad + text_in from its edge.
-pub let text_in : Double = 10.0
-
-///|
-/// A small panel's buttons: pills this high (24), and its icon buttons
-/// circles as wide.
-pub let panel_pill : Double = 24.0
+// (a small panel's padding, its words' room and its pills: align.mbt panel_pad, text_in, panel_pill)
 
 ///|
 /// A page card of words: this in from every side.
@@ -116,7 +103,7 @@ pub let card_pad : Double = 20.0
 
 ///|
 /// A command's box's corner: its copy button's (8), 10 in from its edges, concentric (Settings.kt COMMAND_BOX_CORNER).
-pub let command_box_corner : Double = concentric_out(8.0, 10.0)
+pub let command_box_corner : Double = surface_corner(10.0, 8.0)
 
 ///|
 /// A card's corner with nothing in its corners.
@@ -519,17 +506,17 @@ pub let message_line : @ui.Leading = Exact(24.75)
 ///|
 /// A card with a button (a capsule) in its corner: concentric with it, card_pad and the button's half (Parts.kt:607
 /// Card foot: CARD_PAD + BUTTON_HEIGHT 38 / 2): worked out as Android does, no step of the scale.
-pub let card_foot_radius : @ui.Radius = Exact(card_pad + 19.0)
+pub let card_foot_radius : @ui.Radius = rounded(around(card_pad, 19.0))
 
 ///|
 /// A list card's corner: concentric round its rows (row_corner, list_pad in), as Android works it out (Parts.kt:640
 /// LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER 18, LIST_PAD 8)); its rows take theirs from it (radius=Inner).
-pub let list_card_radius : @ui.Radius = Exact(concentric_out(row_corner, list_pad))
+pub let list_card_radius : @ui.Radius = surface(list_pad, row_corner).radius()
 
 ///|
 /// A card with a Seg (rounded 10) in its top corners: concentric with it (Usage.kt:204 concentricOut(10, CARD_PAD)):
 /// worked out as Android does, no step of the scale.
-pub let seg_card_radius : @ui.Radius = Exact(concentric_out(10.0, card_pad))
+pub let seg_card_radius : @ui.Radius = surface(card_pad, 10.0).radius()
 
 ///|
 /// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 16 wide at most (BAR), how far a line of the
@@ -985,5 +972,14 @@ pub let no_ground : Int64 = 0L
 ///|
 pub let no_ring : Double = 0.0
 
+///|
+/// A length off the scale, as a style's room (padding, margins: below 0 for a margin): align.mbt's.
+fn room(x : Double) -> @ui.Space {
+  Exact(x)
+}
 
-
+///|
+/// A corner off the scale, as a style's: align.mbt's.
+fn rounded(x : Double) -> @ui.Radius {
+  Exact(x)
+}
