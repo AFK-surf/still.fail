@@ -55,9 +55,19 @@ jobs:
         with: { node-version-file: .node-version, package-manager-cache: false }
       # (from the Actions cache the moonbit workflow fills, never downloaded here)
       - uses: ./.github/actions/mbui-moonbit
-      - name: The mbui app's check (detlint, then native type-checked)
-        if: matrix.part == 'app' && !matrix.lto
-        run: moon version && bash apps/mbui/scripts/check.sh
+      # moon's own build (moonc's C and what it checked) as main's newest run left it: without, moonc made all of it
+      # again each run, 46-53 s of the tests' build with every unit and link kept, and the check's type-check from
+      # nothing (2026-10-23, 40018743319); over it, moon makes again what changed (on a branch over its own: the app
+      # part's build 29 s to 20, the check 24 s to 5 after it, the replay's build 26 s to 13-17). Main's only (75-180 MB
+      # a part): a branch takes main's.
+      - uses: actions/cache/restore@v4
+        id: moon
+        with:
+          path: |
+            apps/mbui/_build
+            !${{ env.MBC_STORE }}
+          key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
+          restore-keys: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-
       # The units main's newest run kept, and on a branch its own last run's beside them (a store by content: the two
       # together, nothing of one replaces the other's). A branch's own alone, after it took main's newer commits in
       # (a rebase), compiled again all main had changed since: 253 s of the app part where its push before was 82 s
@@ -98,6 +108,10 @@ jobs:
           # compiler's output only when it fails, and where a part's time went was not to be seen)
           export MBC_LOG="$RUNNER_TEMP/mbc.log"
           TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      - name: The mbui app's check (detlint, then native type-checked)
+        if: matrix.part == 'app' && !matrix.lto
+        # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23)
+        run: moon version && bash apps/mbui/scripts/check.sh
       - name: Where the build's time went (mbc)
         if: always()
         run: |
@@ -127,6 +141,13 @@ jobs:
             ${{ env.MBC_STORE }}
             .ci/lto
           key: ${{ env.BUILD_KEY }}
+      - if: always() && github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/_build
+            !${{ env.MBC_STORE }}
+          key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
       # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
       - name: What failed
         if: failure()
