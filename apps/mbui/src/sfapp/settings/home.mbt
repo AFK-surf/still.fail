@@ -349,7 +349,7 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           if pending {
             spinner(c)
           }
-          switch(c, on)
+          switch(c, "notify", on)
         }) {
           use_notify(core, !on)
         }
@@ -469,7 +469,7 @@ fn about_page(c : @ui.Ctx, core : Core) -> Unit {
                 c.text(fill("android-settings.telemetry.note", [("app", "still.fail")]), style=@sf.meta) |> ignore
               })
               |> ignore
-              switch(c, on)
+              switch(c, "reporting", on)
             }) {
             (core.set_reporting)(!on)
           }

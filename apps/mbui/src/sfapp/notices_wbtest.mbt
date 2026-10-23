@@ -273,6 +273,14 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   let set = named(calls, "notify.set")
   assert_eq(set.length(), 1)
   assert_true(set[0].params.stringify().contains("\"on\":false"))
+  // its knob slides off as mbui's switch's does (asked for: Android's jumps), the row without its tap meanwhile: on
+  // still as it is tapped, part of the way halfway to its rest, off at its rest
+  assert_eq(knob_across(t, "通知"), 1.0)
+  t.run_for((@kit.switch_rest("notify") - t.time()) / 2.0)
+  let mid = knob_across(t, "通知")
+  assert_true(mid > 0.0 && mid < 1.0)
+  t.run_for(@kit.switch_rest("notify") - t.time())
+  assert_eq(knob_across(t, "通知"), 0.0)
   // switched at once, a spinner while the core has not answered: not switched again meanwhile
   t.tap_text("通知")
   assert_eq(named(calls, "notify.set").length(), 1)
@@ -325,4 +333,21 @@ test "settings: usage statistics and error reports switched off on this device, 
   t.tap_text("发送使用统计和错误报告")
   assert_eq(told, [false, true])
   reporting_host.val = None
+}
+
+///|
+/// How far the knob of the settings' switch in the row of `words` is across (0 off … 1 on): its white 20 round in the
+/// 44 by 26 ground drawn level with the words, 3 in from the ground's ends.
+fn knob_across(t : @ui.Tester, words : String) -> Double raise {
+  guard t.drawn_of(words) is Some((_, y)) else { fail("no \{words} drawn") }
+  let rects = t.drawn_rects()
+  let level = fn(r : (Double, Double, Double, Double, Int64)) { (r.1 + r.3 / 2.0 - y).abs() < 30.0 }
+  guard rects.iter().find_first(fn(r) { r.2 == 44.0 && r.3 == 26.0 && level(r) }) is Some(ground) else {
+    fail("no switch by \{words}")
+  }
+  guard rects.iter().find_first(fn(r) { r.2 == 20.0 && r.3 == 20.0 && r.4 == 0xFFFFFFFFL && level(r) })
+    is Some(knob) else {
+    fail("no knob by \{words}")
+  }
+  (knob.0 - ground.0 - 3.0) / 18.0
 }

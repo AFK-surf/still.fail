@@ -488,7 +488,7 @@ fn profile_run(c : @ui.Ctx, core : Core, station : String, p : Json?, fast_part 
     if list_row(c, key=if busy { "" } else { key }, fn() {
         row_lines(c, title, sub, wrap_sub=true)
         doing_mark(c, busy, failed_of(core, ["profile.put"], on))
-        switch(c, value)
+        switch(c, key, value)
       }) {
       act(
         core,
@@ -577,7 +577,7 @@ fn profile_workspaces(c : @ui.Ctx, core : Core, station : String, p : Json?) -> 
                 wrap_sub=true,
               )
               doing_mark(c, busy, failed_of(core, ["profile.put"], on))
-              switch(c, is_on)
+              switch(c, "profile-ws/" + ws, is_on)
             }) {
             let next = if is_on { now.filter(fn(x) { x != ws }) } else { now + [ws] }
             act(
@@ -694,7 +694,7 @@ fn profile_share(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?) ->
               wrap_sub=true,
             )
             doing_mark(c, sharing, failed_of(core, ["profile.share"], on))
-            switch(c, shared)
+            switch(c, "share-switch", shared)
           }) {
           act(
             core,

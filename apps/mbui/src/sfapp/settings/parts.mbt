@@ -731,14 +731,15 @@ let near_beside : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
 
 ///|
 /// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white: mbui's switch's look (@kit.switch_look_of)
-/// in still.fail's colours; the row it is in takes the tap.
-pub fn switch(c : @ui.Ctx, on : Bool) -> Unit {
+/// in still.fail's colours; the row it is in takes the tap. Its knob slides as mbui's switch's does
+/// (`@kit.switch_knob` by `key`, unique where it is asked); Android's jumps.
+pub fn switch(c : @ui.Ctx, key : String, on : Bool) -> Unit {
   let t = @sf.theme()
   @kit.switch_look_of(w=44.0, h=26.0, inset=3.0, on_color=t.p.green, off_color=t.p.line, knob=0xFFFFFFFFL, shadow=false)(
     c,
     {
       on,
-      t: if on { 1.0 } else { 0.0 },
+      t: @kit.switch_knob(c, key, on),
       hovered: false,
       pressed: false,
       focus_shown: false,

@@ -767,7 +767,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
         }
         c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, id=aid, fn() {
           row_lines(c, tr("android-settings.vault.agent"), tr("android-settings.vault.agentNote"), wrap_sub=true)
-          switch(c, e.agent)
+          switch(c, key("agent"), e.agent)
         })
         |> ignore
         if e.agent {

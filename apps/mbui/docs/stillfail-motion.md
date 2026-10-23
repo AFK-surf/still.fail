@@ -133,6 +133,7 @@ Android's recordings of these (HomeMotionTest: e2e/tapes/home-*.trace) are repla
 | A row held | a long press on a Home row | ink 5% ground; its time shows | at once | chat/Home.kt:572, 615 | yes (before this work) |
 | An option pressed | a decision's option | scale .97 | tween(80) in, tween(180) out, Ease.Out | chat/Decisions.kt:141-150 | yes (`option_button`) |
 | An activity pressed | its line | ink 10% ground round it | at once | chat/Chat.kt:1538-1554 | — |
+| A switch turned | a settings row's switch (通知, 共享到工作区…), its value changed | the knob 3 → 21 across, its ground grey → green | at once: no motion (PageParts.kt:220-224) | shared/…/screens/PageParts.kt:220-224 | slides, unlike Android's (asked for, 2026-10-23): mbui's switch's spring() (`@kit.switch_knob`), the ground blending with it |
 
 ## Agents' messages out of their avatar (chat/ChatMotion.kt)
 

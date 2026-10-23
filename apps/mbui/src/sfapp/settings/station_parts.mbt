@@ -374,7 +374,7 @@ fn station_search(c : @ui.Ctx, core : Core, address : String, personal : Bool, m
               |> ignore
             })
             |> ignore
-            switch(c, personal)
+            switch(c, "search-personal", personal)
           }) {
           act(
             core,
@@ -528,7 +528,7 @@ fn station_versions(c : @ui.Ctx, core : Core, station : String, updates : Array[
             let busy = versions_state.switching.contains(station)
             if list_row(c, key=if busy { "" } else { "versions-beta" }, fn() {
                 row_lines(c, tr("android-misc.versions.beta"), tr("android-misc.versions.beta.text"), wrap_sub=true)
-                switch(c, on)
+                switch(c, "versions-beta", on)
               }) {
               let to = if on { "stable" } else { "beta" }
               versions_state.switching[station] = to
@@ -554,7 +554,7 @@ fn station_versions(c : @ui.Ctx, core : Core, station : String, updates : Array[
                   tr(if idle { "android-misc.versions.auto.idle" } else { "android-misc.versions.auto.text" }),
                   wrap_sub=true,
                 )
-                switch(c, on)
+                switch(c, "versions-auto", on)
               }) {
               versions_state.turning[station] = !on
               version_call(core, station, "software.auto", [("on", Json::boolean(!on))], fn() {
@@ -900,7 +900,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
               |> ignore
               let adb = text(view, "adb")
               doing_mark(c, there && (text(view, "phase") != "offered" || adb == "" || adb == "connecting"), None)
-              switch(c, there)
+              switch(c, "adb-switch", there)
             }) {
             if there {
               act(core, tr("android-misc.adb.stopWhat"), "adb.stop", obj([]))
@@ -1078,7 +1078,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             if list_row(c, key=if busy { "" } else { "adb-grant" }, fn() {
                 row_lines(c, tr("android-misc.adb.grant.title"), tr("android-misc.adb.grant.note"), wrap_sub=true)
                 doing_mark(c, busy, failed_of(core, ["adb.grant"], []))
-                switch(c, false)
+                switch(c, "adb-grant", false)
               }) {
               act(
                 core,
