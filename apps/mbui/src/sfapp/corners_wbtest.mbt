@@ -109,16 +109,25 @@ fn bar_tabs(t : @ui.Tester) -> Bool {
 }
 
 ///|
-test "a desktop as wide has its own frame; a tablet's and a phone's do not" {
-  for p in [(0, true), (3, true), (1, false), (2, false)] {
-    let (platform, frame) = p
+test "the frame: a desktop's as wide; a phone's or a tablet's regular both ways; one regular in width alone has the corners" {
+  // (platform, the size classes its host says, the frame, the corners)
+  for p in [
+    (0, "", true, false),
+    (3, "", true, false),
+    (1, "regular", true, false),
+    (2, "regular", true, false),
+    (1, "compact", false, true),
+    (2, "compact", false, true),
+  ] {
+    let (platform, height, frame, corners) = p
     reset()
     let src = fixture("home")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1024.0, h=768.0, platform~)
-    // (a desktop's host says no size classes; one said there changes nothing)
-    say_room(t, "regular", "regular")
+    if height != "" {
+      say_room(t, "regular", height)
+    }
     t.draw()
-    assert_eq(wide_on.val, frame, msg="platform \{platform}")
-    assert_eq(corners_on.val, !frame, msg="platform \{platform}")
+    assert_eq(wide_on.val, frame, msg="platform \{platform} \{height}")
+    assert_eq(corners_on.val, corners, msg="platform \{platform} \{height}")
   }
 }

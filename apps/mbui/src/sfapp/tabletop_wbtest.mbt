@@ -1,16 +1,21 @@
-// An iPhone Duo's poses over the fixture's chat, as its host says them (@hostapi.system_channel `size_class`, `fold`):
-// its inner screen (626 × 890 points held upright, 890 × 626 on its side) regular both ways, its outer one (466 × 678)
-// compact in width; half open on its back half, the fold across the inner screen's middle (tabletop.mbt).
+// An iPhone Duo's poses over the fixture's chat, as its host says them (@hostapi.system_channel `size_class`, `fold`,
+// `bars`): its inner screen (890 x 626 points as it opens, the fold upright in its middle; 626 x 890 turned) regular
+// both ways, its outer one (466 x 678) compact in width with its status bar down its right side (84); half open on its
+// back half, the fold across the turned inner screen's middle (tabletop.mbt).
 
 ///|
-/// The fixture's chat on an iPhone, the window `w` × `h` with the status bar and the home indicator round it, the
-/// size classes and the hinge said as its host says them (`fold`: its message's JSON, "" none).
-fn duo_chat(w : Double, h : Double, width : String, fold : String) -> @ui.Tester {
+/// The fixture's chat on an iPhone, the window `w` × `h`, the size classes and the hinge said as its host says them
+/// (`fold`: its message's JSON, "" none; `bars`: the bars' message, "" the status bar and the home indicator round it).
+fn duo_chat(w : Double, h : Double, width : String, fold : String, bars? : String = "") -> @ui.Tester {
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=1)
-  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":24,\"bottom\":20,\"left\":0,\"right\":0}}")
+  t.post(@hostapi.system_channel, if bars != "" {
+    bars
+  } else {
+    "{\"bars\":{\"top\":24,\"bottom\":20,\"left\":0,\"right\":0}}"
+  })
   t.post(@hostapi.system_channel, "{\"size_class\":{\"width\":\"\{width}\",\"height\":\"regular\"}}")
   if fold != "" {
     t.post(@hostapi.system_channel, fold)
@@ -20,71 +25,118 @@ fn duo_chat(w : Double, h : Double, width : String, fold : String) -> @ui.Tester
 }
 
 ///|
-/// The fold across a 626-wide screen, its division from 430 to 460 (the margins the system keeps round it in), the
-/// hinge `hinge`.
+/// The fold across the turned inner screen (626 wide), its division from 430 to 460 (the margins the system keeps
+/// round it in), the hinge `hinge`.
 fn across(hinge : String) -> String {
   "{\"fold\":{\"hinge\":\"\{hinge}\",\"divisions\":[{\"x\":0,\"y\":430,\"w\":626,\"h\":30}]}}"
 }
 
 ///|
-test "an iPhone Duo opened and held upright (regular both ways): the wide screen's pages, no bottom bar" {
-  let t = duo_chat(626.0, 890.0, "regular", across("open"))
-  assert_true(corners_on.val)
-  assert_true(said_at(t, "最近会话") is Some(_))
+/// The fold upright in the inner screen as it opens (890 wide), its division from 430 to 460, the hinge `hinge`.
+fn upright(hinge : String) -> String {
+  "{\"fold\":{\"hinge\":\"\{hinge}\",\"divisions\":[{\"x\":430,\"y\":0,\"w\":30,\"h\":626}]}}"
+}
+
+///|
+/// Where the words beginning with `s` are drawn (x, y, w, h), the first of them.
+fn words_at(t : @ui.Tester, s : String) -> (Double, Double, Double, Double)? {
+  for w in t.words() {
+    let (text, x, y, ww, h, _) = w
+    if text.has_prefix(s) {
+      return Some((x, y, ww, h))
+    }
+  }
+  None
+}
+
+///|
+test "an iPhone Duo opened (regular both ways): the wide frame, the chats' list beside the chat, no bottom bar" {
+  let t = duo_chat(890.0, 626.0, "regular", upright("open"))
+  assert_true(wide_on.val)
+  assert_false(corners_on.val)
   assert_false(bar_tabs(t))
+  // the chats' list beside the chat: another chat's row, and the open one's messages and composer
+  assert_true(t.find("首页的列表改成按天分组") is Some(_), msg="\{t.drawn_text()}")
+  assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
+  // a finger's composer: what it says is the phone's, not the desktop's 按空格输入
+  assert_true(t.find("发消息") is Some(_), msg="\{t.drawn_text()}")
+}
+
+///|
+test "opened as a book (the fold upright): the sidebar ends on the fold, the list on one half, the chat on the other" {
+  for hinge in ["open", "half"] {
+    let t = duo_chat(890.0, 626.0, "regular", upright(hinge))
+    let (lx, _, lw, _) = words_at(t, "首页的列表改成按天分组").unwrap()
+    assert_true(lx + lw <= 445.0, msg="\{hinge}: the list's row ends at \{lx + lw}")
+    let (cx, _, _, _) = words_at(t, "做完了：列表").unwrap()
+    assert_true(cx >= 445.0, msg="\{hinge}: the chat's message starts at \{cx}")
+  }
+}
+
+///|
+test "turned and flat (regular both ways, the fold across): the wide frame, the composer at its foot" {
+  let t = duo_chat(626.0, 890.0, "regular", across("open"))
+  assert_true(wide_on.val)
+  let (_, y) = t.find("发消息").unwrap()
+  assert_true(y > 890.0 - 110.0, msg="the composer's words at \{y}")
 }
 
 ///|
 test "a window as wide the system calls compact (beside another app): the phone's pages" {
   let t = duo_chat(700.0, 890.0, "compact", "")
+  assert_false(wide_on.val)
   assert_false(corners_on.val)
-  assert_true(said_at(t, "最近会话") is None)
 }
 
 ///|
-test "its outer screen (compact): the phone's pages" {
-  let t = duo_chat(466.0, 678.0, "compact", "{\"fold\":{\"hinge\":\"none\",\"divisions\":[]}}")
-  assert_false(corners_on.val)
-  let (_, y) = t.find("发消息").unwrap()
-  assert_true(y > 678.0 - 110.0, msg="the composer's words at \{y}")
-}
-
-///|
-test "open flat, the fold across it: the composer at the screen's foot, as on any screen" {
-  let t = duo_chat(626.0, 890.0, "regular", across("open"))
-  let (_, y) = t.find("发消息").unwrap()
-  assert_true(y > 890.0 - 110.0, msg="the composer's words at \{y}")
-  let (_, last) = t.find("做完了：列表、跳到最新的按钮").unwrap()
-  assert_true(last > 460.0, msg="the last message at \{last}")
-}
-
-///|
-test "half open on its back half: the messages end over the fold, the composer and the latest chats under it" {
+test "half open on its back half: the messages over the fold, under it the composer and the latest chats" {
   let t = duo_chat(626.0, 890.0, "regular", across("half"))
-  // the composer at the top of the half lying down, just under the fold
+  // the chat's page across the window, not the frame
+  assert_false(wide_on.val)
+  assert_true(corners_on.val)
+  // the last message over the fold
+  let (_, my, _, mh) = words_at(t, "做完了：列表").unwrap()
+  assert_true(my + mh <= 430.0, msg="the last message ends at \{my + mh}")
+  // the composer at the top of the half under the fold
   let (_, words) = t.find("发消息").unwrap()
   assert_true(words > 460.0 && words < 460.0 + 60.0, msg="the composer's words at \{words}")
-  // nothing of the list on or under the fold but the composer
-  for w in t.words() {
-    let (s, _, y, _, h, alpha) = w
-    if alpha > 0.0 && y + h > 430.0 && s != "发消息" {
-      fail("\{s} at \{y}, on or under the fold")
-    }
+  // the latest chats under it, the button that raises them not over the page
+  let (_, ry, _, _) = words_at(t, "首页的列表改成按天分组").unwrap()
+  assert_true(ry > words, msg="the latest chats' row at \{ry}")
+  assert_true(said_at(t, "最近会话") is None)
+  // one tapped: that chat in this one's place
+  t.tap_text("首页的列表改成按天分组")
+  t.run_for(@ui.nav_push_ms)
+  match app.nav.top() {
+    Chat(r) => assert_true(r.session != "s-c1", msg="still \{r.session}")
+    _ => fail("not a chat")
   }
-  assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
-  // the latest chats' button level with the composer
-  let (_, by, _, bh) = said_at(t, "最近会话").unwrap()
-  assert_true(by > 460.0 && by + bh < 460.0 + 80.0, msg="the latest chats' button at \{by}")
-  // opened flat again: back at the foot
+  // opened flat again: the wide frame, the composer at its foot
   t.post(@hostapi.system_channel, across("open"))
   t.draw()
-  let (_, y) = t.find("发消息").unwrap()
-  assert_true(y > 890.0 - 110.0, msg="the composer's words at \{y}")
+  assert_true(wide_on.val)
 }
 
 ///|
-test "half open as a book (the fold upright between two halves): the page as it is open flat" {
-  let t = duo_chat(890.0, 626.0, "regular", "{\"fold\":{\"hinge\":\"half\",\"divisions\":[{\"x\":430,\"y\":0,\"w\":30,\"h\":626}]}}")
+test "its outer screen (compact, the status bar down its right side): the phone's pages beside it, its bar under it" {
+  let t = duo_chat(
+    466.0,
+    678.0,
+    "compact",
+    "{\"fold\":{\"hinge\":\"closed\",\"divisions\":[]}}",
+    bars="{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}",
+  )
+  assert_false(wide_on.val)
+  assert_false(corners_on.val)
+  // nothing of the page under the status bar's side
+  for w in t.words() {
+    let (s, x, _, ww, _, alpha) = w
+    if alpha > 0.0 {
+      assert_true(x + ww <= 466.0 - 84.0 + 0.5, msg="\{s} ends at \{x + ww}")
+    }
+  }
+  // the chat's bar carried under it (its hairline across)
+  assert_true(top_frost_built.val)
   let (_, y) = t.find("发消息").unwrap()
-  assert_true(y > 626.0 - 110.0, msg="the composer's words at \{y}")
+  assert_true(y > 678.0 - 110.0, msg="the composer's words at \{y}")
 }

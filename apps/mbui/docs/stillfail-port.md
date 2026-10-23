@@ -1276,11 +1276,14 @@ The app on iOS is Android's, as on an Android phone (2026-10-23):
   is (src/sfapp/bars.mbt); round it, and at launch, the page's paper (MBUIGround; the launch screen's Paper colour),
   the status bar's words to match (`@hostapi.set_dark`).
 - Its layout chosen by what the system says of the window, as on Android (src/hostapi/system.mbt `size_class`,
-  `fold`): the window's size classes (its trait collection's) pick the phone's pages or the wide screen's
-  (src/sfapp/corners.mbt: an iPhone Duo's inner screen, regular both ways, has the wide screen's however it is held);
-  the hinge (UIHingeInteraction) and where its fold divides the view (the view's division regions), iOS 27.1 on and
-  built with its SDK (mbui.yml's ios job, on Xcode 27.1): half open with the fold across the view, a chat's messages
-  end over it and its composer sits under it (src/sfapp/tabletop.mbt).
+  `fold`): regular both ways (an iPhone Duo's inner screen, however it is held) the web's wide frame in the phone's
+  theme (src/sfapp/wide.mbt is_touch_wide), its sidebar ending on a fold that stands upright; regular in width alone
+  (a phone on its side) the wide screen's pages (corners.mbt); the hinge (UIHingeInteraction) and where its fold
+  divides the view (the view's division regions), iOS 27.1 on and built with its SDK (mbui.yml's ios job, on Xcode
+  27.1): half open with the fold across the view, a chat's page across it, its messages over the fold, its composer
+  and the latest chats under it (src/sfapp/tabletop.mbt).
+- From side to side too: the safe area's sides said as `bars` (an iPhone Duo's outer screen has its status bar down
+  its right side), the pages beside them and a top bar's hairline carried under them (src/sfapp/sides.mbt).
 - The keyboard as Android's: the view keeps its size, the keyboard's top followed frame by frame as the system moves
   it (UIKeyboardLayoutGuide's motion read off a mark's presentation layer), the app laid out above it; the keyboard
   asked for plain text, no capitals or curly quotes of its own, its return key a new line (a search field's its search

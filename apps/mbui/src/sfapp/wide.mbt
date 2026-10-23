@@ -158,10 +158,39 @@ let wide : Wide = {
 let wide_on : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether a window this wide is drawn wide: a desktop's (the phone's and the tablet's are drawn as Android's at any
-/// width: corners.mbt).
+/// Whether a window this wide is drawn wide: a desktop's (a phone's or a tablet's by what its system says of the
+/// window: is_touch_wide).
 pub fn is_wide(c : @ui.Ctx) -> Bool {
   c.width >= wide_from && !@sf.touch_system()
+}
+
+///|
+/// Whether a phone's or a tablet's window is drawn as the wide frame: one the system classes as regular both ways
+/// (@ui.system_size_class: an iPhone Duo's inner screen, an iPad's whole screen), unless the device is half open on its
+/// back half (tabletop.mbt: a chat's page across the window then, its composer under the fold). Its pages are the
+/// frame's, in the phone's theme, a finger dragging the lists; regular in width alone (a phone on its side) is
+/// corners.mbt's.
+pub fn is_touch_wide() -> Bool {
+  @sf.touch_system() &&
+  @ui.system_size_class() is Some({ width: Regular, height: Regular }) &&
+  @ui.system_tabletop() is None
+}
+
+///|
+/// Where the sidebar ends on a phone's or a tablet's screen whose fold stands upright between two halves (an iPhone Duo
+/// opened as a book: @ui.system_fold's division): on the fold, the chats' list on one half and the page on the other
+/// (within the sidebar's least and most). None without one.
+fn side_on_fold() -> Double? {
+  if !@sf.touch_system() {
+    return None
+  }
+  for d in @ui.system_fold().divisions {
+    let (x, _, w, h) = d
+    if h > w {
+      return Some(dmax(side_min, dmin(side_max, x + w / 2.0 - rail_w)))
+    }
+  }
+  None
 }
 
 ///|
@@ -237,46 +266,61 @@ fn wide_frame(
   invited : Bool,
 ) -> Unit {
   let t = @sf.theme()
-  // a desktop's page: the wheel and the trackpad scroll, a drag is the pointer's own
-  c.mouse_drags_lists(false)
+  // a desktop's page: the wheel and the trackpad scroll, a drag is the pointer's own; a phone's or a tablet's: a
+  // finger drags the lists
+  let touch = @sf.touch_system()
+  c.mouse_drags_lists(touch)
   wide_keys(c, src, w)
   // a device waiting to be confirmed in the workspace's safe mode: beside the rail (the workspaces, settings) only
   // what it waits on, no chats' list (its stations refuse it), unless a settings page is open
   let gated = lit_place() != "settings" && @settings.lock_waiting(settings_core(src, w), w.id)
   // (连接 and 用量: a page across the pane, no sidebar: wide_places.mbt)
   let bare = place_bare(lit_place())
-  let side = if gated || bare { 0.0 } else { side_now() }
+  // (on a fold standing upright, the sidebar ends on it while it is not folded away)
+  let on_fold = if wide.folded { None } else { side_on_fold() }
+  let side = if gated || bare { 0.0 } else { on_fold.unwrap_or(side_now()) }
   let main_w = dmax(0.0, c.width - rail_w - side)
+  // a phone's or a tablet's screen: under the status bar and over the navigation bar (the host's `bars`), the frame's
+  // grounds under them
+  let top = status_top()
+  let foot = nav_foot()
   // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
   land(src, w)
   // what the page or the sidebar takes back for (a sheet, a menu, a step of a page's) goes back before the stack does
   let took = c.took_back(fn() {
     c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-      c.box(dir=Row, w=Px(rail_w + side), h=Fill(1.0), bg=t.p.sidebar, clip=true, fn() {
+      c.box(dir=Row, w=Px(rail_w + side), h=Fill(1.0), bg=t.p.sidebar, clip=true, pt=top, pb=foot, fn() {
         rail(c, src, w, all)
         if side > 0.0 {
           c.box(w=Px(side + 8.0), h=Fill(1.0), fn() { sidebar(c, src, w, side + 8.0) }) |> ignore
         }
       })
       |> ignore
-      c.box(w=Px(main_w), h=Fill(1.0), clip=true, fn() {
-        c.sized(main_w, c.height, fn() {
-          // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not)
-          c.selectable(color=@sf.alpha(t.p.blue, 0.28), fn() {
+      c.box(w=Px(main_w), h=Fill(1.0), clip=true, pt=top, pb=foot, fn() {
+        c.sized(main_w, c.height - top - foot, fn() {
+          let page = fn() {
             if gated {
               c.box(w=Px(main_w), h=Px(c.height), bg=t.p.bg, fn() { lock_gate(c, src, w) |> ignore }) |> ignore
             } else {
               c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
               |> ignore
             }
-          })
+          }
+          // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not); a finger
+          // picks them as on a phone (pick.mbt)
+          if touch {
+            page()
+          } else {
+            c.selectable(color=@sf.alpha(t.p.blue, 0.28), page)
+          }
         })
       })
       |> ignore
   })
   |> ignore
   })
-  if !bare {
+  // (the sidebar's edge dragged, unless it is on the fold)
+  if !bare && on_fold is None {
     sidebar_edge(c, side)
   }
   // back (⌘[, a mouse's back button) a page of the stack, where there is one

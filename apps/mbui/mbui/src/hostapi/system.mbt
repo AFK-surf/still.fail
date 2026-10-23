@@ -20,8 +20,9 @@
 //   starts plus `bottom`, so a sheet padded by `bottom` sits on the keyboard. In the app's own window the view is
 //   inside the bars and nothing is said, unless the app lays itself out round them (its manifest's
 //   `<meta-data android:name="dev.mbui.edge" android:value="true">`, as Android's apps edge to edge): then its view is
-//   under them too, from the screen's top to its foot, and `bars` says their `top` and `bottom` (a cutout at a side is
-//   kept out of the view: `left` and `right` 0), the keyboard up as over another app.
+//   under them too, from the screen's top to its foot, and `bars` says their `top` and `bottom` (Android keeps a cutout
+//   at a side out of the view: `left` and `right` 0; iOS's view runs from side to side too, and says them: an iPhone
+//   Duo's outer screen has its status bar down its right side, iOS 27.1), the keyboard up as over another app.
 // - `{"size_class": {"width": "compact"|"regular", "height": "compact"|"regular"}}`: how much room the app's window
 //   has, as the system classes it (not its size in points: what the platform says such a window is, the app's layout
 //   chosen by that and nothing it works out from a width of its own). iOS: the window's trait collection

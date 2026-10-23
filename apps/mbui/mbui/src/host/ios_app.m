@@ -693,8 +693,9 @@ static MBController *the_controller;
     [under.trailingAnchor constraintEqualToAnchor:the_view.trailingAnchor],
   ];
   if (edge) {
-    // edge to edge, as Android's app is: from the screen's top to its foot, under the status bar and the home
-    // indicator (said to the app: viewSafeAreaInsetsDidChange); a side's cutout (on its side) kept out of the view.
+    // edge to edge, as Android's app is: from the screen's top to its foot and from side to side, under the status bar,
+    // the home indicator and what is at a side (an iPhone Duo's outer screen has its status bar down its side, iOS
+    // 27.1; a phone on its side its cutout): all said to the app (viewSafeAreaInsetsDidChange), which keeps clear of them.
     // The keyboard's guide reaches the screen's foot (not the safe area's) while it is down, its mark with it.
     root.keyboardLayoutGuide.usesBottomSafeArea = NO;
     self.kbMark = [UIView new];
@@ -705,8 +706,8 @@ static MBController *the_controller;
     [NSLayoutConstraint activateConstraints:[@[
       [the_view.topAnchor constraintEqualToAnchor:root.topAnchor],
       [the_view.bottomAnchor constraintEqualToAnchor:root.bottomAnchor],
-      [the_view.leadingAnchor constraintEqualToAnchor:g.leadingAnchor],
-      [the_view.trailingAnchor constraintEqualToAnchor:g.trailingAnchor],
+      [the_view.leadingAnchor constraintEqualToAnchor:root.leadingAnchor],
+      [the_view.trailingAnchor constraintEqualToAnchor:root.trailingAnchor],
       [self.kbMark.topAnchor constraintEqualToAnchor:root.keyboardLayoutGuide.topAnchor],
       [self.kbMark.leadingAnchor constraintEqualToAnchor:root.leadingAnchor],
       [self.kbMark.widthAnchor constraintEqualToConstant:1],
@@ -723,16 +724,17 @@ static MBController *the_controller;
     self.bottom,
   ] arrayByAddingObjectsFromArray:under_view]];
 }
-// Edge to edge, the bars said to the app as they change (src/hostapi/system.mbt `bars`): the status bar's over the
-// view's top, the home indicator's under its foot (the safe area's), the sides none (kept out of the view).
+// Edge to edge, the bars said to the app as they change (src/hostapi/system.mbt `bars`): the safe area's on each side
+// (the status bar's over the view's top, or down its side on an iPhone Duo's outer screen; the home indicator's under
+// its foot; a cutout at a side).
 - (void)sayBars {
   if (!edge) return;
   UIEdgeInsets in = self.view.safeAreaInsets;
-  UIEdgeInsets b = UIEdgeInsetsMake(in.top, 0, in.bottom, 0);
+  UIEdgeInsets b = UIEdgeInsetsMake(in.top, in.left, in.bottom, in.right);
   if (self.barsSaid && UIEdgeInsetsEqualToEdgeInsets(b, self.saidBars)) return;
   self.barsSaid = YES;
   self.saidBars = b;
-  say_system(@{@"bars" : @{@"top" : @(b.top), @"bottom" : @(b.bottom), @"left" : @0, @"right" : @0}});
+  say_system(@{@"bars" : @{@"top" : @(b.top), @"bottom" : @(b.bottom), @"left" : @(b.left), @"right" : @(b.right)}});
   [the_view requestFrame];
 }
 - (void)viewSafeAreaInsetsDidChange {

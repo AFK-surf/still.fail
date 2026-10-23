@@ -341,13 +341,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         if failed is Some(_) || !new_chat_made(c, r) {
           waiting_messages(c, failed)
         }
-        c.layer(fn() {
-          c.spacer()
-          composer(c, src, r, None, beside=corners_on.val)
-          // over the navigation bar (a layer goes on under the page's padding); on a device half open, under the fold
-          // (tabletop.mbt)
-          bar_room_box(c, nav_foot() + tabletop_raise(c, composer_own_room(c, draft_key(r), None)))
-        })
+        c.layer(fn() { chat_foot(c, src, w, r, None) })
         |> ignore
         // its first words, as typed, till their row is in the list (flight.mbt; their wait for it counted from now)
         flight_frame(c, draft_key(r))
@@ -357,13 +351,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       Some(v) => {
         messages(c, src, r, v, list)
         c.layer(fn() { chat_bar(c, src, w, r, v) }) |> ignore
-        c.layer(fn() {
-          c.spacer()
-          composer(c, src, r, Some(v), beside=corners_on.val)
-          // over the navigation bar (a layer goes on under the page's padding); on a device half open, under the fold
-          // (tabletop.mbt)
-          bar_room_box(c, nav_foot() + tabletop_raise(c, composer_own_room(c, draft_key(r), Some(v))))
-        })
+        c.layer(fn() { chat_foot(c, src, w, r, Some(v)) })
         |> ignore
         // words sent, as typed, until their row is in the list (flight.mbt)
         flight_waiting(c, draft_key(r))
@@ -1991,6 +1979,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
   let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
   let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
+  top_frost()
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,

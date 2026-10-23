@@ -86,6 +86,8 @@ fn wide_corners(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   match top {
     Home => home_corner(c, src, w)
     Decisions | DriveRead(_) | DrivePlay(_) => ()
+    // a chat half open has the latest chats under its composer (tabletop.mbt)
+    Chat(_) if @ui.system_tabletop() is Some(_) => ()
     _ => recent_corner(c, src, w, top)
   }
 }
@@ -152,9 +154,8 @@ let white : Int64 = 0xFFFFFFFFL
 
 ///|
 /// The latest chats' button at the screen's bottom left, as high as the composer is (ChatHost.kt: 10 from the foot, 52
-/// tall on one line; over a chat on a device half open, as raised as its composer: tabletop.mbt), and the chats it
-/// raises over the page (not dimmed): the list's first six, the one open marked; a new chat at their head, the whole
-/// list at their foot. One picked takes the place of the page open (AppState.open).
+/// tall on one line), and the chats it raises over the page (not dimmed): the list's first six, the one open marked; a
+/// new chat at their head, the whole list at their foot. One picked takes the place of the page open (AppState.open).
 fn recent_corner(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
   let t = @sf.theme()
   let open = recent_open.val
@@ -186,8 +187,7 @@ fn recent_corner(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
         @sf.icon(c, "chats", size=22.0, color=if open { t.p.bg } else { t.p.text }) |> ignore
       })
       c.semantics(node, Button, id~, label=tr("android-misc.wide.recent"), expanded=open)
-      let up = if top is Chat(_) { tabletop_raise(c, composer_own_room_of(c)) } else { 0.0 }
-      c.box(style=@ui.style(h=Fixed(nav_foot() + up)), fn() {  }) |> ignore
+      c.box(style=@ui.style(h=Fixed(nav_foot())), fn() {  }) |> ignore
     })
     |> ignore
   })
@@ -229,7 +229,6 @@ let recent_button_open : @ui.Style = recent_button.then(
 /// The panel (Wide.kt Recent): 340 wide, 560 tall at most, in the capsules' glass; its new-chat button round in its
 /// corner, its rows' grounds and its foot's 6 in, concentric with it.
 fn recent_panel(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
-  let (view, error) = chats_of(src, w.id, "all")
   c.box(style=recent_panel_box, fn() {
     c.box(style=recent_head, fn() {
       c.text(tr("android-misc.wide.recent"), style=recent_title) |> ignore
@@ -242,45 +241,7 @@ fn recent_panel(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
       c.semantics(node, Button, id~, label=tr("android-misc.wide.newChat"))
     })
     |> ignore
-    match view {
-      None => waiting(c, recent_waiting, None, error)
-      // no rows: what the list says in their place (the core's `note`), as Home does: its rows to come while read, or
-      // what could not be; else that there are none
-      Some(v) if v.days.is_empty() =>
-        match v.note {
-          Some(note) if note.reading || note.failing.length() > 0 => waiting(c, recent_waiting, Some(note), None)
-          _ => c.text(tr("android-misc.wide.empty"), style=recent_empty) |> ignore
-        }
-      Some(v) => {
-        let items : Array[ChatItem] = []
-        for d in v.days {
-          for it in d.items {
-            if items.length() < recent_chats_most {
-              items.push(it)
-            }
-          }
-        }
-        c.box(style=recent_rows, fn() {
-          for item in items {
-            let here = match top {
-              Chat(r) => r.station == item.station && r.session == item.session
-              _ => false
-            }
-            c.box(style=if here { recent_row_here } else { recent_row }, fn() {
-              chat_row(c, src, item, v.leading, found=true, opened=fn(r) {
-                recent_open.val = false
-                if !here {
-                  open_in_place(Chat(r))
-                }
-              })
-              |> ignore
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-      }
-    }
+    recent_list(c, src, w, top)
     c.box(style=recent_rule, fn() {  }) |> ignore
     c.box(style=recent_foot, fn() {
       let id = c.id("wide/recent-all")
@@ -299,6 +260,53 @@ fn recent_panel(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// The latest chats (the list's first six, the one open marked; one picked takes the place of the page open:
+/// AppState.open), or what the list says in their place: in the panel the latest chats' button raises, and under a
+/// chat's composer on a device half open (tabletop.mbt).
+fn recent_list(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
+  let (view, error) = chats_of(src, w.id, "all")
+  match view {
+    None => waiting(c, recent_waiting, None, error)
+    // no rows: what the list says in their place (the core's `note`), as Home does: its rows to come while read, or
+    // what could not be; else that there are none
+    Some(v) if v.days.is_empty() =>
+      match v.note {
+        Some(note) if note.reading || note.failing.length() > 0 => waiting(c, recent_waiting, Some(note), None)
+        _ => c.text(tr("android-misc.wide.empty"), style=recent_empty) |> ignore
+      }
+    Some(v) => {
+      let items : Array[ChatItem] = []
+      for d in v.days {
+        for it in d.items {
+          if items.length() < recent_chats_most {
+            items.push(it)
+          }
+        }
+      }
+      c.box(style=recent_rows, fn() {
+        for item in items {
+          let here = match top {
+            Chat(r) => r.station == item.station && r.session == item.session
+            _ => false
+          }
+          c.box(style=if here { recent_row_here } else { recent_row }, fn() {
+            chat_row(c, src, item, v.leading, found=true, opened=fn(r) {
+              recent_open.val = false
+              if !here {
+                open_in_place(Chat(r))
+              }
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    }
+  }
 }
 
 ///|

@@ -160,6 +160,7 @@ fn init {
 fn reset() -> Unit {
   @sf.set_language(None)
   files_cornered.val = false
+  top_frost_built.val = false
   felt_menu.val = -1
   felt_past.clear()
   felt_holds.clear()
@@ -417,11 +418,12 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)
   c.set_clear((t.p.bg >> 8) & 0xFFFFFFL)
-  // a desktop's width: the web app's wide frame (wide.mbt); a phone's or a tablet's window the system calls regular in
-  // width (an opened foldable, a phone on its side): Android's, the pages the whole width with the latest chats at a
-  // corner (corners.mbt); otherwise the phone's pages
-  wide_on.val = is_wide(c)
-  corners_on.val = is_corners()
+  // a desktop's width, or a phone's or a tablet's window the system calls regular both ways (an opened foldable, an
+  // iPad): the web app's wide frame (wide.mbt); one regular in width alone (a phone on its side) or half open on its
+  // back half: Android's, the pages the whole width with the latest chats at a corner (corners.mbt); otherwise the
+  // phone's pages
+  wide_on.val = is_wide(c) || is_touch_wide()
+  corners_on.val = is_corners() && !wide_on.val
   @settings.wide.val = wide_on.val
   @settings.no_bar.val = corners_on.val
   @settings.status_top.val = status_top()
@@ -436,7 +438,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   }
   // everything in still.fail's theme, as this frame's palette has it (light or dark, a phone's or a desktop's): the
   // styles' roles (@sf styles.mbt, the pages' own) its ink, its sizes, its corners; the one place it is put
-  c.with_theme(@sf.ui_theme(), fn() { view_in(c, src, t) })
+  // beside what the system has at the window's sides (sides.mbt)
+  c.with_theme(@sf.ui_theme(), fn() { beside_sides(c, fn() { view_in(c, src, t) }) })
 }
 
 ///|
