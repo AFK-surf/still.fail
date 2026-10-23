@@ -53,17 +53,67 @@ pub fn fixture_json(json : String) -> Source {
     },
   }
   for p in items(Some(screen), "open") {
-    let station = text(Some(p), "station")
-    let session = text(Some(p), "session")
-    let r : ChatRef = { station, session, title: "", station_name: "" }
-    match text(Some(p), "page") {
-      "chat" => open_chat(r)
-      "history" => app.nav.push(History(r, text(Some(p), "key"), None))
-      "settings" => open_setting("home")
-      _ => ()
+    match json_page(p) {
+      Some(page) => app.nav.push(page)
+      None => ()
     }
   }
   src
+}
+
+///|
+/// The page a screen's JSON opens (`open`'s each, as screen_dump_wbtest page_json writes them and Android's
+/// ScreensRefTest page reads them), over Home: None for one it does not know.
+fn json_page(p : Json) -> Page? {
+  let j = Some(p)
+  let station = text(j, "station")
+  let r : ChatRef = { station, session: text(j, "session"), title: "", station_name: "" }
+  let route : @settings.Route? = match text(j, "page") {
+    "chat" => return Some(Chat(r))
+    "history" => return Some(History(r, text(j, "key"), None))
+    "new" => return Some(NewChat)
+    "decisions" => return Some(Decisions)
+    "settings" => return Some(Settings)
+    "files" => return Some(Files)
+    "drive" =>
+      return Some(
+        Drive({
+          station,
+          root: match field(j, "root") {
+            Some(String(s)) => Some(s)
+            _ => None
+          },
+          path: text(j, "path"),
+        }),
+      )
+    "drive-read" => return Some(DriveRead({ station, root: Some(text(j, "root")), path: text(j, "path") }))
+    "me" => Some(Me)
+    "appearance" => Some(Appearance)
+    "fonts" => Some(Fonts)
+    "workspace" => Some(Workspace)
+    "security" => Some(Security)
+    "vault" => Some(Vault)
+    "stations" => Some(Stations)
+    "station" => Some(Station(station))
+    "profiles" => Some(Profiles(station))
+    "profile" => Some(Profile(station, text(j, "profile")))
+    "pick-models" => Some(PickModels(station, text(j, "profile")))
+    "connects" => Some(Connects(station))
+    "connect" => Some(Connect(station, text(j, "connect")))
+    "new-profile" => Some(NewProfile(station))
+    "new-connect" => Some(NewConnect(station))
+    "memories" => Some(Memories)
+    "memory" => Some(Memory(station))
+    "memory-doc" => Some(MemoryDoc(station, text(j, "skill"), number(j, "at").to_int()))
+    "usage" => Some(Usage)
+    "archive" => Some(Archive)
+    "auto-decisions" => Some(AutoDecisions)
+    "bar-settings" => Some(BarSettings)
+    "kept-files" => Some(KeptFiles)
+    "changelog" => Some(Changelog)
+    _ => None
+  }
+  route.map(fn(r) { Setting(r) })
 }
 
 ///|

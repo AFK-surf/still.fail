@@ -1,0 +1,2679 @@
+{
+  "workspace": "ws1",
+  "open": [
+    {
+      "page": "settings"
+    },
+    {
+      "page": "vault"
+    }
+  ],
+  "at": 3000,
+  "shows": [
+    "agent ",
+    "批准时最长能"
+  ],
+  "topics": [
+    {
+      "topic": {
+        "topic": "prefs"
+      },
+      "value": {
+        "onlyMine": false,
+        "onlyWatching": false,
+        "onlyDecisions": false,
+        "listFilter": {},
+        "appearance": "light",
+        "rowPicture": "auto",
+        "absoluteTime": false,
+        "keys": {},
+        "workspace": "ws1",
+        "lastChat": {},
+        "openChat": {},
+        "chatTabs": {},
+        "dropFiles": {},
+        "driveViews": {},
+        "filesTabs": {},
+        "driveFavorites": {},
+        "resume": {},
+        "stationUpdatesDismissed": {},
+        "device": {
+          "app": "",
+          "phone": false,
+          "handoff": false
+        },
+        "reader": {
+          "size": 0,
+          "line": 0,
+          "margin": 0,
+          "face": "sans",
+          "indent": false,
+          "paper": "follow"
+        },
+        "rails": {},
+        "bars": {
+          "sets": [],
+          "current": 0
+        },
+        "barsBy": {},
+        "fonts": {},
+        "faces": {
+          "ui": {
+            "id": "",
+            "name": "",
+            "mono": false,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "text": {
+            "id": "",
+            "name": "",
+            "mono": false,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "code": {
+            "id": "",
+            "name": "",
+            "mono": true,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "list": [
+            {
+              "id": "inter",
+              "name": "Inter",
+              "mono": false,
+              "family": "SF Inter",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/inter/1/var.ttf.gz",
+                  "bytes": 457818,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/inter/1/preview.ttf",
+              "bytes": 457818
+            },
+            {
+              "id": "noto-sans-sc",
+              "name": "思源黑体",
+              "mono": false,
+              "family": "SF 思源黑体",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/noto-sans-sc/1/var.ttf.gz",
+                  "bytes": 11276563,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/noto-sans-sc/1/preview.ttf",
+              "bytes": 11276563
+            },
+            {
+              "id": "noto-serif-sc",
+              "name": "思源宋体",
+              "mono": false,
+              "family": "SF 思源宋体",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/noto-serif-sc/1/var.ttf.gz",
+                  "bytes": 15454579,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/noto-serif-sc/1/preview.ttf",
+              "bytes": 15454579
+            },
+            {
+              "id": "lxgw-wenkai",
+              "name": "霞鹜文楷",
+              "mono": false,
+              "family": "SF 霞鹜文楷",
+              "files": [
+                {
+                  "weight": 400,
+                  "url": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/400.ttf.gz",
+                  "bytes": 13088456,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                },
+                {
+                  "weight": 500,
+                  "url": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/500.ttf.gz",
+                  "bytes": 13088456,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/preview.ttf",
+              "bytes": 26176912
+            },
+            {
+              "id": "jetbrains-mono",
+              "name": "JetBrains Mono",
+              "mono": true,
+              "family": "SF JetBrains Mono",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/jetbrains-mono/1/var.ttf.gz",
+                  "bytes": 90579,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/jetbrains-mono/1/preview.ttf",
+              "bytes": 90579
+            },
+            {
+              "id": "fira-code",
+              "name": "Fira Code",
+              "mono": true,
+              "family": "SF Fira Code",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/fira-code/1/var.ttf.gz",
+                  "bytes": 137151,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/fira-code/1/preview.ttf",
+              "bytes": 137151
+            },
+            {
+              "id": "maple-mono",
+              "name": "Maple Mono",
+              "mono": true,
+              "family": "SF Maple Mono",
+              "files": [
+                {
+                  "weight": 400,
+                  "url": "https://app.still.fail/releases/fonts/maple-mono/1/400.ttf.gz",
+                  "bytes": 8395338,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                },
+                {
+                  "weight": 600,
+                  "url": "https://app.still.fail/releases/fonts/maple-mono/1/600.ttf.gz",
+                  "bytes": 8395338,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/maple-mono/1/preview.ttf",
+              "bytes": 16790677
+            }
+          ]
+        }
+      }
+    },
+    {
+      "topic": {
+        "topic": "accounts"
+      },
+      "value": [
+        {
+          "sub": "u1",
+          "email": "lin@example.com",
+          "name": "林"
+        }
+      ]
+    },
+    {
+      "topic": {
+        "topic": "workspaces"
+      },
+      "value": [
+        {
+          "account": {
+            "sub": "u1",
+            "email": "lin@example.com",
+            "name": "林"
+          },
+          "workspaces": [
+            {
+              "id": "ws1",
+              "name": "星火工作室",
+              "stations": 2,
+              "members": 3
+            },
+            {
+              "id": "ws2",
+              "name": "个人",
+              "stations": 1,
+              "members": 1
+            }
+          ],
+          "invitations": [],
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "topic": {
+        "topic": "workspace",
+        "workspace": "ws1"
+      },
+      "value": {
+        "id": "ws1",
+        "name": "星火工作室",
+        "role": "owner",
+        "members": [
+          {
+            "sub": "u1",
+            "email": "lin@example.com",
+            "name": "林",
+            "role": "owner"
+          },
+          {
+            "sub": "u2",
+            "email": "ana@example.com",
+            "name": "Ana",
+            "role": "admin"
+          },
+          {
+            "sub": "u3",
+            "email": "zhou@example.com",
+            "name": "周",
+            "role": "member"
+          }
+        ],
+        "stations": [
+          {
+            "id": "st1",
+            "name": "Studio"
+          },
+          {
+            "id": "st2",
+            "name": "MBA"
+          }
+        ],
+        "invitations": [
+          {
+            "id": "i1",
+            "role": "member",
+            "email": "qin@example.com",
+            "time": {
+              "expires_at": {
+                "at": 0,
+                "ago": "",
+                "full": "",
+                "until": "6 天后",
+                "past": true
+              }
+            }
+          }
+        ],
+        "added": [
+          {
+            "email": "he@example.com",
+            "role": "member"
+          }
+        ],
+        "relays": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "stations",
+        "scope": "ws1"
+      },
+      "value": [
+        {
+          "station": "ws1/st1",
+          "id": "st1",
+          "name": "Studio",
+          "icon": "glyph:desktop",
+          "summary": "Apple M2 Max · 2 个 agent 在工作",
+          "face": "working",
+          "line": "Apple M2 Max · 64 GB · macOS 26",
+          "online": true,
+          "reconnecting": false,
+          "link": {
+            "state": "online"
+          },
+          "runtimes": [],
+          "models": [],
+          "overview": {
+            "automaticDecisions": {
+              "canEdit": true,
+              "canReview": true,
+              "settings": {
+                "completion": {
+                  "enabled": true,
+                  "model": null
+                }
+              },
+              "models": [
+                {
+                  "id": "gpt-6-mini",
+                  "name": "GPT-6 mini",
+                  "profiles": [
+                    "cx"
+                  ]
+                }
+              ],
+              "recent": [],
+              "policy": {
+                "text": "做完、没有待办的对话归档；还在等人回复或有后续计划的留下。",
+                "options": [
+                  {
+                    "id": "o1",
+                    "name": "已完成",
+                    "rubric": "任务做完，没有后续",
+                    "archive": true,
+                    "count": 12,
+                    "chats": [
+                      {
+                        "session": "s-c3",
+                        "title": "夜里的构建又失败了",
+                        "at": 0,
+                        "recommended": false
+                      }
+                    ]
+                  },
+                  {
+                    "id": "o2",
+                    "name": "被放弃",
+                    "rubric": "明确不再继续",
+                    "archive": true,
+                    "count": 3,
+                    "chats": []
+                  },
+                  {
+                    "id": "o3",
+                    "name": "等回复",
+                    "rubric": "在等某人的答复",
+                    "archive": false,
+                    "count": 5,
+                    "chats": []
+                  }
+                ],
+                "days": 7,
+                "checked": 20,
+                "failed": 0,
+                "edited": false,
+                "change": null,
+                "summaryText": "近 7 天检查了 20 个对话",
+                "changeText": "上次修改 3 天前"
+              }
+            },
+            "viewer": {
+              "via": ""
+            },
+            "connects": [
+              {
+                "id": "k1",
+                "name": "星火助手",
+                "team": "星火",
+                "enabled": true,
+                "kind": "slack",
+                "mode": "multi-session",
+                "requireMention": true,
+                "bind": {
+                  "runtime": "claude",
+                  "model": "claude-opus-5-5",
+                  "effort": "high"
+                },
+                "slack": {
+                  "appToken": "",
+                  "botToken": ""
+                },
+                "connection": {
+                  "state": "connected",
+                  "error": "Slack 拒绝了 token"
+                },
+                "createdBy": {
+                  "id": "lin@example.com",
+                  "name": "林",
+                  "shown": {
+                    "name": "林",
+                    "display": "你",
+                    "mine": true
+                  }
+                },
+                "sessions": 4,
+                "statusText": "在线",
+                "presence": "online",
+                "modeText": "每个 thread 一个会话",
+                "modeShort": "",
+                "runtimeText": "Claude Code",
+                "runText": "",
+                "modelName": "Opus 5.5"
+              }
+            ],
+            "profiles": [
+              {
+                "id": "cc",
+                "name": "Claude 主账号",
+                "runtime": "claude",
+                "runtimes": [
+                  "claude"
+                ],
+                "access": {
+                  "kind": "subscription",
+                  "key": "",
+                  "login": false
+                },
+                "home": "",
+                "homeExists": true,
+                "models": [
+                  "claude-opus-5-5",
+                  "claude-sonnet-5"
+                ],
+                "env": [],
+                "usedBy": [
+                  "k1"
+                ],
+                "loginCommand": "claude setup-token",
+                "machine": false,
+                "backgroundOnMessage": true,
+                "fast": false,
+                "check": {
+                  "state": "ok",
+                  "detail": "可用，订阅有效",
+                  "checkedAt": 0,
+                  "time": {
+                    "checkedAt": {
+                      "at": 0,
+                      "ago": "5 分钟前",
+                      "full": "",
+                      "until": "",
+                      "past": true
+                    }
+                  }
+                },
+                "quota": {
+                  "state": "ok",
+                  "windows": [
+                    {
+                      "label": "5 小时",
+                      "usedPercent": 38,
+                      "mark": "5H",
+                      "left": 62,
+                      "level": "ok",
+                      "refills": "2 小时后恢复"
+                    },
+                    {
+                      "label": "本周",
+                      "usedPercent": 81,
+                      "mark": "W",
+                      "left": 19,
+                      "level": "amber",
+                      "refills": "星期一恢复"
+                    }
+                  ],
+                  "checkedAt": 0,
+                  "time": {
+                    "checkedAt": {
+                      "at": 0,
+                      "ago": "3 分钟前",
+                      "full": "",
+                      "until": "",
+                      "past": true
+                    }
+                  }
+                },
+                "checkText": "可用",
+                "checkTone": "green",
+                "group": "claude",
+                "groupTitle": "Claude 订阅",
+                "makers": {},
+                "names": {
+                  "claude-opus-5-5": "Opus 5.5",
+                  "claude-sonnet-5": "Sonnet 5",
+                  "claude-haiku-5": "Haiku 5"
+                },
+                "series": [
+                  {
+                    "name": "Opus",
+                    "models": [
+                      "claude-opus-5-5"
+                    ]
+                  },
+                  {
+                    "name": "Sonnet",
+                    "models": [
+                      "claude-sonnet-5"
+                    ]
+                  },
+                  {
+                    "name": "Haiku",
+                    "models": [
+                      "claude-haiku-5"
+                    ]
+                  }
+                ],
+                "modelsText": "2 个模型",
+                "available": [
+                  "claude-opus-5-5",
+                  "claude-sonnet-5",
+                  "claude-haiku-5"
+                ],
+                "modelsReading": false,
+                "uses": [],
+                "usesText": "Claude Code",
+                "canAddModel": false,
+                "decisionOnly": false,
+                "decisionModels": [],
+                "share": {
+                  "id": "sh1",
+                  "role": "host",
+                  "host": "st1",
+                  "users": [
+                    "st2"
+                  ]
+                },
+                "workspaces": [
+                  "ws2"
+                ]
+              },
+              {
+                "id": "cx",
+                "name": "ChatGPT 团队",
+                "runtime": "codex",
+                "runtimes": [
+                  "codex"
+                ],
+                "access": {
+                  "kind": "subscription",
+                  "key": "",
+                  "login": false
+                },
+                "home": "",
+                "homeExists": true,
+                "models": [
+                  "gpt-6-mini"
+                ],
+                "env": [],
+                "usedBy": [
+                  "k1"
+                ],
+                "loginCommand": "",
+                "machine": false,
+                "check": {
+                  "state": "ok",
+                  "detail": "可用，订阅有效",
+                  "checkedAt": 0,
+                  "time": {
+                    "checkedAt": {
+                      "at": 0,
+                      "ago": "5 分钟前",
+                      "full": "",
+                      "until": "",
+                      "past": true
+                    }
+                  }
+                },
+                "quota": {
+                  "resetCount": 2,
+                  "resetText": "还可重置 2 次",
+                  "state": "ok",
+                  "windows": [
+                    {
+                      "label": "5 小时",
+                      "usedPercent": 38,
+                      "mark": "5H",
+                      "left": 62,
+                      "level": "ok",
+                      "refills": "2 小时后恢复"
+                    },
+                    {
+                      "label": "本周",
+                      "usedPercent": 81,
+                      "mark": "W",
+                      "left": 19,
+                      "level": "amber",
+                      "refills": "星期一恢复"
+                    }
+                  ],
+                  "checkedAt": 0,
+                  "time": {
+                    "checkedAt": {
+                      "at": 0,
+                      "ago": "3 分钟前",
+                      "full": "",
+                      "until": "",
+                      "past": true
+                    }
+                  }
+                },
+                "checkText": "可用",
+                "checkTone": "green",
+                "group": "chatgpt",
+                "groupTitle": "ChatGPT 订阅",
+                "makers": {},
+                "names": {
+                  "gpt-6": "GPT-6",
+                  "gpt-6-mini": "GPT-6-MINI",
+                  "gpt-6-nano": "GPT-6-NANO",
+                  "gpt-6-codex": "GPT-6-CODEX",
+                  "gpt-6-codex-mini": "GPT-6-CODEX-MINI",
+                  "gpt-5.5": "GPT-5.5",
+                  "gpt-5.5-mini": "GPT-5.5-MINI",
+                  "gpt-5.5-codex": "GPT-5.5-CODEX",
+                  "gpt-5": "GPT-5",
+                  "gpt-5-mini": "GPT-5-MINI",
+                  "o9": "O9",
+                  "o9-mini": "O9-MINI"
+                },
+                "series": [
+                  {
+                    "name": "GPT",
+                    "models": [
+                      "gpt-6",
+                      "gpt-6-mini",
+                      "gpt-6-nano",
+                      "gpt-6-codex",
+                      "gpt-6-codex-mini",
+                      "gpt-5.5",
+                      "gpt-5.5-mini",
+                      "gpt-5.5-codex",
+                      "gpt-5",
+                      "gpt-5-mini",
+                      "o9",
+                      "o9-mini"
+                    ]
+                  }
+                ],
+                "modelsText": "1 个模型",
+                "available": [
+                  "gpt-6",
+                  "gpt-6-mini",
+                  "gpt-6-nano",
+                  "gpt-6-codex",
+                  "gpt-6-codex-mini",
+                  "gpt-5.5",
+                  "gpt-5.5-mini",
+                  "gpt-5.5-codex",
+                  "gpt-5",
+                  "gpt-5-mini",
+                  "o9",
+                  "o9-mini"
+                ],
+                "modelsReading": false,
+                "uses": [],
+                "usesText": "Claude Code",
+                "canAddModel": true,
+                "decisionOnly": false,
+                "decisionModels": [],
+                "workspaces": []
+              },
+              {
+                "id": "k2",
+                "name": "备用 key",
+                "runtime": "claude",
+                "runtimes": [
+                  "claude"
+                ],
+                "access": {
+                  "kind": "anthropic-api",
+                  "key": "sk-…a41f",
+                  "login": false
+                },
+                "home": "",
+                "homeExists": true,
+                "models": [
+                  "claude-opus-5-5",
+                  "claude-sonnet-5"
+                ],
+                "env": [],
+                "usedBy": [],
+                "loginCommand": "",
+                "machine": false,
+                "check": {
+                  "state": "ok",
+                  "detail": "可用，订阅有效",
+                  "checkedAt": 0,
+                  "time": {
+                    "checkedAt": {
+                      "at": 0,
+                      "ago": "5 分钟前",
+                      "full": "",
+                      "until": "",
+                      "past": true
+                    }
+                  }
+                },
+                "quota": {
+                  "state": "unsupported",
+                  "windows": [],
+                  "checkedAt": 0
+                },
+                "checkText": "没能使用",
+                "checkTone": "red",
+                "trouble": {
+                  "title": "key 已失效",
+                  "detail": "服务商拒绝了这个 key",
+                  "next": "",
+                  "action": "key",
+                  "label": ""
+                },
+                "group": "key",
+                "groupTitle": "API key",
+                "makers": {},
+                "names": {
+                  "claude-opus-5-5": "Opus 5.5",
+                  "claude-sonnet-5": "Sonnet 5",
+                  "claude-haiku-5": "Haiku 5"
+                },
+                "series": [
+                  {
+                    "name": "Opus",
+                    "models": [
+                      "claude-opus-5-5"
+                    ]
+                  },
+                  {
+                    "name": "Sonnet",
+                    "models": [
+                      "claude-sonnet-5"
+                    ]
+                  },
+                  {
+                    "name": "Haiku",
+                    "models": [
+                      "claude-haiku-5"
+                    ]
+                  }
+                ],
+                "modelsText": "2 个模型",
+                "available": [
+                  "claude-opus-5-5",
+                  "claude-sonnet-5",
+                  "claude-haiku-5"
+                ],
+                "modelsReading": false,
+                "uses": [],
+                "usesText": "Claude Code",
+                "canAddModel": false,
+                "decisionOnly": false,
+                "decisionModels": [],
+                "workspaces": []
+              }
+            ],
+            "processes": [],
+            "counts": {
+              "sessions": 0,
+              "running": 0,
+              "warm": 0
+            },
+            "slackUsers": [],
+            "slackTeams": [],
+            "slackApps": [],
+            "logins": [],
+            "machineLogins": [
+              {
+                "runtime": "codex",
+                "installed": true,
+                "loggedIn": true,
+                "email": "lin@example.com",
+                "plan": "plus",
+                "usable": true,
+                "text": "",
+                "offered": true
+              }
+            ],
+            "sharing": true,
+            "consoleSignIn": false,
+            "apiProviders": [],
+            "updates": [
+              {
+                "id": "station",
+                "name": "Station",
+                "installed": true,
+                "version": "0.1.1288",
+                "latest": "0.1.1300",
+                "newer": true,
+                "downgrade": false,
+                "channel": "stable",
+                "auto": false,
+                "updatable": true,
+                "state": "idle",
+                "checkedAt": 1
+              },
+              {
+                "id": "claude",
+                "name": "Claude Code",
+                "installed": true,
+                "version": "2.1.4",
+                "latest": "2.1.4",
+                "newer": false,
+                "downgrade": false,
+                "updatable": true,
+                "state": "idle",
+                "checkedAt": 1
+              },
+              {
+                "id": "codex",
+                "name": "Codex",
+                "installed": false,
+                "newer": false,
+                "downgrade": false,
+                "updatable": true,
+                "state": "idle",
+                "checkedAt": 1
+              }
+            ],
+            "processesText": "2 个 agent 进程 · claude 1.2 GB",
+            "agentEnv": [
+              {
+                "key": "HTTPS_PROXY",
+                "secret": false,
+                "value": "http://127.0.0.1:7890"
+              },
+              {
+                "key": "NO_PROXY",
+                "secret": false,
+                "value": "localhost,.internal"
+              }
+            ],
+            "drive": {
+              "roots": [
+                {
+                  "path": "~/项目",
+                  "name": "项目",
+                  "state": "ok"
+                },
+                {
+                  "path": "~/文档",
+                  "name": "文档",
+                  "state": "ok"
+                }
+              ]
+            },
+            "search": {
+              "files": "spotlight",
+              "personal": false
+            },
+            "permissions": {
+              "grants": [
+                {
+                  "id": "capture",
+                  "name": "屏幕录制",
+                  "line": "查看这台 Mac 的屏幕",
+                  "granted": true,
+                  "asking": false
+                },
+                {
+                  "id": "control",
+                  "name": "辅助功能",
+                  "line": "操作这台 Mac 的鼠标和键盘",
+                  "granted": false,
+                  "asking": false
+                },
+                {
+                  "id": "documents",
+                  "name": "文稿",
+                  "line": "读写「文稿」中的文件",
+                  "granted": false,
+                  "asking": true
+                }
+              ],
+              "note": "未允许辅助功能：agent 只能查看屏幕，不能操作",
+              "canRequest": true
+            }
+          },
+          "betaOffered": true,
+          "host": {
+            "hostname": "",
+            "os": "",
+            "arch": "",
+            "cpus": 0,
+            "cpuModel": "",
+            "load": 0,
+            "uptimeSec": 0,
+            "memory": {
+              "totalBytes": 0,
+              "usedBytes": 0
+            },
+            "disk": {
+              "path": "",
+              "totalBytes": 0,
+              "freeBytes": 0
+            },
+            "emberRssBytes": 0,
+            "checkedAt": 0,
+            "summary": "",
+            "line": "",
+            "facts": [],
+            "meters": [
+              {
+                "label": "CPU",
+                "short": "CPU",
+                "percent": 28,
+                "left": 72,
+                "level": "ok",
+                "value": "",
+                "remaining": "空闲 72%",
+                "big": "72",
+                "unit": "%",
+                "title": "CPU 空闲",
+                "total": "负载 1.4"
+              },
+              {
+                "label": "内存",
+                "short": "内存",
+                "percent": 82,
+                "left": 18,
+                "level": "amber",
+                "value": "",
+                "remaining": "剩 11.5 G",
+                "big": "11.5",
+                "unit": "GB",
+                "title": "内存剩",
+                "total": "共 64 GB"
+              },
+              {
+                "label": "磁盘",
+                "short": "磁盘",
+                "percent": 59,
+                "left": 41,
+                "level": "ok",
+                "value": "",
+                "remaining": "剩 380 G",
+                "big": "380",
+                "unit": "GB",
+                "title": "磁盘剩",
+                "total": "共 926 GB"
+              }
+            ],
+            "identity": "Apple M2 Max · 64 GB · macOS 26",
+            "details": [
+              {
+                "label": "主机名",
+                "value": "studio"
+              },
+              {
+                "label": "芯片",
+                "value": "Apple M2 Max，12 核"
+              },
+              {
+                "label": "已运行",
+                "value": "6 天 4 小时"
+              },
+              {
+                "label": "进程",
+                "value": "station 412 MB"
+              }
+            ],
+            "usage": "",
+            "emberText": ""
+          },
+          "way": {
+            "path": "直连",
+            "via": "direct"
+          },
+          "joined": false
+        },
+        {
+          "station": "ws1/st2",
+          "id": "st2",
+          "name": "MBA",
+          "icon": "glyph:laptop:teal",
+          "summary": "离线 · 2 天前",
+          "face": "offline",
+          "online": false,
+          "reconnecting": false,
+          "link": {
+            "state": "offline"
+          },
+          "runtimes": [],
+          "models": [],
+          "betaOffered": false,
+          "joined": false
+        }
+      ]
+    },
+    {
+      "topic": {
+        "topic": "connects",
+        "scope": "ws1",
+        "mine": false
+      },
+      "value": {
+        "me": {
+          "email": "lin@example.com"
+        },
+        "items": [
+          {
+            "station": "ws1/st1",
+            "stationName": "Studio",
+            "connect": {
+              "id": "k1",
+              "name": "星火助手",
+              "team": "星火",
+              "enabled": true,
+              "kind": "slack",
+              "mode": "multi-session",
+              "requireMention": true,
+              "bind": {
+                "runtime": "claude",
+                "model": "claude-opus-5-5",
+                "effort": "high"
+              },
+              "slack": {
+                "appToken": "",
+                "botToken": ""
+              },
+              "connection": {
+                "state": "connected",
+                "error": "Slack 拒绝了 token"
+              },
+              "createdBy": {
+                "id": "lin@example.com",
+                "name": "林",
+                "shown": {
+                  "name": "林",
+                  "display": "你",
+                  "mine": true
+                }
+              },
+              "sessions": 4,
+              "statusText": "在线",
+              "presence": "online",
+              "modeText": "每个 thread 一个会话",
+              "modeShort": "",
+              "runtimeText": "Claude Code",
+              "runText": "",
+              "modelName": "Opus 5.5"
+            },
+            "sessions": [
+              {
+                "key": "s-c7",
+                "runtime": "claude",
+                "process": "",
+                "pending": 0,
+                "statusText": "昨天",
+                "tone": "accent",
+                "titleText": "Slack 里问的报销流程",
+                "agentText": "",
+                "runtimeText": "",
+                "efforts": []
+              },
+              {
+                "key": "s-c2",
+                "runtime": "claude",
+                "process": "",
+                "pending": 0,
+                "statusText": "8 分钟前",
+                "tone": "accent",
+                "titleText": "首页的列表改成按天分组",
+                "agentText": "",
+                "runtimeText": "",
+                "efforts": []
+              }
+            ],
+            "candidates": [],
+            "running": 0
+          },
+          {
+            "station": "ws1/st1",
+            "stationName": "Studio",
+            "connect": {
+              "id": "k2",
+              "name": "值班机器人",
+              "team": "星火",
+              "enabled": true,
+              "kind": "slack",
+              "mode": "single-session",
+              "requireMention": true,
+              "bind": {
+                "runtime": "claude",
+                "model": "claude-opus-5-5",
+                "effort": "high"
+              },
+              "slack": {
+                "appToken": "",
+                "botToken": ""
+              },
+              "connection": {
+                "state": "error",
+                "error": "Slack 拒绝了 token"
+              },
+              "createdBy": {
+                "id": "lin@example.com",
+                "name": "林",
+                "shown": {
+                  "name": "林",
+                  "display": "你",
+                  "mine": true
+                }
+              },
+              "sessions": 4,
+              "statusText": "连接失败",
+              "presence": "error",
+              "modeText": "所有 thread 共用一个会话",
+              "modeShort": "",
+              "runtimeText": "Claude Code",
+              "runText": "",
+              "modelName": "Opus 5.5"
+            },
+            "sessions": [],
+            "candidates": [],
+            "running": 0
+          }
+        ],
+        "wait": {
+          "reading": false,
+          "text": null,
+          "failing": [],
+          "empty": false
+        }
+      }
+    },
+    {
+      "topic": {
+        "topic": "lock",
+        "workspace": "ws1"
+      },
+      "value": {
+        "available": true,
+        "locked": true,
+        "notice": false,
+        "role": "owner",
+        "manages": true,
+        "owner": true,
+        "canSign": true,
+        "signs": true,
+        "signers": 2,
+        "members": [
+          {
+            "sub": "u1",
+            "email": "lin@example.com",
+            "name": "林",
+            "role": "owner",
+            "you": true,
+            "devices": [
+              {
+                "id": "d1",
+                "kind": "app",
+                "label": "这台手机",
+                "signs": true,
+                "older": false,
+                "mine": true,
+                "renewSoon": false,
+                "recent": false
+              },
+              {
+                "id": "d2",
+                "kind": "web",
+                "label": "",
+                "signs": false,
+                "older": false,
+                "mine": false,
+                "daysLeft": 4,
+                "renewSoon": true,
+                "recent": false
+              }
+            ]
+          },
+          {
+            "sub": "u2",
+            "email": "ana@example.com",
+            "name": "Ana",
+            "role": "admin",
+            "you": false,
+            "devices": [
+              {
+                "id": "d3",
+                "kind": "app",
+                "label": "MacBook",
+                "signs": true,
+                "older": false,
+                "mine": false,
+                "renewSoon": false,
+                "recent": false
+              }
+            ]
+          }
+        ],
+        "stations": [
+          {
+            "id": "st1",
+            "name": "Studio",
+            "online": true,
+            "protected": true
+          },
+          {
+            "id": "st2",
+            "name": "MBA",
+            "online": false,
+            "protected": false
+          }
+        ],
+        "protected": 1,
+        "requests": [
+          {
+            "device": "d9",
+            "sub": "u2",
+            "email": "ana@example.com",
+            "name": "Ana",
+            "kind": "app",
+            "label": "Pixel 9",
+            "code": "482 917",
+            "created_at": 0,
+            "yours": false,
+            "time": {
+              "created_at": {
+                "at": 0,
+                "ago": "2 分钟前",
+                "full": "",
+                "until": "",
+                "past": true
+              }
+            }
+          }
+        ],
+        "renew": [],
+        "attention": 1
+      }
+    },
+    {
+      "topic": {
+        "topic": "vaults",
+        "workspace": "ws1"
+      },
+      "value": {
+        "available": true,
+        "locked": true,
+        "canSign": true,
+        "setUp": true,
+        "vaults": [
+          {
+            "id": "v1",
+            "name": "林的库",
+            "owner": "u1",
+            "ownerName": "林",
+            "mine": true,
+            "members": [],
+            "station": "st1",
+            "stationName": "Studio",
+            "items": 3,
+            "devices": 2,
+            "open": false,
+            "keyed": true,
+            "missing": 0,
+            "recoverable": true
+          }
+        ],
+        "requests": [
+          {
+            "id": "r1",
+            "vault": "v1",
+            "vaultName": "林的库",
+            "item": "it1",
+            "itemName": "GitHub token",
+            "session": "s-c1",
+            "chat": "c1",
+            "mode": "proxy",
+            "reason": "要把发布清单推到仓库",
+            "command": "git push origin main",
+            "hosts": [
+              "api.github.com"
+            ],
+            "at": 0
+          }
+        ],
+        "refused": [],
+        "plainLeft": 0
+      }
+    },
+    {
+      "topic": {
+        "topic": "profiles",
+        "scope": "ws1"
+      },
+      "value": {
+        "items": [
+          {
+            "key": "ws1/st1/cc",
+            "group": "claude",
+            "groupTitle": "Claude 订阅",
+            "station": "ws1/st1",
+            "stationId": "st1",
+            "stationName": "Studio",
+            "profile": {
+              "id": "cc",
+              "name": "Claude 主账号",
+              "runtime": "claude",
+              "runtimes": [
+                "claude"
+              ],
+              "access": {
+                "kind": "subscription",
+                "key": "",
+                "login": false
+              },
+              "home": "",
+              "homeExists": true,
+              "models": [
+                "claude-opus-5-5",
+                "claude-sonnet-5"
+              ],
+              "env": [],
+              "usedBy": [
+                "k1"
+              ],
+              "loginCommand": "claude setup-token",
+              "machine": false,
+              "backgroundOnMessage": true,
+              "fast": false,
+              "check": {
+                "state": "ok",
+                "detail": "可用，订阅有效",
+                "checkedAt": 0,
+                "time": {
+                  "checkedAt": {
+                    "at": 0,
+                    "ago": "5 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              "quota": {
+                "state": "ok",
+                "windows": [
+                  {
+                    "label": "5 小时",
+                    "usedPercent": 38,
+                    "mark": "5H",
+                    "left": 62,
+                    "level": "ok",
+                    "refills": "2 小时后恢复"
+                  },
+                  {
+                    "label": "本周",
+                    "usedPercent": 81,
+                    "mark": "W",
+                    "left": 19,
+                    "level": "amber",
+                    "refills": "星期一恢复"
+                  }
+                ],
+                "checkedAt": 0,
+                "time": {
+                  "checkedAt": {
+                    "at": 0,
+                    "ago": "3 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              "checkText": "可用",
+              "checkTone": "green",
+              "group": "claude",
+              "groupTitle": "Claude 订阅",
+              "makers": {},
+              "names": {
+                "claude-opus-5-5": "Opus 5.5",
+                "claude-sonnet-5": "Sonnet 5",
+                "claude-haiku-5": "Haiku 5"
+              },
+              "series": [
+                {
+                  "name": "Opus",
+                  "models": [
+                    "claude-opus-5-5"
+                  ]
+                },
+                {
+                  "name": "Sonnet",
+                  "models": [
+                    "claude-sonnet-5"
+                  ]
+                },
+                {
+                  "name": "Haiku",
+                  "models": [
+                    "claude-haiku-5"
+                  ]
+                }
+              ],
+              "modelsText": "2 个模型",
+              "available": [
+                "claude-opus-5-5",
+                "claude-sonnet-5",
+                "claude-haiku-5"
+              ],
+              "modelsReading": false,
+              "uses": [],
+              "usesText": "Claude Code",
+              "canAddModel": false,
+              "decisionOnly": false,
+              "decisionModels": [],
+              "share": {
+                "id": "sh1",
+                "role": "host",
+                "host": "st1",
+                "users": [
+                  "st2"
+                ]
+              },
+              "workspaces": [
+                "ws2"
+              ]
+            },
+            "shared": false,
+            "host": "st1",
+            "hostName": "Studio",
+            "hostOnline": true,
+            "usable": true,
+            "where": "只在 Studio",
+            "stations": [
+              {
+                "id": "st1",
+                "station": "ws1/st1",
+                "name": "Studio",
+                "online": true,
+                "allowed": true
+              },
+              {
+                "id": "st2",
+                "station": "ws1/st2",
+                "name": "MBA",
+                "online": false,
+                "allowed": true
+              }
+            ],
+            "editable": true,
+            "canShare": true,
+            "members": [
+              {
+                "station": "ws1/st1",
+                "stationId": "st1",
+                "stationName": "Studio",
+                "online": true,
+                "profileId": "cc",
+                "role": "host",
+                "about": "",
+                "usable": true,
+                "checkText": "可用",
+                "checkTone": "green",
+                "usedBy": 1
+              }
+            ]
+          },
+          {
+            "key": "ws1/st1/cx",
+            "group": "chatgpt",
+            "groupTitle": "ChatGPT 订阅",
+            "station": "ws1/st1",
+            "stationId": "st1",
+            "stationName": "Studio",
+            "profile": {
+              "id": "cx",
+              "name": "ChatGPT 团队",
+              "runtime": "codex",
+              "runtimes": [
+                "codex"
+              ],
+              "access": {
+                "kind": "subscription",
+                "key": "",
+                "login": false
+              },
+              "home": "",
+              "homeExists": true,
+              "models": [
+                "gpt-6-mini"
+              ],
+              "env": [],
+              "usedBy": [
+                "k1"
+              ],
+              "loginCommand": "",
+              "machine": false,
+              "check": {
+                "state": "ok",
+                "detail": "可用，订阅有效",
+                "checkedAt": 0,
+                "time": {
+                  "checkedAt": {
+                    "at": 0,
+                    "ago": "5 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              "quota": {
+                "resetCount": 2,
+                "resetText": "还可重置 2 次",
+                "state": "ok",
+                "windows": [
+                  {
+                    "label": "5 小时",
+                    "usedPercent": 38,
+                    "mark": "5H",
+                    "left": 62,
+                    "level": "ok",
+                    "refills": "2 小时后恢复"
+                  },
+                  {
+                    "label": "本周",
+                    "usedPercent": 81,
+                    "mark": "W",
+                    "left": 19,
+                    "level": "amber",
+                    "refills": "星期一恢复"
+                  }
+                ],
+                "checkedAt": 0,
+                "time": {
+                  "checkedAt": {
+                    "at": 0,
+                    "ago": "3 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              "checkText": "可用",
+              "checkTone": "green",
+              "group": "chatgpt",
+              "groupTitle": "ChatGPT 订阅",
+              "makers": {},
+              "names": {
+                "gpt-6": "GPT-6",
+                "gpt-6-mini": "GPT-6-MINI",
+                "gpt-6-nano": "GPT-6-NANO",
+                "gpt-6-codex": "GPT-6-CODEX",
+                "gpt-6-codex-mini": "GPT-6-CODEX-MINI",
+                "gpt-5.5": "GPT-5.5",
+                "gpt-5.5-mini": "GPT-5.5-MINI",
+                "gpt-5.5-codex": "GPT-5.5-CODEX",
+                "gpt-5": "GPT-5",
+                "gpt-5-mini": "GPT-5-MINI",
+                "o9": "O9",
+                "o9-mini": "O9-MINI"
+              },
+              "series": [
+                {
+                  "name": "GPT",
+                  "models": [
+                    "gpt-6",
+                    "gpt-6-mini",
+                    "gpt-6-nano",
+                    "gpt-6-codex",
+                    "gpt-6-codex-mini",
+                    "gpt-5.5",
+                    "gpt-5.5-mini",
+                    "gpt-5.5-codex",
+                    "gpt-5",
+                    "gpt-5-mini",
+                    "o9",
+                    "o9-mini"
+                  ]
+                }
+              ],
+              "modelsText": "1 个模型",
+              "available": [
+                "gpt-6",
+                "gpt-6-mini",
+                "gpt-6-nano",
+                "gpt-6-codex",
+                "gpt-6-codex-mini",
+                "gpt-5.5",
+                "gpt-5.5-mini",
+                "gpt-5.5-codex",
+                "gpt-5",
+                "gpt-5-mini",
+                "o9",
+                "o9-mini"
+              ],
+              "modelsReading": false,
+              "uses": [],
+              "usesText": "Claude Code",
+              "canAddModel": true,
+              "decisionOnly": false,
+              "decisionModels": [],
+              "workspaces": []
+            },
+            "shared": false,
+            "host": "st1",
+            "hostName": "Studio",
+            "hostOnline": true,
+            "usable": true,
+            "where": "只在 Studio",
+            "stations": [
+              {
+                "id": "st1",
+                "station": "ws1/st1",
+                "name": "Studio",
+                "online": true,
+                "allowed": true
+              },
+              {
+                "id": "st2",
+                "station": "ws1/st2",
+                "name": "MBA",
+                "online": false,
+                "allowed": true
+              }
+            ],
+            "editable": true,
+            "canShare": true,
+            "members": [
+              {
+                "station": "ws1/st1",
+                "stationId": "st1",
+                "stationName": "Studio",
+                "online": true,
+                "profileId": "cx",
+                "role": "host",
+                "about": "",
+                "usable": true,
+                "checkText": "可用",
+                "checkTone": "green",
+                "usedBy": 1
+              }
+            ]
+          },
+          {
+            "key": "ws1/st1/k2",
+            "group": "key",
+            "groupTitle": "API key",
+            "station": "ws1/st1",
+            "stationId": "st1",
+            "stationName": "Studio",
+            "profile": {
+              "id": "k2",
+              "name": "备用 key",
+              "runtime": "claude",
+              "runtimes": [
+                "claude"
+              ],
+              "access": {
+                "kind": "anthropic-api",
+                "key": "sk-…a41f",
+                "login": false
+              },
+              "home": "",
+              "homeExists": true,
+              "models": [
+                "claude-opus-5-5",
+                "claude-sonnet-5"
+              ],
+              "env": [],
+              "usedBy": [],
+              "loginCommand": "",
+              "machine": false,
+              "check": {
+                "state": "ok",
+                "detail": "可用，订阅有效",
+                "checkedAt": 0,
+                "time": {
+                  "checkedAt": {
+                    "at": 0,
+                    "ago": "5 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              "quota": {
+                "state": "unsupported",
+                "windows": [],
+                "checkedAt": 0
+              },
+              "checkText": "没能使用",
+              "checkTone": "red",
+              "trouble": {
+                "title": "key 已失效",
+                "detail": "服务商拒绝了这个 key",
+                "next": "",
+                "action": "key",
+                "label": ""
+              },
+              "group": "key",
+              "groupTitle": "API key",
+              "makers": {},
+              "names": {
+                "claude-opus-5-5": "Opus 5.5",
+                "claude-sonnet-5": "Sonnet 5",
+                "claude-haiku-5": "Haiku 5"
+              },
+              "series": [
+                {
+                  "name": "Opus",
+                  "models": [
+                    "claude-opus-5-5"
+                  ]
+                },
+                {
+                  "name": "Sonnet",
+                  "models": [
+                    "claude-sonnet-5"
+                  ]
+                },
+                {
+                  "name": "Haiku",
+                  "models": [
+                    "claude-haiku-5"
+                  ]
+                }
+              ],
+              "modelsText": "2 个模型",
+              "available": [
+                "claude-opus-5-5",
+                "claude-sonnet-5",
+                "claude-haiku-5"
+              ],
+              "modelsReading": false,
+              "uses": [],
+              "usesText": "Claude Code",
+              "canAddModel": false,
+              "decisionOnly": false,
+              "decisionModels": [],
+              "workspaces": []
+            },
+            "shared": false,
+            "host": "st1",
+            "hostName": "Studio",
+            "hostOnline": true,
+            "usable": true,
+            "where": "只在 Studio",
+            "stations": [
+              {
+                "id": "st1",
+                "station": "ws1/st1",
+                "name": "Studio",
+                "online": true,
+                "allowed": true
+              },
+              {
+                "id": "st2",
+                "station": "ws1/st2",
+                "name": "MBA",
+                "online": false,
+                "allowed": true
+              }
+            ],
+            "editable": true,
+            "canShare": true,
+            "members": [
+              {
+                "station": "ws1/st1",
+                "stationId": "st1",
+                "stationName": "Studio",
+                "online": true,
+                "profileId": "k2",
+                "role": "host",
+                "about": "",
+                "usable": true,
+                "checkText": "可用",
+                "checkTone": "green",
+                "usedBy": 1
+              }
+            ]
+          }
+        ],
+        "wait": {
+          "reading": false,
+          "text": null,
+          "failing": [],
+          "empty": false
+        }
+      }
+    },
+    {
+      "topic": {
+        "topic": "vaultItems",
+        "workspace": "ws1",
+        "vault": "v1"
+      },
+      "value": {
+        "vault": "v1",
+        "name": "林的库",
+        "open": false,
+        "items": [
+          {
+            "id": "it1",
+            "version": 1,
+            "at": 0,
+            "name": "GitHub token",
+            "kind": "token",
+            "listed": true,
+            "modes": [
+              "proxy"
+            ],
+            "hosts": [
+              "api.github.com"
+            ],
+            "lastUse": {
+              "at": {
+                "at": 0,
+                "ago": "昨天",
+                "full": "",
+                "until": "",
+                "past": true
+              },
+              "session": "s-c1",
+              "mode": "proxy",
+              "hosts": []
+            }
+          },
+          {
+            "id": "it2",
+            "version": 1,
+            "at": 0,
+            "name": "部署机",
+            "kind": "ssh_key",
+            "listed": true,
+            "modes": [
+              "ssh"
+            ],
+            "hosts": []
+          },
+          {
+            "id": "it3",
+            "version": 1,
+            "at": 0,
+            "kind": "login",
+            "listed": false,
+            "modes": [],
+            "hosts": []
+          }
+        ]
+      }
+    },
+    {
+      "topic": {
+        "topic": "workspaceMarks",
+        "workspace": "ws1"
+      },
+      "value": {
+        "workspaces": {
+          "ws1": {
+            "alert": 1,
+            "unread": 2,
+            "wait": 1,
+            "decisions": 2,
+            "tone": "alert",
+            "badge": 0,
+            "items": []
+          },
+          "ws2": {
+            "alert": 0,
+            "unread": 2,
+            "tone": "done",
+            "badge": 0,
+            "items": []
+          }
+        },
+        "others": "done",
+        "badge": 0,
+        "badgeCounts": "",
+        "badgeKinds": {
+          "on": false,
+          "wait": false,
+          "failed": false,
+          "done": false,
+          "message": false
+        }
+      }
+    },
+    {
+      "topic": {
+        "topic": "chats",
+        "scope": "ws1",
+        "mine": false
+      },
+      "value": {
+        "me": {
+          "email": "lin@example.com"
+        },
+        "stations": [
+          {
+            "station": "",
+            "id": "ws1/st1",
+            "name": "Studio",
+            "state": ""
+          },
+          {
+            "station": "",
+            "id": "ws1/st2",
+            "name": "MBA",
+            "state": ""
+          }
+        ],
+        "loading": false,
+        "days": [
+          {
+            "daysAgo": 0,
+            "at": 0,
+            "label": "今天",
+            "items": [
+              {
+                "id": "c1",
+                "session": "s-c1",
+                "thread": 2,
+                "title": "整理发布清单",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "codex",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "openai · codex",
+                    "maker": {
+                      "id": "openai",
+                      "name": "openai"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "正在核对第三项：安装包的签名",
+                  "createdAt": 0,
+                  "preview": "正在核对第三项：安装包的签名"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "state": "run",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "2 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "tone": "busy"
+              },
+              {
+                "id": "c2",
+                "session": "s-c2",
+                "thread": 2,
+                "title": "首页的列表改成按天分组",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": true,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "8 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "people": [
+                  {
+                    "id": "lin@example.com",
+                    "name": "林",
+                    "email": "lin@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "林",
+                      "display": "你",
+                      "mine": true
+                    }
+                  },
+                  {
+                    "id": "ana@example.com",
+                    "name": "Ana",
+                    "email": "ana@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "Ana",
+                      "display": "Ana",
+                      "mine": false
+                    }
+                  }
+                ],
+                "creator": {
+                  "id": "lin@example.com",
+                  "name": "林",
+                  "via": "cloud"
+                },
+                "decision": {
+                  "seq": 3,
+                  "options": [],
+                  "text": "奏 · 分组的标题用相对日期还是具体日期？"
+                },
+                "tone": "wait"
+              },
+              {
+                "id": "c3",
+                "session": "s-c3",
+                "thread": 2,
+                "title": "夜里的构建又失败了",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": true,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st2",
+                "stationName": "MBA",
+                "stationIcon": "glyph:laptop:teal",
+                "state": "failed",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "15 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "stateText": "要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？",
+                "tone": "alert"
+              },
+              {
+                "id": "c4",
+                "session": "s-c4",
+                "thread": 2,
+                "title": "给设置页加一个深色模式开关",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "deepseek · dsh",
+                    "maker": {
+                      "id": "deepseek",
+                      "name": "deepseek"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": true,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "40 分钟前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "stateText": "做完了：开关和三处颜色都改好了",
+                "tone": "done"
+              },
+              {
+                "id": "c5",
+                "session": "s-c5",
+                "thread": 2,
+                "title": "盯着 CI，绿了告诉我",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st2",
+                "stationName": "MBA",
+                "stationIcon": "glyph:laptop:teal",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "1 小时前",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "watch": {
+                  "text": "监控中：主干构建",
+                  "ask": "它会在归档里继续盯着。"
+                },
+                "stateText": "监控中：每 5 分钟看一次主干的构建",
+                "stateAbout": 12
+              }
+            ]
+          },
+          {
+            "daysAgo": 1,
+            "at": 0,
+            "label": "昨天",
+            "items": [
+              {
+                "id": "c6",
+                "session": "s-c6",
+                "thread": 2,
+                "title": "和 Ana 一起看新版的引导页",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "Ana：第二屏的插画可以再小一点",
+                  "createdAt": 0,
+                  "preview": "Ana：第二屏的插画可以再小一点"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "昨天 21:14",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "people": [
+                  {
+                    "id": "ana@example.com",
+                    "name": "Ana",
+                    "email": "ana@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "Ana",
+                      "display": "Ana",
+                      "mine": false
+                    }
+                  },
+                  {
+                    "id": "lin@example.com",
+                    "name": "林",
+                    "email": "lin@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "林",
+                      "display": "你",
+                      "mine": true
+                    }
+                  },
+                  {
+                    "id": "zhou@example.com",
+                    "name": "周",
+                    "email": "zhou@example.com",
+                    "via": "cloud",
+                    "shown": {
+                      "name": "周",
+                      "display": "周",
+                      "mine": false
+                    }
+                  }
+                ],
+                "creator": {
+                  "id": "ana@example.com",
+                  "name": "Ana",
+                  "via": "cloud"
+                },
+                "tone": "other"
+              },
+              {
+                "id": "c7",
+                "session": "s-c7",
+                "thread": 2,
+                "title": "Slack 里问的报销流程",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "已经把三个步骤整理成一页文档",
+                  "createdAt": 0,
+                  "preview": "已经把三个步骤整理成一页文档"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "connect": "slack-1",
+                "station": "ws1/st2",
+                "stationName": "MBA",
+                "stationIcon": "glyph:laptop:teal",
+                "originText": "Slack · 星火 · #行政",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "昨天 18:02",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              {
+                "id": "c8",
+                "session": "s-c8",
+                "thread": 2,
+                "title": "把旧的截图都换成新的",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "昨天 10:30",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                },
+                "settled": true,
+                "archivable": true,
+                "stateText": "做完了"
+              }
+            ]
+          },
+          {
+            "daysAgo": 4,
+            "at": 0,
+            "label": "星期三",
+            "items": [
+              {
+                "id": "c9",
+                "session": "s-c9",
+                "thread": 2,
+                "title": "迁移数据库的演练",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "claude",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "anthropic · claude",
+                    "maker": {
+                      "id": "anthropic",
+                      "name": "anthropic"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "codex",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "openai · codex",
+                    "maker": {
+                      "id": "openai",
+                      "name": "openai"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "deepseek · dsh",
+                    "maker": {
+                      "id": "deepseek",
+                      "name": "deepseek"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "qwen · dsh",
+                    "maker": {
+                      "id": "qwen",
+                      "name": "qwen"
+                    },
+                    "statusText": ""
+                  },
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "kimi · dsh",
+                    "maker": {
+                      "id": "kimi",
+                      "name": "kimi"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "演练到第二步时 MBA 断开了",
+                  "createdAt": 0,
+                  "preview": "演练到第二步时 MBA 断开了"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st2",
+                "stationName": "MBA",
+                "stationIcon": "glyph:laptop:teal",
+                "offline": "MBA 离线",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "星期三",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              },
+              {
+                "id": "c10",
+                "session": "s-c10",
+                "thread": 3,
+                "title": "周报的模板",
+                "agents": [
+                  {
+                    "key": "",
+                    "runtime": "dsh",
+                    "process": "",
+                    "pending": 0,
+                    "agentText": "gemini · dsh",
+                    "maker": {
+                      "id": "gemini",
+                      "name": "gemini"
+                    },
+                    "statusText": ""
+                  }
+                ],
+                "last": {
+                  "seq": 1,
+                  "authorKind": "agent",
+                  "author": "a",
+                  "text": "模板放在共享文件夹的第一层",
+                  "createdAt": 0,
+                  "preview": "模板放在共享文件夹的第一层"
+                },
+                "unread": false,
+                "mine": true,
+                "lastActiveAt": 0,
+                "station": "ws1/st1",
+                "stationName": "Studio",
+                "stationIcon": "glyph:desktop",
+                "time": {
+                  "lastActiveAt": {
+                    "at": 0,
+                    "ago": "星期三",
+                    "full": "",
+                    "until": "",
+                    "past": true
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "trouble": null,
+        "members": null,
+        "leading": "agents",
+        "glyph": {
+          "online": 1,
+          "dim": 1,
+          "connecting": 0,
+          "failing": 0,
+          "working": 0,
+          "summary": "",
+          "label": "1 台在线"
+        },
+        "note": {
+          "reading": false,
+          "text": null,
+          "failing": [],
+          "empty": false
+        }
+      }
+    },
+    {
+      "topic": {
+        "topic": "status",
+        "workspace": "ws1"
+      },
+      "value": {
+        "items": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "lockPrompts"
+      },
+      "value": {
+        "pairing": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "notify"
+      },
+      "value": {
+        "on": true,
+        "asked": true,
+        "push": false,
+        "kinds": {
+          "wait": false,
+          "failed": false,
+          "done": "",
+          "message": false
+        },
+        "preview": false,
+        "permission": "",
+        "show": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "doing"
+      },
+      "value": {
+        "doing": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "notify",
+        "workspace": "ws1"
+      },
+      "value": {
+        "on": true,
+        "asked": true,
+        "push": false,
+        "kinds": {
+          "wait": false,
+          "failed": false,
+          "done": "",
+          "message": false
+        },
+        "preview": false,
+        "permission": "",
+        "show": []
+      }
+    }
+  ],
+  "calls": [
+    {
+      "call": "client.focus",
+      "params": {
+        "visible": true,
+        "focused": true,
+        "workspace": "ws1"
+      },
+      "ok": {}
+    },
+    {
+      "call": "cache.usage",
+      "params": {},
+      "ok": {
+        "chats": [
+          {
+            "station": "ws1/st1",
+            "thread": 1,
+            "title": "整理发布清单",
+            "sessions": [
+              "s-c1"
+            ],
+            "bytes": 2400000,
+            "files": [
+              {
+                "key": "s-c1",
+                "name": "季度报告.pdf",
+                "size": 3355443,
+                "bytes": 3355443,
+                "opened": -300000
+              },
+              {
+                "key": "s-c1",
+                "name": "演示录屏.mp4",
+                "size": 50331648,
+                "bytes": 12582912,
+                "opened": -7200000
+              }
+            ]
+          },
+          {
+            "station": "ws1/st1",
+            "thread": 4,
+            "title": "给设置页加一个深色模式开关",
+            "sessions": [
+              "s-c4"
+            ],
+            "bytes": 860000
+          },
+          {
+            "station": "ws1/st2",
+            "thread": 3,
+            "title": "夜里的构建又失败了",
+            "sessions": [
+              "s-c3"
+            ],
+            "bytes": 41000
+          }
+        ],
+        "drive": 40370176,
+        "loose": [
+          {
+            "key": "s-old",
+            "name": "旧日志.zip",
+            "size": 921600,
+            "bytes": 921600,
+            "opened": -259200000,
+            "station": "ws1/st2"
+          }
+        ]
+      }
+    }
+  ]
+}

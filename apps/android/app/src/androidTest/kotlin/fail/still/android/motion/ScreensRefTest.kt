@@ -50,8 +50,26 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
 
-class ScreensRefTest {
+/**
+ * One run a screen (`name`: client/fixtures/screens/NAME.json): every screen there, or those the instrumentation's
+ * `screens` argument names (scripts/android-ref.sh refs: `-e screens a,b`).
+ */
+@RunWith(Parameterized::class)
+class ScreensRefTest(private val name: String) {
+    companion object {
+        @JvmStatic
+        @Parameterized.Parameters(name = "{0}")
+        fun names(): List<String> {
+            val asked = InstrumentationRegistry.getArguments().getString("screens")
+            if (!asked.isNullOrBlank()) return asked.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            val context = InstrumentationRegistry.getInstrumentation().context
+            return context.assets.list("screens").orEmpty().filter { it.endsWith(".json") && it != "allowed.json" }.map { it.removeSuffix(".json") }.sorted()
+        }
+    }
+
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
 
     /**
@@ -120,6 +138,10 @@ class ScreensRefTest {
         fail.still.android.ui.FaceFiles.init(activity)
         val app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(activity, "http://127.0.0.1:9", fake.core), PrefsView())
         for (p in screen["open"]?.jsonArray.orEmpty()) app.push(page(p.jsonObject))
+        // the test's clock alone from the first frame: what moves (a spinner's turn, a list's glide) is where the
+        // moment has it, not where the machine's speed left it before the clock stopped
+        rule.mainClock.autoAdvance = false
+        val start = rule.mainClock.currentTime
         rule.setContent {
             StillFailTheme(dark, fail.still.android.ui.rememberFonts(app.kept.faces)) {
                 CompositionLocalProvider(LocalApp provides app, LocalUi provides app) { StillFailApp(app) }
@@ -130,12 +152,15 @@ class ScreensRefTest {
         // picture whatever the machine's speed
         val shows = screen["shows"]?.jsonArray.orEmpty().map { it.jsonPrimitive.content }
         val shown = { shows.all { rule.onAllNodesWithText(it, substring = true).fetchSemanticsNodes().isNotEmpty() } }
-        try { rule.waitUntil(20_000) { shown() } } catch (_: androidx.compose.ui.test.ComposeTimeoutException) {}
-        rule.mainClock.autoAdvance = false
-        // (on the main thread: the clock's frames are composed on the thread that moves it, and an effect that comes in
-        // then registers with the activity's lifecycle, which only the main thread may do: "Method addObserver must be
+        // a frame at a time on that clock until it shows them (what the fake core said come in, off the main thread);
+        // on the main thread: the clock's frames are composed on the thread that moves it, and an effect that comes in
+        // then registers with the activity's lifecycle, which only the main thread may do ("Method addObserver must be
         // called on the main thread", settings, a LifecycleStartEffect coming in on this one: run 39747017554)
-        rule.runOnUiThread { rule.mainClock.advanceTimeBy(screen["at"]?.jsonPrimitive?.long ?: 3000L) }
+        val limit = android.os.SystemClock.uptimeMillis() + 20_000
+        while (!shown() && android.os.SystemClock.uptimeMillis() < limit) rule.runOnUiThread { rule.mainClock.advanceTimeByFrame() }
+        rule.waitForIdle()
+        val at = screen["at"]?.jsonPrimitive?.long ?: 3000L
+        rule.runOnUiThread { rule.mainClock.advanceTimeBy(maxOf(0L, start + at - rule.mainClock.currentTime)) }
         // the window as composed at that moment (PixelCopy of the composition just drawn: not the display's last
         // frame, which may be one behind a paused clock), the whole of it, under the system's bars too; where those
         // bars are (their icons the system's, not the app's: left out of the comparison) beside it
@@ -205,19 +230,50 @@ class ScreensRefTest {
         }.toString()
     }
 
-    /** A page the screen's file opens: `{"page": "chat" | "history" | "settings", …}`. */
+    /**
+     * A page the screen's file opens (apps/mbui src/sfapp/screen_dump_wbtest.mbt page_json, the mbui app's page as
+     * this app's): `{"page": "chat" | "history" | "settings" | "me" | …, …}`.
+     */
     private fun page(p: JsonObject): Screen {
         val s = { k: String -> p[k]!!.jsonPrimitive.content }
+        // ("" or none: every station's)
+        val opt = { k: String -> p[k]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() } }
         return when (s("page")) {
             "chat" -> Screen.Chat(s("station"), ChatOf.Session(s("session")))
             "history" -> Screen.History(s("station"), ChatOf.Session(s("session")), s("key"))
+            "new" -> Screen.NewChat
+            "decisions" -> Screen.Decisions
             "settings" -> Screen.Settings
+            "me" -> Screen.Me
+            "appearance" -> Screen.Appearance
+            "fonts" -> Screen.Fonts
+            "workspace" -> Screen.Workspace
+            "security" -> Screen.Security
+            "vault" -> Screen.Vault
+            "stations" -> Screen.Stations
+            "station" -> Screen.Station(s("station"))
+            "profiles" -> Screen.Profiles(opt("station"))
+            "profile" -> Screen.Profile(s("station"), s("profile"))
+            "pick-models" -> Screen.PickModels(s("station"), s("profile"))
+            "connects" -> Screen.Connects(opt("station"))
+            "connect" -> Screen.Connect(s("station"), s("connect"))
+            "new-profile" -> Screen.NewProfile(s("station"))
+            "new-connect" -> Screen.NewConnect(s("station"))
+            "memories" -> Screen.Memories
+            "memory" -> Screen.Memory(s("station"))
+            "memory-doc" -> Screen.MemoryDoc(s("station"), opt("skill"), p["at"]?.jsonPrimitive?.content?.toDouble()?.toInt() ?: 0)
+            "usage" -> Screen.Usage
+            "archive" -> Screen.Archive
+            "auto-decisions" -> Screen.AutomaticDecisions
+            "bar-settings" -> Screen.BarSettings
+            "kept-files" -> Screen.KeptFiles
+            "changelog" -> Screen.Changelog
+            "files" -> Screen.Files
+            "drive" -> Screen.Drive(s("station"), opt("root"), s("path"))
+            "drive-read" -> Screen.DriveRead(s("station"), s("root"), s("path"))
             else -> error("no page ${s("page")}")
         }
     }
 
-    @Test fun chatCards() = ref("chat-cards")
-    @Test fun history() = ref("history")
-    @Test fun settings() = ref("settings")
-    @Test fun home() = ref("home")
+    @Test fun screen() = ref(name)
 }

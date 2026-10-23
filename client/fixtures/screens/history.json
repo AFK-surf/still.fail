@@ -15,7 +15,8 @@
   ],
   "at": 3000,
   "shows": [
-    "标记为做完了"
+    "列表只建看得",
+    "做完了：列表"
   ],
   "topics": [
     {
@@ -37,6 +38,8 @@
         "chatTabs": {},
         "dropFiles": {},
         "driveViews": {},
+        "filesTabs": {},
+        "driveFavorites": {},
         "resume": {},
         "stationUpdatesDismissed": {},
         "device": {
@@ -58,7 +61,159 @@
           "current": 0
         },
         "barsBy": {},
-        "fonts": {}
+        "fonts": {},
+        "faces": {
+          "ui": {
+            "id": "",
+            "name": "",
+            "mono": false,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "text": {
+            "id": "",
+            "name": "",
+            "mono": false,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "code": {
+            "id": "",
+            "name": "",
+            "mono": true,
+            "family": "",
+            "files": [],
+            "bytes": 0
+          },
+          "list": [
+            {
+              "id": "inter",
+              "name": "Inter",
+              "mono": false,
+              "family": "SF Inter",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/inter/1/var.ttf.gz",
+                  "bytes": 457818,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/inter/1/preview.ttf",
+              "bytes": 457818
+            },
+            {
+              "id": "noto-sans-sc",
+              "name": "思源黑体",
+              "mono": false,
+              "family": "SF 思源黑体",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/noto-sans-sc/1/var.ttf.gz",
+                  "bytes": 11276563,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/noto-sans-sc/1/preview.ttf",
+              "bytes": 11276563
+            },
+            {
+              "id": "noto-serif-sc",
+              "name": "思源宋体",
+              "mono": false,
+              "family": "SF 思源宋体",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/noto-serif-sc/1/var.ttf.gz",
+                  "bytes": 15454579,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/noto-serif-sc/1/preview.ttf",
+              "bytes": 15454579
+            },
+            {
+              "id": "lxgw-wenkai",
+              "name": "霞鹜文楷",
+              "mono": false,
+              "family": "SF 霞鹜文楷",
+              "files": [
+                {
+                  "weight": 400,
+                  "url": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/400.ttf.gz",
+                  "bytes": 13088456,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                },
+                {
+                  "weight": 500,
+                  "url": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/500.ttf.gz",
+                  "bytes": 13088456,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/lxgw-wenkai/1/preview.ttf",
+              "bytes": 26176912
+            },
+            {
+              "id": "jetbrains-mono",
+              "name": "JetBrains Mono",
+              "mono": true,
+              "family": "SF JetBrains Mono",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/jetbrains-mono/1/var.ttf.gz",
+                  "bytes": 90579,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/jetbrains-mono/1/preview.ttf",
+              "bytes": 90579
+            },
+            {
+              "id": "fira-code",
+              "name": "Fira Code",
+              "mono": true,
+              "family": "SF Fira Code",
+              "files": [
+                {
+                  "weight": 0,
+                  "url": "https://app.still.fail/releases/fonts/fira-code/1/var.ttf.gz",
+                  "bytes": 137151,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/fira-code/1/preview.ttf",
+              "bytes": 137151
+            },
+            {
+              "id": "maple-mono",
+              "name": "Maple Mono",
+              "mono": true,
+              "family": "SF Maple Mono",
+              "files": [
+                {
+                  "weight": 400,
+                  "url": "https://app.still.fail/releases/fonts/maple-mono/1/400.ttf.gz",
+                  "bytes": 8395338,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                },
+                {
+                  "weight": 600,
+                  "url": "https://app.still.fail/releases/fonts/maple-mono/1/600.ttf.gz",
+                  "bytes": 8395338,
+                  "sha256": "ff6ddd18ae9eed8077488ece160705ef9845a5817a79a7fc85a5ffde0927fc3a"
+                }
+              ],
+              "preview": "https://app.still.fail/releases/fonts/maple-mono/1/preview.ttf",
+              "bytes": 16790677
+            }
+          ]
+        }
       }
     },
     {
@@ -737,143 +892,63 @@
             "text": ""
           }
         ],
-        "archivable": true
-      }
-    },
-    {
-      "topic": {
-        "topic": "stations",
-        "scope": "ws1"
-      },
-      "value": [
-        {
-          "station": "ws1/st1",
-          "id": "st1",
-          "name": "Studio",
-          "icon": "glyph:desktop",
-          "summary": "",
-          "online": true,
-          "reconnecting": false,
-          "link": {
-            "state": ""
-          },
-          "runtimes": [],
-          "models": [],
-          "overview": {
-            "viewer": {
-              "via": "mesh",
-              "role": "owner"
+        "archivable": true,
+        "xshare": {
+          "session": "s-c1",
+          "text": "开源 · 只读",
+          "to": [],
+          "write": false,
+          "may": true,
+          "places": [
+            {
+              "workspace": "ws2",
+              "name": "日常",
+              "on": false
             },
-            "connects": [],
-            "profiles": [],
-            "processes": [],
-            "counts": {
-              "sessions": 0,
-              "running": 0,
-              "warm": 0
-            },
-            "slackUsers": [],
-            "slackTeams": [],
-            "slackApps": [],
-            "logins": [],
-            "machineLogins": [],
-            "sharing": false,
-            "consoleSignIn": false,
-            "apiProviders": [],
-            "updates": [],
-            "processesText": "",
-            "agentEnv": [],
-            "drive": {
-              "roots": [
-                {
-                  "path": "/Users/lin/文档",
-                  "name": "文档",
-                  "state": "ok"
-                },
-                {
-                  "path": "/Volumes/备份盘",
-                  "name": "备份盘",
-                  "state": "missing"
-                }
-              ],
-              "anywhere": true,
-              "home": "/Users/lin",
-              "trash": true,
-              "watch": true,
-              "zip": true
+            {
+              "workspace": "ws3",
+              "name": "开源",
+              "on": true
             }
-          },
-          "betaOffered": false,
-          "joined": false
+          ]
         },
-        {
-          "station": "ws1/st2",
-          "id": "st2",
-          "name": "MBA",
-          "icon": "glyph:laptop:teal",
-          "summary": "",
-          "online": false,
-          "reconnecting": false,
-          "link": {
-            "state": ""
-          },
-          "runtimes": [],
-          "models": [],
-          "overview": {
-            "viewer": {
-              "via": "mesh",
-              "role": "owner"
-            },
-            "connects": [],
-            "profiles": [],
-            "processes": [],
-            "counts": {
-              "sessions": 0,
-              "running": 0,
-              "warm": 0
-            },
-            "slackUsers": [],
-            "slackTeams": [],
-            "slackApps": [],
-            "logins": [],
-            "machineLogins": [],
-            "sharing": false,
-            "consoleSignIn": false,
-            "apiProviders": [],
-            "updates": [],
-            "processesText": "",
-            "agentEnv": [],
-            "drive": {
-              "roots": [
-                {
-                  "path": "/Users/lin/照片",
-                  "name": "照片",
-                  "state": "ok"
+        "publish": {
+          "may": true,
+          "links": [
+            {
+              "id": "p2",
+              "link": "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq-p2",
+              "createdAt": 0,
+              "byName": "Alice",
+              "mayRevoke": true,
+              "time": {
+                "createdAt": {
+                  "at": 0,
+                  "ago": "10 分钟前",
+                  "full": "10月15日 10:00",
+                  "until": "",
+                  "past": false
                 }
-              ]
+              }
+            },
+            {
+              "id": "p1",
+              "link": "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq-p1",
+              "createdAt": 0,
+              "byName": "Bob",
+              "mayRevoke": false,
+              "time": {
+                "createdAt": {
+                  "at": 0,
+                  "ago": "2 天前",
+                  "full": "10月15日 10:00",
+                  "until": "",
+                  "past": false
+                }
+              }
             }
-          },
-          "betaOffered": false,
-          "joined": false
+          ]
         }
-      ]
-    },
-    {
-      "topic": {
-        "topic": "chatJobs",
-        "station": "ws1/st1",
-        "session": "s-c1"
-      },
-      "value": {
-        "jobs": [],
-        "servicesNote": "",
-        "jobsNote": "",
-        "current": 0,
-        "ended": 0,
-        "clear": [],
-        "allText": "",
-        "clearText": "",
-        "hiddenText": ""
       }
     },
     {
@@ -1085,6 +1160,214 @@
         "empty": false,
         "loaded": true,
         "more": false
+      }
+    },
+    {
+      "topic": {
+        "topic": "stations",
+        "scope": "ws1"
+      },
+      "value": [
+        {
+          "station": "ws1/st1",
+          "id": "st1",
+          "name": "Studio",
+          "icon": "glyph:desktop",
+          "summary": "Apple M2 Max · 2 个 agent 在工作",
+          "online": true,
+          "reconnecting": false,
+          "link": {
+            "state": ""
+          },
+          "runtimes": [],
+          "models": [],
+          "overview": {
+            "viewer": {
+              "via": "mesh",
+              "role": "owner"
+            },
+            "connects": [],
+            "profiles": [],
+            "processes": [],
+            "counts": {
+              "sessions": 0,
+              "running": 0,
+              "warm": 0
+            },
+            "slackUsers": [],
+            "slackTeams": [],
+            "slackApps": [],
+            "logins": [],
+            "machineLogins": [],
+            "sharing": false,
+            "consoleSignIn": false,
+            "apiProviders": [],
+            "updates": [],
+            "processesText": "",
+            "agentEnv": [],
+            "drive": {
+              "roots": [
+                {
+                  "path": "/Users/lin/文档",
+                  "name": "文档",
+                  "state": "ok"
+                },
+                {
+                  "path": "/Volumes/备份盘",
+                  "name": "备份盘",
+                  "state": "missing"
+                }
+              ],
+              "anywhere": true,
+              "home": "/Users/lin",
+              "trash": true,
+              "watch": true,
+              "zip": true
+            }
+          },
+          "betaOffered": false,
+          "host": {
+            "hostname": "",
+            "os": "",
+            "arch": "",
+            "cpus": 0,
+            "cpuModel": "",
+            "load": 0,
+            "uptimeSec": 0,
+            "memory": {
+              "totalBytes": 0,
+              "usedBytes": 0
+            },
+            "disk": {
+              "path": "",
+              "totalBytes": 0,
+              "freeBytes": 0
+            },
+            "emberRssBytes": 0,
+            "checkedAt": 0,
+            "summary": "",
+            "line": "",
+            "facts": [],
+            "meters": [
+              {
+                "label": "",
+                "short": "CPU",
+                "percent": 0,
+                "left": 72,
+                "level": "ok",
+                "value": "",
+                "remaining": "空闲 72%",
+                "big": "",
+                "unit": "",
+                "title": "",
+                "total": ""
+              },
+              {
+                "label": "",
+                "short": "内存",
+                "percent": 0,
+                "left": 18,
+                "level": "amber",
+                "value": "",
+                "remaining": "剩 11.5 G",
+                "big": "",
+                "unit": "",
+                "title": "",
+                "total": ""
+              },
+              {
+                "label": "",
+                "short": "磁盘",
+                "percent": 0,
+                "left": 41,
+                "level": "ok",
+                "value": "",
+                "remaining": "剩 380 G",
+                "big": "",
+                "unit": "",
+                "title": "",
+                "total": ""
+              }
+            ],
+            "identity": "",
+            "details": [],
+            "usage": "",
+            "emberText": ""
+          },
+          "way": {
+            "path": "直连",
+            "via": "direct"
+          },
+          "joined": false
+        },
+        {
+          "station": "ws1/st2",
+          "id": "st2",
+          "name": "MBA",
+          "icon": "glyph:laptop:teal",
+          "summary": "",
+          "online": false,
+          "reconnecting": false,
+          "link": {
+            "state": ""
+          },
+          "runtimes": [],
+          "models": [],
+          "overview": {
+            "viewer": {
+              "via": "mesh",
+              "role": "owner"
+            },
+            "connects": [],
+            "profiles": [],
+            "processes": [],
+            "counts": {
+              "sessions": 0,
+              "running": 0,
+              "warm": 0
+            },
+            "slackUsers": [],
+            "slackTeams": [],
+            "slackApps": [],
+            "logins": [],
+            "machineLogins": [],
+            "sharing": false,
+            "consoleSignIn": false,
+            "apiProviders": [],
+            "updates": [],
+            "processesText": "",
+            "agentEnv": [],
+            "drive": {
+              "roots": [
+                {
+                  "path": "/Users/lin/照片",
+                  "name": "照片",
+                  "state": "ok"
+                }
+              ]
+            }
+          },
+          "betaOffered": false,
+          "joined": false
+        }
+      ]
+    },
+    {
+      "topic": {
+        "topic": "chatJobs",
+        "station": "ws1/st1",
+        "session": "s-c1"
+      },
+      "value": {
+        "jobs": [],
+        "servicesNote": "",
+        "jobsNote": "",
+        "current": 0,
+        "ended": 0,
+        "clear": [],
+        "allText": "",
+        "clearText": "",
+        "hiddenText": ""
       }
     },
     {
@@ -1718,13 +2001,38 @@
         "trouble": null,
         "members": null,
         "leading": "agents",
-        "glyph": null,
+        "glyph": {
+          "online": 1,
+          "dim": 1,
+          "connecting": 0,
+          "failing": 0,
+          "working": 0,
+          "summary": "",
+          "label": "1 台在线"
+        },
         "note": {
           "reading": false,
           "text": null,
           "failing": [],
           "empty": false
         }
+      }
+    },
+    {
+      "topic": {
+        "topic": "status",
+        "workspace": "ws1"
+      },
+      "value": {
+        "items": []
+      }
+    },
+    {
+      "topic": {
+        "topic": "lockPrompts"
+      },
+      "value": {
+        "pairing": []
       }
     },
     {

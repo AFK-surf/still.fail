@@ -85,19 +85,21 @@ case "$cmd" in
     [ -n "${ANDROID_TEST_APK:-}" ] && { $ADB install -r -t "$ANDROID_TEST_APK" > /dev/null || die "Android's tests not installed"; }
     demo
     $ADB shell rm -rf /sdcard/Android/data/$M/files/screens
-    filter=""
-    # (a screen's test is its name in camel case: chat-cards → ScreensRefTest#chatCards)
-    for n in $names; do
-      t=$(python3 -c 'import sys; w=sys.argv[1].split("-"); print(w[0]+"".join(x[:1].upper()+x[1:] for x in w[1:]))' "$n")
-      filter="${filter:+$filter,}fail.still.android.motion.ScreensRefTest#$t"
-    done
-    mkdir -p $O && $ADB shell am instrument -w -e class "$filter" $M.test/androidx.test.runner.AndroidJUnitRunner > $O/instrument.log 2>&1
+    # (one run of ScreensRefTest a screen, those named: its `screens` argument)
+    mkdir -p $O && $ADB shell am instrument -w -e class fail.still.android.motion.ScreensRefTest -e screens "$(echo $names | tr ' ' ',')" \
+      $M.test/androidx.test.runner.AndroidJUnitRunner > $O/instrument.log 2>&1
+    rm -f $O/refs-failed
     if ! grep -q '^OK (' $O/instrument.log; then
       grep -a -E 'FAILURES|Exception|at fail\.still|Error' $O/instrument.log | head -20
       # (what it drew, to see why: out/android-ref/failed/)
       mkdir -p $O/failed && $ADB pull /sdcard/Android/data/$M/files/screens/. $O/failed > /dev/null 2>&1
       $ADB logcat -d -s StillFailCore:* AndroidRuntime:E System.err:W 2>/dev/null | tail -80 > $O/failed/logcat.txt
-      die "Android's screens not drawn ($O/instrument.log)"
+      # the screens Android's test could not draw said (out/android-ref/refs-failed), the others' pictures kept
+      grep -a -o 'Error in screen\[[^]]*\]' $O/instrument.log | sed 's/.*\[//; s/\]$//' | sort -u > $O/refs-failed
+      [ -s $O/refs-failed ] || die "Android's screens not drawn ($O/instrument.log)"
+      echo "android-ref: Android's test did not draw: $(tr '\n' ' ' < $O/refs-failed)"
+      names=$(for n in $names; do grep -qx "$n" $O/refs-failed || echo $n; done)
+      [ -n "$names" ] || die "Android's screens not drawn ($O/instrument.log)"
     fi
     mkdir -p $R
     for n in $names; do
@@ -124,13 +126,16 @@ case "$cmd" in
     # this emulator gives the app (its screen between the bars android.json says, in its density's points)
     [ -f $R/android.json ] || die "no references ($R/android.json): scripts/android-ref.sh refs first"
     win=$(machine | python3 -c 'import json,sys; m=json.load(sys.stdin); b=json.load(open(sys.argv[1]))["bars"]; w,h=map(int,m["size"].split("x")); s=int(m["density"])/160; print(w/s, (h-b["top"]-b["bottom"])/s, s)' $R/android.json)
+    t0=$(date +%s)
     (cd $A && MBUI_ANDROID_REF=moments MBUI_ANDROID_WINDOW="$win" moon_test_native -p stillfail/sfscreens 2>&1) > $O/text/moments.txt \
       || { grep -a -E "failed|FAILED" $O/text/moments.txt | head -10; die "the screens' moments not found (src/sfscreens/android_ref_wbtest.mbt)"; }
+    echo "android-ref: the screens' moments found in $(($(date +%s) - t0)) s"
     for n in $names; do
       json=$(python3 -c 'import json,sys,base64; print(base64.b64encode(json.dumps(json.load(open(sys.argv[1])),ensure_ascii=False,separators=(",",":")).encode()).decode())' $S/$n.json)
       # (the run to that moment on its clock: MBView draws until its clock reaches it, that frame the last)
       at=$(awk -v n="$n" '$1 == "MOMENT" && $2 == n { printf "%d", ($3 == int($3)) ? $3 : int($3) + 1 }' $O/text/moments.txt)
       [ -n "$at" ] || die "$n: no moment said for it ($O/text/moments.txt)"
+      t0=$(date +%s)
       $ADB shell am force-stop $PKG
       $ADB shell run-as $PKG rm -f files/run.log || true
       $ADB logcat -b all -c
@@ -139,9 +144,12 @@ case "$cmd" in
       python3 "$MBUI_DIR/scripts/android_end.py" --adb "$ADB" --app $PKG --uid $uid --file run.log \
         --end "SHOT |FATAL EXCEPTION|Fatal signal" > $O/text/$n.end || { cat $O/text/$n.end; die "$n: no picture's moment"; }
       grep -q "SHOT " $O/text/$n.end || { cat $O/text/$n.end; die "$n: the app ended before its moment"; }
+      t1=$(date +%s)
       $ADB exec-out run-as $PKG cat files/run.log > $O/text/$n.log
       $ADB shell am force-stop $PKG
       python3 "$A/scripts/screens.py" keep $n $O/text/$n.log "$A/screens/text-android.textrec" || exit 1
+      # (where its time went: the app's run to its moment, then reading its log and keeping its text)
+      echo "android-ref: $n: the app's run $((t1 - t0)) s, its text kept $(($(date +%s) - t1)) s"
     done
     ;;
   lists)
@@ -216,14 +224,45 @@ case "$cmd" in
     python3 "$D/android_ref.py" "$R" "$O/mbui" "$O" "$S/allowed.json" $names
     ;;
   ci)
-    # CI's run (mbui-android-ref.yml): the runner's CPU said (the emulator draws in software on it); Android's
+    # CI's run (mbui-android-ref.yml: every screen): the runner's CPU said (the emulator draws in software on it); Android's
     # pictures taken anew where its app or the screens changed (REFS=1), held to those kept (a change is a new
     # reference: this run's, committed in its PR); then the mbui app's, compared
     fail=0
     echo "android-ref: on $(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//')"
-    if [ "${REFS:-}" = 1 ] || [ ! -f $R/android.json ]; then
+    # Screens with no Android picture yet (new ones): theirs taken a few a run (REFS_MOST: Android's test draws them one
+    # after another, its app built first, in the job's 10 minutes), nothing else done in it, the run failing until
+    # every one is in (each run's committed in the PR from its artifact)
+    fresh=$(for n in $names; do [ -f $R/$n.png ] || echo $n; done)
+    if [ -n "$fresh" ]; then
+      take=$(echo $fresh | tr ' ' '\n' | head -${REFS_MOST:-12} | tr '\n' ' ')
+      [ -n "${ANDROID_APK:-}" ] || die "new screens ($take) and no Android app to take their pictures (REFS: the workflow builds it)"
+      bash "$0" refs $take || exit 1
+      left=$(( $(echo $fresh | wc -w) - $(echo $take | wc -w) ))
+      echo "android-ref: Android's pictures of new screens taken ($take): commit this run's (its artifact's client/fixtures/screens/android) in the PR; $left more to take after"
+      exit 1
+    fi
+    # (Android's pictures taken anew: in a pull request, of the screens main has whose JSON it changed; after its app changed,
+    # every one, REFS_MOST a run in turn by the run's number, so a run fits its 10 minutes)
+    again=$names
+    if [ -n "${GITHUB_BASE_REF:-}" ]; then
+      base=$(git -C $ROOT merge-base origin/main HEAD 2>/dev/null)
+      # (one main had a picture of, its JSON changed here: a screen new here has the pictures its runs took)
+      again=$(for n in $names; do git -C $ROOT cat-file -e "$base:client/fixtures/screens/android/$n.png" 2>/dev/null \
+        && ! git -C $ROOT diff --quiet "$base" HEAD -- "client/fixtures/screens/$n.json" && echo $n; done)
+    elif [ $(echo $again | wc -w) -gt ${REFS_MOST:-12} ]; then
+      all=$(echo $again | wc -w); most=${REFS_MOST:-12}; from=$(( (${GITHUB_RUN_NUMBER:-0} * most) % all ))
+      again=$(echo $again $again | tr ' ' '\n' | tail -n +$((from + 1)) | head -$most | tr '\n' ' ')
+    fi
+    if { [ "${REFS:-}" = 1 ] && [ -n "$(echo $again)" ]; } || [ ! -f $R/android.json ]; then
       rm -rf $O/kept && mkdir -p $O && { [ -f $R/android.json ] && cp -r $R $O/kept; true; }
-      bash "$0" refs || exit 1
+      all_names=$names
+      names=$again
+      bash "$0" refs $names || exit 1
+      # (those Android's test could not draw: said, failing the run, and left out of what follows)
+      if [ -s $O/refs-failed ]; then
+        fail=1
+        names=$(for n in $names; do grep -qx "$n" $O/refs-failed || echo $n; done)
+      fi
       # held to those kept as android_ref.py compares (a channel a step apart the same: the same picture has come out so
       # on another runner, at circles' edges), the kept ones then left as they are
       if [ -f $O/kept/android.json ] && cmp -s $O/kept/android.json $R/android.json \
@@ -238,10 +277,12 @@ case "$cmd" in
         # new ones taken again, to be references (one that differs from itself is none: the run says where); those the
         # same as kept need not be, the kept ones having been so
         rm -rf $O/again && cp -r $R $O/again
-        bash "$0" refs > /dev/null || exit 1
+        bash "$0" refs $names > /dev/null || exit 1
         python3 "$D/android_ref.py" "$O/again" "$R" "$O/again-diff" /nonexistent $names | grep '^| [a-z]' \
           | sed 's/^/android-ref: Android twice: /'
       fi
+      # (every screen compared after, those taken anew and the rest; one Android's test could not draw left out)
+      names=$(for n in $all_names; do [ -s $O/refs-failed ] && grep -qx "$n" $O/refs-failed || echo $n; done)
     fi
     # the Android host's text the Tester lacks, recorded (TEXT=1: the job found it lacking), then kept in the PR
     # (nothing compared after it: the run fails for the text to be committed, and the next compares over it; the job
@@ -259,9 +300,9 @@ case "$cmd" in
       exit 1
     fi
     # (the draw lists again where the text was recorded anew or Android's system changed with its pictures)
-    { [ "${TEXT:-}" = 1 ] || [ "${REFS:-}" = 1 ] || [ ! -f $O/dl/print.txt ]; } && { bash "$0" lists || exit 1; }
-    bash "$0" mbui || exit 1
-    bash "$0" compare || fail=1
+    { [ "${TEXT:-}" = 1 ] || [ "${REFS:-}" = 1 ] || [ ! -f $O/dl/print.txt ]; } && { bash "$0" lists $names || exit 1; }
+    bash "$0" mbui $names || exit 1
+    bash "$0" compare $names || fail=1
     exit $fail
     ;;
   *) die "refs, mbui or compare (scripts/android-ref.sh)" ;;

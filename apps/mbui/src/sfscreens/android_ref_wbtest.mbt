@@ -11,12 +11,7 @@
 ///|
 /// The screens (their names, as client/fixtures/screens has them, and their JSON).
 fn android_screens() -> Array[(String, String)] {
-  [
-    ("chat-cards", screen_chat_cards),
-    ("history", screen_history),
-    ("settings", screen_settings),
-    ("home", screen_home),
-  ]
+  screens_kept()
 }
 
 ///|
