@@ -1,6 +1,6 @@
 // Notifications (notices.mbt) over the fixture's chats, the core's `notify` made up here and the system a fake that
 // keeps what it is asked: a notice shown once it is taken, tapped it opens its chat at its message, the chat on top
-// takes its notification off, the system asked once and told what it allows, pushes registered and shown.
+// takes its notification off, the system asked once and told what it allows, pushes registered.
 
 ///|
 /// What the fake system was asked.
@@ -12,12 +12,11 @@ priv struct FakeSystem {
   mut answer : Bool?
   mut opened : String
   mut token : String
-  mut push : String
 }
 
 ///|
 fn fake_system() -> FakeSystem {
-  { shown: [], cancelled: [], permission: "granted", asks: 0, answer: None, opened: "", token: "", push: "" }
+  { shown: [], cancelled: [], permission: "granted", asks: 0, answer: None, opened: "", token: "" }
 }
 
 ///|
@@ -41,11 +40,6 @@ fn use_system(s : FakeSystem) -> Unit {
       o
     },
     token: fn() { s.token },
-    pushed: fn() {
-      let p = s.push
-      s.push = ""
-      p
-    },
   }
 }
 
@@ -98,7 +92,6 @@ fn notify_core(
       match name {
         "notice.claim" => done(Ok({ "show": true }))
         "link.parse" => done(Ok({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "s-c2" }))
-        "notice.pushed" => done(Ok({ "show": true }))
         // left for the test to answer
         "notify.set" | "notify.permission" | "push.register" | "push.unregister" | "notice.bring" => ()
         _ => (base.call)(name, params, done)
@@ -241,23 +234,6 @@ test "pushes: none registered without a token, taken off while off; a token regi
 }
 
 ///|
-test "a push delivered: shown as the core says, then what it is about brought onto the device" {
-  let calls : Array[Made] = []
-  let sys = fake_system()
-  let t = notify_core(calls, sys)
-  sys.push = "{\"type\":\"notice\",\"kind\":\"done\",\"title\":\"周报的模板\",\"body\":\"Claude: 放好了\",\"tag\":\"ws1/st1/s-c10\",\"url\":\"/o/ws1/st1/s-c10?message=4\",\"workspace\":\"ws1\",\"station\":\"st1\",\"session\":\"s-c10\",\"at\":\"1790000000000\",\"seq\":\"4\"}"
-  t.frame()
-  assert_eq(named(calls, "notice.pushed").length(), 1)
-  assert_true(sys.shown.iter().any(fn(n) { n.0 == "ws1/st1/s-c10" && n.2 == "Claude: 放好了" }))
-  let bring = named(calls, "notice.bring")
-  assert_eq(bring.length(), 1)
-  let p = bring[0].params.stringify()
-  assert_true(p.contains("\"station\":\"ws1/st1\""))
-  assert_true(p.contains("\"seq\":4"))
-  // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
-}
-
-///|
 test "settings: notifications switched off, the core keeps it; on again, the system asked" {
   let calls : Array[Made] = []
   let sys = fake_system()
@@ -350,4 +326,26 @@ fn knob_across(t : @ui.Tester, words : String) -> Double raise {
     fail("no knob by \{words}")
   }
   (knob.0 - ground.0 - 3.0) / 18.0
+}
+
+///|
+test "pushes: a token come after the start registered then, a new one again; the same one not twice" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys)
+  assert_eq(named(calls, "push.register").length(), 0)
+  // the push service's first token, given once the app runs (Push.java: FirebaseMessaging's token)
+  sys.token = "tok-1"
+  t.frame()
+  let reg = named(calls, "push.register")
+  assert_eq(reg.length(), 1)
+  assert_true(reg[0].params.stringify().contains("\"token\":\"tok-1\""))
+  t.frame()
+  assert_eq(named(calls, "push.register").length(), 1)
+  // a new token (PushService.onNewToken)
+  sys.token = "tok-2"
+  t.frame()
+  let reg = named(calls, "push.register")
+  assert_eq(reg.length(), 2)
+  assert_true(reg[1].params.stringify().contains("\"token\":\"tok-2\""))
 }

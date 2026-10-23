@@ -124,8 +124,6 @@ public final class Notices {
 
     /** The device's push token as the app's push service last gave it ("" none). */
     private static volatile String pushToken = "";
-    /** The pushes delivered and not yet taken by the app (their data as JSON), the oldest first. */
-    private static final java.util.concurrent.ConcurrentLinkedQueue<String> pushes = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
     /**
      * The device's push token, from the app's push service (its first, or a new one): the app is asked for a frame, so
@@ -137,19 +135,9 @@ public final class Notices {
         Host.main.post(Host::requestFrame);
     }
 
-    /** A push delivered while the app runs (its data, as a JSON object of strings): taken by the app once. */
-    public static void pushed(String data) {
-        pushes.add(data);
-        Host.main.post(Host::requestFrame);
-    }
-
-    /** 0: a notification tapped, once; 1: the push token; 2: a push delivered, once ("" none). */
+    /** 0: a notification tapped, once; 1: the push token ("" none). */
     static String text(int what) {
         if (what == 1) return pushToken;
-        if (what == 2) {
-            String p = pushes.poll();
-            return p == null ? "" : p;
-        }
         if (what != 0) return "";
         String o = opened;
         opened = "";
