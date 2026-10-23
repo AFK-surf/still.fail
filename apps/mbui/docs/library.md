@@ -27,14 +27,15 @@ missing here is ported from the web's file (its structure, its states, its value
 | `styles/glass.ts` | `glass.mbt` | |
 | `styles/controls.css.ts`, `styles/page.css.ts` | `parts.mbt`, `styles.mbt` | |
 | `parts.tsx`, `parts.css.ts`, `own.css.ts` | `parts.mbt` | Button, IconButton, Tip, About, Field, Segmented, Choices, Switch (`switch`, and `switch_look` for a row that takes the tap), SwitchRow, Select, Pill, StatusDot, Dialog, Confirm, the small panel and its parts (PanelHead, PanelGroup, PanelRow: `menu_item(panel=true)`, PanelNote, PanelFoot, PanelText, PanelButton, PanelIconButton), Menu and its items, CopyCommand, Chooser, Empty, FirstOne, Section; ResizeHandle is still the pages' (the sidebar's edge, `sfapp/wide.mbt`; the files' columns', `wide_files_columns.mbt`: the web's own SidebarEdge and ColumnEdge look as it does) |
-| `waiting.tsx`, `styles/spinner.css.ts`, `styles/spokes.ts` | `parts.mbt`, `icons.mbt` | the spinner, the spokes, WaitPill, WaitLine, Progress; the phone's settings draw their own waiting (`sfapp/settings/parts.mbt`: Android's Waiting.kt) |
+| `waiting.tsx`, `waiting.css.ts`, `styles/spinner.css.ts` | `waiting.mbt` | Spinner, WaitPill, WaitLine, WaitNote, WaitShapes (rows, messages, cards), Waiting, WaitMore, Progress, the placeholders' breath; the phone's and the desktop's lists, chats and settings wait with them. The pill over a picture (`pillOver`: the preview's, a screen's) is still the pages' |
+| `styles/spokes.ts` | `icons.mbt` | |
 | `Avatar.tsx` | `avatar.mbt` | |
 | `icons.tsx` | `icons.mbt`, `icon_data.mbt` | made by `scripts/icons` from `design/icons` |
 | `strokes.ts` | `stroke.mbt` | |
 | `fileSize.ts` | `file_size.mbt` | |
 | `shortcuts.ts` | `shortcuts.mbt` | |
-| `motion.ts`, `styles/keyframes.css.ts`, `styles/still.ts` | mbui's `@motion`, `Ctx::move_state` (moveState); `parts.mbt` `pop_in` (popKeyframes) | |
-| `toast.tsx` | mbui's `@kit.toaster` | its look is still the app's |
+| `motion.ts`, `styles/keyframes.css.ts`, `styles/still.ts` | `motion.mbt` (EASE_OUT, ENTER, LEAVE, MOVE, GLIDE_*, LOCAL_MS), mbui's `@motion` and `Ctx::move_state` (moveState); `parts.mbt` `pop_in` (popKeyframes) | |
+| `toast.tsx`, `toast.css.ts` | `toast.mbt` (`toast_look`, `toast_said`, `toast_ms`) over mbui's `@kit.toaster` | the desktop's toast; the phone keeps its own (the web's ToastTo) |
 | `i18n.ts` | | the words are the app's (`sfapp` `tr`, `fill`) |
 | `viewer/` (ViewerBar, Reader, Player, media) | | still the app's: `sfapp/viewer_bar.mbt`, `reader_desk.mbt`, `drive_reader.mbt`, `src/player`, `play_desk.mbt` |
 

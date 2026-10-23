@@ -46,10 +46,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|waiting wide 59686:8968aa76
     #|waiting-dark narrow 29427:29f8e062
     #|waiting-dark wide 59784:52102140
-    #|finding narrow 32265:c4ec98fe
-    #|finding wide 62232:60e2dec8
-    #|finding-dark narrow 32233:d2af3c90
-    #|finding-dark wide 62209:4da91f78
+    #|finding narrow 23487:6f4a19bf
+    #|finding wide 53398:5747b41b
+    #|finding-dark narrow 23379:6bb9808b
+    #|finding-dark wide 53294:2a172733
     #|code narrow 26640:49184c39
     #|code wide 56649:21c5af86
     #|code-dark narrow 26488:5afce163
@@ -58,10 +58,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|wrong wide 58089:549b5475
     #|wrong-dark narrow 27957:a5f59222
     #|wrong-dark wide 57919:878a46eb
-    #|checking narrow 34482:9eaa7d5a
-    #|checking wide 64462:79bc7aa0
-    #|checking-dark narrow 34420:aad9bce3
-    #|checking-dark wide 64386:11e031cb
+    #|checking narrow 26657:72a8a4b0
+    #|checking wide 56601:7ff1041d
+    #|checking-dark narrow 26505:d4765730
+    #|checking-dark wide 56437:839275f
     #|none narrow 29081:a68cf483
     #|none wide 58885:5f72f164
     #|none-dark narrow 28917:239c3fa0
@@ -79,6 +79,7 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|nocode-dark narrow 28133:34ef053a
     #|nocode-dark wide 58199:4c55a6a7
     #|
+
 
 
 
@@ -116,17 +117,18 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   inspect(out.to_string(), content=(
     #|settings narrow 81183:b241c4bb
     #|station narrow 57285:ffeeaf6
-    #|me-reading narrow 16968:8259928c
+    #|me-reading narrow 9158:e5206a82
     #|settings wide 195843:f28dc1f5
     #|station wide 176622:da07a8f5
-    #|me-reading wide 151000:19848ee4
+    #|me-reading wide 143082:8b81a68e
     #|settings-dark narrow 81287:2abbe2eb
     #|station-dark narrow 57077:347438b7
-    #|me-reading-dark narrow 17107:226b962c
+    #|me-reading-dark narrow 9207:dcd8ab45
     #|settings-dark wide 195629:dc09e35e
     #|station-dark wide 176443:c736cddb
-    #|me-reading-dark wide 150896:c2c73fca
+    #|me-reading-dark wide 142890:fad875df
     #|
+
 
 
 

@@ -998,6 +998,18 @@ let told_dark : Ref[Bool?] = Ref(None)
 /// coming in and going out; one said again is a new one.
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
+  // the wide frame's the web's (the library's: @sf.toast_look, 24 over the window's foot, what an unconfirmed write
+  // did said as not known)
+  if wide_on.val {
+    let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", @sf.toast_said(app.toast))] } else { [] }
+    let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=@sf.toast_bottom, look=fn(c, s, _action, _close) {
+      @sf.toast_look(c, s)
+    })
+    if app.toast != "" && r.open.is_empty() {
+      app.toast = ""
+    }
+    return
+  }
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
   // (above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
   let foot = nav_foot()
@@ -1014,8 +1026,8 @@ fn toast(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// How long a toast stays (paused while the pointer is on it).
-pub let toast_ms : Double = 2600.0
+/// How long a toast stays (paused while the pointer is on it): the library's (toast.tsx).
+pub let toast_ms : Double = @sf.toast_ms
 
 ///|
 fn say(c : @ui.Ctx, words : String) -> Unit {
@@ -1333,9 +1345,9 @@ fn init {
 }
 
 ///|
-/// How long a page opening waits for what the core has on the device (App.kt LOCAL_MS, web motion.ts): never for a
-/// station.
-let page_local_ms : Double = 100.0
+/// How long a page opening waits for what the core has on the device (App.kt LOCAL_MS, the library's: motion.ts): never
+/// for a station.
+let page_local_ms : Double = @sf.local_ms
 
 ///|
 /// Whether the core has answered (a value or why not) for what page `p` shows as it opens (App.kt opening): a chat,
