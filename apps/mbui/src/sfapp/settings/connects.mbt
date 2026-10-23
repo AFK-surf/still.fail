@@ -88,6 +88,11 @@ fn connect_row(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Unit {
 
 ///|
 fn connects_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
+  // the wide frame's place: every station's in one list, as the web's (web_connects.mbt)
+  if wide.val && only == "" {
+    connects_page_wide(c, core, here)
+    return
+  }
   let t = @sf.theme()
   let mine = connects_mine.val
   let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
