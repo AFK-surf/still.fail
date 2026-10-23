@@ -717,17 +717,18 @@ let slack_name_ground : @ui.Style = @ui.style(radius=Base)
 let slack_name_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=AccentText, wrap=false)
 
 ///|
-/// A place, as the core names it (History.kt Place): its platform's mark (still.fail's for a chat here, Slack's for
-/// another) and its name, 13 semibold; a chat here is its agent's item, opened by its session (back to it when it is the
-/// chat under the history), in the accent's ink; a Slack thread opens by its link. (Feishu's mark is Slack's here: the
-/// app has no picture of Feishu's yet.)
+/// A place, as the core names it (History.kt Place): its platform's mark (still.fail's for a chat here, Feishu's for a
+/// Feishu chat, Slack's for another: Parts.kt SlackMark) and its name, 13 semibold; a chat here is its agent's item,
+/// opened by its session (back to it when it is the chat under the history), in the accent's ink; a Slack thread opens
+/// by its link.
 fn history_place(c : @ui.Ctx, r : ChatRef, ik : String, place : Json?) -> Unit {
   let t = @sf.theme()
   let surface = text(place, "surface")
   let session = text(place, "session")
   let url = text(place, "url")
   let here = surface == "ember" || surface == "stillfail"
-  let slack = url != "" && (surface == "slack" || surface == "feishu" || surface.has_prefix("feishu:"))
+  let feishu = surface == "feishu" || surface.has_prefix("feishu:")
+  let slack = url != "" && (surface == "slack" || feishu)
   let opens = session != "" || slack
   let id = c.id("history-place/" + ik)
   if opens && c.clicked(id) {
@@ -744,6 +745,8 @@ fn history_place(c : @ui.Ctx, r : ChatRef, ik : String, place : Json?) -> Unit {
   c.box(dir=Row, gap=3.0, align=ACenter, radius=4.0, id=if opens { id } else { 0 }, fn() {
     if here {
       @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 12.0) |> ignore
+    } else if feishu {
+      @sf.feishu_mark(c, 12.0) |> ignore
     } else {
       @sf.slack_mark(c, 12.0) |> ignore
     }

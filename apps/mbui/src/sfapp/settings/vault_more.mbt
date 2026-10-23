@@ -584,46 +584,20 @@ fn field_row(c : @ui.Ctx, core : Core, item : String, f : String, value : String
 }
 
 ///|
-/// What a secret copied was, and when (it is taken off the clipboard 30 s later, unless the app copied something else
-/// meanwhile).
-priv struct Copied {
-  mut words : String
-  /// a count of secrets copied: each its own 30 s
-  mut serial : Int
-}
-
-///|
-let copied : Copied = { words: "", serial: 0 }
-
-///|
 /// How long a secret copied stays on the clipboard (Vault.kt: 30 s).
 let copied_life : Double = 30000.0
 
 ///|
-/// Copied to the clipboard (copy): a secret said so and cleared copied_life later. (The Android app also marks it
-/// sensitive for the system's preview of it, which this app's hosts do not do yet.)
+/// Copied to the clipboard (Vault.kt copy): said so; a secret marked sensitive (the system's preview of it masked,
+/// Android 13 on) and taken off copied_life later unless something else was copied meanwhile (the host's own timer:
+/// Ctx::copy_secret).
 fn copy_secret(c : @ui.Ctx, core : Core, words : String, secret : Bool) -> Unit {
-  c.copy_text(words)
-  (core.say)(tr(if secret { "android-settings.vault.copied" } else { "common.copied" }))
   if secret {
-    copied.words = words
-    copied.serial += 1
+    c.copy_secret(words, clear_ms=copied_life)
   } else {
-    copied.words = ""
+    c.copy_text(words)
   }
-}
-
-///|
-/// The secret copied taken off the clipboard once its time is up (@kit.after on the Ctx's clock; what is shown does
-/// not wait for it).
-fn clear_copied(c : @ui.Ctx) -> Unit {
-  if copied.words == "" {
-    return
-  }
-  if @kit.after(c, "vault-copied/" + copied.serial.to_string(), true, copied_life, later=true) {
-    c.copy_text("")
-    copied.words = ""
-  }
+  (core.say)(tr(if secret { "android-settings.vault.copied" } else { "common.copied" }))
 }
 
 ///|

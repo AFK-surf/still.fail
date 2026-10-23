@@ -25,6 +25,18 @@ test "a service's page: its name and station in the bar, where it is, the sizes 
 }
 
 ///|
+test "the address tapped: typed in with the keyboard for addresses, its action key a go key (Preview.kt: ImeAction.Go)" {
+  let t = service_tester("service")
+  t.frame()
+  let (x, y) = t.find_last("web").unwrap()
+  t.tap(x, y)
+  t.frame()
+  let (active, _, _, _) = t.ime()
+  assert_true(active)
+  assert_eq(t.ime_action(), @hostapi.ime_action_go)
+}
+
+///|
 test "the sizes' bar held still half a second: folded away, felt once (Preview.kt: LongPress)" {
   let t = service_tester("service")
   t.frame()

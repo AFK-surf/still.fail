@@ -65,7 +65,6 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     UsagePrices(days) => prices_page(c, core, here, days)
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
-  clear_copied(c)
 }
 
 ///|

@@ -596,8 +596,6 @@ pub fn reset() -> Unit {
   versions_state.turning.clear()
   versions_state.failed.clear()
   recovery_words.clear()
-  copied.words = ""
-  copied.serial = 0
   vault_serial.val = 0
   // the drafts each page opened of the core (a form a station, a new connect's, a profile's, a Slack app's): a run
   // opens its own

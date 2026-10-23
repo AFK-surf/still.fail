@@ -454,6 +454,14 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             // (performEditorAction)
             out.inputType = InputType.TYPE_CLASS_TEXT;
             out.imeOptions = EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        } else if (Device.imeAction == 2) {
+            // an address's: the keyboard's for addresses, its Enter a go key (Compose's ImeAction.Go, KeyboardType.Uri)
+            out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI;
+            out.imeOptions = EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        } else if (Device.imeAction == 3) {
+            // a number's: digits, its Enter a done key (Compose's ImeAction.Done, KeyboardType.Number)
+            out.inputType = InputType.TYPE_CLASS_NUMBER;
+            out.imeOptions = EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
         }
         out.initialSelStart = Host.selStart;
         out.initialSelEnd = Host.selEnd;

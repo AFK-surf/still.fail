@@ -446,14 +446,20 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 - (void)selectAll:(id)sender { mb_cb.key(12, 0); [self requestFrame]; }
 // The keyboard as Android's app asks for it (MBView.onCreateInputConnection: plain text, many lines, its suggestions,
 // no action of its own): no capitals put in by itself, no quotes or dashes made curly, its return key a new line the
-// field decides on; a search field's (hostapi ime_action, apple_device.h) its search key.
-- (UIKeyboardType)keyboardType { return UIKeyboardTypeDefault; }
+// field decides on; a search field's (hostapi ime_action, apple_device.h) its search key, an address's the keyboard
+// for addresses and its go key, a number's digits and its done key.
+- (UIKeyboardType)keyboardType {
+  if (key_catching) return UIKeyboardTypeDefault;
+  return ime_action_kind == 2 ? UIKeyboardTypeURL : ime_action_kind == 3 ? UIKeyboardTypeNumbersAndPunctuation : UIKeyboardTypeDefault;
+}
 - (UITextAutocorrectionType)autocorrectionType { return key_catching ? UITextAutocorrectionTypeNo : UITextAutocorrectionTypeDefault; }
 - (UITextAutocapitalizationType)autocapitalizationType { return UITextAutocapitalizationTypeNone; }
 - (UITextSmartQuotesType)smartQuotesType { return UITextSmartQuotesTypeNo; }
 - (UITextSmartDashesType)smartDashesType { return UITextSmartDashesTypeNo; }
 - (UITextSmartInsertDeleteType)smartInsertDeleteType { return UITextSmartInsertDeleteTypeNo; }
-- (UIReturnKeyType)returnKeyType { return ime_action_kind == 1 ? UIReturnKeySearch : UIReturnKeyDefault; }
+- (UIReturnKeyType)returnKeyType {
+  return ime_action_kind == 1 ? UIReturnKeySearch : ime_action_kind == 2 ? UIReturnKeyGo : ime_action_kind == 3 ? UIReturnKeyDone : UIReturnKeyDefault;
+}
 
 @end
 

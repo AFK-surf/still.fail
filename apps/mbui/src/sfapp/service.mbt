@@ -17,11 +17,13 @@
 // held down it folds away and the bar's size button opens it again. A service being started again is said over the
 // page, which loads anew once it is back; one stopped, or not found, is said in its place.
 //
+// The address is typed with the keyboard for addresses, its key 前往.
+//
 // Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): the size chosen
 // and the toolbar folded kept on the device across runs (kept while the app runs: there is no store of the device's
-// own), the address's keyboard for addresses with 前往 (an editor's keyboard is not chosen), a marked picture's pin and
-// edge as the page shows them (drawn as an image's marks are), and on Android the top page's fetch() on its port (the
-// WebView's cookies are not the app's to send along: it goes as the page's other requests do).
+// own), a marked picture's pin and edge as the page shows them (drawn as an image's marks are), and on Android the top
+// page's fetch() on its port (the WebView's cookies are not the app's to send along: it goes as the page's other
+// requests do).
 
 ///|
 // kept across runs: a table, never written
@@ -977,6 +979,7 @@ fn service_page_bar(
             font_size=16.0,
             max_lines=1,
             plain=true,
+            ime_action=@hostapi.ime_action_go,
             color=if editing { t.p.text } else { t.p.muted },
             caret_color=t.p.accent,
             field=p.address,
@@ -1789,6 +1792,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
           font_size=15.0,
           max_lines=1,
           plain=true,
+          ime_action=@hostapi.ime_action_number,
           placeholder=hint,
           color=t.p.text,
           placeholder_color=t.p.subtle,
