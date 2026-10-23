@@ -101,10 +101,36 @@ final class Push {
         return got[0];
     }
 
+    /**
+     * What the app's environment says of `key`, as its activity sets it (MainActivity: the process's own, else the
+     * defaults its manifest's dev.mbui.env says): "" none. A push's process may have no activity yet.
+     */
+    private static String env(Context c, String key) {
+        String v = System.getenv(key);
+        if (v != null && !v.isEmpty()) return v;
+        try {
+            android.os.Bundle meta = c.getPackageManager()
+                    .getApplicationInfo(c.getPackageName(), android.content.pm.PackageManager.GET_META_DATA).metaData;
+            String defaults = meta == null ? null : meta.getString("dev.mbui.env");
+            if (defaults != null) for (String kv : defaults.split(";")) {
+                int at = kv.indexOf('=');
+                if (at > 0 && kv.substring(0, at).equals(key)) return kv.substring(at + 1);
+            }
+        } catch (Exception e) {
+            Host.log("push: " + e);
+        }
+        return "";
+    }
+
     /** still.fail cloud, as the app's core is given it (sfcore start: MBUI_CLOUD, else still.fail's own). */
-    private static String cloud() {
-        String c = System.getenv("MBUI_CLOUD");
-        return c == null || c.isEmpty() ? "https://app.still.fail" : c;
+    private static String cloud(Context c) {
+        String v = env(c, "MBUI_CLOUD");
+        return v.isEmpty() ? "https://app.still.fail" : v;
+    }
+
+    /** Whether the app's core is a beta's (sfcore start: MBUI_BETA=1, the beta app's build). */
+    private static boolean beta(Context c) {
+        return env(c, "MBUI_BETA").equals("1");
     }
 
     /**
@@ -128,7 +154,7 @@ final class Push {
             // notifications off the core takes none)
             Notices.token(token);
             boolean alone = !CoreHost.running();
-            if (!CoreHost.startAlone(cloud(), false)) return;
+            if (!CoreHost.startAlone(cloud(this), beta(this))) return;
             try {
                 JSONObject p = new JSONObject().put("kind", "fcm").put("token", token);
                 ask("push.register", p, REGISTER_MS);
@@ -145,7 +171,7 @@ final class Push {
             String tag = data.get("tag"), url = data.get("url");
             if (!"notice".equals(data.get("type")) || tag == null || url == null) return;
             boolean alone = !CoreHost.running();
-            boolean core = CoreHost.startAlone(cloud(), false);
+            boolean core = CoreHost.startAlone(cloud(this), beta(this));
             try {
                 boolean show = shown(core, data.get("workspace"), data.get("kind"));
                 Host.log("push: " + tag + (show ? " shown" : " not shown") + (alone ? " (a core of its own)" : ""));

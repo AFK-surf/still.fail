@@ -4,14 +4,15 @@
 //
 //     apk lock APP.json             its dependencies (APP.json's "lock": group:artifact:version a line) fetched once
 //                                   and their SHA-256 written beside each, so builds take those bytes and no others
-//     apk build APP.json --variant release|debug --version-code N --version-name S --out APP.apk
+//     apk build APP.json --variant V --version-code N --version-name S --out APP.apk
 //                                   [--abi arm64-v8a] [--keystore PATH]
 //     apk fetch PATH SHA256         a file of the Maven repositories (its path in one), checked, kept: its local path
 //
 // APP.json (paths relative to it): "namespace" (its Java package, R's), "applicationId", "minSdk", "targetSdk",
 // "compileSdk", "manifest", "java" [dirs], "res" [dirs], "assets" [dirs], "jniLibs" [dirs], "rules" [R8 files],
 // "lock" (the dependencies' file), "merged" [group:artifact prefixes: libraries whose manifests' components the app's
-// manifest has merged by hand], "variants": {"release"|"debug": {"applicationIdSuffix", "placeholders": {…},
+// manifest has merged by hand], "variants": {NAME: {"applicationId" (the app's own, in place of APP.json's),
+// "applicationIdSuffix", "placeholders": {…}, "res" [dirs over the app's: its own launcher colours, its own name],
 // "minify": bool, "debuggable": bool}}, "strings": {resource name: [env var naming a JSON file, its key]} (values put
 // in as string resources: what is secret to the build, read by the app as it starts).
 //
@@ -665,7 +666,11 @@ fn cmd_build(a : BuildArgs) -> Unit {
       }
     None => @rjson.Value::Null
   }
-  let app_id = text_of(cfg, "applicationId") + text_of(variant, "applicationIdSuffix")
+  let app_id = (match text_of(variant, "applicationId") {
+      "" => text_of(cfg, "applicationId")
+      own => own
+    }) +
+    text_of(variant, "applicationIdSuffix")
   let minify = flag_of(variant, "minify")
   let min_sdk = text_of(cfg, "minSdk")
   let (android_jar, bt) = sdk_tools(text_of(cfg, "compileSdk"))
@@ -735,7 +740,8 @@ fn cmd_build(a : BuildArgs) -> Unit {
     compiled.push(out)
   }
   let app_flat = []
-  let res_dirs = texts_of(cfg, "res").map(fn(r) { @sys.join(base, r) })
+  // (the variant's own after the app's: linked as overlays, what it says again is its)
+  let res_dirs = (texts_of(cfg, "res") + texts_of(variant, "res")).map(fn(r) { @sys.join(base, r) })
   res_dirs.push(strings)
   for i, res in res_dirs {
     if @sys.is_dir(res) {

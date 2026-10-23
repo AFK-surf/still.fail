@@ -56,11 +56,13 @@ pub fn start() -> Bool {
   // a screen is settled only once what it asked of the core is in (mbui's effect.mb outside)
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
   let cloud = @ui.env("MBUI_CLOUD")
+  // (the beta app's core says so: its newer builds from the beta feed, Host::beta; MBUI_BETA=1, its build's env)
+  let beta = @ui.env("MBUI_BETA") == "1"
   let started = if cloud != "" {
     @hostapi.log("still.fail cloud at " + cloud)
-    @core.start(cloud~)
+    @core.start(cloud~, beta~)
   } else {
-    @core.start()
+    @core.start(beta~)
   }
   if started {
     // (a run on a clock of its own: the core's timers on it too; not a replay's, which has no engine)
@@ -90,9 +92,13 @@ pub fn begin() -> Unit {
 /// What the device is, to the core (`client.device`, as still.fail's apps tell it): the name the people who approve it
 /// in a workspace's safe mode see (and a sign-in's device) is still.fail mbui's, not still.fail's own app's: "still.fail
 /// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui iOS · iPhone17,1"
-/// (apple_engine.m's), "still.fail mbui 桌面版 · macOS".
+/// (apple_engine.m's), "still.fail mbui 桌面版 · macOS". Built as still.fail's Android app in its place (apk.json's
+/// stable and beta: MBUI_OWN=1), it is still.fail's own, named as that app named the device: "still.fail Android · …".
 fn tell_device() -> Unit {
-  let facts : Map[String, Json] = { "client": Json::string("still.fail mbui") }
+  let facts : Map[String, Json] = {}
+  if @ui.env("MBUI_OWN") != "1" {
+    facts["client"] = Json::string("still.fail mbui")
+  }
   match @ui.platform() {
     2 => {
       facts["app"] = Json::string("android")
