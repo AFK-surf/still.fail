@@ -4,6 +4,9 @@
 // the native views' (apple_views.m) and, over them, the canvas's.
 #import <Cocoa/Cocoa.h>
 #import <UserNotifications/UserNotifications.h>
+#import <CommonCrypto/CommonDigest.h>
+#import <Security/Security.h>
+#include <dlfcn.h>
 #import <mach/mach.h>
 #import "apple.h"
 #include "post.h"
@@ -1423,8 +1426,6 @@ moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
   return out;
 }
 
-// Updates (@hostapi.app_version, update_install, update_state): this app does not update itself here.
-int32_t mb_host_app_version(void) { return 0; }
 // A package for the system's installer (@hostapi.install_package): none here, said on the system channel (system.mbt).
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   NSDictionary *said = @{@"install" : @{@"name" : mb_ns_from_string(name), @"error" : @"unsupported"}};
@@ -1432,10 +1433,323 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
 }
 
-void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
-  (void)url; (void)sha256; (void)size; (void)name;
+// ---- Updates (@hostapi.app_version, update_install, update_state) ----
+// The app keeping itself current, as still.fail's desktop app does (Electron's autoUpdater; on macOS Squirrel's
+// ShipIt): a newer build the core found (`app.update`: the release's zip) downloaded into the app's caches, picking up
+// where a cut connection left off (the bytes so far kept in `<name>.part`, the rest asked for as a range, a few times
+// over with a growing pause while each try gets further: Android's Updates.java), checked against its size and
+// SHA-256, unzipped beside the app (on its volume), and taken only when it is this app, newer, and signed as this one
+// is (its signature valid and meeting this app's designated requirement: still.fail's team and this app's id; a build
+// signed ad hoc, a developer's, takes none). It is put in this app's place (the bundles swapped, this one's thrown
+// away), and opened as this one quits (a shell waits for this process to end first: two cores never share the
+// data). How it goes the app reads (`update_state`: the phase, how far, what went wrong), told each time it changes
+// (MB_OUTSIDE_UPDATE, id 1: 0 while the host works at it, -1 failed). Only an app's bundle has a version here (a
+// build run as a bare program, 0, never asks).
+
+static NSString *update_phase = @"idle";  // idle | downloading | retrying | installing | failed
+static int update_percent = -1;
+static NSString *update_error = @"";
+static BOOL update_working;
+
+int32_t mb_host_app_version(void) {
+  NSBundle *b = NSBundle.mainBundle;
+  if (!b.bundleIdentifier || ![b.bundlePath.pathExtension isEqualToString:@"app"]) return 0;
+  return [[b objectForInfoDictionaryKey:@"CFBundleVersion"] intValue];
 }
-moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
+
+// How it goes, from the worker: kept and told on the main thread (where the frames read it).
+static void update_say(NSString *phase, int percent, NSString *error) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    BOOL changed = ![phase isEqualToString:update_phase] || percent != update_percent;
+    update_phase = phase;
+    update_percent = percent;
+    update_error = error ?: @"";
+    if ([phase isEqualToString:@"failed"]) update_working = NO;
+    if (changed) {
+      mb_host_outside(MB_OUTSIDE_UPDATE, 1, [phase isEqualToString:@"failed"] ? -1 : 0);
+      [the_view requestFrame];
+    }
+  });
+}
+
+// What an update did, on the log and in the app's caches (<caches>/<id>/update.log: an app's stdout goes nowhere), where
+// the shell that opens the new build adds its own line.
+static NSString *update_log_path(void) {
+  NSString *caches = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+  return [[caches stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier] stringByAppendingPathComponent:@"update.log"];
+}
+
+static void update_log(NSString *s) {
+  fprintf(stdout, "update: %s\n", s.UTF8String);
+  fflush(stdout);
+  NSString *path = update_log_path();
+  [NSFileManager.defaultManager createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES
+                                           attributes:nil error:NULL];
+  NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
+  if (!h) {
+    [NSFileManager.defaultManager createFileAtPath:path contents:nil attributes:nil];
+    h = [NSFileHandle fileHandleForWritingAtPath:path];
+  }
+  [h seekToEndOfFile];
+  [h writeData:[[NSString stringWithFormat:@"%@ %@\n", [NSDate date], s] dataUsingEncoding:NSUTF8StringEncoding]];
+  [h closeFile];
+}
+
+// One try of the download (a data task, its bytes appended to the part as they come): whether the file is whole, or
+// why not (`retry`: a cut connection or the server's trouble, tried again; else given up at once).
+@interface MBUpdateFetch : NSObject <NSURLSessionDataDelegate>
+@property(nonatomic, strong) NSFileHandle *out;
+@property(nonatomic) long long done, size;
+@property(nonatomic) NSInteger status;
+@property(nonatomic, strong) NSError *error;
+@property(nonatomic, strong) dispatch_semaphore_t finished;
+@end
+@implementation MBUpdateFetch
+- (void)URLSession:(NSURLSession *)s
+              dataTask:(NSURLSessionDataTask *)t
+    didReceiveResponse:(NSURLResponse *)r
+     completionHandler:(void (^)(NSURLSessionResponseDisposition))h {
+  self.status = [(NSHTTPURLResponse *)r statusCode];
+  if (self.status == 200) {
+    // the whole file again (the server took no range): from its start
+    [self.out truncateFileAtOffset:0];
+    self.done = 0;
+  }
+  h(self.status == 200 || self.status == 206 ? NSURLSessionResponseAllow : NSURLSessionResponseCancel);
+}
+- (void)URLSession:(NSURLSession *)s dataTask:(NSURLSessionDataTask *)t didReceiveData:(NSData *)d {
+  [self.out writeData:d];
+  self.done += d.length;
+  if (self.size > 0) update_say(@"downloading", (int)(self.done * 100 / self.size), nil);
+}
+- (void)URLSession:(NSURLSession *)s task:(NSURLSessionTask *)t didCompleteWithError:(NSError *)e {
+  self.error = e;
+  dispatch_semaphore_signal(self.finished);
+}
+@end
+
+static BOOL update_fetch(NSURL *url, NSString *part, long long size, BOOL *retry, NSString **why) {
+  if (![NSFileManager.defaultManager fileExistsAtPath:part])
+    [NSFileManager.defaultManager createFileAtPath:part contents:nil attributes:nil];
+  MBUpdateFetch *f = [MBUpdateFetch new];
+  f.out = [NSFileHandle fileHandleForWritingAtPath:part];
+  f.done = (long long)[f.out seekToEndOfFile];
+  f.size = size;
+  f.finished = dispatch_semaphore_create(0);
+  NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.ephemeralSessionConfiguration;
+  cfg.timeoutIntervalForRequest = 30;
+  cfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+  NSURLSession *session = [NSURLSession sessionWithConfiguration:cfg delegate:f delegateQueue:nil];
+  NSMutableURLRequest *rq = [NSMutableURLRequest requestWithURL:url];
+  if (f.done > 0) [rq setValue:[NSString stringWithFormat:@"bytes=%lld-", f.done] forHTTPHeaderField:@"Range"];
+  [[session dataTaskWithRequest:rq] resume];
+  dispatch_semaphore_wait(f.finished, DISPATCH_TIME_FOREVER);
+  [session finishTasksAndInvalidate];
+  [f.out closeFile];
+  *retry = NO;
+  if (f.status == 416) return YES;  // asked from its end: it is all here
+  if (f.status != 200 && f.status != 206) {
+    *why = f.status ? [NSString stringWithFormat:@"status %ld", (long)f.status] : (f.error.localizedDescription ?: @"failed");
+    *retry = f.status == 0 || f.status >= 500;
+    return NO;
+  }
+  if (f.error) {
+    *why = f.error.localizedDescription;
+    *retry = YES;
+    return NO;
+  }
+  if (size > 0 && f.done < size) {
+    *why = [NSString stringWithFormat:@"connection closed at %lld of %lld", f.done, size];
+    *retry = YES;
+    return NO;
+  }
+  return YES;
+}
+
+static NSString *update_sha256(NSString *path) {
+  NSFileHandle *h = [NSFileHandle fileHandleForReadingAtPath:path];
+  if (!h) return @"";
+  CC_SHA256_CTX ctx;
+  CC_SHA256_Init(&ctx);
+  for (;;) {
+    @autoreleasepool {
+      NSData *d = [h readDataOfLength:1 << 20];
+      if (d.length == 0) break;
+      CC_SHA256_Update(&ctx, d.bytes, (CC_LONG)d.length);
+    }
+  }
+  [h closeFile];
+  unsigned char md[CC_SHA256_DIGEST_LENGTH];
+  CC_SHA256_Final(md, &ctx);
+  NSMutableString *s = [NSMutableString string];
+  for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) [s appendFormat:@"%02x", md[i]];
+  return s;
+}
+
+// The release downloaded whole into `dir` (what is there from before kept only if it is the part of this one), checked
+// against its SHA-256: its path, or nil and why not.
+static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, long long size, NSString *name,
+                                 NSString **why) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:NULL];
+  NSString *zip = [dir stringByAppendingPathComponent:name];
+  NSString *part = [zip stringByAppendingString:@".part"];
+  for (NSString *f in [fm contentsOfDirectoryAtPath:dir error:NULL]) {
+    NSString *p = [dir stringByAppendingPathComponent:f];
+    if (![p isEqualToString:zip] && ![p isEqualToString:part]) [fm removeItemAtPath:p error:NULL];
+  }
+  if ([fm fileExistsAtPath:zip]) {
+    if ([update_sha256(zip) caseInsensitiveCompare:sha256] == NSOrderedSame) return zip;
+    [fm removeItemAtPath:zip error:NULL];
+  }
+  long long have = (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize];
+  if (size > 0 && have > size) [fm removeItemAtPath:part error:NULL];
+  // tries in a row that got no further before it gives up (pauses of 1, 2, 4, 8, 16 s between them)
+  const int retries = 6;
+  int failures = 0;
+  for (;;) {
+    long long before = (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize];
+    BOOL retry = NO;
+    if (update_fetch(url, part, size, &retry, why)) break;
+    if (!retry) return nil;
+    if ((long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize] > before) failures = 0;
+    if (++failures >= retries) return nil;
+    update_say(@"retrying", update_percent, nil);
+    [NSThread sleepForTimeInterval:(double)(1 << (failures - 1))];
+    update_say(@"downloading", update_percent, nil);
+  }
+  NSString *got = update_sha256(part);
+  if ([got caseInsensitiveCompare:sha256] != NSOrderedSame) {
+    [fm removeItemAtPath:part error:NULL];
+    *why = @"incomplete";
+    return nil;
+  }
+  if (![fm moveItemAtPath:part toPath:zip error:NULL]) {
+    *why = @"incomplete";
+    return nil;
+  }
+  update_log([NSString stringWithFormat:@"%@ downloaded, sha256 %@ as the feed says", name, got]);
+  return zip;
+}
+
+// Whether the app at `app` is signed as this one must be: valid, all of it, and meeting this app's designated
+// requirement (its id and its signer's team); why not otherwise. (Security's code signing calls found as they are
+// first needed: an app of mbui's links what its own moon.pkg says, which need not name Security.)
+static BOOL update_signed_as_this(NSURL *app, NSString **why) {
+  static OSStatus (*copy_self)(SecCSFlags, SecCodeRef *);
+  static OSStatus (*copy_designated)(SecStaticCodeRef, SecCSFlags, SecRequirementRef *);
+  static OSStatus (*static_create)(CFURLRef, SecCSFlags, SecStaticCodeRef *);
+  static OSStatus (*check_validity)(SecStaticCodeRef, SecCSFlags, SecRequirementRef);
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    void *sec = dlopen("/System/Library/Frameworks/Security.framework/Security", RTLD_LAZY);
+    if (!sec) return;
+    copy_self = dlsym(sec, "SecCodeCopySelf");
+    copy_designated = dlsym(sec, "SecCodeCopyDesignatedRequirement");
+    static_create = dlsym(sec, "SecStaticCodeCreateWithPath");
+    check_validity = dlsym(sec, "SecStaticCodeCheckValidity");
+  });
+  if (!copy_self || !copy_designated || !static_create || !check_validity) {
+    *why = @"no code signing here";
+    return NO;
+  }
+  SecCodeRef me = NULL;
+  SecRequirementRef req = NULL;
+  SecStaticCodeRef it = NULL;
+  OSStatus st = copy_self(kSecCSDefaultFlags, &me);
+  if (st == errSecSuccess) st = copy_designated((SecStaticCodeRef)me, kSecCSDefaultFlags, &req);
+  if (st == errSecSuccess) st = static_create((__bridge CFURLRef)app, kSecCSDefaultFlags, &it);
+  if (st == errSecSuccess)
+    st = check_validity(it, kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate, req);
+  if (me) CFRelease(me);
+  if (req) CFRelease(req);
+  if (it) CFRelease(it);
+  if (st != errSecSuccess) *why = [NSString stringWithFormat:@"not signed as this app (%d)", (int)st];
+  return st == errSecSuccess;
+}
+
+// The zip unzipped beside this app (a folder the system gives for replacing it, on its volume), its app checked, and
+// swapped into this one's place: nil, or why not.
+static NSString *update_put(NSString *zip) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  NSURL *here = NSBundle.mainBundle.bundleURL;
+  NSError *e = nil;
+  NSURL *stage = [fm URLForDirectory:NSItemReplacementDirectory inDomain:NSUserDomainMask appropriateForURL:here
+                              create:YES error:&e];
+  if (!stage) return [NSString stringWithFormat:@"can't write beside %@: %@", here.path, e.localizedDescription];
+  NSTask *unzip = [NSTask new];
+  unzip.launchPath = @"/usr/bin/ditto";
+  unzip.arguments = @[ @"-x", @"-k", zip, stage.path ];
+  [unzip launch];
+  [unzip waitUntilExit];
+  NSURL *app = nil;
+  for (NSURL *u in [fm contentsOfDirectoryAtURL:stage includingPropertiesForKeys:nil options:0 error:NULL])
+    if ([u.pathExtension isEqualToString:@"app"]) app = u;
+  NSString *why = nil;
+  NSBundle *b = app ? [NSBundle bundleWithURL:app] : nil;
+  if (unzip.terminationStatus != 0 || !b) why = @"incomplete";
+  else if (![b.bundleIdentifier isEqualToString:NSBundle.mainBundle.bundleIdentifier])
+    why = [NSString stringWithFormat:@"another app (%@)", b.bundleIdentifier];
+  else if ([[b objectForInfoDictionaryKey:@"CFBundleVersion"] intValue] <= mb_host_app_version())
+    why = @"not newer";
+  else update_signed_as_this(app, &why);
+  if (!why && ![fm replaceItemAtURL:here withItemAtURL:app backupItemName:nil options:0 resultingItemURL:NULL error:&e])
+    why = [NSString stringWithFormat:@"can't replace %@: %@", here.path, e.localizedDescription];
+  [fm removeItemAtURL:stage error:NULL];
+  return why;
+}
+
+void mb_host_update_install(moonbit_string_t url_s, moonbit_string_t sha256_s, double size, moonbit_string_t name_s) {
+  if (update_working || mb_host_app_version() <= 0) return;
+  NSURL *url = [NSURL URLWithString:mb_ns_from_string(url_s)];
+  NSString *sha256 = mb_ns_from_string(sha256_s), *name = mb_ns_from_string(name_s).lastPathComponent;
+  if (!url || !name.length) return;
+  update_working = YES;
+  update_phase = @"downloading";
+  update_percent = -1;
+  update_error = @"";
+  mb_host_outside(MB_OUTSIDE_UPDATE, 1, 0);
+  NSString *caches = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+  NSString *dir = [[caches stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier]
+      stringByAppendingPathComponent:@"updates"];
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    NSString *why = nil;
+    NSString *zip = update_download(dir, url, sha256, (long long)size, name, &why);
+    if (zip) {
+      update_say(@"installing", -1, nil);
+      why = update_put(zip);
+    }
+    if (why) {
+      update_log([NSString stringWithFormat:@"failed: %@", why]);
+      update_say(@"failed", -1, why);
+      return;
+    }
+    [NSFileManager.defaultManager removeItemAtPath:zip error:NULL];
+    update_log(@"in place; opened again as this one quits");
+    dispatch_async(dispatch_get_main_queue(), ^{
+      // opened again once this process has ended, said on the update's log (the app's path as $0, the log's as $1:
+      // nothing in them read as the shell's)
+      NSTask *again = [NSTask new];
+      again.launchPath = @"/bin/sh";
+      again.arguments = @[
+        @"-c",
+        [NSString stringWithFormat:@"while /bin/kill -0 %d 2>/dev/null; do /bin/sleep 0.2; done; "
+                                   @"/usr/bin/open \"$0\" && echo \"$(/bin/date) opened $0\" >> \"$1\"",
+                                   getpid()],
+        NSBundle.mainBundle.bundlePath, update_log_path()
+      ];
+      [again launch];
+      [NSApp terminate:nil];
+    });
+  });
+}
+
+moonbit_string_t mb_host_update_state(void) {
+  if (mb_host_app_version() <= 0) return moonbit_make_string_raw(0);
+  NSDictionary *st = @{@"phase" : update_phase, @"percent" : @(update_percent), @"error" : update_error};
+  NSData *json = [NSJSONSerialization dataWithJSONObject:st options:0 error:NULL];
+  return mb_string_from_ns([[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] ?: @"");
+}
 
 // Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }

@@ -12,6 +12,8 @@ fn reset() -> Unit {
   site_check_page.val = None
   site_check_events.val = None
   site_check_grabbing.val = false
+  update_check_asked.val = false
+  update_check_said.val = ""
   cb.val = On
   size.val = "m"
   bold.val = true
