@@ -7,7 +7,7 @@ export type SiteLang = "zh" | "en";
 const ZH = {
   download: "下载", open: "打开", appleSilicon: "Apple 芯片", downloadGo: "下载 →", androidQr: "下载 Android 版的二维码", androidScan: "Android 扫码下载",
   other: "English", otherHref: "/en/",
-  title: ["所有设备，", "一台电脑"],
+  title: "One devices.",
   lede: "在任何一台上，用所有设备。",
   start: "开始使用",
   steps: ["设备直连", "像一台电脑", "手机上也一样"],
@@ -23,7 +23,7 @@ const ZH = {
 const EN: typeof ZH = {
   download: "Download", open: "Open", appleSilicon: "Apple silicon", downloadGo: "Download →", androidQr: "A code to scan for the Android app", androidScan: "Scan for Android",
   other: "中文", otherHref: "/",
-  title: ["All your devices.", "One computer."],
+  title: "One devices.",
   lede: "Use all of them from any one.",
   start: "Get started",
   steps: ["Connected directly", "Like one computer", "The same on your phone"],

@@ -293,7 +293,7 @@ export function OneComputer(props: DemoProps) {
     <>
       <header className={css.sameHero}>
         <div className={css.wrap}>
-          <h1 className={css.sameTitle}><span className={css.phrase}>{say.title[0]}</span>{lang === "en" ? " " : ""}<span className={css.phrase}>{say.title[1]}</span></h1>
+          <h1 className={css.sameTitle}>{say.title}</h1>
           <p className={css.sameLede}>{say.lede}</p>
           <div className={css.sameActions}><Button href={APP} kind="primary" large>{say.start}</Button></div>
         </div>
