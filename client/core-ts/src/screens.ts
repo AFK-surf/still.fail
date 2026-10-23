@@ -24,7 +24,9 @@ import { ofAddress } from "./workspace.ts";
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-export const CODECS = ["h264", "jpeg"];
+/// The codecs a view may ask for; one asking none takes those every client decodes (H.265 only where the UI said it does).
+export const CODECS = ["h265", "h264", "jpeg"];
+const DEFAULT_CODECS = ["h264", "jpeg"];
 export const MAX_WIDTH = 1920;
 export const MAX_HEIGHT = 1080;
 /// The largest frame a client may ask for (an 8K screen's).
@@ -64,7 +66,7 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
     case "screen.view": {
       const station = text(params, "station");
       StationAddr.parse(station);
-      const codecs = Array.isArray(get(params, "codecs")) ? (get(params, "codecs") as unknown[]).filter((c): c is string => typeof c === "string" && CODECS.includes(c)) : CODECS;
+      const codecs = Array.isArray(get(params, "codecs")) ? (get(params, "codecs") as unknown[]).filter((c): c is string => typeof c === "string" && CODECS.includes(c)) : DEFAULT_CODECS;
       if (codecs.length === 0) throw CoreError.invalid(t("core-misc.screen.noCodec"));
       const size = (field: string, otherwise: number) => {
         const v = get(params, field);

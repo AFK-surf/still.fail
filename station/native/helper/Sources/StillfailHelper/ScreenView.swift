@@ -1,7 +1,7 @@
 // A view of the display (`screen.view`, docs/remote-screens.md): ScreenCaptureKit captures it scaled into the view's
-// bounds; VideoToolbox encodes H.264 on the hardware encoder (or, `codec: "jpeg"`, Core Image each picture as a JPEG
-// of quality 0.8), a picture only once one is asked for and only a new one (the screen changed) unless a key frame is
-// asked for; CGEvent posts the input. While a view is open the display is kept on: opening one wakes a display gone to
+// bounds; VideoToolbox encodes H.264 on the hardware encoder (`codec: "h265"`: H.265 where this Mac encodes it, else
+// H.264; `codec: "jpeg"`: Core Image each picture as a JPEG of quality 0.8), a picture only once one is asked for and
+// only a new one (the screen changed) unless a key frame is asked for; CGEvent posts the input. While a view is open the display is kept on: opening one wakes a display gone to
 // sleep (whose capture is black but for the cursor), and it does not go to sleep again until the view ends.
 //
 // After the request line the connection carries messages (Channel.swift) both ways:
@@ -13,10 +13,12 @@
 //        4 clipboard 1 byte flags (bit 0: paste with ⌘V), 1 byte type (1 text, 2 PNG), the bytes: set (Clipboard.swift)
 //        5 watch     1 byte       1: say each copy made on the Mac from now on (message 5 out), 0: stop
 //        6 reveal    UTF-8        a file's path, shown selected in Finder
-//   out  1 info      JSON     first: {width, height, encoder}, or {error, code: "capture"|"restart"|"display"|"encoder"}
-//        2 config    4 bytes width, 4 bytes height, then the avcC (none for JPEG): before the first frame and whenever
-//                             it changes
-//        3 frame     1 byte flags (bit 0: key frame), 8 bytes timestamp (µs), then the frame (AVCC, or one JPEG)
+//        7 rate      4 bytes      bits a second (big-endian) to encode at from the next frame on (the link carries no
+//                                 more: docs/remote-screens.md, "Pace")
+//   out  1 info      JSON     first: {width, height, encoder, codec}, or {error, code: "capture"|"restart"|"display"|"encoder"}
+//        2 config    4 bytes width, 4 bytes height, then the avcC or hvcC (none for JPEG): before the first frame and
+//                             whenever it changes
+//        3 frame     1 byte flags (bit 0: key frame), 8 bytes timestamp (µs), then the frame (AVCC or HVCC, or one JPEG)
 //        4 event     JSON     {refused: "control"}: input was posted without the grant (macOS drops it)
 //        5 clipboard 1 byte type (1 text, 2 PNG), the bytes: what was copied, while watched
 // The view ends when the connection does. `synthetic: "moving"|"still"` encodes made-up pictures instead of capturing
@@ -38,10 +40,15 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   let maxWidth: Int
   let maxHeight: Int
   let fps: Int
-  let bitrate: Int?
+  /// The bit rate asked when the view opened, then as the station asks (`rate`); none: the picture's size's.
+  var bitrate: Int?
   let synthetic: String?
-  /// "h264", or "jpeg": each picture a JPEG of its own (an agent's view, a client without H.264).
+  /// "h264", "h265" (H.264 where this Mac has no encoder of it), or "jpeg": each picture a JPEG of its own (an agent's
+  /// view, a client without either).
   let jpeg: Bool
+  let hevc: Bool
+  /// What the session encodes: "h264", "h265", or "jpeg".
+  var codec = "h264"
   lazy var images = CIContext(options: [.useSoftwareRenderer: false])
   /// Everything below happens on this queue.
   let queue = DispatchQueue(label: "fail.still.helper.screen", qos: .userInteractive)
@@ -76,6 +83,7 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     bitrate = options["bitrate"] as? Int
     synthetic = options["synthetic"] as? String
     jpeg = (options["codec"] as? String) == "jpeg"
+    hevc = (options["codec"] as? String) == "h265"
     input = ScreenInput(channel: channel, displayID: displayID)
   }
 
@@ -92,6 +100,7 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       case 4: clipboard.set(payload)
       case 5: clipboard.watch(payload)
       case 6: clipboard.reveal(payload)
+      case 7: if payload.count == 4 { rate(Int(payload.withUnsafeBytes { UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self)) })) }
       default: break
       }
     }
@@ -150,14 +159,15 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   func opened(_ width: Int, _ height: Int) {
     if jpeg {
       encoder = "JPEG, quality 0.8"
-      channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder])
+      codec = "jpeg"
+      channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder, "codec": codec])
       return pump()
     }
     if !makeSession(width, height) {
       channel.sendJSON(1, ["error": "no H.264 encoder", "code": "encoder"])
       return
     }
-    channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder])
+    channel.sendJSON(1, ["width": width, "height": height, "encoder": encoder, "codec": codec])
     pump()
   }
 
@@ -273,25 +283,30 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   func makeSession(_ width: Int, _ height: Int) -> Bool {
     if let session { VTCompressionSessionInvalidate(session) }
     session = nil
-    // Hardware with low-latency rate control first (frames come out as they go in), then hardware, then any.
-    let tries: [(String, [CFString: Any])] = [
-      ("hardware, low latency", [kVTVideoEncoderSpecification_EnableLowLatencyRateControl: true, kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true]),
-      ("hardware", [kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true]),
-      ("software", [:]),
-    ]
-    for (name, specification) in tries {
+    // Hardware with low-latency rate control first (frames come out as they go in), then hardware, then any; H.265
+    // (asked for) on the hardware only, H.264 where it is not had (a codec's settings once it is kept: one size's
+    // session made anew keeps the codec it had).
+    let lowLatency: [CFString: Any] = [kVTVideoEncoderSpecification_EnableLowLatencyRateControl: true, kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true]
+    let hardware: [CFString: Any] = [kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true]
+    let h265 = hevc && (encoder.isEmpty || codec == "h265")
+    var tries: [(String, String, [CFString: Any])] = []
+    if h265 { tries += [("h265", "hardware, low latency", lowLatency), ("h265", "hardware", hardware)] }
+    tries += [("h264", "hardware, low latency", lowLatency), ("h264", "hardware", hardware), ("h264", "software", [:])]
+    for (kind, name, specification) in tries {
       var made: VTCompressionSession?
       let status = VTCompressionSessionCreate(
-        allocator: nil, width: Int32(width), height: Int32(height), codecType: kCMVideoCodecType_H264,
+        allocator: nil, width: Int32(width), height: Int32(height), codecType: kind == "h265" ? kCMVideoCodecType_HEVC : kCMVideoCodecType_H264,
         encoderSpecification: specification as CFDictionary, imageBufferAttributes: nil, compressedDataAllocator: nil,
         outputCallback: nil, refcon: nil, compressionSessionOut: &made)
       guard status == noErr, let made else { continue }
       let set = { (key: CFString, value: Any) in VTSessionSetProperty(made, key: key, value: value as CFTypeRef) }
       _ = set(kVTCompressionPropertyKey_RealTime, kCFBooleanTrue!)
       _ = set(kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse!)
-      // Baseline, as every decoder takes it (constrained where the system has it); Main if neither is taken.
+      // H.264: Baseline, as every decoder takes it (constrained where the system has it); Main if neither is taken.
+      // H.265: Main.
       var profile = "default"
-      for p in [kVTProfileLevel_H264_ConstrainedBaseline_AutoLevel, kVTProfileLevel_H264_Baseline_AutoLevel, kVTProfileLevel_H264_Main_AutoLevel]
+      let profiles = kind == "h265" ? [kVTProfileLevel_HEVC_Main_AutoLevel] : [kVTProfileLevel_H264_ConstrainedBaseline_AutoLevel, kVTProfileLevel_H264_Baseline_AutoLevel, kVTProfileLevel_H264_Main_AutoLevel]
+      for p in profiles
       where set(kVTCompressionPropertyKey_ProfileLevel, p) == noErr {
         profile = p as String
         break
@@ -304,6 +319,7 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       VTCompressionSessionPrepareToEncodeFrames(made)
       session = made
       size = (width, height)
+      codec = kind
       encoder = "\(name), \(profile), \(rate) bps"
       return true
     }
@@ -353,7 +369,7 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     }
     if let format = CMSampleBufferGetFormatDescription(sample),
       let atoms = CMFormatDescriptionGetExtension(format, extensionKey: kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms) as? [String: Any],
-      let avcC = atoms["avcC"] as? Data, avcC != lastConfig
+      let avcC = atoms[codec == "h265" ? "hvcC" : "avcC"] as? Data, avcC != lastConfig
     {
       lastConfig = avcC
       let dimensions = CMVideoFormatDescriptionGetDimensions(format)
@@ -418,6 +434,16 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     queue.async {
       self.wanted += 1
       self.pump()
+    }
+  }
+
+  /// From the next frame on, about this many bits a second.
+  func rate(_ bits: Int) {
+    queue.async {
+      self.bitrate = max(100_000, bits)
+      if let session = self.session {
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: self.bitrate! as CFTypeRef)
+      }
     }
   }
 

@@ -186,6 +186,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
     const frames = new ScreenFrames(c, {
       ack: (ts) => tell("screen.ack", { view: name, ts }),
       keyframe: () => tell("screen.keyframe", { view: name }),
+      // H.265 said to play here and did not: opened again, H.264 now.
+      unplayable: () => { if (open) setAttempt((n) => n + 1); },
       drawn: (width, height) => {
         // Another size of frame: fitted again.
         if (width !== size.current.width || height !== size.current.height) zoom.current.reset();

@@ -206,6 +206,13 @@ impl H264 {
         }
     }
 
+    /// From the next frame on, about this many bits a second (an encoder that cannot change it as it goes keeps its own).
+    pub fn rate(&mut self, bitrate: u32) {
+        if let Some(c) = self.codec.as_ref() {
+            set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(bitrate));
+        }
+    }
+
     /// A picture is in it, not out yet.
     pub fn busy(&self) -> bool {
         !self.pending.is_empty()

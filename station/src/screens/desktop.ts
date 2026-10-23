@@ -120,8 +120,9 @@ export class Desktop implements ScreenSource {
     const helper = this.#o.helper;
     if (!this.#o.supported) throw new ScreenRefused(501, "station.screen.unsupported", {}, this.access());
     if (helper === null) throw new ScreenRefused(501, "station.screen.noHelper", {}, this.access());
-    // H.264 where it is taken (the hardware's, small); else a JPEG a picture (an agent's view, a client without H.264).
-    const codec: Codec | undefined = options.codecs.includes("h264") ? "h264" : options.codecs.includes("jpeg") ? "jpeg" : undefined;
+    // H.265 where it is taken (the hardware's, smallest; the helper makes H.264 where this Mac encodes no H.265), H.264,
+    // else a JPEG a picture (an agent's view, a client without either).
+    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh(true);
     const synthetic = this.#o.synthetic !== undefined;
@@ -188,8 +189,9 @@ type HelperError = Error & { code?: string };
 
 /// The helper's messages: a kind byte, the payload's length (4 bytes), the payload (native/helper's ScreenView.swift).
 /// To it: 1 next, 2 keyframe, 3 input, 4 clipboard (flags: bit 0 paste; type: 1 text, 2 PNG; the bytes), 5 watch the
-/// clipboard (1 on, 0 off), 6 reveal (the path). From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes).
-export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6 } as const;
+/// clipboard (1 on, 0 off), 6 reveal (the path), 7 rate (bits a second, 4 bytes; a helper from before it lets it be).
+/// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes).
+export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 
 /// A clip as the helper's `clipboard` message has it: from the helper (`flags` none) or to it.
@@ -226,7 +228,8 @@ export class HelperView implements ScreenView {
   /// Who hears the clipboard as it changes, while it is watched.
   #clipboard: ((clip: Clip) => void) | null = null;
 
-  readonly #codec: Codec;
+  /// What it was asked for, then what it encodes (its `info`).
+  #codec: Codec;
 
   constructor(codec: Codec, socket: HelperPipe, gone: () => void, input: InputOps = new MacInput()) {
     this.#codec = codec;
@@ -260,13 +263,16 @@ export class HelperView implements ScreenView {
         const info = JSON.parse(payload.toString());
         if (typeof info.error === "string") this.#settle.reject(Object.assign(new Error(info.error), { code: info.code }));
         else {
+          // What it encodes: as it says (H.264 where H.265 was asked and this Mac has no encoder of it; a helper from
+          // before H.265 says nothing and makes H.264 of anything but JPEG).
+          this.#codec = info.codec === "h265" || info.codec === "h264" || info.codec === "jpeg" ? info.codec : this.#codec === "jpeg" ? "jpeg" : "h264";
           log.info("screens", "a view of the desktop opened", { width: info.width, height: info.height, encoder: info.encoder });
           this.#settle.resolve({ width: info.width, height: info.height });
         }
         return;
       }
       case 2:
-        this.#config = { codec: this.#codec, width: payload.readUInt32BE(0), height: payload.readUInt32BE(4), ...(this.#codec === "h264" ? { description: new Uint8Array(payload.subarray(8)) } : {}) };
+        this.#config = { codec: this.#codec, width: payload.readUInt32BE(0), height: payload.readUInt32BE(4), ...(this.#codec !== "jpeg" ? { description: new Uint8Array(payload.subarray(8)) } : {}) };
         return;
       case 3: {
         const frame: Frame = { key: (payload[0]! & 1) === 1, ts: Number(payload.readBigUInt64BE(1)), data: new Uint8Array(payload.subarray(9)) };
@@ -304,6 +310,13 @@ export class HelperView implements ScreenView {
 
   keyframe() {
     this.#send(TO_HELPER.keyframe);
+  }
+
+  rate(bitsPerSecond: number) {
+    if (this.#codec === "jpeg") return;
+    const payload = Buffer.alloc(4);
+    payload.writeUInt32BE(Math.min(0xffff_ffff, Math.max(0, Math.round(bitsPerSecond))));
+    this.#send(TO_HELPER.rate, payload);
   }
 
   async input(event: ScreenInput): Promise<void> {

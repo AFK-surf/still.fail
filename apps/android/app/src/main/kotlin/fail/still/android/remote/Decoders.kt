@@ -1,7 +1,7 @@
 // A screen's frames decoded off the main thread (docs/remote-screens.md): H.264 by MediaCodec straight onto a surface,
 // JPEG by BitmapFactory into bitmaps the viewer draws. Each frame is acknowledged once it is shown (H.264: released to
-// the surface; JPEG: drawn by the viewer), or dropped: the station sends at most two ahead of the last acknowledged,
-// so a frame that is never acknowledged would stop the stream.
+// the surface; JPEG: drawn by the viewer), or dropped: the station sends no more while those it sent wait
+// unacknowledged (docs/remote-screens.md, "Pace"), so a frame that is never acknowledged would stop the stream.
 package fail.still.android.remote
 
 import android.graphics.Bitmap

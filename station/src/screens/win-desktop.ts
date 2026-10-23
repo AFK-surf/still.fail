@@ -180,6 +180,8 @@ export class LastingView implements ScreenView {
   #restarting: Promise<boolean> | null = null;
   #heard: ((clip: Clip) => void) | null = null;
   #unwatch: (() => void) | null = null;
+  /// The bit rate asked last, asked again of a process started again.
+  #rate: number | null = null;
 
   constructor(view: HelperView, again: () => Promise<HelperView>, gone: () => void) {
     this.#view = view;
@@ -215,6 +217,7 @@ export class LastingView implements ScreenView {
       log.info("screens", "stillfail-screen ended by itself; started again");
       this.#view = view;
       if (this.#heard !== null) this.#unwatch = view.watchClipboard(this.#heard);
+      if (this.#rate !== null) view.rate(this.#rate);
       return true;
     } catch (error) {
       log.warn("screens", "stillfail-screen did not start again", { error: (error as Error).message });
@@ -225,6 +228,11 @@ export class LastingView implements ScreenView {
 
   keyframe() {
     this.#view.keyframe();
+  }
+
+  rate(bitsPerSecond: number) {
+    this.#rate = bitsPerSecond;
+    this.#view.rate(bitsPerSecond);
   }
 
   input(event: ScreenInput): Promise<void> {

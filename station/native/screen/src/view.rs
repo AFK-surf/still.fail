@@ -53,6 +53,8 @@ pub enum Msg {
     Frame,
     /// The display captured went.
     Closed,
+    /// Bits a second to encode at from the next frame on (the link carries no more).
+    Rate(u32),
 }
 
 struct Options {
@@ -114,6 +116,7 @@ pub fn run(request: &Value, input: &mut impl std::io::Read, out: Out) {
             }
             5 => clipboard.watch(payload.first() == Some(&1)),
             6 => reveal(&String::from_utf8_lossy(&payload)),
+            7 if payload.len() == 4 => drop(tx.send(Msg::Rate(u32::from_be_bytes([payload[0], payload[1], payload[2], payload[3]])))),
             _ => {}
         }
     }
@@ -238,6 +241,13 @@ impl View {
             };
             match msg {
                 Some(Msg::Next) => self.wanted += 1,
+                Some(Msg::Rate(bits)) => {
+                    let bits = bits.max(100_000);
+                    self.options.bitrate = Some(bits);
+                    if let Some(encoder) = self.encoder.as_mut() {
+                        encoder.rate(bits);
+                    }
+                }
                 Some(Msg::Keyframe) => {
                     self.force_key = true;
                     // The same picture again, as a key frame, when the screen does not change.
