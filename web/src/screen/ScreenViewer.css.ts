@@ -176,18 +176,50 @@ export const figure = style({
   selectors: { '&[data-level="amber"]': { color: vars.amber }, '&[data-level="red"]': { color: vars.red } },
 });
 
+/** The panel's grounds within it: its text's colour, faint, so they show as much on a light panel as on a dark one. */
+const tint = (pct: number) => `color-mix(in srgb, ${vars.text} ${pct}%, transparent)`;
+
 /** The screen's panel (ScreenPanel.tsx): a small panel under the bar's tool (docs/ui-panels.md). */
 export const panel = style([popover, panelCard, {
   vars: { [IN]: pillInner(PANEL_PAD, PANEL_PILL, vars.cornerScale) },
-  zIndex: "1000", display: "grid", gap: "6px", width: "300px", boxSizing: "border-box", color: vars.text, fontSize: vars.textUi,
+  zIndex: "1000", display: "grid", gap: "10px", width: "320px", boxSizing: "border-box", color: vars.text, fontSize: vars.textUi,
   animation: "none",
 }]);
-/** What sits in a group as its rows' words do. */
-export const panelPad = style({ display: "grid", padding: `2px ${TEXT_IN}px` });
-/** The keys a combo presses, at a row's end. */
-export const keysShown = style({ fontFamily: "inherit", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
-/** The view's figures, a term and its value a line. */
-export const stats = style({ display: "grid", gap: "2px", margin: "0", padding: `2px ${TEXT_IN}px 4px`, fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
-globalStyle(`${stats} > div`, { display: "flex", justifyContent: "space-between", gap: "12px" });
-globalStyle(`${stats} dt`, { color: vars.muted });
-globalStyle(`${stats} dd`, { margin: "0", fontVariantNumeric: "tabular-nums", textAlign: "right" });
+/** The view's figures, four side by side on a quieter ground: each its value over its name. */
+export const tiles = style({
+  display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "2px", padding: "8px 4px",
+  borderRadius: `var(${IN})`, background: tint(5),
+});
+export const tile = style({ display: "grid", justifyItems: "center", gap: "2px", minWidth: "0", textAlign: "center" });
+globalStyle(`${tile} > b`, {
+  maxWidth: "100%", fontSize: vars.textBody, lineHeight: vars.leadingBody, fontWeight: "600", fontVariantNumeric: "tabular-nums",
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+globalStyle(`${tile} > span`, { color: vars.muted, fontSize: vars.textCaption, lineHeight: vars.leadingCaption });
+/** Under the figures: the picture's size and codec, packets lost. */
+export const tilesNote = style({ padding: `0 ${TEXT_IN}px`, color: vars.muted, fontSize: vars.textCaption, lineHeight: vars.leadingCaption, textAlign: "center" });
+/** The figures and the line under them. */
+export const view = style({ display: "grid", gap: "6px" });
+/** A part of the panel under its small name. */
+export const section = style({ display: "grid", gap: "6px" });
+export const sectionLabel = style({ padding: `0 ${TEXT_IN}px`, color: vars.muted, fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
+/** The combos, two a row: the keys as keycaps over what they do. */
+export const combos = style({ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "4px" });
+export const combo = style({
+  display: "grid", justifyItems: "start", gap: "4px", minWidth: "0", padding: "8px 10px", border: "0",
+  borderRadius: `var(${IN})`, background: tint(5), color: vars.text, font: "inherit", textAlign: "left", cursor: "pointer",
+  selectors: { "&:hover": { background: tint(9) }, "&:active": { background: tint(13) } },
+});
+export const keycaps = style({ display: "flex", flexWrap: "wrap", gap: "3px" });
+export const keycap = style({
+  display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "20px", height: "20px", padding: "0 5px", boxSizing: "border-box",
+  border: `1px solid ${tint(18)}`, borderBottomWidth: "2px", borderRadius: "4px", background: vars.raised,
+  fontFamily: "inherit", fontSize: vars.textCaption, fontWeight: "500", lineHeight: "1",
+});
+export const comboName = style({ maxWidth: "100%", color: vars.muted, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** 全屏, along the foot. */
+export const fullRow = style({
+  display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "32px", border: "0", lineHeight: "1",
+  borderRadius: `var(${IN})`, background: tint(5), color: vars.text, font: "inherit", fontSize: vars.textUi, cursor: "pointer",
+  selectors: { "&:hover": { background: tint(9) }, "&:active": { background: tint(13) } },
+});
