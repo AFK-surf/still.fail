@@ -1,70 +1,52 @@
-// The app's keyboard shortcuts, all in one place: what each does, and the keys that do it. A component that can do an
-// action says so with useShortcut (the one mounted last answers); one listener on the window finds the action a key
-// press is bound to. The keys can be changed in the desktop app (kept on this device by the core, prefs.ts): what shows a shortcut
-// (a tooltip, the list of them) reads it from here too.
+// The app's keyboard shortcuts: what each does and the keys that do it are the core's (the prefs' `keymap`;
+// client/core-ts/src/keymap.ts), changed in the desktop app (`keys.set`, kept on this device). A component that can do
+// an action says so with useShortcut (the one mounted last answers); one listener on the window turns a key press into
+// a binding and finds the action it is bound to. What shows a shortcut (a tooltip, the list of them) reads it from here.
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { onPrefs, prefs, setPrefs } from "./prefs.ts";
-import { t } from "./i18n.ts";
+import { core } from "./core/react.ts";
+import type { KeyAction, KeyActionName, KeymapView } from "./core/shapes.ts";
+import { onPrefs, prefs, usePrefs } from "./prefs.ts";
 
-export type Action =
-  | "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings"
-  | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.find" | "chat.archive"
-  | "panel.close" | "shortcuts";
+export type Action = KeyActionName;
 
 // The actions a tip of @stillfail/ui names the keys of (its Tip's `shortcut`): these (ui.tsx says their keys).
 declare module "@stillfail/ui/shortcuts.ts" {
   interface Shortcuts extends Record<Action, true> {}
 }
 
-/**
- * A binding: modifiers, then a key, joined by "+" ("Mod+Shift+H"). Mod is ⌘ on a Mac and Ctrl elsewhere. The key is
- * where it is on the keyboard (a letter, a digit, Up/Down/Left/Right, Space, Escape, or one of \ [ ] . , / ;), so ⌥
- * or ⇧ changing the character typed does not change which binding it is.
- */
+/** A binding as the core has it (keymap.ts): modifiers Ctrl, Alt, Shift, Mod in that order, then the key ("Shift+Mod+H"). */
 export type Binding = string;
 
-interface Spec {
-  /** Where it works: anywhere in the app, or in a chat. */
-  group: "global" | "chat";
-  keys: Binding[];
-  /** Only in the desktop app, where the browser takes no keys for itself. */
-  desktop?: Binding[];
-  /**
-   * Whether it works with the cursor in a text field: always (a binding with ⌘ or ⌥ does nothing there), never (it is
-   * a key the field types), or when the field is empty (the key moves the cursor in text).
-   */
-  typing: "yes" | "no" | "empty";
+/** None until the core has said it (the first start, before it answers). */
+const NONE: KeymapView = { changeable: false, mac: false, groups: [], actions: [], workspace: [] };
+
+let made: [KeymapView, Map<Action, KeyAction>] | null = null;
+
+/** The keymap now, its actions by name. */
+function keymap(): [KeymapView, Map<Action, KeyAction>] {
+  const view = prefs().keymap ?? NONE;
+  if (made?.[0] !== view) made = [view, new Map(view.actions.map((a) => [a.action, a]))];
+  return made;
 }
 
-export const ACTIONS: Record<Action, Spec> = {
-  "chat.switch": { group: "global", keys: ["Mod+K"], typing: "yes" },
-  "chat.new": { group: "global", keys: ["Mod+Alt+N"], desktop: ["Mod+N"], typing: "yes" },
-  "chat.prev": { group: "global", keys: ["Alt+Up"], typing: "yes" },
-  "chat.next": { group: "global", keys: ["Alt+Down"], typing: "yes" },
-  "sidebar.toggle": { group: "global", keys: ["Mod+\\"], typing: "yes" },
-  "nav.back": { group: "global", keys: [], desktop: ["Mod+["], typing: "yes" },
-  "nav.forward": { group: "global", keys: [], desktop: ["Mod+]"], typing: "yes" },
-  "settings": { group: "global", keys: [], desktop: ["Mod+,"], typing: "yes" },
-  "shortcuts": { group: "global", keys: ["Mod+/"], typing: "yes" },
-  "composer.focus": { group: "chat", keys: ["Space"], typing: "no" },
-  "composer.file": { group: "chat", keys: ["Mod+U"], typing: "yes" },
-  "chat.stop": { group: "chat", keys: ["Mod+."], typing: "yes" },
-  "chat.history": { group: "chat", keys: ["Mod+Shift+H"], typing: "yes" },
-  "chat.jobs": { group: "chat", keys: ["Mod+Shift+J"], typing: "yes" },
-  "chat.latest": { group: "chat", keys: ["Mod+Down"], typing: "empty" },
-  "chat.find": { group: "chat", keys: ["Mod+F"], typing: "yes" },
-  "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },
-  "panel.close": { group: "chat", keys: ["Escape"], typing: "yes" },
-};
+/** The actions, in the order the list of shortcuts has them. */
+export function actions(): KeyAction[] {
+  return keymap()[0].actions;
+}
+
+/** The groups the actions are in, with their names, in order. */
+export function groups(): KeymapView["groups"] {
+  return keymap()[0].groups;
+}
+
+/** An action as the core says it, or undefined before it has. */
+export function actionOf(action: Action): KeyAction | undefined {
+  return keymap()[1].get(action);
+}
 
 /** What an action does, in words. */
 export function labelOf(action: Action): string {
-  return t(`web-main.keymap.${action}`);
-}
-
-/** A group's name, as the list of shortcuts heads it. */
-export function groupLabel(group: Spec["group"]): string {
-  return t(`web-main.keymap.group.${group}`);
+  return actionOf(action)?.name ?? "";
 }
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -72,39 +54,23 @@ const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 /** Keys are changed only in the desktop app; the web pages keep the app's own. */
 export const CHANGEABLE = !!window.stillfailDesktop;
 
-function overrides(): Partial<Record<Action, Binding[]>> {
-  return CHANGEABLE ? prefs().keys as Partial<Record<Action, Binding[]>> : {};
-}
-
-/** The keys that do an action here: changed on this device, or its own (with the desktop app's). */
+/** The keys that do an action here. */
 export function keysOf(action: Action): Binding[] {
-  const changed = overrides()[action];
-  if (changed) return changed;
-  const spec = ACTIONS[action];
-  return window.stillfailDesktop && spec.desktop ? [...spec.desktop, ...spec.keys] : spec.keys;
+  return actionOf(action)?.keys ?? [];
 }
 
-/** Changes an action's keys on this device; null goes back to its own. */
-export function setKeys(action: Action, keys: Binding[] | null): void {
-  setPrefs({ keys: { [action]: keys } });
+/**
+ * Changes an action's keys on this device (null: its own again; no action: every one's). Keys another action had are
+ * moved here: the answer is what the core says of it (null: none moved, or not changed).
+ */
+export function setKeys(action: Action | null, keys: Binding[] | null): Promise<string | null> {
+  return core().call("keys.set", action ? { action, keys } : {})
+    .then((ok) => (ok as { said?: string | null } | null)?.said ?? null, () => null);
 }
 
-/** Whether an action's keys were changed on this device. */
-export function changed(action: Action): boolean {
-  return overrides()[action] !== undefined;
-}
-
-/** The keys changed as last read, as words: other words only when they change (not on each change of the other prefs). */
-const changedKeys = () => (CHANGEABLE ? JSON.stringify(prefs().keys) : null);
-
-/** Redrawn when any action's keys change: what shows them reads them anew. */
+/** Redrawn when the keymap changes: what shows the keys reads them anew. */
 export function useKeymap(): unknown {
-  return useSyncExternalStore(onPrefs, changedKeys, () => null);
-}
-
-/** The action other than `except` a binding already does, if any. */
-export function boundTo(binding: Binding, except: Action): Action | null {
-  return (Object.keys(ACTIONS) as Action[]).find((a) => a !== except && keysOf(a).includes(binding)) ?? null;
+  return usePrefs((p) => p.keymap);
 }
 
 const CODES: Record<string, string> = {
@@ -113,7 +79,10 @@ const CODES: Record<string, string> = {
 };
 const KEYS = Object.fromEntries(Object.entries(CODES).map(([key, code]) => [code, key]));
 
-/** The binding a key press makes (Mod+Shift+H), or null for a key that is none (a modifier alone, a key with no name here). */
+/**
+ * The binding a key press makes (Shift+Mod+H), or null for a key that is none (a modifier alone, a key with no name
+ * here). The key is where it is on the keyboard, so ⌥ or ⇧ changing the character typed does not change which it is.
+ */
 export function bindingOf(e: KeyboardEvent): Binding | null {
   const key = KEYS[e.code] ?? (/^Key[A-Z]$/.test(e.code) ? e.code.slice(3) : /^Digit\d$/.test(e.code) ? e.code.slice(5) : /^F\d{1,2}$/.test(e.code) ? e.code : null);
   if (!key) return null;
@@ -121,37 +90,9 @@ export function bindingOf(e: KeyboardEvent): Binding | null {
   return [...mods, key].join("+");
 }
 
-const SHOWN: Record<string, string> = { Up: "↑", Down: "↓", Left: "←", Right: "→", Escape: "Esc", Enter: "↩" };
-
-interface Parsed { mod: boolean; shift: boolean; alt: boolean; ctrl: boolean; code: string }
-
-function parse(binding: Binding): Parsed {
-  const parts = binding.split("+");
-  // "Mod++" would be a plus; none is bound, so the last part is always the key.
-  const key = parts.pop()!;
-  const code = CODES[key] ?? (/^[A-Z]$/.test(key) ? `Key${key}` : /^\d$/.test(key) ? `Digit${key}` : key);
-  return { mod: parts.includes("Mod"), shift: parts.includes("Shift"), alt: parts.includes("Alt"), ctrl: parts.includes("Ctrl"), code };
-}
-
-function matches(binding: Binding, e: KeyboardEvent): boolean {
-  const b = parse(binding);
-  const mod = MAC ? e.metaKey : e.ctrlKey;
-  // On a Mac, Ctrl is a key of its own; elsewhere it is Mod, and ⌘ (the Windows key) is never part of a binding.
-  const ctrl = MAC ? e.ctrlKey : false;
-  const meta = MAC ? false : e.metaKey;
-  return e.code === b.code && mod === b.mod && e.shiftKey === b.shift && e.altKey === b.alt && ctrl === b.ctrl && !meta;
-}
-
-/** A binding as a key cap shows it: ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere. */
-export function keyLabel(binding: Binding): string {
-  const parts = binding.split("+");
-  const key = parts.pop()!;
-  const shown = key === "Space" ? t("web-main.keymap.space") : SHOWN[key] ?? key;
-  if (MAC) {
-    const marks = { Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Mod: "⌘" } as const;
-    return (["Ctrl", "Alt", "Shift", "Mod"] as const).filter((m) => parts.includes(m)).map((m) => marks[m]).join("") + shown;
-  }
-  return [...parts.map((m) => (m === "Mod" ? "Ctrl" : m)), shown].join("+");
+/** The binding a key press is bound by: elsewhere than on a Mac, ⌘ (the Windows key) is never part of one. */
+function pressed(e: KeyboardEvent): Binding | null {
+  return !MAC && e.metaKey ? null : bindingOf(e);
 }
 
 /**
@@ -166,13 +107,12 @@ export function workspaceIndexOf(e: KeyboardEvent): number | null {
 
 /** The key that switches to the workspace at this place (from 0) in the menu. */
 export function workspaceKeyLabel(index: number): string {
-  return MAC ? `⌃${index + 1}` : `Alt+${index + 1}`;
+  return keymap()[0].workspace[index] ?? "";
 }
 
 /** An action's first key as shown, or null when it has none here. */
 export function shortcutOf(action: Action): string | null {
-  const first = keysOf(action)[0];
-  return first ? keyLabel(first) : null;
+  return actionOf(action)?.labels[0] ?? null;
 }
 
 type Handler = (e: KeyboardEvent) => unknown;
@@ -221,10 +161,12 @@ function onKey(e: KeyboardEvent) {
   if (e.defaultPrevented || e.isComposing) return;
   const at = e.target instanceof Element ? e.target : null;
   const field = at?.closest<HTMLInputElement | HTMLTextAreaElement>(TYPED) ?? null;
+  const binding = pressed(e);
+  if (!binding) return;
   for (const [action, stack] of handlers) {
     const handler = stack.at(-1);
-    if (!handler || !keysOf(action).some((k) => matches(k, e))) continue;
-    const spec = ACTIONS[action];
+    const spec = actionOf(action);
+    if (!handler || !spec?.keys.includes(binding)) continue;
     if (field && (spec.typing === "no" || spec.typing === "empty" && "value" in field && field.value !== "")) continue;
     // A key that types something, bound on its own (changed to one here), is never taken from a text field.
     if (field && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key.length === 1)) continue;
@@ -261,9 +203,9 @@ export function useShortcut(action: Action, handler: Handler | null): void {
   }, [action, on]);
 }
 
-/** The actions that can be done now (some mounted component does each), in the order ACTIONS lists them. */
+/** The actions that can be done now (some mounted component does each), in the order the core lists them. */
 export function availableActions(): Action[] {
-  return (Object.keys(ACTIONS) as Action[]).filter((a) => handlers.get(a)?.length);
+  return actions().map((a) => a.action).filter((a) => handlers.get(a)?.length);
 }
 
 /** Does an action as its key would (⌘K's list, the menu bar). */
@@ -282,10 +224,10 @@ function tellMenu(): void {
   telling = true;
   setTimeout(() => {
     telling = false;
-    const actions = Object.keys(ACTIONS) as Action[];
+    const all = actions().map((a) => a.action);
     menu.state({
-      keys: Object.fromEntries(actions.map((a) => [a, keysOf(a)[0] ?? null])),
-      on: actions.filter((a) => handlers.get(a)?.length),
+      keys: Object.fromEntries(all.map((a) => [a, keysOf(a)[0] ?? null])),
+      on: all.filter((a) => handlers.get(a)?.length),
     });
   }, 50);
 }
@@ -294,6 +236,6 @@ if (menu) {
   onPrefs(tellMenu);
   tellMenu();
   menu.onAction((action) => {
-    if (action in ACTIONS) runAction(action as Action);
+    if (actionOf(action as Action)) runAction(action as Action);
   });
 }

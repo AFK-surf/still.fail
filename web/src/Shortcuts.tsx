@@ -1,16 +1,14 @@
 // The keyboard shortcuts shown: all of them at a glance (⌘/), and the page in settings where each one's keys are changed
-// (kept on this device, keymap.ts).
+// (kept on this device by the core, keymap.ts).
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ACTIONS, CHANGEABLE, bindingOf, boundTo, changed, groupLabel, keyLabel, keysOf, labelOf, setKeys, useKeymap, workspaceKeyLabel, type Action } from "./keymap.ts";
+import { CHANGEABLE, actions, bindingOf, groups, setKeys, useKeymap, workspaceKeyLabel, type Action } from "./keymap.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Dialog, MobileBack, Section } from "./ui.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Shortcuts.css.ts";
 import { t } from "./i18n.ts";
-
-const GROUPS = ["global", "chat"] as const;
 
 /** Keys that belong to one place, not changed here: said in the list so that it is all of them. */
 const fixed = (): { group: string; rows: [string, string][] }[] => [
@@ -20,14 +18,7 @@ const fixed = (): { group: string; rows: [string, string][] }[] => [
 ];
 
 /** A group's actions here: those only the desktop app has are not shown elsewhere. */
-const actionsOf = (group: (typeof GROUPS)[number]) => (Object.keys(ACTIONS) as Action[])
-  .filter((a) => ACTIONS[a].group === group && (window.stillfailDesktop || ACTIONS[a].keys.length > 0));
-
-/** What an action's keys are here, in words. */
-function keysText(action: Action): string {
-  const keys = keysOf(action);
-  return keys.length ? keys.map(keyLabel).join(" / ") : t("web-main.shortcuts.unset");
-}
+const actionsOf = (group: string) => actions().filter((a) => a.group === group && a.listed);
 
 /** Every shortcut, by where it works; the way to change them at its foot. */
 export function ShortcutsDialog({ open, onClose, settings }: { open: boolean; onClose(): void; settings: string }) {
@@ -36,11 +27,11 @@ export function ShortcutsDialog({ open, onClose, settings }: { open: boolean; on
     <Dialog open={open} onClose={onClose} title={t("web-main.shortcuts.title")}
       footer={CHANGEABLE ? <Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={settings} onClick={onClose}>{t("web-main.shortcuts.change")}</Link> : undefined}>
       <div className={css.sheet}>
-        {GROUPS.map((group) => (
+        {groups().map(({ group, name }) => (
           <section key={group} className={css.group}>
-            <h3 className={css.groupTitle}>{groupLabel(group)}</h3>
+            <h3 className={css.groupTitle}>{name}</h3>
             {actionsOf(group).map((a) => (
-              <div key={a} className={css.line}><span>{labelOf(a)}</span><span className={css.keys}>{keysText(a)}</span></div>
+              <div key={a.action} className={css.line}><span>{a.name}</span><span className={css.keys}>{a.text}</span></div>
             ))}
           </section>
         ))}
@@ -68,39 +59,35 @@ export function ShortcutsPage({ back }: { back: string }) {
       e.stopPropagation();
       if (e.key === "Escape" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) return setRecording(null);
       if ((e.key === "Backspace" || e.key === "Delete") && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        setKeys(recording, []);
+        void setKeys(recording, []);
         return setRecording(null);
       }
       const binding = bindingOf(e);
       if (!binding) return;
-      const other = boundTo(binding, recording);
-      if (other) {
-        setKeys(other, keysOf(other).filter((k) => k !== binding));
-        toast(t("web-main.shortcuts.moved", { keys: keyLabel(binding), action: labelOf(other) }));
-      }
-      setKeys(recording, [binding]);
+      // Keys another action had are moved here, said so.
+      void setKeys(recording, [binding]).then((said) => { if (said) toast(said); });
       setRecording(null);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [recording, toast]);
-  const any = (Object.keys(ACTIONS) as Action[]).some(changed);
+  const any = actions().some((a) => a.changed);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-main.nav.settings")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-main.shortcuts.title")}</h1></div></header>
-      {GROUPS.map((group, i) => (
-        <Section key={group} title={groupLabel(group)}
+      {groups().map(({ group, name }, i) => (
+        <Section key={group} title={name}
           description={i === 0 ? <>{t("web-main.shortcuts.hint")}</> : undefined}
-          actions={i === 0 && any ? <button type="button" className={controlsCss.textToggle} onClick={() => { for (const a of Object.keys(ACTIONS) as Action[]) setKeys(a, null); }}>{t("web-main.shortcuts.resetAll")}</button> : undefined}>
+          actions={i === 0 && any ? <button type="button" className={controlsCss.textToggle} onClick={() => void setKeys(null, null)}>{t("web-main.shortcuts.resetAll")}</button> : undefined}>
           <div className={css.rows}>
-            {actionsOf(group).map((a) => (
+            {actionsOf(group).map(({ action: a, name: label, keys, text, changed }) => (
               <div key={a} className={css.row}>
-                <span className={css.rowLabel}>{labelOf(a)}</span>
-                {changed(a) && <button type="button" className={controlsCss.textToggle} onClick={() => setKeys(a, null)}>{t("web-main.shortcuts.reset")}</button>}
-                <button type="button" className={css.record} data-recording={recording === a || undefined} data-none={keysOf(a).length === 0 || undefined}
+                <span className={css.rowLabel}>{label}</span>
+                {changed && <button type="button" className={controlsCss.textToggle} onClick={() => void setKeys(a, null)}>{t("web-main.shortcuts.reset")}</button>}
+                <button type="button" className={css.record} data-recording={recording === a || undefined} data-none={keys.length === 0 || undefined}
                   onClick={() => setRecording(recording === a ? null : a)}>
-                  {recording === a ? t("web-main.shortcuts.recording") : keysText(a)}
+                  {recording === a ? t("web-main.shortcuts.recording") : text}
                 </button>
               </div>
             ))}

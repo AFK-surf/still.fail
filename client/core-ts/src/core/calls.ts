@@ -10,6 +10,7 @@ import { type HeldCall, type ModuleCall, parseModuleCall } from "../module.ts";
 import type { KeepKind } from "../drive-kept.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
+import * as keymap from "../keymap.ts";
 import * as ops from "../ops.ts";
 import type { Topic } from "../protocol.ts";
 import { draftAt } from "../refs.ts";
@@ -119,6 +120,9 @@ export type Call =
   | { kind: "chatRefsKeep"; links: [string, string][] }
   | { kind: "choose"; name: string; params: Record<string, unknown> }
   | { kind: "prefsSet"; patch: unknown; fill: boolean }
+  /// An action's keys changed on this device (keymap.ts): bindings as the keymap has them; null its own again; no
+  /// action, every one's.
+  | { kind: "keysSet"; action: string | null; keys: string[] | null }
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
   | { kind: "commandsFind"; query: string; offered: unknown[] }
@@ -688,6 +692,21 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         patch = rest;
       }
       return { kind: "prefsSet", patch, fill };
+    }
+    case "keys.set": {
+      const p = read(params, [
+        ["action", S, "opt"],
+        ["keys", "strings", "opt"],
+      ]);
+      const action = p.action as string | null;
+      if (action !== null && !(action in keymap.ACTIONS)) throw CoreError.invalid(t("core-misc.params.invalid", { error: `action: ${action}` }));
+      if (action === null && p.keys !== null) throw CoreError.invalid(t("core-misc.params.invalid", { error: "action" }));
+      const keys = p.keys === null ? null : (p.keys as string[]).map((said) => {
+        const b = keymap.binding(said);
+        if (b === null) throw CoreError.invalid(t("core-misc.params.invalid", { error: `keys: ${said}` }));
+        return b;
+      });
+      return { kind: "keysSet", action, keys: keys && [...new Set(keys)] };
     }
     case "client.device":
       return { kind: "clientDevice", facts: orEmpty(params) };
