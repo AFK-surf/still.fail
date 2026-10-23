@@ -275,7 +275,8 @@ a name, ⏎ changes a name in place, space previews, ⌘⌫ deletes what is chos
 ⌘⇧N makes a folder (named as Finder names one, its name then changed). Hidden
 files (a name starting with `.`) show only after ⌘⇧. ; the order (name, time,
 size or kind, by the list's heads or the folder's right-click menu) and whether
-they show are the person's, on the device (prefs `driveViews`). A column's edge is
+they show are the person's, on the device (prefs `driveViews`); names go in the order the device's language reads
+them (the host's `collate`: 中文 by pinyin), by hand where it has none. A column's edge is
 dragged as Finder's: that column wider or narrower (kept while the page is), with ⌥
 every column (kept on the device, `driveViews.column`), a double click as wide as its
 longest name. On the files' page what is

@@ -6,6 +6,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply as applyDelta } from "../src/delta.ts";
+import { arrange } from "../src/drive-browse.ts";
+import { collate } from "../src/hosts/collate.ts";
 import type { CoreMessage } from "../src/protocol.ts";
 import { call, subscribe } from "./helpers.ts";
 import { base, overview, started, stationReplies } from "./station-fixture.ts";
@@ -61,6 +63,20 @@ async function browsing() {
 }
 
 const place = (place: string, view: string, path = "", more: Record<string, unknown> = {}) => ({ owner: "page", place, view, station: ST, root: ROOT, path, ...more });
+
+test("names go in the order the host's language reads them, else by hand", () => {
+  const es = ["报告", "数据", "测试", "b10", "B2", "a"].map((name) => ({ name, dir: false, size: 0, mtime: 0, kind: "text" }));
+  const by = { by: "name" as const, down: false, hidden: false };
+  // By hand: case aside, numbers by value, the rest by its characters.
+  assert.deepEqual(arrange(es, by).map((e) => e.name), ["a", "B2", "b10", "报告", "数据", "测试"]);
+  // As a host has them (here: 中文 by pinyin, as a page in Chinese does): its places, its ties by hand.
+  const pinyin: Record<string, number> = { a: 0, B2: 1, b10: 2, 报告: 3, 测试: 4, 数据: 5 };
+  assert.deepEqual(arrange(es, by, (names) => names.map((n) => pinyin[n] ?? 0)).map((e) => e.name), ["a", "B2", "b10", "报告", "测试", "数据"]);
+  // One that cannot say: by hand.
+  assert.deepEqual(arrange(es, by, () => null).map((e) => e.name), ["a", "B2", "b10", "报告", "数据", "测试"]);
+  // The page's and Node's hosts: the language's collation, equal names in one place.
+  assert.deepEqual(collate(["b10", "B2", "a", "A"]), [3, 2, 0, 0]);
+});
 
 test("a place shows its folders in the order kept on the device, hidden files once asked", async () => {
   const { core, ask, watch } = await browsing();

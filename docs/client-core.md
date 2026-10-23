@@ -78,6 +78,11 @@ What differs per platform comes in through one interface, `Host`
   store, read once (docs/core-db.md).
 - `nowMs`, `monotonicMs`, `utcOffsetMin` (the viewer's time zone), `randomBytes`,
   `resetConnections`, `tcp` (adbd, native hosts).
+- `collate` — names' places in the order people read them in their language (the
+  system's collation: numbers by value, case aside, 中文 by pinyin), for a folder's
+  files: web and desktop `Intl.Collator`, a native shell `text.collate`; none (or
+  a shell from before it), the core orders them by hand. The core itself never
+  calls `Intl` (Hermes asks Java for it).
 - `emit` — delivers a message to one connected UI (by its client id).
 
 iroh comes from the host too (`src/iroh.ts`): the browser's is relay-only (no

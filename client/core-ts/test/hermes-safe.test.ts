@@ -19,7 +19,9 @@ function files(dir: string): string[] {
 // Nor what Hermes does not have at all, and hosts/hermes-globals.ts does not make: URLSearchParams (2026-10-18: a login's
 // loopback callback ended the core on the phone).
 test("the core calls nothing Hermes on Android needs Java for (Intl, locale comparisons and formats), nor URLSearchParams", () => {
-  const found = files(SRC).flatMap((path) =>
+  // Those only the page's worker and Node run (the hosts whose Intl is whole) aside.
+  const whole = ["hosts/collate.ts", "hosts/web.ts", "hosts/node.ts"];
+  const found = files(SRC).filter((path) => !whole.includes(path.slice(SRC.length))).flatMap((path) =>
     readFileSync(path, "utf8").split("\n").flatMap((line, i) => (FORBIDDEN.test(line) && !line.trim().startsWith("//") ? [`${path.slice(SRC.length)}:${i + 1}: ${line.trim()}`] : [])),
   );
   assert.deepEqual(found, []);

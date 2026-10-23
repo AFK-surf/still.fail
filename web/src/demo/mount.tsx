@@ -35,6 +35,7 @@ import { bookAnswer, keepBook, keptBook, searchBook } from "../../../client/core
 import { find as findCommands } from "../../../client/core-ts/src/commands.ts";
 import { openOf } from "../../../client/core-ts/src/search-open.ts";
 import { Browsing, CALLS as BROWSE_CALLS, withDrive } from "../../../client/core-ts/src/drive-browse.ts";
+import { collate } from "../../../client/core-ts/src/hosts/collate.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
 let root: HTMLElement;
@@ -93,6 +94,8 @@ function extendedValueOf(topic: Topic): unknown {
 /** How the station's files are browsed here: as the core does it (drive-browse.ts), on what the demo has. */
 const browsing = new Browsing({
   prefs: () => prefs,
+  // Names in the order the page's language reads them, as the core's web host has them.
+  collate,
   setPrefs: (patch) => void answer("prefs.set", patch),
   entries: (at, root, path) => {
     const folder = extendedValueOf({ topic: "drive", station: at, root, path }) as DriveFolder | null;

@@ -12,8 +12,9 @@ export interface Arrangement { by: SortBy; down: boolean; hidden: boolean }
 /// An entry as its order needs it (`kind` as drive.ts names it: folder, video, text…).
 export interface Ordered { name: string; dir: boolean; size: number; mtime: number; kind: string }
 
-/// Names compared as a file browser does, by hand (Hermes, the native apps' engine, has no collation of its own
-/// without Java): case aside, the digits in them as numbers ("2" before "10"), the rest by its characters.
+/// Names compared as a file browser does, by hand, where the host has no collation (Host.collate; Hermes, the native
+/// apps' engine, has none of its own without Java): case aside, the digits in them as numbers ("2" before "10"), the
+/// rest by its characters.
 const collator = {
   compare(a: string, b: string): number {
     const x = a.toLowerCase().match(/\d+|\D+/g) ?? [];
@@ -46,11 +47,17 @@ export function arrangementKept(a: Arrangement): { sort: string | null; hidden: 
   return { sort: a.by === "name" && !a.down ? null : `${a.by}${a.down ? "-down" : ""}`, hidden: a.hidden ? "shown" : null };
 }
 
+/// Each name's place in the order people read them (Host.collate), or null where it cannot say.
+export type Collate = (names: readonly string[]) => number[] | null;
+
 /// A folder's entries as they are shown: hidden ones left out unless asked for, folders first, then by what was chosen
-/// (the newest and the largest first unless turned the other way, names A to Z).
-export function arrange<E extends Ordered>(entries: readonly E[], a: Arrangement): E[] {
+/// (the newest and the largest first unless turned the other way, names A to Z: as `collate` has them, else by hand).
+export function arrange<E extends Ordered>(entries: readonly E[], a: Arrangement, collate?: Collate): E[] {
   const shown = a.hidden ? [...entries] : entries.filter((e) => !e.name.startsWith("."));
-  const byName = (x: E, y: E) => collator.compare(x.name, y.name);
+  const places = collate?.(shown.map((e) => e.name)) ?? null;
+  const placeOf = new Map<E, number>();
+  if (places !== null) shown.forEach((e, i) => placeOf.set(e, places[i] ?? 0));
+  const byName = (x: E, y: E) => (places !== null ? (placeOf.get(x) ?? 0) - (placeOf.get(y) ?? 0) : 0) || collator.compare(x.name, y.name);
   const by: (x: E, y: E) => number =
     a.by === "time" ? (x, y) => y.mtime - x.mtime || byName(x, y)
     : a.by === "size" ? (x, y) => y.size - x.size || byName(x, y)
@@ -485,6 +492,8 @@ export interface Device {
   newId(): string;
   invalid(what: string): Error;
   changed(pick: (place: Params) => boolean): void;
+  /// Names in the order people read them (the host's), where it can say.
+  collate?: Collate;
 }
 
 /// What is chosen as it goes out (none of `anchor` and `lead` left out).
@@ -558,7 +567,7 @@ export class Browsing {
     const shown = (folder: string): Ordered[] | null => {
       if (!read.has(folder)) {
         const held = this.#d.entries(at.station, at.root, folder);
-        read.set(folder, held === null ? null : arrange(held, a));
+        read.set(folder, held === null ? null : arrange(held, a, this.#d.collate));
       }
       return read.get(folder) ?? null;
     };

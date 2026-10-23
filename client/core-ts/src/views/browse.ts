@@ -39,6 +39,7 @@ function browsingOf(inner: Inner): Browsing {
   if (b) return b;
   b = new Browsing({
     prefs: () => inner.data.shared({ topic: "prefs" }),
+    collate: (names) => inner.host.collate?.(names) ?? null,
     setPrefs: (patch) => prefs.set(inner.data, patch, false, inner.host.nowMs()),
     // A folder's entries as its station said them (held), each with what opens it.
     entries: (station, root, path) => {
