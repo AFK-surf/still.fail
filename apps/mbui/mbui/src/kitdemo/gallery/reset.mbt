@@ -14,6 +14,7 @@ fn reset() -> Unit {
   site_check_grabbing.val = false
   update_check_asked.val = false
   update_check_said.val = ""
+  link_check_ready.val = false
   cb.val = On
   size.val = "m"
   bold.val = true

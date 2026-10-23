@@ -24,10 +24,20 @@ cd "$A"
 now() { python3 -c 'import time;print(time.time())'; }
 secs() { python3 -c "print(f'{$(now)-$1:.1f}')"; }
 N=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
-NAME="still.fail mbui"
+# MBUI_VARIANT, which app it is built as (as Android's apk.json variants are): mbui (the default) still.fail mbui, an app
+# beside still.fail's desktop app (fail.still.mbui, its feed mac/mbui); stable and beta still.fail's desktop app itself,
+# to take its place: Electron's ids, names and links (apps/desktop/package.json, build.sh), so that app's updater takes
+# it and it keeps that app's data, sign-in and sealed keys where they were (src/sfcore/apple_engine.m, src/host/
+# apple_core.mm electron_sealed); their feed mac (the beta's core asks mac/beta, as still.fail's beta builds do).
+case "${MBUI_VARIANT:-mbui}" in
+  mbui) ID=fail.still.mbui NAME="still.fail mbui" FEED=mac/mbui OWN= BETA= SCHEMES=() ZIP_NAME=stillfail-mbui ;;
+  stable) ID=fail.still.desktop NAME=still.fail FEED=mac OWN=1 BETA= SCHEMES=(stillfail ember) ZIP_NAME=stillfail ;;
+  beta) ID=fail.still.desktop.beta NAME=youdid.wtf FEED=mac OWN=1 BETA=1 SCHEMES=(stillfail-beta) ZIP_NAME=stillfail-beta ;;
+  *) echo "mac-app.sh: MBUI_VARIANT is mbui, stable or beta, not $MBUI_VARIANT" >&2; exit 1 ;;
+esac
 OUT=$A/out/mac
 APPDIR="$OUT/$NAME.app"
-ZIP=$OUT/stillfail-mbui-$N-arm64-mac.zip
+ZIP=$OUT/$ZIP_NAME-$N-arm64-mac.zip
 EXE=stillfail-mbui
 mkdir -p "$OUT"
 t0=$(now)
@@ -98,7 +108,7 @@ MINOS=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" {
 PLIST=$APPDIR/Contents/Info.plist
 plutil -create xml1 "$PLIST"
 put() { plutil -insert "$1" "$2" "$3" "$PLIST"; }
-put CFBundleIdentifier -string fail.still.mbui
+put CFBundleIdentifier -string "$ID"
 put CFBundleName -string "$NAME"
 put CFBundleDisplayName -string "$NAME"
 put CFBundleExecutable -string "$EXE"
@@ -114,11 +124,23 @@ put NSPrincipalClass -string NSApplication
 put NSHighResolutionCapable -bool YES
 put NSSupportsAutomaticGraphicsSwitching -bool YES
 # the core reaches stations on the local network directly when it can (as still.fail's desktop app says it)
-put NSLocalNetworkUsageDescription -string "still.fail mbui connects straight to your stations on the local network when it can."
+put NSLocalNetworkUsageDescription -string "$NAME connects straight to your stations on the local network when it can."
 # where its newer builds come from (src/stillfail main: MBUI_UPDATE_FEED; the host installs them: mac_app.m Updates),
-# the feed beta.sh mac publishes; the system gives it to the app opened from the Finder, the Dock or `open`
+# the feed beta.sh mac publishes; built in still.fail's desktop app's place, still.fail's own (the device named as that
+# app named it: src/sfcore/signin.mbt MBUI_OWN), the beta's core its beta's (MBUI_BETA). The system gives these to the
+# app opened from the Finder, the Dock or `open`.
 plutil -insert LSEnvironment -dictionary "$PLIST"
-put LSEnvironment.MBUI_UPDATE_FEED -string mac/mbui
+put LSEnvironment.MBUI_UPDATE_FEED -string "$FEED"
+[ -z "$OWN" ] || put LSEnvironment.MBUI_OWN -string 1
+[ -z "$BETA" ] || put LSEnvironment.MBUI_BETA -string 1
+# the links that open it (stillfail://o/…, as still.fail's desktop app takes them: mac_app.m, then sfapp's links)
+if [ ${#SCHEMES[@]} -gt 0 ]; then
+  plutil -insert CFBundleURLTypes -array "$PLIST"
+  plutil -insert CFBundleURLTypes.0 -dictionary "$PLIST"
+  put CFBundleURLTypes.0.CFBundleURLName -string "$NAME"
+  plutil -insert CFBundleURLTypes.0.CFBundleURLSchemes -array "$PLIST"
+  for i in "${!SCHEMES[@]}"; do put "CFBundleURLTypes.0.CFBundleURLSchemes.$i" -string "${SCHEMES[$i]}"; done
+fi
 plutil -lint "$PLIST" > /dev/null
 
 # ad hoc for now: `sign` after (still.fail's identity in CI)

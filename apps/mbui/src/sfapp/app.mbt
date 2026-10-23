@@ -1162,7 +1162,7 @@ fn system_said(json : String) -> Unit {
   for s in said {
     match s {
       // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
-      Link(url) => link_later.push(url)
+      Link(url) => link_later.push(app_link(url))
       // shown over another app, or in its own window again (share.mbt)
       Over(over) => share_over.val = over
       // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
@@ -1222,4 +1222,18 @@ fn page_ready(src : Source, p : Page) -> Bool {
     History(r, key, _) => answered((src.topic)("chat", chat_params(r))) && answered((src.topic)("history", history_params(r, key)))
     _ => true
   }
+}
+
+///|
+/// A link the system opened the app with, as the core reads it (`link.parse`): one of still.fail's desktop app's own
+/// (stillfail://, ember://, stillfail-beta://: …//o/<workspace>/<station>/<chat>, as the web's /o/ page hands an item
+/// to that app, which this one takes as it is built in its place: scripts/mac-app.sh) as the same page's on the
+/// cloud; any other as it is.
+fn app_link(url : String) -> String {
+  for scheme in ["stillfail://", "ember://", "stillfail-beta://"] {
+    if url.has_prefix(scheme) {
+      return "\{cloud_origin()}/\{url.view(start_offset=scheme.length())}"
+    }
+  }
+  url
 }

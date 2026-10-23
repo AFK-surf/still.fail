@@ -26,6 +26,8 @@
 #        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/chk outside-kinds)
 #   scripts/host_contract.sh mac update         a newer build of the app put in its place by the host and opened
 #        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), one signed otherwise refused (below)
+#   scripts/host_contract.sh mac links          a link of a scheme the app's Info.plist names, opened while it runs, said to the app
+#        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -493,7 +495,46 @@ s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$U" > "$U/port"
     kill $pid
     rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
     echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
+  links)
+    # (macOS) a link the app is opened with (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt; mac_app.m
+    # application:openURLs:, as still.fail's desktop app takes stillfail://o/…): kitdemo bundled as an app whose
+    # Info.plist names a scheme of its own (mbui-kitdemo-links), known to Launch Services for the run (lsregister) and
+    # forgotten after; opened with a link of it while it runs, it says the link and ends.
+    [ "$H" = mac ] || { echo "links contract: macOS only"; exit 1; }
+    U=$PWD/$O/links
+    rm -rf "$U"
+    mkdir -p "$U"
+    LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+    APP=$U/kitdemo.app
+    mkdir -p "$APP/Contents/MacOS"
+    cp _build/native/release/build/kitdemo/kitdemo.exe "$APP/Contents/MacOS/kitdemo"
+    P=$APP/Contents/Info.plist
+    plutil -create xml1 "$P"
+    plutil -insert CFBundleIdentifier -string dev.mbui.kitdemo.links "$P"
+    plutil -insert CFBundleExecutable -string kitdemo "$P"
+    plutil -insert CFBundlePackageType -string APPL "$P"
+    plutil -insert NSPrincipalClass -string NSApplication "$P"
+    plutil -insert CFBundleURLTypes -array "$P"
+    plutil -insert CFBundleURLTypes.0 -dictionary "$P"
+    plutil -insert CFBundleURLTypes.0.CFBundleURLSchemes -array "$P"
+    plutil -insert CFBundleURLTypes.0.CFBundleURLSchemes.0 -string mbui-kitdemo-links "$P"
+    codesign --force --sign - "$APP"
+    "$LSREG" -f "$APP"
+    LINK="mbui-kitdemo-links://o/ws1/st1/chat1?service=web"
+    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_LINKCHECK=1 "$APP/Contents/MacOS/kitdemo" > "$U/links.log" 2>&1 &
+    pid=$!
+    ok=1
+    scripts/chk logwait --log "$U/links.log" --line "LINKCHECK ready" --pid $pid --deadline 60 > /dev/null || ok=0
+    [ $ok = 0 ] || open "$LINK" || ok=0
+    [ $ok = 0 ] || scripts/chk logwait --log "$U/links.log" --line "LINKCHECK link" --pid $pid --deadline 60 > /dev/null || ok=0
+    kill $pid 2> /dev/null || true
+    "$LSREG" -u "$APP"
+    grep -a "LINKCHECK\|^mac: opened" "$U/links.log" || true
+    if [ $ok = 0 ] || ! grep -aqF "LINKCHECK link $LINK" "$U/links.log"; then
+      echo "links contract: opened with $LINK, the app did not say it"; exit 1
+    fi
+    echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links; ios: free, done)" >&2; exit 1 ;;
 esac

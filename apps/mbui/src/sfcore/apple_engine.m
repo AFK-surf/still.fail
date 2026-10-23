@@ -11,7 +11,10 @@
 #include "../host/apple.h"
 
 // $MBUI_CORE_DATA, else ~/Library/Application Support/<bundle id, or mbui>/core: the app's own, never the installed
-// still.fail app's.
+// still.fail app's. Built as still.fail's desktop app itself (scripts/mac-app.sh's stable and beta: Electron's ids,
+// fail.still.desktop and .beta), that app's data where it kept it (its userData, named as the app: still.fail,
+// youdid.wtf; core/ there, as its core's: apps/desktop/src/main.ts): signed in, its prefs and its chats as they were,
+// its sealed keys taken as they are first asked for (src/host/apple_core.mm electron_sealed).
 static const char *core_data_dir(void) {
   static char *dir;
   if (dir) return dir;
@@ -20,7 +23,8 @@ static const char *core_data_dir(void) {
   if (!path) {
     NSURL *support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
     NSString *app = NSBundle.mainBundle.bundleIdentifier ?: @"mbui";
-    path = [[support.path stringByAppendingPathComponent:app] stringByAppendingPathComponent:@"core"];
+    NSString *electron = @{@"fail.still.desktop" : @"still.fail", @"fail.still.desktop.beta" : @"youdid.wtf"}[app];
+    path = [[support.path stringByAppendingPathComponent:electron ?: app] stringByAppendingPathComponent:@"core"];
   }
   [NSFileManager.defaultManager createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
   dir = strdup(path.fileSystemRepresentation);

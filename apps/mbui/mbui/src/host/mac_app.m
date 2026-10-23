@@ -1148,6 +1148,17 @@ static void bring_back(void) {
   bring_back();
   return NO;
 }
+// a link of one of the schemes its Info.plist names (CFBundleURLTypes) opened, the app started by it or brought back:
+// to the app (the system's `link`), its window out
+- (void)application:(NSApplication *)app openURLs:(NSArray<NSURL *> *)urls {
+  for (NSURL *u in urls) {
+    if (!u.absoluteString.length) continue;
+    fprintf(stdout, "mac: opened with a link (%s://)\n", u.scheme.UTF8String ?: "");
+    fflush(stdout);
+    say_system(@{@"link" : u.absoluteString});
+  }
+  bring_back();
+}
 // one of the app's items in the menu bar (mb_host_menu_setup)
 - (void)menuChosen:(NSMenuItem *)item {
   if ([item.representedObject isKindOfClass:NSString.class]) say_system(@{@"menu" : item.representedObject});
