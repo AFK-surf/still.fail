@@ -60,9 +60,10 @@ fn page_json(p : Page) -> Json? {
 }
 
 ///|
-/// `mode` opened, drawn to `at` ms, and what it asked of the core: its screen's JSON (None when a page it stands on is
-/// not one a screen's JSON opens).
-fn screen_dump(mode : String, at : Double) -> Json? {
+/// `mode` opened, drawn to `at` ms, and what it asked of the core: its screen's JSON; else why there is none (a page it
+/// stands on is not one a screen's JSON opens, or the JSON alone does not draw it as the mode does: what the mode
+/// opens over its pages or in them, a sheet, a menu, a word picked, a row ticked, which Android's test does not open).
+fn screen_dump(mode : String, at : Double) -> Result[Json, String] {
   let topics : Array[(Json, Json)] = []
   let calls : Array[Json] = []
   let made : Ref[Source?] = Ref::new(None)
@@ -115,8 +116,10 @@ fn screen_dump(mode : String, at : Double) -> Json? {
   t.run_for(at)
   // (what lies over the pages, a file's viewer, a sheet: not opened by Android's test yet)
   if viewer.val is Some(_) || @settings.sheet_up() {
-    return None
+    return Err("a viewer or a settings sheet over its pages")
   }
+  // what it draws then, to be drawn the same from the JSON alone (taken now: a Tester's draw list is the last made's)
+  let drawn = t.drawlist()
   let open : Array[Json] = []
   for p in app.nav.pages() {
     match p {
@@ -124,7 +127,7 @@ fn screen_dump(mode : String, at : Double) -> Json? {
       _ =>
         match page_json(p) {
           Some(j) => open.push(j)
-          None => return None
+          None => return Err("a page Android's test does not open")
         }
     }
   }
@@ -166,6 +169,9 @@ fn screen_dump(mode : String, at : Double) -> Json? {
     }
   }
   t2.run_for(at)
+  if t2.drawlist() != drawn {
+    return Err("its JSON alone draws it otherwise: what the mode opens over its pages or in them")
+  }
   let seen : Array[String] = []
   for w in t2.words() {
     let s = w.0.trim(chars=" \n").to_string()
@@ -179,7 +185,7 @@ fn screen_dump(mode : String, at : Double) -> Json? {
     Object(m) => m["shows"] = Json::array(shows)
     _ => ()
   }
-  Some(screen)
+  Ok(screen)
 }
 
 ///|
@@ -195,8 +201,8 @@ test "the screens' JSON, when asked (MBUI_SCREEN_DUMP)" {
   for m in asked.split(",") {
     let mode = m.to_owned()
     match screen_dump(mode, dump_at) {
-      Some(j) => println("SCREENDUMP \{mode} \{j.stringify()}")
-      None => println("SCREENDUMP \{mode} -")
+      Ok(j) => println("SCREENDUMP \{mode} \{j.stringify()}")
+      Err(why) => println("SCREENDUMP \{mode} - \{why}")
     }
   }
 }

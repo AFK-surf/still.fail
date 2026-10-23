@@ -123,6 +123,11 @@ class ScreensRefTest(private val name: String) {
         }
         val dark = screen["dark"]?.jsonPrimitive?.content == "true"
         val activity = rule.activity
+        // the app's drafts outlive a screen (Composer.kt Drafts: each chat's, kept by the process as it was first read):
+        // each screen's read anew from its own JSON's `draft.get` (chat-compose's text was the empty one an earlier
+        // screen's chat had read, run 39913595300)
+        (fail.still.android.screens.Drafts::class.java.getDeclaredField("open").apply { isAccessible = true }.get(null) as HashMap<*, *>).clear()
+        activity.getSharedPreferences("drafts", Context.MODE_PRIVATE).edit().clear().commit()
         val prefs = activity.getSharedPreferences("screens-ref", Context.MODE_PRIVATE)
         prefs.edit().clear().putBoolean("notifyAsked", true).putString("workspace", screen["workspace"]!!.jsonPrimitive.content)
             .putString("theme", if (dark) "dark" else "light").commit()

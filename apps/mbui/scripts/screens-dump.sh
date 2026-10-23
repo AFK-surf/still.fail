@@ -2,7 +2,8 @@
 # The made-up screens as the core's JSON both apps draw a screen from (client/fixtures/screens/NAME.json): each of
 # src/sfscreens' modes (or those named) opened in the Tester as sffix opens it, what it asked of the core kept
 # (src/sfapp/screen_dump_wbtest.mbt), written as its file; then held to the core's shapes (core-ts's
-# scripts/screens-fill.ts). A mode on a page Android's ScreensRefTest does not open is said and left out.
+# scripts/screens-fill.ts). A mode on a page Android's ScreensRefTest does not open, or one its JSON alone draws
+# otherwise (a sheet, a menu, a word picked over its pages: what that test does not open yet), is said and left out.
 #   apps/mbui/scripts/screens-dump.sh [MODE…]
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -25,12 +26,14 @@ written=""
 while IFS= read -r line; do
   name=$(echo "$line" | cut -d' ' -f2)
   json=$(echo "$line" | cut -d' ' -f3-)
-  # (a screen written already, its `shows` and moment set by hand, kept: FORCE=1 writes it again)
-  if [ -f $S/$name.json ] && [ -z "${FORCE:-}" ] && ! echo " ${NEW:-} " | grep -q " $name "; then
+  # (none for it: why, and one written before taken out, with Android's picture of it)
+  if [ "${json%% *}" = "-" ]; then
+    echo "screens-dump: $name left out: ${json#- }"
+    [ ! -f $S/$name.json ] || { rm -f $S/$name.json $S/android/$name.png $S/android/$name.texts.json; echo "screens-dump: $name's file taken out"; }
     continue
   fi
-  if [ "$json" = "-" ]; then
-    echo "screens-dump: $name stands on a page Android's test does not open: left out"
+  # (a screen written already, its `shows` and moment set by hand, kept: FORCE=1 writes it again)
+  if [ -f $S/$name.json ] && [ -z "${FORCE:-}" ] && ! echo " ${NEW:-} " | grep -q " $name "; then
     continue
   fi
   echo "$json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(JSON.parse(s),null,2)+"\n"))' > $S/$name.json
