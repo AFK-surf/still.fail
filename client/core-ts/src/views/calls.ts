@@ -75,9 +75,10 @@ export class ViewCalls {
     const station = at > 0 ? key.slice(0, at) : "";
     if (!station.includes("/")) return [null, null];
     const rest = key.slice(at + 1);
-    const bySession = this.#views.ok({ topic: "chat", station, thread: null, session: rest });
+    // As its pages subscribe to it: by its agent's key, or by its thread.
+    const bySession = this.#views.ok({ topic: "chat", station, session: rest }) ?? this.#views.ok({ topic: "chat", station, thread: null, session: rest });
     if (bySession !== undefined) return [bySession, rest];
-    const thread = /^[0-9]+$/.test(rest) ? this.#views.ok({ topic: "chat", station, thread: Number(rest), session: null }) : undefined;
+    const thread = /^[0-9]+$/.test(rest) ? (this.#views.ok({ topic: "chat", station, thread: Number(rest) }) ?? this.#views.ok({ topic: "chat", station, thread: Number(rest), session: null })) : undefined;
     return [thread ?? null, null];
   }
 
