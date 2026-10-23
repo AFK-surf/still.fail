@@ -20,8 +20,11 @@ const STEPS = [
   { title: "在手机上也一样", text: "从任何一台设备打开，看到的都是所有设备" },
 ];
 
-/** The phone, as drawn: its screen's size (its app laid out at it) and its shell's edge round it. */
-const PHONE = { w: 390, h: 760, r: 44 };
+/**
+ * A phone's screen, the one beside the computer and a narrow screen's window alike (the same app, drawn the same):
+ * its app laid out at this size, tall enough that its four stations stand clear of its bottom bar and its button.
+ */
+const PHONE = { w: 390, h: 870, r: 44 };
 /**
  * The shells round the screens: a phone's edge (`edge` wide, all round); a laptop's, its edge round the screen and
  * its base under it, `over` wider than the edge each side and `foot` high.
@@ -52,10 +55,8 @@ function windowAt(room: { w: number; h: number }, narrow: boolean): Box & { k: n
   // What the shell adds round the screen: left, top, right and bottom.
   const l = narrow ? SHELL.edge : SHELL.laptop.edge + SHELL.laptop.over, t = narrow ? SHELL.edge : SHELL.laptop.edge;
   const b = narrow ? SHELL.edge : SHELL.laptop.edge + SHELL.laptop.foot;
-  const w = narrow ? 380 : Math.min(1040, room.w - 48 - 2 * l);
-  // A phone's tall enough that its four stations stand clear of its bottom bar and its button (which would come over
-  // the last one as the rest of the app shows).
-  const h = narrow ? 920 : Math.min(600, room.h - 24 - t - b);
+  const w = narrow ? PHONE.w : Math.min(1040, room.w - 48 - 2 * l);
+  const h = narrow ? PHONE.h : Math.min(600, room.h - 24 - t - b);
   const k = narrow ? Math.min(1, (room.h - 16) / (h + t + b), (room.w - 24) / (w + 2 * l)) : 1;
   return { x: (room.w - w * k) / 2, y: (room.h - (h + t + b) * k) / 2 + t * k, w, h, k };
 }
