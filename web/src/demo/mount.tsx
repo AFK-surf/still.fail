@@ -39,6 +39,8 @@ let mounted = false;
 
 const chats = openingChats();
 const subs = new Map<number, Topic>();
+/** Every topic the page has subscribed to, by its JSON (demoTape). */
+const seen = new Map<string, Topic>();
 /** The calls under way, to cancel. */
 const under = new Map<number, AbortController>();
 let post: (message: unknown) => void = () => undefined;
@@ -403,6 +405,7 @@ setCore(new CoreClient((onMessage) => {
       const message = raw as { id: number; subscribe?: Topic; unsubscribe?: boolean; call?: string; params?: Record<string, unknown>; cancel?: boolean };
       if (message.subscribe) {
         subs.set(message.id, message.subscribe);
+        seen.set(JSON.stringify(message.subscribe), message.subscribe);
         post(said(message.id, message.subscribe));
       } else if (message.unsubscribe) {
         subs.delete(message.id);
@@ -506,6 +509,16 @@ export function DemoApp({ phone }: { phone: boolean }) {
 /** The made-up core's chats, and telling the page they changed: for the browser checks (test/browser), which play
  * what a station would say into a chat. */
 export const demoCore = { chats, publish };
+
+/**
+ * Every topic the page has subscribed to and what it says now, and those of `extra` (apps/mbui/scripts/web-layout.mjs:
+ * the same data given to mbui's app, to hold its layout against the page's). Its errors left out.
+ */
+export function demoTape(extra: Topic[] = []): { topic: Topic; value: unknown }[] {
+  const all = new Map(seen);
+  for (const t of extra) all.set(JSON.stringify(t), t);
+  return [...all.values()].flatMap((topic) => { const v = valueOf(topic); return v instanceof CoreError || v === undefined ? [] : [{ topic, value: v }]; });
+}
 
 /** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */
 /** The demo's chats stop where they are, nobody at work any more (the stories' tests, to look at a page that holds still). */

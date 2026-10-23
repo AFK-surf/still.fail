@@ -175,6 +175,9 @@ struct Node {
   // what it is called where it shows no words of its own (an icon's button: Compose's contentDescription), found by
   // them as words are (Ctx::box `label`; a drive's or a test's `=WORDS`)
   mut label : String
+  // the name of what it stands for in another app's tree (Ctx::box `name`: a web page's class, `shellCss.dock`), read
+  // only by a tool comparing the two (Tester::boxes), "" none
+  mut name : String
   // layout results, absolute, in logical pixels, kept from frame to frame
   // in the slot (a subtree laid out as last frame is moved, not laid out)
   mut x : Double
@@ -316,6 +319,7 @@ fn Node::new() -> Node {
     flow: false,
     line_gap: -1.0,
     label: "",
+    name: "",
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -393,6 +397,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.flow = false
   self.line_gap = -1.0
   self.label = ""
+  self.name = ""
   self.rich = None
   self.lines = []
   self.shapes = []

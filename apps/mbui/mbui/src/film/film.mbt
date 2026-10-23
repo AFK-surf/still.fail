@@ -176,3 +176,10 @@ fn number(s : String) -> Double? {
     _ => None
   }
 }
+
+///|
+/// This host as a Tester's live host (Tester::new's `live`: its text and pictures this host's), for a program that
+/// runs an app in a Tester without filming it (still.fail's src/sflayout). Asked before the Tester gives its own.
+pub fn live() -> @ui.Live {
+  { host: @hostapi.host(), turn: fn() { spin(1.0) } }
+}

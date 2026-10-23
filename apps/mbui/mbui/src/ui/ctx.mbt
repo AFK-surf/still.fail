@@ -661,7 +661,8 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// `flow`: a row that goes on in lines when what it holds does not fit, each thing in it as wide as it is, `gap` apart
 /// along the line and between the lines, or `line_gap` between the lines (Compose's FlowRow and its two spacedBy).
 /// `label`: what it is called where it shows no words (an icon's button, as Compose's contentDescription), found by
-/// them whole as words are (a drive's `=WORDS`, Tester::locate).
+/// them whole as words are (a drive's `=WORDS`, Tester::locate). `name`: what it stands for in another app's tree (the
+/// web page's class it is ported from, `shellCss.dock`), read only by a tool comparing the two (Tester::boxes).
 ///
 /// `style` (style.mbt) says how it looks, its state blocks picked by its own state: pressed, hovered, focused by `id`
 /// (as Ctx::pressed, hovered, focus_shown read them), `selected` and `disabled` as said, dark and narrow by the theme
@@ -732,6 +733,7 @@ pub fn Ctx::box(
   flow? : Bool = false,
   line_gap? : Double = -1.0,
   label? : String = "",
+  name? : String = "",
   id? : Int = 0,
   taps? : Bool = true,
   body : () -> Unit,
@@ -768,6 +770,7 @@ pub fn Ctx::box(
   n.flow = flow
   n.line_gap = line_gap
   n.label = label
+  n.name = name
   n.w = first(
     w,
     match st.w {
