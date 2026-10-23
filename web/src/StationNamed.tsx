@@ -10,12 +10,13 @@ export function StationNamed({ emoji, icon, name, size = 12 }: { emoji?: string 
 
 /**
  * Its mark alone, by its address, before words about it: as the workspace's stations list has it; nothing without one.
- * `alone`: a picture of its own (a row's), the server icon without one.
+ * `alone`: a picture of its own (a row's), the server icon without one. `block`: a box of its own in a flex line, not
+ * sitting in the words' line (whose baseline puts it a little low beside them).
  */
-export function StationMarkAt({ station, size = 12, alone }: { station: string | null | undefined; size?: number; alone?: boolean }) {
+export function StationMarkAt({ station, size = 12, alone, block }: { station: string | null | undefined; size?: number; alone?: boolean; block?: boolean }) {
   const look = useStationLook(station ?? null);
   if (alone) return <StationMark emoji={look?.emoji} icon={look?.icon} size={size} />;
-  return look && (look.emoji || look.icon) ? <StationMark emoji={look.emoji} icon={look.icon} size={size} className={css.inline} /> : null;
+  return look && (look.emoji || look.icon) ? <StationMark emoji={look.emoji} icon={look.icon} size={size} className={block ? css.block : css.inline} /> : null;
 }
 
 /** Its name by its address, where only its name is at hand. */

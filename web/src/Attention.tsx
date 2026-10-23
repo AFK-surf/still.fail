@@ -72,12 +72,11 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
   const jobs = useLongJobs(scope, useToast()).groups.reduce((sum, g) => sum + g.jobs.length, 0);
   const more = !!rail && (!!trouble || jobs > 0);
   const lit = !!rail && (troubleNew || jobs > 0);
+  // Looked at as the bell opens (kept at once), drawn as looked at once it closes: new while it is first read.
   const opened = (on: boolean) => {
     setOpen(on);
-    if (on && rail && trouble) {
-      troubleKeep(scope, "seen", trouble.text);
-      setTroubleSeen(trouble.text);
-    }
+    if (on && rail && trouble) troubleKeep(scope, "seen", trouble.text);
+    if (!on) setTroubleSeen(troubleRead(scope, "seen"));
   };
   // Its stations all reached again: a trouble later in the same words is new.
   useEffect(() => {
@@ -135,7 +134,7 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
               <div role="button" tabIndex={0} className={css.item} data-seen={!troubleNew || undefined}
                 onClick={() => goStations()} onKeyDown={(e) => { if (e.key === "Enter") goStations(); }}>
                 <span className={css.dot} data-kind="alert" role="img" aria-hidden="true" />
-                <span className={css.itemText}><span className={css.itemTitle}><StationMarkAt station={trouble.station} />{trouble.text}</span></span>
+                <span className={css.marked}><StationMarkAt station={trouble.station} block /><span className={css.itemText}><span className={css.itemTitle}>{trouble.text}</span></span></span>
                 <button type="button" className={css.dismiss} title={t("web-main.attention.dismissTrouble")}
                   onClick={(e) => { e.stopPropagation(); letTroubleGo(trouble.text); }}>{t("web-main.attention.dismiss")}</button>
               </div>
