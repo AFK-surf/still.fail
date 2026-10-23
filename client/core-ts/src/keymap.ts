@@ -1,8 +1,10 @@
 // The app's keyboard shortcuts (the prefs' `keymap`; `keys.set`): each action, where it works, the keys of its own and
 // those changed on this device (the prefs' `keys`, the desktop app's only), as a key cap shows them on this device.
-// A client only turns a key press into a binding (its key events are its own) and looks it up here.
+// A client only turns a key press into a binding (its key events are its own) and looks it up here. Of the core it
+// reads only its words: the web's demo makes its keymap with it (web/src/demo/mount.tsx).
 import { t } from "./i18n.ts";
-import { isObject } from "./util.ts";
+
+const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
 type Spec = {
   /// Where it works: anywhere in the app, or in a chat.

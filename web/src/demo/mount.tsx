@@ -26,6 +26,7 @@ import * as station from "./station.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
 import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
+import * as keymap from "../../../client/core-ts/src/keymap.ts";
 import { inkKept } from "../../../client/core-ts/src/highlight.ts";
 import { bookAnswer, keepBook, keptBook, searchBook } from "../../../client/core-ts/src/reader.ts";
 import { find as findCommands } from "../../../client/core-ts/src/commands.ts";
@@ -90,7 +91,7 @@ function demoValueOf(topic: Topic): unknown {
     case "status": return { items: [] };
     case "connection": return { items: [] };
     // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
-    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts) };
+    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts), keymap: keymap.view({ ...prefs, device: DEVICE }) };
     case "doing": return { doing: [] };
     // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
     case "composer": return composerView(String(topic.key ?? ""));
@@ -280,6 +281,8 @@ const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BA
 
 /** The prefs as the visitor set them here (the sidebar's list, …), kept for the page's life as a core keeps them. */
 const prefs: Record<string, unknown> = {};
+/** This device as a core told it would have it (prefs.ts device): what its keymap goes by. */
+const DEVICE = { app: window.stillfailDesktop ? "desktop" : "web", mac: /Mac|iPhone|iPad/.test(navigator.platform) };
 
 /** A message no longer asking anything of the viewer. */
 const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
@@ -307,6 +310,14 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
     }
     setTimeout(publish, 0);
     return null;
+  }
+  if (name === "keys.set") {
+    const { patch, moved, said } = keymap.change({ ...prefs, device: DEVICE }, typeof params.action === "string" ? params.action : null, Array.isArray(params.keys) ? params.keys.map((k) => keymap.binding(k) ?? String(k)) : null);
+    // As prefs.set keeps a map: null takes an action's entry out.
+    if (patch) prefs.keys = Object.fromEntries(Object.entries({ ...(prefs.keys as Record<string, unknown> | undefined), ...patch }).filter(([, v]) => v !== null));
+    else delete prefs.keys;
+    setTimeout(publish, 0);
+    return { moved, said };
   }
   if (name === "shareIn.open" && typeof params.source === "string") {
     return shareOpen(params.source, String(params.station), params.id as string | undefined, params.title as string | undefined, typeof params.key === "string" && params.key.startsWith("new:") ? params.key : undefined);
