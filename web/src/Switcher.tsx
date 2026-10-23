@@ -138,7 +138,7 @@ function useFoundCommands(query: string, all: Offered[]): Listed[] {
   const byId = new Map(all.map((c) => [c.id, c]));
   return groups.flatMap((group) => group.commands.flatMap((found) => {
     const c = byId.get(found.id);
-    return c ? [{ id: c.id, group: group.group, heading: group.title, label: found.label, icon: c.icon, keys: c.keys, run: c.run }] : [];
+    return c ? [{ id: c.id, group: group.group, heading: group.title, label: found.label, icon: c.icon, keys: c.keys ?? null, run: c.run }] : [];
   }));
 }
 
