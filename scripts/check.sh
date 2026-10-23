@@ -216,14 +216,14 @@ if part ts; then
 
   # The clients' types and the UIs' operation bindings are made from the core's (client/core-ts/src/shapes/schema.ts,
   # src/ops.ts): checked in, and never other than what those make.
-  if touches '^client/core-ts/(src/shapes/|src/ops\.ts$|scripts/(shapes|operations)\.ts$)|^web/src/core/(shapes|operations)\.ts$|/data/(Shapes|Operations)\.kt$'; then
+  if touches '^client/core-ts/(src/shapes/|src/ops\.ts$|scripts/(shapes|operations)\.ts$)|^web/src/core/(shapes|operations)\.ts$'; then
     prep core deps client/core-ts
     step "clients' types" after core node client/core-ts/scripts/shapes.ts --check
     step "operation bindings" after core node client/core-ts/scripts/operations.ts --check
   fi
 
-  if touches '^design/(station-)?icons/|^scripts/icons\.py$|^web/ui/src/icons\.tsx$|/ui/Icons\.kt$'; then
-    step icons python3 scripts/icons.py --check
+  if touches '^design/(station-)?icons/|^apps/mbui/(tools/icons/|scripts/icons$)|^web/ui/src/icons\.tsx$'; then
+    step icons bash apps/mbui/scripts/icons . --check
   fi
   # Every CI job may take 10 minutes at most, and says so (timeout-minutes).
   if touches '^\.github/workflows/|^scripts/ci-timeouts\.py$'; then
@@ -231,7 +231,16 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
-  # (the Android app in Kotlin frozen since 2026-10-23: its own checks gone, this one on the mbui app's code in its place)
+  # The Android app in Kotlin (apps/android) is frozen since 2026-10-23, as asked: nothing in it is added or changed
+  # (its AGENTS.md says so; taken out is let through); the Android app developed is apps/mbui. (CI's plan holds it too.)
+  if [ "$mode" != all ] && touches '^apps/android/'; then
+    case "$mode" in
+      commit) git diff --cached --name-only --diff-filter=d -- apps/android ;;
+      *) git diff --name-only --diff-filter=d "$range" -- apps/android ;;
+    esac | grep -vxE 'apps/android/(AGENTS|CLAUDE)\.md' > "$tmp/android-frozen" || true
+    step "the Kotlin Android app frozen (apps/android: change apps/mbui instead)" sh -c "! grep . '$tmp/android-frozen'"
+  fi
+  # (its own checks gone with it; this one on the mbui app's code in its place)
   if touches '^(web/src|web/ui|apps/desktop/src|apps/mbui/src)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/mbui/src'
   fi

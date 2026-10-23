@@ -1,6 +1,6 @@
 // The UIs' bindings of the core's operations, made from their contracts (src/ops.ts `PARAMS`): web/src/core/operations.ts
-// and the Android app's data/Operations.kt. `node scripts/operations.ts` writes them; `--check` fails when they are
-// not what the contracts make. Optional fields keep "left out" apart from an explicit null; bodies the core leaves
+// (the Kotlin Android app's data/Operations.kt was made here too, until that app was frozen on 2026-10-23: it is left as
+// it was). `node scripts/operations.ts` writes them; `--check` fails when they are not what the contracts make. Optional fields keep "left out" apart from an explicit null; bodies the core leaves
 // open (input/settings/state/access) stay JSON.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -52,60 +52,8 @@ function typescript(): string {
   return ts.join("\n");
 }
 
-function kotlin(): string {
-  const kt = [
-    `// ${SAID}`,
-    "package fail.still.android.data",
-    "",
-    "import kotlinx.serialization.json.*",
-    "import kotlin.properties.ReadWriteProperty",
-    "import kotlin.reflect.KProperty",
-    "",
-    "/** A field is absent until assigned; assigning null sends JSON null (reset to default). */",
-    `val UNTRACKED_OPERATIONS = setOf(${untracked.map((n) => `"${n}"`).join(", ")})`,
-    "",
-    "open class OperationFields {",
-    "    internal val fields = mutableMapOf<String, JsonElement>()",
-    "    protected fun <T> field(name: String, encode: (T) -> JsonElement) = object : ReadWriteProperty<Any?, T?> {",
-    "        private var value: T? = null",
-    "        override fun getValue(thisRef: Any?, property: KProperty<*>): T? = value",
-    "        override fun setValue(thisRef: Any?, property: KProperty<*>, value: T?) {",
-    "            this.value = value; fields[name] = value?.let(encode) ?: JsonNull",
-    "        }",
-    "    }",
-    "}",
-    "",
-  ];
-  const types: Record<string, string> = { string: "String", number: "Long", boolean: "Boolean", strings: "List<String>", json: "JsonElement" };
-  const enc: Record<string, string> = { string: "JsonPrimitive(it)", number: "JsonPrimitive(it)", boolean: "JsonPrimitive(it)", strings: "JsonArray(it.map(::JsonPrimitive))", json: "it" };
-  for (const [scope, cls] of [["station", "Station"], ["account", "Cloud"]] as const) {
-    kt.push(`class ${cls}Operations(private val call: suspend (String, JsonObject) -> JsonElement) {`);
-    for (const [sc, name, fields] of rows) {
-      if (sc !== scope) continue;
-      const method = camel(name);
-      const klass = `${method[0].toUpperCase()}${method.slice(1)}Fields`;
-      const required = fields.filter(([, , r]) => r);
-      const optional = fields.filter(([, , r]) => !r);
-      if (optional.length > 0) {
-        kt.push(`    class ${klass} : OperationFields() {`);
-        for (const [k, t] of optional) kt.push(`        var ${k}: ${types[t]}? by field<${types[t]}>("${k}") { ${enc[t]} }`);
-        kt.push("    }");
-      }
-      const params = required.map(([k, t]) => `${k}: ${types[t]}`);
-      if (optional.length > 0) params.push(`fill: ${klass}.() -> Unit = {}`);
-      kt.push(`    suspend fun ${method}(${params.join(", ")}): JsonElement {`);
-      kt.push(optional.length > 0 ? `        val values = ${klass}().apply(fill).fields` : "        val values = mutableMapOf<String, JsonElement>()");
-      for (const [k, t] of required) kt.push(`        values["${k}"] = ${enc[t].replace(/\bit\b/g, k)}`);
-      kt.push(`        return call("${name}", JsonObject(values))`, "    }");
-    }
-    kt.push("}", "");
-  }
-  return kt.join("\n");
-}
-
 const made: [string, string][] = [
   [repo("web/src/core/operations.ts"), typescript()],
-  [repo("apps/android/shared/src/main/kotlin/fail/still/android/data/Operations.kt"), kotlin()],
 ];
 if (process.argv.includes("--check")) {
   const stale = made.filter(([path, text]) => readFileSync(path, "utf8") !== text);
