@@ -1,18 +1,138 @@
 {
+  "blocked": {
+    "left": 12060,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the illustration's faces drawn otherwise (their eyes and cheeks: the drawable's paths as mbui strokes them); its buttons' edges; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 2
+  },
+  "chat": {
+    "left": 35028,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 18
+  },
+  "chat-agent": {
+    "left": 87473,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the agent's sheet over it as Android's, its figures' tiles a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 24
+  },
+  "chat-attach": {
+    "left": 442264,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; compare.png in the draft a picture's tile in mbui, a file's chip on Android (its preview), the list above it placed otherwise; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 31
+  },
   "chat-cards": {
-    "left": 135096,
+    "left": 135134,
     "why": "not yet as Android's: the top bar has no blur of what scrolls under it; the list stands at another place (Android's shows build.log's card at its top, the mbui app 发送到星火#发布 above it); the avatars of the title (你 against 林); words a pixel apart along every line; words compared by where they stand since #989 (their boxes out of the pixels); the title's avatars' letters a pixel high: Compose sets a line a font taller than it as its font (and a pixel more where they differ by an odd number), which mbui now does too, and places what it centres on whole pixels (rounding half up), which mbui does not yet (the letter's box is centred to half a pixel), so the A that was half a pixel off is one",
     "texts_left": 20
   },
-  "history": {
-    "left": 4344,
-    "why": "not yet as Android's: the title 执行历史 stands left of Android's (centred there); the steps' lines a few px higher than Android's; words compared by where they stand since #989 (their boxes out of the pixels)",
-    "texts_left": 12
+  "chat-compose": {
+    "left": 426312,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the draft's three lines make the composer taller on Android's, the list above it placed otherwise; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 27
   },
-  "settings": {
-    "left": 4757,
-    "why": "not yet as Android's: the rows' icons' edges a pixel apart (mbui's strokes against Android's VectorDrawable's: where each icon stands is the same), as Home's marks and icons; a few words a fraction of a pixel apart (设置, the avatar's 林, and on the workspace's card its name, its line and its letter half a pixel high, where Compose rounds the card's padding and heights to whole pixels, which mbui does not yet); words compared by where they stand since #989 (their boxes out of the pixels)",
+  "chat-failed": {
+    "left": 18983,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the failed message's 未发送 · 重试 · 删除 line; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 11
+  },
+  "chat-info": {
+    "left": 60622,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the chat's sheet over it as Android's, its rows a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 21
+  },
+  "chat-job": {
+    "left": 67592,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the job's sheet: its tabs' segment and the 停止 button's ground; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 28
+  },
+  "chat-jobs": {
+    "left": 61729,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the services' sheet: its rows' ground and chevrons; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 21
+  },
+  "chat-loading": {
+    "left": 20880,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the skeleton's blocks' corners and the composer's edge a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 1
+  },
+  "chat-login": {
+    "left": 112289,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the login card's width and its 在浏览器里登录 button; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 17
+  },
+  "chat-md": {
+    "left": 113010,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the table's rows and the code blocks' heads (语言, 复制) placed otherwise; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 42
+  },
+  "chat-pick": {
+    "left": 62935,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the word held and its bar (引用 · 复制 · 全选) a few px apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 18
+  },
+  "chat-quote": {
+    "left": 461995,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the quote in the composer and its 添加说明 line, the composer taller on Android's; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 32
+  },
+  "chat-sending": {
+    "left": 19341,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the sending message's 正在发送 line; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 11
+  },
+  "chat-update": {
+    "left": 153276,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the messages above a decision card stand 4 dp higher than Android's (等 X 决定 further from its card) and two of one author's messages in a row further apart; the quoted line's ❝ a glyph of Android's line, an icon beside it in mbui (that line and the next set apart); the composer capsule's shadow, the bar's avatars and agent mark a pixel apart; the station's update popover open in mbui (the core says it is), closed on Android's; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 26
+  },
+  "decisions": {
+    "left": 147979,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): two of one author's messages in a row further apart than Android's, everything under them lower; the card's numbers' circles; the composer's shadow; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 13
+  },
+  "decisions-idle": {
+    "left": 2576,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the illustration's face and the summary's figures a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 3
+  },
+  "decisions-text": {
+    "left": 7993,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the composer's shadow and the text card's field a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
     "texts_left": 5
+  },
+  "drive": {
+    "left": 57513,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): each row 1 dp shorter and its icon and words 2 dp left of Android's (EntryRow's paddings), the card shorter with them; the file icons' strokes; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 19
+  },
+  "drive-chosen": {
+    "left": 358561,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the rows as drive's (shorter, their words further left); a chosen row's ground spans the card's width on Android's, inset in mbui; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 20
+  },
+  "drive-empty": {
+    "left": 1821,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the empty folder's icon and 上传文件's ground a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 6
+  },
+  "drive-entry": {
+    "left": 161072,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the rows as drive's; the entry's sheet's rows and icons placed otherwise; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 26
+  },
+  "drive-sub": {
+    "left": 48843,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the rows as drive's (shorter, their words further left); a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 10
+  },
+  "files": {
+    "left": 3162,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the roots' icons' strokes a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 6
+  },
+  "history-details": {
+    "left": 6254,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the station's name: Studio in mbui, st1 (its id) on Android's; the figures' tiles' edges; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 9
   },
   "home": {
     "left": 11977,
@@ -27,5 +147,120 @@
         "why": "the bottom bar's glass and 令's: Android's picture has Haze's stand-in there (its background and tint, no blur: the emulator's capture draws none; 令 the accent at 86% over the page, as Bar.kt's drawBehind), mbui frosts the rows under them as a phone's Haze does"
       }
     ]
+  },
+  "home-jobs": {
+    "left": 38589,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the long jobs' row and the bar's glass (Haze's stand-in on Android's: no blur in its capture); a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 18
+  },
+  "home-sheet": {
+    "left": 115373,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the workspaces' sheet's rows placed otherwise (current workspace's tile, the accounts' rows); a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 33
+  },
+  "landing": {
+    "left": 12312,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the illustration's faces drawn otherwise (their eyes and cheeks); the buttons' edges; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 1
+  },
+  "landing-invited": {
+    "left": 12418,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the illustration's faces drawn otherwise; the invitation's row and its 加入 a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 1
+  },
+  "newchat": {
+    "left": 21989,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the illustration's face; the choosers over the composer and its shadow; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 10
+  },
+  "place": {
+    "left": 40833,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the bar's glass (Haze's stand-in on Android's, mbui frosts) and its places' icons; the roots' icons; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 5
+  },
+  "settings": {
+    "left": 4757,
+    "why": "not yet as Android's: the rows' icons' edges a pixel apart (mbui's strokes against Android's VectorDrawable's: where each icon stands is the same), as Home's marks and icons; a few words a fraction of a pixel apart (设置, the avatar's 林, and on the workspace's card its name, its line and its letter half a pixel high, where Compose rounds the card's padding and heights to whole pixels, which mbui does not yet); words compared by where they stand since #989 (their boxes out of the pixels)",
+    "texts_left": 5
+  },
+  "settings-appearance": {
+    "left": 42743,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the theme's choice: 浅色 chosen in mbui, 跟随系统 on Android's (Android's test opens it with prefs of its own, not the screen's); the segments' grounds; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 9
+  },
+  "settings-archive": {
+    "left": 2625,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the rows' 恢复/删除 icons a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 7
+  },
+  "settings-connects": {
+    "left": 1853,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the Slack marks and the rows' dots a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 6
+  },
+  "settings-home": {
+    "left": 4757,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the rows' icons' edges a pixel apart (mbui's strokes against Android's VectorDrawables); 外观's value: 浅色 in mbui, 跟随系统 on Android's (its test's prefs, not the screen's); a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 7
+  },
+  "settings-home-dark": {
+    "left": 4250,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the rows' icons' edges a pixel apart (mbui's strokes against Android's VectorDrawables); 外观's value: 深色 in mbui, 跟随系统 on Android's (its test's prefs); a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 7
+  },
+  "settings-me": {
+    "left": 408,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the avatar's letter and the 当前 tag a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 5
+  },
+  "settings-memory": {
+    "left": 7673,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the rows' heights and chevrons a pixel apart down the list; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 18
+  },
+  "settings-memory-doc": {
+    "left": 6655,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the switch's thumb and the tabs' chips a pixel apart; the card's rows; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 15
+  },
+  "settings-notify-off": {
+    "left": 4757,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the rows' icons' edges a pixel apart (mbui's strokes against Android's VectorDrawables); 外观's value as settings-home's; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 7
+  },
+  "settings-profile": {
+    "left": 13746,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the quota bars' segments, the switches' thumbs, the buttons' grounds a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 30
+  },
+  "settings-profiles": {
+    "left": 47663,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the logged-in Codex row: its mark and its 使用此账号; the quota tags; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 10
+  },
+  "settings-station": {
+    "left": 14963,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the dials' bars and the tabs' segment a pixel apart down the page; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 33
+  },
+  "settings-stations": {
+    "left": 6505,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the offline machine's illustration drawn otherwise; the memory tag; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 13
+  },
+  "settings-usage": {
+    "left": 9819,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the chart's bars' edges and the segments a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 8
+  },
+  "settings-vault": {
+    "left": 311465,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the request's choices: Android's four (仅本次, 本对话 1 小时内, 本对话直到归档 recommended, 拒绝) with their longer words, mbui's three (no 本对话直到归档); 已加密 against 已加锁, the default grant's section placed lower with it; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 20
+  },
+  "settings-workspace": {
+    "left": 1408,
+    "why": "not yet as Android's (2026-10-23, the first run of every screen, 39932136132): the members' avatars' letters and tags a pixel apart; a centred title's words measured from its box rather than its first letter (androidref's texts: the title's line counts apart where it is not)",
+    "texts_left": 7
   }
 }
