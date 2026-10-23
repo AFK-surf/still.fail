@@ -750,6 +750,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
     },
     version_words: fn() { update_row_words() },
     version_tap: fn() { update_row_tapped(src) },
+    local_install: fn(join) { if join { local_station_install(src, w.id) } else { local_station_update() } },
     // the system's browser (LocalUriHandler.openUri); nothing took it, said so (android-misc.link.cantOpen)
     open_link: fn(url) {
       if !@ui.open_url(url) {

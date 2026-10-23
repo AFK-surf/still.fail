@@ -879,6 +879,8 @@
   "web-pages.localStation.openLog": "打开日志",
   "web-pages.localStation.openFolder": "在 Finder 中显示数据",
   "web-pages.localStation.openFolderPc": "在资源管理器中显示数据",
+  "web-pages.localStation.doing.install": "正在下载并安装",
+  "web-pages.localStation.update": "更新到最新版",
   "web-pages.settings.title": "设置",
   "web-pages.settings.usage.days": "天数",
   "web-pages.settings.usage.failed": "无法获取用量：{error}",
