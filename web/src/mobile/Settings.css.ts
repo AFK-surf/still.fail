@@ -12,8 +12,9 @@ export const mRowIcon = style({ flex: "none", color: "var(--m-muted)" });
  */
 export const mWorkspace = style({
   display: "grid", placeItems: "center", flex: "none", width: "46px", height: "46px", overflow: "hidden",
-  borderRadius: `calc(20px * ${vars.cornerScale} - 14px)`, cornerShape: vars.cornerShape, background: "var(--m-chip)",
-  color: "var(--m-muted)", fontSize: "22px", fontWeight: "600", lineHeight: "1",
+  borderRadius: `calc(20px * ${vars.cornerScale} - 14px)`, // own corner: concentric with its card's (mCard 20, 14 in)
+  cornerShape: vars.cornerShape, background: "var(--m-chip)",
+  color: "var(--m-muted)", fontSize: vars.textHeading, fontWeight: "600", lineHeight: "1",
   selectors: {
     "&[data-marked]": { color: "var(--m-ink)" },
     "&[data-picture]": { background: "none" },
