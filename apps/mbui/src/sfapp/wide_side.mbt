@@ -93,14 +93,15 @@ fn nav_row(
 ///|
 /// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
 /// 140ms` ease out): the pointer's ground in and out, the lit one's, as the state changes.
-fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool) -> Int64 {
+fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> Int64 {
   let t = @sf.theme()
+  let lit = lit.unwrap_or(t.p.selected)
   let h = @kit.animate(c, key + "/hover", if hover { 1.0 } else { 0.0 }, transition=nav_fade)
   let o = @kit.animate(c, key + "/on", if on { 1.0 } else { 0.0 }, transition=nav_fade)
   if h <= 0.0 && o <= 0.0 {
     0L
   } else {
-    @sf.over(@sf.alpha(t.p.hover, h * (1.0 - o)), @sf.alpha(t.p.selected, o))
+    @sf.over(@sf.alpha(t.p.hover, h * (1.0 - o)), @sf.alpha(lit, o))
   }
 }
 
@@ -901,8 +902,9 @@ fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       for i, d in shown {
         let v = Some(d)
+        // the question it asks, uncut (the core's `question`; DecisionDesk.tsx question), else its title
         let question = match text(v, "question") {
-          "" => text(v, "text")
+          "" => text(v, "title")
           q => q
         }
         if nav_row(c, "zou-nav/" + decision_key(d), i == 0, pady=8.0, align=AStart, fn() {

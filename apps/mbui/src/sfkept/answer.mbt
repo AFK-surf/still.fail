@@ -92,6 +92,14 @@ pub fn has(name : String, params : Json) -> Bool {
 /// beside it; an error where it is not kept (said on the output); None for a call that is not one of these.
 pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Bytes?), Json]? {
   match name {
+    // the rail as drawn from the prefs kept (`rail`, `rails`: rail.ts railView), by them as JSON
+    "railView" => {
+      let key = params.stringify()
+      match kept("railView").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "railView", "prefs": params })
+      }
+    }
     "markdown" => {
       let text = word(params, "text")
       match kept("markdown").get(text) {

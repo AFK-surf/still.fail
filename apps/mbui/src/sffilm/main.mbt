@@ -21,6 +21,10 @@ fn main {
       Some(s) => s
       None => {
         let s = @sfapp.fixture_app(mode)
+        // MBUI_UPDATE=<version>: a newer build offered
+        if @film.arg("MBUI_UPDATE") != "" {
+          @sfapp.fixture_update(@film.arg("MBUI_UPDATE"))
+        }
         let s = if late > 0.0 { @sfapp.round_trip(s, late) } else { s }
         if dark {
           @sf.set_dark(Some(true))

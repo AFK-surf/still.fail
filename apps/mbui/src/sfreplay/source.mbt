@@ -66,12 +66,39 @@ fn image(call : String, params : Json, key : String, name : String) -> String {
 }
 
 ///|
+/// The prefs of a tape from a core before the rail was the core's (prefs `railView`, core-ts rail.ts): the rail as the
+/// real core draws it from what those prefs keep (`rail`, `rails`), kept (src/sfkept), a pure function of them.
+fn with_rail_view(v : Json?) -> Json? {
+  match v {
+    Some(Object(m)) if !m.contains("railView") => {
+      let kept : Map[String, Json] = {}
+      for k in ["rail", "rails"] {
+        match m.get(k) {
+          Some(x) => kept[k] = x
+          None => ()
+        }
+      }
+      match @sfkept.answer("railView", Json::object(kept), None) {
+        Some(Ok((rail, _))) => {
+          let out = m.copy()
+          out["railView"] = rail
+          Some(Json::object(out))
+        }
+        _ => v
+      }
+    }
+    _ => v
+  }
+}
+
+///|
 /// The app's source over @core, as src/stillfail's (without its logs and its read-only runs).
 pub fn source() -> @sfapp.Source {
   {
     topic: fn(name, params) {
       let s = @core.subscribe(name, params~)
-      { value: s.value, error: s.error, version: s.version }
+      let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
+      { value, error: s.error, version: s.version }
     },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up

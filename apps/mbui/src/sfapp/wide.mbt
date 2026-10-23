@@ -246,6 +246,7 @@ let side_moves : Array[(String, Array[String])] = [
   ("list-mark", ["--mark"]),
   ("page-bar", ["padding-left", "margin-left", "margin-right"]),
   ("page-bar-end", ["width"]),
+  ("side-update", ["left", "transform"]),
 ]
 
 ///|
@@ -460,7 +461,22 @@ fn wide_frame(
   // shown a while, the page moved aside as wide as it was (shell.css.ts main's left: --peek-shift), its bars from the
   // sidebar's edge to the window's (brand.css.ts); closed, their padding clear of the bar (and of the window's buttons)
   let shift = if peek { rail_ws.peek_shift } else { 0.0 }
-  rail_ws.bar_pl = if bar && inset { bar_closed_inset } else { bar_in }
+  // (closed, with 更新 over their start: clear of it too, brand.css.ts)
+  rail_ws.closed = bar
+  let updating = !gated && side_update_shown()
+  rail_ws.bar_pl = if !bar {
+    bar_in
+  } else if updating {
+    if inset {
+      bar_update_inset
+    } else {
+      bar_update_in
+    }
+  } else if inset {
+    bar_closed_inset
+  } else {
+    bar_in
+  }
   rail_ws.bar_ml = if peek { dmax(0.0, s - closed_bar_gap - shift) } else { 0.0 }
   rail_ws.bar_mr = shift
   // what the sidebar's parts work out from, where the move has got to: its top row (Sidebar.css.ts brand: none in the
@@ -504,6 +520,9 @@ fn wide_frame(
     })
     |> ignore
     dock(c, src, w, all, bar, peek, s, col, top, foot)
+    if updating {
+      side_update(c, src, bar, s, inset)
+    }
   })
   // (the sidebar's edge: on its right edge open, between the bar and the page folded, at the edge of the sidebar shown
   // a while; dragged, unless it is on the fold)
@@ -538,6 +557,82 @@ fn page_bar_room() -> (Double, Double, Double, Double) {
 fn page_bar_end(c : @ui.Ctx) -> Unit {
   c.box(moves="page-bar-end", w=Px(rail_ws.bar_mr), fn() {  }) |> ignore
 }
+
+///|
+/// Whether the desktop app has a newer build to offer, or one on its way in (brand.tsx UpdateButton: the app's update
+/// state, none while there is none).
+fn side_update_shown() -> Bool {
+  update.available is Some(_) || update_busy() || update.phase == "failed"
+}
+
+///|
+/// The desktop app's newer build (brand.tsx UpdateButton, brand.css.ts sidebarUpdate): 更新 at the open sidebar's top
+/// right, 12 in from its edge, or past the rail (and the window's buttons) when it is closed, moved with it; how far it
+/// has downloaded, 正在重启 while it is put in place, 更新失败，重试 when it failed (why, its tip). Pressed, the build is
+/// downloaded and the app restarts as it.
+fn side_update(c : @ui.Ctx, src : Source, bar : Bool, s : Double, inset : Bool) -> Unit {
+  // (its phase as the host says it, what went wrong said once: updates.mbt)
+  update_progress() |> ignore
+  let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
+  let busy = update_busy()
+  let label = match update.phase {
+    "downloading" | "retrying" =>
+      fill("web-main.appUpdate.downloading", [("percent", dmax(0.0, number(v, "percent")).to_int().to_string())])
+    "installing" => tr("web-main.appUpdate.restarting")
+    "failed" => tr("web-main.appUpdate.failed")
+    _ => tr("web-main.versions.update")
+  }
+  let tip = if update.phase == "failed" {
+    update_error(text(v, "error"))
+  } else {
+    fill("web-main.appUpdate.title", [("version", text(update.available, "versionName")), ("app", "still.fail")])
+  }
+  let id = c.id("side/update")
+  // open, its end 12 in from the sidebar's (translateX(-100%)); closed, its start past the rail and the window's buttons
+  let width = match c.laid_size(id) {
+    Some((w, _)) => w
+    None => 0.0
+  }
+  let (left, tx) = if bar {
+    (if inset { update_closed_inset } else { update_closed_in }, 0.0)
+  } else {
+    (rail_w + s - bar_in, -width)
+  }
+  c.cursor(id, Hand)
+  c.layer(fn() {
+    let b = c.box(style=update_at, moves="side-update", left~, top=update_top, tx~, id~, fn() {
+      @sf.pill(c, label, tone=Accented)
+    })
+    c.semantics(b, Button, id~, label~)
+  })
+  |> ignore
+  @sf.tip(c, "side/update-tip", id, tip, side=Bottom)
+  if c.clicked(id) && !busy {
+    update_install(src)
+  }
+}
+
+///|
+/// Where 更新 is (brand.css.ts sidebarUpdate): 11 down in the desktop app; closed, 68 from the window's edge (80 with
+/// the window's buttons in the app's top row); the page bars' start clear of it then (72, 84).
+let update_top : Double = 11.0
+
+///|
+let update_closed_in : Double = 68.0
+
+///|
+let update_closed_inset : Double = 80.0
+
+///|
+let bar_update_in : Double = 72.0
+
+///|
+let bar_update_inset : Double = 84.0
+
+///|
+/// 更新's box: its pill's size.
+// kept across runs: a value (no field of it changes)
+let update_at : @ui.Style = @ui.style(row=true)
 
 ///|
 let bar_in : Double = 12.0
@@ -618,33 +713,53 @@ fn main_page(
 // ── the rail (Rail.tsx) ─────────────────────────────────────────────────
 
 ///|
-/// The rail's places when none were chosen (Rail.tsx RAIL_DEFAULT).
-// kept across runs: a table, never written
-let rail_default : Array[String] = [
-  "attention", "chats", "files", "stations", "profiles", "connects", "usage",
-]
+/// The rail as the core says it is drawn (prefs `railView`: core-ts rail.ts railView): every place, its words and kind,
+/// the kinds the panel that adds them groups them by, the default, the rail of a workspace with none of its own (`all`)
+/// and each one's own (`by`).
+fn rail_view(src : Source) -> Json? {
+  field((src.topic)("prefs", {}).value, "railView")
+}
 
 ///|
-/// The rail's places in workspace `ws`, as kept (the prefs' `rails`), those this app has.
-fn rail_items(src : Source, ws : String) -> Array[String] {
-  let prefs = (src.topic)("prefs", {}).value
-  let kept = match field(field(prefs, "rails"), ws) {
-    Some(Array(a)) => a.map(fn(x) { text(Some(x), "") })
-    _ =>
-      match field(prefs, "rail") {
-        Some(Array(a)) => a.map(fn(x) { text(Some(x), "") })
-        _ => []
-      }
+/// Workspace `ws`'s rail (railView's `by` its own, else `all`): its places in order (`items`), those left out
+/// (`hidden`), whether it is other than the default (`changed`).
+fn rail_of(src : Source, ws : String) -> Json? {
+  let v = rail_view(src)
+  match field(field(v, "by"), ws) {
+    Some(Object(_)) as own => own
+    _ => field(v, "all")
   }
-  let known = [
-    "chats", "mine", "watching", "archive", "decisions", "attention", "files", "stations",
-    "profiles", "connects", "usage",
-  ]
-  let items = kept.filter(fn(k) { known.contains(k) })
-  if items.length() == 0 {
-    rail_default
-  } else {
-    items
+}
+
+///|
+/// A list of words (a JSON array of strings).
+fn words_in(a : Array[Json]) -> Array[String] {
+  a.filter_map(fn(x) {
+    match x {
+      String(s) => Some(s)
+      _ => None
+    }
+  })
+}
+
+///|
+/// The rail's places in workspace `ws`, in their order.
+fn rail_items(src : Source, ws : String) -> Array[String] {
+  words_in(items(rail_of(src, ws), "items"))
+}
+
+///|
+/// Every place the rail can show, in the order its settings list them (railView's `places`).
+fn rail_places(src : Source) -> Array[String] {
+  items(rail_view(src), "places").map(fn(p) { text(Some(p), "id") })
+}
+
+///|
+/// A place's words (its tip, its menu's row): as the core says them.
+fn rail_label(src : Source, place : String) -> String {
+  match items(rail_view(src), "places").search_by(fn(p) { text(Some(p), "id") == place }) {
+    Some(i) => text(Some(items(rail_view(src), "places")[i]), "label")
+    None => place
   }
 }
 
@@ -761,6 +876,10 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
 }
 
 ///|
+/// A place lit in the closed bar: the words' colour at 12% (Rail.css.ts item, closed: color-mix(text 12%)).
+let lit_in_bar : Double = 0.12
+
+///|
 /// The rail's places 9 from its edges open (in its 56's middle), 2 in the closed bar; 6 apart; its top row 41 under the
 /// window's buttons, else 5.
 let rail_in : Double = 9.0
@@ -786,7 +905,10 @@ fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit, label? 
   let key = "rail/ground/" + id.to_string()
   let ink = @kit.animate(c, key + "/ink", if on || hover { 1.0 } else { 0.0 }, transition=nav_fade)
   let b = c.box(w=Px(38.0), h=Px(38.0), align=ACenter, justify=JCenter, id~, fn() {
-    rail_square(c, nav_ground(c, key, hover, on), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
+    // (lit in the closed bar, on its floating ground: the words' colour at 12%, as plain a step above it as the
+    // selected grey is above the sidebar; Rail.css.ts item, closed)
+    let lit = if rail_ws.closed { @sf.alpha(t.p.text, lit_in_bar) } else { t.p.selected }
+    rail_square(c, nav_ground(c, key, hover, on, lit~), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
     |> ignore
   })
   // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right)
@@ -1016,7 +1138,7 @@ fn rail_place(c : @ui.Ctx, src : Source, w : Workspace, place : String, on : Boo
       } else {
         @sf.icon(c, rail_icon(place), size=20.0, color~) |> ignore
       }
-    }, label=if place == "stations" { "Station：" + rail_stations_label(src, w.id) } else { rail_label(place) })
+    }, label=if place == "stations" { "Station：" + rail_stations_label(src, w.id) } else { rail_label(src, place) })
     // what wants the person in a list, as its rows' marks: on its icon's corner while the sidebar is folded (open,
     // the rows show it; Rail.css.ts listMark)
     let tone = match place {
@@ -1082,33 +1204,6 @@ fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
 }
 
 ///|
-/// A place's name (Rail.tsx railLabel).
-fn rail_label(place : String) -> String {
-  match place {
-    "chats" => tr("web-main.rail.chats")
-    "mine" => tr("web-main.filter.chats.mine")
-    "watching" => tr("web-main.filter.watching")
-    "archive" => tr("web-main.filter.archived")
-    "decisions" => tr("web-main.rail.decisions")
-    "attention" => tr("web-main.attention.entry")
-    "files" => tr("web-pages.drive.title")
-    "stations" => "Station"
-    "profiles" => "Profile"
-    "connects" => tr("web-pages.settings.nav.connects")
-    "usage" => tr("web-pages.settings.nav.usage")
-    _ => place
-  }
-}
-
-///|
-/// The places the rail can hold (Rail.tsx RAIL_ITEMS), in its order.
-// kept across runs: a table, never written
-let rail_known : Array[String] = [
-  "chats", "mine", "watching", "archive", "decisions", "attention", "files", "stations",
-  "profiles", "connects", "usage",
-]
-
-///|
 /// The rail kept (`prefs.set {rails: {workspace: [...]}}`, on this device).
 fn rail_keep(src : Source, ws : String, items : Array[String]) -> Unit {
   (src.call)(
@@ -1131,7 +1226,7 @@ fn rail_in_view(src : Source, w : Workspace) -> String {
       4 => "archive"
       _ => "chats"
     }
-  } else if rail_known.contains(lit) {
+  } else if rail_places(src).contains(lit) {
     lit
   } else {
     ""
@@ -1156,31 +1251,31 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       return
     }
   }
-  let items = rail_items(src, w.id)
+  let kept = rail_items(src, w.id)
   // (提醒 is no page, nor the one in view at the rail's foot: put in from 自定义侧边条)
   let extra = rail_in_view(src, w)
-  let away = rail_known.filter(fn(i) { !items.contains(i) && i != "attention" && i != extra })
+  let away = rail_places(src).filter(fn(i) { !kept.contains(i) && i != "attention" && i != extra })
   let entries : Array[@kit.Entry] = []
   let icons : Map[String, String] = {}
   if away.length() > 0 {
     entries.push(@kit.menu_label(tr("web-main.rail.away")))
     for i in away {
-      entries.push(@kit.menu_item("go:" + i, label=rail_label(i)))
+      entries.push(@kit.menu_item("go:" + i, label=rail_label(src, i)))
       icons["go:" + i] = if i == "decisions" { "zou" } else { rail_icon(i) }
     }
     entries.push(@kit.menu_separator())
   }
-  if place != "" && items.contains(place) && items.length() > 1 {
-    entries.push(@kit.menu_item("remove", label=fill("web-main.rail.remove", [("name", rail_label(place))])))
+  if place != "" && kept.contains(place) && kept.length() > 1 {
+    entries.push(@kit.menu_item("remove", label=fill("web-main.rail.remove", [("name", rail_label(src, place))])))
     icons["remove"] = "minus"
   }
   entries.push(@kit.menu_item("customize", label=tr("web-main.rail.customize")))
   icons["customize"] = "sliders"
-  if items != rail_default {
+  if flag(rail_of(src, w.id), "changed") {
     entries.push(@kit.menu_item("reset", label=tr("web-main.rail.reset")))
     icons["reset"] = "refresh"
   }
-  let by = c.rect_of(c.id("rail/" + (if place != "" { place } else { items.get(0).unwrap_or("") })))
+  let by = c.rect_of(c.id("rail/" + (if place != "" { place } else { kept.get(0).unwrap_or("") })))
   let (ax, ay, aw, ah) = by.unwrap_or((0.0, rail_menu_clear, rail_w - 8.0, 0.0))
   // a place's ＋: put in, the rail changed from there (once the menu has gone)
   let added : Ref[String] = Ref("")
@@ -1198,7 +1293,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     row_end=fn(c, s) {
       if s.entry.value.has_prefix("go:") {
         let i = s.entry.value.view(start_offset=3).to_string()
-        if rail_menu_add(c, i, s.hot) {
+        if rail_menu_add(c, i, rail_label(src, i), s.hot) {
           added.val = i
         }
       }
@@ -1208,15 +1303,15 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     wide.rail_menu = None
   }
   if added.val != "" {
-    let next = items.copy()
+    let next = kept.copy()
     next.push(added.val)
     rail_keep(src, w.id, next)
     rail_ws.editing = true
     return
   }
   match m.chosen {
-    Some("remove") => rail_keep(src, w.id, items.filter(fn(i) { i != place }))
-    Some("reset") => rail_keep(src, w.id, rail_default)
+    Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
+    Some("reset") => rail_keep(src, w.id, words_in(items(rail_view(src), "default")))
     Some("customize") => rail_ws.editing = true
     Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.view(start_offset=3).to_string())
     _ => ()
@@ -1226,7 +1321,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// A place's ＋ at the end of its row in the rail's menu (Rail.css.ts menuAdd): 24 round, shown on the row pointed at,
 /// in the pointer's ground pointed at itself; true on the frame after it was pressed.
-fn rail_menu_add(c : @ui.Ctx, place : String, hot : Bool) -> Bool {
+fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Bool {
   let t = @sf.theme()
   let id = c.id("rail-menu/add/" + place)
   c.cursor(id, Hand)
@@ -1238,7 +1333,7 @@ fn rail_menu_add(c : @ui.Ctx, place : String, hot : Bool) -> Bool {
       @sf.icon(c, "plus", size=14.0, color=@sf.alpha(if over { t.p.text } else { t.p.muted }, shown)) |> ignore
     }
   })
-  c.semantics(b, Button, id~, label=fill("web-main.rail.add", [("name", rail_label(place))]))
+  c.semantics(b, Button, id~, label=fill("web-main.rail.add", [("name", label)]))
   c.clicked(id)
 }
 

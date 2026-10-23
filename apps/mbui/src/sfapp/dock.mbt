@@ -98,7 +98,7 @@ fn dock_items(ws : String, chats : Json?, decisions : Json?) -> Array[(Json, Doc
       ),
       "ask": Json::string(
         match text(d, "question") {
-          "" => text(d, "text").replace(old="奏 · ", new="")
+          "" => text(d, "title")
           q => q
         },
       ),

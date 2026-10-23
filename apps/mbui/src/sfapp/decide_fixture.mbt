@@ -367,6 +367,7 @@ fn fix_decisions(mode : String) -> Json {
       ],
     },
     "text": "奏 · 要不要把旧的截图也一起换掉？",
+    "question": "要不要把旧的截图也一起换掉？",
   }
   let text_card : Json = {
     "station": "ws1/st2",
@@ -385,6 +386,7 @@ fn fix_decisions(mode : String) -> Json {
     "options": [],
     "card": { "type": "text", "placeholder": "sk_test_…", "assigneeText": "等 林 回复" },
     "text": "奏 · 测试环境要一个 Stripe 的测试 key",
+    "question": "测试环境要一个 Stripe 的测试 key",
   }
   {
     "items": if mode == "decisions-text" { [text_card, options_card] } else { [options_card, text_card] },

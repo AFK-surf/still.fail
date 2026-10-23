@@ -24,6 +24,10 @@ fn main {
     @sfapp.fixture_json(@hostapi.env_text("MBUI_FIXTURE_JSON"))
   } else {
     let src = @sfapp.fixture(mode)
+    // MBUI_UPDATE=<version>: a newer build offered
+    if @ui.env("MBUI_UPDATE") != "" {
+      @sfapp.fixture_update(@ui.env("MBUI_UPDATE"))
+    }
     // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: screens_wbtest.mbt opens the same)
     @sfapp.open_fixture_mode(mode)
     src

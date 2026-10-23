@@ -543,6 +543,11 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
         "faces": fixture_faces(f.fonts),
         "keys": fixture_keys(f.keys),
         "keymap": fixture_keymap(f.keys),
+        // the rail as the core says it (rail.ts railView), none kept: its default
+        "railView": match fixture_kept("railView", {}, None) {
+          Some(Ok((v, _))) => v
+          _ => Json::null()
+        },
       }
       // the drive's ways, the files' page's tabs and favourites (browse_fixture.mbt)
       fix_browse_prefs_into(o)
@@ -889,6 +894,13 @@ pub fn fixture(mode : String) -> Source {
     leave: fn(_, _) {  },
     read_only: false,
   }
+}
+
+///|
+/// A newer build of the app offered, `version` (its 更新 in the wide frame's sidebar, the settings' version row), as
+/// an update source would say it: for a made-up run's pictures of it (src/sffix, src/sffilm: MBUI_UPDATE=<version>).
+pub fn fixture_update(version : String) -> Unit {
+  update.available = Some({ "versionName": Json::string(version) })
 }
 
 ///|
