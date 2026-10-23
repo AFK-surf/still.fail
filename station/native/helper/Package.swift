@@ -8,13 +8,14 @@ let package = Package(
   name: "StillfailHelper",
   platforms: [.macOS(.v14)],
   products: [.executable(name: "stillfail-helper", targets: ["StillfailHelper"])],
-  dependencies: [.package(path: "../../../vendor/PermissionFlow")],
+  dependencies: [.package(path: "../../../vendor/PermissionFlow"), .package(path: "../../../vendor/serve-sim")],
   targets: [
     .executableTarget(
       name: "StillfailHelper",
       dependencies: [
         .product(name: "PermissionFlow", package: "PermissionFlow"),
         .product(name: "SystemSettingsKit", package: "PermissionFlow"),
+        .product(name: "SimNative", package: "serve-sim"),
       ],
       swiftSettings: [
         .swiftLanguageMode(.v5),

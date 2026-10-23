@@ -38,8 +38,8 @@
 
 ### Sources (station/src/screens/source.ts)
 
-A `ScreenSource` is something a person can see and drive: `desktop` (the station machine's display) or `browser` (a tab
-of the station's browser). The `Screens` registry lists them and opens views. A view is pull-driven: the next frame is
+A `ScreenSource` is something a person can see and drive: `desktop` (the station machine's display), `browser` (a tab
+of the station's browser) or `simulator` (an iOS Simulator booted on a Mac station, below). The `Screens` registry lists them and opens views. A view is pull-driven: the next frame is
 captured/encoded only when the pace (below) lets one go, so a slow link lowers the bit rate and then the frame rate
 instead of queueing. Each source picks its codec among those the client accepts: the desktop is H.265 where the client
 decodes it and the Mac encodes it, else H.264 (hardware encoder; Windows H.264 only), a browser tab JPEG (CDP
@@ -189,6 +189,33 @@ driving: 控制中心 › 缩放 with a mouse, a button in the foot (and 全屏'
 
 The same app opens the drive's folders macOS protects (`files.*`, docs/drive.md): its window then shows only the rows
 asked for (`permissions.show {grants}`), a folder's row asking macOS's own prompt (the only way a folder is granted).
+
+### Simulators (station/src/screens/simulator.ts, sim-input.ts; native/helper's SimulatorView.swift)
+
+Each iOS Simulator booted on a Mac station is a screen, `simulator:<udid>`, titled with its device and runtime
+("iPhone 17 · iOS 26.2") and sized as its device type's screen (its `capabilities.plist`), for people to see and use the
+app they are building and for agents to drive it with the `computer` tool. Which are booted is `xcrun simctl list`'s,
+looked at again when CoreSimulator rewrites a device's `device.plist` (as it boots and shuts down: the station watches
+each device's folder, not what is below it, which a running device writes all the time) and as the screens are asked
+for; a device that shuts down leaves the list and its views end. A Mac without Xcode lists none.
+
+still.fail Helper does it (`simulator.view {udid, codec, maxWidth, maxHeight, bitrate?}`), with serve-sim's capture and
+input (vendor/serve-sim): the device's framebuffer read through CoreSimulator's IOSurface as it changes, each picture
+scaled into the view's bounds (VTPixelTransferSession) and encoded as the desktop's are (ScreenView.swift's encoders
+and messages: H.265/H.264 on the hardware encoder, or a JPEG a picture; a still screen sends nothing); the input goes
+to the device through SimulatorKit's HID client. Nothing of macOS's is granted for it and Simulator.app need not run;
+the view's statistics name its capture `CoreSimulator`. A Mac that is itself a virtual machine has no working
+hardware encoder for any view (the desktop's neither): JPEG views work there.
+
+The device is a touchscreen (sim-input.ts): the left button held is a finger (one going down within the bottom 3% or
+the top 2% of the screen is a system gesture: the home indicator's swipe, the pull down), a wheel a finger dragging,
+a key its USB HID usage by its `code` (modifiers only named in `mods`, as a phone's keys row sends them, pressed round
+it), typed text a US keyboard's keys and anything else pasted (the device's pasteboard set with `simctl pbcopy`, then
+⌘V). Simulator.app's shortcuts press its buttons: ⌘⇧H home, ⌘L lock, ⌘K the software keyboard. The web client touches
+a simulator directly on a phone (no trackpad to choose), a finger held being the device's long press; the mbui app
+drives it as any screen for now (its 触控板 switched off for direct touch). No clipboard,
+cursor or dropped files yet. `station/side/screen-simulator.test.ts` makes and boots a simulator of its own, views it
+through the real helper and says how soon a picture follows a finger and the frames a second.
 
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
 

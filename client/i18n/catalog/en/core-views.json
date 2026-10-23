@@ -467,6 +467,7 @@
   "core-views.screen.many": "{names} and {more} more",
   "core-views.screen.kind.desktop": "Desktop",
   "core-views.screen.kind.browser": "Browser tab",
+  "core-views.screen.kind.simulator": "iOS Simulator",
   "core-views.screen.on": "{names} viewing",
   "core-views.screen.openedBy": "Opened by “{title}”",
   "core-views.screen.someChat": "a chat",

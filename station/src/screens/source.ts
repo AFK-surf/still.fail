@@ -66,7 +66,7 @@ export interface ScreenView {
   reveal?(path: string): Promise<void>;
 }
 
-export type ScreenKind = "desktop" | "browser";
+export type ScreenKind = "desktop" | "browser" | "simulator";
 
 /// How a view's pictures are made, as its statistics show it: what captures them (ScreenCaptureKit,
 /// Windows.Graphics.Capture, Chrome's screencast), the encoder's name as it says it, and whether it is the hardware's
@@ -86,7 +86,7 @@ export type ScreenScale = { percent: number; recommended: number; steps: number[
 export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; app?: string; path?: string; asking?: boolean };
 
 export interface ScreenSource {
-  /// Stable while the source lasts: `desktop`, `browser:<targetId>`.
+  /// Stable while the source lasts: `desktop`, `browser:<targetId>`, `simulator:<udid>`.
   readonly id: string;
   readonly kind: ScreenKind;
   title(): string;

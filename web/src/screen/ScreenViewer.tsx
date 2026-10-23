@@ -71,10 +71,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   /** A phone's zoom of the picture, and the pointer its finger moves as a trackpad (zoom.ts). */
   const zoom = useRef(new Zoom());
   const padPointer = useRef(new PadPointer());
-  /** A finger drives it as a trackpad (unless this device keeps `direct`), on a phone. */
-  const pad = usePrefs((p) => p.screenTouch) !== "direct" && phone;
-  const padRef = useRef(pad);
-  padRef.current = pad;
+  /** This device's way for a finger: as a trackpad unless it keeps `direct` (a simulator's is a touchscreen: below). */
+  const padKept = usePrefs((p) => p.screenTouch) !== "direct";
   /**
    * 全屏 on a phone: the screen alone, the browser's own full screen where it has one (and sideways where it lets the
    * page turn it), the bars folded into one button over the corner (open: `toolsOpen`).
@@ -112,6 +110,14 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   /** What came of the view: its panel reads the frames and bits a second from it. */
   const meter = useRef<Meter>({ frames: 0, bytes: 0 });
   const [shown, setShown] = useState<Shown | null>(null);
+  /** A simulator's screen is touched where it is, as the device's own is (no trackpad to choose). */
+  const touchscreen = shown?.kind === "simulator";
+  /** A finger drives it as a trackpad (unless this device keeps `direct`), on a phone. */
+  const pad = padKept && phone && !touchscreen;
+  const padRef = useRef(pad);
+  padRef.current = pad;
+  const touchscreenRef = useRef(touchscreen);
+  touchscreenRef.current = touchscreen;
   const [failure, setFailure] = useState<string | null>(null);
   const [drawn, setDrawn] = useState(false);
   /** 只看/控制 as asked, until the core says it is so. */
@@ -267,7 +273,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
         return true;
       },
       ...(phone ? { fingers: {
-        pad: () => padRef.current, pointer: padPointer.current, zoom: zoom.current, fit, room,
+        pad: () => padRef.current, touchscreen: () => touchscreenRef.current, pointer: padPointer.current, zoom: zoom.current, fit, room,
         moved: () => { place(); drawPointer(); },
       } } : {}),
       held: { take: () => { const m = heldRef.current; if (m) { heldRef.current = 0; setHeld(0); } return m; } },
@@ -451,7 +457,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
           {!over && (
             <div className={css.foot}>
               {takeOver ? <>{others}{takeOverButton}</> : modes}
-              {driving && (
+              {driving && !touchscreen && (
                 <Tip label={t("web-pages.screen.trackpad")}>
                   <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.trackpad")} aria-pressed={pad}
                     onClick={() => { setPrefs({ screenTouch: pad ? "direct" : null }); toast(t(pad ? "web-pages.screen.padOff" : "web-pages.screen.padOn")); }}>
@@ -492,7 +498,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
                     <button type="button" className={css.keyboard} aria-label={control ? t("web-pages.screen.control") : t("web-pages.screen.look")}
                       onClick={() => setControl(!control)}>{control ? <Cursor size={18} /> : <Eye size={18} />}</button>
                   )}
-                  {driving && (
+                  {driving && !touchscreen && (
                     <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.trackpad")} aria-pressed={pad}
                       onClick={() => { setPrefs({ screenTouch: pad ? "direct" : null }); toast(t(pad ? "web-pages.screen.padOff" : "web-pages.screen.padOn")); }}><Trackpad size={18} /></button>
                   )}

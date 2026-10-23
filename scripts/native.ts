@@ -294,7 +294,7 @@ const PARTS: Record<string, Part> = {
     files: () => [HELPER_APP],
     targets: ["darwin-arm64"],
     env: "STILLFAIL_HELPER",
-    inputs: ["station/native/helper", "vendor/PermissionFlow", HELPER_ICON],
+    inputs: ["station/native/helper", "vendor/PermissionFlow", "vendor/serve-sim", HELPER_ICON],
     recipe: () => ({ swift: DOCK_BUILD, app: HELPER_APP }),
     build(_t, out) {
       const dir = join(ROOT, "station/native/helper");

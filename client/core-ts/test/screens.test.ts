@@ -285,6 +285,25 @@ test("a_link_to_a_screen_of_a_station_not_reached_says_what_its_id_does", async 
   core.close();
 });
 
+test("a_simulator_is_listed_and_linked_as_one_and_a_kind_not_known_as_a_display", async () => {
+  const sim = { id: "simulator:5A25EA86-3568-43D6-9068-8B2CB5FADB26", kind: "simulator", title: "iPhone 17 · iOS 26.2", width: 1206, height: 2622, viewers: [], peek: true };
+  const answers = { ...base(), "GET /screens": { screens: [sim, { id: "later:1", kind: "something-later", title: "", width: 0, height: 0, viewers: [] }] } };
+  const { host, core, ui } = await viewing(1, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  subscribe(core, ui, 2, { topic: "screenCard", station: "ws/elsewhere", screen: sim.id });
+  await host.settle();
+  apply(host, values);
+  const v = values.get(1) as J;
+  assert.deepEqual(v.screens.map((x: J) => [x.kind, x.title, x.line]), [
+    ["simulator", "iPhone 17 · iOS 26.2", "iOS 模拟器 · 1206×2622"],
+    ["desktop", "桌面", "桌面"],
+  ]);
+  assert.equal(v.screens[0].peek, true);
+  assert.deepEqual(values.get(2), { kind: "simulator", title: "iOS 模拟器", line: "远程屏幕", link: "/w/ws/s/elsewhere/screen/simulator%3A5A25EA86-3568-43D6-9068-8B2CB5FADB26", gone: false, peek: false, width: 0, height: 0 });
+  core.close();
+});
+
 test("a_preview_only_looks_and_is_asked_only_of_a_screen_its_station_says_can_be_previewed", async () => {
   const answers = { ...base(), "GET /screens": { screens: [SCREENS.screens[0], { ...SCREENS.screens[1], peek: true }] } };
   const { host, core, ui, views } = await viewing(1, answers);

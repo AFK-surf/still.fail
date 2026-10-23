@@ -7,11 +7,11 @@ import type { Tool } from "./mcp.ts";
 export const SCREEN = {
   name: "screen",
   description:
-    "The screens of this station a person can see and drive from their still.fail app (this machine's display; tabs of the station's browser), each with who is viewing or controlling it now and the link that opens it there. When a person has to act on one (log in, solve a captcha, approve a prompt), post its link on a line of its own (people see the screen's card) with chat_post kind=need_human and end your turn; call this again to see whether someone is on it. To see and operate one yourself, use the computer tool with its id.",
+    "The screens of this station a person can see and drive from their still.fail app (this machine's display; tabs of the station's browser; the iOS Simulators booted on this Mac), each with who is viewing or controlling it now and the link that opens it there. When a person has to act on one (log in, solve a captcha, approve a prompt), post its link on a line of its own (people see the screen's card) with chat_post kind=need_human and end your turn; call this again to see whether someone is on it. To see and operate one yourself, use the computer tool with its id.",
   inputSchema: {
     "type": "object",
     "properties": {
-      "id": { "type": "string", "description": "One screen's id (desktop, browser:<targetId>); default: all of them" }
+      "id": { "type": "string", "description": "One screen's id (desktop, browser:<targetId>, simulator:<udid>); default: all of them" }
     },
     "additionalProperties": false
   },
