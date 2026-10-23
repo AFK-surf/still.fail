@@ -1031,6 +1031,28 @@ mod tests {
         ANSWERED.notify_all();
     }
 
+    /// A directory of its own under the system's temporary one, removed when dropped (after the shell started in it,
+    /// made after it). Not tempfile's: a dev-dependency gives the tests' build other features of the crates below it, so
+    /// that build compiled iroh and the rest a second time (the Windows shell's prebuild, 2026-10-23).
+    struct TempDir(PathBuf);
+    impl TempDir {
+        fn new() -> Self {
+            static N: AtomicU64 = AtomicU64::new(0);
+            let dir = std::env::temp_dir().join(format!("stillfail-shell-test-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            TempDir(dir)
+        }
+        fn path(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     /// The answer to `id`, once it comes (however long that takes).
     fn answer(id: u64) -> (String, String, Option<Vec<u8>>) {
         let mut answers = ANSWERS.lock().unwrap();
@@ -1045,7 +1067,7 @@ mod tests {
 
     #[test]
     fn keeps_files_and_records_as_client_ffi_does() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = TempDir::new();
         let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
         shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
         assert_eq!(answer(1).1, "");
@@ -1073,7 +1095,7 @@ mod tests {
 
     #[test]
     fn keeps_an_accounts_database() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = TempDir::new();
         let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
         let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
         let id = sync("sql.open", r#"{"name":"account-a"}"#)["value"]["id"].as_u64().unwrap();
@@ -1105,7 +1127,7 @@ mod tests {
 
     #[test]
     fn lets_a_closed_connection_and_its_streams_go() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = TempDir::new();
         let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
         let inner = shell.inner.clone();
         shell.runtime.block_on(async move {

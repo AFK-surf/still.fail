@@ -290,7 +290,7 @@ jobs:
         with:
           path: ~/AppData/Local/stillfail-native
           key: ${{ steps.native-keys.outputs.key }}
-      - name: The Windows engine and shell, prebuilt (never built on CI)
+      - name: The Windows engine and shell, prebuilt (the prebuild workflow's, when asked)
         run: |
           node scripts/native.ts fetch shell win32-x64
           node scripts/native.ts fetch engine win32-x64

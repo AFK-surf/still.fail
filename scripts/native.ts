@@ -19,16 +19,20 @@
 //   node scripts/native.ts iroh-pkg [dir]              the web's iroh (iroh-wasm) put in web/src/core/iroh-pkg
 //   node scripts/native.ts status                      every part and target: key, and whether cached / published
 //   node scripts/native.ts missing [--windows] [part[:target]…]    those (default: all of ours) the release lacks, one a line
+//   node scripts/native.ts missing --prebuilt          the prebuilt ones (`msvc`: the shell and engine, Android's and
+//        Windows', which the mbui app's jobs only fetch) in neither the store nor the release, one a line
 //   node scripts/native.ts ensure [--windows] [--publish] [--outbox DIR] [part[:target]…]
 //        CI: each (default: all) in the cache, built when not prebuilt; --publish uploads what the release lacks
 //        (gh, main only); --outbox copies the artifacts the release lacks there (a branch's run artifact)
 //        The default leaves out what only Windows builds (MSVC's: the mbui app's shell and engine); --windows is those.
 //   node scripts/native.ts prune [N]                   the release keeps the newest N (20) of each part and target
-//   node scripts/native.ts prebuild [--release] [part:target…]   a development machine's: each (default: the Windows
-//        parts) the store (STORE: the releases bucket's natives/) lacks, got or built here (a Mac cross-builds the
-//        Windows ones), then put there (scripts/release-put.sh: CLOUDFLARE_API_TOKEN, the releases bucket's), for CI to
-//        fetch: CI never builds those (`msvc`), it says to prebuild them. --release: in the release native-artifacts
-//        instead (gh), which native.ts fetches from after the store, for a machine without the bucket's token.
+//   node scripts/native.ts prebuild [--release] [part:target…]   each (default: the Windows parts) in neither the store
+//        (STORE: the releases bucket's natives/) nor the release, got or built here (Windows builds the Windows ones, a
+//        Mac cross-builds them), then put in the store (scripts/release-put.sh: CLOUDFLARE_API_TOKEN, the releases
+//        bucket's), for CI to fetch. CI builds those (`msvc`) only when asked, in the prebuild workflow
+//        (.github/workflows/prebuild.yml, run by hand); its other jobs fetch them, or fail saying to run it.
+//        --release: in the release native-artifacts instead (gh), which native.ts fetches from after the store (the
+//        workflow's, and a machine's without the bucket's token).
 //   node scripts/native.ts store-sync                  CI on main: each prebuilt part (the Windows ones) at its key that the
 //        release has and the store lacks, copied there (release-put.sh, CLOUDFLARE_API_TOKEN); never built
 //
@@ -217,7 +221,7 @@ const PARTS: Record<string, Part> = {
     targets: ["android-arm64", "win32-x64"],
     msvc: true,
     inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", ...VENDORED],
-    recipe: (t) => (t === "win32-x64" ? { cargo: shellWinCommand(), tests: SHELL_TESTS, xwin: XWIN } : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS }),
+    recipe: (t) => (t === "win32-x64" ? { cargo: SHELL_TESTS, xwin: XWIN } : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS }),
     build(t, out) {
       const target = targetDir(join(ROOT, "client/target"), "shell");
       if (t === "win32-x64") return shellWin(out);
@@ -338,9 +342,9 @@ const shellCommand = () => [
   // Named by its file (SONAME): the engine that links it is then given its name, not where it was built.
   "--", "-C", "link-arg=-Wl,-soname,libstillfail_shell.so",
 ];
-/// The Windows shell: the crate's cdylib (a DLL with its import library, which the engine links); and its tests, built
-/// beside it, not run (a Mac builds them; CI's Windows runs them).
-const shellWinCommand = () => ["rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", "x86_64-pc-windows-msvc", "--release"];
+/// The Windows shell: the crate's cdylib (a DLL with its import library, which the engine links) and its tests, in one
+/// build, the tests' (whose library is the DLL: the crate has no dev-dependency to build what is below it with other
+/// features), not run (a Mac builds them; CI's Windows runs them). Two builds took 2 of the 8 minutes, 2026-10-23.
 const SHELL_TESTS = ["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc", "--no-run", "--message-format=json-render-diagnostics"];
 /// cargo-xwin, which cross-builds the Windows parts on a Mac with the Windows SDK and MSVC's CRT (Microsoft's, which it
 /// downloads: xwin), clang-cl and lld-link (Homebrew's llvm and lld).
@@ -365,10 +369,7 @@ function shellWin(out: string) {
   const target = cross ? join(BUILD(), "target") : targetDir(join(ROOT, "client/target"), "shell");
   const env = { CARGO_TARGET_DIR: target, ...(cross ? xwinEnv() : {}) };
   const xwin = (args: string[]) => (cross ? ["xwin", ...args] : args);
-  cargo(xwin(shellWinCommand()), join(ROOT, "client"), env);
-  const release = join(target, "x86_64-pc-windows-msvc/release");
-  for (const f of ["stillfail_shell.dll", "stillfail_shell.dll.lib"]) copyFileSync(existsSync(join(release, f)) ? join(release, f) : join(release, "deps", f), join(out, f));
-  // the tests' executables, from cargo's own account of what it built
+  // the library and the tests' executables, from cargo's own account of what it built
   rustTarget("x86_64-pc-windows-msvc");
   const done = spawnSync("cargo", xwin(SHELL_TESTS), { cwd: join(ROOT, "client"), env: rustEnv(env), encoding: "utf8", maxBuffer: 256 << 20, stdio: ["ignore", "pipe", "inherit"] });
   if (done.status !== 0) throw new Error(`cargo ${xwin(SHELL_TESTS).join(" ")}: exit ${done.status}`);
@@ -376,9 +377,14 @@ function shellWin(out: string) {
   for (const line of done.stdout.split("\n")) {
     if (!line.startsWith("{")) continue;
     const m = JSON.parse(line);
-    if (m.reason !== "compiler-artifact" || !m.profile?.test || !m.executable) continue;
+    if (m.reason !== "compiler-artifact") continue;
+    // the library (not its tests): the DLL, and its import library beside it
+    const dll = (m.filenames as string[]).find((f) => basename(f) === "stillfail_shell.dll");
+    if (!m.profile?.test && dll) for (const f of ["stillfail_shell.dll", "stillfail_shell.dll.lib"]) copyFileSync(join(dirname(dll), f), join(out, f));
+    if (!m.profile?.test || !m.executable) continue;
     copyFileSync(m.executable, join(out, "tests", `${m.target.kind.includes("lib") ? "lib" : m.target.name}.exe`));
   }
+  if (!existsSync(join(out, "stillfail_shell.dll"))) throw new Error("the shell's DLL was not built");
   if (readdirSync(join(out, "tests")).length === 0) throw new Error("the shell's tests were not built");
 }
 /// The Windows engine (apps/mbui/engine) in Hermes's own CMake build (its libhermes, static, linked into the DLL),
@@ -667,8 +673,9 @@ function buildHere(part: string, target: Target, k: string): string {
   return final;
 }
 
-/// The part's directory in the cache: there already, downloaded, or built.
-async function get(part: string, target: Target, mode: "any" | "fetch" | "build" = "any"): Promise<string> {
+/// The part's directory in the cache: there already, downloaded, or built ("prebuild": the prebuild command's, the one
+/// that builds a prebuilt part on CI).
+async function get(part: string, target: Target, mode: "any" | "fetch" | "build" | "prebuild" = "any"): Promise<string> {
   const k = key(part, target);
   const dir = cached(part, target, k);
   if (mode !== "build" && complete(dir, part, target)) return dir;
@@ -679,8 +686,10 @@ async function get(part: string, target: Target, mode: "any" | "fetch" | "build"
       const got = await download(part, target, k);
       if (got) return got;
     }
-    // What a development machine prebuilds is never built on CI: said, with how.
-    if (onWindows(part, target) && (process.env.CI || mode === "fetch")) throw new Error(`${part} ${target} ${k} is not prebuilt: prebuild it on a Mac (Studio), node scripts/native.ts prebuild ${part}:${target}`);
+    // What is prebuilt (`msvc`) CI builds only in the prebuild workflow, run by hand: anywhere else said, with how.
+    if (mode !== "prebuild" && P(part).msvc && (mode === "fetch" || (onWindows(part, target) && process.env.CI))) {
+      throw new Error(`${part} ${target} ${k} is not prebuilt: run the prebuild workflow on the branch, gh workflow run prebuild.yml -R ${REPO} --ref ${process.env.GITHUB_REF_NAME || "<branch>"} (or on a Mac, node scripts/native.ts prebuild ${part}:${target})`);
+    }
     if (mode === "fetch" || policy === "offline") throw new Error(`${part} ${target} ${k} is not prebuilt (STILLFAIL_NATIVE=${policy || "-"}, ${mode})`);
     // n0's relay is downloaded from n0 whatever the policy: "building" it is that.
     return buildHere(part, target, k);
@@ -783,7 +792,9 @@ async function exists(name: string): Promise<boolean> {
 /// Whether the store of prebuilt parts has it.
 async function inStore(name: string): Promise<boolean> {
   try {
-    const r = await fetch(`${STORE}/${name}`, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(30_000) });
+    // (its first byte: the store answers HEAD 404 for what it has)
+    const r = await fetch(`${STORE}/${name}`, { headers: { Range: "bytes=0-0" }, redirect: "follow", signal: AbortSignal.timeout(30_000) });
+    await r.body?.cancel();
     return r.ok;
   } catch {
     return false;
@@ -857,6 +868,15 @@ async function main(argv: string[]) {
     case "missing": {
       // Each part (default: all of ours) the release lacks, one a line: CI's plan skips the natives job when none is.
       // --windows: those only Windows builds (the natives-win job's); without it, the others.
+      // --prebuilt: the prebuilt ones (`msvc`) that neither the store nor the release has (the prebuild workflow's).
+      if (args.includes("--prebuilt")) {
+        for (const [p, t] of ours()) {
+          if (!P(p).msvc) continue;
+          const name = asset(p, t, key(p, t));
+          if (!(await inStore(name)) && !(await exists(name))) console.log(`${p}:${t}`);
+        }
+        return;
+      }
       const windows = args.includes("--windows");
       const wanted: [string, Target][] = [];
       for (const a of args.filter((a) => a !== "--windows")) { const [p, t] = a.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
@@ -919,11 +939,12 @@ async function main(argv: string[]) {
       for (const [p, t] of wanted) {
         const k = key(p, t);
         const name = asset(p, t, k);
-        if (toRelease ? await exists(name) : await inStore(name)) { console.log(`${p} ${t} ${k}: there already`); continue; }
+        // (in either: fetch takes it from both, and main's store-sync copies the release's into the store)
+        if ((await inStore(name)) || (await exists(name))) { console.log(`${p} ${t} ${k}: there already`); continue; }
         const started = Date.now();
-        const dir = await get(p, t);
+        const dir = await get(p, t, "prebuild");
         pack(dir, name, join(work, "natives"));
-        console.log(`${p} ${t} ${k}: ready (${((Date.now() - started) / 1000).toFixed(0)} s), putting it in the store`);
+        console.log(`${p} ${t} ${k}: ready (${((Date.now() - started) / 1000).toFixed(0)} s), putting it in the ${toRelease ? "release" : "store"}`);
         any = true;
       }
       try {
@@ -941,7 +962,7 @@ async function main(argv: string[]) {
           if (!onWindows(p, t)) continue;
           const name = asset(p, t, key(p, t));
           if (await inStore(name)) { console.log(`${name}: in the store`); continue; }
-          if (!(await exists(name))) { console.log(`${name}: in neither (prebuild it: node scripts/native.ts prebuild ${p}:${t})`); continue; }
+          if (!(await exists(name))) { console.log(`${name}: in neither (prebuild it: the prebuild workflow, or node scripts/native.ts prebuild ${p}:${t})`); continue; }
           const r = await fetch(`https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
           if (!r.ok) throw new Error(`${name}: the release answered ${r.status}`);
           writeFileSync(join(work, "natives", name), Buffer.from(await r.arrayBuffer()));

@@ -184,10 +184,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
-  # The mbui app's Windows shell and engine (scripts/native.ts `msvc`) are prebuilt on a development Mac, cross-built
-  # (node scripts/native.ts prebuild), and put in the releases bucket by their keys; CI never builds them. Here, on
-  # GitHub's Windows (no runner of ours is), for a change to what they are made of: both fetched (a key not there fails,
-  # saying how to prebuild it), and the shell's tests, built with it, run where it runs.
+  # The mbui app's Windows shell and engine (scripts/native.ts `msvc`) are prebuilt, by the prebuild workflow when asked
+  # (.github/workflows/prebuild.yml) or on a Mac, and fetched by their keys; nothing else builds them. Here, on GitHub's
+  # Windows (no runner of ours is), for a change to what they are made of: both fetched (a key not there fails, saying
+  # to run the prebuild workflow), and the shell's tests, built with it, run where it runs.
   windows-natives:
     needs: plan
     if: needs.plan.outputs.windows_natives == 'true'
@@ -218,8 +218,8 @@ jobs:
           for t in "$shell"/tests/*.exe; do echo "== $(basename "$t")"; "$t" --test-threads=2 || exit 1; done
 
   # main: the prebuilt Windows natives in the releases bucket's natives/ (what `prebuild --release` put in the release
-  # native-artifacts from a development Mac, copied over: nothing is built here), once the API (which serves natives/)
-  # is out. Seconds when the store has them.
+  # native-artifacts, the prebuild workflow's or a Mac's, copied over: nothing is built here), once the API (which serves
+  # natives/) is out. Seconds when the store has them.
   natives-store:
     needs: [plan, api]
     if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.api.result)
