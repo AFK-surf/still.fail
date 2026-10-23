@@ -7,6 +7,9 @@
   <key>CFBundleName</key><string>MBUI</string>
   <key>CFBundleDisplayName</key><string>MoonBit UI</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
+  <key>CFBundleAllowMixedLocalizations</key><true/>
   <key>CFBundleShortVersionString</key><string>0.1</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleSupportedPlatforms</key><array><string>iPhoneSimulator</string></array>
