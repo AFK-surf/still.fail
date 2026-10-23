@@ -53,5 +53,7 @@ export default defineConfig({
     outDir: here(beta ? "../dist/site-beta" : "../dist/site"),
     emptyOutDir: true,
     target: "es2022",
+    // The page, and the phone beside the computer on it (site/phone.html: the app as wide as a phone).
+    rollupOptions: { input: { index: here("../site/index.html"), phone: here("../site/phone.html") } },
   },
 });

@@ -92,7 +92,7 @@ export function OneComputer(props: DemoProps) {
   const win = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
   const phone = useRef<HTMLDivElement>(null);
-  const phoneScreen = useRef<HTMLDivElement>(null);
+  const phoneScreen = useRef<HTMLIFrameElement>(null);
   const lines = useRef<SVGGElement>(null);
   const words = useRef<HTMLDivElement>(null);
 
@@ -100,8 +100,9 @@ export function OneComputer(props: DemoProps) {
     const el = scene.current, space = room.current, outer = win.current, inner = screen.current, hand = phone.current, wires = lines.current;
     if (!el || !space || !outer || !inner || !hand || !wires) return;
     const narrow = innerWidth <= 860;
-    // The phone's own app beside the computer's (a wide screen only: on a narrow one the window is the phone).
-    if (!narrow && el.offsetParent !== null && phoneScreen.current && props.mountDemoView) props.mountDemoView(phoneScreen.current);
+    // The phone's own app beside the computer's, a page of its own as wide as a phone (site/phone.html), so that it is
+    // laid out as on one (its rules go by the screen's width); a wide screen only: on a narrow one the window is the phone.
+    if (!narrow && el.offsetParent !== null && phoneScreen.current && !phoneScreen.current.src) phoneScreen.current.src = "/phone.html";
 
     // The rows themselves, where the app has them in the window (in its own size), what holds them in (the app's
     // lists, cut at their edges), what they stand on and their corners; read again until the app is there, and when
@@ -224,7 +225,7 @@ export function OneComputer(props: DemoProps) {
       cancelAnimationFrame(asked);
       letOut(false);
     };
-  }, [props.mountDemoView]);
+  }, []);
 
   // Every pair of the four machines and the phone.
   const pairs = 10;
@@ -259,7 +260,7 @@ export function OneComputer(props: DemoProps) {
               </div>
             </div>
             <div className={css.onePhone} ref={phone}>
-              <div className={css.onePhoneScreen} ref={phoneScreen} style={{ width: PHONE.w, height: PHONE.h }} />
+              <iframe className={css.onePhoneScreen} ref={phoneScreen} width={PHONE.w} height={PHONE.h} title="still.fail 手机版" tabIndex={-1} />
             </div>
           </div>
         </div>

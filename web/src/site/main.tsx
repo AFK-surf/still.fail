@@ -3,10 +3,10 @@ import "../styles/index.ts";
 import "./site.css.ts";
 import { StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
-import { mountDemo, mountDemoView } from "../demo/mount.tsx";
+import { mountDemo } from "../demo/mount.tsx";
 import { Site } from "./Site.tsx";
 import { followMotion } from "@stillfail/ui/motion.ts";
 
 // The demo in it moves as the system asks (the site's own motion goes by its media query: site.css.ts).
 followMotion();
-hydrateRoot(document.getElementById("site")!, <StrictMode><Site mountDemo={mountDemo} mountDemoView={mountDemoView} /></StrictMode>);
+hydrateRoot(document.getElementById("site")!, <StrictMode><Site mountDemo={mountDemo} /></StrictMode>);

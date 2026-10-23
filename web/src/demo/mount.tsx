@@ -584,19 +584,3 @@ export function mountDemo(element: HTMLElement, options: { start?: "chat" | "sta
     </StrictMode>,
   );
 }
-
-/**
- * Another view of the demo, once it runs (mountDemo): the phone's app in `element`, on the same made-up core, where
- * the site shows a phone beside the computer's (site/OneComputer.tsx). It opens where the demo does.
- */
-export function mountDemoView(element: HTMLElement): void {
-  if (!mounted || element.childElementCount > 0) return;
-  element.dataset.demo = "";
-  const app = element.appendChild(document.createElement("div"));
-  app.style.height = "100%";
-  createRoot(app).render(
-    <StrictMode>
-      <DemoApp phone />
-    </StrictMode>,
-  );
-}

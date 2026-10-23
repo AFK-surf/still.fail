@@ -294,10 +294,13 @@ export const oneDemo = style({});
 globalStyle(`${oneScreen} > ${oneDemo}`, { height: "100%", clipPath: "none", "@media": { [NARROW]: { height: "100%", clipPath: "none" } } });
 /** The phone, a device among the others (a wide screen's; on a narrow one the window is the phone). */
 export const onePhone = style({
-  position: "absolute", top: "0", left: "0", zIndex: 3, transformOrigin: "0 0", filter: "drop-shadow(0 24px 36px rgba(0, 0, 0, .22))",
+  // Its shadow a box shadow round its corners, not a filter: under a filter the phone bar's frosted glass loses its
+  // shape (Chromium draws it as a plain rectangle).
+  position: "absolute", top: "0", left: "0", zIndex: 3, transformOrigin: "0 0", borderRadius: "44px", boxShadow: "0 24px 36px rgba(0, 0, 0, .22)", // own corner: a phone's
   "@media": { [NARROW]: { display: "none" } },
 });
-export const onePhoneScreen = style({ overflow: "hidden", clipPath: "inset(0 round 44px)", background: vars.canvas });
+/** Its screen: the phone's app, a page of its own (site/phone.html); its corners cut by a clip. */
+export const onePhoneScreen = style({ display: "block", border: "0", clipPath: "inset(0 round 44px)", background: vars.canvas });
 
 // ---- The second idea: the distance (Distance.tsx) ----
 
