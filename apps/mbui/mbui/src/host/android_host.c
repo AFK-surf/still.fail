@@ -2092,6 +2092,10 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
 int32_t mb_host_window_inset(void) { return 0; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
+void mb_host_set_badge(int32_t n) { (void)n; }
+// (this machine's station: managed from the macOS app only)
+moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
+void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
 
 // ---------------------------------------------------------------------------
 // Streams (src/hostapi/stream.mbt): dev.mbui.Streams decodes (MediaCodec, BitmapFactory) and draws each frame the app

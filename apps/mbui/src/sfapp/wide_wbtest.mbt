@@ -477,3 +477,74 @@ test "wide: a place of the rail dragged up a place is kept there (prefs.set rail
   // not opened by the drag
   assert_false(app.nav.top() == Files)
 }
+
+///|
+test "the app's icon has what is wrong and what waits for the person in every workspace (the desktop's badge)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.frame()
+  // ws1: one wrong, one waiting
+  assert_eq(t.badge(), 2)
+}
+
+///|
+test "wide: 通知's 红点 beside the banner (prefs.set badgeKinds), each kind's 计入红点" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Setting(@settings.Route::Notifications))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("红点") is Some(_), msg="the badge's tile")
+  t.tap_text("红点")
+  t.frame()
+  let set = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "badgeKinds") is Some(_) })
+  assert_eq(set.length(), 1)
+  assert_eq(field(field(Some(set[0].params), "badgeKinds"), "on"), Some(Json::boolean(false)))
+}
+
+///|
+test "wide: 快捷键 changed by pressing new ones (prefs.set keys), and the new keys do it; 版本 its own page" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Setting(@settings.Route::Shortcuts))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("快速切换对话") is Some(_))
+  assert_true(t.find("⌘K") is Some(_))
+  t.tap_text("⌘K")
+  t.frame()
+  assert_true(t.find("按下新的快捷键…") is Some(_))
+  // ⌘J: 快速切换对话's now, not the switcher's opening
+  t.key(@ui.key_of_char('j'), mods=@ui.mod_cmd)
+  t.frame()
+  let set = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "keys") is Some(_) })
+  assert_eq(set.length(), 1)
+  assert_true(t.find("⌘J") is Some(_))
+  assert_false(wide.switcher)
+  t.key(@ui.key_of_char('j'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(wide.switcher, msg="⌘J opens it now")
+  // 版本
+  t.key(@ui.key_escape)
+  app.nav.replace(Setting(@settings.Route::Version))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("still.fail 桌面版") is Some(_))
+}
+
+///|
+test "wide: 本机 Station as the system says it (a service running in a workspace), stopped from its page" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.set_local_station(
+    #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Studio","removed":false}}
+    ,
+  )
+  app.nav.replace(Setting(@settings.Route::LocalStation))
+  t.run_for(@ui.nav_push_ms)
+  for words in ["本机 Station", "Studio", "运行中", "单独安装（launchd）", "0.1.4600", "在 星火工作室", "~/.stillfail"] {
+    assert_true(t.find(words) is Some(_), msg=words)
+  }
+  // (its row: the last 停止 on the page, the lead says the word too)
+  let (sx, sy) = t.find_last("停止").unwrap()
+  t.tap(sx, sy)
+  t.frame()
+  assert_eq(t.local_acts(), ["stop"])
+}

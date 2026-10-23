@@ -1367,6 +1367,34 @@ pub fn Ctx::open_url(self : Ctx, url : String) -> Bool {
 }
 
 ///|
+/// The number on the app's icon (@hostapi.set_badge: macOS's Dock tile), 0 none. Under a Tester: kept (Tester::badge).
+pub fn set_badge(n : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.badge = n
+    None => @hostapi.set_badge(n)
+  }
+}
+
+///|
+/// This machine's station as the system says it (@hostapi.local_station), JSON; "" none. Under a Tester: as it is set
+/// (Tester::set_local_station).
+pub fn local_station() -> String {
+  match fake.val {
+    Some(f) => f.local_station
+    None => @hostapi.local_station()
+  }
+}
+
+///|
+/// Something done to this machine's station (@hostapi.local_station_act). Under a Tester: kept (Tester::local_acts).
+pub fn local_station_act(action : String) -> Unit {
+  match fake.val {
+    Some(f) => f.local_acts.push(action)
+    None => @hostapi.local_station_act(action)
+  }
+}
+
+///|
 /// `url` handed to the system, outside a frame (an answer that came between frames): as Ctx::open_url.
 pub fn open_url(url : String) -> Bool {
   h_open_url(url)

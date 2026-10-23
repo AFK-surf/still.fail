@@ -17,6 +17,48 @@ let notify_kinds : Array[String] = ["wait", "failed", "done", "message"]
 fn notify_page_reset() -> Unit {
   kind_open.val = ""
   kinds_chosen.clear()
+  badge_chosen.clear()
+}
+
+///|
+/// What was just chosen of what the app's icon counts before the prefs say it back (`badgeKinds`), by kind ("on" the
+/// badge itself).
+let badge_chosen : Map[String, Bool] = {}
+
+///|
+/// What the badge counts as kept (prefs `badgeKinds`; Notifications.tsx BADGE_DEFAULT where none is): itself on, the
+/// waits and failures, not done turns nor messages.
+fn badge_kind(core : Core, kind : String) -> Bool {
+  match badge_chosen.get(kind) {
+    Some(v) => v
+    None =>
+      match field(field((core.topic)("prefs", Map::new()).value, "badgeKinds"), kind) {
+        Some(True) => true
+        Some(False) => false
+        _ => kind == "on" || kind == "wait" || kind == "failed"
+      }
+  }
+}
+
+///|
+/// What the badge counts changed (`prefs.set {badgeKinds: {kind: on}}`): shown at once.
+fn set_badge_kind(core : Core, kind : String, on : Bool) -> Unit {
+  badge_chosen[kind] = on
+  (core.call)("prefs.set", obj([("badgeKinds", obj([(kind, Json::boolean(on))]))]), fn(r) {
+    match r {
+      Ok(_) => ()
+      Err(e) => {
+        badge_chosen.remove(kind)
+        (core.say)(fill("web-pages.notifications.kindsFailed", [("error", error_text(e))]))
+      }
+    }
+  })
+}
+
+///|
+/// Whether this app shows a badge where it runs (macOS's Dock tile).
+fn badge_here() -> Bool {
+  @ui.platform() == 0
 }
 
 ///|
@@ -88,6 +130,13 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
       _ => ()
     }
   }
+  let kept_badge = field((core.topic)("prefs", Map::new()).value, "badgeKinds")
+  for k in ["on", "wait", "failed", "done", "message"] {
+    match (badge_chosen.get(k), field(kept_badge, k)) {
+      (Some(true), Some(True)) | (Some(false), Some(False)) => badge_chosen.remove(k)
+      _ => ()
+    }
+  }
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("web-pages.settings.nav.notifications")) },
@@ -124,7 +173,7 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
       }
       c.cursor(id, Hand)
       let lit = on && action == ""
-      // (two to a line, as the web's tiles are: its badge's beside it, which this app has none of)
+      // (two to a line, as the web's tiles are: the badge's beside it where there is one)
       c.box(style=way_tiles, fn() {
       c.box(style=if lit { way_tile_on } else { way_tile }, id~, fn() {
         c.box(style=way_picture, fn() { c.box(style=way_banner, fn() {  }) |> ignore }) |> ignore
@@ -143,7 +192,26 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
         }
       })
       |> ignore
-      c.box(style=way_tile_room, fn() {  }) |> ignore
+      if badge_here() {
+        let bid = c.id("notify-badge")
+        let badge_on = badge_kind(core, "on")
+        c.cursor(bid, Hand)
+        if hit(c, bid) {
+          c.after_build("notify-badge", fn() { set_badge_kind(core, "on", !badge_on) })
+        }
+        c.box(style=if badge_on { way_tile_on } else { way_tile }, id=bid, fn() {
+          c.box(style=way_picture_app, fn() {
+            c.box(style=way_app, fn() { c.box(style=way_dot, fn() {  }) |> ignore }) |> ignore
+          })
+          |> ignore
+          c.text(tr("web-pages.notifications.ways.badge"), style=way_name) |> ignore
+          c.text(tr(if badge_on { "web-pages.notifications.on" } else { "web-pages.notifications.off" }), style=wide_meta)
+          |> ignore
+        })
+        |> ignore
+      } else {
+        c.box(style=way_tile_room, fn() {  }) |> ignore
+      }
       })
       |> ignore
     })
@@ -180,13 +248,21 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
 /// turn's: off, while away, always).
 fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool) -> Unit {
   let banner = kind_banner(notify, kind)
-  let sum = if !banner {
-    tr("web-pages.notifications.none")
-  } else if kind == "done" && done_banner(notify) == "away" {
-    tr("web-pages.notifications.sumBannerAway")
-  } else {
-    tr("web-pages.notifications.ways.banner")
+  let badged = badge_here() && badge_kind(core, "on") && badge_kind(core, kind)
+  let ways : Array[String] = []
+  if banner {
+    ways.push(
+      if kind == "done" && done_banner(notify) == "away" {
+        tr("web-pages.notifications.sumBannerAway")
+      } else {
+        tr("web-pages.notifications.ways.banner")
+      },
+    )
   }
+  if badged {
+    ways.push(tr("web-pages.notifications.ways.badge"))
+  }
+  let sum = if ways.length() == 0 { tr("web-pages.notifications.none") } else { ways.join(" · ") }
   let open = kind_open.val == kind
   if list_row(c, key="notify-kind/" + kind, fn() {
       row_lines(c, tr("web-pages.notifications.kinds." + kind), tr("web-pages.notifications.kinds." + kind + "Note"))
@@ -224,6 +300,16 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool) 
           switch(c, "notify-way/" + kind, banner)
         }) {
         set_kind(core, kind, Json::boolean(!banner))
+      }
+      // 计入红点: whether the app's icon counts it (off while the badge is)
+      if badge_here() {
+        let counted = badge_kind(core, kind)
+        if list_row(c, key=if badge_kind(core, "on") { "notify-badge/" + kind } else { "" }, fn() {
+            row_title(c, tr("web-pages.notifications.inBadge"))
+            switch(c, "notify-badge/" + kind, counted)
+          }) {
+          set_badge_kind(core, kind, !counted)
+        }
       }
     })
     |> ignore
@@ -644,6 +730,19 @@ let way_tile_room : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 // kept across runs: a value (no field of it changes)
 let way_tile_on : @ui.Style = way_tile.then(@ui.style(border_color=Accent))
+
+///|
+/// The badge's tile's picture: the app's icon, a red dot at its corner (Notifications.css.ts picApp, picBadge).
+// kept across runs: a value (no field of it changes)
+let way_picture_app : @ui.Style = @ui.style(w=S16, h=S10, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let way_app : @ui.Style = @ui.style(w=S8, h=S8, p=SPx, align=AEnd, radius=Lg, bg=Faint)
+
+///|
+// kept across runs: a value (no field of it changes)
+let way_dot : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, bg=Danger)
 
 ///|
 /// The tile's picture: a window, a banner in its corner.

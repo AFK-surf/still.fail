@@ -31,7 +31,7 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
   if wide.find_chat != "" && wide.find_chat != side_key(r) {
     find_forget()
   }
-  if c.shortcut('f') && view is Some(v) && v.thread is Some(_) {
+  if @settings.action_pressed(c, (src.topic)("prefs", {}).value, "chat.find") && view is Some(v) && v.thread is Some(_) {
     find_open(c, r)
   }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {

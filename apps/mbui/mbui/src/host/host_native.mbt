@@ -208,6 +208,9 @@ extern "C" fn ffi_window_drag() -> Unit = "mb_host_window_drag"
 extern "C" fn ffi_set_cursor(kind : Int) -> Unit = "mb_host_set_cursor"
 
 ///|
+extern "C" fn ffi_set_badge(n : Int) -> Unit = "mb_host_set_badge"
+
+///|
 /// The desktop's window as the app wants it, said before `run`: its first size (`w` by `h`; MBUI_WIN=<w>x<h> still
 /// has the last word) and its least (`min_w` by `min_h`), and with `inset` no title bar of the system's: the app's own
 /// top row is it (macOS: the window's buttons in it, 16 in and centred on its first 44; the app drags the window by
@@ -235,6 +238,28 @@ fn window_drag() -> Unit {
 /// 5 an open hand. Nothing where there is no pointer.
 fn set_cursor(kind : Int) -> Unit {
   ffi_set_cursor(kind)
+}
+
+///|
+fn set_badge(n : Int) -> Unit {
+  ffi_set_badge(n)
+}
+
+///|
+extern "C" fn ffi_local_station() -> String = "mb_host_local_station"
+
+///|
+#borrow(a)
+extern "C" fn ffi_local_station_act(a : String) -> Unit = "mb_host_local_station_act"
+
+///|
+fn local_station() -> String {
+  ffi_local_station()
+}
+
+///|
+fn local_station_act(a : String) -> Unit {
+  ffi_local_station_act(a)
 }
 
 ///|

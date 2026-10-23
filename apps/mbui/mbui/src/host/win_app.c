@@ -874,6 +874,12 @@ void mb_host_window_drag(void) {
 }
 
 // The pointer's shape (@hostapi.set_cursor), shown at once where it is over the window.
+// The number on the app's icon (@hostapi.set_badge): none on Windows here (its taskbar's overlay is not drawn yet).
+void mb_host_set_badge(int32_t n) { (void)n; }
+// (this machine's station: managed from the macOS app only)
+moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
+void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
+
 void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
   POINT p;

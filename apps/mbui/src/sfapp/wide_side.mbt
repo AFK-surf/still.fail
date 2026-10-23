@@ -510,6 +510,12 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       page(@settings.Route::Permissions, "permissions", "key", tr("web-pages.settings.nav.permissions"))
       page(@settings.Route::Changelog, "changelog", "sparks", tr("web-pages.settings.nav.changelog"))
       page(@settings.Route::About, "about", "info", tr("web-pages.settings.nav.about"))
+      // the desktop's own (cloud/settings.tsx: the client's part)
+      page(@settings.Route::Shortcuts, "shortcuts", "command", tr("web-pages.settings.nav.shortcuts"))
+      page(@settings.Route::Version, "version", "info", tr("web-pages.settings.nav.version"))
+      if @ui.platform() == 0 {
+        page(@settings.Route::LocalStation, "local-station", "monitor", tr("web-pages.localStation.title"))
+      }
       nav_heading(c, "Station")
       if !rails.contains("stations") {
         page(@settings.Route::Stations, "stations", "server", "Station")

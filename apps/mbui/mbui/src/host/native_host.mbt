@@ -31,6 +31,21 @@ impl @hostapi.Host for Native with set_cursor(_, kind) {
 }
 
 ///|
+impl @hostapi.Host for Native with set_badge(_, n) {
+  set_badge(n)
+}
+
+///|
+impl @hostapi.Host for Native with local_station(_) {
+  local_station()
+}
+
+///|
+impl @hostapi.Host for Native with local_station_act(_, a) {
+  local_station_act(a)
+}
+
+///|
 impl @hostapi.Host for Native with run(_, title, frame, pointer, wheel, key, text) {
   run(title, frame, pointer, wheel, key, text)
 }

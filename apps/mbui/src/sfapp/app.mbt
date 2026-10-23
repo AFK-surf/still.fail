@@ -293,6 +293,7 @@ fn reset() -> Unit {
   faces_reset()
   links_reset()
   wide_reset()
+  badge_told.val = -1
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
   kept_chats.clear()
   fixture_pictures.clear()
@@ -471,6 +472,10 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
 }
 
 ///|
+/// The number last put on the app's icon (-1 none yet).
+let badge_told : Ref[Int] = Ref(-1)
+
+///|
 /// Signed in: the workspace in view (the one switched to, else the one last open, else the first once every account
 /// has answered), its Home at the root of the pages; the splash while none is known yet, and a page that says so when
 /// there is none.
@@ -502,6 +507,23 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       c.after_build("notices", fn() { notices_frame(src, w) })
       // the core and the workspace links are opened against, as the frame ends (links.mbt)
       c.after_build("links", fn() { links_frame(src, w) })
+      // the number on the app's icon (the desktop app's followBadge): the core's badge, else what is wrong and what
+      // waits in every workspace; told as it changes
+      let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
+      let badge = match field(marks, "badge") {
+        Some(Number(_, ..)) => count(marks, "badge")
+        _ =>
+          match field(marks, "workspaces") {
+            Some(Object(m)) => m.values().fold(init=0, fn(n, x) { n + count(Some(x), "alert") + count(Some(x), "wait") })
+            _ => 0
+          }
+      }
+      if marks is Some(_) && badge != badge_told.val {
+        c.after_build("badge", fn() {
+          badge_told.val = badge
+          @ui.set_badge(badge)
+        })
+      }
       // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
       if !link_later.is_empty() {
         c.tell("links-given", fn() { links_given(src) })

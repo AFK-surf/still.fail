@@ -55,10 +55,15 @@ fn sw_reset() -> Unit {
 ///|
 /// What can be done now (Switcher.tsx commandsFor): the open chat's (find, its services), the app's (a new chat, the
 /// sidebar, settings, the shortcuts), settings' pages (typed only); whose name or id has `query`, in their parts' order.
-fn sw_commands(c : @ui.Ctx, query : String) -> Array[SwCommand] {
-  let mac = @ui.platform() == 0
-  let cmd = if mac { "⌘" } else { "Ctrl+" }
-  let shift = if mac { "⇧" } else { "Shift+" }
+fn sw_commands(c : @ui.Ctx, src : Source, query : String) -> Array[SwCommand] {
+  // an action's first keys as shown (as kept on this device: settings' 快捷键)
+  let prefs = (src.topic)("prefs", {}).value
+  let keys = fn(action : String) {
+    match @settings.keys_of(prefs, action) {
+      [b, ..] => @settings.key_label(b)
+      [] => ""
+    }
+  }
   let all : Array[SwCommand] = []
   match app.nav.top() {
     Chat(r) => {
@@ -67,7 +72,7 @@ fn sw_commands(c : @ui.Ctx, query : String) -> Array[SwCommand] {
         group: "chat",
         label: tr("web-main.keymap.chat.find"),
         icon: "search",
-        keys: cmd + "F",
+        keys: keys("chat.find"),
         typed: false,
         run: fn() { find_open(c, r) },
       })
@@ -76,7 +81,7 @@ fn sw_commands(c : @ui.Ctx, query : String) -> Array[SwCommand] {
         group: "chat",
         label: tr("web-main.keymap.chat.jobs"),
         icon: "web",
-        keys: cmd + shift + "J",
+        keys: keys("chat.jobs"),
         typed: false,
         run: fn() { wide.jobs_open = true },
       })
@@ -88,7 +93,7 @@ fn sw_commands(c : @ui.Ctx, query : String) -> Array[SwCommand] {
     group: "global",
     label: tr("web-main.keymap.chat.new"),
     icon: "compose",
-    keys: cmd + "N",
+    keys: keys("chat.new"),
     typed: false,
     run: new_chat_wide,
   })
@@ -97,7 +102,7 @@ fn sw_commands(c : @ui.Ctx, query : String) -> Array[SwCommand] {
     group: "global",
     label: tr("web-main.keymap.sidebar.toggle"),
     icon: "panel-open",
-    keys: cmd + "\\",
+    keys: keys("sidebar.toggle"),
     typed: false,
     run: fn() { wide.folded = !wide.folded },
   })
@@ -106,7 +111,7 @@ fn sw_commands(c : @ui.Ctx, query : String) -> Array[SwCommand] {
     group: "global",
     label: tr("web-main.keymap.settings"),
     icon: "settings",
-    keys: cmd + ",",
+    keys: keys("settings"),
     typed: false,
     run: open_settings,
   })
@@ -115,7 +120,7 @@ fn sw_commands(c : @ui.Ctx, query : String) -> Array[SwCommand] {
     group: "global",
     label: tr("web-main.keymap.shortcuts"),
     icon: "command",
-    keys: cmd + "/",
+    keys: keys("shortcuts"),
     typed: false,
     run: fn() { wide.keys_open = true },
   })
@@ -190,7 +195,7 @@ fn sw_read(src : Source, w : Workspace, query : String) -> SearchView? {
 fn sw_lines(c : @ui.Ctx, src : Source, w : Workspace, query : String) -> Array[SwLine] {
   let lines : Array[SwLine] = []
   let typed = query != ""
-  let commands = if sw.kind != "" { [] } else { sw_commands(c, query) }
+  let commands = if sw.kind != "" { [] } else { sw_commands(c, src, query) }
   let add_commands = fn() {
     for i, x in commands {
       if i == 0 || commands[i - 1].group != x.group {
