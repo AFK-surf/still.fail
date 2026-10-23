@@ -504,11 +504,11 @@ let ws_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_section_title : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+let ws_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_section_count : @ui.TextStyle = @ui.text_style(size=Base, weight=Medium, color=Subtle, wrap=false)
+let ws_section_count : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Medium, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
