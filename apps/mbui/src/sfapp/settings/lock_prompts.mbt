@@ -4,8 +4,15 @@
 // closed by hand, it is denied (`lockPrompt.deny`) and its code is worth nothing.
 
 ///|
-/// The devices turned away here: not put up again while the core has yet to drop them.
+/// The asks turned away here (a device and the code it was shown, `ask_of`): not put up again while the core has yet to
+/// drop them. The same device asking again (a new code) is put up again: it was not until the app started again
+/// (2026-10-23, 弹窗不弹). What the core dropped is forgotten here too.
 let prompts_denied : Array[String] = []
+
+///|
+fn ask_of(r : Json) -> String {
+  text(Some(r), "device") + " " + text(Some(r), "code")
+}
 
 ///|
 fn lock_prompts_reset() -> Unit {
@@ -17,7 +24,11 @@ fn lock_prompts_reset() -> Unit {
 /// app's up): call each frame, over the pages.
 pub fn lock_prompts(core : Core, free : Bool) -> Unit {
   let prompts = (core.topic)("lockPrompts", Map::new()).value
-  let waiting = items(prompts, "pairing").iter().find_first(fn(r) { !prompts_denied.contains(text(Some(r), "device")) })
+  let pairing = items(prompts, "pairing")
+  if prompts is Some(_) {
+    prompts_denied.retain(fn(d) { pairing.iter().any(fn(r) { ask_of(r) == d }) })
+  }
+  let waiting = pairing.iter().find_first(fn(r) { !prompts_denied.contains(ask_of(r)) })
   match waiting {
     Some(r) if free && !sheet_up() => pair_sheet(core, r)
     _ => ()
@@ -31,7 +42,7 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
   let rv = Some(r)
   let device = text(rv, "device")
   let deny = fn() {
-    prompts_denied.push(device)
+    prompts_denied.push(ask_of(r))
     act(core, tr("web-pages.security.denyDevice"), "lockPrompt.deny", obj([("device", str(device))]))
   }
   let who = match text(rv, "name") {

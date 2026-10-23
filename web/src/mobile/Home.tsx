@@ -27,6 +27,8 @@ import { fileOpen } from "../searchOpen.ts";
 import { ChangelogNews } from "./Changelog.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
+import { SecurityWaitingScreen } from "./Security.tsx";
+import type { LockView } from "../cloud/Security.tsx";
 import { usePullToReload } from "./pull.ts";
 import * as css from "./Home.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -71,6 +73,23 @@ export function Home() {
       <HomeBar others={marks?.others} othersLabel={marks?.othersLabel} invited={invited} filtering={(all.value?.stations.length ?? 0) > 0}
         filter={filter} />
       {searching && <SearchPage from={searching} onLeave={() => setAway(false)} onClose={() => setSearching(null)} />}
+    </div>
+  );
+}
+
+/**
+ * What a device waiting to be confirmed in the workspace's security mode sees in place of the workspace (index.tsx
+ * LockGate): the waiting page under Home's top bar, its settings and the workspace's name, which switches to another
+ * (2026-10-23: with the page in the workspace's place, there was no way to another workspace).
+ */
+export function WaitingHome({ lock }: { lock: LockView }) {
+  const app = useApp();
+  const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
+  const marks = useWorkspaceMarks(app.entry.id);
+  return (
+    <div className={css.mHome}>
+      <div className={css.mHomePanes}><SecurityWaitingScreen lock={lock} /></div>
+      <HomeBar others={marks?.others} othersLabel={marks?.othersLabel} invited={invited} filtering={false} filter="all" />
     </div>
   );
 }

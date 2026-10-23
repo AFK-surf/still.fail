@@ -48,7 +48,8 @@ export function listNote(stations: J[], days: J[], loading: boolean, unread: str
         .map((s) => {
           const name = strOf(s, "name");
           const cause = get(s, "cause");
-          const text = is(s, "error") || cause === "unreached" ? t("core-logic.looks.failing.retrying", { name }) : cause === "network" ? t("core-logic.looks.failing.network") : t("core-logic.looks.failing.offline", { name });
+          const text = is(s, "error") || cause === "unreached" ? t("core-logic.looks.failing.retrying", { name }) : cause === "network" ? t("core-logic.looks.failing.network")
+            : cause === "lock" ? t("core-logic.looks.failing.lock", { name }) : t("core-logic.looks.failing.offline", { name });
           return { station: get(s, "station") ?? null, text, message: get(s, "message") ?? null };
         });
   const empty = !loading && !connecting && failing.length === 0;
@@ -196,6 +197,8 @@ export function outboxHeld(outbox: J[]): J[] {
 /// reached.
 export function offlineNote(link: J, name: string): string {
   const cause = get(link, "cause");
+  // Refused for a security mode: why, as the station's refusal says it.
+  if (cause === "lock" && typeof get(link, "message") === "string") return t("core-logic.looks.offline.lock", { name: name === "" ? "station" : name, reason: get(link, "message") });
   const key = cause === "network" ? "core-logic.looks.offline.network" : cause === "unreached" ? "core-logic.looks.offline.unreached" : "core-logic.looks.offline.station";
   return name === "" ? t(key, { name: "station" }) : t(key, { name });
 }

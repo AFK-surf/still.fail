@@ -12,7 +12,7 @@ import { DecisionsScreen } from "./Decisions.tsx";
 import { ChatHost } from "./ChatHost.tsx";
 import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } from "./Connects.tsx";
 import { HistoryScreen, RunSettingsScreen } from "./History.tsx";
-import { Home, Recent } from "./Home.tsx";
+import { Home, Recent, WaitingHome } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
 import { MemoriesScreen, MemoryDocScreen, MemoryScreen } from "./Memory.tsx";
 import { DrivePlayScreen, DriveReadScreen, DriveScreen } from "./Drive.tsx";
@@ -30,7 +30,7 @@ import { AboutScreen, AppearanceScreen, LanguageScreen, SettingsScreen } from ".
 import { FontScreen } from "./Fonts.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
-import { SecurityOpenScreen, SecurityPrompt, SecurityScreen, SecurityWaitingScreen } from "./Security.tsx";
+import { SecurityOpenScreen, SecurityPrompt, SecurityScreen } from "./Security.tsx";
 import { ShareInSheet } from "./ShareIn.tsx";
 import { useLock } from "../cloud/Security.tsx";
 import { VaultItemScreen, VaultScreen } from "./Vault.tsx";
@@ -116,7 +116,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
 /** A device waiting to be confirmed into the workspace's lock sees that instead of its pages (but the settings). */
 function LockGate({ workspace, path, children }: { workspace: string; path: string; children: React.ReactNode }) {
   const lock = useLock(workspace);
-  if (lock?.me?.waiting && !/\/settings(\/|$)/.test(path)) return <SecurityWaitingScreen lock={lock} />;
+  if (lock?.me?.waiting && !/\/settings(\/|$)/.test(path)) return <WaitingHome lock={lock} />;
   return <>{children}</>;
 }
 

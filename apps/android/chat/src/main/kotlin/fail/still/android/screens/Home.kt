@@ -200,15 +200,7 @@ fun HomeScreen(current: WorkspaceEntry) {
         TopGlassBar(haze, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.graphicsLayer { alpha = 1f - away }) {
             // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
             SettingsGear()
-            Row(Modifier.weight(1f).clip(Smooth(8.dp)).clickable { Elsewhere.workspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TopBarTitle(current.workspace.name, Modifier.weight(1f, fill = false))
-                // The other workspaces have something waiting: its dot by the name, before an invitation's.
-                val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
-                val others = marks.value?.others
-                if (others != null) WorkspaceMark(others, marks.value?.othersLabel.orEmpty())
-                else if (Elsewhere.invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
-                IconIn(Icons.ChevronDown, 16.dp, C.muted)
-            }
+            WorkspaceTitle(current, Modifier.weight(1f))
             // A newer build of the app that brings something the changelog says (one that does not waits in the settings
             // until one does): tapped, it is downloaded and handed to the installer (Updates.kt).
             val updates = app.updates

@@ -364,7 +364,8 @@ private fun StationOverview(s: StationView) {
     else Card {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-            Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
+            // Down for a security mode: why (the core's `blocked`), not how to bring it back.
+            Text(s.blocked ?: t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
             RetryPill(Modifier.padding(top = 6.dp), retrying = s.link.retrying == true)
         }
     }
@@ -634,7 +635,7 @@ fun openStationPeek(app: AppState, address: String) {
                 Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
                 // What its agents' processes are is on its page, a tap away.
                 if (s.online) StationFigures(s, peek = true)
-                else Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
+                else Text(s.blocked ?: t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
             }
             ListCard {
                 // Its files (docs/drive.md), where it has a drive: a way there from where it is named, as the wide screen's card has.

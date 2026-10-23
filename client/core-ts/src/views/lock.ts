@@ -806,6 +806,8 @@ export class Lock {
       if (!s) return yield* Effect.fail(CoreError.invalid("not a station of this workspace"));
       const asked = yield* Effect.result(self.#station(station, "GET", "/lock"));
       if (asked._tag === "Failure") {
+        // It takes none of this workspace's members for a security mode (one turned on after it joined): why, as it said.
+        if (asked.failure.code === "lock_station") return yield* Effect.fail(asked.failure);
         const old = asked.failure.status === 404 || /404|no route/.test(asked.failure.message);
         return yield* Effect.fail(new CoreError(old ? "lock_station_old" : "lock_station_offline", old ? t("core-misc.lock.stationOld", { name: s.name }) : t("core-misc.lock.stationOffline", { name: s.name })));
       }

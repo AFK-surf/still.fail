@@ -638,7 +638,7 @@ fn page_view(
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
         // stations refuse it: Security.kt LockGate); its settings stay
         Home =>
-          if lock_gate(c, src, w) {
+          if lock_gate(c, src, w, bar=invited) {
             home_page(c, src, w, all, invited)
           }
         Chat(r) => {
@@ -741,16 +741,31 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -
 }
 
 ///|
-/// The workspace's safe mode in its chats' place while this device waits to be confirmed in it (the settings'
-/// lock_wait.mbt): true when there is nothing to wait for, and the page is the caller's to draw.
-fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
+/// Whether the workspace's pages are shown: not while this device waits to be confirmed in its safe mode, whose page is
+/// drawn instead (Security.kt LockGate). `bar` (whether invitations wait): on a phone, under Home's top bar, settings
+/// and the workspace's name, its switcher (Security.kt SecurityWaitingScreen: with no bottom bar either, a phone had no
+/// way out of the workspace, 2026-10-23); none beside the wide screen's rail, which has them.
+fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
   let core = settings_core(src, w)
   if !@settings.lock_waiting(core, w.id) {
     return true
   }
-  @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+  match bar {
+    None => @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+    Some(invited) =>
+      c.box(style=gate_fill, fn() {
+        c.layer(fn() { @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name)) }) |> ignore
+        c.layer(fn() { top_bar(c, src, w, None, "all", invited) }) |> ignore
+      })
+      |> ignore
+  }
   false
 }
+
+///|
+/// The waiting page and Home's top bar over it, the screen's whole.
+// kept across runs: a value (no field of it changes)
+let gate_fill : @ui.Style = @ui.style(w=Full, h=Full)
 
 ///|
 /// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.

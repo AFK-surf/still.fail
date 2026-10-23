@@ -724,8 +724,14 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
                     if @sf.has_drawable(pic) {
                       @sf.drawable(c, pic, 220.0) |> ignore
                     }
+                    // down for a security mode: why (the core's `blocked`), not how to bring it back
+                    let blocked = text(st, "blocked")
                     c.text(
-                      fill("android-settings.stations.offline", [("app", "still.fail")]),
+                      if blocked != "" {
+                        blocked
+                      } else {
+                        fill("android-settings.stations.offline", [("app", "still.fail")])
+                      },
                       size=13.0,
                       color=t.p.muted,
                       center=true,

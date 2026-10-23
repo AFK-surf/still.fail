@@ -70,7 +70,9 @@ export async function joinWorkspace(data: string, token: string, lock?: string):
     writePrivate(joinedPendingPath(data, joined.workspace), JSON.stringify({ hash: lock }));
   }
   const now = readState(data) ?? state;
-  if (joined.workspace !== now.workspace) {
+  // The plane's `state` frame may have named it already (it tells the station before it answers): that is kept, its
+  // roster and whether it is locked with it, not put back to none until the next frame.
+  if (joined.workspace !== now.workspace && !(now.joined ?? []).some((j) => j.workspace === joined.workspace)) {
     now.joined = [...(now.joined ?? []).filter((j) => j.workspace !== joined.workspace), { ...joined, peers: [], revocations: [] }];
     writeState(data, now);
   }

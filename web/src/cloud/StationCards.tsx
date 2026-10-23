@@ -99,6 +99,8 @@ export function joinedText(s: StationView): string | null {
 
 /** Whether its agents are at work, or when it was last seen. */
 export function state(s: StationView): ReactNode {
+  // Down for a security mode: that, not when it was last seen (it is up; it refused).
+  if (!s.online && s.blocked) return s.summary;
   if (!s.online) return s.lastSeen ? tx("web-pages.stations.lastSeen", { time: <Time stamp={stamp(s, "lastSeen")} /> }) : t("web-pages.stations.neverOnline");
   if (!s.overview) return t("common.connecting");
   const running = s.overview.counts.running;
@@ -108,6 +110,8 @@ export function state(s: StationView): ReactNode {
 /** What may be wrong with it, each in words, worst first. */
 export function problems(s: StationView, silent: boolean): { key: string; level: Level; text: string }[] {
   if (s.online && silent) return [{ key: "silent", level: "amber", text: t("web-pages.stations.silent", { name: NAME }) }];
+  // Down for a security mode: why (the core's `blocked`), not how to bring it back.
+  if (!s.online && s.blocked) return [{ key: "blocked", level: "red", text: s.blocked }];
   if (!s.online) {
     return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? t("web-pages.stations.away", { name: NAME }) : t("web-pages.stations.neverConnected", { name: NAME }) }];
   }

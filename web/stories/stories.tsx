@@ -321,6 +321,17 @@ const memberships = (joined = false): DemoExtension => ({
     return [...value, { ...first, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab" }];
   },
 });
+/** Lab's Mini1 joined to this workspace, which it takes none of the members of for a security mode (the core's `blocked`). */
+const blockedJoined: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "stations" || !Array.isArray(value)) return undefined;
+    const first = value[0] as StationView;
+    const why = "此 workspace 在此 station 加入后才开启安全模式，它不再接受此 workspace 的成员：请将它从此 workspace 移除后重新添加";
+    const { overview: _, host: __, ...rest } = first;
+    return [...value, { ...rest, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab", online: false,
+      summary: "安全模式未放行", blocked: why, link: { state: "offline", cause: "lock", message: why } }];
+  },
+};
 /** Several of these at once: the first that answers a topic or call, each `then` over the last's value. */
 const together = (...all: DemoExtension[]): DemoExtension => ({
   topic: (t) => { for (const e of all) { const v = e.topic?.(t); if (v !== undefined) return v; } return undefined; },
@@ -795,6 +806,8 @@ export const stories: Story[] = [
   { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="为 Studio 选择图标"]' }] },
   { id: "app-station-workspaces", group: "应用", title: "station · 在几个 workspace 里", app: true, demo: memberships(), steps: toStation("设置") },
   { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
+  { id: "app-station-blocked", group: "应用", title: "station · 安全模式未放行", app: true, demo: blockedJoined, steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
+  { id: "phone-station-blocked", group: "应用", title: "手机 · station · 安全模式未放行", app: true, phone: true, demo: blockedJoined, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Mini1" }] },
   { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-first-station-existing", group: "应用", title: "第一台 station · 也可加已有的", app: true, demo: firstJoining },
   { id: "app-first-station-existing-open", group: "应用", title: "第一台 station · 选已有的", app: true, demo: firstJoining, steps: [{ text: "添加其他 workspace 的 station" }] },
@@ -957,6 +970,7 @@ export const stories: Story[] = [
   { id: "security-waiting-wrong", group: "设置", title: "安全 · 安全码不对", app: true, demo: lockDemo("wrong") },
   { id: "security-waiting-none", group: "设置", title: "安全 · 未找到在线的受信任设备", app: true, demo: lockDemo("none") },
   { id: "security-waiting-failed", group: "设置", title: "安全 · 批准请求未能提交", app: true, demo: lockDemo("failed") },
+  { id: "phone-security-waiting", group: "设置", title: "手机 · 安全 · 等待批准此设备（顶栏可切换 workspace）", app: true, phone: true, demo: lockDemo("waiting") },
   { id: "phone-security-waiting-failed", group: "设置", title: "手机 · 安全 · 批准请求未能提交", app: true, phone: true, demo: lockDemo("failed") },
   { id: "security-prompt-two-workspaces", group: "设置", title: "安全 · 新设备请求批准（显示安全码）", app: true, demo: lockDemo("prompt") },
   { id: "phone-security-prompt-two-workspaces", group: "设置", title: "手机 · 安全 · 新设备请求批准（显示安全码）", app: true, phone: true, demo: lockDemo("prompt") },

@@ -353,6 +353,8 @@
   },
   "core-views.station.unreachable": "Can't reach {name}",
   "core-views.station.unreachable_short": "Can't reach",
+  "core-views.station.lock": "Security mode is blocking {name}",
+  "core-views.station.lock_short": "Blocked by security mode",
   "core-views.station.offline_network": "No network: can't reach {name}",
   "core-views.station.network": "No network connection",
   "core-views.station.not_listed": "This station isn't in the list",

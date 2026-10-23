@@ -2055,7 +2055,8 @@ data class Link (
 	/// until the try reaches it, its 重试 turning meanwhile.
 	val retrying: Boolean? = null,
 	/// Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the
-	/// cloud says it is not online) | unreached (the cloud says it is). Absent otherwise, and from a core before it.
+	/// cloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the
+	/// workspace's members, for a security mode: `message` says why). Absent otherwise, and from a core before it.
 	val cause: String? = null
 )
 
@@ -4058,6 +4059,9 @@ data class StationView (
 	val online: Boolean,
 	/// Up, but not reached just now (connecting or coming back): its figures are from before.
 	val reconnecting: Boolean? = null,
+	/// Down for a security mode (it refused this device, or takes none of this workspace's members yet): why, in
+	/// words, in place of the page's 离线 note. Absent otherwise.
+	val blocked: String? = null,
 	/// Seconds, from still.fail cloud.
 	val lastSeen: Long? = null,
 	val version: String? = null,

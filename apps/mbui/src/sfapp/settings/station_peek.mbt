@@ -69,7 +69,14 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String) -> Unit {
         if flag(s, "online") {
           peek_figures(c, core, s)
         } else {
-          c.text(fill("android-settings.stations.offline", [("app", "still.fail")]), style=peek_said) |> ignore
+          // down for a security mode: why (the core's `blocked`), not how to bring it back
+          let blocked = text(s, "blocked")
+          let said = if blocked != "" {
+            blocked
+          } else {
+            fill("android-settings.stations.offline", [("app", "still.fail")])
+          }
+          c.text(said, style=peek_said) |> ignore
         }
       })
       |> ignore

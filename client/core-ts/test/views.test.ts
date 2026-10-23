@@ -863,6 +863,33 @@ test("many_changes_are_one_computation_and_one_emission", async () => {
   assert.equal(u.messages, messages + 1);
 });
 
+test("a_station_refusing_for_a_security_mode_says_why_in_place_of_offline", async () => {
+  // A station added to another workspace, taking none of its members yet, showed only 离线 there (2026-10-23).
+  const t = setup();
+  const list = ui();
+  const chats = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.subscribe(2, { topic: "chats", scope: "ws" });
+  t.set(workspace(), stations(t.nowS()));
+  await t.readAll([[list, 1], [chats, 2]]);
+  const why = "此 workspace 在此 station 加入后才开启安全模式，它不再接受此 workspace 的成员：请将它从此 workspace 移除后重新添加";
+  t.set(link("ws/a"), { state: "online" });
+  t.set(link("ws/c"), { state: "online" });
+  t.set(link("ws/b"), { state: "offline", cause: "lock", message: why });
+  await t.readAll([[list, 1], [chats, 2]]);
+  const b = (list.value as J[]).find((s) => s.station === "ws/b");
+  assert.deepEqual([b.online, b.summary, b.line, b.blocked], [false, "安全模式未放行", "安全模式未放行", why]);
+  const v = chats.value;
+  assert.deepEqual(v.stations.find((s: J) => s.station === "ws/b"), { station: "ws/b", id: "b", name: "beta", state: "offline", message: why, cause: "lock" });
+  assert.deepEqual(v.trouble, { text: "安全模式未放行 beta", state: "offline", retry: false, station: "ws/b" });
+  // Down for another reason: as before, nothing of a security mode.
+  t.set(link("ws/b"), { state: "offline", cause: "unreached" });
+  await t.readAll([[list, 1], [chats, 2]]);
+  const again = (list.value as J[]).find((s) => s.station === "ws/b");
+  assert.deepEqual([again.summary, again.blocked], ["连不上", undefined]);
+  assert.equal(chats.value.trouble.text, "无法连接 beta");
+});
+
 test("a_stopped_view_lets_its_topics_go", async () => {
   const t = setup();
   const u = ui();

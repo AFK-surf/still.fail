@@ -106,6 +106,13 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
         if (entries.length > 0) socket.send(JSON.stringify({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) }));
         told.set(m.workspace, seq);
       }
+      askPending();
+    };
+    // The lock joining a workspace named, asked for (pendingAsks) as the station hears it joined and at each ping.
+    const asked = new Set<string>();
+    const askPending = () => {
+      if (socket.readyState !== WebSocket.OPEN) return;
+      for (const ws of pendingAsks(s, asked)) socket.send(JSON.stringify({ type: "lock.get", after: -1, workspace: ws }));
     };
     tell();
     const unlisten = s.listen(tell);
@@ -134,6 +141,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
         }
         answered = false;
         socket.send("ping");
+        askPending();
       });
     });
     socket.on("message", (data, binary) => {
@@ -256,6 +264,22 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
   } else if (body?.type === "lock" && Array.isArray(body.entries)) {
     takeFromPlane(s, body.entries, typeof body.workspace === "string" && body.workspace !== s.state?.workspace ? body.workspace : null);
   }
+}
+
+/// The joined workspaces whose lock, named by joining, is to be asked for now: not pinned yet, the plane having one
+/// there, not asked for on this connection (`asked`, kept by it). The plane tells the station it joined (a `state`
+/// frame) before it answers the join, so that frame came before joining wrote which lock to pin and asked for nothing:
+/// the station took none of that workspace's members until a later frame, which may not come for days (2026-10-23).
+export function pendingAsks(s: CloudState, asked: Set<string>): string[] {
+  const out: string[] = [];
+  for (const j of s.state?.joined ?? []) {
+    if (s.leftOut(j.workspace) !== "pending" || (s.planeLockSeqs.get(j.workspace) ?? -1) < 0) continue;
+    const key = `${j.workspace}/${s.pendingLock(j.workspace)}`;
+    if (asked.has(key)) continue;
+    asked.add(key);
+    out.push(j.workspace);
+  }
+  return out;
 }
 
 /// The control plane's lock head against this station's, in `ws` (the home workspace when null): asks for what it

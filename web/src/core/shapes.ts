@@ -2108,7 +2108,8 @@ export interface Link {
 	retrying?: boolean;
 	/**
 	 * Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the
-	 * cloud says it is not online) | unreached (the cloud says it is). Absent otherwise, and from a core before it.
+	 * cloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the
+	 * workspace's members, for a security mode: `message` says why). Absent otherwise, and from a core before it.
 	 */
 	cause?: string;
 }
@@ -4107,6 +4108,11 @@ export interface StationView {
 	online: boolean;
 	/** Up, but not reached just now (connecting or coming back): its figures are from before. */
 	reconnecting?: boolean;
+	/**
+	 * Down for a security mode (it refused this device, or takes none of this workspace's members yet): why, in
+	 * words, in place of the page's 离线 note. Absent otherwise.
+	 */
+	blocked?: string;
 	/** Seconds, from still.fail cloud. */
 	lastSeen?: number;
 	version?: string;
