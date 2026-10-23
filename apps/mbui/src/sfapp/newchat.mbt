@@ -227,8 +227,9 @@ fn new_chat_on(
   if !fresh.sent && !fresh.starting && sig != fresh.made_sig {
     fresh.made = ""
   }
-  // at a desktop's width, the web's page (wide_newchat.mbt)
-  if wide_on.val && !leaving {
+  // at a desktop's width, the web's page (wide_newchat.mbt); once its first words are sent, the composer at the foot
+  // where the chat's is, as the web's goes to the chat's dock (the words fly from there into the chat: flight.mbt)
+  if wide_on.val && !leaving && !fresh.sent && !fresh.starting {
     new_chat_page_wide(c, src, w, v, station)
     return
   }
