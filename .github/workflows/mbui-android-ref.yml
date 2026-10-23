@@ -137,7 +137,9 @@ jobs:
           # which then started cold, ~85 s configuring, 39740407276)
           gradle-read-only: 'true'
       - uses: ./.github/actions/mbui-apk
+        id: apk
         if: steps.emu.outputs.on == '1'
+        with: { for: sf }
       # (not in a run that takes Android's pictures: the two do not fit in one job's 10 minutes, the text is recorded in
       # the run after, over the pictures committed; this app's build alone took 4 minutes cold, 39936596964)
       - name: The mbui app, for the text it lacks (APP=sffix, debug, for the x86_64 emulator)
@@ -147,6 +149,13 @@ jobs:
         if: steps.emu.outputs.on == '1'
         working-directory: apps/mbui/mbui
         run: ABI=x86_64 APP=render MBUI_ANDROID_HOOK=$PWD/scripts/render_android_hook.sh bash scripts/android.sh build
+      # the dependencies' dex as both apps left it, kept now: this job fails in the runs that record what a PR commits,
+      # which an action's save at the job's end passes over (.github/actions/mbui-apk `for`)
+      - uses: actions/cache/save@v4
+        if: always() && steps.apk.outputs.key != ''
+        with:
+          path: ${{ github.workspace }}/.ci/apk
+          key: ${{ steps.apk.outputs.key }}
       # Android's build directories as pipeline's check-android left them (this branch's, else main's; read only, that
       # job keeps them): what did not change is up to date (from nothing, Gradle took 176-222 s of this job)
       - uses: actions/cache/restore@v4

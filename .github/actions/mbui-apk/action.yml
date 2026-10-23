@@ -1,14 +1,43 @@
 # What mbui's scripts/apk keeps for a debug APK of mbui's own apps (apps/mbui/mbui/android): the dependencies
 # apk.lock pins, fetched and each dexed once, by the lock (a new lock: fetched and dexed anew, then kept). APK_CACHE
 # for the steps after it.
+# `for`: a job that builds still.fail's app too (its dependencies more than mbui's own apps'): a key of its own, saved by
+# the job itself (actions/cache/save with this step's `key`, if: always()) after its builds; a key is kept as the job
+# that first saved it had it, and a job that fails (mbui-android-ref's runs that record what a PR commits) saves
+# nothing at its end (its dex cold each run: 127 s of the 10 minutes, 39940293358).
 name: mbui APK
 description: The APK's dependencies and their dex, kept by apk.lock
+inputs:
+  for:
+    description: "the job's own key (still.fail's app built too), saved by the job; none: mbui's apps, saved at the job's end"
+    default: ''
+outputs:
+  key:
+    description: the cache's key
+    value: ${{ steps.key.outputs.key }}
 runs:
   using: composite
   steps:
-    - uses: actions/cache@v4
+    - id: key
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.for }}" ]; then
+          key="mbui-apk-lib-${{ runner.os }}-${{ inputs.for }}-${{ hashFiles('apps/mbui/mbui/android/apk.lock', 'apps/mbui/mbui/tools/apk/main.mbt', 'apps/mbui/android/apk.json') }}"
+        else
+          key="mbui-apk-lib-${{ runner.os }}-${{ hashFiles('apps/mbui/mbui/android/apk.lock', 'apps/mbui/mbui/tools/apk/main.mbt') }}"
+        fi
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+    - if: inputs.for == ''
+      uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/.ci/apk
-        key: mbui-apk-lib-${{ runner.os }}-${{ hashFiles('apps/mbui/mbui/android/apk.lock', 'apps/mbui/mbui/tools/apk/main.mbt') }}
+        key: ${{ steps.key.outputs.key }}
+    - if: inputs.for != ''
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ github.workspace }}/.ci/apk
+        key: ${{ steps.key.outputs.key }}
+        # (else mbui's own apps' dex: what they share is not dexed again)
+        restore-keys: mbui-apk-lib-${{ runner.os }}-
     - shell: bash
       run: echo "APK_CACHE=$GITHUB_WORKSPACE/.ci/apk" >> "$GITHUB_ENV"
