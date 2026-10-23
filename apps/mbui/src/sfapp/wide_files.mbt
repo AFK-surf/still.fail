@@ -880,7 +880,11 @@ fn files_list(
     (None, None) => c.box(style=files_note_box, fn() { c.text(tr("web-pages.files.reading"), style=place_meta) |> ignore }) |> ignore
     (Some([]), _) =>
       c.box(style=files_note_box, fn() { c.text(tr("web-pages.drive.emptyFolder"), style=place_meta) |> ignore }) |> ignore
-    (Some(list), _) =>
+    (Some(list), _) => {
+      // a list's heads (ListView): its order by a press on one, the one it is in marked
+      if !tree && depth == 0 {
+        files_heads(c, src)
+      }
       for e in list {
         let full = dv_join(path, e.name)
         let okey = "tree/" + at.station + "/" + root + "/" + full
@@ -896,7 +900,38 @@ fn files_list(
           files_list(c, src, at, root, full, depth + 1, true, front_it)
         }
       }
+    }
   }
+}
+
+///|
+/// A list's heads (DriveViews.tsx ListView): 名称, 大小, 修改时间 over their columns; a press orders the folder by it
+/// (`driveViews.sort`), the order it is in marked.
+fn files_heads(c : @ui.Ctx, src : Source) -> Unit {
+  let t = @sf.theme()
+  let (sort, _) = dv_views(src)
+  let head = fn(key : String, words : String, style : @ui.Style) {
+    let id = c.id("files/head/" + key)
+    c.cursor(id, Hand)
+    if c.clicked(id) && sort != key {
+      dv_set_view(src, "sort", if key == "name" { None } else { Some(key) })
+    }
+    let b = c.box(style~, id~, fn() {
+      c.text(words, style=files_head_words) |> ignore
+      if sort == key {
+        @sf.icon(c, "chevron-down", size=files_close_icon, color=t.p.muted) |> ignore
+      }
+    })
+    c.semantics(b, Button, id~, label=words)
+  }
+  c.box(style=files_heads_row, fn() {
+    c.box(style=files_head_mark, fn() {  }) |> ignore
+    head("name", tr("web-pages.drive.sortBy.nameHead"), files_head_name)
+    head("size", tr("web-pages.drive.sortBy.sizeHead"), files_head_size)
+    head("time", tr("web-pages.drive.sortBy.timeHead"), files_head_time)
+    c.box(style=files_row_end, fn() {  }) |> ignore
+  })
+  |> ignore
 }
 
 ///|
@@ -1011,6 +1046,12 @@ fn wide_row(
     c.text(e.name, style=place_name) |> ignore
     if column && e.dir {
       @sf.icon(c, "chevron-right", size=files_icon, color=t.p.subtle) |> ignore
+    }
+    // a list's and a tree's: its size and when it changed, in their columns
+    if !column {
+      c.box(style=files_size_cell, fn() { c.text(e.size_text, style=files_cell_words) |> ignore }) |> ignore
+      c.box(style=files_time_cell, fn() { c.text(e.time_text, style=files_cell_words) |> ignore }) |> ignore
+      c.box(style=files_row_end, fn() {  }) |> ignore
     }
   })
   |> ignore
@@ -1220,6 +1261,50 @@ let files_head_half : @ui.Style = @ui.style(w=Full, px=S6, pt=S3, pb=S3, gap=S1_
 ///|
 // kept across runs: a value (no field of it changes)
 let files_pane_half : @ui.Style = @ui.style(w=Full, h=Full, px=S4, clip=true)
+
+///|
+/// A list's columns (ListView): its size's (96) and its time's (116), right-aligned, and the room after them for its
+/// row's menu (64).
+// kept across runs: a value (no field of it changes)
+let files_size_cell : @ui.Style = @ui.style(row=true, w=S24, justify=JEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_time_cell : @ui.Style = @ui.style(row=true, w=S28, justify=JEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_row_end : @ui.Style = @ui.style(w=S16)
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_cell_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// The heads: a row 32 high, their words small and muted, each over its column.
+// kept across runs: a value (no field of it changes)
+let files_heads_row : @ui.Style = @ui.style(row=true, w=Full, h=S8, px=S2, gap=S2, align=ACenter)
+
+///|
+/// (over a row's mark: as wide as it)
+// kept across runs: a value (no field of it changes)
+let files_head_mark : @ui.Style = @ui.style(w=S4)
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_head_name : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_head_size : @ui.Style = @ui.style(row=true, w=S24, gap=S1, align=ACenter, justify=JEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_head_time : @ui.Style = @ui.style(row=true, w=S28, gap=S1, align=ACenter, justify=JEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_head_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 /// The line under the bar (Files.css.ts: the pane's line across it).
