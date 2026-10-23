@@ -465,7 +465,12 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       0.0,
     )
   }
-  if (n.bg & 0xFFL) != 0L || n.border_w > 0.0 {
+  // its border over what it holds (drawn after it, below): the box's own edge, never covered by what is in it, as
+  // CSS's border is outside what a box holds (here it takes no room); with nothing in it, with its ground
+  let border_over = n.border_w > 0.0 &&
+    n.first >= 0 &&
+    (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll)
+  if (n.bg & 0xFFL) != 0L || (n.border_w > 0.0 && !border_over) {
     self.emit_rect(
       n.x,
       n.y,
@@ -473,7 +478,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       n.fh,
       n.radius,
       n.bg,
-      n.border_w,
+      if border_over { 0.0 } else { n.border_w },
       n.border_c,
       alpha,
     )
@@ -619,6 +624,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   if clipped {
     pop_clip()
+  }
+  if border_over {
+    self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, n.border_c, alpha)
+    self.notch_last(n)
   }
   if n.kind == kind_list {
     self.paint_scrollbar(n, alpha)

@@ -7,6 +7,8 @@
 //     chk textrec [--keep] LOG NAME PAGE W H [PLATFORM]   --keep: listed in textrec_runs.txt (to be committed)
 //     chk textrec --runs     textrec_runs.mbt made again from textrec_runs.txt
 //     chk textrec --check    CI: textrec_runs.mbt, the list and the runs git keeps agree
+//     chk textrec --rehash LOG  a change to what mbui draws: each kept run's frames hashed again as the Tester over
+//                            its kept text drew them (the REHASH lines its test says, in LOG), its text the host's still
 //
 // W H "-": the window's size at the run's first frame (its DRAWHASH line). PLATFORM is the host's as
 // @hostapi.platform has it (0 macOS, 1 iOS, 2 Android, 3 Windows, 4 the web; 0 by default).
@@ -204,8 +206,11 @@ fn textrec(args : Array[String]) -> Int {
   if args == ["--check"] {
     return textrec_check()
   }
+  if args.length() == 2 && args[0] == "--rehash" {
+    return textrec_rehash(args[1])
+  }
   if args.length() < 5 {
-    @sys.eprintln("chk textrec [--keep] LOG NAME PAGE W H [PLATFORM] | --runs | --check")
+    @sys.eprintln("chk textrec [--keep] LOG NAME PAGE W H [PLATFORM] | --runs | --check | --rehash LOG")
     return 2
   }
   let log = args[0]
@@ -265,6 +270,9 @@ fn textrec(args : Array[String]) -> Int {
     "    for line in t.drawn_text().split(\"\\n\") {",
     "      println(\"TDUMP \" + line.to_owned())",
     "    }",
+    "    for f in frames {",
+    "      println(\"REHASH \{name} \\{f.0} \\{f.2}\")",
+    "    }",
     "  }",
     "  assert_true(frames.length() > 0)",
     "  assert_eq(t.text_missing(), [])",
@@ -281,5 +289,71 @@ fn textrec(args : Array[String]) -> Int {
   )
   runs_file(if keep_it { Some(name) } else { None })
   say("\{keep.length()} lines")
+  0
+}
+
+///|
+/// What a change to what mbui draws leaves of the kept runs: each run's text is still the host's, and its frames' hashes
+/// are no longer what mbui draws over it. Its test says them as the Tester drew them (REHASH NAME FRAME HASH, the lines
+/// a kept run's test prints when a frame is apart); each is put in place of its DRAWHASH line's hash. The run's header
+/// says so. Fails when LOG says none.
+fn textrec_rehash(log : String) -> Int {
+  let lines = text_lines(@sys.read_text(log).unwrap_or(""))
+  let by : Map[String, Map[String, String]] = Map::new()
+  for l in lines {
+    let p = split_ws(tail(l, "REHASH "))
+    if p.length() != 4 || p[0] != "REHASH" || p[3].has_prefix("VIEWSCRIPT") {
+      continue
+    }
+    let m = match by.get(p[1]) {
+      Some(m) => m
+      None => {
+        let m = Map::new()
+        by[p[1]] = m
+        m
+      }
+    }
+    m[p[2]] = p[3]
+  }
+  if by.is_empty() {
+    @sys.eprintln("chk textrec --rehash: no REHASH line in \{log}")
+    return 1
+  }
+  let note = "// Its frames' hashes since made again by a Tester over this text (scripts/chk textrec --rehash): a change to\n// what mbui draws, not to the host's."
+  for name, frames in by {
+    let path = @sys.join(kit(), "textrec_\{name}.mbt")
+    let text = match @sys.read_text(path) {
+      Some(t) => t
+      None => {
+        @sys.eprintln("chk textrec --rehash: \{path} is not there")
+        return 1
+      }
+    }
+    let out = []
+    let mut changed = 0
+    for l in text_lines(text) {
+      if l.has_prefix("  #|DRAWHASH ") {
+        let p = split_ws(l.view(start_offset="  #|".length()).to_string())
+        if p.length() >= 7 {
+          match frames.get(p[1]) {
+            Some(h) if h != p[6] => {
+              p[6] = h
+              changed = changed + 1
+              out.push("  #|" + p.join(" "))
+              continue
+            }
+            _ => ()
+          }
+        }
+      }
+      out.push(l)
+      // (said once, under the header)
+      if l == "// made by scripts/chk textrec: not edited by hand." && !text.contains("chk textrec --rehash") {
+        out.push(note)
+      }
+    }
+    let _ = @sys.write_text(path, out.join("\n") + "\n")
+    say("\{name}: \{changed} frames hashed again")
+  }
   0
 }
