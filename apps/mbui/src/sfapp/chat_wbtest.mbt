@@ -143,6 +143,7 @@ test "images take their own proportions before they load" {
     height: 2532.0,
     thumbhash: "",
     owner: "",
+    upload: "",
   }
   assert_eq(image_box(a, 16.0), (139.0, 300.0, false))
   assert_eq(image_box({ ..a, width: 1600.0, height: 900.0 }, 16.0), (360.0, 203.0, false))

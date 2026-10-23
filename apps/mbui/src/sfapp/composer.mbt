@@ -556,6 +556,27 @@ fn upload_id(what : String, n : Int) -> String {
 }
 
 ///|
+/// The pictures of images sent from here, as they were picked (ChatFiles.kt FileData.sentOf): by station and the name
+/// it keeps the file under once up, or by the upload's id from when it starts going up (a message sent before it is up
+/// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
+/// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image).
+let sent_pictures : Map[String, String] = {}
+
+///|
+fn sent_key(station : String, path : String) -> String {
+  station + "\u{1}" + base_name(path)
+}
+
+///|
+/// The picture `a` was sent from here as, if it was.
+fn sent_picture(station : String, a : Attachment) -> String? {
+  match sent_pictures.get(sent_key(station, a.path)) {
+    Some(k) => Some(k)
+    None => if a.upload != "" { sent_pictures.get("upload\u{1}" + a.upload) } else { None }
+  }
+}
+
+///|
 /// A file picked or pasted, into the draft and up to the station at once (Composer.kt upload): over 1 GB it is
 /// refused where it shows; on a read-only run it goes nowhere.
 fn add_file(src : Source, d : Draft, station : String, name : String, bytes : Bytes, pasted : String?) -> Unit {
@@ -600,6 +621,9 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
   // the core sends it up, from its bytes handed over beside the call; a message sent before it is up waits for it
   let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1)
   p.core_id = cid
+  if image != "" {
+    sent_pictures["upload\u{1}" + cid] = image
+  }
   let blob : Map[String, Json] = {
     "hostBytes": [0, Json::number(bytes.length().to_double())],
     "type": Json::string(file_type(name)),
@@ -677,7 +701,7 @@ fn file_type(name : String) -> String {
 ///|
 /// What the core says of the draft's files as they go up (its composer's topic), each frame one is going: how far,
 /// up (with a picture's size from here when the station gave none), or failed (to go again).
-fn follow_uploads(src : Source, d : Draft) -> Unit {
+fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
   if !d.files.iter().any(fn(f) { f.core_id != "" && f.done is None && f.error is None }) {
     return
   }
@@ -701,6 +725,9 @@ fn follow_uploads(src : Source, d : Draft) -> Unit {
           }
           f.sent = f.size
           f.done = Some(Json::object(file))
+          if f.image != "" {
+            sent_pictures[sent_key(station, text(f.done, "path"))] = f.image
+          }
         }
         _ =>
           match text(Some(one), "error") {
@@ -1163,7 +1190,7 @@ fn composer(
     None => draft_key(r)
   })
   // its files as they go up in the core
-  follow_uploads(src, d)
+  follow_uploads(src, d, r.station)
   let offline = match v {
     Some(v) => v.offline
     None => false
@@ -1880,6 +1907,7 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
     height: f.height.to_double(),
     thumbhash: "",
     owner: "",
+    upload: "",
   }
   // the viewer's id of it (Viewer::id: its station, no session, its path), its tile kept for it to fly from
   let thumb = station + "//" + a.path

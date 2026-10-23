@@ -249,6 +249,7 @@ fn reset() -> Unit {
   svc_folded.val = false
   splash_waited.val = false
   drafts.clear()
+  sent_pictures.clear()
   cui.attach = false
   cui.picking = None
   cui.picking_for = ""

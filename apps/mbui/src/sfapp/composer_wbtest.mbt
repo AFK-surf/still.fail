@@ -581,6 +581,44 @@ test "the fixture's station: sending, then the message, then an answer; a failur
 }
 
 ///|
+test "a picture sent from here is drawn in its message as it was picked, up before it was sent or after" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let ups : Map[String, Json] = {}
+  let t = fake_core(calls, made~, ups~)
+  let src = made.val.unwrap()
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let d = drafts.get(draft_key(r)).unwrap()
+  // a PNG's header (IHDR 1600 × 900): a picture
+  let png = Bytes::from_array([
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x06, 0x40,
+    0, 0, 0x03, 0x84, 8, 6, 0, 0, 0,
+  ].map(fn(i) { i.to_byte() }))
+  add_file(src, d, r.station, "shot.png", png, None)
+  let shot = d.files[0].image
+  assert_true(shot != "")
+  // up before it is sent: its message's file by the name the station keeps it under, wherever it is moved
+  upped(ups, named(calls, "composer.add")[0], path="/w/uploads/2026-10-23-a1-shot.png")
+  t.draw()
+  let file = fn(path : String, upload : String) {
+    attachment_of({
+      "name": Json::string("shot.png"),
+      "path": Json::string(path),
+      "size": Json::number(29.0),
+      "upload": Json::string(upload),
+    })
+  }
+  assert_eq(sent_picture(r.station, file("/w/s-c1/uploads/2026-10-23-a1-shot.png", "")), Some(shot))
+  // not another station's of that name, nor one this device did not send
+  assert_eq(sent_picture("ws1/st2", file("/w/s-c1/uploads/2026-10-23-a1-shot.png", "")), None)
+  assert_eq(sent_picture(r.station, file("/w/s-c1/uploads/2026-10-23-b2-shot.png", "")), None)
+  // sent while it still goes up: its message names its upload
+  add_file(src, d, r.station, "later.png", png, None)
+  let later = d.files[1]
+  assert_eq(sent_picture(r.station, file("/w/s-c1/uploads/2026-10-23-c3-later.png", later.core_id)), Some(later.image))
+}
+
+///|
 test "image sizes from their bytes" {
   // a PNG's header (IHDR 1600 × 900), a GIF's (3 × 2)
   let png = Bytes::from_array([
