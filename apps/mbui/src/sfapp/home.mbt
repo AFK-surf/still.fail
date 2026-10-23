@@ -603,70 +603,20 @@ fn note_marks(c : @ui.Ctx, v : ChatsView) -> Unit {
 }
 
 ///|
-// kept across runs: a table, never written
-let titles : Array[Double] = [150.0, 110.0, 170.0, 130.0, 96.0, 160.0, 120.0]
-
-///|
-// kept across runs: a table, never written
-let lines : Array[Double] = [230.0, 190.0, 250.0, 170.0, 210.0, 200.0, 180.0]
-
-///|
-/// The list read the first time (Waiting.kt Waiting, WaitShapes Rows): rows to come breathing, what is wrong over
-/// them in red (the shapes then still).
+/// The list read the first time (the library's Waiting: @sf.waiting, its rows): rows to come breathing, what is wrong
+/// over them in red (the shapes then still); what it waits on said only to a screen reader while it reads.
 fn waiting(c : @ui.Ctx, n : Int, note : ListNote?, error : String?) -> Unit {
-  let t = @sf.theme()
-  let failing : Array[String] = []
-  match error {
-    Some(e) => failing.push(e)
-    None => ()
-  }
-  match note {
-    Some(nt) => failing.append(nt.failing)
-    None => ()
-  }
-  let reading = error is None &&
-    (match note {
-      Some(nt) => nt.reading
-      None => true
-    })
-  c.box(w=Fill(1.0), fn() {
-    if failing.length() > 0 {
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=14.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-        for f in failing {
-          c.box(padx=12.0, pady=6.0, radius=15.0, bg=t.p.chip, fn() {
-            c.text(f, size=13.0, color=t.p.red, line=18.0, center=true) |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    }
-    let breath = if reading { @sf.breath(c) } else { 0.6 }
-    // what it waits on, said only to a screen reader while it reads (Waiting.kt)
-    let said = if reading {
-      match note {
-        Some({ text: Some(s), .. }) => s
-        _ => tr("common.reading")
-      }
-    } else {
-      ""
-    }
-    c.box(w=Fill(1.0), opacity=breath, label=said, fn() {
-      for i in 0..<n {
-        c.box(dir=Row, w=Fill(1.0), h=Px(66.0), pl=22.0, pr=16.0, gap=12.0, align=ACenter, fn() {
-          c.box(w=Fill(1.0), gap=10.0, fn() {
-            @sf.bar(c, Px(titles[i % titles.length()]), 13.0)
-            @sf.bar(c, Px(lines[i % lines.length()]), 10.0)
-          })
-          |> ignore
-          @sf.bar(c, Px(22.0), 22.0)
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
+  @sf.waiting(
+    c,
+    shape=Rows,
+    count=n,
+    text=tr("common.reading"),
+    error=error.unwrap_or(""),
+    note?=match note {
+      Some(nt) => Some({ reading: nt.reading, text: nt.text.unwrap_or(""), failing: nt.failing })
+      None => None
+    },
+  )
 }
 
 ///|

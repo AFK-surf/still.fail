@@ -96,41 +96,6 @@ fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Sha
   out
 }
 
-///|
-/// The spinner's line: 2 wide (Waiting.kt Spinner: Stroke(2.dp)).
-let spin_stroke : Double = 2.0
-
-///|
-/// The spinner (styles/spinner.css.ts, Waiting.kt Spinner): a ring of line_strong, a quarter of it in the accent,
-/// turning in 0.8s; 14, or 12 in a line of small text. `sweep` (of a turn) and `period` for other rings that turn (a
-/// chat's mark at work: three quarters, 1.2s). Its lines drawn as they are every frame (mbui's Ctx::lines), only where
-/// the arc starts going round with the clock: nothing to make, nothing to wait for.
-pub fn spinner(
-  c : @ui.Ctx,
-  size? : Double = 14.0,
-  ring? : Int64,
-  arc? : Int64,
-  sweep? : Double = 0.25,
-  period? : Double = 800.0,
-) -> Int {
-  let t = theme()
-  let ring = ring.unwrap_or(t.p.line_strong)
-  let arc = arc.unwrap_or(t.p.accent)
-  let pi = 3.141592653589793
-  // the line's middle 1 in from the edge; the arc from a quarter before the top (the web's: a border whose top is
-  // the arc), turned by the clock
-  let mid = size / 2.0
-  let r = mid - spin_stroke / 2.0
-  let from = -0.75 * pi + c.cycle(period) * 2.0 * pi
-  c.lines(
-    [
-      @ui.line(@ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi), width=spin_stroke, color=ring),
-      @ui.line(@ui.arc(mid, mid, r, from~, sweep=sweep * 2.0 * pi), width=spin_stroke, color=arc),
-    ],
-    w=Px(size),
-    h=Px(size),
-  )
-}
 
 ///|
 /// What is at work steps round (Spokes.kt, the web's spokes.ts): eight, the brightest a step further every 100 ms,

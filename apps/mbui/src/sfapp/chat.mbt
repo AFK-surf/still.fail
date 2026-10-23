@@ -932,7 +932,7 @@ let rise_dy : Double = 14.0
 /// ENTER), each its turn as long (listQueue.ts).
 fn row_rise() -> (Double, @motion.Ease, Double) {
   if wide_on.val {
-    (220.0, Out, 6.0)
+    (@sf.enter_ms, @sf.ease_out, @sf.enter_rise)
   } else {
     (row_turn_ms, Standard, rise_dy)
   }
@@ -2517,53 +2517,11 @@ fn avatar(
 }
 
 ///|
-// kept across runs: a table, never written
-let shapes : Array[(Bool, Double, Double)] = [
-  (false, 220.0, 40.0),
-  (false, 160.0, 58.0),
-  (true, 180.0, 40.0),
-  (false, 240.0, 76.0),
-  (true, 120.0, 40.0),
-  (false, 200.0, 40.0),
-]
-
-///|
-/// The chat read the first time (Waiting.kt Waiting, WaitShapes Messages): the messages to come breathing, theirs
-/// with a picture on the left, the viewer's on the right; what could not be read over them in red (the shapes still).
+/// The chat read the first time (the library's Waiting: @sf.waiting, its messages): the messages to come breathing,
+/// theirs with a picture on the left, the viewer's on the right; what could not be read over them in red (the shapes
+/// still).
 fn waiting_messages(c : @ui.Ctx, failed : String?) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), fn() {
-    match failed {
-      Some(f) =>
-        c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=14.0, pb=4.0, align=ACenter, fn() {
-          c.box(padx=12.0, pady=6.0, radius=15.0, bg=t.p.chip, fn() {
-            c.text(f, size=13.0, color=t.p.red, line=18.0, center=true) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      None => ()
-    }
-    let breath = if failed is None { @sf.breath(c) } else { 0.6 }
-    let most = c.width * 0.7
-    c.box(w=Fill(1.0), pt=8.0, gap=14.0, opacity=breath, fn() {
-      for s in shapes {
-        let (mine, w, h) = s
-        c.box(dir=Row, w=Fill(1.0), padx=16.0, justify=if mine { JEnd } else { JStart }, fn() {
-          if !mine {
-            c.box(w=Px(28.0), h=Px(28.0), radius=14.0, bg=t.p.neutral_bg, fn() {  })
-            |> ignore
-            c.box(w=Px(10.0), fn() {  }) |> ignore
-          }
-          c.box(w=Px(dmin(w, most)), h=Px(h), radius=18.0, bg=t.p.neutral_bg, fn() {  })
-          |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
+  @sf.waiting(c, shape=Messages, error=failed.unwrap_or(""))
 }
 
 ///|

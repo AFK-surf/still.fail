@@ -1227,130 +1227,40 @@ pub fn doing_mark(c : @ui.Ctx, running : Bool, failed : String?, inline? : Bool 
 }
 
 ///|
-/// A wait said in a line of its own (Waiting.kt WaitLine): a spinner before it; what is wrong in red.
+/// A wait said in a line of its own (the library's WaitLine: @sf.wait_line, a spinner before it after a moment; what is
+/// wrong in red at once); `pad`: in from its sides as a card's words.
 pub fn wait_line(c : @ui.Ctx, words : String, error? : Bool = false, pad? : Bool = false) -> Unit {
-  c.box(style=if pad { wait_line_padded } else { @sf.beside }, fn() {
-    if !error {
-      spinner(c, inline=true)
-    }
-    c.text(words, style=if error { @sf.meta.then(@sf.bad) } else { @sf.meta }) |> ignore
-  })
-  |> ignore
+  if pad {
+    c.box(style=wait_line_padded, fn() { @sf.wait_line(c, words, error~) }) |> ignore
+  } else {
+    @sf.wait_line(c, words, error~)
+  }
 }
 
 ///|
 /// A wait's line in a page's flow: in from its sides as a card's words.
 // kept across runs: a value (no field of it changes)
-let wait_line_padded : @ui.Style = @sf.beside.then(@ui.style(px=S5, py=S2))
+let wait_line_padded : @ui.Style = @ui.style(w=Full, px=S5, py=S2)
 
 ///|
-/// The shapes of a settings page's cards to come (Waiting.kt Waiting, WaitShape.Cards), breathing; what could not be
-/// read over them in red (the shapes then still).
+/// The shapes of a settings page's cards to come (the library's Waiting: @sf.waiting, its cards), 12 in from the page's
+/// sides; what could not be read over them in red (the shapes then still).
 fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
-  let pills = if error != "" { [error] } else { [] }
-  pills.append(failing)
-  c.box(style=@sf.full_width, fn() {
-    if pills.length() > 0 {
-      wait_pills(c, pills)
-    }
-    let breath = if pills.length() == 0 { @sf.breath(c) } else { 0.6 }
-    c.box(style=wait_card_list, opacity=breath, fn() {
-      for i in 0..<count {
-        c.box(style=wait_card, h=Px(wait_cards[i % wait_cards.length()]), fn() {  }) |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// What could not be read, each in a pill of the chip's grey (Waiting.kt WaitPill), over the shapes: 20 in, 14 down.
-fn wait_pills(c : @ui.Ctx, pills : Array[String]) -> Unit {
-  let t = @sf.theme()
-  c.box(style=wait_pill_list, fn() {
-    for f in pills {
-      // (the chip's grey: the wide frame's light one is not mbui's Faint)
-      c.box(style=wait_pill, bg=t.p.chip, fn() {
-        // Waiting.kt:119 (13sp, line 18, two lines at most, the second ending in an ellipsis)
-        c.text(f, style=wait_pill_words) |> ignore
-      })
-      |> ignore
-    }
+  c.box(style=wait_cards_in, fn() {
+    @sf.waiting(c, shape=Cards, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
   })
   |> ignore
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_pill_list : @ui.Style = @ui.style(w=Full, px=S5, pt=S3_5, pb=S1, gap=S2, align=ACenter)
+let wait_cards_in : @ui.Style = @ui.style(w=Full, px=S3)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wait_pill : @ui.Style = @ui.style(px=S3, py=S1_5, radius=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_pill_words : @ui.TextStyle = @sf.meta.then(@sf.bad).then(@ui.text_style(center=true, max_lines=2))
-
-///|
-/// The cards to come: 12 from the page's sides, 16 apart, each a card's corner on the placeholders' grey.
-// kept across runs: a value (no field of it changes)
-let wait_card_list : @ui.Style = @ui.style(w=Full, px=S3, gap=S4)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_card : @ui.Style = @ui.style(w=Full, radius=Xl3, bg=Neutral)
-
-///|
-// kept across runs: a table, never written
-let wait_cards : Array[Double] = [120.0, 88.0, 152.0, 104.0]
-
-///|
-// kept across runs: a table, never written
-let wait_titles : Array[Double] = [150.0, 110.0, 170.0, 130.0, 96.0, 160.0, 120.0]
-
-///|
-// kept across runs: a table, never written
-let wait_lines : Array[Double] = [230.0, 190.0, 250.0, 170.0, 210.0, 200.0, 180.0]
-
-///|
-/// A list's rows to come (Waiting.kt WaitShape.Rows): a title and a line, a picture at the end, 66 high.
+/// A list's rows to come (the library's Waiting: @sf.waiting, its rows); what could not be read over them in red.
 fn waiting_rows(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
-  let pills = if error != "" { [error] } else { [] }
-  pills.append(failing)
-  c.box(style=@sf.full_width, fn() {
-    if pills.length() > 0 {
-      wait_pills(c, pills)
-    }
-    let breath = if pills.length() == 0 { @sf.breath(c) } else { 0.6 }
-    c.box(style=@sf.full_width, opacity=breath, fn() {
-      for i in 0..<count {
-        // (66 high, 22 in at its start: off the scale)
-        c.box(style=wait_row, h=Px(66.0), pl=22.0, fn() {
-          c.box(style=wait_row_lines, fn() {
-            @sf.bar(c, Px(wait_titles[i % 7]), 13.0)
-            @sf.bar(c, Px(wait_lines[i % 7]), 10.0)
-          })
-          |> ignore
-          @sf.bar(c, Px(22.0), 22.0)
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
+  @sf.waiting(c, shape=Rows, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
 }
-
-///|
-/// A row to come: 16 in at its end, its lines and its picture 12 apart; its lines 10 apart.
-// kept across runs: a value (no field of it changes)
-let wait_row : @ui.Style = @ui.style(row=true, w=Full, pr=S4, gap=S3, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wait_row_lines : @ui.Style = @ui.style(w=Full, gap=S2_5)
 
 ///|
 /// What could not be read of a list, by the stations that failed (a ListNote's `failing`).
