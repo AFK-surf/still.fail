@@ -63,6 +63,9 @@ struct FakeHost {
   mut inset : Bool
   /// the system's size of words (font_scale: 1 as it is)
   mut font_scale : Double
+  /// something reading the widgets out (a11y_on), and what it was last told they are (a11y.mbt)
+  mut a11y : Bool
+  mut a11y_said : String
   env : Map[String, String]
   app_version : Int
   /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken
@@ -664,6 +667,22 @@ fn h_open_tab(url : String) -> Bool {
       true
     }
     None => @hostapi.open_tab(url)
+  }
+}
+
+///|
+fn h_a11y_on() -> Bool {
+  match fake.val {
+    Some(f) => f.a11y
+    None => @hostapi.a11y_on()
+  }
+}
+
+///|
+fn h_a11y_tree(tree : String) -> Unit {
+  match fake.val {
+    Some(f) => f.a11y_said = tree
+    None => @hostapi.a11y_tree(tree)
   }
 }
 

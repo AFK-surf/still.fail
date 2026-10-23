@@ -305,7 +305,21 @@ fn place_page(
             }
             // its ＋, named as what it adds (PlusButton)
             match primary {
-              Some((key, run)) => if nav_button(c, key, "plus", size=20.0) { run() }
+              Some((key, run)) =>
+                if nav_button(
+                    c,
+                    key,
+                    "plus",
+                    size=20.0,
+                    said=match key {
+                      "add-station" => tr("android-misc.bar.action.stations")
+                      "add-profile" => tr("android-misc.bar.action.profiles")
+                      "add-connect" => tr("android-misc.bar.action.connects")
+                      _ => ""
+                    },
+                  ) {
+                  run()
+                }
               None => ()
             }
           })
@@ -1395,11 +1409,12 @@ fn tap_text(
 
 ///|
 /// A round button in a bar (Parts.kt NavButton): its icon alone, 34 round. True on the frame after a tap.
-fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0) -> Bool {
+fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String = "") -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  // (34 round, off the scale; rippled over its circle: NavButton's clip(CircleShape).clickable)
-  c.box(style=round_button, w=Px(34.0), h=Px(34.0), id~, fn() {
+  // (34 round, off the scale; rippled over its circle: NavButton's clip(CircleShape).clickable; `said` what it is to a
+  // screen reader, a contentDescription round it)
+  c.box(style=round_button, w=Px(34.0), h=Px(34.0), id~, label=said, fn() {
     @sf.icon(c, icon, size~, color=t.p.text) |> ignore
     @motion.ripple(c, id, 17.0)
   })

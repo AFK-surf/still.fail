@@ -136,6 +136,13 @@ extern "C" fn ffi_system_dark() -> Int = "mb_host_system_dark"
 ///|
 extern "C" fn ffi_font_scale() -> Double = "mb_host_font_scale"
 
+///|
+extern "C" fn ffi_a11y_on() -> Int = "mb_host_a11y_on"
+
+///|
+#borrow(s)
+extern "C" fn ffi_a11y_tree(s : String) -> Unit = "mb_host_a11y_tree"
+
 extern "C" fn ffi_set_dark(dark : Int) -> Unit = "mb_host_set_dark"
 
 ///|
@@ -512,6 +519,16 @@ fn system_dark() -> Bool {
 ///|
 fn font_scale() -> Double {
   ffi_font_scale()
+}
+
+///|
+fn a11y_on() -> Bool {
+  ffi_a11y_on() != 0
+}
+
+///|
+fn a11y_tree(s : String) -> Unit {
+  ffi_a11y_tree(s)
 }
 
 ///|

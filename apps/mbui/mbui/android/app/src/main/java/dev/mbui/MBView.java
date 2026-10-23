@@ -58,6 +58,30 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         setRenderMode(RENDERMODE_WHEN_DIRTY);
         setFocusable(true);
         setFocusableInTouchMode(true);
+        // a screen reader turned on or off: the app tells its widgets, or stops (A11y, @hostapi.a11y_on)
+        android.view.accessibility.AccessibilityManager am =
+                (android.view.accessibility.AccessibilityManager) c.getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (am != null) am.addAccessibilityStateChangeListener(on -> wantFrame());
+    }
+
+    /** The app's widgets for Android's accessibility (A11y): made as the app first tells them. */
+    private A11y a11y;
+
+    A11y a11y() {
+        if (a11y == null) a11y = new A11y(this);
+        return a11y;
+    }
+
+    @Override
+    public android.view.accessibility.AccessibilityNodeProvider getAccessibilityNodeProvider() {
+        return a11y != null && a11y.any() ? a11y : super.getAccessibilityNodeProvider();
+    }
+
+    @Override
+    protected boolean dispatchHoverEvent(android.view.MotionEvent e) {
+        // a finger exploring the screen with a screen reader on: the widget under it (A11y)
+        if (a11y != null && a11y.any() && a11y.hover(e)) return true;
+        return super.dispatchHoverEvent(e);
     }
 
     // ---- GL thread ----

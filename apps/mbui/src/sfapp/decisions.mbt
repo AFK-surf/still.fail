@@ -28,7 +28,7 @@ fn decisions_capsule(c : @ui.Ctx, src : Source, w : Workspace, ground : Int64) -
   if c.clicked(id) {
     open_decisions()
   }
-  c.box(
+  let capsule = c.box(
     dir=Row,
     h=Px(56.0),
     min_w=56.0,
@@ -47,7 +47,8 @@ fn decisions_capsule(c : @ui.Ctx, src : Source, w : Workspace, ground : Int64) -
       }
     },
   )
-  |> ignore
+  // (Home.kt DecisionsCapsule: 「n 件待你决定」 to a screen reader)
+  c.semantics(capsule, Button, id~, label=fill("android-chat.home.decisions", [("n", n.to_string())]))
 }
 
 ///|

@@ -134,7 +134,7 @@ fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
             news_gone.val = news
             (src.call)("changelog.seen", Json::object({}), fn(_) {  })
           }
-          c.box(style=news_close, id=close, fn() {
+          c.box(style=news_close, id=close, label=tr("android-settings.changelog.dismiss"), fn() {
             @sf.icon(c, "close", size=16.0, color=t.p.muted) |> ignore
             @motion.ripple(c, close, 16.0)
           })

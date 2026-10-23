@@ -46,7 +46,7 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
   // over the navigation bar (History.kt: windowInsetsPadding(navigationBars))
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
     page_bar(c, "history", tr("common.back"), tr("android-chat.history.title"), fn() {
-      if title != "" && link != "" && nav_button(c, "copy", 18.0, key="history/copy") {
+      if title != "" && link != "" && nav_button(c, "copy", 18.0, key="history/copy", said=tr("web-mobile.history.copyLink")) {
         copy_chat_link(c, title, link)
       }
     })

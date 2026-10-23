@@ -52,6 +52,8 @@ pub(open) trait Host {
   set_app_state(Self, FuncRef[(Int) -> Unit]) -> Unit = _
   system_dark(Self) -> Bool = _
   font_scale(Self) -> Double = _
+  a11y_on(Self) -> Bool = _
+  a11y_tree(Self, String) -> Unit = _
   set_dark(Self, Bool) -> Unit = _
   set_sideways(Self, Bool) -> Unit = _
   share(Self, String, String, String, Bytes) -> Bool = _
@@ -357,6 +359,16 @@ impl Host with env(_, _) {
 
 ///|
 impl Host with set_app_state(_, _) {
+  ()
+}
+
+///|
+impl Host with a11y_on(_) {
+  false
+}
+
+///|
+impl Host with a11y_tree(_, _) {
   ()
 }
 
@@ -1257,6 +1269,25 @@ pub fn env(name : String) -> String {
 pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
   current.val.set_app_state(f)
 }
+
+///|
+/// Whether something reads the app's widgets out (Android: an accessibility service on, TalkBack's or another's): the
+/// app then tells the host what its widgets are as they change (`a11y_tree`, @ui's semantics.mbt).
+pub fn a11y_on() -> Bool {
+  current.val.a11y_on()
+}
+
+///|
+/// What the app's widgets are now, for the system's accessibility (@ui's semantics.mbt says the lines). What is asked
+/// of one comes back on the channel `a11y_channel`.
+pub fn a11y_tree(tree : String) -> Unit {
+  current.val.a11y_tree(tree)
+}
+
+///|
+/// The channel what the system's accessibility asks of a widget is posted on (`{"id": widget, "action": name}`): the
+/// framework's own (@ui takes it).
+pub let a11y_channel : String = "a11y"
 
 ///|
 /// How much bigger the system's setting for the size of words makes them (Android's fontScale: 1 as it is, 1.3 the

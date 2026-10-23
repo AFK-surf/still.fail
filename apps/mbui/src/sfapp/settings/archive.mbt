@@ -193,7 +193,11 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
     fn() {
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=10.0, align=ACenter, fn() {
         c.text(title, size=16.0, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
-        c.text(join([text(v, "place"), text(v, "clock")], "  "), size=12.0, color=t.p.subtle, wrap=false)
+        // (read as how it was archived: ArchiveRow's contentDescription = item.how)
+        c.box(label=text(v, "how"), fn() {
+          c.text(join([text(v, "place"), text(v, "clock")], "  "), size=12.0, color=t.p.subtle, wrap=false)
+          |> ignore
+        })
         |> ignore
         if busy {
           c.box(w=Px(34.0), h=Px(34.0), align=ACenter, justify=JCenter, fn() { spinner(c) }) |> ignore

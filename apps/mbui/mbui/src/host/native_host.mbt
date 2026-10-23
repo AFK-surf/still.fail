@@ -216,6 +216,16 @@ impl @hostapi.Host for Native with font_scale(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with a11y_on(_) {
+  a11y_on()
+}
+
+///|
+impl @hostapi.Host for Native with a11y_tree(_, s) {
+  a11y_tree(s)
+}
+
+///|
 impl @hostapi.Host for Native with set_dark(_, dark) {
   set_dark(dark)
 }

@@ -344,6 +344,8 @@ pub struct Ctx {
   sem_hidden : Array[(Int, Int)]
   asked_actions : Array[(Int, Action)]
   actions : Array[(Int, Action)]
+  // what the system's accessibility was last told the widgets are (a11y.mbt; "" nothing yet, or it is off)
+  mut a11y_sent : String
   // the keyboard's focus beyond a field's (focus.mbt): whether it shows (it came by the keyboard), what had it as the
   // frame started; what can take it, as this frame builds it and as the last one did; roving groups' state, and the
   // group being built
@@ -509,6 +511,7 @@ fn Ctx::new() -> Ctx {
     sem_hidden: [],
     asked_actions: [],
     actions: [],
+    a11y_sent: "",
     focus_visible: false,
     focus_roved: false,
     focus_before: 0,
@@ -1044,8 +1047,9 @@ let no_text_patch : TextPatch = text_patch()
 
 ///|
 pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
-  // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame)
-  self.clicked.contains(id)
+  // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame; the Activate
+  // a screen reader asks of it is one: semantics.mbt)
+  self.clicked.contains(id) || (id != 0 && self.action_asked(id, Activate))
 }
 
 ///|

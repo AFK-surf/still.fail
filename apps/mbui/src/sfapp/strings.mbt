@@ -3,6 +3,9 @@
 
 ///|
 let zh : Map[String, String] = {
+  "android-chat.archive.named": "归档「{title}」",
+  "android-settings.changelog.dismiss": "知道了",
+  "web-main.list.separator": "、",
   "web-main.relay.action": "接力到频道…",
   "web-main.relay.change": "更换",
   "web-main.relay.done": "已接力到 {place}",

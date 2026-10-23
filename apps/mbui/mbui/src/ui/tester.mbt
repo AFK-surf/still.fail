@@ -217,6 +217,8 @@ pub fn Tester::new(
     dark,
     inset: window_inset,
     font_scale: 1.0,
+    a11y: false,
+    a11y_said: "",
     env: Map::from_array(env),
     app_version,
     notices: [],

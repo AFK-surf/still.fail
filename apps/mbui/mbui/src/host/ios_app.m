@@ -1095,6 +1095,9 @@ void mb_host_set_app_state(void (*f)(int32_t)) {
 // Whether the system is set to dark (@hostapi.system_dark): the screen's interface style.
 // Words as the app sizes them (@hostapi.font_scale): the system's own size of words not followed here yet.
 double mb_host_font_scale(void) { return 1.0; }
+// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
+int32_t mb_host_a11y_on(void) { return 0; }
+void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
 
 int32_t mb_host_system_dark(void) {
   return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? 1 : 0;

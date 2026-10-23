@@ -245,22 +245,26 @@ fn update_button(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let progress = update_progress()
   if progress != "" {
-    c.text(
-      match progress.find(" ") {
-        Some(i) => progress.view(start_offset=i + 1).to_owned()
-        None => "…"
-      },
-      size=13.0,
-      color=t.p.muted,
-      wrap=false,
-    )
+    // (read out whole: Home.kt's contentDescription = progress)
+    c.box(label=progress, fn() {
+      c.text(
+        match progress.find(" ") {
+          Some(i) => progress.view(start_offset=i + 1).to_owned()
+          None => "…"
+        },
+        size=13.0,
+        color=t.p.muted,
+        wrap=false,
+      )
+      |> ignore
+    })
     |> ignore
     return
   }
   match update.available {
     Some(v) if items(Some(v), "news").length() > 0 =>
       c.box(fn() {
-        if nav_button(c, "download", 20.0, key="home-update") {
+        if nav_button(c, "download", 20.0, key="home-update", said=up("android-chat.home.update", args=[("version", text(Some(v), "versionName"))])) {
           update_install(src)
         }
         c.layer(align=AEnd, fn() {

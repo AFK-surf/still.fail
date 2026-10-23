@@ -4,6 +4,8 @@
 
 ///|
 let drive_zh : Map[String, String] = {
+  "android-misc.bar.action.files": "添加文件夹",
+  "android-misc.drive.pick.filterClear": "清除筛选",
   "android-misc.act.failed": "无法{what}：{error}",
   "android-misc.bar.place.files": "文件",
   "android-misc.drive.choose": "选择文件夹",

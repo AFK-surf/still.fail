@@ -43,7 +43,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_v_tell, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
-    m_save, m_system_dark, m_font_scale, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
+    m_save, m_system_dark, m_font_scale, m_a11y_on, m_a11y_tree, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
     m_open_url, m_open_tab, m_hold_words, m_clipboard_secret, m_over_done, m_text_scale, m_img_hold, m_img_pump;
 static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
@@ -95,6 +95,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_drive = (*env)->GetStaticMethodID(env, host_cls, "drive", "(ILjava/lang/String;)I");
   m_system_dark = (*env)->GetStaticMethodID(env, host_cls, "systemDark", "()Z");
   m_font_scale = (*env)->GetStaticMethodID(env, host_cls, "fontScale", "()F");
+  m_a11y_on = (*env)->GetStaticMethodID(env, host_cls, "a11yOn", "()Z");
+  m_a11y_tree = (*env)->GetStaticMethodID(env, host_cls, "a11yTree", "(Ljava/lang/String;)V");
   m_set_dark = (*env)->GetStaticMethodID(env, host_cls, "setDark", "(Z)V");
   m_set_sideways = (*env)->GetStaticMethodID(env, host_cls, "setSideways", "(Z)V");
   m_word_at = (*env)->GetStaticMethodID(env, host_cls, "wordAt", "(Ljava/lang/String;I)D");
@@ -1126,6 +1128,20 @@ static void mb_post_wake(void) {
 int32_t mb_host_system_dark(void) {
   JNIEnv *env = env_();
   return (*env)->CallStaticBooleanMethod(env, host_cls, m_system_dark) ? 1 : 0;
+}
+
+// Whether an accessibility service is on (@hostapi.a11y_on: Host.a11yOn, AccessibilityManager's say, a frame asked as it
+// changes), and what the app's widgets are now for it (@hostapi.a11y_tree: MBView's A11y, the view's virtual nodes).
+int32_t mb_host_a11y_on(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticBooleanMethod(env, host_cls, m_a11y_on) ? 1 : 0;
+}
+
+void mb_host_a11y_tree(moonbit_string_t s) {
+  JNIEnv *env = env_();
+  jstring j = jstr(env, s);
+  (*env)->CallStaticVoidMethod(env, host_cls, m_a11y_tree, j);
+  (*env)->DeleteLocalRef(env, j);
 }
 
 // How much bigger the system's words setting makes words (@hostapi.font_scale), as MainActivity keeps it (Host.fontScale:

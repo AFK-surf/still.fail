@@ -4,6 +4,10 @@
 ///|
 // kept across runs: a table, never written
 let zh : Map[String, String] = {
+  "web-mobile.connects.feishu.qr": "创建飞书机器人的二维码",
+  "android-misc.bar.action.connects": "添加连接",
+  "android-misc.bar.action.profiles": "添加 Profile",
+  "android-misc.bar.action.stations": "添加 station",
   "web-mobile.connects.feishu.name": "飞书",
   "web-mobile.connects.feishu.slackNote": "在 Slack 的频道和私信中使用",
   "web-mobile.connects.feishu.feishuNote": "在飞书的群和私聊中使用，含国际版 Lark",

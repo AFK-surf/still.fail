@@ -78,7 +78,8 @@ fn station_update_control(c : @ui.Ctx, src : Source, station : String, notice : 
     }
     None => ()
   }
-  c.box(style=update_control_row, id~, fn() {
+  // (read as the notice's words: StationUpdate.kt's contentDescription = notice.text)
+  c.box(style=update_control_row, id~, label=text(notice, "text"), fn() {
     c.box(style=if trouble { update_dot_trouble } else { update_dot }, fn() {  }) |> ignore
     c.text(
       match text(notice, "label") {
@@ -243,10 +244,21 @@ fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : 
             if c.clicked(close) {
               update_notice(src, station, notice, if flag(notice, "dismissible") { "dismiss" } else { "close" })
             }
-            c.box(style=update_close, id=close, fn() {
-              @sf.icon(c, "close", size=14.0, color=@sf.theme().p.muted) |> ignore
-              @motion.ripple(c, close, 16.0)
-            })
+            c.box(
+              style=update_close,
+              id=close,
+              label=tr(
+                if flag(notice, "dismissible") {
+                  "android-misc.stationUpdate.dismiss"
+                } else {
+                  "android-misc.stationUpdate.collapse"
+                },
+              ),
+              fn() {
+                @sf.icon(c, "close", size=14.0, color=@sf.theme().p.muted) |> ignore
+                @motion.ripple(c, close, 16.0)
+              },
+            )
             |> ignore
           })
           |> ignore
