@@ -583,9 +583,12 @@ let card_foot_ground : @ui.Style = card_ground.then(@ui.style(radius=@sf.card_fo
 ///|
 /// Rows on one rounded card, no lines between them (Parts.kt ListCard, RowsCard): its rows know they are on one
 /// (`on_card`, LocalOnCard).
-fn list_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
-    c.box(style=list_ground, fn() {
+/// In the wide frame the web's list (pages.css.ts list, listRow): its rows on the page, no ground under them but the
+/// pointer's, their words at the column's edge; `boxed`, on its ground still (a card of rows: listCard).
+fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
+  let flat = wide.val && !boxed
+  c.box(style=if flat { wide_list_room } else if wide.val { wide_card_room } else { card_room }, fn() {
+    c.box(style=if flat { wide_list_ground } else { list_ground }, fn() {
       let was = on_card.val
       on_card.val = true
       body()
@@ -595,6 +598,15 @@ fn list_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// The wide frame's list on the page: its rows' words 16 in (the row's own 12), as the title's.
+// kept across runs: a value (no field of it changes)
+let wide_list_room : @ui.Style = @ui.style(w=Full, px=S1, pb=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_list_ground : @ui.Style = @ui.style(w=Full, gap=SPx)
 
 ///|
 /// Whether what is being drawn is on a list card (Parts.kt LocalOnCard): a PickRow's ground is then the card's
@@ -624,7 +636,7 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, 
     |> ignore
   }
   match piece {
-    None => row(list_line)
+    None => row(if wide.val { wide_list_line } else { list_line })
     Some((first, last)) => card_piece(c, first, last, fn() { row(list_piece_line) })
   }
   id != 0 && hit(c, id)
@@ -707,6 +719,21 @@ let list_piece_patch : @ui.Style = @ui.style(w=Full, h=Full, bg=Card)
 /// what `Inner` works out on a whole card; a piece's ground is no container of it, squared where it is no end of it).
 // kept across runs: a value (no field of it changes)
 let list_piece_line : @ui.Style = list_line.then(@ui.style(radius=Xl2))
+
+///|
+/// The wide frame's row (pages.css.ts listRow): 52 high at least, 10 by 12 in, the field's corner under the pointer.
+// kept across runs: a value (no field of it changes)
+let wide_list_line : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  min_h=S12,
+  px=S3,
+  py=S2_5,
+  gap=S3,
+  radius=Xl,
+  align=ACenter,
+  hovered=@ui.patch(bg=Hover),
+)
 
 ///|
 /// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.

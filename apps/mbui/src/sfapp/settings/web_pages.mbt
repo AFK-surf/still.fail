@@ -150,7 +150,7 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
   })
   blocks.push(fn() { section_header(c, tr("web-pages.notifications.kinds.title")) })
   blocks.push(fn() {
-    list_card(c, fn() {
+    list_card(c, boxed=true, fn() {
       for kind in notify_kinds {
         kind_row(c, core, notify, kind, on)
       }
@@ -158,7 +158,7 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
   })
   blocks.push(fn() { section_header(c, tr("web-pages.notifications.more.title")) })
   blocks.push(fn() {
-    list_card(c, fn() {
+    list_card(c, boxed=true, fn() {
       let preview = flag(notify, "preview") || field(notify, "preview") is None
       if list_row(c, key=if on { "notify-preview" } else { "" }, fn() {
           row_lines(c, tr("web-pages.notifications.preview"), tr("web-pages.notifications.previewNote"), wrap_sub=true)
