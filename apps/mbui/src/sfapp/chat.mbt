@@ -112,6 +112,8 @@ priv struct Reading {
   /// drawn; the rows new to it since, until they show
   known : Map[String, Bool]
   mut drawn : Bool
+  /// the agents' lines among them (by key): one gone from the chat's end is forgotten (row_keys)
+  acts : Map[String, Bool]
   /// the frame its page was last built in, and its own data last taken in (chat_tick: what comes out of its avatars
   /// played on, its activities' lingering)
   mut shown_frame : Int
@@ -182,6 +184,7 @@ fn reading_of(key : String) -> Reading {
         bench_present: [],
         known: {},
         drawn: false,
+        acts: {},
         shown_frame: -10,
         played: -10,
         ticked: -10,
@@ -1179,6 +1182,16 @@ fn row_keys(
       all_keys.insert(at + j, "o:" + l.row.id)
     }
   }
+  // an agent's line gone from the chat's end (its turn over, its moment stayed) is new to the list again: its next
+  // turn comes in as its first did, its room opening, not there at once (its key is its agent's, the same each turn)
+  if !v.newer && !rd.acts.is_empty() {
+    let gone = rd.acts.keys().filter(fn(k) { !all_keys.contains(k) }).collect()
+    for k in gone {
+      rd.acts.remove(k)
+      rd.known.remove(k)
+      rd.admitted.remove(k)
+    }
+  }
   let info = c.list_info(key)
   let following = match info {
     Some(i) => i.at_end || i.gliding || i.following_row
@@ -1208,6 +1221,9 @@ fn row_keys(
       }
       if comes {
         rd.admitted[k] = true
+        if e is Working(_) {
+          rd.acts[k] = true
+        }
         match e {
           // (after what closes under a post as its agent starts)
           Working(_) => turns.admit(c, k, working_turn_ms, after=true)
@@ -1239,8 +1255,11 @@ fn row_keys(
       }
     }
   }
-  for k in keys {
+  for i, k in keys {
     rd.known[k] = true
+    if list[i] is Working(_) {
+      rd.acts[k] = true
+    }
   }
   rd.drawn = true
   (list, keys)

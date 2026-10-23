@@ -93,6 +93,24 @@ test("only_what_is_said_while_a_chat_shows_comes_in", async () => {
   assert.deepEqual(said(v), []);
 });
 
+test("an_agent_at_work_in_a_chat_made_as_it_shows_comes_in_one_opened_at_work_does_not", async () => {
+  const host = new FakeHost();
+  const attend = await run(Attend.load(host));
+  const started = (v: J) => v.agents.filter((a: J) => a.started === true).map((a: J) => a.session.key);
+  const atWork = (thread: number, key: string): J => ({ ...chat(0, false, [[1, 0, true]]), thread: { id: thread, read: 0 }, agents: [{ session: { key }, status: "running" }] });
+  // a chat made here, shown before its station has a thread for it: its agent at work as it is first seen
+  attend.focus(1, focus({ visible: true, chat: { station: "ws/st", session: "new:k1" } }));
+  attend.chat("ws/st", "new:k1", { thread: null, messages: [], agents: [] });
+  assert.deepEqual(started(attend.chat("ws/st", "new:k1", atWork(7, "a")).value), ["a"]);
+  // a chat opened with its agent at work already
+  attend.focus(2, focus({ visible: true, chat: { station: "ws/st", thread: 8 } }));
+  assert.deepEqual(started(attend.chat("ws/st", null, atWork(8, "b")).value), []);
+  // the made one out of view and back: what is at work then was already
+  attend.focus(1, focus({ visible: false }));
+  attend.focus(1, focus({ visible: true }));
+  assert.deepEqual(started(attend.chat("ws/st", "new:k1", atWork(7, "a")).value), []);
+});
+
 test("background_and_delayed_messages_are_history_but_new_live_messages_still_animate", async () => {
   const host = new FakeHost();
   const attend = await run(Attend.load(host));
