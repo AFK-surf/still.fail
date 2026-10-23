@@ -185,6 +185,13 @@ static void engine_log(void *ctx, int level, const char *text, size_t len) {
   __android_log_print(priority, "StillFailCore", "%.*s", (int)len, text);
 }
 
+// The core's thread, attached to the VM before Hermes runs there (engine.h `thread`): Hermes answers String's
+// normalize, Intl and the rest in Java, through fbjni, which takes the thread's JNIEnv as it is.
+static void engine_thread(void *ctx) {
+  (void)ctx;
+  core_env();
+}
+
 // What the app's Java asks the core (AdbCore.send): the UI's client, the core's thread takes it in order.
 static void JNICALL java_send(JNIEnv *env, jclass cls, jstring json) {
   if (!A.engine || !json) return;
@@ -321,7 +328,7 @@ static void core_start(const char *data_dir, const char *cloud_origin, int beta,
   A.listener = (*env)->NewGlobalRef(env, listener);
   jsize size = (*env)->GetArrayLength(env, script);
   jbyte *code = (*env)->GetByteArrayElements(env, script, NULL);
-  sf_engine_host host = {NULL, engine_say, engine_app_call, engine_log};
+  sf_engine_host host = {NULL, engine_say, engine_app_call, engine_log, engine_thread};
   A.engine = sf_engine_start((const uint8_t *)code, (size_t)size, "core.hbc", data_dir, cloud_origin, beta, "android", &host);
   (*env)->ReleaseByteArrayElements(env, script, code, JNI_ABORT);
   if (!A.engine) {

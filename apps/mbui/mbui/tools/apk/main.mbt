@@ -2,7 +2,7 @@
 // resources and manifest linked by aapt2, its native libraries and assets packed, aligned and signed, with the SDK's
 // own tools (and R8 at a version pinned here). What scripts/apk.py did, in MoonBit (2026-10-23: tools are MoonBit).
 //
-//     apk lock APP.json             its dependencies (APP.json's "lock": group:artifact:version a line) fetched once
+//     apk lock APP.json             its dependencies (APP.json's "lock": group:artifact:version[:classifier] a line) fetched once
 //                                   and their SHA-256 written beside each, so builds take those bytes and no others
 //     apk build APP.json --variant V --version-code N --version-name S --out APP.apk
 //                                   [--abi arm64-v8a] [--keystore PATH]
@@ -138,7 +138,9 @@ fn fetch(url : String, dest : String) -> Bool {
 fn artifact_path(coord : String, ext : String) -> String {
   let p = coord.split(":").map(fn(x) { x.to_string() }).to_array()
   let g = p[0].replace_all(old=".", new="/")
-  "\{g}/\{p[1]}/\{p[2]}/\{p[1]}-\{p[2]}.\{ext}"
+  // group:artifact:version[:classifier] (hermes-android's AAR is only its -release one)
+  let c = if p.length() > 3 { "-" + p[3] } else { "" }
+  "\{g}/\{p[1]}/\{p[2]}/\{p[1]}-\{p[2]}\{c}.\{ext}"
 }
 
 ///|

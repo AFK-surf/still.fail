@@ -35,6 +35,9 @@ typedef struct {
   void (*app_call)(void *ctx, uint64_t id, const char *op, const char *json, size_t len, const uint8_t *bytes, size_t blen);
   /// A line of the core's log: 0 debug, 1 info, 2 warn, 3 error. May be NULL.
   void (*log)(void *ctx, int level, const char *text, size_t len);
+  /// Called first on the core's thread, before Hermes runs anything there: on Android the host attaches it to the VM,
+  /// as Hermes answers String's normalize, Intl and the rest in Java through it. May be NULL.
+  void (*thread)(void *ctx);
 } sf_engine_host;
 
 /// Starts a core: its script (Hermes bytecode or source; copied), named `script_url` in its stack traces, its files in

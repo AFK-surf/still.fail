@@ -345,6 +345,7 @@ class Engine {
   }
 
   void run() {
+    if (host_.thread) host_.thread(host_.ctx);
     double t0 = steadyMs();
     shell_ = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, gate_);
     if (!shell_) {
@@ -451,8 +452,38 @@ struct sf_engine {
   std::unique_ptr<Engine> engine;
 };
 
+#ifdef __ANDROID__
+/// Hermes's methods that Android answers in Java (String's normalize, localeCompare and toLocale…Case, Date's and
+/// Number's toLocaleString, Intl) find their Java classes (Hermes's AndroidUnicodeUtils, its Intl ones) by FindClass
+/// the first time one runs, and keep them. On the core's thread, made here and not by Java, FindClass looks in the
+/// system's class loader, which has none of the app's: the class is not found and the core ends (a formula's first
+/// letter: MathJax's isLatinOrGreekChar, normalize("NFD")). Each run once in a runtime of its own, on the app's thread
+/// that starts the first engine (android_core.c: the UI's, or a push's), finds and keeps them for every engine after
+/// (NativeLoader set up and fbjni loaded first: CoreHost.java).
+static void findJavaClasses(const sf_engine_host& host) {
+  static std::once_flag once;
+  std::call_once(once, [&host] {
+    static const std::string touch =
+        "'\\u00e9'.normalize('NFD'); 'a'.localeCompare('b'); 'A'.toLocaleLowerCase(); 'a'.toLocaleUpperCase();"
+        "new Date(0).toLocaleString(); (1.5).toLocaleString();"
+        "new Intl.Collator().compare('a', 'b'); new Intl.DateTimeFormat().format(0); new Intl.NumberFormat().format(1);";
+    try {
+      auto config = ::hermes::vm::RuntimeConfig::Builder().withIntl(true).build();
+      std::unique_ptr<facebook::hermes::HermesRuntime> rt = facebook::hermes::makeHermesRuntime(config);
+      rt->evaluateJavaScript(std::make_shared<jsi::StringBuffer>(touch), "classes.js");
+    } catch (const std::exception& e) {
+      std::string why = std::string("Hermes's Java classes not found: ") + e.what();
+      if (host.log) host.log(host.ctx, 3, why.data(), why.size());
+    }
+  });
+}
+#endif
+
 extern "C" SF_ENGINE_API sf_engine* sf_engine_start(const uint8_t* script, size_t script_len, const char* script_url, const char* data_dir,
                                                     const char* cloud_origin, int beta, const char* os, const sf_engine_host* host) {
+#ifdef __ANDROID__
+  findJavaClasses(*host);
+#endif
   auto* e = new sf_engine{std::make_unique<Engine>(std::string(reinterpret_cast<const char*>(script), script_len), script_url ? script_url : "core.hbc",
                                                    data_dir, cloud_origin, beta != 0, os ? os : "windows", *host)};
   if (!e->engine->start()) {
