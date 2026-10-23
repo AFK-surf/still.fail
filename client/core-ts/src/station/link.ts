@@ -60,8 +60,13 @@ export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number |
 /// Why a station taken for down is not reached, as far as the device can tell: `network`, still.fail cloud is not
 /// reached either (the device's own network, most likely); `station`, the cloud says it is not online; `unreached`, the
 /// cloud says it is, and this device does not reach it. A weak network took a phone's stations for down and said each
-/// "离线" while they were up (2026-10-23).
-export type DownCause = "network" | "station" | "unreached";
+/// "离线" while they were up (2026-10-23). `lock`: it answered, refusing this device or the workspace's members for a
+/// security mode (this device not approved there, or the station not taking that workspace's members yet): its words
+/// say why, in place of 离线 (2026-10-23: a station added to another workspace showed only 离线 there).
+export type DownCause = "network" | "station" | "unreached" | "lock";
+
+/// Whether a station's refusal is for a security mode (DownCause `lock`).
+export const lockRefusal = (e: { code: string }) => e.code === "lock_unconfirmed" || e.code === "lock_station";
 
 /// What a station's `/events` stream is opened for: host samples, the sessions followed as they run, the jobs' logs.
 export type EventsFor = { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] };
@@ -235,6 +240,8 @@ export class Links {
     for (const link of this.#links.values()) {
       const state = link.state.state;
       if (state !== "offline" && !(state === "connecting" && link.state.last === "offline")) continue;
+      // Refused for a security mode: that, until it answers otherwise.
+      if (link.state.cause === "lock") continue;
       const cause = this.#cause(link.address);
       if (link.state.cause !== cause) this.setLink(link.address, { ...link.state, cause });
     }
@@ -470,9 +477,11 @@ export class Links {
               span.set("error.type", error.code);
               span.end();
               misses++;
-              // It answered, but no: it is there. Not reached at all: coming back, or down.
-              const state = error.status !== undefined ? "error" : reached && misses < MISSES ? "reconnecting" : "offline";
-              self.setLink(address, state === "offline" ? { state, message: error.message, cause: self.#cause(address) } : { state, message: error.message });
+              // It answered, but no: it is there. Not reached at all: coming back, or down. Refused for a security mode:
+              // down for this device, and why (DownCause `lock`).
+              const lock = lockRefusal(error);
+              const state = lock ? "offline" : error.status !== undefined ? "error" : reached && misses < MISSES ? "reconnecting" : "offline";
+              self.setLink(address, state === "offline" ? { state, message: error.message, cause: lock ? "lock" : self.#cause(address) } : { state, message: error.message });
               return { failed: `open failed: ${error.message}` } as const;
             }
             const body = opened.success.body;

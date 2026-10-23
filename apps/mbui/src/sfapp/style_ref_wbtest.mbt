@@ -42,43 +42,44 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 20119:c41bb593
+    #|waiting narrow 29727:8588bcda
     #|waiting wide 59559:f5cdef4
-    #|waiting-dark narrow 19962:4df63003
+    #|waiting-dark narrow 29558:ecbc39eb
     #|waiting-dark wide 59707:533c044
-    #|finding narrow 22785:5e829afe
+    #|finding narrow 32393:ac0eb48b
     #|finding wide 62185:e0e267eb
-    #|finding-dark narrow 22768:8ac78329
+    #|finding-dark narrow 32364:a43859c1
     #|finding-dark wide 62212:4573f729
-    #|code narrow 17160:f24112c1
+    #|code narrow 26768:2d514798
     #|code wide 56570:515b9500
-    #|code-dark narrow 17023:77540a2c
+    #|code-dark narrow 26619:1b228668
     #|code-dark wide 56456:443fff44
-    #|wrong narrow 18581:c75e7342
+    #|wrong narrow 28189:c2ad8e47
     #|wrong wide 57986:fbd9a0bd
-    #|wrong-dark narrow 18492:405cccc3
+    #|wrong-dark narrow 28088:45d4a6ab
     #|wrong-dark wide 57866:f8513163
-    #|checking narrow 25002:3f7c2da
+    #|checking narrow 34610:736d8faf
     #|checking wide 64383:284f6fee
-    #|checking-dark narrow 24955:e1ef40ac
+    #|checking-dark narrow 34551:6b3654e8
     #|checking-dark wide 64357:5b29eda9
-    #|none narrow 19601:2c08218f
+    #|none narrow 29209:8ea1cd9e
     #|none wide 58766:2f04416a
-    #|none-dark narrow 19452:b23e8e79
+    #|none-dark narrow 29048:d25f5671
     #|none-dark wide 58926:8328172a
-    #|failed narrow 15433:6f0bbf53
+    #|failed narrow 25041:1e3a069a
     #|failed wide 54502:1f46b674
-    #|failed-dark narrow 15364:491adb43
+    #|failed-dark narrow 24960:5d1dcd2b
     #|failed-dark wide 54766:3ad292d4
-    #|refused narrow 17717:9b213afe
+    #|refused narrow 27325:b9a1548b
     #|refused wide 56860:4169e777
-    #|refused-dark narrow 17684:b6815b3e
+    #|refused-dark narrow 27280:82c4e2f2
     #|refused-dark wide 57106:4cfff131
-    #|nocode narrow 18805:6df58d8d
+    #|nocode narrow 28413:e75160cc
     #|nocode wide 57964:a4ca13e5
-    #|nocode-dark narrow 18668:23fac7bb
+    #|nocode-dark narrow 28264:7ce22b03
     #|nocode-dark wide 58122:e3acc8ef
     #|
+
 
 
 

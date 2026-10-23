@@ -37,7 +37,7 @@ export const routes = ({ cloud, data, changed }: WorkspacesDeps): Route[] => [
       if (lock !== undefined && lock !== null && (typeof lock !== "string" || !/^[0-9a-f]{64}$/.test(lock))) return error(400, "lock: a lock's hash");
       try {
         const joined = await joinWorkspace(data, token, typeof lock === "string" ? lock : undefined);
-        cloud.reload();
+        cloud.reload(true);
         changed?.();
         return json(200, JSON.stringify({ joined: { workspace: joined.workspace, workspaceName: joined.workspace_name, name: joined.name }, ...view(cloud, r) }));
       } catch (e) {

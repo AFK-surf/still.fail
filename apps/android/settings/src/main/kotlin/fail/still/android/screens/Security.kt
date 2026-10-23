@@ -79,6 +79,8 @@ import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -392,14 +394,19 @@ private fun pairSheet(app: AppState, r: LockPairing, deny: () -> Unit) {
 fun LockPrompts() {
     val app = LocalApp.current
     val topic by rememberTopic<LockPromptsView>(app.core, Topics.lockPrompts)
-    // Turned away here: not put up again while the core has yet to drop it.
+    // Turned away here, each ask (a device and the code it was shown): not put up again while the core has yet to drop
+    // it. The same device asking again (a new code) is put up again: it was not until the app started again (2026-10-23,
+    // 弹窗不弹). What the core dropped is forgotten here too.
     val denied = remember { mutableStateListOf<String>() }
-    val r = topic.value?.pairing?.firstOrNull { it.device !in denied }
+    val pairing = topic.value?.pairing
+    val ask = { p: LockPairing -> "${p.device} ${p.code}" }
+    if (pairing != null) LaunchedEffect(pairing) { denied.retainAll { d -> pairing.any { ask(it) == d } } }
+    val r = pairing?.firstOrNull { ask(it) !in denied }
     val free = app.sheet == null
-    LaunchedEffect(r?.device, free) {
+    LaunchedEffect(r?.let(ask), free) {
         if (r == null || !free) return@LaunchedEffect
         pairSheet(app, r) {
-            denied += r.device
+            denied += ask(r)
             app.act(t("web-pages.security.denyDevice")) { app.core.call("lockPrompt.deny", buildJsonObject { put("device", r.device) }) }
         }
     }
@@ -460,18 +467,27 @@ fun SecurityOpenScreen(current: WorkspaceEntry) {
 
 /**
  * What a device waiting to be confirmed shows instead of the workspace's pages: asking by hand, its person's trusted
- * devices reached, the code one of them shows typed here (`me.pair`; views/pair.ts).
+ * devices reached, the code one of them shows typed here (`me.pair`; views/pair.ts). Under Home's top bar: settings,
+ * and the workspace's name, which switches to another (2026-10-23: with this page in Home's place and no bottom bar,
+ * a phone had no way out of the workspace).
  */
 @Composable
 fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 28.dp).windowInsetsPadding(WindowInsets.navigationBars).imePadding(),
-        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        IconIn(Icons.ShieldCheck, 44.dp, C.ink)
-        Text(t("web-pages.security.waitingTitle"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
-        Text(t("web-pages.security.waitingLead", "name" to current.workspace.name), fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle, textAlign = TextAlign.Center)
-        PairSteps(current, lock)
+    val haze = remember { HazeState() }
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().hazeSource(haze).padding(horizontal = 28.dp).windowInsetsPadding(WindowInsets.navigationBars).imePadding(),
+            verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            IconIn(Icons.ShieldCheck, 44.dp, C.ink)
+            Text(t("web-pages.security.waitingTitle"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
+            Text(t("web-pages.security.waitingLead", "name" to current.workspace.name), fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle, textAlign = TextAlign.Center)
+            PairSteps(current, lock)
+        }
+        TopGlassBar(haze, Modifier.align(Alignment.TopCenter)) {
+            SettingsGear()
+            WorkspaceTitle(current, Modifier.weight(1f))
+        }
     }
 }
 

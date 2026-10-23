@@ -281,14 +281,14 @@ export function StationScreen() {
   const { login } = useParams();
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[joinedText(s), s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))].filter(Boolean).join(" · ")}</span> : undefined}
+      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[joinedText(s), s.host?.identity || (s.online ? t("web-mobile.stations.online") : s.blocked ? s.summary : t("web-mobile.stations.offline"))].filter(Boolean).join(" · ")}</span> : undefined}
         trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
       {!s ? <Waiting fill shape="cards" count={3} error={stations.error?.message} /> : (
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
           {/* Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
               offline changes what the page is. */}
           {s.online ? <Card><StationFigures s={s} /></Card> : (
-            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill trying={s.link.retrying === true} /></span></Card>
+            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{s.blocked ?? t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill trying={s.link.retrying === true} /></span></Card>
           )}
           {/* What runs on it is in settings' lists, every station's together; here, how much of it there is (once read), and its versions. */}
           <SectionHeader title={t("web-mobile.stations.onThis")} start={24} />

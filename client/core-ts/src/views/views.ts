@@ -87,6 +87,7 @@ export function downWords(link: J, name: string): string {
   const cause = get(link, "cause");
   if (cause === "network") return t("core-views.station.offline_network", { name });
   if (cause === "unreached") return t("core-views.station.unreachable", { name });
+  if (cause === "lock") return t("core-views.station.lock", { name });
   return t("core-views.station.offline", { name });
 }
 
@@ -1104,6 +1105,8 @@ export class Views implements Owner {
       else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name }), false, s.address]);
       else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name }), false, s.address]);
       const cause = state === "offline" ? get(this.link(s.address), "cause") : undefined;
+      // Refused for a security mode: why.
+      if (cause === "lock") message = get(this.link(s.address), "message") ?? null;
       states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}) });
     }
     const days = this.#days(rows);
@@ -1309,6 +1312,7 @@ export class Views implements Owner {
       const cause = get(this.link(s.address), "cause");
       if (!s.online && cause === "network") summary = t("core-views.station.network");
       else if (!s.online && cause === "unreached") summary = t("core-views.station.unreachable_short");
+      else if (!s.online && cause === "lock") summary = t("core-views.station.lock_short");
       else if (!s.online) {
         summary = typeof s.lastSeen === "number" ? t("core-views.station.offline_since", { ago: format.relativeTime(s.lastSeen * 1000, c.now, c.offsetMin) }) : t("core-views.station.offline_short");
       } else if (host !== null) {
@@ -1328,9 +1332,11 @@ export class Views implements Owner {
         ...(s.icon ? { icon: s.icon } : {}),
         summary,
         face: looks.face(s.online, overview),
-        line: looks.stationLine(s.online, host),
+        line: !s.online && cause === "lock" ? t("core-views.station.lock_short") : looks.stationLine(s.online, host),
         online: s.online,
         reconnecting: s.online && state !== "online" && state !== "error",
+        // Down for a security mode: why, in place of the page's 离线 words.
+        ...(!s.online && cause === "lock" && typeof get(this.link(s.address), "message") === "string" ? { blocked: get(this.link(s.address), "message") } : {}),
         lastSeen: s.lastSeen,
         version: s.version,
         link: this.link(s.address),

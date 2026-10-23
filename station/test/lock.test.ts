@@ -348,6 +348,54 @@ test("a station in a second workspace pins that one's lock there: none of its me
 const VECTOR_HASH = "27e965570b626031e9640b781bdba3b5bb111ba2307b81bd9af8d14158f8578a";
 const VECTOR_CODE = "UJV-HA9";
 
+test("joining a locked workspace: the plane's frame comes before the join's answer, and its lock is asked for once joining names it; till then its members are told why", async () => {
+  const { joinedPendingPath } = await import("../src/cloud/state.ts");
+  const { mkdirSync, writeFileSync } = await import("node:fs");
+  const { dirname } = await import("node:path");
+  const { pendingAsks } = await import("../src/cloud/presence.ts");
+  const { refusalOf } = await import("../src/mesh/serve.ts");
+  const B = "01HBBBBBBBBBBBBBBBBBBBBBBB";
+  const C = "01HCCCCCCCCCCCCCCCCCCCCCCC";
+  const w = workspace();
+  const b = workspace(B);
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const sent: any[] = [];
+  const asked = new Set<string>();
+  const inB = { workspace: B, workspace_name: "B", name: "s0", peers: [{ id: b.stations[0]!.hex }], revocations: [], lock: { seq: 0, hash: entryHash(b.first) }, locked: true };
+  const frame = (joined: unknown[], lock: unknown = null) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: [], grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock, workspaces: joined });
+  // B's member, with a credential as the plane signs them, and someone else's.
+  const endpoint = ed().hex;
+  const hello = { credential: credential(w.grant, B, endpoint, "member") };
+  const forged = { credential: credential(new GrantKey("k9"), B, endpoint, "member") };
+  const refused = (h: unknown) => refusalOf(cloud, h, endpoint, new Error("credential is for another workspace"));
+  // The plane tells the station it is in B as it takes the join, before the join is answered: which lock to pin is not
+  // written yet, and nothing is asked for.
+  applyState(cloud, frame([inB]), (f) => sent.push(f));
+  assert.equal(sent.length, 0);
+  assert.equal(cloud.leftOut(B), "unpinned");
+  assert.deepEqual(pendingAsks(cloud, asked), []);
+  assert.deepEqual(refused(hello), { error: refused(hello).error, code: "lock_station", why: "unpinned" });
+  // Joining answered, naming B's lock: asked for at once (and once), not at the plane's next frame.
+  mkdirSync(dirname(joinedPendingPath(cloud.data, B)), { recursive: true });
+  writeFileSync(joinedPendingPath(cloud.data, B), JSON.stringify({ hash: entryHash(b.first) }));
+  assert.equal(cloud.leftOut(B), "pending");
+  assert.equal(refused(hello).why, "pending");
+  assert.deepEqual(refused(forged), { error: "credential is for another workspace" }, "one that does not check out is told nothing of B");
+  assert.deepEqual(pendingAsks(cloud, asked), [B]);
+  assert.deepEqual(pendingAsks(cloud, asked), []);
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first] }));
+  assert.equal(cloud.leftOut(B), null);
+  assert.deepEqual(cloud.memberships().map((m) => m.workspace), [WS, B]);
+  // Its home locked later: an unlocked workspace it is in is left out, and its members told why.
+  cloud.takeLock([w.first]);
+  applyState(cloud, frame([inB, { workspace: C, workspace_name: "C", name: "s0", peers: [], revocations: [], lock: null }], { seq: 0, hash: entryHash(w.first) }));
+  assert.equal(cloud.leftOut(C), "home");
+  assert.equal(refusalOf(cloud, { credential: credential(w.grant, C, endpoint, "member") }, endpoint, new Error("x")).why, "home");
+  // Nothing of a workspace it is not in, nor of its home.
+  assert.equal(cloud.leftOut("01HDDDDDDDDDDDDDDDDDDDDDDD"), null);
+  assert.equal(cloud.leftOut(WS), null);
+});
+
 test("over the stations' own transport: a station the control plane stuffs in is refused, the lock's stations level each other", async () => {
   const { memoryMesh } = await import("./memory-mesh.ts");
   const { PEER_ALPN, peerCall, servePeer } = await import("../src/mesh/peer.ts");

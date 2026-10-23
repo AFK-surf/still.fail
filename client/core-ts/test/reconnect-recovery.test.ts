@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Deferred, Effect, Queue } from "effect";
 import { Core } from "../src/core.ts";
 import { t } from "../src/i18n.ts";
-import { HostError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
 import { BRIEF_MAX_MS, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_HELD_MS } from "../src/station/link.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { SOCKET_RETRY_MAX_MS } from "../src/sync/cloud.ts";
@@ -292,6 +292,27 @@ test("a_station_tried_seldom_after_long_down_is_tried_as_still_fail_cloud_is_rea
     s.gate.stream = "open";
     // The cloud's socket is tried within SOCKET_RETRY_MAX_MS, and the station with it.
     assert.ok((await reopens(s, OFFLINE_RETRY_MS)) <= SOCKET_RETRY_MAX_MS + 2_000);
+  } finally {
+    s.core.close();
+  }
+});
+
+test("a_station_refusing_this_device_for_a_security_mode_is_down_for_that_and_says_why_whatever_still_fail_cloud_says", async () => {
+  const s = await started();
+  try {
+    const why = "此 station 尚未接入此 workspace 的安全模式，稍后会自动重试；如果一直如此，请将它更新到最新版本";
+    s.gate.stream = new CoreError("lock_station", why);
+    s.end();
+    await s.host.time.pass(10_000, 1000);
+    const link = () => s.core.inner.stations.link(ST)?.state as { state: string; cause?: string; message?: string };
+    assert.deepEqual([link().state, link().cause, link().message], ["offline", "lock", why]);
+    // still.fail cloud's word changing (it lists the station online) does not make it 连不上.
+    s.core.inner.stations.recause();
+    assert.equal(link().cause, "lock");
+    // Taking members again: reached.
+    s.gate.stream = "open";
+    await s.host.time.pass(RECONNECT_MAX_MS + 1000, 1000);
+    assert.equal(link().state, "online");
   } finally {
     s.core.close();
   }

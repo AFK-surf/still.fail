@@ -976,7 +976,7 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String"],
     ["message", opt("String")],
     ["retrying", opt("bool"), { doc: "Found offline and tried again just now (a person's 重试, or the device back): still taken for down\nuntil the try reaches it, its 重试 turning meanwhile." }],
-    ["cause", opt("String"), { doc: "Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the\ncloud says it is not online) | unreached (the cloud says it is). Absent otherwise, and from a core before it." }],
+    ["cause", opt("String"), { doc: "Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the\ncloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the\nworkspace's members, for a security mode: `message` says why). Absent otherwise, and from a core before it." }],
   ], { doc: "A station's mesh link: connecting | online | offline | error." }),
   StationState: struct([
     ["station", "String"],
@@ -2522,6 +2522,7 @@ export const SHAPES: Record<string, Shape> = {
     ["line", opt("String")],
     ["online", "bool"],
     ["reconnecting", "bool", { default: true, doc: "Up, but not reached just now (connecting or coming back): its figures are from before." }],
+    ["blocked", opt("String"), { doc: "Down for a security mode (it refused this device, or takes none of this workspace's members yet): why, in\nwords, in place of the page's 离线 note. Absent otherwise." }],
     ["lastSeen", opt("i64"), { client: opt("I54"), doc: "Seconds, from still.fail cloud." }],
     ["version", opt("String")],
     ["link", "Link"],
