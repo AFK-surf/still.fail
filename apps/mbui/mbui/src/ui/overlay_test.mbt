@@ -268,3 +268,24 @@ test "a layer dismissed as the view closed it its own way is not dismissed by th
   assert_true(t.query(Button, label="inside") is Some(_))
   assert_eq(log, [])
 }
+
+///|
+test "a layer opened by a list's row (built as the list is laid out) is laid out over the window as any other is" {
+  let t = Tester::new(fn(c) {
+    c.list("rows", 3, 40.0, fn(k) {
+      c.text("row \{k}") |> ignore
+      if k == 1 {
+        c.overlay("row-layer", fn() {
+          c.box(tx=100.0, ty=200.0, w=Px(80.0), pad=10.0, fn() { c.text("card") |> ignore }) |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  })
+  let card = t.words().filter(fn(w) { w.0 == "card" })
+  assert_eq(card.length(), 1)
+  // where its box puts it, in what the box holds
+  assert_eq((card[0].1, card[0].2), (110.0, 210.0))
+  assert_true(card[0].3 > 0.0 && card[0].3 <= 60.0, msg="\{card[0].3} wide")
+}

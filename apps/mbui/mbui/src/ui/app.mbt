@@ -222,9 +222,17 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     building.val = true
     c.build_no = c.build_no + 1
     root = frame_build(c, w, h)
+    let built_layers = c.layers.length()
     t1 = h_now()
     // lists build their rows while laid out, and those see clicks too
     c.layout(root, 0.0, 0.0, w, h) |> ignore
+    // a layer opened by what was built as it was laid out (a list's row: a hover card over what it holds) came after
+    // the page's layout: laid out over the window now, as one opened before it is; one opened in it, after it
+    let mut late = built_layers
+    while late < c.layers.length() {
+      c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
+      late = late + 1
+    }
     // what covers an item, over it as laid out now (cover.mbt)
     c.covers_after_layout()
     // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)
@@ -1039,6 +1047,14 @@ fn key_in(code : Int, mods : Int) -> Unit {
   }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
   desk_key(code, mods, c.editors.contains(c.focus) && code < key_escape)
+  // ⌘V (Ctrl+V) as the app's key: the host saw a picture on the clipboard (mac_app.m, win_app.c), read for the field
+  // focused (Ctx::editor: a picture where it takes pictures, its words where it does not)
+  if code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0 && c.editors.contains(c.focus) {
+    match clipboard_read() {
+      Some(r) => desk.pasting = Some((c.focus, r))
+      None => ()
+    }
+  }
   // ⌘C with no field focused: the words picked with the pointer
   if code == key_copy && !c.editors.contains(c.focus) && selected_words() != "" {
     h_clipboard_set(selected_words())

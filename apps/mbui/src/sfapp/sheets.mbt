@@ -164,8 +164,8 @@ fn tone_color(tone : String) -> Int64 {
 
 ///|
 /// An allowance's windows, compact (Parts.kt QuotaChips): the settings' boxes (one FillChip, as Android's app has).
-fn quota_chips(c : @ui.Ctx, quota : Json?, small? : Bool = false) -> Unit {
-  @settings.quota_chips(c, quota, small~)
+fn quota_chips(c : @ui.Ctx, quota : Json?, small? : Bool = false, gap? : Double = 8.0, tip? : (Int, Json) -> Unit) -> Unit {
+  @settings.quota_chips(c, quota, small~, gap~, tip?)
 }
 
 ///|

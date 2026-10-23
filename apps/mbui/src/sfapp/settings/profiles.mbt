@@ -28,8 +28,15 @@ fn access_label(kind : String) -> String {
 
 ///|
 /// A profile's allowance in a line (Parts.kt QuotaChips): a box per window, what is left in it, its mark when there is
-/// more than one; `small`, a lower line (a chat's agents, an execution's notes).
-pub fn quota_chips(c : @ui.Ctx, q : Json?, small? : Bool = false) -> Unit {
+/// more than one; `small`, a lower line (a chat's agents, an execution's notes); `gap` apart; `tip`: told each one's
+/// box (its id) and window, for words over it while it is pointed at (the web's Tip over each).
+pub fn quota_chips(
+  c : @ui.Ctx,
+  q : Json?,
+  small? : Bool = false,
+  gap? : Double = 8.0,
+  tip? : (Int, Json) -> Unit,
+) -> Unit {
   if text(q, "state") != "ok" {
     return
   }
@@ -37,18 +44,28 @@ pub fn quota_chips(c : @ui.Ctx, q : Json?, small? : Bool = false) -> Unit {
   if windows.length() == 0 {
     return
   }
-  c.box(dir=Row, gap=8.0, align=ACenter, fn() {
+  c.box(dir=Row, gap~, align=ACenter, fn() {
     for w in windows {
       let wv = Some(w)
       let left = clamp(count(wv, "left"))
-      fill_chip(
-        c,
-        left,
-        text(wv, "level"),
-        if windows.length() == 1 { "" } else { text(wv, "mark") },
-        left.to_string() + "%",
-        small~,
-      )
+      let chip = fn() {
+        fill_chip(
+          c,
+          left,
+          text(wv, "level"),
+          if windows.length() == 1 { "" } else { text(wv, "mark") },
+          left.to_string() + "%",
+          small~,
+        )
+      }
+      match tip {
+        Some(f) => {
+          let id = c.id("quota-chip/" + text(wv, "mark"))
+          c.box(id~, taps=false, chip) |> ignore
+          f(id, w)
+        }
+        None => chip()
+      }
     }
   })
   |> ignore

@@ -163,6 +163,7 @@ fn reset() -> Unit {
   felt_menu.val = -1
   felt_past.clear()
   felt_holds.clear()
+  ran_lines.clear()
   image_quoted_at.val = -1
   attention.told = false
   picture_pick.val = None

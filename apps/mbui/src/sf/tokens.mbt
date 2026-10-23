@@ -855,3 +855,14 @@ pub let quote_pop_h : @ui.Len = Fixed(26.0)
 ///|
 /// A page's bar in the wide frame (the web's sidebar.css.ts pageBar: 45 high).
 pub let wide_bar_h_size : @ui.Len = Fixed(45.0)
+
+///|
+/// A card over what the pointer rests on (the web's Hover.css.ts card: 320 wide; a tile's 220 at least), and an
+/// agent's in it (AgentCard.css.ts: 288).
+pub let hover_card_w : @ui.Len = Fixed(320.0)
+
+///|
+pub let hover_tile_least : @ui.Len = Fixed(220.0)
+
+///|
+pub let agent_card_w : @ui.Len = Fixed(288.0)

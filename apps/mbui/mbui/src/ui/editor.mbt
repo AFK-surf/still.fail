@@ -367,6 +367,7 @@ pub fn Ctx::editor(
   words? : Bool = false,
   look? : (String) -> (String, Array[(Int, Int, Int64)]),
   field? : Field,
+  pictures? : Bool = false,
 ) -> EditorResult {
   let id = self.id(key)
   let st = match (self.editors.get(id), field) {
@@ -405,6 +406,25 @@ pub fn Ctx::editor(
   st.built_frame = self.build_no
   st.built_key = key
   st.built_id = id
+  // ⌘V with a picture on the clipboard, read for it: the picture where it takes pictures (Ctx::field_picture), else
+  // the words with it put in as a paste's
+  match desk.pasting {
+    Some((pid, r)) if pid == id =>
+      match r.got() {
+        Some(got) => {
+          desk.pasting = None
+          match got.picture {
+            Png(png) if pictures => {
+              desk.pictures[id] = png
+              self.read_changed("a picture pasted")
+            }
+            _ => if got.text != "" { st.text_input(0, got.text, 0, 0, self.now) }
+          }
+        }
+        None => ()
+      }
+    _ => ()
+  }
   // Android's long press on it (the finger still, held long_press_ms: one that moves past the slop is no tap, app.mbt): the word there picked, its handles and the
   // floating menu, felt (Compose's text field); the finger sliding on from there widens it by words (`editor_tap`
   // is Android's alone: elsewhere a press on a field puts the caret at once)
@@ -854,6 +874,16 @@ fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
       self.own(id)
     }
   }
+}
+
+///|
+/// A picture pasted into the field `key` (one that takes pictures: Ctx::editor `pictures`) with ⌘V (Ctrl+V), as PNG:
+/// taken once, for the app to put in as a file (a page's paste takes a picture as one).
+pub fn Ctx::field_picture(self : Ctx, key : String) -> Bytes? {
+  let id = self.id(key)
+  let got = desk.pictures.get(id)
+  desk.pictures.remove(id)
+  got
 }
 
 ///|
