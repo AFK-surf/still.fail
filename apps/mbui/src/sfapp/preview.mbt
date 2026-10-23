@@ -770,8 +770,8 @@ fn leaving_done() -> Unit {
 ///|
 /// What a viewer holds of the host's, let go.
 fn Viewer::let_go(self : Viewer) -> Unit {
-  // read in a desktop's reader (reader_desk.mbt): what it read let go with it
-  reader_ui.remove("chat\n" + self.id())
+  // read in a desktop's reader (@sf.reader): what it read let go with it
+  @sf.reader_let_go("chat\n" + self.id())
   if self.turned {
     @hostapi.set_sideways(false)
   }
@@ -782,7 +782,7 @@ fn Viewer::let_go(self : Viewer) -> Unit {
   match self.media {
     Some(m) => {
       m.close()
-      desk_listing.remove(m.key())
+      @sf.player_view_let_go(m.key())
     }
     None => ()
   }
@@ -1020,7 +1020,7 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     // a desktop's song: in the player a drive's plays in (play_desk.mbt), read through the core a part at a time
     Some(KAudio) if wide_on.val => {
       if v.media is None {
-        let m = @player.player(key="preview-song")
+        let m = @sf.new_media("preview-song")
         m.open({
           name: v.file.name,
           mime: v.mime,
@@ -2608,11 +2608,11 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
   let p = @sf.theme().p
   let tint = if desk { p.muted } else { dark_muted }
   let strong = if desk { p.text } else { dark_text }
-  let ground = if desk { @sf.over(p.canvas, @sf.alpha(p.raised, desk_video_share)) } else { solid_glass() }
-  let side = if desk { (c.width - dmin(desk_video_most, c.width - 2.0 * desk_video_in)) / 2.0 } else { 8.0 }
-  let (above, below) = if desk { (desk_video_in, desk_video_in) } else { (8.0, 8.0) }
-  let (inner_x, inner_b) = if desk { (desk_video_pad, desk_video_pad) } else { (4.0, 4.0) }
-  let rate_ground = if desk { @sf.alpha(p.text, desk_rate_share) } else { 0xFFFFFF1AL }
+  let ground = if desk { @sf.media_ground() } else { solid_glass() }
+  let side = if desk { (c.width - dmin(@sf.media_bar_most, c.width - 2.0 * @sf.media_bar_in)) / 2.0 } else { 8.0 }
+  let (above, below) = if desk { (@sf.media_bar_in, @sf.media_bar_in) } else { (8.0, 8.0) }
+  let (inner_x, inner_b) = if desk { (@sf.media_bar_pad, @sf.media_bar_pad) } else { (4.0, 4.0) }
+  let rate_ground = if desk { @sf.alpha(p.text, @sf.media_rate_share) } else { 0xFFFFFF1AL }
   c.box(w=Fill(1.0), pl=side, pr=side, pt=above, pb=below, opacity=if on { shown } else { 0.0 }, fn() {
     c.box(
       w=Fill(1.0),
@@ -2774,7 +2774,7 @@ fn timeline(
   let span = last - first
   // a desktop's in the page's words (media.css.ts vvTrack: the words at 20%, played the words), a phone's in white
   let p = @sf.theme().p
-  let (track, played) = if wide_on.val { (@sf.alpha(p.text, desk_track_share), p.text) } else { (0xFFFFFF33L, dark_text) }
+  let (track, played) = if wide_on.val { (@sf.alpha(p.text, @sf.media_track_share), p.text) } else { (0xFFFFFF33L, dark_text) }
   // the time under the finger, on the track (inside the box's 6 each side)
   let under = fn() -> Double? {
     match c.rect_of(id) {

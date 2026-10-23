@@ -14,7 +14,7 @@ test "17-drive-read" {
     f.run_to(@ui.nav_rest())
     // a tap on the text: the bars
     f.tap_at(195.0, 420.0)
-    f.run_for(@sfapp.reader_bars_ms)
+    f.run_for(@sf.reader_bars_ms)
     f.see("目录")
     f.see("下一章")
     f.see("第一章 雨后的车站")
@@ -25,7 +25,7 @@ test "17-drive-read" {
     f.run_to(@kit.sheet_rest("dv-reader-sheet"))
     f.gone("第四章 回程")
     // held still there: where it is told to the core
-    f.run_for(@sfapp.reader_still_ms)
+    f.run_for(@sf.reader_still_ms)
     f.back()
     f.run_to(@ui.nav_rest())
     f.see("小说-e2e.txt")

@@ -112,7 +112,7 @@ fn open_play_fixture(mode : String) -> Unit {
   app.nav.push(Drive({ ..docs, path: fix_films }))
   app.nav.push(DrivePlay(at))
   match pin {
-    Some(s) => playing_for(reader_key(at)).player.pin(s)
+    Some(s) => @sf.playing_for(reader_key(at)).media.pin(s)
     None => ()
   }
 }

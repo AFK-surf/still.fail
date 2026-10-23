@@ -1,12 +1,14 @@
-// The text side of the drive's reader (ember apps/android drive/TextModel.kt, Novel.kt): the file decoded here
-// (@hostapi.decode_text: the system's tables), then read by the core as a reader shows it (`reader.book`,
-// client/core-ts/src/reader.ts: a hard-wrapped novel joined into its paragraphs, its chapters, the lines that are
-// headings; a Markdown file's tree, the same Markdown a chat's words are); here only what is laid out: the text cut into
-// blocks a list lays out one at a time (a Markdown file's at its tree's blocks), the paragraphs' indent. Where the
-// reader is, is an offset into the text it shows (the core's drivePlace `at`), as the core's are (UTF-16).
+// The text a reader shows (web/ui viewer/Reader.tsx's Book, lineAt, TextBody; decode.ts): the file decoded here
+// (@hostapi.decode_text: the system's tables, as the web's are the browser's), then read by the page's core as a reader
+// shows it (viewer_host.mbt read_book: `reader.book`, client/core-ts/src/reader.ts: a hard-wrapped novel joined into its
+// paragraphs, its chapters, the lines that are headings; a Markdown file's tree, the same Markdown a chat's words are);
+// here only what is laid out: the text cut into blocks a list lays out one at a time (the web's pieces, laid out only
+// near the screen; a Markdown file's at its tree's blocks), the paragraphs' indent. Where the reader is, is an offset
+// into the text it shows (file.ts Place `at`), as the core's are (UTF-16).
 
 ///|
-/// How much text one block holds (TextModel.kt CHUNK_CHARS): 2–3 phone pages.
+/// How much text one block holds (2–3 phone pages; the web's pieces are 1500, laid out by the browser as they come near:
+/// a block is what a list lays out at once here, Android's TextModel.kt CHUNK_CHARS).
 let chunk_chars : Int = 1000
 
 ///|
@@ -14,8 +16,8 @@ let chunk_chars : Int = 1000
 let indent_text : String = "\u{3000}\u{3000}"
 
 ///|
-/// The most of a text the reader holds (Novel.kt MAX_NOVEL_BYTES): a bigger file opens with its first 16 MB.
-let max_novel_bytes : Int = 16 * 1024 * 1024
+/// The most of a file the reader holds (Reader.tsx MOST): a bigger one opens with its front, saying so.
+pub let reader_most : Int = 32 * 1024 * 1024
 
 ///|
 fn tx_cu(s : String, i : Int) -> Int {
@@ -46,7 +48,7 @@ fn tx_sub(s : String, from : Int, to : Int) -> String {
 ///|
 /// Cut into contiguous blocks of at most `budget`, at paragraph ends where it can (TextModel.kt chunkText); a longer
 /// paragraph after punctuation within reach. The blocks and where each starts.
-fn chunk_text(text : String, budget? : Int = chunk_chars) -> (Array[String], Array[Int]) {
+pub fn chunk_text(text : String, budget? : Int = chunk_chars) -> (Array[String], Array[Int]) {
   let chunks = []
   let starts = []
   let n = text.length()
@@ -197,18 +199,18 @@ fn render_offset(chunk : String, start : Int, heads : Map[Int, Bool], raw : Int,
 // ── the text, ready ──────────────────────────────────────────────────────
 
 ///|
-/// A hit: its block, where in the raw block, how long.
-priv struct TextMatch {
+/// A place found: its block, where in the raw block, how long.
+pub(all) struct TextMatch {
   chunk : Int
   start : Int
   length : Int
 } derive(Eq, Debug)
 
 ///|
-/// A text ready to read (Novel.kt Novel): the core's book of it (its id, for a search), the text, its blocks and where
+/// A book as the reader draws it (Reader.tsx Book): the core's (its id, for a search), the text, its blocks and where
 /// each starts (a Markdown file's: its tree's nodes too), its length, its chapters (by block and offset in it), the
 /// heading lines' starts, how it was decoded, whether it was cut.
-priv struct Novel {
+pub struct Book {
   title : String
   id : Int
   text : String
@@ -226,7 +228,7 @@ priv struct Novel {
 
 ///|
 /// The block an offset of the text is in, and how far into it.
-fn Novel::at(self : Novel, offset : Int) -> (Int, Int) {
+pub fn Book::at(self : Book, offset : Int) -> (Int, Int) {
   if self.chunks.length() == 0 {
     return (0, 0)
   }
@@ -244,7 +246,7 @@ fn Novel::at(self : Novel, offset : Int) -> (Int, Int) {
 
 ///|
 /// The offset of the text a block and a share of it are at.
-fn Novel::offset_of(self : Novel, chunk : Int, within : Double) -> Int {
+pub fn Book::offset_of(self : Book, chunk : Int, within : Double) -> Int {
   if self.chunks.length() == 0 {
     return 0
   }
@@ -273,13 +275,13 @@ fn md_chunks(nodes : Array[Json], text : String, budget? : Int = chunk_chars) ->
   let mut part : Array[Json] = []
   let mut start = 0
   for node in nodes {
-    let at = @sf.md_node_at(node)
+    let at = md_node_at(node)
     if part.length() > 0 && at >= 0 {
       let mut line = imin(at, text.length())
       while line > 0 && tx_cu(text, line - 1) != 10 {
         line -= 1
       }
-      if line > start && ((@sf.md_node_depth(node) is Some(d) && d <= 3) || line - start > budget) {
+      if line > start && ((md_node_depth(node) is Some(d) && d <= 3) || line - start > budget) {
         parts.push(part)
         starts.push(start)
         part = []
@@ -296,11 +298,12 @@ fn md_chunks(nodes : Array[Json], text : String, budget? : Int = chunk_chars) ->
 }
 
 ///|
-/// The text `book` (the core's `reader.book` of it) is of, ready: cut into blocks, its chapters found in them.
-fn novel_of(title : String, words : String, book : Json, encoding : String, truncated : Bool, markdown : Bool) -> Novel {
-  let b = Some(book)
+/// The text `book` (the core's `reader.book` of it, its text as joined) is of, ready: cut into blocks, its chapters
+/// found in them.
+fn book_of(title : String, book : ReadBook, encoding : String, truncated : Bool, markdown : Bool) -> Book {
+  let words = book.text
   let (parts, chunks, starts) = if markdown {
-    let (parts, starts) = md_chunks(items(b, "md"), words)
+    let (parts, starts) = md_chunks(book.md, words)
     let chunks = starts.mapi(fn(i, at) { tx_sub(words, at, if i + 1 < starts.length() { starts[i + 1] } else { words.length() }) })
     (parts, chunks, starts)
   } else {
@@ -308,20 +311,16 @@ fn novel_of(title : String, words : String, book : Json, encoding : String, trun
     ([], chunks, starts)
   }
   let heads : Map[Int, Bool] = {}
-  for h in items(b, "heads") {
-    match h {
-      Number(n, ..) => heads[n.to_int()] = true
-      _ => ()
-    }
+  for h in book.heads {
+    heads[h] = true
   }
-  let chapters = items(b, "chapters").map(fn(ch) {
-    let offset = number(Some(ch), "offset").to_int()
-    let k = chunk_index_for(starts, offset)
-    (text(Some(ch), "title"), k, offset - (if starts.length() > 0 { starts[k] } else { 0 }))
+  let chapters = book.chapters.map(fn(ch) {
+    let k = chunk_index_for(starts, ch.offset)
+    (ch.title, k, ch.offset - (if starts.length() > 0 { starts[k] } else { 0 }))
   })
   {
     title,
-    id: number(b, "id").to_int(),
+    id: book.id,
     text: words,
     chunks,
     starts,

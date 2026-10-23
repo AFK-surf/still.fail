@@ -36,8 +36,15 @@ missing here is ported from the web's file (its structure, its states, its value
 | `shortcuts.ts` | `shortcuts.mbt` | |
 | `motion.ts`, `styles/keyframes.css.ts`, `styles/still.ts` | `motion.mbt` (EASE_OUT, ENTER, LEAVE, MOVE, GLIDE_*, LOCAL_MS), mbui's `@motion` and `Ctx::move_state` (moveState); `parts.mbt` `pop_in` (popKeyframes) | |
 | `toast.tsx`, `toast.css.ts` | `toast.mbt` (`toast_look`, `toast_said`, `toast_ms`) over mbui's `@kit.toaster` | the desktop's toast; the phone keeps its own (the web's ToastTo) |
-| `i18n.ts` | | the words are the app's (`sfapp` `tr`, `fill`) |
-| `viewer/` (ViewerBar, Reader, Player, media) | | still the app's: `sfapp/viewer_bar.mbt`, `reader_desk.mbt`, `drive_reader.mbt`, `src/player`, `play_desk.mbt` |
+| `i18n.ts` | `i18n.mbt` | `t`: the catalog's words as the app says them (`set_words`, its `fill`, told as it starts) |
+| `viewer/ViewerBar.tsx`, `ViewerBar.css.ts` | `viewer_bar.mbt` | the bar, its tools, download; `BarOnScroll` (useBarOnScroll) |
+| `viewer/host.ts` | `viewer_host.mbt` | `set_viewer_host`: what the viewers ask of the page (the app's `sfapp/viewer_host.mbt`, as the web's `web/src/viewer/whole.ts`); the theme is the library's own, so no `useDark` |
+| `viewer/file.ts` | `viewer_file.mbt` | a file a viewer opens (the app's drive file: `sfapp/drive_viewer.mbt`, the web's `drive/viewerFile.ts`), `blob_file` |
+| `viewer/readerStyle.ts` | `reader_style.mbt` | |
+| `viewer/Reader.tsx`, `Reader.css.ts` (and `decode.ts`) | `reader.mbt`, `reader_text.mbt` | the column, its state, the desktop's bar and panels; `reader_text.mbt` the book as laid out (blocks a list lays out one at a time, the indent), the text decoded by the host's tables (`@hostapi.decode_text`). The phone's bars over the column are still the app's (`sfapp/drive_reader.mbt`, Android's Reader.kt) |
+| `viewer/Player.tsx`, `Player.css.ts` (and `rest.ts`, `subtitles.ts`) | `player.mbt` | the source, the place, the subtitle (`@codec.parse_subtitles`), the desktop's view; the phone's controls are still `src/player` (Android's Player.kt) |
+| `viewer/media.css.ts` | `media.mbt` | the controls' bar, timeline, keys and speed, also the app's video viewer's (`sfapp/preview.mbt`) |
+| `viewer/names.ts` | `names.mbt` | |
 
 Besides the web's: the Markdown of messages (`markdown.mbt`, `md_core.mbt`: the core's tree drawn), code's colours
 (`ink.mbt`), formulas (`math.mbt`), the station glyph (`glyph.mbt`), Android's drawables (`picture.mbt`), the phone's

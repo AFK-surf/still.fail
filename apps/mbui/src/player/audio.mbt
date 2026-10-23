@@ -131,3 +131,19 @@ fn light_timeline(c : @ui.Ctx, key : String, n : @ui.NativeView, s : @kit.MediaS
   })
   |> ignore
 }
+
+///|
+/// `m:ss`, the seconds cut (VideoViewer.kt short: the chat's audio).
+pub fn short_clock(ms : Double) -> String {
+  let t = (if ms < 0.0 { 0.0 } else { ms }).to_int64()
+  "\{t / 60000L}:\{two(t / 1000L % 60L)}"
+}
+
+///|
+fn two(n : Int64) -> String {
+  if n < 10L {
+    "0\{n}"
+  } else {
+    "\{n}"
+  }
+}

@@ -1,6 +1,5 @@
-// The bar every file opened shows across the window's top on a desktop (ember @stillfail/ui viewer/ViewerBar.tsx,
-// ViewerBar.css.ts): a picture's, a PDF's or code's preview (preview.mbt), a text read (drive_reader.mbt), a film
-// played (play.mbt). Always there, along the window's top, 45 high: the way back on the left (where to, by name), the
+// The bar every file opened shows across the window's top on a desktop (web/ui viewer/ViewerBar.tsx, ViewerBar.css.ts):
+// a picture's, a PDF's or code's preview (the app's FilePreview), a text read (reader.mbt), a film played (player.mbt). Always there, along the window's top, 45 high: the way back on the left (where to, by name), the
 // file's name and a line about it in the middle, its tools on the right as icons, download last. Its ground is the
 // file's (the paper under a text) at 82% over a 20 blur, saturated, a line of its own under it at 70%; it drags the
 // window, clear of the window's buttons where they are in the app's top row. Gone up out of the way (a picture left
@@ -8,7 +7,7 @@
 
 ///|
 /// The colours a bar is drawn in: the file's ground under it, its words, what is quieter, its line.
-priv struct ViewerInk {
+pub(all) struct ViewerInk {
   ground : Int64
   ink : Int64
   muted : Int64
@@ -17,15 +16,15 @@ priv struct ViewerInk {
 
 ///|
 /// The page's own (a preview's: the canvas, the page's words).
-fn page_viewer_ink() -> ViewerInk {
-  let p = @sf.theme().p
+pub fn page_viewer_ink() -> ViewerInk {
+  let p = theme().p
   { ground: p.canvas, ink: p.text, muted: p.muted, line: p.line }
 }
 
 ///|
 /// The bar (`key` its own): back to `back`, `name` and `meta` under it, `tools` at its end (viewer_tool,
 /// viewer_download); `hidden`, gone up out of the way. True on the frame after its way back was pressed.
-fn viewer_bar(
+pub fn viewer_bar(
   c : @ui.Ctx,
   key : String,
   back : String,
@@ -46,7 +45,7 @@ fn viewer_bar(
   }
   let glass = @ui.Glass::frosted(
     blur=viewer_bar_blur,
-    tint=@sf.alpha(ink.ground, viewer_bar_share),
+    tint=alpha(ink.ground, viewer_bar_share),
     solid=ink.ground,
     saturation=viewer_bar_saturation,
   )
@@ -64,7 +63,7 @@ fn viewer_bar(
           went = true
         }
         let b = c.box(style=viewer_back_box, id=if live { id } else { 0 }, fn() {
-          @sf.icon(c, "chevron-left", size=viewer_back_icon, color=ink.ink) |> ignore
+          icon(c, "chevron-left", size=viewer_back_icon, color=ink.ink) |> ignore
           c.text(back, style=viewer_back_words.then(@ui.text_style(color=Data(ink.ink)))) |> ignore
         })
         c.semantics(b, Button, id~, label=back)
@@ -82,7 +81,7 @@ fn viewer_bar(
       c.box(style=viewer_bar_end, tools) |> ignore
     })
     |> ignore
-    c.box(style=viewer_bar_rule.then(@ui.style(bg=Data(@sf.alpha(ink.line, viewer_line_share)))), fn() {  })
+    c.box(style=viewer_bar_rule.then(@ui.style(bg=Data(alpha(ink.line, viewer_line_share)))), fn() {  })
     |> ignore
   })
   c.look(node, @ui.look(alpha=1.0 - gone, dy=-viewer_bar_h * gone))
@@ -92,10 +91,10 @@ fn viewer_bar(
 ///|
 /// One of a bar's tools (ViewerBar.tsx ViewerTool): an 18 icon in a 32 button, in the file's quieter ink until
 /// pointed at or `on` (its ground then the page's chosen one), named on hover. True on the frame after it was pressed.
-fn viewer_tool(
+pub fn viewer_tool(
   c : @ui.Ctx,
   key : String,
-  icon : String,
+  icon_name : String,
   label : String,
   ink : ViewerInk,
   on? : Bool = false,
@@ -108,25 +107,75 @@ fn viewer_tool(
   }
   let hot = live && (c.hovered(id) || c.pressed(id))
   let b = c.box(style=viewer_tool_box, selected=on, disabled~, id=if live { id } else { 0 }, fn() {
-    @sf.icon(c, icon, size=viewer_tool_icon, color=if on || hot { ink.ink } else { ink.muted }) |> ignore
+    icon(c, icon_name, size=viewer_tool_icon, color=if on || hot { ink.ink } else { ink.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label~, pressed=on, disabled~)
   if live {
-    @sf.tip(c, key + "/tip", id, label, side=Bottom)
+    tip(c, key + "/tip", id, label, side=Bottom)
   }
   live && c.clicked(id)
 }
 
 ///|
 /// Download, as every bar has it last (ViewerDownload). True on the frame after it was pressed.
-fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : Bool = false) -> Bool {
-  viewer_tool(c, key, "download", tr("web-main.preview.download"), ink, disabled~)
+pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : Bool = false) -> Bool {
+  viewer_tool(c, key, "download", t("web-main.preview.download"), ink, disabled~)
 }
+
+///|
+/// When a bar over a file read down (a text, a PDF, code) is out of the way (useBarOnScroll): gone as it is read on
+/// down, back as it is read back up, or as the pointer comes to the window's top. Where the list it reads by was last
+/// seen: its first row in view and how far down it.
+pub(all) struct BarOnScroll {
+  mut hidden : Bool
+  mut seen : (Int, Double)
+}
+
+///|
+/// A bar there, nothing read yet.
+pub fn BarOnScroll::new() -> BarOnScroll {
+  { hidden: false, seen: (0, 0.0) }
+}
+
+///|
+/// Told how the list `list` stands this frame (onScroll) and where the pointer is (onPointerMove): near its top
+/// always there; on down, gone; back up, back; the pointer near the window's top, back.
+pub fn BarOnScroll::heard(self : BarOnScroll, c : @ui.Ctx, list : String) -> Unit {
+  match c.list_place(list) {
+    Some((first, off, _)) => {
+      let (was_first, was_off) = self.seen
+      if first == 0 && off < viewer_top_kept {
+        self.hidden = false
+      } else if first > was_first || (first == was_first && off - was_off > viewer_moved) {
+        self.hidden = true
+      } else if first < was_first || (first == was_first && was_off - off > viewer_moved) {
+        self.hidden = false
+      }
+      self.seen = (first, off)
+    }
+    None => ()
+  }
+  let (_, py, _) = c.pointer()
+  if py >= 0.0 && py < viewer_bar_reach {
+    self.hidden = false
+  }
+}
+
+///|
+/// Read down this far before the bar goes (TOP_KEPT); this much of a scroll at once says which way (MOVED).
+let viewer_top_kept : Double = 48.0
+
+///|
+let viewer_moved : Double = 6.0
+
+///|
+/// The pointer this near the window's top brings the bar back (VIEWER_BAR_REACH).
+pub let viewer_bar_reach : Double = 72.0
 
 ///|
 /// How tall the bar is (VIEWER_BAR: a page's bar, its 32 buttons level with the window's): what is under it starts
 /// below it or goes under it.
-let viewer_bar_h : Double = 45.0
+pub let viewer_bar_h : Double = 45.0
 
 ///|
 /// Its going and coming (ViewerBar.css.ts: transform and opacity, 240 ms ease-out).
@@ -137,10 +186,10 @@ let viewer_bar_ms : Double = 240.0
 let viewer_bar_share : Double = 0.82
 
 ///|
-let viewer_bar_blur : Double = 20.0
+pub let viewer_bar_blur : Double = 20.0
 
 ///|
-let viewer_bar_saturation : Double = 1.4
+pub let viewer_bar_saturation : Double = 1.4
 
 ///|
 let viewer_line_share : Double = 0.7
@@ -154,10 +203,10 @@ let viewer_bar_sides : Double = 320.0
 let viewer_none : Double = 0.0
 
 ///|
-let viewer_back_icon : Double = 20.0
+pub let viewer_back_icon : Double = 20.0
 
 ///|
-let viewer_tool_icon : Double = 18.0
+pub let viewer_tool_icon : Double = 18.0
 
 ///|
 /// The room the window's buttons have in the app's top row, past the bar's own 12 (84 in all).
@@ -178,11 +227,11 @@ let viewer_bar_buttons : @ui.Style = @ui.style(w=Fixed(viewer_buttons_w), h=Full
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viewer_bar_start : @ui.Style = @ui.style(row=true, w=@sf.grow, align=ACenter, clip=true)
+let viewer_bar_start : @ui.Style = @ui.style(row=true, w=grow, align=ACenter, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viewer_bar_end : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S0_5, align=ACenter, justify=JEnd)
+let viewer_bar_end : @ui.Style = @ui.style(row=true, w=grow, gap=S0_5, align=ACenter, justify=JEnd)
 
 ///|
 // kept across runs: a value (no field of it changes)
