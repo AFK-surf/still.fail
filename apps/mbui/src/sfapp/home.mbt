@@ -139,7 +139,10 @@ fn open_listed(view : ChatsView) -> Unit {
 }
 
 ///|
-/// The top bar's height (8 + 34 + 8), under which the list starts.
+/// The top bars' height under the status bar (a place's, TopGlassBar, and a chat's, BarFrame: TopBarHeight), what is in
+/// them in its middle; the list starts under it. One length, on the device's pixels at once: 8 + 34 + 8 and 5 + 40 + 5,
+/// each on whole pixels, can come out a pixel apart (at 2.85 pixels a point, 143 and 142), the two bars' lines apart
+/// as a chat is swiped back.
 let bar_h : Double = 50.0
 
 ///|
@@ -326,8 +329,8 @@ fn top_bar(
   let t = @sf.theme()
   // frosted glass over the list (the page's paper at 70% over a 24px blur), a hairline under it
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
-    // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then 8)
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top() + 8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
+    // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
+    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="home-settings") {
         app.nav.push(Settings)
       }

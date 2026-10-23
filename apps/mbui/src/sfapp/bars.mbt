@@ -10,6 +10,13 @@ fn status_top() -> Double {
 }
 
 ///|
+/// A top bar's least height, the status bar's and its own (bar_h) as one length (TopGlassBar, Chat.kt BarFrame: the
+/// status bar's padding, then heightIn(min = TopBarHeight)).
+fn top_bar_h() -> Double {
+  status_top() + bar_h
+}
+
+///|
 /// The navigation bar's height (WindowInsets.navigationBars' bottom): what a page's foot is padded by. The soft keyboard
 /// up, the view ends where it starts plus this, so what is padded by it sits on the keyboard
 /// (keyboard.union(navigationBars)).

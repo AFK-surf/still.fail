@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -51,10 +52,18 @@ import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
 import fail.still.android.ui.glass
 
+/**
+ * The top bars' height under the status bar: Home's and a place's (TopGlassBar) and a chat's (Chat.kt BarFrame),
+ * what is in them in its middle. One length, on the device's pixels at once: 8 + 34 + 8dp and 5 + 40 + 5dp, each
+ * rounded, can come out a pixel apart (at 2.85 pixels a dp, 143 and 142), the two bars' lines apart as a chat is swiped
+ * back.
+ */
+val TopBarHeight = 50.dp
+
 /** Home's top bar (and a place's): frosted over what `haze` is the source of, a hairline under it; its row of buttons. */
 @Composable
 fun TopGlassBar(haze: HazeState, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) = Row(
-    modifier.fillMaxWidth().glass(haze).windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+    modifier.fillMaxWidth().glass(haze).windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp).heightIn(min = TopBarHeight),
     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = content,
 )
 
