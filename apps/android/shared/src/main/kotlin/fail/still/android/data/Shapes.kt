@@ -1208,7 +1208,7 @@ data class Quote (
 	val ts: String? = null,
 	/// agent | person | page (a mark on a previewed page) | image (a numbered mark on an image)
 	val role: String? = null,
-	/// The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot).
+	/// The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot; an image of the quoted message, sent again with this one).
 	val file: String? = null
 )
 

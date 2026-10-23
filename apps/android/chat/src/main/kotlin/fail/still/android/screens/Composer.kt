@@ -291,6 +291,24 @@ class Draft {
         focusQuote = q.id
     }
 
+    /** An image of a message, quoted: the file goes again with the message as the station has it (nothing goes up). */
+    fun quoteFile(author: String, ts: String, role: String, file: Attachment) {
+        val q = DraftQuote(System.nanoTime(), author, file.name, ts, role, file.name)
+        quotes += q
+        if (files.none { it.done?.path == file.path }) files += Pending(System.nanoTime(), file.name, file.size, null, width = file.width?.toInt(), height = file.height?.toInt()).also { it.done = file }
+        focusQuote = q.id
+    }
+
+    /** The file going with a quote (a mark's screenshot, an image of a message), shown in its card rather than with the files. */
+    fun fileOf(q: DraftQuote): Pending? = q.file?.let { name -> files.firstOrNull { (it.done?.name ?: it.name) == name } }
+
+    /** A quote taken out, with the file that went with it (unless another quote names it too). */
+    fun unquote(q: DraftQuote) {
+        val own = fileOf(q)
+        quotes.remove(q)
+        if (own != null && quotes.none { fileOf(it) === own }) takeOut(own)
+    }
+
     /** Empties it, for what is sent: the text (its references' marks, which the core makes links) with where each file
      *  named by its path is (StationFiles.kt), the files up, the quotes. */
     fun take(): Taken {
@@ -798,6 +816,10 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                         quoteLine(q.author, q.text), inlineContent = quoteMark(), fontSize = 13.sp, lineHeight = 19.5.sp, color = chatMuted(), maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = 16.dp, end = 34.dp, top = 9.dp),
                     )
+                    // Its own picture (an image of a message quoted, a mark's screenshot), under what it quotes (web: quoteCardPicture).
+                    draft.fileOf(q)?.let { f -> draftPictureOf(f, station, session) }?.let { picture ->
+                        Image(picture, q.text, Modifier.padding(start = 16.dp, top = 6.dp).size(56.dp).clip(InComposerFiles).background(C.chip), contentScale = ContentScale.Crop)
+                    }
                     val focus = remember { FocusRequester() }
                     LaunchedEffect(draft.focusQuote) { if (draft.focusQuote == q.id) { focus.requestFocus(); draft.focusQuote = null } }
                     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 3.dp, bottom = 10.dp)) {
@@ -810,7 +832,7 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                     }
                 }
                 // In the quote's corner as far from both edges, round in its corner (its half and that: the quote's).
-                Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(28.dp).clip(CircleShape).clickable { draft.quotes.remove(q) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(28.dp).clip(CircleShape).clickable { draft.unquote(q) }, contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 12.dp, chatSubtle())
                 }
             }
@@ -819,8 +841,11 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
     // As far from the capsule's edge as from its top (ComposerFilesIn), past its own room (ComposerInset).
     val beyond = ComposerFilesIn - ComposerInset
     // A picture's remove button sits over its corner (PictureRemoveOut beyond it): the gap after it room for that too.
-    if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = beyond, end = beyond + PictureRemoveOut, top = beyond), horizontalArrangement = Arrangement.spacedBy(6.dp + PictureRemoveOut)) {
-        draft.files.forEach { f ->
+    // Those going with a quote are in its card.
+    val quoted = draft.quotes.mapNotNull { draft.fileOf(it) }.toSet()
+    val rest = draft.files.filter { it !in quoted }
+    if (rest.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = beyond, end = beyond + PictureRemoveOut, top = beyond), horizontalArrangement = Arrangement.spacedBy(6.dp + PictureRemoveOut)) {
+        rest.forEach { f ->
             val remove = { draft.takeOut(f) }
             val picture = draftPictureOf(f, station, session)
             if (picture != null) Box {
@@ -944,11 +969,13 @@ private fun draftPictureOf(f: Pending, station: String?, key: String?): ImageBit
     if (a == null || station == null || !isImage(a.name)) return null
     val app = LocalApp.current
     val longest = with(LocalDensity.current) { 56.dp.roundToPx() * 2 }
-    val id = FileData.id(station, key ?: "", a, thumb = true)
+    // Through the session keeping it (an image of a message quoted: its message's), else the chat's.
+    val keeper = a.owner ?: key
+    val id = FileData.id(station, keeper ?: "", a, thumb = true)
     var picture by remember(f.id) { mutableStateOf(FileData.sentPicture(station, a.path) ?: FileData.keptPicture(id, longest)) }
-    LaunchedEffect(f.id, key) {
-        if (picture != null || key == null) return@LaunchedEffect
-        try { picture = FileData.picture(id, FileData.fetch(app, station, key, a, thumb = true).await(), longest) } catch (_: CoreException) {}
+    LaunchedEffect(f.id, keeper) {
+        if (picture != null || keeper == null) return@LaunchedEffect
+        try { picture = FileData.picture(id, FileData.fetch(app, station, keeper, a, thumb = true).await(), longest) } catch (_: CoreException) {}
     }
     return picture
 }

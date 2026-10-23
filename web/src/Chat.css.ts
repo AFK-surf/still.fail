@@ -382,6 +382,14 @@ export const quotePop = style({
     "&:hover": { background: vars.primaryHover },
   },
 });
+/** An image of a message quoted, in the composer's quote card: as small as a picked one, the station's picture. */
+export const quoteThumb = style({
+  cornerShape: vars.cornerShape, display: "block", width: "64px", height: "64px", borderRadius: vars.rField, overflow: "hidden",
+  background: vars.neutralBg,
+});
+globalStyle(`${quoteThumb} img`, { width: "100%", height: "100%", objectFit: "cover", display: "block" });
+/** The same over an image's corner in the list (Chat.tsx useSelectionQuote's `images`): inside it, to be reached from it. */
+export const quoteImagePop = style({ transform: "translate(-100%, 0)" });
 export const activityLine = style({
   selectors: {
     [`${chatList} &`]: outsetStart(columns.activity),

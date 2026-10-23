@@ -131,7 +131,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
   // What waits to be decided here and does not show: a button over the list leads to it.
   const asks = useAsksShown(rows.virtual, chat);
   // Selecting text inside one message offers to quote it: into the chat's draft, its composer's (by its key).
-  const quoting = useSelectionQuote(list, (quote) => offerToDraft(draftKey, { files: [], quotes: [], quote }));
+  const quoting = useSelectionQuote(list, (quote, file) => offerToDraft(draftKey, { files: [], quotes: [], quote, ...(file ? { quotedFile: file } : {}) }));
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
@@ -148,7 +148,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
           if (to && chat.agents.some((a) => a.session.key === to.key)) { e.preventDefault(); chatPage.history(draftKey, to.key, to.entry); }
         }}>
         <DraftKey.Provider value={draftKey}>
-          <ChatRows chat={chat} rows={rows} to={to} />
+          <ImageQuote.Provider value={quoting.images}><ChatRows chat={chat} rows={rows} to={to} /></ImageQuote.Provider>
         </DraftKey.Provider>
       </div>
       </Gallery.Provider>
@@ -374,12 +374,49 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   );
 }
 
+/** How an image of a message in the list is quoted (useSelectionQuote's `images`): none outside a chat's list. */
+export const ImageQuote = createContext<ImageQuoting | null>(null);
+export interface ImageQuoting {
+  /** The pointer over the image `file` (its box `at`): a button over its corner quotes it. */
+  over(file: Attachment, at: Element): void;
+  /** Off it, to `to`: the button goes, unless that is where it went. */
+  off(to: EventTarget | null): void;
+  /** Held there (a finger's long press): quoted at once. */
+  hold(file: Attachment, at: Element): void;
+}
+
 /**
  * Selecting words inside one message of the list offers to quote them (`onQuote`), in a small button over the
- * selection. Answers what the list takes to watch the selection, and the button.
+ * selection; an image of one (`images`, for its files' boxes), a button over its corner, or holding it, quotes the
+ * image (its file going again with the message). Answers what the list takes to watch the selection, and the button.
  */
-export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">) => void) {
-  const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number } | null>(null);
+export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">, file?: Attachment) => void) {
+  const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number; file?: Attachment } | null>(null);
+  const latest = useRef(onQuote);
+  latest.current = onQuote;
+  const [images] = useState((): ImageQuoting => {
+    // The image's message, as a quote names it; only one the station has (its ts).
+    const of = (file: Attachment, at: Element): Omit<Quote, "comment"> | null => {
+      const row = at.closest<HTMLElement>("[data-author][data-ts]");
+      if (!row || !list.current?.contains(row)) return null;
+      return { author: row.dataset.author!, text: file.name, ts: row.dataset.ts!, role: row.dataset.role === "agent" ? "agent" : "person", file: file.name };
+    };
+    return {
+      over: (file, at) => {
+        const quote = of(file, at);
+        if (!quote) return;
+        const box = at.getBoundingClientRect();
+        setPicked({ quote, file, x: box.right - 6, y: box.top + 6 });
+      },
+      off: (to) => setPicked((p) => (p?.file && !(to instanceof Element && to.closest(`.${css.quoteImagePop}`)) ? null : p)),
+      hold: (file, at) => {
+        const quote = of(file, at);
+        if (!quote) return;
+        navigator.vibrate?.(10);
+        latest.current(quote, file);
+      },
+    };
+  });
   const pick = () => {
     const selection = window.getSelection();
     const text = selection?.toString().trim();
@@ -394,10 +431,11 @@ export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: 
   };
   return {
     listProps: { onMouseUp: () => { setTimeout(pick, 0); }, onScroll: () => setPicked(null) },
+    images,
     pop: picked && (
-      <button type="button" className={css.quotePop} style={{ left: picked.x, top: picked.y }}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => { onQuote(picked.quote); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
+      <button type="button" className={picked.file ? `${css.quotePop} ${css.quoteImagePop}` : css.quotePop} style={{ left: picked.x, top: picked.y }}
+        onMouseDown={(e) => e.preventDefault()} onMouseLeave={picked.file ? (e) => images.off(e.relatedTarget) : undefined}
+        onClick={() => { onQuote(picked.quote, picked.file); setPicked(null); if (!picked.file) window.getSelection()?.removeAllRanges(); }}>
         <QuoteIcon size={12} strokeWidth={2.2} />{t("web-main.chat.quote")}
       </button>
     ),
@@ -1440,6 +1478,9 @@ const revealed = new Set<string>();
  */
 function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
   const station = useStation();
+  const quoting = useContext(ImageQuote);
+  // Held to quote it: the tap the finger's lifting makes does not open it too.
+  const held = useRef(false);
   const image = isImage(file.name);
   const video = kindOf(file.name).kind === "video";
   const [videoFailed, setVideoFailed] = useState(false);
@@ -1489,7 +1530,19 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} data-send-image={sentFileKey(file)} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
+        <button ref={box} type="button" className={look.image} data-send-image={sentFileKey(file)} onClick={() => { if (held.current) held.current = false; else setOpen(true); }} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
+          // In a chat's list, one the station has can be quoted: a button over its corner as a mouse comes over it, or held.
+          {...(quoting && sessionKey !== null ? {
+            onPointerDown: () => { held.current = false; },
+            onMouseEnter: (e: React.MouseEvent<HTMLElement>) => quoting.over(file, e.currentTarget),
+            onMouseLeave: (e: React.MouseEvent<HTMLElement>) => quoting.off(e.relatedTarget),
+            onContextMenu: (e: React.MouseEvent<HTMLElement>) => {
+              if ((e.nativeEvent as Partial<PointerEvent>).pointerType !== "touch" && !matchMedia("(hover: none)").matches) return;
+              e.preventDefault();
+              held.current = true;
+              quoting.hold(file, e.currentTarget);
+            },
+          } : {})}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined} data-near={near || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
@@ -1507,6 +1560,13 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
       {preview}
     </>
   );
+}
+
+/** An image of a message quoted, waiting in the composer: a small picture of the station's (none: its likeness). */
+function QuotedThumb({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
+  const fetched = useFileShown(sessionKey, file, isImage(file.name), true);
+  const likeness = !fetched.url && file.thumbhash ? thumbhashUrl(file.thumbhash) : null;
+  return <span className={css.quoteThumb}>{(fetched.url ?? likeness) && <img src={fetched.url ?? likeness!} alt={file.name} />}</span>;
 }
 
 /**
@@ -1903,13 +1963,14 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     el.setSelectionRange(at, at);
   }, [text]);
   // A preview's marks beside the chat: their screenshot and a quote each, to say more about before sending.
-  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words, quote, dropped }) => {
+  useDraftInbox(locked ? undefined : draftKey, (offer) => {
+    const { files: offered, quotes: added, text: words, quote, dropped } = offer;
     if (words) setText(text.trim() ? `${text.trimEnd()}\n${words}` : words);
     if (offered.length) add(offered);
     if (dropped?.length) draft.addDropped(dropped);
     if (added.length) draft.addQuotes(added);
-    // A passage selected in the chat: its comment line takes the focus.
-    if (quote) draft.quote(quote);
+    // A passage selected in the chat (or an image of it): its comment line takes the focus.
+    if (quote) draft.quote(quote, offer.quotedFile);
     else input.current?.focus();
   });
   // Grow with the text up to its lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
@@ -2047,9 +2108,11 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: 
         <div className={css.composerQuotes}>
           {quotes.map((q) => {
             const own = fileOf(q, files);
+            // An image of a message quoted is the station's already (none of this device's): drawn as the chat draws it.
+            const kept = own?.done && !own.preview ? own.done : undefined;
             return (
             <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
-              <QuoteCard quote={q} picture={own && <PendingFile file={own} />}
+              <QuoteCard quote={q} picture={own && (kept?.owner ? <QuotedThumb sessionKey={kept.owner} file={kept} /> : <PendingFile file={own} />)}
                 onRemove={() => { draft.unquote(q.id); if (own) draft.remove(own.id); }} comment={
                 <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
                   className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder={t("web-main.quote.commentPlaceholder")} aria-label={t("web-main.quote.commentLabel", { author: q.author })}

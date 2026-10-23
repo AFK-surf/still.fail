@@ -1199,7 +1199,7 @@ export interface Quote {
 	ts?: string;
 	/** agent | person | page (a mark on a previewed page) | image (a numbered mark on an image) */
 	role?: string;
-	/** The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot). */
+	/** The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot; an image of the quoted message, sent again with this one). */
 	file?: string;
 }
 

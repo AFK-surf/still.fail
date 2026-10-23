@@ -178,6 +178,23 @@ test("what_is_written_shows_with_what_it_can_do_and_is_kept_as_the_chats_draft",
   t.core.close();
 });
 
+test("an_image_of_a_message_quoted_goes_again_with_the_message_as_it_is_on_the_station_nothing_going_up", async () => {
+  const t = await setup();
+  await t.watch(1, "ws/st:k");
+  const image = { name: "shot.png", path: "/w/uploads/shot.png", size: 120, width: 40, height: 30, owner: "s1" };
+  const quote = { author: "agent", text: "shot.png", ts: "1.0", role: "agent", file: "shot.png" };
+  await t.ask("quote", { key: "ws/st:k", id: "q1", quote, focus: true, attachment: image, fileId: "f1" });
+  // Quoted twice: the file goes once.
+  await t.ask("quote", { key: "ws/st:k", id: "q2", quote, attachment: image });
+  const shown = v(t.values, 1);
+  assert.deepEqual([shown.quotes.map((q: J) => q.file), shown.files.map((f: J) => f.done), shown.uploading, shown.ready], [["shot.png", "shot.png"], [image], false, true]);
+  assert.equal(shown.files[0].id, "f1");
+  // Without the quote naming it, an attachment offered is not taken.
+  await t.ask("quote", { key: "ws/st:k", id: "q3", quote: { author: "agent", text: "这段" }, attachment: { ...image, path: "/w/uploads/other.png" } });
+  assert.equal(v(t.values, 1).files.length, 1);
+  t.core.close();
+});
+
 test("taken_to_send_it_empties_and_comes_back_when_it_could_not_go_unless_something_new_was_written", async () => {
   const t = await setup();
   await t.watch(1, "ws/st:k");

@@ -7,7 +7,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { topicNow, useReady, useTopicSelect } from "../core/react.ts";
-import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote, type Attachment } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -16,7 +16,7 @@ import type { Draft as SharedDraft } from "../draft.ts";
 import { Gallery } from "../FilePreview.tsx";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
-import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { ChatRows, historyLinkClicked, ImageQuote, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
 import { Archive, ArrowDown, ArrowUp, ArrowUpRight, Bell, Camera, Chats, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
@@ -297,7 +297,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
     find: find.show,
   });
   const [stable] = useState(() => ({
-    quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
+    quote: (q: Omit<Quote, "comment">, file?: Attachment) => latest.current.draft.current.quote(q, file),
     file: (session: string, file: { path: string; name: string }) => {
       const { app, here } = latest.current;
       app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })));
@@ -350,7 +350,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
       <Gallery.Provider value={gallery}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold} {...sentAfter(view)}>
         <DraftKey.Provider value={chatKey}>
-          <ChatRows chat={view} rows={rows} to={to} />
+          <ImageQuote.Provider value={quoting.images}><ChatRows chat={view} rows={rows} to={to} /></ImageQuote.Provider>
         </DraftKey.Provider>
       </div>
       </Gallery.Provider>
