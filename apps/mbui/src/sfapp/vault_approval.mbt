@@ -1,73 +1,177 @@
-// An agent's request for a vault item where its card is (Vault.kt VaultApproval; Decisions.kt: a post's options card
-// with `vault`, in a chat and on the 奏 page): the three answers in place of the card's own when it waits on the viewer
-// here (`vault.approve` once, for the chat's hour or until it is archived, as far as the item allows; `vault.deny`); shown
-// but not to be tapped where they cannot be
-// (another's to decide, `mine` false: the card says whose; a device that holds no key, said to be the app's); once
-// decided (no longer among the vault's requests), nothing to tap, until its station takes the card back.
+// An agent's request about a vault item where its card is (VaultAsk.tsx, VaultApproval.tsx): to use one or to keep one
+// (docs/vault.md 申请和授权, agent 存入). In place of the post's words, a card of words (@sf.card): what is asked in its
+// title, the command it is for, a risk only where there is one, and the answer at its foot: the answer most give as the
+// one solid button (允许 / 存入), the other beside it (拒绝 / 不存), how long a use is allowed a choice beside them that
+// starts at the longest the item is given for (`vault.approve`, `vault.deny`). Once decided, one line saying how it
+// ended. Only the viewer's own request can be answered, and only in an app keeping keys; elsewhere a line says whose it
+// is or where it is approved. A secret to keep while the vault is not on on this device: 开启密钥库, to the vault's page.
 
 ///|
-fn vault_approval(c : @ui.Ctx, src : Source, ws : String, request : String, mine : Bool) -> Unit {
+/// The request whose length-of-use menu is open (empty: none); put back by `reset`.
+let vault_menu : Ref[String] = Ref("")
+
+///|
+/// The length of use picked for each request; put back by `reset`.
+let vault_picked : Map[String, String] = {}
+
+///|
+/// The card in place of an agent's post asking about a vault item (`card.vaultAsk`), at the chat's station.
+fn vault_ask_card(c : @ui.Ctx, src : Source, here : Here, card : Card, ask : VaultAsk) -> Unit {
+  if ask.status != "" {
+    vault_outcome(c, ask)
+    return
+  }
+  let t = @sf.theme()
+  let ws = workspace_of(here.station)
+  let me = here.view.me
+  let mine = card.assignee == "" || me == "" || card.assignee.to_lower() == me.to_lower()
   let view = (src.topic)("vaults", { "workspace": ws.to_json() }).value
-  let running = vault_answering(request) is Some(_)
-  // (the longest the item is granted for: its request says, as the station posts it)
-  let lasts = match items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == request }) {
-    Some(r) => text(Some(r), "lasts")
-    None => ""
-  }
-  if view is None || !mine {
-    vault_options(c, src, ws, request, lasts, false)
-  } else if !flag(view, "available") {
-    vault_options(c, src, ws, request, lasts, false)
-    c.box(style=vault_said_room, fn() { c.text(tr("android-settings.vault.approve.inApp"), style=vault_said) |> ignore })
+  let row = items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == card.vault })
+  let save = ask.save_kind != ""
+  // (a solid button at its foot where there is an answer to give here: the card's corner is then the button's)
+  let answers = mine &&
+    (flag(view, "available") || flag(view, "plain")) &&
+    (row is Some(_) || vault_answering(card.vault) is Some(_))
+  @sf.card(c, button_corner=answers, fn() {
+    c.box(style=vault_what, fn() {
+      let title = if save {
+        fill("android-settings.vault.ask.save", [
+          ("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)),
+          ("name", ask.name),
+        ])
+      } else {
+        fill("android-settings.vault.ask.use", [("name", ask.name)])
+      }
+      let runs = [@ui.span(title, weight=600, color=t.p.text)]
+      if save && ask.username != "" {
+        runs.push(@ui.span("  " + ask.username, color=t.p.muted))
+      }
+      c.rich(runs, style=vault_title) |> ignore
+      if !save && ask.command != "" {
+        c.rich([@ui.span(ask.command, mono=true)], style=vault_command) |> ignore
+      }
+      // only what is out of the ordinary: a command that reads the secret itself
+      if !save && ask.mode == "env" {
+        c.rich([@ui.span(tr("android-settings.vault.ask.plain"), color=t.p.warn_ink)], style=vault_note) |> ignore
+      }
+    })
     |> ignore
-  } else if running || items(view, "requests").iter().any(fn(r) { text(Some(r), "id") == request }) {
-    vault_options(c, src, ws, request, lasts, true)
-  } else {
-    c.text(tr("android-settings.vault.approve.decided"), style=vault_said) |> ignore
-  }
+    vault_actions(c, src, ws, card.vault, row, view, mine, save, card.assignee_text)
+  })
+  |> ignore
 }
 
 ///|
-/// The answers (Vault.kt VaultOptions), in the decisions' options: once, this chat for an hour, this chat until it is
-/// archived, as far as the item allows (`lasts`), the longest recommended; refused. The one under way turns where it was
-/// tapped.
-fn vault_options(c : @ui.Ctx, src : Source, ws : String, request : String, lasts : String, enabled : Bool) -> Unit {
-  let scopes = @settings.vault_scopes_up_to(lasts)
-  let options : Array[Choice] = scopes.mapi(fn(i, s) {
-    {
-      label: tr("android-settings.vault.approve." + s),
-      detail: tr("android-settings.vault.approve." + s + "Detail"),
-      recommended: i == scopes.length() - 1,
+/// How a request ended, in a line: a dot (green once granted) and 已存入密码「…」, 已允许使用「…」 · 本对话内, 已拒绝使用「…」.
+fn vault_outcome(c : @ui.Ctx, ask : VaultAsk) -> Unit {
+  let save = ask.save_kind != ""
+  let scope = if ask.scope == "once" || ask.scope == "hour" { ask.scope } else { "chat" }
+  let words = match ask.status {
+    "granted" if save =>
+      fill("android-settings.vault.ask.kept", [
+        ("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)),
+        ("name", ask.name),
+      ])
+    "granted" => fill("android-settings.vault.ask.granted", [("name", ask.name), ("scope", tr("android-settings.vault.scope." + scope))])
+    "denied" if save => fill("android-settings.vault.ask.notKept", [("name", ask.name)])
+    "denied" => fill("android-settings.vault.ask.denied", [("name", ask.name)])
+    _ => tr("android-settings.vault.ask.expired")
+  }
+  c.box(style=vault_ended, fn() {
+    c.box(style=if ask.status == "granted" { vault_dot_on } else { vault_dot }, fn() {  }) |> ignore
+    c.text(words, style=vault_ended_words) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The answer to request `request` (its row among the vault's requests, `row`, while it waits on the viewer): the
+/// buttons, or a line where there is no answer to give here (`who`: whose it is).
+fn vault_actions(
+  c : @ui.Ctx,
+  src : Source,
+  ws : String,
+  request : String,
+  row : Json?,
+  view : Json?,
+  mine : Bool,
+  save : Bool,
+  who : String?,
+) -> Unit {
+  let note = fn(words : String) { c.text(words, style=vault_note) |> ignore }
+  if view is None {
+    return
+  }
+  if !flag(view, "available") && !flag(view, "plain") {
+    note(tr("android-settings.vault.approve.inApp"))
+    return
+  }
+  let running = vault_answering(request)
+  if !mine || (row is None && running is None) {
+    note(
+      match who {
+        Some(w) if !mine => w
+        _ => tr("android-settings.vault.approve.decided")
+      },
+    )
+    return
+  }
+  let scopes = if save { ["once"] } else { @settings.vault_scopes_up_to(text(row, "lasts")) }
+  let scope = match vault_picked.get(request) {
+    Some(s) if scopes.contains(s) => s
+    _ => scopes[scopes.length() - 1]
+  }
+  let on : Map[String, Json] = { "workspace": ws.to_json(), "request": request.to_json() }
+  c.box(style=vault_foot, fn() {
+    if save && !flag(view, "plain") && !flag(view, "setUp") {
+      // kept only in a vault that is on here: the way to turn it on first
+      if @sf.button(c, tr("android-settings.vault.turnOn"), key="vault/" + request + "/on", tone=Primary) {
+        app.nav.push(Setting(@settings.Route::Vault))
+      }
+    } else {
+      let yes = if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
+      let busy = match running {
+        Some(n) => n != vault_deny_no
+        None => false
+      }
+      if @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=Primary, busy~, disabled=running is Some(_)) {
+        let given = if save { "once" } else { scope }
+        on["scope"] = given.to_json()
+        let what = if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" }
+        act(src, tr(what), vault_key(request, vault_scope_no(given)), "vault.approve", Json::object(on))
+      }
+    }
+    let no = if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }
+    if @sf.button(c, tr(no), key="vault/" + request + "/no", tone=Ghost, busy=running == Some(vault_deny_no), disabled=running is Some(_)) {
+      act(src, tr("android-settings.vault.act.denyWhat"), vault_key(request, vault_deny_no), "vault.deny", Json::object(on))
+    }
+    if !save && scopes.length() > 1 {
+      let entries = scopes.map(fn(s) { @kit.menu_radio(s, s == scope, label=tr("android-settings.vault.scope." + s)) })
+      let m = @sf.chooser(c, "vault/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, vault_menu.val == request)
+      if m.open {
+        vault_menu.val = request
+      } else if vault_menu.val == request {
+        vault_menu.val = ""
+      }
+      match m.chosen {
+        Some(s) => {
+          vault_picked[request] = s
+          vault_menu.val = ""
+        }
+        None => ()
+      }
     }
   })
-  options.push({
-    label: tr("android-settings.vault.approve.deny"),
-    detail: tr("android-settings.vault.approve.denyDetail"),
-    recommended: false,
-  })
-  // (each answer's key by what it is: a scope's place among them all, refused after them)
-  let key_of = fn(i : Int) { if i < scopes.length() { vault_scope_no(scopes[i]) } else { vault_deny_no } }
-  let busy = match vault_answering(request) {
-    Some(no) =>
-      match Array::makei(options.length(), fn(i) { i }).search_by(fn(i) { key_of(i) == no }) {
-        Some(i) => Some(options[i].label)
-        None => None
-      }
-    None => None
-  }
-  match decision_options(c, "vault/" + request, options, enabled, busy) {
-    Some(o) => {
-      let at = options.search_by(fn(x) { x.label == o.label }).unwrap_or(options.length() - 1)
-      let on : Map[String, Json] = { "workspace": ws.to_json(), "request": request.to_json() }
-      if at >= scopes.length() {
-        act(src, tr("android-settings.vault.approve.denyWhat"), vault_key(request, vault_deny_no), "vault.deny", Json::object(on))
-      } else {
-        on["scope"] = scopes[at].to_json()
-        act(src, tr("android-settings.vault.approve.what"), vault_key(request, key_of(at)), "vault.approve", Json::object(on))
-      }
-    }
-    None => ()
-  }
+  |> ignore
+}
+
+///|
+/// The answer under a card that names a vault request but says nothing of it (from a station before `vaultAsk`), and
+/// on the 奏 page under such a post: the buttons alone.
+fn vault_approval(c : @ui.Ctx, src : Source, ws : String, request : String, mine : Bool) -> Unit {
+  let view = (src.topic)("vaults", { "workspace": ws.to_json() }).value
+  let row = items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
+  vault_actions(c, src, ws, request, row, view, mine, field(row, "save") is Some(_), None)
 }
 
 ///|
@@ -100,10 +204,44 @@ fn vault_answering(request : String) -> Int? {
 }
 
 ///|
-/// What is said in place of the answers (13 on 19, the chat's subtle: Vault.kt:443), 6 under them where they show.
+/// What is asked, over the answer: its lines 2 apart (VaultAsk.css.ts what).
 // kept across runs: a value (no field of it changes)
-let vault_said : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, color=Subtle, w=Full)
+let vault_what : @ui.Style = @ui.style(w=Full, gap=S0_5)
+
+///|
+/// Its title, 14 on 20 (the account after it quieter, its own run).
+// kept across runs: a value (no field of it changes)
+let vault_title : @ui.TextStyle = @ui.text_style(size=Base, leading=L5, color=Fg, w=Full)
+
+///|
+/// The command, one line of it, 12 and quiet.
+// kept across runs: a value (no field of it changes)
+let vault_command : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, color=Muted, wrap=false, max_lines=1, w=Full)
+
+///|
+/// A line of what is out of the ordinary, or where there is no answer to give here: 12 and quiet.
+// kept across runs: a value (no field of it changes)
+let vault_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, color=Muted, w=Full)
+
+///|
+/// The answer's buttons, 10 apart (pages.css.ts cardFoot).
+// kept across runs: a value (no field of it changes)
+let vault_foot : @ui.Style = @ui.style(row=true, gap=S2_5, align=ACenter)
+
+///|
+/// How it ended: a dot and its words, 8 apart.
+// kept across runs: a value (no field of it changes)
+let vault_ended : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter, pt=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vault_said_room : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let vault_ended_words : @ui.TextStyle = @ui.text_style(size=Base, leading=L5, color=Muted)
+
+///|
+/// Its dot, 6 round: green once granted, else quiet.
+// kept across runs: a value (no field of it changes)
+let vault_dot : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=Subtle)
+
+///|
+// kept across runs: a value (no field of it changes)
+let vault_dot_on : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=Positive)

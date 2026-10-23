@@ -19,6 +19,9 @@ export type VaultDeps = {
   /// The lock pinned in a workspace this station is in; null when none is (or it is broken: nobody is admitted then).
   lock(workspace: string): LockState | null;
   events?: Events;
+  /// A device's box certificate taken (a newer one than held): the secrets agents asked to keep for its person are
+  /// sealed to it too (vault/secrets.ts `boxed`).
+  boxed?(lock: LockState, cert: BoxCert): void;
 };
 
 /// A refusal with its code, which the core says as it is.
@@ -36,7 +39,7 @@ function body(r: Request): unknown {
 
 const sees = (vault: Vault, viewer: Viewer) => vault.ws === viewer.workspace && vault.members.includes(viewer.sub);
 
-export const routes = ({ vaults, lock, events }: VaultDeps): Route[] => {
+export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
   /// The lock of the viewer's workspace, or the refusal.
   const locked = (r: Request): LockState | Answer => lock(r.viewer.workspace) ?? NEEDS_LOCK();
   const isAnswer = (v: LockState | Answer): v is Answer => "status" in v;
@@ -137,6 +140,7 @@ export const routes = ({ vaults, lock, events }: VaultDeps): Route[] => {
         if (had !== null && had.at > cert.at) return json(200, JSON.stringify({ box: had }));
         vaults.putBox(cert);
         tell("vault-box", cert, `vault-box\0${cert.device}`, (v) => v.workspace === cert.ws);
+        boxed?.(l, cert);
         return json(200, JSON.stringify({ box: cert }));
       },
     },

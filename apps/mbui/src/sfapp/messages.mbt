@@ -892,6 +892,14 @@ fn agent_words(
   m : Message,
   quote? : ((Attachment) -> Unit)? = None,
 ) -> Unit {
+  // an agent's request about a vault item: its card in place of the words, answered on it (vault_approval.mbt)
+  match m.card {
+    Some({ ask: Some(ask), .. } as card) => {
+      vault_ask_card(c, src, here, card, ask)
+      return
+    }
+    _ => ()
+  }
   let placed : Map[String, Attachment] = {}
   for n in m.placed {
     match m.attachments.iter().find_first(fn(a) { a.name == n }) {
@@ -1781,6 +1789,10 @@ fn decision_under(
     None => m.options
   }
   if m.card is None && m.options is None {
+    return
+  }
+  // a vault request that says what it is: answered on its own card, in place of the words (vault_approval.mbt)
+  if m.card is Some({ ask: Some(_), .. }) {
     return
   }
   let resolved = match m.decision {

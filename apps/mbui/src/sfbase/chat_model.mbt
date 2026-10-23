@@ -119,6 +119,21 @@ pub(all) struct Card {
   login : String
   station : String
   vault : String
+  /// with `vault`: the request as the card says it (MessageCard.vaultAsk), drawn in place of the post's words
+  ask : VaultAsk?
+}
+
+///|
+/// An agent's request about a vault item as its card says it (VaultAsk): the item, how it is given, the command it is
+/// for; one to keep a secret (`save_kind` not empty): what kind and the account; once decided, how (`status`, `scope`).
+pub(all) struct VaultAsk {
+  name : String
+  mode : String
+  command : String
+  save_kind : String
+  username : String
+  status : String
+  scope : String
 }
 
 ///|
@@ -303,6 +318,19 @@ pub fn message_of(m : Json) -> Message {
           login: text(c, "login"),
           station: text(c, "station"),
           vault: text(c, "vault"),
+          ask: match field(c, "vaultAsk") {
+            Some(Object(_)) as a =>
+              Some({
+                name: text(a, "name"),
+                mode: text(a, "mode"),
+                command: text(a, "command"),
+                save_kind: text(field(a, "save"), "kind"),
+                username: text(field(a, "save"), "username"),
+                status: text(a, "status"),
+                scope: text(a, "scope"),
+              })
+            _ => None
+          },
         })
       _ => None
     },

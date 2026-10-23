@@ -707,6 +707,8 @@ fn decision_face(
       rows.push(fn() {
         match kind {
           // an agent's request for a vault item: approved here (Vault.kt), the 奏 page's the viewer's
+          // (one that says what it is: answered on its card, in the post above)
+          "options" if text(card, "vault") != "" && field(card, "vaultAsk") is Some(_) => ()
           "options" if text(card, "vault") != "" => {
             let ws = match station.find("/") {
               Some(i) => station.view(end_offset=i).to_string()

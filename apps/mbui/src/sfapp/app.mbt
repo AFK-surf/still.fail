@@ -26,6 +26,8 @@ fn init {
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
   @sf.set_language(None)
+  vault_menu.val = ""
+  vault_picked.clear()
   reveals.clear()
   files_cornered.val = false
   felt_menu.val = -1

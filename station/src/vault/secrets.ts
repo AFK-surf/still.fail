@@ -1,7 +1,9 @@
 // Agents asking for the vault's secrets (docs/vault.md, agent 用密钥): a request from a session, its card in the
 // session's chat for the vault's owner, the grant or refusal the owner's app sends back (checked by the keeper, which
 // alone ever holds the secret), and the commands run with a grant. Without security mode, the secrets are the plain
-// library's (plain.ts): the same request and card, decided by the item's owner, the value read from the station. The requests and what was done with them are kept
+// library's (plain.ts): the same request and card, decided by the item's owner, the value read from the station. An
+// agent may also ask to keep a secret in its owner's vault (secret_save): sealed to their devices, written by the app
+// that approves it (or, without security mode, into the plain library here). The requests and what was done with them are kept
 // in the station's database (`vault_requests`, `vault_audit`), never a secret; the vaults' grants only in memory, the
 // plain library's written down without their value (`vault_grants`) and taken up again after a restart. A grant ends
 // with its chat: archived or deleted, its session's grants are dropped.
@@ -10,14 +12,15 @@ import type { DatabaseSync } from "node:sqlite";
 import type { LockState } from "../cloud/lock.ts";
 import { threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
+import { log } from "../ops/log.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
-import { type Deny, type Grant, type Listing, type Mode, type Request, type Scope, SCOPES, TAG, allows, signedOk, signerOf } from "./crypto.ts";
+import { type BoxCert, type Deny, type Grant, type Kind, type Listing, type Mode, type Request, type Save, type Scope, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
 import { type Held, Keeper, hostAllowed, valueOf } from "./keeper.ts";
-import { PLAIN, type PlainStore } from "./plain.ts";
+import { KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
-import { type Ran, SECRET_VAR, runWith } from "./run.ts";
+import { type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
 
 const SCHEMA = `
@@ -65,6 +68,16 @@ const WAIT_MS = 45_000;
 const PENDING_SECS = 86400;
 /// A command run with a grant is stopped after this long, unless it asks for less (at most an hour).
 const RUN_MS = 10 * 60_000;
+/// A command printing a secret to keep is stopped after this long.
+const CAPTURE_MS = 2 * 60_000;
+
+/// The words on the card of a request to keep a secret.
+const SAVE_WORDS = {
+  save: { label: "存入密钥库", detail: "agent 之后每次使用仍需你批准" },
+  deny: { label: "拒绝", detail: "不保存，通知 agent" },
+};
+const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥" };
+const howWords = (mode: Mode, hosts: string[]): string => (mode === "proxy" ? `代理（限 ${hosts.join(", ")}）` : mode === "ssh" ? "ssh-agent（私钥不出 station）" : "环境变量（命令可读取明文）");
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /// A ULID: 48 bits of milliseconds, 80 random.
@@ -116,6 +129,9 @@ export class Secrets {
   readonly #d: SecretsDeps;
   readonly #waiting = new Map<string, Set<(r: Request) => void>>();
   readonly #listeners: ((r: Request) => void)[] = [];
+  /// The secrets agents asked to keep, by request, until decided: only in memory (a restart forgets them). The plain
+  /// library's is written from here once approved; a vault's is sealed to its owner's devices set up later.
+  readonly #unsaved = new Map<string, Record<string, string>>();
 
   constructor(d: SecretsDeps) {
     this.#d = d;
@@ -229,13 +245,13 @@ export class Secrets {
 
   /// Whether `viewer` decides request `r`: the plain library's item's owner, a member of the vault.
   #decides(r: Request, viewer: { sub: string; email: string }, lock: LockState | null): boolean {
-    if (r.vault === PLAIN) return r.owner === viewer.email.toLowerCase();
+    if (r.vault === PLAIN || r.save) return r.owner === viewer.email.toLowerCase();
     return lock !== null && this.#d.vaults.vault(lock.ws, r.vault)?.members.includes(viewer.sub) === true;
   }
 
   /// Whether request `r`'s changes are told to `viewer` (the members' event streams).
   tells(r: Request, viewer: { sub: string; email: string; workspace: string }): boolean {
-    return viewer.workspace === r.ws && (r.vault === PLAIN ? r.owner === viewer.email.toLowerCase() : this.#d.vaults.vault(r.ws, r.vault)?.members.includes(viewer.sub) === true);
+    return viewer.workspace === r.ws && (r.vault === PLAIN || r.save ? r.owner === viewer.email.toLowerCase() : this.#d.vaults.vault(r.ws, r.vault)?.members.includes(viewer.sub) === true);
   }
 
   /// The requests `viewer` may decide in workspace `ws`, still waiting.
@@ -245,8 +261,10 @@ export class Secrets {
     return rows
       .map((r) => JSON.parse(r.body) as Request)
       .filter((r) => {
-        // A vault's request whose box this station no longer holds (it restarted) can never be granted: let go.
-        if (r.at + PENDING_SECS > now && (r.vault === PLAIN || this.keeper.waiting(r.id))) return true;
+        // A vault's request whose box this station no longer holds (it restarted) can never be granted: let go. So is a
+        // secret to keep that is gone with a restart (the plain library's) and sealed to no device.
+        const live = r.save ? this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0) : r.vault === PLAIN || this.keeper.waiting(r.id);
+        if (r.at + PENDING_SECS > now && live) return true;
         this.#settle(r, "expired");
         return false;
       })
@@ -257,7 +275,7 @@ export class Secrets {
   uses(ws: string, lock: LockState | null, vault: string, viewer: { sub: string; email: string }, limit = 500): Use[] {
     if (vault !== PLAIN && (lock === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
     const rows = this.#d.db
-      .prepare("SELECT body FROM vault_requests WHERE ws = ? AND status IN ('granted', 'denied') AND json_extract(body, '$.vault') = ? ORDER BY json_extract(body, '$.at') DESC LIMIT ?")
+      .prepare("SELECT body FROM vault_requests WHERE ws = ? AND status IN ('granted', 'denied') AND json_extract(body, '$.vault') = ? AND json_extract(body, '$.save') IS NULL ORDER BY json_extract(body, '$.at') DESC LIMIT ?")
       .all(ws, vault, limit) as { body: string }[];
     return rows
       .map((row) => JSON.parse(row.body) as Request)
@@ -360,8 +378,7 @@ export class Secrets {
 
   /// The card for request `r` in the session's chat: the vault's owner decides it in the app.
   async #post(session: string, thread: SessionThread, r: Request, l: Listing, owner: string | undefined): Promise<string | null> {
-    const how = r.mode === "proxy" ? `代理（限 ${(r.hosts ?? l.hosts).join(", ")}）` : r.mode === "ssh" ? "ssh-agent（私钥不出 station）" : "环境变量（命令可读取明文）";
-    const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
+    const how = howWords(r.mode, r.hosts ?? l.hosts);
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     // In a still.fail chat the card says where it is approved; Slack has no card, so the words say it.
     const where = stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"];
@@ -381,18 +398,239 @@ export class Secrets {
           vault: { request: r.id, name: l.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: r.mode === "proxy" ? (r.hosts ?? l.hosts) : [] },
         }
       : null;
+    return this.#postCard(session, thread, text, card);
+  }
+
+  /// A request's post in the session's chat, with its card where the chat shows cards; the card's ts, if it has one.
+  async #postCard(session: string, thread: SessionThread, text: string, card: Record<string, unknown> | null): Promise<string | null> {
+    const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
     const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
     const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
     this.#d.hub.shared(thread.thread.id, n, session, text);
     return card !== null ? posted : null;
   }
 
-  /// A request decided otherwise than granted, or granted (`grant` checked by the keeper first).
-  #settle(r: Request, status: Request["status"], scope?: Scope) {
+  // ── secrets agents ask to keep (secret_save, docs/vault.md agent 存入) ──
+
+  /// The person a session works for, as the lock has them (their sub), where security mode is on.
+  #memberOf(lock: LockState, email: string): string | null {
+    return [...lock.members.values()].find((m) => m.email.toLowerCase() === email)?.sub ?? null;
+  }
+
+  /// `sub`'s devices set up for the vault: their box certificates, checked against the lock.
+  #certsOf(lock: LockState, sub: string): BoxCert[] {
+    return this.#d.vaults.boxes(lock.ws).filter((c) => certOk(lock, c) === null && lock.devices.get(c.device)?.sub === sub);
+  }
+
+  /// The vault a secret kept for `sub` is meant for: one of theirs keyed to a device of theirs, their own first; empty
+  /// while they have none (the app that approves makes one).
+  #vaultFor(lock: LockState, sub: string): string {
+    const devices = new Set(this.#certsOf(lock, sub).map((c) => c.device));
+    const theirs = this.#d.vaults.vaults(lock.ws).filter((v) => v.members.includes(sub) && v.keys.some((k) => devices.has(k.cert.device)));
+    return (theirs.find((v) => v.owner === sub) ?? theirs[0])?.id ?? "";
+  }
+
+  #sealTo(cert: BoxCert, ws: string, request: string, fields: Record<string, string>) {
+    return { device: cert.device, box: cert.box, secret: seal(cert.box, Buffer.from(JSON.stringify(fields)), saveContext(ws, request)) };
+  }
+
+  /// Whether the person a session works for can keep a secret: `plain` (no security mode: the plain library here),
+  /// `on` (a vault of theirs, keyed to a device of theirs set up), `off` (security mode on, their vault not turned on:
+  /// a secret to keep waits on its card until they turn it on there), `none` (no one to keep it for).
+  status(session: string): "plain" | "on" | "off" | "none" {
+    const { lock } = this.#placeOf(session);
+    const email = this.#starter(session);
+    if (email === null) return "none";
+    if (lock === null) return "plain";
+    const sub = this.#memberOf(lock, email);
+    if (sub === null) return "none";
+    return this.#vaultFor(lock, sub) !== "" ? "on" : "off";
+  }
+
+  /// secret_save: a request from `session` to keep a secret in the vault of whoever started its chat, given as `value`
+  /// or printed by `command` (run here in `cwd`; what it prints is never shown); waits a while for its decision.
+  async save(
+    session: string,
+    a: { name: string; kind: string; reason: string; value?: string; command?: string; username?: string; public_key?: string; modes?: string[]; hosts?: string[]; env?: string; cwd: string },
+  ): Promise<string> {
+    const { ws, lock } = this.#placeOf(session);
+    const email = this.#starter(session);
+    if (email === null) throw new Refused("No one started this chat: there is no one to keep a secret for.");
+    const kind = a.kind as Kind;
+    if (!KINDS.includes(kind)) throw new Refused("kind is token, login or ssh_key");
+    const name = a.name.trim();
+    if (name === "" || name.length > 200) throw new Refused("name is required (at most 200 characters): what the person and agents will know it by");
+    if (a.reason.trim() === "") throw new Refused("reason is required: why it is worth keeping, for the person deciding");
+    if ((a.value === undefined) === (a.command === undefined)) throw new Refused("Give the secret either as value or as a command that prints it (command), not both.");
+    const hosts = [...new Set((a.hosts ?? []).map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
+    const modes = (a.modes?.length ? [...new Set(a.modes)] : kind === "ssh_key" ? ["ssh"] : hosts.length > 0 ? ["proxy"] : ["env"]) as Mode[];
+    if (!modes.every((m) => MODES.includes(m))) throw new Refused("modes are proxy, ssh or env");
+    if (modes.includes("ssh") !== (kind === "ssh_key")) throw new Refused("an SSH key is given by ssh (or env), and only an SSH key is");
+    const sub = lock === null ? null : this.#memberOf(lock, email);
+    if (lock !== null && sub === null) throw new Refused(`${email} is not in the workspace's security mode: there is no vault of theirs to keep it in.`);
+    const listing: Listing = { name, kind, modes, hosts, ...(a.env ? { env: a.env } : {}) };
+    const now = this.#d.now();
+    const item = `i_${ulid(now)}`;
+    // What is not secret checked before anything is run.
+    const draft = (fields: Record<string, string>): PlainItem => ({ ws, id: item, owner: email, version: 0, kind, name, fields, notes: "", listing, at: Math.floor(now / 1000) });
+    const fieldsOf = (value: string): Record<string, string> =>
+      kind === "token" ? { value } : kind === "login" ? { ...(a.username ? { username: a.username } : {}), password: value } : { private_key: value, ...(a.public_key ? { public_key: a.public_key } : {}) };
+    const why = plainOk(null, draft(fieldsOf("x")), email);
+    if (why !== null) throw new Refused(why);
+    let value = a.value ?? "";
+    if (a.command !== undefined) {
+      const got = await capture(a.command, a.cwd, baseEnv(), CAPTURE_MS);
+      const end = got.timedOut ? "it ran too long" : got.code !== null ? `exit code ${got.code}` : `ended by ${got.signal}`;
+      if (got.timedOut || got.code !== 0) throw new Refused(`The command did not print the secret (${end}); nothing was kept. What it said on stderr:\n${got.err.slice(-2000)}`);
+      if (got.tooLong) throw new Refused("The command printed more than 64 KB: that is not one secret; nothing was kept.");
+      value = got.out;
+    }
+    if (value === "") throw new Refused("The secret is empty; nothing was kept.");
+    const fields = fieldsOf(value);
+    const id = `r_${ulid(now)}`;
+    const save: Save = { kind, name, modes, hosts, ...(a.env ? { env: a.env } : {}), ...(a.username ? { username: a.username } : {}), ...(a.public_key ? { public_key: a.public_key } : {}) };
+    const request: Request = {
+      id, ws, vault: lock === null ? PLAIN : this.#vaultFor(lock, sub!), item, session, chat: "", mode: modes[0]!, reason: a.reason.trim(),
+      ...(a.command !== undefined ? { command: a.command } : {}), ...(hosts.length ? { hosts } : {}),
+      // A vault's: a box for the grant to this chat that comes with keeping it (the app seals the secret to it too).
+      box: lock === null ? "" : this.keeper.open(id), at: Math.floor(now / 1000), status: "pending", owner: email, save,
+      ...(lock !== null ? { sealed: this.#certsOf(lock, sub!).map((c) => this.#sealTo(c, ws, id, fields)) } : {}),
+    };
+    this.#unsaved.set(id, fields);
+    const kept: Kept = { request, thread: null, cardTs: null };
+    const thread = this.#d.hub.store.latestThread(session);
+    if (thread !== null) {
+      request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
+      kept.cardTs = await this.#postSave(session, thread, request);
+      kept.thread = thread.thread.id;
+    }
+    this.#save(kept);
+    this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), a.command ?? ""].filter((x) => x !== "").join(" · "));
+    this.#told(request);
+    const decided = await this.#decision(id, WAIT_MS);
+    return this.#saidSave(decided ?? request);
+  }
+
+  /// The card of a request to keep a secret: what it is, whose, why (the app draws it from `vault.save`, offering to
+  /// turn the vault on first where it is not).
+  async #postSave(session: string, thread: SessionThread, r: Request): Promise<string | null> {
+    const s = r.save!;
+    const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
+    const text = [
+      `申请将「${s.name}」存入密钥库（${KIND_WORDS[s.kind]}${s.username ? ` · ${s.username}` : ""}）：${r.reason}`,
+      ...(stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"]),
+    ].join("\n\n");
+    const card = stillfail
+      ? {
+          type: "options",
+          options: [{ ...SAVE_WORDS.save, recommended: true }, SAVE_WORDS.deny],
+          assignee: r.owner,
+          // The request as the app draws it (VaultAsk.tsx): `save` says it is one to keep; its outcome added once decided.
+          vault: {
+            request: r.id, name: s.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: s.modes[0], hosts: s.modes[0] === "proxy" ? s.hosts : [],
+            save: { kind: s.kind, ...(s.username ? { username: s.username } : {}) },
+          },
+        }
+      : null;
+    return this.#postCard(session, thread, text, card);
+  }
+
+  /// What an agent is told of a request to keep a secret, waiting or decided.
+  #saidSave(r: Request): string {
+    const s = r.save!;
+    const whose = r.owner ?? "the person";
+    if (r.status === "granted") {
+      const held = this.keeper.usable(r.session, r.id);
+      const use = typeof held === "string"
+        ? `When you need it, ask with secret_use {item: "${s.name}"}, then secret_run.`
+        : `This chat may use it now: secret_run {grant: "${r.id}", command: "…"${s.env ? "" : ', env: "NAME"'}} (${held.grant.mode === "proxy" ? `through the proxy to ${held.grant.hosts.join(", ")}` : held.grant.mode === "ssh" ? "by ssh-agent" : "in the environment"}); other chats ask with secret_use.`;
+      return `Kept: 「${s.name}」 is in ${whose}'s vault now (item ${r.item}). ${use}`;
+    }
+    if (r.status === "denied") return `${whose} chose not to keep 「${s.name}」 (request ${r.id}).`;
+    if (r.status === "expired") return `The request to keep 「${s.name}」 (${r.id}) was let go.`;
+    const off = r.vault === "" ? " Their vault is not turned on yet: the card lets them turn it on in the still.fail app, and then keep it." : "";
+    return `Asked to keep 「${s.name}」 (request ${r.id}); the card is in your chat for ${whose}, who approves it in the still.fail app.${off} Not decided yet: end your turn need_human (about the card), and you are told when it is decided. Only their approval in the app keeps it: a reply in the chat saying yes does not.`;
+  }
+
+  /// A device's box key published (PUT vault/boxes, checked): the secrets waiting to be kept for its person sealed to
+  /// it too, so that they may approve them from it.
+  boxed(lock: LockState, cert: BoxCert) {
+    const sub = lock.devices.get(cert.device)?.sub;
+    const email = sub === undefined ? undefined : lock.members.get(sub)?.email.toLowerCase();
+    if (sub === undefined || email === undefined) return;
+    const rows = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'").all(lock.ws) as { body: string }[];
+    for (const row of rows) {
+      const r = JSON.parse(row.body) as Request;
+      const fields = this.#unsaved.get(r.id);
+      if (!r.save || r.vault === PLAIN || r.owner !== email || fields === undefined || r.sealed?.some((x) => x.box === cert.box)) continue;
+      const k = this.#kept(r.ws, r.id)!;
+      k.request.sealed = [...(r.sealed ?? []).filter((x) => x.device !== cert.device), this.#sealTo(cert, r.ws, r.id, fields)];
+      if (k.request.vault === "") k.request.vault = this.#vaultFor(lock, sub);
+      this.#save(k);
+      this.#told(k.request);
+    }
+  }
+
+  /// POST vault/saves: a secret asked to be kept, written by `sub`'s app into their vault `vault` (under the request's
+  /// item id; its copy brought here first); why it is refused, or null.
+  saved(lock: LockState, sub: string, d: { request?: unknown; vault?: unknown; grant?: unknown }): string | null {
+    const k = typeof d?.request === "string" ? this.#kept(lock.ws, d.request) : null;
+    if (k === null || !k.request.save || k.request.vault === PLAIN) return "no such request to keep a secret in a vault";
+    if (lock.members.get(sub)?.email.toLowerCase() !== k.request.owner) return "only the person it is kept for decides it";
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
+    const vault = typeof d.vault === "string" ? this.#d.vaults.vault(lock.ws, d.vault) : null;
+    if (vault === null || !vault.members.includes(sub)) return "no such vault of theirs here";
+    const item = this.#d.vaults.item(lock.ws, vault.id, k.request.item);
+    if (item === null || item.deleted || item.listing?.name !== k.request.save.name) return "the item is not in that vault here: bring its copy first";
+    // Keeping it lets the chat that asked use it (its app's grant, sealed to this request's box): kept all the same if
+    // that grant does not hold.
+    const why = d.grant === undefined ? "none sent" : this.keeper.accept(lock, vault, item, { ...k.request, vault: vault.id }, d.grant as Grant);
+    if (why !== null) {
+      log.warn("vault", "a kept secret's grant to its chat not taken", { why });
+      // Its box is of no more use.
+      if (this.keeper.waiting(k.request.id)) this.keeper.drop(k.request.id);
+    }
+    this.#settle(k.request, "granted", undefined, vault.id);
+    return null;
+  }
+
+  /// POST vault/plain/saves: a secret asked to be kept, approved by whoever it is for (no security mode): written into
+  /// the plain library here. The item as written, or why not.
+  savedPlain(ws: string, lock: LockState | null, email: string, d: { request?: unknown }): PlainItem | string {
+    const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
+    if (k === null || !k.request.save || k.request.vault !== PLAIN) return "no such request to keep a secret";
+    if (k.request.owner !== email.toLowerCase()) return "only the person it is kept for decides it";
+    if (lock !== null) return "security mode is on: secrets go into the vault, encrypted";
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
+    const fields = this.#unsaved.get(k.request.id);
+    if (fields === undefined) return "the secret is gone (the station restarted): the agent asks again";
+    const s = k.request.save;
+    const next: PlainItem = {
+      ws, id: k.request.item, owner: k.request.owner!, version: 0, kind: s.kind, name: s.name, fields, notes: "",
+      listing: { name: s.name, kind: s.kind, modes: s.modes, hosts: s.hosts, ...(s.env ? { env: s.env } : {}) }, at: Math.floor(this.#d.now() / 1000),
+    };
+    if (this.#d.plain.item(ws, next.id) !== null) return "the item is there already";
+    const why = plainOk(null, next, next.owner);
+    if (why !== null) return why;
+    this.#d.plain.put(next);
+    // Keeping it lets the chat that asked use it, for as long as the person's items are given.
+    const lasts = this.#d.plain.lasts(ws, next.owner)?.lasts ?? null;
+    const scope = SCOPES.filter((x) => allows(lasts, x)).at(-1)!;
+    const held = this.keeper.hold(k.request, { scope, hosts: s.modes[0] === "proxy" ? s.hosts : [], listing: next.listing!, lasts }, { kind: s.kind, name: s.name, fields });
+    if (held !== null) log.warn("vault", "a kept secret's grant to its chat not held", { why: held });
+    this.#settle(k.request, "granted");
+    return this.#d.plain.item(ws, next.id)!;
+  }
+
+  /// A request decided otherwise than granted, or granted (`grant` checked by the keeper first); `into`: the vault a
+  /// secret to keep went into.
+  #settle(r: Request, status: Request["status"], scope?: Scope, into?: string) {
     const k = this.#kept(r.ws, r.id);
     if (k === null || k.request.status !== "pending") return;
     k.request.status = status;
+    if (into !== undefined) k.request.vault = into;
     this.#save(k);
+    this.#unsaved.delete(r.id);
     if (status !== "granted") this.keeper.drop(r.id);
     if (k.thread !== null && k.cardTs !== null) {
       this.#d.hub.store.withdrawCard(r.session, k.thread, k.cardTs);
@@ -407,7 +645,7 @@ export class Secrets {
     if (!heard && status !== "expired") {
       const l = this.#listingOf(r);
       try {
-        this.#d.hub.notify(r.session, l ? this.#said(k.request, l) : `The request ${r.id} was ${status}.`);
+        this.#d.hub.notify(r.session, k.request.save ? this.#saidSave(k.request) : l ? this.#said(k.request, l) : `The request ${r.id} was ${status}.`);
       } catch {
         // The session is gone: nobody to tell.
       }
@@ -418,6 +656,7 @@ export class Secrets {
   grant(lock: LockState, sub: string, grant: Grant): string | null {
     const k = typeof grant?.request === "string" ? this.#kept(lock.ws, grant.request) : null;
     if (k === null) return "no such request";
+    if (k.request.save) return "a secret to keep is approved by POST vault/saves";
     const vault = this.#d.vaults.vault(lock.ws, k.request.vault);
     const item = this.#d.vaults.item(lock.ws, k.request.vault, k.request.item);
     if (vault === null || item === null) return "the request's vault or item is gone";
@@ -433,6 +672,7 @@ export class Secrets {
   grantPlain(ws: string, lock: LockState | null, email: string, d: { request?: unknown; scope?: unknown }): string | null {
     const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
     if (k === null || k.request.vault !== PLAIN) return "no such request of the plain library";
+    if (k.request.save) return "a secret to keep is approved by POST vault/plain/saves";
     if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
     if (lock !== null) return "security mode is on: the plain library's secrets are moved into the vault, not given out";
     const item = this.#d.plain.item(ws, k.request.item);
@@ -460,10 +700,16 @@ export class Secrets {
     const k = typeof d?.request === "string" ? this.#kept(lock.ws, d.request) : null;
     if (k === null) return "no such request";
     if (d.v !== 1 || d.ws !== lock.ws) return "a refusal is {v: 1, ws, request, at, sig} of this workspace";
-    const vault = this.#d.vaults.vault(lock.ws, k.request.vault);
-    if (vault === null || !vault.members.includes(sub)) return "only the vault's members decide its requests";
     const by = typeof d.sig?.key === "string" ? signerOf(lock, d.sig.key) : null;
-    if (by === null || !vault.members.includes(by.sub)) return "a refusal is signed by a vault member's device in the lock";
+    if (k.request.save) {
+      // A secret to keep: its owner's to turn down, from one of their devices.
+      if (lock.members.get(sub)?.email.toLowerCase() !== k.request.owner) return "only the person it is kept for decides it";
+      if (by === null || by.sub !== sub) return "a refusal is signed by one of their devices in the lock";
+    } else {
+      const vault = this.#d.vaults.vault(lock.ws, k.request.vault);
+      if (vault === null || !vault.members.includes(sub)) return "only the vault's members decide its requests";
+      if (by === null || !vault.members.includes(by.sub)) return "a refusal is signed by a vault member's device in the lock";
+    }
     if (!signedOk(d, TAG.deny)) return "the refusal's signature is invalid";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
     this.#settle(k.request, "denied");
@@ -478,11 +724,9 @@ export class Secrets {
     const listing = this.#listingOf(held.request);
     this.keeper.spend(held.request.id);
     const env = a.env ?? listing?.env;
-    // The station's environment, without what would let the command act as the station or its agents' accounts.
-    const base = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !/^(STILLFAIL_|EMBER_|ANTHROPIC_|CLAUDE_|OPENAI_|CODEX_)/.test(e[0])));
     // The station does not update itself meanwhile: the proxy or ssh-agent the command uses is this process's.
     const letGo = hold();
-    const ran = await runWith(held, { command: a.command, cwd: a.cwd, ...(env ? { env } : {}), timeoutMs: Math.min(a.timeoutMs ?? RUN_MS, 3600_000) }, this.proxy, base, (detail) =>
+    const ran = await runWith(held, { command: a.command, cwd: a.cwd, ...(env ? { env } : {}), timeoutMs: Math.min(a.timeoutMs ?? RUN_MS, 3600_000) }, this.proxy, baseEnv(), (detail) =>
       this.#audit(held.request, "use", detail),
     ).finally(letGo);
     this.#audit(held.request, "run", a.command.slice(0, 500));
@@ -494,6 +738,10 @@ export class Secrets {
     return this.keeper.held(session);
   }
 }
+
+/// The station's environment, without what would let a command act as the station or its agents' accounts.
+const baseEnv = (): Record<string, string> =>
+  Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !/^(STILLFAIL_|EMBER_|ANTHROPIC_|CLAUDE_|OPENAI_|CODEX_)/.test(e[0])));
 
 function said(r: Ran): string {
   const end = r.timedOut ? "stopped: it ran too long" : r.code !== null ? `exit code ${r.code}` : `ended by ${r.signal}`;

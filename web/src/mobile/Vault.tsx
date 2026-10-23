@@ -11,7 +11,8 @@ import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
 import { KindIcon } from "../cloud/Vault.tsx";
-import { VaultChoices } from "../VaultApproval.tsx";
+import { VaultActions } from "../VaultApproval.tsx";
+import { AskCard } from "../VaultAsk.tsx";
 import { stationBase } from "../station.tsx";
 import {
   ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemLasts, lastsChoice, lastsName, listLine, useVaultUses, type Kind, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
@@ -148,22 +149,15 @@ function Vaults({ view }: { view: VaultsView }) {
   );
 }
 
-/** A request waiting on the viewer: which item, why, the command, how, its chat; then the approval's rows. */
+/** A request waiting on the viewer (to use an item, or to keep one): its card, as in its chat, and a way to that chat. */
 function Request({ r }: { r: VaultRequest }) {
   const app = useApp();
+  const chat = r.station ? `${stationBase(`${app.entry.id}/${r.station}`)}/chats/${encodeURIComponent(r.session)}` : null;
   return (
     <div className={css.mRequest}>
-      <ListCard><div className={securityCss.mBody}>
-        <b>{t("web-pages.vault.approve.wants", { name: r.itemName ?? r.item })}</b>
-        <dl className={css.mFacts}>
-          <dt>{t("web-pages.vault.reason")}</dt><dd>{r.reason}</dd>
-          {r.command && <><dt>{t("web-pages.vault.command")}</dt><dd><code className={css.mMono}>{r.command}</code></dd></>}
-          <dt>{t("web-pages.vault.how")}</dt><dd>{howLine(r.mode, r.hosts)}</dd>
-        </dl>
-        {r.station && <LinkButton label={t("web-pages.vault.openChat")} className={css.mStart}
-          onClick={() => app.push(`${stationBase(`${app.entry.id}/${r.station}`)}/chats/${encodeURIComponent(r.session)}`)} />}
-      </div></ListCard>
-      <div className={css.mChoices}><VaultChoices workspace={app.entry.id} id={r.id} /></div>
+      <AskCard fill ask={{ name: r.itemName ?? r.item, mode: r.mode, command: r.command, save: r.save }}>
+        <VaultActions workspace={app.entry.id} id={r.id} extra={chat && <LinkButton label={t("web-pages.vault.openChat")} onClick={() => app.push(chat)} />} />
+      </AskCard>
     </div>
   );
 }

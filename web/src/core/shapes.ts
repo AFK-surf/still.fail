@@ -1474,7 +1474,18 @@ export interface DecisionOption {
 	recommended?: boolean;
 }
 
-/** An agent's request to use a vault item, as its card in the chat says it (station/src/vault/secrets.ts). */
+/**
+ * What an agent asks to keep in the person's vault (secret_save, docs/vault.md agent 存入): approving it writes it into their
+ * vault (`vault.approve`, turning it on first where it is not).
+ */
+export interface VaultSave {
+	/** token | login | ssh_key */
+	kind: string;
+	/** A login's account name. */
+	username?: string;
+}
+
+/** An agent's request to use a vault item, or to keep one, as its card in the chat says it (station/src/vault/secrets.ts). */
 export interface VaultAsk {
 	/** The item's name. */
 	name: string;
@@ -1488,6 +1499,8 @@ export interface VaultAsk {
 	status?: string;
 	/** Granted: once | hour | chat. */
 	scope?: string;
+	/** A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted). */
+	save?: VaultSave;
 }
 
 /**
@@ -5477,7 +5490,7 @@ export interface VaultRefusal {
 	code: string;
 }
 
-/** An agent's request to use an item, waiting on the viewer (`vault.approve`, `vault.deny`). */
+/** An agent's request to use an item, or to keep one, waiting on the viewer (`vault.approve`, `vault.deny`). */
 export interface VaultRequest {
 	id: string;
 	vault: string;
@@ -5496,6 +5509,8 @@ export interface VaultRequest {
 	command?: string;
 	hosts: string[];
 	at: number;
+	/** A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused). */
+	save?: VaultSave;
 }
 
 /** A vault the viewer is a member of. */

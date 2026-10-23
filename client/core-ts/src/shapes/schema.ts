@@ -259,7 +259,12 @@ export const SHAPES: Record<string, Shape> = {
     ["hosts", vec("String"), { doc: "By the proxy: the hosts it is sent to." }],
     ["status", opt("String"), { doc: "Decided: granted | denied | expired. Absent while it waits (or before its station said)." }],
     ["scope", opt("String"), { doc: "Granted: once | hour | chat." }],
-  ], { doc: "An agent's request to use a vault item, as its card in the chat says it (station/src/vault/secrets.ts)." }),
+    ["save", opt("VaultSave"), { doc: "A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted)." }],
+  ], { doc: "An agent's request to use a vault item, or to keep one, as its card in the chat says it (station/src/vault/secrets.ts)." }),
+  VaultSave: struct([
+    ["kind", "String", { doc: "token | login | ssh_key" }],
+    ["username", opt("String"), { doc: "A login's account name." }],
+  ], { doc: "What an agent asks to keep in the person's vault (secret_save, docs/vault.md agent 存入): approving it writes it into their\nvault (`vault.approve`, turning it on first where it is not)." }),
   DecisionOption: struct([
     ["label", "String"],
     ["detail", opt("String")],
@@ -1433,7 +1438,8 @@ export const SHAPES: Record<string, Shape> = {
     ["command", opt("String")],
     ["hosts", vec("String")],
     ["at", "i64", { client: "I54" }],
-  ], { doc: "An agent's request to use an item, waiting on the viewer (`vault.approve`, `vault.deny`)." }),
+    ["save", opt("VaultSave"), { doc: "A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused)." }],
+  ], { doc: "An agent's request to use an item, or to keep one, waiting on the viewer (`vault.approve`, `vault.deny`)." }),
   VaultRefusal: struct([
     ["station", "String"],
     ["name", "String"],

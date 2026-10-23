@@ -310,11 +310,13 @@ pub fn vault_scopes_up_to(lasts : String) -> Array[String] {
 
 ///|
 /// A request waiting on the viewer (Vault.kt RequestCard): what it is for, its command, how it is given, its chat; the
-/// answers under it (VaultOptions): its grants up to the item's longest, the longest recommended, and refused.
+/// answers under it (VaultOptions): its grants up to the item's longest, the longest recommended, and refused. One to
+/// keep a secret (`save`, docs/vault.md agent 存入): kept (approved as once) or refused.
 fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> Unit {
   let t = @sf.theme()
   let rv = Some(r)
   let id = text(rv, "id")
+  let save = field(rv, "save") is Some(_)
   let mut station = ""
   for x in items(v, "vaults") {
     if text(Some(x), "id") == text(rv, "vault") {
@@ -324,7 +326,7 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
   list_card(c, fn() {
     body(c, fn() {
       c.text(
-        fill("android-settings.vault.request.title", [
+        fill(if save { "android-settings.vault.request.keepTitle" } else { "android-settings.vault.request.title" }, [
           (
             "name",
             match opt_text(rv, "itemName") {
@@ -355,11 +357,16 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
   })
   c.box(w=Fill(1.0), padx=12.0, pb=10.0, fn() {
     let on = [("workspace", ws), ("request", id)]
-    let scopes = vault_scopes_up_to(text(rv, "lasts"))
-    let options = scopes.mapi(fn(i, s) {
-      (tr("android-settings.vault.approve." + s), tr("android-settings.vault.approve." + s + "Detail"), i == scopes.length() - 1)
-    })
-    options.push((tr("android-settings.vault.approve.deny"), tr("android-settings.vault.approve.denyDetail"), false))
+    let scopes = if save { ["once"] } else { vault_scopes_up_to(text(rv, "lasts")) }
+    let options = if save {
+      [(tr("android-settings.vault.save.save"), tr("android-settings.vault.save.saveDetail"), true)]
+    } else {
+      scopes.mapi(fn(i, s) {
+        (tr("android-settings.vault.approve." + s), tr("android-settings.vault.approve." + s + "Detail"), i == scopes.length() - 1)
+      })
+    }
+    let refused = if save { "android-settings.vault.save.denyDetail" } else { "android-settings.vault.approve.denyDetail" }
+    options.push((tr("android-settings.vault.approve.deny"), tr(refused), false))
     let deny = scopes.length()
     let mut busy = if is_doing(core, ["vault.deny"], on) { deny } else { -1 }
     for i, s in scopes {
@@ -373,7 +380,7 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
       Some(k) =>
         act(
           core,
-          tr("android-settings.vault.approve.what"),
+          tr(if save { "android-settings.vault.save.what" } else { "android-settings.vault.approve.what" }),
           "vault.approve",
           obj([("workspace", str(ws)), ("request", str(id)), ("scope", str(scopes[k]))]),
         )

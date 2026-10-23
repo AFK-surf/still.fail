@@ -1,0 +1,242 @@
+// Agents asking to keep a secret in the vault (docs/vault.md agent 存入; src/vault/secrets.ts `save`): sealed to the
+// devices of whoever started the chat and decided by them alone, kept once their app wrote it into their vault (or,
+// without security mode, written into their plain library here), sealed to a device set up later, a command's output
+// taken without being shown. Nothing waits on time: a request's answer is awaited only once it is decided.
+import assert from "node:assert/strict";
+import { createPublicKey, generateKeyPairSync, sign as nodeSign } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import { type Entry, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { type BoxCert, type Deny, type Grant, type Item, type Request, type Sig, type Vault, TAG, encryptWith, grantContext, itemContext, keyContext, newBoxPair, openSeal, saveContext, seal, signedBytes } from "../src/vault/crypto.ts";
+import { PLAIN, PlainStore } from "../src/vault/plain.ts";
+import { Secrets } from "../src/vault/secrets.ts";
+import { VaultStore } from "../src/vault/store.ts";
+import { STILLFAIL_SURFACE } from "../src/store/store.ts";
+
+const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
+const VAULT = "v_01HZZZZZZZZZZZZZZZZZZZZZZZ";
+const PASSWORD = "correct-horse-battery-staple-7";
+
+function ed() {
+  const key = generateKeyPairSync("ed25519").privateKey;
+  const hex = Buffer.from(createPublicKey(key).export({ format: "jwk" }).x as string, "base64url").toString("hex");
+  return { hex, id: `ed25519:${hex}`, sign: (bytes: Buffer) => nodeSign(null, bytes, key).toString("hex") };
+}
+type Key = ReturnType<typeof ed>;
+type Person = { sub: string; signer: Key; base: Key; box: { pub: string; priv: Uint8Array } };
+const fill = (b: number, n = 32) => new Uint8Array(n).fill(b);
+const tick = () => new Promise((r) => setImmediate(r));
+
+function signed<T extends Record<string, unknown>>(o: T, tag: string, key: Key): T & { sig: Sig } {
+  return { ...o, sig: { key: key.id, alg: "Ed25519", sig: key.sign(signedBytes(o, tag)) } };
+}
+
+/// A lock: alice and bob, each with a device; alice's vault, keyed to her device.
+function world() {
+  const [alice, bob] = ["alice", "bob"].map((sub) => ({ sub, signer: ed(), base: ed(), box: newBoxPair() })) as [Person, Person];
+  const body = {
+    owner: "alice", origins: ["https://app.still.fail"], rp_id: "app.still.fail", cloud_keys: { keys: [] },
+    members: [{ sub: "alice", email: "alice@x.com", role: "owner" }, { sub: "bob", email: "bob@x.com", role: "member" }],
+    devices: [alice, bob].map((p) => ({ id: p.base.hex, sub: p.sub, kind: "app", label: p.sub, sign_key: p.signer.id })),
+    passkeys: [], stations: [], gateways: [],
+  };
+  const e = { v: 1, ws: WS, seq: 0, prev: null, at: 1000, kind: "genesis", body } as Omit<Entry, "sig">;
+  const state = genesis({ ...e, sig: { key: alice.signer.id, alg: "Ed25519" as const, sig: alice.signer.sign(lockBytes(entryHash(e as Entry))) } });
+  const cert = (p: Person): BoxCert => signed({ v: 1 as const, ws: WS, device: p.base.hex, box: p.box.pub, at: 1000 }, TAG.box, p.signer);
+  const vault: Vault = signed(
+    { v: 1 as const, ws: WS, id: VAULT, seq: 0, owner: "alice", name: "Personal", members: ["alice"], epoch: 0, keys: [{ cert: cert(alice), wrapped: seal(alice.box.pub, fill(4), keyContext(WS, VAULT, 0)) }], at: 1000 },
+    TAG.vault, alice.signer,
+  );
+  return { alice, bob, state, vault, cert };
+}
+
+/// The item alice's app writes for request `r`: what the station sealed to her, under the request's item id.
+function written(r: Request, by: Person, fields: Record<string, string>): Item {
+  const plain = { kind: r.save!.kind, name: r.save!.name, fields, domains: [], notes: "" };
+  return signed(
+    { v: 1 as const, ws: WS, vault: VAULT, id: r.item, version: 0, epoch: 0, ct: encryptWith(fill(4), Buffer.from(JSON.stringify(plain)), itemContext(WS, VAULT, r.item, 0, 0), fill(5, 12)), listing: { name: r.save!.name, kind: r.save!.kind, modes: r.save!.modes, hosts: r.save!.hosts }, at: 1000 },
+    TAG.item, by.signer,
+  );
+}
+
+function harness(lock: () => ReturnType<typeof world>["state"] | null, starter = "alice@x.com") {
+  const db = new DatabaseSync(":memory:");
+  const vaults = new VaultStore(db);
+  const plain = new PlainStore(db);
+  const notified: [string, string][] = [];
+  const cards: { text: string; card: any }[] = [];
+  const hub = {
+    store: {
+      getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp", archivedAt: null } : null),
+      participants: (k: string) => new Map([[k, [starter]]]),
+      latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
+      withdrawCard: () => true,
+      restateCard: () => true,
+      insertMessage: (m: { text: string; card: unknown }) => (cards.push({ text: m.text, card: m.card }), [1]),
+      subscribe: () => () => {},
+    },
+    chat: () => ({ post: async () => "1.0" }),
+    shared: () => {},
+    notify: (k: string, text: string) => notified.push([k, text]),
+  };
+  const dir = mkdtempSync(join(tmpdir(), "vault-save-"));
+  const make = () => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => 1_000_000 });
+  return { db, vaults, plain, notified, cards, dir, make, secrets: make() };
+}
+
+const pendingOf = (secrets: Secrets, lock: ReturnType<typeof world>["state"] | null, email: string, sub = email.split("@")[0]!) => secrets.pending(WS, lock, { sub, email });
+const opened = (r: Request, p: Person) => JSON.parse(Buffer.from(openSeal(p.box.priv, r.sealed!.find((s) => s.box === p.box.pub)!.secret, saveContext(WS, r.id))).toString());
+
+test("a secret to keep in a vault: sealed to its owner's devices, decided by them alone, kept once their app wrote it", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  h.vaults.putBox(w.cert(w.bob));
+  try {
+    assert.equal(h.secrets.status("s1"), "on");
+    await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "login", reason: "x", cwd: h.dir }), /either as value or as a command/);
+    await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "login", reason: "x", value: "p", modes: ["ssh"], cwd: h.dir }), /SSH key is given by ssh/);
+    await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "token", reason: "x", value: "p", modes: ["proxy"], cwd: h.dir }), /names its hosts/);
+
+    const asked = h.secrets.save("s1", { name: "UniFi UX7", kind: "login", reason: "log in to the router", value: PASSWORD, username: "zzj", env: "UX7_PASSWORD", cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(r && r.save && r.vault === VAULT && r.owner === "alice@x.com" && r.box !== "");
+    assert.deepEqual(r.save, { kind: "login", name: "UniFi UX7", modes: ["env"], hosts: [], env: "UX7_PASSWORD", username: "zzj" });
+    // Sealed to her device alone (bob's is his), nothing of it in the clear.
+    assert.deepEqual(r.sealed!.map((s) => s.device), [w.alice.base.hex]);
+    assert.deepEqual(opened(r, w.alice), { username: "zzj", password: PASSWORD });
+    assert.ok(!JSON.stringify(r).includes(PASSWORD));
+    // The card: what it is and whose, to keep or turn down.
+    const { text, card } = h.cards[0]!;
+    assert.equal(text, "申请将「UniFi UX7」存入密钥库（登录 · zzj）：log in to the router");
+    assert.equal(card.assignee, "alice@x.com");
+    assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["存入密钥库", "拒绝"]);
+    assert.deepEqual(card.vault.save, { kind: "login", username: "zzj" });
+
+    // bob neither sees nor decides it; alice's word comes only once the item is in her vault here.
+    assert.deepEqual(pendingOf(h.secrets, w.state, "bob@x.com"), []);
+    assert.match(h.secrets.saved(w.state, "bob", { request: r.id, vault: VAULT })!, /only the person it is kept for/);
+    assert.match(h.secrets.grant(w.state, "alice", { request: r.id } as never)!, /POST vault\/saves/);
+    assert.match(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT })!, /not in that vault here/);
+    h.vaults.putItem(written(r, w.alice, { username: "zzj", password: PASSWORD }));
+    // Her app's grant to this chat comes with it, sealed to the request's box.
+    const grant: Grant = signed(
+      { v: 1 as const, ws: WS, request: r.id, vault: VAULT, item: r.item, mode: "env" as const, hosts: [], scope: "chat" as const, exp: 1000 + 30 * 86400, secret: seal(r.box, Buffer.from(JSON.stringify({ kind: "login", name: "UniFi UX7", fields: { username: "zzj", password: PASSWORD } })), grantContext(WS, r.id)), at: 1000 },
+      TAG.grant, w.alice.signer,
+    );
+    assert.equal(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT, grant }), null);
+    assert.match(await asked, /Kept: 「UniFi UX7」 is in alice@x.com's vault now \(item i_\w+\)\. This chat may use it now: secret_run \{grant: "r_/);
+    assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.secret.fields.password]), [[r.id, "chat", PASSWORD]]);
+    // Now one agents may ask for; the save is no use of it.
+    assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["UniFi UX7"]);
+    assert.deepEqual(h.secrets.uses(WS, w.state, VAULT, { sub: "alice", email: "alice@x.com" }), []);
+    assert.match(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT })!, /the request is granted/);
+
+    // Turned down from one of her devices, signed; not by bob.
+    const again = h.secrets.save("s1", { name: "Other", kind: "token", reason: "y", value: "tok", cwd: h.dir });
+    await tick();
+    const [second] = pendingOf(h.secrets, w.state, "alice@x.com");
+    const deny = (by: Person): Deny => signed({ v: 1 as const, ws: WS, request: second!.id, at: 1000 }, TAG.deny, by.signer);
+    assert.match(h.secrets.deny(w.state, "bob", deny(w.bob))!, /only the person it is kept for/);
+    assert.match(h.secrets.deny(w.state, "alice", deny(w.bob))!, /one of their devices/);
+    assert.equal(h.secrets.deny(w.state, "alice", deny(w.alice)), null);
+    assert.match(await again, /chose not to keep 「Other」/);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a secret to keep while the vault is not turned on: it waits, sealed to the device once it is set up; a restart forgets one sealed to none", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    assert.equal(h.secrets.status("s1"), "off");
+    const asked = h.secrets.save("s1", { name: "UniFi UX7", kind: "login", reason: "router", value: PASSWORD, cwd: h.dir });
+    await tick();
+    let [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(r && r.vault === "" && r.sealed!.length === 0);
+
+    // A device of bob's changes nothing of alice's; hers gets it sealed.
+    const told: Request[] = [];
+    h.secrets.listen((x) => told.push(x));
+    h.secrets.boxed(w.state, w.cert(w.bob));
+    assert.equal(told.length, 0);
+    h.vaults.putBox(w.cert(w.alice));
+    h.secrets.boxed(w.state, w.cert(w.alice));
+    [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(opened(r!, w.alice), { password: PASSWORD });
+    assert.equal(told.length, 1);
+
+    // Turned on now: kept from that device as any.
+    h.vaults.putVault(w.vault);
+    h.vaults.putItem(written(r!, w.alice, { password: PASSWORD }));
+    assert.equal(h.secrets.saved(w.state, "alice", { request: r!.id, vault: VAULT }), null);
+    assert.match(await asked, /Kept: 「UniFi UX7」.*When you need it, ask with secret_use/);
+
+    // One sealed to no device is gone with a restart; one sealed to a device stays.
+    void h.secrets.save("s1", { name: "Lost", kind: "token", reason: "z", value: "tok", cwd: h.dir });
+    void h.secrets.save("s1", { name: "Stays", kind: "token", reason: "z", value: "tok", cwd: h.dir });
+    await tick();
+    h.db.prepare("UPDATE vault_requests SET body = json_set(body, '$.sealed', json('[]')) WHERE json_extract(body, '$.save.name') = 'Lost'").run();
+    const after = h.make();
+    assert.deepEqual(pendingOf(after, w.state, "alice@x.com").map((x) => x.save!.name), ["Stays"]);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a secret to keep printed by a command: taken without being shown; a command that fails says so with it hidden", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  try {
+    const command = "printf '%s\\n' \"$TOKEN_FOR_TEST\"";
+    process.env.TOKEN_FOR_TEST = PASSWORD;
+    // (made once the command has ended: told then)
+    const made = new Promise<Request>((resolve) => h.secrets.listen((x) => x.status === "pending" && resolve(x)));
+    void h.secrets.save("s1", { name: "Token", kind: "token", reason: "x", command, hosts: ["api.github.com"], cwd: h.dir });
+    const r = await made;
+    delete process.env.TOKEN_FOR_TEST;
+    assert.deepEqual(opened(r, w.alice), { value: PASSWORD });
+    assert.equal(r.command, command);
+    assert.deepEqual(r.save!.modes, ["proxy"]);
+
+    await assert.rejects(h.secrets.save("s1", { name: "T2", kind: "token", reason: "x", command: `printf '${PASSWORD}'; echo "bad ${PASSWORD}" >&2; exit 3`, cwd: h.dir }), (e: Error) => /exit code 3/.test(e.message) && !e.message.includes(PASSWORD) && e.message.includes("bad [已隐藏]"));
+    await assert.rejects(h.secrets.save("s1", { name: "T3", kind: "token", reason: "x", command: "true", cwd: h.dir }), /empty/);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a secret to keep without security mode: written into the owner's plain library here once they approve; a restart forgets it", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    assert.equal(h.secrets.status("s1"), "plain");
+    const asked = h.secrets.save("s1", { name: "Slack", kind: "token", reason: "post", value: "xoxb-1", hosts: ["slack.com"], cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(r && r.vault === PLAIN && r.sealed === undefined && !JSON.stringify(r).includes("xoxb-1"));
+    assert.equal(h.secrets.savedPlain(WS, null, "carol@x.com", { request: r.id }), "only the person it is kept for decides it");
+    assert.match(h.secrets.grantPlain(WS, null, "bob@x.com", { request: r.id, scope: "once" })!, /POST vault\/plain\/saves/);
+    const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id });
+    assert.ok(typeof kept !== "string");
+    assert.deepEqual([kept.id, kept.owner, kept.fields, kept.listing], [r.item, "bob@x.com", { value: "xoxb-1" }, { name: "Slack", kind: "token", modes: ["proxy"], hosts: ["slack.com"] }]);
+    assert.match(await asked, /Kept: 「Slack」.*This chat may use it now/);
+    assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["Slack"]);
+    assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.grant.hosts]), [[r.id, "chat", ["slack.com"]]]);
+
+    // Waiting through a restart: gone, so let go.
+    void h.secrets.save("s1", { name: "Other", kind: "token", reason: "x", value: "v", cwd: h.dir });
+    await tick();
+    const after = h.make();
+    assert.deepEqual(pendingOf(after, null, "bob@x.com"), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});

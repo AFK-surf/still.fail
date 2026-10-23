@@ -32,7 +32,7 @@ export const VaultLive = Layer.effectDiscard(
     });
     secrets.listen((r) => events.tell("vault-request", r, `vault-request\0${r.id}`, (viewer) => secrets.tells(r, viewer)));
     parts.routes([
-      ...vaultRoutes({ vaults, lock: (ws) => lock(ws), events }),
+      ...vaultRoutes({ vaults, lock: (ws) => lock(ws), events, boxed: (l, cert) => secrets.boxed(l, cert) }),
       ...requestRoutes({ secrets, plain: secrets.plain, lock: (ws) => lock(ws), events }),
     ]);
     parts.tools(vaultTools(secrets, (k) => store.getSession(k)?.workspace ?? null));

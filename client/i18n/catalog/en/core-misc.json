@@ -244,6 +244,8 @@
   "core-misc.vault.reason.open": "Open “{name}”",
   "core-misc.vault.reason.unlock": "Unlock the vault “{name}”",
   "core-misc.vault.reason.approve": "Let an agent use “{name}”",
+  "core-misc.vault.reason.save": "Save “{name}” to Secrets",
+  "core-misc.vault.notSealedHere": "This device had no vault when this was asked. Approve it on a device that did",
   "core-misc.vault.personal": "Personal",
   "core-misc.vault.noPlainStation": "No station can keep secrets: update your stations",
   "core-misc.vault.plainLocked": "Security mode is on: secrets go into the encrypted vault",
