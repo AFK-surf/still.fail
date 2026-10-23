@@ -93,6 +93,11 @@ options(
       "command": ":embed -i $input -o $output --name screen_chat_md",
     },
     {
+      "input": "../../../../client/fixtures/screens/chat-pick.json",
+      "output": "screen_chat_pick_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_chat_pick",
+    },
+    {
       "input": "../../../../client/fixtures/screens/chat-quote.json",
       "output": "screen_chat_quote_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_chat_quote",
@@ -128,9 +133,19 @@ options(
       "command": ":embed -i $input -o $output --name screen_drive",
     },
     {
+      "input": "../../../../client/fixtures/screens/drive-chosen.json",
+      "output": "screen_drive_chosen_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive_chosen",
+    },
+    {
       "input": "../../../../client/fixtures/screens/drive-empty.json",
       "output": "screen_drive_empty_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_drive_empty",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/drive-entry.json",
+      "output": "screen_drive_entry_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_drive_entry",
     },
     {
       "input": "../../../../client/fixtures/screens/drive-sub.json",
@@ -141,6 +156,11 @@ options(
       "input": "../../../../client/fixtures/screens/files.json",
       "output": "screen_files_wbtest.mbt",
       "command": ":embed -i $input -o $output --name screen_files",
+    },
+    {
+      "input": "../../../../client/fixtures/screens/history.json",
+      "output": "screen_history_wbtest.mbt",
+      "command": ":embed -i $input -o $output --name screen_history",
     },
     {
       "input": "../../../../client/fixtures/screens/history-details.json",

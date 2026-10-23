@@ -208,7 +208,8 @@ fn screen_dump(mode : String, at : Double) -> Result[Json, String] {
 /// screen's JSON says it as `ui`.
 // kept across runs: a list, never written
 let android_opens : Array[String] = [
-  "chat-info", "chat-jobs", "chat-job", "chat-agent", "home-sheet", "history-details", "place",
+  "chat-info", "chat-jobs", "chat-job", "chat-agent", "home-sheet", "history-details", "place", "history",
+  "drive-chosen", "drive-entry", "chat-pick",
 ]
 
 ///|

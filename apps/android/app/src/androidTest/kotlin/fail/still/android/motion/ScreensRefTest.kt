@@ -21,7 +21,10 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -266,6 +269,35 @@ class ScreensRefTest(private val name: String) {
         // the agent's mark in the bar, "<agent> · <station>"
         "chat-agent" to { _ -> rule.onAllNodes(hasContentDescription(" · Studio", substring = true)).onFirst().performClick() },
         "home-sheet" to { app -> rule.runOnUiThread { openWorkspaces(app) } },
+        // the reading's group (h2) and its second step, the change's group (h4) and its first, as the mbui fixture has
+        // them open (a step's row says what it was said to do, else its tool's name)
+        "history" to { _ ->
+            for (words in listOf("读了 src/ui/list.mbt 等 2 个文件，跑了测试", "跑一遍列表的测试", "改了 src/ui/list.mbt，跑了 2 条命令", "Edit")) {
+                rule.onAllNodesWithText(words).onFirst().performClick()
+                rule.runOnUiThread { rule.mainClock.advanceTimeByFrame() }
+            }
+        },
+        // rows chosen as the phone's file managers choose them: one held, another tapped
+        "drive-chosen" to { _ ->
+            rule.onAllNodesWithText("长篇小说.txt").onFirst().performTouchInput { longClick() }
+            rule.runOnUiThread { rule.mainClock.advanceTimeByFrame() }
+            rule.onAllNodesWithText("首页截图.png").onFirst().performClick()
+        },
+        // one held, then what is done with it (the bar's "…")
+        "drive-entry" to { _ ->
+            rule.onAllNodesWithText("长篇小说.txt").onFirst().performTouchInput { longClick() }
+            rule.runOnUiThread { rule.mainClock.advanceTimeByFrame() }
+            rule.onNodeWithContentDescription(t("android-misc.drive.chosenActions")).performClick()
+        },
+        // a word of the last answer held: 列表, its 5th and 6th characters, where its layout has them
+        "chat-pick" to { _ ->
+            val node = rule.onAllNodesWithText("做完了：列表", substring = true).onFirst()
+            val results = mutableListOf<TextLayoutResult>()
+            node.fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+            val a = results[0].getBoundingBox(4)
+            val b = results[0].getBoundingBox(5)
+            node.performTouchInput { longClick(Offset((a.left + b.right) / 2f, (a.top + a.bottom) / 2f)) }
+        },
         "history-details" to { _ -> rule.onAllNodesWithText(t("android-chat.history.tab.details")).onFirst().performClick() },
         // (before its first frame: the bar's place, above)
         "place" to { _ -> },
