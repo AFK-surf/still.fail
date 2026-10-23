@@ -41,10 +41,26 @@ test("a chat's places: the connects that can start a conversation, each bot's ch
       places: [{ id: "C1", name: "cue-dev", kind: "channel" }, { id: "C2", name: "design", kind: "channel", private: true }],
     },
   ], "the connects whose surface cannot start one (gpt, team here) are not offered");
-  // One whose places cannot be read says why, the rest still offered.
-  Object.assign(r.gptChat, { places: async () => { throw new Error("missing_scope"); }, begin: async () => { throw new Error("no"); } });
+  // One whose places cannot be read says why, the rest still offered (the Codex bot in a Slack workspace of its own).
+  Object.assign(r.gptChat, { workspace: () => "T2", places: async () => { throw new Error("missing_scope"); }, begin: async () => { throw new Error("no"); } });
   const again = await relayPlaces(r.hub, thread);
   assert.deepEqual(again.map((c) => [c.id, c.places.length, c.error ?? null]), [["cl", 2, null], ["gpt", 0, "missing_scope"]]);
+  await r.close();
+});
+
+test("a chat's places: of the bots in one Slack workspace, the one running what the chat's agent runs", async () => {
+  const { r } = relayRig();
+  const offered = async (thread: Parameters<typeof relayPlaces>[1]) => (await relayPlaces(r.hub, thread)).map((c) => c.id);
+  Object.assign(r.gptChat, { places: async () => [{ id: "C1", name: "cue-dev", kind: "channel" }], begin: r.chat.begin });
+  // (the Claude bot and the Codex bot both in T1)
+  const [, claude] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  const [, codex] = newSession(r.hub, { runtime: "codex", createdBy: "ada@x.com" });
+  assert.deepEqual(await offered(claude), ["cl"]);
+  assert.deepEqual(await offered(codex), ["gpt"]);
+  await assert.rejects(relay(r.hub, claude, "Ada", { connect: "gpt", channel: "C1" }, ""), /cannot take this chat/);
+  // A workspace with no bot of the chat's runtime offers the bots it has.
+  Object.assign(r.gptChat, { workspace: () => "T2" });
+  assert.deepEqual(await offered(claude), ["cl", "gpt"]);
   await r.close();
 });
 

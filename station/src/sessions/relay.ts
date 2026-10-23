@@ -36,19 +36,34 @@ function agentOf(hub: Hub, thread: ThreadRow): string {
   return member.session;
 }
 
-/// The connects of the session's workspace that are on and connected, with the surface each speaks through.
+/// The connects of the session's workspace that are on and connected, with the surface each speaks through: of the
+/// bots in one Slack workspace or Feishu tenant, the chat's own (the session's connect), else those running what the
+/// chat's agent runs (its runtime, and its model where one of them is bound to it); all of them where none does.
 function connectsFor(hub: Hub, session: string): { id: string; chat: ChatSurface; kind: RelayConnect["kind"] }[] {
   const home = hub.workspaces()[0] ?? null;
   const ws = hub.wsOf(session);
-  return hub
+  const row = hub.store.getSession(session);
+  const all = hub
     .config()
     .connects.filter((c) => c.enabled && (home === null || (c.workspace ?? home) === ws))
     .flatMap((c) => {
       const chat = hub.chatOf(c.id);
       if (chat === undefined || !chat.places || !chat.begin) return [];
       const kind = c.kind === "feishu" ? (chat instanceof FeishuSurface && chat.domain === "lark" ? "lark" : "feishu") : "slack";
-      return [{ id: c.id, chat, kind }];
+      return [{ id: c.id, chat, kind, bind: c.bind }];
     });
+  const platform = (c: (typeof all)[number]) => `${c.kind}/${c.chat.workspace() ?? c.id}`;
+  return all
+    .filter((c) => {
+      const there = all.filter((o) => platform(o) === platform(c));
+      if (row === null || there.length === 1) return true;
+      if (there.some((o) => o.id === row.connect)) return c.id === row.connect;
+      const runs = there.filter((o) => o.bind.runtime === row.runtime);
+      const model = runs.filter((o) => row.model !== null && o.bind.model === row.model);
+      const kept = model.length > 0 ? model : runs.length > 0 ? runs : there;
+      return kept.includes(c);
+    })
+    .map(({ id, chat, kind }) => ({ id, chat, kind }));
 }
 
 /// The team (Slack workspace, Feishu tenant) a surface's bot is in, once it is known.
