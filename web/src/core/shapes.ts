@@ -4364,6 +4364,13 @@ export interface PrefsView {
 	 * trackpad (the finger moves the pointer, a tap clicks where it points).
 	 */
 	screenTouch?: string;
+	/**
+	 * The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
+	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
+	 */
+	previewSizes?: Record<string, string>;
+	/** A service's page's toolbar folded away on this device (held down; the bar's size button opens it again). */
+	previewFolded?: boolean;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
 	resume?: Record<string, string>;
 	/** Versions dismissed on this device, by workspace/station. */

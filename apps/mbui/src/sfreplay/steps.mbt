@@ -63,6 +63,9 @@ pub fn Flow::start(
       abort("flow: nothing in the run holds " + text + " to drop")
     }
   }
+  // (the core's pure calls the app has kept answers for are answered here, not asked of the run's core: src/sfreplay
+  // source.mbt; the run's asks of them not waited for)
+  r.skip_where(fn(name, params) { @sfkept.has(name, params) })
   r.shuffle(seed)
   // (a test's steps written as a scripted run (FLOW_EMIT) over a trace the app may have outgrown: at once, as the steps
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)

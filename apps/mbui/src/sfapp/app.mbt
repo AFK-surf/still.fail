@@ -249,7 +249,8 @@ fn reset() -> Unit {
   update.phase = "idle"
   update.source = None
   update_version.val = 0
-  svc_folded.val = false
+  svc_folded.val = None
+  svc_keep.val = fn(_) {  }
   splash_waited.val = false
   drafts.clear()
   sent_pictures.clear()

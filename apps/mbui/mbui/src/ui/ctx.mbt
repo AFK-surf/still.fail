@@ -310,6 +310,8 @@ pub struct Ctx {
   // the page being built (a page of a Nav, by its serial; 0 none), and the
   // ids of the state each page's widgets made, forgotten with the page
   mut owner : Int
+  // the time on top of the page being built (nav.mbt Ctx::page_stint)
+  mut stint : Int
   owned : Map[Int, Array[Int]]
   // back: where it goes this frame (the Nav drawn that can go back) and the
   // node it is drawn in, as the last frame had them; whether the host was
@@ -488,6 +490,7 @@ fn Ctx::new() -> Ctx {
     covers: Map::new(),
     cover_asks: [],
     owner: 0,
+    stint: 0,
     owned: Map::new(),
     back: None,
     back_node: -1,

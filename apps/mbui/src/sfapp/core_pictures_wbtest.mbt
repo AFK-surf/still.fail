@@ -1,30 +1,45 @@
 // Pictures as Android's has them (Parts.kt rememberPicture, PeopleStack; RowPicture.kt Faces): one that could not be
-// had asked again when put up anew; people stacked with the first over the rest, a row's starter over the others.
+// had asked again when its page is put up anew; people stacked with the first over the rest, a row's starter over the others.
 
 ///|
-test "a picture that could not be had is asked for again when it is put up anew, not while it stays up" {
+test "a picture that could not be had is asked for again when its page is put up anew, not while it stays up" {
   let asked : Array[(Bytes?) -> Unit] = []
   let picture = core_pictures(fn(_, done) { asked.push(done) })
   let url = "https://pictures.example/lin.jpg"
   // asked once, nothing while it comes
   assert_eq(picture(url, 1), "")
-  assert_eq(picture(url, 2), "")
+  assert_eq(picture(url, 1), "")
   assert_eq(asked.length(), 1)
-  // the network down: not asked again while it stays up (Compose's produceState runs once it comes in)
+  // the network down: not asked again while its page stays up (Compose's produceState runs once it comes in),
+  // however many frames
   (asked[0])(None)
+  assert_eq(picture(url, 1), "")
+  assert_eq(picture(url, 1), "")
+  assert_eq(asked.length(), 1)
+  // its page put up again (left and come back to: another page put on top since): asked again (the core says it
+  // could not until its own while is over, then fetches it)
+  assert_eq(picture(url, 3), "")
+  assert_eq(asked.length(), 2)
+  // shown on two pages at once (a sheet's and the page under it): asked again once for each, not each time it goes
+  // from one to the other
+  (asked[1])(None)
   assert_eq(picture(url, 3), "")
   assert_eq(picture(url, 4), "")
-  assert_eq(asked.length(), 1)
-  // gone a frame and put up again (a page left and come back to, a row scrolled out and in): asked again (the core
-  // says it could not until its own while is over, then fetches it)
-  assert_eq(picture(url, 6), "")
-  assert_eq(asked.length(), 2)
+  assert_eq(asked.length(), 3)
+  (asked[2])(None)
+  assert_eq(picture(url, 3), "")
+  assert_eq(picture(url, 4), "")
+  assert_eq(picture(url, 3), "")
+  assert_eq(asked.length(), 3)
+  // its page put up again: asked again
+  assert_eq(picture(url, 5), "")
+  assert_eq(asked.length(), 4)
   // had: its image, kept for good, never asked again
-  (asked[1])(Some(b"\x89PNG"))
-  let key = picture(url, 7)
+  (asked[3])(Some(b"\x89PNG"))
+  let key = picture(url, 5)
   assert_true(key.has_prefix("mem:picture/"))
-  assert_eq(picture(url, 20), key)
-  assert_eq(asked.length(), 2)
+  assert_eq(picture(url, 9), key)
+  assert_eq(asked.length(), 4)
 }
 
 ///|

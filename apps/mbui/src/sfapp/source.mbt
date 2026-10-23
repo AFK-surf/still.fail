@@ -31,8 +31,8 @@ pub(all) struct Source {
   sign_in : () -> Unit
   /// whether a sign-in is under way
   signing_in : () -> Bool
-  /// a picture by its URL (a person's, a station's icon) as it is put up in frame `frame` (Ctx::frame_no): an
-  /// image's src once it is here, "" until then (the core's `picture`: core_pictures.mbt)
+  /// a picture by its URL (a person's, a station's icon) as it is put up on its page's time on top `stint`
+  /// (Ctx::page_stint): an image's src once it is here, "" until then (the core's `picture`: core_pictures.mbt)
   picture : (String, Int) -> String
   /// what the core said when it stopped, if it did
   fatal : () -> String?

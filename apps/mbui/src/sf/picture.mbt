@@ -136,8 +136,9 @@ pub fn glyph_color(name : String, dark : Bool) -> Int64? {
 }
 
 ///|
-/// A picture put up by its address (in frame `frame`: Ctx::frame_no) as an image's key once it is here ("" until
-/// then): the app's (its core's `picture`), said as it starts; until then the address itself, which the host loads.
+/// A picture put up by its address (on the page's time on top `stint`: Ctx::page_stint) as an image's key once it is
+/// here ("" until then): the app's (its core's `picture`), said as it starts; until then the address itself, which
+/// the host loads.
 // kept across runs: the app says it as its view is built, the same function every run
 pub let picture_of : Ref[(String, Int) -> String] = Ref(fn(url, _) { url })
 
@@ -211,7 +212,7 @@ pub fn station_mark(
   // a picture still.fail cloud keeps (cloud/src/icons.ts), by its address: its bytes the core's (`picture`, as
   // Parts.kt rememberStationPicture), so a GIF among them moves (mbui's gif.mbt); its emoji (below) while it comes
   if icon.has_prefix("https://") || icon.has_prefix("http://") {
-    let key = (picture_of.val)(icon, c.frame_no)
+    let key = (picture_of.val)(icon, c.page_stint())
     if key != "" {
       c.image(key, w=Px(size), h=Px(size), fit=FitCover, radius=size * 0.24, bg=0L, still~) |> ignore
       return

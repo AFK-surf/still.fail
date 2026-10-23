@@ -24,6 +24,9 @@ struct NavPage[P] {
   mut page : P
   // it rose from the bottom (Nav::rise): it goes back down the same way
   mut rise : Bool
+  // its time on top: a number of its own each time it is put there (pushed, or come back to as the one over it went),
+  // what is built on it reads (Ctx::page_stint)
+  mut stint : Int
 }
 
 ///|
@@ -35,7 +38,26 @@ let nav_serial : Ref[Int] = { val: 0 }
 ///|
 fn[P] nav_page(page : P) -> NavPage[P] {
   nav_serial.val = nav_serial.val + 1
-  { serial: nav_serial.val, page, rise: false }
+  { serial: nav_serial.val, page, rise: false, stint: next_stint() }
+}
+
+///|
+/// Pages' times on top, unique across every Nav.
+// kept across runs: it goes on counting, as nav_serial does
+let nav_stint : Ref[Int] = { val: 0 }
+
+///|
+fn next_stint() -> Int {
+  nav_stint.val = nav_stint.val + 1
+  nav_stint.val
+}
+
+///|
+/// The page now on top (the one under a page that went) put there anew.
+fn[P] Nav::topped(self : Nav[P]) -> Unit {
+  if self.pages.length() > 0 {
+    self.pages[self.pages.length() - 1].stint = next_stint()
+  }
 }
 
 ///|
@@ -318,6 +340,7 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
     }
   }
   self.leaving = self.pages.pop()
+  self.topped()
   match self.leaving {
     Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Arrive)
     _ => self.go(2, 1.0, nav_push_ms, Standard)
@@ -388,6 +411,7 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
 /// Gone back from where a finger left the page: on from there, easing out.
 fn[P] Nav::let_go(self : Nav[P]) -> Unit {
   self.leaving = self.pages.pop()
+  self.topped()
   self.go(2, 1.0, dmax(nav_let_go_ms * (1.0 - self.p), nav_let_go_min_ms), LetGo)
 }
 
@@ -516,12 +540,23 @@ fn[P] Ctx::nav_layer(
 ) -> Unit {
   let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, ty=drop, fn() {
     let saved = self.owner
+    let saved_stint = self.stint
     self.owner = e.serial
+    self.stint = e.stint
     self.scope(e.serial, fn() { page(e.page) })
     self.owner = saved
+    self.stint = saved_stint
   })
   self.nodes[i].layer = true
   self.nodes[i].slide = slide
+}
+
+///|
+/// The time on top of the page being built (a stack's: a number of its own each time the page is put on top, pushed
+/// or come back to; 0 outside any): what is put up anew when its page is (a picture that could not be had asked for
+/// again, as Compose's produceState runs again as its page comes back), whatever frames were drawn between.
+pub fn Ctx::page_stint(self : Ctx) -> Int {
+  self.stint
 }
 
 ///|
@@ -599,8 +634,11 @@ pub fn[P] Ctx::nav_flat(self : Ctx, nav : Nav[P], page : (P) -> Unit, bg? : Int6
   let top = nav.pages[nav.pages.length() - 1]
   self.box(w=Fill(1.0), h=Fill(1.0), clip=true, bg~, fn() {
     let saved = self.owner
+    let saved_stint = self.stint
     self.owner = top.serial
+    self.stint = top.stint
     self.scope(top.serial, fn() { page(top.page) })
     self.owner = saved
+    self.stint = saved_stint
   })
 }

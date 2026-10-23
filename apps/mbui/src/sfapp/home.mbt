@@ -1357,7 +1357,7 @@ fn lower(s : String) -> String {
 /// constraints it is given).
 fn face(c : @ui.Ctx, src : Source, p : Person, size : Double, starter : Bool, dx : Double) -> Int {
   let t = @sf.theme()
-  let picture = if p.picture != "" { (src.picture)(p.picture, c.frame_no) } else { "" }
+  let picture = if p.picture != "" { (src.picture)(p.picture, c.page_stint()) } else { "" }
   c.box(w=Px(size), h=Px(size), tx=dx, fn() {
     @sf.avatar(c, if p.email != "" { p.email } else { p.id }, p.name, picture, size)
     c.layer(fn() {
