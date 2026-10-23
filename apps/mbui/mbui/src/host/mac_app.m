@@ -9,6 +9,7 @@
 #import <Security/Security.h>
 #include <dlfcn.h>
 #import <mach/mach.h>
+#include <pwd.h>
 #import "apple.h"
 #include "post.h"
 #include "done_watch.h"
@@ -956,6 +957,8 @@ void mb_host_dock_keep(moonbit_string_t json) {
 // start, stop, restart (the service's launchctl, a hand-started one only stopped), the log or the folder opened.
 static NSString *local_doing = nil;
 static NSString *local_failed = nil;
+static int local_percent = -1;   // how far the installer's download is (local_heard, below), -1 not said
+static NSString *local_said = nil; // the last step the installer said
 static NSString *local_data(void) { return [NSHomeDirectory() stringByAppendingPathComponent:@".stillfail"]; }
 static NSString *local_service(void) {
   for (NSString *label in @[ @"fail.still.station", @"org.3720.ember.station" ]) {
@@ -982,11 +985,12 @@ moonbit_string_t mb_host_local_station(void) {
   NSString *data = local_data();
   NSString *service = local_service();
   BOOL there = [NSFileManager.defaultManager fileExistsAtPath:data];
-  if (!there && !service) return mb_string_from_ns(@"");
+  // none here, and nothing being done or gone wrong about it: ""; one being installed is said before it is there
+  if (!there && !service && !local_doing && !local_failed) return mb_string_from_ns(@"");
   NSString *version = nil;
   pid_t pid = local_pid(data, &version);
   NSMutableDictionary *o = [NSMutableDictionary dictionary];
-  o[@"data"] = [data stringByAbbreviatingWithTildeInPath];
+  if (there || service) o[@"data"] = [data stringByAbbreviatingWithTildeInPath];
   o[@"runner"] = pid == 0 ? @"none" : service ? @"service" : @"other";
   if (!version && service) {
     NSString *build = [NSString stringWithContentsOfFile:[data stringByAppendingPathComponent:@"app/BUILD"] encoding:NSUTF8StringEncoding error:nil];
@@ -1004,7 +1008,11 @@ moonbit_string_t mb_host_local_station(void) {
     w[@"removed"] = @(c[@"removed_at"] != nil && c[@"removed_at"] != NSNull.null);
     o[@"workspace"] = w;
   }
-  if (local_doing) o[@"doing"] = local_doing;
+  if (local_doing) {
+    o[@"doing"] = local_doing;
+    if (local_percent >= 0) o[@"percent"] = @(local_percent);
+    if (local_said) o[@"said"] = local_said;
+  }
   if (local_failed) o[@"failed"] = local_failed;
   NSData *json = [NSJSONSerialization dataWithJSONObject:o options:0 error:nil];
   return mb_string_from_ns(json ? [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] : @"");
@@ -1026,9 +1034,167 @@ static NSString *local_launchctl(NSArray<NSString *> *args) {
   s = [s stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
   return s.length ? s : [NSString stringWithFormat:@"launchctl %d", t.terminationStatus];
 }
+// The person's login shell's PATH and proxy variables, read once (as still.fail's desktop app reads them: station.ts
+// ofShell): an app opened from the Finder or the Dock has neither, and the station the installer sets up runs with the
+// PATH it is installed from (where the agents are found: nvm's Node, Homebrew's). A shell that does not answer in 5 s
+// gives nothing.
+static NSDictionary<NSString *, NSString *> *login_env(void) {
+  static NSDictionary *env;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSString *shell = NSProcessInfo.processInfo.environment[@"SHELL"];
+    if (!shell.length) {
+      struct passwd *pw = getpwuid(getuid());
+      shell = pw && pw->pw_shell ? @(pw->pw_shell) : @"/bin/zsh";
+    }
+    NSString *mark = @"__stillfail_env__";
+    NSTask *t = [NSTask new];
+    t.executableURL = [NSURL fileURLWithPath:shell];
+    t.arguments = @[ @"-ilc", [NSString stringWithFormat:@"printf '%@'; env; printf '%@'", mark, mark] ];
+    t.standardInput = [NSFileHandle fileHandleWithNullDevice];
+    t.standardError = [NSFileHandle fileHandleWithNullDevice];
+    NSPipe *out = [NSPipe pipe];
+    t.standardOutput = out;
+    NSMutableDictionary *got = [NSMutableDictionary dictionary];
+    if ([t launchAndReturnError:nil]) {
+      dispatch_semaphore_t done = dispatch_semaphore_create(0);
+      __block NSData *said = nil;
+      dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        said = [out.fileHandleForReading readDataToEndOfFile];
+        dispatch_semaphore_signal(done);
+      });
+      if (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
+        [t terminate];
+        dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
+      }
+      NSString *s = [[NSString alloc] initWithData:said ?: [NSData data] encoding:NSUTF8StringEncoding] ?: @"";
+      NSArray<NSString *> *parts = [s componentsSeparatedByString:mark];
+      if (parts.count >= 3) {
+        for (NSString *line in [parts[1] componentsSeparatedByString:@"\n"]) {
+          NSRange eq = [line rangeOfString:@"="];
+          if (eq.location == NSNotFound) continue;
+          NSString *k = [line substringToIndex:eq.location];
+          if ([k isEqualToString:@"PATH"] || [k.lowercaseString hasSuffix:@"_proxy"])
+            got[k] = [line substringFromIndex:eq.location + 1];
+        }
+      }
+    }
+    env = got;
+  });
+  return env;
+}
+
+// The station's installer (still.fail cloud's /install.sh, as 添加 station hands it out and still.fail's desktop app
+// runs it: cloud/src/install.ts), run here as the person would in a terminal (their shell's PATH and proxies): with a
+// token (`install`: one-time, for a workspace: the core's workspace.enroll) it downloads the release, puts it in
+// ~/.stillfail/app, joins the workspace and runs the station as a launchd service; without one (`update`) it brings the
+// station here up to the latest release and runs it as a service (a station's data with none, as the desktop app ran
+// it, becomes one). `ask`: {"origin", "token"?, "channel": stable | beta}. nil when it did, else the last it said.
+// How far it is, as it goes (local_station's `percent` and `said`): the percent its downloads' curl shows
+// (--progress-bar: "#### 45.2%", each redrawn after a \r), and the last other line it said (its step: downloading,
+// installing, starting): local_percent, local_said (above).
+
+static void local_heard(NSData *piece) {
+  NSString *s = [[NSString alloc] initWithData:piece encoding:NSUTF8StringEncoding];
+  s = [s stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  if (!s.length) return;
+  static NSRegularExpression *bar;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ bar = [NSRegularExpression regularExpressionWithPattern:@"^#*\\s*([0-9]+(\\.[0-9]+)?)%$" options:0 error:nil]; });
+  NSTextCheckingResult *m = [bar firstMatchInString:s options:0 range:NSMakeRange(0, s.length)];
+  int percent = m ? [[s substringWithRange:[m rangeAtIndex:1]] intValue] : -1;
+  if (!m && [s rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"#"] invertedSet]].location == NSNotFound) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (m) {
+      local_percent = percent;
+    } else {
+      local_said = s;
+      local_percent = -1;
+    }
+    [the_view requestFrame];
+  });
+}
+
+static NSString *local_install(NSDictionary *ask) {
+  NSString *origin = [ask[@"origin"] isKindOfClass:NSString.class] ? ask[@"origin"] : @"";
+  if (![origin hasPrefix:@"https://"] && ![origin hasPrefix:@"http://"]) return @"origin";
+  NSMutableArray *args = [@[
+    @"-c",
+    @"f=$(mktemp) && curl -fsSL \"$0/install.sh\" -o \"$f\" && sh \"$f\" \"$@\"; s=$?; rm -f \"$f\"; exit $s",
+    origin
+  ] mutableCopy];
+  if ([ask[@"token"] isKindOfClass:NSString.class] && [ask[@"token"] length]) [args addObject:ask[@"token"]];
+  NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
+  [env addEntriesFromDictionary:login_env()];
+  if ([ask[@"channel"] isEqual:@"beta"]) env[@"STILLFAIL_CHANNEL"] = @"beta";
+  NSTask *t = [NSTask new];
+  t.executableURL = [NSURL fileURLWithPath:@"/bin/sh"];
+  t.arguments = args;
+  t.environment = env;
+  t.standardInput = [NSFileHandle fileHandleWithNullDevice];
+  NSPipe *out = [NSPipe pipe];
+  t.standardOutput = out;
+  t.standardError = out;
+  NSError *e = nil;
+  if (![t launchAndReturnError:&e]) return e.localizedDescription ?: @"sh";
+  // what it says as it says it: each piece ended by a \r (curl's bar redrawn) or a \n heard (local_heard)
+  NSMutableData *said = [NSMutableData data];
+  NSUInteger from = 0;
+  for (;;) {
+    NSData *d = [out.fileHandleForReading availableData];
+    if (d.length == 0) break;
+    [said appendData:d];
+    const uint8_t *b = (const uint8_t *)said.bytes;
+    for (NSUInteger i = from; i < said.length; i++) {
+      if (b[i] != '\r' && b[i] != '\n') continue;
+      local_heard([said subdataWithRange:NSMakeRange(from, i - from)]);
+      from = i + 1;
+    }
+  }
+  [t waitUntilExit];
+  NSString *s = [[NSString alloc] initWithData:said encoding:NSUTF8StringEncoding] ?: @"";
+  fprintf(stdout, "mac: the station's installer (%s) exited %d\n%s\n", ask[@"token"] ? "install" : "update",
+          t.terminationStatus, s.UTF8String);
+  fflush(stdout);
+  if (t.terminationStatus == 0) return nil;
+  NSString *last = @"";
+  for (NSString *line in [s componentsSeparatedByString:@"\n"]) {
+    NSString *l = [line stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (l.length) last = l;
+  }
+  return last.length ? last : [NSString stringWithFormat:@"install.sh %d", t.terminationStatus];
+}
+
 void mb_host_local_station_act(moonbit_string_t action) {
   NSString *a = mb_ns_from_string(action);
   NSString *data = local_data();
+  // `install {…}`, `update {…}`: the installer (local_install), off the main thread, as the others
+  NSRange space = [a rangeOfString:@" "];
+  if (space.location != NSNotFound && ([a hasPrefix:@"install "] || [a hasPrefix:@"update "])) {
+    NSString *verb = [a substringToIndex:space.location];
+    NSData *j = [[a substringFromIndex:space.location + 1] dataUsingEncoding:NSUTF8StringEncoding];
+    NSDictionary *ask = j ? [NSJSONSerialization JSONObjectWithData:j options:0 error:nil] : nil;
+    if (![ask isKindOfClass:NSDictionary.class]) return;
+    if (local_doing) {
+      local_failed = @"busy";
+      [the_view requestFrame];
+      return;
+    }
+    local_doing = verb;
+    local_failed = nil;
+    local_percent = -1;
+    local_said = nil;
+    [the_view requestFrame];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+      NSString *failed = local_install(ask);
+      dispatch_async(dispatch_get_main_queue(), ^{
+        local_doing = nil;
+        local_failed = failed;
+        [the_view requestFrame];
+      });
+    });
+    return;
+  }
   if ([a isEqualToString:@"log"]) {
     [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:[data stringByAppendingPathComponent:@"stillfail.log"]]];
     return;

@@ -45,6 +45,9 @@ pub(all) struct Core {
   version_words : () -> (String, Bool)
   /// the version row tapped: a newer build installed, or still.fail cloud asked now
   version_tap : () -> Unit
+  /// 本机 Station's installer run (the app's local_station.mbt): `true` a station downloaded and joined to this
+  /// workspace (none here), `false` the one here brought up to the latest release and run as a service
+  local_install : (Bool) -> Unit
   /// a web page to open (a sign-in's, Slack's): handed to the system's browser (@ui.open_url), said so where nothing
   /// took it
   open_link : (String) -> Unit

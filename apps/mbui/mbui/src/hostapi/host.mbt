@@ -1116,7 +1116,10 @@ pub fn local_station() -> String {
 }
 
 ///|
-/// Something done to this machine's station: start, stop, restart (as `local_station` then says), log, folder (opened).
+/// Something done to this machine's station: start, stop, restart (as `local_station` then says), log, folder (opened);
+/// `install {"origin", "token", "channel"}` (the station's installer with a workspace's one-time token: downloaded,
+/// joined, run as a service) and `update {"origin", "channel"}` (the installer with none: the station here brought up
+/// to the latest release, run as a service), `doing` while they run, as the others.
 pub fn local_station_act(action : String) -> Unit {
   current.val.local_station_act(action)
 }
