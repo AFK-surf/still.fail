@@ -23,57 +23,93 @@ fn permissions_page(c : @ui.Ctx, core : Core) -> Unit {
     },
     [("name", "still.fail")],
   )
-  scroll_page(c, "permissions", [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-pages.settings.nav.permissions")) },
-    fn() { page_note(c, fill("web-pages.permissions.lead", [("name", "still.fail")])) },
-    fn() {
-      card(c, fn() {
-        c.box(style=permission_box, fn() {
-          c.box(style=permission_line, fn() {
-            c.box(style=permission_icon, fn() {
-              @sf.icon(c, "bell", size=@sf.row_icon, color=@sf.theme().p.text) |> ignore
-            })
-            |> ignore
-            c.box(style=@sf.full_width, fn() {
-              c.text(tr("web-pages.permissions.notify.name"), style=permission_name) |> ignore
-              c.text(tr("web-pages.permissions.notify.purpose"), style=wide_row_sub_lines) |> ignore
-            })
-            |> ignore
-            c.box(style=near_beside, fn() {
-              if state == "granted" {
-                @sf.icon(c, "check", size=@sf.row_icon, color=@sf.theme().p.muted) |> ignore
-              }
-              c.text(tr("web-pages.permissions.state." + state), style=wide_value) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-          if state == "default" || state == "denied" {
-            c.box(style=permission_line, fn() {
-              c.box(style=@sf.full_width, fn() {
-                c.text(tr("web-pages.permissions.notify.without"), style=wide_row_title_lines) |> ignore
-                if state == "denied" {
-                  c.text(where_, style=wide_row_sub_lines) |> ignore
-                }
-              })
-              |> ignore
-              if state == "default" {
-                if wide_button(c, "permission-allow", tr("web-pages.permissions.allow"), true) {
-                  (core.notify_ask)()
-                }
-              } else if wide_button(c, "permission-open", tr("web-pages.permissions.open"), false) {
-                open_notify_settings(core)
-              }
-            })
-            |> ignore
-          }
+  desk_page(
+    c,
+    core,
+    "permissions",
+    tr("web-pages.settings.nav.permissions"),
+    lead=fill("web-pages.permissions.lead", [("name", "still.fail")]),
+    [
+      fn() {
+        permission_row(
+          c,
+          "bell",
+          tr("web-pages.permissions.notify.name"),
+          tr("web-pages.permissions.notify.purpose"),
+          tr("web-pages.permissions.notify.without"),
+          where_,
+          state,
+          fn() { (core.notify_ask)() },
+          fn() { open_notify_settings(core) },
+        )
+      },
+    ],
+  )
+}
+
+///|
+/// One permission (PermissionRow): a card, its round mark, what it is for and whether it is given (given in green, refused
+/// in red); not given, what goes without it, where the system keeps it when refused, and the way to give it.
+fn permission_row(
+  c : @ui.Ctx,
+  icon : String,
+  name : String,
+  purpose : String,
+  without : String,
+  where_ : String,
+  state : String,
+  allow : () -> Unit,
+  open : () -> Unit,
+) -> Unit {
+  let t = @sf.theme()
+  c.box(style=desk_card, fn() {
+    c.box(style=desk_card_row, fn() {
+      c.box(style=permission_icon, fn() { @sf.icon(c, icon, size=permission_glyph, color=t.p.text) |> ignore }) |> ignore
+      c.box(style=desk_card_text, fn() {
+        c.text(name, style=desk_strong) |> ignore
+        c.text(purpose, style=desk_muted) |> ignore
+      })
+      |> ignore
+      c.box(style=permission_state, fn() {
+        let ink = match state {
+          "granted" => t.p.green_ink
+          "denied" => t.p.red
+          _ => t.p.muted
+        }
+        if state == "granted" {
+          @sf.icon(c, "check", size=permission_check, color=ink) |> ignore
+        }
+        c.text(tr("web-pages.permissions.state." + state), style=match state {
+          "granted" => permission_state_given
+          "denied" => permission_state_refused
+          _ => permission_state_words
         })
         |> ignore
       })
       |> ignore
-    },
-  ])
+    })
+    |> ignore
+    if state == "default" || state == "denied" {
+      c.box(style=desk_card_row, fn() {
+        c.box(style=desk_card_text, fn() {
+          c.text(without, style=desk_words) |> ignore
+          if state == "denied" {
+            c.text(where_, style=desk_muted) |> ignore
+          }
+        })
+        |> ignore
+        if state == "default" {
+          if @sf.button(c, tr("web-pages.permissions.allow"), key="permission-allow", tone=Primary) {
+            allow()
+          }
+        } else if @sf.button(c, tr("web-pages.permissions.open"), key="permission-open") {
+          open()
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
 }
 
 // ---------------------------------------------------------------------------
@@ -82,12 +118,9 @@ fn permissions_page(c : @ui.Ctx, core : Core) -> Unit {
 ///|
 /// How a station archives on its own: never (no days), once idle, or once idle and recommended by its review.
 fn archive_mode(v : Json?) -> String {
-  if number(v, "days") <= 0.0 {
-    "off"
-  } else if flag(v, "reviewed") {
-    "reviewed"
-  } else {
-    "idle"
+  match text(v, "mode") {
+    "" => "off"
+    m => m
   }
 }
 
@@ -133,13 +166,15 @@ fn archiving_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     "off" | "reviewed" => pref(core, "archiveHint")
     _ => "done"
   }
-  let stations = match stations_of(core, here).value {
+  let read = stations_of(core, here).value
+  let stations = match read {
     Some(Array(a)) => a
     _ => []
   }
   let known = stations.filter(fn(s) { flag(Some(s), "online") && field(Some(s), "overview") is Some(Object(_)) })
   let reviewing = known.filter(fn(s) { review_on(Some(s)) })
   let not_reviewing = known.filter(fn(s) { !review_on(Some(s)) })
+  // (hintReviews: what the stations' reviews say, where some or none review)
   let reviews = if known.length() == 0 || not_reviewing.length() == 0 {
     ""
   } else if reviewing.length() == 0 {
@@ -150,94 +185,100 @@ fn archiving_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       ("off", not_reviewing.map(fn(s) { text(Some(s), "name") }).join("、")),
     ])
   }
+  let none_review = known.length() > 0 && reviewing.length() == 0
   let hints = ["off", "done", "reviewed"]
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-pages.archiving.title")) },
+  desk_page(c, core, "archiving", tr("web-pages.archiving.title"), [
     fn() {
-      section_header(c, tr("web-pages.appearance.archive.title"))
-      section_note(c, tr("web-pages.appearance.archive.description"))
-    },
-    fn() {
-      let at = hints.search(hint_now).unwrap_or(1)
-      inset(c, fn() {
-        let picked = seg(c, "archiveHint", hints.map(fn(h) { tr("web-pages.appearance.archive." + h) }), at)
-        if picked != at {
-          set_pref(core, "archiveHint", if hints[picked] == "done" { "" } else { hints[picked] })
+      @sf.section(c, tr("web-pages.appearance.archive.title"), note=tr("web-pages.appearance.archive.description"), fn() {
+        let at = hints.search(hint_now).unwrap_or(1)
+        let mut picked = 0
+        desk_choice(c, fn() { picked = @sf.segmented(c, "archiveHint", hints.map(fn(h) { tr("web-pages.appearance.archive." + h) }), at) })
+        // (按模型判断 not to be picked while no station reviews, unless it is what is set)
+        if picked != at && !(hints[picked] == "reviewed" && none_review) {
+          let next = if hints[picked] == "done" { "" } else { hints[picked] }
+          c.after_build("archive-hint", fn() { set_pref(core, "archiveHint", next) })
         }
-      })
-      c.box(style=archive_hint_box, fn() {
-        c.text(tr("web-pages.appearance.archive." + hint_now + "Hint"), style=wide_row_sub_lines) |> ignore
-        if reviews != "" && (hint_now == "reviewed" || reviewing.length() == 0) {
-          c.box(style=near_beside, fn() {
-            c.text(reviews, style=wide_row_sub_lines) |> ignore
+        desk_hint(c, tr("web-pages.appearance.archive." + hint_now + "Hint"))
+        if reviews != "" && (hint_now == "reviewed" || none_review) {
+          c.box(style=desk_hint_line, fn() {
+            c.text(reviews, style=desk_hint_words) |> ignore
+            if tap_text(c, "archive-review-go", tr("web-pages.archiving.reviewGo"), color=@sf.link_ink(), size=link_size) {
+              (core.push)(AutoCompletion)
+            }
           })
           |> ignore
-          if tap_text(c, "archive-review-go", tr("web-pages.archiving.reviewGo"), color=@sf.link_ink(), size=link_size) {
-            (core.push)(AutoCompletion)
-          }
         }
       })
-      |> ignore
     },
     fn() {
-      section_header(c, tr("web-pages.archiving.auto.title"))
-      section_note(c, tr("web-pages.archiving.auto.description"))
+      @sf.section(c, tr("web-pages.archiving.auto.title"), note=tr("web-pages.archiving.auto.description"), fn() {
+        if read is None {
+          @sf.wait_line(c, tr("common.readingStations"), key="archiving-stations")
+        }
+        c.box(style=desk_list, fn() {
+          for s in stations {
+            archiving_row(c, core, Some(s))
+          }
+        })
+        |> ignore
+      })
     },
-  ]
-  if stations_of(core, here).value is None {
-    blocks.push(fn() { waiting_rows(c, count=1) })
-  }
-  for s in stations {
-    let s = Some(s)
-    blocks.push(fn() { archiving_row(c, core, s) })
-  }
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "archiving", blocks)
+  ])
 }
 
 ///|
-/// A station's row (StationRow): online or not, its name, how it archives on its own in a line (or why that is not
-/// known); it opens the station's page once it can say.
+/// A station's row (StationRow): online or not, its name, how it archives on its own in a line (red where it is set to
+/// and cannot; or why that is not known); it opens the station's page once it can say.
 fn archiving_row(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
+  let t = @sf.theme()
   let view = if flag(s, "online") { field(field(s, "overview"), "archiving") } else { None }
   let station = text(s, "station")
-  inset(c, fn() {
-    let line = match view {
-      Some(Object(_)) as v => {
-        let mode = archive_mode(v)
-        let how = if mode == "off" {
-          tr("web-pages.archiving.mode.off")
-        } else {
-          tr("web-pages.archiving.mode." + mode) + " · " + days_label(number(v, "days"))
-        }
-        let stalled = flag(v, "reviewed") && number(v, "days") > 0.0 && !review_on(s)
-        if stalled {
-          tr("web-pages.archiving.stalled")
-        } else {
-          fill("web-pages.archiving.summary", [("how", how), ("slack", days_label(number(v, "slackDays")))])
-        }
+  let mut bad = false
+  let line = match view {
+    Some(Object(_)) as v => {
+      let stalled = flag(v, "reviewed") && number(v, "days") > 0.0 && !review_on(s)
+      if stalled {
+        bad = true
+        tr("web-pages.archiving.stalled")
+      } else {
+        text(v, "summaryText")
       }
-      _ =>
-        if !flag(s, "online") {
-          tr("web-pages.automaticDecisions.offline")
-        } else if !(field(s, "overview") is Some(Object(_))) {
-          tr("common.connecting")
-        } else {
-          tr("web-pages.archiving.upgrade")
-        }
     }
-    let opens = view is Some(Object(_))
-    if list_row(c, key=if opens { "archiving/" + station } else { "" }, fn() {
-        @sf.status_dot(c, if flag(s, "online") { "online" } else { "offline" })
-        row_lines(c, text(s, "name"), line)
-        if opens {
-          chevron(c)
-        }
-      }) {
+    _ =>
+      if !flag(s, "online") {
+        tr("web-pages.automaticDecisions.offline")
+      } else if !(field(s, "overview") is Some(Object(_))) {
+        tr("common.connecting")
+      } else {
+        tr("web-pages.archiving.upgrade")
+      }
+  }
+  let opens = view is Some(Object(_))
+  let id = if opens { c.id("archiving/" + station) } else { 0 }
+  if opens {
+    c.cursor(id, Hand)
+    if hit(c, id) {
       (core.push)(StationArchiving(station))
     }
+  }
+  c.box(style=if opens { desk_list_link } else { desk_list_row }, id~, fn() {
+    @sf.status_dot(c, if flag(s, "online") { "online" } else { "offline" })
+    c.box(style=desk_list_text, fn() {
+      c.box(style=desk_named, fn() {
+        if @sf.has_station_mark(text(s, "emoji"), text(s, "icon")) {
+          @sf.station_mark(c, text(s, "emoji"), text(s, "icon"), desk_mark, t.p.text)
+        }
+        c.text(text(s, "name"), style=desk_list_title) |> ignore
+      })
+      |> ignore
+      c.text(line, style=if bad { desk_note_bad } else { desk_note }) |> ignore
+    })
+    |> ignore
+    if opens {
+      @sf.icon(c, "chevron-right", size=desk_chevron, color=t.p.muted) |> ignore
+    }
   })
+  |> ignore
 }
 
 ///|
@@ -246,74 +287,81 @@ fn archiving_row(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit {
   let s = station_of(core, here, station)
   let view = if flag(s, "online") { field(field(s, "overview"), "archiving") } else { None }
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("web-pages.archiving.title")) },
-    fn() { large_title(c, text(s, "name")) },
-  ]
+  let name = text(s, "name")
+  let title = if name == "" {
+    tr("web-pages.archiving.auto.title")
+  } else {
+    tr("web-pages.archiving.auto.title") + " · " + name
+  }
+  let blocks : Array[() -> Unit] = []
   match view {
     Some(Object(_)) as v => {
       let busy = is_doing(core, ["archiving.save"], [("station", station)])
       let locked = !flag(v, "canEdit") || busy
       let save = fn(days : Double, slack : Double, reviewed : Bool) {
-        act(
-          core,
-          tr("web-pages.archiving.saveWhat"),
-          "archiving.save",
-          obj([
-            ("station", str(station)),
-            ("days", Json::number(days)),
-            ("slackDays", Json::number(slack)),
-            ("reviewed", Json::boolean(reviewed)),
-          ]),
-          done=tr("web-pages.archiving.saved"),
-        )
+        c.after_build("archiving-save", fn() {
+          act(
+            core,
+            tr("web-pages.archiving.saveWhat"),
+            "archiving.save",
+            obj([
+              ("station", str(station)),
+              ("days", Json::number(days)),
+              ("slackDays", Json::number(slack)),
+              ("reviewed", Json::boolean(reviewed)),
+            ]),
+            done=tr("web-pages.archiving.saved"),
+          )
+        })
       }
       let days = number(v, "days")
       let slack = number(v, "slackDays")
       let mode = archive_mode(v)
       let review = review_on(s)
       if !flag(v, "canEdit") {
-        blocks.push(fn() { page_note(c, tr("web-pages.archiving.adminOnly")) })
+        blocks.push(fn() { desk_hint(c, tr("web-pages.archiving.adminOnly")) })
       }
+      // its review: how it stands and the way to it, said under the section's title
       blocks.push(fn() {
-        section_header(c, tr("web-pages.archiving.review"))
-        c.box(style=archive_hint_box, fn() {
-          c.text(review_short(s), style=wide_row_sub_lines) |> ignore
-          if tap_text(c, "archiving-review-go", tr("web-pages.archiving.reviewGo"), color=@sf.link_ink(), size=link_size) {
-            (core.push)(AutoCompletion)
-          }
+        @sf.section(c, tr("web-pages.archiving.review"), fn() {
+          c.box(style=desk_said_line, fn() {
+            c.text(review_short(s) + " · ", style=desk_hint_words) |> ignore
+            if tap_text(c, "archiving-review-go", tr("web-pages.archiving.reviewGo"), color=@sf.link_ink(), size=link_size) {
+              (core.push)(AutoCompletion)
+            }
+          })
+          |> ignore
         })
-        |> ignore
       })
       let modes = ["off", "idle", "reviewed"]
       blocks.push(fn() {
-        section_header(c, tr("web-pages.archiving.mode"))
-        let at = modes.search(mode).unwrap_or(0)
-        inset(c, fn() {
-          let picked = seg(c, "archiving-mode", modes.map(fn(m) { tr("web-pages.archiving.mode." + m) }), at)
-          if picked != at && !locked {
+        @sf.section(c, tr("web-pages.archiving.mode"), fn() {
+          let at = modes.search(mode).unwrap_or(0)
+          let mut picked = 0
+          desk_choice(c, fn() { picked = @sf.segmented(c, "archiving-mode", modes.map(fn(m) { tr("web-pages.archiving.mode." + m) }), at) })
+          if picked != at && !locked && !(modes[picked] == "reviewed" && !review) {
             match modes[picked] {
               "off" => save(0.0, slack, false)
-              "idle" => save(if days > 0.0 { days } else { archive_days[0] }, slack, false)
-              _ => save(if days > 0.0 { days } else { archive_days[0] }, slack, true)
+              "idle" => save(if days > 0.0 { days } else { 1.0 }, slack, false)
+              _ => save(if days > 0.0 { days } else { 1.0 }, slack, true)
             }
           }
+          let mut note = tr("web-pages.archiving.mode." + mode + "Hint")
+          if mode == "reviewed" && !review {
+            note = note + " " + tr("web-pages.archiving.reviewNeeded")
+          } else if !review {
+            note = note + " " + tr("web-pages.archiving.stationNeedsReview")
+          }
+          desk_hint(c, note)
         })
-        let mut note = tr("web-pages.archiving.mode." + mode + "Hint")
-        if mode == "reviewed" && !review {
-          note = note + " " + tr("web-pages.archiving.reviewNeeded")
-        } else if !review {
-          note = note + " " + tr("web-pages.archiving.stationNeedsReview")
-        }
-        c.box(style=archive_hint_box, fn() { c.text(note, style=wide_row_sub_lines) |> ignore }) |> ignore
       })
       if mode != "off" {
         blocks.push(fn() {
-          section_header(c, tr("web-pages.archiving.idle"))
-          let offered = days_offered(days, archive_days)
-          let at = offered.search(days).unwrap_or(0)
-          inset(c, fn() {
-            let picked = seg(c, "archiving-idle", offered.map(days_label), at)
+          @sf.section(c, tr("web-pages.archiving.idle"), fn() {
+            let offered = items(v, "daysOffered").map(fn(n) { n.as_number().unwrap_or(0.0) })
+            let at = offered.search(days).unwrap_or(0)
+            let mut picked = 0
+            desk_choice(c, fn() { picked = @sf.segmented(c, "archiving-idle", offered.map(days_label), at) })
             if picked != at && !locked {
               save(offered[picked], slack, flag(v, "reviewed"))
             }
@@ -321,25 +369,21 @@ fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, station : Strin
         })
       }
       blocks.push(fn() {
-        section_header(c, tr("web-pages.archiving.slack"))
-        let offered = days_offered(slack, slack_days)
-        let at = offered.search(slack).unwrap_or(0)
-        inset(c, fn() {
-          let picked = seg(c, "archiving-slack", offered.map(days_label), at)
+        @sf.section(c, tr("web-pages.archiving.slack"), fn() {
+          let offered = items(v, "slackDaysOffered").map(fn(n) { n.as_number().unwrap_or(0.0) })
+          let at = offered.search(slack).unwrap_or(0)
+          let mut picked = 0
+          desk_choice(c, fn() { picked = @sf.segmented(c, "archiving-slack", offered.map(days_label), at) })
           if picked != at && !locked {
             save(days, offered[picked], flag(v, "reviewed"))
           }
+          desk_hint(c, tr("web-pages.archiving.slackHint"))
         })
-        c.box(style=archive_hint_box, fn() {
-          c.text(tr("web-pages.archiving.slackHint"), style=wide_row_sub_lines) |> ignore
-        })
-        |> ignore
       })
     }
     _ =>
       blocks.push(fn() {
-        page_note(
-          c,
+        c.text(
           if !flag(s, "online") {
             tr("web-pages.automaticDecisions.offline")
           } else if !(field(s, "overview") is Some(Object(_))) {
@@ -347,57 +391,43 @@ fn station_archiving_page(c : @ui.Ctx, core : Core, here : Here, station : Strin
           } else {
             tr("web-pages.archiving.upgrade")
           },
+          style=desk_note,
         )
+        |> ignore
       })
   }
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "station-archiving/" + station, blocks)
+  desk_page(c, core, "station-archiving/" + station, title, blocks, back=tr("web-pages.archiving.title"))
 }
 
 ///|
 /// A link in a note's words (12).
 let link_size : Double = 12.0
 
-///|
-/// The days offered (archiving.ts IDLE_DAYS, SLACK_DAYS), with the one kept when it is none of them.
-// kept across runs: a table, never written
-let archive_days : Array[Double] = [1.0, 3.0, 7.0, 30.0]
 
 ///|
-// kept across runs: a table, never written
-let slack_days : Array[Double] = [0.0, 3.0, 7.0, 30.0]
+/// A permission's mark (Permissions.css.ts icon: as tall as a button, round, on the canvas, its glyph 18), its state
+/// at its first row's end (the meta's 12 in 500: given in green with a check 14, refused in red).
+let permission_glyph : Double = 18.0
 
 ///|
-fn days_offered(kept : Double, base : Array[Double]) -> Array[Double] {
-  if kept > 0.0 && !base.contains(kept) {
-    let all = base.copy()
-    all.push(kept)
-    all.sort()
-    all
-  } else {
-    base
-  }
-}
+let permission_check : Double = 14.0
 
 ///|
-/// A permission's card (Permissions.css.ts): its line, and what goes without it under it, 14 apart.
-// kept across runs: a value (no field of it changes)
-let permission_box : @ui.Style = @ui.style(w=Full, gap=S3_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let permission_line : @ui.Style = @ui.style(row=true, w=Full, gap=S3, align=ACenter)
-
-///|
-/// Its icon in a disc of the page's ground (Permissions.css.ts icon: 36).
 // kept across runs: a value (no field of it changes)
 let permission_icon : @ui.Style = @ui.style(w=S9, h=S9, radius=Full, align=ACenter, justify=JCenter, bg=Bg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let permission_name : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
+let permission_state : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
 
 ///|
-/// What a choice means, under it (chat.css.ts appearanceHint: 12, muted, 8 over it), 16 in.
 // kept across runs: a value (no field of it changes)
-let archive_hint_box : @ui.Style = @ui.style(w=Full, px=S4, pt=S2, gap=S1)
+let permission_state_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let permission_state_given : @ui.TextStyle = permission_state_words.then(@ui.text_style(color=Positive))
+
+///|
+// kept across runs: a value (no field of it changes)
+let permission_state_refused : @ui.TextStyle = permission_state_words.then(@ui.text_style(color=Danger))

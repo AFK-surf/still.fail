@@ -550,7 +550,17 @@ fn fx_station(address : String) -> Json {
           ),
           (
             "archiving",
-            obj([("days", Json::number(1.0)), ("slackDays", Json::number(3.0)), ("reviewed", Json::boolean(false)), ("canEdit", Json::boolean(true))]),
+            // (the core's words and choices, as it gives them: archiving.ts in the core)
+            obj([
+              ("days", Json::number(1.0)),
+              ("slackDays", Json::number(3.0)),
+              ("reviewed", Json::boolean(false)),
+              ("canEdit", Json::boolean(true)),
+              ("mode", str("idle")),
+              ("summaryText", str("空闲就归档 · 1 天 · Slack：3 天")),
+              ("daysOffered", [Json::number(1.0), Json::number(3.0), Json::number(7.0), Json::number(30.0)]),
+              ("slackDaysOffered", [Json::number(0.0), Json::number(3.0), Json::number(7.0), Json::number(30.0)]),
+            ]),
           ),
           (
             "automaticDecisions",

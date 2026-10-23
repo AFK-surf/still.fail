@@ -95,6 +95,21 @@ pub fn Space::px(self : Space) -> Double {
 }
 
 ///|
+/// What a spacing token comes to as a margin: as `px`, and an `Exact` below 0 too (CSS's margins: one taking back a
+/// padding, a list reaching past its column), not NaN.
+pub fn Space::margin_px(self : Space) -> Double {
+  match self {
+    Exact(v) => {
+      if v != v {
+        abort("style: a margin's Exact is NaN")
+      }
+      v
+    }
+    s => s.px()
+  }
+}
+
+///|
 /// A width or a height: what it holds (`Hug`, the default), all of the parent's (`Full`), a share of what is left
 /// along the parent's main axis (`Grow(k)`), a share of the parent's room in percent (`Pct(p)`, CSS's 50%; a size only,
 /// not a bound), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a list's width; in a token
