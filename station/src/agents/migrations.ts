@@ -71,6 +71,7 @@ export const NOTES: [number, string][] = [
   [64, "The browser tool now gives each chat its own DevTools address (ws://127.0.0.1:<door>/browser/…): connect chrome-devtools-mcp (--wsEndpoint) and Playwright (connectOverCDP) there, not at Chrome's own port. Tabs you open through it are this chat's: people see which chat opened a tab and may close it, and they close when this chat is archived."],
   [65, "Math in still.fail chats: use \\(…\\) inline, \\[…\\] on separate lines or $$ fences for display. Single dollar signs are ordinary text, so amounts need no escaping."],
   [66, "New tool secret_save: ask to keep a credential you will need again (a password read with op, a token a person gave or you made) in the vault of whoever started the chat; they approve it on a card in the still.fail app (which offers to turn their vault on first), and later uses go through secret_use. Prefer its command (what it prints is the secret, never shown to you) over value. Offer it before using such a credential another way, and never ask for a value in the chat (skill stillfail-vault)."],
+  [67, "secret_use, secret_run and secret_save take station: another station of the workspace their commands run on (a router only it reaches, a password manager signed in there), in this chat's directory on it (where station_task runs). The card says where; a grant asked for one station runs nowhere else."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

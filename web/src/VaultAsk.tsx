@@ -11,7 +11,7 @@ import { t } from "./i18n.ts";
 import type { ReactNode } from "react";
 
 /** What a request's card says: the item, how it would be given, the command it is for (or, one to keep, what it is). */
-export type Asked = { name: string; mode: string; command?: string | null | undefined; save?: VaultSave | undefined };
+export type Asked = { name: string; mode: string; command?: string | null | undefined; save?: VaultSave | undefined; station?: string | undefined };
 
 /** Its title: 使用「GitHub token」, 存入密码「UniFi UX7 管理员」. */
 export const askTitle = (a: Asked): string =>
@@ -22,14 +22,15 @@ export const askTitle = (a: Asked): string =>
  * as wide as the page's other cards (the vault's page), not as what it says (a chat's).
  */
 export function AskCard({ ask, fill = false, children }: { ask: Asked; fill?: boolean; children?: ReactNode }) {
-  // Only what is out of the ordinary is said: a command that can read the secret itself.
+  // Only what is out of the ordinary is said: a command that can read the secret itself, or runs on another station.
   const risky = !ask.save && ask.mode === "env";
+  const elsewhere = !ask.save && ask.station ? t("web-pages.vault.ask.on", { station: ask.station }) : null;
   return (
     <div className={`${pagesCss.card} ${fill ? "" : css.card}`}>
       <div className={css.what}>
         <div className={css.title}>{askTitle(ask)}{ask.save?.username && <span className={css.sub}>{ask.save.username}</span>}</div>
         {!ask.save && ask.command && <div className={css.command} title={ask.command}>{ask.command}</div>}
-        {risky && <div className={css.risk}>{t("web-pages.vault.ask.plain")}</div>}
+        {(risky || elsewhere) && <div className={css.note}>{risky && <span className={css.risk}>{t("web-pages.vault.ask.plain")}</span>}{risky && elsewhere && " · "}{elsewhere}</div>}
       </div>
       {children}
     </div>

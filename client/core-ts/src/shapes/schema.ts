@@ -260,6 +260,7 @@ export const SHAPES: Record<string, Shape> = {
     ["status", opt("String"), { doc: "Decided: granted | denied | expired. Absent while it waits (or before its station said)." }],
     ["scope", opt("String"), { doc: "Granted: once | hour | chat." }],
     ["save", opt("VaultSave"), { doc: "A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted)." }],
+    ["station", opt("String"), { doc: "Another station of the workspace its commands run on (a secret to keep: the one its command read it on), by name." }],
   ], { doc: "An agent's request to use a vault item, or to keep one, as its card in the chat says it (station/src/vault/secrets.ts)." }),
   VaultSave: struct([
     ["kind", "String", { doc: "token | login | ssh_key" }],

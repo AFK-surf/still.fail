@@ -31,7 +31,8 @@ station's profiles), or anything the person said not to keep.
 - `secret_save {name, kind, reason, command | value, username?, modes?, hosts?, env?}`:
   - `command` prints the secret and nothing else; it runs here, in your workspace, and you never see what it prints:
     `op read 'op://Personal/Ui/password'`, `op item get <id> --fields password --reveal`, `bw get password <id>`. Its
-    approval (1Password's) is asked once, here.
+    approval (1Password's) is asked once. Where the password manager is signed in on another station (1Password's
+    desktop app on a Mac), give `station`: the command runs there, in this chat's directory (where station_task runs).
   - `value` only for one you already hold (a token you made or were given).
   - `kind`: `token` (an API key, a bearer token), `login` (a password, with `username`), `ssh_key` (a private key, with
     `public_key` if known).
@@ -53,8 +54,9 @@ station's profiles), or anything the person said not to keep.
 - `secret_run {grant, command, env?}` runs the command here: through the proxy (the placeholder in `$STILLFAIL_SECRET`
   and the item's variable, swapped on HTTPS to its hosts only), by ssh-agent, or with the value in the environment
   (the output comes back with it hidden). Never print, encode or send the value elsewhere.
-- `secret_run` runs on this station. A secret needed where only another station reaches (a router on its network)
-  cannot be used from here: say so rather than copying the value over.
+- What only another station reaches (a router on its network, a tool signed in there): `secret_use {…, station}`, and
+  the card says where; `secret_run` then runs each command there, in this chat's directory on that station (where
+  station_task runs), the value sent there for that command only. Never copy a value to another machine yourself.
 - A script that logs in keeps the session it gets (a cookie, a token) between runs, in a file only its owner reads,
   and logs in again only when that is refused: every login costs the person an approval, and a second factor sent by
   email or SMS cannot be kept.

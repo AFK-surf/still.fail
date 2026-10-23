@@ -1,8 +1,10 @@
 // The vault as a part of the station (parts.ts, docs/vault.md): its store in the station's database, the agents'
 // requests for its secrets and the grants they hold, its routes (the vaults, by the lock pinned in the asker's
-// workspace; the requests and grants), its tools for the agents and its events (`vault-request`). A part of the agents'
-// side: its requests are told in the agents' chats (the hub).
+// workspace; the requests and grants), its tools for the agents and its events (`vault-request`), and its requests of
+// the other stations (`vault.`: a command run there with a secret, a secret read there). A part of the agents' side: its
+// requests are told in the agents' chats (the hub), its commands run in the remote tasks' session directories.
 import { Effect, Layer } from "effect";
+import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { routes as vaultRoutes } from "../api/routes/vault.ts";
 import { routes as requestRoutes } from "../api/routes/vault-requests.ts";
 import { wall } from "../ops/fibers.ts";
@@ -21,7 +23,7 @@ export const VaultLive = Layer.effectDiscard(
     const events = yield* Events;
     const parts = yield* Parts;
     const cloud = (yield* ControlPlane).state;
-    const { hub } = yield* Agents;
+    const { hub, remote } = yield* Agents;
     // A workspace's lock: the home workspace's is the station's own (null), another's by its id.
     const lock = (ws: string | null) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null;
     const vaults = vaultStore(store.db);
@@ -29,7 +31,16 @@ export const VaultLive = Layer.effectDiscard(
     const secrets = new Secrets({
       db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(), lock, now: () => wall.now(),
       title: (session) => sender(hub, session)[0] ?? null,
+      // Commands with a secret on another station of the workspace (docs/vault.md 在另一台 station 上用).
+      peer: (given) => {
+        if (given === cloud.state?.station || cloud.memberships().some((m) => m.name.toLowerCase() === given.toLowerCase())) return null;
+        const { id } = peerNamed(cloud, given);
+        return { id, name: nameOf(cloud, id) };
+      },
+      ask: (station, request) => remote.ask(station, request),
+      workOf: (ws, peer, session) => remote.work(ws, peer, session),
     });
+    remote.bus.on("vault.", (peer, request, workspace) => secrets.heard(peer, workspace ?? cloud.home() ?? "", request));
     secrets.listen((r) => events.tell("vault-request", r, `vault-request\0${r.id}`, (viewer) => secrets.tells(r, viewer)));
     parts.routes([
       ...vaultRoutes({ vaults, lock: (ws) => lock(ws), events, boxed: (l, cert) => secrets.boxed(l, cert) }),

@@ -1783,6 +1783,7 @@
   "web-pages.vault.ask.kind.token": "Token",
   "web-pages.vault.ask.kind.ssh_key": "SSH 私钥",
   "web-pages.vault.ask.plain": "可读取明文",
+  "web-pages.vault.ask.on": "在 {station} 运行",
   "web-pages.vault.ask.notKept": "未存入「{name}」",
   "web-pages.vault.scope.once": "仅这一次",
   "web-pages.vault.scope.hour": "1 小时内",

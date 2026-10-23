@@ -43,6 +43,9 @@ export type Request = {
   /// A request to keep a secret in a vault: the secret's fields, sealed to each of its owner's devices set up (their
   /// box keys), when it was asked or since (`saveContext`). The device that approves it opens its own.
   sealed?: Sealed[];
+  /// Another station of the workspace its commands run on (secret_use `station`, docs/vault.md 在另一台 station 上用):
+  /// its id and name, said on the card; the secret is sent there for each command and kept there only while it runs.
+  runOn?: { id: string; name: string };
 };
 /// What an agent asks to keep: the item's listing, and the fields of it that are not secret (a login's account name, an
 /// SSH key's public half), said on its card.

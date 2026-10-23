@@ -1858,6 +1858,7 @@
   "web-pages.vault.ask.kind.token": "token",
   "web-pages.vault.ask.kind.ssh_key": "SSH key",
   "web-pages.vault.ask.plain": "Can read it in plain text",
+  "web-pages.vault.ask.on": "Runs on {station}",
   "web-pages.vault.ask.notKept": "Didn't save “{name}”",
   "web-pages.vault.scope.once": "Just this once",
   "web-pages.vault.scope.hour": "For 1 hour",

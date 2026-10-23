@@ -303,6 +303,12 @@ export class Remote {
     return join(this.root, "sessions", hash([workspace, peer, session]));
   }
 
+  /// A source session's shared directory, made and noted as used (a command run there with a secret of the vault:
+  /// vault/secrets.ts `heard`).
+  work(workspace: string, peer: string, session: string): string {
+    return this.seen(workspace, peer, session);
+  }
+
   /// Makes a source session's shared directory and notes when it was last used (at most once a minute).
   private seen(workspace: string, peer: string, session: string): string {
     const room = this.room(workspace, peer, session);

@@ -86,6 +86,7 @@ fn ask_card(c : @ui.Ctx, src : Source, save? : Bool = false, status? : String = 
     username: if save { "zzj" } else { "" },
     status,
     scope: if status == "granted" { "chat" } else { "" },
+    station: "",
   }
   let card : Card = {
     kind: "options",

@@ -1501,6 +1501,8 @@ export interface VaultAsk {
 	scope?: string;
 	/** A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted). */
 	save?: VaultSave;
+	/** Another station of the workspace its commands run on (a secret to keep: the one its command read it on), by name. */
+	station?: string;
 }
 
 /**
