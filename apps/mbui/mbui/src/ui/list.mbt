@@ -480,8 +480,6 @@ fn Ctx::place_list(
     None => return
   }
   st.vp_h = ih
-  // how it stood after the last layout (Ctx::list_info): what was built from that is drawn again if this one moves it
-  let was = (st.vis_first, st.vis_last, st.at_end, st.below)
   // rows built in the build phase (none, normally) are not shown
   n.first = -1
   n.last = -1
@@ -639,12 +637,8 @@ fn Ctx::place_list(
   }
   st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
   st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
-  // what the view built this frame read from the list as it stood (a way back to the end, the rows in view told):
-  // built again where this layout changed that (a scroll that took one frame, a wheel's or a key's, would otherwise
-  // be drawn with what was read before it)
-  if was != (st.vis_first, st.vis_last, st.at_end, st.below) {
-    self.read_changed("a list's rows in view, its end")
-  }
+  // (what the view built this frame read of how the list stood, a way back to the end, the rows in view told, is read
+  // back where it was read: Ctx::list_info; a list scrolled that nothing read builds nothing again)
   if st.glide {
     // how far it is above its end: the rows not laid out by their heights as known (measured, or estimated)
     let to_end = if last == st.count - 1 {
@@ -868,9 +862,73 @@ pub(all) struct ListInfo {
 }
 
 ///|
-/// How list `key` stood after the last layout; None before its first.
+/// How list `key` stood after the last layout; None before its first. Read as the view builds, it is read back
+/// (readback.mbt) by its rows in view and how far it is from its end: laid out otherwise this frame (a scroll that took
+/// one frame, a wheel's or a key's), the frame is built again from it. What is built from less of it says what
+/// (Ctx::list_info_as), and is built again only as that changes.
 pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
-  match self.lists.get(self.id(key)) {
+  self.list_info_as(key, rows_and_end)
+}
+
+///|
+/// What Ctx::list_info is read back by: the rows in view, whether the list is at its end and how far from it.
+fn rows_and_end(i : ListInfo?) -> (Int, Int, Bool, Double)? {
+  match i {
+    Some(i) => Some((i.first, i.last, i.at_end, i.below))
+    None => None
+  }
+}
+
+///|
+/// How list `key` stood after the last layout, as Ctx::list_info, read back by what `made` makes of it alone: what
+/// the view builds from it only by whether it is at its end, or far from it, is built again as that changes, not at
+/// every step of a scroll.
+pub fn[T : Eq] Ctx::list_info_as(self : Ctx, key : String, made : (ListInfo?) -> T) -> ListInfo? {
+  let id = self.id(key)
+  let v = self.list_info_of(id)
+  if building.val {
+    let was = made(v)
+    self.info_reads.push((key, fn() { made(self.list_info_of(id)) != was }))
+  }
+  v
+}
+
+///|
+/// A list, to read later as it then stands and never read back: for what a frame works out of where it is once its
+/// builds are over and tells outside (Ctx::after_build: a reader's place, what they have seen whole), never for what it
+/// draws (that reads Ctx::list_info, list_place and list_row_height as it builds).
+pub struct ListReader {
+  priv ctx : Ctx
+  priv id : Int
+}
+
+///|
+/// List `key`, by its id where this is said (the scope it is built in), to read later (ListReader).
+pub fn Ctx::list_reader(self : Ctx, key : String) -> ListReader {
+  { ctx: self, id: self.id(key) }
+}
+
+///|
+/// How the list stands now (Ctx::list_info's).
+pub fn ListReader::info(self : ListReader) -> ListInfo? {
+  self.ctx.list_info_of(self.id)
+}
+
+///|
+/// Where the list is now (Ctx::list_place's).
+pub fn ListReader::place(self : ListReader) -> (Int, Double, Double)? {
+  self.ctx.list_place_of(self.id)
+}
+
+///|
+/// How tall row `item` is now (Ctx::list_row_height's).
+pub fn ListReader::row_height(self : ListReader, item : Int) -> Double? {
+  self.ctx.list_row_height_of(self.id, item)
+}
+
+///|
+fn Ctx::list_info_of(self : Ctx, id : Int) -> ListInfo? {
+  match self.lists.get(id) {
     Some(st) =>
       Some({
         count: st.count,

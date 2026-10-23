@@ -1,5 +1,6 @@
 // What the view reads of the layout as it builds, read back (as words_of is, words.mbt): a box's rect as this frame
-// lays it out (Ctx::laid_rect), where a list is and how tall its rows are (Ctx::list_place, list_row_height). Each is
+// lays it out (Ctx::laid_rect), how a list stands, where it is and how tall its rows are (Ctx::list_info, list_place,
+// list_row_height). Each is
 // what the last layout left; once this frame is laid out, what it read is looked at again, and what is not as it was
 // read (a box grown, a list placed now where it was not) is a layout read back that moved (Ctx::read_changed): the
 // frame is built again from it, before it is drawn, at most frame_passes_most times; one that never holds still is
@@ -81,6 +82,11 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       moved.push("list_place \"\{r.0}\"")
     }
   })
+  for r in self.info_reads {
+    if (r.1)() {
+      moved.push("list_info \"\{r.0}\"")
+    }
+  }
   self.row_reads.each(fn(k, r) {
     if self.list_row_height_of(k.0, k.1) != r.1 {
       moved.push("list_row_height \"\{r.0}\" \{k.1}")
@@ -94,6 +100,7 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
   self.laid_reads.clear()
   self.size_reads.clear()
   self.place_reads.clear()
+  self.info_reads.clear()
   self.row_reads.clear()
   self.words_reads.clear()
   for m in moved {

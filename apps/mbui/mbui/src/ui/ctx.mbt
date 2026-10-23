@@ -297,6 +297,9 @@ pub struct Ctx {
   laid_reads : Map[Int, ((Double, Double, Double, Double)?, SourceLoc)]
   size_reads : Map[Int, ((Double, Double)?, SourceLoc)]
   place_reads : Map[Int, (String, (Int, Double, Double)?)]
+  /// lists' places read as the view built (Ctx::list_info, list_info_as): each list's key, and whether what was made
+  /// of its place is not what it makes of it now
+  info_reads : Array[(String, () -> Bool)]
   row_reads : Map[(Int, Int), (String, Double?)]
   words_reads : Map[String, Bool]
   laid_watch : Map[Int, Int]
@@ -485,6 +488,7 @@ fn Ctx::new() -> Ctx {
     laid_reads: Map::new(),
     size_reads: Map::new(),
     place_reads: Map::new(),
+    info_reads: [],
     row_reads: Map::new(),
     words_reads: Map::new(),
     laid_watch: Map::new(),
