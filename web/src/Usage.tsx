@@ -7,7 +7,7 @@ import { Link } from "react-router";
 import { useTopic } from "./core/react.ts";
 import type { UsageDay, UsageItem, UsageList, UsageSeries, UsageView } from "./core/shapes.ts";
 import { stationBase } from "./station.tsx";
-import { Avatar, Segmented, Tip, Waiting } from "./ui.tsx";
+import { Avatar, Segmented, Waiting } from "./ui.tsx";
 import * as css from "./Usage.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as proseCss from "./Prose.css.ts";
@@ -48,54 +48,72 @@ export function Tiles({ view, pricesPath }: { view: UsageView; pricesPath?: stri
   );
 }
 
-/** Each day's cost as a bar, split by who it was for; the day's numbers on hover. */
+/**
+ * Each day's cost as a bar on the scale's lines, split by who it was for: the day picked (today at first) says its
+ * numbers over them, and with several people what each of them spent that day under them. A day pointed at says its
+ * numbers while it is (the wide screen); a click or a tap picks it.
+ */
 export function DaysChart({ view }: { view: UsageView }) {
   const many = view.daily.length > 10;
   const several = view.series.length > 1;
+  const [picked, setPicked] = useState<string | null>(null);
+  const [pointed, setPointed] = useState<string | null>(null);
+  const day = view.daily.find((d) => d.day === pointed) ?? view.daily.find((d) => d.day === picked) ?? view.daily[view.daily.length - 1];
   return (
     <div>
-      <div className={css.chartHead}>
-        {several && (
-          <div className={css.legend}>
-            {view.series.map((s, i) => <span key={s.key} className={css.legendItem}><span className={`${css.swatch} ${seriesClass(view.series, i)}`} />{s.name}</span>)}
-          </div>
-        )}
-        {view.max > 0 && <span className={css.top}>{t("web-main.usage.top", { cost: view.daily.find((d) => d.cost === view.max)?.costText ?? "" })}</span>}
-      </div>
-      <div className={css.plot} data-many={many || undefined}>
-        {view.max > 0 && <span className={css.ceiling} />}
-        {view.daily.map((d) => <Day key={d.day} day={d} view={view} />)}
+      {day && (
+        <div className={css.dayHead}>
+          <span className={css.dayName}>{day.today ? t("web-main.usage.today") : day.label}</span>
+          <span className={css.dayFigures}><span className={css.dayCost}>{day.costText}</span><span className={css.dayCalls}>{day.callsText}</span></span>
+        </div>
+      )}
+      <div className={css.plot}>
+        {view.top > 0 && view.ticks.map((tick) => (
+          <span key={tick.value} className={css.tick} style={{ bottom: `${(tick.value / view.top) * 100}%` }}><span className={css.tickLabel}>{tick.label}</span></span>
+        ))}
+        <div className={css.days} data-many={many || undefined} onPointerLeave={() => setPointed(null)}>
+          {view.daily.map((d) => (
+            <button key={d.day} type="button" className={css.day} aria-label={`${d.label} ${d.costText}`} aria-pressed={d.day === day?.day}
+              onClick={() => setPicked(d.day)} onPointerEnter={(e) => e.pointerType === "mouse" && setPointed(d.day)}>
+              <Bar day={d} view={view} many={many} />
+            </button>
+          ))}
+        </div>
       </div>
       <div className={css.labels} data-many={many || undefined}>
         {view.daily.map((d, i) => (
-          <span key={d.day} className={css.label} data-today={d.today || undefined}>
+          <span key={d.day} className={css.label} data-on={d.day === day?.day || undefined}>
             {!many || d.today || (view.daily.length - 1 - i) % 7 === 0 ? (d.today ? t("web-main.usage.today") : d.label) : ""}
           </span>
         ))}
       </div>
+      {several && day && (
+        <div className={css.dayRows}>
+          {view.series.map((s, i) => {
+            const part = day.parts[i] ?? 0;
+            const share = day.cost > 0 ? Math.min(1, Math.max(part > 0 ? 0.01 : 0, part / day.cost)) : 0;
+            return (
+              <div key={s.key} className={css.dayRow}>
+                <span className={`${css.dayDot} ${seriesClass(view.series, i)}`} />
+                <span className={css.dayWho}>{s.name}</span>
+                <span className={css.dayPart}>{day.partsText[i] ?? ""}</span>
+                <span className={css.dayShare}><span className={seriesClass(view.series, i)} style={{ width: `${share * 100}%` }} /></span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function Day({ day, view }: { day: UsageDay; view: UsageView }) {
-  const height = view.max > 0 ? (day.cost / view.max) * 100 : 0;
-  const tip = (
-    <span>
-      <span className={css.tipHead}>{day.today ? t("web-main.usage.today") : day.label} · {day.costText}</span>
-      <span>{day.callsText}</span>
-      {view.series.length > 1 && day.cost > 0 && view.series.map((s, i) => (day.parts[i] ?? 0) > 0 && (
-        <span key={s.key} className={css.tipRow}><span className={`${css.swatch} ${seriesClass(view.series, i)}`} />{s.name}<span className={css.tipValue}>{day.partsText[i]}</span></span>
-      ))}
-    </span>
-  );
+/** A day's bar, as high as its share of the scale's top: its people's parts one over another, the first at the foot, 1 apart, each round at its ends but the foot's. */
+function Bar({ day, view, many }: { day: UsageDay; view: UsageView; many: boolean }) {
+  if (view.top <= 0 || day.cost <= 0) return null;
   return (
-    <Tip label={tip} side="top">
-      <button type="button" className={css.day} aria-label={`${day.label} ${day.costText}`}>
-        <span className={css.bar} style={{ height: `${height}%` }}>
-          {day.parts.map((p, i) => p > 0 && <span key={i} className={`${css.part} ${seriesClass(view.series, i)}`} style={{ height: `${(p / day.cost) * 100}%` }} />)}
-        </span>
-      </button>
-    </Tip>
+    <span className={css.bar} data-many={many || undefined} style={{ height: `${Math.min(1, day.cost / view.top) * 100}%` }}>
+      {day.parts.map((p, i) => p > 0 && <span key={i} className={`${css.part} ${seriesClass(view.series, i)}`} style={{ flexGrow: p }} />)}
+    </span>
   );
 }
 

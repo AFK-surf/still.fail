@@ -2198,7 +2198,9 @@ export const SHAPES: Record<string, Shape> = {
     ["tiles", vec("UsageTile")],
     ["series", vec("UsageSeries")],
     ["daily", vec("UsageDay")],
-    ["max", "f64", { doc: "The most a day cost (what the bars are drawn against)." }],
+    ["max", "f64", { doc: "The most a day cost." }],
+    ["top", "f64", { doc: "What the bars are drawn against: a round number at or above `max` (views/usage.ts scale), 0 when nothing was spent." }],
+    ["ticks", vec("UsageTick"), { doc: "The scale's lines, the last at `top`." }],
     ["lists", vec("UsageList")],
     ["notes", vec("String")],
     ["basis", "String"],
@@ -2222,6 +2224,10 @@ export const SHAPES: Record<string, Shape> = {
     ["value", "String"],
     ["sub", "String"],
   ], { doc: "折合费用 $1,911 (按 API 价算).", keepNone: true }),
+  UsageTick: struct([
+    ["value", "f64"],
+    ["label", "String", { doc: "2k" }],
+  ], { doc: "A line of the scale the bars stand in, at `value` dollars.", keepNone: true }),
   UsageSeries: struct([
     ["key", "String"],
     ["name", "String"],

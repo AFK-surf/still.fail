@@ -21,9 +21,10 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -37,9 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.LocalApp
@@ -137,59 +141,91 @@ private fun Tiles(view: UsageView, openPrices: () -> Unit) {
     }
 }
 
-/** Each day's cost as a bar, split by who it was for; the day tapped (today at first) says its numbers under them. */
+/** The plot's height, a day's bar's width (with many days, as wide as its day), and the room at the right the scale says its lines in. */
+private val PLOT = 150.dp
+private val BAR = 16.dp
+private val SCALE_ROOM = 24.dp
+
+/**
+ * Each day's cost as a bar on the scale's lines, split by who it was for; the day tapped (today at first) says its
+ * numbers over them, and with several people what each of them spent that day under them.
+ */
 @Composable
 private fun Days(view: UsageView) {
     var picked by rememberSaveable(view.days) { mutableStateOf<String?>(null) }
     val day = view.daily.firstOrNull { it.day == picked } ?: view.daily.lastOrNull()
     val several = view.series.size > 1
     val many = view.daily.size > 10
-    if (several) Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        view.series.forEachIndexed { i, s ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.weight(1f, fill = false)) {
-                Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(seriesColor(view.series, i)))
-                Text(s.name, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val gap = if (many) 2.dp else 6.dp
+    if (day != null) {
+        Text(if (day.today) t("android-misc.usage.today") else day.label, fontSize = 12.sp, color = C.muted)
+        Row(Modifier.padding(top = 2.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(day.costText, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.alignByBaseline())
+            Text(day.callsText, fontSize = 13.sp, color = C.muted, modifier = Modifier.alignByBaseline())
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(PLOT)) {
+        // the scale's lines across, each said at the right just over it, where no bar is
+        if (view.top > 0) view.ticks.forEach { tick ->
+            val y = PLOT * (1f - (tick.value / view.top).toFloat())
+            Box(Modifier.fillMaxWidth().offset(y = y).height(1.dp).background(C.line))
+            Text(tick.label, fontSize = 10.sp, color = C.subtle, maxLines = 1, softWrap = false, modifier = Modifier.align(Alignment.TopEnd).offset(y = y).above(2.dp))
+        }
+        Row(Modifier.fillMaxSize().padding(end = SCALE_ROOM), horizontalArrangement = Arrangement.spacedBy(gap)) {
+            view.daily.forEach { d ->
+                Column(Modifier.weight(1f).fillMaxHeight().testTag("usage-day-${d.day}").clickable { picked = d.day }, verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Bar(d, view, many)
+                }
             }
         }
     }
-    Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(if (many) 3.dp else 6.dp)) {
-        view.daily.forEach { d ->
-            Column(
-                Modifier.weight(1f).fillMaxHeight().clip(Smooth(topStart = 4.dp, topEnd = 4.dp))
-                    .background(if (d.day == day?.day) C.chip else Color.Transparent).clickable { picked = d.day },
-                verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally,
-            ) { Bar(d, view) }
-        }
-    }
     Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(if (many) 3.dp else 6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp, end = SCALE_ROOM), horizontalArrangement = Arrangement.spacedBy(gap)) {
         view.daily.forEachIndexed { i, d ->
             val shown = !many || d.today || (view.daily.size - 1 - i) % 7 == 0
-            Text(if (!shown) "" else if (d.today) t("android-misc.usage.today") else d.label, fontSize = 11.sp, color = if (d.today) C.ink else C.subtle, maxLines = 1, softWrap = false,
-                textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            Text(if (!shown) "" else if (d.today) t("android-misc.usage.today") else d.label, fontSize = 11.sp, color = if (d == day) C.ink else C.subtle,
+                fontWeight = if (d == day) FontWeight.Medium else null, maxLines = 1, softWrap = false, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
         }
     }
-    if (day != null) Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text("${if (day.today) t("android-misc.usage.today") else day.label} · ${day.costText} · ${day.callsText}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink)
-        if (several && day.cost > 0) view.series.forEachIndexed { i, s ->
-            if ((day.parts.getOrNull(i) ?: 0.0) > 0) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(seriesColor(view.series, i)))
-                Text(s.name, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Text(day.partsText.getOrNull(i).orEmpty(), fontSize = 12.sp, color = C.muted)
+    // with several people: each of them (the rest too), what they spent that day and its share of the day's
+    if (several && day != null) Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        view.series.forEachIndexed { i, s ->
+            val part = day.parts.getOrNull(i) ?: 0.0
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(seriesColor(view.series, i)))
+                    Text(s.name, fontSize = 13.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(day.partsText.getOrNull(i).orEmpty(), fontSize = 13.sp, color = C.ink)
+                }
+                Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(4.dp).clip(Smooth(2.dp)).background(C.chip)) {
+                    if (part > 0 && day.cost > 0) Box(Modifier.fillMaxWidth((part / day.cost).toFloat().coerceIn(.01f, 1f)).fillMaxHeight().clip(Smooth(2.dp)).background(seriesColor(view.series, i)))
+                }
             }
         }
     }
 }
 
+/** Laid out `gap` over where it is put: its foot there. */
+private fun Modifier.above(gap: Dp) = layout { m, c ->
+    val p = m.measure(c)
+    layout(p.width, p.height) { p.place(0, -p.height - gap.roundToPx()) }
+}
+
+/**
+ * A day's bar, as high as its share of the scale's top: its people's parts one over another, the first at the foot,
+ * 1 apart, each round at its ends but the foot's, which stands square on the line.
+ */
 @Composable
-private fun Bar(d: UsageDay, view: UsageView) {
-    if (view.max <= 0 || d.cost <= 0) return
-    val share = (d.cost / view.max).toFloat().coerceIn(0f, 1f)
-    Column(Modifier.widthIn(max = 28.dp).fillMaxWidth().fillMaxHeight(share).clip(Smooth(topStart = 4.dp, topEnd = 4.dp)),
-        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.Bottom)) {
-        // Top first: the column is drawn from the top, the first person at the foot.
-        d.parts.withIndex().reversed().filter { it.value > 0 }.forEach { (i, p) ->
-            Box(Modifier.fillMaxWidth().weight((p / d.cost).toFloat().coerceAtLeast(.001f)).background(seriesColor(view.series, i)))
+private fun Bar(d: UsageDay, view: UsageView, many: Boolean) {
+    if (view.top <= 0 || d.cost <= 0) return
+    val share = (d.cost / view.top).toFloat().coerceIn(0f, 1f)
+    val r = if (many) 2.dp else 4.dp
+    val parts = d.parts.withIndex().filter { it.value > 0 }
+    val foot = parts.firstOrNull()?.index
+    Column(Modifier.then(if (many) Modifier.fillMaxWidth() else Modifier.width(BAR)).fillMaxHeight(share), verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.Bottom)) {
+        // top first: the column is laid out from the top, the first person at the foot
+        parts.reversed().forEach { (i, p) ->
+            Box(Modifier.fillMaxWidth().weight((p / d.cost).toFloat().coerceAtLeast(.001f)).clip(if (i == foot) Smooth(topStart = r, topEnd = r) else Smooth(r)).background(seriesColor(view.series, i)))
         }
     }
 }

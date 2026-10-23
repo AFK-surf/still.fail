@@ -5035,6 +5035,13 @@ export interface UsageSeries {
 	name: string;
 }
 
+/** A line of the scale the bars stand in, at `value` dollars. */
+export interface UsageTick {
+	value: number;
+	/** 2k */
+	label: string;
+}
+
 /** 折合费用 $1,911 (按 API 价算). */
 export interface UsageTile {
 	label: string;
@@ -5056,8 +5063,12 @@ export interface UsageView {
 	tiles: UsageTile[];
 	series: UsageSeries[];
 	daily: UsageDay[];
-	/** The most a day cost (what the bars are drawn against). */
+	/** The most a day cost. */
 	max: number;
+	/** What the bars are drawn against: a round number at or above `max` (views/usage.ts scale), 0 when nothing was spent. */
+	top: number;
+	/** The scale's lines, the last at `top`. */
+	ticks: UsageTick[];
 	lists: UsageList[];
 	notes: string[];
 	basis: string;

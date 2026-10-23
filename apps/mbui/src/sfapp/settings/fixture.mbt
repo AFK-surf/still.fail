@@ -690,6 +690,9 @@ fn fx_usage(days : Int) -> Json {
     ("series", [obj([("key", str("lin@example.com")), ("name", str("林"))]), obj([("key", str("ana@example.com")), ("name", str("Ana"))]), obj([("key", str("")), ("name", str("其他"))])]),
     ("daily", Json::array(daily)),
     ("max", Json::number(27.0)),
+    // (the scale the core works out for it: views/usage.ts scale)
+    ("top", Json::number(30.0)),
+    ("ticks", [obj([("value", Json::number(10.0)), ("label", str("10"))]), obj([("value", Json::number(20.0)), ("label", str("20"))]), obj([("value", Json::number(30.0)), ("label", str("30"))])]),
     (
       "lists",
       [
