@@ -39,6 +39,7 @@
 #include "core_api.h"
 #include "listen_api.h"
 #include "electron_sealed.h"
+#include "apple_collate.h"
 
 namespace jsi = facebook::jsi;
 
@@ -548,6 +549,11 @@ static void install(jsi::Runtime &rt) {
     std::string op = a[0].asString(rt).utf8(rt);
     std::string json = a[1].asString(rt).utf8(rt);
     if (tracing()) fprintf(stderr, "[core trace] sync %s %.*s\n", op.c_str(), (int)std::min<size_t>(json.size(), 120), json.c_str());
+    // the order people read names in: the system's (apple_collate.h), not the shell's
+    if (op == "text.collate") {
+      NSData *said = apple_collate_answer([NSData dataWithBytes:json.data() length:json.size()]);
+      return jsi::String::createFromUtf8(rt, static_cast<const uint8_t *>(said.bytes), said.length);
+    }
     size_t len = 0;
     uint8_t *out = sf_shell_call_sync(C.shell, op.c_str(), reinterpret_cast<const uint8_t *>(json.data()), json.size(), &len);
     jsi::String s = jsi::String::createFromUtf8(rt, out, len);
