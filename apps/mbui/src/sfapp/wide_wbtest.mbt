@@ -1125,3 +1125,17 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("运行方式") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
+
+///|
+test "wide: 用量 as the web's: what it counts beside its title, who spent it the list shown first, how it is counted at its foot" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Place("usage"))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
+  assert_true(t.find("整理发布清单") is None, msg="not the chats' list first: " + t.words().map(fn(w) { w.0 }).join("|"))
+  let (bx, by) = t.find_last("按对话").unwrap()
+  t.tap(bx, by)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("整理发布清单") is Some(_), msg="the chats' list picked")
+}
