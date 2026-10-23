@@ -5,6 +5,8 @@
 ///|
 // kept across runs: a table, never written
 let zh : Map[String, String] = {
+  "web-main.filter.connects.all": "全部连接",
+  "web-main.filter.connects.named": "筛选连接：{named}",
   "web-pages.notifications.sample.title": "示例对话",
   "web-pages.notifications.sample.wait": "待你决定 · 选 A 还是 B？",
   "web-pages.notifications.sample.failed": "出错 · agent 启动失败",
