@@ -77,7 +77,9 @@ export function adbLinksDemo(lent: boolean): DemoExtension {
 export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "agent" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed"
   /** Driving it with its clipboard and files (docs/remote-screens.md "Clipboard and files"): a copy made on it this browser
    *  would not write itself (offered), a file dragged over it, files dropped and on their way, and there. */
-  | "copied" | "dragging" | "sending" | "sent";
+  | "copied" | "dragging" | "sending" | "sent"
+  /** Driving a Windows station's desktop: its display's scale offered (300%, 150% recommended), set as chosen. */
+  | "windows";
 const TRANSFER: ViewStory[] = ["copied", "dragging", "sending", "sent"];
 /** Where the demo station puts a file dropped on its screen. */
 const DROP = { folder: "/Users/zhangsan/Downloads", reveal: true };
@@ -288,6 +290,7 @@ async function play(story: ViewStory, h264: boolean, params: Record<string, unkn
   // An agent drives it as it opens: the core opens it to look (no `control` asked), 接管 at hand.
   const agent = story === "agent";
   if (TRANSFER.includes(story)) Object.assign(state, { clipboard: ["text", "png"], drop: DROP });
+  if (story === "windows") state.scale = { percent: 300, recommended: 150, steps: [100, 125, 150, 175, 200, 225, 250, 300, 350] };
   if (agent) Object.assign(state, { control: false, others: [AGENT, "张三"], controllers: [AGENT], takeOver: true });
   const say = () => { state.line = lineOf(state, agent); emit({ state: { ...state, others: [...state.others], controllers: [...(state.controllers ?? [])] } }); };
   const name = String(params.view);
@@ -364,7 +367,14 @@ export function screensDemo(story: ViewStory = "live", list: ScreensView = SCREE
         }
         return null;
       }
-      if (name === "screen.input") { heard.push(p.input); return null; }
+      if (name === "screen.input") {
+        heard.push(p.input);
+        // The display's scale set: said back as the station says it.
+        const input = p.input as { t?: string; percent?: number } | undefined;
+        const v = views.get(String(p.view));
+        if (input?.t === "scale" && v?.state.scale && typeof input.percent === "number") { v.state.scale = { ...v.state.scale, percent: input.percent }; v.say(); }
+        return null;
+      }
       if (name === "screen.clipboard") { heard.push({ clipboard: p }); return null; }
       if (name === "drive.upload.part") {
         // Sent: each whole at once. On its way: the small one there, the large one a third of the way and no further.
