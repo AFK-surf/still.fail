@@ -284,8 +284,7 @@ globalStyle(`${oneWires} path`, {
   animation: `${flowing} 1.4s linear infinite`, "@media": { [STILL]: { animation: "none" } },
 });
 /** The computer's window (OneComputer.tsx): placed and stepped back by script; its shadow follows what of it shows. */
-/** The window and the devices flying to it, under one shadow (of what of them shows), so that nothing changes as the
- *  devices give way to the window's own rows. */
+/** The window under its shadow (of what of it shows: the devices flying, then the window growing out of them). */
 export const oneLift = style({ position: "absolute", inset: "0", zIndex: 1, pointerEvents: "none", filter: "drop-shadow(0 30px 40px rgba(0, 0, 0, .18))" });
 export const oneWindow = style({ position: "absolute", transformOrigin: "0 0", pointerEvents: "auto" });
 /** What of the window shows: its clip, set by script (the rows, widening to the window). */
@@ -299,9 +298,6 @@ export const onePhone = style({
   "@media": { [NARROW]: { display: "none" } },
 });
 export const onePhoneScreen = style({ overflow: "hidden", clipPath: "inset(0 round 44px)", background: vars.canvas });
-/** The devices while they fly: copies of the app's rows (OneComputer.tsx copyOf), placed by script. */
-export const oneCopies = style({ position: "absolute", inset: "0" });
-export const oneCopy = style({ position: "absolute", top: "0", left: "0", transformOrigin: "0 0" });
 
 // ---- The second idea: the distance (Distance.tsx) ----
 

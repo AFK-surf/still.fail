@@ -1,10 +1,9 @@
 // The first idea: your devices, joined into one computer. Scrolled through, the devices first stand apart, each joined
 // to every other; then they go into one window and are its list of stations; last, the same on the phone.
 //
-// Nothing fades in or out to cover a change: what moves is the same thing all the way. The devices are copies of the
-// app's own rows (its station list, the live demo), drawn as the rows are: they fly to where the rows stand, cover
-// them exactly, and only then give way to them, pixel for pixel the same. The window is not faded in: it grows out of
-// those rows (its clip, the rows' boxes widening to its own). The phone is a device from the start, the phone's app
+// Nothing fades in or out to cover a change, and nothing is swapped for a look-alike: the devices are the app's own
+// rows (its station list, the live demo), moved out of their places and back. The window is not faded in: it shows
+// only where they are, then grows out of them (its clip, their boxes widening to its own). The phone is a device from the start, the phone's app
 // running in it, small; it comes to the front at the end while the computer's window steps back, both seen all along.
 // On a narrow screen the window is the phone's app itself, and the devices its station cards.
 import { useEffect, useRef } from "react";
@@ -44,8 +43,9 @@ const rounded = ({ x, y, w, h }: Box, r: number) => {
  */
 function windowAt(room: { w: number; h: number }, narrow: boolean): Box & { k: number } {
   const w = narrow ? 380 : Math.min(1040, room.w - 48);
-  // A phone's tall enough that its four stations stand clear of its bottom bar (which would cover the last one's foot).
-  const h = narrow ? 840 : Math.min(600, room.h - 24);
+  // A phone's tall enough that its four stations stand clear of its bottom bar and its button (which would come over
+  // the last one as the rest of the app shows).
+  const h = narrow ? 920 : Math.min(600, room.h - 24);
   const k = narrow ? Math.min(1, (room.h - 16) / h, (room.w - 24) / w) : 1;
   return { x: (room.w - w * k) / 2, y: (room.h - h * k) / 2, w, h, k };
 }
@@ -61,7 +61,8 @@ function apart(room: { w: number; h: number }, narrow: boolean) {
   const s = Math.min(room.w / design.w, room.h / design.h, 1);
   const ox = (room.w - design.w * s) / 2, oy = Math.min((room.h - design.h * s) / 2, 24);
   const at = ([x, y]: number[]) => ({ x: ox + x! * s, y: oy + y! * s });
-  return { machines: machines.map(at), phone: at([150, 320]), scale: narrow ? 0.7 : 1 };
+  // The phone on the right, the side the window will have it on: it goes there without passing over the machines.
+  return { machines: machines.map(at), phone: at([960, 260]), scale: narrow ? 0.7 : 1 };
 }
 
 /** The app's row for a machine: its name where the app writes it, out to its link (the computer's list) or to its
@@ -85,32 +86,6 @@ function ground(el: HTMLElement): string {
   return "transparent";
 }
 
-/**
- * A copy of a row that draws as the row does anywhere: its ancestors copied without their contents and laid out as
- * nothing (display: contents), so that what styles it through them (the app's variables, its selectors) still does,
- * on the ground it stands on in the app.
- */
-function copyOf(row: HTMLElement, upTo: HTMLElement, width: number): HTMLElement {
-  let copy = row.cloneNode(true) as HTMLElement;
-  copy.removeAttribute("href");
-  copy.setAttribute("tabindex", "-1");
-  for (let at = row.parentElement; at && at !== upTo.parentElement; at = at.parentElement) {
-    const shell = at.cloneNode(false) as HTMLElement;
-    shell.removeAttribute("id");
-    if (at === upTo) shell.dataset.demo = "";
-    shell.style.display = "contents";
-    shell.appendChild(copy);
-    copy = shell;
-  }
-  const holder = document.createElement("div");
-  holder.className = css.oneCopy;
-  holder.style.background = ground(row);
-  holder.style.width = `${width}px`;
-  holder.setAttribute("aria-hidden", "true");
-  holder.appendChild(copy);
-  return holder;
-}
-
 export function OneComputer(props: DemoProps) {
   const scene = useRef<HTMLElement>(null);
   const room = useRef<HTMLDivElement>(null);
@@ -118,33 +93,52 @@ export function OneComputer(props: DemoProps) {
   const screen = useRef<HTMLDivElement>(null);
   const phone = useRef<HTMLDivElement>(null);
   const phoneScreen = useRef<HTMLDivElement>(null);
-  const copies = useRef<HTMLDivElement>(null);
   const lines = useRef<SVGGElement>(null);
   const words = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = scene.current, space = room.current, outer = win.current, inner = screen.current, hand = phone.current, wires = lines.current, layer = copies.current;
-    if (!el || !space || !outer || !inner || !hand || !wires || !layer) return;
+    const el = scene.current, space = room.current, outer = win.current, inner = screen.current, hand = phone.current, wires = lines.current;
+    if (!el || !space || !outer || !inner || !hand || !wires) return;
     const narrow = innerWidth <= 860;
     // The phone's own app beside the computer's (a wide screen only: on a narrow one the window is the phone).
     if (!narrow && el.offsetParent !== null && phoneScreen.current && props.mountDemoView) props.mountDemoView(phoneScreen.current);
 
-    // The rows, where the app has them in the window (its own box), and their copies; read again until the app is
-    // there, and when the room changes size.
-    let rows: { box: Box; copy: HTMLElement }[] = [];
-    // How large the window is drawn just now (its rows are read in its own size).
-    let drawn = 1;
+    // The rows themselves, where the app has them in the window (in its own size), what holds them in (the app's
+    // lists, cut at their edges), what they stand on and their corners; read again until the app is there, and when
+    // the room changes size.
+    interface Row { el: HTMLElement; box: Box; ground: string; radius: number; holders: HTMLElement[] }
+    let rows: Row[] = [];
+    // How large the window is drawn just now; whether the rows are out of their lists just now.
+    let drawn = 1, out = false;
+    // While they fly, the rows are let out of their lists and each laid on its own ground, and nothing else of the app
+    // is drawn (what lies where they pass, its header, its buttons over them); home, all put back as it was.
+    let app: HTMLElement | null = null;
+    const letOut = (on: boolean) => {
+      if (on === out) return;
+      out = on;
+      if (app) app.style.visibility = on ? "hidden" : "";
+      for (const r of rows) {
+        r.el.style.visibility = on ? "visible" : "";
+        for (const h of r.holders) Object.assign(h.style, { overflow: on ? "visible" : "", contain: on ? "none" : "", clipPath: on ? "none" : "" });
+        Object.assign(r.el.style, on
+          ? { position: "relative", zIndex: "1", background: r.ground, transformOrigin: "0 0" }
+          : { position: "", zIndex: "", background: "", transformOrigin: "", transform: "" });
+      }
+    };
     const read = () => {
-      const app = inner.querySelector<HTMLElement>("#demo");
-      const found = app ? NAMES.map((n) => rowOf(app, n, narrow)) : [];
+      letOut(false);
+      app = inner.querySelector<HTMLElement>("#demo");
+      const found = app ? NAMES.map((n) => rowOf(app!, n, narrow)) : [];
       if (!app || found.some((r) => !r)) return false;
       const at = inner.getBoundingClientRect();
-      for (const r of rows) r.copy.remove();
       rows = (found as HTMLElement[]).map((row) => {
         const b = row.getBoundingClientRect();
-        const copy = copyOf(row, app, b.width / drawn);
-        layer.appendChild(copy);
-        return { box: { x: (b.left - at.left) / drawn, y: (b.top - at.top) / drawn, w: b.width / drawn, h: b.height / drawn }, copy };
+        const holders: HTMLElement[] = [];
+        for (let h = row.parentElement; h && h !== inner; h = h.parentElement) holders.push(h);
+        return {
+          el: row, holders, ground: ground(row), radius: Number.parseFloat(getComputedStyle(row).borderTopLeftRadius) || 0,
+          box: { x: (b.left - at.left) / drawn, y: (b.top - at.top) / drawn, w: b.width / drawn, h: b.height / drawn },
+        };
       });
       return true;
     };
@@ -157,14 +151,15 @@ export function OneComputer(props: DemoProps) {
       const w = windowAt(size, narrow);
       Object.assign(outer.style, { left: `${w.x}px`, top: `${w.y}px`, width: `${w.w}px`, height: `${w.h}px` });
 
+      // Where the scene is: from its first step to its last, moving all the while it is scrolled (only a little at
+      // its start and end holds still), so that nothing stands still under a moving finger.
       const steps = narrow ? [0, 1] : [0, 1, 2];
       const span = el.offsetHeight - innerHeight;
-      const x = clamp(-el.getBoundingClientRect().top / Math.max(1, span)) * (steps.length - 1);
+      const x = clamp((clamp(-el.getBoundingClientRect().top / Math.max(1, span)) - 0.06) / 0.88) * (steps.length - 1);
       const i = Math.min(Math.floor(x), steps.length - 2);
-      const t = ease(clamp((x - i - 0.25) / 0.5));
-      // 0 → 1: the devices fly to their rows (fly), then the window grows out of the rows (grow): one motion, the
-      // growing taking over from the flying at the speed it had, never coming to rest between the two. 1 → 2: the
-      // computer's window steps back as the phone comes to the front (front).
+      const t = clamp(x - i);
+      // 0 → 1: the devices fly to their rows (fly), then the window grows out of the rows (grow), the one taking over
+      // from the other at the same pace. 1 → 2: the computer's window steps back as the phone comes to the front.
       const fly = i === 0 ? clamp(t / 0.55) : 1;
       const grow = i === 0 ? clamp((t - 0.55) / 0.45) : 1;
       const front = i === 1 ? t : 0;
@@ -176,23 +171,24 @@ export function OneComputer(props: DemoProps) {
       drawn = s;
       if (rows.length === 0 && !read()) { asked = requestAnimationFrame(draw); return; }
       const inRoom = (b: Box): Box => ({ x: w.x + tx + b.x * s, y: w.y + ty + b.y * s, w: b.w * s, h: b.h * s });
-      // Its clip: nothing before the devices are in place; then their rows, each widening to the whole window.
-      const whole = { x: 0, y: 0, w: w.w, h: w.h };
-      inner.style.clipPath = fly < 1
-        ? "path('M0 0')"
-        : `path('${rows.map((r) => rounded(mix(r.box, whole, grow), lerp(0, narrow ? 36 : 20, grow))).join(" ")}')`;
 
-      // The devices: from apart to their rows; once on them (and the rows shown under them), not drawn any more.
+      // The devices are the app's own rows: moved from apart to where they stand, the window shown only where they are
+      // (its clip, their boxes); home, the window grows out of them (their boxes widening to its own).
       const parts = apart(size, narrow);
-      const placed = rows.map((r, k) => {
-        const end = inRoom(r.box), from = parts.machines[k]!;
-        const scale = lerp(parts.scale, s, fly);
-        const start = { x: from.x - (r.box.w * parts.scale) / 2, y: from.y - (r.box.h * parts.scale) / 2 };
-        const at = { x: lerp(start.x, end.x, fly), y: lerp(start.y, end.y, fly) };
-        r.copy.style.transform = `translate(${at.x}px, ${at.y}px) scale(${scale})`;
-        r.copy.style.visibility = fly < 1 ? "visible" : "hidden";
-        return { x: at.x, y: at.y, w: r.box.w * scale, h: r.box.h * scale };
+      const local = rows.map((r, k) => {
+        const from = parts.machines[k]!;
+        const scale = lerp(parts.scale / s, 1, fly);
+        const start = { x: (from.x - (r.box.w * parts.scale) / 2 - w.x - tx) / s, y: (from.y - (r.box.h * parts.scale) / 2 - w.y - ty) / s };
+        const at = { x: lerp(start.x, r.box.x, fly), y: lerp(start.y, r.box.y, fly) };
+        if (fly < 1) r.el.style.transform = `translate(${at.x - r.box.x}px, ${at.y - r.box.y}px) scale(${scale})`;
+        return { x: at.x, y: at.y, w: r.box.w * scale, h: r.box.h * scale, r: r.radius * scale };
       });
+      letOut(fly < 1);
+      const whole = { x: 0, y: 0, w: w.w, h: w.h }, corner = narrow ? 36 : 20;
+      inner.style.clipPath = `path('${(fly < 1
+        ? local.map((b) => rounded(b, b.r))
+        : rows.map((r) => rounded(mix(r.box, whole, grow), lerp(r.radius, corner, grow)))).join(" ")}')`;
+      const placed = local.map(inRoom);
 
       // The phone (a wide screen's): small among the devices, then beside the window, then in front at full size.
       let phoneAt: Box | undefined;
@@ -214,11 +210,11 @@ export function OneComputer(props: DemoProps) {
       for (let p = 0; p < ends.length; p++) for (let q = p + 1; q < ends.length; q++) {
         paths[n++]?.setAttribute("d", `M${ends[p]!.x} ${ends[p]!.y} L${ends[q]!.x} ${ends[q]!.y}`);
       }
-      // What the steps say, one under another, moving up with the scene: the next one comes up as this one goes.
-      words.current?.style.setProperty("--at", `${i + t}`);
+      // What the steps say, one under another: the next comes up as this one goes, about the middle of the way.
+      words.current?.style.setProperty("--at", `${i + ease(clamp((t - 0.4) / 0.2))}`);
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
-    const resized = () => { for (const r of rows) r.copy.remove(); rows = []; ask(); };
+    const resized = () => { letOut(false); rows = []; ask(); };
     draw();
     addEventListener("scroll", ask, { passive: true });
     addEventListener("resize", resized);
@@ -226,7 +222,7 @@ export function OneComputer(props: DemoProps) {
       removeEventListener("scroll", ask);
       removeEventListener("resize", resized);
       cancelAnimationFrame(asked);
-      for (const r of rows) r.copy.remove();
+      letOut(false);
     };
   }, [props.mountDemoView]);
 
@@ -261,7 +257,6 @@ export function OneComputer(props: DemoProps) {
                   <Demo v="1" start="stations" className={css.oneDemo} {...(props.mountDemo ? { mount: props.mountDemo } : {})} {...(props.demo ? { frame: props.demo } : {})} />
                 </div>
               </div>
-              <div className={css.oneCopies} ref={copies} />
             </div>
             <div className={css.onePhone} ref={phone}>
               <div className={css.onePhoneScreen} ref={phoneScreen} style={{ width: PHONE.w, height: PHONE.h }} />
