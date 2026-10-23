@@ -3,7 +3,7 @@
 # Apple apps (src/host/apple_core.mm) and Android's (src/host/android_core.c on still.fail's prebuilt engine): builds the
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
 #   scripts/core.sh deps | shell [TARGET] | hermes | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
-#                   | smoke [build|run] | listen | exit | login-test | vectors | sizes | clean | all
+#                   | smoke [build|run] | listen | exit | sealed | login-test | vectors | sizes | clean | all
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -183,7 +183,7 @@ engine() {
     *) echo "engine: no target $target"; return 1 ;;
   esac
   local lib=$OUT/$target/libmbui_core.a
-  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt "$D/core.sh" ]; then
+  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt "$D/core.sh" ]; then
     return 0
   fi
   mkdir -p $OUT/$target
@@ -266,6 +266,13 @@ exit_test() {
   return $code
 }
 
+# What still.fail's desktop app (Electron's safeStorage) sealed, opened as the app built in its place opens it
+# (src/host/electron_sealed.h): core/sealed_test.m against files made as that app makes them. No core, no Keychain.
+sealed_test() {
+  clang -fobjc-arc -O2 -Wall -Isrc/host core/sealed_test.m -framework Foundation -o $OUT/sealed_test || return 1
+  $OUT/sealed_test
+}
+
 # The core demo's login command (scripts/mac.sh login, MBUI_AUTH_LOGIN: still.fail's sign-in on the host's
 # browser_login) as a station's remote login would run it, up to the person's browser step, against still.fail cloud: a fresh data directory, BROWSER a stand-in that keeps the
 # page's address. Nobody signs in: the browser that comes back is curl, with a state that is not the sign-in's.
@@ -337,6 +344,7 @@ case "${1:-all}" in
   apple) apple "${2:-aarch64-apple-darwin}" ;;
   listen) listen_test ;;
   exit) exit_test ;;
+  sealed) sealed_test ;;
   login-test) login_test ;;
   smoke)
     case "${2:-all}" in

@@ -38,6 +38,7 @@
 
 #include "core_api.h"
 #include "listen_api.h"
+#include "electron_sealed.h"
 
 namespace jsi = facebook::jsi;
 
@@ -246,6 +247,32 @@ static NSMutableDictionary *keychain_query(NSString *key) {
 }
 #pragma clang diagnostic pop
 
+// A key still.fail's desktop app (Electron's) kept, where this app is built in its place and so keeps its data where
+// that one did (src/sfcore/apple_engine.m: <that app's userData>/core): its file in userData/sealed, opened with the
+// password Electron's safeStorage keeps in the Keychain ("<app> Safe Storage", the userData's name being the app's),
+// which this app reads unasked as its designated requirement is that app's; asked about otherwise, it is not read
+// (kSecUseAuthenticationUIFail) and the key is none (electron_sealed.h). nil when there is none.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+static NSData *electron_sealed(NSString *key) {
+  NSString *user_data = [[secure_dir stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+  NSString *file = [[user_data stringByAppendingPathComponent:@"sealed"] stringByAppendingPathComponent:electron_sealed_name(key)];
+  NSData *blob = [NSData dataWithContentsOfFile:file];
+  if (!blob) return nil;
+  NSDictionary *q = @{
+    (id)kSecClass : (id)kSecClassGenericPassword,
+    (id)kSecAttrService : [user_data.lastPathComponent stringByAppendingString:@" Safe Storage"],
+    (id)kSecReturnData : @YES,
+    (id)kSecMatchLimit : (id)kSecMatchLimitOne,
+    (id)kSecUseAuthenticationUI : (id)kSecUseAuthenticationUIFail,
+  };
+  CFTypeRef out = NULL;
+  if (SecItemCopyMatching((__bridge CFDictionaryRef)q, &out) != errSecSuccess) return nil;
+  NSData *password = (__bridge_transfer NSData *)out;
+  return electron_sealed_open(blob, password);
+}
+#pragma clang diagnostic pop
+
 // One secure.* operation, done here and now: its answer's JSON and bytes, or why not (`*error`).
 static void secure_do(NSString *op, NSDictionary *a, NSData *bytes, NSData **json_out, NSData **bytes_out, NSString **error) {
   *json_out = nil;
@@ -291,7 +318,18 @@ static void secure_do(NSString *op, NSDictionary *a, NSData *bytes, NSData **jso
       *json_out = const_json("{}");
       *bytes_out = (__bridge_transfer NSData *)out;
     } else if (st == errSecItemNotFound) {
-      *json_out = const_json("{\"none\":true}");
+      // none here yet: still.fail's desktop app's, where this app is built in its place, sealed here again
+      NSData *old = electron_sealed(key);
+      if (old) {
+        NSMutableDictionary *add = keychain_query(key);
+        add[(id)kSecValueData] = old;
+        add[(id)kSecAttrAccessible] = (id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+        SecItemAdd((__bridge CFDictionaryRef)add, NULL);
+        *json_out = const_json("{}");
+        *bytes_out = old;
+      } else {
+        *json_out = const_json("{\"none\":true}");
+      }
     } else {
       *error = [NSString stringWithFormat:@"secure.get: Keychain %d", (int)st];
     }
