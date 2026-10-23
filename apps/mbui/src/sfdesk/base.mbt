@@ -63,6 +63,4 @@ fn dmax(a : Double, b : Double) -> Double {
   } else {
     b
   }
-fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
 }

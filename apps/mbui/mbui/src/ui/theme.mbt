@@ -82,8 +82,6 @@ pub(all) struct Theme {
   neutral : Int64
   /// what is chosen in a list
   selected : Int64
-  /// a list's row under the pointer, the way to what is open beside it (still.fail's --list)
-  list : Int64
   /// links
   link : Int64
   /// someone else at the controls (Color's Warn)
@@ -221,7 +219,6 @@ pub fn Theme::light() -> Theme {
     danger_bg: 0xFFF0EFFFL,
     neutral: 0xEDEFF1FFL,
     selected: 0xEBE7E1FFL,
-    list: 0xFBFAF9FFL,
     link: 0x1559C4FFL,
     warn: 0xD9962BFFL,
     lifted: 0xFFFFFFFFL,
@@ -269,7 +266,6 @@ pub fn Theme::dark() -> Theme {
     danger_bg: 0x442322FFL,
     neutral: 0x2A2B2FFFL,
     selected: 0x323338FFL,
-    list: 0x1C1D20FFL,
     sidebar: 0x19191BFFL,
     list: 0x1C1D20FFL,
     link: 0x81AEFAFFL,
@@ -375,7 +371,6 @@ pub fn Theme::ios_light() -> Theme {
     danger_bg: 0xFF3B301FL,
     neutral: 0xE5E5EAFFL,
     selected: 0xD1D1D6FFL,
-    list: 0xF2F2F7FFL,
     link: 0x0A84FFFFL,
     warn: 0xFF9F0AFFL,
     lifted: 0xFFFFFFFFL,
@@ -418,7 +413,6 @@ pub fn Theme::ios_dark() -> Theme {
     danger_bg: 0xFF453A33L,
     neutral: 0x3A3A3CFFL,
     selected: 0x3A3A3CFFL,
-    list: 0x1C1C1EFFL,
     link: 0x409CFFFFL,
     lifted: 0x636366FFL,
     // white at 5%
@@ -507,7 +501,6 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
     Neutral => self.neutral
     Hover => self.hover
     Selected => self.selected
-    ListGround => self.list
     Focus => self.focus
     Scrim => self.scrim
     Link => self.link
