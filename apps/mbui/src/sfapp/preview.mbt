@@ -12,8 +12,9 @@
 // (FileViewers.frames). Its bytes stream (the Android app reads it whole first): a finger along its timeline puts its
 // player in a mode of seeks one after another (NativeView::scrub), and the host keeps what it read.
 //
-// Not yet, against the Android app: pinching on iOS (no second finger told there yet), the frosted glass (the bars
-// are a solid tint: a native view under them cannot be blurred, and the canvas's blur is another slice's).
+// Not yet, against the Android app: pinching on iOS (no second finger told there yet). The bars are frosted glass over
+// what the app draws (a picture, a document); over a native view (a video, a page) a solid tint, as it cannot be
+// blurred.
 
 ///|
 /// The words this page adds (client/i18n/catalog/zh android-chat.json, common.json).
@@ -2752,6 +2753,30 @@ fn solid_glass() -> Int64 {
 }
 
 ///|
+/// Haze's blur of 24 dp and 20 dp as CSS's (glass.mbt: (px - 0.5) / 0.57735 dp).
+let dark_glass_blur : Double = 24.0 * 0.57735 + 0.5
+
+///|
+let page_glass_blur : Double = 20.0 * 0.57735 + 0.5
+
+///|
+/// The frosted glass over a picture (FilePreview.kt darkGlass): 0x121214 at 62% over its blur; with transparency
+/// reduced, that tint over black.
+fn dark_glass() -> @ui.Glass {
+  let tint = @sf.alpha(0x121214FFL, 0.62)
+  @ui.Glass::frosted(blur=dark_glass_blur, tint~, solid=@sf.over(0x000000FFL, tint))
+}
+
+///|
+/// The same over a document (FilePreview.kt pageGlass): the surface at 72% (dark, surface2's) over its blur, over the
+/// viewer's canvas.
+fn page_glass() -> @ui.Glass {
+  let t = @sf.theme()
+  let tint = @sf.alpha(if t.dark { t.p.card2 } else { t.p.card }, 0.72)
+  @ui.Glass::frosted(blur=page_glass_blur, tint~, solid=@sf.over(t.p.canvas, tint))
+}
+
+///|
 /// A button on the viewer's bars (ImageMarks.kt PictureButton): 32 square, its corner 12, an 18 icon; quieter when
 /// it cannot be pressed; `held` (the tool in use) on white at 16%, its icon near white. True on the frame after it was
 /// tapped.
@@ -3090,7 +3115,7 @@ fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool) ->
 
 ///|
 /// The bar at the top (FilePreview.kt): the file's name, its own tools (an image's zoom, a document's 预览 / 源码),
-/// download and close; frosted in the Android app (a solid tint here), fading when left alone.
+/// download and close; frosted glass (a solid tint over a native view), fading when left alone.
 fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = self
   let t = @sf.theme()
@@ -3099,6 +3124,19 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
   let tint = if dark { dark_muted } else { t.p.muted }
   let kind = v.shown_kind()
   ignore(src)
+  // over what the app draws, frosted; over a native view (a video, a page), which cannot be blurred, a solid tint
+  let native = match kind {
+    Some(KVideo) => true
+    Some(KHtml) => !v.source
+    _ => false
+  }
+  let glass : @ui.Glass? = if native {
+    None
+  } else if dark {
+    Some(dark_glass())
+  } else {
+    Some(page_glass())
+  }
   // under the status bar, 8 at least (FilePreview.kt: statusBars' top, coerceAtLeast(8))
   c.box(w=Fill(1.0), pt=dmax(status_top(), 8.0), align=ACenter, opacity=if on { shown } else { 0.0 }, fn() {
     c.box(
@@ -3111,13 +3149,16 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
       gap=4.0,
       align=ACenter,
       radius=picture_bar_corner,
-      bg=if dark {
-        solid_glass()
+      bg?=if glass is Some(_) {
+        None
+      } else if dark {
+        Some(solid_glass())
       } else if t.dark {
-        @sf.alpha(t.p.card, 0.92)
+        Some(@sf.alpha(t.p.card, 0.92))
       } else {
-        0xFFFFFFEBL
+        Some(0xFFFFFFEBL)
       },
+      glass?=glass,
       shadow=if dark { 0.0 } else { @sf.viewer_bar_raised.sigma },
       shadow_y=@sf.viewer_bar_raised.dy,
       shadow_color=@sf.viewer_bar_raised.color,
