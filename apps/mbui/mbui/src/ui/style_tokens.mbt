@@ -432,6 +432,8 @@ pub(all) enum Color {
   /// a sidebar's ground beside the page (still.fail's Sidebar.css.ts vars.sidebar): what stands in it is cut out of it
   /// (a row's people's pictures, RowPicture.css.ts --mark-around)
   Sidebar
+  /// a field's edge pointed at or written in, a column's edge in hand (still.fail's --field-hover)
+  FieldHover
   A(Color, Opacity)
   Over(Color, Color)
   Exact(Int64)

@@ -126,6 +126,7 @@ pub fn icon_button(
   ink? : Int64,
   quiet? : Int64,
   disabled? : Bool = false,
+  label? : String = "",
 ) -> Bool {
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
@@ -138,7 +139,7 @@ pub fn icon_button(
     // the page's hover, as a tint of the ink it sits with
     alpha(ink, 0.065 * h)
   }
-  c.box(
+  let b = c.box(
     w=Px(size),
     h=Px(size),
     align=ACenter,
@@ -151,7 +152,11 @@ pub fn icon_button(
       draw_icon(c, icon, icon_size, if on || h > 0.5 { ink } else { quiet })
     },
   )
-  |> ignore
+  // named (IconButton's label): what a screen reader calls it, and its tip
+  if label != "" {
+    c.semantics(b, Button, id~, label~, disabled~)
+    tip(c, "ib/" + key + icon, id, label)
+  }
   !disabled && c.clicked(id)
 }
 
@@ -887,3 +892,970 @@ let about_icon : Double = 14.0
 ///|
 // kept across runs: a value (no field of it changes)
 let about_box : @ui.Style = @ui.style(w=S5, h=S5, radius=Full, align=ACenter, justify=JCenter)
+
+// ---------------------------------------------------------------------------
+// Switches, sections, pills, dots, the empty and the first one (parts.tsx Switch, SwitchRow, Section, Pill,
+// StatusDot, Empty, FirstOne; parts.css.ts, own.css.ts)
+
+///|
+/// A switch's look (parts.css.ts switch_, switchThumb): 36 by 22, its thumb 18 white 2 in with a faint shadow, the
+/// strong line's grey off, the accent on, the thumb sliding between; `small` (switchSmall: in a line of small text) 26
+/// by 16, its thumb 12.
+fn switch_look_for(small : Bool) -> (@ui.Ctx, @kit.SwitchState) -> Unit {
+  let t = theme()
+  let (w, h) = if small { (switch_small_w, switch_small_h) } else { (switch_w, switch_h) }
+  @kit.switch_look_of(w~, h~, inset=switch_in, on_color=t.p.accent, off_color=t.p.line_strong, knob=0xFFFFFFFFL)
+}
+
+///|
+/// A switch (parts.tsx Switch: mbui's, @kit.switch: a tap, Space or Enter turn it), `on` or not, named `label` for a
+/// screen reader, in the web's look (switch_look_for). `busy`: what it set is on its way, a small ring before it, and it
+/// is not turned again meanwhile. What it is now (the other, turned this frame).
+pub fn switch(
+  c : @ui.Ctx,
+  key : String,
+  on : Bool,
+  label? : String = "",
+  disabled? : Bool = false,
+  small? : Bool = false,
+  busy? : Bool = false,
+) -> Bool {
+  if busy {
+    spinner(c, size=if small { spinner_inline } else { spinner_size }) |> ignore
+  }
+  // its own height wherever it is (in a row, in its middle: switchSmall's alignSelf), not stretched
+  let mut now = on
+  c.box(style=switch_at, fn() {
+    now = @kit.switch(c, key, on, label~, disabled=disabled || busy, look=switch_look_for(small)).value
+  })
+  |> ignore
+  now
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let switch_at : @ui.Style = @ui.style(justify=JCenter, align=AStart)
+
+///|
+/// A switch drawn in a row that takes the tap itself (the row turns it): its look alone, its thumb sliding as a
+/// switch's does (`@kit.switch_knob` by `key`).
+pub fn switch_look(c : @ui.Ctx, key : String, on : Bool, small? : Bool = false) -> Unit {
+  let (w, h) = if small { (switch_small_w, switch_small_h) } else { (switch_w, switch_h) }
+  switch_look_for(small)(c, {
+    on,
+    t: @kit.switch_knob(c, key, on),
+    hovered: false,
+    pressed: false,
+    focus_shown: false,
+    disabled: false,
+    rect: (0.0, 0.0, w, h),
+  })
+}
+
+///|
+/// A setting's row (parts.tsx SwitchRow, switchRow): what it is on the left, `note` quieter under it, its switch on the
+/// right, 16 apart; its words press the switch too. What it is now.
+pub fn switch_row(
+  c : @ui.Ctx,
+  key : String,
+  title : String,
+  on : Bool,
+  note? : String = "",
+  disabled? : Bool = false,
+  busy? : Bool = false,
+) -> Bool {
+  let id = c.id(key + "/words")
+  let mut now = on
+  c.box(style=switch_row_box, fn() {
+    c.box(style=switch_row_words, id=if disabled || busy { 0 } else { id }, fn() {
+      c.text(title, style=switch_row_title) |> ignore
+      if note != "" {
+        c.text(note, style=switch_row_note) |> ignore
+      }
+    })
+    |> ignore
+    now = switch(c, key, on, label=title, disabled~, busy~)
+  })
+  |> ignore
+  if c.clicked(id) {
+    !on
+  } else {
+    now
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let switch_row_box : @ui.Style = @ui.style(row=true, w=Full, align=ACenter, gap=S4)
+
+///|
+// kept across runs: a value (no field of it changes)
+let switch_row_words : @ui.Style = @ui.style(w=Grow(1.0), gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let switch_row_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let switch_row_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+
+///|
+/// A titled block of a page (parts.tsx Section, page.css.ts section, parts.css.ts sectionHead): its title (14 on 22,
+/// 600) and `note` under it (12, muted, 3 under, 52em at most), its `actions` at the head's end on the title's centre
+/// line, 10 over what it holds; 28 under it all.
+pub fn section(
+  c : @ui.Ctx,
+  title : String,
+  body : () -> Unit,
+  note? : String = "",
+  actions? : () -> Unit,
+) -> Unit {
+  c.box(style=section_box, fn() {
+    c.box(style=section_head, fn() {
+      c.box(style=section_words, fn() {
+        c.text(title, style=section_title) |> ignore
+        if note != "" {
+          c.box(style=section_note_box, pt=section_note_gap, fn() { c.text(note, style=section_note) |> ignore })
+          |> ignore
+        }
+      })
+      |> ignore
+      match actions {
+        Some(f) => c.box(style=section_actions, f) |> ignore
+        None => ()
+      }
+    })
+    |> ignore
+    body()
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_box : @ui.Style = @ui.style(w=Full, mb=S7)
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_head : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=ACenter, gap=S3, mb=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_words : @ui.Style = @ui.style(w=Grow(1.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_title : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Semibold, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_note_box : @ui.Style = @ui.style(max_w=section_note_most)
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_actions : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+
+///|
+/// A pill's tone (parts.tsx Tone): its ground and its words' ink.
+pub(all) enum PillTone {
+  Neutral
+  Green
+  Blue
+  Amber
+  Red
+  Accented
+} derive(Eq)
+
+///|
+/// A pill (parts.tsx Pill, parts.css.ts pill): words 12, 500, on one line, 22 high, 9 in, round; on the quiet grey in
+/// the muted ink, or in a tone (its pale ground, its ink).
+pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral) -> Unit {
+  let p = theme().p
+  let (ground, ink) = match tone {
+    Neutral => (p.neutral_bg, p.muted)
+    Green => (p.green_bg, p.green_ink)
+    Blue => (p.blue_bg, p.blue)
+    Amber => (p.amber_bg, p.warn_ink)
+    Red => (p.red_bg, p.red)
+    Accented => (p.accent_bg, p.accent_text)
+  }
+  c.box(style=pill_box, padx=pill_in, bg=ground, fn() { c.text(words, style=pill_words, color=ink) |> ignore })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), radius=Full, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pill_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, wrap=false)
+
+///|
+/// How something stands, at a glance (parts.tsx StatusDot, parts.css.ts statusDot): a dot 7 round, online the online
+/// green, busy amber, error red, else (offline) a ring 1.5 in the muted ink. `state`: "online", "busy", "error", or
+/// anything else for offline (the web's Presence).
+pub fn status_dot(c : @ui.Ctx, state : String) -> Unit {
+  let p = theme().p
+  let (ground, ring) = match state {
+    "online" => (p.online, no_ground)
+    "busy" => (p.warn_ink, no_ground)
+    "error" => (p.red, no_ground)
+    _ => (no_ground, p.muted)
+  }
+  c.box(style=status_dot_box, bg=ground, border=if ring == no_ground { no_ring } else { status_ring }, border_color=ring, fn() {  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let status_dot_box : @ui.Style = @ui.style(w=dot_size, h=dot_size, radius=Full)
+
+///|
+/// Nothing here (parts.tsx Empty, parts.css.ts empty): what `body` says in the middle of the room it has, 40 in, its
+/// parts 6 apart, in the muted ink (its words the page's, centred).
+pub fn empty(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.box(style=empty_box, body) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let empty_box : @ui.Style = @ui.style(w=Full, h=Grow(1.0), p=S10, gap=S1_5, align=ACenter, justify=JCenter)
+
+///|
+/// The first one to make (parts.tsx FirstOne, own.css.ts firstOne): a list with nothing in it yet, or a page whose first
+/// step is still to take. Its scene (`art`), what that first one is (16, 600, 12 under the scene), a line about it (13,
+/// muted, 34em at most), and the one thing to do (12 under it, its buttons 8 apart, centred); 480 at most, in the
+/// middle, 24 over and under.
+pub fn first_one(
+  c : @ui.Ctx,
+  title : String,
+  actions : () -> Unit,
+  art? : () -> Unit,
+  lead? : String = "",
+) -> Unit {
+  c.box(style=first_room, fn() {
+    c.box(style=first_box, fn() {
+      match art {
+        Some(f) => f()
+        None => ()
+      }
+      c.box(style=first_title_at, fn() { c.text(title, style=first_title) |> ignore }) |> ignore
+      if lead != "" {
+        c.box(style=first_lead_box, fn() { c.text(lead, style=first_lead) |> ignore }) |> ignore
+      }
+      c.box(style=first_actions, actions) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let first_room : @ui.Style = @ui.style(w=Full, align=ACenter, py=S6)
+
+///|
+// kept across runs: a value (no field of it changes)
+let first_box : @ui.Style = @ui.style(w=Full, max_w=first_most, pt=S2, pb=S6, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let first_title_at : @ui.Style = @ui.style(pt=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let first_title : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, center=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let first_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, center=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let first_lead_box : @ui.Style = @ui.style(max_w=first_lead_most, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let first_actions : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter, justify=JCenter, pt=S3)
+
+// ---------------------------------------------------------------------------
+// Dialogs (parts.tsx Dialog; parts.css.ts dialog, dialogHead, dialogLead, dialogBody, dialogFoot, overlay)
+
+///|
+/// A dialog (parts.tsx Dialog: mbui's, @kit.dialog: the page under it dimmed and taking no press, the focus kept in
+/// it, Escape, the back and a press outside closing it) in the web's look: `w` wide (520; `wide` 640), 32 short of the
+/// window at most; its corner 42 (its padding 24 and a pill's half height, so a pill in its corner and the close
+/// button follow its edge: DIALOG_PAD), a small panel's ground and line, a deep shadow. Its title (22, 600) 25 under
+/// its top beside the close button (round, 32: `close_label`, none when ""), `description` 6 under it (13, muted),
+/// what `body` holds 18 under that (its parts 16 apart), and `footer`'s buttons at its end 24 under it, 8 apart.
+/// Whether it is open now (closed by its close button too).
+pub fn dialog(
+  c : @ui.Ctx,
+  key : String,
+  open : Bool,
+  title : String,
+  body : () -> Unit,
+  description? : String = "",
+  footer? : () -> Unit,
+  wide? : Bool = false,
+  w? : Double,
+  close_label? : String = "",
+) -> Bool {
+  let closed = Ref(false)
+  let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
+  let d = @kit.dialog(
+    c,
+    key,
+    open,
+    title,
+    description~,
+    w=dmin(w, c.width - dialog_margin),
+    close_label="",
+    look=fn(c, s, inner) {
+      c.box(
+        style=dialog_box,
+        w=Px(s.w),
+        radius=dialog_r,
+        bg=panel_ground(),
+        shadow=dialog_shadow,
+        shadow_y=dialog_shadow_y,
+        shadow_color=theme().p.shadow,
+        fn() {
+        c.box(style=dialog_head, fn() {
+          c.text(s.title, style=dialog_title) |> ignore
+          if close_label != "" &&
+            icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
+            closed.val = true
+          }
+        })
+        |> ignore
+        if s.description != "" {
+          c.box(style=dialog_lead_at, fn() { c.text(s.description, style=dialog_lead) |> ignore }) |> ignore
+        }
+        c.box(style=dialog_body, inner) |> ignore
+        match footer {
+          Some(f) => c.box(style=dialog_foot, f) |> ignore
+          None => c.box(style=dialog_end, fn() {  }) |> ignore
+        }
+        },
+      )
+      |> ignore
+    },
+    body,
+  )
+  d.value && !closed.val
+}
+
+///|
+/// A dialog's frame: 24 in at its sides and over its title, a line round it (its corner, ground and shadow: dialog_r,
+/// panel_ground, dialog_shadow).
+// kept across runs: a value (no field of it changes)
+let dialog_box : @ui.Style = @ui.style(px=S6, pt=S6, border=B1, border_color=Line)
+
+///|
+/// Its title's row (dialogHead: 25 under the top, 26 from the right): the close button at its end, its middle on the
+/// title's.
+// kept across runs: a value (no field of it changes)
+let dialog_head : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=ACenter, gap=S3, min_h=S8, pt=SPx, pr=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_lead_at : @ui.Style = @ui.style(w=Full, pt=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted)
+
+///|
+/// What it holds: 18 under the title (or its lead), its parts 16 apart.
+// kept across runs: a value (no field of it changes)
+let dialog_body : @ui.Style = @ui.style(w=Full, pt=S4_5, gap=S4)
+
+///|
+/// Its buttons: at its end, 8 apart, 24 under what it holds and over its foot.
+// kept across runs: a value (no field of it changes)
+let dialog_foot : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, align=ACenter, gap=S2, py=S6)
+
+///|
+/// With none, 24 under what it holds.
+// kept across runs: a value (no field of it changes)
+let dialog_end : @ui.Style = @ui.style(h=S6)
+
+// ---------------------------------------------------------------------------
+// Fields, selects, choices (parts.tsx Field, Select, Choices; parts.css.ts field, select, choice, radio)
+
+///|
+/// A field (parts.tsx Field, parts.css.ts field): its `label` (13, 500) with `aside` at the head's end, what `body`
+/// holds (the input), and under it what is wrong (`error`, 12 red) or else a `hint` (12, muted); 6 apart.
+pub fn field(
+  c : @ui.Ctx,
+  label : String,
+  body : () -> Unit,
+  hint? : String = "",
+  error? : String = "",
+  aside? : () -> Unit,
+) -> Unit {
+  c.box(style=field_box, fn() {
+    c.box(style=field_top, fn() {
+      c.text(label, style=field_label) |> ignore
+      match aside {
+        Some(f) => f()
+        None => ()
+      }
+    })
+    |> ignore
+    body()
+    if error != "" {
+      c.text(error, style=field_error) |> ignore
+    } else if hint != "" {
+      c.text(hint, style=field_hint) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let field_box : @ui.Style = @ui.style(w=Full, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let field_top : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=AEnd, gap=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let field_label : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let field_error : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Danger)
+
+///|
+// kept across runs: a value (no field of it changes)
+let field_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+
+///|
+/// A dropdown of choices (parts.tsx Select: mbui's, @kit.select: its options under it, the arrows, letters and Enter
+/// as a select's): a pill as a one-line field is (parts.css.ts select: 36 high at least, 16 in, a line of the strong
+/// grey, the field's hover grey under the pointer, on the canvas, its words 14 cut short, the placeholder subtle), a
+/// chevron at its end; its options a small panel's rows, the chosen checked at their end, `hints` quieter before it.
+/// `options`: each value and its words. What is chosen now.
+pub fn select(
+  c : @ui.Ctx,
+  key : String,
+  value : String,
+  options : Array[(String, String)],
+  placeholder? : String = "",
+  label? : String = "",
+  disabled? : Bool = false,
+  w? : Double = select_w,
+  hints? : Map[String, String] = {},
+) -> String {
+  let t = theme()
+  let items = options.map(fn(o) { @kit.item(o.0, label=o.1) })
+  @kit.select(c, key, value, items, placeholder~, w~, label~, disabled~, look=fn(c, s) {
+      c.box(style=if s.hovered || s.open || s.focus_shown { select_box_hot } else { select_box }, disabled=s.disabled, fn() {
+          c.text(s.text, style=if s.placeholder { select_placeholder } else { select_words }) |> ignore
+          icon(c, "chevron-down", size=select_chevron, color=t.p.muted) |> ignore
+      })
+      |> ignore
+    }, item_look=fn(c, s) {
+      c.box(
+        style=select_item,
+        min_h=menu_row_min,
+        radius=@ui.concentric(r_menu, panel_pad),
+        bg=if s.hot { t.p.hover } else { no_ground },
+        fn() {
+        c.text(s.entry.label, style=menu_words) |> ignore
+        c.spacer()
+        match hints.get(s.entry.value) {
+          Some(h) => c.text(h, style=select_hint) |> ignore
+          None => ()
+        }
+        c.box(style=menu_check, fn() {
+          if s.entry.kind is Choice(true) {
+            icon(c, "check", size=select_chevron, color=t.p.text) |> ignore
+          }
+        })
+        |> ignore
+        },
+      )
+      |> ignore
+    }).value
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let select_box : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  min_h=S9,
+  px=S4,
+  py=S1_5,
+  gap=S2,
+  radius=Full,
+  bg=Surface,
+  border=B1,
+  border_color=Border,
+  align=ACenter,
+  justify=JBetween,
+  disabled=@ui.patch(opacity=O55),
+)
+
+///|
+/// Pointed at, open or focused: the field's hover grey round it.
+// kept across runs: a value (no field of it changes)
+let select_box_hot : @ui.Style = select_box.then(@ui.style(border_color=FieldHover))
+
+///|
+// kept across runs: a value (no field of it changes)
+let select_words : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, wrap=false, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let select_placeholder : @ui.TextStyle = select_words.then(@ui.text_style(color=Subtle))
+
+///|
+/// An option's row (parts.css.ts selectItem: a menu's item, its check at its end 10 in).
+// kept across runs: a value (no field of it changes)
+let select_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let select_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+
+///|
+/// Exclusive options that need a sentence each (parts.tsx Choices: mbui's radio group, @kit.radio_group): bordered
+/// cards 8 apart, each its title (13, 600) and `description` (12, muted) beside a radio mark at its end; the chosen one
+/// edged in the ink. `options`: each value, title and description. What is chosen now.
+pub fn choices(
+  c : @ui.Ctx,
+  key : String,
+  value : String,
+  options : Array[(String, String, String)],
+  label? : String = "",
+) -> String {
+  let t = theme()
+  let items = options.map(fn(o) { @kit.item(o.0, label=o.1) })
+  @kit.radio_group(c, key, items, value, label~, gap=choice_gap, look=fn(c, s) {
+      c.box(style=if s.on { choice_card_on } else if s.hovered { choice_card_hot } else { choice_card }, disabled=s.disabled, fn() {
+          c.box(style=choice_words, fn() {
+            c.text(s.label, style=choice_title) |> ignore
+            let note = options.search_by(fn(o) { o.1 == s.label }).map(fn(i) { options[i].2 }).unwrap_or("")
+            if note != "" {
+              c.text(note, style=choice_note) |> ignore
+            }
+          })
+          |> ignore
+          c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
+            if s.on {
+              c.box(style=radio_dot, fn() {  }) |> ignore
+            }
+          })
+          |> ignore
+      })
+      |> ignore
+    }).value
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_card : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  px=S3_5,
+  py=S3,
+  gap=S3,
+  radius=Xl1_5,
+  bg=Surface,
+  border=B1,
+  border_color=Border,
+  align=ACenter,
+  disabled=@ui.patch(opacity=O55),
+)
+
+///|
+/// Pointed at: the field's hover grey round it; chosen: edged twice in the ink (its line and a ring of 1).
+// kept across runs: a value (no field of it changes)
+let choice_card_hot : @ui.Style = choice_card.then(@ui.style(border_color=FieldHover))
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_card_on : @ui.Style = choice_card.then(@ui.style(border=B2, border_color=Fg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_words : @ui.Style = @ui.style(w=Grow(1.0), gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+
+///|
+/// The radio mark: 18 round, edged 1.5 (the strong grey; the ink chosen), its dot 8 in the ink.
+// kept across runs: a value (no field of it changes)
+let radio_mark : @ui.Style = @ui.style(w=S4_5, h=S4_5, radius=Full, border=B1, border_color=Border, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let radio_mark_on : @ui.Style = radio_mark.then(@ui.style(border_color=Fg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let radio_dot : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Fg)
+
+// ---------------------------------------------------------------------------
+// Asking before (parts.tsx Confirm; parts.css.ts dialogAlert, dialogError)
+
+///|
+/// What a confirm reports: whether it is open now, and whether its action was pressed this frame.
+pub(all) struct Confirmed {
+  open : Bool
+  confirmed : Bool
+}
+
+///|
+/// Asks before something that cannot be undone (parts.tsx Confirm: an alert dialog, a press outside does not close
+/// it): 420 wide, 28 over its title, 24 in; its title (22, 600) and `description` (13, muted), what went wrong (`error`:
+/// 13 red, 12 over the buttons, it stays open), then `cancel` (its words alone) and `action` (solid red; a ring while
+/// `busy`) at its end, 16 under, 8 apart. Escape, the back and `cancel` close it.
+pub fn confirm(
+  c : @ui.Ctx,
+  key : String,
+  open : Bool,
+  title : String,
+  description : String,
+  action : String,
+  cancel~ : String,
+  busy? : Bool = false,
+  error? : String = "",
+) -> Confirmed {
+  let mut confirmed = false
+  let mut closed = false
+  let d = @kit.dialog(
+    c,
+    key,
+    open,
+    title,
+    description~,
+    w=dmin(confirm_w, c.width - dialog_margin),
+    outside=false,
+    close_label="",
+    look=fn(c, s, inner) {
+      c.box(
+        style=confirm_box,
+        w=Px(s.w),
+        radius=dialog_r,
+        bg=panel_ground(),
+        shadow=dialog_shadow,
+        shadow_y=dialog_shadow_y,
+        shadow_color=theme().p.shadow,
+        fn() {
+          c.text(s.title, style=dialog_title) |> ignore
+          c.text(s.description, style=dialog_lead) |> ignore
+          inner()
+        },
+      )
+      |> ignore
+    },
+    fn() {
+      if error != "" {
+        c.box(style=confirm_error_at, fn() { c.text(error, style=confirm_error) |> ignore }) |> ignore
+      }
+      c.box(style=confirm_foot, fn() {
+        if button(c, cancel, key=key + "/cancel", tone=Ghost) {
+          closed = true
+        }
+        if button(c, action, key=key + "/action", tone=DangerSolid, busy~) {
+          confirmed = true
+        }
+      })
+      |> ignore
+    },
+  )
+  { open: d.value && !closed, confirmed }
+}
+
+///|
+/// Its frame (dialogAlert: 28 over, 24 in, 8 between its title, its lead and what follows).
+// kept across runs: a value (no field of it changes)
+let confirm_box : @ui.Style = @ui.style(px=S6, pt=S7, pb=S6, gap=S2, border=B1, border_color=Line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let confirm_error_at : @ui.Style = @ui.style(w=Full, pt=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let confirm_error : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger)
+
+///|
+// kept across runs: a value (no field of it changes)
+let confirm_foot : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, align=ACenter, gap=S2, pt=S2)
+
+// ---------------------------------------------------------------------------
+// A small panel's parts (parts.tsx PanelHead, PanelGroup, PanelNote, PanelFoot, PanelText, PanelButton,
+// PanelIconButton; parts.css.ts: inside a small panel, @sf.panel, its rows @sf.menu_item(panel=true))
+
+///|
+/// A small panel's head (PanelHead): its title (13, 600) and `note` under it (12, muted), in by a row's padding, 6 over
+/// and 4 under.
+pub fn panel_head(c : @ui.Ctx, title : String, note? : String = "") -> Unit {
+  c.box(style=panel_head_box, fn() {
+    c.text(title, style=panel_title) |> ignore
+    if note != "" {
+      c.text(note, style=panel_note_words) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A group of a small panel's rows (PanelGroup) under a small `label` (12, muted), 2 apart.
+pub fn panel_group(c : @ui.Ctx, body : () -> Unit, label? : String = "") -> Unit {
+  c.box(style=panel_group_box, fn() {
+    if label != "" {
+      c.box(style=panel_label_at, fn() { c.text(label, style=panel_note_words) |> ignore }) |> ignore
+    }
+    body()
+  })
+  |> ignore
+}
+
+///|
+/// A note in a small panel (PanelNote): 12, muted, in by a row's padding.
+pub fn panel_note(c : @ui.Ctx, words : String) -> Unit {
+  c.box(style=panel_text_box, fn() { c.text(words, style=panel_note_words) |> ignore }) |> ignore
+}
+
+///|
+/// A block of words in a small panel (PanelText): in by a row's padding, on the line its rows' words are.
+pub fn panel_text(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.box(style=panel_text_box, body) |> ignore
+}
+
+///|
+/// A small panel's buttons at its foot (PanelFoot): at its end, 6 apart, 4 under what is over them.
+pub fn panel_foot(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.box(style=panel_foot_box, body) |> ignore
+}
+
+///|
+/// How a small panel's button stands (PanelButton's tone): its words alone, the accent's ink (the one thing to do),
+/// muted (a lesser one), or the accent's pale ground always (one that must be seen).
+pub(all) enum PanelTone {
+  Plainly
+  Accent
+  Quiet
+  Filled
+} derive(Eq)
+
+///|
+/// Words to press in a small panel (PanelButton): a small pill, 24 high, 10 in, its words 12 and 500; a ground only
+/// while pointed at (`Filled`: the accent's pale ground always, the accent at 20% pointed at: the web's 22%, the scale's
+/// nearest). True on the frame after it was pressed.
+pub fn panel_button(
+  c : @ui.Ctx,
+  key : String,
+  words : String,
+  tone? : PanelTone = Plainly,
+  disabled? : Bool = false,
+) -> Bool {
+  let id = c.id(key)
+  let hot = !disabled && c.hovered(id)
+  let b = c.box(
+    style=if tone == Filled { panel_button_filled } else { panel_button_box },
+    disabled~,
+    id=if disabled { 0 } else { id },
+    fn() {
+      c.text(words, style=match tone {
+        Accent | Filled => panel_button_accent
+        Quiet => if hot { panel_button_words } else { panel_button_quiet }
+        Plainly => panel_button_words
+      })
+      |> ignore
+    },
+  )
+  c.semantics(b, Button, id~, label=words, disabled~)
+  !disabled && c.clicked(id)
+}
+
+///|
+/// An icon to press in a small panel (PanelIconButton: close, stop, a step): a 24 circle, the muted ink, the hover's
+/// ground and the ink pointed at; named on hover. True on the frame after it was pressed.
+pub fn panel_icon_button(c : @ui.Ctx, key : String, name : String, label : String, disabled? : Bool = false) -> Bool {
+  let p = theme().p
+  let id = c.id(key)
+  let hot = !disabled && c.hovered(id)
+  let b = c.box(style=panel_icon_box, disabled~, id=if disabled { 0 } else { id }, fn() {
+    icon(c, name, size=panel_icon_size, color=if hot { p.text } else { p.muted }) |> ignore
+  })
+  c.semantics(b, Button, id~, label~, disabled~)
+  tip(c, "pib/" + key, id, label)
+  !disabled && c.clicked(id)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_head_box : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_note_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_group_box : @ui.Style = @ui.style(w=Full, gap=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_label_at : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_text_box : @ui.Style = @ui.style(w=Full, px=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_foot_box : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, gap=S1_5, pt=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_button_box : @ui.Style = @ui.style(
+  row=true,
+  h=S6,
+  px=S2_5,
+  gap=S1,
+  radius=Full,
+  align=ACenter,
+  justify=JCenter,
+  hovered=@ui.patch(bg=Hover),
+  disabled=@ui.patch(opacity=O50),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_button_filled : @ui.Style = panel_button_box.then(
+  @ui.style(bg=AccentBg, hovered=@ui.patch(bg=A(Accent, O20))),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_button_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L6, weight=Medium, wrap=false, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_button_accent : @ui.TextStyle = panel_button_words.then(@ui.text_style(color=AccentText))
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_button_quiet : @ui.TextStyle = panel_button_words.then(@ui.text_style(color=Muted))
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_icon_box : @ui.Style = @ui.style(
+  w=S6,
+  h=S6,
+  radius=Full,
+  align=ACenter,
+  justify=JCenter,
+  hovered=@ui.patch(bg=Hover),
+  disabled=@ui.patch(opacity=O35),
+)
+
+// ---------------------------------------------------------------------------
+// A command to copy, a chooser (parts.tsx CopyCommand, Chooser; parts.css.ts command, controls.css.ts chooser)
+
+///|
+/// A command to copy (CopyCommand, parts.css.ts command): the words in the code face (12) on one line, its copy button
+/// at its end (an icon button, 6 in, its corner concentric), on the paper, 14 in at its start; pressed, the words
+/// copied and a check for a moment (`copied` its name then, `copy` before).
+pub fn copy_command(c : @ui.Ctx, key : String, text : String, copy~ : String, copied~ : String) -> Unit {
+  let id = c.id(key + "/copy")
+  let just = c.within(id, command_copied_ms)
+  c.box(style=command_box, bg=theme().p.paper, fn() {
+    c.box(style=command_words_at, fn() { c.text(text, style=command_words) |> ignore }) |> ignore
+    if icon_button(c, if just { "check" } else { "copy" }, key=key + "/copy", label=if just { copied } else { copy }) {
+      @ui.clipboard_set(text)
+      c.mark(id)
+      c.wake_in(command_copied_ms, later=true)
+    }
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let command_box : @ui.Style = @ui.style(row=true, w=Full, pl=S3_5, pr=S1_5, py=S1_5, gap=S2, radius=Xl, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let command_words_at : @ui.Style = @ui.style(w=Grow(1.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let command_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false)
+
+///|
+/// A choice that opens a menu of what it can be (Chooser, controls.css.ts chooser): quiet words (12) and a small
+/// chevron, 28 high, 8 in, 8 round, the hover's ground and the ink pointed at or open; pressed, its menu (@sf.menu) of
+/// `entries` (a choice each: @kit.menu_radio) on `side`, 220 wide at least. `open`: whether its menu is open, the
+/// view's (what it is now comes back with what was chosen).
+pub fn chooser(
+  c : @ui.Ctx,
+  key : String,
+  words : String,
+  entries : Array[@kit.Entry],
+  open : Bool,
+  side? : @ui.Side = Bottom,
+) -> @kit.Menu {
+  let p = theme().p
+  let id = c.id(key)
+  let opened = if c.clicked(id) { !open } else { open }
+  let lit = c.hovered(id) || opened
+  let b = c.box(style=chooser_box, selected=opened, id~, fn() {
+    c.text(words, style=if lit { chooser_words_lit } else { chooser_words }) |> ignore
+    icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
+  })
+  c.semantics(b, Button, id~, label=words, expanded=opened)
+  menu(c, key + "/menu", opened, id, entries, {}, chooser_menu_w, side~)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let chooser_box : @ui.Style = @ui.style(
+  row=true,
+  h=S7,
+  px=S2,
+  gap=S1_25,
+  radius=Lg,
+  align=ACenter,
+  hovered=@ui.patch(bg=Hover),
+  selected=@ui.patch(bg=Hover),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let chooser_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, wrap=false, color=Muted)
+
+///|
+// kept across runs: a value (no field of it changes)
+let chooser_words_lit : @ui.TextStyle = chooser_words.then(@ui.text_style(color=Fg))

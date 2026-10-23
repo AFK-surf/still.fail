@@ -26,7 +26,7 @@ missing here is ported from the web's file (its structure, its states, its value
 | `styles/align.ts` | `corners.mbt` | its concentric corner only so far; `inner`, `bleed*`, the column and `outset*` are still worked out by the pages |
 | `styles/glass.ts` | `glass.mbt` | |
 | `styles/controls.css.ts`, `styles/page.css.ts` | `parts.mbt`, `styles.mbt` | |
-| `parts.tsx`, `parts.css.ts`, `own.css.ts` | `parts.mbt` | Button, IconButton, Tip, About, Segmented, the panel and its rows, Menu, the menu's items; the others (Field, Choices, Switch, SwitchRow, Select, Pill, StatusDot, Dialog, Confirm, CopyCommand, Chooser, Empty, FirstOne, Section, ResizeHandle) are still drawn by the pages that use them |
+| `parts.tsx`, `parts.css.ts`, `own.css.ts` | `parts.mbt` | Button, IconButton, Tip, About, Field, Segmented, Choices, Switch (`switch`, and `switch_look` for a row that takes the tap), SwitchRow, Select, Pill, StatusDot, Dialog, Confirm, the small panel and its parts (PanelHead, PanelGroup, PanelRow: `menu_item(panel=true)`, PanelNote, PanelFoot, PanelText, PanelButton, PanelIconButton), Menu and its items, CopyCommand, Chooser, Empty, FirstOne, Section; ResizeHandle is still the pages' (the sidebar's edge, `sfapp/wide.mbt`; the files' columns', `wide_files_columns.mbt`: the web's own SidebarEdge and ColumnEdge look as it does) |
 | `waiting.tsx`, `styles/spinner.css.ts`, `styles/spokes.ts` | `parts.mbt`, `icons.mbt` | the spinner, the spokes, WaitPill, WaitLine, Progress; the phone's settings draw their own waiting (`sfapp/settings/parts.mbt`: Android's Waiting.kt) |
 | `Avatar.tsx` | `avatar.mbt` | |
 | `icons.tsx` | `icons.mbt`, `icon_data.mbt` | made by `scripts/icons` from `design/icons` |

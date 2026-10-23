@@ -549,6 +549,8 @@ pub fn reset() -> Unit {
   builtin_open.clear()
   doc_picked.clear()
   close_sheet()
+  asking.val = None
+  asked.val = None
   sheet.last = None
   sheet.was_up = false
   sheet.height = 0.5

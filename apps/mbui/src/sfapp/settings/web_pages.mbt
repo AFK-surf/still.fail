@@ -246,7 +246,7 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
       let preview = flag(notify, "preview") || field(notify, "preview") is None
       if list_row(c, key=if on { "notify-preview" } else { "" }, fn() {
           row_lines(c, tr("web-pages.notifications.preview"), tr("web-pages.notifications.previewNote"), wrap_sub=true)
-          switch(c, "notify-preview", preview)
+          @sf.switch_look(c, "notify-preview", preview)
         }) {
         act(core, tr("web-pages.notifications.preview"), "notify.set", obj([("preview", Json::boolean(!preview))]))
       }
@@ -257,7 +257,7 @@ fn notify_page(c : @ui.Ctx, core : Core) -> Unit {
         let peek = dock_setting("peek")
         if list_row(c, key=if dock_setting("on") { "dock-peek" } else { "" }, fn() {
             row_lines(c, tr("web-pages.dock.peek"), tr("web-pages.dock.peekNote"), wrap_sub=true)
-            switch(c, "dock-peek", peek)
+            @sf.switch_look(c, "dock-peek", peek)
           }) {
           dock_set("peek", !peek)
         }
@@ -328,7 +328,7 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool) 
         |> ignore
       } else if list_row(c, key=if on { "notify-way/" + kind } else { "" }, fn() {
           row_title(c, tr("web-pages.notifications.ways.banner"))
-          switch(c, "notify-way/" + kind, banner)
+          @sf.switch_look(c, "notify-way/" + kind, banner)
         }) {
         set_kind(core, kind, Json::boolean(!banner))
       }
@@ -337,7 +337,7 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool) 
         let held = dock_setting(kind)
         if list_row(c, key=if dock_setting("on") { "notify-dock/" + kind } else { "" }, fn() {
             row_title(c, tr("web-pages.notifications.inDock"))
-            switch(c, "notify-dock/" + kind, held)
+            @sf.switch_look(c, "notify-dock/" + kind, held)
           }) {
           dock_set(kind, !held)
         }
@@ -347,7 +347,7 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool) 
         let counted = badge_kind(core, kind)
         if list_row(c, key=if badge_kind(core, "on") { "notify-badge/" + kind } else { "" }, fn() {
             row_title(c, tr("web-pages.notifications.inBadge"))
-            switch(c, "notify-badge/" + kind, counted)
+            @sf.switch_look(c, "notify-badge/" + kind, counted)
           }) {
           set_badge_kind(core, kind, !counted)
         }
@@ -595,7 +595,7 @@ fn archiving_row(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
     }
     let opens = view is Some(Object(_))
     if list_row(c, key=if opens { "archiving/" + station } else { "" }, fn() {
-        presence_dot(c, if flag(s, "online") { "online" } else { "offline" })
+        @sf.status_dot(c, if flag(s, "online") { "online" } else { "offline" })
         row_lines(c, text(s, "name"), line)
         if opens {
           chevron(c)

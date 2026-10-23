@@ -546,23 +546,13 @@ fn wide_confirm(
   allowed : Bool,
 ) -> Bool? {
   let mut said : Bool? = None
-  let d = @kit.dialog(
+  let d = @sf.dialog(
     c,
     key,
     open,
     title,
     w=dmin(confirm_w, c.width - 32.0),
-    close_label="",
-    look=fn(c, s, body) {
-      c.box(style=confirm_box, fn() {
-        c.box(style=@ui.style(w=Fixed(s.w), gap=S2), fn() {
-          c.text(s.title, style=confirm_title) |> ignore
-          body()
-        })
-        |> ignore
-      })
-      |> ignore
-    },
+    close_label=tr("common.close"),
     fn() {
       for l in lines {
         c.text(l, style=confirm_line) |> ignore
@@ -581,7 +571,7 @@ fn wide_confirm(
       |> ignore
     },
   )
-  if open && !d.value && said is None {
+  if open && !d && said is None {
     said = Some(false)
   }
   said
@@ -801,14 +791,6 @@ let small_primary_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium,
 ///|
 // kept across runs: a value (no field of it changes)
 let small_quiet_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let confirm_box : @ui.Style = @ui.style(p=S5, radius=Xl2, bg=Raised, border=B1, border_color=Line, shadow=Xl)
-
-///|
-// kept across runs: a value (no field of it changes)
-let confirm_title : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

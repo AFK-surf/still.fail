@@ -509,6 +509,7 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
     Lifted => self.lifted
     Wash => self.wash
     Sidebar => self.sidebar
+    FieldHover => self.field_hover
     Theater => 0x000000FFL
     A(c, o) => alpha(self.color(c), o.value())
     Over(u, t) => over(self.color(u), self.color(t))

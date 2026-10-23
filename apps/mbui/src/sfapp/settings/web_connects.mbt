@@ -53,7 +53,7 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       let blocks : Array[() -> Unit] = []
       if first && no_profile {
         blocks.push(fn() {
-          first_one(c, tr("web-pages.connects.profileFirst"), tr("web-pages.connects.profileFirstLead"), fn() {
+          @sf.first_one(c, tr("web-pages.connects.profileFirst"), lead=tr("web-pages.connects.profileFirstLead"), fn() {
             if @sf.button(c, tr("web-pages.connects.goAddProfile"), key="connects-go-profiles", tone=Primary) {
               (core.push)(Profiles(""))
             }
@@ -61,7 +61,7 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         })
       } else if first {
         blocks.push(fn() {
-          first_one(c, tr("web-pages.connects.addFirst"), tr("web-pages.connects.addFirstLead"), fn() {
+          @sf.first_one(c, tr("web-pages.connects.addFirst"), lead=tr("web-pages.connects.addFirstLead"), fn() {
             match add {
               Some(run) =>
                 if @sf.button(c, tr("web-pages.connects.add"), key="connects-add-first", tone=Primary, icon="plus") {
@@ -180,7 +180,7 @@ fn cn_row(c : @ui.Ctx, core : Core, station : String, station_name : String, s :
       c.text(text(cv, "statusText"), style=cn_meta) |> ignore
       let on = [("station", station), ("id", id)]
       doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
-      presence_dot(c, text(cv, "presence"))
+      @sf.status_dot(c, text(cv, "presence"))
     }) {
     (core.push)(Connect(station, id))
   }
@@ -326,20 +326,6 @@ fn cn_waiting_app(c : @ui.Ctx, core : Core, a : Json, s : Json) -> Unit {
   |> ignore
 }
 
-///|
-/// A list's first one to make (parts FirstOne, own.css.ts firstOne): in the middle, 24 over and under, 480 wide at
-/// most; its title the title's 16 in 600, what it is for under it in the muted ink, what to do 8 under.
-fn first_one(c : @ui.Ctx, title : String, lead : String, go : () -> Unit) -> Unit {
-  c.box(style=cn_first_room, fn() {
-    c.box(style=cn_first, fn() {
-      c.text(title, style=cn_first_title) |> ignore
-      c.text(lead, style=cn_first_lead) |> ignore
-      c.box(style=cn_first_act, fn() { go() }) |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
 
 ///|
 /// The sizes: its picture 28, its kind's mark 17 in a 20 square (a waiting app's 18), the team's and the tag's
@@ -447,25 +433,3 @@ let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=f
 // kept across runs: a value (no field of it changes)
 let cn_more : @ui.Style = @ui.style(w=S8, h=S8, radius=Xl, align=ACenter, justify=JCenter, hovered=@ui.patch(bg=Hover))
 
-///|
-// kept across runs: a value (no field of it changes)
-let cn_first_room : @ui.Style = @ui.style(w=Full, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cn_first : @ui.Style = @ui.style(w=Full, max_w=Fixed(cn_first_most), px=S4, pt=S8, pb=S12, gap=S2, align=ACenter)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cn_first_title : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cn_first_lead : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, w=Full, center=true)
-
-///|
-let cn_first_most : Double = 480.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let cn_first_act : @ui.Style = @ui.style(pt=S2)

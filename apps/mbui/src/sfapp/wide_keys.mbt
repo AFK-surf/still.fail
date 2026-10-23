@@ -469,32 +469,13 @@ fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
       ],
     ),
   ]
-  let d = @kit.dialog(
+  let d = @sf.dialog(
     c,
     "keys-dialog",
     wide.keys_open,
     tr("web-main.shortcuts.title"),
     w=dmin(520.0, c.width - 32.0),
-    close_label="",
-    look=fn(c, s, body) {
-      c.box(
-        w=Px(s.w),
-        pad=20.0,
-        gap=6.0,
-        radius=42.0,
-        bg=@sf.panel_ground(),
-        border=1.0,
-        border_color=t.p.line,
-        shadow=32.0,
-        shadow_y=24.0,
-        shadow_color=t.p.shadow,
-        fn() {
-          c.text(s.title, size=16.0, weight=600, color=t.p.text, wrap=false, line=24.0) |> ignore
-          body()
-        },
-      )
-      |> ignore
-    },
+    close_label=tr("common.close"),
     fn() {
       for g in groups {
         c.box(pt=10.0, pb=2.0, fn() {
@@ -515,7 +496,7 @@ fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
       }
     },
   )
-  wide.keys_open = d.value
+  wide.keys_open = d
 }
 
 ///|

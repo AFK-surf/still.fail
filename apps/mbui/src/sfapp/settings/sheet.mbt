@@ -65,6 +65,27 @@ pub fn close() -> Unit {
 /// The sheet, over everything the app shows: call after the pages each frame.
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
   menu_overlay(c)
+  // the wide frame's question, while it is asked and as it goes
+  match asked.val {
+    Some(a) => {
+      let r = @sf.confirm(
+        c,
+        "settings-confirm",
+        asking.val is Some(_),
+        a.title,
+        a.words,
+        a.action,
+        cancel=tr("common.cancel"),
+      )
+      if r.confirmed {
+        asking.val = None
+        (a.run)()
+      } else if !r.open {
+        asking.val = None
+      }
+    }
+    None => ()
+  }
   let up = sheet.draw is Some(_)
   if up {
     sheet.last = sheet.draw
@@ -197,10 +218,34 @@ fn ask(
 }
 
 ///|
+/// What the wide frame asks before something that cannot be undone (the web's Confirm, a dialog: confirm): its title,
+/// what it does, its action, whether in red, and what goes on once it is said.
+priv struct Asking {
+  title : String
+  words : String
+  action : String
+  danger : Bool
+  run : () -> Unit
+}
+
+///|
+/// What is asked now in the wide frame, and what was asked last (drawn while its dialog goes).
+let asking : Ref[Asking?] = Ref(None)
+
+///|
+let asked : Ref[Asking?] = Ref(None)
+
+///|
 /// Asks before something that cannot be undone (PageParts.kt confirm, with `what`): its title, what it does, 取消 and
 /// `action` (red when `danger`); the sheet closes at once and `run` goes on. The app's pages ask so too (a chat archived
-/// while it keeps watch).
+/// while it keeps watch). In the wide frame the web's Confirm instead (@sf.confirm, a dialog in the middle of the window,
+/// drawn by overlay).
 pub fn confirm(title : String, words : String, action : String, run : () -> Unit, danger? : Bool = false) -> Unit {
+  if wide.val {
+    asking.val = Some({ title, words, action, danger, run })
+    asked.val = asking.val
+    return
+  }
   open_sheet(0.36, fn(c, _core) {
     let t = @sf.theme()
     sheet_head(c, title)

@@ -1005,22 +1005,14 @@ fn files_goto(c : @ui.Ctx, src : Source, stations : Array[DvStation], here : Dri
       None => ()
     }
   }
-  let d = @kit.dialog(
+  let d = @sf.dialog(
     c,
     "files-goto",
     fgo.open,
     tr("web-pages.files.goTo"),
     description=tr("web-pages.files.goToNote"),
     w=dmin(fgo_w, c.width - fgo_margin),
-    close_label="",
-    look=fn(c, s, body) {
-      c.box(style=fgo_panel.then(@ui.style(w=Fixed(s.w))), fn() {
-        c.text(s.title, style=fgo_title) |> ignore
-        c.text(s.description, style=fgo_note) |> ignore
-        body()
-      })
-      |> ignore
-    },
+    close_label=tr("common.close"),
     fn() {
       c.box(style=fgo_field_box, fn() {
         let res = c.editor(
@@ -1083,7 +1075,7 @@ fn files_goto(c : @ui.Ctx, src : Source, stations : Array[DvStation], here : Dri
       }
     },
   )
-  if !d.value {
+  if !d {
     fgo.open = false
   }
 }
@@ -1155,14 +1147,6 @@ let fgo_line : Double = 20.0
 
 ///|
 let fgo_menu_w : Double = 220.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let fgo_panel : @ui.Style = @ui.style(p=S5, gap=S2, radius=Xl3, bg=Raised, border=B1, border_color=Line, shadow=Lg)
-
-///|
-// kept across runs: a value (no field of it changes)
-let fgo_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
