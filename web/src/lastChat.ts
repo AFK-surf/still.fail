@@ -25,7 +25,10 @@ function chatPath(chat: OpenChat): string {
   return `${stationBase(chat.station)}/chats/${encodeURIComponent(chat.key)}`;
 }
 
-/** The page of the chat last open in `workspace`, from the marks of any workspace; undefined when none is known. */
+/**
+ * The page of the chat `workspace` lands on: the one last open there, as the core says it (its marks' `chat`); this is
+ * only the router's path for it. Undefined when none is known.
+ */
 export function lastChatOf(marks: WorkspaceMarksView | undefined, workspace: string): string | undefined {
   const chat = marks?.workspaces[workspace]?.chat;
   return chat ? chatPath(chat) : undefined;

@@ -24,6 +24,8 @@ import { makeStory, openingChats } from "./story.ts";
 import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
+import { railView } from "../../../client/core-ts/src/rail.ts";
+import { lang } from "../i18n.ts";
 import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
 import * as keymap from "../../../client/core-ts/src/keymap.ts";
@@ -91,7 +93,7 @@ function demoValueOf(topic: Topic): unknown {
     case "status": return { items: [] };
     case "connection": return { items: [] };
     // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
-    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts), keymap: keymap.view({ ...prefs, device: DEVICE }) };
+    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts), keymap: keymap.view({ ...prefs, device: DEVICE }), railView: railView(prefs, lang()) };
     case "doing": return { doing: [] };
     // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
     case "composer": return composerView(String(topic.key ?? ""));
