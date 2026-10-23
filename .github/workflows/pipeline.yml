@@ -101,8 +101,10 @@ jobs:
           # The modules' packages (scripts/module-bundle.ts): what one packs (its module.json says), or how they are packed
           # and signed: modules=….
           eval "$(printf '%s\n' "$changed" | node scripts/module-bundle.ts plan)"
+          # the Android app: mbui's in its place (scripts/release.sh android), made of what apps/mbui's beta is made of
+          # (scripts/beta.sh APP_SRC: its code, mbui's, the client's, media's, vendor's), or how it is released
           android=false
-          if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
+          if has '^(apps/mbui/(src|core|android|ios|engine)/|apps/mbui/mbui/src/|apps/mbui/(mbui/)?moon\.(mod|work)$|client/|media/|vendor/|scripts/(release\.sh|native\.ts)$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android=true; fi
           # check-android-lint: only for a change lint can find anything in (apps/android/lints.sh), or a branch's to
           # .github/ but mbui's workflows (mbui.yml, mbui-*: none of this pipeline's but mbui-check, which runs mbui's own
           # tests; its check then runs as if all changed).
@@ -612,7 +614,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "release-station-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
-  # The Android app (fail.still.android.beta), on android/beta/latest.json.
+  # The Android app (fail.still.android.beta: mbui's, apps/mbui, in the place of apps/android's), on android/beta/latest.json.
   android:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' }}
