@@ -262,11 +262,11 @@ export function loginsView(canLogin = true, canRelay = true, listed: string[] = 
 /** Formulas beside Chinese text, with code, currency, an invalid command and a formula wider than a phone. */
 export const MATH = String.raw`## D1 / D7 收入分解
 
-D1 预测 $p_1$，尾部预测 $r$，七日预测为 $p_7 = p_1 + r$。
+D1 预测 \(p_1\)，尾部预测 \(r\)，七日预测为 \(p_7 = p_1 + r\)。
 
-$$
+\[
 L_7 = \frac{1}{N}\sum_{i=1}^{N}\left(p_{1,i}+r_i-y_{7,i}\right)^2
-$$
+\]
 
 较长的公式可以横向滚动：
 
@@ -274,9 +274,9 @@ $$
 \underbrace{\mathbb{E}[Y_7 \mid x]}_{\text{expected seven-day attributed revenue}} = \underbrace{\mathbb{E}[Y_1 \mid x]}_{\text{observed first-day attributed revenue}} + \underbrace{\mathbb{E}[Y_7-Y_1 \mid x]}_{\text{remaining six days of attributed revenue}}
 $$
 
-费用仍可写成 \$5 和 \$10。代码中的公式保持原样：
+费用直接写成 $5 和 $10。代码中的公式保持原样：
 
 ` + '`$p_7 = p_1 + r$`' + String.raw`
 
-写错的公式也保留内容：$\unknowncommand{x}$。
+写错的公式也保留内容：\(\unknowncommand{x}\)。
 `;

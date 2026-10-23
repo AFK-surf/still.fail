@@ -69,6 +69,7 @@ export const NOTES: [number, string][] = [
   [62, "Messages agents send a chat with session_send now show there folded into one line people may open: send one when you have something to tell or ask, said whole, never an acknowledgement (its answer says it arrived) or step-by-step progress; tell people what they must hear in your own chat."],
   [63, "What agents send each other with session_send is no longer in either chat's conversation (nor in Slack or Feishu): people read it on a page of its own. What they must hear of a letter, tell them in your own chat in your own words with where it came from, never only 收到/got it."],
   [64, "The browser tool now gives each chat its own DevTools address (ws://127.0.0.1:<door>/browser/…): connect chrome-devtools-mcp (--wsEndpoint) and Playwright (connectOverCDP) there, not at Chrome's own port. Tabs you open through it are this chat's: people see which chat opened a tab and may close it, and they close when this chat is archived."],
+  [65, "Math in still.fail chats: use \\(…\\) inline, \\[…\\] on separate lines or $$ fences for display. Single dollar signs are ordinary text, so amounts need no escaping."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
