@@ -1408,36 +1408,39 @@ fn decision_under(
     close=close_gap,
     start_at?,
     fn() {
-      // (who decides over the options as the message's column has them: 4 apart)
-      c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
+      // (who decides right over the options, 6 over them as Decisions.kt pads them, and the vault's request)
+      c.box(w=Fill(1.0), align=AStart, fn() {
         match m.card {
           Some({ assignee_text: Some(a), .. }) => quiet(a)
           _ => ()
         }
-        match m.card {
-          // an agent's request for a vault item: approved here (Vault.kt), not answered in the chat
-          Some({ vault, assignee, .. }) if vault != "" => {
-            let ws = match here.station.find("/") {
-              Some(i) => here.station.view(end_offset=i).to_string()
-              None => here.station
+        c.box(style=options_room, fn() {
+          match m.card {
+            // an agent's request for a vault item: approved here (Vault.kt), not answered in the chat
+            Some({ vault, assignee, .. }) if vault != "" => {
+              let ws = match here.station.find("/") {
+                Some(i) => here.station.view(end_offset=i).to_string()
+                None => here.station
+              }
+              let me = here.view.me
+              vault_approval(c, src, ws, vault, assignee == "" || me == "" || assignee.to_lower() == me.to_lower())
             }
-            let me = here.view.me
-            vault_approval(c, src, ws, vault, assignee == "" || me == "" || assignee.to_lower() == me.to_lower())
+            _ =>
+              match
+                decision_options(
+                  c,
+                  "options/" + m.ts,
+                  options,
+                  !resolved && !here.view.offline && !here.view.archived,
+                  busy,
+                  chosen~,
+                ) {
+                Some(o) if !resolved => answer_option(src, here.station, m.thread, m.seq, o.label)
+                _ => ()
+              }
           }
-          _ =>
-            match
-              decision_options(
-                c,
-                "options/" + m.ts,
-                options,
-                !resolved && !here.view.offline && !here.view.archived,
-                busy,
-                chosen~,
-              ) {
-              Some(o) if !resolved => answer_option(src, here.station, m.thread, m.seq, o.label)
-              _ => ()
-            }
-        }
+        })
+        |> ignore
       })
       |> ignore
     },
@@ -1479,6 +1482,12 @@ let options_card_pad : Double = 8.0
 let options_row_pad : Double = 7.0
 
 ///|
+/// The room over a post's options in its chat (Decisions.kt DecisionUnder: padding(top = 6) on the options' card, or
+/// on the vault's request in their place).
+// kept across runs: a value (no field of it changes)
+let options_room : @ui.Style = @ui.style(w=Full, pt=S1_5)
+
+///|
 let option_disc : Double = 22.0
 
 ///|
@@ -1500,7 +1509,7 @@ fn decision_options(
   let t = @sf.theme()
   let free = enabled && busy is None
   let mut picked : Choice? = None
-  c.box(w=Fill(1.0), pt=6.0, fn() {
+  c.box(w=Fill(1.0), fn() {
     c.box(w=Fill(1.0), radius=options_card_radius, bg=t.p.chip, pad=options_card_pad, fn() {
       // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {

@@ -745,11 +745,21 @@ fn decision_face(
       })
       rows.push(fn() { c.box(h=Px(if replies { composer_room + 10.0 } else { 10.0 }), fn() {  }) |> ignore })
       c.list(pre + "messages/" + key, rows.length(), 90.0, fn(i) {
+        // (20 apart, as in the chat: the viewer's message sent soon after the one before it, joined_gap)
+        let joined = i < view.messages.length() && view.messages[i].joined
         c.box(
           w=Fill(1.0),
           pl=14.0,
           pr=14.0,
-          pt=if i == 0 { 10.0 } else if i == rows.length() - 1 { 0.0 } else { 20.0 },
+          pt=if i == 0 {
+            10.0
+          } else if i == rows.length() - 1 {
+            0.0
+          } else if joined {
+            joined_gap
+          } else {
+            gap
+          },
           fn() { (rows[i])() },
         )
         |> ignore

@@ -994,7 +994,7 @@ fn new_connect_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               if models.length() == 0 {
                 c.text(tr("android-settings.flow.noModels"), size=13.0, color=@sf.theme().p.warn_ink, w=Fill(1.0), line=18.0) |> ignore
               } else {
-                c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, fn() {
+                rows_card(c, fn() {
                   for m in models {
                     let mv = Some(m)
                     let rts = strings(mv, "runtimes")
@@ -1044,7 +1044,7 @@ fn new_connect_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               } else {
                 c.text(tr("android-settings.flow.whichTeam"), size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
                 let chosen = field(view, "chosen")
-                c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, fn() {
+                rows_card(c, fn() {
                   for team in teams {
                     let tv = Some(team)
                     let owner = field(tv, "owner")

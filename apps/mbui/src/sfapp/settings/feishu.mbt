@@ -52,7 +52,7 @@ fn feishu_steps(
     "platform" => {
       let platform = opt_text(view, "platform").unwrap_or("slack")
       let feishu = strings(view, "platforms").contains("feishu")
-      c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, fn() {
+      rows_card(c, fn() {
         if pick_row(
             c,
             "flow-platform/slack",
@@ -86,7 +86,7 @@ fn feishu_steps(
     }
     "feishuWay" => {
       let way = text(f, "way")
-      c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, fn() {
+      rows_card(c, fn() {
         if pick_row(c, "flow-feishu-scan", tr("web-mobile.connects.feishu.scan"), sub=tr("web-mobile.connects.feishu.scanNote"), checked=way != "app") {
           edit_feishu("way", str("scan"))
         }

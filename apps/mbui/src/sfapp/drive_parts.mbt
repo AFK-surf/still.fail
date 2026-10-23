@@ -431,16 +431,18 @@ fn dv_sheet_frame(
 
 ///|
 /// The rows of a card in a list (DriveScreen.kt cardRow): 12 in from the sides, the first and last carrying its 16
-/// corners, 10 under the last.
+/// corners, 10 under the last; each row list_pad in from the card's sides (and from its top on the first, its bottom
+/// on the last), pressed and grounded (`ground`: a chosen row's, none for the card's own) in a row_corner, concentric
+/// with the card's.
 fn dv_card_row(
   c : @ui.Ctx,
   first : Bool,
   last : Bool,
-  ground : Int64,
+  ground : Int64?,
   id : Int,
   body : () -> Unit,
 ) -> Unit {
-  let t = @sf.theme()
+  let card = dv_surface()
   c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=if last { 10.0 } else { 0.0 }, fn() {
     c.box(w=Fill(1.0), fn() {
       c.layer(fn() {
@@ -448,7 +450,7 @@ fn dv_card_row(
           w=Fill(1.0),
           h=Fill(1.0),
           radius=if first || last { 16.0 } else { 0.0 },
-          bg=ground,
+          bg=card,
           fn() {  },
         )
         |> ignore
@@ -457,30 +459,31 @@ fn dv_card_row(
       // the corners the card does not have here: squared again
       if first != last || (!first && !last) {
         if !first {
-          c.layer(fn() { c.box(w=Fill(1.0), h=Px(16.0), bg=ground, fn() {  }) |> ignore })
+          c.layer(fn() { c.box(w=Fill(1.0), h=Px(16.0), bg=card, fn() {  }) |> ignore })
           |> ignore
         }
         if !last {
           c.layer(fn() {
             c.spacer()
-            c.box(w=Fill(1.0), h=Px(16.0), bg=ground, fn() {  }) |> ignore
+            c.box(w=Fill(1.0), h=Px(16.0), bg=card, fn() {  }) |> ignore
           })
           |> ignore
         }
       }
-      c.box(w=Fill(1.0), id~, fn() {
-        body()
-        // DriveScreen.kt cardRow: clickable inside the card's padding (LIST_PAD), clip(Smooth(LIST_ROW_CORNER))
-        if id != 0 {
-          @motion.ripple(
-            c,
-            id,
-            @sf.row_corner,
-            out_x=-@sf.list_pad,
-            out_top=if first { -@sf.list_pad } else { 0.0 },
-            out_bottom=if last { -@sf.list_pad } else { 0.0 },
-          )
-        }
+      let room = match (first, last) {
+        (true, true) => dv_row_room_only
+        (true, false) => dv_row_room_first
+        (false, true) => dv_row_room_last
+        (false, false) => dv_row_room
+      }
+      c.box(style=room, fn() {
+        c.box(style=dv_row_ground, bg?=ground, id~, fn() {
+          body()
+          if id != 0 {
+            @motion.ripple(c, id, @sf.row_corner)
+          }
+        })
+        |> ignore
       })
       |> ignore
     })
@@ -488,6 +491,29 @@ fn dv_card_row(
   })
   |> ignore
 }
+
+///|
+/// A card's row's room in it (DriveScreen.kt cardRow, Parts.kt LIST_PAD): 8 in from the card's sides, and from its top
+/// on the first row, its bottom on the last.
+// kept across runs: a value (no field of it changes)
+let dv_row_room : @ui.Style = @ui.style(w=Full, px=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_row_room_first : @ui.Style = @ui.style(w=Full, px=S2, pt=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_row_room_last : @ui.Style = @ui.style(w=Full, px=S2, pb=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_row_room_only : @ui.Style = @ui.style(w=Full, p=S2)
+
+///|
+/// A card's row's own ground (pressed, chosen): rounded LIST_ROW_CORNER, concentric with the card's.
+// kept across runs: a value (no field of it changes)
+let dv_row_ground : @ui.Style = @ui.style(w=Full, radius=Xl2)
 
 ///|
 /// A row held (a long press, 400 ms as the system's): true on the frame the hold acts, once; the tap that ends it is
