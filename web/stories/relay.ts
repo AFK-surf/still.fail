@@ -16,6 +16,8 @@ const CONNECTS: RelayConnect[] = [
     { id: "C6", name: "ops", kind: "channel" },
     { id: "C7", name: "random", kind: "channel" },
     { id: "C8", name: "releases", kind: "channel" },
+    { id: "C9", name: "support", kind: "channel" },
+    { id: "C10", name: "infra", kind: "channel" },
   ] },
   { id: "fs", kind: "feishu", name: "Codex 机器人", team: "Cue 团队", places: [
     { id: "oc_1", name: "产品讨论", kind: "topics", used: 1_700_000_200_000 },
