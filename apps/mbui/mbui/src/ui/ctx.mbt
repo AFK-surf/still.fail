@@ -1404,6 +1404,16 @@ pub fn dock_available() -> Bool {
 }
 
 ///|
+/// The keys held down now (@hostapi.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd). Under a Tester: as it holds
+/// them (Tester::hold_mods).
+pub fn mods_held() -> Int {
+  match fake.val {
+    Some(f) => f.mods
+    None => @hostapi.mods_held()
+  }
+}
+
+///|
 /// A line to the dock (@hostapi.dock_send). Under a Tester: kept (Tester::dock_lines).
 pub fn dock_send(line : String) -> Unit {
   match fake.val {

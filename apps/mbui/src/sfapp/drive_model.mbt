@@ -64,6 +64,8 @@ priv struct DvStation {
   zip : Bool
   /// the viewer's role there (a read-only member: viewer)
   role : String
+  /// whether it takes copies from another station (`drive.transfer`: one from before does not)
+  transfers : Bool
 }
 
 ///|
@@ -106,6 +108,7 @@ fn dv_station(v : Json) -> DvStation {
     // overview does not)
     zip: flag(d, "zip") || flag(d, "anywhere"),
     role: text(field(ov, "viewer"), "role"),
+    transfers: flag(d, "transfers"),
   }
 }
 

@@ -988,6 +988,12 @@ fn dock_available() -> Bool {
 }
 
 ///|
+/// (the keys held are not read here)
+fn mods_held() -> Int {
+  0
+}
+
+///|
 fn dock_send(l : String) -> Unit {
   ignore(l)
 }

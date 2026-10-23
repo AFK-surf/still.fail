@@ -94,13 +94,49 @@ static void run_script_step(int step);
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake, haptics
 #include "apple_device.h"
 
+static int32_t drop_pick(NSArray<NSURL *> *urls);
+
+// Files dragged in from outside (Finder) and let go on the window (ui/drop.mbt): where they are held, posted on
+// `mbui.drop` as they move ({"type":"over","x","y"}, {"type":"left"}), then let go, their files read as a pick's
+// ({"type":"drop","x","y","pick"}).
+static void drop_post(NSString *json) {
+  NSData *d = [json dataUsingEncoding:NSUTF8StringEncoding];
+  mb_post("mbui.drop", (const char *)d.bytes, d.length, NULL, 0);
+}
+
 @implementation MBView
 
 - (instancetype)initWithFrame:(NSRect)f {
   self = [super initWithFrame:f];
   self.wantsLayer = YES;
   self.mirror = @"";
+  [self registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
   return self;
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info {
+  return [self draggingUpdated:info];
+}
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)info {
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  drop_post([NSString stringWithFormat:@"{\"type\":\"over\",\"x\":%.1f,\"y\":%.1f}", p.x, p.y]);
+  return NSDragOperationCopy;
+}
+- (void)draggingExited:(id<NSDraggingInfo>)info {
+  (void)info;
+  drop_post(@"{\"type\":\"left\"}");
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
+  NSArray<NSURL *> *urls = [info.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
+                                                                  options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  if (urls.count == 0) {
+    drop_post(@"{\"type\":\"left\"}");
+    return NO;
+  }
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  int32_t pid = drop_pick(urls);
+  drop_post([NSString stringWithFormat:@"{\"type\":\"drop\",\"x\":%.1f,\"y\":%.1f,\"pick\":%d}", p.x, p.y, pid]);
+  return YES;
 }
 
 - (CALayer *)makeBackingLayer {
@@ -766,6 +802,13 @@ static NSString *dock_helper(void) {
   return nil;
 }
 int32_t mb_host_dock_available(void) { return dock_helper() ? 1 : 0; }
+
+// The keys held now (@hostapi.mods_held), as a key's are told: shift 1, control 2, option 4, command 8.
+int32_t mb_host_mods_held(void) {
+  NSEventModifierFlags m = [NSEvent modifierFlags];
+  return ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
+         ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
+}
 static void dock_heard(NSData *line) {
   if (!line.length) return;
   // a chat opened from it: the app's window in front, as the desktop app's (app.focus)
@@ -1595,6 +1638,18 @@ double mb_host_mem_bytes(void) {
 static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *picks;
 static int32_t next_pick = 1;
 
+static void pick_told(int32_t pid, NSArray *names, NSArray *datas) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSMutableDictionary *p = picks[@(pid)];
+    if (!p) return;
+    p[@"names"] = names;
+    p[@"datas"] = datas;
+    p[@"state"] = @(names.count > 0 ? 1 : -1);
+    mb_host_outside(MB_OUTSIDE_PICK, pid, names.count > 0 ? 1 : -1);
+    [the_view requestFrame];
+  });
+}
+
 static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     NSMutableArray *names = [NSMutableArray new], *datas = [NSMutableArray new];
@@ -1604,16 +1659,51 @@ static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
       [names addObject:u.lastPathComponent ?: @"file"];
       [datas addObject:d];
     }
-    dispatch_async(dispatch_get_main_queue(), ^{
-      NSMutableDictionary *p = picks[@(pid)];
-      if (!p) return;
-      p[@"names"] = names;
-      p[@"datas"] = datas;
-      p[@"state"] = @(names.count > 0 ? 1 : -1);
-      mb_host_outside(MB_OUTSIDE_PICK, pid, names.count > 0 ? 1 : -1);
-      [the_view requestFrame];
-    });
+    pick_told(pid, names, datas);
   });
+}
+
+// Files let go on the window (ui/drop.mbt): read as a pick's, a folder's files by their way down from where it was
+// dropped ("照片/2026/a.jpg"), each folder itself named with a "/" at its end and no bytes (so an empty one is made
+// too); Finder's .DS_Store left out.
+static int32_t drop_pick(NSArray<NSURL *> *urls) {
+  if (!picks) picks = [NSMutableDictionary new];
+  int32_t pid = next_pick++;
+  picks[@(pid)] = [@{@"state" : @0} mutableCopy];
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSMutableArray *names = [NSMutableArray new], *datas = [NSMutableArray new];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    void (^one)(NSURL *, NSString *) = ^(NSURL *u, NSString *name) {
+      NSNumber *dir = nil;
+      [u getResourceValue:&dir forKey:NSURLIsDirectoryKey error:nil];
+      if (dir.boolValue) {
+        [names addObject:[name stringByAppendingString:@"/"]];
+        [datas addObject:[NSData data]];
+        return;
+      }
+      if ([u.lastPathComponent isEqualToString:@".DS_Store"]) return;
+      NSData *d = [NSData dataWithContentsOfURL:u options:NSDataReadingMappedIfSafe error:nil];
+      if (!d || d.length > (1ull << 30)) return;
+      [names addObject:name];
+      [datas addObject:d];
+    };
+    for (NSURL *u in urls) {
+      NSString *top = u.lastPathComponent ?: @"file";
+      one(u, top);
+      NSNumber *dir = nil;
+      [u getResourceValue:&dir forKey:NSURLIsDirectoryKey error:nil];
+      if (!dir.boolValue) continue;
+      NSDirectoryEnumerator *walk = [fm enumeratorAtURL:u includingPropertiesForKeys:@[ NSURLIsDirectoryKey ] options:0 errorHandler:nil];
+      NSString *base = u.URLByStandardizingPath.path;
+      for (NSURL *v in walk) {
+        NSString *path = v.URLByStandardizingPath.path;
+        if (![path hasPrefix:base]) continue;
+        one(v, [top stringByAppendingString:[path substringFromIndex:base.length]]);
+      }
+    }
+    pick_told(pid, names, datas);
+  });
+  return pid;
 }
 
 int32_t mb_host_pick_start(int32_t kind) {

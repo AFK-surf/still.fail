@@ -548,6 +548,5 @@
   "android-misc.permissions.requestWhat": "request {name}",
   "android-misc.permissions.requestLabel": "Request {name}",
   "android-misc.permissions.missing": "Not allowed",
-  "android-misc.files.favoritesHint": "Star a folder from the toolbar",
   "android-misc.localStation.lead": "The station installed or started on this Mac is managed here: start, stop or restart it, open its log and its data. Which workspace it joins is set in each workspace’s Station settings."
 }

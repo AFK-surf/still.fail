@@ -27,6 +27,7 @@ fn fixture_station_drive(up : Bool) -> Json {
           { "path": "/Volumes/备份盘", "name": "备份盘", "state": "missing" },
         ],
         "anywhere": true,
+        "transfers": true,
         "home": fix_home,
         "trash": true,
         "watch": true,
@@ -38,7 +39,7 @@ fn fixture_station_drive(up : Bool) -> Json {
   } else {
     {
       "viewer": { "via": "mesh", "role": "owner" },
-      "drive": { "roots": [{ "path": "/Users/lin/照片", "name": "照片", "state": "ok" }] },
+      "drive": { "roots": [{ "path": "/Users/lin/照片", "name": "照片", "state": "ok" }], "transfers": true },
     }
   }
 }
@@ -145,10 +146,16 @@ fn fix_folder_json(root : String, path : String) -> Json {
 let fix_places : Map[String, Json] = {}
 
 ///|
+/// The copies asked (`drive.transfer`), as the `driveTransfers` topic shows them, newest first: each copying, 38% on.
+let fix_transfers : Array[Json] = []
+
+///|
 fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let p = Some(Json::object(params))
   match name {
     "workspace" => Some({ "id": "ws1", "name": "星火工作室", "manager": true, "role": "owner" })
+    "driveTransfers" =>
+      Some({ "supported": true, "loaded": true, "transfers": Json::array(fix_transfers.copy()) })
     "drive" =>
       if f.mode == "drive-loading" {
         None
@@ -174,10 +181,55 @@ fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -
 }
 
 ///|
+/// A copy asked (`drive.transfer`), shown in the `driveTransfers` topic as going: 38% on.
+fn fix_transfer(params : Json) -> Unit {
+  let p = Some(params)
+  let from = field(p, "from")
+  let to = field(p, "to")
+  let names = items(from, "names").map(fn(n) {
+    match n {
+      String(s) => s
+      _ => ""
+    }
+  })
+  let title = names.get(0).unwrap_or("")
+  let way = dv_name(dv_absolute(text(to, "root"), text(to, "path")))
+  fix_transfers.insert(0, {
+    "id": Json::string("t\{fix_transfers.length() + 1}"),
+    "station": Json::string(text(to, "station")),
+    "stationName": "MBA",
+    "fromStation": Json::string(text(from, "station")),
+    "fromStationName": "Studio",
+    "fromRoot": Json::string(text(from, "root")),
+    "fromPath": Json::string(text(from, "path")),
+    "names": Json::array(names.map(fn(n) { Json::string(n) })),
+    "toRoot": Json::string(text(to, "root")),
+    "toPath": Json::string(text(to, "path")),
+    "toText": Json::string("MBA › " + way),
+    "title": Json::string(title),
+    "move": Json::boolean(flag(p, "move")),
+    "state": "copying",
+    "active": true,
+    "progress": 0.38,
+    "total": 50541773,
+    "copied": 19205873,
+    "count": 1,
+    "files": 1,
+    "statusText": "18.3 MB / 48.2 MB",
+    "createdAt": 1792300000000,
+  })
+}
+
+///|
 fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   let root = text(p, "root")
   match name {
+    "drive.transfer" => {
+      fix_transfer(params)
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
     "drive.rename" => {
       let from = text(p, "from")
       let to = text(p, "to")
@@ -259,7 +311,13 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
           { "name": "项目", "path": "/Users/lin/项目" },
           { "name": "下载", "path": "/Users/lin/下载", "unreadable": true },
         ],
-        "places": [{ "name": "外接硬盘", "path": "/Volumes/外接硬盘", "disk": true }],
+        // (as a station offers them: its home, the home's own folders, its disks)
+        "places": [
+          { "name": "主目录", "path": fix_home },
+          { "name": "文档", "path": "/Users/lin/文档" },
+          { "name": "下载", "path": "/Users/lin/下载", "unreadable": true },
+          { "name": "外接硬盘", "path": "/Volumes/外接硬盘", "disk": true },
+        ],
       }
       Some(Ok(answer))
     }
