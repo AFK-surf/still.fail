@@ -5,6 +5,9 @@ import android.security.keystore.KeyProperties;
 
 import android.system.Os;
 
+import com.facebook.soloader.nativeloader.NativeLoader;
+import com.facebook.soloader.nativeloader.SystemDelegate;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -46,6 +49,12 @@ final class CoreHost {
         } catch (Exception e) {
             Host.log("device model: " + e);
         }
+        // Hermes's Java side (String's normalize, Intl: AndroidUnicodeUtils, its Intl classes, fbjni's) loads its
+        // libraries through NativeLoader: not set up, a formula's first letter ended the core (still.fail's Engine.kt).
+        if (!NativeLoader.isInitialized()) NativeLoader.init(new SystemDelegate());
+        // fbjni set up by its own JNI_OnLoad (the JavaVM those calls go through): only a library loaded by name has it
+        // run, and libfbjni.so is otherwise only libhermes.so's dependency (its abort: "g_vm")
+        System.loadLibrary("fbjni");
         // (the app's library, src/host/android_core.c in it: loaded already where the app runs, not where a push
         // started the process)
         System.loadLibrary("mbui");

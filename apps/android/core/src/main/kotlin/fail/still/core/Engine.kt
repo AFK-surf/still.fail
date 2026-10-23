@@ -52,6 +52,9 @@ internal object HermesNative {
         // Intl classes), whose classes load their library through NativeLoader as they load: not set up, the first
         // formula's letter (MathJax normalizes each) failed to load AndroidUnicodeUtils and the core's thread aborted.
         if (!NativeLoader.isInitialized()) NativeLoader.init(SystemDelegate())
+        // fbjni set up by its own JNI_OnLoad (the JavaVM those calls go through): only a library loaded by name has it
+        // run, and libfbjni.so is otherwise only libhermes.so's dependency
+        System.loadLibrary("fbjni")
         System.loadLibrary("stillfail_hermes")
     }
 
