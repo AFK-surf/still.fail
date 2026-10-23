@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- still.fail mbui's share extension (mbui's src/host/ios_share.m; scripts/ios.sh puts it in the app as
+     PlugIns/Share.appex, its id the app's and .share, its version the app's, MBUIAppGroup the group the two share):
+     what another app shares kept for the app, which shows it the next time it comes to the front. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>fail.still.mbui.debug.share</string>
+  <key>CFBundleExecutable</key><string>Share</string>
+  <key>CFBundleName</key><string>still.fail mbui</string>
+  <key>CFBundleDisplayName</key><string>still.fail mbui</string>
+  <key>CFBundlePackageType</key><string>XPC!</string>
+  <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
+  <key>CFBundleLocalizations</key><array><string>zh-Hans</string><string>en</string></array>
+  <key>CFBundleAllowMixedLocalizations</key><true/>
+  <key>CFBundleShortVersionString</key><string>0.1</string>
+  <key>CFBundleVersion</key><string>0</string>
+  <key>CFBundleSupportedPlatforms</key><array><string>iPhoneSimulator</string></array>
+  <key>MinimumOSVersion</key><string>17.0</string>
+  <key>UIDeviceFamily</key><array><integer>1</integer></array>
+  <key>NSExtension</key><dict>
+    <key>NSExtensionPointIdentifier</key><string>com.apple.share-services</string>
+    <key>NSExtensionPrincipalClass</key><string>MBShareController</string>
+    <key>NSExtensionAttributes</key><dict>
+      <key>NSExtensionActivationRule</key><dict>
+        <key>NSExtensionActivationSupportsText</key><true/>
+        <key>NSExtensionActivationSupportsWebURLWithMaxCount</key><integer>1</integer>
+        <key>NSExtensionActivationSupportsImageWithMaxCount</key><integer>20</integer>
+        <key>NSExtensionActivationSupportsMovieWithMaxCount</key><integer>20</integer>
+        <key>NSExtensionActivationSupportsFileWithMaxCount</key><integer>20</integer>
+        <key>NSExtensionActivationSupportsAttachmentsWithMaxCount</key><integer>20</integer>
+      </dict>
+    </dict>
+  </dict>
+  <key>MBUIShareTaking</key><string>正在收下…</string>
+  <key>MBUIShareTaken</key><string>已收下。打开 still.fail mbui，选要发到的对话。</string>
+  <key>MBUIShareFailed</key><string>没能收下，再分享一次试试。</string>
+  <key>MBUIShareDone</key><string>好</string>
+</dict>
+</plist>

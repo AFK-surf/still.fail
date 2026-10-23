@@ -10,6 +10,8 @@ export APP=${APP:-stillfail}
 export MBUI_IOS_PLIST=$A/ios/Info.plist
 export MBUI_IOS_ID=${MBUI_IOS_ID:-fail.still.mbui.debug}
 export MBUI_IOS_DEVICE=${MBUI_IOS_DEVICE:-ios-mbui-sf}
+# its share extension (mbui's src/host/ios_share.m): what another app shares, kept for the app to show
+export MBUI_IOS_SHARE_PLIST=$A/ios/Share-Info.plist
 # the build's number as Android's versionCode (main's commits: git rev-list --count HEAD), where this is a checkout;
 # MBUI_IOS_BUILD says it otherwise
 if [ -z "${MBUI_IOS_BUILD:-}" ] && n=$(git -C "$A" rev-list --count HEAD 2>/dev/null); then export MBUI_IOS_BUILD=$n; fi
