@@ -257,13 +257,25 @@ fn new_chat_on(
       fn() {
         @sf.drawable(c, if t.dark { "illus_new_chat_dark" } else { "illus_new_chat" }, 230.0)
         |> ignore
+        // (the wide frame's, its first words sent: the web's words, as the page had them, going)
         c.box(pt=6.0, fn() {
-          c.text(tr("android-chat.new.heading"), size=22.0, weight=700, color=t.p.text, wrap=false, line=30.8)
+          c.text(
+            tr(if wide_on.val { "web-main.newChat.title" } else { "android-chat.new.heading" }),
+            size=22.0,
+            weight=700,
+            color=t.p.text,
+            wrap=false,
+            line=30.8,
+          )
           |> ignore
         })
         |> ignore
         c.text(
-          fill("android-chat.new.sub", [("station", name)]),
+          if wide_on.val {
+            fill("web-main.newChat.sub", [("name", if name == "" { tr("web-main.newChat.thisMachine") } else { name })])
+          } else {
+            fill("android-chat.new.sub", [("station", name)])
+          },
           size=14.0,
           color=t.p.muted,
           center=true,
