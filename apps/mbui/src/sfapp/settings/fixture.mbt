@@ -549,6 +549,10 @@ fn fx_station(address : String) -> Json {
             ],
           ),
           (
+            "archiving",
+            obj([("days", Json::number(1.0)), ("slackDays", Json::number(3.0)), ("reviewed", Json::boolean(false)), ("canEdit", Json::boolean(true))]),
+          ),
+          (
             "automaticDecisions",
             obj([
               ("canEdit", Json::boolean(true)),
@@ -1274,7 +1278,17 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
     "notify" => {
       // notifications off (slice 10's settings-notify-off)
       let on = !mode.has_prefix("settings-notify-off")
-      Some(obj([("on", Json::boolean(on)), ("asked", Json::boolean(true)), ("push", Json::boolean(false)), ("show", [])]))
+      Some(
+        obj([
+          ("on", Json::boolean(on)),
+          ("asked", Json::boolean(true)),
+          ("push", Json::boolean(false)),
+          ("show", []),
+          ("kinds", obj([("wait", Json::boolean(true)), ("failed", Json::boolean(true)), ("done", str("away")), ("message", Json::boolean(false))])),
+          ("preview", Json::boolean(true)),
+          ("permission", str(if mode.has_prefix("settings-notify-denied") { "denied" } else { "granted" })),
+        ]),
+      )
     }
     "doing" => Some(obj([("doing", [])]))
     "lockDraft" =>

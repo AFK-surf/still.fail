@@ -461,6 +461,10 @@ fn archive_row(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
 fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let here = match app.nav.top() {
+    // (a page under one of them: that one lit)
+    Setting(@settings.Route::StationArchiving(_)) => Some(@settings.Route::Archiving)
+    Setting(@settings.Route::AutoCompletion) | Setting(@settings.Route::AutoPolicy(_)) =>
+      Some(@settings.Route::AutoDecisions)
     Setting(r) => Some(r)
     Settings => Some(@settings.Route::Appearance)
     Archived => Some(@settings.Route::Archive)
@@ -500,7 +504,10 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       nav_heading(c, tr("web-pages.settings.nav.client"))
       page(@settings.Route::Appearance, "appearance", "sliders", tr("web-pages.settings.nav.appearance"))
-      page(@settings.Route::Home, "notifications", "bell", tr("web-pages.settings.nav.notifications"))
+      page(@settings.Route::Notifications, "notifications", "bell", tr("web-pages.settings.nav.notifications"))
+      page(@settings.Route::Permissions, "permissions", "key", tr("web-pages.settings.nav.permissions"))
+      page(@settings.Route::Changelog, "changelog", "sparks", tr("web-pages.settings.nav.changelog"))
+      page(@settings.Route::About, "about", "info", tr("web-pages.settings.nav.about"))
       nav_heading(c, "Station")
       if !rails.contains("stations") {
         page(@settings.Route::Stations, "stations", "server", "Station")
@@ -511,7 +518,8 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       if !rails.contains("profiles") {
         page(@settings.Route::Profiles(""), "profiles", "quota", "Profile")
       }
-      page(@settings.Route::Archive, "archive", "archive", tr("web-pages.archiving.title"))
+      page(@settings.Route::Archiving, "archive", "archive", tr("web-pages.archiving.title"))
+      page(@settings.Route::AutoDecisions, "automatic-decisions", "check", tr("web-pages.automaticDecisions.title"))
       page(@settings.Route::Memories, "memory", "brain", tr("web-pages.settings.nav.memory"))
       if !rails.contains("usage") {
         page(@settings.Route::Usage, "usage", "chart", tr("web-pages.settings.nav.usage"))
