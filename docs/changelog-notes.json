@@ -127,5 +127,358 @@
     "text": [
       "修复：agent 的工作目录在文稿、桌面、下载这些受保护文件夹里时，Mac 上的 station 会卡住不响应；现在缺权限会写明是哪个文件夹并弹出授权窗口"
     ]
+  },
+  "4d3c6e78b": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "c2741d845": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "b5af39267": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "93e77af75": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "d5b7ca455": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "e0ab4da04": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "54186c3a7": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "4b8eb2562": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "aecfe29de": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "3605d6927": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "d4a70be73": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "2ad0005e1": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "bc8d3527e": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "97bcea9d4": {
+    "parts": [
+      "android"
+    ]
+  },
+  "700d6e8a4": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "f42c1f7a0": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "64af64ef5": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "24d6d7864": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "e042c98b6": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "e7bd41c6a": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "a40aab3da": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "e6abf8ac3": {
+    "parts": [
+      "android"
+    ]
+  },
+  "2ebf6be0b": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "93ccde9cc": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "594ecac79": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "082b3f99a": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "1ab59e4e6": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "0ad4504e6": {
+    "parts": [
+      "android",
+      "cloud"
+    ]
+  },
+  "5ef5f5d83": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "dfbf4ca2f": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "3536d1a6d": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "0bc558bf1": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "cb4d3cffb": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "306558caa": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "5665df01e": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "6fd8bbd8e": {
+    "parts": [
+      "android"
+    ]
+  },
+  "b743c74a0": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "dcb15c070": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "f1266ed4a": {
+    "parts": [
+      "android"
+    ]
+  },
+  "4898bb83c": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "c400c1906": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "f6c9ee914": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "375018cde": {
+    "parts": [
+      "android"
+    ]
+  },
+  "f267051a9": {
+    "parts": [
+      "android"
+    ]
+  },
+  "3d4ac9eb8": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "e210eebd8": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "46574196c": {
+    "parts": [
+      "android"
+    ]
+  },
+  "548db1a10": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "b0a035739": {
+    "parts": [
+      "android"
+    ]
+  },
+  "c8b9d20f5": {
+    "parts": [
+      "android"
+    ]
+  },
+  "aa8e394a6": {
+    "parts": [
+      "android"
+    ]
+  },
+  "f50fd2f01": {
+    "parts": [
+      "android"
+    ]
+  },
+  "3f4f0851f": {
+    "parts": [
+      "android"
+    ]
+  },
+  "9d3b0e1e3": {
+    "parts": [
+      "android"
+    ]
+  },
+  "9aa166d4d": {
+    "parts": [
+      "android"
+    ]
+  },
+  "3c0c6d6fe": {
+    "parts": [
+      "android"
+    ]
+  },
+  "5c4da6985": {
+    "parts": [
+      "android"
+    ]
+  },
+  "8aa92b03d": {
+    "parts": [
+      "android"
+    ]
+  },
+  "57fac1fe6": {
+    "parts": [
+      "android"
+    ]
+  },
+  "a97dd4f4a": {
+    "parts": [
+      "android"
+    ]
+  },
+  "29e04a4a2": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "a2c3c5c66": {
+    "parts": [
+      "android"
+    ]
+  },
+  "5e5fe56c3": {
+    "parts": [
+      "android"
+    ]
+  },
+  "527bac052": {
+    "parts": [
+      "android",
+      "web"
+    ]
+  },
+  "6ea50924d": {
+    "parts": [
+      "android",
+      "web"
+    ]
+  },
+  "f27c31d26": {
+    "parts": [
+      "android"
+    ]
+  },
+  "5c3d7c2b2": {
+    "parts": [
+      "android"
+    ]
+  },
+  "94f6ac388": {
+    "parts": [
+      "desktop"
+    ]
+  },
+  "d97583d92": {
+    "parts": [
+      "android"
+    ]
+  },
+  "bc4733297": {
+    "parts": [
+      "android"
+    ]
   }
 }

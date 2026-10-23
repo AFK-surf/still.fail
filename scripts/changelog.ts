@@ -1,8 +1,8 @@
 // The changelog people read in the apps (docs/changelog.md), from main's history: each commit's `Changelog:` trailers
 // (a line for people, in Chinese) and `Fixes: FB-<n>` (the bug reports it fixes), with the version it came in (the
-// commits up to it: 0.1.<n>, as every part numbers its builds) and the parts it reached by the files it changed (partsOf).
-// docs/changelog-notes.json adds lines to commits from before, or says one again: { "<commit or its start>": { "text":
-// [...], "fixes": [...] } }.
+// commits up to it: 0.1.<n>, as every part numbers its builds) and the parts it reached by the files it changed (partsOf),
+// or as it says (`Changelog-parts:`). docs/changelog-notes.json adds lines to commits from before, or says one again:
+// { "<commit or its start>": { "text": [...], "fixes": [...], "parts": [...] } }.
 // That is the test channel's. The stable channel's is written once a release, for people who skip the steps between:
 // docs/releases/0.1.<n>.md, which an agent drafts from the test channel's entries since the last one (--draft) and a
 // person reads before the release goes out (docs/changelog.md).
@@ -14,8 +14,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Where a change reaches people: the station, the web app (and the desktop app, which carries it), the Android app, the desktop app's own shell, or still.fail cloud (live as it deploys). */
+/** Where a change reaches people: the station, the web app (and the Electron desktop app, which carries it), the Android app, the desktop app's own (the Electron app's shell, mbui's desktop app), or still.fail cloud (live as it deploys). */
 export type Part = "station" | "web" | "android" | "desktop" | "cloud";
+const PART_NAMES: readonly string[] = ["station", "web", "android", "desktop", "cloud"] satisfies Part[];
+const isPart = (name: string): name is Part => PART_NAMES.includes(name);
 
 export interface Entry {
   /** The commits up to it: what each part's build number is. */
@@ -41,13 +43,33 @@ const PARTS: [RegExp, Part[]][] = [
   [/^web\//, ["web"]],
   [/^apps\/android\//, ["android"]],
   [/^apps\/desktop\//, ["desktop"]],
+  // still.fail's mbui app (apps/mbui, mbui itself in apps/mbui/mbui): the Android app since 2026-10-23 (the Kotlin one,
+  // apps/android, is frozen), and the desktop app that is to take the Electron one's place (it tells the core it is
+  // "desktop"). What one platform's host alone builds reaches that platform (iOS is no part yet); the desktop's own
+  // pages (src/sfdesk, and what sfapp still has of them: its wide frame, the menu bar, the settings ported from the
+  // web's) the desktop.
+  [/^apps\/mbui\/((mbui\/)?ios\/|(mbui\/)?src\/host\/ios_)/, []],
+  [/^apps\/mbui\/((mbui\/|engine\/)?android\/|(mbui\/)?src\/host\/android_)/, ["android"]],
+  [/^apps\/mbui\/((mbui\/)?src\/host\/(apple|mac_|win|electron_)|src\/sfdesk\/|src\/sfapp\/((strings_)?wide|menu_bar|preview_desk|settings\/(web|desk)_))/, ["desktop"]],
+  [/^apps\/mbui\//, ["android", "desktop"]],
   [/^cloud\/src\//, ["cloud"]],
 ];
 
 // What changes no app by itself: tests, the lists of what the Android app carries, and the types the clients read
-// (client/core-ts/src/shapes/schema.ts, and the bindings made from it), which change with the code that fills them.
-const CHANGES_NOTHING =
-  /^client\/core-ts\/(test|bench|harness|side)\/|^apps\/android\/[^/]+\/src\/(androidTest|test)\/|^apps\/android\/(carries\.sh|not-carried\.txt)$|^client\/core-ts\/src\/shapes\/schema\.ts$|^web\/src\/core\/(shapes|operations)\.ts$|^apps\/android\/.*\/data\/(Shapes|Operations)\.kt$/;
+// (client/core-ts/src/shapes/schema.ts, and the bindings made from it), which change with the code that fills them;
+// the core's scripts (what they make is in its src/); mbui's tests, fixtures, tapes, kept answers, films, demos, tools
+// and docs.
+const CHANGES_NOTHING = new RegExp(
+  [
+    /^client\/core-ts\/(test|bench|harness|side|scripts)\//,
+    /^apps\/android\/[^/]+\/src\/(androidTest|test)\/|^apps\/android\/(carries\.sh|not-carried\.txt)$/,
+    /^client\/core-ts\/src\/shapes\/schema\.ts$|^web\/src\/core\/(shapes|operations)\.ts$|^apps\/android\/.*\/data\/(Shapes|Operations)\.kt$/,
+    /^apps\/mbui\/(mbui\/)?([^/]+|(e2e|docs|screens|scripts|tools|bench|goldens|test|web)\/.*)$/,
+    /^apps\/mbui\/src\/(sffilm|sfreplay|sffix|sfkept|sfkit|sflayout|sfscreens|coredemo|books|photos|videos)\//,
+    /^apps\/mbui\/mbui\/src\/(\w*demo|effecttest|awly|film|textdiff)\//,
+    /^apps\/mbui\/.*(_test|_wbtest|_fixture|\/fixture)\.mbt$|^apps\/mbui\/core\/(.*[_-]test\.(m|js)|smoke\.m)$/,
+  ].map((r) => r.source).join("|"),
+);
 
 // The words people read (client/i18n/catalog/<language>/<part>[-…].json). The core carries them all into every app,
 // but they reach people where the code that says them does: a commit that changes code as well reaches only what its
@@ -93,14 +115,16 @@ const TRAILER = /^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/;
 const NOTHING = /^(none|n\/?a|nothing|无|没有|-+)[.。]?$/i;
 
 /**
- * A commit's message: the changelog's lines and the fixes in its trailers, from every paragraph after the subject that is
- * only trailers (each line `Key: value`, or one indented to fold the line before on). git takes the last such paragraph
- * alone for the trailers, which lost every `Changelog:` written above a blank line and `Co-Authored-By:` (37 commits from
- * 2026-10-01 to 10-08: their changes were in the apps, and nothing said so).
+ * A commit's message: the changelog's lines, the fixes and the parts it says it reaches people in (`Changelog-parts:`)
+ * in its trailers, from every paragraph after the subject that is only trailers (each line `Key: value`, or one indented
+ * to fold the line before on). git takes the last such paragraph alone for the trailers, which lost every `Changelog:`
+ * written above a blank line and `Co-Authored-By:` (37 commits from 2026-10-01 to 10-08: their changes were in the
+ * apps, and nothing said so).
  */
-export function readMessage(message: string): { text: string[]; fixes: number[] } {
+export function readMessage(message: string): { text: string[]; fixes: number[]; parts: string[] } {
   const text: string[] = [];
   const fixes: number[] = [];
+  const parts: string[] = [];
   for (const paragraph of message.split("\n").slice(1).join("\n").split(/\n[ \t]*\n/)) {
     const lines = paragraph.split("\n").filter((l) => l.trim());
     if (!lines.length || !lines.every((l, i) => TRAILER.test(l) || (i > 0 && /^\s/.test(l)))) continue;
@@ -108,9 +132,21 @@ export function readMessage(message: string): { text: string[]; fixes: number[] 
       const [, key, value] = TRAILER.exec(line)!;
       if (/^changelog$/i.test(key!) && value!.trim()) text.push(value!.trim());
       if (/^fixes$/i.test(key!)) for (const fb of value!.matchAll(/FB-?(\d+)/gi)) fixes.push(Number(fb[1]));
+      if (/^changelog-parts$/i.test(key!)) parts.push(...value!.toLowerCase().split(/[,，\s]+/).filter(Boolean));
     }
   }
-  return { text, fixes };
+  return { text, fixes, parts };
+}
+
+/** The parts a commit was said to reach people in, those that are parts; null: none was. */
+function partsSaid(said: string[]): Part[] | null {
+  const parts = [...new Set(said.filter(isPart))].sort();
+  return parts.length ? parts : null;
+}
+
+/** The message's Changelog-parts that name no part. */
+export function unknownParts(message: string): string[] {
+  return readMessage(message).parts.filter((p) => !isPart(p));
 }
 
 /** The message's Changelog lines that only say there is nothing to tell. */
@@ -118,7 +154,7 @@ export function saysNothing(message: string): string[] {
   return readMessage(message).text.filter((t) => NOTHING.test(t));
 }
 
-type Notes = Record<string, { text?: string[]; fixes?: number[] }>;
+type Notes = Record<string, { text?: string[]; fixes?: number[]; parts?: string[] }>;
 
 export function changelog(root: string, rev = "HEAD"): Entry[] {
   const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
@@ -146,7 +182,10 @@ export function changelog(root: string, rev = "HEAD"): Entry[] {
     const fixes = [...new Set([...said.fixes, ...(note?.fixes ?? [])])];
     if (!text.length && !fixes.length) continue;
     const version = versions.get(commit)!;
-    entries.push({ version, commit, at: Number(at), text, fixes, parts: partsOf(rest.split("\n").filter(Boolean), notCarried) });
+    // Where it reaches people: what it says (docs/changelog-notes.json's `parts`, or its `Changelog-parts:`), where its
+    // files alone cannot tell (the desktop's change in code the Android app carries too); else where its files are.
+    const parts = partsSaid(note?.parts ?? []) ?? partsSaid(said.parts) ?? partsOf(rest.split("\n").filter(Boolean), notCarried);
+    entries.push({ version, commit, at: Number(at), text, fixes, parts });
   }
   return entries;
 }
@@ -206,8 +245,11 @@ if (import.meta.main) {
     const arg = rev!;
     const messages = existsSync(arg) ? [["this commit", readFileSync(arg, "utf8")]]
       : execFileSync("git", ["log", "--format=%h%x1f%B%x1e", arg], { cwd: root, encoding: "utf8" }).split("\x1e").map((r) => r.trim()).filter(Boolean).map((r) => r.split("\x1f"));
-    const bad = messages.filter(([, m]) => saysNothing(m!).length);
-    for (const [commit, m] of bad) console.error(`${commit}: "Changelog: ${saysNothing(m!)[0]}": a commit with nothing to tell people writes no Changelog line (docs/changelog.md)`);
+    const bad = messages.filter(([, m]) => saysNothing(m!).length || unknownParts(m!).length);
+    for (const [commit, m] of bad) {
+      if (saysNothing(m!).length) console.error(`${commit}: "Changelog: ${saysNothing(m!)[0]}": a commit with nothing to tell people writes no Changelog line (docs/changelog.md)`);
+      if (unknownParts(m!).length) console.error(`${commit}: "Changelog-parts: ${unknownParts(m!).join(", ")}": the parts are ${PART_NAMES.join(", ")} (docs/changelog.md)`);
+    }
     process.exit(bad.length ? 1 : 0);
   }
   if (flag === "--stable") console.log(JSON.stringify(stable(root, changelog(root, rev ?? "HEAD"))));
