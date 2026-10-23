@@ -12,7 +12,8 @@ import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { Cloud } from "../src/cloud/state.ts";
 import { signalGroup } from "../src/ops/group.ts";
-import { Jobs } from "../src/jobs/jobs.ts";
+import { LOOK_MS } from "../src/jobs/admit.ts";
+import { Jobs, type Machine, STOP_LOOK_MS } from "../src/jobs/jobs.ts";
 import { blobId, listLocal } from "../src/jobs/dirsync.ts";
 import { DISK_LOW_BYTES, MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, readJson, writeJson } from "../src/jobs/remote.ts";
 import { PEER_ALPN, peerCall, servePeer } from "../src/mesh/peer.ts";
@@ -67,20 +68,29 @@ const cloudOf = (station: string, peers: string[]): any =>
     relays: () => [],
   });
 
+/// A machine with room for every task (jobs/admit.ts): its CPUs idle, its memory under no pressure.
+const idle: Machine = (() => {
+  let t = 0;
+  return { cpus: () => 8, ticks: () => [0, (t += 1000)] as [number, number], pressure: async () => "normal" as const };
+})();
+
 /// A source station A and a target B of workspace "ws", A's requests to B over the station transport (in memory). `old`:
-/// B answers as a station from before directory sync would. `asked`: the methods A asked B, in order.
-async function pair() {
+/// B answers as a station from before directory sync would. `asked`: the methods A asked B, in order. `queue`: B's jobs
+/// on a clock of their own (`queueClock`) and an idle machine, where a test starts a task beside one running (its queue
+/// waits for room on that clock, not on the machine the test runs on).
+async function pair(options: { queue?: boolean } = {}) {
   const clock = testClock();
+  const queueClock = options.queue ? testClock() : undefined;
   const mesh = memoryMesh();
   const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
   cleanup.push(() => Promise.all([source.close(), target.close()]).then(() => undefined));
   /// What the target's disk has free (`disk.free`; plenty unless a test says otherwise).
   const disk = { free: () => 500 * 1024 ** 3 };
-  const make = (dir: string, options: { clock?: Clock.Clock; diskFree?: (path: string) => number } = {}) => {
+  const make = (dir: string, options: { clock?: Clock.Clock; diskFree?: (path: string) => number; jobsClock?: Clock.Clock; machine?: Machine } = {}) => {
     const store = Store.open(":memory:");
     const told: [string, string][] = [];
-    const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
+    const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null, clock: options.jobsClock, machine: options.machine });
     const remote = new Remote({ data: dir, store, jobs, clock: options.clock, diskFree: options.diskFree, notify: (session, text) => void told.push([session, text]) });
     cleanup.push(async () => {
       await remote.close();
@@ -91,7 +101,7 @@ async function pair() {
     return { dir, store, jobs, remote, told };
   };
   const a = make(tempdir(), { clock });
-  const b = make(tempdir(), { diskFree: () => disk.free() });
+  const b = make(tempdir(), { diskFree: () => disk.free(), ...(queueClock ? { jobsClock: queueClock, machine: idle } : {}) });
   const B = target.id();
   mkdirSync(join(a.dir, "mesh"), { recursive: true });
   writeFileSync(join(a.dir, "mesh", "cloud.json"), JSON.stringify({ workspace: "ws", station: source.id() }));
@@ -144,7 +154,7 @@ async function pair() {
     return { prepared, started, sync: started.sync };
   };
   const mirror = (name: string) => join(b.remote.room("ws", source.id(), "s1"), "work", name);
-  return { a, b, A: source.id(), B, home, clock, use, run, mirror, state, release, disk };
+  return { a, b, A: source.id(), B, home, clock, queueClock, use, run, mirror, state, release, disk };
 }
 
 const stamp = (path: string) => {
@@ -264,7 +274,8 @@ describe("dirsync", { concurrency: true }, () => {
   });
 
   test("one task at a time in a mirror: a sync while one runs there is refused, nothing started", async () => {
-    const p = await pair();
+    const p = await pair({ queue: true });
+    const queueClock = p.queueClock!;
     const dir = join(tempdir(), "busy");
     mkdirSync(dir);
     writeFileSync(join(dir, "f"), "1\n");
@@ -280,8 +291,16 @@ describe("dirsync", { concurrency: true }, () => {
     const other = join(tempdir(), "other");
     mkdirSync(other);
     writeFileSync(join(other, "g"), "g\n");
-    assert.equal((await p.run("free", other, "cat g")).sync.sent.files, 1);
-    await p.use("station_task", { key: "long", action: "stop" });
+    // (started beside the long one once the queue has room: on its clock, a look at a time)
+    await p.use("station_task", { key: "free", action: "prepare", command: "cat g", dir: other });
+    const free = await p.use("station_task", { key: "free", action: "start" });
+    assert.equal(free.sync.sent.files, 1);
+    await rounds(queueClock, `${LOOK_MS} millis`, () => p.b.store.getJob(free.job.id)!.state !== "running");
+    // (its stop's grace looks on that clock too)
+    let stopped = false;
+    const stopping = p.use("station_task", { key: "long", action: "stop" }).finally(() => (stopped = true));
+    await rounds(queueClock, `${STOP_LOOK_MS} millis`, () => stopped);
+    await stopping;
     const next = await p.use("station_task", { key: "next", action: "start" });
     assert.equal(next.sync.sent.files, 1);
     assert.equal(readFileSync(join(p.mirror("busy"), "f"), "utf8"), "2\n");
