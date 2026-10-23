@@ -426,6 +426,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // back half: Android's, the pages the whole width with the latest chats at a corner (corners.mbt); otherwise the
   // phone's pages
   wide_on.val = is_wide(c) || is_touch_wide()
+  // the wide frame's lines set as the desktop app's pages set them (a browser's way)
+  @ui.set_web_lines(wide_on.val)
   corners_on.val = is_corners() && !wide_on.val
   @settings.wide.val = wide_on.val
   @settings.no_bar.val = corners_on.val

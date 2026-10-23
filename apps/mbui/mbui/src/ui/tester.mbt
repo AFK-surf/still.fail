@@ -50,6 +50,7 @@ fn reset_globals() -> Unit {
   text_cache.glyphs.clear()
   text_cache.fresh.clear()
   text_cache.generation = -1
+  web_lines.val = false
   faces_reset()
   text_table.val = None
   inputs_since.val = false

@@ -235,15 +235,11 @@ fn Rich::run_bg(self : Rich, r : Run) -> Int64 {
 ///|
 fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
   let sc = g().scale
-  let (a0, d0, own0) = font_metrics(r.size, r.weight)
-  // Chinese in it: measured by the CJK font's too (taller), as Android measures a line by the fonts it draws in
+  let (_, _, own0) = font_metrics(r.size, r.weight)
+  // Chinese in it: measured by the CJK font's too (taller), as Android measures a line by the fonts it draws in (as a
+  // browser, by the first font's alone: line_metrics)
   let cjk = r.runs.iter().any(fn(run) { words_cjk(run.text) })
-  let (a0, d0) = if cjk {
-    let (ha, hd) = han_metrics(r.size, r.weight)
-    (dmax(a0, ha), dmax(d0, hd))
-  } else {
-    (a0, d0)
-  }
+  let (a0, d0) = line_metrics(r.size, r.weight, cjk)
   let lh = if r.line > 0.0 { r.line } else { own0 }
   let px = whole_pixel_lines(r.size, r.weight)
   let (pitch0, base_asc, extra) = set_line(lh, a0, d0, sc, px, trim=r.trim)
@@ -301,13 +297,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     let weight = r.run_weight(run)
     let style = run_style(run) | r.faces
     let s = shape(run.text, size, weight, style~, spacing=r.spacing)
-    let (a, d, _) = font_metrics(size, weight, style~)
-    let (a, d) = if words_cjk(run.text) {
-      let (ha, hd) = han_metrics(size, weight, style~)
-      (dmax(a, ha), dmax(d, hd))
-    } else {
-      (a, d)
-    }
+    let (a, d) = line_metrics(size, weight, words_cjk(run.text), style~)
     let (l, lasc, _) = set_line(lh * size / r.size, a, d, sc, px)
     run_start.push(off)
     run_size.push(size)

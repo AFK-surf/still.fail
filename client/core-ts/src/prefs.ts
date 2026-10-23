@@ -9,8 +9,8 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenCodec", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "previewFolded"];
-const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenCodec", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "previewFolded", "sidebars", "trouble"];
+const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
 const PREFS = { topic: "prefs" };
@@ -161,6 +161,8 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("screenQuality" in prefs && !["smooth", "hd", "original"].includes(prefs.screenQuality as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenQuality" }));
   if ("screenCodec" in prefs && prefs.screenCodec !== "h264") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenCodec" }));
   if (isObject(prefs.previewSizes) && Object.values(prefs.previewSizes).some((v) => typeof v !== "string" || !/^[0-9]{1,4}(x[0-9]{1,4})?$/.test(v))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "previewSizes" }));
+  if (isObject(prefs.sidebars) && Object.values(prefs.sidebars).some((v) => typeof v !== "string" || !/^([0-9]{1,4}|[0-9]{1,4},closed|closed)$/.test(v))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "sidebars" }));
+  if (isObject(prefs.trouble) && (Object.keys(prefs.trouble).some((k) => !/\n(seen|gone)$/.test(k)) || Object.values(prefs.trouble).some((v) => v !== null && (typeof v !== "string" || v.length > 2000)))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "trouble" }));
   if ("badgeKinds" in prefs && prefs.badgeKinds !== null && !isObject(prefs.badgeKinds)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badgeKinds" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));
   withLang(prefs);

@@ -107,6 +107,15 @@ priv struct PanelOut {
 }
 
 ///|
+/// A heading among a menu's items (Radix's Label), as mbui draws one: small, quiet, 10 in, 6 over and 4 under it.
+pub fn menu_heading_look(c : @ui.Ctx, label : String) -> Unit {
+  c.box(padx=10.0, pt=6.0, pb=4.0, fn() {
+    c.text(label, size=c.theme().font_sm, color=c.theme().muted, wrap=false) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// The panel of menu `key` (built in its layer): by `anchor` (a rectangle in the window) on its `side`, `offset`
 /// away (by its size last frame), named `label`; a submenu's when `depth` > 0; a listbox (a select's) when `listbox`.
 fn menu_panel(
@@ -125,6 +134,7 @@ fn menu_panel(
   look : (@ui.Ctx, Double, () -> Unit) -> Unit,
   item_look : (@ui.Ctx, MenuItemState) -> Unit,
   motion? : @ui.Look,
+  heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
 ) -> PanelOut {
   let pid = c.id(key + "/panel")
   let ids = entries.mapi(fn(k, _) { part_id(pid, k) })
@@ -183,11 +193,7 @@ fn menu_panel(
                 c.box(h=Px(1.0), w=Fill(1.0), bg=@ui.alpha(c.theme().fg, 0.12), fn() {  }) |> ignore
               })
               |> ignore
-            Heading =>
-              c.box(padx=10.0, pt=6.0, pb=4.0, fn() {
-                c.text(e.label, size=c.theme().font_sm, color=c.theme().muted, wrap=false) |> ignore
-              })
-              |> ignore
+            Heading => heading_look(c, e.label)
             _ => {
               let iid = ids[n]
               let r = c.interact(iid, disabled=e.disabled)
@@ -252,6 +258,7 @@ fn menu_panel(
                       min_w,
                       look,
                       item_look,
+                      heading_look~,
                     )
                   })
                   if out.chosen is Some(_) {
@@ -381,6 +388,7 @@ pub fn dropdown_menu(
   min_w? : Double = 180.0,
   look? : (@ui.Ctx, Double, () -> Unit) -> Unit = menu_look,
   item_look? : (@ui.Ctx, MenuItemState) -> Unit = menu_item_look,
+  heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
   at? : (Double, Double, Double, Double),
   scrim? : Int64 = 0L,
   enter? : @motion.Trans,
@@ -427,6 +435,7 @@ pub fn dropdown_menu(
         min_w,
         look,
         item_look,
+        heading_look~,
         motion?=match moved {
           Some(m) => m
           None => None

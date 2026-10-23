@@ -103,8 +103,64 @@ fn last(text : String) -> Json {
 }
 
 ///|
+/// The web's demo's chats (ember web/src/demo/fixtures.ts startingChats), its one station's, as its core lists them:
+/// MBUI_FIXTURE=webdemo, the wide frame beside the web's story app-chat with the same chats (their people's pictures
+/// letters here).
+fn webdemo_days() -> Array[Json] {
+  let lin = person("lin@acme.dev", "林晓", false)
+  let chen = person("chen@acme.dev", "陈默", false)
+  let zhou = person("zhou@acme.dev", "周宁", false)
+  let one = fn(id, title, ago, more : Map[String, Json]) {
+    let r = row(id, title, "ws1/st1", ago, more)
+    match r {
+      Object(m) => {
+        m.remove("stationIcon")
+        Json::object(m)
+      }
+      _ => r
+    }
+  }
+  [
+    {
+      "label": "今天",
+      "items": [
+        one("safari", "把那个弄一下", "1 分钟前", {
+          "last": last("还是不行"),
+          "people": [lin, chen],
+          "creator": { "id": "lin@acme.dev", "name": "林晓", "via": "cloud" },
+        }),
+        one("csv", "订单导出支持 CSV", "26 分钟前", {
+          "unread": true,
+          "tone": "done",
+          "last": last("做好了：导出按当前筛选条件走流式写出，10 万行大约 2.3 秒，已合进 main（a3f9c21）。"),
+          "agents": [agent("openai", "codex")],
+          "people": [zhou],
+        }),
+        one("deps", "每周依赖升级", "58 分钟前", {
+          "state": "block",
+          "tone": "alert",
+          "last": last("其余 23 个包都升好了，测试通过。只剩 React Router 8：它改了 loader 的写法，要动 14 个路由文件。这周要一起升吗？"),
+          "people": [chen],
+        }),
+        one("p99", "排查 API p99 变慢", "20 小时前", {
+          "last": last("罪魁是 orders 表少了 (user_id, created_at) 联合索引：上周的分页改动让查询走了全表扫描。"),
+          "people": [lin],
+        }),
+      ],
+    },
+    {
+      "label": "昨天",
+      "items": [one("docs", "补一下部署文档", "26 小时前", { "last": last("谢谢，文档看过了"), "people": [chen] })],
+    },
+  ]
+}
+
+///|
 /// The chats of the first workspace, newest first, by day.
 fn fixture_days(f : Fixture) -> Array[Json] {
+  if f.mode == "webdemo" {
+    return webdemo_days()
+  }
   let today = [
     row("c1", "整理发布清单", "ws1/st1", "2 分钟前", {
       "state": "run",
@@ -234,10 +290,11 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     Some(String(s)) => s
     _ => ""
   }
-  let stations : Json = [
-    { "id": "ws1/st1", "name": "Studio" },
-    { "id": "ws1/st2", "name": "MBA" },
-  ]
+  let stations : Json = if f.mode == "webdemo" {
+    [{ "id": "ws1/st1", "name": "Studio" }]
+  } else {
+    [{ "id": "ws1/st1", "name": "Studio" }, { "id": "ws1/st2", "name": "MBA" }]
+  }
   if f.mode == "loading" {
     return None
   }
@@ -278,8 +335,8 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     "days": Json::array(days),
     "leading": "agents",
     "note": { "reading": false, "failing": [], "empty": Json::boolean(empty) },
-    // the stations at a glance (Station's place in the bar): Studio online, MBA not
-    "glyph": if scope == "ws1" {
+    // the stations at a glance (Station's place in the bar): Studio online, MBA not (the web's demo: its one, online)
+    "glyph": if scope == "ws1" && f.mode != "webdemo" {
       { "online": 1, "dim": 1, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
     } else {
       { "online": 1, "dim": 0, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
@@ -349,10 +406,14 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
       Some([
         {
           "account": account,
-          "workspaces": [
-            { "id": "ws1", "name": "星火工作室", "stations": 2, "members": 3 },
-            { "id": "ws2", "name": "个人", "stations": 1, "members": 1 },
-          ],
+          "workspaces": if f.mode == "webdemo" {
+            [{ "id": "ws1", "name": "Acme", "stations": 1, "members": 3 }]
+          } else {
+            [
+              { "id": "ws1", "name": "星火工作室", "stations": 2, "members": 3 },
+              { "id": "ws2", "name": "个人", "stations": 1, "members": 1 },
+            ]
+          },
           "invitations": [],
           "loaded": true,
         },
@@ -376,6 +437,10 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     "imageNear" => fixture_image_near(params)
     "chats" => fixture_chats(f, params)
     "search" => fixture_search(params)
+    // the archive's chats (the settings' made-up ones): the wide frame's sidebar lists them
+    "archive" => @settings.fixture_topic(f.mode, name, params)
+    // (the web's demo has none)
+    "workspaceMarks" if f.mode == "webdemo" => Some({ "workspaces": { "ws1": {} } })
     "workspaceMarks" =>
       Some({
         "workspaces": {

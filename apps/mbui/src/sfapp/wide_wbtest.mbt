@@ -813,3 +813,34 @@ test "wide: 文件's columns as Finder's: an edge dragged makes its column wider
   assert_true(ex4 < ex3, msg="fitted to its names")
   ignore(cx)
 }
+
+///|
+test "wide: the rail as the web's: the stations their glyph and how they are; the workspaces 6 apart, another's tone at its corner; the ＋ over them its menu" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  // the stations' place says how they are (RailStations' label)
+  assert_true(t.query(Button, label="Station：" + rail_stations_label(fixture("home"), "ws1")) is Some(_))
+  // the workspaces, one under another, 36 apart (30 and the 6 between)
+  let ws : Array[(Double, Double, Double, Double)] = []
+  for x in ["星火工作室", "个人"] {
+    match t.query(Button, label=x) {
+      Some(n) => ws.push(n.rect)
+      None => ()
+    }
+  }
+  if ws.length() == 2 {
+    assert_eq(ws[1].1 - ws[0].1, 36.0)
+    assert_eq(ws[0].2, 30.0)
+  }
+  // the ＋ (seen as the pointer comes over the workspaces): its menu
+  let (ax, ay, aw, ah) = t.query(Button, label="新建 workspace、添加账号").unwrap().rect
+  t.tap(ax + aw / 2.0, ay + ah / 2.0)
+  t.frame()
+  assert_true(t.find("新建 workspace") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("添加另一个账号") is Some(_))
+  // 新建 workspace: its sheet
+  let (mx, my) = t.find("新建 workspace").unwrap()
+  t.tap(mx, my)
+  t.frame()
+  assert_true(sheet_host.kind == NewWorkspace)
+}

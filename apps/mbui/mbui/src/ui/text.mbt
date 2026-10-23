@@ -143,6 +143,42 @@ fn han_metrics(size : Double, weight : Int, style? : Int = 0) -> (Double, Double
 }
 
 ///|
+/// Lines set as a browser sets them (Blink's LayoutNG), not as Android does: by the first font's ascent and descent
+/// alone, each on a whole point, what is left of the line halved and rounded down above them (FontHeight::AddLeading);
+/// what falls back to another font (Chinese) on the same baseline. A frame set as a web page is (a desktop's window,
+/// as the desktop app's pages) says so (set_web_lines).
+let web_lines : Ref[Bool] = Ref(false)
+
+///|
+/// Whether lines are set as a browser sets them from now on (web_lines); the layouts made the other way let go.
+pub fn set_web_lines(on : Bool) -> Unit {
+  if web_lines.val != on {
+    web_lines.val = on
+    for f in text_cache.fonts {
+      for _, s in f.map {
+        s.lay = None
+      }
+    }
+  }
+}
+
+///|
+/// A line's ascent and descent as it is set (`cjk`: Chinese in it): the first font's, the taller of it and the font Han
+/// falls back to with Chinese in it, as Android measures a line by the fonts it draws in; as a browser sets it
+/// (web_lines), the first font's alone, each on a whole point.
+fn line_metrics(size : Double, weight : Int, cjk : Bool, style? : Int = 0) -> (Double, Double) {
+  let (a, d, _) = font_metrics(size, weight, style~)
+  if web_lines.val {
+    (a.round(), d.round())
+  } else if cjk {
+    let (ha, hd) = han_metrics(size, weight, style~)
+    (dmax(a, ha), dmax(d, hd))
+  } else {
+    (a, d)
+  }
+}
+
+///|
 /// Whether the host sets a line of words on whole device pixels, as Android's StaticLayout does (its font metrics
 /// whole pixels too): the sixth number it answers of font_metrics, 1. A host that does not say does not.
 fn whole_pixel_lines(size : Double, weight : Int, style? : Int = 0) -> Bool {
@@ -216,6 +252,10 @@ fn set_line(
   px : Bool,
   trim? : Bool = false,
 ) -> (Double, Double, Double) {
+  // as a browser: the room halved, rounded down above; a font taller than its line overflows it, the line as asked
+  if web_lines.val {
+    return (line, asc + ((line - asc - desc) / 2.0).floor(), 0.0)
+  }
   let sc = if sc > 0.0 { sc } else { 1.0 }
   let pitch = if px { (line * sc - 1.0e-6).ceil() / sc } else { line }
   let room = pitch - asc - desc
@@ -760,7 +800,7 @@ fn layout_text(
   let lines = line_start.length()
   // a line as high as asked, the glyphs in its middle; measured by the first line's fonts, as Android measures them
   // (Chinese in it: the CJK font's, taller), the lines after it set in the same place
-  let (asc, desc, own_h) = font_metrics(size, weight)
+  let (_, _, own_h) = font_metrics(size, weight)
   let mut cjk = false
   if lines > 0 {
     for c in line_start[0]..<line_end[0] {
@@ -770,12 +810,7 @@ fn layout_text(
       }
     }
   }
-  let (asc, desc) = if cjk {
-    let (ha, hd) = han_metrics(size, weight)
-    (dmax(asc, ha), dmax(desc, hd))
-  } else {
-    (asc, desc)
-  }
+  let (asc, desc) = line_metrics(size, weight, cjk)
   let (line_h, ascent, extra) = set_line(
     if line > 0.0 {
       line

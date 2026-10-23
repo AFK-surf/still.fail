@@ -1582,6 +1582,8 @@ export const SHAPES: Record<string, Shape> = {
     ["screenQuality", opt("String"), { doc: "How large a picture of a station's screen this device asks for: `smooth` (at most 1280×720), `hd` (at\nmost 1920×1080), `original` (the screen's own size), or (none) as the window is (at most 1920×1080, 2560×1440 on\na screen that has more)." }],
     ["screenCodec", opt("String"), { doc: "The codec a station's screen is asked in on this device: `h264` (H.264 only), or (none) the best both ends\nhave (H.265 where they do)." }],
     ["previewSizes", map("String"), { default: true, doc: "The size a service's page is shown at on this device (its preview's 尺寸), by its station and job\n(`<station>\\n<job>`): its width, or `<width>x<height>`; none: as big as the preview." }],
+    ["sidebars", map("String"), { default: true, doc: "Each sidebar of the wide frame as it was left on this device, by its workspace and its group\n(`<workspace>\\n<chats|settings|files|profiles|stations>`): its width, `<width>,closed` folded at that width, or `closed`." }],
+    ["trouble", map("String"), { default: true, doc: "What this device did with a workspace's stations' trouble in the rail's bell, by `<workspace>\\n<seen|gone>`:\nthe trouble's words as they were when it was looked at (no longer lighting the bell) or let go (no longer listed)." }],
     ["previewFolded", opt("bool"), { doc: "A service's page's toolbar folded away on this device (held down; the bar's size button opens it again)." }],
     ["resume", map("String"), { default: true, doc: "A Slack app made for a new connect, to go on with, by station (the Android app's)." }],
     ["stationUpdatesDismissed", map("String"), { default: true, doc: "Versions dismissed on this device, by workspace/station." }],

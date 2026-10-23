@@ -42,7 +42,9 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     wide.jobs_open = !wide.jobs_open
   }
   if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
-    if wide.switcher && sw.kind != "" {
+    if rail_ws.editing {
+      rail_ws.editing = false
+    } else if wide.switcher && sw.kind != "" {
       // one kind's list: back to all of them
       sw.kind = ""
       wide.chosen = 0
@@ -120,7 +122,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
     Some(m) => m
     // (closed: told so, for its going)
     None => {
-      wide_menu(c, "row-menu", false, 0, [], {}, row_menu_w) |> ignore
+      wide_menu(c, "row-menu", false, 0, [], {}, menu_w) |> ignore
       return
     }
   }
@@ -139,6 +141,11 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
   if link != "" {
     entries.push(@kit.menu_item("link", label=tr("web-main.chat.copyLink")))
   }
+  // relayed to a channel (docs/relay.md): a chat with an agent to go on there
+  match item.thread {
+    Some(_) if item.agents.length() > 0 => entries.push(@kit.menu_item("relay", label=tr("web-main.relay.action")))
+    _ => ()
+  }
   entries.push(@kit.menu_item("transcript", label=tr("web-main.chat.copyTranscript")))
   entries.push(@kit.menu_item("archive", label=tr("web-main.chat.archive")))
   let icons = {
@@ -146,11 +153,12 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
     "rename": "edit",
     "keep": "shield-check",
     "link": "copy",
+    "relay": "arrow-up-right",
     "transcript": "file",
     "archive": "archive",
   }
   // (its top left at the pointer, as the web's context menu opens)
-  let m = wide_menu(c, "row-menu", true, 0, entries, icons, row_menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
+  let m = wide_menu(c, "row-menu", true, 0, entries, icons, menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
   if !m.open {
     wide.menu = None
   }
@@ -190,6 +198,17 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
         None => ()
       }
     Some("link") => copy_chat_link(c, item.title, link)
+    Some("relay") =>
+      match item.thread {
+        Some(th) =>
+          open_relay(
+            c,
+            src,
+            { station: item.station, session: item.session, title: item.title, station_name: item.station_name },
+            th,
+          )
+        None => ()
+      }
     Some("transcript") =>
       copy_transcripts(c, src, item.station, match item.agents.map(fn(a) { a.key }).filter(fn(k) { k != "" }) {
         [] => [item.session]
@@ -200,9 +219,6 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
   }
 }
 
-///|
-/// The row's menu's width: as wide as 复制 session 文件路径 needs.
-let row_menu_w : Double = 224.0
 
 ///|
 /// Where a chat's agents' sessions are kept on their station's machine (ChatRef.tsx useCopyTranscripts:
