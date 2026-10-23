@@ -66,8 +66,8 @@ test "wide: the lit place pressed again folds its sidebar, shown a while (the po
   let edge = rail_w + 240.0
   t.drag(edge, 400.0, edge + 60.0, 400.0)
   t.frame()
-  // (as far as the pointer went once it was pressed on the edge)
-  assert_true(wide.side_w > 280.0 && wide.side_w <= 300.0, msg=wide.side_w.to_string())
+  // (as far as the pointer went from where it was pressed: the library's edge, @sf.handle_drag)
+  assert_eq(wide.side_w, 300.0)
   assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string(wide.side_w.round().to_int().to_string())))
 }
 
