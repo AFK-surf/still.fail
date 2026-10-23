@@ -420,7 +420,8 @@ const ENGINE_ANDROID_CMAKE = ["-G", "Ninja", "-DANDROID_ABI=arm64-v8a", "-DANDRO
 /// Android's engine: hermes-android's AAR (HERMES.rn: Gradle's cache, else Maven Central) for libhermes.so and its
 /// headers, the shell this target's, and the SDK's CMake with the NDK's toolchain; the NDK's libc++_shared.so beside.
 function engineAndroid(out: string) {
-  const env = androidEnv();
+  const sdk = androidHome();
+  const ndk = join(sdk, "ndk", NDK);
   const work = join(BUILD(), "engine-android");
   mkdirSync(work, { recursive: true });
   const hermes = join(work, `hermes-android-${HERMES.rn}`);
@@ -430,18 +431,18 @@ function engineAndroid(out: string) {
     run("unzip", ["-q", "-o", hermesAar(work), "jni/arm64-v8a/libhermes.so", "prefab/modules/libhermes/include/*", "-d", hermes]);
   }
   const shell = join(ensure("shell", "android-arm64"), "libstillfail_shell.so");
-  const cmakeDir = readdirSync(join(env.ANDROID_HOME, "cmake")).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).pop();
-  if (!cmakeDir) throw new Error(`no CMake in ${join(env.ANDROID_HOME, "cmake")}: install the SDK's cmake`);
-  const bin = join(env.ANDROID_HOME, "cmake", cmakeDir, "bin");
+  const cmakeDir = readdirSync(join(sdk, "cmake")).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).pop();
+  if (!cmakeDir) throw new Error(`no CMake in ${join(sdk, "cmake")}: install the SDK's cmake`);
+  const bin = join(sdk, "cmake", cmakeDir, "bin");
   const build = join(work, "build");
   rmSync(build, { recursive: true, force: true });
   run(join(bin, "cmake"), ["-S", join(ROOT, "apps/mbui/engine/android"), "-B", build, ...ENGINE_ANDROID_CMAKE,
-    `-DCMAKE_MAKE_PROGRAM=${join(bin, "ninja")}`, `-DCMAKE_TOOLCHAIN_FILE=${join(env.ANDROID_NDK_HOME, "build/cmake/android.toolchain.cmake")}`,
+    `-DCMAKE_MAKE_PROGRAM=${join(bin, "ninja")}`, `-DCMAKE_TOOLCHAIN_FILE=${join(ndk, "build/cmake/android.toolchain.cmake")}`,
     `-DANDROID_PLATFORM=android-${ANDROID_API}`, `-DHERMES_SO=${join(hermes, "jni/arm64-v8a/libhermes.so")}`,
     `-DHERMES_INCLUDE=${join(hermes, "prefab/modules/libhermes/include")}`, `-DSHELL_SO=${shell}`]);
   run(join(bin, "cmake"), ["--build", build]);
   for (const name of ["libstillfail_hermes.so", "libjsi.so"]) copyFileSync(join(build, name), join(out, name));
-  const sysroot = join(env.ANDROID_NDK_HOME, "toolchains/llvm/prebuilt", osPlatform() === "darwin" ? "darwin-x86_64" : "linux-x86_64", "sysroot");
+  const sysroot = join(ndk, "toolchains/llvm/prebuilt", osPlatform() === "darwin" ? "darwin-x86_64" : "linux-x86_64", "sysroot");
   copyFileSync(join(sysroot, "usr/lib/aarch64-linux-android/libc++_shared.so"), join(out, "libc++_shared.so"));
 }
 /// hermes-android's AAR at HERMES.rn: Gradle's cache where it has it, else downloaded once into `work`.
