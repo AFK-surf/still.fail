@@ -597,17 +597,12 @@ pub fn open_fixture(mode : String) -> Unit {
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
     "chat-letters-pop" => wide.info_open = true
     "chat-jobs-pop" => wide.jobs_open = true
+    // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
     "chat-letters-side" => {
       dui.letters_open = ""
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
-      side_open(r, "letters")
     }
-    "chat-jobs-side" => side_open(r, "jobs")
-    "chat-history-side" => side_open(r, "history/s-c1")
-    "chat-model-pop" => {
-      side_open(r, "history/s-c1")
-      wide.triple = r.station + "\u{1}session:s-c1"
-    }
+    "chat-model-pop" => wide.triple = r.station + "\u{1}session:s-c1"
     // (what is typed is looked for as the bar is first drawn)
     "chat-find" => {
       wide.find_chat = side_key(r)

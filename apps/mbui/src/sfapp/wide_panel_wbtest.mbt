@@ -40,9 +40,12 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  side_open(r, "history/s-c1")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.nav_push_ms)
+  // the bar's switch: its first agent's history beside it
+  t.click(Button, label="打开侧栏")
+  t.frame()
+  assert_eq(side_now(r), (["s-c1"], "s-c1"))
   // (where its transcript is: asked once the frame is built, answered at once)
   t.frame()
   t.frame()
@@ -63,7 +66,7 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
 }
 
 ///|
-test "wide: Station 文件 from the chat's \"…\" beside it (kept: prefs.set chatTabs); a row's 添加到消息 into its message" {
+test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: chat.tabs.open); a row's 添加到消息 into its message" {
   reset()
   let calls : Array[Made] = []
   let base = fixture("chat")
@@ -83,11 +86,11 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept: prefs.set ch
   t.frame()
   t.tap_text("Station 文件")
   t.run_for(@kit.presence_out_ms)
-  assert_eq(side_front(r), "files")
-  let kept = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "chatTabs") is Some(_) })
-  assert_true(kept.length() > 0)
-  let tabs = field(field(field(Some(kept[kept.length() - 1].params), "chatTabs"), "ws1/st1:s-c1"), "tabs")
-  assert_eq(tabs, Some(Json::array([Json::string("files")])))
+  let opened = named(calls, "chat.tabs.open")
+  assert_eq(opened.length(), 1)
+  assert_eq(text(Some(opened[0].params), "chat"), "ws1/st1:s-c1")
+  assert_eq(text(Some(opened[0].params), "tab"), "files")
+  assert_eq(side_now(r), (["files"], "files"))
   // its tab, and the station's home in it at the pane's right
   assert_true(t.find("主目录") is Some(_))
   // a file's menu: 添加到消息, into the chat's draft, named by its path
@@ -130,8 +133,9 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   t.click(Button, label="收起侧栏")
   t.frame()
   assert_true(t.find("主目录") is None)
-  let kept = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "chatTabs") is Some(_) })
-  assert_true(kept.length() > 0)
+  let closed = named(calls, "chat.tabs.close")
+  assert_eq(closed.length(), 1)
+  assert_eq(text(Some(closed[0].params), "chat"), "new:ws1")
   t.click(Button, label="Station 文件")
   t.frame()
   assert_true(t.find("主目录") is Some(_))
@@ -151,4 +155,29 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   let refs = refs_of("new:ws1/st1")
   assert_eq(refs.length(), 1)
   assert_eq(refs[0].path, fix_docs + "/发布清单.md")
+}
+
+///|
+test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's history before 任务, the last left in front, the panel's switch closes them all" {
+  reset()
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(side_now(r), ([], ""))
+  side_change(r, "open", Some("jobs"))
+  t.frame()
+  side_change(r, "open", Some("s-c1"))
+  t.frame()
+  // (the history after the histories open, before the other tabs; in front as it is opened)
+  assert_eq(side_now(r), (["s-c1", "jobs"], "s-c1"))
+  assert_true(t.find("只看收发") is Some(_), msg="its history in front")
+  side_change(r, "close", Some("s-c1"))
+  t.frame()
+  assert_eq(side_now(r), (["jobs"], "jobs"))
+  t.click(Button, label="收起侧栏")
+  t.frame()
+  assert_eq(side_now(r), ([], ""))
+  assert_true(t.query(Button, label="打开侧栏") is Some(_))
 }

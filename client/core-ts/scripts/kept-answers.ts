@@ -1,5 +1,5 @@
 // The core's answers to its pure calls (`markdown`, `code.ink`, `reader.book`, `reader.text`, `reader.search`,
-// `commands.find`), worked
+// `commands.find`, a chat's side panel's tabs: chat-tabs.ts), worked
 // out by the real core and kept for the mbui app's runs without one (apps/mbui/src/sfkept: its Tester's tests, the
 // screenshots' app, the replays of tapes older than a call), so no client reads Markdown or code itself. What those
 // runs ask comes from their output, where an answer asked and not kept is said as `kept-answers-ask {…}`
@@ -13,6 +13,7 @@ import { inkKept } from "../src/highlight.ts";
 import { markdown } from "../src/markdown.ts";
 import { book, bookAnswer, searchBook } from "../src/reader.ts";
 import { find } from "../src/commands.ts";
+import { changed, tabsOf, type Change } from "../src/chat-tabs.ts";
 import { tr, type Lang } from "../src/i18n.ts";
 
 const target = new URL("../../../apps/mbui/src/sfkept/kept.mbt", import.meta.url);
@@ -28,6 +29,7 @@ type Kept = {
   "code.ink": Record<string, unknown>;
   "reader.book": Record<string, { answer?: unknown; text?: string; search?: Record<string, unknown> }>;
   "commands.find": Record<string, unknown>;
+  "chat.tabs": Record<string, unknown>;
 };
 const before = readFileSync(target, "utf8");
 const was = (fresh ? {} : JSON.parse(before.slice(before.indexOf("#|") + 2))) as Partial<Kept>;
@@ -39,6 +41,8 @@ const searches = new Map<string, Set<string>>();
 for (const [key, entry] of Object.entries(was["reader.book"] ?? {})) searches.set(key, new Set(Object.keys(entry.search ?? {})));
 // ⌘K's: by what was asked as the app said it (its query, what it offered, its language).
 const finds = new Set(Object.keys(was["commands.find"] ?? {}));
+// A chat's tabs: by what was asked (what is kept for it, its agents, whether it has a chat yet, its session, a change).
+const tabs = new Set(Object.keys(was["chat.tabs"] ?? {}));
 const bookKey = (md: unknown, text: unknown) => `${md === true ? "md" : "txt"}\u0001${String(text ?? "")}`;
 let asked = 0;
 for (const file of outputs) {
@@ -55,13 +59,14 @@ for (const file of outputs) {
       if (ask.call === "reader.search") queries.add(String(ask.query ?? ""));
       searches.set(key, queries);
     } else if (ask.call === "commands.find") finds.add(String(ask.key ?? ""));
+    else if (ask.call === "chat.tabs") tabs.add(String(ask.key ?? ""));
     else throw new Error(`kept-answers: no such pure call: ${line}`);
   }
 }
 
 // Each worked out by the core as it is now.
 const sorted = (keys: Iterable<string>) => [...keys].sort();
-const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {} };
+const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {} };
 for (const text of sorted(texts)) kept.markdown[text] = markdown(text);
 for (const key of sorted(codes)) {
   const cut = key.indexOf("\u0001");
@@ -82,8 +87,20 @@ for (const key of sorted(finds)) {
   const lang: Lang = ask.lang === "en" ? "en" : "zh";
   kept["commands.find"][key] = find(String(ask.query ?? ""), Array.isArray(ask.offered) ? ask.offered : [], (k, a) => tr(lang, k, a));
 }
+// The tabs shown for what is kept, or (`change`) what is kept after it (`next`: null where nothing changes) with the
+// tabs shown then (`tabs`: the chat's view after it, so a run's next step is not one more ask away).
+for (const key of sorted(tabs)) {
+  const ask = JSON.parse(key) as { kept?: unknown; agents?: unknown; noChat?: unknown; session?: unknown; change?: Change };
+  const agents = Array.isArray(ask.agents) ? ask.agents : [];
+  const noChat = ask.noChat === true;
+  const session = typeof ask.session === "string" ? ask.session : null;
+  if (ask.change) {
+    const next = changed(ask.kept, agents, noChat, session, ask.change);
+    kept["chat.tabs"][key] = { next, tabs: tabsOf(next ?? ask.kept, agents, noChat, session) };
+  } else kept["chat.tabs"][key] = tabsOf(ask.kept, agents, noChat, session);
+}
 const content = HEAD + JSON.stringify(kept) + "\n";
-const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists`;
+const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs`;
 if (check) {
   if (content !== before) {
     console.error(`kept-answers: the core answers otherwise now than apps/mbui/src/sfkept/kept.mbt keeps: run client/core-ts/scripts/kept-answers.ts (${counts})`);

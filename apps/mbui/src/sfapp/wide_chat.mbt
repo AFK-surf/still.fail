@@ -138,16 +138,15 @@ fn chat_keys(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     archive_chat(src, r, v)
     wide.landed = ""
   }
+  // an agent's history in front: the panel closed; else the first agent's open, or the first agent's opened
+  // (ChatPage.tsx chat.history)
   if @settings.action_pressed(c, prefs, "chat.history", in_field=true) && v.agents.length() > 0 {
-    if side_front(r).has_prefix("history/") {
-      for tab in side_tabs(r) {
-        side_close(r, tab)
-      }
+    let (tabs, front) = side_of(v)
+    let agent = fn(t : String) { v.agents.iter().any(fn(a) { a.key == t }) }
+    if agent(front) {
+      side_change(r, "clear", None)
     } else {
-      match side_tabs(r).iter().find_first(fn(t) { t.has_prefix("history/") }) {
-        Some(t) => side_open(r, t)
-        None => side_open(r, "history/" + v.agents[0].key)
-      }
+      side_change(r, "open", Some(tabs.iter().find_first(agent).unwrap_or(v.agents[0].key)))
     }
   }
   if @settings.action_pressed(c, prefs, "chat.stop", in_field=true) {
@@ -293,7 +292,7 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
             c.cursor(id, Hand)
             // its execution history beside the chat (the web's: ChatPage.tsx AgentTile), pressed again in front, closed
             if c.clicked(id) {
-              side_toggle(r, "history/" + a.key)
+              side_toggle(r, a.key)
             }
             c.box(id~, fn() {
               if i == 0 {
@@ -335,8 +334,8 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
             wide.info_open = !wide.info_open
           }
           // the side panel's switch while it is closed: the first agent's history in it
-          if side_tabs(r).length() == 0 && view.agents.length() > 0 && icon_button(c, "chat-panel", "panel-open", label=tr("web-pages.chat.openPanel"), action="chat.history") {
-            side_open(r, "history/" + view.agents[0].key)
+          if side_of(view).0.length() == 0 && view.agents.length() > 0 && icon_button(c, "chat-panel", "panel-open", label=tr("web-pages.chat.openPanel"), action="chat.history") {
+            side_change(r, "open", Some(view.agents[0].key))
           }
         })
         |> ignore

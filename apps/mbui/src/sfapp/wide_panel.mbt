@@ -11,150 +11,67 @@ fn side_key(r : ChatRef) -> String {
 }
 
 ///|
-/// The chat's side panel's tabs, in their order: `history/<session>` an agent's, `jobs`, `letters`.
-fn side_tabs(r : ChatRef) -> Array[String] {
-  let k = side_key(r)
-  match wide.tabs.get(k) {
-    Some(tabs) => tabs
-    None => {
-      // as the core kept them for the chat on this device (prefs `chatTabs`, the web's keepTabs), the first time asked
-      let (tabs, front) = kept_tabs(r)
-      if tabs.length() > 0 {
-        wide.tabs[k] = tabs
-        if front != "" {
-          wide.front[k] = front
-        }
-      }
-      tabs
-    }
-  }
+/// A chat's tabs' key as the core keeps them (the prefs' `chatTabs`: `<station>:<session>`, as its page names it).
+fn tabs_key(r : ChatRef) -> String {
+  r.station + ":" + r.session
 }
 
 ///|
-/// The tabs the core keeps for chat `r` (prefs `chatTabs` by `station:session`: an agent's history by its session's
-/// key, `jobs`, `letters`), as this panel names them, and the one in front.
-fn kept_tabs(r : ChatRef) -> (Array[String], String) {
-  let prefs = match link_src.val {
-    Some(src) => (src.topic)("prefs", {}).value
-    None => return ([], "")
-  }
-  let kept = field(field(prefs, "chatTabs"), r.station + ":" + r.session)
-  let own = fn(t : String) -> String? {
-    match t {
-      "jobs" | "letters" | "files" => Some(t)
-      // (the web's other tabs, its services and visualizations, this panel has not)
-      _ if t.has_prefix("service:") || t.contains("/") => None
-      _ => Some("history/" + t)
-    }
-  }
-  let tabs : Array[String] = []
-  match field(kept, "tabs") {
-    Some(Array(a)) =>
-      for x in a {
-        match x {
-          String(t) =>
-            match own(t) {
-              Some(o) => tabs.push(o)
-              None => ()
-            }
-          _ => ()
-        }
-      }
-    _ => ()
-  }
-  let front = match own(text(kept, "active")) {
+/// Whether this panel shows `tab` beside a chat of `v`: one of its agents' histories (by its session's key), 任务, 文件,
+/// agent 往来 (not yet the web's services and visualizations).
+fn side_shows(v : ChatView, tab : String) -> Bool {
+  tab == "jobs" || tab == "files" || tab == "letters" || v.agents.iter().any(fn(a) { a.key == tab })
+}
+
+///|
+/// The chat's side panel's tabs, in their order, and the one in front: the core's (the chat view's `tabs`: those kept
+/// for it on this device that it has, ChatPage.tsx), of those this panel shows.
+fn side_of(v : ChatView) -> (Array[String], String) {
+  let tabs = v.tabs.open.filter(fn(t) { side_shows(v, t) })
+  let front = match v.tabs.shown {
     Some(f) if tabs.contains(f) => f
-    _ => ""
+    _ => tabs.get(0).unwrap_or("")
   }
   (tabs, front)
 }
 
 ///|
-/// Chat `r`'s tabs as they are now, kept by the core for it on this device (prefs `chatTabs`), as the web keeps them.
-fn keep_tabs(r : ChatRef) -> Unit {
+/// Chat `r`'s tabs as its view has them now.
+fn side_now(r : ChatRef) -> (Array[String], String) {
+  match link_src.val {
+    Some(src) =>
+      match (src.topic)("chat", chat_params(r)).value {
+        Some(v) => side_of(chat_view(v))
+        None => ([], "")
+      }
+    None => ([], "")
+  }
+}
+
+///|
+/// Chat `r`'s tabs changed by the core, which keeps them on this device (ChatPage.tsx changeTabs, `chat.tabs.*`):
+/// `tab` opened in front (an agent's history after the histories open, any other last), closed (the last left in
+/// front, if it was), brought to the front; all of them closed (`clear`).
+fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
   match link_src.val {
     Some(src) => {
-      let k = side_key(r)
-      let web = fn(t : String) { if t.has_prefix("history/") { t.view(start_offset=8).to_string() } else { t } }
-      let tabs = wide.tabs.get(k).unwrap_or([]).map(fn(t) { Json::string(web(t)) })
-      let entry : Map[String, Json] = { "tabs": Json::array(tabs) }
-      match wide.front.get(k) {
-        Some(f) if f != "" => entry["active"] = Json::string(web(f))
-        _ => ()
+      let params : Map[String, Json] = { "chat": Json::string(tabs_key(r)) }
+      match tab {
+        Some(t) => params["tab"] = Json::string(t)
+        None => ()
       }
-      let chat : Map[String, Json] = {}
-      chat[r.station + ":" + r.session] = Json::object(entry)
-      (src.call)("prefs.set", { "chatTabs": Json::object(chat) }, fn(_) {  })
+      (src.call)("chat.tabs." + action, Json::object(params), fn(_) {  })
     }
     None => ()
   }
 }
 
 ///|
-/// The tab in front (the last opened while none is said).
-fn side_front(r : ChatRef) -> String {
-  let tabs = side_tabs(r)
-  match wide.front.get(side_key(r)) {
-    Some(f) if tabs.contains(f) => f
-    _ =>
-      match tabs.last() {
-        Some(l) => l
-        None => ""
-      }
-  }
-}
-
-///|
-/// `tab` opened in front: an agent's history after the histories open, before the other tabs (ChatPage.tsx openTab).
-fn side_open(r : ChatRef, tab : String) -> Unit {
-  let k = side_key(r)
-  let tabs = side_tabs(r).copy()
-  if !tabs.contains(tab) {
-    if tab.has_prefix("history/") {
-      let mut at = 0
-      for i, x in tabs {
-        if x.has_prefix("history/") {
-          at = i + 1
-        }
-      }
-      tabs.insert(at, tab)
-    } else {
-      tabs.push(tab)
-    }
-  }
-  wide.tabs[k] = tabs
-  wide.front[k] = tab
-  keep_tabs(r)
-}
-
-///|
-/// `tab` closed: the last left comes to the front if it was.
-fn side_close(r : ChatRef, tab : String) -> Unit {
-  let k = side_key(r)
-  let tabs = side_tabs(r).filter(fn(x) { x != tab })
-  if tabs.length() == 0 {
-    // (none left: kept so, not read back from what the core had)
-    wide.tabs[k] = []
-    wide.front.remove(k)
-    keep_tabs(r)
-    return
-  }
-  wide.tabs[k] = tabs
-  if side_front(r) == tab || !tabs.contains(side_front(r)) {
-    wide.front[k] = tabs[tabs.length() - 1]
-  }
-  keep_tabs(r)
-}
-
-///|
 /// An agent's history pressed (its mark in the bar), or the chat's files (its info's 文件): in front, closed; else
 /// opened in front.
 fn side_toggle(r : ChatRef, tab : String) -> Unit {
-  if side_front(r) == tab {
-    side_close(r, tab)
-  } else {
-    side_open(r, tab)
-  }
+  let (tabs, front) = side_now(r)
+  side_change(r, if tabs.contains(tab) && front == tab { "close" } else { "open" }, Some(tab))
 }
 
 ///|
@@ -227,8 +144,11 @@ let side_pane : @ui.Style = @ui.style(w=Full, h=Full, clip=true)
 ///|
 /// The chat's page with its side panel beside it while something is open in it: the chat `pane` wide less the panel's.
 fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : () -> Unit) -> Unit {
-  let tabs = side_tabs(r)
-  let panel = if tabs.length() > 0 && v is Some(_) { side_width(c.width) } else { 0.0 }
+  let open = match v {
+    Some(view) => side_of(view).0.length() > 0
+    None => false
+  }
+  let panel = if open { side_width(c.width) } else { 0.0 }
   if panel <= 0.0 {
     chat()
     return
@@ -253,8 +173,7 @@ fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
 ///|
 /// The panel: its tabs and its switch over what the one in front shows.
 fn side_panel(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
-  let tabs = side_tabs(r)
-  let front = side_front(r)
+  let (tabs, front) = side_of(v)
   c.box(style=side_panel_style, fn() {
     c.box(style=side_bar, fn() {
       c.box(style=side_tab_list, fn() {
@@ -264,16 +183,12 @@ fn side_panel(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatVie
       })
       |> ignore
       if icon_button(c, "side/close", "panel-close", label=tr("web-pages.chat.closePanel")) {
-        wide.tabs.remove(side_key(r))
-        wide.front.remove(side_key(r))
+        side_change(r, "clear", None)
       }
     })
     |> ignore
     c.box(style=side_pane, fn() {
-      if front.has_prefix("history/") {
-        let key = front.view(start_offset=8).to_string()
-        history_body(c, src, r, key, None, (src.topic)("chat", chat_params(r)))
-      } else if front == "jobs" {
+      if front == "jobs" {
         side_jobs(c, src, r)
       } else if front == "files" {
         // the workspace's stations' files (wide_files_tab.mbt), what is added from them going into the chat's draft
@@ -283,6 +198,9 @@ fn side_panel(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatVie
           Some(th) => letters_body(c, src, r, th)
           None => ()
         }
+      } else if front != "" {
+        // one of its agents' execution histories
+        history_body(c, src, r, front, None, (src.topic)("chat", chat_params(r)))
       }
     })
     |> ignore
@@ -297,34 +215,30 @@ fn side_tab_of(c : @ui.Ctx, r : ChatRef, v : ChatView, tab : String, front : Boo
   let id = c.id("side/tab/" + tab)
   c.cursor(id, Hand)
   if c.clicked(id) {
-    wide.front[side_key(r)] = tab
-    keep_tabs(r)
+    side_change(r, "front", Some(tab))
   }
   let close = c.id("side/tab-close/" + tab)
   c.cursor(close, Hand)
   if c.clicked(close) {
-    side_close(r, tab)
+    side_change(r, "close", Some(tab))
   }
   c.box(style=side_tab, selected=front, id~, fn() {
-    if tab.has_prefix("history/") {
-      let key = tab.view(start_offset=8).to_string()
-      match v.agents.iter().find_first(fn(a) { a.key == key }) {
-        Some(a) => {
-          @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
-          c.text(a.who, style=if front { side_tab_front } else { side_tab_words }) |> ignore
+    match v.agents.iter().find_first(fn(a) { a.key == tab }) {
+      Some(a) => {
+        @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
+        c.text(a.who, style=if front { side_tab_front } else { side_tab_words }) |> ignore
+      }
+      None => {
+        let (icon, label) = if tab == "jobs" {
+          ("boxes", tr("web-pages.chat.jobs"))
+        } else if tab == "files" {
+          ("folder", tr("web-pages.chat.files"))
+        } else {
+          ("chats", tr("web-main.letters.title"))
         }
-        None => ()
+        @sf.icon(c, icon, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
+        c.text(label, style=if front { side_tab_front } else { side_tab_words }) |> ignore
       }
-    } else {
-      let (icon, label) = if tab == "jobs" {
-        ("boxes", tr("web-pages.chat.jobs"))
-      } else if tab == "files" {
-        ("folder", tr("web-pages.chat.files"))
-      } else {
-        ("chats", tr("web-main.letters.title"))
-      }
-      @sf.icon(c, icon, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
-      c.text(label, style=if front { side_tab_front } else { side_tab_words }) |> ignore
     }
     c.box(style=side_tab_close, id=close, fn() { @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore })
     |> ignore
@@ -567,7 +481,7 @@ fn chat_info_rows(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit 
           wide.info_open = false
           dui.letters_open = ""
           dui.letters_held[side_key(r)] = id
-          side_open(r, "letters")
+          side_change(r, "open", Some("letters"))
         }
       _ => ()
     }
@@ -632,7 +546,7 @@ fn jobs_rows(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       pick=Some(fn(id) {
         wide.jobs_open = false
         wide.job_picked = id
-        side_open(r, "jobs")
+        side_change(r, "open", Some("jobs"))
       }),
     )
   })
@@ -640,7 +554,7 @@ fn jobs_rows(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   c.box(style=info_tools, fn() {
     if info_tool_row(c, "jobs-pop/all", "panel-open", text(view, "allText"), "") {
       wide.jobs_open = false
-      side_open(r, "jobs")
+      side_change(r, "open", Some("jobs"))
     }
     if number(view, "ended") > 0.0 {
       let clear_key = "clear/" + r.station
