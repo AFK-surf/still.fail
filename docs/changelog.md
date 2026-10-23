@@ -18,9 +18,11 @@ Session: ember:c-…
 - 这几行放在正文后面、整段都是 `Key: value` 的段落里。和 `Co-Authored-By:` 隔一个空行也读得到：scripts/changelog.ts 读标题之后每个这样的段落，不只 git 当成 trailer 的最后一段（以前只读最后一段，2026-10-01 到 10-08 有 37 个提交的条目因此没进日志）。
 - 版本是这个提交在 main 历史里的序号（`git rev-list --count`，各端的 `0.1.<n>` 就是它），不用手填。
 - 归哪一端，看提交改了哪些文件（scripts/changelog.ts `partsOf`）：`station/src/`、`station/native/` 归 station（之前的提交里 `mesh/` 也是），`web/` 归网页版（桌面 app 带着网页，也算），`client/` 归网页和安卓（`apps/android/not-carried.txt` 列的只归网页，`client/shell/` 只归安卓），`apps/android/` 归安卓，`apps/desktop/` 归桌面，`cloud/src/` 归云端（一部署就上线）。其余（官网、文档、脚本）不需要发版。
-  - 测试、安卓的 `carries.sh`/`not-carried.txt`、`client/core-ts/src/shapes/schema.ts` 和从它生成的类型，自己不让提交归到哪一端；提交只改了这些时才按上面的目录算。
+  - `apps/mbui/`（mbui 写的 app：2026-10-23 起就是安卓 app，也是要接替 Electron 的桌面 app）归安卓和桌面；只有一个平台的宿主编进去的归那个平台（`android/`、`host/android_*` 归安卓，`host/` 里 apple、mac、win 的归桌面，iOS 的还不归哪一端），桌面自己的页面（`src/sfdesk/`，和还留在 `src/sfapp/` 的 `wide*`、`menu_bar`、`settings/web_*`、`settings/desk_*`）归桌面。
+  - 测试、安卓的 `carries.sh`/`not-carried.txt`、`client/core-ts/src/shapes/schema.ts` 和从它生成的类型、`client/core-ts/scripts/`，mbui 的测试、fixture、录的 trace、预先算好的 core 答案（`sfkept`）、film、demo、工具和文档，自己不让提交归到哪一端；提交只改了这些时才按上面的目录算。
+  - 文件说不清时自己说：改的是几端共用的代码、却只有一端的人感受得到（桌面版的改动落在安卓也带着的 `src/sfapp/` 或 core 里，只在手机上看得到的改动），加一行 `Changelog-parts: desktop`（几端就用逗号隔开：station、web、android、desktop、cloud），它代替按文件算出来的端。写了不认识的端，commit-msg hook 和 CI 会拒掉。
   - 界面文字（`client/i18n/catalog/`）各端的都打在 core 里，但只跟着代码走：同一个提交也改了代码，就只归代码到的那几端（桌面功能的文字不会让它出现在安卓的「已更新」里）；只改了文字，按文件名归：`android-*` 安卓，`web-*` 网页，`desktop` 桌面，`station`、`cloud` 各自，`core-*`、`common` 网页和安卓。
-- 写错了或漏写了：在 `docs/changelog-notes.json` 里按提交号（至少 7 位）补或改：`{ "<提交>": { "text": [...], "fixes": [...] } }`，它的 `text` 会替换提交里的那几行。
+- 写错了或漏写了：在 `docs/changelog-notes.json` 里按提交号（至少 7 位）补或改：`{ "<提交>": { "text": [...], "fixes": [...], "parts": [...] } }`，它的 `text` 会替换提交里的那几行，`parts` 替换提交说的或按文件算出来的端。
 
 ## 正式版的日志：每次正式发布写一份
 
