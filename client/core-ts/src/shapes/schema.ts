@@ -2506,7 +2506,13 @@ export const SHAPES: Record<string, Shape> = {
     ["archivable", opt("bool"), { doc: "Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap\n(`chat.archive`). Absent otherwise." }],
     ["xshare", opt("ChatShare"), { doc: "Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or\nthe viewer is in no other workspace." }],
     ["publish", opt("ChatPublish"), { doc: "Its public snapshots (docs/public-share.md); absent while it has no chat." }],
+    ["tabs", opt("ChatTabs"), { doc: "Its side panel's tabs as this device keeps them for it (prefs `chatTabs`, chat-tabs.ts); absent from a core\nbefore it." }],
   ], { doc: "An item's page: its chat (with the viewer's read position), or its agent before it has one." }),
+  ChatTabs: struct([
+    ["open", vec("String"), { doc: "The tabs open beside it, in their order, of those kept the ones it has (an agent's history by its session's key,\n`service:<job>` one of its agents' services, `jobs`, `files`, `letters`, `file:[…]` a visualization); all kept while its\nagents are not known. None kept: none, or where its agent has no chat yet its history (`auto`)." }],
+    ["shown", opt("String"), { doc: "The one in front: as kept, else the first; none with none open." }],
+    ["auto", opt("bool"), { doc: "None kept: `open` is what the chat opens by itself (its agent's history, it having no chat yet). A client where\nthe panel would lie over the chat shows none, and changes them with `auto: false`." }],
+  ], { doc: "A chat's side panel (`chat.tabs.open/close/front/clear` change it)." }),
   ChatPublish: struct([
     ["may", "bool", { doc: "The viewer may publish it (not a read-only member)." }],
     ["links", vec("ChatPublished"), { doc: "The snapshots its station keeps of it, the newest first (without those being revoked here)." }],

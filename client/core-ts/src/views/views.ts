@@ -10,6 +10,7 @@ import type { Host } from "../host.ts";
 import type { Runner } from "../runtime.ts";
 import type { Store } from "../store.ts";
 import type { Owner } from "../core/routing.ts";
+import * as chatTabs from "../chat-tabs.ts";
 import * as decisions from "../decisions.ts";
 import { merge } from "../entries.ts";
 import { CoreError } from "../error.ts";
@@ -858,6 +859,10 @@ export class Views implements Owner {
     const workspace = this.ok({ topic: "workspace", workspace: ofAddress(station) }) ?? null;
     const role = get(workspace, "role");
     const manager = role === "owner" || role === "admin";
+    // Its side panel's tabs, as kept on this device for it by its page's key (chat-tabs.ts).
+    const session = typeof view.thread === "number" ? null : typeof view.session === "string" ? view.session : null;
+    const kept = get(get(prefs, "chatTabs"), `${station}:${session ?? view.thread}`);
+    v.tabs = chatTabs.tabsOf(kept, arr(v.agents), v.noChat === true, session);
     const dismissed = get(get(prefs, "stationUpdatesDismissed"), station);
     v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager, this.stationName(station));
     if (Array.isArray(v.outbox)) v.outbox = looks.outboxWaits(v.outbox, v.stationUpdate);
