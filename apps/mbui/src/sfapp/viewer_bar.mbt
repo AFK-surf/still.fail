@@ -71,7 +71,8 @@ fn viewer_bar(
       })
       |> ignore
       // the middle, as wide as what it says, the sides kept for the way back and the tools
-      c.box(style=viewer_bar_middle.then(@ui.style(max_w=Fixed(dmax(0.0, c.width - viewer_bar_sides)))), fn() {
+      let most = dmax(viewer_none, c.width - viewer_bar_sides)
+      c.box(style=viewer_bar_middle.then(@ui.style(max_w=Fixed(most))), fn() {
         c.text(name, style=viewer_name_words.then(@ui.text_style(color=Data(ink.ink)))) |> ignore
         if meta != "" {
           c.text(meta, style=viewer_meta_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
@@ -148,6 +149,9 @@ let viewer_line_share : Double = 0.7
 /// What the middle leaves its sides at least: the way back's and the tools' room either side (as the grid's equal
 /// sides keep it in the middle).
 let viewer_bar_sides : Double = 320.0
+
+///|
+let viewer_none : Double = 0.0
 
 ///|
 let viewer_back_icon : Double = 20.0

@@ -764,6 +764,8 @@ fn leaving_done() -> Unit {
 ///|
 /// What a viewer holds of the host's, let go.
 fn Viewer::let_go(self : Viewer) -> Unit {
+  // read in a desktop's reader (reader_desk.mbt): what it read let go with it
+  reader_ui.remove("chat\n" + self.id())
   if self.turned {
     @hostapi.set_sideways(false)
   }
@@ -1047,7 +1049,10 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
         }
         _ => ()
       }
-      return
+      // played as it comes: read whole only once asked to be saved (a desktop's bar has 下载 for it)
+      if !v.asked {
+        return
+      }
     }
     _ => ()
   }
@@ -1465,7 +1470,13 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
     Some(KVideo) => v.video_stage(c, src, stage)
     Some(KAudio) => v.audio_stage(c, stage)
     _ =>
-      if v.told_of() {
+      if v.desk_reads() {
+        // a desktop's: a text and Markdown read in the reader, as a drive's are (reader_desk.mbt)
+        match v.bytes {
+          Some(b) => v.desk_read(c, src, b)
+          None => ()
+        }
+      } else if v.told_of() {
         v.note(c, fn() { if wide_on.val { v.desk_facts(c) } else { v.facts(c) } })
       } else if (v.kind is None && v.sniffed is None) || (v.bytes is None && v.error is None) {
         tap_stage(c, v, stage)

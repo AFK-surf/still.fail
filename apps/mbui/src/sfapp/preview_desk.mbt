@@ -148,6 +148,10 @@ fn desk_clock(ms : Double) -> String {
 /// fades (`shown`), and as the pointer rests over an image; its tools by what it shows. The pointer's moves wake it.
 fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = self
+  // read in the reader: its own bar
+  if v.desk_reads() {
+    return
+  }
   let ink = page_viewer_ink()
   let kind = v.shown_kind()
   // a mouse moving over it wakes what fades; resting on the bar, it stays
@@ -242,7 +246,9 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : ViewerInk) -> Unit {
     _ => ()
   }
   if !v.coming() && !marking.on {
-    let saving = v.bytes is Some(_) || (v.told_of() && !v.asked)
+    // what is here saved at once; one told of, or played as it comes, read whole first
+    let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
+    let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked)
     if viewer_download(c, "preview/download", ink, disabled=!saving) {
       v.ask_save(c)
     }

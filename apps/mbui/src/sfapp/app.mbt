@@ -548,6 +548,10 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         match app.nav.top() {
           Screen(at) =>
             c.layer(fn() { screen_page(c, src, at.station, at.screen, at.title) }) |> ignore
+          // a drive's text read, a film played: over the whole window too, as the web's pages of a file opened
+          // (Drive.css.ts opened: fixed over everything)
+          DriveRead(at) => c.layer(fn() { reader_page(c, src, at) }) |> ignore
+          DrivePlay(at) => c.layer(fn() { play_page(c, src, at) }) |> ignore
           _ => ()
         }
         wide_overlays(c, src, w)
