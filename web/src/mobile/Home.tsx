@@ -23,7 +23,7 @@ import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
-import { fileOpen } from "../searchOpen.ts";
+import { filesPath } from "../searchOpen.ts";
 import { ChangelogNews } from "./Changelog.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
@@ -220,22 +220,24 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
   );
 }
 
-/** Where something a search found opens on the phone: its chat (a service), a station's page, the workspace's members. */
+/** Where something a search found opens on the phone (`SearchItem.open`, the core's): its chat (a service's page over
+ *  it), a station's page, the workspace's members, a place in a station's files. */
 function openFound(app: ReturnType<typeof useApp>, item: SearchItem): void {
-  const at = item.station.indexOf("/");
-  const id = encodeURIComponent(at < 0 ? item.station : item.station.slice(at + 1));
-  const chat = item.chat ? `${stationBase(item.station)}/chats/${encodeURIComponent(item.chat)}` : null;
-  switch (item.kind) {
-    case "job":
-      if (chat && item.job && item.port != null) return app.open(`${chat}/services/${encodeURIComponent(item.job)}`);
+  const open = item.open;
+  if (!open) return;
+  const at = open.station.indexOf("/");
+  const id = encodeURIComponent(at < 0 ? open.station : open.station.slice(at + 1));
+  const chat = open.chat ? `${stationBase(open.station)}/chats/${encodeURIComponent(open.chat)}` : null;
+  switch (open.to) {
+    case "service":
+      if (chat && open.job) return app.open(`${chat}/services/${encodeURIComponent(open.job)}`);
       break;
     case "station":
       return app.push(app.at(`/s/${id}/overview`));
-    case "member":
+    case "members":
       return app.push(app.at("/settings/members"));
-    case "file":
-      if (item.path) return app.push(fileOpen(app.at(`/s/${id}`), item));
-      break;
+    case "files":
+      return app.push(filesPath(app.at(`/s/${id}`), open));
   }
   if (chat) app.open(chat);
 }

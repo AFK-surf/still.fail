@@ -66,7 +66,11 @@ Later: the cloud's own (feedback), Slack channels' history.
 - View `search {scope, query, kind?, limit?}` → `SearchView`: the chats (`items`, as the sidebar's rows; a station's
   archived one drawn as a row of its own, `archived`), the messages (the device's and the stations', each once, newest
   first), the rest by kind (`groups`), what the list still waits on (`wait`) and a line under it (`note`: stations
-  offline, too old to search). With `kind`, that kind alone, up to 50.
+  offline, too old to search). With `kind`, that kind alone, up to 50. Each thing found besides chats and messages
+  says where it opens (`open`, `SearchOpen`: `chat`, `service`, `task`, `station`, `members`, `files` with the
+  folder, the place under it and `how`, read or play); each client goes there its own way.
+- Call `commands.find {query, offered}` → `CommandsFound`: what ⌘K offers of what a client can do now (core
+  commands.ts), by part, those whose name, id or other words have the words.
 - Per station `stationSearch {station, q, kind?, limit?}`: asked once the words have stayed as they are for a moment
   (`SEARCH_SETTLE_MS`), while shown, at the urgency of what is shown; held in the link's memory while shown, let go
   after. A station from before search answers 404: said in `note`.
@@ -75,7 +79,7 @@ Later: the cloud's own (feedback), Slack channels' history.
 
 - ⌘K (web/src/Switcher.tsx): commands, chats, messages, then each kind under its heading, a few of each; 查看更多
   lists that kind alone, Esc back to all. A service opens its preview (`?service=`), a task the chat's services and
-  tasks (`?job=`), a station its page, a member the workspace's settings.
+  tasks (`?job=`), a station its page, a member the workspace's settings (`open` as a path: `pathOf`).
 - The phones (web/src/mobile/Home.tsx `SearchPage`, Android screens/Search.kt): the same list and the same places.
 - A message found, and a chat found by words its title shows late or not at all (`foundText`), is listed by the line
   that has the words (they bold), who said it or where and when beside it, its chat's title under it.

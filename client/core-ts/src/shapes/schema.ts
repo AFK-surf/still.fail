@@ -1843,7 +1843,29 @@ export const SHAPES: Record<string, Shape> = {
     ["archived", opt("bool")],
     ["createdAt", opt("i64"), { client: opt("I54") }],
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`)." }],
+    ["open", opt("SearchOpen"), { doc: "Where it opens; absent where it opens nowhere (no chat, no path), and from older cores." }],
   ], { doc: "A thing a search found besides chats and messages (`SearchGroup.items`), and what opens it." }),
+  SearchOpen: struct([
+    ["to", "String", { doc: "chat | service (its chat, its page over it) | task (its chat, it picked) | station (its page) | members (the\nworkspace's) | files (its station's)" }],
+    ["station", "String", { doc: "Its station's address (empty: the members)." }],
+    ["chat", opt("String"), { doc: "The chat (its key in its station's list): its page is `chats/<chat>`." }],
+    ["job", opt("String"), { doc: "A service's or task's id." }],
+    ["root", opt("String"), { doc: "Files: the folder they are under, `path` where under it." }],
+    ["path", opt("String")],
+    ["how", opt("String"), { doc: "Files: read (a text) | play (a video, a song); absent, the folder `path` is shown." }],
+  ], { doc: "Where something found opens, as every client has a page for it (views/search.ts `openOf`); each client\ngoes there its own way." }),
+  CommandsFound: struct([
+    ["groups", vec("CommandGroup")],
+  ], { doc: "What ⌘K's list offers of what a client can do now (`commands.find`), by part in the list's order; a part with\nnone is left out." }),
+  CommandGroup: struct([
+    ["group", "String", { doc: "chat | update | global | settings" }],
+    ["title", "String", { doc: "Its heading." }],
+    ["commands", vec("FoundCommand")],
+  ]),
+  FoundCommand: struct([
+    ["id", "String", { doc: "As offered: what the client does when it is picked." }],
+    ["label", "String"],
+  ]),
   FoundMessage: struct([
     ["station", "String"],
     ["thread", "i64", { client: "I54" }],
