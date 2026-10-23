@@ -183,7 +183,10 @@ fn usage_days(c : @ui.Ctx, v : Json?) -> Unit {
     })
     |> ignore
   }
-  c.box(dir=Row, w=Fill(1.0), h=Px(150.0), gap=gap_w, fn() {
+  // The day's ground and its bar round at the top only (Usage.kt clips them Smooth(topStart = 4, topEnd = 4)): each
+  // the corner taller than shown, the bar's foot left empty, and the row cutting both at the foot.
+  let corner = 4.0
+  c.box(dir=Row, w=Fill(1.0), h=Px(150.0), gap=gap_w, clip=true, fn() {
     for d in daily {
       let dv = Some(d)
       let id = c.id("usage-day/" + text(dv, "day"))
@@ -191,11 +194,11 @@ fn usage_days(c : @ui.Ctx, v : Json?) -> Unit {
         usage_state.day = text(dv, "day")
       }
       let on = text(dv, "day") == text(day, "day")
-      c.box(w=Fill(1.0), h=Fill(1.0), radius=4.0, bg=if on { t.p.chip } else { 0L }, align=ACenter, justify=JEnd, id~, fn() {
+      c.box(w=Fill(1.0), h=Px(150.0 + corner), radius=corner, bg=if on { t.p.chip } else { 0L }, align=ACenter, justify=JEnd, id~, fn() {
         let cost = number(dv, "cost")
         if max > 0.0 && cost > 0.0 {
           let share = dmin(1.0, dmax(0.0, cost / max))
-          c.box(w=Fill(1.0), max_w=28.0, h=Px(150.0 * share), radius=4.0, clip=true, gap=2.0, justify=JEnd, fn() {
+          c.box(w=Fill(1.0), max_w=28.0, h=Px(150.0 * share + corner), pb=corner, radius=corner, clip=true, gap=2.0, justify=JEnd, fn() {
             let parts = items(dv, "parts")
             let mut k = parts.length() - 1
             while k >= 0 {
