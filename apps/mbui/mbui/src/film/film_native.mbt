@@ -79,21 +79,25 @@ fn spin(ms : Double) -> Unit {
 }
 
 ///|
-fn say(s : String) -> Unit {
+/// (for a film program too: a tool's output and its files)
+pub fn say(s : String) -> Unit {
   ffi_say(s)
 }
 
 ///|
-fn read_text(path : String) -> String {
+/// (for a film program too: a tool's output and its files)
+pub fn read_text(path : String) -> String {
   ffi_read_text(path)
 }
 
 ///|
-fn write_text(path : String, text : String) -> Bool {
+/// (for a film program too: a tool's output and its files)
+pub fn write_text(path : String, text : String) -> Bool {
   ffi_write_text(path, text) != 0
 }
 
 ///|
-fn exit(code : Int) -> Unit {
+/// (for a film program too: a tool's output and its files)
+pub fn exit(code : Int) -> Unit {
   ffi_exit(code)
 }
