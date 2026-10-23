@@ -1,5 +1,5 @@
 // The core's engine, linked into this app alone so the default demo stays without the 57 MB shell
-// (src/sfcore/apple_engine.m: Hermes on the Rust shell, the browser session for signing in).
+// (src/sfcore/apple_engine.m: Hermes on the Rust shell, on iOS the browser session for signing in).
 #include "../sfcore/apple_engine.m"
 
 // An environment variable for the app's MoonBit, "" when unset.

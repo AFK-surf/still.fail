@@ -1071,6 +1071,10 @@ let splash_float_ms : Double = 1800.0
 let splash_waited : Ref[Bool] = { val: false }
 
 ///|
+/// The sign-in button's width at most in a desktop's window, as the desktop app's.
+let sign_in_wide_w : Double = 300.0
+
+///|
 /// Signed out (SignIn.kt SignInScreen): the illustration, what still.fail is for, and 登录或注册.
 fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
   // inside the bars (SignIn.kt: windowInsetsPadding(systemBars))
@@ -1081,6 +1085,8 @@ fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
 fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let busy = (src.signing_in)()
+  // a desktop's: the picture and 登录或注册 alone, no words around them (asked for, 2026-10-23)
+  let wide = is_wide(c)
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),
@@ -1100,26 +1106,28 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
         dmin(300.0, c.width - 60.0),
       )
       |> ignore
-      c.box(pt=10.0, fn() {
+      if !wide {
+        c.box(pt=10.0, fn() {
+          c.text(
+            tr("android-settings.signIn.title"),
+            size=28.0,
+            weight=700,
+            color=t.p.text,
+            wrap=false,
+          )
+          |> ignore
+        })
+        |> ignore
         c.text(
-          tr("android-settings.signIn.title"),
-          size=28.0,
-          weight=700,
-          color=t.p.text,
-          wrap=false,
+          tr("android-settings.signIn.note"),
+          size=15.0,
+          color=t.p.muted,
+          center=true,
+          w=Fill(1.0),
+          line=21.0,
         )
         |> ignore
-      })
-      |> ignore
-      c.text(
-        tr("android-settings.signIn.note"),
-        size=15.0,
-        color=t.p.muted,
-        center=true,
-        w=Fill(1.0),
-        line=21.0,
-      )
-      |> ignore
+      }
       c.box(h=Px(6.0), fn() {  }) |> ignore
       let id = c.id("sign-in")
       if c.clicked(id) && !busy {
@@ -1128,6 +1136,8 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
       c.box(
         dir=Row,
         w=Fill(1.0),
+        // a desktop's no wider than the desktop app's (web cloud/gate.css.ts `ways`)
+        max_w=if wide { sign_in_wide_w } else { c.width },
         h=Px(50.0),
         radius=25.0,
         bg=t.p.text,
@@ -1154,13 +1164,15 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
         },
       )
       |> ignore
-      c.text(
-        tr("android-settings.signIn.many"),
-        size=12.0,
-        color=t.p.muted,
-        wrap=false,
-      )
-      |> ignore
+      if !wide {
+        c.text(
+          tr("android-settings.signIn.many"),
+          size=12.0,
+          color=t.p.muted,
+          wrap=false,
+        )
+        |> ignore
+      }
     },
   )
   |> ignore

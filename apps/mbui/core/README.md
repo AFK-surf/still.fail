@@ -214,7 +214,7 @@ Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engi
   `specialUse` foreground service, as ember's LoginRelay.kt) holds the process up so the cached apps freezer does not
   stop it answering the browser. `scripts/android.sh listen-test` runs it with core/listen-test.js in the core's place
   (a POST from the emulator's shell; then build again without it).
-- **Sign-in**: no browser session on Android (`@core.has_browser_session()` false), so coredemo's 登录 signs in on
+- **Sign-in**: no browser session on Android, macOS and Windows (`@core.has_browser_session()` false), so 登录 signs in on
   `@hostapi.browser_login` (`dev.mbui.BrowserLogin`): `auth.begin` with `http://127.0.0.1:<port>/oauth/callback`, the
   page in a Custom Tab (the Custom Tabs protocol's own intent extras, no androidx) on the app's task, the one GET to
   that path under that host taken and answered, then the app brought back in front (MainActivity is `singleTask`, as
@@ -265,9 +265,10 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
 (cloud/src/auth.ts `APP_REDIRECTS`, `validRedirect`). Two ways back:
 
 - **Custom scheme** (`stillfail://auth/callback`, what the smoke test asks for). Needs nothing from the core, only
-  the host: open the URL and catch the callback. On iOS and macOS `ASWebAuthenticationSession(url:,
+  the host: open the URL and catch the callback. On iOS `ASWebAuthenticationSession(url:,
   callbackURLScheme: "stillfail")` does both (no `CFBundleURLTypes` registration needed, the callback URL comes back
-  to its completion handler); otherwise register the scheme (`CFBundleURLTypes`; on macOS handle `kAEGetURL`, on iOS
+  to its completion handler; on macOS it is Safari's whatever the default browser, so the Mac signs in on the loopback
+  below, in the default browser, as the desktop app does); otherwise register the scheme (`CFBundleURLTypes`; on macOS handle `kAEGetURL`, on iOS
   `application:openURL:`). Then `mb_core_send({"id":…,"call":"auth.complete","params":{"query":"<query>"}})`.
   Built: `src/host/apple_auth.m` and `@core.sign_in`; `MBUI_AUTH_DRY=1` makes the session but does not start it (no one
   has signed in through it yet: a real sign-in is the person's to do). Caveat: another installed still.fail app
