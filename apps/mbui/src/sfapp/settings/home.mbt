@@ -638,12 +638,14 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
   // SettingsHome.kt: 12 under the theme's switch, the faces' row on a card of its own
   blocks.push(fn() {
     if wide.val {
+      // (the wide frame's chooses them here, as the web's FontSetting)
       section_header(c, tr("web-pages.appearance.fonts.title"))
       section_note(c, tr("web-pages.appearance.fonts.description"))
+      inset(c, fn() { font_setting_wide(c, core) })
     } else {
       gap(c, 12.0)
+      list_card(c, fn() { font_row(c, core) })
     }
-    list_card(c, fn() { font_row(c, core) })
   })
   blocks.append(
     choice(
@@ -669,6 +671,19 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
       if wide.val { tr("web-pages.appearance.language.description") } else { "" },
     ),
   )
+  // 拖入 chat 的文件 (Appearance.tsx DropSetting): named by their path, or sent as files (prefs `dropAs`)
+  if wide.val {
+    blocks.append(
+      choice(
+        "dropAs",
+        tr("web-pages.appearance.drop.title"),
+        [("", "web-pages.appearance.drop.path"), ("file", "web-pages.appearance.drop.file")],
+        pref(core, "dropAs"),
+        0,
+        tr("web-pages.appearance.drop.description"),
+      ),
+    )
+  }
   // (the wide frame's is on 归档's page, as the web's: archiving_page)
   if !wide.val {
   blocks.append(

@@ -172,7 +172,16 @@ let font_sample_code : String = "```ts\nform.onsubmit = (e) => {\n  e.preventDef
 ///|
 /// A chat as the faces set it (Fonts.kt FontPreview, the web's): their message in its bubble, an agent's under its
 /// name. `ui_face`, `text_face`: host faces the faces coming are shown in meanwhile (0: as the app is set now).
-fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
+fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int, wide? : Bool = false) -> Unit {
+  // (the wide frame's in 外观 itself: a card of its own as wide as the setting, 20 in; its words the web's 14)
+  let card = fn(c : @ui.Ctx, body : () -> Unit) {
+    if wide {
+      c.box(style=font_preview_card, fn() { body() }) |> ignore
+      true
+    } else {
+      card(c, body)
+    }
+  }
   card(c, fn() {
     c.box(style=preview_column, fn() {
       c.box(style=preview_mine_room, fn() {
@@ -194,7 +203,7 @@ fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
           c,
           tr("web-pages.appearance.fonts.sampleText") + "\n\n" + font_sample_code + "\n\n" + tr("web-pages.appearance.fonts.sampleAfter"),
           key="fonts/sample",
-          size=@sf.text_scale.lg.0,
+          size=if wide { @sf.text_scale.base.0 } else { @sf.text_scale.lg.0 },
         )
         |> ignore
       })
@@ -279,3 +288,189 @@ fn short_size(bytes : Double) -> String {
   }
   n + " " + unit
 }
+
+// ---------------------------------------------------------------------------
+// The wide frame's: in 外观 itself (FontSetting.tsx)
+
+///|
+/// The face pointed at in the wide frame's tiles, tried in the preview before it is chosen ("" none; "\u{1}" the place's
+/// own).
+let fonts_trying : Ref[String] = Ref("")
+
+///|
+/// 外观's 字体 in the wide frame (FontSetting.tsx FontSetting): the places' switch (界面 / 正文 / 代码), the faces of the
+/// place in view as tiles (默认 or 跟随界面 first), each `Aa 字` and its name drawn in itself, the chosen one ringed and
+/// checked; under them a chat as the faces set it, a tile pointed at tried in it first.
+fn font_setting_wide(c : @ui.Ctx, core : Core) -> Unit {
+  let t = @sf.theme()
+  let prefs = (core.topic)("prefs", Map::new()).value
+  let chosen_of = fn(place : String) { text(field(prefs, "fonts"), place) }
+  let all = items(field(prefs, "faces"), "list")
+  let files_state = (core.topic)("fonts", Map::new()).value
+  let place = font_places[fonts_at.val]
+  let chosen = chosen_of(place)
+  let shown_in = fn(id : String) {
+    let mut face = 0
+    for i, f in all {
+      if text(Some(f), "id") == id {
+        face = (core.face_preview)(id, i, items(Some(f), "files").iter().any(fn(x) { number(Some(x), "weight") == 0.0 }))
+      }
+    }
+    face
+  }
+  let own = if place == "code" { (core.own_code_face)() } else { 0 }
+  let as_chosen = fn(p : String) {
+    let id = chosen_of(p)
+    if id == "" || (core.face_here)(id) {
+      0
+    } else {
+      shown_in(id)
+    }
+  }
+  // what the preview shows: each place as chosen, the one pointed at tried in its place
+  let tried = fonts_trying.val
+  let try_face = if tried == "\u{1}" {
+    Some(own)
+  } else if tried != "" {
+    Some(match shown_in(tried) {
+      0 => own
+      f => f
+    })
+  } else {
+    None
+  }
+  let ui_face = match (place, try_face) {
+    ("ui", Some(f)) => f
+    _ => as_chosen("ui")
+  }
+  let text_face = match (place, try_face) {
+    ("text", Some(f)) => f
+    ("ui", Some(f)) if chosen_of("text") == "" => f
+    _ => if chosen_of("text") == "" { ui_face } else { as_chosen("text") }
+  }
+  fonts_trying.val = ""
+  c.box(style=fonts_wide_setting, fn() {
+    let picked = seg(c, "fonts/place", font_places.map(fn(p) { tr("web-pages.appearance.fonts." + p) }), fonts_at.val, compact=true)
+    if picked != fonts_at.val {
+      fonts_at.val = picked
+    }
+    c.box(style=font_tiles, fn() {
+      let tile = fn(key : String, id : String, name : String, face : Int, status : String) {
+        let tid = c.id("fonts/tile/" + place + "/" + key)
+        c.cursor(tid, Hand)
+        if c.hovered(tid) {
+          fonts_trying.val = if id == "" { "\u{1}" } else { id }
+        }
+        if hit(c, tid) {
+          set_font(core, place, if id == "" { None } else { Some(id) })
+        }
+        let on = chosen == id
+        let b = c.box(style=if on { font_tile_on } else { font_tile }, id=tid, fn() {
+          c.rich([@ui.span(tr("web-pages.appearance.fonts.glyph"))], key="fonts/tile-glyph/" + key, style=font_tile_glyph, face~)
+          |> ignore
+          c.rich([@ui.span(if status != "" { status } else { name })], key="fonts/tile-name/" + key, style=if on {
+            font_tile_name_on
+          } else {
+            font_tile_name
+          }, face~)
+          |> ignore
+          if on {
+            c.layer(fn() {
+              c.box(style=font_tile_check_place, fn() { @sf.icon(c, "check", size=font_check, color=t.p.accent) |> ignore })
+              |> ignore
+            })
+            |> ignore
+          }
+        })
+        c.semantics(b, Button, id=tid, label=name)
+      }
+      let none = if place == "text" { "web-pages.appearance.fonts.followUi" } else { "web-pages.appearance.fonts.default" }
+      tile("none", "", tr(none), own, "")
+      for f in all {
+        let fv = Some(f)
+        if flag(fv, "mono") != (place == "code") {
+          continue
+        }
+        let id = text(fv, "id")
+        let status = match field(field(files_state, "fetching"), id) {
+          Some(Number(p, ..)) => fill("android-settings.fonts.downloading", [("percent", (p * 100.0).to_int().to_string())])
+          _ =>
+            match text(field(files_state, "failed"), id) {
+              "" => ""
+              why => fill("android-settings.fonts.failed", [("error", why)])
+            }
+        }
+        let face = match shown_in(id) {
+          0 => own
+          x => x
+        }
+        tile(id, id, text(fv, "name"), face, status)
+      }
+    })
+    |> ignore
+    font_preview(c, ui_face, text_face, wide=true)
+  })
+  |> ignore
+}
+
+///|
+/// A tile's check (14), in its corner.
+let font_check : Double = 14.0
+
+///|
+/// The setting (setting: 14 apart, 640 wide at most): the switch as wide as its words, the tiles across, the preview.
+// kept across runs: a value (no field of it changes)
+let fonts_wide_setting : @ui.Style = @ui.style(w=Full, max_w=Fixed(font_setting_most), gap=S3_5, align=AStart)
+
+///|
+let font_setting_most : Double = 640.0
+
+///|
+/// The tiles (tiles: 96 wide at least, 10 apart; tile: 96 high, 12 by 10 in, the card's corner and ground, ringed 1.5 in
+/// the accent when chosen).
+// kept across runs: a value (no field of it changes)
+let font_tiles : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let font_tile : @ui.Style = @ui.style(
+  w=Fixed(font_tile_w),
+  h=S24,
+  px=S2_5,
+  py=S3,
+  gap=S1_5,
+  align=ACenter,
+  justify=JCenter,
+  radius=Xl3,
+  bg=Card,
+  hovered=@ui.patch(bg=Tint),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let font_tile_on : @ui.Style = font_tile.then(@ui.style(border=B1, border_color=Accent))
+
+///|
+// kept across runs: a value (no field of it changes)
+let font_tile_glyph : @ui.TextStyle = @ui.text_style(size=Xl4, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let font_tile_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, max_lines=1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let font_tile_name_on : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false, max_lines=1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let font_tile_check_place : @ui.Style = @ui.style(w=Full, h=Full, p=S2_5, align=AEnd)
+
+///|
+/// A tile as wide as six to the setting's width are, 10 apart (tiles: auto-fill, 96 at least).
+let font_tile_w : Double = (font_setting_most - 50.0) / 6.0
+
+///|
+/// The wide frame's preview (preview: a settings card, 20 in, as wide as the setting).
+// kept across runs: a value (no field of it changes)
+let font_preview_card : @ui.Style = @ui.style(w=Full, p=S5, radius=Xl3, bg=Card)

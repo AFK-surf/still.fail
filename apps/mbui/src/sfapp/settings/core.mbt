@@ -534,6 +534,7 @@ pub fn reset() -> Unit {
   station_parts.clear()
   lock_prompts_reset()
   fonts_at.val = 0
+  fonts_trying.val = ""
   adb_reset()
   keyed_fields.clear()
   notify_switched.val = None

@@ -1056,3 +1056,36 @@ test "wide: the workspace's page as the web's: its mark and name at its head, wh
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("退出「星火工作室」？") is Some(_), msg="asked again")
 }
+
+///|
+test "wide: 外观's faces chosen in the page itself (FontSetting): the places' switch, a tile each, the chosen one checked; picked, kept as the device's; 拖入 chat 的文件's switch" {
+  reset()
+  let src = fixture("settings")
+  let calls : Array[Made] = []
+  let src2 : Source = {
+    ..src,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (src.call)(name, params, done)
+    },
+  }
+  // (tall enough for the whole page: 拖入 chat 的文件 at its end in view)
+  let t = @ui.Tester::new(fn(c) { view(c, src2) }, w=1280.0, h=1600.0, platform=0)
+  open_setting("appearance")
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  for label in ["默认", "Inter", "思源黑体"] {
+    assert_true(t.query(Button, label~) is Some(_), msg=label)
+  }
+  t.click(Button, label="思源黑体")
+  t.frame()
+  let set = named(calls, "prefs.set").filter(fn(m) { text(field(Some(m.params), "fonts"), "ui") == "noto-sans-sc" })
+  assert_eq(set.length(), 1)
+  // 代码 (the switch's, not the words over it): the code faces
+  let (x, y) = t.find_last("代码").unwrap()
+  t.tap(x, y)
+  t.frame()
+  assert_true(t.query(Button, label="JetBrains Mono") is Some(_))
+  assert_true(t.find("拖入 chat 的文件") is Some(_))
+  assert_true(t.find("发文件") is Some(_))
+}

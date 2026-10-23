@@ -1012,9 +1012,11 @@ fn seg(
   fill? : Bool = false,
   height? : Double = 30.0,
   radius? : Double = 10.0,
+  compact? : Bool = false,
 ) -> Int {
   let t = @sf.theme()
-  // in the wide frame the web's (controls.css.ts seg): a pill of options as wide as their words, 105 at least, 36 high
+  // in the wide frame the web's (controls.css.ts seg): a pill of options as wide as their words, 105 at least (`compact`:
+  // as wide as their words alone, as 字体's places are), 36 high
   let pill = wide.val
   let fill = fill && !pill
   let height = if pill { 36.0 } else { height }
@@ -1031,7 +1033,7 @@ fn seg(
     grow=fill,
     look=fn(c, st) {
       c.box(
-        style=if pill {
+        style=if pill && !compact {
           seg_pill_option
         } else if fill {
           seg_full_option
