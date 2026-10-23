@@ -1034,3 +1034,25 @@ test "wide: words with no face chosen are set in the desktop app's face (Inter, 
   t.frame()
   assert_eq(faces_in[1], "", msg="a phone's: the system's")
 }
+
+///|
+test "wide: the workspace's page as the web's: its mark and name at its head, who you are there; 成员 N with 添加成员, roles in pills; 中继; 退出与删除 a row each" {
+  reset()
+  let page = @settings.fixture_page("settings-workspace")
+  let src = fixture("settings")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  open_setting(page)
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("星火工作室") is Some(_))
+  assert_true(t.find("Owner · lin@example.com") is Some(_), msg="who you are")
+  assert_true(t.find("成员") is Some(_))
+  assert_true(t.query(Button, label="添加成员") is Some(_))
+  assert_true(t.find("管理员") is Some(_), msg="a role's pill")
+  assert_true(t.find("中继") is Some(_))
+  assert_true(t.query(Button, label="添加中继") is Some(_))
+  assert_true(t.find("退出与删除") is Some(_))
+  t.click(Button, label="退出")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("退出「星火工作室」？") is Some(_), msg="asked again")
+}
