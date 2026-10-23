@@ -254,6 +254,9 @@ priv struct Fresh {
   /// what its field says while empty
   placeholder : String
   send : (Draft) -> Unit
+  /// the wide frame's new chat (the web's roomy composer): its choices in the row under the words, beside ＋, the
+  /// words always over them; None: the capsule as it is
+  tools : (() -> Unit)?
 }
 
 ///|
@@ -1510,6 +1513,11 @@ fn composer(
 }
 
 ///|
+/// The roomy composer's choices beside ＋ (the web's composer toolbar): 4 apart, on ＋'s line.
+// kept across runs: a value (no field of it changes)
+let composer_tools : @ui.Style = @ui.style(row=true, h=S9, gap=S1, align=ACenter)
+
+///|
 /// What floats over the page in the composer's glass (Glass.kt floating, ComposerCorner): the capsule's ground, the
 /// `@` menu's (chat_refs.mbt). `h` tall.
 fn floating_ground(c : @ui.Ctx, h : @ui.Size) -> Int {
@@ -1806,11 +1814,19 @@ fn composer_bar(
     )
     part(f, "field")
   }
-  if expanded {
+  let tools = match fresh {
+    Some(f) => f.tools
+    None => None
+  }
+  if expanded || tools is Some(_) {
     c.box(w=Fill(1.0), gap=4.0, fn() {
       field()
       c.box(dir=Row, w=Fill(1.0), align=AEnd, fn() {
         plus_button()
+        match tools {
+          Some(more) => c.box(style=composer_tools, more) |> ignore
+          None => ()
+        }
         c.spacer()
         send_button()
       })

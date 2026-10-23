@@ -100,9 +100,9 @@ fn fill_words(key : String, error : String) -> String {
 ///|
 /// The page's bar (Parts.kt NavBar): 取消 back, 新对话 in the middle.
 fn new_chat_bar(c : @ui.Ctx) -> Unit {
-  // the wide frame's new chat has no bar (the sidebar's 新建对话 is lit): the page's top row only
+  // the wide frame's new chat has no bar (the sidebar's 新建对话 is lit): what it holds is in the middle of all of the
+  // pane, as the web's (its bar is over the page)
   if wide_on.val {
-    c.box(w=Fill(1.0), h=Px(45.0), fn() {  }) |> ignore
     return
   }
   if @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg, top=status_top()) {
@@ -226,6 +226,11 @@ fn new_chat_on(
   let sig = picked_sig(v)
   if !fresh.sent && !fresh.starting && sig != fresh.made_sig {
     fresh.made = ""
+  }
+  // at a desktop's width, the web's page (wide_newchat.mbt)
+  if wide_on.val && !leaving {
+    new_chat_page_wide(c, src, w, v, station)
+    return
   }
   // leaving: up out of view as it fades (140 ms, Arrive), the choices fading where they are (80 ms)
   let (up, fade) = if leaving {
@@ -406,6 +411,7 @@ fn new_chat_on(
             key: "new:" + address,
             placeholder: tr("android-chat.new.placeholder"),
             send: fn(d) { send_first(c, src, w, v, address, name, d) },
+            tools: None,
           }))
         })
       } else {

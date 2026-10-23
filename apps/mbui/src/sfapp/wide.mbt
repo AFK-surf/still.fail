@@ -77,6 +77,8 @@ priv struct Wide {
   transcripts : Map[String, String]
   mut context_menu : String
   mut clear_asking : String
+  /// the new chat's station chooser open (wide_newchat.mbt)
+  mut station_menu : Bool
 }
 
 ///|
@@ -117,6 +119,7 @@ let wide : Wide = {
   transcripts: {},
   context_menu: "",
   clear_asking: "",
+  station_menu: false,
 }
 
 ///|
@@ -162,6 +165,7 @@ fn wide_reset() -> Unit {
   wide.transcripts.clear()
   wide.context_menu = ""
   wide.clear_asking = ""
+  wide.station_menu = false
   wide_on.val = false
   corners_on.val = false
   recent_open.val = false

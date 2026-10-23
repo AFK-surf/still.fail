@@ -42,10 +42,22 @@ fn pick_draft(src : Source, station : String, of : String, patch : Map[String, J
 
 ///|
 /// The control of the pick `of` on `station` (ModelTriple): its line, and its panel under it while open (above it with
-/// `up`).
-fn model_triple(c : @ui.Ctx, src : Source, station : String, of : String, up? : Bool = false) -> Unit {
+/// `up`). `page`: the control as a page has it with itself (a new chat's: its `pick`), not read on its own; `small`: in
+/// a composer's row (ModelTriple.css.ts in newChat: 28 high, its words 12).
+fn model_triple(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  of : String,
+  up? : Bool = false,
+  page? : Json? = None,
+  small? : Bool = false,
+) -> Unit {
   let t = @sf.theme()
-  let v = (src.topic)("pick", pick_params(station, of)).value
+  let v = match page {
+    Some(_) => page
+    None => (src.topic)("pick", pick_params(station, of)).value
+  }
   guard v is Some(Object(_)) else { return }
   let value = field(v, "value")
   let options = items(v, "options")
@@ -72,9 +84,18 @@ fn model_triple(c : @ui.Ctx, src : Source, station : String, of : String, up? : 
     }
   }
   let runtime = text(value, "runtime")
-  c.box(style=if open { triple_on } else { triple_style }, id~, fn() {
+  let (words, muted) = if small { (triple_words_xs, triple_muted_xs) } else { (triple_words, triple_muted) }
+  c.box(
+    style=match (open, small) {
+      (true, false) => triple_on
+      (false, false) => triple_style
+      (true, true) => triple_small_on
+      (false, true) => triple_small
+    },
+    id~,
+    fn() {
     if options.length() == 0 {
-      c.text(tr("web-main.model.none"), style=triple_muted) |> ignore
+      c.text(tr("web-main.model.none"), style=muted) |> ignore
     } else {
       let model = text(value, "model")
       @sf.maker_mark(c, text(field(vo, "maker"), "id"), runtime, 14.0) |> ignore
@@ -86,26 +107,26 @@ fn model_triple(c : @ui.Ctx, src : Source, station : String, of : String, up? : 
           n => n
         }
       }
-      c.text(name, style=triple_words) |> ignore
+      c.text(name, style=words) |> ignore
       if !flag(v, "runtimeFixed") && items(vo, "runtimes").length() > 1 {
-        c.text("·", style=triple_muted) |> ignore
-        c.text(runtime_label(runtime), style=triple_words) |> ignore
+        c.text("·", style=muted) |> ignore
+        c.text(runtime_label(runtime), style=words) |> ignore
       }
       let effort = text(value, "effort")
       if effort != "" || items(v, "efforts").length() > 0 {
-        c.text("·", style=triple_muted) |> ignore
-        c.text(if effort == "" { tr("web-main.model.defaultEffort") } else { effort_text(effort) }, style=triple_words)
+        c.text("·", style=muted) |> ignore
+        c.text(if effort == "" { tr("web-main.model.defaultEffort") } else { effort_text(effort) }, style=words)
         |> ignore
       }
       match text(v, "fastText") {
         "" => ()
         f => {
-          c.text("·", style=triple_muted) |> ignore
-          c.text(f, style=triple_words) |> ignore
+          c.text("·", style=muted) |> ignore
+          c.text(f, style=words) |> ignore
         }
       }
       if account is Some(Object(_)) {
-        c.text("·", style=triple_muted) |> ignore
+        c.text("·", style=muted) |> ignore
         let profile = field(account, "profile")
         if profile is Some(Object(_)) {
           @sf.maker_mark(c, text(profile, "mark"), runtime, 14.0) |> ignore
@@ -118,7 +139,7 @@ fn model_triple(c : @ui.Ctx, src : Source, station : String, of : String, up? : 
           } else if level == "red" {
             triple_red
           } else {
-            triple_words
+            words
           },
         )
         |> ignore
@@ -133,7 +154,8 @@ fn model_triple(c : @ui.Ctx, src : Source, station : String, of : String, up? : 
     } else {
       @sf.icon(c, "chevron-down", size=12.0, color=t.p.muted) |> ignore
     }
-  })
+    },
+  )
   |> ignore
   let pop = @kit.popover(
     c,
@@ -809,3 +831,29 @@ let triple_models_w : Double = 200.0
 ///|
 // kept across runs: a value (no field of it changes)
 let triple_head_box : @ui.Style = @ui.style(px=S2_5, pt=S1, pb=S1_5)
+
+///|
+/// In a composer's row (newChat's): 28 high, 8 in, its words 12.
+// kept across runs: a value (no field of it changes)
+let triple_small : @ui.Style = @ui.style(
+  row=true,
+  h=S7,
+  px=S2,
+  gap=S1_5,
+  align=ACenter,
+  radius=Lg,
+  clip=true,
+  hovered=@ui.patch(bg=Hover),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_small_on : @ui.Style = @ui.style(row=true, h=S7, px=S2, gap=S1_5, align=ACenter, radius=Lg, clip=true, bg=Hover)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_words_xs : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_muted_xs : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
