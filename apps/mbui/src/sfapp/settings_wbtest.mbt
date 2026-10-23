@@ -42,6 +42,19 @@ test "settings: the account, the workspace's rows and how each stands, this devi
 }
 
 ///|
+test "settings: the version row says the build, as Android's versionName (0.1.<build>); the line alone where the host has none" {
+  for case in [(4566, "still.fail mbui 0.1.4566"), (0, "still.fail mbui 0.1")] {
+    reset()
+    let src = fixture("settings")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=1600.0, app_version=case.0)
+    open_setting("home")
+    t.draw()
+    t.run_for(@ui.nav_push_ms)
+    assert_true(t.find(case.1) is Some(_))
+  }
+}
+
+///|
 test "appearance: 深色 chosen, the app is drawn dark at once and the core keeps it" {
   let t = settings_tester("appearance")
   assert_true(t.find("跟随系统") is Some(_))

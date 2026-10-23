@@ -382,7 +382,7 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         // this build (Version): its name and version, and the way to a newer one (tapped: installed, or asked now)
         let (words, newer) = (core.version_words)()
         if list_row(c, key="version", fn() {
-            c.text("still.fail " + build_version, size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0)
+            c.text("still.fail mbui " + build_version(), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0)
             |> ignore
             c.text(words, size=15.0, color=if newer { @sf.link_ink() } else { t.p.muted }, wrap=false, line=21.0)
             |> ignore
@@ -447,8 +447,16 @@ fn use_notify(core : Core, on : Bool) -> Unit {
 }
 
 ///|
-/// This build's version, as the settings' last rows say it.
-let build_version : String = "mbui 0.1"
+/// This build's version, as the version row says it after the app's name (SettingsHome.kt Version: its versionName,
+/// 0.1.<build>): the build where the host knows it (Android's version code), the line alone where it does not.
+fn build_version() -> String {
+  let v = @ui.app_version()
+  if v > 0 {
+    "0.1." + v.to_string()
+  } else {
+    "0.1"
+  }
+}
 
 ///|
 /// The words under a switch (SettingsHome.kt's notes under a Seg; Fonts.kt's under the faces): 24 in, 8 under it, 13
