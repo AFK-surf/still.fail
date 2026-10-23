@@ -10,9 +10,9 @@
     "texts_left": 12
   },
   "settings": {
-    "left": 1688,
-    "why": "not yet as Android's: a few words a fraction of a pixel apart (设置, the avatars' 林); words compared by where they stand since #989 (their boxes out of the pixels)",
-    "texts_left": 3
+    "left": 4757,
+    "why": "not yet as Android's: the rows' icons' edges a pixel apart (mbui's strokes against Android's VectorDrawable's: where each icon stands is the same), as Home's marks and icons; a few words a fraction of a pixel apart (设置, the avatar's 林, and on the workspace's card its name, its line and its letter half a pixel high, where Compose rounds the card's padding and heights to whole pixels, which mbui does not yet); words compared by where they stand since #989 (their boxes out of the pixels)",
+    "texts_left": 5
   },
   "home": {
     "left": 11977,
