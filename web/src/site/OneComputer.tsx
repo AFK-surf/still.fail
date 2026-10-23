@@ -75,13 +75,24 @@ function rowOf(app: HTMLElement, name: string, phone: boolean): HTMLElement | un
   return row && row !== app ? row : undefined;
 }
 
-/** What is behind an element: the first colour laid under it on the way out. */
+/** How opaque a computed colour is (rgb(), rgba(), or color(… / a)). */
+function alpha(c: string): number {
+  if (!c || c === "transparent") return 0;
+  const a = /\/\s*([\d.]+%?)\s*\)$/.exec(c)?.[1] ?? /^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/.exec(c)?.[1];
+  return a === undefined ? 1 : a.endsWith("%") ? parseFloat(a) / 100 : parseFloat(a);
+}
+
+/** What an element is seen on: its colour and each laid under it on the way out, to the first that hides what is
+ *  further out (a highlighted row is a tint over its list's colour), as one background. */
 function ground(el: HTMLElement): string {
+  const layers: string[] = [];
   for (let at: HTMLElement | null = el; at; at = at.parentElement) {
-    const c = getComputedStyle(at).backgroundColor;
-    if (c && c !== "transparent" && !/rgba\(.*,\s*0\)$/.test(c)) return c;
+    const c = getComputedStyle(at).backgroundColor, a = alpha(c);
+    if (a === 0) continue;
+    if (a >= 1) return [...layers.map((t) => `linear-gradient(${t}, ${t})`), c].join(", ");
+    layers.push(c);
   }
-  return "transparent";
+  return layers.length ? layers.map((t) => `linear-gradient(${t}, ${t})`).join(", ") : "transparent";
 }
 
 export function OneComputer(props: DemoProps) {
@@ -112,23 +123,34 @@ export function OneComputer(props: DemoProps) {
     let rows: Row[] = [];
     // How large the window is drawn just now; whether the rows are out of their lists just now.
     let drawn = 1, out = false;
-    // While they fly, the rows are let out of their lists and each laid on its own ground, and nothing else of the app
-    // is drawn (what lies where they pass, its header, its buttons over them); home, all put back as it was.
+    // While they fly, the rows are let out of their lists and each laid on its own ground, over the rest of the app;
+    // home, all put back as it was.
     let app: HTMLElement | null = null;
+    // What the holders' own styles were, to put back.
+    const was = new Map<HTMLElement, Partial<CSSStyleDeclaration>>();
     const letOut = (on: boolean) => {
       if (on === out) return;
       out = on;
       for (const r of rows) {
-        // Out of their lists, and over all of the device while in the air (its camera island and its corners, at 2 in
-        // the window: site.css.ts): what holds them cuts nothing off, and each layer of its own they are in (the app's
-        // screen is fixed, its root moved by a transform) is lifted over those.
+        // Out of their lists, and over the device's camera island and its corners while in the air (at 2000 in the
+        // window: site.css.ts), the rest of the app under them as it was: what holds them cuts nothing off, nor keeps them in
+        // a layer of its own (a z-index, a transform that moves nothing; the app's screen, fixed, is placed as it was
+        // the other way: the app's root is what it is fixed to and what it is placed in).
         for (const h of r.holders) {
-          Object.assign(h.style, on
-            ? { overflow: "visible", contain: "none", clipPath: "none", zIndex: "3" }
-            : { overflow: "", contain: "", clipPath: "", zIndex: "" });
+          if (on && !was.has(h)) {
+            const c = getComputedStyle(h);
+            const still = /^(none|matrix\(1, 0, 0, 1, 0, 0\)|matrix3d\(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1\))$/.test(c.transform);
+            const set: Partial<CSSStyleDeclaration> = {
+              overflow: "visible", contain: "none", clipPath: "none", zIndex: "auto", isolation: "auto", willChange: "auto",
+              ...(still ? { transform: "none" } : {}), ...(c.position === "fixed" ? { position: "absolute" } : {}),
+            };
+            was.set(h, Object.fromEntries(Object.keys(set).map((k) => [k, h.style[k as keyof typeof set]])) as Partial<CSSStyleDeclaration>);
+            Object.assign(h.style, set);
+          }
+          if (!on && was.has(h)) { Object.assign(h.style, was.get(h)); was.delete(h); }
         }
         Object.assign(r.el.style, on
-          ? { position: "relative", zIndex: "50", background: r.ground, transformOrigin: "0 0" }
+          ? { position: "relative", zIndex: "3000", background: r.ground, transformOrigin: "0 0" }
           : { position: "", zIndex: "", background: "", transformOrigin: "", transform: "" });
       }
     };

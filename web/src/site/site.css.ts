@@ -309,6 +309,9 @@ export const oneEdge = style({
   // A phone's face round its screen (a narrow screen's window).
   "@media": { [NARROW]: { inset: "-12px", borderRadius: "48px", selectors: { "&::after": { display: "none" } } } }, // own corner: a phone's
 });
+/** Over all the app draws in the window (its own layers go up to 1000), the rows flying in alone over it
+ *  (OneComputer.tsx). */
+const OVER_APP = 2000;
 /** The screen's corners, round within its shell's (as far in as the shell's edge is wide): the shell's black laid
  *  over them, not a clip (which would cut the rows off as they fly out past them). */
 const caps = (r: number) => [
@@ -317,7 +320,7 @@ const caps = (r: number) => [
   `radial-gradient(circle at 100% 0, transparent ${r}px, ${BEZEL} ${r + 0.5}px) bottom left / ${r}px ${r}px no-repeat`,
   `radial-gradient(circle at 0 0, transparent ${r}px, ${BEZEL} ${r + 0.5}px) bottom right / ${r}px ${r}px no-repeat`,
 ].join(", ");
-export const oneCorners = style({ position: "absolute", inset: "0", zIndex: 2, pointerEvents: "none", background: caps(20), "@media": { [NARROW]: { background: caps(36) } } });
+export const oneCorners = style({ position: "absolute", inset: "0", zIndex: OVER_APP, pointerEvents: "none", background: caps(20), "@media": { [NARROW]: { background: caps(36) } } });
 /** A laptop's base: metal, its hinge under the lid, the scoop in its front edge to lift the lid by. */
 export const oneBase = style({
   position: "absolute", left: "-84px", right: "-84px", top: "calc(100% + 18px)", height: "14px", background: ALU,
@@ -334,7 +337,7 @@ export const oneBase = style({
   "@media": { [NARROW]: { display: "none" } },
 });
 /** A phone's camera island at the top of its screen; `oneIslandInWindow` the one of a narrow screen's window. */
-const island = { position: "absolute", left: "calc(50% - 56px)", width: "112px", height: "32px", borderRadius: "16px", background: "#000", zIndex: 2, pointerEvents: "none" } as const; // own corner: an island
+const island = { position: "absolute", left: "calc(50% - 56px)", width: "112px", height: "32px", borderRadius: "16px", background: "#000", zIndex: OVER_APP, pointerEvents: "none" } as const; // own corner: an island
 export const oneIsland = style({ ...island, top: "23px" });
 export const oneIslandInWindow = style({ ...island, top: "11px", display: "none", "@media": { [NARROW]: { display: "block" } } });
 /** A phone's buttons on its metal edge: the volume keys on the left, the power key on the right. `oneKeysInWindow` the
