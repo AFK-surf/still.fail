@@ -72,6 +72,7 @@ let zh_wide : Map[String, String] = {
   "web-main.find.partial": "仅搜索了已加载的 {held} 条，共 {of} 条",
   "web-main.find.placeholder": "在对话中查找",
   "web-main.find.prev": "上一个",
+  "web-main.combos.short": "常用",
   "web-main.decisions.count": "{n} 件待你决定",
   "web-main.decisions.entry": "奏：{n} 件待你决定",
   "web-main.filter.archived": "已归档",

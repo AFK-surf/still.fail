@@ -1645,6 +1645,12 @@ fn composer_bar(
   fresh : Fresh?,
 ) -> Unit {
   let t = @sf.theme()
+  // the roomy composer's choices (a new chat's in the wide frame): its words always over its row
+  let tools = match fresh {
+    Some(f) => f.tools
+    None => None
+  }
+  let expanded = expanded || tools is Some(_)
   // typing may warm the agent's runtime: the first time, then a minute after the last (asked each frame, so it counts)
   let warm_due = d.warm_n == 0 ||
     @kit.after(c, "warm/" + d.key + "/\{d.warm_n}", true, warm_every_ms, later=true)
@@ -1814,11 +1820,7 @@ fn composer_bar(
     )
     part(f, "field")
   }
-  let tools = match fresh {
-    Some(f) => f.tools
-    None => None
-  }
-  if expanded || tools is Some(_) {
+  if expanded {
     c.box(w=Fill(1.0), gap=4.0, fn() {
       field()
       c.box(dir=Row, w=Fill(1.0), align=AEnd, fn() {
