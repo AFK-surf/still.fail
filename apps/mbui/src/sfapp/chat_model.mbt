@@ -63,12 +63,24 @@ pub(all) struct Quote {
   text : String
   comment : String
   ts : String
+  /// agent | person | page (a mark on a previewed page) | image (a numbered mark on an image)
+  role : String
+  /// the name of the file among the message's that goes with it (a mark's screenshot, an image of the message
+  /// quoted): shown in its card, not with the message's files; "" none
+  file : String
 }
 
 ///|
 fn quote_of(q : Json) -> Quote {
   let s = Some(q)
-  { author: text(s, "author"), text: text(s, "text"), comment: text(s, "comment"), ts: text(s, "ts") }
+  {
+    author: text(s, "author"),
+    text: text(s, "text"),
+    comment: text(s, "comment"),
+    ts: text(s, "ts"),
+    role: text(s, "role"),
+    file: text(s, "file"),
+  }
 }
 
 ///|
