@@ -75,8 +75,13 @@ pub fn source() -> @sfapp.Source {
     },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
-    // here. Any other ask the tape does not have still diverges.
+    // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
+    // run's language, which only the run knows).
     call: fn(name, params, done) {
+      if name == "commands.find" {
+        @core.call(name, params~, on_done=done)
+        return
+      }
       match @sfkept.answer(name, params, None) {
         Some(Ok((v, _))) => done(Ok(v))
         _ => @core.call(name, params~, on_done=done)

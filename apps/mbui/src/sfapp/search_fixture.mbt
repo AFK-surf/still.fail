@@ -63,7 +63,7 @@ fn found_item(kind : String, key : String, title : String, text : String, word :
 }
 
 ///|
-fn fixture_search(params : Map[String, Json]) -> Json? {
+fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
   let query = match params.get("query") {
     Some(String(q)) => q
     _ => ""
@@ -158,7 +158,23 @@ fn fixture_search(params : Map[String, Json]) -> Json? {
       "note": "还有 1 台 station 离线，没有搜它上面的内容",
     })
   } else {
-    Some({ "items": [], "words": Json::array(if query == "" { [] } else { [Json::string(query)] }), "messages": [], "groups": [], "wait": none })
+    // the device's chats whose titles have the words (with none, the latest), as the core's search lists them
+    let words = query.trim(chars=" ").to_string().to_lower()
+    let chats : Array[Json] = []
+    for d in fixture_days(f) {
+      for c in items(Some(d), "items") {
+        if words == "" || text(Some(c), "title").to_lower().contains(words) {
+          chats.push(c)
+        }
+      }
+    }
+    Some({
+      "items": Json::array(chats),
+      "words": Json::array(if words == "" { [] } else { [Json::string(words)] }),
+      "messages": [],
+      "groups": [],
+      "wait": none,
+    })
   }
 }
 

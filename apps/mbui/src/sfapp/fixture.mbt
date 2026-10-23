@@ -445,7 +445,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     "shareIn" => fixture_share_topic(params)
     "imageNear" => fixture_image_near(params)
     "chats" => fixture_chats(f, params)
-    "search" => fixture_search(params)
+    "search" => fixture_search(f, params)
     // the archive's chats (the settings' made-up ones): the wide frame's sidebar lists them
     "archive" => @settings.fixture_topic(f.mode, name, params)
     // (the web's demo has none)
@@ -769,9 +769,18 @@ pub fn fixture(mode : String) -> Source {
 }
 
 ///|
-/// The core's pure calls (`markdown`, `code.ink`, `reader.*`) as the real core answered them, kept (src/sfkept: bound
+/// The core's pure calls (`markdown`, `code.ink`, `reader.*`, `commands.find`) as the real core answered them, kept (src/sfkept: bound
 /// by a run without a core); None for any other.
 fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Bytes?), Json]? {
+  // (⌘K's words are the core's in its language: the made-up core's is the app's)
+  let params = match (name, params) {
+    ("commands.find", Object(m)) => {
+      let m = m.copy()
+      m["lang"] = Json::string(@sf.language())
+      Json::object(m)
+    }
+    _ => params
+  }
   match @sf.kept_call.val {
     Some(kept) => kept(name, params, bytes)
     None => None

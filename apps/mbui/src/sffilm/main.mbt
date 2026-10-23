@@ -6,6 +6,8 @@
 
 ///|
 fn main {
+  // no core here: the real core's answers to its pure calls, kept (src/sfkept), as sffix's
+  @sf.kept_call.val = Some(@sfkept.answer)
   let mode = @film.arg("MBUI_FIXTURE")
   let dark = @film.arg("MBUI_DARK") == "1"
   let late = whole_ms(@film.arg("MBUI_CORE_MS"))

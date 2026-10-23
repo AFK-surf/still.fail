@@ -230,8 +230,6 @@ fn reset() -> Unit {
   keepings.clear()
   // the wide frame's keys (wide_keys.mbt)
   focus_composer.val = false
-  switcher_query.val = ""
-  switcher_field.set("")
   rename_for.val = ""
   side_rename_field.set("")
   rename_seen.val = false

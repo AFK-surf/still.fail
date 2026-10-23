@@ -409,10 +409,6 @@ let found_line_22 : @ui.Style = @ui.style(row=true, w=Full, h=@sf.found_line_h, 
 // kept across runs: a value (no field of it changes)
 let found_line_20 : @ui.Style = @ui.style(row=true, w=Full, h=S5, gap=S2, align=ACenter)
 
-///|
-/// A found line (StrokedLine) where it is put: the strokes are drawn in its corner's terms.
-// kept across runs: a value (no field of it changes)
-let found_words_box : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// A hit's line: 15 on 22, one line cut at its end; an item's: 14 on 20.
@@ -606,7 +602,7 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
     Chat(ch) =>
       match ch.found {
         Some(found) => {
-          let meta = join_meta([
+          let meta = @sf.join_meta([
             if ch.archived {
               tr("android-chat.search.archived")
             } else {
@@ -621,7 +617,7 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
         None => chat_row(c, src, ch.item, "agents", found=true) |> ignore
       }
     Message(m) => {
-      let meta = join_meta([m.by, m.ago])
+      let meta = @sf.join_meta([m.by, m.ago])
       let key = "m/" + m.station + "/" + m.chat.session + "/" + m.seq.to_string()
       if hit_row(c, key, m.text, m.marks, meta, m.chat.title) {
         let words = match view {
@@ -658,11 +654,6 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
   }
 }
 
-///|
-/// Words beside each other in a row's meta: the ones said, " · " between them.
-fn join_meta(parts : Array[String]) -> String {
-  parts.filter(fn(p) { p != "" }).join(" · ")
-}
 
 ///|
 /// A message or a chat found by words (HitRow): what has them on its first line, the row's width (they bold, stroked
@@ -679,7 +670,7 @@ fn hit_row(
   let id = c.id("search/hit/" + key)
   c.box(style=found_hit_row, id~, fn() {
     c.box(style=found_line_22, fn() {
-      found_line(c, key, text, marks, found_hit_words, t.p.text)
+      @sf.found_line(c, key, text, marks, found_hit_words, t.p.text)
     })
     |> ignore
     c.box(style=found_line_20, fn() {
@@ -696,17 +687,6 @@ fn hit_row(
   c.clicked(id)
 }
 
-///|
-/// What a kind is drawn with (web Switcher.tsx's KIND_ICON).
-fn kind_icon(kind : String) -> String {
-  match kind {
-    "file" => "file"
-    "job" => "web"
-    "station" => "server"
-    "member" => "user"
-    _ => "search"
-  }
-}
 
 ///|
 /// Something found besides a chat or a message (ItemRow): its kind's icon (a station its own mark), what it is, where
@@ -721,7 +701,7 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
       } else {
         @sf.icon(
           c,
-          if it.kind == "file" && it.dir { "folder" } else { kind_icon(it.kind) },
+          if it.kind == "file" && it.dir { "folder" } else { @sf.kind_icon(it.kind) },
           size=18.0,
           color=t.p.muted,
         )
@@ -732,7 +712,7 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
     c.box(style=found_column, fn() {
       c.box(style=found_line_22, fn() {
         c.text(it.title, style=found_title) |> ignore
-        let meta = join_meta([
+        let meta = @sf.join_meta([
           if several && it.kind != "station" {
             it.station_name
           } else {
@@ -747,7 +727,7 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
       |> ignore
       if it.text != "" {
         c.box(style=found_line_20, fn() {
-          found_line(c, "i/" + it.key, it.text, it.marks, found_item_words, t.p.text)
+          @sf.found_line(c, "i/" + it.key, it.text, it.marks, found_item_words, t.p.text)
         })
         |> ignore
       }
@@ -760,83 +740,3 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
   c.clicked(id)
 }
 
-///|
-/// A found line (Search.kt StrokedLine over `marked`): `text` on one line cut at its end, in `style`, the words found
-/// (`marks`) in `ink` and bold, a hand-drawn stroke in the accent under each, drawn in from the left one after another
-/// as the line comes (again when it changes).
-fn found_line(
-  c : @ui.Ctx,
-  key : String,
-  text : String,
-  marks : Array[(Int, Int)],
-  style : @ui.TextStyle,
-  ink : Int64,
-) -> Unit {
-  let t = @sf.theme()
-  let runs : Array[@ui.Run] = []
-  let mut at = 0
-  for m in marks {
-    let (from, to) = m
-    if from < at || to > text.length() || from > to {
-      continue
-    }
-    runs.push(@ui.span(text.view(start_offset=at, end_offset=from).to_string()))
-    runs.push(@ui.span(text.view(start_offset=from, end_offset=to).to_string(), weight=600, color=ink))
-    at = to
-  }
-  runs.push(@ui.span(text.view(start_offset=at).to_string()))
-  let wkey = "search/found/" + key
-  // its strokes drawn in as the line comes: 520 ms each, one 180 ms after the other
-  let total = @sf.strokes_ms(marks.length())
-  let drawn = @motion.anim(c, "search/drawn/" + key + "/" + text, 0.0, global=true)
-  if drawn.target() == 0.0 && !drawn.moving() && marks.length() > 0 {
-    drawn.animate(total, @motion.tween(total, ease=Linear))
-  }
-  let at_ms = drawn.get()
-  let box = c.box(style=found_words_box, fn() {
-    // under the words: each mark's stroke, from its first glyph's left to its last's right (2 past either), 3 under
-    // the baseline
-    match c.words_of(wkey) {
-      Some(w) if w.pieces.length() > 0 => {
-        let p = w.pieces[0]
-        let lay = p.layout
-        // a line cut at its end: the words past the ellipsis have no stroke
-        let end = if lay.text != text {
-          lay.text.length() - 1
-        } else {
-          text.length()
-        }
-        let base = if lay.line_y.length() > 0 { lay.line_y[0] + lay.line_base[0] } else { 0.0 }
-        c.layer(fn() {
-          for i, m in marks {
-            let (from, to) = m
-            let to = if to < end { to } else { end }
-            if from >= to {
-              continue
-            }
-            let part = @sf.stroke_part(at_ms, i)
-            if part <= 0.0 {
-              continue
-            }
-            match lay.rects(from, to).get(0) {
-              Some((rx, _, rw, _)) => {
-                let left = rx - 2.0
-                let right = rx + rw + 2.0
-                let (cx, cy) = @sf.stroke_corner(@sf.line_stroke)
-                c.box(tx=left - cx, ty=base + 3.0 - cy, fn() {
-                  @sf.hand_stroke(c, @sf.line_stroke, right - left, part, t.p.accent) |> ignore
-                })
-                |> ignore
-              }
-              None => ()
-            }
-          }
-        })
-        |> ignore
-      }
-      _ => ()
-    }
-    c.rich(runs, key=wkey, style~) |> ignore
-  })
-  c.words(box, wkey)
-}
