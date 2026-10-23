@@ -88,6 +88,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        drawingThread();
         Native.surfaceCreated();
         MBText.reset();
         mine = ++setUp;
@@ -185,16 +186,100 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             shotFrame(w, h);
             return;
         }
+        long began = System.nanoTime();
         // the vsync's time; a frame the system asked for (a resize) has none, and time never goes back
         long v = vsyncNanos;
-        double now = v != 0 ? v / 1e6 : System.nanoTime() / 1e6;
+        double now = v != 0 ? v / 1e6 : began / 1e6;
         if (now < lastFrame) now = lastFrame;
         lastFrame = now;
         // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
-        boolean later = takeBacks(v != 0 ? v : System.nanoTime());
+        boolean later = takeBacks(v != 0 ? v : began);
         boolean more = Native.frame(w, h, density, now);
         if (more || later) wantFrame();
         Script.frameDrawn();
+        frameWorked(System.nanoTime() - began);
+    }
+
+    // ---- the drawing thread, as the system's own ----
+
+    /**
+     * This thread builds, lays out and draws every frame: what Compose's UI thread and HWUI's RenderThread do between
+     * them. GLSurfaceView makes it a plain thread (nice 0), while the system raises the app in front's UI thread and
+     * RenderThread (THREAD_PRIORITY_TOP_APP_BOOST, or SCHED_FIFO) and its scheduler and governor favour them: a frame
+     * here could wait behind the core's thread, pictures decoding and the system's own work, on whatever core and clock
+     * the phone gave it. Raised as a display thread, and its work per frame told to the system (ADPF's
+     * PerformanceHintManager, as HWUI tells its frames' since Android 12) against the display's frame, so the CPUs it
+     * runs on are clocked for it.
+     */
+    private void drawingThread() {
+        try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
+        } catch (RuntimeException e) {
+            Host.log("drawing thread: priority: " + e);
+        }
+        // (a session per thread: GLSurfaceView starts another as the view is shown again)
+        int tid = android.os.Process.myTid();
+        if (android.os.Build.VERSION.SDK_INT < 31 || tid == hintTid) return;
+        if (hints != null) hints.close();
+        hints = null;
+        hintTid = tid;
+        android.os.PerformanceHintManager pm = getContext().getSystemService(android.os.PerformanceHintManager.class);
+        long target = framePeriod;
+        try {
+            hints = pm == null ? null : pm.createHintSession(new int[] {tid}, target);
+        } catch (RuntimeException e) {
+            Host.log("drawing thread: hints: " + e);
+        }
+        hintTarget = target;
+    }
+
+    /** The system told what this thread's work over a frame (null: Android before 12, or a phone without ADPF). */
+    private android.os.PerformanceHintManager.Session hints;
+    private int hintTid;
+    private long hintTarget;
+    /** The display's frame (ns), read as the view is shown and as the display changes its rate (main thread). */
+    private volatile long framePeriod = 16_666_667L;
+
+    private final android.hardware.display.DisplayManager.DisplayListener displays =
+            new android.hardware.display.DisplayManager.DisplayListener() {
+                @Override public void onDisplayAdded(int id) {}
+
+                @Override public void onDisplayRemoved(int id) {}
+
+                @Override public void onDisplayChanged(int id) {
+                    readFramePeriod();
+                }
+            };
+
+    private void readFramePeriod() {
+        android.view.Display d = getDisplay();
+        if (d != null && d.getRefreshRate() > 1) framePeriod = (long) (1e9 / d.getRefreshRate());
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        readFramePeriod();
+        android.hardware.display.DisplayManager dm = getContext().getSystemService(android.hardware.display.DisplayManager.class);
+        if (dm != null) dm.registerDisplayListener(displays, Host.main);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        android.hardware.display.DisplayManager dm = getContext().getSystemService(android.hardware.display.DisplayManager.class);
+        if (dm != null) dm.unregisterDisplayListener(displays);
+        super.onDetachedFromWindow();
+    }
+
+    /** A frame's work done (GL thread): how long it took, against the display's frame as it is now. */
+    private void frameWorked(long nanos) {
+        if (hints == null) return;
+        long target = framePeriod;
+        if (target != hintTarget) {
+            hintTarget = target;
+            hints.updateTargetWorkDuration(target);
+        }
+        if (nanos > 0) hints.reportActualWorkDuration(nanos);
     }
 
     // ---- the system's back ----
