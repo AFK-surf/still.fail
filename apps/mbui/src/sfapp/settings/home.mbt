@@ -40,7 +40,7 @@ pub fn page(
 /// sizes, as the web's, not the wide scale taken down for the pages still made of the phone's parts.
 fn desk_ported(route : Route) -> Bool {
   match route {
-    Notifications | Permissions | Archiving | StationArchiving(_) | Connects("") | Workspace | Security | Shortcuts | AutoDecisions | AutoCompletion | AutoPolicy(_) => true
+    Notifications | Permissions | Archiving | StationArchiving(_) | Connects("") | Workspace | Security | Shortcuts | AutoDecisions | AutoCompletion | AutoPolicy(_) | Memories | Memory(_) => true
     _ => false
   }
 }
