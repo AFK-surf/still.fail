@@ -1,0 +1,117 @@
+# The prebuilt native parts (scripts/native.ts `msvc`: the mbui app's shell and engine, Android's and Windows'), which
+# CI's other jobs only fetch, built when asked: for a branch whose change makes a new one (apps/mbui/engine,
+# client/shell, …), the jobs that fetch it fail saying to run this:
+#
+#     gh workflow run prebuild.yml -R AFK-surf/still.fail --ref <branch>
+#
+# Each that neither the store nor the release has is built from the branch's checkout (Windows' on GitHub's Windows,
+# Android's on Linux with the NDK) and put in the release native-artifacts, which they fetch from (main's
+# natives-store copies the Windows ones into the store); then the failed jobs of the commit's pipeline and mbui runs
+# run again. Never on its own (2026-10-23, as asked: what needs building is triggered by hand). A Mac still can:
+# node scripts/native.ts prebuild.
+name: prebuild
+on:
+  workflow_dispatch:
+concurrency:
+  group: prebuild-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  what:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      builds: ${{ steps.what.outputs.builds }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      # One job a Windows part (each its own build, minutes); Android's in one, the shell first (the engine links it).
+      - id: what
+        run: |
+          missing=$(node scripts/native.ts missing --prebuilt)
+          echo "${missing:-nothing missing}"
+          builds=$(printf '%s\n' $missing | jq -R . | jq -sc '
+            (map(select(endswith(":win32-x64"))) | map({name: ., os: "windows-2025", parts: .}))
+            + (map(select(endswith(":android-arm64"))) | if length > 0 then [{name: "android-arm64", os: "ubuntu-24.04", parts: join(" ")}] else [] end)')
+          echo "builds=$builds" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: what
+    if: needs.what.outputs.builds != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.what.outputs.builds) }}
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    permissions:
+      contents: write # the release native-artifacts' assets
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.ci-target
+    steps:
+      # the keys are git's blobs: the checkout as git has it
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      # Git Bash's /usr/bin/link shadows MSVC's link.exe for cargo
+      - if: runner.os == 'Windows'
+        run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
+      # The NDK from the Actions cache the setup action keeps it in (a gigabyte from Google's servers otherwise)
+      - if: runner.os == 'Linux'
+        id: ndk
+        uses: actions/cache/restore@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/28.2.13676358
+          key: android-ndk-28.2.13676358-${{ runner.os }}-${{ runner.arch }}
+      - if: runner.os == 'Linux'
+        run: |
+          sdkmanager=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+          if [ "${{ steps.ndk.outputs.cache-hit }}" != true ]; then "$sdkmanager" 'ndk;28.2.13676358' > /dev/null; fi
+          ls "$ANDROID_HOME/cmake" 2>/dev/null | grep -q . || "$sdkmanager" 'cmake;3.31.6' > /dev/null
+      - name: Build ${{ matrix.parts }}, put it in the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/native.ts prebuild --release ${{ matrix.parts }}
+
+  # The commit's runs whose jobs fetched what was missing: their failed jobs again, once each has ended (a run is run
+  # again only then). Not on main, whose runs publish the beta: a run again there may be an older commit's.
+  again:
+    needs: [what, build]
+    if: always() && github.ref != 'refs/heads/main' && needs.what.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.build.result)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=
+          for wf in pipeline.yml mbui.yml; do
+            id=$(gh run list -R "$GITHUB_REPOSITORY" -w "$wf" --commit "$GITHUB_SHA" --event push -L 1 --json databaseId --jq '.[0].databaseId // empty')
+            if [ -n "$id" ]; then ids="$ids $id"; else echo "$wf: no run of $GITHUB_SHA"; fi
+          done
+          # (up to 8 minutes for the last to end)
+          for _ in $(seq 1 24); do
+            running=
+            for id in $ids; do [ "$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json status --jq .status)" = completed ] || running=1; done
+            [ -z "$running" ] && break
+            sleep 20
+          done
+          for id in $ids; do
+            state=$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json workflowName,status,conclusion --jq '"\(.workflowName): \(.status) \(.conclusion)"')
+            case "$state" in
+              *": completed failure") gh run rerun "$id" -R "$GITHUB_REPOSITORY" --failed && echo "$state: run $id's failed jobs again" ;;
+              *": completed "*) echo "$state (run $id)" ;;
+              *) echo "$state (run $id): gh run rerun $id --failed once it ends" ;;
+            esac
+          done

@@ -19,16 +19,20 @@
 //   node scripts/native.ts iroh-pkg [dir]              the web's iroh (iroh-wasm) put in web/src/core/iroh-pkg
 //   node scripts/native.ts status                      every part and target: key, and whether cached / published
 //   node scripts/native.ts missing [--windows] [part[:target]…]    those (default: all of ours) the release lacks, one a line
+//   node scripts/native.ts missing --prebuilt          the prebuilt ones (`msvc`: the shell and engine, Android's and
+//        Windows', which the mbui app's jobs only fetch) in neither the store nor the release, one a line
 //   node scripts/native.ts ensure [--windows] [--publish] [--outbox DIR] [part[:target]…]
 //        CI: each (default: all) in the cache, built when not prebuilt; --publish uploads what the release lacks
 //        (gh, main only); --outbox copies the artifacts the release lacks there (a branch's run artifact)
 //        The default leaves out what only Windows builds (MSVC's: the mbui app's shell and engine); --windows is those.
 //   node scripts/native.ts prune [N]                   the release keeps the newest N (20) of each part and target
-//   node scripts/native.ts prebuild [--release] [part:target…]   a development machine's: each (default: the Windows
-//        parts) the store (STORE: the releases bucket's natives/) lacks, got or built here (a Mac cross-builds the
-//        Windows ones), then put there (scripts/release-put.sh: CLOUDFLARE_API_TOKEN, the releases bucket's), for CI to
-//        fetch: CI never builds those (`msvc`), it says to prebuild them. --release: in the release native-artifacts
-//        instead (gh), which native.ts fetches from after the store, for a machine without the bucket's token.
+//   node scripts/native.ts prebuild [--release] [part:target…]   each (default: the Windows parts) in neither the store
+//        (STORE: the releases bucket's natives/) nor the release, got or built here (Windows builds the Windows ones, a
+//        Mac cross-builds them), then put in the store (scripts/release-put.sh: CLOUDFLARE_API_TOKEN, the releases
+//        bucket's), for CI to fetch. CI builds those (`msvc`) only when asked, in the prebuild workflow
+//        (.github/workflows/prebuild.yml, run by hand); its other jobs fetch them, or fail saying to run it.
+//        --release: in the release native-artifacts instead (gh), which native.ts fetches from after the store (the
+//        workflow's, and a machine's without the bucket's token).
 //   node scripts/native.ts store-sync                  CI on main: each prebuilt part (the Windows ones) at its key that the
 //        release has and the store lacks, copied there (release-put.sh, CLOUDFLARE_API_TOKEN); never built
 //
@@ -667,8 +671,9 @@ function buildHere(part: string, target: Target, k: string): string {
   return final;
 }
 
-/// The part's directory in the cache: there already, downloaded, or built.
-async function get(part: string, target: Target, mode: "any" | "fetch" | "build" = "any"): Promise<string> {
+/// The part's directory in the cache: there already, downloaded, or built ("prebuild": the prebuild command's, the one
+/// that builds a prebuilt part on CI).
+async function get(part: string, target: Target, mode: "any" | "fetch" | "build" | "prebuild" = "any"): Promise<string> {
   const k = key(part, target);
   const dir = cached(part, target, k);
   if (mode !== "build" && complete(dir, part, target)) return dir;
@@ -679,8 +684,10 @@ async function get(part: string, target: Target, mode: "any" | "fetch" | "build"
       const got = await download(part, target, k);
       if (got) return got;
     }
-    // What a development machine prebuilds is never built on CI: said, with how.
-    if (onWindows(part, target) && (process.env.CI || mode === "fetch")) throw new Error(`${part} ${target} ${k} is not prebuilt: prebuild it on a Mac (Studio), node scripts/native.ts prebuild ${part}:${target}`);
+    // What is prebuilt (`msvc`) CI builds only in the prebuild workflow, run by hand: anywhere else said, with how.
+    if (mode !== "prebuild" && P(part).msvc && (mode === "fetch" || (onWindows(part, target) && process.env.CI))) {
+      throw new Error(`${part} ${target} ${k} is not prebuilt: run the prebuild workflow on the branch, gh workflow run prebuild.yml -R ${REPO} --ref ${process.env.GITHUB_REF_NAME || "<branch>"} (or on a Mac, node scripts/native.ts prebuild ${part}:${target})`);
+    }
     if (mode === "fetch" || policy === "offline") throw new Error(`${part} ${target} ${k} is not prebuilt (STILLFAIL_NATIVE=${policy || "-"}, ${mode})`);
     // n0's relay is downloaded from n0 whatever the policy: "building" it is that.
     return buildHere(part, target, k);
@@ -783,7 +790,9 @@ async function exists(name: string): Promise<boolean> {
 /// Whether the store of prebuilt parts has it.
 async function inStore(name: string): Promise<boolean> {
   try {
-    const r = await fetch(`${STORE}/${name}`, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(30_000) });
+    // (its first byte: the store answers HEAD 404 for what it has)
+    const r = await fetch(`${STORE}/${name}`, { headers: { Range: "bytes=0-0" }, redirect: "follow", signal: AbortSignal.timeout(30_000) });
+    await r.body?.cancel();
     return r.ok;
   } catch {
     return false;
@@ -857,6 +866,15 @@ async function main(argv: string[]) {
     case "missing": {
       // Each part (default: all of ours) the release lacks, one a line: CI's plan skips the natives job when none is.
       // --windows: those only Windows builds (the natives-win job's); without it, the others.
+      // --prebuilt: the prebuilt ones (`msvc`) that neither the store nor the release has (the prebuild workflow's).
+      if (args.includes("--prebuilt")) {
+        for (const [p, t] of ours()) {
+          if (!P(p).msvc) continue;
+          const name = asset(p, t, key(p, t));
+          if (!(await inStore(name)) && !(await exists(name))) console.log(`${p}:${t}`);
+        }
+        return;
+      }
       const windows = args.includes("--windows");
       const wanted: [string, Target][] = [];
       for (const a of args.filter((a) => a !== "--windows")) { const [p, t] = a.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
@@ -919,11 +937,12 @@ async function main(argv: string[]) {
       for (const [p, t] of wanted) {
         const k = key(p, t);
         const name = asset(p, t, k);
-        if (toRelease ? await exists(name) : await inStore(name)) { console.log(`${p} ${t} ${k}: there already`); continue; }
+        // (in either: fetch takes it from both, and main's store-sync copies the release's into the store)
+        if ((await inStore(name)) || (await exists(name))) { console.log(`${p} ${t} ${k}: there already`); continue; }
         const started = Date.now();
-        const dir = await get(p, t);
+        const dir = await get(p, t, "prebuild");
         pack(dir, name, join(work, "natives"));
-        console.log(`${p} ${t} ${k}: ready (${((Date.now() - started) / 1000).toFixed(0)} s), putting it in the store`);
+        console.log(`${p} ${t} ${k}: ready (${((Date.now() - started) / 1000).toFixed(0)} s), putting it in the ${toRelease ? "release" : "store"}`);
         any = true;
       }
       try {
@@ -941,7 +960,7 @@ async function main(argv: string[]) {
           if (!onWindows(p, t)) continue;
           const name = asset(p, t, key(p, t));
           if (await inStore(name)) { console.log(`${name}: in the store`); continue; }
-          if (!(await exists(name))) { console.log(`${name}: in neither (prebuild it: node scripts/native.ts prebuild ${p}:${t})`); continue; }
+          if (!(await exists(name))) { console.log(`${name}: in neither (prebuild it: the prebuild workflow, or node scripts/native.ts prebuild ${p}:${t})`); continue; }
           const r = await fetch(`https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
           if (!r.ok) throw new Error(`${name}: the release answered ${r.status}`);
           writeFileSync(join(work, "natives", name), Buffer.from(await r.arrayBuffer()));
