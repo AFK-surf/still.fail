@@ -1493,6 +1493,13 @@ pub fn Ctx::copy_text(self : Ctx, s : String) -> Unit {
 }
 
 ///|
+/// The desktop's window made to fill the screen, or back as it was (@hostapi.set_full_screen).
+pub fn Ctx::set_full_screen(self : Ctx, on : Bool) -> Unit {
+  ignore(self)
+  h_set_full_screen(on)
+}
+
+///|
 /// Puts the picture `data` (an image file's bytes) on the system's clipboard, as a picture other apps paste.
 pub fn Ctx::copy_image(self : Ctx, data : Bytes) -> Unit {
   ignore(self)

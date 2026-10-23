@@ -959,6 +959,17 @@ fn window_inset() -> Bool {
 }
 
 ///|
+/// The window filling the screen (see host_native.mbt): a browser's page has none of its own.
+fn full_screen() -> Bool {
+  false
+}
+
+///|
+fn set_full_screen(on : Bool) -> Unit {
+  ignore(on)
+}
+
+///|
 /// The window dragged by the app's top row (see host_native.mbt): a browser's page cannot move its window.
 fn window_drag() -> Unit {
   ()

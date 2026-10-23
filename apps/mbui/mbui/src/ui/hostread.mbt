@@ -69,6 +69,16 @@ pub fn window_inset() -> Bool {
 }
 
 ///|
+/// Whether the desktop's window fills the screen now (@hostapi.full_screen; a Tester's as Ctx::set_full_screen last
+/// made it).
+pub fn full_screen() -> Bool {
+  match fake.val {
+    Some(f) => f.full
+    None => @hostapi.full_screen()
+  }
+}
+
+///|
 /// The host's environment variable `name`, "" unset (a Tester's `env`).
 pub fn env(name : String) -> String {
   h_env(name)

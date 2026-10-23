@@ -13,6 +13,8 @@
 pub(open) trait Host {
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
+  full_screen(Self) -> Bool = _
+  set_full_screen(Self, Bool) -> Unit = _
   window_drag(Self) -> Unit = _
   set_cursor(Self, Int) -> Unit = _
   set_badge(Self, Int) -> Unit = _
@@ -185,6 +187,16 @@ impl Host with window_setup(_, _, _, _, _, _) {
 ///|
 impl Host with window_inset(_) {
   false
+}
+
+///|
+impl Host with full_screen(_) {
+  false
+}
+
+///|
+impl Host with set_full_screen(_, _) {
+  ()
 }
 
 ///|
@@ -1034,6 +1046,19 @@ pub fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inse
 /// leaves them there.
 pub fn window_inset() -> Bool {
   current.val.window_inset()
+}
+
+///|
+/// Whether the desktop's window fills the screen now (macOS's full screen). False where there is no such window.
+pub fn full_screen() -> Bool {
+  current.val.full_screen()
+}
+
+///|
+/// The desktop's window made to fill the screen, or back as it was (macOS's full screen, as its green button does).
+/// Nothing where there is no window to size.
+pub fn set_full_screen(on : Bool) -> Unit {
+  current.val.set_full_screen(on)
 }
 
 ///|

@@ -205,6 +205,12 @@ extern "C" fn ffi_window_setup(min_w : Double, min_h : Double, w : Double, h : D
 extern "C" fn ffi_window_inset() -> Int = "mb_host_window_inset"
 
 ///|
+extern "C" fn ffi_full_screen() -> Int = "mb_host_full_screen"
+
+///|
+extern "C" fn ffi_set_full_screen(on : Int) -> Unit = "mb_host_set_full_screen"
+
+///|
 extern "C" fn ffi_window_drag() -> Unit = "mb_host_window_drag"
 
 ///|
@@ -227,6 +233,18 @@ fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? :
 /// leaves them there.
 fn window_inset() -> Bool {
   ffi_window_inset() != 0
+}
+
+///|
+/// Whether the window fills the screen now (macOS's full screen).
+fn full_screen() -> Bool {
+  ffi_full_screen() != 0
+}
+
+///|
+/// The window made to fill the screen, or back (macOS's full screen).
+fn set_full_screen(on : Bool) -> Unit {
+  ffi_set_full_screen(if on { 1 } else { 0 })
 }
 
 ///|

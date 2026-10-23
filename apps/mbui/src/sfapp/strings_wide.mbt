@@ -292,6 +292,8 @@ let zh_wide : Map[String, String] = {
   "web-pages.drive.player.mute": "静音",
   "web-pages.drive.player.unmute": "取消静音",
   "web-pages.drive.player.volume": "音量",
+  "web-pages.drive.player.full": "全屏",
+  "web-pages.drive.player.unfull": "退出全屏",
   "web-main.video.pauseKey": "暂停（空格）",
   "web-main.video.playKey": "播放（空格）",
 }

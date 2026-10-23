@@ -76,6 +76,8 @@ struct FakeHost {
   /// the environment, the build's version code
   mut dark : Bool
   mut inset : Bool
+  /// the window filling the screen (Ctx::set_full_screen), as last made to
+  mut full : Bool
   /// the system's size of words (font_scale: 1 as it is)
   mut font_scale : Double
   /// something reading the widgets out (a11y_on), and what it was last told they are (a11y.mbt)
@@ -628,6 +630,15 @@ fn h_clipboard_set(s : String) -> Unit {
       f.clipboard_secret = -1.0
     }
     None => @hostapi.clipboard_set(s)
+  }
+}
+
+///|
+/// The window made to fill the screen or back (@hostapi.set_full_screen); the fake host keeps it (@ui.full_screen).
+fn h_set_full_screen(on : Bool) -> Unit {
+  match fake.val {
+    Some(f) => f.full = on
+    None => @hostapi.set_full_screen(on)
   }
 }
 

@@ -733,6 +733,17 @@ int32_t mb_host_window_inset(void) {
   return setup_inset && w && !(w.styleMask & NSWindowStyleMaskFullScreen) ? 1 : 0;
 }
 
+// Whether the window fills the screen now (@hostapi.full_screen), and made to or back (as its green button does).
+int32_t mb_host_full_screen(void) {
+  NSWindow *w = the_view.window;
+  return w && (w.styleMask & NSWindowStyleMaskFullScreen) ? 1 : 0;
+}
+
+void mb_host_set_full_screen(int32_t on) {
+  NSWindow *w = the_view.window;
+  if (w && (on != 0) != ((w.styleMask & NSWindowStyleMaskFullScreen) != 0)) [w toggleFullScreen:nil];
+}
+
 // The press under way drags the window (the app's top row: @hostapi.window_drag); twice, what the system's title bar
 // does on a double click (zoom, minimize or nothing, as set in the system's settings).
 void mb_host_window_drag(void) {

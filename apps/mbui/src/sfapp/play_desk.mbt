@@ -67,7 +67,7 @@ fn desk_play(c : @ui.Ctx, p : @kit.Media, d : DeskPlaying) -> Unit {
     if listing {
       desk_listing[key] = false
     } else {
-      (d.go_back)()
+      desk_leave(c, key, d.go_back)
     }
   }
   let ink = page_viewer_ink()
@@ -145,7 +145,7 @@ fn desk_play(c : @ui.Ctx, p : @kit.Media, d : DeskPlaying) -> Unit {
             (d.save)()
           }
         }) {
-        (d.go_back)()
+        desk_leave(c, key, d.go_back)
       }
     })
     |> ignore
@@ -179,6 +179,22 @@ fn desk_play(c : @ui.Ctx, p : @kit.Media, d : DeskPlaying) -> Unit {
 ///|
 /// Where the pointer was, by the player's key: its moves wake the controls.
 let desk_moves : Map[String, (Double, Double)] = Map([])
+
+///|
+/// The players that made the window fill the screen, by key: back as it was when they are left.
+let desk_fulled : Map[String, Bool] = Map([])
+
+///|
+/// Back from a player (`go_back`), the window as it was if the player made it fill the screen.
+fn desk_leave(c : @ui.Ctx, key : String, go_back : () -> Unit) -> Unit {
+  if desk_fulled.contains(key) {
+    desk_fulled.remove(key)
+    if @ui.full_screen() {
+      c.set_full_screen(false)
+    }
+  }
+  go_back()
+}
 
 ///|
 /// The controls (Player.tsx's vvBar): the timeline, then the steps and play, the time, the speed and the subtitle.
@@ -264,6 +280,19 @@ fn desk_play_controls(
         desk_play_key(c, key + "/captions", "captions", tr(if subs_on { "web-pages.drive.player.captionsOff" } else { "web-pages.drive.player.captionsOn" }), on, small=true, lit=subs_on) {
         p.toggle_subtitle()
         p.wake()
+      }
+      // 全屏: the window filling the screen (macOS's), back as it was (and as the player is left)
+      if !f.audio && @ui.platform() == 0 {
+        let full = @ui.full_screen()
+        if desk_play_key(c, key + "/full", if full { "shrink" } else { "expand" }, tr(if full { "web-pages.drive.player.unfull" } else { "web-pages.drive.player.full" }), on, small=true) {
+          c.set_full_screen(!full)
+          if full {
+            desk_fulled.remove(key)
+          } else {
+            desk_fulled[key] = true
+          }
+          p.wake()
+        }
       }
     })
     |> ignore

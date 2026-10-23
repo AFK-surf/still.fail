@@ -297,6 +297,7 @@ fn reset() -> Unit {
   // a desktop's player's 选集 and the pointer it last saw (play_desk.mbt)
   desk_listing.clear()
   desk_moves.clear()
+  desk_fulled.clear()
   badge_told.val = -1
   dock_reset()
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)

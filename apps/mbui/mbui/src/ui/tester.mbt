@@ -226,6 +226,7 @@ pub fn Tester::new(
     opened: [],
     dark,
     inset: window_inset,
+    full: false,
     font_scale: 1.0,
     a11y: false,
     a11y_said: "",
