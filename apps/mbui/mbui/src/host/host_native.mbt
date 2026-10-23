@@ -133,6 +133,9 @@ extern "C" fn ffi_set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit = "mb_host_s
 
 extern "C" fn ffi_system_dark() -> Int = "mb_host_system_dark"
 
+///|
+extern "C" fn ffi_font_scale() -> Double = "mb_host_font_scale"
+
 extern "C" fn ffi_set_dark(dark : Int) -> Unit = "mb_host_set_dark"
 
 ///|
@@ -504,6 +507,11 @@ fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
 /// it changes. Hosts that cannot tell say light.
 fn system_dark() -> Bool {
   ffi_system_dark() != 0
+}
+
+///|
+fn font_scale() -> Double {
+  ffi_font_scale()
 }
 
 ///|

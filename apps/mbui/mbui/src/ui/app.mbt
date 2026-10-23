@@ -163,6 +163,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.whole_px = whole
     c.epoch = c.epoch + 1
   }
+  // the system's size of words: every layout made anew when it changes
+  let fs = font_scale()
+  if fs != c.font_scale && fs > 0.0 {
+    c.font_scale = fs
+    c.epoch = c.epoch + 1
+  }
   c.now = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t

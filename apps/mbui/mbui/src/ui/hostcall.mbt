@@ -61,6 +61,8 @@ struct FakeHost {
   /// the environment, the build's version code
   mut dark : Bool
   mut inset : Bool
+  /// the system's size of words (font_scale: 1 as it is)
+  mut font_scale : Double
   env : Map[String, String]
   app_version : Int
   /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken

@@ -184,6 +184,7 @@ public class MainActivity extends Activity {
         Host.activity = this;
         Host.view = view;
         Host.systemDark = night(getResources().getConfiguration());
+        Host.fontScale = getResources().getConfiguration().fontScale;
         if (Host.script != null) Script.start(view);
         // started by a notification's tap (Notices): what it opens, for the app
         Notices.from(getIntent());
@@ -371,6 +372,11 @@ public class MainActivity extends Activity {
     @Override
     public void onConfigurationChanged(android.content.res.Configuration c) {
         super.onConfigurationChanged(c);
+        // the system's size of words changed (configChanges has fontScale): the next frame draws words at it
+        if (c.fontScale != Host.fontScale) {
+            Host.fontScale = c.fontScale;
+            Host.requestFrame();
+        }
         boolean dark = night(c);
         if (dark != Host.systemDark) {
             Host.systemDark = dark;

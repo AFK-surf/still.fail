@@ -711,14 +711,14 @@ pub fn Ctx::rich(
   // its style (style.mbt) under what is said here, as Ctx::text's
   let st = self.text_patch(style)
   let (s_size, s_line) = self.text_sizes(st)
-  let size = first(size, s_size).unwrap_or(15.0)
+  let size = self.sp(first(size, s_size).unwrap_or(15.0))
   let weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   let color = first(color, opt_color(self.theme, st.color)).unwrap_or(0x1D1D1FFFL)
-  let line = first(line, s_line).unwrap_or(self.theme.text_line * size)
+  let line = first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * size)
   let wrap = first(wrap, st.wrap).unwrap_or(true)
   let w = first(w, opt_size(st.w)).unwrap_or(Auto)
   let spacing = match (tracking, st.tracking) {
-    (Some(v), _) => v
+    (Some(v), _) => self.sp(v)
     (None, Some(t)) => t.px(size)
     (None, None) => 0.0
   }

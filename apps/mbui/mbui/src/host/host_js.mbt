@@ -376,6 +376,11 @@ fn system_dark() -> Bool {
 }
 
 ///|
+fn font_scale() -> Double {
+  1.0
+}
+
+///|
 /// The app is drawn dark from now on (host_native.mbt): the page has nothing of its own to follow it.
 fn set_dark(dark : Bool) -> Unit {
   ignore(dark)
