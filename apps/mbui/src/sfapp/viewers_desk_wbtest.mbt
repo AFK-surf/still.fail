@@ -12,7 +12,14 @@ fn desk_tester(mode : String) -> @ui.Tester {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
   t.draw()
-  t.run_for(fly_open_ms)
+  if mode.has_prefix("reader") || mode.has_prefix("player") {
+    // (what the mode opens: 文档 and the file in it)
+    app.nav.replace(Home)
+    open_drive_fixture(mode)
+    t.run_for(@ui.nav_push_ms)
+  } else {
+    t.run_for(fly_open_ms)
+  }
   t
 }
 
