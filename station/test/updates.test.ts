@@ -14,7 +14,7 @@ import { type Env, type Found, howToInstall, howToUpdate, findCommand, ownNode, 
 import { hold } from "../src/updates/holds.ts";
 import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
 import { WINDOWS, platform as machine } from "../src/platform/index.ts";
-import { windowsUpdateScript } from "../src/platform/windows.ts";
+import { windowsUpdateScript, wingetPackage } from "../src/platform/windows.ts";
 import {
   channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, tail, versionIn,
 } from "../src/updates/versions.ts";
@@ -760,6 +760,27 @@ END
     const there: Env = { PATH: prefix };
     assert.deepEqual(howToUpdate("claude", findCommand("claude", there)!, there), {
       program: join(prefix, "npm.cmd"), args: ["install", "-g", "@anthropic-ai/claude-code@latest", "--prefix", prefix],
+    });
+  });
+
+  test("a winget package is named by the directory winget unpacked it in", () => {
+    const at = (dir: string) => wingetPackage(`C:\\Users\\a\\AppData\\Local\\Microsoft\\WinGet\\Packages\\${dir}\\claude.exe`);
+    assert.equal(at("Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe"), "Anthropic.ClaudeCode");
+    assert.equal(at("Some_Tool_Microsoft.Winget.Source_8wekyb3d8bbwe"), "Some_Tool");
+    assert.equal(wingetPackage("C:\\Program Files\\WinGet\\Packages\\OpenAI.Codex_Microsoft.Winget.Source_8wekyb3d8bbwe\\bin\\codex.exe"), "OpenAI.Codex");
+    assert.equal(wingetPackage("C:\\Users\\a\\.local\\bin\\claude.exe"), null);
+  });
+
+  test("on Windows a command winget installed is updated with winget", { skip: !WINDOWS && "Windows'" }, () => {
+    const dir = join(temp(), "WinGet", "Packages", "Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "claude.exe"), "");
+    const apps = temp();
+    writeFileSync(join(apps, "winget.exe"), "");
+    const env: Env = { PATH: [dir, apps].join(";") };
+    assert.deepEqual(howToUpdate("claude", findCommand("claude", env)!, env), {
+      program: join(apps, "winget.exe"),
+      args: ["upgrade", "--id", "Anthropic.ClaudeCode", "--exact", "--silent", "--disable-interactivity", "--accept-source-agreements", "--accept-package-agreements"],
     });
   });
 

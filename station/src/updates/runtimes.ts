@@ -1,5 +1,5 @@
 // Claude Code, Codex, DeepSeek Harness, Grok Build and Devin on this machine (Cursor's SDK: updates.ts readCursor) (the Rust station's updates.rs): where the station's PATH finds
-// them, how each is updated the way it was installed (`claude update`, Devin's installer, npm, Homebrew, Vite+, Codex's
+// them, how each is updated the way it was installed (`claude update`, Devin's installer, npm, Homebrew, winget, Vite+, Codex's
 // standalone installer) or installed when it is not there, and running those commands.
 import { existsSync, lstatSync, readdirSync, readlinkSync, realpathSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -125,7 +125,7 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   // the current one: the installer again fetches the latest and switches it (`devin update` wants a terminal: without
   // one it ends at once, nothing done).
   if (kind === "devin") return realPath.includes("/devin/cli/_versions/") ? platform.devinInstall : new Unable("station.updates.devinElsewhere", { path: realPath });
-  // A package manager's shim of this machine's kind (Windows: Vite+'s beside vp.exe, npm's .cmd in its prefix).
+  // A package manager's of this machine's kind (Windows: winget's, Vite+'s shim beside vp.exe, npm's .cmd in its prefix).
   const shim = platform.shimUpdate(found, kindPackage(kind), env);
   if (shim === "no-npm") return new Unable("station.updates.noNpm", { name });
   if (shim !== null) return shim;

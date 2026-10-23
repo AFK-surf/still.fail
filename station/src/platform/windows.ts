@@ -59,6 +59,24 @@ const isFile = (p: string) => {
   }
 };
 
+/// The winget package a command is of: its portable packages unpack into …\WinGet\Packages\<Id>_<Source>_<hash>
+/// (%LOCALAPPDATA%'s, or Program Files' for the machine), the command on PATH a link to it in WinGet\Links (or that
+/// directory on PATH itself); none for a command elsewhere.
+export function wingetPackage(real: string): string | null {
+  const dir = /[\\/]WinGet[\\/]Packages[\\/]([^\\/]+)[\\/]/i.exec(real)?.[1];
+  const parts = dir?.split("_") ?? [];
+  return parts.length >= 3 ? parts.slice(0, -2).join("_") : null;
+}
+
+/// winget as PATH finds it, else where Windows puts it (an app execution alias in WindowsApps, which a stat of it may
+/// not take for a file, though it runs).
+function wingetCommand(env: Env): string {
+  const found = findCommand("winget", env);
+  if (found !== null) return found.onPath;
+  const key = Object.keys(env).find((k) => k.toUpperCase() === "LOCALAPPDATA");
+  return key && env[key] ? join(env[key], "Microsoft", "WindowsApps", "winget.exe") : "winget.exe";
+}
+
 /// A command is a file with one of PATHEXT's extensions (no mode bit says it runs): `codex` is found as `codex.cmd`,
 /// `claude` as `claude.exe`.
 function findCommand(name: string, env: Env): Found | null {
@@ -478,6 +496,8 @@ export const windows: Platform = {
   /// Vite+'s command is a shim of its own (codex.cmd, codex.exe) beside vp.exe; npm's a .cmd in its global prefix,
   /// the package in node_modules beside it.
   shimUpdate(found, pkg, env) {
+    const winget = wingetPackage(found.real);
+    if (winget !== null) return { program: wingetCommand(env), args: ["upgrade", "--id", winget, "--exact", "--silent", "--disable-interactivity", "--accept-source-agreements", "--accept-package-agreements"] };
     const dir = dirname(found.onPath);
     if (existsSync(join(dir, "vp.exe"))) return { program: join(dir, "vp.exe"), args: ["install", "-g", `${pkg}@latest`] };
     if (/\.cmd$/i.test(found.onPath) && existsSync(join(dir, "node_modules", ...pkg.split("/")))) {
