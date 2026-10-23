@@ -43,24 +43,28 @@ try {
   // (the clock's moves on the page's own controller, what page.clock.runFor asks of it: page.clock's each add a script
   // to the context, run again in every page it opens after, and a context here opens the stories one after another)
   const tick = (page, ms) => page.evaluate((ms) => globalThis.__pwClock.controller.runFor(ms), ms);
-  const settle = async (page, ms) => {
-    await page.evaluate(() => Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]));
-    await tick(page, ms);
-    for (let t = 0; t < still_ms; t += 100) {
-      await page.evaluate(async () => {
-        const going = document.getAnimations().filter((a) => (a.playState === 'running' || a.pending) && a.effect?.getTiming().iterations !== Infinity);
-        for (const a of going) a.finish();
-        await Promise.all(going.map((a) => a.finished.catch(() => {})));
-      });
-      await tick(page, 100);
+  // Its steps in the page itself, not two round trips each: a share's pages spent 238-326 s settling so, 115-158 s
+  // in the page, its run 125-139 s and 114-117 s on the same runners, nothing measured otherwise (2026-10-23). Between
+  // its steps the page lets in what comes in real time (a fetch, a picture decoded): a task of its own, not a timer (the
+  // clock's), each time.
+  const settle = (page, ms) => page.evaluate(async ([ms, still]) => {
+    await Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]);
+    const clock = globalThis.__pwClock.controller;
+    const task = () => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => r(); c.port2.postMessage(0); });
+    await clock.runFor(ms);
+    for (let t = 0; t < still; t += 100) {
+      const going = document.getAnimations().filter((a) => (a.playState === 'running' || a.pending) && a.effect?.getTiming().iterations !== Infinity);
+      for (const a of going) a.finish();
+      await Promise.all(going.map((a) => a.finished.catch(() => {})));
+      await task();
+      await clock.runFor(100);
     }
-  };
+  }, [ms, still_ms]);
 
   // Still: what moves by script (its springs, not among the page's animations) at its end: settled. Its steps in the page
   // itself, on the clock Playwright puts there (what page.clock.runFor asks of it), not two round trips each: the page
   // held still (the demo ended, its time fixed), nothing it waits for comes in real time meanwhile. The four looks of
   // a story were a third of the stories' time on CI's runners, 161-237 s of a share's pages, 29-54 s so (2026-10-23).
-  // (Not so for a step's settling: what a step brings comes in real time too, a fetch, a picture decoded.)
   const steady = (page) => page.evaluate(async (still) => {
     const clock = globalThis.__pwClock.controller;
     for (let t = 0; t < still; t += 100) {
