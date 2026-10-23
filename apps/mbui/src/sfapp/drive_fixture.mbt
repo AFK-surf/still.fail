@@ -32,6 +32,8 @@ fn fixture_station_drive(up : Bool) -> Json {
         "watch": true,
         "zip": true,
       },
+      // its disk: 380 GB of 1 TB left
+      "disk": { "freeBytes": 380000000000.0, "totalBytes": 1000000000000.0 },
     }
   } else {
     {

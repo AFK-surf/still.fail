@@ -351,7 +351,8 @@ pub fn open_mode(mode : String) -> Unit {
     app.nav.replace(Place(mode.view(start_offset=6).to_string()))
   } else if mode.has_prefix("files-") {
     // the files' page in the wide frame (wide_files.mbt) at Studio's 文档: files-columns (设计稿 open beside it, chosen),
-    // files-tree (设计稿 opened in place), files-list, files-split (two tabs, the one shown split)
+    // files-tree (设计稿 opened in place), files-list, files-preview (发布清单.md previewed beside it), files-split (two
+    // tabs, the one shown split)
     let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
     app.nav.push(Files)
     app.nav.push(Drive(docs))
@@ -366,6 +367,11 @@ pub fn open_mode(mode : String) -> Unit {
         wide.files_open["station/ws1/st1"] = true
       }
       "files-list" => wide.files_view = Some("list")
+      // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
+      "files-preview" => {
+        wide.files_preview = Some(true)
+        wide.files_chosen = "ws1/st1\u{1}" + fix_docs + "\u{1}发布清单.md"
+      }
       // two tabs, the one shown split: 文档 in front, the home beside it
       "files-split" =>
         wide.tabs_set["ws1"] = (

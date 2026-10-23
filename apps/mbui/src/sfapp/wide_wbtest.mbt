@@ -247,6 +247,8 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
   for label in ["个人收藏", "团队共享", "Station"] {
     assert_true(t.find(label) is Some(_), msg=label)
   }
+  // how full Studio's disk is, by its row (MBA away: none)
+  assert_true(t.query(Image, label="剩 380 GB · 已用 62%") is Some(_))
   // a station opened: its places (drive.folders), read once
   t.click(Button, label="展开 Studio")
   t.frame()
@@ -595,4 +597,62 @@ test "wide: 通知's 桌面浮窗 beside the banner and the badge where there is
   t.tap_text("桌面浮窗")
   t.frame()
   assert_true(@settings.dock_setting("on"))
+}
+
+///|
+test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its start read, what it is and where; a video or a folder says how to open it; kept (prefs.set driveViews.preview)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Files)
+  app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="列表")
+  t.frame()
+  assert_true(t.find("选中一个文件来预览") is None)
+  t.click(Button, label="显示预览 ⌘⇧P")
+  t.frame()
+  assert_true(t.find("选中一个文件来预览") is Some(_), msg="nothing chosen yet")
+  assert_true(
+    named(calls, "prefs.set").any(fn(m) { text(field(Some(m.params), "driveViews"), "preview") == "shown" }),
+    msg="kept",
+  )
+  // a Markdown file chosen: its start read (all of it, under 64 KB), what it is under it
+  let facts = ["大小", "修改", "Station", "位置"]
+  let before = facts.map(fn(said) { t.locate(said).length() })
+  fix_reads.clear()
+  let (x, y) = t.find("发布清单.md").unwrap()
+  t.tap(x, y)
+  t.frame()
+  // (its row, its name over what it is, its path)
+  assert_eq(t.locate("发布清单.md").length(), 3)
+  assert_eq(fix_reads.length(), 1)
+  assert_eq(number(Some(fix_reads[0]), "length").to_int(), 4210)
+  for i, said in facts {
+    assert_eq(t.locate(said).length(), before[i] + 1, msg=said)
+  }
+  for said in ["打开", "下载", "复制路径"] {
+    assert_true(t.query(Button, label=said) is Some(_), msg=said)
+  }
+  t.click(Button, label="复制路径")
+  t.frame()
+  assert_eq(t.clipboard(), "/Users/lin/文档/发布清单.md")
+  // a video: how to open it, nothing read
+  fix_reads.clear()
+  let (x, y) = t.find("演示录屏.mp4").unwrap()
+  t.tap(x, y)
+  t.frame()
+  assert_true(t.find("双击播放") is Some(_))
+  assert_eq(fix_reads.length(), 0)
+  // a folder: no size, no 下载
+  let (x, y) = t.find("设计稿").unwrap()
+  t.tap(x, y)
+  t.frame()
+  assert_true(t.find("双击打开文件夹") is Some(_))
+  assert_eq(t.locate("大小").length(), before[0])
+  assert_true(t.query(Button, label="下载") is None)
+  // ⌘⇧P: gone
+  t.key(@ui.key_of_char('p'), mods=@ui.mod_cmd + @ui.mod_shift_key)
+  t.frame()
+  assert_true(t.find("双击打开文件夹") is None)
+  assert_true(t.query(Button, label="显示预览 ⌘⇧P") is Some(_))
 }

@@ -354,7 +354,7 @@ fn web() -> Palette {
 ///|
 /// `text` as Markdown, in a column as wide as it is given. `size`: the
 /// words' (0: the theme's body); `on_link` is told where a tapped link
-/// leads; `files` and `screens` as the file's head says.
+/// leads; `files` and `screens` as the file's head says; `document`: its headings a document's (Md's `document`).
 pub fn markdown(
   c : @ui.Ctx,
   text : String,
@@ -369,6 +369,7 @@ pub fn markdown(
   found? : Array[String] = [],
   code? : (String, String) -> (() -> Unit)? = fn(_, _) { None },
   screens? : Screens? = None,
+  document? : Bool = false,
 ) -> Int {
   let t = theme()
   let md = {
@@ -385,7 +386,7 @@ pub fn markdown(
     screens,
     line: 0.0,
     serif: false,
-    document: false,
+    document,
   }
   if tree is None && !core_parsed.contains(text) && !markdown_asked.contains(text) {
     if markdown_read.val is Some(read) {
