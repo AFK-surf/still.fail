@@ -1,5 +1,6 @@
 // The words of the settings, as the Android app says them in Chinese (ember client/i18n/catalog/zh: android-settings,
-// android-misc, web-pages, web-mobile, web-main, common): the keys these pages use, `{name}` put in by `fill`.
+// android-misc, web-pages, web-mobile, web-main, common): the keys these pages use, `{name}` put in by `fill`. In
+// English, strings_en.mbt's (scripts/strings, from the catalog's English; lang_wbtest.mbt holds every key to have one).
 
 ///|
 // kept across runs: a table, never written
@@ -488,8 +489,6 @@ let zh : Map[String, String] = {
   "web-pages.security.request": "发送批准请求",
   "web-pages.security.waitingLead": "「{name}」已开启安全模式，新设备需由你的受信任设备批准",
   "web-pages.security.waitingTitle": "等待批准此设备",
-  // (this app's own: the 安全 page of a device that waits, where it asks: the chats' place)
-  "mbui.security.waitingWhere": "在对话页「发送批准请求」，再输入你的受信任设备上显示的安全码；批准前此设备看不到对话，也连不上 station",
   "web-pages.security.requestFailed": "此设备无法提交批准请求：{error}",
   "web-pages.security.confirmDevice": "批准设备",
   "web-pages.security.denyDevice": "拒绝设备",
@@ -764,7 +763,6 @@ let zh : Map[String, String] = {
   "android-settings.login.finishing": "正在完成登录",
   "android-settings.login.grokNote": "在打开的 xAI 页面，用订阅了 SuperGrok 或 X Premium+ 的账号登录，输入代码后批准。完成后此处会自动继续，无需返回操作。",
   "android-settings.login.making": "正在生成 {provider} 的登录链接",
-  "android-settings.login.manual": "也可以在该机器上手动登录",
   "android-settings.login.cursorNote": "在打开的 Cursor 页面登录并确认。完成后此处会自动继续，无需返回操作。",
   "android-settings.login.step1Short": "在打开的页面用 {app} 要使用的 Claude 账号登录，并同意授权",
   "android-settings.login.step1ShortDevin": "在打开的页面用 {app} 要使用的 Devin 账号登录",
@@ -778,7 +776,6 @@ let zh : Map[String, String] = {
   "android-settings.login.reopen": "已复制，重新打开登录页",
   "android-settings.login.restart": "重新开始",
   "android-settings.login.signIn": "登录",
-  "android-settings.login.step2": "2. 同意后页面会显示授权码，复制到此处：",
   "android-settings.login.unfinished": "登录未完成",
   "android-settings.machine.added": "已添加 Profile，使用此机器的登录",
   "android-settings.machine.signedIn": "已登录",
@@ -1182,15 +1179,34 @@ let zh : Map[String, String] = {
 }
 
 ///|
+/// `key`'s words in English when that is the language (@sf.language: strings_en.mbt, scripts/strings), a count's of one
+/// (`n` 1) its `.one`, as Android's I18n.kt chooses; None in Chinese, or for a key it has no words for.
+fn english(key : String, args? : Array[(String, String)] = []) -> String? {
+  if @sf.language() != "en" {
+    return None
+  }
+  if args.iter().any(fn(a) { a.0 == "n" && a.1 == "1" }) && en.get(key + ".one") is Some(one) {
+    return Some(one)
+  }
+  en.get(key)
+}
+
+///|
 /// The words for `key`.
 fn tr(key : String) -> String {
-  zh.get(key).unwrap_or(key)
+  match english(key) {
+    Some(s) => s
+    None => zh.get(key).unwrap_or(key)
+  }
 }
 
 ///|
 /// The words for `key` with `{name}`s put in.
 fn fill(key : String, args : Array[(String, String)]) -> String {
-  let mut s = tr(key)
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => tr(key)
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }

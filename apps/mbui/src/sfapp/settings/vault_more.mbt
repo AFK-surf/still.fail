@@ -422,7 +422,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
             c.text(tr("web-pages.vault.notForAgents"), size=15.0, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
           } else {
             let hosts = strings(rv, "hosts")
-            fact(c, tr("web-pages.vault.how"), join(strings(rv, "modes").map(fn(m) { how_line(m, hosts) }), "、"))
+            fact(c, tr("web-pages.vault.how"), join(strings(rv, "modes").map(fn(m) { how_line(m, hosts) }), tr("web-main.list.separator")))
             match opt_text(rv, "env") {
               Some(env) if env != "" => fact(c, tr("android-settings.vault.env"), env, code=true)
               _ => ()

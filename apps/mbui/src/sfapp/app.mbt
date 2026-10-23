@@ -158,6 +158,7 @@ fn init {
 /// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
+  @sf.set_language(None)
   files_cornered.val = false
   felt_menu.val = -1
   felt_past.clear()
@@ -890,6 +891,8 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 /// when it follows it; the host told when it changes (its bars follow).
 fn appearance(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
+  // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
+  @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
   let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
   // (the host told once the prefs are read: not the system's first, then the one chosen)

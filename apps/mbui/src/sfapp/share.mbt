@@ -41,7 +41,10 @@ let share_zh : Map[String, String] = {
 
 ///|
 fn sh(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = share_zh.get(key).unwrap_or(tr(key))
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => share_zh.get(key).unwrap_or(tr(key))
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }
@@ -701,7 +704,7 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
   let under = if one {
     file_size(size.to_double())
   } else {
-    files.map(fn(f) { f.name }).join("、")
+    files.map(fn(f) { f.name }).join(tr("web-main.list.separator"))
   }
   let said = match title {
     Some(x) => x

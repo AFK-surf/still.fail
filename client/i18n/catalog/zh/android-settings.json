@@ -198,6 +198,7 @@
   "android-settings.login.done": "登录成功",
   "android-settings.login.failed": "上次登录失败：{error}",
   "android-settings.login.finishing": "正在完成登录",
+  "android-settings.login.finish": "完成登录",
   "android-settings.login.making": "正在生成 {provider} 的登录链接",
   "android-settings.login.note": "登录在运行 {app} 的机器上完成，你只需在浏览器中授权。",
   "android-settings.login.openPage": "打开授权页面",

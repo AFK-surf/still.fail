@@ -34,7 +34,10 @@ let up_zh : Map[String, String] = {
 
 ///|
 fn up(key : String, args? : Array[(String, String)] = []) -> String {
-  let mut s = up_zh.get(key).unwrap_or(key)
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => up_zh.get(key).unwrap_or(key)
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }

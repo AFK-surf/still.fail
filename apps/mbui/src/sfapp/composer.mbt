@@ -2393,11 +2393,7 @@ fn attach_sheet(
       None =>
         say(
           c,
-          if kind == Camera {
-            "这台设备上还不能拍照"
-          } else {
-            "这个版本在这台设备上还不能选文件"
-          },
+          tr(if kind == Camera { "android-chat.composer.noCamera" } else { "android-chat.composer.noFiles" }),
         )
     }
   }
@@ -2425,7 +2421,7 @@ fn attach_sheet(
         // no gallery on this host: said so
         NoGallery => {
           cui.attach = false
-          say(c, "这个版本还不能读相册的最近照片")
+          say(c, tr("android-chat.composer.noRecent"))
         }
         _ => @hostapi.gallery_ask()
       }

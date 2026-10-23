@@ -1,11 +1,20 @@
 // The words, as the Android app says them in Chinese (ember client/i18n/catalog/zh: android-chat.json,
-// android-settings.json, android-misc.json, common.json); `{name}` is put in by `fill`.
+// android-settings.json, android-misc.json, common.json); `{name}` is put in by `fill`. In English (@sf.language: the
+// core's `lang`, else the phone's) this package's tables' words are strings_en.mbt's, which scripts/strings writes from
+// the catalog's English: a word added here is run through it (lang_wbtest.mbt holds every key to have its English).
 
 ///|
 let zh : Map[String, String] = {
   "android-chat.archive.named": "归档「{title}」",
   "android-settings.changelog.dismiss": "知道了",
   "web-main.list.separator": "、",
+  // what this version cannot do on a device yet (composer.mbt, drive.mbt, screen_view.mbt, preview.mbt)
+  "android-chat.composer.noCamera": "这台设备上还不能拍照",
+  "android-chat.composer.noFiles": "这个版本在这台设备上还不能选文件",
+  "android-chat.composer.noRecent": "这个版本还不能读相册的最近照片",
+  "android-chat.preview.noPdf": "此平台不能显示 PDF",
+  // a station that lends its files, offline (wide_side.mbt)
+  "android-settings.connects.offline": "{name} · 离线",
   "web-main.relay.action": "接力到频道…",
   "web-main.relay.change": "更换",
   "web-main.relay.done": "已接力到 {place}",
@@ -64,7 +73,6 @@ let zh : Map[String, String] = {
   "android-chat.ref.none.match": "没有标题匹配的对话",
   "android-chat.ref.title": "引用对话",
   "android-chat.ref.update": "更新 {app} 后才能引用对话",
-  "android-chat.chat.archiveThis": "归档此对话",
   "android-chat.chat.delete.verb": "删除",
   "android-chat.chat.empty": "在此发送消息，此对话中的 agent 会在这里回复",
   "android-chat.chat.latest": "跳到最新",
@@ -232,8 +240,24 @@ let zh : Map[String, String] = {
 }
 
 ///|
+/// `key`'s words in English when that is the language (@sf.language: strings_en.mbt, scripts/strings), a count's of one
+/// (`n` 1) its `.one`, as Android's I18n.kt chooses; None in Chinese, or for a key it has no words for.
+fn english(key : String, args? : Array[(String, String)] = []) -> String? {
+  if @sf.language() != "en" {
+    return None
+  }
+  if args.iter().any(fn(a) { a.0 == "n" && a.1 == "1" }) && en.get(key + ".one") is Some(one) {
+    return Some(one)
+  }
+  en.get(key)
+}
+
+///|
 /// The words for `key`.
 pub fn tr(key : String) -> String {
+  if english(key) is Some(s) {
+    return s
+  }
   match zh.get(key) {
     Some(s) => s
     None =>
@@ -259,7 +283,10 @@ pub fn tr(key : String) -> String {
 ///|
 /// The words for `key` with `{name}`s put in.
 pub fn fill(key : String, args : Array[(String, String)]) -> String {
-  let mut s = tr(key)
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => tr(key)
+  }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }

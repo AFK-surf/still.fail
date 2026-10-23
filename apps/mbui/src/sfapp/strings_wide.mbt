@@ -151,6 +151,7 @@ let zh_wide : Map[String, String] = {
   "web-pages.vault.title": "密钥",
   "web-pages.archiving.title": "归档",
   "common.back": "返回",
-  "web-pages.drive.home": "主目录",  "web-main.decisions.empty": "暂无待决的奏折",
+  "web-pages.drive.home": "主目录",
+  "web-main.decisions.empty": "暂无待决的奏折",
   "web-main.composer.pressToTypeCjk": "按{key}输入",
 }

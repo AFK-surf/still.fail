@@ -1,0 +1,16 @@
+#!/bin/bash
+# The app's words in English (tools/strings, in MoonBit: its main.mbt says what), into src/sfapp/strings_en.mbt and
+# src/sfapp/settings/strings_en.mbt:  scripts/strings <repository>
+# Built here only when there is none built from these very sources (by content).
+D=$(cd "$(dirname "$0")" && pwd)
+A=$(cd "$D/.." && pwd)
+# (moon: the toolchain the scripts use)
+. "$D/env.sh"
+T=$A/tools
+B=$T/_build/native/release/build/sftools/strings/strings.exe
+src=$(cd "$A" && find tools/strings tools/moon.mod tools/moon.work mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
+if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  (cd "$T" && env -u MOON_CC moon build --target native --release >&2) || { echo "strings: tools/strings did not build" >&2; exit 1; }
+  echo "$src" > "$B.src"
+fi
+exec "$B" "$@"

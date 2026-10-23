@@ -228,6 +228,7 @@
   "android-settings.login.done": "Signed in",
   "android-settings.login.failed": "Last sign-in failed: {error}",
   "android-settings.login.finishing": "Finishing sign-in",
+  "android-settings.login.finish": "Finish signing in",
   "android-settings.login.making": "Creating {provider} sign-in link",
   "android-settings.login.note": "Sign-in happens on the machine running {app}; you only need to authorize it in the browser.",
   "android-settings.login.openPage": "Open the sign-in page",

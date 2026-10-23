@@ -364,7 +364,7 @@ fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       u.picking = Some(p)
       u.drop_to = Some(to)
     }
-    None => say(c, "这个版本在这台设备上还不能选文件")
+    None => say(c, tr("android-chat.composer.noFiles"))
   }
 }
 
@@ -766,7 +766,7 @@ fn take_over(c : @ui.Ctx, s : ScreenSess) -> Unit {
         if who.is_empty() {
           tr("android-misc.screen.someoneDrives")
         } else {
-          fill("android-misc.screen.drives", [("who", who.join("、"))])
+          fill("android-misc.screen.drives", [("who", who.join(tr("web-main.list.separator")))])
         },
         style=take_over_words,
       )
