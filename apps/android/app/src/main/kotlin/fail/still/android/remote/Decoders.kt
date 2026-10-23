@@ -1,7 +1,7 @@
-// A screen's frames decoded off the main thread (docs/remote-screens.md): H.264 by MediaCodec straight onto a surface,
+// A screen's frames decoded off the main thread (docs/remote-screens.md): H.264 or H.265 by MediaCodec straight onto a surface,
 // JPEG by BitmapFactory into bitmaps the viewer draws. Each frame is acknowledged once it is shown (H.264: released to
-// the surface; JPEG: drawn by the viewer), or dropped: the station sends at most two ahead of the last acknowledged,
-// so a frame that is never acknowledged would stop the stream.
+// the surface; JPEG: drawn by the viewer), or dropped: the station sends no more while those it sent wait
+// unacknowledged (docs/remote-screens.md, "Pace"), so a frame that is never acknowledged would stop the stream.
 package fail.still.android.remote
 
 import android.graphics.Bitmap
@@ -13,26 +13,27 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import android.view.Surface
-import java.nio.ByteBuffer
 import java.util.ArrayDeque
 import java.util.concurrent.Executors
 
 private const val TAG = "screen"
 
 /**
- * H.264 onto `surface` (set as the viewer's texture comes and goes): reconfigured on each config, reset on a decoder
+ * H.264 or H.265 onto `surface` (set as the viewer's texture comes and goes): reconfigured on each config, reset on a decoder
  * error. `shown`: a frame's timestamp once it is on the surface (or dropped); `broken`: the decoder lost its state
- * (an error, a new surface), the next frame has to be a key frame (`screen.keyframe`). Everything runs on its own
+ * (an error, a new surface), the next frame has to be a key frame (`screen.keyframe`); `unplayable`: H.265 that the
+ * phone said it decodes failed before a frame came out (from then on [hevcFailed]: the view is opened again for H.264).
+ * Everything runs on its own
  * thread, the codec's callbacks too.
  */
-internal class H264Decoder(private val shown: (Long) -> Unit, private val broken: () -> Unit) {
+internal class VideoDecoder(private val shown: (Long) -> Unit, private val broken: () -> Unit, private val unplayable: () -> Unit = {}) {
     private class Frame(val data: ByteArray, val key: Boolean, val ts: Long)
 
-    private val thread = HandlerThread("screen-h264").apply { start() }
+    private val thread = HandlerThread("screen-video").apply { start() }
     private val handler = Handler(thread.looper)
     private var codec: MediaCodec? = null
     private var surface: Surface? = null
-    private var config: AvcConfig? = null
+    private var config: VideoConfig? = null
     private var width = 0
     private var height = 0
     /** Frames waiting for an input buffer, and the free input buffers. */
@@ -43,6 +44,16 @@ internal class H264Decoder(private val shown: (Long) -> Unit, private val broken
     /** Until a key frame comes, frames are dropped (a decoder started anew, or broken). */
     private var needKey = true
     private var released = false
+    /** A frame came out of a decoder of this view's. */
+    private var played = false
+
+    /** H.265 that cannot be had here after all: the view goes to H.264. */
+    private fun h265Failed(c: VideoConfig?): Boolean {
+        if (c !is HevcConfig || played) return false
+        hevcFailed = true
+        unplayable()
+        return true
+    }
 
     /** The surface it draws on; null while there is none (frames are dropped meanwhile). */
     fun surface(s: Surface?) = handler.post {
@@ -52,11 +63,11 @@ internal class H264Decoder(private val shown: (Long) -> Unit, private val broken
         if (start()) broken()
     }
 
-    /** A config: its avcC (`description`) and the frame's size. */
-    fun configure(avcC: ByteArray, width: Int, height: Int) = handler.post {
-        val parsed = parseAvcC(avcC)
+    /** A config: its codec (`h264`, `h265`), its avcC or hvcC (`description`) and the frame's size. */
+    fun configure(codec: String, description: ByteArray, width: Int, height: Int) = handler.post {
+        val parsed = parseConfig(codec, description)
         if (parsed == null) {
-            Log.w(TAG, "an avcC that is not one (${avcC.size} bytes)")
+            Log.w(TAG, "a $codec config that is not one (${description.size} bytes)")
             config = null
             stop()
             return@post
@@ -91,14 +102,13 @@ internal class H264Decoder(private val shown: (Long) -> Unit, private val broken
         val s = surface ?: return false
         if (released) return false
         return try {
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width.coerceAtLeast(16), height.coerceAtLeast(16))
-            format.setByteBuffer("csd-0", ByteBuffer.wrap(c.csd0()))
-            format.setByteBuffer("csd-1", ByteBuffer.wrap(c.csd1()))
+            val format = MediaFormat.createVideoFormat(c.mime, width.coerceAtLeast(16), height.coerceAtLeast(16))
+            c.into(format)
             // A key frame of a whole screen can be large; the decoder's own guess for the size is often too small.
             format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, (width * height).coerceAtLeast(1 shl 20))
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
             format.setInteger(MediaFormat.KEY_PRIORITY, 0)
-            val made = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            val made = MediaCodec.createDecoderByType(c.mime)
             made.setCallback(callback, handler)
             made.configure(format, s, null, 0)
             made.start()
@@ -106,8 +116,9 @@ internal class H264Decoder(private val shown: (Long) -> Unit, private val broken
             needKey = true
             true
         } catch (e: Exception) {
-            Log.w(TAG, "no H.264 decoder", e)
+            Log.w(TAG, "no ${c.mime} decoder", e)
             stop()
+            h265Failed(c)
             false
         }
     }
@@ -150,24 +161,26 @@ internal class H264Decoder(private val shown: (Long) -> Unit, private val broken
 
     private val callback = object : MediaCodec.Callback() {
         override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
-            if (codec !== this@H264Decoder.codec) return
+            if (codec !== this@VideoDecoder.codec) return
             inputs += index
             feed()
         }
 
         override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
-            if (codec !== this@H264Decoder.codec) return
+            if (codec !== this@VideoDecoder.codec) return
             val config = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
             try { codec.releaseOutputBuffer(index, !config && info.size > 0) } catch (_: Exception) { return }
             if (config) return
             val ts = info.presentationTimeUs
+            if (info.size > 0) played = true
             while (inside.isNotEmpty() && inside.first() <= ts) inside.removeFirst()
             shown(ts)
         }
 
         override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-            if (codec !== this@H264Decoder.codec) return
-            Log.w(TAG, "the H.264 decoder failed", e)
+            if (codec !== this@VideoDecoder.codec) return
+            Log.w(TAG, "the video decoder failed", e)
+            if (h265Failed(config)) { stop(); return }
             // Anew, from the next key frame.
             if (start()) broken()
         }
@@ -176,14 +189,20 @@ internal class H264Decoder(private val shown: (Long) -> Unit, private val broken
     }
 
     companion object {
+        private fun decoders(mime: String) = try {
+            android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.filter { info ->
+                !info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) }
+            }
+        } catch (_: Exception) { emptyList() }
+
         /** Whether the phone has an H.264 decoder at all (else the view asks for JPEG only). */
-        val available: Boolean by lazy {
-            try {
-                android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
-                    !info.isEncoder && info.supportedTypes.any { it.equals(MediaFormat.MIMETYPE_VIDEO_AVC, ignoreCase = true) }
-                }
-            } catch (_: Exception) { false }
-        }
+        val available: Boolean by lazy { decoders(MediaFormat.MIMETYPE_VIDEO_AVC).isNotEmpty() }
+
+        /** H.265 failed on this phone though it said it decodes it: not asked again while the app runs. */
+        @Volatile var hevcFailed = false
+
+        /** Whether it decodes H.265 on its hardware (a software decoder of a screen's frames is too slow to ask it). */
+        val hevc: Boolean by lazy { decoders(MediaFormat.MIMETYPE_VIDEO_HEVC).any { it.isHardwareAccelerated } }
     }
 }
 

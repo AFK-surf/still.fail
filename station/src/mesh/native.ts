@@ -60,7 +60,8 @@ export type Endpoint = {
   close(): Promise<void>;
 };
 export type Mesh = {
-  bind(options: { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; discovery?: boolean; bindAddr?: string }): Promise<Endpoint>;
+  /// `relayOnly`: through the relays alone, no IP transports (what measures the way through a relay).
+  bind(options: { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; discovery?: boolean; bindAddr?: string; relayOnly?: boolean }): Promise<Endpoint>;
   /// thumbs.rs `thumbnail` (native/mesh/src/thumbs.rs): the image's thumbnail in `dir`, made if not there yet; null when
   /// the image is shown itself.
   thumbnail(image: string, dir: string): Promise<{ path: string; type: string } | null>;

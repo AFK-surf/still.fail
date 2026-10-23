@@ -262,7 +262,7 @@ const PARTS: Record<string, Part> = {
       const dir = join(ROOT, "apps/desktop/dock");
       const scratch = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "native", "dock") : join(dir, ".build");
       run("swift", [...DOCK_BUILD, "--scratch-path", scratch], { cwd: dir });
-      copyFileSync(join(scratch, "arm64-apple-macosx/release/StillfailDock"), join(out, "StillfailDock"));
+      copyFileSync(swiftProduct(scratch, "StillfailDock"), join(out, "StillfailDock"));
     },
   },
   // still.fail Helper (station/native/helper, docs/station-ts-native.md §4): the station's macOS app for what macOS
@@ -281,7 +281,7 @@ const PARTS: Record<string, Part> = {
       run("swift", [...DOCK_BUILD, "--scratch-path", scratch], { cwd: dir });
       const app = join(out, HELPER_APP);
       mkdirSync(join(app, "Contents/MacOS"), { recursive: true });
-      copyFileSync(join(scratch, "arm64-apple-macosx/release/stillfail-helper"), join(app, "Contents/MacOS/stillfail-helper"));
+      copyFileSync(swiftProduct(scratch, "stillfail-helper"), join(app, "Contents/MacOS/stillfail-helper"));
       copyFileSync(join(dir, "Info.plist"), join(app, "Contents/Info.plist"));
       const iconset = join(out, "AppIcon.iconset");
       mkdirSync(iconset);
@@ -335,6 +335,12 @@ const RELAY: Record<string, { url: string; sha256: string }> = {
   "linux-arm64": { url: RELAY_URL("aarch64-unknown-linux-musl"), sha256: "1b4261b6dd0d17ae9a7516aa6d122b296a77678bac174ce30262702c9f91cb00" },
 };
 const DOCK_BUILD = ["build", "-c", "release", "--arch", "arm64"];
+/// Where `swift build` put a release product: SwiftPM's own build system's place, or (Swift 6.4's swift-build) its
+/// `out/Products/Release`; the newer where a scratch path has both.
+const swiftProduct = (scratch: string, name: string) =>
+  [join(scratch, "arm64-apple-macosx/release", name), join(scratch, "out/Products/Release", name)]
+    .filter((p) => existsSync(p))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0] ?? join(scratch, "arm64-apple-macosx/release", name);
 const HELPER_APP = "still.fail Helper.app";
 const SHELL_RUSTFLAGS = "-C link-arg=-Wl,-z,max-page-size=16384";
 const shellCommand = () => [

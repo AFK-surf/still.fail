@@ -1,18 +1,73 @@
-// H.264 as a station's screen sends it (docs/remote-screens.md: the avcC with each config, then access units in AVCC,
-// each NAL after its length) made what Android's decoder takes: the parameter sets as csd-0 (SPS) and csd-1 (PPS), and
-// each access unit with start codes (Annex B) in place of the lengths.
+// H.264 and H.265 as a station's screen sends them (docs/remote-screens.md: the avcC or hvcC with each config, then
+// access units with each NAL after its length) made what Android's decoder takes: the parameter sets as csd-0 (H.264:
+// SPS, csd-1 PPS; H.265: VPS, SPS and PPS all in csd-0), and each access unit with start codes (Annex B) in place of
+// the lengths.
 package fail.still.android.remote
 
+import android.media.MediaFormat
 import java.nio.ByteBuffer
 
 private val START = byteArrayOf(0, 0, 0, 1)
 
+/** A config's parameter sets: how long a frame's NAL lengths are, the decoder's type, its csd. */
+internal sealed interface VideoConfig {
+    val lengthSize: Int
+    val mime: String
+    fun into(format: MediaFormat)
+}
+
 /** An avcC (ISO/IEC 14496-15 AVCDecoderConfigurationRecord): how long a NAL's length is, and the parameter sets. */
-internal class AvcConfig(val lengthSize: Int, val sps: List<ByteArray>, val pps: List<ByteArray>) {
+internal class AvcConfig(override val lengthSize: Int, val sps: List<ByteArray>, val pps: List<ByteArray>) : VideoConfig {
+    override val mime: String get() = MediaFormat.MIMETYPE_VIDEO_AVC
     /** The SPS, each after a start code: MediaFormat's csd-0. */
     fun csd0(): ByteArray = withStarts(sps)
     /** The PPS, likewise: csd-1. */
     fun csd1(): ByteArray = withStarts(pps)
+    override fun into(format: MediaFormat) {
+        format.setByteBuffer("csd-0", ByteBuffer.wrap(csd0()))
+        format.setByteBuffer("csd-1", ByteBuffer.wrap(csd1()))
+    }
+}
+
+/** An hvcC (ISO/IEC 14496-15 HEVCDecoderConfigurationRecord): how long a NAL's length is, and its VPS, SPS and PPS. */
+internal class HevcConfig(override val lengthSize: Int, val units: List<ByteArray>) : VideoConfig {
+    override val mime: String get() = MediaFormat.MIMETYPE_VIDEO_HEVC
+    /** Every parameter set, each after a start code: MediaFormat's csd-0. */
+    fun csd0(): ByteArray = withStarts(units)
+    override fun into(format: MediaFormat) {
+        format.setByteBuffer("csd-0", ByteBuffer.wrap(csd0()))
+    }
+}
+
+/** A config's description as the codec says it is; null when it is not one. */
+internal fun parseConfig(codec: String, b: ByteArray): VideoConfig? = when (codec) {
+    "h264" -> parseAvcC(b)
+    "h265" -> parseHvcC(b)
+    else -> null
+}
+
+/** Reads an hvcC; null when it is not one (too short, another version, an array that runs past its end, no units). */
+internal fun parseHvcC(b: ByteArray): HevcConfig? {
+    if (b.size < 23 || b[0].toInt() != 1) return null
+    val lengthSize = (b[21].toInt() and 3) + 1
+    if (lengthSize == 3) return null
+    val u16 = { at: Int -> ((b[at].toInt() and 0xff) shl 8) or (b[at + 1].toInt() and 0xff) }
+    val units = ArrayList<ByteArray>()
+    var at = 23
+    repeat(b[22].toInt() and 0xff) {
+        if (at + 3 > b.size) return null
+        val n = u16(at + 1)
+        at += 3
+        repeat(n) {
+            if (at + 2 > b.size) return null
+            val len = u16(at)
+            at += 2
+            if (len == 0 || at + len > b.size) return null
+            units += b.copyOfRange(at, at + len)
+            at += len
+        }
+    }
+    return if (units.isEmpty()) null else HevcConfig(lengthSize, units)
 }
 
 private fun withStarts(units: List<ByteArray>): ByteArray {

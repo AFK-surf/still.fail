@@ -124,6 +124,9 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.equal(view.call.auto, true, "no mode asked: decided as it opens");
   assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", control: true }) as J).call.auto, false);
   assert.throws(() => parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", codecs: ["vp9"] }));
+  // H.265 only from a UI that says it decodes it; none said: what every client decodes.
+  assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", codecs: ["h265", "h264", "jpeg"] }) as J).call.ask.codecs, ["h265", "h264", "jpeg"]);
+  assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1" }) as J).call.ask.codecs, ["h264", "jpeg"]);
   assert.throws(() => parseCall("screen.control", { view: "v1" }));
 });
 

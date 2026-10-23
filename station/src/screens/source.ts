@@ -3,13 +3,13 @@
 // slow link lowers the frame rate instead of queueing frames. The mesh layer carries views (`/admin/api/screens`);
 // sources know nothing of it.
 
-export type Codec = "h264" | "jpeg";
+export type Codec = "h265" | "h264" | "jpeg";
 
 /// A frame's format: sent before the first frame and whenever it changes; the next frame is then a key frame.
-/// `description`: H.264's avcC (what WebCodecs and MediaCodec take as the decoder's configuration).
+/// `description`: H.264's avcC, H.265's hvcC (what WebCodecs and MediaCodec take as the decoder's configuration).
 export type FrameConfig = { codec: Codec; width: number; height: number; description?: Uint8Array };
 
-/// One encoded frame: H.264 in AVCC (length-prefixed NAL units), or a whole JPEG. `ts`: microseconds, rising.
+/// One encoded frame: H.264 or H.265 as length-prefixed NAL units (AVCC, HVCC), or a whole JPEG. `ts`: microseconds, rising.
 export type Frame = { config?: FrameConfig; key: boolean; ts: number; data: Uint8Array };
 
 /// A person's input; coordinates are 0..1 of the frame. `mods`: bit 0 alt, 1 ctrl, 2 meta, 3 shift (CDP's order).
@@ -20,7 +20,8 @@ export type ScreenInput =
   | { t: "text"; text: string };
 
 /// `peek`: a preview (a link's card in a chat): it brings nothing forward, wakes nothing and is not among those on it.
-export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean };
+/// `bitrate`: what to encode at first (bits a second; none: the source's own), until `ScreenView.rate` says otherwise.
+export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number };
 
 /// What a screen's clipboard holds, as a view carries it (docs/remote-screens.md `clipboard`): text, or a PNG picture.
 export type ClipType = "text" | "png";
@@ -40,6 +41,12 @@ export interface ScreenView {
   /// Starts the next frame as a key frame (a client's decoder lost its state).
   keyframe(): void;
   input(event: ScreenInput): Promise<void>;
+  /// Encodes from the next frame at about this many bits a second (the link carries no more: docs/remote-screens.md,
+  /// "Pace"); one without it encodes at its own.
+  rate?(bitsPerSecond: number): void;
+  /// Its pictures from now on fitted into these bounds (a config first: docs/remote-screens.md, "Pace"); one without it
+  /// keeps those it opened with.
+  bounds?(maxWidth: number, maxHeight: number): void;
   /// Stops capturing; a pending `next` resolves null.
   close(): void;
   /// The source's clipboard set (of a type its `clipboard()` names), then, with `paste`, pasted where its focus is (the

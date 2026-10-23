@@ -1,5 +1,5 @@
 // The station's screens (docs/remote-screens.md): the view wire over a member's link in memory (framing, at most
-// UNACKED frames not acknowledged, read-only members, who is on a screen, how a view ends), with a fake source; the
+// as many frames not acknowledged as the pace lets go, read-only members, who is on a screen, how a view ends), with a fake source; the
 // list (GET /screens, `screens` on the event stream); a person's input as macOS posts it; the desktop source with a
 // fake helper (its grants, its view protocol); the clipboard both ways and files dropped (only for a view that drives,
 // within bounds, of the types a source carries). Nothing here captures a screen: side/screen-desktop.test.ts does.
@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import { Events } from "../src/api/events.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
-import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, UNACKED, answerScreen, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
+import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
 import { Desktop, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
@@ -26,6 +26,8 @@ import { KEYS, WinInput } from "../src/screens/win-input.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
+import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED } from "../src/mesh/screen-pace.ts";
+import type { Clock } from "effect";
 import { memoryMesh, vanish } from "./memory-mesh.ts";
 import { Superseded } from "../src/mesh/superseded.ts";
 
@@ -118,14 +120,14 @@ async function link() {
 }
 
 /// A view opened as a client opens one: its head line, the station answering it (`served`), the answer's head.
-async function open(hub: ScreenHub, viewer: Viewer, screen: unknown = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264", "jpeg"], control: true }, path = "/admin/api/screens/fake/view") {
+async function open(hub: ScreenHub, viewer: Viewer, screen: unknown = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264", "jpeg"], control: true }, path = "/admin/api/screens/fake/view", clock?: Clock.Clock) {
   const { conn, theirs } = await link();
   const stream = await conn.openBi();
   await writeLine(stream, { method: "POST", path, headers: { "stillfail-lang": "en" }, screen });
   const incoming = (await theirs.acceptBi())!;
   const heard = new Reader(incoming);
   const head = await heard.line();
-  const served = answerScreen(hub, incoming, heard.carry, head, viewer, () => true);
+  const served = answerScreen(hub, incoming, heard.carry, head, viewer, () => true, clock);
   const client = new Reader(stream);
   const answer = await client.line();
   return { conn, stream, served, answer, client, frames: new FrameIn(stream, client.carry) };
@@ -154,8 +156,8 @@ test("a view: its answer, what it is, then the config and frames as the source g
   hub.add(source);
   const v = await open(hub, member, { maxWidth: 99999, codecs: ["vp9", "h264"], control: true });
   assert.deepEqual(v.answer, { status: 200, headers: { "content-type": SCREEN_TYPE } });
-  // What it asked, bounded; the codecs ours only; the height as not said.
-  assert.deepEqual(source.opened, [{ maxWidth: 8192, maxHeight: 1080, codecs: ["h264"] }]);
+  // What it asked, bounded; the codecs ours only; the height as not said; at the pace's start rate.
+  assert.deepEqual(source.opened, [{ maxWidth: 8192, maxHeight: 1080, codecs: ["h264"], bitrate: START_RATE }]);
   const states: any[] = [];
   const config = json(await until(v.frames, KIND.config, states));
   assert.deepEqual(states, [{ title: "Tab", control: true }, { viewers: ["Pat"], controlledBy: ["Pat"] }]);
@@ -171,32 +173,34 @@ test("a view: its answer, what it is, then the config and frames as the source g
   await v.served;
 });
 
-test("at most two frames go unacknowledged: the source is asked for the next as one is acknowledged", async () => {
+test("frames go unacknowledged while the link keeps up: two before its round trip is known, none once one waits too long", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
   hub.add(source);
-  const v = await open(hub, member);
+  const time = testClock();
+  const v = await open(hub, member, undefined, undefined, time.clock);
   await until(v.frames, KIND.video);
   await until(v.frames, KIND.video);
   await settle();
   const view = source.views[0]!;
-  assert.equal(UNACKED, 2);
-  assert.equal(view.asked, 2, "no frame is made while two are not acknowledged");
-  // The first decoded: one more.
+  assert.equal(view.asked, START_UNACKED, "before an acknowledgement, two");
+  // The first decoded at once (a round trip of 0 ms): the link keeps up, frames go until MAX_UNACKED are on the way.
   await v.stream.write(frame(KIND.ack, ts8(1000)));
-  assert.equal((await until(v.frames, KIND.video)).readBigUInt64BE(1), 3000n);
   await settle();
-  assert.equal(view.asked, 3);
-  // An ack says all up to it were decoded: two more.
-  await v.stream.write(frame(KIND.ack, ts8(3000)));
-  await until(v.frames, KIND.video);
-  await until(v.frames, KIND.video);
+  assert.equal(view.asked, 1 + MAX_UNACKED);
+  // Later than the round trip and QUEUE_MS: a queue builds, nothing more goes, not even as one is acknowledged.
+  await time.adjust(QUEUE_MS + 1);
+  await v.stream.write(frame(KIND.ack, ts8(2000)));
   await settle();
-  assert.equal(view.asked, 5);
+  assert.equal(view.asked, 1 + MAX_UNACKED);
+  // All of them decoded: they go again.
+  await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+  await settle();
+  assert.equal(view.asked, 1 + 2 * MAX_UNACKED);
   // A short ack says nothing.
   await v.stream.write(frame(KIND.ack, Buffer.alloc(3)));
   await settle();
-  assert.equal(view.asked, 5);
+  assert.equal(view.asked, 1 + 2 * MAX_UNACKED);
   // A key frame asked for goes to the source.
   await v.stream.write(frame(KIND.keyframe, Buffer.alloc(0)));
   await settle();
@@ -604,6 +608,11 @@ test("Windows' desktop: a stillfail-screen process a view, asked for each frame,
   const pending = view.next();
   view.close();
   assert.equal(await pending, null);
+  // H.265 asked of it: as its info says what it made; one that says nothing (from before H.265) made H.264.
+  const asked = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h265", "h264"] });
+  assert.equal((await asked.next())?.config?.codec, "h264");
+  assert.equal(readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).at(-1).codec, "h265");
+  asked.close();
   // One that cannot capture says why.
   await assert.rejects(desktop.open({ maxWidth: 1, maxHeight: 1, codecs: ["jpeg"] }), (e: ScreenRefused) => e.status === 503 && /no display to capture/.test(e.message));
   await desktop.close();

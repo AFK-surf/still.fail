@@ -2,25 +2,28 @@
 // line has a `screen` object, answered 200 `application/x-stillfail-screen`, then frames both ways, each a kind byte,
 // its payload's length (4 bytes, big-endian) and the payload. Station → client: `config`, `video`, `state`; client →
 // station: `input`, `ack`, `keyframe`; and the screen's clipboard both ways (`clipboard`), for a view that drives it
-// (the station sends it as it changes, the client to set it and paste). The source is asked for a frame only while fewer than UNACKED are not
-// acknowledged, so a slow link lowers the frame rate rather than queueing frames.
+// (the station sends it as it changes, the client to set it and paste). The source is asked for a frame only while the
+// `Pacer` lets one go: as many as the link holds (a far one holds several), none while the oldest not acknowledged
+// waits longer than the link takes with no queue; and the source is asked for the bit rate the link carries
+// (screen-pace.ts). So a slow link lowers the bit rate, then the frame rate, rather than queueing frames.
 //
 // A read-only member views, their input is dropped. The view ends when the client finishes its side (`ended:
 // "finished"`), the source goes (`"gone"`, also when it has no more frames), the station stops (`"stopping"`), or the
 // stream or its connection breaks (nothing more is written then); its source's capture stops with it.
+import type { Clock } from "effect";
 import { langOfCore } from "../api/request.ts";
+import { liveClock } from "../ops/fibers.ts";
 import { tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenInput, type ScreenSource, type ScreenView, CLIP_PNG_MAX, clipFits } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
+import { Pacer, START_RATE, Sizer, ownRate } from "./screen-pace.ts";
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
 export const KIND = { config: 1, video: 2, state: 3, clipboard: 4, input: 16, ack: 17, keyframe: 18, setClipboard: 19 } as const;
-/// Frames sent and not acknowledged, at most.
-export const UNACKED = 2;
 /// A client's frame is an input event at most: one larger ends the view.
 export const MAX_IN = 64 * 1024;
 /// A client's `clipboard` frame is its flags, its type and a picture at most.
@@ -29,7 +32,7 @@ export const MAX_CLIP_IN = 2 + CLIP_PNG_MAX;
 export const limitIn = (kind: number) => (kind === KIND.setClipboard ? MAX_CLIP_IN : MAX_IN);
 /// A clip's type byte on the wire.
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
-const CODECS: Codec[] = ["h264", "jpeg"];
+const CODECS: Codec[] = ["h265", "h264", "jpeg"];
 const PATH = /^\/admin\/api\/screens\/([^/?]+)\/view$/;
 
 export function frame(kind: number, payload: Buffer): Buffer {
@@ -142,7 +145,7 @@ function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Code
 
 /// A stream whose head says `"screen"` (serve.ts dispatches it): a view of a screen, for as long as both sides keep it.
 /// `carry`: what came after the head line. Resolves once the view ended.
-export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer, head: any, viewer: Viewer, up: () => boolean): Promise<void> {
+export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer, head: any, viewer: Viewer, up: () => boolean, clock: Clock.Clock = liveClock): Promise<void> {
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(head.headers ?? {})) if (typeof v === "string") headers[k] = v;
   const lang = langOfCore(headers);
@@ -171,7 +174,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const control = ask.control && !readOnly(viewer);
   let view: ScreenView;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.peek ? { peek: true } : {}) });
+    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, bitrate: START_RATE, ...(ask.peek ? { peek: true } : {}) });
   } catch (error) {
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.
@@ -192,7 +195,10 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
     return;
   }
   const access = accessShown(source.access?.(), lang);
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access }).run();
+  const now = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
+  const pacer = new Pacer(now, START_RATE);
+  const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight });
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access, pacer, sizer }).run();
 }
 
 /// One view while it lasts.
@@ -204,13 +210,13 @@ class ViewSession {
   #writes: Promise<void> = Promise.resolve();
   /// Inputs, in order, each once the one before was posted.
   #inputs: Promise<void> = Promise.resolve();
-  /// Timestamps of the frames sent and not acknowledged, oldest first.
-  #unacked: number[] = [];
   #wake: () => void = () => {};
   #leave: () => void = () => {};
   #unwatch: () => void = () => {};
   #unclip: () => void = () => {};
   #title: string;
+  /// The bit rate the source was last asked for.
+  #rate: number | null = null;
 
   readonly hub: ScreenHub;
   readonly id: string;
@@ -224,8 +230,12 @@ class ViewSession {
   /// A preview's: not among those on the screen.
   readonly peek: boolean;
   readonly access: AccessShown | undefined;
+  readonly pacer: Pacer;
+  readonly sizer: Sizer;
+  /// The picture's size, as its latest config said (H.264, H.265: what the bounds go by).
+  #size: { width: number; height: number } | null = null;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -236,6 +246,8 @@ class ViewSession {
     this.control = o.control;
     this.peek = o.peek === true;
     this.access = o.access;
+    this.pacer = o.pacer;
+    this.sizer = o.sizer;
     this.#title = o.source.title();
   }
 
@@ -299,10 +311,26 @@ class ViewSession {
     await this.#over;
   }
 
+  /// The source asked for the bit rate the link carries, when it changed by more than a little; and for as small a
+  /// picture as that rate makes sharpest (a source that changes its size).
+  #pace() {
+    const rate = this.pacer.rate();
+    if (rate === null || !this.view.rate) return;
+    if (this.#rate === null || Math.abs(rate - this.#rate) >= this.#rate * 0.05) {
+      this.#rate = rate;
+      this.view.rate(Math.round(rate));
+    }
+    if (this.#size && this.view.bounds) {
+      const bounds = this.sizer.step(rate, this.pacer.through(), this.#size);
+      if (bounds) this.view.bounds(bounds.maxWidth, bounds.maxHeight);
+    }
+  }
+
   /// Frames out, while the client keeps up.
   async #pump() {
     while (!this.#closed) {
-      if (this.#unacked.length >= UNACKED) {
+      if (!this.pacer.may()) {
+        this.#pace();
         await new Promise<void>((resolve) => (this.#wake = resolve));
         continue;
       }
@@ -315,8 +343,14 @@ class ViewSession {
       }
       if (this.#closed) return;
       if (next === null) return this.#stop("gone");
-      if (next.config) void this.#send(KIND.config, configPayload(next.config));
-      this.#unacked.push(next.ts);
+      if (next.config) {
+        if (next.config.codec !== "jpeg") {
+          this.pacer.ceiling(ownRate(next.config.width, next.config.height));
+          this.#size = { width: next.config.width, height: next.config.height };
+        }
+        void this.#send(KIND.config, configPayload(next.config));
+      }
+      this.pacer.sent(next.ts, next.data.length);
       await this.#send(KIND.video, videoPayload(next));
     }
   }
@@ -336,8 +370,8 @@ class ViewSession {
         switch (got.kind) {
           case KIND.ack: {
             if (got.payload.length < 8) break;
-            const ts = Number(got.payload.readBigUInt64BE(0));
-            while (this.#unacked.length > 0 && this.#unacked[0]! <= ts) this.#unacked.shift();
+            this.pacer.acked(Number(got.payload.readBigUInt64BE(0)));
+            this.#pace();
             this.#wake();
             break;
           }

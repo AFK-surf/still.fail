@@ -83,7 +83,7 @@ export function NetChip({ net, shown, meter, os }: { net: StationNet | null; sho
     ],
     [
       [t("web-pages.screen.stat.picture"), shown?.width && shown.height ? `${shown.width}×${shown.height}` : "—"],
-      [t("web-pages.screen.stat.codec"), shown?.codec ? (shown.codec === "h264" ? "H.264" : shown.codec.toUpperCase()) : "—"],
+      [t("web-pages.screen.stat.codec"), shown?.codec ? (shown.codec === "h264" ? "H.264" : shown.codec === "h265" ? "H.265" : shown.codec.toUpperCase()) : "—"],
     ],
   ];
   return (
