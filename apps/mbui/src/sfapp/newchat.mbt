@@ -594,7 +594,12 @@ fn send_first(
   // the words stay where they were typed, the files where their tiles were, while the chat is made (flight.mbt:
   // carried; NewChat.kt host.sending)
   let here : ChatRef = { station, session: "", title: "", station_name }
-  flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
+  // (not from the wide frame's composer in the middle of the page: the chat's list would be carried up from there,
+  // half a page, and its rows put where it is drawn would not stay put; the row is where it is, as with motion
+  // reduced, the page going as it goes)
+  if !wide_on.val {
+    flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
+  }
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
