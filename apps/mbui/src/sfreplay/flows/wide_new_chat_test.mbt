@@ -8,13 +8,13 @@ test "64-wide-new-chat" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("wide-new-chat"), seed~, w=1280.0, h=800.0)
     f.see("新建对话")
     f.key("cmd+n")
-    f.see("想让 agent 做什么？")
+    f.see("新对话")
     f.tap("做任何事")
     f.type_text("宽屏新对话 085912 post:宽屏新对话的回答 085912")
     f.enter()
     f.run_for(@sfapp.flight_ms)
     f.see("宽屏新对话 085912")
-    f.gone("想让 agent 做什么？")
+    f.gone("新对话")
     // its agent's answer in the chat
     f.see("=宽屏新对话的回答 085912")
     // the agent's avatar lingering after its turn ended: once its answer is out of it and it is home again, there a
