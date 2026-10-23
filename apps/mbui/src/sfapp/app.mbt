@@ -350,7 +350,6 @@ fn reset() -> Unit {
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
   dv_fetches.clear()
   keepings.clear()
-  reader_mds.clear()
   // the wide frame's keys (wide_keys.mbt)
   focus_composer.val = false
   switcher_query.val = ""

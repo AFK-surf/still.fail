@@ -26,6 +26,7 @@ import * as fonts from "../../../client/core-ts/src/fonts.ts";
 import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
 import { inkKept } from "../../../client/core-ts/src/highlight.ts";
+import { bookAnswer, keepBook, keptBook, searchBook } from "../../../client/core-ts/src/reader.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
 let root: HTMLElement;
@@ -279,6 +280,15 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
   for (const e of extensions) { const v = e.call?.(name, params); if (v !== undefined) return v; }
   if (name === "markdown") return { md: markdown(String(params.text ?? "")) };
   if (name === "code.ink") return { ink: inkKept(String(params.code ?? ""), String(params.lang ?? "")) };
+  if (name === "reader.book") {
+    const text = String(params.text ?? "");
+    const { id, book } = keepBook(text, params.markdown === true);
+    return bookAnswer(id, book, text, { withText: true });
+  }
+  if (name === "reader.search") {
+    const book = keptBook(Number(params.id));
+    return { at: book ? searchBook(book, String(params.query ?? "")) : [] };
+  }
   if (name === "prefs.set") {
     for (const [field, value] of Object.entries(params)) {
       const before = prefs[field];

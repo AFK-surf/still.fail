@@ -4,6 +4,8 @@
 
 ///|
 fn main {
+  // no core here: the real core's answers to its pure calls, kept (src/sfkept)
+  @sf.kept_call.val = Some(@sfkept.answer)
   if @ui.env("MBUI_DARK") == "1" {
     @sf.set_dark(Some(true))
   }

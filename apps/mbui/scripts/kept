@@ -1,0 +1,21 @@
+#!/bin/bash
+# The real core's answers the app's runs without a core ask (src/sfkept), kept: the tests run (scripts/test.sh, native)
+# and what they asked and found not kept is worked out by the core (client/core-ts/scripts/kept-answers.ts), again until
+# they ask nothing more (an answer leads to the next ask: a book's text, then a search in it). FRESH=1: from none, so
+# what no test asks any more goes.
+D="$(cd "$(dirname "$0")" && pwd)"
+. "$D/env.sh"
+make="node $A/../../client/core-ts/scripts/kept-answers.ts"
+asks=$(mktemp)
+trap 'rm -f "$asks"' EXIT
+if [ -n "$FRESH" ]; then $make --fresh || exit 1; fi
+for round in 1 2 3 4 5 6 7 8; do
+  : > "$asks"
+  KEPT_ASKS="$asks" LINES_OUT=${LINES_OUT:-3} bash "$D/test.sh"
+  n=$(grep -c . "$asks")
+  echo "kept: round $round: $n answers asked and not kept"
+  [ "$n" = 0 ] && exit 0
+  $make "$asks" || exit 1
+done
+echo "kept: still asking after $round rounds" >&2
+exit 1

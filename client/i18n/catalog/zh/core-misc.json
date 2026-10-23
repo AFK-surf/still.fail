@@ -245,5 +245,6 @@
   "core-misc.vault.reason.approve": "批准 agent 使用「{name}」",
   "core-misc.vault.personal": "个人",
   "core-misc.vault.noPlainStation": "没有可存放密钥的 station：请更新 station",
-  "core-misc.vault.plainLocked": "已开启安全模式：密钥需存入加密的库"
+  "core-misc.vault.plainLocked": "已开启安全模式：密钥需存入加密的库",
+  "core-misc.reader.gone": "这本书已经不在了，请重新打开"
 }

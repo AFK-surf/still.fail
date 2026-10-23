@@ -17,9 +17,13 @@ test "a run's models: by series, filtered by what is typed, none said so" {
 }
 
 ///|
-test "a file's code highlighted as a whole, then cut at its lines (FilePreview.kt TextViewer)" {
-  let runs = @sf.highlight("let a = 1\n// note\nlet b = \"x\"", "javascript", false).unwrap()
-  let lines = runs_by_line(runs)
+test "a file's code coloured as a whole, then cut at its lines (FilePreview.kt TextViewer)" {
+  let code = "let a = 1\n// note\nlet b = \"x\""
+  let ink = match @sfkept.answer("code.ink", { "code": Json::string(code), "lang": "javascript" }, None) {
+    Some(Ok((Object(m), _))) if m.get("ink") is Some(String(ink)) => ink
+    _ => fail("the core's ink of the code is not kept")
+  }
+  let lines = runs_by_line(@sf.ink_runs(code, ink, false))
   assert_eq(lines.length(), 3)
   let words = lines.map(fn(l) { l.map(fn(r) { r.text }).join("") })
   assert_eq(words, ["let a = 1", "// note", "let b = \"x\""])

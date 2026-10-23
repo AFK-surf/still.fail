@@ -7,10 +7,13 @@ import type { Inner, Progress } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { inkKept } from "../highlight.ts";
 import { markdown } from "../markdown.ts";
+import { bookAnswer, keepBook, keptBook, searchBook } from "../reader.ts";
+import { Beside } from "../protocol.ts";
 import * as prefs from "../prefs.ts";
 import type { ClientId, RequestId } from "../protocol.ts";
 import type { SpanContext } from "../trace.ts";
 import { Kind } from "../trace.ts";
+import { t } from "../i18n.ts";
 import { isObject } from "../util.ts";
 import { Wake } from "../wake.ts";
 import type { Call } from "./calls.ts";
@@ -119,6 +122,20 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.succeed({ ink: inkKept(call.code, call.lang) });
       case "markdown":
         return Effect.succeed({ md: markdown(call.text) });
+      case "readerBook": {
+        const { id, book } = keepBook(call.text, call.markdown);
+        return Effect.succeed(bookAnswer(id, book, call.text, call));
+      }
+      case "readerText": {
+        const book = keptBook(call.id);
+        if (!book) return Effect.fail(CoreError.invalid(t("core-misc.reader.gone")));
+        return Effect.succeed(new Beside({ length: book.text.length }, new TextEncoder().encode(book.text)));
+      }
+      case "readerSearch": {
+        const book = keptBook(call.id);
+        if (!book) return Effect.fail(CoreError.invalid(t("core-misc.reader.gone")));
+        return Effect.succeed({ at: searchBook(book, call.query, call.limit) });
+      }
       case "decisionDefer":
         prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
         return Effect.succeed(null);

@@ -1,6 +1,7 @@
-// The drive's text model (drive_text.mbt, as TextModel.kt's tests check it) and its pages over the fixture's made-up
-// drive (drive_fixture.mbt): 文件, a folder, going in and back, a row held and renamed, deleted, a folder made, a
-// file to the preview, a text read with its bars and its contents.
+// The drive's text as laid out (drive_text.mbt, as TextModel.kt's tests check it; how the core reads it is its own
+// tests', client/core-ts/test/reader.test.ts) and its pages over the fixture's made-up drive (drive_fixture.mbt): 文件,
+// a folder, going in and back, a row held and renamed, deleted, a folder made, a file to the preview, a text read with
+// its bars and its contents, a Markdown file read as Markdown and searched.
 
 ///|
 fn utf8_of(s : String) -> Bytes {
@@ -36,38 +37,6 @@ test "decoding: a file that is not UTF-8 read as GB18030 (第一章 开始)" {
 }
 
 ///|
-test "chapters: 第…章, front matter, Chapter N; a stray title-like line only far enough from the last" {
-  let text = "序章\n很久以前的事。\n第一章 车站\n他到了。\n第 12 节\n又一节。\nChapter 3 The Key\nwords.\n正文 第三卷 回程\n"
-  let marks = find_chapters(text, weak=false)
-  assert_eq(marks.map(fn(m) { m.title }), ["序章", "第一章 车站", "第 12 节", "Chapter 3 The Key", "正文 第三卷 回程"])
-  assert_eq(marks[1].offset, text.find("第一章").unwrap())
-  // not a heading: a sentence that starts with 第
-  assert_eq(find_chapters("第一次见到他的时候，天已经黑了，路上一个人也没有。\n", weak=false).length(), 0)
-}
-
-///|
-test "a hard-wrapped text is reflowed into its paragraphs; a heading stays its own" {
-  let line = "这一行正好二十五个字这一行正好二十五个字这一行正好二"
-  let lines = []
-  for i in 0..<14 {
-    lines.push(if i % 4 == 3 { "结束了。" } else { line })
-  }
-  let text = "第一章 开头\n" + lines.join("\n")
-  let wrap = detect_wrap_width(text)
-  assert_eq(wrap, line.length())
-  let keep : Map[Int, Bool] = Map([])
-  for m in find_chapters(text, weak=false) {
-    keep[m.offset] = true
-  }
-  let flowed = reflow(text, wrap, keep)
-  let paras = flowed.split("\n").map(fn(p) { p.to_owned() }).to_array()
-  assert_eq(paras[0], "第一章 开头")
-  assert_eq(paras[1], line + line + line + "结束了。")
-  // paragraph-per-line text is left alone
-  assert_eq(detect_wrap_width("短的一行。\n另一行，长一点点的。\n"), 0)
-}
-
-///|
 test "blocks: cut at paragraph ends within the budget, found again by offset" {
   let p = "一二三四五六七八九十。\n"
   let text = p.repeat(30)
@@ -82,44 +51,57 @@ test "blocks: cut at paragraph ends within the budget, found again by offset" {
 }
 
 ///|
+/// The core's book of `text` (`reader.book`), as the real core answered it (src/sfkept).
+fn kept_book(text : String, markdown : Bool) -> Json raise {
+  let params : Json = { "markdown": Json::boolean(markdown), "tree": Json::boolean(markdown), "text": Json::string(text) }
+  match @sfkept.answer("reader.book", params, None) {
+    Some(Ok((book, _))) => book
+    _ => fail("the core's book of the text is not kept")
+  }
+}
+
+///|
 test "indents: a paragraph's own spacing replaced by two ideographic spaces, a heading left; offsets follow" {
   let chunk = "第一章 车站\n  他到了。\n\u{3000}\u{3000}她也到了。\n"
-  let drawn = render_chunk(chunk, true)
+  // (the core says the first line is a heading: the block starts at 100 of the text)
+  let heads : Map[Int, Bool] = { 100: true }
+  let drawn = render_chunk(chunk, 100, heads, true)
   assert_eq(drawn, "第一章 车站\n\u{3000}\u{3000}他到了。\n\u{3000}\u{3000}她也到了。\n")
   let raw = chunk.find("他").unwrap()
-  assert_eq(drawn.view(start_offset=render_offset(chunk, raw, true)).has_prefix("他"), true)
+  assert_eq(drawn.view(start_offset=render_offset(chunk, 100, heads, raw, true)).has_prefix("他"), true)
   let raw2 = chunk.find("她").unwrap()
-  assert_eq(drawn.view(start_offset=render_offset(chunk, raw2, true)).has_prefix("她"), true)
+  assert_eq(drawn.view(start_offset=render_offset(chunk, 100, heads, raw2, true)).has_prefix("她"), true)
+  // the same block elsewhere in the text: its first line indented too
+  assert_true(render_chunk(chunk, 0, heads, true).has_prefix("\u{3000}\u{3000}第一章"))
 }
 
 ///|
-test "search: every place, by block; letters ignoring case when nothing else was found" {
-  let hits = search_chunks(["钥匙在这里，钥匙也在那里", "没有", "Key and key"], "钥匙")
-  assert_eq(hits.map(fn(m) { (m.chunk, m.start) }), [(0, 0), (0, 6)])
-  assert_eq(search_chunks(["Key and KEY"], "key").length(), 2)
-}
-
-///|
-test "Markdown: drawn as runs, its marks gone, the way back to the raw offsets" {
-  let md = render_markdown("# 标题\n\n- 一项 **重要**\n> 引用\n", 0x888888FFL, 0xE5704AFFL, 0x444444FFL)
-  let drawn = md.runs.iter().fold(init="", fn(a, r) { a + r.text })
-  assert_eq(drawn, "标题\n\n• 一项 重要\n▎ 引用\n")
-  assert_eq(md.raw_of.length(), drawn.length())
-  assert_true(md.runs.iter().any(fn(r) { r.text == "重要" && r.weight == 600 }))
-  assert_eq(md.leading, 16.0)
-  let raw = "# 标题\n\n- 一项 **重要**\n> 引用\n".find("重要").unwrap()
-  assert_eq(drawn.view(start_offset=md.rendered_index(raw)).has_prefix("重要"), true)
-  assert_eq(markdown_chapters("# 一\n```\n# 不是\n```\n## 二\n#### 太深\n").map(fn(m) { m.title }), ["一", "二"])
-}
-
-///|
-test "a novel built: blocks, chapters by block, an offset found again" {
-  let novel = build_novel("小说.txt", utf8_of(novel_text()), false)
+test "a novel as the core read it: blocks, chapters by block, an offset found again" {
+  let novel = novel_of("小说.txt", novel_text(), kept_book(novel_text(), false), "UTF-8", false, false)
   assert_eq(novel.chapters.length(), 5)
   assert_eq(novel.chapters[1].0, "第二章 旧仓库")
   let (k, o) = novel.at(3000)
   assert_eq(novel.starts[k] + o, 3000)
   assert_eq(novel.offset_of(k, 0.0), novel.starts[k])
+  // the core's heading lines are not indented
+  assert_true(novel.heads.contains(0) || novel.heads.contains(novel_text().find("第一章").unwrap()))
+}
+
+///|
+test "Markdown cut into blocks at its tree's nodes, a heading starting one, each from its line" {
+  let text = fixture_markdown()
+  let novel = novel_of("发布清单.md", text, kept_book(text, true), "UTF-8", false, true)
+  // 发布清单, 准备, 检查: each a block of its own from its heading's line, the contents at each
+  assert_eq(novel.chapters.map(fn(ch) { (ch.0, ch.2) }), [("发布清单", 0), ("准备", 0), ("检查", 0)])
+  assert_eq(novel.starts.length(), 3)
+  assert_eq(novel.starts[1], text.find("## 准备").unwrap())
+  assert_eq(novel.chunks.iter().fold(init="", fn(a, s) { a + s }), text)
+  // a long one cut where it passes the budget, at a node's line
+  let (parts, starts) = md_chunks(novel.parts.iter().flat_map(fn(p) { p.iter() }).collect(), text, budget=40)
+  assert_true(parts.length() > 3)
+  for at in starts {
+    assert_true(at == 0 || text.at(at - 1).to_int() == 10)
+  }
 }
 
 ///|
@@ -335,6 +317,28 @@ test "a text read where it was left goes there, then asks for no frame more" {
   assert_eq(r.jump_step, 0)
   assert_eq(r.chunk, 2)
   t.assert_idle()
+}
+
+///|
+test "a Markdown file read as a chat's Markdown is drawn, its words searched where they are drawn" {
+  let t = drive_tester("reader-md")
+  nav_rested(t)
+  t.run_for(reader_place_ms)
+  // its marks gone: a heading, a list, inline code, a quote, as Markdown draws them
+  assert_true(t.find("发布清单") is Some(_))
+  assert_true(t.find("# 发布清单") is None)
+  assert_true(t.find("**每一项**") is None)
+  assert_true(t.find("release.log") is Some(_))
+  // searched: 每一项 is in bold in the text, found as drawn
+  let r = reading_for(reader_key({ station: "ws1/st1", root: Some(fix_docs), path: "发布清单.md" }))
+  r.query = "每一项"
+  r.typed_n += 1
+  t.draw()
+  t.run_for(reader_search_ms)
+  t.draw()
+  assert_eq(r.matches.length(), 1)
+  assert_eq(r.matches[0].chunk, 0)
+  assert_eq(fixture_markdown().view(start_offset=r.matches[0].start).has_prefix("每一项"), true)
 }
 
 ///|

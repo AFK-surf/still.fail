@@ -16,3 +16,5 @@ import {
   "mbui/zip",
   "stillfail/sfapp/settings",
 }
+
+import { "stillfail/sfkept" } for "wbtest"

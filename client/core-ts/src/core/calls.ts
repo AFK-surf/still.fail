@@ -84,6 +84,13 @@ export type Call =
   | { kind: "codeInk"; code: string; lang: string }
   /// Markdown a client holds itself read by the core (markdown.ts): a file's, a memory's.
   | { kind: "markdown"; text: string }
+  /// A text file as a reader shows it (reader.ts): the text, decoded by the client (in `text`, or its UTF-8 beside the
+  /// call); `withText`: the text as joined in the answer too (else `reader.text` gives it).
+  | { kind: "readerBook"; text: string; markdown: boolean; withText: boolean; tree: boolean }
+  /// A kept book's text as joined, its UTF-8 beside the answer.
+  | { kind: "readerText"; id: number }
+  /// Where words are in a kept book.
+  | { kind: "readerSearch"; id: number; query: string; limit: number }
   | { kind: "cacheClear"; station: string; thread: number }
   /// What the device keeps of the drives' files let go (drive-kept.ts).
   | { kind: "driveKeptClear" }
@@ -826,6 +833,26 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     }
     case "markdown":
       return { kind: "markdown", text: read(params, [["text", S, "req"]]).text as string };
+    case "reader.book": {
+      const p = read(params, [
+        ["markdown", "bool", "default"],
+        ["text", S, "opt"],
+        ["withText", "bool", "default"],
+        ["tree", "bool", "default"],
+      ]);
+      const text = (p.text as string | undefined) ?? new TextDecoder().decode(beside(bytes));
+      return { kind: "readerBook", text, markdown: p.markdown as boolean, withText: p.withText as boolean, tree: p.tree as boolean };
+    }
+    case "reader.text":
+      return { kind: "readerText", id: read(params, [["id", "u64", "req"]]).id as number };
+    case "reader.search": {
+      const p = read(params, [
+        ["id", "u64", "req"],
+        ["query", S, "req"],
+        ["limit", "u64", "opt"],
+      ]);
+      return { kind: "readerSearch", id: p.id as number, query: p.query as string, limit: (p.limit as number | undefined) ?? 500 };
+    }
     case "drive.kept.clear":
       return { kind: "driveKeptClear" };
     case "cache.file.clear": {

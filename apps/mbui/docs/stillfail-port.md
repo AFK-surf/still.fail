@@ -47,10 +47,10 @@ Done (branch fw-richtext-nav, 2026-10-19):
   (UAX #14 over the whole paragraph). Hosts shape and measure by run: a
   `style` (italic, mono) beside size and weight on every host. The layout
   answers offsets, carets and a range's rects, for selection later.
-  src/md parses Markdown (GFM's tables too); `@sf.markdown` draws it as a message does
-  (Markdown.kt): tables in a card's frame, their columns as wide as their words allow up to the message's width,
-  then scrolled sideways; code highlighted as the web's Shiki (vitesse light and dark, src/sf/highlight.mbt from
-  Highlight.kt) and scrolled sideways rather than wrapped (mbui's `Ctx::sideways`: a finger moving sideways first
+  the core reads Markdown (client/core-ts/src/markdown.ts, GFM's tables too) and `@sf.markdown` draws its tree as a
+  message does (Markdown.kt): tables in a card's frame, their columns as wide as their words allow up to the message's
+  width, then scrolled sideways; code in the colours the core says (`ink`, painted as the web's Shiki: vitesse light
+  and dark, src/sf/ink.mbt) and scrolled sideways rather than wrapped (mbui's `Ctx::sideways`: a finger moving sideways first
   drags it, up or down first the list); a link held is its menu (打开链接, 复制链接; src/sfapp/link_menu.mbt, Links.kt
   linkHold over mbui's `on_link_hold`). Selection: slice 5's picking.
 - 2, the page stack: `Nav[P]` and `Ctx::nav` (src/ui/nav.mbt), App.kt's
@@ -1002,10 +1002,12 @@ MBUI_OPEN_PAGE=files until the bottom bar reaches it). Before the flows, `script
 the drive flows' folder in the test station's home (e2e-<tag>: a text, a novel of made-up chapters, a folder with a
 file), a run's own, which flow 15 lends through the app.
 
-The live client renders the local core's Markdown tree, including code colours and formula drawings. Older tapes
-predate the pure `markdown` operation: `client/core-ts/scripts/replay-markdown.ts` generates its answers from the
-tapes' own words using the real core. Regenerate `src/sfreplay/markdown_answers.mbt` with that script after adding
-or changing tapes or the core parser; the check script verifies it. This adds no backend messages or elapsed time
+The live client renders the local core's Markdown tree, including code colours and formula drawings, and asks it for
+code's colours (`code.ink`) and a drive text as the reader shows it (`reader.*`). A run without a core (the Tester's
+tests, the screenshots' app, and tapes older than those calls) has the real core's answers kept in `src/sfkept`
+(`kept.mbt`, made by `client/core-ts/scripts/kept-answers.ts`): an answer asked and not kept is said on the run's output
+and fails `scripts/test.sh`; `scripts/kept` runs the tests and has the core work out what they asked (`FRESH=1`: only
+what they ask now). The check script verifies the kept answers are the core's own. This adds no backend messages or elapsed time
 to the recordings. Formula glyphs are packaged once from `client/math/font.json`; messages carry only glyph IDs,
 positions, rules and any native text (see `client/math/README.md`).
 

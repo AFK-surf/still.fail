@@ -525,6 +525,13 @@ pub fn fixture(mode : String) -> Source {
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
     call: fn(name, params, done) {
+      match fixture_kept(name, params, None) {
+        Some(r) => {
+          done(r.map(fn(a) { a.0 }))
+          return
+        }
+        None => ()
+      }
       match @settings.fixture_call(name, params) {
         Some(r) => {
           done(r)
@@ -609,6 +616,13 @@ pub fn fixture(mode : String) -> Source {
       }
     },
     read_bytes: fn(name, params, done) {
+      match fixture_kept(name, params, None) {
+        Some(r) => {
+          done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
+          return
+        }
+        None => ()
+      }
       // the faces' files (fonts_fixture.mbt)
       match fixture_fonts_read(f, name) {
         Some(r) => {
@@ -645,7 +659,14 @@ pub fn fixture(mode : String) -> Source {
       fixture_stream(name, params, on_value, done)
     },
     cancel: fn(_) {  },
-    call_bytes: fn(name, params, _bytes, done) {
+    call_bytes: fn(name, params, bytes, done) {
+      match fixture_kept(name, params, Some(bytes)) {
+        Some(r) => {
+          done(r.map(fn(a) { a.0 }))
+          return
+        }
+        None => ()
+      }
       if fixture_fonts_call(f, name, params, done) {
         return
       }
@@ -664,6 +685,16 @@ pub fn fixture(mode : String) -> Source {
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
     read_only: false,
+  }
+}
+
+///|
+/// The core's pure calls (`markdown`, `code.ink`, `reader.*`) as the real core answered them, kept (src/sfkept: bound
+/// by a run without a core); None for any other.
+fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Bytes?), Json]? {
+  match @sf.kept_call.val {
+    Some(kept) => kept(name, params, bytes)
+    None => None
   }
 }
 

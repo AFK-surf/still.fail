@@ -2897,23 +2897,31 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
   }
   // in rows of 60 lines, so a long file lays out only what is in view
   let lines = words.split("\n").map(fn(s) { s.to_owned() }).to_array()
-  // code highlighted (Markdown's source as Markdown), as a whole, then by its lines; past HIGHLIGHT_LIMIT as it is
+  // code in the colours the core says of its language (`code.ink`), as a whole, then cut at its lines; Markdown's
+  // source, plain text and what is past HIGHLIGHT_LIMIT as they are
   let colored = match v.colored {
     Some(cl) if v.colored_dark == t.dark => cl
     _ => {
       let (_, _, language) = preview_kind(v.name)
-      let lang = if kind == KMarkdown { "markdown" } else if kind == KCsv || kind == KText { "" } else { language }
-      let cl = if lang != "" && words.length() <= highlight_limit {
-        match @sf.highlight(words, lang, t.dark) {
-          Some(runs) => runs_by_line(runs)
-          None => []
-        }
+      let lang = if kind == KMarkdown || kind == KCsv || kind == KText { "" } else { language }
+      let said = if lang != "" && words.length() <= highlight_limit {
+        @sf.code_ink(c, words, lang)
       } else {
-        []
+        Some(None)
       }
-      v.colored = Some(cl)
-      v.colored_dark = t.dark
-      cl
+      match said {
+        Some(ink) => {
+          let cl = match ink {
+            Some(ink) => runs_by_line(@sf.ink_runs(words, ink, t.dark))
+            None => []
+          }
+          v.colored = Some(cl)
+          v.colored_dark = t.dark
+          cl
+        }
+        // (asked: plain until the core says)
+        None => []
+      }
     }
   }
   let chunks = (lines.length() + 59) / 60
