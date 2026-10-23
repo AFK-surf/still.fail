@@ -6,7 +6,9 @@
 
 ///|
 /// The page on a station, at a desktop's width; `held`, while its stations are read (newchat.mbt new_chat_on): what
-/// is said of the station and the choices breathing, the composer taking words but sending nothing.
+/// is said of the station and the choices breathing, the composer taking words but sending nothing. `going`: it has
+/// become its chat, under it now (new_chat_leaving_wide): how far its scene has gone up and what is under the composer
+/// faded (0 … 1 each), its composer's place kept empty.
 fn new_chat_page_wide(
   c : @ui.Ctx,
   src : Source,
@@ -15,6 +17,150 @@ fn new_chat_page_wide(
   station : Json?,
   held? : Bool = false,
   error? : String? = None,
+  going? : (Double, Double)? = None,
+) -> Unit {
+  let address = if held { held_address(w, v) } else { text(station, "station") }
+  // (what fades as it is left for a chat by the sidebar: wide_switch.mbt)
+  if going is None && !held {
+    wide_switch.new_view = v
+  }
+  // the stations' files beside it (NewChat.tsx: the chat's bar's 文件 where the chat's page has it, its tab kept for
+  // the workspace's new chat), where they lend them
+  // (as the new chat's view has its stations: nothing more asked of the core for it)
+  let drive = !held &&
+    address != "" &&
+    items(v, "stations").iter().any(fn(s) { field(field(Some(s), "overview"), "drive") is Some(Object(_)) })
+  let panel = if drive && new_files_open(src, w.id) { side_width(c.width) } else { 0.0 }
+  let page = c.id("new/page")
+  let scene = fn() {
+    c.box(style=new_wide_frame, id=page, fn() {
+      new_chat_scene_wide(c, src, w, v, station, held~, error~, going~)
+      if drive && going is None {
+        c.layer(fn() {
+          c.box(style=new_files_bar, fn() {
+            if icon_button(c, "new/files", "folder", label=tr("web-pages.chat.files")) {
+              new_files_set(src, w.id, panel <= 0.0)
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      }
+      // a row of the 文件 tab carried over it: frosted, as over a chat
+      if going is None {
+        drop_hint(c, page)
+      }
+    })
+    |> ignore
+  }
+  if panel <= 0.0 {
+    scene()
+  } else {
+    let left = c.width - panel - 1.0
+    c.box(style=side_row, fn() {
+      c.box(style=@ui.style(w=Fixed(left), h=Full), fn() { c.sized(left, c.height, scene) }) |> ignore
+      c.box(style=side_rule, fn() {  }) |> ignore
+      c.box(style=@ui.style(w=Fixed(panel), h=Full), fn() {
+        // (leaving: the chat it became has it now)
+        if going is None {
+          c.sized(panel, c.height, fn() { new_files_panel(c, src, w, address) })
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  // a row of the 文件 tab let go over it: into its message
+  if going is None && address != "" {
+    chat_drop(c, src, "new:" + address, page)
+  }
+}
+
+///|
+/// Whether the workspace's new chat has its 文件 tab open (NewChat.tsx: prefs `chatTabs` by `new:<workspace>`, read
+/// once, then as it is opened and closed here).
+fn new_files_open(src : Source, ws : String) -> Bool {
+  let k = "new:" + ws
+  match wide.tabs.get(k) {
+    Some(tabs) => tabs.contains("files")
+    None => {
+      let kept = field(field((src.topic)("prefs", {}).value, "chatTabs"), k)
+      let open = match field(kept, "tabs") {
+        Some(Array(a)) => a.contains(Json::string("files"))
+        _ => false
+      }
+      wide.tabs[k] = if open { ["files"] } else { [] }
+      open
+    }
+  }
+}
+
+///|
+/// The workspace's new chat's 文件 tab opened or closed, kept by the core on this device.
+fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
+  wide.tabs["new:" + ws] = if on { ["files"] } else { [] }
+  let entry : Map[String, Json] = { "tabs": Json::array(if on { [Json::string("files")] } else { [] }) }
+  if on {
+    entry["active"] = Json::string("files")
+  }
+  let tabs : Map[String, Json] = {}
+  tabs["new:" + ws] = Json::object(entry)
+  (src.call)("prefs.set", { "chatTabs": Json::object(tabs) }, fn(_) {  })
+}
+
+///|
+/// The new chat's side panel (NewChat.tsx): its one tab, Station 文件, closed by its × or the panel's; the files of the
+/// workspace's stations, what is added going into the new chat's draft.
+fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -> Unit {
+  let t = @sf.theme()
+  c.box(style=side_panel_style, fn() {
+    c.box(style=side_bar, fn() {
+      c.box(style=side_tab_list, fn() {
+        let close = c.id("new/files-tab-close")
+        c.cursor(close, Hand)
+        if c.clicked(close) {
+          new_files_set(src, w.id, false)
+        }
+        c.box(style=side_tab, selected=true, fn() {
+          @sf.icon(c, "folder", size=14.0, color=t.p.text) |> ignore
+          c.text(tr("web-pages.chat.files"), style=side_tab_front) |> ignore
+          c.box(style=side_tab_close, id=close, fn() { @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      if icon_button(c, "new/files-close", "panel-close", label=tr("web-pages.chat.closePanel")) {
+        new_files_set(src, w.id, false)
+      }
+    })
+    |> ignore
+    c.box(style=side_pane, fn() { files_tab(c, src, w, "new:" + address, address) }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The page in its pane, as its place is laid out.
+// kept across runs: a value (no field of it changes)
+let new_wide_frame : @ui.Style = @ui.style(w=Full, h=Full)
+
+///|
+/// Where 文件 is: the chat's bar's end, over the page (what is in its middle stays where it is).
+// kept across runs: a value (no field of it changes)
+let new_files_bar : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size, px=S3, align=ACenter, justify=JEnd)
+
+///|
+/// The page's scene and composer, in the middle of what is left of the pane (new_chat_page_wide).
+fn new_chat_scene_wide(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  v : Json?,
+  station : Json?,
+  held? : Bool = false,
+  error? : String? = None,
+  going? : (Double, Double)? = None,
 ) -> Unit {
   let t = @sf.theme()
   let address = if held { held_address(w, v) } else { text(station, "station") }
@@ -22,14 +168,17 @@ fn new_chat_page_wide(
   let breathing = error is None
   let here = if name == "" { tr("web-main.newChat.thisMachine") } else { name }
   let col = dmin(new_column_w, c.width - new_column_side)
-  // (the composer's own 10 at its sides outside the column: its capsule as wide as the column)
-  let room = col + 2.0 * composer_side
+  // (the composer as wide as the column: in the wide frame it has no room of its own at its sides)
+  let room = col
   c.box(style=new_wide_page, fn() {
     c.box(style=@ui.style(w=Fixed(room), gap=S2_5, align=ACenter), fn() {
-      @sf.drawable(c, if t.dark { "illus_new_chat_dark" } else { "illus_new_chat" }, new_scene_w) |> ignore
-      c.box(style=new_wide_title_box, fn() { c.text(tr("web-main.newChat.title"), style=new_wide_title) |> ignore })
-      |> ignore
-      c.box(style=new_wide_sub_box, fn() {
+      let scene = @sf.drawable(c, if t.dark { "illus_new_chat_dark" } else { "illus_new_chat" }, new_scene_w)
+      new_going(c, scene, going, true)
+      let title = c.box(style=new_wide_title_box, fn() {
+        c.text(tr("web-main.newChat.title"), style=new_wide_title) |> ignore
+      })
+      new_going(c, title, going, true)
+      let sub = c.box(style=new_wide_sub_box, fn() {
         // (held: its line breathing, the station's name in it not known yet)
         if held {
           held_line(c, new_held_sub_w, breathing)
@@ -37,19 +186,22 @@ fn new_chat_page_wide(
           c.text(fill("web-main.newChat.sub", [("name", here)]), style=new_wide_sub) |> ignore
         }
       })
-      |> ignore
+      new_going(c, sub, going, true)
       // its station went as it was written in, or what is sent waits for its quota: said, the page staying
       if flag(v, "down") {
-        new_notice(c, fill("web-main.newChat.down", [("name", here)]))
+        new_going(c, new_notice(c, fill("web-main.newChat.down", [("name", here)])), going, true)
       }
       match opt_text(v, "spent") {
-        Some(spent) => new_notice(c, spent)
+        Some(spent) => new_going(c, new_notice(c, spent), going, true)
         None => ()
       }
       let r : ChatRef = { station: address, session: "", title: "", station_name: name }
-      // (held with no station to hold it on, its first value not come yet: no draft asked for)
-      if !held || address != "" {
-        c.box(style=new_wide_composer, fn() {
+      if going is Some(_) {
+        // gone to the chat's foot (composer_page): its place as it was
+        bar_room_box(c, fresh.room)
+      } else if !held || address != "" {
+        // (held with no station to hold it on, its first value not come yet: no draft asked for)
+        let place = c.box(style=new_wide_composer, fn() {
           c.sized(room, c.height, fn() {
             composer(c, src, r, None, fresh=Some({
               key: "new:" + address,
@@ -68,20 +220,21 @@ fn new_chat_page_wide(
             }))
           })
         })
-        |> ignore
+        // (how tall it is, kept clear as the page leaves: new_chat_leaving_wide)
+        @motion.measure(c, place, "new/composer")
       }
       let combos = items(v, "frequent")
       if combos.length() > 0 {
-        c.box(style=new_wide_frequent, fn() {
+        let frequent = c.box(style=new_wide_frequent, fn() {
           c.text(tr("web-main.combos.short"), style=new_wide_meta) |> ignore
           c.box(style=frequent_flow, flow=true, fn() {
             for combo in combos {
-              frequent_chip(c, src, w, Some(combo), false)
+              frequent_chip(c, src, w, Some(combo), going is Some(_))
             }
           })
           |> ignore
         })
-        |> ignore
+        new_going(c, frequent, going, false)
       }
       // what it waits for, in a line of its own; why its stations could not be read
       match error {
@@ -90,14 +243,15 @@ fn new_chat_page_wide(
       }
       if !held && (flag(v, "waiting") || field(v, "model") is None) {
         match opt_text(v, "problem") {
-          Some(p) => c.text(p, style=new_wide_meta_wrap) |> ignore
+          Some(p) => new_going(c, c.text(p, style=new_wide_meta_wrap), going, false)
           None => ()
         }
       }
       // the machine's own sessions to go on with, where it kept any
       let blocked = text(v, "blocked")
       if field(station, "overview") is Some(Object(_)) && blocked != "profile" && blocked != "shared" && !src.read_only {
-        @settings.machine_sessions_offer(c, settings_core(src, w), address, name)
+        let offer = c.box(fn() { @settings.machine_sessions_offer(c, settings_core(src, w), address, name) })
+        new_going(c, offer, going, false)
       }
     })
     |> ignore
@@ -159,9 +313,29 @@ fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json
 
 ///|
 /// A line of what is wrong for now (spentNotice): the amber's 12% under it, 8 by 12 in.
-fn new_notice(c : @ui.Ctx, words : String) -> Unit {
-  c.box(style=new_wide_notice, fn() { c.text(words, style=new_wide_notice_words) |> ignore }) |> ignore
+fn new_notice(c : @ui.Ctx, words : String) -> Int {
+  c.box(style=new_wide_notice, fn() { c.text(words, style=new_wide_notice_words) |> ignore })
 }
+
+///|
+/// Node `i` of the page as it leaves (`going`: how far up, how far faded): `up`, out of view above as it fades
+/// (madeChat.ts: translateY(-32px) scale(.96)); else fading where it is. As it is while the page stays (fading in
+/// while it comes from a chat).
+fn new_going(c : @ui.Ctx, i : Int, going : (Double, Double)?, up : Bool) -> Unit {
+  match going {
+    Some((u, _)) if up => c.look(i, @ui.look(alpha=1.0 - u, dy=-new_leave_rise * u, scale=1.0 - new_leave_shrink * u))
+    Some((_, f)) => c.look(i, @ui.look(alpha=1.0 - f))
+    // (come to from a chat: fading in as the composer comes, wide_switch.mbt)
+    None => switch_appear(c, i)
+  }
+}
+
+///|
+/// How far what leaves goes up, and how much smaller it gets.
+let new_leave_rise : Double = 32.0
+
+///|
+let new_leave_shrink : Double = 0.04
 
 ///|
 /// The column (newChatInner: 720 at most, 32 in from the pane's sides), the scene's width (ILLUS_SIZE: 320).
@@ -172,10 +346,6 @@ let new_column_side : Double = 64.0
 
 ///|
 let new_scene_w : Double = 320.0
-
-///|
-/// What the composer stands in from its room at each side (composer.mbt: 10).
-let composer_side : Double = 10.0
 
 ///|
 /// The page (newChat): what it holds in its middle.

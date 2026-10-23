@@ -1,0 +1,11 @@
+# The wide frame's new chat and its first words sent (newchat.mbt, flight.mbt carried; the web's madeChat.ts
+# toMadeChat): the page becomes the chat, the words going up into their bubble.
+timeout 20000
+until 做任何事
+wait 600
+tap 做任何事
+wait 500
+type 把发布说明写一下
+wait 700
+tap icon:arrow-up
+wait 3000

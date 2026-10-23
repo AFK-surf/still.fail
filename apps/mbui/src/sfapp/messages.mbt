@@ -28,6 +28,20 @@ priv struct Ink {
 
 ///|
 fn ink() -> Ink {
+  // in the wide frame the web's own (styles/global.css.ts): its bubble the neutral ground, names in the accent's ink
+  if wide_on.val {
+    let p = @sf.theme().p
+    return {
+      text: p.text,
+      muted: p.muted,
+      subtle: p.subtle,
+      neutral: p.neutral_bg,
+      name: p.accent_text,
+      card: p.card,
+      accent: p.accent,
+      canvas: p.canvas,
+    }
+  }
   if @sf.theme().dark {
     {
       text: 0xE9E9EAFFL,
@@ -100,15 +114,31 @@ fn entry_view(c : @ui.Ctx, src : Source, here : Here, e : Entry, list : Array[En
 ///|
 /// Over the first message that was unread when the chat opened: the accent, a rule each side.
 fn unread_line(c : @ui.Ctx) -> Unit {
-  let accent = ink().accent
-  c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-    c.box(w=Fill(1.0), h=Px(1.0), bg=@sf.alpha(accent, 0.5), fn() {  }) |> ignore
-    c.text(tr("android-chat.chat.newBelow"), size=13.0, weight=500, color=accent, wrap=false)
-    |> ignore
-    c.box(w=Fill(1.0), h=Px(1.0), bg=@sf.alpha(accent, 0.5), fn() {  }) |> ignore
+  c.box(style=unread_row, fn() {
+    c.box(style=unread_rule, fn() {  }) |> ignore
+    c.text(tr("android-chat.chat.newBelow"), style=if wide_on.val { unread_words_wide } else { unread_words }) |> ignore
+    c.box(style=unread_rule, fn() {  }) |> ignore
   })
   |> ignore
 }
+
+///|
+/// The unread line's row, its rules each side (1, the accent at 50%), its words 13 in 500 (the wide screen's 12:
+/// Chat.css.ts chatUnreadLine) in the accent.
+// kept across runs: a value (no field of it changes)
+let unread_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let unread_rule : @ui.Style = @ui.style(w=Grow(1.0), h=SPx, bg=A(Accent, O50))
+
+///|
+// kept across runs: a value (no field of it changes)
+let unread_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Accent, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let unread_words_wide : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Accent, wrap=false)
 
 ///|
 /// When it was said, small (Chat.kt MessageTime): how long ago, or when, in every message, after a tap on one.
@@ -120,13 +150,15 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
       if c.clicked(id) {
         absolute_times.val = !absolute_times.val
       }
+      // in the wide frame the other way of saying it, on hover (ui.tsx Time: its Tip)
+      wide_tip(c, "time/" + key, id, if absolute_times.val { s.ago } else { s.full })
       c.box(id~, fn() {
         c.text(
           if absolute_times.val { s.full } else { s.ago },
           size=if wide_on.val { web_time } else { 10.0 },
           color=ink().muted,
           wrap=false,
-          line=16.0,
+          line=if wide_on.val { web_time_line } else { 16.0 },
         )
         |> ignore
       })
@@ -136,30 +168,35 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
 }
 
 ///|
-/// A chat's words on a desktop's width, as the web's (styles/global.css.ts, conversation.css.ts): a message's 14 (its
-/// head's name too), its time 11; the viewer's bubble 14 on 22, 10 by 16 in, 20 round, 640 wide at most.
+/// A chat's words on a desktop's width, as the web's (styles/global.css.ts, conversation.css.ts, chat.css.ts): a
+/// message's 14 (a person's plain words on lines 1.55), its time 11; the viewer's bubble 14 on 1.55, 8 by 14 in, 18
+/// round, 78% of the column and 560 wide at most (chat.css.ts msgMine msgBubble).
 let web_body : Double = 14.0
 
 ///|
 let web_time : Double = 11.0
 
 ///|
-let web_bubble_line : Double = 22.0
+let web_plain_line : Double = web_body * 1.55
 
 ///|
-let web_bubble_w : Double = 640.0
+/// (a time on a message's lines, 1.65)
+let web_time_line : Double = web_time * 1.65
+
+///|
+let web_bubble_w : Double = 560.0
 
 ///|
 let web_bubble_share : Double = 0.78
 
 ///|
-let web_bubble_px : Double = 16.0
+let web_bubble_px : Double = 14.0
 
 ///|
-let web_bubble_py : Double = 10.0
+let web_bubble_py : Double = 8.0
 
 ///|
-let web_bubble_r : Double = 20.0
+let web_bubble_r : Double = 18.0
 
 ///|
 /// A message's picture (Chat.kt MessageAvatar): an agent's maker on the round grey ground, still.fail's mark, or a
@@ -255,13 +292,29 @@ fn said(
   let em = emits_of(ek)
   c.box(w=Fill(1.0), fn() {
     let col = c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
-      // an agent of the chat's name opens its card (AgentSheet.kt)
+      // an agent of the chat's name opens its card (AgentSheet.kt); in the wide frame its execution history beside the
+      // chat, pressed again in front, closed (the web's chatPage.agent: its history where the page gives no card)
       let mine = m.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
       let name = c.id("name/" + m.ts)
-      if mine && c.clicked(name) {
-        open_sheet(c, AgentOf(ref_of(here), m.by.agent))
+      if mine && wide_on.val {
+        c.cursor(name, Hand)
       }
-      said_head(c, m.by.name, if mine { name } else { 0 }, m.ts, m.time)
+      if mine && c.clicked(name) {
+        if wide_on.val {
+          side_toggle(ref_of(here), "history/" + m.by.agent)
+        } else {
+          open_sheet(c, AgentOf(ref_of(here), m.by.agent))
+        }
+      }
+      // another chat's agent (session_send): its name opens that chat, by its link (Chat.tsx MessageRow `by.from`)
+      let elsewhere = !mine && m.by.from != ""
+      if elsewhere {
+        c.cursor(name, Hand)
+        if c.clicked(name) {
+          open_link(m.by.from)
+        }
+      }
+      said_head(c, m.by.name, if mine || elsewhere { name } else { 0 }, m.ts, m.time)
       quote_cards(c, src, here, m.quotes, m.attachments, false)
       if m.author_kind == "person" {
         if m.text != "" {
@@ -293,10 +346,26 @@ fn said(
       @motion.measure(c, col, "emit-col/" + seq_s(m.seq))
       emit_out(c, col, em, m.seq)
     }
-    // the picture over the name's start (where a message out of an avatar lands: hidden while the flying one is
-    // over it)
+    // the picture over the name's start, or out in the margin before it in the wide frame, held at the list's top as a
+    // long message scrolls past (where a message out of an avatar lands: hidden while the flying one is over it)
     c.layer(fn() {
-      let av = said_avatar(c, fn() { message_avatar(c, src, m) })
+      // one of the chat's agents': in the wide frame its card while the pointer rests on its picture (Chat.tsx
+      // AgentAvatar, AgentHover)
+      let carded = wide_on.val &&
+        m.author_kind == "agent" &&
+        m.by.agent != "" &&
+        here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
+      let hid = if carded { c.id("said-avatar/" + m.ts) } else { 0 }
+      let av = said_avatar(c, id=hid, fn() { message_avatar(c, src, m) })
+      if wide_on.val {
+        c.stick(av, wide_avatar_held)
+      }
+      if carded {
+        @kit.hover_card(c, "agent-hover/" + m.ts, hid, side=Bottom, along=Start, look=fn(c, _, body) {
+          wide_panel(c, 300.0, body)
+        }, fn() { agent_hover(c, src, ref_of(here), m.by.agent) })
+        |> ignore
+      }
       if emit_goes(em, m.seq) {
         @motion.measure(c, av, "emit-landing/" + ek + "/" + seq_s(m.seq))
         if emit_emitting(em, m.seq) {
@@ -311,13 +380,18 @@ fn said(
 
 ///|
 /// A message's head (Chat.kt SaidRow): in from the picture over its start (said_avatar), its name (15, 650, in the
-/// chat's name colour, one line up to 240; `id` taps it) and when it was said.
+/// chat's name colour, one line up to 240; `id` taps it) and when it was said. In the wide frame as the web's
+/// (Chat.css.ts msgHead msgName): the picture out in the margin, the name where the words start, 13 in 600.
 fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) -> Unit {
   let k = ink()
-  c.box(dir=Row, w=Fill(1.0), pl=25.0, min_h=24.0, gap=6.0, align=ACenter, fn() {
+  c.box(dir=Row, w=Fill(1.0), pl=head_in(), min_h=24.0, gap=6.0, align=ACenter, fn() {
     c.box(max_w=240.0, id~, fn() {
-      c.text(name, size=if wide_on.val { web_body } else { 15.0 }, weight=650, color=k.name, wrap=false, line=21.0)
-      |> ignore
+      if wide_on.val {
+        // one that opens something takes the accent under the pointer (Chat.css.ts msgAgent:hover)
+        c.text(name, style=if id != 0 && c.hovered(id) { wide_name_hot } else { wide_name }) |> ignore
+      } else {
+        c.text(name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0) |> ignore
+      }
     })
     |> ignore
     message_time(c, key, time)
@@ -326,17 +400,52 @@ fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) 
 }
 
 ///|
-/// Where a message's picture goes, over its head's start (Chat.kt SaidRow: 3 down, centred on the name's line).
-fn said_avatar(c : @ui.Ctx, body : () -> Unit) -> Int {
-  c.box(pt=3.0, body)
+/// How far a message's head stands in from its start: past the picture over it, none in the wide frame (the picture
+/// out in the margin).
+fn head_in() -> Double {
+  if wide_on.val {
+    0.0
+  } else {
+    25.0
+  }
 }
+
+///|
+/// A name over its message in the wide frame (Chat.css.ts msgHead msgName): the UI's size in 600, the accent's ink, its
+/// line inside the head's 24.
+// kept across runs: a value (no field of it changes)
+let wide_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, leading=L5, color=AccentText, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_name_hot : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, leading=L5, color=Accent, wrap=false)
+
+///|
+/// Where a message's picture goes, over its head's start (Chat.kt SaidRow: 3 down, centred on the name's line); in the
+/// wide frame out in the list's margin before the words, as far from the name as from the margin's edge (Chat.css.ts
+/// msgRow > msgAvatar: 29 out).
+fn said_avatar(c : @ui.Ctx, body : () -> Unit, id? : Int = 0) -> Int {
+  if wide_on.val {
+    c.box(tx=-wide_avatar_out, ty=3.0, id~, body)
+  } else {
+    c.box(pt=3.0, id~, body)
+  }
+}
+
+///|
+/// How far a message's picture stands out before its words in the wide frame (align.ts columns.avatar), and where it
+/// is held as its message scrolls past: 8 under the chat's bar (Chat.css.ts: sticky, 8 under the pane's top).
+let wide_avatar_out : Double = 29.0
+
+///|
+let wide_avatar_held : Double = wide_bar_h + 8.0
 
 ///|
 /// A spinner and a word, small, under a message of the viewer's (Chat.kt UnderWay).
 fn under_way(c : @ui.Ctx, words : String) -> Unit {
   c.box(dir=Row, gap=5.0, align=ACenter, fn() {
     @sf.spinner(c, size=12.0) |> ignore
-    c.text(words, size=10.0, color=ink().muted, wrap=false, line=16.0) |> ignore
+    c.text(words, size=if wide_on.val { web_time } else { 10.0 }, color=ink().muted, wrap=false, line=16.0) |> ignore
   })
   |> ignore
 }
@@ -368,10 +477,12 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, b : Install) -> Uni
       _ => ""
     }
     let note = if b.note != "" && b.action == "" { " · " + b.note } else { "" }
-    c.text(b.title + pct + note, size=10.0, color~, line=16.0) |> ignore
+    // (a time's size: 10, the wide screen's 11)
+    let size = if wide_on.val { web_time } else { 10.0 }
+    c.text(b.title + pct + note, size~, color~, line=16.0) |> ignore
     if b.action != "" {
-      c.text("·", size=10.0, color=ink().muted, wrap=false, line=16.0) |> ignore
-      c.text(b.action, size=10.0, weight=600, color=if busy { ink().muted } else { ink().text }, wrap=false, line=16.0)
+      c.text("·", size~, color=ink().muted, wrap=false, line=16.0) |> ignore
+      c.text(b.action, size~, weight=600, color=if busy { ink().muted } else { ink().text }, wrap=false, line=16.0)
       |> ignore
     }
   })
@@ -451,6 +562,8 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
             ],
             key="notice-profile/" + m.ts,
             style=if open { system_words_open } else { system_words },
+            size=notice_type().0,
+            line=notice_type().1,
             color~,
             link_color=color,
             on_link=fn(_) { app.nav.push(Setting(@settings.Route::Profile(station, m.profile))) },
@@ -461,7 +574,7 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
             // cut short where it does not fit, the word that acts on it after
             c.box(fn() {
               if open {
-                @sf.markdown(c, said, key="notice/" + m.ts, size=15.0, ink=color) |> ignore
+                @sf.markdown(c, said, key="notice/" + m.ts, size=notice_type().0, ink=color) |> ignore
               } else {
                 pill_words(c, plain_words(if to_install is Some(_) { said } else { first }), color)
               }
@@ -516,7 +629,19 @@ fn notice_pill(c : @ui.Ctx, id : Int, ground : Int64, open : Bool, body : () -> 
 ///|
 /// A notice's line of words (15 on a message's line), cut short where it does not fit.
 fn pill_words(c : @ui.Ctx, words : String, color : Int64) -> Unit {
-  c.text(words, size=15.0, color~, wrap=false, line=24.75) |> ignore
+  let (size, line) = notice_type()
+  c.text(words, size~, color~, wrap=false, line~) |> ignore
+}
+
+///|
+/// A notice's words: 15 on a message's line (Chat.kt SystemNotice); in the wide frame the web's Markdown, 14 on 1.65
+/// (Chat.css.ts msgSystemBox's `.markdown`).
+fn notice_type() -> (Double, Double) {
+  if wide_on.val {
+    (web_body, web_body * 1.65)
+  } else {
+    (15.0, 24.75)
+  }
 }
 
 ///|
@@ -542,8 +667,9 @@ fn notice_action(c : @ui.Ctx, key : String, action : String, color : Int64, busy
   if id != 0 && c.clicked(id) {
     run()
   }
-  c.rich([@ui.span(" · ", color=@sf.alpha(color, notice_dot_alpha))], style=system_words, color~) |> ignore
-  c.box(id~, fn() { c.rich([@ui.span(action, weight=600, underline=true)], style=system_words, color~) |> ignore })
+  let (size, line) = notice_type()
+  c.rich([@ui.span(" · ", color=@sf.alpha(color, notice_dot_alpha))], style=system_words, size~, line~, color~) |> ignore
+  c.box(id~, fn() { c.rich([@ui.span(action, weight=600, underline=true)], style=system_words, size~, line~, color~) |> ignore })
   |> ignore
 }
 
@@ -690,7 +816,7 @@ fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
     key="words/" + ts,
     size=if wide_on.val { web_body } else { 15.0 },
     color=ink().text,
-    line=23.0,
+    line=if wide_on.val { web_plain_line } else { 23.0 },
     link_color=t.p.blue,
     pressed_bg=@sf.alpha(t.p.blue, 0.14),
     on_link=fn(h) { open_link(h) },
@@ -713,7 +839,7 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   // gone to (a notification's), the bubble takes the accent's ground as it flashes (Chat.kt Bubble: lit)
   let lit = if flashing.val.0 == ts { flashing.val.1 } else { 0.0 }
   let neutral = if lit > 0.0 { @sf.mix(flash_ground(), lit, k.neutral) } else { k.neutral }
-  // (the web's on a desktop's width: conversation.css.ts msgBubble, 78% of the column and 640 at most, 10 by 16 in, 20
+  // (the web's on a desktop's width: chat.css.ts msgMine msgBubble, 78% of the column and 560 at most, 8 by 14 in, 18
   // round)
   let b = c.box(
     max_w=if wide_on.val { dmin(c.width * web_bubble_share, web_bubble_w) } else { c.width - 36.0 },
@@ -727,7 +853,7 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
       key="bubble/" + ts,
       size=if wide_on.val { web_body } else { 16.0 },
       color=k.text,
-      line=if wide_on.val { web_bubble_line } else { 21.0 },
+      line=if wide_on.val { web_plain_line } else { 21.0 },
       // (SendTextStyle's lines: a TextStyle of its own, no LineHeightStyle)
       trim=true,
       link_color=t.p.blue,
@@ -856,9 +982,23 @@ fn quote_cards(
   }
   let k = ink()
   let most = dmin(380.0, (c.width - 28.0) * 0.88)
+  let (size, line, said) = quote_type()
   c.box(style=if mine { quote_cards_end } else { quote_cards_start }, fn() {
     for q in quotes {
       let own = quote_file(q, files)
+      // pressed, the chat goes to the message it quotes, flashing it (Chat.tsx Quotes jump), its words in the text's
+      // colour under the pointer
+      let seq = match here.view.messages.iter().find_first(fn(m) { q.ts != "" && m.ts == q.ts }) {
+        Some(m) => m.seq
+        None => -1.0
+      }
+      let jump = if seq >= 0.0 { c.id("quote-jump/" + q.ts + "/" + q.text) } else { 0 }
+      if jump != 0 {
+        c.cursor(jump, Hand)
+        if c.clicked(jump) {
+          go_to(ref_of(here), seq)
+        }
+      }
       c.box(max_w=most, radius=12.0, bg=k.card, fn() {
         c.box(
           dir=Row,
@@ -867,21 +1007,22 @@ fn quote_cards(
           pt=7.0,
           pb=if q.comment == "" && own is None { 7.0 } else { 0.0 },
           align=AStart,
+          id=jump,
           fn() {
-            c.box(w=Px(15.0), h=Px(19.5), justify=JCenter, fn() {
+            c.box(w=Px(15.0), h=Px(line), justify=JCenter, fn() {
               @sf.icon(c, "quote", size=11.0, color=k.accent) |> ignore
             })
             |> ignore
             // two lines at most
-            c.box(max_h=39.0, clip=true, fn() {
+            c.box(max_h=line * 2.0, clip=true, fn() {
               c.rich(
                 [
                   @ui.span(fill("android-chat.quote.who", [("name", q.author)]), weight=500, color=k.text),
                   @ui.span(q.text),
                 ],
-                size=13.0,
-                color=k.muted,
-                line=19.5,
+                size~,
+                color=if jump != 0 && c.hovered(jump) { k.text } else { k.muted },
+                line~,
               )
               |> ignore
             })
@@ -907,7 +1048,7 @@ fn quote_cards(
               None => ()
             }
             if q.comment != "" {
-              c.box(pt=3.0, fn() { c.text(q.comment, size=15.0, color=k.text, line=22.5) |> ignore }) |> ignore
+              c.box(pt=3.0, fn() { c.text(q.comment, size=said, color=k.text, line=said * 1.5) |> ignore }) |> ignore
             }
           })
           |> ignore
@@ -917,6 +1058,17 @@ fn quote_cards(
     }
   })
   |> ignore
+}
+
+///|
+/// A quote card's words: the passage's size and line (13 on 19.5; the wide screen's 12 on 18, Chat.css.ts
+/// quoteCardText), and what was said about it, on lines 1.5 its size (15; the wide screen's 13: quoteCardComment).
+fn quote_type() -> (Double, Double, Double) {
+  if wide_on.val {
+    (12.0, 18.0, 13.0)
+  } else {
+    (13.0, 19.5, 15.0)
+  }
 }
 
 ///|
@@ -1171,7 +1323,7 @@ fn file_item(
       }
       // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
-      note_thumb(c, thumb, open, 10.0, letterbox~)
+      note_thumb(c, thumb, open, file_corner(), letterbox~)
       // held long where the list quotes: quoted, the press its (lifting it opens nothing), once a press
       match quote {
         Some(q) => {
@@ -1186,14 +1338,17 @@ fn file_item(
         }
         None => ()
       }
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=t.p.chip, id=open, opacity=thumb_shows(thumb), fn() {
+      if wide_on.val {
+        c.cursor(open, Hand)
+      }
+      c.box(w=Px(w), h=Px(h), radius=file_corner(), clip=true, bg=if wide_on.val { t.p.neutral_bg } else { t.p.chip }, id=open, opacity=thumb_shows(thumb), fn() {
         if key != "" && key != "!" {
           c.image(
             key,
             w=Px(w),
             h=Px(h),
             fit=if letterbox { FitContain } else { FitCover },
-            radius=10.0,
+            radius=file_corner(),
             bg=0L,
             fade=sent is None,
           )
@@ -1221,7 +1376,7 @@ fn file_item(
       let h = bh * w / bw
       // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
-      note_thumb(c, thumb, open, 10.0, letterbox~)
+      note_thumb(c, thumb, open, file_corner(), letterbox~)
       // the frame the viewer was left at, once it has been closed back into here; else its first as the station makes
       // it (ChatFiles.kt ChatVideo: the station's poster), or as drawn here where the station made none and it is
       // small; else the black alone
@@ -1233,7 +1388,7 @@ fn file_item(
             k => k
           }
       }
-      c.box(w=Px(w), h=Px(h), radius=10.0, clip=true, bg=0x000000FFL, id=open, opacity=thumb_shows(thumb), fn() {
+      c.box(w=Px(w), h=Px(h), radius=file_corner(), clip=true, bg=0x000000FFL, id=open, opacity=thumb_shows(thumb), fn() {
         if still != "" && still != "!" {
           c.layer(fn() {
             c.image(
@@ -1241,7 +1396,7 @@ fn file_item(
               w=Px(w),
               h=Px(h),
               fit=if letterbox { FitContain } else { FitCover },
-              radius=10.0,
+              radius=file_corner(),
               bg=0L,
             )
             |> ignore
@@ -1273,6 +1428,10 @@ fn file_item(
 ///|
 /// A file as a card (ChatFiles.kt FileCard): its kind's mark, its name, its size, on the neutral ground.
 fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
+  if wide_on.val {
+    file_card_wide(c, a, w, id)
+    return
+  }
   let t = @sf.theme()
   c.box(
     dir=Row,
@@ -1296,6 +1455,153 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
   )
   |> ignore
 }
+
+///|
+/// A file as a card in the wide frame (Chat.tsx FileCard, Chat.css.ts fileCard): its sheet (file_sheet), its name (13,
+/// what is cut its middle, never its extension) over its size (11, grey), 236 wide at most, 8 by 10 in and 7 at the
+/// sheet's side, rounded as the sheet stands in (13), on the neutral ground; under the pointer the pointer's, its path
+/// said (the web's Tip).
+fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int) -> Unit {
+  if id != 0 {
+    c.cursor(id, Hand)
+    wide_tip(c, "file-card/" + a.path, id, if a.path != "" { a.path } else { a.name })
+  }
+  let hot = id != 0 && c.hovered(id)
+  c.box(style=if hot { file_card_hot } else { file_card_box }, w=Px(w), radius=message_file_corner, id~, fn() {
+    file_sheet(c, a.name)
+    c.box(style=file_card_words, fn() {
+      file_name_line(c, a.name)
+      c.text(file_size(a.size), style=file_card_meta) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A message's pictures' corner: 10 (ChatFiles.kt), the wide screen's as its file cards' (message_file_corner).
+fn file_corner() -> Double {
+  if wide_on.val {
+    message_file_corner
+  } else {
+    10.0
+  }
+}
+
+///|
+/// What a message's file card, its pictures and its pasted text are rounded (Chat.css.ts MESSAGE_FILE_CORNER: the
+/// sheet's room 9.75 and its corner 3.25).
+let message_file_corner : Double = 13.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_box : @ui.Style = @ui.style(
+  row=true,
+  pl=@sf.file_sheet_in,
+  pr=S2_5,
+  py=S2,
+  gap=S2_5,
+  bg=Neutral,
+  align=ACenter,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_hot : @ui.Style = file_card_box.then(@ui.style(bg=Hover))
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_words : @ui.Style = @ui.style(w=Grow(1.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_meta : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, leading=L4, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_name_row : @ui.Style = @ui.style(row=true, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_name_stem : @ui.Style = @ui.style(w=Grow(1.0))
+
+///|
+/// A file's name on one line, what is cut short the middle of it, never its extension (Chat.tsx FileName: an extension
+/// of 7 at most, the dot with it).
+fn file_name_line(c : @ui.Ctx, name : String) -> Unit {
+  let (stem, ext) = match name.rev_find(".") {
+    Some(i) if i > 0 && name.length() - i <= 8 => (name.view(end_offset=i).to_string(), name.view(start_offset=i).to_string())
+    _ => (name, "")
+  }
+  c.box(style=file_name_row, fn() {
+    c.box(style=file_name_stem, fn() { c.text(stem, style=file_card_name) |> ignore }) |> ignore
+    if ext != "" {
+      c.text(ext, style=file_card_name) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// What a file is, at a glance (Chat.tsx FileTile): a sheet 30 by 36, its top corner folded, drawn in the muted ink
+/// 1.5 wide, its extension on it in the text's ink (six letters at most, upper case), or two lines where it has none.
+fn file_sheet(c : @ui.Ctx, name : String) -> Unit {
+  let t = @sf.theme()
+  let dot = name.rev_find(".")
+  let ext = match dot {
+    Some(i) if i > 0 && name.length() - i <= 6 => name.view(start_offset=i + 1).to_string().to_upper()
+    _ => ""
+  }
+  let lines = if ext == "" { file_sheet_lines } else { "" }
+  let shapes = [
+    @ui.shape_of(@pixels.svg_path(file_sheet_outline + file_sheet_fold + lines, c.scale), stroke=t.p.muted, width=1.5),
+  ]
+  c.box(style=file_sheet_box, fn() {
+    c.shapes(shapes, w=Px(file_sheet_side.0), h=Px(file_sheet_side.1), name="file-sheet") |> ignore
+    if ext != "" {
+      // on the sheet's lower part, its middle at 14.5 (FileTile's <text x=14.5 y=27>), .62 of the card's 14
+      c.layer(fn() {
+        c.box(style=file_sheet_ext_room, fn() {
+          c.text(ext, size=file_sheet_ext_size, weight=600, color=t.p.text, wrap=false) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The sheet's outline, its fold, and its lines where it has no extension (FileTile's paths, in its 30 by 36).
+let file_sheet_outline : String = "M6 1.75H19L26.25 9V31Q26.25 34.25 23 34.25H6Q2.75 34.25 2.75 31V5Q2.75 1.75 6 1.75Z"
+
+///|
+let file_sheet_fold : String = "M19 1.75V6.5Q19 9 21.5 9H26.25"
+
+///|
+let file_sheet_lines : String = "M8.5 19H20.5M8.5 23.5H17"
+
+///|
+/// The sheet's box (FileTile's 30 by 36).
+let file_sheet_side : (Double, Double) = (30.0, 36.0)
+
+///|
+/// The extension's size on the sheet (.62 of the message's 14).
+let file_sheet_ext_size : Double = 14.0 * 0.62
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_sheet_box : @ui.Style = @ui.style(w=@sf.file_sheet_w, h=@sf.file_sheet_h)
+
+///|
+/// The extension's room: the sheet's width, its words' baseline 27 down (FileTile's <text y=27>).
+// kept across runs: a value (no field of it changes)
+let file_sheet_ext_room : @ui.Style = @ui.style(w=Full, h=Full, pt=S4_5, align=ACenter)
 
 ///|
 /// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
@@ -1327,8 +1633,9 @@ fn decision_under(
   asked_at? : Double = -1.0,
 ) -> Unit {
   let k = ink()
+  let (quiet_size, quiet_line) = quiet_type()
   let quiet = fn(words : String) {
-    c.box(pt=2.0, fn() { c.text(words, size=13.0, color=k.subtle, line=19.0) |> ignore })
+    c.box(pt=2.0, fn() { c.text(words, size=quiet_size, color=k.subtle, line=quiet_line) |> ignore })
     |> ignore
   }
   match m.card {
@@ -1414,7 +1721,7 @@ fn decision_under(
           Some({ assignee_text: Some(a), .. }) => quiet(a)
           _ => ()
         }
-        c.box(style=options_room, fn() {
+        c.box(style=if wide_on.val { options_room_wide } else { options_room }, fn() {
           match m.card {
             // an agent's request for a vault item: approved here (Vault.kt), not answered in the chat
             Some({ vault, assignee, .. }) if vault != "" => {
@@ -1488,7 +1795,67 @@ let options_row_pad : Double = 7.0
 let options_room : @ui.Style = @ui.style(w=Full, pt=S1_5)
 
 ///|
+/// In the wide frame 8 over them (Decisions.css.ts options: margin-top 8).
+// kept across runs: a value (no field of it changes)
+let options_room_wide : @ui.Style = @ui.style(w=Full, pt=S2, align=AStart)
+
+///|
 let option_disc : Double = 22.0
+
+///|
+/// The quiet line over or in place of a post's options (who decides, how it went): 13 on 19 (Decisions.kt); the wide
+/// frame's 12 on 18 (Decisions.css.ts settledLine).
+fn quiet_type() -> (Double, Double) {
+  if wide_on.val {
+    (12.0, 18.0)
+  } else {
+    (13.0, 19.0)
+  }
+}
+
+///|
+/// An option's measures: its number's disc and how far in it stands (7 from the row's top and side, 22 across); its
+/// label's size and line, its detail's. The wide frame's as the web's (Decisions.css.ts choice: a 20 disc 8 in, 13 on
+/// 20 over 12 on 18).
+priv struct OptionType {
+  disc : Double
+  pad_in : Double
+  label : Double
+  label_line : Double
+  detail : Double
+  detail_line : Double
+}
+
+///|
+fn option_type() -> OptionType {
+  if wide_on.val {
+    { disc: 20.0, pad_in: 8.0, label: 13.0, label_line: 20.0, detail: 12.0, detail_line: 18.0 }
+  } else {
+    { disc: option_disc, pad_in: options_row_pad, label: 15.0, label_line: 21.0, detail: 13.0, detail_line: 18.0 }
+  }
+}
+
+///|
+/// The card of options in the wide frame: as wide as what it says, 460 at least (Decisions.css.ts options); on a phone
+/// as wide as the message.
+let options_least_wide : Double = 460.0
+
+///|
+/// The card's width: as wide as its widest label or detail with its number and paddings, 460 at least, the column's at
+/// most (the web's `width: fit-content; min-width: min(100%, 460px)`); on a phone the message's.
+fn options_w(c : @ui.Ctx, options : Array[Choice], ot : OptionType) -> @ui.Size {
+  if !wide_on.val {
+    return Fill(1.0)
+  }
+  let mut words = 0.0
+  for o in options {
+    words = dmax(words, @ui.text_advance(o.label, size=ot.label, weight=500))
+    words = dmax(words, @ui.text_advance(o.detail, size=ot.detail, weight=400))
+  }
+  // (the card's 8 each side, the row's number in by 8 and 12 after it, the row's 12 at its end)
+  let room = c.width - 2.0 * row_side(c)
+  Px(dmin(room, dmax(options_least_wide, options_card_pad * 2.0 + ot.pad_in + ot.disc + 12.0 + words + 12.0)).ceil())
+}
 
 ///|
 let options_card_radius : Double = @sf.around(options_card_pad + options_row_pad, option_disc / 2.0)
@@ -1509,38 +1876,47 @@ fn decision_options(
   let t = @sf.theme()
   let free = enabled && busy is None
   let mut picked : Choice? = None
-  c.box(w=Fill(1.0), fn() {
-    c.box(w=Fill(1.0), radius=options_card_radius, bg=t.p.chip, pad=options_card_pad, fn() {
+  let ot = option_type()
+  let wide = wide_on.val
+  // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
+  c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
+    c.box(w=options_w(c, options, ot), radius=options_card_radius, bg=if wide { @sf.alpha(t.p.text, 0.05) } else { t.p.chip }, pad=options_card_pad, fn() {
       // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
         if c.clicked(id) && free {
           picked = Some(o)
         }
+        // under the pointer its row's ground, in the wide frame (Decisions.css.ts choice:hover)
+        if wide && free {
+          c.cursor(id, Hand)
+        }
+        let hot = wide && free && c.hovered(id)
         c.box(
           dir=Row,
           w=Fill(1.0),
-          pl=options_row_pad,
+          pl=ot.pad_in,
           pr=12.0,
-          pt=options_row_pad,
-          pb=options_row_pad,
+          pt=ot.pad_in,
+          pb=ot.pad_in,
           gap=12.0,
           align=AStart,
           radius=18.0,
+          bg=if hot { t.p.hover } else { 0L },
           opacity=if enabled || chosen == Some(o.label) { 1.0 } else { 0.5 },
           id~,
           fn() {
             c.box(
-              w=Px(option_disc),
-              h=Px(option_disc),
-              radius=option_disc / 2.0,
+              w=Px(ot.disc),
+              h=Px(ot.disc),
+              radius=ot.disc / 2.0,
               bg=if o.recommended { t.p.accent } else { @sf.alpha(t.p.text, 0.09) },
               align=ACenter,
               justify=JCenter,
               fn() {
                 let color = if o.recommended { 0xFFFFFFFFL } else { t.p.muted }
                 if i < 6 {
-                  @sf.icon(c, "option-\{i + 1}", size=22.0, color~) |> ignore
+                  @sf.icon(c, "option-\{i + 1}", size=ot.disc, color~) |> ignore
                 } else {
                   c.text("\{i + 1}", size=12.0, weight=600, color~, wrap=false) |> ignore
                 }
@@ -1548,14 +1924,14 @@ fn decision_options(
             )
             |> ignore
             c.box(w=Fill(1.0), fn() {
-              c.text(o.label, size=15.0, weight=500, color=t.p.text, line=21.0) |> ignore
+              c.text(o.label, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
               if o.detail != "" {
-                c.text(o.detail, size=13.0, color=t.p.muted, line=18.0) |> ignore
+                c.text(o.detail, size=ot.detail, color=t.p.muted, line=ot.detail_line) |> ignore
               }
             })
             |> ignore
             if busy == Some(o.label) {
-              c.box(h=Px(21.0), justify=JCenter, fn() { @sf.spinner(c, size=12.0) |> ignore })
+              c.box(h=Px(ot.label_line), justify=JCenter, fn() { @sf.spinner(c, size=12.0) |> ignore })
               |> ignore
             }
             // SettingParts.kt options: clickable while free, its ripple in the ink (ripple(color = C.ink))
@@ -1584,7 +1960,10 @@ fn login_ended_line(c : @ui.Ctx, words : String, failed : Bool) -> Unit {
 /// Slack's mark on its corner and a name as messages have them, then where it went or came from over its words
 /// beside a bar.
 fn sent_elsewhere(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) -> Unit {
-  ignore(here)
+  if wide_on.val {
+    sent_elsewhere_wide(c, src, here, s)
+    return
+  }
   let t = @sf.theme()
   let k = ink()
   c.box(w=Fill(1.0), fn() {
@@ -1717,6 +2096,152 @@ fn sent_elsewhere(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) -> Unit
 }
 
 ///|
+/// What was said elsewhere in the wide frame, as the web's (Chat.tsx SentElsewhere, an OthersMessage): its picture out
+/// in the margin with Slack's (or Feishu's) mark on its corner, then its name, where it went or came from (an arrow in
+/// the accent, 发送到 / 来自 in grey, the place on the neutral ground: a link when there is one) and its time over its
+/// words, all of them, as Markdown.
+fn sent_elsewhere_wide(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) -> Unit {
+  let t = @sf.theme()
+  // an agent of the chat's name opens its history beside the chat (the web's chatPage.agent)
+  let mine = !s.received && s.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == s.by.agent })
+  let name = c.id("elsewhere-name/" + s.key)
+  if mine {
+    c.cursor(name, Hand)
+    if c.clicked(name) {
+      side_toggle(ref_of(here), "history/" + s.by.agent)
+    }
+  }
+  let place_link = match s.place {
+    Some(p) => p.url
+    None => ""
+  }
+  let place = if place_link != "" { c.id("elsewhere-place/" + s.key) } else { 0 }
+  if place != 0 {
+    c.cursor(place, Hand)
+    if c.clicked(place) {
+      open_link(place_link)
+    }
+  }
+  c.box(style=elsewhere_row, fn() {
+    c.box(style=elsewhere_main, fn() {
+      c.box(style=elsewhere_head, fn() {
+        c.box(style=elsewhere_name, id=if mine { name } else { 0 }, fn() {
+          c.text(s.by.name, style=if mine && c.hovered(name) { wide_name_hot } else { wide_name }) |> ignore
+        })
+        |> ignore
+        c.box(style=elsewhere_route, fn() {
+          @sf.icon(c, if s.received { "received" } else { "send" }, size=14.0, color=t.p.accent) |> ignore
+          let words = tr(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string()
+          c.text(words, style=elsewhere_words) |> ignore
+          c.box(style=if place != 0 && c.hovered(place) { elsewhere_place_hot } else { elsewhere_place }, id=place, fn() {
+            let (mark, said) = match s.place {
+              Some(p) => (p.surface, p.name)
+              None => ("slack", "Slack")
+            }
+            if mark == "ember" || mark == "stillfail" {
+              @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 12.0) |> ignore
+            } else {
+              @sf.slack_mark(c, 12.0) |> ignore
+            }
+            c.text(said, style=elsewhere_place_words) |> ignore
+          })
+          |> ignore
+          if s.failed {
+            c.box(style=elsewhere_failed, fn() { c.text(tr("android-chat.history.send.failed"), style=elsewhere_failed_words) |> ignore }) |> ignore
+          }
+        })
+        |> ignore
+        message_time(c, "s:" + s.key, s.time)
+      })
+      |> ignore
+      @sf.markdown(c, s.text, key="elsewhere/" + s.key, size=web_body, ink=t.p.text, on_link=fn(h) { open_link(h) }) |> ignore
+    })
+    |> ignore
+    c.layer(fn() {
+      let av = said_avatar(c, fn() {
+        if s.received {
+          avatar(c, src, s.by.name, s.by.name, "", 18.0)
+        } else {
+          agent_avatar(c, s.by.maker, s.by.runtime)
+        }
+        // the place's mark on its corner, 6 past it (Chat.css.ts msgAvatarSlack)
+        c.layer(fn() {
+          c.box(style=elsewhere_mark, tx=10.0, ty=10.0, fn() { @sf.slack_mark(c, 9.0) |> ignore }) |> ignore
+        })
+        |> ignore
+      })
+      c.stick(av, wide_avatar_held)
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let elsewhere_row : @ui.Style = @ui.style(w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let elsewhere_main : @ui.Style = @ui.style(w=Full, gap=S1)
+
+///|
+/// Its head (Chat.css.ts msgHead): 24 high at least, 6 apart; the route takes what room is left, its place cut short
+/// first (msgRoute).
+// kept across runs: a value (no field of it changes)
+let elsewhere_head : @ui.Style = @ui.style(row=true, w=Full, min_h=S6, gap=S1_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let elsewhere_name : @ui.Style = @ui.style(max_w=@sf.name_max)
+
+///|
+// kept across runs: a value (no field of it changes)
+let elsewhere_route : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let elsewhere_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// The place (later.css.ts hPlace): its mark and its name, 12 in 500, 1 by 6 in, 6 round on the neutral ground; a
+/// link's the pointer's ground under the pointer.
+// kept across runs: a value (no field of it changes)
+let elsewhere_place : @ui.Style = @ui.style(row=true, px=S1_5, py=SPx, gap=S1, radius=Md, bg=Neutral, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let elsewhere_place_hot : @ui.Style = elsewhere_place.then(@ui.style(bg=Hover))
+
+///|
+// kept across runs: a value (no field of it changes)
+let elsewhere_place_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, leading=L5, wrap=false)
+
+///|
+/// Sending it failed: a red pill (the web's Pill tone red).
+// kept across runs: a value (no field of it changes)
+let elsewhere_failed : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Md, bg=DangerBg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let elsewhere_failed_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Danger, wrap=false)
+
+///|
+/// The place's mark on the picture's corner: 14 round, 6 past its right and foot edges, on the list's ground, a line
+/// round it (Chat.css.ts msgAvatarSlack).
+// kept across runs: a value (no field of it changes)
+let elsewhere_mark : @ui.Style = @ui.style(
+  w=S3_5,
+  h=S3_5,
+  radius=Full,
+  bg=Bg,
+  border=B1,
+  border_color=Line,
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
 /// A message sent from here that the chat does not show yet (Chat.kt Out): on its way, or failed (its words faded,
 /// 未发送 in red).
 fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
@@ -1771,7 +2296,7 @@ fn outgoing(c : @ui.Ctx, src : Source, here : Here, o : Outgoing) -> Unit {
       c.box(dir=Row, pt=4.0, gap=2.0, align=ACenter, fn() {
         c.box(dir=Row, pr=6.0, gap=4.0, align=ACenter, id=why, fn() {
           @sf.icon(c, "info", size=12.0, color=t.p.red) |> ignore
-          c.text(tr("android-chat.chat.unsent"), size=13.0, color=t.p.red, wrap=false) |> ignore
+          c.text(tr("android-chat.chat.unsent"), size=unsent_size(), color=t.p.red, wrap=false) |> ignore
         })
         |> ignore
         unsent_button(c, src, here, o, "chat.retry", "retry", tr("common.retry"), !v.offline && !v.archived && !discarding, retrying)
@@ -1840,6 +2365,12 @@ fn unsent_button(
       })
     }
   }
+  // (in the wide frame the pointer's ground and the text's ink under it: Chat.css.ts msgUnsentBtn)
+  let hot = wide_on.val && enabled && !busy && c.hovered(id)
+  if wide_on.val && enabled && !busy {
+    c.cursor(id, Hand)
+  }
+  let ink = if hot { k.text } else { k.muted }
   c.box(
     dir=Row,
     padx=7.0,
@@ -1847,15 +2378,16 @@ fn unsent_button(
     gap=4.0,
     radius=7.0,
     align=ACenter,
+    bg=if hot { @sf.theme().p.hover } else { 0L },
     opacity=if enabled { 1.0 } else { 0.5 },
     id~,
     fn() {
       if busy {
         @sf.spinner(c, size=12.0) |> ignore
       } else {
-        @sf.icon(c, icon, size=12.0, color=k.muted) |> ignore
+        @sf.icon(c, icon, size=12.0, color=ink) |> ignore
       }
-      c.text(label, size=13.0, color=k.muted, wrap=false) |> ignore
+      c.text(label, size=unsent_size(), color=ink, wrap=false) |> ignore
       // Chat.kt: clip(Smooth(7)).clickable (not while busy)
       if enabled && !busy {
         @motion.ripple(c, id, 7.0)
@@ -1863,6 +2395,16 @@ fn unsent_button(
     },
   )
   |> ignore
+}
+
+///|
+/// What is said under a message that did not go: 13 (Chat.kt); the web's 12 (Chat.css.ts msgUnsent).
+fn unsent_size() -> Double {
+  if wide_on.val {
+    12.0
+  } else {
+    13.0
+  }
 }
 
 ///|
@@ -1941,7 +2483,7 @@ fn now_words(c : @ui.Ctx, row : String, said : (String, String), color : Int64) 
   let p = swap.get()
   // one line's room: the words going laid out under the new ones and drawn over them
   c.box(style=now_room, fn() {
-    let said = fn(words : String) { c.text(words, style=now_said, color~) }
+    let said = fn(words : String) { c.text(words, style=if wide_on.val { now_said_wide } else { now_said }, color~) }
     let cur = said(st.words)
     if p < 1.0 {
       c.look(cur, @ui.look(alpha=p, dy=now_line / 4.0 * (1.0 - p)))
@@ -1960,6 +2502,11 @@ let now_room : @ui.Style = @ui.style(h=Fixed(now_line), clip=true)
 /// What it does now: 15, on one line.
 // kept across runs: a value (no field of it changes)
 let now_said : @ui.TextStyle = @ui.text_style(size=Lg, wrap=false)
+
+///|
+/// The wide screen's: 13 (Chat.css.ts activityLine).
+// kept across runs: a value (no field of it changes)
+let now_said_wide : @ui.TextStyle = @ui.text_style(size=Sm, wrap=false)
 
 ///|
 /// Its line's height (Lg's): the words come and go a quarter of it.
@@ -2022,18 +2569,31 @@ fn activity(
         None => ""
       }
   }
-  // tapped, its execution history (History.kt), its press drawn round it
+  // tapped, its execution history (History.kt), its press drawn round it; in the wide frame beside the chat, pressed
+  // again in front closed (the web's chatPage.history), its words the text's under the pointer
   let id = c.id("activity/" + a.key)
+  let wide = wide_on.val
   if c.clicked(id) {
-    app.nav.push(History(ref_of(here), a.key, None))
+    if wide {
+      side_toggle(ref_of(here), "history/" + a.key)
+    } else {
+      app.nav.push(History(ref_of(here), a.key, None))
+    }
   }
+  if wide {
+    c.cursor(id, Hand)
+  }
+  let words_ink = if wide && c.hovered(id) { k.text } else { k.muted }
+  // one of several agents: stopped alone from its row, under the pointer (Chat.tsx Activity `stoppable`)
+  let row = c.id("activity-row/" + a.key)
+  c.box(dir=Row, w=Fill(1.0), align=ACenter, id=row, fn() {
   c.box(
     dir=Row,
-    w=Fill(1.0),
-    gap=5.0,
+    gap=activity_gap(),
     align=ACenter,
     radius=6.0,
     bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.1) } else { 0L },
+    tx=activity_out(),
     id~,
     fn() {
     let face = c.box(w=Px(24.0), h=Px(24.0), tx=-ring_room, align=ACenter, justify=JCenter, fn() {
@@ -2056,9 +2616,10 @@ fn activity(
     let cut = tail < 1.0 && natural > 0.0
     let tb = c.box(dir=Row, max_w=if cut { natural * tail } else { 1.0e9 }, clip=cut, fn() {
       let inner = c.box(dir=Row, fn() {
-        now_words(c, ek + "\u{1}" + a.key, said, k.muted)
+        now_words(c, ek + "\u{1}" + a.key, said, words_ink)
         if clock != "" {
-          c.box(pl=3.0, fn() { c.text(clock, size=15.0, color=k.subtle, wrap=false) |> ignore })
+          let (gap, size) = clock_type()
+          c.box(pl=gap, fn() { c.text(clock, size~, color=k.subtle, wrap=false) |> ignore })
           |> ignore
         }
       })
@@ -2072,8 +2633,85 @@ fn activity(
     },
   )
   |> ignore
+  if wide && here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id)) {
+    activity_stop(c, src, here, a)
+  }
+  })
+  |> ignore
   ignore(first)
 }
+
+///|
+/// Where an agent at work's line stands: its picture where a message's is, over the head's start; in the wide frame out
+/// in the margin with them (Chat.css.ts activityLine: 35 out with its 6 of padding), the words 3 before the column's,
+/// 8 after the picture (its 24 laid, drawn 3 before).
+fn activity_out() -> Double {
+  if wide_on.val {
+    -wide_avatar_out
+  } else {
+    0.0
+  }
+}
+
+///|
+fn activity_gap() -> Double {
+  if wide_on.val {
+    2.0
+  } else {
+    5.0
+  }
+}
+
+///|
+/// How long its turn has run, after what it does: 3 after it in 15 (Chat.kt), the wide screen's 8 after in 13
+/// (Chat.css.ts activityTail, activityElapsed).
+fn clock_type() -> (Double, Double) {
+  if wide_on.val {
+    (8.0, 13.0)
+  } else {
+    (3.0, 15.0)
+  }
+}
+
+///|
+/// Stopping one agent of several from its line (Chat.tsx Activity's stop): a 22 square, 6 round, the stop's mark in
+/// grey, the pointer's ground and the text's ink under the pointer; its tip says whose.
+fn activity_stop(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
+  let key = "stop/" + here.station + "/" + a.key
+  let busy = doing(key)
+  let id = if busy { 0 } else { c.id("activity-stop/" + a.key) }
+  if id != 0 && c.clicked(id) {
+    act(
+      src,
+      tr("android-chat.agent.stop"),
+      key,
+      "session.stop",
+      { "station": Json::string(here.station), "key": Json::string(a.key) },
+      done=tr("android-chat.history.stopped"),
+    )
+  }
+  if id != 0 {
+    c.cursor(id, Hand)
+    wide_tip(c, "activity-stop/" + a.key, id, fill("web-main.activity.stop", [("who", a.who)]))
+  }
+  let hot = id != 0 && c.hovered(id)
+  c.box(style=if hot { activity_stop_hot } else { activity_stop_box }, id~, fn() {
+    if busy {
+      @sf.spinner(c, size=12.0) |> ignore
+    } else {
+      @sf.icon(c, "stop", size=12.0, color=if hot { @sf.theme().p.text } else { @sf.theme().p.muted }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let activity_stop_box : @ui.Style = @ui.style(w=@sf.small_button, h=@sf.small_button, radius=Md, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let activity_stop_hot : @ui.Style = activity_stop_box.then(@ui.style(bg=Hover))
 
 ///|
 /// How far an activity's ring reaches round its avatar (Chat.kt: the messages' 18dp avatar, its ring 3dp round it).

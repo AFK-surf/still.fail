@@ -641,3 +641,41 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
     },
   )
 }
+
+///|
+/// A station's files from its 文件 tab (wide_files_tab.mbt: 添加到消息, or dragged onto the chat) into draft `key`, as
+/// the web's droppedFrom: each named by its path, or as a file where the chat says so (a folder only named); what is
+/// already in it not twice.
+fn refs_put(src : Source, key : String, items : Array[FDragged]) -> Unit {
+  if items.is_empty() {
+    return
+  }
+  let have = refs_of(key)
+  let as_files = drops_as_files(src, key)
+  for i in items {
+    if have.iter().any(fn(x) { x.station == i.station && x.path == i.abs }) {
+      continue
+    }
+    let name = if i.station_name != "" { i.station_name } else { station_name_by(src, i.station) }
+    let r = draft_ref(i.station, name, i.root, i.path, i.name, i.dir, size=i.size)
+    have.push({ ..r, mode: if as_files && !i.dir { "file" } else { "path" } })
+  }
+  draft_refs[key] = have
+}
+
+///|
+/// A station's name by its address (`<workspace>/<station>`), as the workspace's stations say it ("" not known).
+fn station_name_by(src : Source, station : String) -> String {
+  let (list, _) = dv_stations(src, workspace_of(station))
+  match list.unwrap_or([]).iter().find_first(fn(s) { s.station == station }) {
+    Some(s) => s.name
+    None => ""
+  }
+}
+
+///|
+/// Whether any of the workspace's stations lends its files (ChatSide.tsx useStationDrive): then a chat has its 文件 tab.
+fn drive_in(src : Source, ws : String) -> Bool {
+  let (list, _) = dv_stations(src, ws)
+  list.unwrap_or([]).iter().any(fn(s) { s.drive })
+}

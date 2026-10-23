@@ -115,10 +115,11 @@ fn files_in_corner(v : ChatView?, d : Draft) -> Bool {
 ///|
 /// The capsule's top inset (capsule_top), nothing kept.
 fn capsule_top_of(v : ChatView?, d : Draft) -> Double {
+  let inset = ct().inset
   if files_in_corner(v, d) {
-    composer_inset - picture_remove_out
+    dmax(0.0, inset - picture_remove_out)
   } else {
-    composer_inset
+    inset
   }
 }
 
@@ -126,6 +127,89 @@ fn capsule_top_of(v : ChatView?, d : Draft) -> Double {
 /// Where ＋'s ink starts in its 36 button (the 18 icon centred, its line from 4.5 of 24 less half its 1.75 stroke):
 /// the opened field's words start there.
 let plus_ink : Double = 9.0 + 18.0 * ((4.5 - 1.75 / 2.0) / 24.0)
+
+///|
+/// The composer's measures: the phone's (Composer.kt, Glass.kt), or in the wide frame the web's (composer.css.ts,
+/// Chat.css.ts composerText, dock.css.ts): its capsule's inset and, opened, its content's own padding more (the web's 6
+/// as a capsule, 12 as a box); ＋ and send across and their icons; the words' size and line, the field's padding shut
+/// and opened; the gap between the field and the buttons under it, and between what waits over it; the opened box's
+/// corner (shut, a pill); the field's most lines; the room over and under it on the page, and the least room the list
+/// keeps for it (the web's one opened line: 14 × 1.5 + 102).
+priv struct ComposerType {
+  inset : Double
+  open_pad : Double
+  button : Double
+  plus_icon : Double
+  send_icon : Double
+  font : Double
+  line : Double
+  shut : (Double, Double, Double, Double)
+  opened : (Double, Double, Double, Double)
+  open_gap : Double
+  gap : Double
+  corner : Double
+  over : Double
+  under : Double
+  least : Double
+}
+
+///|
+fn ct() -> ComposerType {
+  if wide_on.val {
+    {
+      inset: 6.0,
+      open_pad: 6.0,
+      button: 32.0,
+      plus_icon: 18.0,
+      send_icon: 16.0,
+      font: 14.0,
+      line: 21.0,
+      // (left, right, top, bottom)
+      shut: (0.0, 8.0, 5.0, 5.0),
+      opened: (8.0, 8.0, 8.0, 0.0),
+      open_gap: 10.0,
+      gap: 10.0,
+      corner: 28.0,
+      over: 12.0,
+      under: 16.0,
+      least: 14.0 * 1.5 + 102.0,
+    }
+  } else {
+    {
+      inset: composer_inset,
+      open_pad: 0.0,
+      button: 36.0,
+      plus_icon: 18.0,
+      send_icon: 18.0,
+      font: send_size,
+      line: send_line,
+      shut: (0.0, 14.0, 7.0, 7.0),
+      opened: (plus_ink, 14.0, 7.0, 7.0),
+      open_gap: 4.0,
+      gap: 8.0,
+      corner: composer_corner,
+      over: 8.0,
+      under: 10.0,
+      least: composer_room,
+    }
+  }
+}
+
+///|
+/// How many lines the field grows to before it scrolls: six (Composer.kt); in the wide frame up to 480 high or 40% of
+/// the window (Chat.tsx useComposerText).
+fn field_lines(c : @ui.Ctx) -> Int {
+  if wide_on.val {
+    let n = (dmin(480.0, c.height * 0.4) / ct().line).to_int()
+    if n < 1 {
+      1
+    } else {
+      n
+    }
+  } else {
+    6
+  }
+}
 
 ///|
 /// Pasted at once, this many characters or more go as a file; a file of pasted words this long at most can be put
@@ -460,6 +544,100 @@ fn draft_named(d : Draft, v : Json) -> Unit {
 ///|
 /// The capsule changes shape over this long (Composer.kt Morph).
 let composer_morph_ms : Double = 260.0
+
+///|
+/// Laid out for another page (a new chat become its chat, in the wide frame: dock.tsx), the composer goes from where
+/// and how big it was to where and how big it is now, over this long (Ease.Out): one composer changing, its ground
+/// from the shape it had to this one and what it holds from where it showed to its places (morph.ts morph).
+let composer_page_ms : Double = 340.0
+
+///|
+/// The composer's move to another page: the draft whose composer goes (the chat's), from where (x, y, w, h).
+let composer_page_from : Ref[(String, (Double, Double, Double, Double))?] = { val: None }
+
+///|
+/// The page under the composer changes from now (a new chat become chat `chat`'s, in the wide frame; "*": another
+/// page, whose composer is the next drawn): from where its ground was as the frame before laid it out.
+fn composer_page_starts(c : @ui.Ctx, chat : String) -> Unit {
+  composer_page_from.val = None
+  if @ui.reduced_motion() {
+    return
+  }
+  match @motion.measured_rect(c, "composer/ground") {
+    Some(rect) => {
+      composer_page_from.val = Some((chat, rect))
+      let a = @motion.anim(c, "composer/page", 1.0, global=true)
+      a.snap(0.0)
+      a.animate(1.0, @motion.tween(composer_page_ms, ease=Linear))
+    }
+    None => ()
+  }
+}
+
+///|
+/// The composer of chat `chat` on its way from another page's place: where it was, and how far it has come (0 … 1,
+/// Ease.Out); None once there.
+fn composer_page(c : @ui.Ctx, chat : String) -> ((Double, Double, Double, Double), Double)? {
+  match composer_page_from.val {
+    // (another page's, said before it was known whose: the first drawn there takes it)
+    Some(("*", from)) => {
+      composer_page_from.val = Some((chat, from))
+      composer_page(c, chat)
+    }
+    Some((key, from)) if key == chat => {
+      let a = @motion.anim(c, "composer/page", 1.0, global=true)
+      if a.moving() {
+        Some((from, @motion.Out.at(a.get())))
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// The capsule (node `i`, box `cap`) on its way from another page's place (`from`: its ground there) to its own, `p` of
+/// the way: drawn with its bottom left edge from where the other's ground's was to where it is laid out (what it holds stands on that edge,
+/// each part going on from where it showed: their layout motion), its ground from that shape to its own (page_ground).
+fn page_carry(c : @ui.Ctx, i : Int, cap : Int, from : (Double, Double, Double, Double), p : Double) -> Unit {
+  let (fx, fy, _, fh) = from
+  match c.laid_rect(cap) {
+    Some((x, y, _, h)) => c.look(i, @ui.look(dx=(fx - x) * (1.0 - p), dy=(fy + fh - y - h) * (1.0 - p)))
+    // (not laid out yet: built again once it is)
+    None => ()
+  }
+}
+
+///|
+/// The capsule's ground on its way from another page's place (`from`) to its own (box `cap` as this frame lays it out,
+/// `to_h` high when it is not all of it), `p` of the way, on the capsule's bottom left edge (page_carry): its size, and
+/// its corner (a pill's while it is one line high, the box's past that, as in the wide frame).
+fn page_ground(c : @ui.Ctx, cap : Int, from : (Double, Double, Double, Double), p : Double, to_h : Double?) -> Unit {
+  let (_, _, fw, fh) = from
+  match c.laid_rect(cap) {
+    Some((_, _, w, laid_h)) => {
+      let h = to_h.unwrap_or(laid_h)
+      let corner = ct().corner
+      let r0 = dmin(corner, fh / 2.0)
+      let r1 = dmin(corner, h / 2.0)
+      c.box(style=page_ground_room, fn() {
+        c.box(style=@ui.style(w=Fixed(fw + (w - fw) * p), h=Fixed(fh + (h - fh) * p)), fn() {
+          floating_ground(c, Fill(1.0), corner=r0 + (r1 - r0) * p) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+    // (not laid out yet: built again once it is)
+    None => ()
+  }
+}
+
+///|
+/// What the ground stands in on its way: all of the capsule, from its bottom edge.
+// kept across runs: a value (no field of it changes)
+let page_ground_room : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd)
 
 ///|
 /// Words sent from chat `chat`'s composer hold its room as tall as when they went (`room`) for `ms` from the next frame,
@@ -1156,6 +1334,10 @@ fn composer_morph(c : @ui.Ctx, chat : String, natural : Double?) -> Double? {
     Some(h) => {
       // (one motion wherever it is asked from: the list's rows ask in scopes of their own)
       let a = @motion.anim(c, "composer/morph", h, global=true)
+      // (laid out for another page, it goes there on the page's move, not this: composer_page)
+      if composer_page(c, chat) is Some(_) {
+        a.snap(h)
+      }
       a.follow(h, @motion.tween(composer_morph_ms, ease=Out))
       let m = a.get()
       let (room, share) = composer_held(c, chat)
@@ -1176,7 +1358,7 @@ fn composer_room_for(c : @ui.Ctx, key : String, v : ChatView?) -> Double {
     // (no draft yet: the composer not built; the room it leaves at least)
     None => 0.0
   }
-  dmax(composer_room, room)
+  dmax(ct().least, room)
 }
 
 ///|
@@ -1206,15 +1388,16 @@ fn composer_own_room(c : @ui.Ctx, key : String, v : ChatView?) -> Double {
 fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
   let natural = composer_natural(c)
   let top = capsule_top_of(v, d)
+  let k = ct()
   match (flight_of(d.key), natural, composer_morph(c, d.key, natural)) {
     // while words fly to their row, the list keeps the room the composer will have, so their place is where they
     // land (ChatHost.kt roomForList)
-    (Some(_), Some(h), _) => h + top + composer_inset + 8.0 + 10.0
+    (Some(_), Some(h), _) => h + top + k.inset + k.over + k.under
     // otherwise the room the capsule is drawn with (the list's rows going with it)
-    (None, _, Some(h)) => h + top + composer_inset + 8.0 + 10.0
+    (None, _, Some(h)) => h + top + k.inset + k.over + k.under
     _ =>
       match c.laid_size(cui.cap_id) {
-        Some((_, h)) => h + 8.0 + 10.0
+        Some((_, h)) => h + k.over + k.under
         None => 0.0
       }
   }
@@ -1423,6 +1606,8 @@ fn composer(
       }
     None => ()
   }
+  // what the 文件 tab's 添加到消息 put in for this chat (wide_files_tab.mbt), named by their paths or as files
+  refs_put(src, d.key, files_tab_take_sent(d.key))
   // files another app shared into this chat (share.mbt), up as ＋'s are
   // (taken once from where they wait: the files as they were shared, whichever build takes them)
   match shared_into.get(d.key) {
@@ -1456,23 +1641,43 @@ fn composer(
   let top = capsule_top(v, d)
   // `@` and a few letters: the chats they find, over the capsule (chat_refs.mbt)
   chat_ref_menu(c, src, d, r.station, if fresh is Some(_) { "" } else { r.session }, field_key, locked)
-  c.box(w=Fill(1.0), pl=if beside { beside_recent } else { 10.0 }, pr=10.0, pt=8.0, pb=10.0, fn() {
-    c.box(w=Fill(1.0), pad=composer_inset, pt=top, id=cap, fn() {
-      // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller)
+  let k = ct()
+  // (its sides in the wide frame the composer's column's: wide_center)
+  let side = if wide_on.val { 0.0 } else { 10.0 }
+  // laid out for another page (a new chat become its chat, in the wide frame), from where it was (composer_page)
+  let page = composer_page(c, d.key)
+  c.box(w=Fill(1.0), pl=if beside { beside_recent } else { side }, pr=side, pt=k.over, pb=k.under, fn() {
+    let capsule = c.box(w=Fill(1.0), pad=k.inset, pt=top, id=cap, fn() {
+      // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller); in the wide
+      // frame its corner a pill's while it is one line high, the opened box's past that (the web's: its corners go from
+      // capsule to box with its height)
+      let ground_h = match morph {
+        Some(h) => Some(h + top + k.inset)
+        None => composer_natural(c).map(fn(h) { h + top + k.inset })
+      }
+      let corner = match ground_h {
+        Some(h) if wide_on.val => dmin(k.corner, h / 2.0)
+        _ => k.corner
+      }
       let ground = c.layer(fn() {
-        c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
-          floating_ground(c, match morph {
-            Some(h) => Px(h + top + composer_inset)
-            None => Fill(1.0)
-          })
-          |> ignore
-        })
-        |> ignore
+        match page {
+          Some((from, p)) => page_ground(c, cap, from, p, ground_h)
+          None =>
+            c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
+              let g = floating_ground(c, match morph {
+                Some(h) => Px(h + top + k.inset)
+                None => Fill(1.0)
+              }, corner~)
+              // (where it was as its page changes: composer_page_starts)
+              @motion.measure(c, g, "composer/ground")
+            })
+            |> ignore
+        }
       })
       c.draw_only(ground)
       // (named to be measured, not to be pressed: a tap anywhere in the capsule that nothing in it takes is the capsule's,
       // which puts the caret in the field, ChatHost.kt's clickable { draft.focus++ })
-      content = c.box(w=Fill(1.0), gap=8.0, id=composer_content_id(c), taps=false, fn() {
+      content = c.box(w=Fill(1.0), gap=k.gap, pad=if expanded { k.open_pad } else { 0.0 }, id=composer_content_id(c), taps=false, fn() {
         match v {
           Some(v) => composer_notices(c, src, r, v, d.key)
           None => ()
@@ -1493,12 +1698,16 @@ fn composer(
       @motion.measure(c, content, "composer/content")
       @motion.scope(c, content, bottom=true)
     })
-    |> ignore
+    // on its way from another page's place, carried with what it holds
+    match page {
+      Some((from, p)) => page_carry(c, capsule, cap, from, p)
+      None => ()
+    }
   })
   |> ignore
   match morph {
     // growing: what is above the ground is not drawn yet
-    Some(h) => c.cut_to_bottom(content, h + composer_inset)
+    Some(h) => c.cut_to_bottom(content, h + k.inset)
     None => ()
   }
   keep_draft_soon(c, src, d)
@@ -1536,6 +1745,19 @@ fn composer(
 }
 
 ///|
+/// The system's file picker for draft `d` (the wide frame's ＋): what is picked comes in as the sheet's files do
+/// (cui.picking, taken in as the capsule is laid out).
+fn pick_files_now(c : @ui.Ctx, d : Draft) -> Unit {
+  match @ui.pick(Files, hold=true) {
+    Some(p) => {
+      cui.picking = Some(p)
+      cui.picking_for = d.key
+    }
+    None => say(c, tr("android-chat.composer.noFiles"))
+  }
+}
+
+///|
 /// The roomy composer's choices beside ＋ (the web's composer toolbar): 4 apart, on ＋'s line.
 // kept across runs: a value (no field of it changes)
 let composer_tools : @ui.Style = @ui.style(row=true, h=S9, gap=S1, align=ACenter)
@@ -1543,11 +1765,11 @@ let composer_tools : @ui.Style = @ui.style(row=true, h=S9, gap=S1, align=ACenter
 ///|
 /// What floats over the page in the composer's glass (Glass.kt floating, ComposerCorner): the capsule's ground, the
 /// `@` menu's (chat_refs.mbt). `h` tall.
-fn floating_ground(c : @ui.Ctx, h : @ui.Size) -> Int {
+fn floating_ground(c : @ui.Ctx, h : @ui.Size, corner? : Double = composer_corner) -> Int {
   c.box(
     w=Fill(1.0),
     h~,
-    radius=composer_corner,
+    radius=corner,
     glass=@sf.glass_floating(),
     shadow=@sf.floating.sigma,
     shadow_color=@sf.floating.color,
@@ -1680,9 +1902,20 @@ fn composer_bar(
   let ready = draft_ready(d, locked)
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
-  if c.clicked(plus) && !no_files && (v is Some(_) || fresh is Some(_)) {
-    cui.attach = true
-    c.blur()
+  // ＋ (or its keys, ⌘U): on a phone its sheet (the camera, the photos, the files); in the wide frame the system's file
+  // picker at once, as the web's file field (Chat.tsx ComposerTools)
+  let file_keys = wide_on.val &&
+    (match link_src.val {
+      Some(s) => @settings.action_pressed(c, (s.topic)("prefs", {}).value, "composer.file", in_field=true)
+      None => false
+    })
+  if (c.clicked(plus) || file_keys) && !no_files && (v is Some(_) || fresh is Some(_)) {
+    if wide_on.val {
+      pick_files_now(c, d)
+    } else {
+      cui.attach = true
+      c.blur()
+    }
   }
   // sent once what it refers to can be read in this workspace (outside.mbt send_sharing): at once when it refers to
   // nothing outside, else after the core is asked (and the sheet answered)
@@ -1704,19 +1937,38 @@ fn composer_bar(
   if c.clicked(send) {
     do_send()
   }
+  // (laid out for another page, on its move: composer_page)
+  let part_ms = if composer_page(c, d.key) is Some(_) { composer_page_ms } else { 260.0 }
   let part = fn(i : Int, name : String) {
-    @motion.layout(c, i, "composer/part/" + name, spec=@motion.tween(260.0, ease=Out), listed=false)
+    @motion.layout(c, i, "composer/part/" + name, spec=@motion.tween(part_ms, ease=Out), listed=false)
   }
+  let k = ct()
+  let wide = wide_on.val
+  // in the wide frame grey, its ground and the text's ink under the pointer, its tip with its keys (Chat.tsx
+  // ComposerTools, Chat.css.ts attachBtn)
+  if wide && !no_files {
+    c.cursor(plus, Hand)
+    wide_tip(c, "composer/plus", plus, tr("web-main.composer.attach"), action="composer.file")
+  }
+  let plus_hot = wide && !no_files && c.hovered(plus)
   let plus_button = fn() {
     let b = c.box(
-      w=Px(36.0),
-      h=Px(36.0),
-      radius=18.0,
+      w=Px(k.button),
+      h=Px(k.button),
+      radius=k.button / 2.0,
       align=ACenter,
       justify=JCenter,
+      bg=if plus_hot { t.p.hover } else { 0L },
       id=plus,
       fn() {
-        @sf.icon(c, "plus", size=18.0, color=if no_files { @sf.alpha(t.p.text, 0.35) } else { t.p.text })
+        let ink = if no_files {
+          @sf.alpha(t.p.text, 0.35)
+        } else if wide && !plus_hot {
+          t.p.muted
+        } else {
+          t.p.text
+        }
+        @sf.icon(c, "plus", size=k.plus_icon, color=ink)
         |> ignore
         // Composer.kt: clip(CircleShape).clickable (not when locked)
         if !no_files {
@@ -1731,16 +1983,27 @@ fn composer_bar(
     // not ready: the ink faint over the capsule's own ground, its arrow that ground (Composer.kt: 18% ink over
     // C.surface, the phone's canvas; the web's over --raised on a desktop's width)
     let ground = if t.narrow { t.p.canvas } else { t.p.raised }
+    // (in the wide frame its ink a step lighter under the pointer: Chat.css.ts sendBtn, the text at 82%)
+    let hot = wide && ready && c.hovered(send)
+    if wide && ready {
+      c.cursor(send, Hand)
+    }
     let b = c.box(
-      w=Px(36.0),
-      h=Px(36.0),
-      radius=18.0,
+      w=Px(k.button),
+      h=Px(k.button),
+      radius=k.button / 2.0,
       align=ACenter,
       justify=JCenter,
-      bg=if ready { t.p.text } else { @sf.over(ground, @sf.alpha(t.p.text, 0.18)) },
+      bg=if hot {
+        @sf.mix(t.p.text, 0.82, t.p.canvas)
+      } else if ready {
+        t.p.text
+      } else {
+        @sf.over(ground, @sf.alpha(t.p.text, 0.18))
+      },
       id=send,
       fn() {
-        @sf.icon(c, "arrow-up", size=18.0, color=if ready { t.p.bg } else { ground }) |> ignore
+        @sf.icon(c, "arrow-up", size=k.send_icon, color=if ready { t.p.bg } else { ground }) |> ignore
         // Composer.kt: clip(CircleShape).clickable(enabled = ready)
         if ready {
           @motion.ripple(c, send, 18.0)
@@ -1758,14 +2021,15 @@ fn composer_bar(
       fill("web-main.composer.pressToTypeCjk", [("key", tr("web-main.keymap.space"))])
     _ => tr("android-chat.chat.placeholder")
   }
+  let (fl, fr, ft, fb) = if expanded { k.opened } else { k.shut }
   let field = fn() {
     let f = c.box(
       w=Fill(1.0),
-      min_h=36.0,
-      pl=if expanded { plus_ink } else { 0.0 },
-      pr=14.0,
-      pt=7.0,
-      pb=7.0,
+      min_h=if wide { 0.0 } else { k.button },
+      pl=fl,
+      pr=fr,
+      pt=ft,
+      pb=fb,
       justify=JCenter,
       fn() {
         let hint = @motion.anim(c, "composer/hint", 1.0)
@@ -1781,11 +2045,11 @@ fn composer_bar(
           placeholder~,
           // in the face chosen for what people write (Composer.kt SendTextFaced)
           words=true,
-          font_size=send_size,
-          line=send_line,
+          font_size=k.font,
+          line=k.line,
           // (SendTextStyle: a TextStyle of its own, no LineHeightStyle)
           trim=true,
-          max_lines=6,
+          max_lines=field_lines(c),
           plain=true,
           color=t.p.text,
           placeholder_color=@sf.alpha(t.p.subtle, hint.get()),
@@ -1844,7 +2108,7 @@ fn composer_bar(
     part(f, "field")
   }
   if expanded {
-    c.box(w=Fill(1.0), gap=4.0, fn() {
+    c.box(w=Fill(1.0), gap=k.open_gap, fn() {
       field()
       c.box(dir=Row, w=Fill(1.0), align=AEnd, fn() {
         plus_button()

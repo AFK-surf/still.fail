@@ -192,6 +192,39 @@ test "a link held still a long press's time: its hold told once, with where it l
 }
 
 ///|
+test "a link right clicked: its hold told at once, with where it leads and its piece of line; no tap" {
+  let held : Array[(String, (Double, Double, Double, Double))] = []
+  let tapped : Array[String] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(200.0), fn() {
+        c.rich(
+          [@ui.plain("see "), @ui.link("docs", "https://example.com/d")],
+          size=10.0,
+          on_link=fn(h) { tapped.push(h) },
+          on_link_hold=Some(fn(h, r) { held.push((h, r)) }),
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.frame()
+  let (x, y, w, h) = t.run_rects("docs")[0]
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  assert_true(held.length() > 0)
+  assert_true(held.iter().all(fn(x) { x.0 == "https://example.com/d" && (x.1).2 == w }))
+  assert_eq(tapped.length(), 0)
+  // the words beside it: nothing
+  held.clear()
+  t.frame()
+  t.right_click(x - 10.0, y + h / 2.0)
+  assert_eq(held.length(), 0)
+}
+
+///|
 test "a URL handed to the system (the fake host keeps it)" {
   let t = @ui.Tester::new(fn(c) { ignore(c) }, w=100.0, h=100.0)
   t.frame()

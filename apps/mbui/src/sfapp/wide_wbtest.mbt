@@ -193,6 +193,183 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
 }
 
 ///|
+/// The composer's ground as drawn now (the lowest glass in the pane, right of the sidebar): x, y, w, h.
+fn composer_glass(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
+  let mut best : (Double, Double, Double, Double)? = None
+  for g in t.drawn_glass() {
+    let (x, y, w, h, _, _) = g
+    if x > rail_w + 240.0 && w > 400.0 {
+      match best {
+        Some((_, by, _, _)) if by >= y => ()
+        _ => best = Some((x, y, w, h))
+      }
+    }
+  }
+  match best {
+    Some(b) => b
+    None => fail("no composer drawn at \{t.time()}")
+  }
+}
+
+///|
+test "wide: a new chat becomes its chat as the web's: its scene up and away, the composer down to the chat's foot, the words up into their bubble" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.frame()
+  t.tap_text("做任何事")
+  let words = "把发布说明写一下"
+  t.type_text(words)
+  t.draw()
+  let title = match t.drawn_of("新对话") {
+    Some((_, y)) => y
+    None => fail("no 新对话")
+  }
+  let (bx, by, bw, bh) = composer_glass(t)
+  t.enter()
+  t.draw()
+  let sent = t.time()
+  // the chat at once, its words where they were typed (in the composer in the middle), the composer where it was
+  assert_true(app.nav.top() is Chat(_))
+  let typed = seen_once(t, words)
+  assert_true(typed.1 > by && typed.1 < by + bh)
+  assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
+  // half way: the scene gone up as it fades, the composer on its way down and wider
+  t.run_for(new_leave_ms / 2.0)
+  let up = match t.drawn_of("新对话") {
+    Some((_, y)) => y
+    None => fail("the scene gone at once")
+  }
+  assert_true(up < title - 8.0, msg="the scene goes up: \{title} → \{up}")
+  let (mx, my, mw, mh) = composer_glass(t)
+  // (as tall as the new chat's box was, about: focused, the chat's is a box too, Chat.tsx multiline)
+  ignore(mh)
+  assert_true(my > by + 20.0 && mx < bx && mw > bw, msg="the composer on its way: \{(mx, my, mw, mh)} from \{(bx, by, bw, bh)}")
+  // the scene gone at 140 ms
+  t.run_for(new_leave_ms / 2.0 + 1.0)
+  assert_true(t.drawn_of("新对话") is None)
+  // the composer at the chat's foot at 340 ms, a capsule as wide as the column and its curves
+  t.run_for(sent + composer_page_ms + 1.0 - t.time())
+  let (ex, ey, ew, eh) = composer_glass(t)
+  assert_true(ey + eh > 800.0 - 30.0, msg="at the foot: \{(ex, ey, ew, eh)}")
+  assert_true(ew > bw)
+  t.frame()
+  assert_at((ex, ey), { let (x, y, _, _) = composer_glass(t); (x, y) })
+  // the words in their bubble under the chat's bar at 480 ms, gone across to its right
+  t.run_for(sent + flight_carry_ms + 34.0 - t.time())
+  assert_true(send_flight.val is None)
+  let landed = seen_once(t, words)
+  assert_true(landed.1 < typed.1 - 200.0 && landed.0 > typed.0 + 100.0, msg="landed at \{landed} from \{typed}")
+}
+
+///|
+test "wide: a chat and a new chat switched by the sidebar as the web's: the composer goes between their places, the rest crossfades" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.run_for(history_fade_ms)
+  let (_, cy, _, ch) = composer_glass(t)
+  // to a new chat: the composer from the chat's foot up to its place in the page, the scene coming in
+  t.tap_text("新建对话")
+  t.draw()
+  let went = t.time()
+  assert_true(app.nav.top() == NewChat)
+  let (_, y0, _, h0) = composer_glass(t)
+  assert_true((y0 + h0 - (cy + ch)).abs() < 1.0, msg="from the chat's foot: \{(y0, h0)} \{(cy, ch)}")
+  t.run_for(page_cross_ms / 2.0)
+  match t.look_of("新对话") {
+    Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="coming in: \{a}")
+    None => fail("no 新对话")
+  }
+  t.run_for(went + composer_page_ms + 1.0 - t.time())
+  let (_, y1, _, h1) = composer_glass(t)
+  assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{(y1, h1)}")
+  assert_eq(t.look_of("新对话").map(fn(l) { l.2 }), Some(1.0))
+  // back to the chat by its row: the composer down to its foot, the scene fading over it
+  t.tap_text("整理发布清单")
+  t.draw()
+  let back = t.time()
+  assert_true(app.nav.top() is Chat(_))
+  t.run_for(page_cross_ms / 2.0)
+  match t.look_of("新对话") {
+    Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="fading: \{a}")
+    None => fail("the new chat gone at once")
+  }
+  t.run_for(back + composer_page_ms + 1.0 - t.time())
+  assert_true(t.find("新对话") is None)
+  let (_, y2, _, h2) = composer_glass(t)
+  assert_true((y2 + h2 - (cy + ch)).abs() < 1.0, msg="at the chat's foot again: \{(y2, h2)}")
+}
+
+///|
+/// Where words `s` of a paragraph are drawn (their first line's), else the test fails.
+fn words_rect(t : @ui.Tester, s : String) -> (Double, Double, Double, Double) raise {
+  match t.run_rects(s) {
+    [r, ..] => r
+    _ => fail("「\{s}」 not drawn at \{t.time()}")
+  }
+}
+
+///|
+test "wide: a right click in a chat as the desktop app's: a link's 在浏览器中打开链接 and 复制链接, words picked 复制" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.run_for(history_fade_ms)
+  // Ana's message, its address a link
+  for _ in 0..<12 {
+    match t.run_rects("example.com/review/42") {
+      [(_, y, _, _), ..] if y > 100.0 && y < 600.0 => break
+      _ => t.wheel(900.0, 400.0, -200.0)
+    }
+  }
+  t.run_for(history_fade_ms)
+  let (x, y, w, h) = words_rect(t, "example.com/review/42")
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  assert_true(t.find("在浏览器中打开链接") is Some(_))
+  t.tap_text("复制链接")
+  t.frame()
+  assert_eq(t.clipboard(), "https://example.com/review/42")
+  t.frame()
+  assert_true(t.find("在浏览器中打开链接") is None)
+  // the words before it with nothing picked: no menu
+  let (px, py, pw, ph) = words_rect(t, "第二屏的插画")
+  t.right_click(px + pw / 2.0, py + ph / 2.0)
+  t.frame()
+  assert_false(wide_context.open)
+  // words picked with the pointer: 复制 alone, and what is picked copied
+  t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
+  t.frame()
+  assert_eq(t.ctx().selected_text(), "第二屏的插画")
+  t.right_click(px + pw / 2.0, py + ph / 2.0)
+  t.frame()
+  assert_true(t.find("复制链接") is None)
+  t.tap_text("复制")
+  t.frame()
+  assert_eq(t.clipboard(), "第二屏的插画")
+}
+
+///|
+test "wide: words picked in a message with the pointer: 引用 over them quotes them into the chat's draft" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.run_for(history_fade_ms)
+  let (px, py, pw, ph) = words_rect(t, "高度先按 90 估")
+  t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
+  t.frame()
+  // the pill 8 over the middle of what is picked
+  let (qx, qy) = match t.words().filter(fn(w) { w.0 == "引用" && w.2 < py && w.2 > py - 60.0 }) {
+    [w, ..] => (w.1, w.2)
+    _ => fail("no 引用 over what is picked")
+  }
+  assert_true((qx - (px + pw / 2.0)).abs() < 60.0, msg="引用 at \{(qx, qy)}")
+  t.tap(qx + 4.0, qy + 4.0)
+  t.frame()
+  let d = drafts.get(draft_key({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" })).unwrap()
+  assert_eq(d.quotes.length(), 1)
+  assert_eq(d.quotes[0].text, "高度先按 90 估")
+  assert_eq(t.ctx().selected_text(), "")
+}
+
+///|
 test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权限, 归档 (the hint, each station's), a station's archiving" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

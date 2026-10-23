@@ -34,16 +34,25 @@ let login_ended_room : @ui.Style = @ui.style(pt=SPx)
 
 
 ///|
-/// The card: 6 under what is above it, as wide as what it holds and at least 280 (LoginCard's widthIn: its step buttons
-/// fill that), 8 in all round, its parts 2 apart, on the chip's grey (the accent at 12% when it is the one a link
-/// pointed to), its corner a pill's half and its padding (22).
+/// The card: 8 under what is above it, as wide as what it holds and at least 360, 8 in all round, its parts 2 apart, on
+/// the ink at 5%, its corner its padding and its × pill's half (the web's MachineLogins.css.ts card). On a phone 6
+/// under, 280 at least (LoginCard's widthIn: its step buttons fill that), on the chip's grey, its corner 22 (its × the
+/// phone's 28). The accent at 12% when it is the one a link pointed to.
 // kept across runs: a value (no field of it changes)
 let login_card_room : @ui.Style = @ui.style(w=Full, pt=S1_5, align=AStart)
+
+///|
+// kept across runs: a value (no field of it changes)
+let login_card_room_wide : @ui.Style = @ui.style(w=Full, pt=S2, align=AStart)
 
 ///|
 /// `fill`: as wide as where it is (a station page's 登录: StationLogins' Modifier.fillMaxWidth()).
 // kept across runs: a value (no field of it changes)
 let login_card_room_fill : @ui.Style = @ui.style(w=Full, pt=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let login_card_room_fill_wide : @ui.Style = @ui.style(w=Full, pt=S2)
 
 ///|
 /// The card's least width (LoginCard: widthIn(min = 280.dp)).
@@ -56,7 +65,21 @@ let login_card_box : @ui.Style = @ui.style(min_w=login_card_min_w, p=S2, gap=S0_
 
 ///|
 // kept across runs: a value (no field of it changes)
+let login_card_box_wide : @ui.Style = @ui.style(
+  min_w=@sf.login_card_least,
+  p=S2,
+  gap=S0_5,
+  radius=@sf.login_card_corner,
+  bg=A(Fg, O5),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
 let login_card_marked : @ui.Style = login_card_box.then(@ui.style(bg=A(Accent, O10)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let login_card_marked_wide : @ui.Style = login_card_box_wide.then(@ui.style(bg=A(Accent, O10)))
 
 ///|
 /// Its title and its × in a row, the × in the card's top corner.
@@ -64,8 +87,8 @@ let login_card_marked : @ui.Style = login_card_box.then(@ui.style(bg=A(Accent, O
 let login_head : @ui.Style = @ui.style(row=true, w=Full, align=AStart)
 
 ///|
-/// Its title (15 on 21, medium, the ink), 10 in from the card's padding and 10 down: as wide as its words (a card
-/// hugging what it holds measures them so).
+/// Its title (13 on 20, medium, the ink; a phone's 15 on 21), 10 in from the card's padding and 10 down: as wide as
+/// its words (a card hugging what it holds measures them so).
 // kept across runs: a value (no field of it changes)
 let login_title_room : @ui.Style = @ui.style(px=S2_5, pt=S2_5)
 
@@ -74,7 +97,12 @@ let login_title_room : @ui.Style = @ui.style(px=S2_5, pt=S2_5)
 let login_title_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg)
 
 ///|
-/// 取消 as the card's ×: a pill's size (28), round, rippled in the ink (LoginCards.kt CancelLogin: ripple(color = C.ink)).
+// kept across runs: a value (no field of it changes)
+let login_title_wide : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L6)
+
+///|
+/// 取消 as the card's ×: a small panel's pill (24; a phone's 28), round, its ground under the pointer (the web's
+/// panelIcon), rippled in the ink on a phone (LoginCards.kt CancelLogin: ripple(color = C.ink)).
 // kept across runs: a value (no field of it changes)
 let login_cancel : @ui.Style = @ui.style(
   w=S7,
@@ -85,7 +113,12 @@ let login_cancel : @ui.Style = @ui.style(
 )
 
 ///|
-/// A line of how it stands or what to do (13 on 19, grey; red what is off), 10 in, a spinner 6 before it.
+// kept across runs: a value (no field of it changes)
+let login_cancel_wide : @ui.Style = @ui.style(w=S6, h=S6, radius=Full, align=ACenter, justify=JCenter, hovered=@ui.patch(bg=Hover))
+
+///|
+/// A line of how it stands or what to do (12 on 18, grey; red what is off; a phone's 13 on 19), 10 in, a spinner 6
+/// before it.
 // kept across runs: a value (no field of it changes)
 let login_said : @ui.Style = @ui.style(row=true, px=S2_5, gap=S1_5, align=ACenter)
 
@@ -95,7 +128,15 @@ let login_said_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, lead
 
 ///|
 // kept across runs: a value (no field of it changes)
+let login_said_wide : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5)
+
+///|
+// kept across runs: a value (no field of it changes)
 let login_said_red : @ui.TextStyle = login_said_words.then(@ui.text_style(color=Danger))
+
+///|
+// kept across runs: a value (no field of it changes)
+let login_said_red_wide : @ui.TextStyle = login_said_wide.then(@ui.text_style(color=Danger))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -111,9 +152,9 @@ let login_code_room : @ui.Style = @ui.style(px=S2_5, py=S1)
 let login_code_words : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-/// A step's button (StepButton): the card's width, 8 under what is above it, a thumb's height (44), its corner the
-/// card's less its padding; solid (the ink, its words the paper's) while it is the next thing to do, else the ink at
-/// 5%; its words 15 semibold, a spinner or ↗ 6 beside them.
+/// A step's button (StepButton): the card's width, 8 under what is above it, 32 high (a phone's: a thumb's, 44), its
+/// corner the card's less its padding; solid (the ink, its words the paper's) while it is the next thing to do, else
+/// the ink at 5%; its words 13 medium (a phone's 15 semibold), a spinner or ↗ 6 beside them.
 // kept across runs: a value (no field of it changes)
 let login_step_room : @ui.Style = @ui.style(w=Full, pt=S2)
 
@@ -132,7 +173,15 @@ let login_step : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
+let login_step_wide : @ui.Style = login_step.then(@ui.style(h=S8, hovered=@ui.patch(bg=A(Fg, O10))))
+
+///|
+// kept across runs: a value (no field of it changes)
 let login_step_solid : @ui.Style = login_step.then(@ui.style(bg=Fg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let login_step_solid_wide : @ui.Style = login_step_wide.then(@ui.style(bg=Fg, hovered=@ui.patch(bg=A(Fg, O80))))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -140,7 +189,15 @@ let login_step_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, 
 
 ///|
 // kept across runs: a value (no field of it changes)
+let login_step_words_wide : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
 let login_step_words_solid : @ui.TextStyle = login_step_words.then(@ui.text_style(color=Bg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let login_step_words_solid_wide : @ui.TextStyle = login_step_words_wide.then(@ui.text_style(color=Bg))
 
 ///|
 /// The code pasted back (CodeField): the card's width, 6 under the step above, 44 high, on the surface, 14 in on the
@@ -197,11 +254,24 @@ fn login_card(
     return
   }
   let all = (src.topic)("machineLogins", { "station": Json::string(station) })
-  c.box(style=if fill { login_card_room_fill } else { login_card_room }, fn() {
-    c.box(style=if marked { login_card_marked } else { login_card_box }, fn() {
+  let wide = wide_on.val
+  let room = match (fill, wide) {
+    (true, true) => login_card_room_fill_wide
+    (true, false) => login_card_room_fill
+    (false, true) => login_card_room_wide
+    (false, false) => login_card_room
+  }
+  let card = match (marked, wide) {
+    (true, true) => login_card_marked_wide
+    (true, false) => login_card_marked
+    (false, true) => login_card_box_wide
+    (false, false) => login_card_box
+  }
+  c.box(style=room, fn() {
+    c.box(style=card, fn() {
       if flag(all.value, "canLogin") {
         c.box(style=login_head, fn() {
-          c.box(style=login_title_room, fn() { c.text(text(l, "title"), style=login_title_words) |> ignore }) |> ignore
+          c.box(style=login_title_room, fn() { c.text(text(l, "title"), style=if wide_on.val { login_title_wide } else { login_title_words }) |> ignore }) |> ignore
           // (the title as wide as its words, the card as wide as they and its least: the × at its corner)
           c.spacer()
           login_cancel_button(c, src, station, id)
@@ -209,7 +279,7 @@ fn login_card(
         |> ignore
         login_active(c, src, station, l, flag(all.value, "canRelay"))
       } else {
-        c.box(style=login_title_room, fn() { c.text(text(l, "title"), style=login_title_words) |> ignore }) |> ignore
+        c.box(style=login_title_room, fn() { c.text(text(l, "title"), style=if wide_on.val { login_title_wide } else { login_title_words }) |> ignore }) |> ignore
         login_said_line(c, text(l, "statusText"), under=true)
       }
     })
@@ -232,7 +302,7 @@ fn login_cancel_button(c : @ui.Ctx, src : Source, station : String, id : String)
     })
   }
   // (取消 to a screen reader: CancelLogin's contentDescription)
-  c.box(style=login_cancel, id=cancel, label=tr("web-main.logins.cancelWhat"), fn() {
+  c.box(style=if wide_on.val { login_cancel_wide } else { login_cancel }, id=cancel, label=tr("web-main.logins.cancelWhat"), fn() {
     if busy {
       @sf.spinner(c, size=12.0) |> ignore
     } else {
@@ -250,7 +320,13 @@ fn login_said_line(c : @ui.Ctx, words : String, red? : Bool = false, busy? : Boo
     if busy {
       @sf.spinner(c, size=12.0) |> ignore
     }
-    c.text(words, style=if red { login_said_red } else { login_said_words }) |> ignore
+    let style = match (red, wide_on.val) {
+      (true, true) => login_said_red_wide
+      (true, false) => login_said_red
+      (false, true) => login_said_wide
+      (false, false) => login_said_words
+    }
+    c.text(words, style~) |> ignore
   })
   |> ignore
 }
@@ -262,11 +338,24 @@ fn login_step_button(c : @ui.Ctx, key : String, label : String, solid : Bool, bu
   let id = if busy { 0 } else { c.id(key) }
   let ink = if solid { t.p.bg } else { t.p.text }
   c.box(style=login_step_room, fn() {
-    c.box(style=if solid { login_step_solid } else { login_step }, id~, fn() {
+    let wide = wide_on.val
+    let step = match (solid, wide) {
+      (true, true) => login_step_solid_wide
+      (true, false) => login_step_solid
+      (false, true) => login_step_wide
+      (false, false) => login_step
+    }
+    let words = match (solid, wide) {
+      (true, true) => login_step_words_solid_wide
+      (true, false) => login_step_words_solid
+      (false, true) => login_step_words_wide
+      (false, false) => login_step_words
+    }
+    c.box(style=step, id~, fn() {
       if busy {
         @sf.spinner(c, size=12.0, arc=ink) |> ignore
       }
-      c.text(label, style=if solid { login_step_words_solid } else { login_step_words }) |> ignore
+      c.text(label, style=words) |> ignore
       if external {
         @sf.icon(c, "arrow-up-right", size=16.0, color=ink) |> ignore
       }

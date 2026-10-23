@@ -425,6 +425,11 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
       }
       Some({
         "workspace": Json::string(f.workspace),
+        "chatTabs": if f.mode == "newchat-files" {
+          { "new:ws1": { "tabs": ["files"], "active": "files" } }
+        } else {
+          {}
+        },
         "listFilter": Json::object(lf),
         "appearance": Json::string(f.appearance),
         "fonts": fixture_fonts(f.fonts),

@@ -187,6 +187,8 @@ fn reset() -> Unit {
   fresh.sent = false
   fresh.starting = false
   fresh.scene = None
+  fresh.room = 0.0
+  composer_page_from.val = None
   new_fix.station = "st1"
   new_fix.model = "claude-opus-5-5"
   new_fix.runtime = "claude"

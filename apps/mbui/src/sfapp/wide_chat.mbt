@@ -9,6 +9,10 @@
 let column_w : Double = 760.0
 
 ///|
+/// A page's bar in the wide frame (styles/sidebar.css.ts pageBar: 45, its 1 at the foot).
+let wide_bar_h : Double = 45.0
+
+///|
 /// What a chat's rows stand in from the pane's sides: 14 on a phone; in the wide frame, the column in the middle.
 fn row_side(c : @ui.Ctx) -> Double {
   if wide_on.val {
@@ -34,11 +38,132 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
   if @settings.action_pressed(c, (src.topic)("prefs", {}).value, "chat.find") && view is Some(v) && v.thread is Some(_) {
     find_open(c, r)
   }
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+  match view {
+    Some(v) => chat_keys(c, src, r, v)
+    None => ()
+  }
+  ignore(t)
+  c.box(style=wide_pane_ground, fn() {
     // what is opened beside it, at its right (wide_panel.mbt)
-    with_side(c, src, r, view, fn() { wide_chat_pane(c, src, w, r, view, list, error) })
+    with_side(c, src, w, r, view, fn() { wide_chat_pane(c, src, w, r, view, list, error) })
   })
   |> ignore
+  // a row of the 文件 tab let go over the chat: into its message (once the tab has said so, this frame)
+  chat_drop(c, src, draft_key(r), c.id("chat/pane"))
+}
+
+///|
+/// A row of the 文件 tab let go over the chat (box `pane`): into draft `key` (ChatSide.tsx useChatDrop).
+fn chat_drop(c : @ui.Ctx, src : Source, key : String, pane : Int) -> Unit {
+  match files_tab_take_drop(c) {
+    Some((item, x, y)) if within(c.rect_of(pane), x, y) => refs_put(src, key, [item])
+    _ => ()
+  }
+}
+
+///|
+/// Whether (x, y) is in the rectangle, where there is one.
+fn within(r : (Double, Double, Double, Double)?, x : Double, y : Double) -> Bool {
+  match r {
+    Some((rx, ry, rw, rh)) => x >= rx && x < rx + rw && y >= ry && y < ry + rh
+    None => false
+  }
+}
+
+///|
+/// A row of the 文件 tab carried over the chat (box `pane`; ChatSide.tsx DropHint, ChatPage.css.ts dropHint): the chat
+/// frosted over under its composer, the row's mark twice a card's and 松开以添加到消息 in its middle.
+fn drop_hint(c : @ui.Ctx, pane : Int) -> Unit {
+  let item = match files_tab_dragging() {
+    Some(i) => i
+    None => return
+  }
+  let (px, py, _) = c.pointer()
+  if !within(c.rect_of(pane), px, py) {
+    return
+  }
+  let l = c.layer(fn() {
+    c.layer(fn() { floating_ground(c, Fill(1.0), corner=0.0) |> ignore }) |> ignore
+    c.box(style=drop_hint_box, fn() {
+      let mark = c.box(fn() {
+        if item.dir {
+          @sf.icon(c, "folder", size=drop_folder, color=@sf.theme().p.muted) |> ignore
+        } else {
+          file_sheet(c, item.name)
+        }
+      })
+      c.look(mark, @ui.look(scale=2.0))
+      c.text(tr("web-main.composer.dropHere"), style=drop_hint_words) |> ignore
+    })
+    |> ignore
+  })
+  // (drawn only: what it is let go on is the tab's to say)
+  c.draw_only(l)
+}
+
+///|
+/// What is said in its middle: its mark over its words, 16 apart less what the mark grows by (a card's, twice).
+// kept across runs: a value (no field of it changes)
+let drop_hint_box : @ui.Style = @ui.style(w=Full, h=Full, gap=S4, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let drop_hint_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+
+///|
+/// A folder's mark there, as large as a card's sheet.
+let drop_folder : Double = 30.0
+
+///|
+/// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut): ⌘↓ to its end (with the cursor in an empty composer
+/// too), ⌘⇧E into the archive while nothing is left in it, ⌘⇧H its first agent's history beside it (one in front:
+/// the panel closed), ⌘. its agents at work stopped; Esc closes its panel (wide_keys.mbt, once nothing else took it).
+fn chat_keys(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
+  let prefs = (src.topic)("prefs", {}).value
+  let empty = match drafts.get(draft_key(r)) {
+    Some(d) => draft_empty(d)
+    None => true
+  }
+  if @settings.action_pressed(c, prefs, "chat.latest", in_field=empty) {
+    if !v.newer {
+      c.list_to_end(list_key(r))
+    } else {
+      match v.thread {
+        Some(th) => (src.call)("chat.latest", { "station": Json::string(r.station), "thread": Json::number(th) }, fn(_) {  })
+        None => ()
+      }
+    }
+  }
+  if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && v.archivable && !v.archived && !v.offline {
+    archive_chat(src, r, v)
+    wide.landed = ""
+  }
+  if @settings.action_pressed(c, prefs, "chat.history", in_field=true) && v.agents.length() > 0 {
+    if side_front(r).has_prefix("history/") {
+      for tab in side_tabs(r) {
+        side_close(r, tab)
+      }
+    } else {
+      match side_tabs(r).iter().find_first(fn(t) { t.has_prefix("history/") }) {
+        Some(t) => side_open(r, t)
+        None => side_open(r, "history/" + v.agents[0].key)
+      }
+    }
+  }
+  if @settings.action_pressed(c, prefs, "chat.stop", in_field=true) {
+    for a in v.agents {
+      if a.status == "running" || a.status == "queued" {
+        act(
+          src,
+          tr("android-chat.agent.stop"),
+          "stop/" + r.station + "/" + a.key,
+          "session.stop",
+          { "station": Json::string(r.station), "key": Json::string(a.key) },
+          done=tr("android-chat.history.stopped"),
+        )
+      }
+    }
+  }
 }
 
 ///|
@@ -52,7 +177,8 @@ fn wide_chat_pane(
   list : Array[Entry],
   error : Json?,
 ) -> Unit {
-  c.box(style=side_panel_style, fn() {
+  let pane = c.id("chat/pane")
+  c.box(style=side_panel_style, id=pane, fn() {
     match view {
       None => {
         wide_chat_bar(c, src, w, r, None)
@@ -61,23 +187,35 @@ fn wide_chat_pane(
             Some(fill("android-chat.chat.unreadable", [("error", text(Some(e), "message"))]))
           None => None
         }
-        waiting_messages(c, failed)
+        // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)
+        if failed is Some(_) || !new_chat_made(c, r) {
+          waiting_messages(c, failed)
+        }
         c.layer(fn() {
           c.spacer()
           wide_composer(c, src, r, None)
         })
         |> ignore
+        // its first words, as typed, till their row is in the list (flight.mbt)
+        flight_frame(c, draft_key(r))
+        flight_waiting(c, draft_key(r))
+        flight_files(c, draft_key(r))
       }
       Some(v) => {
         messages(c, src, r, v, list)
         c.layer(fn() { wide_chat_bar(c, src, w, r, Some(v)) }) |> ignore
         bar_popovers(c, src, r, v)
+        // come to from a new chat: what it showed fading under the composer (wide_switch.mbt)
+        switch_veil(c)
+        // a row of the 文件 tab carried over it: frosted, under its composer
+        drop_hint(c, pane)
         c.layer(fn() {
           c.spacer()
           wide_composer(c, src, r, Some(v))
         })
         |> ignore
         flight_waiting(c, draft_key(r))
+        flight_files(c, draft_key(r))
         pick_layer(c, src, r)
         link_menu_layer(c)
       }
@@ -93,18 +231,25 @@ fn wide_composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit 
 }
 
 ///|
-/// What the composer's column holds, in the pane's middle (804 wide at most, 12 from its sides; the composer's own 10
-/// at its sides inside), in the wide frame; as it is elsewhere.
+/// What the composer's column holds, in the pane's middle (the column and the capsule's curve each side, 804 wide at
+/// most, 12 from the pane's sides: dock.css.ts), in the wide frame; as it is elsewhere.
 fn wide_center(c : @ui.Ctx, body : () -> Unit) -> Unit {
   if !wide_on.val {
     body()
     return
   }
-  let inner = dmin(c.width - 24.0, column_w + 44.0)
-  c.box(dir=Row, w=Fill(1.0), justify=JCenter, fn() {
-    c.box(w=Px(inner + 20.0), fn() { c.sized(inner + 20.0, c.height, body) }) |> ignore
+  let inner = wide_composer_w(c)
+  c.box(style=wide_centred, fn() {
+    c.box(w=Px(inner), fn() { c.sized(inner, c.height, body) }) |> ignore
   })
   |> ignore
+}
+
+///|
+/// The composer's width in the wide frame's pane `c.width` wide (dock.css.ts composerBox: the column and 22 each side,
+/// 12 from the pane's sides).
+fn wide_composer_w(c : @ui.Ctx) -> Double {
+  dmin(c.width - 24.0, column_w + 44.0)
 }
 
 ///|
@@ -121,15 +266,14 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
   if @ui.window_inset() {
     c.window_drag(bar)
   }
-  c.box(dir=Row, w=Fill(1.0), h=Px(45.0), pl=12.0, pr=12.0, pb=1.0, gap=16.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
-    c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, fn() {
+  c.box(dir=Row, w=Fill(1.0), h=Px(wide_bar_h), pl=12.0, pr=12.0, pb=1.0, gap=16.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
+    // (the title, its people and agents 10 apart, 8 in from the bar's padding: session.css.ts pageBarTitle)
+    c.box(dir=Row, w=Fill(1.0), pl=bar_title_in, gap=bar_title_gap, align=ACenter, fn() {
       let title = match v {
         Some(view) => view.title
         None => r.title
       }
-      c.box(max_w=dmax(80.0, c.width * 0.42), fn() {
-        c.text(title, size=14.0, weight=600, color=t.p.text, wrap=false, line=20.0) |> ignore
-      })
+      c.box(max_w=dmax(80.0, c.width * 0.42), fn() { c.text(title, style=bar_title) |> ignore })
       |> ignore
       match v {
         Some(view) => {
@@ -139,9 +283,8 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
               None => ()
             }
           }
-          let people = if view.people.length() > 5 { view.people[:5].to_array() } else { view.people }
-          if people.length() > 0 {
-            people_stack(c, src, people, 16.0)
+          if view.people.length() > 0 {
+            bar_people(c, src, view.people)
           }
           for i, a in view.agents {
             let id = c.id("bar-agent/" + a.key)
@@ -154,7 +297,7 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
               if i == 0 {
                 agent_station_mark(c, a, station)
               } else {
-                model_mark(c, a, 22.0)
+                model_mark(c, a, mark_side())
               }
             })
             |> ignore
@@ -179,27 +322,27 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
       // ⌘F's bar, in place of the buttons while it is open
       Some(view) if wide.find_chat == side_key(r) => find_bar(c, src, r, view)
       Some(view) =>
-        c.box(dir=Row, gap=2.0, align=ACenter, fn() {
+        c.box(style=bar_buttons, fn() {
           let archive = view.archivable && !view.archived
           if archive {
             if doing("archive/" + r.station + "/" + r.session) {
-              c.box(w=Px(32.0), h=Px(32.0), align=ACenter, justify=JCenter, fn() { @sf.spinner(c) |> ignore })
+              c.box(style=bar_button_busy, fn() { @sf.spinner(c) |> ignore })
               |> ignore
-            } else if icon_button(c, "chat-archive", "archive") {
+            } else if icon_button(c, "chat-archive", "archive", label=tr("web-pages.chat.archive"), action="chat.archive") {
               archive_chat(src, r, view)
               wide.landed = ""
             }
           }
           let jobs = (src.topic)("chatJobs", chat_params(r))
           // its services and jobs, and what is done with it: each a popover under its button (wide_panel.mbt)
-          if items(jobs.value, "jobs").length() > 0 && icon_button(c, "chat-jobs", "web", label=tr("web-pages.chat.services")) {
+          if items(jobs.value, "jobs").length() > 0 && icon_button(c, "chat-jobs", "web", label=tr("web-pages.chat.services"), action="chat.jobs") {
             wide.jobs_open = !wide.jobs_open
           }
           if view.thread is Some(_) && icon_button(c, "chat-more", "more", label=tr("web-pages.chat.info")) {
             wide.info_open = !wide.info_open
           }
           // the side panel's switch while it is closed: the first agent's history in it
-          if side_tabs(r).length() == 0 && view.agents.length() > 0 && icon_button(c, "chat-panel", "panel-open", label=tr("web-pages.chat.openPanel")) {
+          if side_tabs(r).length() == 0 && view.agents.length() > 0 && icon_button(c, "chat-panel", "panel-open", label=tr("web-pages.chat.openPanel"), action="chat.history") {
             side_open(r, "history/" + view.agents[0].key)
           }
         })
@@ -211,9 +354,136 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
 }
 
 ///|
+/// How far in the chat's title stands from the bar's padding, and how far apart it, its people and its agents are
+/// (session.css.ts pageBarTitle: 8, 10).
+let bar_title_in : Double = 8.0
+
+///|
+let bar_title_gap : Double = 10.0
+
+///|
+/// Who is in the chat, in its bar (components.tsx PeopleStack, max 5): each a 16 circle, their picture or their
+/// initial in 600 on the paper, ringed 1.5 in the sidebar's ground, each 4 over the one before, the first over them
+/// all; more than five, +n after them; on hover their names.
+fn bar_people(c : @ui.Ctx, src : Source, people : Array[Person]) -> Unit {
+  let t = @sf.theme()
+  let shown = if people.length() > 5 { people[:5].to_array() } else { people }
+  let n = shown.length()
+  let step = person_side + 2.0 * person_ring
+  let id = c.id("bar-people")
+  wide_tip(
+    c,
+    "bar-people",
+    id,
+    fill("web-main.people.in", [("names", people.map(fn(p) { p.display }).join(tr("web-main.list.separator")))]),
+  )
+  // (their rings out past them: the first's face where the stack starts, Chat's boxShadow)
+  c.box(style=people_row, tx=-person_ring, id~, fn() {
+    c.box(w=Px(step + (person_side - 4.0) * (n - 1).to_double()), h=Px(step), fn() {
+      // the last drawn first, each under the one before it
+      for j in 0..<n {
+        let i = n - 1 - j
+        let p = shown[i]
+        c.layer(fn() {
+          c.box(
+            w=Px(step),
+            h=Px(step),
+            radius=step / 2.0,
+            bg=t.p.sidebar,
+            tx=(person_side - 4.0) * i.to_double(),
+            align=ACenter,
+            justify=JCenter,
+            fn() {
+              if p.picture != "" {
+                avatar(c, src, p.id, p.display, p.picture, person_side)
+              } else {
+                c.box(style=person_letter, bg=t.p.paper, fn() {
+                  c.text(person_initial(p.display), style=person_letter_words) |> ignore
+                })
+                |> ignore
+              }
+            },
+          )
+          |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+    if people.length() > 5 {
+      c.box(style=people_more, fn() { c.text("+\{people.length() - 5}", style=people_more_words) |> ignore }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let people_row : @ui.Style = @ui.style(row=true, align=ACenter)
+
+///|
+/// The pane's ground under a chat.
+// kept across runs: a value (no field of it changes)
+let wide_pane_ground : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_centred : @ui.Style = @ui.style(row=true, w=Full, justify=JCenter)
+
+///|
+/// A page's title in its bar (sidebar.css.ts pageBar h1: 14 in 600, on 20).
+// kept across runs: a value (no field of it changes)
+let bar_title : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L6, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let bar_title_room : @ui.Style = @ui.style(w=Full)
+
+///|
+/// What is done in a page's bar, at its end, 2 apart (ChatPage.css.ts pageBarActions); a button under way, its 32.
+// kept across runs: a value (no field of it changes)
+let bar_buttons : @ui.Style = @ui.style(row=true, gap=S0_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let bar_button_busy : @ui.Style = @ui.style(w=S8, h=S8, align=ACenter, justify=JCenter)
+
+///|
+/// A person in the bar, 16 across, ringed 1.5 (components.css.ts peopleStack).
+let person_side : Double = 16.0
+
+///|
+let person_ring : Double = 1.5
+
+///|
+/// Their initial, upper case.
+fn person_initial(name : String) -> String {
+  match name.iter().next() {
+    Some(ch) => ch.to_string().to_upper()
+    None => "?"
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let person_letter : @ui.Style = @ui.style(w=S4, h=S4, radius=Full, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let person_letter_words : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let people_more : @ui.Style = @ui.style(pl=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let people_more_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=false)
+
+///|
 /// An icon button of a page's bar (page.css.ts iconBtn): 32 square, the nav's corner, the pointer's ground and ink
 /// on hover. True on the frame after a press.
-fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "") -> Bool {
+fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "", action? : String = "") -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   c.cursor(id, Hand)
@@ -228,9 +498,10 @@ fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "") -
     id~,
     fn() { @sf.icon(c, icon, size=16.0, color=if hot { t.p.text } else { t.p.muted }) |> ignore },
   )
-  // named for a screen reader (the web's aria-label)
+  // named for a screen reader (the web's aria-label), and said under it on hover with its keys (the web's IconButton)
   if label != "" {
     c.semantics(b, Button, id~, label~)
+    wide_tip(c, key, id, label, action~)
   }
   c.clicked(id)
 }
@@ -245,15 +516,12 @@ fn page_bar_wide(c : @ui.Ctx, title : String, back : Bool, trailing : () -> Unit
     c.window_drag(bar)
   }
   let mut went = false
-  c.box(dir=Row, w=Fill(1.0), h=Px(45.0), pl=12.0, pr=12.0, pb=1.0, gap=8.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
+  c.box(dir=Row, w=Fill(1.0), h=Px(wide_bar_h), pl=12.0, pr=12.0, pb=1.0, gap=8.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
     if back {
       went = icon_button(c, "page-bar/back", "chevron-left")
     }
-    c.box(w=Fill(1.0), fn() {
-      c.text(title, size=14.0, weight=600, color=t.p.text, wrap=false, line=20.0) |> ignore
-    })
-    |> ignore
-    c.box(dir=Row, gap=2.0, align=ACenter, trailing) |> ignore
+    c.box(style=bar_title_room, fn() { c.text(title, style=bar_title) |> ignore }) |> ignore
+    c.box(style=bar_buttons, trailing) |> ignore
   })
   |> ignore
   went

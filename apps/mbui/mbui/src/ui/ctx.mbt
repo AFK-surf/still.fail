@@ -195,6 +195,8 @@ pub struct Ctx {
   /// (Ctx::wake_in's): what Tester::assert_idle says of what is left
   mut frame_by : SourceLoc?
   mut wake_by : SourceLoc?
+  /// what is held near the top of a list as its row scrolls past (Ctx::stick), in the order built this frame
+  stuck : Array[Int]
   // hit targets of the last frame, in paint order, and those being collected
   mut hit_ids : Array[Int]
   mut hit_rects : Array[Double]
@@ -423,6 +425,7 @@ fn Ctx::new() -> Ctx {
     frame_rest: false,
     frame_by: None,
     wake_by: None,
+    stuck: [],
     hit_ids: [],
     hit_rects: [],
     next_hit_ids: [],

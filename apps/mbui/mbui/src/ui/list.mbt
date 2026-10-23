@@ -496,6 +496,8 @@ fn Ctx::place_list(
   let nan = 0.0 / 0.0
   let top_rows : Array[Int] = [] // above the pivot, nearest first
   let rows : Array[Int] = [] // the pivot and below
+  // what the rows built hold near the list's top (Ctx::stick): from where in `stuck`, each row's
+  let stuck_from = self.stuck.length()
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
     let r = self.build_row(li, st, k)
     let h = self.layout(r, ix, y, iw, nan)
@@ -689,6 +691,52 @@ fn Ctx::place_list(
   if off != 0.0 {
     for r in order {
       self.shift(r, off)
+    }
+  }
+  self.stick_in(li, stuck_from, iy)
+}
+
+///|
+/// The list node `i` is in (its nearest), or -1.
+fn Ctx::list_of(self : Ctx, i : Int) -> Int {
+  let mut p = self.nodes[i].parent
+  while p >= 0 && self.nodes[p].kind != kind_list {
+    p = self.nodes[p].parent
+  }
+  p
+}
+
+///|
+/// Node `i` held `top` below the top of the list it is in while its row scrolls past (CSS's `position: sticky` with
+/// `top`): laid out where it is, it goes down with the view's top as that passes it, never past the foot of its parent
+/// (what a long row keeps in view, its picture at the top of the list). Outside a list's rows it is where it is laid out.
+pub fn Ctx::stick(self : Ctx, i : Int, top : Double) -> Unit {
+  if i < 0 || i >= self.count {
+    return
+  }
+  self.nodes[i].stick = top
+  self.stuck.push(i)
+}
+
+///|
+/// What the rows of list `li` just placed hold near its top (`stuck` from `from`; a list in a row holds its own), its
+/// content starting at `top`: each where its parent lays it, then down to `top` and its own distance, as far as its
+/// parent's foot lets it.
+fn Ctx::stick_in(self : Ctx, li : Int, from : Int, top : Double) -> Unit {
+  for j in from..<self.stuck.length() {
+    let s = self.stuck[j]
+    let n = self.nodes[s]
+    if n.parent < 0 || n.stick != n.stick || self.list_of(s) != li {
+      continue
+    }
+    let p = self.nodes[n.parent]
+    // where its parent lays it (a subtree placed as before keeps where it was held last frame)
+    self.replace(s, p.x, p.y)
+    let held = top + n.stick - n.y
+    let room = p.y + p.fh - p.pad_b - n.fh - n.y
+    let dy = dmin(held, room)
+    if dy > 0.0 {
+      self.shift(s, dy)
     }
   }
 }

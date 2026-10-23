@@ -13,7 +13,81 @@ fn side_key(r : ChatRef) -> String {
 ///|
 /// The chat's side panel's tabs, in their order: `history/<session>` an agent's, `jobs`, `letters`.
 fn side_tabs(r : ChatRef) -> Array[String] {
-  wide.tabs.get(side_key(r)).unwrap_or([])
+  let k = side_key(r)
+  match wide.tabs.get(k) {
+    Some(tabs) => tabs
+    None => {
+      // as the core kept them for the chat on this device (prefs `chatTabs`, the web's keepTabs), the first time asked
+      let (tabs, front) = kept_tabs(r)
+      if tabs.length() > 0 {
+        wide.tabs[k] = tabs
+        if front != "" {
+          wide.front[k] = front
+        }
+      }
+      tabs
+    }
+  }
+}
+
+///|
+/// The tabs the core keeps for chat `r` (prefs `chatTabs` by `station:session`: an agent's history by its session's
+/// key, `jobs`, `letters`), as this panel names them, and the one in front.
+fn kept_tabs(r : ChatRef) -> (Array[String], String) {
+  let prefs = match link_src.val {
+    Some(src) => (src.topic)("prefs", {}).value
+    None => return ([], "")
+  }
+  let kept = field(field(prefs, "chatTabs"), r.station + ":" + r.session)
+  let own = fn(t : String) -> String? {
+    match t {
+      "jobs" | "letters" | "files" => Some(t)
+      // (the web's other tabs, its services and visualizations, this panel has not)
+      _ if t.has_prefix("service:") || t.contains("/") => None
+      _ => Some("history/" + t)
+    }
+  }
+  let tabs : Array[String] = []
+  match field(kept, "tabs") {
+    Some(Array(a)) =>
+      for x in a {
+        match x {
+          String(t) =>
+            match own(t) {
+              Some(o) => tabs.push(o)
+              None => ()
+            }
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  let front = match own(text(kept, "active")) {
+    Some(f) if tabs.contains(f) => f
+    _ => ""
+  }
+  (tabs, front)
+}
+
+///|
+/// Chat `r`'s tabs as they are now, kept by the core for it on this device (prefs `chatTabs`), as the web keeps them.
+fn keep_tabs(r : ChatRef) -> Unit {
+  match link_src.val {
+    Some(src) => {
+      let k = side_key(r)
+      let web = fn(t : String) { if t.has_prefix("history/") { t.view(start_offset=8).to_string() } else { t } }
+      let tabs = wide.tabs.get(k).unwrap_or([]).map(fn(t) { Json::string(web(t)) })
+      let entry : Map[String, Json] = { "tabs": Json::array(tabs) }
+      match wide.front.get(k) {
+        Some(f) if f != "" => entry["active"] = Json::string(web(f))
+        _ => ()
+      }
+      let chat : Map[String, Json] = {}
+      chat[r.station + ":" + r.session] = Json::object(entry)
+      (src.call)("prefs.set", { "chatTabs": Json::object(chat) }, fn(_) {  })
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -50,6 +124,7 @@ fn side_open(r : ChatRef, tab : String) -> Unit {
   }
   wide.tabs[k] = tabs
   wide.front[k] = tab
+  keep_tabs(r)
 }
 
 ///|
@@ -58,18 +133,22 @@ fn side_close(r : ChatRef, tab : String) -> Unit {
   let k = side_key(r)
   let tabs = side_tabs(r).filter(fn(x) { x != tab })
   if tabs.length() == 0 {
-    wide.tabs.remove(k)
+    // (none left: kept so, not read back from what the core had)
+    wide.tabs[k] = []
     wide.front.remove(k)
+    keep_tabs(r)
     return
   }
   wide.tabs[k] = tabs
   if side_front(r) == tab || !tabs.contains(side_front(r)) {
     wide.front[k] = tabs[tabs.length() - 1]
   }
+  keep_tabs(r)
 }
 
 ///|
-/// An agent's history pressed (its mark in the bar): in front, closed; else opened in front.
+/// An agent's history pressed (its mark in the bar), or the chat's files (its info's 文件): in front, closed; else
+/// opened in front.
 fn side_toggle(r : ChatRef, tab : String) -> Unit {
   if side_front(r) == tab {
     side_close(r, tab)
@@ -147,7 +226,7 @@ let side_pane : @ui.Style = @ui.style(w=Full, h=Full, clip=true)
 
 ///|
 /// The chat's page with its side panel beside it while something is open in it: the chat `pane` wide less the panel's.
-fn with_side(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, chat : () -> Unit) -> Unit {
+fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : () -> Unit) -> Unit {
   let tabs = side_tabs(r)
   let panel = if tabs.length() > 0 && v is Some(_) { side_width(c.width) } else { 0.0 }
   if panel <= 0.0 {
@@ -161,7 +240,7 @@ fn with_side(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, chat : () ->
     c.box(style=@ui.style(w=Fixed(panel), h=Full), fn() {
       c.sized(panel, c.height, fn() {
         match v {
-          Some(view) => side_panel(c, src, r, view)
+          Some(view) => side_panel(c, src, w, r, view)
           None => ()
         }
       })
@@ -173,7 +252,7 @@ fn with_side(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, chat : () ->
 
 ///|
 /// The panel: its tabs and its switch over what the one in front shows.
-fn side_panel(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
+fn side_panel(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let tabs = side_tabs(r)
   let front = side_front(r)
   c.box(style=side_panel_style, fn() {
@@ -196,6 +275,9 @@ fn side_panel(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
         history_body(c, src, r, key, None, (src.topic)("chat", chat_params(r)))
       } else if front == "jobs" {
         side_jobs(c, src, r)
+      } else if front == "files" {
+        // the workspace's stations' files (wide_files_tab.mbt), what is added from them going into the chat's draft
+        files_tab(c, src, w, draft_key(r), r.station)
       } else if front == "letters" {
         match v.thread {
           Some(th) => letters_body(c, src, r, th)
@@ -216,6 +298,7 @@ fn side_tab_of(c : @ui.Ctx, r : ChatRef, v : ChatView, tab : String, front : Boo
   c.cursor(id, Hand)
   if c.clicked(id) {
     wide.front[side_key(r)] = tab
+    keep_tabs(r)
   }
   let close = c.id("side/tab-close/" + tab)
   c.cursor(close, Hand)
@@ -235,6 +318,8 @@ fn side_tab_of(c : @ui.Ctx, r : ChatRef, v : ChatView, tab : String, front : Boo
     } else {
       let (icon, label) = if tab == "jobs" {
         ("boxes", tr("web-pages.chat.jobs"))
+      } else if tab == "files" {
+        ("folder", tr("web-pages.chat.files"))
       } else {
         ("chats", tr("web-main.letters.title"))
       }
@@ -464,6 +549,12 @@ fn chat_info_rows(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit 
   |> ignore
   let th = opt_number(thread, "id")
   c.box(style=info_tools, fn() {
+    // the stations' files beside the chat, where they lend them (ChatPage.tsx onFiles)
+    if drive_in(src, workspace_of(r.station)) &&
+      info_tool_row(c, "info-pop/files", "folder", tr("web-pages.chat.files"), "") {
+      wide.info_open = false
+      side_toggle(r, "files")
+    }
     match th {
       Some(id) if v.letters > 0 =>
         if info_tool_row(

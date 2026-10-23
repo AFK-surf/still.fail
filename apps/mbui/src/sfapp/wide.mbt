@@ -243,6 +243,9 @@ fn wide_reset() -> Unit {
   ftab_reset()
   wide.tabs_set.clear()
   fgo_reset()
+  wide_context.open = false
+  wide_context.frame = -1
+  wide_switch_reset()
   wide_on.val = false
   corners_on.val = false
   recent_open.val = false
@@ -388,12 +391,17 @@ fn wide_frame(
         }
       })
       |> ignore
-      c.box(w=Px(main_w), h=Fill(1.0), clip=true, pt=top, pb=foot, fn() {
+      let page_id = c.id("main-page")
+      // a right click in it: what is picked copied (wide_context.mbt)
+      wide_context_page(c, page_id)
+      c.box(w=Px(main_w), h=Fill(1.0), clip=true, pt=top, pb=foot, id=page_id, fn() {
         c.sized(main_w, c.height - top - foot, fn() {
           let page = fn() {
             if gated {
               c.box(w=Px(main_w), h=Px(c.height), bg=t.p.bg, fn() { lock_gate(c, src, w) |> ignore }) |> ignore
             } else {
+              // a chat and a new chat switched between: the composer moving, the rest crossfading (wide_switch.mbt)
+              wide_switch_frame(c)
               c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=t.p.bg)
               |> ignore
             }
@@ -462,7 +470,12 @@ fn main_page(
   page : Page,
 ) -> Unit {
   match page {
-    Chat(r) => wide_chat_page(c, src, w, r)
+    Chat(r) => {
+      wide_chat_page(c, src, w, r)
+      new_chat_leaving_wide(c, src, w, r)
+      // (come to from a new chat by the sidebar: the new chat fading over it)
+      switch_new_out(c, src, w)
+    }
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
     // settings' own home is its first page (the web goes to 外观)

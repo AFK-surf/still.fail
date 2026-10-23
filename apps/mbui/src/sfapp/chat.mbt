@@ -73,6 +73,61 @@ let gap : Double = 20.0
 let joined_gap : Double = 4.0
 
 ///|
+/// The list's gap in the wide frame (session.css.ts chatList: 28).
+let wide_list_gap : Double = 28.0
+
+///|
+fn list_gap() -> Double {
+  if wide_on.val {
+    wide_list_gap
+  } else {
+    gap
+  }
+}
+
+///|
+/// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
+/// row: 14 under the bar (Chat.kt); in the wide frame the web's 24 (session.css.ts chatList).
+fn bar_foot() -> Double {
+  if wide_on.val {
+    wide_bar_h
+  } else {
+    status_top() + chat_bar_h
+  }
+}
+
+///|
+fn list_top() -> Double {
+  if wide_on.val {
+    wide_bar_h + 24.0
+  } else {
+    status_top() + chat_bar_h + 14.0
+  }
+}
+
+///|
+/// What the list keeps under its last row over the composer's room: 10 (Chat.kt); the web's 24 (session.css.ts
+/// chatList, its foot's padding).
+fn list_foot() -> Double {
+  if wide_on.val {
+    24.0
+  } else {
+    10.0
+  }
+}
+
+///|
+/// How far under the list's top the unread line opens: a few lines of what came before it in view (Chat.kt 85; the
+/// web's four lines of 23, Chat.tsx useMessageList).
+fn unread_lead() -> Double {
+  if wide_on.val {
+    92.0
+  } else {
+    85.0
+  }
+}
+
+///|
 /// What the page keeps of a chat while it is open.
 priv struct Reading {
   /// the first message's entry and where it was in the list, the last frame
@@ -125,6 +180,9 @@ priv struct Reading {
   /// rows asked a turn to come in (turns.mbt: Chat.kt admitted); each row's rise in, by key, while it rises
   admitted : Map[String, Bool]
   rises : Map[String, @motion.Anim]
+  /// in the wide frame, the messages that were there as they came into the list (the chat opened, the page before),
+  /// fading in, all that came at once together (Chat.tsx useHistoryFade), by key, while they fade
+  history : Map[String, @motion.Anim]
   /// when the list's own motion is at rest, as last laid out (ListInfo's `rest`): a turn waits for it
   mut list_rest : Double
   /// what was sent from here and is not in the core's view yet: in the list from the frame it was sent (sent_local)
@@ -204,6 +262,7 @@ fn reading_of(key : String) -> Reading {
         fresh: {},
         admitted: {},
         rises: {},
+        history: {},
         list_rest: -1.0,
         sending: [],
         newest: "",
@@ -369,6 +428,10 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
 }
 
 ///|
+/// How long what was there as it came into a chat's list fades in (Chat.css.ts data-history-fade).
+let history_fade_ms : Double = 180.0
+
+///|
 /// The chat's list, its key.
 fn list_key(r : ChatRef) -> String {
   "chat/" + r.station + "/" + r.session
@@ -476,11 +539,11 @@ fn messages(
         } else if joined {
           joined_gap
         } else {
-          gap
+          list_gap()
         }
         match e {
-          Top => c.box(h=Px(status_top() + chat_bar_h + 14.0), fn() {  }) |> ignore
-          Foot => c.box(h=Px(chat_foot_room(c, r, Some(v)) + 10.0 + floor), fn() {  }) |> ignore
+          Top => c.box(h=Px(list_top()), fn() {  }) |> ignore
+          Foot => c.box(h=Px(chat_foot_room(c, r, Some(v)) + list_foot() + floor), fn() {  }) |> ignore
           Working(a) => {
             // coming in, its room opens (220 ms, Ease.Out) as it fades in and grows from its avatar; its turn over,
             // it stays a moment and fades (Chat.kt Activity)
@@ -582,7 +645,8 @@ fn messages(
                 // from when its turn came (turns.mbt), else now
                 let a = @motion.Anim::new(0.0)
                 let at = turns.started_at(keys[i])
-                a.animate(1.0, @motion.tween(row_turn_ms, ease=Standard), start_at?=if at >= 0.0 { Some(at) } else { None })
+                let (ms, ease, _) = row_rise()
+                a.animate(1.0, @motion.tween(ms, ease~), start_at?=if at >= 0.0 { Some(at) } else { None })
                 rd.rises[keys[i]] = a
               }
             }
@@ -592,9 +656,14 @@ fn messages(
                 if !a.moving() && p >= 1.0 {
                   rd.rises.remove(keys[i]) |> ignore
                 } else {
-                  c.look(ri, @ui.look(alpha=p, dy=rise_dy * (1.0 - p)))
+                  c.look(ri, @ui.look(alpha=p, dy=row_rise().2 * (1.0 - p)))
                 }
               }
+              None => ()
+            }
+            match rd.history.get(keys[i]) {
+              Some(a) if a.moving() => c.look(ri, @ui.look(alpha=a.get()))
+              Some(_) => rd.history.remove(keys[i]) |> ignore
               None => ()
             }
           }
@@ -648,7 +717,7 @@ fn messages(
       }
       put_now = line >= 0 || was >= 0 || at >= 0
       if line >= 0 {
-        c.list_scroll_to(key, line, offset=-(status_top() + chat_bar_h + 14.0 + 85.0))
+        c.list_scroll_to(key, line, offset=-(list_top() + unread_lead()))
       } else if was >= 0 {
         c.list_scroll_to(key, was, offset=-kept.unwrap().offset)
       } else if at >= 0 {
@@ -656,7 +725,7 @@ fn messages(
         // else its top under the bar
         c.list_scroll_to(key, at, offset=match v.at_offset {
           Some(px) => -(px / c.scale)
-          None => -(status_top() + chat_bar_h + 14.0)
+          None => -list_top()
         })
       }
     }
@@ -701,7 +770,7 @@ fn messages(
           } else {
             flash_start(rd)
           }
-          c.list_scroll_to(key, at, offset=-(status_top() + chat_bar_h + 14.0))
+          c.list_scroll_to(key, at, offset=-list_top())
           @hostapi.log("chat: gone to message \{target.to_int()}")
         } else {
           match v.thread {
@@ -817,7 +886,7 @@ fn messages(
     // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
     // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
     let lr = c.list_reader(key)
-    let top = status_top() + chat_bar_h
+    let top = bar_foot()
     let room = chat_foot_room(c, r, Some(v))
     c.after_build("reading", fn() { read_place(rd, v, list, lr, top, room) })
     // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
@@ -856,6 +925,18 @@ pub let out_leave_ms : Double = 200.0
 /// How far a row new to the list comes up as it fades in (Chat.kt rise: 14, over its turn's 320 ms, the standard
 /// curve).
 let rise_dy : Double = 14.0
+
+///|
+/// How a row new to the list comes in: 320 ms on the standard curve, from 14 under (Chat.kt rise, the phone's mRise);
+/// in the wide frame the web's [data-enter], 220 ms on its ease-out from 6 under (keyframes.css.ts enterUp, motion.ts
+/// ENTER), each its turn as long (listQueue.ts).
+fn row_rise() -> (Double, @motion.Ease, Double) {
+  if wide_on.val {
+    (220.0, Out, 6.0)
+  } else {
+    (row_turn_ms, Standard, rise_dy)
+  }
+}
 
 ///|
 /// How long after a chat is put in place what comes at its end glides after it (Follow.kt).
@@ -1433,7 +1514,7 @@ fn row_keys(
         match e {
           // (after what closes under a post as its agent starts)
           Working(_) => turns.admit(c, k, working_turn_ms, after=true)
-          _ => turns.admit(c, k, row_turn_ms)
+          _ => turns.admit(c, k, row_rise().0)
         }
       }
     }
@@ -1470,7 +1551,23 @@ fn row_keys(
       }
     }
   }
+  // in the wide frame what was there as it came into the list (the chat opened, the page before it) fades in, all of
+  // it at once (Chat.tsx useHistoryFade, Chat.css.ts data-history-fade: 180 ms, the ease out); not what is new (it
+  // rises in) nor what was sent from here
+  let mut came : @motion.Anim? = None
   for i, k in keys {
+    if wide_on.val && !rd.known.contains(k) && !rd.fresh.contains(k) && list[i] is Said(_) {
+      let a = match came {
+        Some(a) => a
+        None => {
+          let a = @motion.Anim::new(0.0)
+          a.animate(1.0, @motion.tween(history_fade_ms, ease=Out))
+          came = Some(a)
+          a
+        }
+      }
+      rd.history[k] = a
+    }
     rd.known[k] = true
     if list[i] is Working(_) {
       rd.acts[k] = true
@@ -1505,7 +1602,7 @@ fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Array[St
   // (by its index as the rows stand now, while the list holds it: the reader's scroll lets it go)
   if came || rd.following_row {
     match keys.search(rd.follow_key) {
-      Some(i) => c.list_follow_from(key, i, margin=status_top() + chat_bar_h + 14.0 + follow_margin)
+      Some(i) => c.list_follow_from(key, i, margin=list_top() + follow_margin)
       None => ()
     }
   }
@@ -1759,8 +1856,8 @@ fn jump_to_latest(
       c,
       "chat-jump",
       shown,
-      enter=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css)),
-      exit=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css)),
+      enter=float_enter(),
+      exit=float_exit(),
     ) {
     Some(l) => l
     None => return
@@ -1782,19 +1879,21 @@ fn jump_to_latest(
       }
     }
   }
+  // (in the wide frame its tip, with its keys: the web's Tip over it)
+  wide_tip(c, "chat-jump", id, tr("android-chat.chat.latest"), action="chat.latest")
+  let (side, ends) = float_side()
   c.layer(align=AEnd, fn() {
     c.spacer()
     // (in the wide frame right over the send button, the composer's column in the pane's middle: Chat.css.ts)
-    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=chat_foot_room(c, r, Some(v)) + 2.0, fn() {
+    c.box(pr=float_right(c), pb=float_foot(c, r, v), fn() {
       let pill = c.box(
         dir=Row,
-        h=Px(36.0),
-        min_w=36.0,
-        padx=if count is Some(_) { 0.0 } else { 0.0 },
-        pl=if count is Some(_) { 10.0 } else { 0.0 },
-        pr=if count is Some(_) { 14.0 } else { 0.0 },
+        h=Px(side),
+        min_w=side,
+        pl=if count is Some(_) { ends.0 } else { 0.0 },
+        pr=if count is Some(_) { ends.1 } else { 0.0 },
         gap=4.0,
-        radius=18.0,
+        radius=side / 2.0,
         align=ACenter,
         justify=JCenter,
         glass=@sf.glass_floating(),
@@ -1803,7 +1902,7 @@ fn jump_to_latest(
         shadow_y=@sf.floating.dy,
         id~,
         fn() {
-          @sf.icon(c, "arrow-down", size=18.0, color=t.p.text) |> ignore
+          @sf.icon(c, "arrow-down", size=side / 2.0, color=t.p.text) |> ignore
           match count {
             Some(n) =>
               c.text(
@@ -1831,6 +1930,56 @@ fn jump_to_latest(
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// The round buttons over the list's foot (the way to the end, the bell): 36 across, a count's pill 10 and 14 in at its
+/// ends (Chat.kt JumpToLatest); the wide screen's 32, 9 and 12 (Chat.css.ts chatToBottom).
+fn float_side() -> (Double, (Double, Double)) {
+  if wide_on.val {
+    (32.0, (9.0, 12.0))
+  } else {
+    (36.0, (10.0, 14.0))
+  }
+}
+
+///|
+/// Where they stand from the pane's right: 18 in (Chat.kt), or in the wide frame over the composer's send button (its
+/// column in the pane's middle, 6 in from its end: Chat.css.ts chatToBottom).
+fn float_right(c : @ui.Ctx) -> Double {
+  if wide_on.val {
+    (c.width - wide_composer_w(c)) / 2.0 + 6.0
+  } else {
+    18.0
+  }
+}
+
+///|
+/// And from its foot: 2 over the composer's room (Chat.kt), or in the wide frame 12 over it (Chat.css.ts: 12 and the
+/// composer's room).
+fn float_foot(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Double {
+  chat_foot_room(c, r, Some(v)) + (if wide_on.val { 12.0 } else { 2.0 })
+}
+
+///|
+/// How they come and go: growing from 60% and up from 18 under (Chat.kt JumpToLatest, web mJump: its opacity 180 ms,
+/// CSS's ease, the rest 220 on the standard curve; going, 150 and 180); in the wide frame fading in 160 ms (Chat.css.ts
+/// chatToBottom: fadeKeyframes, ease-out) and out as long.
+fn float_enter() -> @motion.Trans {
+  if wide_on.val {
+    @motion.trans(fade=0.0, spec=@motion.tween(160.0, ease=Out), fade_spec=@motion.tween(160.0, ease=Out))
+  } else {
+    @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css))
+  }
+}
+
+///|
+fn float_exit() -> @motion.Trans {
+  if wide_on.val {
+    @motion.trans(fade=0.0, spec=@motion.tween(160.0, ease=Out), fade_spec=@motion.tween(160.0, ease=Out))
+  } else {
+    @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css))
+  }
 }
 
 ///|
@@ -1862,13 +2011,15 @@ fn jump_to_ask(
       c,
       "chat-ask",
       shown,
-      enter=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css)),
-      exit=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css)),
+      enter=float_enter(),
+      exit=float_exit(),
     ) {
     Some(l) => l
     None => return shown
   }
-  let lift = @motion.animate(c, "chat-ask/lift", if to_end { 44.0 } else { 0.0 }, spec=@motion.tween(ask_lift_ms, ease=Standard))
+  let (side, _) = float_side()
+  // over the way to the end while that shows, 8 above it (the web's 40 from foot to foot: Chat.css.ts chatToAsk)
+  let lift = @motion.animate(c, "chat-ask/lift", if to_end { side + 8.0 } else { 0.0 }, spec=@motion.tween(ask_lift_ms, ease=Standard))
   let id = c.id("chat-ask")
   if c.clicked(id) && shown {
     let k = r.station + "\u{1}" + r.session
@@ -1876,13 +2027,14 @@ fn jump_to_ask(
     go_to(r, asks[turn % asks.length()])
     ask_turns[k] = turn + 1
   }
+  wide_tip(c, "chat-ask", id, tr("android-chat.asks.go"))
   c.layer(align=AEnd, fn() {
     c.spacer()
-    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=chat_foot_room(c, r, Some(v)) + 2.0 + lift, fn() {
+    c.box(pr=float_right(c), pb=float_foot(c, r, v) + lift, fn() {
       let bell = c.box(
-        w=Px(36.0),
-        h=Px(36.0),
-        radius=18.0,
+        w=Px(side),
+        h=Px(side),
+        radius=side / 2.0,
         align=ACenter,
         justify=JCenter,
         glass=@sf.glass_floating(),
@@ -1890,7 +2042,7 @@ fn jump_to_ask(
         shadow_color=@sf.floating.color,
         shadow_y=@sf.floating.dy,
         id~,
-        fn() { @sf.icon(c, "bell", size=18.0, color=t.p.text) |> ignore },
+        fn() { @sf.icon(c, "bell", size=side / 2.0, color=t.p.text) |> ignore },
       )
       // (Chat.kt JumpToAsk's contentDescription)
       c.semantics(bell, Button, id~, label=tr("android-chat.asks.go"))
@@ -2171,17 +2323,18 @@ fn agent_state_mark(c : @ui.Ctx, badge : String) -> Unit {
 /// An agent's mark (Parts.kt ModelMark, small, as a list's): its maker's mark on a soft tile, its state on the corner.
 fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
   let t = @sf.theme()
+  let (ground, line) = mark_ground()
   c.box(w=Px(size), h=Px(size), fn() {
     c.box(
       w=Px(size),
       h=Px(size),
       radius=6.0,
-      bg=t.p.card,
-      border=1.0,
+      bg=ground,
+      border=line,
       border_color=t.p.line,
       align=ACenter,
       justify=JCenter,
-      fn() { @sf.maker_mark(c, a.maker, a.runtime, size * 0.6) |> ignore },
+      fn() { @sf.maker_mark(c, a.maker, a.runtime, mark_logo(size)) |> ignore },
     )
     |> ignore
     if a.badge != "" {
@@ -2200,29 +2353,33 @@ fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
 /// tile's. Until the station is known, the agent's mark alone.
 fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
   let t = @sf.theme()
+  let m = mark_side()
+  let (ground, line) = mark_ground()
   match station {
-    None => model_mark(c, a, 22.0)
+    None => model_mark(c, a, m)
     Some(s) =>
       // (AgentStationMark: 「who · station」 to a screen reader)
       c.box(label=a.who + " · " + s.name, fn() {
         c.box(
           dir=Row,
-          h=Px(22.0),
+          h=Px(m),
           radius=6.0,
-          bg=t.p.card,
-          border=1.0,
+          bg=ground,
+          border=line,
           border_color=t.p.line,
           align=ACenter,
           fn() {
-            c.box(w=Px(22.0), h=Px(22.0), align=ACenter, justify=JCenter, fn() {
-              @sf.maker_mark(c, a.maker, a.runtime, 13.2) |> ignore
+            c.box(w=Px(m), h=Px(m), align=ACenter, justify=JCenter, fn() {
+              @sf.maker_mark(c, a.maker, a.runtime, mark_logo(m)) |> ignore
             })
             |> ignore
-            c.box(max_w=96.0, padx=5.0, align=ACenter, fn() {
+            // the station's part: its mark, or its name kept short (the web's 140, its words .19 of the tile and 1 in)
+            let (most, inside, said_line) = station_part_type()
+            c.box(max_w=most, padx=inside, align=ACenter, fn() {
               if @sf.has_station_mark(s.emoji, s.icon) {
-                @sf.station_mark(c, s.emoji, s.icon, 13.0, t.p.muted)
+                @sf.station_mark(c, s.emoji, s.icon, mark_station(), t.p.muted)
               } else {
-                c.text(s.name, size=12.0, color=t.p.muted, wrap=false, line=14.0)
+                c.text(s.name, size=12.0, color=t.p.muted, wrap=false, line=said_line)
                 |> ignore
               }
             })
@@ -2230,12 +2387,13 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
           },
         )
         |> ignore
+        // the agent's state on the maker's corner, how the station is reached on the tile's: each 3 past it
         c.layer(fn() {
           c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-            c.box(tx=13.0, ty=13.0, fn() { agent_state_mark(c, a.badge) }) |> ignore
+            c.box(tx=m - 9.0, ty=m - 9.0, fn() { agent_state_mark(c, a.badge) }) |> ignore
             c.spacer()
             if s.via != "" {
-              c.box(tx=3.0, ty=15.0, fn() { via_dot(c, s.via, 10.0, 2.0) }) |> ignore
+              c.box(tx=3.0, ty=m - 7.0, fn() { via_dot(c, s.via, 10.0, 2.0) }) |> ignore
             }
           })
           |> ignore
@@ -2243,6 +2401,55 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
         |> ignore
       })
       |> ignore
+  }
+}
+
+///|
+/// An agent's mark in the bar: 22 square on the card's ground with a line round it (PageParts.kt); the wide screen's
+/// 20 on the neutral ground, no line (ui.css.ts agentMark), its maker .62 of it (the phone's .6), a station's mark 12
+/// (13), a station's name on the tile's line, in by .19 of it and 1, 140 at most (ChatPage.css.ts agentStationPart).
+fn mark_side() -> Double {
+  if wide_on.val {
+    20.0
+  } else {
+    22.0
+  }
+}
+
+///|
+fn mark_ground() -> (Int64, Double) {
+  let p = @sf.theme().p
+  if wide_on.val {
+    (p.neutral_bg, 0.0)
+  } else {
+    (p.card, 1.0)
+  }
+}
+
+///|
+fn mark_logo(side : Double) -> Double {
+  if wide_on.val {
+    (side * 0.62).round()
+  } else {
+    side * 0.6
+  }
+}
+
+///|
+fn mark_station() -> Double {
+  if wide_on.val {
+    12.0
+  } else {
+    13.0
+  }
+}
+
+///|
+fn station_part_type() -> (Double, Double, Double) {
+  if wide_on.val {
+    (140.0, 20.0 * 0.19 + 1.0, 20.0)
+  } else {
+    (96.0, 5.0, 14.0)
   }
 }
 

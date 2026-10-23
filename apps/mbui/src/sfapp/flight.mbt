@@ -18,7 +18,8 @@
 // A new chat's first words are carried (ChatHost.kt Flight.carried, web madeChat.ts): drawn where they were typed from
 // the frame they are sent, over the new chat's composer and then its chat's (newchat.mbt makes the chat, the page
 // becomes it), until their row is laid out in the chat's list; then the list comes up out of the composer with them,
-// across and up together on Ease.Arrive (480 ms, 90 after: the choices fade first), their bubble's ground and time
+// across and up together on Ease.Arrive (480 ms, 90 after: the choices fade first; in the wide frame from the middle of
+// the page at once, the composer going down to the chat's foot meanwhile: composer_page), their bubble's ground and time
 // coming in on the same way. The composer is not held for them. The list is not cut at the composer's top as Android's
 // is (ChatHost.kt clipRect): their bubble, in it, is drawn over the composer only while nothing over it cuts what it
 // draws (Ctx::put_over), and what else is in it then (its time) is all but clear there.
@@ -330,22 +331,48 @@ fn flight_ground_of(c : @ui.Ctx, f : SendFlight) -> Double {
 
 ///|
 fn flight_across(p : Double) -> Double {
-  @motion.Flight.at(dmin(dmin(p / flight_fly, 1.0) / 0.88, 1.0))
+  @motion.Flight.at(dmin(dmin(p / fly_share(), 1.0) / 0.88, 1.0))
 }
 
 ///|
 fn flight_up(p : Double) -> Double {
-  @motion.Flight.at(dmax((dmin(p / flight_fly, 1.0) - 0.12) / 0.88, 0.0))
+  @motion.Flight.at(dmax((dmin(p / fly_share(), 1.0) - 0.12) / 0.88, 0.0))
+}
+
+///|
+/// The wide frame's flight is the web's (madeChat.ts sendingHere): 520 ms, flown the whole of it, its bubble's ground
+/// and its time coming in as it goes across; the phone's (ChatHost.kt) 600, flown over 80%, settling from 24%.
+fn flight_len() -> Double {
+  if wide_on.val {
+    520.0
+  } else {
+    flight_ms
+  }
+}
+
+///|
+fn fly_share() -> Double {
+  if wide_on.val {
+    1.0
+  } else {
+    flight_fly
+  }
 }
 
 ///|
 /// How settled it is (its time and the rest of its row coming in), and how much of its bubble's ground shows.
 fn flight_settled(p : Double) -> Double {
+  if wide_on.val {
+    return flight_across(p)
+  }
   @motion.Arrive.at(dclamp((p - flight_settle) / (1.0 - flight_settle), 0.0, 1.0))
 }
 
 ///|
 fn flight_ground(p : Double) -> Double {
+  if wide_on.val {
+    return flight_across(p)
+  }
   dclamp((p - flight_settle) / (flight_fly - flight_settle), 0.0, 1.0)
 }
 
@@ -389,11 +416,13 @@ fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
     c.say("sent row in the list \{f.key}")
     f.placed_frame = c.frame_number()
     if f.carried {
-      // a new chat's: once its choices have faded (web: 90 ms after what leaves has begun to)
-      f.way.animate(1.0, @motion.tween(flight_carry_ms, ease=Linear, delay=flight_carry_after_ms))
+      // a new chat's: once its choices have faded (web: 90 ms after what leaves has begun to); in the wide frame at
+      // once, the composer going to the chat's foot with them (Chat.tsx toMadeChat: no wait)
+      let after = if wide_on.val { 0.0 } else { flight_carry_after_ms }
+      f.way.animate(1.0, @motion.tween(flight_carry_ms, ease=Linear, delay=after))
     } else {
-      f.way.animate(1.0, @motion.tween(flight_ms, ease=Linear))
-      composer_hold(f.chat, f.room, flight_settle * flight_ms)
+      f.way.animate(1.0, @motion.tween(flight_len(), ease=Linear))
+      composer_hold(f.chat, f.room, flight_settle * flight_len())
     }
   }
 }
@@ -423,7 +452,8 @@ fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
           fn() {
             c.box(style=@sf.full_width, tx=f.from_x - f.field_x, ty=f.from_y - f.field_y, fn() {
               // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced)
-              c.rich([@ui.span(f.text)], key="flight/words", size=send_size, color=t.p.text, line=send_line, trim=true, w=Fill(1.0), words=true)
+              let k = ct()
+              c.rich([@ui.span(f.text)], key="flight/words", size=k.font, color=t.p.text, line=k.line, trim=true, w=Fill(1.0), words=true)
               |> ignore
             })
             |> ignore
