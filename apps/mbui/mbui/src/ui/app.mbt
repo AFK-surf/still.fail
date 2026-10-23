@@ -873,8 +873,16 @@ fn Ctx::list_drag(self : Ctx, id : Int, d : Double) -> Unit {
 
 ///|
 /// Whether a press at (x, y) is on the left edge of the stack that takes
-/// back (Ctx::nav), where a swipe back starts.
+/// back (Ctx::nav), where a swipe back starts. None on Android: there the
+/// swipe from the edge is the system's back gesture (on_back), as still.fail's
+/// Android app has no other. One of these started beside it too, and the
+/// system taking the finger from the app once it had decided (a cancel here)
+/// called the page back to its place mid-swipe, deaf to the system's steps
+/// after it.
 fn Ctx::on_edge(self : Ctx, x : Double, y : Double) -> Bool {
+  if h_platform() == 2 {
+    return false
+  }
   match self.back {
     Some(_) if self.back_node >= 0 && self.back_node < self.count => {
       let n = self.nodes[self.back_node]
