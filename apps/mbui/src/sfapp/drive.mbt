@@ -356,8 +356,8 @@ fn root_row(c : @ui.Ctx, station : String, r : DvRoot, first : Bool, last : Bool
     app.nav.push(Drive({ station, root: Some(r.path), path: "" }))
   }
   let trouble = dv_trouble(r.state)
-  dv_card_row(c, first, last, dv_surface(), id, fn() {
-    c.box(dir=Row, w=Fill(1.0), padx=16.0, pady=12.0, gap=12.0, align=ACenter, fn() {
+  dv_card_row(c, first, last, None, id, fn() {
+    c.box(dir=Row, w=Fill(1.0), padx=@sf.card_pad - @sf.list_pad, pady=12.0, gap=12.0, align=ACenter, fn() {
       @sf.icon(c, "folder", size=22.0, color=t.p.muted) |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(r.name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
@@ -802,13 +802,9 @@ fn entry_row(
       }
     }
   }
-  let ground = if chosen {
-    @sf.over(dv_surface(), @sf.alpha(t.p.accent, 0.12))
-  } else {
-    dv_surface()
-  }
+  let ground = if chosen { Some(@sf.over(dv_surface(), @sf.alpha(t.p.accent, 0.12))) } else { None }
   dv_card_row(c, first, last, ground, if busy { 0 } else { id }, fn() {
-    c.box(dir=Row, w=Fill(1.0), padx=16.0, pady=11.0, gap=12.0, align=ACenter, fn() {
+    c.box(dir=Row, w=Fill(1.0), padx=@sf.card_pad - @sf.list_pad, pady=11.0, gap=12.0, align=ACenter, fn() {
       if choosing {
         c.box(
           w=Px(22.0),
@@ -1058,8 +1054,8 @@ fn upload_row(
 ) -> Unit {
   let t = @sf.theme()
   let k = "up/\{u.serial}"
-  dv_card_row(c, first, last, dv_surface(), 0, fn() {
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=8.0, pt=11.0, pb=11.0, gap=12.0, align=ACenter, fn() {
+  dv_card_row(c, first, last, None, 0, fn() {
+    c.box(dir=Row, w=Fill(1.0), pl=@sf.card_pad - @sf.list_pad, pt=11.0, pb=11.0, gap=12.0, align=ACenter, fn() {
       @sf.icon(c, "upload", size=22.0, color=t.p.muted) |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(u.name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore

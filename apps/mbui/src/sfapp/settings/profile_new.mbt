@@ -203,7 +203,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     }
     let blocks : Array[() -> Unit] = []
     let pad = fn(f : () -> Unit) { c.box(w=Fill(1.0), padx=18.0, pt=8.0, gap=12.0, f) |> ignore }
-    let group_box = fn(f : () -> Unit) { c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, f) |> ignore }
+    let group_box = fn(f : () -> Unit) { rows_card(c, f) }
     if step == "pick" {
       blocks.push(fn() {
         pad(fn() { c.text(text(d, "hint"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore })
@@ -338,7 +338,7 @@ fn connect_form(
   let label = fn(words : String) {
     c.text(words, size=13.0, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
   }
-  let group_box = fn(f : () -> Unit) { c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, f) |> ignore }
+  let group_box = fn(f : () -> Unit) { rows_card(c, f) }
   let ekey = "profile-endpoint/" + form
   if !n.filled {
     n.filled = true

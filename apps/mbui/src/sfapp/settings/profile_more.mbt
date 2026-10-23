@@ -958,7 +958,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
     },
     fn() {
       c.box(w=Fill(1.0), pl=inset, pr=inset, pb=10.0, fn() {
-        c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, fn() {
+        rows_card(c, fn() {
           for l in offers {
             let lv = Some(l)
             let rt = text(lv, "runtime")

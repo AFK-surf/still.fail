@@ -630,6 +630,18 @@ fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
 }
 
 ///|
+/// The rows' card itself, where its page puts it (Parts.kt RowsCard): its rows LIST_PAD in, knowing they are on one.
+fn rows_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  c.box(style=list_ground, fn() {
+    let was = on_card.val
+    on_card.val = true
+    body()
+    on_card.val = was
+  })
+  |> ignore
+}
+
+///|
 /// The wide frame's list on the page: its rows' words 16 in (the row's own 12), as the title's.
 // kept across runs: a value (no field of it changes)
 let wide_list_room : @ui.Style = @ui.style(w=Full, px=S1, pb=S2_5)
