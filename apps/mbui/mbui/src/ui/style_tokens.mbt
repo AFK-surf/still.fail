@@ -96,13 +96,15 @@ pub fn Space::px(self : Space) -> Double {
 
 ///|
 /// A width or a height: what it holds (`Hug`, the default), all of the parent's (`Full`), a share of what is left
-/// along the parent's main axis (`Grow(k)`), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a
-/// list's width; in a token file, a value off the scale).
+/// along the parent's main axis (`Grow(k)`), a share of the parent's room in percent (`Pct(p)`, CSS's 50%; a size only,
+/// not a bound), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a list's width; in a token
+/// file, a value off the scale).
 pub(all) enum Len {
   Hug
   Full
   Grow(Double)
   Fixed(Double)
+  Pct(Double)
   S0
   SPx
   S0_5
@@ -194,6 +196,7 @@ fn Len::size(self : Len) -> Size {
     Hug => Auto
     Full => Fill(1.0)
     Grow(k) => Fill(k)
+    Pct(p) => Pct(exact_ok(p, "Len Pct"))
     Fixed(v) => Px(exact_ok(v, "Len"))
     l => Px(l.space().unwrap().px())
   }
@@ -204,6 +207,7 @@ fn Len::size(self : Len) -> Size {
 fn Len::bound(self : Len, none_is : Double) -> Double {
   match self {
     Hug | Full | Grow(_) => none_is
+    Pct(p) => abort("style: a bound is not a share (Pct(\{p}))")
     Fixed(v) => exact_ok(v, "Len")
     l => l.space().unwrap().px()
   }

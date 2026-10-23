@@ -344,6 +344,12 @@ pub struct Ctx {
   // the boxes built this frame whose corner is `Inner` (style.mbt): worked out once laid out (corners.mbt), and
   // those that could not be (Tester::corner_faults says them)
   inners : Array[Int]
+  // what move_state moves (move_state.mbt): the moves going on; what each box named to be moved was shown as, this
+  // frame (its build so far) and the last; how many boxes of each name this build has built
+  move_runs : Array[MoveRun]
+  mut shown_now : Map[String, MoveShown]
+  mut shown_last : Map[String, MoveShown]
+  move_seen : Map[String, Int]
   // the boxes built this frame whose corner is `Around`: worked out from what lies in their corner (corners.mbt)
   arounds : Array[Int]
   inner_faults : Array[String]
@@ -519,6 +525,10 @@ fn Ctx::new() -> Ctx {
     narrow_below: 700.0,
     narrow: false,
     inners: [],
+    move_runs: [],
+    shown_now: {},
+    shown_last: {},
+    move_seen: {},
     arounds: [],
     inner_faults: [],
     direction: Ltr,
@@ -659,6 +669,13 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// says is as without either (no padding, no ground). A padding below 0 is not said (Ctx::row passes -1). With an
 /// `id` it takes the presses on its room (the innermost box with an id under the finger does); `taps` false: the id
 /// only names it (to measure it, Ctx::laid_size; to move it by a look), what holds it taking the presses there.
+///
+/// What CSS says of a box and the flex engine lays out anyway: margins (`m`, `mx`, `my`, `ml`, `mr`, `mt`, `mb`, below
+/// 0 too, the finer over the coarser as the padding), a size as a share of the parent's (`Pct`), and `left`, `top`,
+/// `right`, `bottom`: any said, it is out of the flow, put that far from its parent's edges, the parent's padding not
+/// kept (CSS's position: absolute, its parent the one it is placed in), drawn and pressed in the order it was built;
+/// both of a pair said and no size across, it reaches from one to the other. `moves`: the name Ctx::move_state moves
+/// it by.
 pub fn Ctx::box(
   self : Ctx,
   style? : Style,
@@ -674,6 +691,18 @@ pub fn Ctx::box(
   pr? : Double,
   pt? : Double,
   pb? : Double,
+  m? : Double,
+  mx? : Double,
+  my? : Double,
+  ml? : Double,
+  mr? : Double,
+  mt? : Double,
+  mb? : Double,
+  left? : Double,
+  top? : Double,
+  right? : Double,
+  bottom? : Double,
+  moves? : String = "",
   gap? : Double,
   align? : Align,
   justify? : Justify,
@@ -769,6 +798,24 @@ pub fn Ctx::box(
   }
   n.pad_t = first(said(pt), first(py, first(opt_px(st.pt), s_y))).unwrap_or(0.0)
   n.pad_b = first(said(pb), first(py, first(opt_px(st.pb), s_y))).unwrap_or(0.0)
+  // margins as the padding: one side said over both, both over all four, said here over the style's (below 0 too)
+  let mx = first(mx, m)
+  let my = first(my, m)
+  let sm_x = opt_px(first(st.mx, st.m))
+  let sm_y = opt_px(first(st.my, st.m))
+  n.mar_l = first(ml, first(mx, first(opt_px(st.ml), sm_x))).unwrap_or(0.0)
+  n.mar_r = first(mr, first(mx, first(opt_px(st.mr), sm_x))).unwrap_or(0.0)
+  if n.rtl {
+    let l = n.mar_l
+    n.mar_l = n.mar_r
+    n.mar_r = l
+  }
+  n.mar_t = first(mt, first(my, first(opt_px(st.mt), sm_y))).unwrap_or(0.0)
+  n.mar_b = first(mb, first(my, first(opt_px(st.mb), sm_y))).unwrap_or(0.0)
+  n.at_l = left.unwrap_or(0.0 / 0.0)
+  n.at_t = top.unwrap_or(0.0 / 0.0)
+  n.at_r = right.unwrap_or(0.0 / 0.0)
+  n.at_b = bottom.unwrap_or(0.0 / 0.0)
   n.min_w = first(min_w, opt_bound(st.min_w, 0.0)).unwrap_or(0.0)
   n.max_w = first(max_w, opt_bound(st.max_w, 1.0e9)).unwrap_or(1.0e9)
   n.min_h = first(min_h, opt_bound(st.min_h, 0.0)).unwrap_or(0.0)
@@ -840,6 +887,11 @@ pub fn Ctx::box(
     // (`taps` false: an id only to be measured or moved by (laid_size, a look): what is pressed in it is what holds
     // it, not it, which would take every press on its room that nothing in it takes)
     n.hit = taps
+  }
+  // moved by a move_state (move_state.mbt): what it is shown as while the move lasts, where it was to where it is built
+  if moves != "" {
+    n.moves = moves
+    self.move_node(i)
   }
   self.with_parent(i, body)
   i

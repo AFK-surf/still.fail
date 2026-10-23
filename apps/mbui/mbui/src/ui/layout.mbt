@@ -267,6 +267,27 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.set_padding_bottom(Pt(pad_b))
     ch = true
   }
+  // margins (CSS's: below 0 too)
+  let mar_l = len(n.mar_l)
+  if pt_differs(s.margin_left_kind(), s.margin_left_value(), mar_l) {
+    s.set_margin_left(Pt(mar_l))
+    ch = true
+  }
+  let mar_t = len(n.mar_t)
+  if pt_differs(s.margin_top_kind(), s.margin_top_value(), mar_t) {
+    s.set_margin_top(Pt(mar_t))
+    ch = true
+  }
+  let mar_r = len(n.mar_r)
+  if pt_differs(s.margin_right_kind(), s.margin_right_value(), mar_r) {
+    s.set_margin_right(Pt(mar_r))
+    ch = true
+  }
+  let mar_b = len(n.mar_b)
+  if pt_differs(s.margin_bottom_kind(), s.margin_bottom_value(), mar_b) {
+    s.set_margin_bottom(Pt(mar_b))
+    ch = true
+  }
   let gap = len(n.gap)
   // (a row in lines: `line_gap` between its lines where said)
   let lines = if n.flow && n.line_gap >= 0.0 { len(n.line_gap) } else { gap }
@@ -341,11 +362,15 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let mut hpx = 0.0
   let mut has_w = false
   let mut has_h = false
+  // the width (and height) said as a share of the parent's (NaN: not)
+  let mut wpct = 0.0 / 0.0
+  let mut hpct = 0.0 / 0.0
   match n.w {
     Px(p) => {
       wpx = p
       has_w = true
     }
+    Pct(p) => wpct = p
     Fill(k) =>
       if in_row {
         grow = k
@@ -361,11 +386,14 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   // a pager's pages lie over each other, moved sideways as they turn
   let over = n.pager != 0 || n.layer
+  // put where it is said in its parent (CSS's position: absolute), out of the flow
+  let at = !over && n.placed_at()
   match n.h {
     Px(p) => {
       hpx = p
       has_h = true
     }
+    Pct(p) => hpct = p
     Fill(k) =>
       if in_col {
         grow = k
@@ -433,6 +461,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       s.set_width(Pct(100.0))
       ch = true
     }
+  } else if !wpct.is_nan() {
+    if !(s.width_kind() == @flex.LEN_PCT && s.width_value() == wpct) {
+      s.set_width(Pct(wpct))
+      ch = true
+    }
   } else {
     let w = len(wpx)
     if opt_differs(s.width_kind(), s.width_value(), has_w, w) {
@@ -445,6 +478,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       s.set_height(Pct(100.0))
       ch = true
     }
+  } else if !hpct.is_nan() {
+    if !(s.height_kind() == @flex.LEN_PCT && s.height_value() == hpct) {
+      s.set_height(Pct(hpct))
+      ch = true
+    }
   } else {
     let h = len(hpx)
     if opt_differs(s.height_kind(), s.height_value(), has_h, h) {
@@ -452,11 +490,39 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       ch = true
     }
   }
-  let pos : @flex.PositionType = if over { Absolute } else { Relative }
+  let pos : @flex.PositionType = if over || at { Absolute } else { Relative }
   if s.position != pos {
     s.position = pos
-    s.set_inset_left(if over { Pt(0.0) } else { Auto })
-    s.set_inset_top(if over { Pt(0.0) } else { Auto })
+    ch = true
+  }
+  // a layer from its parent's top left; one put where it is said, from the edges said (len: on whole pixels too)
+  let inset = fn(v : Double, layer : Double) -> Double {
+    if over {
+      layer
+    } else if at && !v.is_nan() {
+      len(v)
+    } else {
+      0.0 / 0.0
+    }
+  }
+  let in_l = inset(n.at_l, 0.0)
+  if opt_differs(s.inset_left_kind(), s.inset_left_value(), !in_l.is_nan(), in_l) {
+    s.set_inset_left(if in_l.is_nan() { Auto } else { Pt(in_l) })
+    ch = true
+  }
+  let in_t = inset(n.at_t, 0.0)
+  if opt_differs(s.inset_top_kind(), s.inset_top_value(), !in_t.is_nan(), in_t) {
+    s.set_inset_top(if in_t.is_nan() { Auto } else { Pt(in_t) })
+    ch = true
+  }
+  let in_r = inset(n.at_r, 0.0 / 0.0)
+  if opt_differs(s.inset_right_kind(), s.inset_right_value(), !in_r.is_nan(), in_r) {
+    s.set_inset_right(if in_r.is_nan() { Auto } else { Pt(in_r) })
+    ch = true
+  }
+  let in_b = inset(n.at_b, 0.0 / 0.0)
+  if opt_differs(s.inset_bottom_kind(), s.inset_bottom_value(), !in_b.is_nan(), in_b) {
+    s.set_inset_bottom(if in_b.is_nan() { Auto } else { Pt(in_b) })
     ch = true
   }
   let mut up = 0

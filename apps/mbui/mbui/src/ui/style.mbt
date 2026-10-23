@@ -4,7 +4,7 @@
 
 ///|
 /// What a box looks like, every property optional (None: not said here). Padding from the finer to the coarser: `pl`
-/// `pr` `pt` `pb` over `px` `py` over `p`.
+/// `pr` `pt` `pb` over `px` `py` over `p`; the margins (`m`…) the same.
 pub(all) struct Patch {
   row : Bool?
   w : Len?
@@ -20,6 +20,13 @@ pub(all) struct Patch {
   pr : Space?
   pt : Space?
   pb : Space?
+  m : Space?
+  mx : Space?
+  my : Space?
+  ml : Space?
+  mr : Space?
+  mt : Space?
+  mb : Space?
   gap : Space?
   align : Align?
   justify : Justify?
@@ -63,6 +70,13 @@ pub fn patch(
   pr? : Space,
   pt? : Space,
   pb? : Space,
+  m? : Space,
+  mx? : Space,
+  my? : Space,
+  ml? : Space,
+  mr? : Space,
+  mt? : Space,
+  mb? : Space,
   gap? : Space,
   align? : Align,
   justify? : Justify,
@@ -89,6 +103,13 @@ pub fn patch(
     pr,
     pt,
     pb,
+    m,
+    mx,
+    my,
+    ml,
+    mr,
+    mt,
+    mb,
     gap,
     align,
     justify,
@@ -119,6 +140,13 @@ pub fn style(
   pr? : Space,
   pt? : Space,
   pb? : Space,
+  m? : Space,
+  mx? : Space,
+  my? : Space,
+  ml? : Space,
+  mr? : Space,
+  mt? : Space,
+  mb? : Space,
   gap? : Space,
   align? : Align,
   justify? : Justify,
@@ -153,6 +181,13 @@ pub fn style(
       pr,
       pt,
       pb,
+      m,
+      mx,
+      my,
+      ml,
+      mr,
+      mt,
+      mb,
       gap,
       align,
       justify,
@@ -203,6 +238,12 @@ pub fn Patch::then(self : Patch, o : Patch) -> Patch {
   let a_pr = if o.p is Some(_) || o.px is Some(_) { None } else { a.pr }
   let a_pt = if o.p is Some(_) || o.py is Some(_) { None } else { a.pt }
   let a_pb = if o.p is Some(_) || o.py is Some(_) { None } else { a.pb }
+  let a_mx = if o.m is Some(_) { None } else { a.mx }
+  let a_my = if o.m is Some(_) { None } else { a.my }
+  let a_ml = if o.m is Some(_) || o.mx is Some(_) { None } else { a.ml }
+  let a_mr = if o.m is Some(_) || o.mx is Some(_) { None } else { a.mr }
+  let a_mt = if o.m is Some(_) || o.my is Some(_) { None } else { a.mt }
+  let a_mb = if o.m is Some(_) || o.my is Some(_) { None } else { a.mb }
   {
     row: or_else(o.row, a.row),
     w: or_else(o.w, a.w),
@@ -218,6 +259,13 @@ pub fn Patch::then(self : Patch, o : Patch) -> Patch {
     pr: or_else(o.pr, a_pr),
     pt: or_else(o.pt, a_pt),
     pb: or_else(o.pb, a_pb),
+    m: or_else(o.m, a.m),
+    mx: or_else(o.mx, a_mx),
+    my: or_else(o.my, a_my),
+    ml: or_else(o.ml, a_ml),
+    mr: or_else(o.mr, a_mr),
+    mt: or_else(o.mt, a_mt),
+    mb: or_else(o.mb, a_mb),
     gap: or_else(o.gap, a.gap),
     align: or_else(o.align, a.align),
     justify: or_else(o.justify, a.justify),
