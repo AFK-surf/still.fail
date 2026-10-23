@@ -524,6 +524,7 @@ fn usage_lists(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
     }
   }
   if wide.val {
+    gap(c, 20.0)
     inset(c, body)
   } else {
     card(c, corner=@sf.seg_card_radius, body) |> ignore

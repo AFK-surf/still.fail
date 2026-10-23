@@ -307,7 +307,7 @@ fn place_page(
                   "add-connect" => tr("android-misc.bar.action.connects")
                   _ => ""
                 }
-                if wide_button(c, key, label, false) {
+                if head_pill(c, key, label) {
                   run()
                 }
               }
@@ -1882,3 +1882,37 @@ let pick_line_ground : @ui.Style = @ui.style(
 ///|
 // kept across runs: a value (no field of it changes)
 let check_room : @ui.Style = @ui.style(w=@sf.check_room_w, align=ACenter)
+
+///|
+/// A page head's own action in the wide frame (the web's outlined pill, ui.tsx Button with Plus): its ＋ and words, a
+/// line round it, the pointer's ground. True on the frame after a press.
+fn head_pill(c : @ui.Ctx, key : String, label : String) -> Bool {
+  let t = @sf.theme()
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let b = c.box(style=head_pill_style, id~, fn() {
+    @sf.icon(c, "plus", size=@sf.row_icon, color=t.p.text) |> ignore
+    c.text(label, style=head_pill_words) |> ignore
+  })
+  c.semantics(b, Button, id~, label~)
+  hit(c, id)
+}
+
+///|
+/// The pill (controls.css.ts btn: 36 high, 16 in, the field's line round it).
+// kept across runs: a value (no field of it changes)
+let head_pill_style : @ui.Style = @ui.style(
+  row=true,
+  h=S9,
+  px=S4,
+  gap=S1_5,
+  align=ACenter,
+  radius=Full,
+  border=B1,
+  border_color=Border,
+  hovered=@ui.patch(bg=Hover),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_pill_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false)
