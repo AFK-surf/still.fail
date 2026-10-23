@@ -17,11 +17,15 @@ fn desk_page(
   lead? : String = "",
   back? : String = tr("android-settings.title"),
   actions? : () -> Unit,
+  head? : () -> Unit,
 ) -> Unit {
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, back, trailing?=actions) },
-    fn() { large_title(c, title, about~, says=lead) },
-  ]
+  let blocks : Array[() -> Unit] = [fn() { top_back(c, core, back, trailing?=actions) }]
+  // a head of its own in place of the title (an account's: who it is), as the page's first block
+  match head {
+    // as far down as a title's head stands (wide_head_top)
+    Some(h) => blocks.push(fn() { c.box(style=desk_own_head, fn() { h() }) |> ignore })
+    None => blocks.push(fn() { large_title(c, title, about~, says=lead) })
+  }
   for i, b in content {
     blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
   }
@@ -33,6 +37,11 @@ fn desk_page(
 fn desk_column(c : @ui.Ctx) -> Double {
   dmin(desk_column_most, c.width - 2.0 * wide_side(c) - 2.0 * desk_column_in)
 }
+
+///|
+/// A page's head of its own (an account's): where a title's head would stand.
+// kept across runs: a value (no field of it changes)
+let desk_own_head : @ui.Style = @ui.style(w=Full, px=S4, pt=S10)
 
 ///|
 let desk_column_most : Double = 760.0
