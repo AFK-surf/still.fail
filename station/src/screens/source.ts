@@ -20,7 +20,8 @@ export type ScreenInput =
   | { t: "text"; text: string };
 
 /// `peek`: a preview (a link's card in a chat): it brings nothing forward, wakes nothing and is not among those on it.
-export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean };
+/// `bitrate`: what to encode at first (bits a second; none: the source's own), until `ScreenView.rate` says otherwise.
+export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number };
 
 /// What a screen's clipboard holds, as a view carries it (docs/remote-screens.md `clipboard`): text, or a PNG picture.
 export type ClipType = "text" | "png";
@@ -43,6 +44,9 @@ export interface ScreenView {
   /// Encodes from the next frame at about this many bits a second (the link carries no more: docs/remote-screens.md,
   /// "Pace"); one without it encodes at its own.
   rate?(bitsPerSecond: number): void;
+  /// Its pictures from now on fitted into these bounds (a config first: docs/remote-screens.md, "Pace"); one without it
+  /// keeps those it opened with.
+  bounds?(maxWidth: number, maxHeight: number): void;
   /// Stops capturing; a pending `next` resolves null.
   close(): void;
   /// The source's clipboard set (of a type its `clipboard()` names), then, with `paste`, pasted where its focus is (the

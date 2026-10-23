@@ -2,7 +2,7 @@
 // is asked for, from the acknowledgements alone, on a clock the test moves.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DOWN, HOLD_MS, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_UNACKED, UP, UP_AFTER_MS, UP_EVERY_MS, ownRate } from "../src/mesh/screen-pace.ts";
+import { DOWN, DOWNSIZE_MS, DOWNSIZE_SHARE, HOLD_MS, LOW_BOUNDS, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UP, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate } from "../src/mesh/screen-pace.ts";
 
 function paced() {
   let now = 0;
@@ -101,6 +101,29 @@ test("the bit rate: down to what went through once a queue stays, not for a loss
   assert.equal(p.pacer.rate(), own);
 });
 
+test("a view starting at START_RATE goes up by START_UP a step until a queue first builds, then by UP", () => {
+  let now = 0;
+  const pacer = new Pacer(() => now, START_RATE);
+  pacer.ceiling(ownRate(1920, 1080));
+  assert.equal(pacer.rate(), START_RATE);
+  let ts = 0;
+  const frame = (trip: number) => {
+    ts += 1000;
+    pacer.sent(ts, 10_000);
+    now += trip;
+    pacer.acked(ts);
+  };
+  frame(20);
+  assert.equal(pacer.rate(), START_RATE * START_UP, "the first round trip: up at once");
+  now += UP_EVERY_MS;
+  frame(20);
+  assert.equal(pacer.rate(), Math.min(ownRate(1920, 1080), START_RATE * START_UP * START_UP));
+  // Smaller than the own: as the picture's size has it.
+  const small = new Pacer(() => now, START_RATE);
+  small.ceiling(ownRate(640, 360));
+  assert.equal(small.rate(), 1_000_000);
+});
+
 test("a picture's size sets the most it is asked; none before it is known", () => {
   const p = paced();
   assert.equal(p.pacer.rate(), null);
@@ -108,4 +131,25 @@ test("a picture's size sets the most it is asked; none before it is known", () =
   assert.equal(p.pacer.rate(), Math.max(1_000_000, 1280 * 720 * 3));
   p.pacer.ceiling(ownRate(640, 360));
   assert.equal(p.pacer.rate(), 1_000_000);
+});
+
+test("the picture made smaller while the link carries a quarter of its own rate and the source uses it; back once the smaller one's own goes through", () => {
+  let now = 0;
+  const sizer = new Sizer(() => now, { maxWidth: 1920, maxHeight: 1080 });
+  const big = { width: 1920, height: 1080 }, small = { width: 1280, height: 720 };
+  const low = ownRate(1920, 1080) * DOWNSIZE_SHARE - 1;
+  // Low, but the screen changes little (a tenth of it used): not made smaller.
+  for (; now <= DOWNSIZE_MS * 2; now += 100) assert.equal(sizer.step(low, low / 10, big), null);
+  // Low and used: smaller once it stays so for DOWNSIZE_MS.
+  let asked = null;
+  for (const start = now; now <= start + DOWNSIZE_MS && asked === null; now += 100) asked = sizer.step(low, low, big);
+  assert.deepEqual(asked, LOW_BOUNDS);
+  assert.equal(sizer.low, true);
+  // The small one's own goes through for UPSIZE_MS: its own size again.
+  asked = null;
+  for (const start = now; now <= start + UPSIZE_MS + 100 && asked === null; now += 100) asked = sizer.step(ownRate(1280, 720), ownRate(1280, 720), small);
+  assert.deepEqual(asked, { maxWidth: 1920, maxHeight: 1080 });
+  // A view asked no larger than the small bounds is never made smaller.
+  const phone = new Sizer(() => now, { maxWidth: 1280, maxHeight: 720 });
+  for (let i = 0; i < 100; i++, now += 100) assert.equal(phone.step(MIN_RATE, MIN_RATE, small), null);
 });

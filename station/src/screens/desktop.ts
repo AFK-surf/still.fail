@@ -131,7 +131,7 @@ export class Desktop implements ScreenSource {
     if (!synthetic && this.#status?.capture !== true) throw this.#refused();
     // Granted since the helper started: it starts itself again to have it, and is asked once more.
     for (let attempt = 0; ; attempt++) {
-      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view));
+      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view));
       this.#views.add(view);
       try {
         await view.ready;
@@ -189,9 +189,10 @@ type HelperError = Error & { code?: string };
 
 /// The helper's messages: a kind byte, the payload's length (4 bytes), the payload (native/helper's ScreenView.swift).
 /// To it: 1 next, 2 keyframe, 3 input, 4 clipboard (flags: bit 0 paste; type: 1 text, 2 PNG; the bytes), 5 watch the
-/// clipboard (1 on, 0 off), 6 reveal (the path), 7 rate (bits a second, 4 bytes; a helper from before it lets it be).
+/// clipboard (1 on, 0 off), 6 reveal (the path), 7 rate (bits a second, 4 bytes), 8 bounds (JSON {maxWidth, maxHeight});
+/// a helper from before 7 and 8 lets them be.
 /// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes).
-export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7 } as const;
+export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 
 /// A clip as the helper's `clipboard` message has it: from the helper (`flags` none) or to it.
@@ -317,6 +318,10 @@ export class HelperView implements ScreenView {
     const payload = Buffer.alloc(4);
     payload.writeUInt32BE(Math.min(0xffff_ffff, Math.max(0, Math.round(bitsPerSecond))));
     this.#send(TO_HELPER.rate, payload);
+  }
+
+  bounds(maxWidth: number, maxHeight: number) {
+    this.#send(TO_HELPER.bounds, Buffer.from(JSON.stringify({ maxWidth: Math.round(maxWidth), maxHeight: Math.round(maxHeight) })));
   }
 
   async input(event: ScreenInput): Promise<void> {

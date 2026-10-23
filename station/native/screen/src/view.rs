@@ -17,6 +17,7 @@ use windows::Win32::UI::HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetP
 
 use super::Out;
 use super::avc;
+use super::hevc;
 use super::capture::{Capture, Gpu, Scaler, fitted};
 use super::clipboard::{Clipboard, PNG_MAX};
 use super::encode::H264;
@@ -55,10 +56,14 @@ pub enum Msg {
     Closed,
     /// Bits a second to encode at from the next frame on (the link carries no more).
     Rate(u32),
+    /// The pictures from now on fitted into these bounds.
+    Bounds(u32, u32),
 }
 
 struct Options {
     jpeg: bool,
+    /// H.265 asked (made where the hardware has an encoder of it, else H.264).
+    hevc: bool,
     max: (u32, u32),
     bitrate: Option<u32>,
     /// The software encoder even where there is hardware (a test of it): never asked by the station.
@@ -71,6 +76,7 @@ pub fn run(request: &Value, input: &mut impl std::io::Read, out: Out) {
     }
     let options = Options {
         jpeg: request["codec"].as_str() == Some("jpeg"),
+        hevc: request["codec"].as_str() == Some("h265"),
         max: (request["maxWidth"].as_u64().unwrap_or(1920).max(16) as u32, request["maxHeight"].as_u64().unwrap_or(1080).max(16) as u32),
         bitrate: request["bitrate"].as_u64().map(|b| b as u32),
         software: request["encoder"].as_str() == Some("software"),
@@ -116,6 +122,13 @@ pub fn run(request: &Value, input: &mut impl std::io::Read, out: Out) {
             }
             5 => clipboard.watch(payload.first() == Some(&1)),
             6 => reveal(&String::from_utf8_lossy(&payload)),
+            8 => {
+                if let Ok(b) = serde_json::from_slice::<Value>(&payload) {
+                    if let (Some(w), Some(h)) = (b["maxWidth"].as_u64(), b["maxHeight"].as_u64()) {
+                        drop(tx.send(Msg::Bounds(w.max(16) as u32, h.max(16) as u32)));
+                    }
+                }
+            }
             7 if payload.len() == 4 => drop(tx.send(Msg::Rate(u32::from_be_bytes([payload[0], payload[1], payload[2], payload[3]])))),
             _ => {}
         }
@@ -155,6 +168,9 @@ struct View {
     /// The encoder made a picture asked to be a key frame without one: made anew for the next ask instead.
     force_unheeded: bool,
     config: Vec<u8>,
+    /// Whether the view's encoder makes H.265, once one was made.
+    encoder_hevc: Option<bool>,
+    vps: Vec<u8>,
     sps: Vec<u8>,
     pps: Vec<u8>,
     jpeg_size: (u32, u32),
@@ -191,6 +207,8 @@ impl View {
             encoder: None,
             force_unheeded: false,
             config: Vec::new(),
+            encoder_hevc: None,
+            vps: Vec::new(),
             sps: Vec::new(),
             pps: Vec::new(),
             jpeg_size: (0, 0),
@@ -204,19 +222,34 @@ impl View {
             let made = view.make_encoder(width, height).map_err(|e| failed(out, &e, "encoder"))?;
             made
         };
-        out.json(1, json!({ "width": width, "height": height, "encoder": encoder }));
+        let codec = if view.options.jpeg { "jpeg" } else if view.encoder_hevc == Some(true) { "h265" } else { "h264" };
+        out.json(1, json!({ "width": width, "height": height, "encoder": encoder, "codec": codec }));
         Ok(view)
     }
 
     fn make_encoder(&mut self, width: u32, height: u32) -> windows::core::Result<String> {
         self.encoder = None;
         let bitrate = self.options.bitrate.unwrap_or((width * height * 3).max(1_000_000));
-        let encoder = H264::new(&self.gpu, width, height, bitrate, self.options.software)?;
+        // H.265 where it was asked and the hardware has it (a size's encoder made anew keeps the codec it had).
+        let hevc = self.options.hevc && self.encoder_hevc.unwrap_or(true);
+        let encoder = match hevc.then(|| H264::hevc(&self.gpu, width, height, bitrate)) {
+            Some(Ok(encoder)) => encoder,
+            _ => H264::new(&self.gpu, width, height, bitrate, self.options.software)?,
+        };
+        self.encoder_hevc = Some(encoder.hevc);
         let name = encoder.name.clone();
         // The parameter sets the output type names, for an encoder that puts none in band.
-        let header = avc::picture(&encoder.header);
-        if let (Some(sps), Some(pps)) = (header.sps, header.pps) {
-            (self.sps, self.pps) = (sps, pps);
+        (self.vps, self.sps, self.pps) = (Vec::new(), Vec::new(), Vec::new());
+        if encoder.hevc {
+            let header = hevc::picture(&encoder.header);
+            if let (Some(vps), Some(sps), Some(pps)) = (header.vps, header.sps, header.pps) {
+                (self.vps, self.sps, self.pps) = (vps, sps, pps);
+            }
+        } else {
+            let header = avc::picture(&encoder.header);
+            if let (Some(sps), Some(pps)) = (header.sps, header.pps) {
+                (self.sps, self.pps) = (sps, pps);
+            }
         }
         self.encoder = Some(encoder);
         self.force_key = true;
@@ -241,6 +274,8 @@ impl View {
             };
             match msg {
                 Some(Msg::Next) => self.wanted += 1,
+                // The next picture is of the new size: the encoder made anew for it (from a key frame, a config first).
+                Some(Msg::Bounds(w, h)) => self.options.max = (w, h),
                 Some(Msg::Rate(bits)) => {
                     let bits = bits.max(100_000);
                     self.options.bitrate = Some(bits);
@@ -365,38 +400,50 @@ impl View {
 
     /// One picture out: its config first when it changed.
     fn sent(&mut self, encoded: super::encode::Encoded, out: &Out) {
-        let picture = avc::picture(&encoded.stream);
-        if picture.data.is_empty() {
+        let hevc = self.encoder.as_ref().is_some_and(|e| e.hevc);
+        let (data, key, vps, sps, pps) = if hevc {
+            let p = hevc::picture(&encoded.stream);
+            (p.data, p.key, p.vps, p.sps, p.pps)
+        } else {
+            let p = avc::picture(&encoded.stream);
+            (p.data, p.key, None, p.sps, p.pps)
+        };
+        if data.is_empty() {
             return;
         }
-        if let Some(sps) = picture.sps {
+        if let Some(vps) = vps {
+            self.vps = vps;
+        }
+        if let Some(sps) = sps {
             self.sps = sps;
         }
-        if let Some(pps) = picture.pps {
+        if let Some(pps) = pps {
             self.pps = pps;
         }
-        let key = picture.key || encoded.clean;
+        let key = key || encoded.clean;
         if encoded.asked && !key {
             self.force_unheeded = true;
             self.force_key = true;
             self.fresh = self.latest.is_some();
         }
-        if self.sps.len() < 4 || self.pps.is_empty() {
+        if self.sps.len() < 4 || self.pps.is_empty() || (hevc && self.vps.is_empty()) {
             return;
         }
+        let description = if hevc { hevc::hvcc(&self.vps, &self.sps, &self.pps) } else { Some(avc::avcc(&self.sps, &self.pps)) };
+        let Some(description) = description else { return };
         let (width, height) = self.encoder.as_ref().map(|e| (e.width, e.height)).unwrap_or((0, 0));
         let mut config = Vec::new();
         config.extend_from_slice(&width.to_be_bytes());
         config.extend_from_slice(&height.to_be_bytes());
-        config.extend_from_slice(&avc::avcc(&self.sps, &self.pps));
+        config.extend_from_slice(&description);
         if config != self.config {
             out.send(2, &config);
             self.config = config;
         }
-        let mut payload = Vec::with_capacity(9 + picture.data.len());
+        let mut payload = Vec::with_capacity(9 + data.len());
         payload.push(key as u8);
         payload.extend_from_slice(&(encoded.ts as u64).to_be_bytes());
-        payload.extend_from_slice(&picture.data);
+        payload.extend_from_slice(&data);
         out.send(3, &payload);
     }
 

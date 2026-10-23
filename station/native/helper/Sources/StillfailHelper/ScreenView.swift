@@ -15,6 +15,7 @@
 //        6 reveal    UTF-8        a file's path, shown selected in Finder
 //        7 rate      4 bytes      bits a second (big-endian) to encode at from the next frame on (the link carries no
 //                                 more: docs/remote-screens.md, "Pace")
+//        8 bounds    JSON         {maxWidth, maxHeight}: the pictures from now on fitted into these (a config first)
 //   out  1 info      JSON     first: {width, height, encoder, codec}, or {error, code: "capture"|"restart"|"display"|"encoder"}
 //        2 config    4 bytes width, 4 bytes height, then the avcC or hvcC (none for JPEG): before the first frame and
 //                             whenever it changes
@@ -37,8 +38,9 @@ import VideoToolbox
 final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   let channel: Channel
   let displayID: CGDirectDisplayID
-  let maxWidth: Int
-  let maxHeight: Int
+  /// The view's bounds: as it opened, then as the station asks (`bounds`).
+  var maxWidth: Int
+  var maxHeight: Int
   let fps: Int
   /// The bit rate asked when the view opened, then as the station asks (`rate`); none: the picture's size's.
   var bitrate: Int?
@@ -55,6 +57,9 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   let input: ScreenInput
   lazy var clipboard = Clipboard(channel: channel, input: input)
   var stream: SCStream?
+  var configuration: SCStreamConfiguration?
+  /// The made-up pictures' size (`synthetic`), as the bounds have it.
+  var syntheticSize = (0, 0)
   var timer: DispatchSourceTimer?
   var session: VTCompressionSession?
   var size = (0, 0)
@@ -100,6 +105,10 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       case 4: clipboard.set(payload)
       case 5: clipboard.watch(payload)
       case 6: clipboard.reveal(payload)
+      case 8:
+        if let b = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any], let w = b["maxWidth"] as? Int, let h = b["maxHeight"] as? Int {
+          bounds(w, h)
+        }
       case 7: if payload.count == 4 { rate(Int(payload.withUnsafeBytes { UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self)) })) }
       default: break
       }
@@ -147,6 +156,7 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
         try await stream.startCapture()
         queue.sync {
           self.stream = stream
+          self.configuration = configuration
           self.opened(width, height)
         }
       } catch {
@@ -233,7 +243,8 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       guard moving else { return }
       let timer = DispatchSource.makeTimerSource(queue: self.queue)
       timer.schedule(deadline: .now(), repeating: .nanoseconds(1_000_000_000 / fps))
-      timer.setEventHandler { self.took(self.picture(width, height), self.now()) }
+      self.syntheticSize = (width, height)
+      timer.setEventHandler { self.took(self.picture(self.syntheticSize.0, self.syntheticSize.1), self.now()) }
       timer.resume()
       self.timer = timer
     }
@@ -434,6 +445,28 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     queue.async {
       self.wanted += 1
       self.pump()
+    }
+  }
+
+  /// The pictures from now on fitted into `width`×`height`: the capture asked for the new size (its next picture is
+  /// that size, and the encoder is made anew for it, from a key frame).
+  func bounds(_ width: Int, _ height: Int) {
+    queue.async {
+      self.maxWidth = max(16, width)
+      self.maxHeight = max(16, height)
+      let display = Status.display(self.displayID)
+      let (w, h) = self.fitted(display["width"] as! Int, display["height"] as! Int)
+      if self.synthetic != nil {
+        self.syntheticSize = (w, h)
+        return
+      }
+      guard let stream = self.stream, let configuration = self.configuration else { return }
+      if configuration.width == w && configuration.height == h { return }
+      configuration.width = w
+      configuration.height = h
+      stream.updateConfiguration(configuration) { error in
+        if let error { self.channel.sendJSON(4, ["bounds": error.localizedDescription]) }
+      }
     }
   }
 

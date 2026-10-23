@@ -22,6 +22,29 @@ class AvcTest {
         assertArrayEquals(bytes(0, 0, 0, 1) + pps, c.csd1())
     }
 
+    // An hvcC as VideoToolbox writes it: version 1, Main, 4-byte lengths (lengthSizeMinusOne 3 in byte 21), three
+    // arrays (VPS 32, SPS 33, PPS 34), one unit each.
+    private val vps = bytes(0x40, 0x01, 0x0c)
+    private val hsps = bytes(0x42, 0x01, 0x01, 0x01)
+    private val hpps = bytes(0x44, 0x01, 0xc1)
+    private val hvcC = bytes(1, 0x01, 0x60, 0, 0, 0, 0xb0, 0, 0, 0, 0, 0, 153, 0xf0, 0, 0xfc, 0xfd, 0xf8, 0xf8, 0, 0, 0x0f, 3) +
+        bytes(0x20, 0, 1, 0, vps.size) + vps + bytes(0x21, 0, 1, 0, hsps.size) + hsps + bytes(0x22, 0, 1, 0, hpps.size) + hpps
+
+    @Test fun hvcCMakesOneCsdOfEverySetWithStartCodes() {
+        val c = parseHvcC(hvcC)!!
+        assertEquals(4, c.lengthSize)
+        assertArrayEquals(bytes(0, 0, 0, 1) + vps + bytes(0, 0, 0, 1) + hsps + bytes(0, 0, 0, 1) + hpps, c.csd0())
+        assertEquals(c.lengthSize, parseConfig("h265", hvcC)!!.lengthSize)
+        assertNull(parseConfig("vp9", hvcC))
+    }
+
+    @Test fun anHvcCThatIsNotOneIsNone() {
+        assertNull(parseHvcC(bytes()))
+        assertNull(parseHvcC(hvcC.copyOfRange(0, hvcC.size - 2)))
+        // No arrays: no parameter sets.
+        assertNull(parseHvcC(hvcC.copyOfRange(0, 22) + bytes(0)))
+    }
+
     @Test fun anAvcCThatIsNotOneIsNone() {
         assertNull(parseAvcC(bytes()))
         assertNull(parseAvcC(bytes(0) + avcC.copyOfRange(1, avcC.size)))

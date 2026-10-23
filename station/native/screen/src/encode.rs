@@ -1,5 +1,6 @@
 // H.264 with Media Foundation: the hardware encoder (an asynchronous MFT, given the D3D11 textures themselves) where
-// the machine has one that takes them, else Microsoft's software encoder (given each picture's bytes). Low latency (a
+// the machine has one that takes them, else Microsoft's software encoder (given each picture's bytes). H.265 the same
+// way, on the hardware only (Main; where the machine has no HEVC encoder, the view goes on in H.264). Low latency (a
 // picture out for each in), no B-frames, constrained baseline where the encoder has it, a key frame when asked for and
 // at least every 10 s besides. One picture is in it at a time: the view asks for the next only once one went.
 use std::collections::VecDeque;
@@ -38,6 +39,8 @@ pub struct H264 {
     pub width: u32,
     pub height: u32,
     pub name: String,
+    /// H.265 (else H.264).
+    pub hevc: bool,
     /// The parameter sets the output type names (an encoder that does not put them in band).
     pub header: Vec<u8>,
     _manager: Option<IMFDXGIDeviceManager>,
@@ -49,10 +52,10 @@ fn set(codec: &ICodecAPI, api: &GUID, value: VARIANT) -> bool {
     unsafe { codec.SetValue(api, &value).is_ok() }
 }
 
-/// The hardware encoders that take NV12 to H.264, best first.
-fn hardware() -> Vec<IMFActivate> {
+/// The hardware encoders that take NV12 to H.264 (or H.265), best first.
+fn hardware(hevc: bool) -> Vec<IMFActivate> {
     let input = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: MFVideoFormat_NV12 };
-    let output = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: MFVideoFormat_H264 };
+    let output = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: if hevc { MFVideoFormat_HEVC } else { MFVideoFormat_H264 } };
     let mut found: *mut Option<IMFActivate> = std::ptr::null_mut();
     let mut count = 0u32;
     let mut all = Vec::new();
@@ -84,12 +87,30 @@ fn friendly(activate: &IMFActivate) -> String {
 }
 
 impl H264 {
+    /// The best H.265 encoder there is for `width`×`height`, on the hardware; an error where there is none.
+    pub fn hevc(gpu: &Gpu, width: u32, height: u32, bitrate: u32) -> Result<H264> {
+        let mut last = None;
+        for activate in hardware(true) {
+            let name = friendly(&activate);
+            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, true, width, height, bitrate, name)) {
+                Ok(encoder) => return Ok(encoder),
+                Err(error) => {
+                    unsafe {
+                        let _ = activate.ShutdownObject();
+                    }
+                    last = Some(error);
+                }
+            }
+        }
+        Err(last.unwrap_or_else(|| windows::core::Error::new(MF_E_TOPO_CODEC_NOT_FOUND, "no H.265 encoder on this machine's hardware")))
+    }
+
     /// The best encoder there is for `width`×`height`: hardware first (unless `software`), then software.
     pub fn new(gpu: &Gpu, width: u32, height: u32, bitrate: u32, software: bool) -> Result<H264> {
         let mut last = None;
-        for activate in if software { Vec::new() } else { hardware() } {
+        for activate in if software { Vec::new() } else { hardware(false) } {
             let name = friendly(&activate);
-            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, width, height, bitrate, name)) {
+            match unsafe { activate.ActivateObject::<IMFTransform>() }.and_then(|t| H264::open(gpu, t, true, false, width, height, bitrate, name)) {
                 Ok(encoder) => return Ok(encoder),
                 Err(error) => {
                     unsafe {
@@ -100,13 +121,14 @@ impl H264 {
             }
         }
         let software: Result<IMFTransform> = unsafe { CoCreateInstance(&CLSID_MSH264EncoderMFT, None, CLSCTX_INPROC_SERVER) };
-        match software.and_then(|t| H264::open(gpu, t, false, width, height, bitrate, "Microsoft H.264 (software)".into())) {
+        match software.and_then(|t| H264::open(gpu, t, false, false, width, height, bitrate, "Microsoft H.264 (software)".into())) {
             Ok(encoder) => Ok(encoder),
             Err(error) => Err(last.unwrap_or(error)),
         }
     }
 
-    fn open(gpu: &Gpu, transform: IMFTransform, hardware: bool, width: u32, height: u32, bitrate: u32, name: String) -> Result<H264> {
+    #[allow(clippy::too_many_arguments)]
+    fn open(gpu: &Gpu, transform: IMFTransform, hardware: bool, hevc: bool, width: u32, height: u32, bitrate: u32, name: String) -> Result<H264> {
         unsafe {
             let attributes = transform.GetAttributes().ok();
             let asynchronous = attributes.as_ref().and_then(|a| a.GetUINT32(&MF_TRANSFORM_ASYNC).ok()).unwrap_or(0) != 0;
@@ -140,12 +162,18 @@ impl H264 {
             }
             let size = ((width as u64) << 32) | height as u64;
             let rate = ((FPS as u64) << 32) | 1;
-            // Constrained baseline, as every decoder takes it; baseline, then main (no B-frames asked) where not.
+            // H.264: constrained baseline, as every decoder takes it; baseline, then main (no B-frames asked) where not.
+            // H.265: Main, 8 bits 4:2:0.
             let mut profile = "";
-            for (p, named) in [(eAVEncH264VProfile_ConstrainedBase.0 as u32, "constrained baseline"), (eAVEncH264VProfile_Base.0 as u32, "baseline"), (eAVEncH264VProfile_Main.0 as u32, "main")] {
+            let profiles: &[(u32, &str)] = if hevc {
+                &[(eAVEncH265VProfile_Main_420_8.0 as u32, "H.265 main")]
+            } else {
+                &[(eAVEncH264VProfile_ConstrainedBase.0 as u32, "constrained baseline"), (eAVEncH264VProfile_Base.0 as u32, "baseline"), (eAVEncH264VProfile_Main.0 as u32, "main")]
+            };
+            for &(p, named) in profiles {
                 let output = MFCreateMediaType()?;
                 output.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
-                output.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264)?;
+                output.SetGUID(&MF_MT_SUBTYPE, if hevc { &MFVideoFormat_HEVC } else { &MFVideoFormat_H264 })?;
                 output.SetUINT32(&MF_MT_AVG_BITRATE, bitrate)?;
                 output.SetUINT64(&MF_MT_FRAME_SIZE, size)?;
                 output.SetUINT64(&MF_MT_FRAME_RATE, rate)?;
@@ -162,7 +190,7 @@ impl H264 {
                 }
             }
             if profile.is_empty() {
-                return Err(windows::core::Error::new(MF_E_INVALIDMEDIATYPE, "the encoder takes no H.264 profile asked"));
+                return Err(windows::core::Error::new(MF_E_INVALIDMEDIATYPE, "the encoder takes no profile asked"));
             }
             let input = MFCreateMediaType()?;
             input.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
@@ -200,6 +228,7 @@ impl H264 {
                 width,
                 height,
                 name: format!("{name}, {profile}, {bitrate} bps"),
+                hevc,
                 header,
                 _manager: manager,
             })

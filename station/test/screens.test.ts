@@ -26,7 +26,7 @@ import { KEYS, WinInput } from "../src/screens/win-input.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
-import { MAX_UNACKED, QUEUE_MS, START_UNACKED } from "../src/mesh/screen-pace.ts";
+import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED } from "../src/mesh/screen-pace.ts";
 import type { Clock } from "effect";
 import { memoryMesh, vanish } from "./memory-mesh.ts";
 import { Superseded } from "../src/mesh/superseded.ts";
@@ -156,8 +156,8 @@ test("a view: its answer, what it is, then the config and frames as the source g
   hub.add(source);
   const v = await open(hub, member, { maxWidth: 99999, codecs: ["vp9", "h264"], control: true });
   assert.deepEqual(v.answer, { status: 200, headers: { "content-type": SCREEN_TYPE } });
-  // What it asked, bounded; the codecs ours only; the height as not said.
-  assert.deepEqual(source.opened, [{ maxWidth: 8192, maxHeight: 1080, codecs: ["h264"] }]);
+  // What it asked, bounded; the codecs ours only; the height as not said; at the pace's start rate.
+  assert.deepEqual(source.opened, [{ maxWidth: 8192, maxHeight: 1080, codecs: ["h264"], bitrate: START_RATE }]);
   const states: any[] = [];
   const config = json(await until(v.frames, KIND.config, states));
   assert.deepEqual(states, [{ title: "Tab", control: true }, { viewers: ["Pat"], controlledBy: ["Pat"] }]);
@@ -608,6 +608,11 @@ test("Windows' desktop: a stillfail-screen process a view, asked for each frame,
   const pending = view.next();
   view.close();
   assert.equal(await pending, null);
+  // H.265 asked of it: as its info says what it made; one that says nothing (from before H.265) made H.264.
+  const asked = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h265", "h264"] });
+  assert.equal((await asked.next())?.config?.codec, "h264");
+  assert.equal(readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).at(-1).codec, "h265");
+  asked.close();
   // One that cannot capture says why.
   await assert.rejects(desktop.open({ maxWidth: 1, maxHeight: 1, codecs: ["jpeg"] }), (e: ScreenRefused) => e.status === 503 && /no display to capture/.test(e.message));
   await desktop.close();

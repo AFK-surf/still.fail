@@ -19,7 +19,7 @@ import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "..
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenInput, type ScreenSource, type ScreenView, CLIP_PNG_MAX, clipFits } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
-import { Pacer, ownRate } from "./screen-pace.ts";
+import { Pacer, START_RATE, Sizer, ownRate } from "./screen-pace.ts";
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
@@ -174,7 +174,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const control = ask.control && !readOnly(viewer);
   let view: ScreenView;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.peek ? { peek: true } : {}) });
+    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, bitrate: START_RATE, ...(ask.peek ? { peek: true } : {}) });
   } catch (error) {
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.
@@ -195,8 +195,10 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
     return;
   }
   const access = accessShown(source.access?.(), lang);
-  const pacer = new Pacer(() => Number(clock.monotonicTimeNanosUnsafe()) / 1e6);
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access, pacer }).run();
+  const now = () => Number(clock.monotonicTimeNanosUnsafe()) / 1e6;
+  const pacer = new Pacer(now, START_RATE);
+  const sizer = new Sizer(now, { maxWidth: ask.maxWidth, maxHeight: ask.maxHeight });
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access, pacer, sizer }).run();
 }
 
 /// One view while it lasts.
@@ -229,8 +231,11 @@ class ViewSession {
   readonly peek: boolean;
   readonly access: AccessShown | undefined;
   readonly pacer: Pacer;
+  readonly sizer: Sizer;
+  /// The picture's size, as its latest config said (H.264, H.265: what the bounds go by).
+  #size: { width: number; height: number } | null = null;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined; pacer: Pacer }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined; pacer: Pacer; sizer: Sizer }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -242,6 +247,7 @@ class ViewSession {
     this.peek = o.peek === true;
     this.access = o.access;
     this.pacer = o.pacer;
+    this.sizer = o.sizer;
     this.#title = o.source.title();
   }
 
@@ -305,13 +311,19 @@ class ViewSession {
     await this.#over;
   }
 
-  /// The source asked for the bit rate the link carries, when it changed by more than a little.
+  /// The source asked for the bit rate the link carries, when it changed by more than a little; and for as small a
+  /// picture as that rate makes sharpest (a source that changes its size).
   #pace() {
     const rate = this.pacer.rate();
     if (rate === null || !this.view.rate) return;
-    if (this.#rate !== null && Math.abs(rate - this.#rate) < this.#rate * 0.05) return;
-    this.#rate = rate;
-    this.view.rate(Math.round(rate));
+    if (this.#rate === null || Math.abs(rate - this.#rate) >= this.#rate * 0.05) {
+      this.#rate = rate;
+      this.view.rate(Math.round(rate));
+    }
+    if (this.#size && this.view.bounds) {
+      const bounds = this.sizer.step(rate, this.pacer.through(), this.#size);
+      if (bounds) this.view.bounds(bounds.maxWidth, bounds.maxHeight);
+    }
   }
 
   /// Frames out, while the client keeps up.
@@ -332,7 +344,10 @@ class ViewSession {
       if (this.#closed) return;
       if (next === null) return this.#stop("gone");
       if (next.config) {
-        if (next.config.codec !== "jpeg") this.pacer.ceiling(ownRate(next.config.width, next.config.height));
+        if (next.config.codec !== "jpeg") {
+          this.pacer.ceiling(ownRate(next.config.width, next.config.height));
+          this.#size = { width: next.config.width, height: next.config.height };
+        }
         void this.#send(KIND.config, configPayload(next.config));
       }
       this.pacer.sent(next.ts, next.data.length);

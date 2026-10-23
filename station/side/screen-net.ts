@@ -6,6 +6,7 @@
 //
 //   node scripts/native.ts run mesh -- node station/side/screen-net.ts
 //   SOURCE=helper node scripts/native.ts run mesh helper -- node station/side/screen-net.ts
+//   RELAY=https://… node scripts/native.ts run mesh -- node station/side/screen-net.ts   (through that relay alone)
 //
 // LINK_SECONDS (default 8) a link; LINKS to pick some by name (comma separated); BITRATE (default 6000000) the source's.
 import { execFileSync } from "node:child_process";
@@ -37,7 +38,7 @@ const helperApp = () => process.env.STILLFAIL_HELPER ?? execFileSync(process.exe
 /// How long a device takes to decode and draw a frame before it acknowledges it.
 const DRAW_MS = 4;
 
-type Link = { name: string; rttMs: number; loss: number; mbps: number | null };
+type Link = { name: string; rttMs: number; loss: number; mbps: number | null; relay?: string };
 const LINKS: Link[] = [
   { name: "lan", rttMs: 2, loss: 0, mbps: null },
   { name: "city", rttMs: 40, loss: 0, mbps: null },
@@ -63,26 +64,30 @@ function movingSource(): ScreenSource {
     kind: "desktop",
     title: () => "bench",
     size: () => ({ width: 1920, height: 1080 }),
-    async open(): Promise<ScreenView> {
+    async open(options): Promise<ScreenView> {
       let closed = false;
       let key = true;
       let last = 0;
       let first = true;
-      let bitrate = BITRATE;
+      let bitrate = Math.min(BITRATE, options.bitrate ?? BITRATE);
+      // The picture's size: 1080p fitted into the bounds asked.
+      const fit = (w: number, h: number) => { const k = Math.min(1, w / 1920, h / 1080); return { width: Math.round(1920 * k), height: Math.round(1080 * k) }; };
+      let size = fit(options.maxWidth, options.maxHeight);
       return {
         async next(): Promise<Frame | null> {
           const due = last + 1000 / FPS;
           if (now() < due) await sleep(due - now());
           if (closed) return null;
           last = now();
-          const size = Math.max(200, Math.round(bitrate / 8 / FPS) * (key ? 8 : 1));
-          const f: Frame = { key, ts: nowUs(), data: randomBytes(size), ...(first ? { config: { codec: "h264", width: 1920, height: 1080, description: new Uint8Array([1]) } } : {}) };
+          const bytes = Math.max(200, Math.round(bitrate / 8 / FPS) * (key ? 8 : 1));
+          const f: Frame = { key, ts: nowUs(), data: randomBytes(bytes), ...(first ? { config: { codec: "h264", ...size, description: new Uint8Array([1]) } } : {}) };
           key = false;
           first = false;
           return f;
         },
         keyframe: () => void (key = true),
         rate: (bps) => void (bitrate = bps),
+        bounds: (w, h) => void ((size = fit(w, h)), (first = true), (key = true)),
         input: async () => {},
         close: () => void (closed = true),
       };
@@ -159,9 +164,10 @@ function units(frame: Buffer): Buffer[] {
 const pct = (xs: number[], p: number) => (xs.length === 0 ? NaN : [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(xs.length * p))]!);
 
 async function run(link: Link, station: Endpoint, device: Endpoint) {
-  // A device of its own each link: iroh keeps the ways it knew to a station, the last link's proxy among them.
-  const proxy = await impair(link, station.sockets().find((s) => !s.startsWith("0.0.0.0") && !s.startsWith("["))!);
-  const conn = await device.connect({ id: station.id(), ips: [proxy.address] }, ALPN);
+  // A device of its own each link: iroh keeps the ways it knew to a station, the last link's proxy among them. Through a
+  // relay (RELAY): no proxy, the real way there and back.
+  const proxy = link.relay ? { close() {} } : await impair(link, station.sockets().find((s) => !s.startsWith("0.0.0.0") && !s.startsWith("["))!);
+  const conn = await device.connect(link.relay ? { id: station.id(), relays: [link.relay] } : { id: station.id(), ips: [(proxy as { address: string }).address] }, ALPN);
   const stream = await conn.openBi();
   await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: { maxWidth: 1920, maxHeight: 1080, codecs: CODECS, control: false } });
   const reader = new Reader(stream);
@@ -172,6 +178,8 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   const drawn: number[] = [];
   let bytes = 0;
   let codec = "";
+  /// The picture's heights, as each config said them.
+  const heights: number[] = [];
   const kept: Buffer[] = [];
   const start = now();
   const end = start + SECONDS * 1000;
@@ -183,6 +191,7 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
     if (f.kind === KIND.config) {
       const config = JSON.parse(f.payload.toString());
       codec = config.codec;
+      heights.push(config.height);
       if (DUMP && config.description) kept.push(...parameterSets(codec, Buffer.from(config.description, "base64")));
     }
     if (f.kind !== KIND.video) continue;
@@ -206,6 +215,7 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   return {
     link: link.name,
     codec,
+    heights: heights.join("→"),
     fps: +(drawn.length / span).toFixed(1),
     lateP50: Math.round(pct(late, 0.5)),
     lateP95: Math.round(pct(late, 0.95)),
@@ -219,8 +229,11 @@ async function main() {
   const mesh = loadMesh();
   // The device on 127.0.0.1, the station on an address it cannot reach from there (a tunnel's, as Tailscale's 100.x;
   // STATION_AT another): the device reaches it only through the proxy, whatever ways the station tells it of.
-  const bind = (at: string) => mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [], discovery: false, bindAddr: at });
-  const station = await bind(process.env.STATION_AT ?? `${tunnel()}:0`);
+  // RELAY: both through that relay alone (a link `relay`, the real network to it and back, nothing made worse).
+  const relay = process.env.RELAY;
+  const bind = (at: string) => mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: relay ? [relay] : [], discovery: false, ...(relay ? { relayOnly: true } : { bindAddr: at }) });
+  const station = await bind(process.env.STATION_AT ?? (relay ? "" : `${tunnel()}:0`));
+  if (relay) await station.online();
   const hub = new ScreenHub();
   const source: ScreenSource = SOURCE === "helper" ? new Desktop({ supported: true, helper: new HelperApp({ app: helperApp(), dir: mkdtempSync(join(tmpdir(), "screen-net-")) }), changed: () => {}, synthetic: "moving" }) : movingSource();
   // FIXED_RATE: the source never asked for another bit rate (as before the pace asked it).
@@ -239,7 +252,8 @@ async function main() {
   })();
   const only = process.env.LINKS?.split(",");
   const rows = [];
-  for (const link of LINKS.filter((l) => !only || only.includes(l.name))) {
+  const links = relay ? [{ name: `relay ${new URL(relay).host}`, rttMs: 0, loss: 0, mbps: null, relay }] : LINKS.filter((l) => !only || only.includes(l.name));
+  for (const link of links) {
     const device = await bind("127.0.0.1:0");
     const row = await run(link, station, device);
     await device.close();

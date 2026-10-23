@@ -103,9 +103,20 @@ client, so any client that acknowledges what it drew is paced.
   kbit/s, again each round trip and 200 ms it stays. A packet lost and sent again holds the frames behind it for about
   a round trip and then they all come: that lowers nothing. Once nothing queued for 1 s it goes up by 15% each 0.5 s,
   to the source's own (`ownRate`: the picture's pixels × 3 a second, at least 1 Mbit/s). So a slow link gets as many
-  frames, smaller, rather than fewer and late. The desktop's helper changes its encoder's average bit rate from the
+  frames, smaller, rather than fewer and late.
+- **Start.** A view opens at 1.5 Mbit/s (`ViewOptions.bitrate`, the helper's `bitrate`) and goes up by half each 0.5 s
+  until it is first lowered: its first frame is a whole picture, its largest, and one at the source's own rate held a
+  1 Mbit/s link up for a second. Rate is lowered only once 0.5 s of acknowledgements say what went through.
+- **Size.** While the rate stays at a quarter or less of what the picture's size is encoded at for 3 s, the source is
+  asked for a picture fitted into 1280×720 (`ScreenView.bounds`; the helper's message 8): fewer pixels, each sharper,
+  where a 1080p picture at a few hundred kbit/s blurs its text. Once the smaller picture's rate stays at its own for
+  3 s, the view's own size again. Each change is a config and a key frame, as any change of size is. The desktop's helper changes its encoder's average bit rate from the
   next frame (macOS: VideoToolbox's `AverageBitRate`; Windows: the encoder's `CODECAPI_AVEncCommonMeanBitRate`); a
   browser tab's JPEGs keep theirs.
+- **H.265** where both ends have it: a Mac's hardware encoder (VideoToolbox), a Windows machine's hardware HEVC MFT
+  (Main; stillfail-screen builds the hvcC from the stream's VPS, SPS and PPS), decoded by WebCodecs on the web and by
+  MediaCodec's hardware decoder on Android. A client whose decoder fails on it before its first frame opens the view
+  again asking H.264 (for as long as the app or page runs).
 - **The link.** The mesh's QUIC uses BBR (station/native/mesh): random loss is not taken for a full link. Cubic,
   before it, halved what went at each loss: at 1% loss and 40 ms, a screen fell to 24 frames a second and a file to
   2.8 Mbit/s (BBR: 52, 31 Mbit/s).
@@ -143,8 +154,9 @@ input and output, ended as its input is). One that ends by itself (the display w
 graphics driver started again, a crash) is started again and the view goes on from a key frame with its config; past
 three times a minute the view ends. Windows.Graphics.Capture captures the main display (the cursor drawn in, no
 yellow border on Windows 11; a picture where nothing changed, by its dirty regions on 11 24H2 on, is not a new one); the
-GPU's video processor scales it into `maxWidth`×`maxHeight` as NV12; Media Foundation encodes H.264 on the hardware
-encoder (its MFT given the D3D11 textures; Microsoft's software encoder where there is none) with low latency
+GPU's video processor scales it into `maxWidth`×`maxHeight` as NV12; Media Foundation encodes H.265 (when the client takes it and the
+hardware has an HEVC encoder) or H.264 on the hardware encoder (its MFT given the D3D11 textures; Microsoft's software
+encoder where there is none) with low latency
 (constrained baseline, no B-frames, the parameter sets taken out of band into the avcC), a key frame on request; a view
 without H.264 gets WIC's JPEGs. SendInput posts the input: the pointer in the virtual desktop's absolute units, a page's
 wheel pixels as Windows' units (120 a notch, about a page's 100 pixels), keys by their `code` as the key's scan code
@@ -225,7 +237,7 @@ station's list (read as its stream opens, then its `screens` events; in memory o
 go to the page as they come, their bytes beside the JSON rather than in it (the web's worker transfers them, the
 desktop's utility process posts them on the page's port, Android's engine hands them to Kotlin with `emitBytes`); the
 page decodes (WebCodecs or `createImageBitmap` on the web, which asks H.265 where WebCodecs plays it; MediaCodec or a
-bitmap on Android, H.264) and acknowledges each frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
+bitmap on Android, which asks H.265 where it has a hardware decoder of it) and acknowledges each frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
 changes; it opens the view again when the link drops or 只看/控制 changes. Opened with no `control` asked (a link, the
 station's page), it only looks while someone other than the viewer drives the screen (an agent at work, another
 person); the viewer's own views, however many the list names (another window, or those an app killed with the view

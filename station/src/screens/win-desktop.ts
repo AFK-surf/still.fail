@@ -1,5 +1,5 @@
 // This Windows machine's display as a screen source (`desktop`, docs/remote-screens.md): stillfail-screen
-// (station/native/screen) captures the main display with Windows.Graphics.Capture, encodes H.264 with Media
+// (station/native/screen) captures the main display with Windows.Graphics.Capture, encodes H.265 or H.264 with Media
 // Foundation (the hardware encoder where there is one), or a JPEG a picture for a view that takes no H.264, and posts
 // the input with SendInput. Each view is a process of its own, started with `view` and spoken to on its standard input
 // and output in still.fail Helper's messages (desktop.ts `HelperView`); it ends as its input does.
@@ -123,13 +123,14 @@ export class WindowsDesktop implements ScreenSource {
   async open(options: ViewOptions): Promise<ScreenView> {
     const binary = this.#o.binary;
     if (binary === null) throw new ScreenRefused(501, "station.screen.noHelper", {}, this.access());
-    // H.264 where it is taken (the hardware's, small); else a JPEG a picture (an agent's view, a client without H.264).
-    const codec: Codec | undefined = options.codecs.includes("h264") ? "h264" : options.codecs.includes("jpeg") ? "jpeg" : undefined;
+    // H.265 where it is taken (stillfail-screen makes it where the hardware has an encoder of it, else H.264: its info
+    // says which), H.264, else a JPEG a picture (an agent's view, a client without either).
+    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh();
     if (this.#status?.capture === false) throw new ScreenRefused(501, "station.screen.unsupported", {}, this.access());
     const input = new WinInput();
-    const ask = { codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight };
+    const ask = { codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}) };
     let first: HelperView;
     try {
       first = await this.#start(binary, ask, input);
@@ -142,7 +143,7 @@ export class WindowsDesktop implements ScreenSource {
   }
 
   /// One process for a view, answering (its info had); fails with what it said.
-  async #start(binary: string, ask: { codec: Codec; maxWidth: number; maxHeight: number }, input: WinInput): Promise<HelperView> {
+  async #start(binary: string, ask: { codec: Codec; maxWidth: number; maxHeight: number; bitrate?: number }, input: WinInput): Promise<HelperView> {
     const child = (this.#o.start ?? start)(binary, ["view"]);
     child.stdin!.write(`${JSON.stringify(ask)}\n`);
     const view = new HelperView(ask.codec, childPipe(child), () => {}, input);
@@ -180,8 +181,9 @@ export class LastingView implements ScreenView {
   #restarting: Promise<boolean> | null = null;
   #heard: ((clip: Clip) => void) | null = null;
   #unwatch: (() => void) | null = null;
-  /// The bit rate asked last, asked again of a process started again.
+  /// The bit rate and bounds asked last, asked again of a process started again.
   #rate: number | null = null;
+  #bounds: [number, number] | null = null;
 
   constructor(view: HelperView, again: () => Promise<HelperView>, gone: () => void) {
     this.#view = view;
@@ -218,6 +220,7 @@ export class LastingView implements ScreenView {
       this.#view = view;
       if (this.#heard !== null) this.#unwatch = view.watchClipboard(this.#heard);
       if (this.#rate !== null) view.rate(this.#rate);
+      if (this.#bounds !== null) view.bounds(...this.#bounds);
       return true;
     } catch (error) {
       log.warn("screens", "stillfail-screen did not start again", { error: (error as Error).message });
@@ -233,6 +236,11 @@ export class LastingView implements ScreenView {
   rate(bitsPerSecond: number) {
     this.#rate = bitsPerSecond;
     this.#view.rate(bitsPerSecond);
+  }
+
+  bounds(maxWidth: number, maxHeight: number) {
+    this.#bounds = [maxWidth, maxHeight];
+    this.#view.bounds(maxWidth, maxHeight);
   }
 
   input(event: ScreenInput): Promise<void> {
