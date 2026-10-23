@@ -56,6 +56,8 @@ fn messages_reset() -> Unit {
   between_frames.val = None
   outside_due.val = None
   system_bars_now.val = { top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 }
+  system_size_class_now.val = None
+  system_fold_now.val = { hinge: NoHinge, divisions: [] }
 }
 
 ///|

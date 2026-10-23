@@ -1,14 +1,13 @@
-// A phone's or a tablet's screen wider than a phone's (still.fail's Android app, chat/screens/Wide.kt, as the web's
-// mobile/app.tsx WIDE draws it: an opened foldable, a phone on its side, a film turned sideways): the phone's pages
-// the screen's whole width, no bottom bar under them; at the screen's bottom left, level with the composer and as
+// A phone's or a tablet's window the system classes as regular in width (@ui.system_size_class: an opened foldable
+// such as an iPhone Duo's inner screen whichever way it is held, an Android phone on its side; still.fail's Android
+// app, chat/screens/Wide.kt, as the web's mobile/app.tsx WIDE draws it): the phone's pages the window's whole width, no
+// bottom bar under them; at the screen's bottom left, level with the composer and as
 // tall, a button raises the latest chats over the page (a chat's composer starts beside it); on Home, 奏 and the
 // new-chat button at its bottom right, the stations at a glance in its top bar. A new chat keeps a column in the
 // middle. The drive's reader and player take the whole screen: nothing at their corners. Not the desktop's wide frame
-// (wide.mbt): no rail, no sidebar, the phone's theme, a finger drags the lists as on a phone.
-
-///|
-/// From this width on, a phone's or a tablet's screen is wide (Wide.kt WideAt).
-let corners_from : Double = 680.0
+// (wide.mbt): no rail, no sidebar, the phone's theme, a finger drags the lists as on a phone. Chosen by what the
+// system says of the window, not by a width of the app's own (Wide.kt's 680): a window as wide that the system calls
+// compact (an app beside another on the screen) keeps the phone's pages.
 
 ///|
 /// Whether this frame is drawn as Android's wide screen.
@@ -22,9 +21,10 @@ let recent_open : Ref[Bool] = Ref(false)
 let recent_over : Ref[Page?] = Ref(None)
 
 ///|
-/// Whether a window this wide is drawn as Android's wide screen: a phone's or a tablet's (a desktop's is wide.mbt's).
-pub fn is_corners(c : @ui.Ctx) -> Bool {
-  c.width >= corners_from && @sf.touch_system()
+/// Whether this frame is drawn as Android's wide screen: a phone's or a tablet's window the system classes as regular
+/// in width (a desktop's is wide.mbt's, by its width: no system there says more of a window).
+pub fn is_corners() -> Bool {
+  @sf.touch_system() && @ui.system_size_class() is Some({ width: Regular, .. })
 }
 
 ///|
@@ -152,8 +152,9 @@ let white : Int64 = 0xFFFFFFFFL
 
 ///|
 /// The latest chats' button at the screen's bottom left, as high as the composer is (ChatHost.kt: 10 from the foot, 52
-/// tall on one line), and the chats it raises over the page (not dimmed): the list's first six, the one open marked; a
-/// new chat at their head, the whole list at their foot. One picked takes the place of the page open (AppState.open).
+/// tall on one line; over a chat on a device half open, as raised as its composer: tabletop.mbt), and the chats it
+/// raises over the page (not dimmed): the list's first six, the one open marked; a new chat at their head, the whole
+/// list at their foot. One picked takes the place of the page open (AppState.open).
 fn recent_corner(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
   let t = @sf.theme()
   let open = recent_open.val
@@ -185,7 +186,8 @@ fn recent_corner(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
         @sf.icon(c, "chats", size=22.0, color=if open { t.p.bg } else { t.p.text }) |> ignore
       })
       c.semantics(node, Button, id~, label=tr("android-misc.wide.recent"), expanded=open)
-      c.box(style=@ui.style(h=Fixed(nav_foot())), fn() {  }) |> ignore
+      let up = if top is Chat(_) { tabletop_raise(c, composer_own_room_of(c)) } else { 0.0 }
+      c.box(style=@ui.style(h=Fixed(nav_foot() + up)), fn() {  }) |> ignore
     })
     |> ignore
   })

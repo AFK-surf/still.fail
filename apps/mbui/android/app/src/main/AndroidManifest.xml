@@ -179,5 +179,9 @@
         <receiver android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
             android:exported="false" />
         <meta-data android:name="com.google.android.gms.version" android:value="@integer/google_play_services_version" />
+        <!-- Folds: Jetpack WindowManager reads the device's fold through what the system provides it, as its library's
+             manifest asks (apk.json "merged": androidx.window:window) -->
+        <uses-library android:name="androidx.window.extensions" android:required="false" />
+        <uses-library android:name="androidx.window.sidecar" android:required="false" />
     </application>
 </manifest>

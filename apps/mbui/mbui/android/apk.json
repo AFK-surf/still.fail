@@ -12,6 +12,7 @@
   "jniLibs": ["../out/android/apk/jniLibs", "app/src/main/jniLibs"],
   "rules": [],
   "lock": "apk.lock",
+  "merged": ["androidx.window:window:"],
   "variants": {
     "debug": {"debuggable": true, "placeholders": {}}
   }

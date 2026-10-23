@@ -1186,6 +1186,27 @@ fn composer_room_of(c : @ui.Ctx) -> Double {
 }
 
 ///|
+/// The room the composer of chat `key` takes as it is drawn (composer_room_with), not the least a list keeps for it
+/// (composer_room): what it is raised by on a device half open (tabletop.mbt). The least until it is laid out.
+fn composer_own_room(c : @ui.Ctx, key : String, v : ChatView?) -> Double {
+  let room = match drafts.get(key) {
+    Some(d) => composer_room_with(c, d, v)
+    None => 0.0
+  }
+  if room > 0.0 {
+    room
+  } else {
+    composer_room
+  }
+}
+
+///|
+/// The room the page's composer takes as it is drawn (composer_own_room the draft it was last built for).
+fn composer_own_room_of(c : @ui.Ctx) -> Double {
+  composer_own_room(c, cui.room_for.0, cui.room_for.1)
+}
+
+///|
 /// The composer's room for draft `d` (composer_room_for).
 fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
   let natural = composer_natural(c)

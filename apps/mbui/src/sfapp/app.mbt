@@ -417,11 +417,11 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)
   c.set_clear((t.p.bg >> 8) & 0xFFFFFFL)
-  // a desktop's width: the web app's wide frame (wide.mbt); a phone's or a tablet's as wide (an opened foldable, a
-  // phone on its side): Android's, the pages the whole width with the latest chats at a corner (corners.mbt); below
-  // them the phone's pages
+  // a desktop's width: the web app's wide frame (wide.mbt); a phone's or a tablet's window the system calls regular in
+  // width (an opened foldable, a phone on its side): Android's, the pages the whole width with the latest chats at a
+  // corner (corners.mbt); otherwise the phone's pages
   wide_on.val = is_wide(c)
-  corners_on.val = is_corners(c)
+  corners_on.val = is_corners()
   @settings.wide.val = wide_on.val
   @settings.no_bar.val = corners_on.val
   @settings.status_top.val = status_top()

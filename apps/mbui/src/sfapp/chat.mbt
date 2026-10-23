@@ -344,8 +344,9 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         c.layer(fn() {
           c.spacer()
           composer(c, src, r, None, beside=corners_on.val)
-          // over the navigation bar (a layer goes on under the page's padding)
-          bar_room_box(c, nav_foot())
+          // over the navigation bar (a layer goes on under the page's padding); on a device half open, under the fold
+          // (tabletop.mbt)
+          bar_room_box(c, nav_foot() + tabletop_raise(c, composer_own_room(c, draft_key(r), None)))
         })
         |> ignore
         // its first words, as typed, till their row is in the list (flight.mbt; their wait for it counted from now)
@@ -359,8 +360,9 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         c.layer(fn() {
           c.spacer()
           composer(c, src, r, Some(v), beside=corners_on.val)
-          // over the navigation bar (a layer goes on under the page's padding)
-          bar_room_box(c, nav_foot())
+          // over the navigation bar (a layer goes on under the page's padding); on a device half open, under the fold
+          // (tabletop.mbt)
+          bar_room_box(c, nav_foot() + tabletop_raise(c, composer_own_room(c, draft_key(r), Some(v))))
         })
         |> ignore
         // words sent, as typed, until their row is in the list (flight.mbt)
@@ -491,7 +493,7 @@ fn messages(
         }
         match e {
           Top => c.box(h=Px(status_top() + chat_bar_h + 14.0), fn() {  }) |> ignore
-          Foot => c.box(h=Px(composer_room_for(c, draft_key(r), Some(v)) + 10.0 + floor), fn() {  }) |> ignore
+          Foot => c.box(h=Px(chat_foot_room(c, r, Some(v)) + 10.0 + floor), fn() {  }) |> ignore
           Working(a) => {
             // coming in, its room opens (220 ms, Ease.Out) as it fades in and grows from its avatar; its turn over,
             // it stays a moment and fades (Chat.kt Activity)
@@ -829,7 +831,7 @@ fn messages(
     // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
     let lr = c.list_reader(key)
     let top = status_top() + chat_bar_h
-    let room = composer_room_for(c, draft_key(r), Some(v))
+    let room = chat_foot_room(c, r, Some(v))
     c.after_build("reading", fn() { read_place(rd, v, list, lr, top, room) })
     // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
     // from memory never leaves the page)
@@ -1796,7 +1798,7 @@ fn jump_to_latest(
   c.layer(align=AEnd, fn() {
     c.spacer()
     // (in the wide frame right over the send button, the composer's column in the pane's middle: Chat.css.ts)
-    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_for(c, draft_key(r), Some(v)) + 2.0, fn() {
+    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=chat_foot_room(c, r, Some(v)) + 2.0, fn() {
       let pill = c.box(
         dir=Row,
         h=Px(36.0),
@@ -1889,7 +1891,7 @@ fn jump_to_ask(
   }
   c.layer(align=AEnd, fn() {
     c.spacer()
-    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_for(c, draft_key(r), Some(v)) + 2.0 + lift, fn() {
+    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=chat_foot_room(c, r, Some(v)) + 2.0 + lift, fn() {
       let bell = c.box(
         w=Px(36.0),
         h=Px(36.0),

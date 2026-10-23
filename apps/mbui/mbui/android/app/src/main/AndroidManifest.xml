@@ -53,5 +53,9 @@
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a local loopback listener alive for a few minutes while the user signs in in their browser, so the browser's OAuth redirect to 127.0.0.1 reaches the app." />
         </service>
+        <!-- Folds: Jetpack WindowManager reads the device's fold through what the system provides it, as its library's
+             manifest asks (apk.json "merged": androidx.window:window) -->
+        <uses-library android:name="androidx.window.extensions" android:required="false" />
+        <uses-library android:name="androidx.window.sidecar" android:required="false" />
     </application>
 </manifest>
