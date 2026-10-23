@@ -16,11 +16,14 @@ test "signed out: the sign-in page" {
 }
 
 ///|
-test "signed out in a desktop's window: 登录或注册 no wider than the desktop app's; a phone's across the page" {
+test "signed out in a desktop's window: 登录或注册 alone, no wider than the desktop app's; a phone's across the page" {
   reset()
   let pressed = Ref::new(0)
   let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  // no words but its own
+  assert_true(t.find("让 agent 持续工作") is None)
+  assert_true(t.find("可同时登录多个账号，随时切换 workspace。") is None)
   let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
   let (mid, at) = (x + w / 2.0, y + h / 2.0)
   // beside it, where it ended when it was as wide as the page: nothing
