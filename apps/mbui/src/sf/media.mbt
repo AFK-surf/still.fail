@@ -45,6 +45,49 @@ pub fn media_ground() -> Int64 {
 }
 
 ///|
+/// The colours of what floats over a film or a song: its words, what is quieter, the controls' ground, and the stage
+/// under it all.
+pub(all) struct MediaInk {
+  text : Int64
+  muted : Int64
+  ground : Int64
+  stage : Int64
+}
+
+///|
+/// Over a picture, whatever the theme: black under it (a film is watched on the dark, its frame no white round it), the
+/// words near white on a deep tint (the picture's glass; a native view under it cannot be blurred: solid). A song has
+/// no picture: the page's own colours (`picture` false).
+pub fn media_ink(picture : Bool) -> MediaInk {
+  if picture {
+    { text: media_dark_text, muted: media_dark_muted, ground: media_dark_ground, stage: media_dark_stage }
+  } else {
+    let p = theme().p
+    { text: p.text, muted: p.muted, ground: media_ground(), stage: p.canvas }
+  }
+}
+
+///|
+/// Over a picture: the words, the quieter ones, the tint (darkGlass's 0x121214, deeper with no blur), the stage.
+pub let media_dark_text : Int64 = 0xF4F4F5FFL
+
+///|
+pub let media_dark_muted : Int64 = 0xFFFFFF99L
+
+///|
+pub let media_dark_ground : Int64 = 0x121214D9L
+
+///|
+pub let media_dark_stage : Int64 = 0x000000FFL
+
+///|
+/// A button's ground under the pointer (the words at 10%) and while what it turns on is on (16%).
+let media_hot_share : Double = 0.1
+
+///|
+let media_lit_share : Double = 0.16
+
+///|
 /// `part` of a track from its start, in `color`.
 pub fn media_share_bar(c : @ui.Ctx, part : Double, color : Int64) -> Unit {
   c.box(style=media_head_row, fn() {
@@ -55,14 +98,16 @@ pub fn media_share_bar(c : @ui.Ctx, part : Double, color : Int64) -> Unit {
 }
 
 ///|
-/// A round head `part` along its track (vvHeadRail, vvHead: centred where it is, a shadow under it), `r` its half.
-pub fn media_head(c : @ui.Ctx, part : Double, color : Int64, small? : Bool = false) -> Unit {
+/// A round head `part` along its track (vvHeadRail, vvHead: centred where it is, a shadow under it), `r` its half; in a
+/// timeline (`rail`: its track in by the timeline's px, media_timeline_box) on the track, not the timeline's whole
+/// width (a layer is its parent's whole box).
+pub fn media_head(c : @ui.Ctx, part : Double, color : Int64, small? : Bool = false, rail? : Bool = false) -> Unit {
   let (room, head, r) = if small {
     (media_small_head_room, media_small_head, media_small_head_r)
   } else {
     (media_head_room, media_head_disc, media_head_r)
   }
-  c.box(style=media_head_row, fn() {
+  c.box(style=if rail { media_head_rail } else { media_head_row }, fn() {
     c.box(style=@ui.style(w=Grow(part)), fn() {  }) |> ignore
     c.box(style=room, fn() {
       c.box(style=head.then(@ui.style(bg=Data(color))), tx=-r, fn() {  }) |> ignore
@@ -86,15 +131,17 @@ pub fn media_key(
   small? : Bool = false,
   bright? : Bool = false,
   lit? : Bool = false,
+  ink? : MediaInk,
 ) -> Bool {
-  let pal = theme().p
+  let ink = ink.unwrap_or(media_ink(false))
   let id = c.id(key)
   if on {
     c.cursor(id, Hand)
   }
   let hot = on && (c.hovered(id) || c.pressed(id))
-  let b = c.box(style=media_key_box, selected=lit, disabled=!on, id=if on { id } else { 0 }, fn() {
-    icon(c, icon_name, size=if small { viewer_tool_icon } else { viewer_back_icon }, color=if bright || hot || lit { pal.text } else { pal.muted })
+  let ground = if lit { alpha(ink.text, media_lit_share) } else if hot { alpha(ink.text, media_hot_share) } else { no_ground }
+  let b = c.box(style=media_key_box.then(@ui.style(bg=Data(ground))), disabled=!on, id=if on { id } else { 0 }, fn() {
+    icon(c, icon_name, size=if small { viewer_tool_icon } else { viewer_back_icon }, color=if bright || hot || lit { ink.text } else { ink.muted })
     |> ignore
   })
   c.semantics(b, Button, id~, label~, disabled=!on, pressed=lit)
@@ -107,14 +154,14 @@ pub fn media_key(
 ///|
 /// The speed as a figure (vvRate): 28 high, 46 wide at least, 8 in, its corner 10, on the words at 10%. True on the
 /// frame after it was pressed.
-pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on : Bool) -> Bool {
-  let pal = theme().p
+pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on : Bool, ink? : MediaInk) -> Bool {
+  let ink = ink.unwrap_or(media_ink(false))
   let id = c.id(key)
   if on {
     c.cursor(id, Hand)
   }
-  let b = c.box(style=media_rate_box.then(@ui.style(bg=Data(alpha(pal.text, media_rate_share)))), id=if on { id } else { 0 }, fn() {
-    c.rich([@ui.span(words, weight=media_strong, mono=true)], style=media_rate_words) |> ignore
+  let b = c.box(style=media_rate_box.then(@ui.style(bg=Data(alpha(ink.text, media_rate_share)))), id=if on { id } else { 0 }, fn() {
+    c.rich([@ui.span(words, weight=media_strong, mono=true, color=ink.text)], style=media_rate_words) |> ignore
   })
   c.semantics(b, Button, id~, label~, disabled=!on)
   on && c.clicked(id)
@@ -151,6 +198,10 @@ pub let media_track : @ui.Style = @ui.style(w=Full, h=S1, radius=Full, clip=true
 ///|
 // kept across runs: a value (no field of it changes)
 pub let media_head_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let media_head_rail : @ui.Style = media_head_row.then(@ui.style(px=S2_5))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -191,7 +242,5 @@ let media_key_box : @ui.Style = @ui.style(
   radius=Lg,
   align=ACenter,
   justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Selected),
   disabled=@ui.patch(opacity=O35),
 )

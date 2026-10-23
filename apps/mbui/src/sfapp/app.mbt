@@ -287,7 +287,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @sf.set_shortcuts(tip_keys_of)
   // the library's words, the app's catalog's; what its viewers ask of the page (viewer_host.mbt)
   @sf.set_words(fill)
-  @sf.set_viewer_host(viewer_host_of(src))
+  @sf.set_viewer_host(viewer_host_of(c, src))
   let t = @sf.begin(c)
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)

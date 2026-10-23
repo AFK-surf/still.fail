@@ -271,7 +271,6 @@ priv struct Viewer {
   vzoom : @kit.Zoom
   /// 源码 rather than 预览
   mut source : Bool
-  mut video : @ui.NativeView?
   mut page : @ui.NativeView?
   mut pdf : @ui.Pdf?
   mut text : String?
@@ -287,10 +286,6 @@ priv struct Viewer {
   fade : @motion.Value
   // a finger on the stage: where it was last frame, how far it has gone, the last tap (time, where)
   mut held : Bool
-  /// a finger on a video's timeline: the bars stay while it is (their rest counted from when it is let go), the player
-  /// paused and its seeks one after another (NativeView::scrub); where it was last sent (-1 none yet)
-  mut scrubbing : Bool
-  mut scrub_to : Double
   mut last_x : Double
   mut last_y : Double
   mut moved : Double
@@ -302,8 +297,6 @@ priv struct Viewer {
   mut pinch_x : Double
   mut pinch_y : Double
   mut pinched : Bool
-  /// the video's speed
-  mut rate : Double
   /// a read of the video's file, logged the first times
   mut reads : Int
   /// how a song's player stands, pinned for a fixture's shot
@@ -324,10 +317,6 @@ priv struct Viewer {
   fly : @motion.Value
   mut fly_back : Bool
   mut fly_from : Thumb?
-  /// a video's frame asked for to be saved (and which), the phone turned for it
-  mut grabbing : Bool
-  mut grab_frame : Int
-  mut turned : Bool
   /// a video's picture as it flies (its still, or the frame it goes back with)
   mut fly_pic : String
   /// a video opened again: where it was left (ms; -1 from its start), until its player is ready to go on from there
@@ -604,9 +593,9 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     rest_n: 0,
     rests: true,
     zoom: @kit.Zoom::new(glide_ms=zoom_glide_ms),
-    vzoom: @kit.Zoom::new(glide_ms=zoom_glide_ms),
+    // (a film edge to edge, enlarged, as the player puts it: what it flies to and from)
+    vzoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true, glide_ms=zoom_glide_ms),
     source: false,
-    video: None,
     page: None,
     pdf: None,
     text: None,
@@ -617,8 +606,6 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     closing: false,
     fade: @motion.Value::new(0.0),
     held: false,
-    scrubbing: false,
-    scrub_to: -1.0,
     last_x: 0.0,
     last_y: 0.0,
     moved: 0.0,
@@ -629,7 +616,6 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     pinch_x: 0.0,
     pinch_y: 0.0,
     pinched: false,
-    rate: 1.0,
     reads: 0,
     pinned: None,
     steps,
@@ -649,9 +635,6 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     },
     leaving_grab: false,
     left_at: 0.0,
-    grabbing: false,
-    grab_frame: 0,
-    turned: false,
     mouse_x: 0.0,
     mouse_y: 0.0,
     mouse_seen: false,
@@ -772,13 +755,6 @@ fn leaving_done() -> Unit {
 fn Viewer::let_go(self : Viewer) -> Unit {
   // read in a desktop's reader (@sf.reader): what it read let go with it
   @sf.reader_let_go("chat\n" + self.id())
-  if self.turned {
-    @hostapi.set_sideways(false)
-  }
-  match self.video {
-    Some(n) => n.close()
-    None => ()
-  }
   match self.media {
     Some(m) => {
       m.close()
@@ -1017,79 +993,47 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     return
   }
   match v.shown_kind() {
-    // a desktop's song: in the player a drive's plays in (play_desk.mbt), read through the core a part at a time
-    Some(KAudio) if wide_on.val => {
+    // a film or a song: the one player (@sf.player_view), read through the core a part at a time (never the whole file
+    // first, a seek far ahead one more ranged read), from the frame it was left at (the thumbnail's)
+    Some(KVideo) | Some(KAudio) => {
       if v.media is None {
-        let m = @sf.new_media("preview-song")
-        m.open({
-          name: v.file.name,
-          mime: v.mime,
-          audio: true,
-          read: fn(offset, length, answer) {
-            v.read_part(src, offset, length, "played", fn(r) {
-              match r {
-                Ok((answer_json, bytes)) =>
-                  answer(bytes, match field(Some(answer_json), "total") {
-                    Some(Number(t, ..)) => t
-                    _ => -1.0
-                  })
-                Err(_) => answer(b"", -2.0)
-              }
-            })
+        let m = @sf.new_media("preview-media", rest_ms=if bars_rest() { @kit.media_rest_ms } else { 0.0 })
+        let start = if v.start_at > 0.0 { v.start_at } else { 0.0 }
+        v.start_at = -1.0
+        m.open(
+          {
+            name: v.file.name,
+            mime: v.mime,
+            audio: v.shown_kind() == Some(KAudio),
+            read: fn(offset, length, answer) {
+              v.read_part(src, offset, length, "played", fn(r) {
+                match r {
+                  Ok((answer_json, bytes)) => {
+                    let total = match field(Some(answer_json), "total") {
+                      Some(Number(t, ..)) => t
+                      _ => -1.0
+                    }
+                    if v.reads < 3 {
+                      @ui.log(
+                        "preview: \{v.name} @\{offset.to_int()} \{bytes.length()} bytes through the core (\{v.part_call()}, total \{total.to_int()})",
+                      )
+                    }
+                    v.reads += 1
+                    answer(bytes, total)
+                  }
+                  Err(e) => {
+                    @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
+                    answer(b"", -2.0)
+                  }
+                }
+              })
+            },
           },
-        })
+          start~,
+        )
         v.media = Some(m)
       }
-      if !v.asked {
-        return
-      }
-    }
-    Some(KVideo) | Some(KAudio) => {
-      if v.video is None {
-        let n = @ui.NativeView::video(v.mime, fn(offset, length, answer) {
-          v.read_part(src, offset, length, "played", fn(r) {
-            match r {
-              Ok((answer_json, bytes)) => {
-                let total = match field(Some(answer_json), "total") {
-                  Some(Number(t, ..)) => t
-                  _ => -1.0
-                }
-                if v.reads < 3 {
-                  @ui.log(
-                    "preview: \{v.name} @\{offset.to_int()} \{bytes.length()} bytes through the core (\{v.part_call()}, total \{total.to_int()})",
-                  )
-                }
-                v.reads += 1
-                answer(bytes, total)
-              }
-              Err(e) => {
-                @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
-                answer(b"", -2.0)
-              }
-            }
-          })
-        })
-        // the view just made, played once the frame's builds are over; opened again where it was left, from there
-        // (VideoViewer.kt startAtUs: played once its length says it was not left at its end)
-        if v.start_at > 0.0 {
-          let at = v.start_at
-          c.tell("preview-start", fn() { n.seek(at) })
-        } else {
-          c.tell("preview-play", fn() { n.play() })
-        }
-        v.video = Some(n)
-      }
-      match v.video {
-        Some(n) if v.start_at > 0.0 && n.duration() > 0.0 => {
-          let at = v.start_at
-          v.start_at = -1.0
-          if at < n.duration() - 50.0 {
-            c.tell("preview-play", fn() { n.play() })
-          }
-        }
-        _ => ()
-      }
-      // played as it comes: read whole only once asked to be saved (a desktop's bar has 下载 for it)
+      // played as it comes: read whole only once asked to be saved (the player's 下载)
       if !v.asked {
         return
       }
@@ -1233,9 +1177,13 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
   } else {
     ink().canvas
   }
+  // a film or a song: the player's own page (its bars, its controls, what a finger does on it)
+  let media = kind == Some(KVideo) || kind == Some(KAudio)
   c.layer(fn() {
     let stage = c.id("preview/stage")
-    @ui.capture(c, stage)
+    if !media {
+      @ui.capture(c, stage)
+    }
     c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(ground, shown), opacity=faded, id=stage, fn() {
       v.content(c, src, stage)
     })
@@ -1253,15 +1201,8 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
       })
       |> ignore
     }
-    c.layer(fn() { if wide_on.val { v.desk_bar(c, src, shown) } else { v.bar(c, src, shown) } }) |> ignore
-    match kind {
-      Some(KVideo) =>
-        c.layer(fn() {
-          c.spacer()
-          v.video_controls(c, shown)
-        })
-        |> ignore
-      _ => ()
+    if !media {
+      c.layer(fn() { if wide_on.val { v.desk_bar(c, src, shown) } else { v.bar(c, src, shown) } }) |> ignore
     }
   })
   |> ignore
@@ -1299,8 +1240,8 @@ fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       // it, and where it was), else with its still (FilePreview.kt close: flight.frame())
       (Some(t), Some(KVideo), _) if self.drive is None && self.vzoom.rect() is Some(_) => {
         self.fly_from = Some(t)
-        match self.video {
-          Some(n) if n.here() && n.shown() && !n.grabbing() && !self.grabbing => {
+        match self.view() {
+          Some(n) if n.here() && n.shown() && !n.grabbing() => {
             self.leaving_grab = true
             self.left_at = n.position()
             c.tell("preview-grab", fn() { n.grab_shown(kept_frame_side) })
@@ -1313,7 +1254,7 @@ fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       _ => ignore(self.fade.start(0.0, @motion.tween(pv_fade_ms, ease=Bezier(0.8, 0.0, 0.8, 0.3))))
     }
     // the views under the canvas go at once (they cannot fade)
-    match self.video {
+    match self.view() {
       // (once the frame's builds are over: closed as the back is taken or the marks are put, once)
       Some(n) => c.tell("preview-pause", fn() { n.pause() })
       None => ()
@@ -1339,7 +1280,7 @@ fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
 /// A video closing into its thumbnail, its frame grabbed: once here, kept for the thumbnail (with where it was) and
 /// gone back with; none to be had, back with its still.
 fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
-  let n = match self.video {
+  let n = match self.view() {
     Some(n) => n
     None => {
       self.leaving_grab = false
@@ -1363,15 +1304,6 @@ fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     None => ()
   }
   ignore(c)
-}
-
-///|
-/// Where a step of a video's frames went, said on the log for scripted runs (e2e/flows/97): its frame, of how many.
-fn step_log(i : Int, frames : Int) -> Unit {
-  if frames > 0 {
-    let k = if i < 0 { 0 } else if i >= frames { frames - 1 } else { i }
-    @ui.log("video: stepped to frame \{k + 1} of \{frames}")
-  }
 }
 
 ///|
@@ -1507,9 +1439,7 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
   let kind = v.shown_kind()
   match kind {
     Some(KImage) if v.file.size <= big_file => v.image_stage(c, src, stage)
-    Some(KVideo) => v.video_stage(c, src, stage)
-    Some(KAudio) if wide_on.val => v.desk_song(c, src)
-    Some(KAudio) => v.audio_stage(c, stage)
+    Some(KVideo) | Some(KAudio) => v.player_stage(c, src, stage)
     _ =>
       if v.desk_reads() {
         // a desktop's: a text and Markdown read in the reader, as a drive's are (reader_desk.mbt)
@@ -2445,421 +2375,87 @@ fn Viewer::still(self : Viewer, src : Source) -> String {
 }
 
 ///|
-/// The video where its zoom puts it: the system's player, a native view under the canvas, shown through a hole in
-/// it. Until its first frame shows, the chat's still of it over it (VideoViewer.kt poster), else the stage's black;
-/// its size, until the player says it, as sent, else the still's.
-fn Viewer::video_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
-  let v = self
-  let z = v.vzoom
-  z.boxed(c.width, c.height)
-  let still = v.still(src)
-  match v.video {
-    Some(n) => {
-      let (nw, nh) = n.natural()
-      if nw > 0.0 && nh > 0.0 {
-        z.natural(nw, nh)
-      } else if v.file.width > 0.0 && v.file.height > 0.0 {
-        z.natural(v.file.width, v.file.height)
-      } else {
-        match @ui.image_natural(still) {
-          Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh)
-          _ => ()
-        }
-      }
-      z.step()
-      v.gestures(c, src, stage, z, false, false)
-      // the player's picture: not while it flies from its thumbnail or back into it (its still flies, or the frame it
-      // goes back with), nor once it has gone, but while that frame is grabbed
-      if !v.flies && (!v.closing || v.leaving_grab) && n.here() {
-        match z.rect() {
-          Some(r) => c.native(n, content=Some(r)) |> ignore
-          // its size not known yet (not sent with it): placed all the same, a point in the middle, so the player has
-          // somewhere to draw (Android's decoder starts only with a surface, and tells the size once it has one)
-          None =>
-            c.native(n, content=Some((z.bw / 2.0, z.bh / 2.0, 1.0, 1.0))) |> ignore
-        }
-      }
-      match z.rect() {
-        // flying: from the thumbnail's box to the picture's place, or back (FilePreview.kt viewerFlying), on the
-        // black the chat's box has
-        Some(r) if v.flies =>
-          v.draw_flight(c, if v.fly_pic != "" { v.fly_pic } else { still }, r, v.flying(), ground=0x000000FFL)
-        // the still over the picture, where the player will show it, until its first frame does
-        Some((x, y, w, h)) if still != "" && !n.shown() =>
-          c.layer(fn() { c.picture(still, x~, y~, w~, h~) |> ignore }) |> ignore
-        _ => ()
-      }
-      if n.state() == -1 {
-        c.layer(align=ACenter, fn() {
-          c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
-            c.text(pv("android-chat.video.failed"), size=14.0, color=0xFFFFFF99L, wrap=false)
-            |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      }
-    }
-    None => tap_stage(c, v, stage)
+/// The player's view of a film or a song (the system's player in a native view), while one is open.
+fn Viewer::view(self : Viewer) -> @ui.NativeView? {
+  match self.media {
+    Some(m) => m.native()
+    None => None
   }
 }
 
 ///|
-/// A song (VideoViewer.kt AudioViewer, in the page's colours): its name and the capsule that plays it
-/// (src/player's audio_strip), in the middle; its player has no picture to place.
-fn Viewer::audio_stage(self : Viewer, c : @ui.Ctx, stage : Int) -> Unit {
+/// A film or a song in the one player (@sf.player_view, as a drive's plays), back to where it was opened from, its
+/// 下载 the preview's. Where its picture is (edge to edge, as the player puts it) is worked out here too: what it flies
+/// to from its thumbnail and back into it from (its still flying, the player's picture not placed meanwhile), and where
+/// the chat's still of it shows until its first frame does.
+fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
   let v = self
-  tap_stage(c, v, stage)
-  match v.video {
-    Some(n) =>
-      v.note(c, fn() { @player.audio_strip(c, "preview/audio", n, v.file.name, pinned=v.pinned) })
+  let m = match v.media {
+    Some(m) => m
+    None => {
+      tap_stage(c, v, stage)
+      return
+    }
+  }
+  // (a fixture's: how it stands pinned, the same on every run)
+  match v.pinned {
+    Some(p) => m.pin(p)
     None => ()
   }
-}
-
-///|
-/// The video's controls (VideoViewer.kt), floating over its foot: where it is (to tap or drag along), the steps and
-/// play, which frame, the speed. The tint stands for the Android app's frosted glass (a native view cannot be blurred).
-fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
-  let v = self
-  let n = match v.video {
-    Some(n) => n
-    None => return
+  // (a song has no picture: no still of it is asked for)
+  let still = if v.shown_kind() == Some(KVideo) { v.still(src) } else { "" }
+  let z = v.vzoom
+  z.boxed(c.width, c.height)
+  let (nw, nh) = match m.native() {
+    Some(n) => n.natural()
+    None => (0.0, 0.0)
   }
-  let on = v.bars_shown()
-  let dur = n.duration()
-  // where it is: while a finger is on the timeline, where the finger sent it (VideoViewer.kt go: `time` is the target
-  // at once), not where the player says (in scrubbing it says the seek it is taking up, behind the finger and back and
-  // forth as they come); else the player's
-  let pos = if v.scrubbing && v.scrub_to >= 0.0 { v.scrub_to } else { n.position() }
-  // the file's own frames (VideoViewer.kt frameStarts: when each starts, read from the file as the system reads it), so
-  // a step is to the very next frame it has, whatever its rate; without them (none to read, a host that reads none) a
-  // 60th of a second
-  let starts = match n.frames() {
-    Some(list) if list.length() > 0 => Some(list)
-    _ => None
-  }
-  let read = n.frames() is Some(_) || !n.here()
-  let step = 1000.0 / 60.0
-  let frames = match starts {
-    Some(list) => list.length()
-    None => if dur > 0.0 && read { (dur / step).round().to_int() } else { 0 }
-  }
-  // the frame showing (the last to start by now)
-  let at = match starts {
-    Some(list) => frame_at(list, pos)
-    None => if dur > 0.0 { ((pos + frame_slack) / step).floor().to_int() } else { 0 }
-  }
-  let start_of = fn(i : Int) -> Double {
-    match starts {
-      // its start: the host shows the frame showing then (NativeView::seek), that one
-      Some(list) => list[if i < 0 { 0 } else if i >= list.length() { list.length() - 1 } else { i }]
-      None => dmax(0.0, dmin(dmax(dur, 0.0), i.to_double() * step))
-    }
-  }
-  // the timeline (VideoViewer.kt): from the first frame's start to the last one's end (as long as the one before it),
-  // the head at the start of the frame showing; a place on it is the frame showing there
-  let (first, last) = match starts {
-    Some(list) => {
-      let k = list.length() - 1
-      (list[0], list[k] + (if k > 0 { list[k] - list[k - 1] } else { 0.0 }))
-    }
-    None => (0.0, dmax(dur, 0.0))
-  }
-  let now = match starts {
-    Some(list) => list[at]
-    None => pos
-  }
-  let frame_of = fn(ms : Double) -> Double {
-    match starts {
-      Some(list) => start_of(frame_at(list, ms))
-      None => start_of((ms / step).floor().to_int())
-    }
-  }
-  // a frame asked for to be saved, come: kept with the downloads (`<name>-<frame>.png`)
-  if v.grabbing {
-    match n.grabbed() {
-      Some(png) => {
-        v.grabbing = false
-        if png.length() > 0 {
-          // by the name it shows as (not the station's stored name)
-          let base = match v.file.name.rev_find(".") {
-            Some(i) if i > 0 => v.file.name.view(end_offset=i).to_owned()
-            _ => v.file.name
-          }
-          // (the host's picture of the frame, said once)
-          keep_bytes(c, base + "-\{v.grab_frame + 1}.png", "image/png", png)
-        } else {
-          say(c, pv("android-chat.video.saveFrame.failed"))
-        }
-      }
-      // (grabbed on the host's side: its word that it is done brings the frame that takes it)
-      None => ()
-    }
-  }
-  let controls = c.id("preview/video-controls")
-  if c.pressed(controls) {
-    v.wake(tap_rest_ms)
-  }
-  // a desktop's in the page's colours over the canvas, as wide as 1080 allows less 16 either side, 16 off the foot
-  // (media.css.ts vvBar: the raised ground at 72%, solid here over the player's view), no 横屏; a phone's on the dark
-  // tint, 8 round it
-  let desk = wide_on.val
-  let p = @sf.theme().p
-  let tint = if desk { p.muted } else { dark_muted }
-  let strong = if desk { p.text } else { dark_text }
-  let ground = if desk { @sf.media_ground() } else { solid_glass() }
-  let side = if desk { (c.width - dmin(@sf.media_bar_most, c.width - 2.0 * @sf.media_bar_in)) / 2.0 } else { 8.0 }
-  let (above, below) = if desk { (@sf.media_bar_in, @sf.media_bar_in) } else { (8.0, 8.0) }
-  let (inner_x, inner_b) = if desk { (@sf.media_bar_pad, @sf.media_bar_pad) } else { (4.0, 4.0) }
-  let rate_ground = if desk { @sf.alpha(p.text, @sf.media_rate_share) } else { 0xFFFFFF1AL }
-  c.box(w=Fill(1.0), pl=side, pr=side, pt=above, pb=below, opacity=if on { shown } else { 0.0 }, fn() {
-    c.box(
-      w=Fill(1.0),
-      pl=inner_x,
-      pr=inner_x,
-      pt=2.0,
-      pb=inner_b,
-      radius=16.0,
-      bg=ground,
-      id=if on { controls } else { 0 },
-      fn() {
-        timeline(c, v, n, first, last, now, frame_of)
-        c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
-          c.box(dir=Row, gap=2.0, fn() {
-            if picture_button(c, "preview/prev", "chevron-left", tint, on, said=pv("android-chat.video.prev")) {
-              n.seek(start_of(at - 1))
-              n.pause()
-              step_log(at - 1, frames)
-              v.wake(tap_rest_ms)
-            }
-            if picture_button(c, "preview/play", if n.playing() { "pause" } else { "play" }, tint, on, said=pv(if n.playing() { "android-chat.video.pause" } else { "android-chat.video.play" })) {
-              if n.playing() {
-                n.pause()
-              } else {
-                n.play()
-              }
-              v.wake(tap_rest_ms)
-            }
-            if picture_button(c, "preview/next", "chevron-right", tint, on, said=pv("android-chat.video.next")) {
-              n.seek(start_of(at + 1))
-              n.pause()
-              step_log(at + 1, frames)
-              v.wake(tap_rest_ms)
-            }
-          })
-          |> ignore
-          c.box(w=Fill(1.0), fn() {
-            if frames > 0 {
-              let words = pv_fill("android-chat.video.frames", [("n", "\{frames}")])
-              let parts = words.split("{at}").map(fn(s) { s.to_owned() }).to_array()
-              c.rich(
-                [
-                  @ui.span(parts.get(0).unwrap_or(""), color=tint, mono=true),
-                  @ui.span("\{at + 1}", color=strong, weight=600, mono=true),
-                  @ui.span(parts.get(1).unwrap_or(""), color=tint, mono=true),
-                ],
-                size=12.0,
-                wrap=false,
-              )
-              |> ignore
-            } else if n.state() == 0 || !read {
-              c.box(dir=Row, gap=8.0, align=ACenter, fn() {
-                @sf.spinner(c, size=12.0) |> ignore
-                c.text(pv(if read { "common.reading" } else { "android-chat.video.reading" }), size=13.0, color=tint, wrap=false)
-                |> ignore
-              })
-              |> ignore
-            }
-          })
-          |> ignore
-          let rate_id = c.id("preview/rate")
-          if c.clicked(rate_id) && on {
-            let rates = [0.1, 0.25, 0.5, 1.0]
-            let mut i = 3
-            for k, r in rates {
-              if r == v.rate {
-                i = k
-              }
-            }
-            v.rate = rates[(i + rates.length() - 1) % rates.length()]
-            n.rate(v.rate)
-            v.wake(tap_rest_ms)
-          }
-          let r = if v.rate == 1.0 {
-            "1"
-          } else if v.rate == 0.5 {
-            "0.5"
-          } else if v.rate == 0.25 {
-            "0.25"
-          } else {
-            "0.1"
-          }
-          c.box(
-            h=Px(28.0),
-            min_w=46.0,
-            padx=8.0,
-            radius=10.0,
-            bg=rate_ground,
-            align=ACenter,
-            justify=JCenter,
-            id=rate_id,
-            fn() {
-              c.rich([@ui.span(r + "×", weight=600, mono=true)], size=12.0, color=strong, wrap=false)
-              |> ignore
-            },
-          )
-          |> ignore
-          // 保存此帧: paused, the frame showing grabbed at its own size (VideoViewer.kt, MediaMetadataRetriever)
-          if picture_button(c, "preview/save-frame", "camera", tint, on, enabled=!n.playing() && n.state() == 1 && !v.grabbing, said=pv("android-chat.video.saveFrame")) {
-            v.grabbing = true
-            v.grab_frame = at
-            n.grab_frame(start_of(at))
-            v.wake(tap_rest_ms)
-          }
-          // 横屏: the phone turned for it (and back as the viewer closes)
-          if !desk && picture_button(c, "preview/landscape", "landscape", if v.turned { dark_text } else { dark_muted }, on, said=pv(if v.turned { "android-chat.video.landscape.exit" } else { "android-chat.video.landscape" })) {
-            v.turned = !v.turned
-            @hostapi.set_sideways(v.turned)
-            v.wake(tap_rest_ms)
-          }
-        })
-        |> ignore
-      },
-    )
-    |> ignore
-  })
-  |> ignore
-  // over the navigation bar (VideoViewer.kt: windowInsetsPadding(navigationBars), then 8)
-  bar_room_box(c, nav_foot())
-}
-
-///|
-/// How far past a time a frame may start and still be the one showing then: where a player is is said in whole ms
-/// (Android's: a frame starting at 1583.33 shows once it was sent to 1583), and no two frames start a ms apart.
-let frame_slack : Double = 1.0
-
-///|
-/// The frame showing at `ms` among frames starting at `starts` (in order): the last to start by then (up to
-/// frame_slack over taken as by then).
-fn frame_at(starts : Array[Double], ms : Double) -> Int {
-  let mut lo = 0
-  let mut hi = starts.length() - 1
-  while lo < hi {
-    let mid = (lo + hi + 1) / 2
-    if starts[mid] <= ms + frame_slack {
-      lo = mid
-    } else {
-      hi = mid - 1
-    }
-  }
-  lo
-}
-
-///|
-/// Where in the video it is (VideoViewer.kt Timeline): a thin track from `first` to `last` (ms), what has played, a
-/// round head at `now`; tapped or dragged along to go there (`frame_of`: the frame showing at a time, where it goes),
-/// paused as it goes (VideoViewer.kt go). Dragged, the player is told a finger is on it (NativeView::scrub: each
-/// frame it goes to shown before the next is taken up), the head where the finger sent it.
-fn timeline(
-  c : @ui.Ctx,
-  v : Viewer,
-  n : @ui.NativeView,
-  first : Double,
-  last : Double,
-  now : Double,
-  frame_of : (Double) -> Double,
-) -> Unit {
-  let id = c.id("preview/timeline")
-  let span = last - first
-  // a desktop's in the page's words (media.css.ts vvTrack: the words at 20%, played the words), a phone's in white
-  let p = @sf.theme().p
-  let (track, played) = if wide_on.val { (@sf.alpha(p.text, @sf.media_track_share), p.text) } else { (0xFFFFFF33L, dark_text) }
-  // the time under the finger, on the track (inside the box's 6 each side)
-  let under = fn() -> Double? {
-    match c.rect_of(id) {
-      Some((x, _, w, _)) if span > 0.0 => {
-        let (px, _, _) = c.pointer()
-        Some(frame_of(first + dmax(0.0, dmin(1.0, (px - x - 6.0) / dmax(1.0, w - 12.0))) * span))
-      }
-      _ => None
-    }
-  }
-  let held = c.pressed(id)
-  if held {
-    if !v.scrubbing {
-      // a finger down on it: paused, its seeks one after another until it is let go
-      v.scrubbing = true
-      v.scrub_to = -1.0
-      c.tell("preview-scrub", fn() {
-        n.pause()
-        n.scrub(true)
-      })
-    }
-    match under() {
-      Some(to) if to != v.scrub_to => {
-        v.scrub_to = to
-        c.tell("preview-seek", fn() { n.seek(to) })
-      }
+  if nw > 0.0 && nh > 0.0 {
+    z.natural(nw, nh)
+  } else if v.file.width > 0.0 && v.file.height > 0.0 {
+    z.natural(v.file.width, v.file.height)
+  } else {
+    match @ui.image_natural(still) {
+      Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh)
       _ => ()
     }
-    // held there: the bars stay (seen again as it moves; a finger held still asks nothing)
-    v.awake = true
-    v.rest_len = -1.0
-  } else if v.scrubbing {
-    // let go: to where it was let go if the finger moved on since the last seek (its last move and its lifting in one
-    // frame), then the player as before (that seek taken up), the bars rest from now
-    match under() {
-      Some(to) if to != v.scrub_to => c.tell("preview-seek", fn() { n.seek(to) })
-      _ => ()
-    }
-    v.scrubbing = false
-    v.scrub_to = -1.0
-    c.tell("preview-scrub", fn() { n.scrub(false) })
-    v.wake(tap_rest_ms)
-  } else if c.clicked(id) {
-    // tapped (down and up within a frame): paused there
-    match under() {
-      Some(to) =>
-        c.tell("preview-seek", fn() {
-          n.pause()
-          n.seek(to)
-        })
+  }
+  z.step()
+  // flying: from the thumbnail's box to the picture's place, or back, on the black the chat's box has
+  if v.flies && (!v.closing || !v.leaving_grab) {
+    match z.rect() {
+      Some(r) => v.draw_flight(c, if v.fly_pic != "" { v.fly_pic } else { still }, r, v.flying(), ground=0x000000FFL)
       None => ()
     }
-    v.wake(tap_rest_ms)
+    return
   }
-  // where the head is: where the finger sent it while it is on the track, else where the player is
-  let at = if v.scrubbing && v.scrub_to >= 0.0 { v.scrub_to } else { now }
-  let part = if span > 0.0 { dmax(0.0, dmin(1.0, (at - first) / span)) } else { 0.0 }
-  c.box(w=Fill(1.0), h=Px(22.0), padx=6.0, justify=JCenter, id~, fn() {
-    // what has played, then the rest (Fill shares the row: one alone would fill it)
-    c.box(dir=Row, w=Fill(1.0), h=Px(4.0), radius=2.0, bg=track, fn() {
-      if part > 0.0 {
-        c.box(w=Fill(part), h=Px(4.0), radius=2.0, bg=played, fn() {  }) |> ignore
-      }
-      if part < 1.0 {
-        c.box(w=Fill(1.0 - part), h=Px(4.0), fn() {  }) |> ignore
-      }
-    })
-    |> ignore
-    // the head, its middle where what has played ends (the layer is the box's whole width, its 6 each side
-    // included: the head's 12 take them up)
-    c.layer(fn() {
-      c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), align=ACenter, fn() {
-        if part > 0.0 {
-          c.box(w=Fill(part), fn() {  }) |> ignore
-        }
-        c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=played, fn() {  }) |> ignore
-        if part < 1.0 {
-          c.box(w=Fill(1.0 - part), fn() {  }) |> ignore
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
+  let file : @sf.ViewerFile = {
+    name: v.file.name,
+    size: v.file.size,
+    mtime: 0.0,
+    mime: v.mime,
+    kind: if v.shown_kind() == Some(KAudio) { "audio" } else { "video" },
+    title: "",
+    key: "",
+    bytes: None,
+    read: fn(_, _, done) { done(Err("")) },
+    stream: None,
+    beside: None,
+    place: fn() { NeverLeft },
+    keep_place: fn(_, _) {  },
+    save: fn() { v.ask_save(c) },
+  }
+  @sf.player_view(
+    c,
+    m,
+    file,
+    [],
+    back_label=if wide_on.val { v.desk_back(src) } else { tr("common.back") },
+    on_back=fn() { v.shut(c) },
+    on_go=fn(_) {  },
+    // (the chat's still where its picture will be, until its first frame shows)
+    still~,
+  )
 }
 
 ///|

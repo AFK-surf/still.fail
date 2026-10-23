@@ -274,7 +274,12 @@ pub fn tr(key : String) -> String {
                 None =>
                   match zh_links.get(key) {
                     Some(s) => s
-                    None => zh_screen.get(key).unwrap_or(key)
+                    None =>
+                      match zh_screen.get(key) {
+                        Some(s) => s
+                        // (the preview's own words: the library's player says some of them)
+                        None => pv_zh.get(key).unwrap_or(key)
+                      }
                   }
               }
           }

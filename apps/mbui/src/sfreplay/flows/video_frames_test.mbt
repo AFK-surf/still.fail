@@ -1,7 +1,8 @@
-// 97-video-frames (e2e/traces/video-frames.trace): a video's frames (VideoViewer.kt): alice's other device sends a
-// clip; opened, its frames' times read from the file (the host's player: 4 s at 30 a second, 120 frames); ‹ and › to
-// the one before and the very next, each as the player says it is there; 保存此帧: the frame showing grabbed by the
-// host and kept with the downloads, a PNG at the video's own size, named by the frame it is.
+// 97-video-frames (e2e/traces/video-frames.trace): a video's frames (the library's player, @sf.player_view): alice's
+// other device sends a clip; opened, it plays, its frames' times read from the file (the host's player: 4 s at 30 a
+// second, 120 frames); paused, which frame of how many, and its ±15 s become ‹ and ›: to the one before and the very
+// next, each as the player says it is there; 保存此帧: the frame showing grabbed by the host and kept with the
+// downloads, a PNG at the video's own size, named by the frame it is.
 
 ///|
 /// The system's player of view `v` reads the clip as the run's did: its first two bytes, then `rest` from its start;
@@ -39,17 +40,20 @@ test "97-video-frames" {
     let v = opened_view(f)
     clip_reads(f, v, 423168, 423168)
     player_told(f)
+    f.see("/ 0:04")
+    // paused, as the player says (its button 播放 again): the frame showing of how many
+    f.tap("icon:pause")
+    player_told(f)
+    f.see("icon:play")
     f.see("/ 120 帧")
-    // ‹ pauses on the frame before the one showing; again; › the very next: each shown as the player says it is there
+    // ‹ to the frame before the one showing; again; › the very next: each shown as the player says it is there
     f.tap("icon:chevron-left")
     player_told(f)
-    // paused, as the player says (its button 播放 again)
-    f.see("icon:play")
     f.tap("icon:chevron-left")
     player_told(f)
     f.tap("icon:chevron-right")
     player_told(f)
-    // 保存此帧 takes the frame of a player paused and ready (preview.mbt: the button on only then)
+    // 保存此帧 takes the frame of a player paused and ready (player.mbt: the button there only then)
     f.see("icon:play")
     f.tap("icon:camera")
     f.see("已保存到「下载」")

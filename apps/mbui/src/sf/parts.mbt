@@ -165,8 +165,8 @@ pub fn icon_button(
 }
 
 ///|
-/// A chip (the reader's bars, Reader.css.ts chip): 30 high, its corner 10,
-/// on a 7% tint of the ink, 12% under the pointer; its words small.
+/// A chip (the reader's bars, Reader.css.ts chip): 30 high, its corner 10 (`inner`: in a rounded surface's corner,
+/// concentric with it), on a 7% tint of the ink, 12% under the pointer; its words small.
 pub fn chip(
   c : @ui.Ctx,
   label : String,
@@ -174,6 +174,7 @@ pub fn chip(
   icon? : String = "",
   ink? : Int64,
   disabled? : Bool = false,
+  inner? : Bool = false,
 ) -> Bool {
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
@@ -188,7 +189,8 @@ pub fn chip(
     align=ACenter,
     justify=JCenter,
     bg=alpha(ink, 0.07 + 0.05 * h),
-    radius=10.0,
+    style=if inner { chip_inner } else { @ui.style() },
+    radius?=if inner { None } else { Some(10.0) },
     opacity=if disabled { 0.35 } else { 1.0 },
     id=if disabled { 0 } else { id },
     fn() {
@@ -203,6 +205,10 @@ pub fn chip(
   |> ignore
   !disabled && c.clicked(id)
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let chip_inner : @ui.Style = @ui.style(radius=Inner)
 
 ///|
 /// A choice of a few (Segmented; the kit's sliding toggle group): a quiet

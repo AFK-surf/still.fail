@@ -1,9 +1,9 @@
 // 45-drive-play (e2e/traces/drive-play.trace: Mini1 against the local still.fail, 76 messages): a video of the drive
-// played (Player.kt): 影音 in the lent folder (drive-media), the first episode tapped: the player, which of the folder's
-// it is (2 / 3: the song sorts first), its subtitle read beside it (drive.read), its picture read by the system's
+// played (the library's player, @sf.player): 影音 in the lent folder (drive-media), the first episode tapped: the
+// player, which of the folder's films it is (1 / 2: the song is not one of them), its subtitle read beside it (drive.read), its picture read by the system's
 // player through the core (drive.read: its head, then all of it); left where it was, told to the core
 // (drive.place); opened again, on from there; 15 s on twice takes it to its end (播放结束, kept as seen), the next one
-// offered and played in its place (3 / 3), left; the song (1 / 3), read the same way.
+// offered and played in its place (2 / 2), left; the song (alone of its kind: no count), read the same way.
 
 ///|
 /// The system's player of view `v` reads a file of `size` bytes as the run's did: its head, then all of it, the app
@@ -47,7 +47,7 @@ test "45-drive-play" {
     f.see("片尾曲.m4a")
     f.tap("第01集.mp4")
     f.run_to(@ui.nav_rest())
-    f.see("2 / 3")
+    f.see("1 / 2")
     let v = opened_view(f)
     player_reads(f, v, 2276541)
     // playing (what the Mac's player said of itself, on the trace: Replay::host), its first subtitle at its time
@@ -59,7 +59,7 @@ test "45-drive-play" {
     // opened again: on from where it was left
     f.tap("第01集.mp4")
     f.run_to(@ui.nav_rest())
-    f.see("2 / 3")
+    f.see("1 / 2")
     let v = opened_view(f)
     player_reads(f, v, 2276541)
     player_told(f)
@@ -70,7 +70,7 @@ test "45-drive-play" {
     player_told(f)
     f.see("播放结束")
     f.tap("下一个：第02集.mp4")
-    f.see("3 / 3")
+    f.see("2 / 2")
     let v = opened_view(f)
     player_reads(f, v, 461621)
     player_told(f)
@@ -79,7 +79,7 @@ test "45-drive-play" {
     f.run_to(@ui.nav_rest())
     f.tap("片尾曲.m4a")
     f.run_to(@ui.nav_rest())
-    f.see("1 / 3")
+    f.see("片尾曲.m4a")
     let v = opened_view(f)
     player_reads(f, v, 45252)
     f.back()

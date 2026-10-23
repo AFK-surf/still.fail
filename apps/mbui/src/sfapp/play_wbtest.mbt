@@ -2,11 +2,11 @@
 // it is, the subtitle read beside it, where it was left kept as the page goes; a video's row pushing it.
 
 ///|
-test "the player of a drive's video: its name, which of the folder's (the song first), its subtitle at its time" {
+test "the player of a drive's video: its name, which of the folder's films, paused its time to the ms, its subtitle" {
   let t = drive_tester("player-video")
   assert_true(t.find("第02集.mp4") is Some(_))
-  assert_true(t.find("3 / 4") is Some(_))
-  assert_true(t.find("5:12 / 23:24") is Some(_))
+  assert_true(t.find("2 / 3") is Some(_))
+  assert_true(t.find("5:12.000 / 23:24") is Some(_))
   assert_true(t.find("反正也不急") is Some(_))
   assert_true(app.nav.top() is DrivePlay(_))
   // the subtitle kept on the device as the film's parts are, as played (Player.kt: through DriveCache.played), as
@@ -53,10 +53,11 @@ test "a video's row on a folder's page plays it" {
 }
 
 ///|
-test "a song of the drive: its mark and name in the middle; an episode at its end offers the next" {
+test "a song of the drive: its mark and name in the middle, alone of its kind; an episode at its end offers the next" {
   let t = drive_tester("player-audio")
   assert_true(t.find("1:03 / 3:34") is Some(_))
-  assert_true(t.find("1 / 4") is Some(_))
+  assert_true(t.find_last("片尾曲.m4a") is Some(_))
+  assert_true(t.find(" / 4") is None)
   let e = drive_tester("player-ended")
   assert_true(e.find("播放结束") is Some(_))
   e.tap_text("下一个：第02集.mp4")

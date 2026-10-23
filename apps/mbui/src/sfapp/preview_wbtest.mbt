@@ -58,16 +58,17 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
 }
 
 ///|
-test "a video plays in a native view, its bytes read through the core; its controls over it" {
+test "a video plays in the one player (@sf.player_view), its bytes read through the core; its controls over it" {
   let t = preview_tester("video")
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("open 1 1 ") }))
   assert_true(t.views().contains("control 1 1 0"))
-  // 1280 × 720 fitted: (390 - 24) wide, in the middle
+  // 1280 × 720 edge to edge on the black, in the middle
   let holes = t.holes()
   assert_eq(holes.length(), 1)
-  let (x, _, w, h) = holes[0]
-  assert_eq(x, 12.0)
-  assert_true((w - 366.0).abs() < 0.5 && (h - 366.0 * 720.0 / 1280.0).abs() < 0.5)
+  let (x, y, w, h) = holes[0]
+  assert_eq(x, 0.0)
+  assert_true((w - 390.0).abs() < 0.5 && (h - 390.0 * 720.0 / 1280.0).abs() < 0.5)
+  assert_true((y + h / 2.0 - 422.0).abs() < 1.0)
   // its frames' times asked of the host and counted, once it says them (three frames a 30th of a second apart)
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("control 1 20 ") }))
   assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,33.333,66.667\"}}"))
@@ -147,8 +148,8 @@ fn ten_frames() -> (@ui.Tester, Double, Double, Double) raise {
     t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,100,200,300,400,500,600,700,800,900\"}}"),
   )
   t.draw()
-  let (x, y, w, h) = t.ctx().rect_of(t.ctx().id("preview/timeline")).unwrap()
-  (t, x + 6.0, w - 12.0, y + h / 2.0)
+  let (x, y, w, h) = t.ctx().rect_of(t.ctx().id("preview-media/timeline")).unwrap()
+  (t, x + @sf.player_track_inset, w - 2.0 * @sf.player_track_inset, y + h / 2.0)
 }
 
 ///|
@@ -176,19 +177,22 @@ test "a video's timeline dragged: paused, the player told a finger is on it, a s
     .any(fn(r) { (r.2 - 12.0).abs() < 0.5 && (r.3 - 12.0).abs() < 0.5 && (r.0 + 6.0 - (x0 + span * 0.7)).abs() < 0.5 }),
   )
   assert_true(!t.views().contains("control 1 9 0"))
-  // let go further on than its last move (the two in one frame): to the frame there first (900 ms), then told so
+  // let go further on than its last move (the two in one frame): to the frame there first (900 ms), then told so, and
+  // played on as it played when the finger came
+  let plays = t.views().filter(fn(l) { l == "control 1 1 0" }).length()
   t.release(x0 + span * 0.95, mid)
   assert_eq(seeks(), ["control 1 3 200", "control 1 3 700", "control 1 3 900"])
   let log = t.views()
   assert_true(log.search("control 1 3 900").unwrap() < log.search("control 1 9 0").unwrap())
+  assert_eq(log.filter(fn(l) { l == "control 1 1 0" }).length(), plays + 1)
 }
 
 ///|
-test "a video's timeline tapped: paused at the frame there, no finger along it told" {
+test "a video's timeline tapped: to the start of the frame there, played on as it was, no finger along it told" {
   let (t, x0, span, mid) = ten_frames()
-  t.tap(x0 + span * 0.5, mid)
-  assert_true(t.views().contains("control 1 2 0"))
+  t.tap(x0 + span * 0.55, mid)
   assert_true(t.views().contains("control 1 3 500"))
+  assert_true(!t.views().contains("control 1 2 0"))
   assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 9 ") }))
 }
 
@@ -201,18 +205,19 @@ test "a video's ‹ and › go to a frame's very start, a frame on from the one 
     let (x, y, w, h) = t.ctx().rect_of(t.ctx().id(key)).unwrap()
     t.tap(x + w / 2.0, y + h / 2.0)
   }
+  // (paused, the player's ±15 s are its frames' keys)
   // › from the first: to the second's start, as the file has it (no ms rounded up: past it is the third's)
-  tap_button("preview/next")
+  tap_button("preview-media/frame-on")
   assert_true(t.views().contains("control 1 3 33.333"))
   // the player there says 33 (whole ms): that is the second still, so › goes to the third
   t.set_player(1, position=33.0)
   t.draw()
-  tap_button("preview/next")
+  tap_button("preview-media/frame-on")
   assert_true(t.views().contains("control 1 3 66.667"))
   // and ‹ from the third (66) back to the second
   t.set_player(1, position=66.0)
   t.draw()
-  tap_button("preview/prev")
+  tap_button("preview-media/frame-back")
   assert_eq(t.views().filter(fn(l) { l == "control 1 3 33.333" }).length(), 2)
 }
 
@@ -266,12 +271,12 @@ test "a video flies from its thumbnail in the chat, its still flying; the player
   t.run_for(fly_open_ms / 2.0)
   assert_eq(t.holes().length(), 0)
   assert_eq(pv_hidden.val, "ws1/st1/s-c1/uploads/fx/演示录屏.mp4")
-  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 300.0 && i[2] < 366.0 }))
-  // in: the player's picture where the still was, fitted (390 - 24 wide)
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 300.0 && i[2] < 390.0 }))
+  // in: the player's picture where the still was, edge to edge
   t.run_for(fly_open_ms)
   assert_eq(pv_hidden.val, "")
   assert_eq(t.holes().length(), 1)
-  assert_true((t.holes()[0].2 - 366.0).abs() < 0.5)
+  assert_true((t.holes()[0].2 - 390.0).abs() < 0.5)
 }
 
 ///|

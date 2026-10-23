@@ -394,6 +394,7 @@ fn dv_sheet_frame(
   close? : (() -> Unit)? = None,
   gone? : () -> Unit = fn() { dv.closing = NoSheet },
   ground? : Int64 = 0L,
+  trailing? : String = "",
 ) -> Unit {
   let t = @sf.theme()
   let r = @kit.sheet(
@@ -409,8 +410,15 @@ fn dv_sheet_frame(
       })
       |> ignore
       if title != "" {
-        c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, fn() {
+        c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
           c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false) |> ignore
+          // what is said beside it (SheetHead's trailing: the contents' count and how far read)
+          if trailing != "" {
+            c.box(style=dv_sheet_trailing, fn() {
+              c.text(trailing, style=dv_sheet_trailing_words) |> ignore
+            })
+            |> ignore
+          }
         })
         |> ignore
       }
@@ -613,3 +621,12 @@ fn dv_doing(
     }
   })
 }
+
+///|
+/// What a sheet's head says beside its title (the web's headNote: the page's meta size, quiet, at its end).
+// kept across runs: a value (no field of it changes)
+let dv_sheet_trailing : @ui.Style = @ui.style(w=@sf.grow, align=AEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_sheet_trailing_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)

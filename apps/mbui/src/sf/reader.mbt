@@ -360,8 +360,8 @@ pub fn reader_jump(r : Reading, chunk : Int, offset : Int) -> Unit {
 pub let reader_still_ms : Double = 800.0
 
 ///|
-/// How long a phone's bars take to come or go (a tap on the text).
-pub let reader_bars_ms : Double = 180.0
+/// How long a phone's bars take to go (a tap on the text; they come in 140).
+pub let reader_bars_ms : Double = 240.0
 
 ///|
 /// The search goes this long after the last thing typed.
@@ -799,8 +799,9 @@ fn joined(words : Array[String], between : String) -> String {
 // ── a desktop's ─────────────────────────────────────────────────────────
 
 ///|
-/// A text read on a desktop (Reader with a mouse): `file` (read as `key`, Markdown or not) over the window on its
-/// paper, the bar every file opened has back to `back_label` (`on_back`); while it comes, how far it has; failed, why.
+/// A text read (Reader): `file` (read as `key`, Markdown or not) on its paper, back to `back_label` (`on_back`); while
+/// it comes, how far it has; failed, why. With a mouse a desktop's (over the window, the bar every file opened has, the
+/// panels docked at its right); on a phone its own bars that a tap brings, the panels as the page's sheets.
 pub fn reader(
   c : @ui.Ctx,
   key : String,
@@ -811,7 +812,10 @@ pub fn reader(
 ) -> Unit {
   let r = reading_for(key)
   reader_load(r, file, markdown)
-  let style = (viewer_host().reader_style)()
+  let host = viewer_host()
+  let narrow = (host.narrow)()
+  let (room_top, room_foot) = (host.room)()
+  let style = (host.reader_style)()
   let p = reader_paper(style.paper)
   c.box(style=reader_fill.then(@ui.style(bg=Data(p.ground))), fn() {
     match (r.book, r.failed) {
@@ -822,6 +826,10 @@ pub fn reader(
               c.text(t("web-pages.drive.reader.empty"), style=desk_note_words.then(@ui.text_style(color=Data(p.muted))))
               |> ignore
             })
+          } else if narrow {
+            // a phone's: under its status bar and over its navigation (the page's bars), 28 and 72 more
+            let (left, right) = desk_reader_sides(c, r, style, panel=false)
+            reader_column(c, r, book, style, p, left~, right~, top=room_top + narrow_reader_top, foot=room_foot + narrow_reader_foot, headings=true, cut=true)
           } else {
             let (left, right) = desk_reader_sides(c, r, style)
             reader_column(c, r, book, style, p, left~, right~, top=desk_reader_top, foot=desk_reader_foot, headings=true, cut=true)
@@ -853,7 +861,11 @@ pub fn reader(
     }
   })
   |> ignore
-  desk_reader_chrome(c, r, file, style, p, back_label, on_back)
+  if narrow {
+    narrow_reader_chrome(c, r, file, style, p, back_label, on_back, room_top, room_foot)
+  } else {
+    desk_reader_chrome(c, r, file, style, p, back_label, on_back)
+  }
 }
 
 ///|
@@ -869,8 +881,8 @@ fn desk_note(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 /// The text's room either side on a desktop: one column 34 of its size wide and its margins at most, in the middle of
 /// what the panel leaves (Reader.css.ts column, scroller[data-panel]); the left, and the right with the panel's.
-fn desk_reader_sides(c : @ui.Ctx, r : Reading, style : ReaderStyle) -> (Double, Double) {
-  let panel = if r.panel == NoPanel { 0.0 } else { desk_panel_w }
+fn desk_reader_sides(c : @ui.Ctx, r : Reading, style : ReaderStyle, panel? : Bool = true) -> (Double, Double) {
+  let panel = if !panel || r.panel == NoPanel { 0.0 } else { desk_panel_w }
   let margin = style.margin.to_double()
   let room = dmax(0.0, c.width - panel)
   let column = dmin(room, desk_column_ems * style.size.to_double() + 2.0 * margin)
@@ -1113,7 +1125,15 @@ fn desk_panel(
 ///|
 /// The chapters (Reader.tsx Contents): finding in the whole text first, then each chapter numbered, the one being read
 /// in the accent's ink with a check; a tap goes there. None found: said so.
-fn desk_contents(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, chapter : Int, has_chapters : Bool) -> Unit {
+fn desk_contents(
+  c : @ui.Ctx,
+  r : Reading,
+  book : Book?,
+  p : ReaderPaper,
+  chapter : Int,
+  has_chapters : Bool,
+  done? : () -> Unit = fn() {  },
+) -> Unit {
   let find = c.id("reader/contents-find")
   c.cursor(find, Hand)
   if c.clicked(find) {
@@ -1152,6 +1172,7 @@ fn desk_contents(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, chapte
       c.cursor(id, Hand)
       if c.clicked(id) {
         reader_jump(r, k, o)
+        done()
       }
       let now = i == chapter
       c.box(style=desk_row, id~, fn() {
@@ -1178,14 +1199,15 @@ fn desk_contents(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, chapte
 ///|
 /// Words to find in the file (Reader.tsx Find): the field, how many were found, each place in a line of its text; one
 /// pressed goes there, ⏎ to the first.
-fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper) -> Unit {
+fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : () -> Unit = fn() {  }) -> Unit {
   c.box(style=desk_find_place, fn() {
     c.box(style=desk_find_field.then(@ui.style(border_color=Data(alpha(p.ink, desk_field_line)))), fn() {
       let res = c.editor(
         "reader-search",
         placeholder=t("web-pages.drive.reader.findPlaceholder"),
-        font_size=desk_field_size,
-        line=desk_field_line_h,
+        // (what is typed in: 14, a phone's 16, as the web's --text-input)
+        font_size=if theme().narrow { narrow_field_size } else { desk_field_size },
+        line=if theme().narrow { narrow_field_line_h } else { desk_field_line_h },
         max_lines=1,
         plain=true,
         color=p.ink,
@@ -1200,6 +1222,7 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper) -> Unit {
         r.hit = 0
         let m = r.matches[0]
         reader_jump(r, m.chunk, m.start)
+        done()
       }
     })
     |> ignore
@@ -1232,6 +1255,7 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper) -> Unit {
       if c.clicked(id) {
         r.hit = i
         reader_jump(r, m.chunk, m.start)
+        done()
       }
       c.box(style=desk_hit_row, id~, fn() {
         c.rich(reader_snippet(b.chunks[m.chunk], m, p.accent), style=desk_hit_words.then(@ui.text_style(color=Data(p.ink))))
@@ -1247,8 +1271,13 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper) -> Unit {
 ///|
 /// The paper, the size, the lines, the margins, the face and the indent (Reader.tsx Layout, a desktop's: the face and
 /// the indent each on a row of their own), each changed as it is picked (the host's set_reader_style).
-fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper) -> Unit {
+fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, narrow? : Bool = false) -> Unit {
   let set = viewer_host().set_reader_style
+  // what it is laid out in: the panel's 280 (320 less 20 either side), a phone's sheet's width less 20 either side
+  let inner = if narrow { dmax(desk_none, c.width - 2.0 * desk_layout_in) } else { desk_layout_inner }
+  let swatch = (inner - desk_papers_gaps) / desk_papers_row
+  let half = (inner - desk_pair_gap) / 2.0
+  let seg_item = if narrow { (half - desk_seg_track) / 2.0 } else { desk_seg_item }
   let label = fn(words : String) {
     c.text(words, style=desk_layout_label.then(@ui.text_style(color=Data(p.muted)))) |> ignore
   }
@@ -1259,7 +1288,7 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper) -
       c.box(style=desk_papers, fn() {
         let shown = if theme().dark { "night" } else { day_paper_key(style.paper) }
         for key in ["white", "green", "grey"] {
-          if desk_swatch(c, key, shown == key, p) {
+          if desk_swatch(c, key, shown == key, p, swatch) {
             set(Paper(key))
           }
         }
@@ -1303,33 +1332,36 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper) -
       Some(v) => c.after_build("reader/margin", fn() { set(Margin(v.round().to_int())) })
       None => ()
     }
-    c.box(style=desk_layout_block, fn() {
-      label(t("web-pages.drive.reader.face"))
-      let k = segmented(
-        c,
-        "reader/face",
-        [t("web-pages.drive.reader.serif"), t("web-pages.drive.reader.sans")],
-        if style.face == "serif" { 0 } else { 1 },
-        item_w=desk_seg_item,
-      )
-      let want = if k == 0 { "serif" } else { "sans" }
-      if want != style.face {
-        set(Face(want))
-      }
-    })
-    |> ignore
-    c.box(style=desk_layout_block, fn() {
-      label(t("web-pages.drive.reader.indentLabel"))
-      let k = segmented(
-        c,
-        "reader/indent",
-        [t("web-pages.drive.reader.indent"), t("web-pages.drive.reader.flush")],
-        if style.indent { 0 } else { 1 },
-        item_w=desk_seg_item,
-      )
-      if (k == 0) != style.indent {
-        set(Indent(k == 0))
-      }
+    c.box(style=if narrow { desk_layout_pair } else { desk_layout_column }, fn() {
+      c.box(style=if narrow { desk_layout_half.then(@ui.style(w=Fixed(half))) } else { desk_layout_block }, fn() {
+        label(t("web-pages.drive.reader.face"))
+        let k = segmented(
+          c,
+          "reader/face",
+          [t("web-pages.drive.reader.serif"), t("web-pages.drive.reader.sans")],
+          if style.face == "serif" { 0 } else { 1 },
+          item_w=seg_item,
+        )
+        let want = if k == 0 { "serif" } else { "sans" }
+        if want != style.face {
+          set(Face(want))
+        }
+      })
+      |> ignore
+      c.box(style=if narrow { desk_layout_half.then(@ui.style(w=Fixed(half))) } else { desk_layout_block }, fn() {
+        label(t("web-pages.drive.reader.indentLabel"))
+        let k = segmented(
+          c,
+          "reader/indent",
+          [t("web-pages.drive.reader.indent"), t("web-pages.drive.reader.flush")],
+          if style.indent { 0 } else { 1 },
+          item_w=seg_item,
+        )
+        if (k == 0) != style.indent {
+          set(Indent(k == 0))
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -1339,12 +1371,12 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper) -
 ///|
 /// One paper, drawn in itself (Reader.css.ts paperSwatch): 文 on its ground, ringed in the accent when it is the one,
 /// its name under it. True on the frame after it was pressed.
-fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper) -> Bool {
+fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double) -> Bool {
   let id = c.id("reader/paper/" + key)
   c.cursor(id, Hand)
   // (each as it is by day, whatever the app's theme)
   let paper = paper_by_key(key)
-  c.box(style=desk_swatch_box, id~, fn() {
+  c.box(style=desk_swatch_box.then(@ui.style(w=Fixed(w))), id~, fn() {
     c.box(
       style=(if on { desk_swatch_on } else { desk_swatch_off }).then(
         @ui.style(bg=Data(paper.ground), border_color=Data(if on { p.accent } else { alpha(p.ink, desk_swatch_line) })),
@@ -1423,6 +1455,480 @@ fn desk_slider_row(
   |> ignore
   kept
 }
+
+// ── a phone's ───────────────────────────────────────────────────────────
+
+///|
+/// What floats over the paper on a phone (Reader with a finger): nothing until a tap on the text brings the bars, and
+/// a tap takes them away. At the top the way back, the name with its chapter and how far read under it, 搜索 and 下载
+/// (as every file opened can be saved: the desktop's bar has it last); at the
+/// foot the chapter with 上一章 and 下一章, a hairline track with a knob to jump anywhere and how far, 目录 and 排版. While
+/// they are away, how far through it is: a hairline along the foot. What was found under the top. The panels are the
+/// page's sheets (the host's), drawn on the page's own ground, not the paper's.
+fn narrow_reader_chrome(
+  c : @ui.Ctx,
+  r : Reading,
+  file : ViewerFile,
+  style : ReaderStyle,
+  p : ReaderPaper,
+  back_label : String,
+  on_back : () -> Unit,
+  room_top : Double,
+  room_foot : Double,
+) -> Unit {
+  let book = r.book
+  let chapter = match book {
+    Some(b) => reader_chapter(r, b)
+    None => -1
+  }
+  let chapters = match book {
+    Some(b) => b.chapters
+    None => []
+  }
+  let share = match book {
+    Some(b) => reader_fraction(r, b)
+    None => 0.0
+  }
+  let pct = "\{(share * 100.0).round().to_int()}%"
+  // the bars coming (140 ms) or going (240 ms), eased out, a step up or down as they fade (Reader.css.ts fades)
+  let k = @motion.animate(c, "reader-bars", if r.chrome { 1.0 } else { 0.0 }, spec=@motion.tween(
+      if r.chrome { narrow_bars_in_ms } else { reader_bars_ms },
+      ease=Out,
+    ))
+  let live = r.chrome
+  let glass = narrow_glass(p)
+  // the page's top bar (a phone's clock and icons) on the paper, not over the text read on up under it
+  if room_top > 0.0 {
+    c.layer(fn() { c.box(style=@ui.style(w=Full, h=Fixed(room_top), bg=Data(p.ground)), fn() {  }) |> ignore }) |> ignore
+  }
+  // how far through it is while they are away
+  if k < 1.0 {
+    let n = c.layer(fn() {
+      c.box(style=desk_hairline_place, fn() {
+        c.box(style=desk_hairline.then(@ui.style(bg=Data(alpha(p.ink, desk_hairline_share)))), fn() {
+          c.box(style=@ui.style(w=Grow(dmax(desk_none, share)), h=Full, bg=Data(alpha(p.accent, desk_hairline_fill))), fn() {
+          })
+          |> ignore
+          c.box(style=@ui.style(w=Grow(dmax(desk_none, desk_whole - share)), h=Full), fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    c.look(n, @ui.look(alpha=desk_whole - k))
+  }
+  let title = match book {
+    Some(b) =>
+      joined([if chapter >= 0 && chapters.length() >= 2 { chapters[chapter].0 } else { "" }, pct], " · ")
+    None => ""
+  }
+  if k > 0.0 {
+    c.layer(fn() {
+      c.box(style=desk_found_place, fn() {
+        c.box(style=@ui.style(h=Fixed(room_top + narrow_bar_off)), fn() {  }) |> ignore
+        c.box(style=narrow_bar_row, fn() {
+          let w = dmin(c.width - narrow_bar_side, narrow_top_most)
+          let n = c.box(style=narrow_top_box.then(@ui.style(w=Fixed(w))), glass~, id=if live { c.id("reader-top") } else { 0 }, fn() {
+            // the way back (its words only on a wide screen)
+            c.box(style=narrow_top_end, fn() {
+              let id = c.id("reader/back")
+              if live && c.clicked(id) {
+                on_back()
+              }
+              let b = c.box(style=narrow_back_box, id=if live { id } else { 0 }, fn() {
+                icon(c, "chevron-left", size=viewer_back_icon, color=p.ink) |> ignore
+              })
+              c.semantics(b, Button, id~, label=back_label)
+            })
+            |> ignore
+            c.box(style=narrow_title_box, fn() {
+              c.text(match book {
+                Some(b) => b.title
+                None => ""
+              }, style=narrow_title_words.then(@ui.text_style(color=Data(p.ink))))
+              |> ignore
+              if title != "" {
+                c.text(title, style=narrow_title_small.then(@ui.text_style(color=Data(p.muted)))) |> ignore
+              }
+            })
+            |> ignore
+            // 搜索
+            c.box(style=narrow_top_end.then(@ui.style(justify=JEnd)), fn() {
+              let id = c.id("reader/find")
+              if live && c.clicked(id) {
+                if r.panel == Find {
+                  reader_close_panel(c, r)
+                } else {
+                  reader_open_panel(c, r, Find)
+                }
+              }
+              let b = c.box(style=narrow_top_button, selected=r.panel == Find, id=if live { id } else { 0 }, fn() {
+                icon(c, "search", size=viewer_back_icon, color=p.ink) |> ignore
+              })
+              c.semantics(b, Button, id~, label=t("web-pages.drive.reader.find"), pressed=r.panel == Find)
+              // 下载, as every file opened has it (the desktop's bar's last)
+              let did = c.id("reader/download")
+              if live && c.clicked(did) {
+                (file.save)()
+              }
+              let d = c.box(style=narrow_top_button, id=if live { did } else { 0 }, fn() {
+                icon(c, "download", size=viewer_back_icon, color=p.ink) |> ignore
+              })
+              c.semantics(d, Button, id=did, label=t("web-main.preview.download"))
+            })
+            |> ignore
+          })
+          c.look(n, @ui.look(alpha=k, dy=-narrow_bars_step * (desk_whole - k)))
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  // what was found: under the top bar while it shows, at the top while it is away
+  if r.hit >= 0 && r.matches.length() > 0 {
+    c.layer(fn() {
+      c.box(style=desk_found_place, fn() {
+        c.box(style=@ui.style(h=Fixed(room_top + narrow_bar_off + narrow_found_down * k)), fn() {  }) |> ignore
+        c.box(style=narrow_bar_row, fn() { desk_found(c, r, p) }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  if k > 0.0 {
+    c.layer(fn() {
+      c.box(style=narrow_foot_place, fn() {
+        c.box(style=narrow_bar_row, fn() {
+          let w = dmin(c.width - narrow_bar_side, narrow_foot_most)
+          let n = c.box(style=narrow_foot_box.then(@ui.style(w=Fixed(w))), glass~, id=if live { c.id("reader-bottom") } else { 0 }, fn() {
+            if chapters.length() > 0 {
+              c.box(style=narrow_chapter_row, fn() {
+                if chip(c, t("web-pages.drive.reader.prevChapter"), key="reader/prev", ink=p.ink, disabled=!live || chapter <= 0, inner=true) {
+                  match chapters.get(chapter - 1) {
+                    Some((_, ck, co)) => reader_jump(r, ck, co)
+                    None => ()
+                  }
+                }
+                c.box(style=desk_grow_middle.then(@ui.style(clip=true)), fn() {
+                  c.text(
+                    if chapter >= 0 { chapters[chapter].0 } else { chapters[0].0 },
+                    style=narrow_chapter_words.then(@ui.text_style(color=Data(p.muted))),
+                  )
+                  |> ignore
+                })
+                |> ignore
+                if chip(c, t("web-pages.drive.reader.nextChapter"), key="reader/next", ink=p.ink, disabled=!live || chapter >= chapters.length() - 1, inner=true) {
+                  match chapters.get(chapter + 1) {
+                    Some((_, ck, co)) => reader_jump(r, ck, co)
+                    None => ()
+                  }
+                }
+              })
+              |> ignore
+            }
+            c.box(style=narrow_track_row, fn() {
+              c.box(style=narrow_track_box, fn() {
+                match book {
+                  Some(b) => narrow_track(c, r, b, p, live)
+                  None => ()
+                }
+              })
+              |> ignore
+              c.box(style=narrow_percent_box, fn() {
+                c.text(pct, style=narrow_percent_words.then(@ui.text_style(color=Data(p.ink)))) |> ignore
+              })
+              |> ignore
+            })
+            |> ignore
+            c.box(style=narrow_tools, fn() {
+              let third = (w - 2.0 * narrow_foot_in - 2.0 * narrow_tools_gap) / 3.0
+              if narrow_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), r.panel == Contents, p, live, third) {
+                reader_open_panel(c, r, Contents)
+              }
+              if narrow_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), r.panel == Layout, p, live, third) {
+                reader_open_panel(c, r, Layout)
+              }
+            })
+            |> ignore
+          })
+          c.look(n, @ui.look(alpha=k, dy=narrow_bars_step * (desk_whole - k)))
+        })
+        |> ignore
+        c.box(style=@ui.style(h=Fixed(room_foot + narrow_foot_off)), fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  narrow_sheets(c, r, book, style, chapter, share)
+}
+
+///|
+/// The bars' ground: the paper's raised one at 72%, frosted (glassy).
+fn narrow_glass(p : ReaderPaper) -> @ui.Glass {
+  @ui.Glass::frosted(
+    blur=viewer_bar_blur,
+    tint=alpha(p.raised, desk_glass_share),
+    solid=over(p.ground, alpha(p.raised, desk_glass_share)),
+    saturation=viewer_bar_saturation,
+  )
+}
+
+///|
+/// How far through it is, to drag or tap to a place (Reader.tsx Track): the knob follows the finger, the text goes there
+/// as it lets go.
+fn narrow_track(c : @ui.Ctx, r : Reading, book : Book, p : ReaderPaper, live : Bool) -> Unit {
+  let key = "reader/where"
+  let (_, _, down) = c.pointer()
+  let shown = if r.draft >= 0.0 { r.draft } else { reader_fraction(r, book) }
+  let v = slider(c, key, shown, 0.0, 1.0, ink=p.ink, accent=p.accent, ground=p.raised)
+  if live && down && c.pressed(c.id(key)) {
+    r.draft = v
+  } else if !down && r.draft >= 0.0 {
+    let to = r.draft
+    r.draft = -1.0
+    let last = book.chunks.length() - 1
+    reader_jump(r, (to * (if last < 0 { 0 } else { last }).to_double()).round().to_int(), 0)
+  }
+}
+
+///|
+/// A tool of the foot (Reader.css.ts tool): its icon over its name, a third of the row, 50 high; its ground the ink at
+/// 7% while what it opens is open. True on the frame after it was pressed.
+fn narrow_tool(c : @ui.Ctx, key : String, icon_name : String, label : String, on : Bool, p : ReaderPaper, live : Bool, w : Double) -> Bool {
+  let id = c.id(key)
+  let b = c.box(
+    style=narrow_tool_box.then(@ui.style(w=Fixed(w), bg=Data(if on { alpha(p.ink, narrow_tool_on) } else { no_ground }))),
+    id=if live { id } else { 0 },
+    fn() {
+      icon(c, icon_name, size=viewer_back_icon, color=p.ink) |> ignore
+      c.text(label, style=narrow_tool_words.then(@ui.text_style(color=Data(p.ink)))) |> ignore
+    },
+  )
+  c.semantics(b, Button, id~, label~, pressed=on)
+  live && c.clicked(id)
+}
+
+///|
+/// The panel open (or sinking away) as the page's sheet (Reader.tsx open, narrow): the contents and the search 72% of
+/// the page and dragged by its grabber, the layout half of it; each on the page's own ground, a pick closing it.
+fn narrow_sheets(c : @ui.Ctx, r : Reading, book : Book?, style : ReaderStyle, chapter : Int, share : Double) -> Unit {
+  let sheet = match viewer_host().sheet {
+    Some(f) => f
+    None => return
+  }
+  let (panel, closing) = match r.panel {
+    NoPanel => if r.closing != NoPanel { (r.closing, true) } else { return }
+    x => (x, false)
+  }
+  let p = sheet_paper()
+  let close = fn() { reader_close_panel(c, r) }
+  let chapters = match book {
+    Some(b) => b.chapters.length()
+    None => 0
+  }
+  let has_chapters = chapters >= 2
+  let (title, trailing, height, draggable) = match panel {
+    Contents =>
+      (
+        t("web-pages.drive.reader.contents"),
+        if chapters > 0 {
+          t("web-pages.drive.reader.contentsNote", args=[("n", "\{chapters}"), ("read", "\{(share * 100.0).round().to_int()}")])
+        } else {
+          ""
+        },
+        narrow_sheet_tall,
+        true,
+      )
+    Find => (t("web-pages.drive.reader.find"), "", narrow_sheet_tall, true)
+    _ => (t("web-pages.drive.reader.layout"), "", narrow_sheet_half, false)
+  }
+  sheet(c, {
+    title,
+    trailing,
+    height,
+    draggable,
+    closing,
+    close,
+    gone: fn() { r.closing = NoPanel },
+    body: fn() {
+      match panel {
+        Contents => desk_contents(c, r, book, p, chapter, has_chapters, done=close)
+        Find => desk_find(c, r, book, p, done=close)
+        _ => desk_layout(c, r, style, p, narrow=true)
+      }
+    },
+  })
+}
+
+///|
+/// The page's own colours, as a sheet over it is drawn on (the web's --m-* in a phone's sheet).
+fn sheet_paper() -> ReaderPaper {
+  let th = theme()
+  { ground: th.p.canvas, ink: th.p.text, muted: th.p.muted, raised: th.p.raised, line: th.p.line, accent: th.p.accent, dark: th.dark }
+}
+
+///|
+/// A phone's bars: their coming (140 ms; going reader_bars_ms), the step they take as they fade (6); the top one 8
+/// under the page's top bar, 720 wide at most, 12 in from the sides; the foot one 12 over its foot, 560 at most; what
+/// was found 56 lower while the top bar shows; the text 28 under the page's top and 72 over its foot.
+let narrow_bars_in_ms : Double = 140.0
+
+///|
+let narrow_bars_step : Double = 6.0
+
+///|
+let narrow_bar_off : Double = 8.0
+
+///|
+let narrow_foot_off : Double = 12.0
+
+///|
+let narrow_bar_side : Double = 24.0
+
+///|
+let narrow_top_most : Double = 720.0
+
+///|
+let narrow_foot_most : Double = 560.0
+
+///|
+let narrow_found_down : Double = 56.0
+
+///|
+let narrow_reader_top : Double = 28.0
+
+///|
+let narrow_reader_foot : Double = 72.0
+
+///|
+/// The foot's room (12 round: what lies in its corners as far from both edges, concentric with it, still.fail's corner
+/// rule, where the web's bottom has 12 14 8), its tools 4 apart, a tool's ground the ink at 7% while on.
+let narrow_foot_in : Double = 12.0
+
+///|
+let narrow_tools_gap : Double = 4.0
+
+///|
+let narrow_tool_on : Double = 0.07
+
+///|
+/// The sheets' share of the page: the contents and the search 72%, the layout half.
+let narrow_sheet_tall : Double = 0.72
+
+///|
+let narrow_sheet_half : Double = 0.5
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_bar_row : @ui.Style = @ui.style(row=true, w=Full, justify=JCenter)
+
+///|
+/// The top bar (top): 48 high, 6 in, its corner 16; its ends at least 64 (minmax(64px, auto)).
+// kept across runs: a value (no field of it changes)
+let narrow_top_box : @ui.Style = @ui.style(row=true, h=S12, px=S1_5, align=ACenter, radius=Xl1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_top_end : @ui.Style = @ui.style(row=true, min_w=S16, align=ACenter)
+
+///|
+/// The way back (back): 36 high, 4 before the chevron and 10 after, its corner 12; 搜索 (topButton) 36 across.
+// kept across runs: a value (no field of it changes)
+let narrow_back_box : @ui.Style = @ui.style(
+  row=true,
+  h=S9,
+  pl=S1,
+  pr=S2_5,
+  align=ACenter,
+  radius=Xl,
+  hovered=@ui.patch(bg=Tint),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_top_button : @ui.Style = @ui.style(
+  w=S9,
+  h=S9,
+  align=ACenter,
+  justify=JCenter,
+  radius=Xl,
+  hovered=@ui.patch(bg=Tint),
+  selected=@ui.patch(bg=Tint),
+)
+
+///|
+/// The name over its chapter and how far (title): the name in the page's ui size, 600; under it its caption, quiet.
+// kept across runs: a value (no field of it changes)
+let narrow_title_box : @ui.Style = @ui.style(w=grow, align=ACenter, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_title_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_title_small : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
+
+///|
+/// The foot (bottom): 12 over, 14 either side, 8 under, 8 between its rows, its corner 16; at its foot the page's.
+// kept across runs: a value (no field of it changes)
+let narrow_foot_place : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_foot_box : @ui.Style = @ui.style(p=S3, gap=S2, radius=Xl1_5)
+
+///|
+/// The chapter's row (chapterRow): 上一章, its name, 下一章, 10 apart.
+// kept across runs: a value (no field of it changes)
+let narrow_chapter_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_chapter_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, narrow=@ui.text_patch(size=Sm))
+
+///|
+/// The track and how far (trackRow): the track 28 high, 7 in from its ends; how far 40 wide, 10 apart.
+// kept across runs: a value (no field of it changes)
+let narrow_track_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_track_box : @ui.Style = @ui.style(w=grow, h=S7, px=S1_5, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_percent_box : @ui.Style = @ui.style(w=S10, align=AEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_percent_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Sm))
+
+///|
+/// The tools (tools: three to a row, 4 apart): a tool 50 high, its icon over its name 3 apart.
+// kept across runs: a value (no field of it changes)
+let narrow_tools : @ui.Style = @ui.style(row=true, w=Full, gap=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_tool_box : @ui.Style = @ui.style(
+  h=Fixed(narrow_tool_h),
+  gap=S0_5,
+  align=ACenter,
+  justify=JCenter,
+  radius=Inner,
+  hovered=@ui.patch(bg=Tint),
+)
+
+///|
+let narrow_tool_h : Double = 50.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_tool_words : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// A heading's (Reader.css.ts piece p[data-heading]: 600, 1.2 of the text's size).
@@ -1562,6 +2068,12 @@ let desk_field_line_h : Double = 20.0
 let desk_field_line : Double = 0.18
 
 ///|
+let narrow_field_size : Double = 16.0
+
+///|
+let narrow_field_line_h : Double = 22.0
+
+///|
 /// The size's row on the ink at 6%; the lines' and the margins' steps.
 let desk_size_ground : Double = 0.06
 
@@ -1572,7 +2084,7 @@ let desk_lines_step : Double = 0.1
 let desk_margin_step : Double = 1.0
 
 ///|
-/// The face's and the indent's choices: each half of the panel's width less its room (280, less the track's 4).
+/// The face's and the indent's choices on a desktop: each half of the panel's room (280, less the track's 4).
 let desk_seg_item : Double = 138.0
 
 ///|
@@ -1671,7 +2183,7 @@ let desk_found_box : @ui.Style = @ui.style(row=true, h=S10, pl=S3_5, pr=S1_25, g
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_found_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
+let desk_found_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, narrow=@ui.text_patch(size=Sm))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1721,7 +2233,7 @@ pub let desk_panel_title : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibo
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_panel_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5)
+pub let desk_panel_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, narrow=@ui.text_patch(size=Sm))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1751,11 +2263,11 @@ let desk_row : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_row_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, wrap=false)
+let desk_row_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_row_now : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=AccentText, leading=L6, wrap=false)
+let desk_row_now : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=AccentText, leading=L6, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 /// A chapter's number (chapterLine: its own 28, 11 and quiet).
@@ -1767,7 +2279,7 @@ let desk_chapter_n_w : Double = 24.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_chapter_n_words : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false)
+pub let desk_chapter_n_words : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// The field: 16 in from the panel's sides, 6 over and 8 under; 38 high, a pill, 16 in.
@@ -1787,7 +2299,7 @@ let desk_hit_row : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5, radius=Xl, hove
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_hit_words : @ui.TextStyle = @ui.text_style(size=Sm, max_lines=2)
+let desk_hit_words : @ui.TextStyle = @ui.text_style(size=Sm, max_lines=2, narrow=@ui.text_patch(size=Lg))
 
 ///|
 /// The layout (layout): 20 in, 4 over, 24 under; its blocks 10 apart, each its name over its control, 8 between.
@@ -1800,7 +2312,7 @@ let desk_layout_block : @ui.Style = @ui.style(w=Full, gap=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_layout_label : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
+let desk_layout_label : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, narrow=@ui.text_patch(size=Sm))
 
 ///|
 /// The papers (papers: five to a row, 8 apart): each a swatch 44 high, its corner the page's, its name under it.
@@ -1809,10 +2321,39 @@ let desk_papers : @ui.Style = @ui.style(row=true, w=Full, gap=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_swatch_box : @ui.Style = @ui.style(w=Fixed(desk_swatch_w), gap=S1, align=ACenter)
+let desk_swatch_box : @ui.Style = @ui.style(gap=S1, align=ACenter)
 
 ///|
-let desk_swatch_w : Double = 49.6
+/// The layout's room (layout: 20 either side; the panel's 280 of its 320), its papers five to a row 8 apart, the face
+/// and the indent side by side on a phone 14 apart (layoutPair), a choice's track 4 round its two.
+let desk_layout_in : Double = 20.0
+
+///|
+let desk_layout_inner : Double = 280.0
+
+///|
+let desk_papers_gaps : Double = 32.0
+
+///|
+let desk_papers_row : Double = 5.0
+
+///|
+let desk_pair_gap : Double = 14.0
+
+///|
+let desk_seg_track : Double = 4.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_layout_pair : @ui.Style = @ui.style(row=true, w=Full, gap=S3_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_layout_column : @ui.Style = @ui.style(w=Full, gap=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_layout_half : @ui.Style = @ui.style(gap=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1828,7 +2369,7 @@ let desk_swatch_glyph : @ui.TextStyle = @ui.text_style(size=Xl, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_swatch_name : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false)
+let desk_swatch_name : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
 /// The size's row (sizeRow): 40 high, 4 in, the page's corner; its keys 32 high, 44 wide at least, 10 in.
@@ -1850,11 +2391,11 @@ let desk_size_key_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_size_key_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false)
+let desk_size_key_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_size_value : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false)
+let desk_size_value : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
 /// A slider's row (sliderRow): its name 48, the line, its value 48, 10 apart.
@@ -1871,4 +2412,4 @@ let desk_slider_value_box : @ui.Style = @ui.style(w=S12, align=AEnd)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_slider_value : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, wrap=false)
+let desk_slider_value : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Sm))
