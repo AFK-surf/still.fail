@@ -424,18 +424,22 @@ static int32_t shape_slow(moonbit_string_t text, int32_t len, double size, int32
     } else {
       int drawn = 0;
       for (NSUInteger j = r.location; j < r.location + r.length; j++) drawn |= from[j];
-      // a glyph the shaper moved within its cluster's advance (contextual spacing of CJK punctuation; the room Core
-      // Text puts between Han and Latin letters since iOS 26 and macOS 27, given to the Latin letter's cluster as
-      // room before it): drawn there, not where it sits on its own, or the room shows after the letter
+      // a glyph the shaper moved within its cluster's advance (contextual spacing of CJK punctuation): drawn
+      // there, not where it sits on its own
       // (the leftmost of its glyphs: a vowel sign the shaper put before its consonant is where it starts)
       double gx = NAN;
       for (NSUInteger j = r.location; j < r.location + r.length; j++)
         if (!isnan(glyph_x[j]) && (isnan(gx) || glyph_x[j] < gx)) gx = glyph_x[j];
       double dx = any_rtl || isnan(gx) ? 0 : gx - start_x;
       if (fabs(dx) < 0.01) dx = 0;
+      // A Latin letter right after Han (or kana, a full-width sign): the room Core Text puts between them since iOS 26
+      // and macOS 27 is the letter's cluster's, before it, so it is drawn where its glyph is (else the room shows
+      // after it: 你是O wner); elsewhere a letter is drawn where its cluster starts (a kerned pair's glyphs a hair
+      // off it, as they always were)
+      BOOL after_wide = r.location > 0 && [s characterAtIndex:r.location - 1] >= 0x2E80;
       if (!drawn && k > 0)
         key = -2;
-      else if (r.length == 1 && c < 128 && dx == 0)
+      else if (r.length == 1 && c < 128 && (dx == 0 || !after_wide))
         key = ascii_key(c, size, weight, style);
       else
         key = intern_at([s substringWithRange:r], size, weight, style, dx);
