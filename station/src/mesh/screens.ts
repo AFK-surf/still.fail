@@ -291,7 +291,9 @@ class ViewSession {
 
   async run(): Promise<void> {
     // How it starts: what it is and whether this view drives it; then who is on it (the hub tells everyone on it).
-    void this.#state({ title: this.#title, control: this.control, ...(this.access ? { access: this.access } : {}) });
+    // How its pictures are made (the statistics' 采集方式 and 编码器), where the source says.
+    const video = this.view.video?.();
+    void this.#state({ title: this.#title, control: this.control, ...(this.access ? { access: this.access } : {}), ...(video ? { video } : {}) });
     if (!this.peek) this.#leave = this.hub.join(this.id, { name: this.name, control: this.control, tell: (people) => void this.#state(people) });
     const unwatch = this.hub.watch(() => {
       if (this.hub.get(this.id) !== this.source) return this.#stop("gone");

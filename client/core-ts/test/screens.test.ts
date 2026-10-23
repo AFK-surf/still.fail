@@ -372,6 +372,11 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   const now = lastState(log, 1);
   assert.deepEqual([now.others, now.line, now.cursor], [["Bob"], "控制 · Bob 也在查看", { x: 0.1, y: 0.2, shape: "text" }]);
   assert.equal(now.scale, undefined, "a station that says no scale: none");
+  // How its pictures are made, as the station says it.
+  v!.send(stateFrame({ video: { capture: "ScreenCaptureKit", encoder: "hardware, low latency, HEVC_Main_AutoLevel", hardware: true } }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(lastState(log, 1).video, { capture: "ScreenCaptureKit", encoder: "hardware, low latency, HEVC_Main_AutoLevel", hardware: true });
   // Its display's scale, as the station says it, to a view that drives it; set with the input it takes.
   const steps = [100, 125, 150, 175, 200];
   v!.send(stateFrame({ scale: { percent: 200, recommended: 150, steps } }));
