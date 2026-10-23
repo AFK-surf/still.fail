@@ -77,18 +77,22 @@ try {
 
   const wrong = [];
   /** A page with the story in it, taken to its state by its steps; whether it got there. */
-  const open = async (story, context) => {
-    // What the story before it kept in the browser gone (its storage, its cookies): only what the context's cache holds
-    // stays, the app's scripts compiled once a context rather than once a story (a page opened 30% sooner, Studio,
-    // 2026-10-23). The clock is the context's, each page's from the same moment.
-    await context.clearCookies();
-    const page = await context.newPage();
-    const cdp = await context.newCDPSession(page);
+  const open = async (story, page, cdp) => {
+    // What the story before it kept in the browser gone (its storage, its cookies, the pointer over it, a finger's
+    // emulation, motion reduced): only what the context's cache holds stays. Opened in the page the one before was in
+    // (a document of its own), the app's scripts compiled once a page rather than once a story: a story opened in 266 ms
+    // in a page of its own, 67 ms so (Studio, 2026-10-23); in a context of its own, a page 30% sooner. The clock is the
+    // context's, each document's from the same moment.
+    await page.evaluate(() => sessionStorage.clear()).catch(() => {});
+    await page.context().clearCookies();
     await cdp.send('Storage.clearDataForOrigin', { origin: new URL(base).origin, storageTypes: 'all' });
-    await cdp.detach();
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    await page.mouse.move(-1, -1);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.setViewportSize(story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 });
     const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    const onError = (e) => errors.push(e.message);
+    page.on('pageerror', onError);
     await page.goto(`${base}?story=${story.id}&theme=light`);
     await settle(page, 1000);
     let reached = true;
@@ -104,7 +108,6 @@ try {
         if (step.hold) {
           // A real finger, held on its middle as long as a long press.
           const box = await at(step.hold).boundingBox({ timeout: 5000 });
-          const cdp = await page.context().newCDPSession(page);
           await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }] });
           await tick(page, 800);
@@ -117,10 +120,10 @@ try {
         break;
       }
     }
-    return { page, errors, reached };
+    return { errors, reached, done: () => page.off('pageerror', onError) };
   };
-  const take = async (story, context) => {
-    const { page, errors, reached } = await open(story, context);
+  const take = async (story, page, cdp) => {
+    const { errors, reached, done } = await open(story, page, cdp);
     if (reached) {
       const c = await page.evaluate(corners);
       const p = await page.evaluate(panels);
@@ -173,15 +176,17 @@ try {
       }
       console.log(`${story.id}: ${c.measured} corner(s), ${p.surfaces} panel(s) measured${scrolled ? `, again scrolled to the end` : ''}; ${c.wrong.length + p.wrong.length + more} off`);
     }
+    done();
     for (const e of errors) console.log(`${story.id}: page error ${e}`);
-    await page.close();
   };
-  // Several at once, each in a page of its own, each line of them in a context of its own.
+  // Several at once, each line of them in a page and a context of its own.
   const queue = [...stories];
   await Promise.all(Array.from({ length: Number(process.env.PAGES) || 6 }, async () => {
     const context = await browser.newContext({ deviceScaleFactor: 1, locale: 'zh-CN', reducedMotion: 'no-preference' });
     await context.clock.install();
-    while (queue.length) await take(queue.shift(), context);
+    const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
+    while (queue.length) await take(queue.shift(), page, cdp);
     await context.close();
   }));
   const distinct = [...new Set(wrong)];
