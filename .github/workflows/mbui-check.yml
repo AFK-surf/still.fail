@@ -55,6 +55,18 @@ jobs:
         with: { node-version-file: .node-version, package-manager-cache: false }
       # (from the Actions cache the moonbit workflow fills, never downloaded here)
       - uses: ./.github/actions/mbui-moonbit
+      # moon's own build (moonc's C and what it checked) as main's newest run left it: without, moonc made all of it
+      # again each run, 46-53 s of the tests' build with every unit and link kept, and the check's type-check from
+      # nothing (2026-10-23, 40018743319); over it, moon makes again what changed, by content (every source touched
+      # as a checkout leaves it: 15 s against 60 on Studio). Main's only (~100 MB a part): a branch takes main's.
+      - uses: actions/cache/restore@v4
+        id: moon
+        with:
+          path: |
+            apps/mbui/_build
+            !${{ env.MBC_STORE }}
+          key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
+          restore-keys: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-
       - name: The mbui app's check (detlint, then native type-checked)
         if: matrix.part == 'app' && !matrix.lto
         run: moon version && bash apps/mbui/scripts/check.sh
@@ -127,6 +139,13 @@ jobs:
             ${{ env.MBC_STORE }}
             .ci/lto
           key: ${{ env.BUILD_KEY }}
+      - if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mbui-moon-build-cache') && steps.moon.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/_build
+            !${{ env.MBC_STORE }}
+          key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
       # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
       - name: What failed
         if: failure()
