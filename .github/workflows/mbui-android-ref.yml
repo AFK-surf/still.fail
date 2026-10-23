@@ -138,8 +138,10 @@ jobs:
           gradle-read-only: 'true'
       - uses: ./.github/actions/mbui-apk
         if: steps.emu.outputs.on == '1'
+      # (not in a run that takes Android's pictures: the two do not fit in one job's 10 minutes, the text is recorded in
+      # the run after, over the pictures committed; this app's build alone took 4 minutes cold, 39936596964)
       - name: The mbui app, for the text it lacks (APP=sffix, debug, for the x86_64 emulator)
-        if: steps.text.outputs.lacks == '1'
+        if: steps.text.outputs.lacks == '1' && steps.what.outputs.refs != '1'
         run: ABI=x86_64 APP=sffix bash apps/mbui/scripts/android.sh build
       - name: mbui-render's app, which draws the screens' draw lists (for the x86_64 emulator)
         if: steps.emu.outputs.on == '1'
@@ -175,10 +177,11 @@ jobs:
         if: steps.emu.outputs.on == '1'
         env:
           REFS: ${{ steps.what.outputs.refs }}
-          TEXT: ${{ steps.text.outputs.lacks }}
+          TEXT: ${{ steps.what.outputs.refs != '1' && steps.text.outputs.lacks || '0' }}
+          TEXT_NEXT: ${{ steps.what.outputs.refs == '1' && steps.text.outputs.lacks || '0' }}
           ANDROID_APK: ${{ steps.what.outputs.refs == '1' && format('{0}/apps/android/app/build/outputs/apk/debug/app-debug.apk', github.workspace) || '' }}
           ANDROID_TEST_APK: ${{ steps.what.outputs.refs == '1' && format('{0}/apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk', github.workspace) || '' }}
-          MBUI_APK: ${{ steps.text.outputs.lacks == '1' && format('{0}/apps/mbui/android/app/build/outputs/apk/debug/app-debug.apk', github.workspace) || '' }}
+          MBUI_APK: ${{ steps.text.outputs.lacks == '1' && steps.what.outputs.refs != '1' && format('{0}/apps/mbui/android/app/build/outputs/apk/debug/app-debug.apk', github.workspace) || '' }}
           RENDER_APK: ${{ github.workspace }}/apps/mbui/mbui/android/app/build/outputs/apk/debug/app-debug.apk
         run: bash apps/mbui/scripts/android-ref.sh ci
       # Android's pictures taken over all this came out as those kept: marked, not taken again for it
