@@ -30,7 +30,7 @@ fn new_chat_page_wide(
   let drive = !held &&
     address != "" &&
     items(v, "stations").iter().any(fn(s) { field(field(Some(s), "overview"), "drive") is Some(Object(_)) })
-  let panel = if drive && new_files_open(src, w.id) { side_width(c.width) } else { 0.0 }
+  let files = drive && new_files_open(src, w.id)
   let page = c.id("new/page")
   let scene = fn() {
     c.box(style=new_wide_frame, id=page, fn() {
@@ -39,7 +39,7 @@ fn new_chat_page_wide(
         c.layer(fn() {
           c.box(style=new_files_bar, fn() {
             if icon_button(c, "new/files", "folder", label=tr("web-pages.chat.files")) {
-              new_files_set(src, w.id, panel <= 0.0)
+              new_files_set(src, w.id, !files)
             }
             // (its end by the window's while the page is moved aside for the sidebar shown a while)
             page_bar_end(c)
@@ -55,23 +55,13 @@ fn new_chat_page_wide(
     })
     |> ignore
   }
-  if panel <= 0.0 {
-    scene()
-  } else {
-    let left = c.width - panel - 1.0
-    c.box(style=side_row, fn() {
-      c.box(style=@ui.style(w=Fixed(left), h=Full), fn() { c.sized(left, c.height, scene) }) |> ignore
-      c.box(style=side_rule, fn() {  }) |> ignore
-      c.box(style=@ui.style(w=Fixed(panel), h=Full), fn() {
-        // (leaving: the chat it became has it now)
-        if going is None {
-          c.sized(panel, c.height, fn() { new_files_panel(c, src, w, address) })
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  }
+  // its panel slides in and out as a chat's does (NewChat.tsx useSidePanel)
+  side_beside(c, "new:" + w.id, files, side_width(c.width), scene, fn() {
+    // (leaving: the chat it became has it now)
+    if going is None {
+      new_files_panel(c, src, w, address)
+    }
+  })
   // a row of the 文件 tab let go over it: into its message
   if going is None && address != "" {
     chat_drop(c, src, "new:" + address, page)
@@ -89,6 +79,8 @@ fn new_files_open(src : Source, ws : String) -> Bool {
 ///|
 /// The workspace's new chat's 文件 tab opened or closed, kept by the core on this device (`chat.tabs.*`).
 fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
+  let open = new_files_open(src, ws)
+  side_changing("new:" + ws, if open { ["files"] } else { [] }, if open { "files" } else { "" }, on)
   let call = if on { "chat.tabs.open" } else { "chat.tabs.close" }
   (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, fn(_) {  })
 }

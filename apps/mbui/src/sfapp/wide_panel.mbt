@@ -49,10 +49,24 @@ fn side_now(r : ChatRef) -> (Array[String], String) {
 }
 
 ///|
-/// Chat `r`'s tabs changed by the core, which keeps them on this device (ChatPage.tsx changeTabs, `chat.tabs.*`):
-/// `tab` opened in front (an agent's history after the histories open, any other last), closed (the last left in
-/// front, if it was), brought to the front; all of them closed (`clear`).
+/// Chat `r`'s tabs changed by the core, which keeps them on this device (ChatPage.tsx change): `tab` opened in front (an
+/// agent's history after the histories open, any other last), closed (the last left in front, if it was), brought to
+/// the front; all of them closed (`clear`). The panel is told first whether any will be open, to slide as they come.
 fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
+  let (tabs, front) = side_now(r)
+  let any = match action {
+    "open" | "front" => true
+    "close" => tabs.iter().any(fn(t) { Some(t) != tab })
+    _ => false
+  }
+  side_changing(side_key(r), tabs, front, any)
+  side_ask(r, action, tab)
+}
+
+///|
+/// The change asked of the core alone (changeTabs, `chat.tabs.*`), the panel told nothing: as a chat made from the new
+/// chat's page starts with what it had beside it.
+fn side_ask(r : ChatRef, action : String, tab : String?) -> Unit {
   match link_src.val {
     Some(src) => {
       let params : Map[String, Json] = { "chat": Json::string(tabs_key(r)) }
@@ -95,6 +109,10 @@ let side_panel_style : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
 ///|
 // kept across runs: a value (no field of it changes)
 let side_rule : @ui.Style = @ui.style(w=SPx, h=Full, bg=Line)
+
+///|
+/// How wide that hairline is (its SPx), the panel's column being it and the panel.
+let side_rule_w : Double = 1.0
 
 ///|
 /// Its bar (sideBar): 45 high, the tabs from 8 in, the panel's switch at its right 12 in.
@@ -142,28 +160,94 @@ let side_tab_close : @ui.Style = @ui.style(w=S5, h=S5, radius=Md, align=ACenter,
 let side_pane : @ui.Style = @ui.style(w=Full, h=Full, clip=true)
 
 ///|
-/// The chat's page with its side panel beside it while something is open in it: the chat `pane` wide less the panel's.
-fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : () -> Unit) -> Unit {
-  let open = match v {
-    Some(view) => side_of(view).0.length() > 0
-    None => false
+/// How long the side panel takes to slide in and out (ChatSide.tsx useSidePanel: 0.28 s and 0.24 s, the page's ease-out).
+pub let side_in_ms : Double = 280.0
+
+///|
+pub let side_out_ms : Double = 240.0
+
+///|
+/// The side panel's slide (ChatSide.tsx useSidePanel), for the page it is beside (a chat's, a workspace's new chat's):
+/// what it was last built as (open or not), whether a change asked of the core here opens or closes it (`opening`,
+/// `leaving`: it slides then), and while it slides out, what it showed (its tabs and the one in front).
+priv struct SideSlide {
+  mut was : (String, Bool)?
+  mut asked : String
+  mut leaving : (String, Array[String], String)?
+}
+
+///|
+let side_slide_of : SideSlide = { was: None, asked: "", leaving: None }
+
+///|
+fn side_slide_reset() -> Unit {
+  side_slide_of.was = None
+  side_slide_of.asked = ""
+  side_slide_of.leaving = None
+}
+
+///|
+/// A change of page `key`'s tabs asked of the core, from `tabs` (`front` in front), leaving `any` open (useSidePanel
+/// changing): from none to some, the panel slides in once they come; from some to none, out, showing them as it goes.
+fn side_changing(key : String, tabs : Array[String], front : String, any : Bool) -> Unit {
+  let open = tabs.length() > 0
+  if any {
+    side_slide_of.leaving = None
   }
-  let panel = if open { side_width(c.width) } else { 0.0 }
-  if panel <= 0.0 {
-    chat()
+  if open != any {
+    side_slide_of.asked = key
+    if !any {
+      side_slide_of.leaving = Some((key, tabs, front))
+    }
+  } else {
+    side_slide_of.asked = ""
+  }
+}
+
+///|
+/// What page `key`'s panel shows while it slides out, its last tab closed: the tabs it had, the one in front.
+fn side_leaving(key : String) -> (Array[String], String)? {
+  match side_slide_of.leaving {
+    Some((k, tabs, front)) if k == key => Some((tabs, front))
+    _ => None
+  }
+}
+
+///|
+/// Page `key` (`page`) and its side panel (`panel`, `whole` wide at rest) side by side, the panel `open` or not. Opened by
+/// a change asked here, the panel's column widens from nothing over 280 ms and the page narrows with it, frame by frame;
+/// closed, the other way over 240 ms (ChatSide.tsx useSidePanel). The panel keeps its whole width all along and shows
+/// through its column as it grows, so it comes in from the right edge without what it holds laid out again; turned back
+/// on its way, it goes on from where it is. Open or closed otherwise (a page opened with its tabs as they were left),
+/// it is so at once.
+fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page : () -> Unit, panel : () -> Unit) -> Unit {
+  let name = "--side-panel/" + key
+  match side_slide_of.was {
+    Some((k, was)) if k == key && was != open && side_slide_of.asked == key => {
+      side_slide_of.asked = ""
+      c.move_state([("side-panel", [name])], duration=if open { side_in_ms } else { side_out_ms })
+    }
+    _ => ()
+  }
+  side_slide_of.was = Some((key, open))
+  // its column (the rule, then the panel) as wide as it has got
+  let col = c.moved(name, if open { whole + side_rule_w } else { 0.0 })
+  if col <= 0.0 {
+    if !open && side_leaving(key) is Some(_) {
+      side_slide_of.leaving = None
+    }
+    page()
     return
   }
-  let left = c.width - panel - 1.0
+  let left = c.width - col
   c.box(style=side_row, fn() {
-    c.box(style=@ui.style(w=Fixed(left), h=Full), fn() { c.sized(left, c.height, chat) }) |> ignore
-    c.box(style=side_rule, fn() {  }) |> ignore
-    c.box(style=@ui.style(w=Fixed(panel), h=Full), fn() {
-      c.sized(panel, c.height, fn() {
-        match v {
-          Some(view) => side_panel(c, src, w, r, view)
-          None => ()
-        }
+    c.box(style=@ui.style(w=Fixed(left), h=Full), fn() { c.sized(left, c.height, page) }) |> ignore
+    c.box(style=@ui.style(w=Fixed(col), h=Full, clip=true), fn() {
+      c.box(style=@ui.style(row=true, w=Fixed(whole + side_rule_w), h=Full), fn() {
+        c.box(style=side_rule, fn() {  }) |> ignore
+        c.box(style=@ui.style(w=Fixed(whole), h=Full), fn() { c.sized(whole, c.height, panel) }) |> ignore
       })
+      |> ignore
     })
     |> ignore
   })
@@ -171,9 +255,36 @@ fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
 }
 
 ///|
+/// The chat's page with its side panel beside it: its tabs, or while the panel slides out the ones it had.
+fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : () -> Unit) -> Unit {
+  let key = side_key(r)
+  let (tabs, front) = match v {
+    Some(view) => side_of(view)
+    None => ([], "")
+  }
+  let open = tabs.length() > 0
+  side_beside(c, key, open, side_width(c.width), chat, fn() {
+    match v {
+      Some(view) => {
+        let (tabs, front) = if open { (tabs, front) } else { side_leaving(key).unwrap_or(([], "")) }
+        side_panel(c, src, w, r, view, tabs, front)
+      }
+      None => ()
+    }
+  })
+}
+
+///|
 /// The panel: its tabs and its switch over what the one in front shows.
-fn side_panel(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
-  let (tabs, front) = side_of(v)
+fn side_panel(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  r : ChatRef,
+  v : ChatView,
+  tabs : Array[String],
+  front : String,
+) -> Unit {
   c.box(style=side_panel_style, fn() {
     c.box(style=side_bar, fn() {
       c.box(style=side_tab_list, fn() {

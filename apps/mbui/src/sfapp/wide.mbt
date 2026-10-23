@@ -193,6 +193,7 @@ fn wide_reset() -> Unit {
   wide.info_open = false
   wide.jobs_open = false
   wide.job_picked = ""
+  side_slide_reset()
   find_forget()
   wide.triple = ""
   wide.triple_accounts = false

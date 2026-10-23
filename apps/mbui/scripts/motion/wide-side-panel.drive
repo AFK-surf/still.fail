@@ -1,0 +1,15 @@
+# The chat's side panel (ChatSide.tsx useSidePanel, wide_panel.mbt side_beside): MBUI_WIN=1280x800 over the made-up
+# chat. Opened by the chat bar's switch (its first agent's history in from the pane's right edge, the chat narrowing
+# with it), closed by the panel's (out the other way), then opened and closed again.
+timeout 20000
+until 按空格输入
+wait 600
+tap icon:panel-open
+wait 900
+tap icon:panel-close
+wait 900
+tap icon:panel-open
+wait 900
+tap icon:panel-close
+wait 900
+exit

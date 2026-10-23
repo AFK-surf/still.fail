@@ -681,9 +681,9 @@ fn send_first(
             // made here, the chat opens without its agent's history beside it; the files open beside the page stay
             // open beside the chat (NewChat.tsx onSent)
             let files = new_files_open(src, workspace_of(station))
-            side_change(r, "clear", None)
+            side_ask(r, "clear", None)
             if files {
-              side_change(r, "open", Some("files"))
+              side_ask(r, "open", Some("files"))
             }
           }
           app.nav.become(Chat(r))
