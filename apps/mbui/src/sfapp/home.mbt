@@ -511,7 +511,7 @@ fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay
       items.insert(if i < items.length() { i } else { items.length() }, item)
     }
   }
-  let result = out.filter(fn(o) { o.1.length() > 0 }).map(fn(o) { { label: o.0, items: o.1 } })
+  let result = out.filter(fn(o) { o.1.length() > 0 }).map(fn(o) { ChatDay::{ label: o.0, items: o.1 } })
   shown_days[key] = result
   result
 }

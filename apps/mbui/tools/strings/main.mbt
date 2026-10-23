@@ -164,6 +164,7 @@ fn main {
     out.write_string(
       "/// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is \"en\".\n",
     )
+    out.write_string("// kept across runs: a table, never written\n")
     out.write_string("let en : Map[String, String] = {\n")
     for w in words {
       out.write_string("  " + quoted(w.0) + ": " + quoted(w.1) + ",\n")

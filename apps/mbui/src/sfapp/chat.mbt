@@ -9,15 +9,6 @@
 // where it was left: `chat.place`) is not said with MBUI_READONLY=1 (Source.readonly): a run on a real account then
 // changes nothing in it. The composer at its foot is composer.mbt's.
 
-///|
-/// A chat the page is of: its station, the session it is opened by (a row's `session`), its title and its station's
-/// name as the row said them (the page shows the view's own once it is read).
-pub(all) struct ChatRef {
-  station : String
-  session : String
-  title : String
-  station_name : String
-} derive(Eq)
 
 ///|
 /// An entry of the list (Chat.kt Entry), with the room above the first (the bar's) and below the last (the

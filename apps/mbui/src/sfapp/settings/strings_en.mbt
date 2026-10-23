@@ -3,6 +3,7 @@
 
 ///|
 /// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is "en".
+// kept across runs: a table, never written
 let en : Map[String, String] = {
   "web-pages.settings.memory.lead": "Memory shared by all chats on a station: global memory spans projects, and each project has its own. Each station keeps its own memory; nothing syncs between stations.",
   "web-pages.automaticDecisions.choosePoint": "Choose a decision point, then configure each station’s model",

@@ -3,6 +3,7 @@
 
 ///|
 /// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is "en".
+// kept across runs: a table, never written
 let en : Map[String, String] = {
   "android-misc.viz.cantRead": "Couldn't read this file",
   "android-misc.viz.cantSend": "Can't send messages in this chat now",

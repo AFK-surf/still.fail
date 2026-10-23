@@ -257,7 +257,7 @@ fn works_in(src : Source, r : ChatRef, session : String) -> Bool {
 ///|
 /// An agent's execution history, over the chat it is in (at `entry`, else its newest): not twice over itself.
 fn push_history(r : ChatRef, key : String, entry : Int?) -> Unit {
-  let page = History(r, key, entry)
+  let page : Page = History(r, key, entry)
   if app.nav.top() != page {
     app.nav.push(page)
   }
