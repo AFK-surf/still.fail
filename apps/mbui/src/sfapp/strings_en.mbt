@@ -444,6 +444,7 @@ let en : Map[String, String] = {
   "web-main.find.partial": "Searched only the {held} loaded items of {of}",
   "web-main.find.placeholder": "Find in chat",
   "web-main.find.prev": "Previous",
+  "web-main.combos.short": "Frequent",
   "web-main.decisions.count": "{n} waiting",
   "web-main.decisions.count.one": "1 waiting",
   "web-main.decisions.entry": "Decisions: {n} waiting",

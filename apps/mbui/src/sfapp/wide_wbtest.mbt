@@ -158,3 +158,25 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
   assert_eq(wide.find_query, "")
 }
+
+///|
+test "wide: a new chat as the web's: its scene and the composer in the pane's middle, where it runs and on what in the composer's row" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.frame()
+  assert_true(app.nav.top() == NewChat)
+  assert_true(t.find("新对话") is Some(_))
+  assert_true(t.find("做任何事") is Some(_))
+  // the composer in the middle of the pane, not at its foot
+  let (_, y) = t.find("做任何事").unwrap()
+  assert_true(y < 600.0, msg="in the middle")
+  // where it runs: its stations in a menu
+  let station = t.query(Button, label="Studio")
+  assert_true(station is Some(_))
+  t.click(Button, label="Studio")
+  t.frame()
+  assert_true(wide.station_menu)
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_false(wide.station_menu)
+}

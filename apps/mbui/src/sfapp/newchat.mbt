@@ -100,9 +100,9 @@ fn fill_words(key : String, error : String) -> String {
 ///|
 /// The page's bar (Parts.kt NavBar): 取消 back, 新对话 in the middle.
 fn new_chat_bar(c : @ui.Ctx) -> Unit {
-  // the wide frame's new chat has no bar (the sidebar's 新建对话 is lit): the page's top row only
+  // the wide frame's new chat has no bar (the sidebar's 新建对话 is lit): what it holds is in the middle of all of the
+  // pane, as the web's (its bar is over the page)
   if wide_on.val {
-    c.box(w=Fill(1.0), h=Px(45.0), fn() {  }) |> ignore
     return
   }
   if @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg, top=status_top()) {
@@ -227,6 +227,12 @@ fn new_chat_on(
   if !fresh.sent && !fresh.starting && sig != fresh.made_sig {
     fresh.made = ""
   }
+  // at a desktop's width, the web's page (wide_newchat.mbt); once its first words are sent, the composer at the foot
+  // where the chat's is, as the web's goes to the chat's dock (the words fly from there into the chat: flight.mbt)
+  if wide_on.val && !leaving && !fresh.sent && !fresh.starting {
+    new_chat_page_wide(c, src, w, v, station)
+    return
+  }
   // leaving: up out of view as it fades (140 ms, Arrive), the choices fading where they are (80 ms)
   let (up, fade) = if leaving {
     (new_leave(c).get(), new_fade(c).get())
@@ -251,13 +257,25 @@ fn new_chat_on(
       fn() {
         @sf.drawable(c, if t.dark { "illus_new_chat_dark" } else { "illus_new_chat" }, 230.0)
         |> ignore
+        // (the wide frame's, its first words sent: the web's words, as the page had them, going)
         c.box(pt=6.0, fn() {
-          c.text(tr("android-chat.new.heading"), size=22.0, weight=700, color=t.p.text, wrap=false, line=30.8)
+          c.text(
+            tr(if wide_on.val { "web-main.newChat.title" } else { "android-chat.new.heading" }),
+            size=22.0,
+            weight=700,
+            color=t.p.text,
+            wrap=false,
+            line=30.8,
+          )
           |> ignore
         })
         |> ignore
         c.text(
-          fill("android-chat.new.sub", [("station", name)]),
+          if wide_on.val {
+            fill("web-main.newChat.sub", [("name", if name == "" { tr("web-main.newChat.thisMachine") } else { name })])
+          } else {
+            fill("android-chat.new.sub", [("station", name)])
+          },
           size=14.0,
           color=t.p.muted,
           center=true,
@@ -406,6 +424,7 @@ fn new_chat_on(
             key: "new:" + address,
             placeholder: tr("android-chat.new.placeholder"),
             send: fn(d) { send_first(c, src, w, v, address, name, d) },
+            tools: None,
           }))
         })
       } else {
@@ -575,7 +594,12 @@ fn send_first(
   // the words stay where they were typed, the files where their tiles were, while the chat is made (flight.mbt:
   // carried; NewChat.kt host.sending)
   let here : ChatRef = { station, session: "", title: "", station_name }
-  flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
+  // (not from the wide frame's composer in the middle of the page: the chat's list would be carried up from there,
+  // half a page, and its rows put where it is drawn would not stay put; the row is where it is, as with motion
+  // reduced, the page going as it goes)
+  if !wide_on.val {
+    flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
+  }
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()

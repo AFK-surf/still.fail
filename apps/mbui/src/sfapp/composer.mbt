@@ -254,6 +254,9 @@ priv struct Fresh {
   /// what its field says while empty
   placeholder : String
   send : (Draft) -> Unit
+  /// the wide frame's new chat (the web's roomy composer): its choices in the row under the words, beside ＋, the
+  /// words always over them; None: the capsule as it is
+  tools : (() -> Unit)?
 }
 
 ///|
@@ -1510,6 +1513,11 @@ fn composer(
 }
 
 ///|
+/// The roomy composer's choices beside ＋ (the web's composer toolbar): 4 apart, on ＋'s line.
+// kept across runs: a value (no field of it changes)
+let composer_tools : @ui.Style = @ui.style(row=true, h=S9, gap=S1, align=ACenter)
+
+///|
 /// What floats over the page in the composer's glass (Glass.kt floating, ComposerCorner): the capsule's ground, the
 /// `@` menu's (chat_refs.mbt). `h` tall.
 fn floating_ground(c : @ui.Ctx, h : @ui.Size) -> Int {
@@ -1637,6 +1645,12 @@ fn composer_bar(
   fresh : Fresh?,
 ) -> Unit {
   let t = @sf.theme()
+  // the roomy composer's choices (a new chat's in the wide frame): its words always over its row
+  let tools = match fresh {
+    Some(f) => f.tools
+    None => None
+  }
+  let expanded = expanded || tools is Some(_)
   // typing may warm the agent's runtime: the first time, then a minute after the last (asked each frame, so it counts)
   let warm_due = d.warm_n == 0 ||
     @kit.after(c, "warm/" + d.key + "/\{d.warm_n}", true, warm_every_ms, later=true)
@@ -1811,6 +1825,10 @@ fn composer_bar(
       field()
       c.box(dir=Row, w=Fill(1.0), align=AEnd, fn() {
         plus_button()
+        match tools {
+          Some(more) => c.box(style=composer_tools, more) |> ignore
+          None => ()
+        }
         c.spacer()
         send_button()
       })
