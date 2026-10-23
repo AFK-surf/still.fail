@@ -804,13 +804,13 @@ notifications (src/hostapi/notify.mbt).
   back with 无法开启/关闭通知：… when it fails; the push registration then follows what the core answered (Push.sync:
   `push.unregister` while off, `push.register {kind: fcm, token}` with the host's token while on), as it does at
   every start.
-- A push delivered while the app runs is shown unless the core says not (`notice.pushed`: off, a page in view, another
-  workspace's, its kind off), and what it is about is brought onto the device (`notice.bring`).
+- A push delivered is shown unless the core says not (`notice.pushed`: off, a page in view, another workspace's, its
+  kind off), and what it is about is brought onto the device (`notice.bring`), by the push service (Push.java).
 - `APP=sffix MBUI_FIXTURE=chat-flash|chat-flash-mine` (a message gone to, its flash held at its peak) and
   `settings-notify-off`: `scripts/shots.sh notify web-notify` (mac-notify-*, web-notify-* pictures).
 
-Hosts (@hostapi.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token,
-push_next): Android is the system's (android/…/Notices.java, POST_NOTIFICATIONS in the manifest, the activity's
+Hosts (@hostapi.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token):
+Android is the system's (android/…/Notices.java, POST_NOTIFICATIONS in the manifest, the activity's
 permission answer and the tap's intent). macOS keeps what would be shown and says it on the log (`NOTICE <tag>\t<title>\t
 <body>`, `NOTICE CANCEL`, `NOTICE TAP`): the app there is a bare executable, which UNUserNotificationCenter does not
 take (it wants a bundle); what it allows is unknown. iOS's are the system's (UNUserNotificationCenter, no pushes).
@@ -818,15 +818,17 @@ Windows shows none yet (toast notifications and WNS: a later slice's), nor the w
 notification by its words on Android (the app's own active notifications; the tap its PendingIntent sent) and on
 macOS (the kept ones): drive.mbt `noticed`, `nonotice`, `notice`.
 
-Not yet, against the current app: Firebase Cloud Messaging. The Android app sets Firebase up by hand from its build's
-FCM_* settings and shows pushes from its FirebaseMessagingService (PushService) while it is not in front, starting its
-core headless to ask `notice.pushed` and `notice.bring`. Here no push service is linked: this app (dev.mbui.demo, later
-fail.still.mbui) would need its own app in still.fail's Firebase project, and its core runs only inside the activity's
-process (no headless start for a service yet). `push_token` says none and `push_next` delivers nothing, so the app
-registers no device (and takes it off the accounts while off, as the Android app does); the app's own side of a
-delivered push (notice.pushed, the notification, notice.bring) is there and tested (src/sfapp/notices_wbtest.mbt). Also
-not: the client.wake before notice.bring (the app is awake when a push reaches it here), the notification's language
-when the app is not running (KeptLang: the app's words are the Chinese catalog's).
+Firebase Cloud Messaging (android/…/Push.java, as the Android app's Push.kt): Firebase set up by hand from the app's
+resources (res/values/push.xml, firebase.properties' values) for the package's Firebase app (fail.still.android.beta's;
+none registered for the others, whose pushes stay off), its components merged into the app's manifest by hand (apk.json
+`merged`). The token is asked for as the process starts; the app registers it as the core's `notify` says, at its
+start and as a token comes later. The FirebaseMessagingService does what PushService does, on FCM's thread, with the
+core: the app's where it runs (its own Java client, AdbCore's ids), else one started for the push
+(android_core.c CoreHost.startAlone: the app takes it as its own if it opens meanwhile, else it stops once the push is
+handled). A new token is registered; a push is asked of the core (`notice.pushed`; it not answering, shown unless the
+app is in front), shown, then `client.wake` (the app off screen: how long, since it went or the push before woke it)
+and `notice.bring`. The app's frames stop while it is behind, so none of it is the MoonBit side's. Still not: the
+notification's language when the app is not running (KeptLang: the app's words are the Chinese catalog's).
 
 Files and media, kept on the device (branch mbui-media-complete, 2026-10-19; ember apps/android shared/screens/
 FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetches, ui/Parts.kt DownloadChip):

@@ -194,9 +194,10 @@ public class MainActivity extends Activity {
     /**
      * Since when the app has been off screen (elapsedRealtime: deep sleep counted); 0 while on it. The process's, not
      * an activity's: one closed with back and made again later is the same app coming back (as still.fail's
-     * MainActivity's `hidden`).
+     * MainActivity's `hidden`). An app's push service reads it too (still.fail's Push.java: how long the app was away
+     * as a push wakes its core).
      */
-    private static long hiddenAt;
+    static volatile long hiddenAt;
 
     /** The Wi-Fi multicast lock held while on screen, when the manifest asks for it (src/hostapi/system.mbt). */
     private android.net.wifi.WifiManager.MulticastLock multicast;

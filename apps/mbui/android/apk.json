@@ -12,6 +12,7 @@
   "jniLibs": ["../out/android/apk/jniLibs", "app/src/main/jniLibs"],
   "rules": ["app/proguard-rules.pro"],
   "lock": "apk.lock",
+  "merged": ["androidx.core:core:", "androidx.profileinstaller:", "androidx.startup:", "com.google.firebase:", "com.google.android.gms:", "com.google.android.datatransport:"],
   "strings": {
     "posthog_host": ["STILLFAIL_POSTHOG", "host"],
     "posthog_key": ["STILLFAIL_POSTHOG", "key"]

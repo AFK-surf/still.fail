@@ -44,7 +44,22 @@ final class CoreHost {
         } catch (Exception e) {
             Host.log("device model: " + e);
         }
+        // (the app's library, src/host/android_core.c in it: loaded already where the app runs, not where a push
+        // started the process)
+        System.loadLibrary("mbui");
     }
+
+    /**
+     * A push's core (Push.Service, on FCM's thread; android_core.c): the one running, else one started with no app's
+     * client yet, which the app takes as its own if it starts meanwhile. True when one runs.
+     */
+    static native boolean startAlone(String cloud, boolean beta);
+
+    /** The push handled: the core startAlone started stopped, unless the app has taken it. */
+    static native void stopAlone();
+
+    /** Whether a core runs in this process. */
+    static native boolean running();
 
     /** Off the core's thread: the Keystore takes its time. */
     private static final ExecutorService calls = Executors.newSingleThreadExecutor();
@@ -641,9 +656,9 @@ final class CoreHost {
         return got[0] instanceof android.hardware.biometrics.BiometricPrompt.CryptoObject c ? c : crypto;
     }
 
-    /** The app's context, from the activity (the core runs only beside it). */
+    /** The app's context (a push's core runs with no activity). */
     private static android.content.Context context() {
-        return Host.activity.getApplicationContext();
+        return StillfailApp.app;
     }
 
     /**
@@ -738,7 +753,7 @@ final class CoreHost {
      * drafts, what it kept of the device.
      */
     static String dataDir() {
-        File files = Host.activity.getFilesDir();
+        File files = StillfailApp.app.getFilesDir();
         File d = new File(files, "core");
         File before = new File(files, "stillfail-core");
         if (!d.exists() && before.isDirectory()) {
@@ -750,7 +765,7 @@ final class CoreHost {
 
     /** An asset of the APK (the core's bytecode), or null. */
     static byte[] asset(String name) {
-        try (InputStream in = Host.activity.getAssets().open(name)) {
+        try (InputStream in = StillfailApp.app.getAssets().open(name)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[1 << 16];
             for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
