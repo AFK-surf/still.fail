@@ -133,7 +133,6 @@ function Page({ mountDemo, demo }: DemoProps) {
         <div className={`${css.wrap} ${css.install}`}>
           <div>
             <h2 className={css.headingTitle}><span className={css.phrase}>{say.install[0]}</span>{lang === "en" ? " " : ""}<span className={css.phrase}>{say.install[1]}</span></h2>
-            <p className={css.headingLede}>{say.installLede}</p>
           </div>
           <div className={css.terminal}>
             <div className={css.terminalBody}>

@@ -304,8 +304,8 @@ export function OneComputer(props: DemoProps) {
           <div className={css.stepWords}>
             <div className={css.stepTrack} ref={words}>
               {say.steps.map((s) => (
-                <div key={s.title} className={css.stepSay}>
-                  <b>{s.title}</b><span>{s.text}</span>
+                <div key={s} className={css.stepSay}>
+                  <b>{s}</b>
                 </div>
               ))}
             </div>

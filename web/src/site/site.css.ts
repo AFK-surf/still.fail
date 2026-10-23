@@ -268,8 +268,6 @@ export const stepSay = style({
   selectors: { "&:not(:first-child)": { opacity: 0, visibility: "hidden" } },
 });
 globalStyle(`${stepSay} > b`, { fontSize: vars.textHeading, fontWeight: 700, color: FG, textWrap: "balance" });
-// Wrapped at its commas and spaces, not inside a word (订 / 阅), into lines about as long as each other.
-globalStyle(`${stepSay} > span`, { fontSize: vars.textTitle, color: "var(--s-muted)", wordBreak: "keep-all", textWrap: "balance" });
 /** Where the devices and the window are placed (OneComputer.tsx). */
 export const oneRoom = style({ position: "relative", flex: "1", minHeight: "0", marginTop: "12px" });
 export const oneWires = style({ position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" });
