@@ -119,6 +119,7 @@ fn workspace_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }
       },
       fn() {
+        c.box(style=desk_list, fn() {
         for m in members {
           ws_member_row(c, core, here, v, m)
         }
@@ -182,6 +183,8 @@ fn workspace_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             })
           }
         }
+        })
+        |> ignore
       },
     )
   })
@@ -318,25 +321,19 @@ fn ws_section(
   actions? : () -> Unit = fn() {  },
   body : () -> Unit,
 ) -> Unit {
-  c.box(style=ws_section_box, fn() {
-    c.box(style=ws_section_head, fn() {
-      c.box(style=ws_section_words, fn() {
-        c.box(style=ws_title_line, fn() {
-          c.text(title, style=ws_section_title) |> ignore
-          if count > 0 {
-            c.text(count.to_string(), style=ws_section_count) |> ignore
-          }
-        })
-        |> ignore
-        if description != "" {
-          c.text(description, style=ws_section_sub) |> ignore
-        }
-      })
-      |> ignore
-      c.box(style=ws_section_actions, fn() { actions() }) |> ignore
-    })
-    |> ignore
-    body()
+  c.box(style=ws_section_room, fn() {
+    @sf.section(
+      c,
+      title,
+      body,
+      note=description,
+      actions~,
+      title_after?=if count > 0 {
+        Some(fn() { c.text(count.to_string(), style=ws_section_count) |> ignore })
+      } else {
+        None
+      },
+    )
   })
   |> ignore
 }
@@ -344,7 +341,7 @@ fn ws_section(
 ///|
 /// A row of a list (pages.css.ts listRow: 52 high at least, 10 by 12 in).
 fn ws_row(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ws_list_row, fn() { body() }) |> ignore
+  c.box(style=desk_list_row, fn() { body() }) |> ignore
 }
 
 ///|
@@ -409,28 +406,74 @@ fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> 
     let on = [("workspace", ws), ("member", sub)]
     let calls = ["workspace.setRole", "workspace.removeMember"]
     doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on))
-    let pid = c.id("ws-role/" + sub)
-    let owner_sets = role == "owner" && sub != here.sub
-    if owner_sets {
-      c.cursor(pid, Hand)
-      if hit(c, pid) {
-        member_sheet(core, here, v, m)
+    // its role: the owner sets another's (a Select, 120 wide), else said in a pill
+    let now = text(mv, "role")
+    if role == "owner" && sub != here.sub {
+      let setting = is_doing(core, ["workspace.setRole"], on)
+      let picked = @sf.select(
+        c,
+        "ws-role/" + sub,
+        now,
+        ["owner", "admin", "member"].map(fn(r) { (r, role_label(r)) }),
+        label=tr("web-pages.settings.members.role"),
+        disabled=setting,
+        w=ws_role_w,
+      )
+      if picked != now {
+        c.after_build("ws-role/" + sub, fn() {
+          act(
+            core,
+            tr("android-settings.members.roleWhat"),
+            "workspace.setRole",
+            obj([("workspace", str(ws)), ("member", str(sub)), ("role", str(picked)), ("account", str(here.sub))]),
+            done=tr("android-settings.members.roleSet"),
+          )
+        })
       }
+    } else {
+      @sf.pill(c, role_label(now))
     }
-    let pill = c.box(style=ws_pill, id=if owner_sets { pid } else { 0 }, fn() {
-      c.text(role_label(text(mv, "role")), style=ws_pill_words) |> ignore
-    })
-    if owner_sets {
-      c.semantics(pill, Button, id=pid, label=tr("web-pages.settings.members.role"))
-    }
+    // what a manager does to them, under ⋯ (Menu): taken out of the workspace, asked again first
     if can {
       let mid = c.id("ws-member-more/" + sub)
       c.cursor(mid, Hand)
-      if hit(c, mid) {
-        member_sheet(core, here, v, m)
+      let open = ws_menu.val == sub
+      if c.clicked(mid) {
+        ws_menu.val = if open { "" } else { sub }
       }
       let b = c.box(style=ws_more, id=mid, fn() { @sf.icon(c, "more", size=ws_more_icon, color=t.p.muted) |> ignore })
-      c.semantics(b, Button, id=mid, label=tr("web-pages.settings.members.remove"))
+      c.semantics(b, Button, id=mid, label=tr("web-pages.settings.members.remove"), expanded=open)
+      let m = @sf.menu(
+        c,
+        "ws-member-menu/" + sub,
+        open,
+        mid,
+        [@kit.menu_item("remove", label=tr("web-pages.settings.members.remove"))],
+        { "remove": "trash" },
+        @sf.menu_w,
+        along=End,
+      )
+      if open && !m.open {
+        ws_menu.val = ""
+      }
+      if m.chosen is Some(_) {
+        ws_menu.val = ""
+        confirm(
+          fill("android-settings.members.moveOutTitle", [("email", email), ("name", text(v, "name"))]),
+          tr("android-settings.members.moveOutText"),
+          tr("android-settings.members.moveOut"),
+          danger=true,
+          fn() {
+            act(
+              core,
+              tr("android-settings.members.moveOutWhat"),
+              "workspace.removeMember",
+              obj([("workspace", str(ws)), ("member", str(sub)), ("account", str(here.sub))]),
+              done=tr("android-settings.members.movedOut"),
+            )
+          },
+        )
+      }
     }
   })
 }
@@ -478,53 +521,27 @@ let ws_facts : @ui.Style = @ui.style(row=true, px=S2, gap=S2, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_fact : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, wrap=false)
+let ws_fact : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_fact_dot : @ui.TextStyle = @ui.text_style(size=Lg, color=Subtle, wrap=false)
+let ws_fact_dot : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Subtle, wrap=false)
 
-///|
-/// A section (section: 28 under; its head 10 over what it holds, its title the body's 14 on 22 in 600, how many 8 after
-/// it subtle in 500, what it is the meta's 12 muted 3 under).
-// kept across runs: a value (no field of it changes)
-let ws_section_box : @ui.Style = @ui.style(w=Full, px=S4, pb=S7)
 
-///|
-// kept across runs: a value (no field of it changes)
-let ws_section_head : @ui.Style = @ui.style(row=true, w=Full, pb=S2_5, gap=S3, align=ACenter)
 
-///|
-// kept across runs: a value (no field of it changes)
-let ws_section_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let ws_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
 
-///|
-// kept across runs: a value (no field of it changes)
-let ws_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_section_count : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Medium, color=Subtle, wrap=false)
+let ws_section_count : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Medium, color=Subtle, wrap=false)
 
-///|
-// kept across runs: a value (no field of it changes)
-let ws_section_sub : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
 
-///|
-// kept across runs: a value (no field of it changes)
-let ws_section_actions : @ui.Style = @ui.style(row=true, gap=S2)
 
-///|
-/// A row of a list (listRow: 52 high at least, 10 by 12 in, 12 apart, the field's corner).
-// kept across runs: a value (no field of it changes)
-let ws_list_row : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(ws_row_least), py=S2_5, gap=S3, align=ACenter, radius=Xl)
 
-///|
-let ws_row_least : Double = 52.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -532,15 +549,15 @@ let ws_row_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false)
+let ws_row_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, wrap=false)
+let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_sub_wrap : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
+let ws_row_sub_wrap : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
 
 ///|
 /// 你 by the viewer (choiceBadge: 1 by 7 in, a capsule on the accent's ground, the meta's 12 in 500).
@@ -549,19 +566,10 @@ let ws_badge : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Full, bg=AccentBg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_badge_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=AccentText, wrap=false)
+let ws_badge_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=AccentText, wrap=false)
 
-///|
-/// A role (Pill: 22 high, 9 in, a capsule on the neutral ground, the meta's 12 in 500 muted).
-// kept across runs: a value (no field of it changes)
-let ws_pill : @ui.Style = @ui.style(h=Fixed(ws_pill_h), px=S2, radius=Full, bg=Neutral, align=ACenter, justify=JCenter)
 
-///|
-let ws_pill_h : Double = 22.0
 
-///|
-// kept across runs: a value (no field of it changes)
-let ws_pill_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Muted, wrap=false)
 
 ///|
 /// ⋯ (an icon button: 32, its corner 12).
@@ -571,11 +579,11 @@ let ws_more : @ui.Style = @ui.style(w=S8, h=S8, radius=Xl, align=ACenter, justif
 ///|
 /// A group's head among the people (memberGroup: 18 over, 12 in, 2 under, 8 apart).
 // kept across runs: a value (no field of it changes)
-let ws_group_box : @ui.Style = @ui.style(row=true, w=Full, pt=S4, pb=SPx, gap=S2, align=AEnd)
+let ws_group_box : @ui.Style = @ui.style(row=true, w=Full, px=S6, pt=S4_5, pb=S0_5, gap=S2, align=AEnd)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_group_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
+let ws_group_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A card (pages.css.ts card: 20 in, its corner the card's, the card's ground; its rows 14 apart).
@@ -588,7 +596,7 @@ let ws_card_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_card_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, w=@sf.grow, wrap=false)
+let ws_card_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, w=@sf.grow, wrap=false)
 
 ///|
 /// 退出与删除 (dangerList: 18 apart, 4 over and under).
@@ -597,4 +605,18 @@ let ws_danger_list : @ui.Style = @ui.style(w=Full, py=S1, gap=S4)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_danger_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
+let ws_danger_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// A section at the column's edges (the library's Section in it).
+// kept across runs: a value (no field of it changes)
+let ws_section_room : @ui.Style = @ui.style(w=Full, px=S4)
+
+///|
+/// The owner's role choice (roleSelect: 120 wide).
+let ws_role_w : Double = 120.0
+
+///|
+/// The ⋯ menu open, by the person's sub ("" none).
+// kept across runs: said again by each press; core.mbt's reset empties it
+let ws_menu : Ref[String] = Ref("")
