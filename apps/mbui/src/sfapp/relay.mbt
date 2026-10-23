@@ -202,7 +202,7 @@ fn relay_arrange(connects : Array[Json], query : String, all : Bool) -> (Array[(
 priv enum RelayPart {
   Lead
   Search
-  Picked(String, String?, String, Bool)
+  Picked(String, String?, String, Bool, String?)
   Reading
   Failed(String)
   Note(String)
@@ -241,18 +241,17 @@ fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit 
     parts.push(Search)
   }
   match (link, chosen) {
-    (Some(_), _) => parts.push(Picked("", None, tr("web-main.relay.kind.thread"), false))
-    (None, Some((conn, p))) => {
+    (Some(_), _) => parts.push(Picked("", None, tr("web-main.relay.kind.thread"), false, None))
+    (None, Some((conn, p))) =>
       parts.push(
         Picked(
           relay_place_name(p),
           Some(relay_workspace(conn)),
           relay_kind_note(p) + " · " + tr("web-main.relay.change"),
           true,
+          Some(fill("web-main.relay.via", [("bot", text(Some(conn), "name"))])),
         ),
       )
-      parts.push(Note(fill("web-main.relay.via", [("bot", text(Some(conn), "name"))])))
-    }
     (None, None) =>
       match relaying.read {
         0 => parts.push(Reading)
@@ -426,6 +425,16 @@ let relay_place : @ui.Style = @ui.style(
 let relay_place_on : @ui.Style = relay_place.then(@ui.style(bg=AccentBg))
 
 ///|
+/// Which bot the agent speaks through there, under the place picked (Relay.kt): in line with the row's name, as far
+/// in as its 10, its mark's 16 and the 8 after it.
+// kept across runs: a value (no field of it changes)
+let relay_via : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, pt=S0_5, gap=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let relay_via_mark : @ui.Style = @ui.style(w=S4)
+
+///|
 // kept across runs: a value (no field of it changes)
 let relay_place_name_words : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false)
 
@@ -448,11 +457,19 @@ fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : Re
     match part {
       Lead => c.text(tr("web-main.relay.lead"), style=relay_words) |> ignore
       Search => relay_field(c, "relay/search", relay_query, tr("web-main.relay.searchOrLink"))
-      Picked(name, where_, note, change) =>
+      Picked(name, where_, note, change, via) => {
         if relay_place_row(c, "relay/picked", None, if name == "" { tr("web-main.relay.thread") } else { name }, where_, Some(note), true) &&
           change {
           relaying.picked = None
         }
+        if via is Some(words) {
+          c.box(style=relay_via, fn() {
+            c.box(style=relay_via_mark, fn() {  }) |> ignore
+            c.text(words, style=relay_small) |> ignore
+          })
+          |> ignore
+        }
+      }
       Reading =>
         c.box(style=relay_reading, fn() {
           @sf.spinner(c, size=14.0) |> ignore

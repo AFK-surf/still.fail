@@ -127,12 +127,10 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
     );
   } else if (picked !== null) {
     list = (
-      <>
-        <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
-          {row(picked, true, <>{kindNote(picked.place)} · <span className={css.change}>{t("web-main.relay.change")}</span></>, () => setPicked(null))}
-        </div>
+      <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
+        {row(picked, true, <>{kindNote(picked.place)} · <span className={css.change}>{t("web-main.relay.change")}</span></>, () => setPicked(null))}
         <p className={css.via}>{t("web-main.relay.via", { bot: picked.connect.name })}</p>
-      </>
+      </div>
     );
   } else if ("reading" in read) list = <WaitLine text={t("web-main.relay.reading")} />;
   else if ("error" in read) list = <p className={controlsCss.fieldError} role="alert">{read.error}</p>;
