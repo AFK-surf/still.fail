@@ -422,9 +422,10 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
 }
 
 ///|
-/// An online station's machine on its page (Stations.kt StationFigures): what is left of it large, its network, the
-/// rest a row each, its agents' processes; in its room whether known yet or not (grey bars over it until it is: laid
-/// out unseen as when it is, so nothing below moves as it comes); reconnecting, as last heard, faded.
+/// An online station's machine on its page's 概览 (Stations.kt StationFigures): what is left of it large, its network,
+/// its agents' processes (what it is, a row each, is under 软件与设备: station_device); in its room whether known yet
+/// or not (grey bars over it until it is: laid out unseen as when it is, so nothing below moves as it comes);
+/// reconnecting, as last heard, faded.
 fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let t = @sf.theme()
   let host = match field(s, "host") {
@@ -434,7 +435,6 @@ fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let read = host is Some(_)
   let net = station_net(core, s)
   let running = text(field(s, "overview"), "processesText")
-  let details = if read { items(host, "details") } else { unread_details() }
   // (each part's room a box of its own under its padding: what is laid over it covers that alone, as matchParentSize
   // in a padded Box)
   c.box(style=if flag(s, "reconnecting") { peek_figures_faded } else { peek_figures_box }, fn() {
@@ -464,39 +464,6 @@ fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
         c.box(style=seen(@sf.full_width, net is Some(_), false), fn() { net_line(c, net) }) |> ignore
         if net is None {
           c.layer(fn() { net_bars(c) }) |> ignore
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-    c.box(style=figures_details, fn() {
-      c.box(style=@sf.full_width, fn() {
-        c.box(style=seen(figures_rows, read, false), fn() {
-          for d in details {
-            c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
-              c.box(min_w=52.0, fn() {
-                c.text(text(Some(d), "label"), size=13.0, color=t.p.subtle, wrap=false, line=20.0) |> ignore
-              })
-              |> ignore
-              c.text(text(Some(d), "value"), size=13.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-        // four bars evenly down its room (Arrangement.SpaceEvenly: as much room over each as under the last)
-        if !read {
-          c.layer(fn() {
-            c.box(style=figures_spread, fn() {
-              c.spacer()
-              for _ in 0..<4 {
-                @sf.bar(c, Px(unread_detail_w), net_bar_h, breathing=true)
-                c.spacer()
-              }
-            })
-            |> ignore
-          })
-          |> ignore
         }
       })
       |> ignore
@@ -543,11 +510,6 @@ let unread_dial_r : Double = 6.0
 let figures_net : @ui.Style = @ui.style(w=Full, pt=S3_5)
 
 ///|
-/// The rest a row each, 16 under its network.
-// kept across runs: a value (no field of it changes)
-let figures_details : @ui.Style = @ui.style(w=Full, pt=S4)
-
-///|
 /// Its rows, 8 apart (HostDetails).
 // kept across runs: a value (no field of it changes)
 let figures_rows : @ui.Style = @ui.style(w=Full, gap=S2)
@@ -561,9 +523,9 @@ let figures_spread : @ui.Style = @ui.style(w=Full, h=Full)
 let unread_detail_w : Double = 180.0
 
 ///|
-/// Its agents' processes, 8 under the rows.
+/// Its agents' processes, 14 under its network.
 // kept across runs: a value (no field of it changes)
-let figures_running : @ui.Style = @ui.style(w=Full, pt=S2)
+let figures_running : @ui.Style = @ui.style(w=Full, pt=S3_5)
 
 ///|
 /// A line's room, as tall as a line in Chinese (18), what it says centred across it (Line).
@@ -585,6 +547,82 @@ fn unread_dials() -> Array[Json] {
 fn unread_details() -> Array[Json] {
   Array::make(4, obj([("label", str("主机名")), ("value", str("直连"))]))
 }
+
+///|
+/// What the machine is, a row each (Stations.kt StationDevice: its hostname, chip, how long it has been up, the process)
+/// and what still.fail keeps on it, as the web's 设备信息: grey bars in their room while it is not read yet; offline and
+/// never read, a line saying so.
+fn station_device(c : @ui.Ctx, s : Json?) -> Array[() -> Unit] {
+  let t = @sf.theme()
+  let host = match field(s, "host") {
+    Some(Object(_)) as h => h
+    _ => None
+  }
+  let read = host is Some(_)
+  let footprint = text(field(field(s, "overview"), "footprint"), "text")
+  // (a copy: the topic's own array is not added to)
+  let details = if read { items(host, "details").copy() } else { unread_details() }
+  if footprint != "" {
+    details.push(obj([("label", str(tr("web-pages.stations.page.footprint"))), ("value", str(footprint))]))
+  }
+  [
+    fn() { section_header(c, tr("web-pages.stations.device"), start=S6) },
+    fn() {
+      card(c, fn() {
+        if !read && !flag(s, "online") {
+          c.text(tr("web-pages.stations.deviceOffline"), style=part_note) |> ignore
+        } else {
+          c.box(style=@sf.full_width, fn() {
+            c.box(style=seen(figures_rows, read, false), fn() {
+              for d in details {
+                c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
+                  c.box(min_w=52.0, fn() {
+                    c.text(text(Some(d), "label"), size=13.0, color=t.p.subtle, wrap=false, line=20.0) |> ignore
+                  })
+                  |> ignore
+                  c.text(text(Some(d), "value"), size=13.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
+                })
+                |> ignore
+              }
+            })
+            |> ignore
+            // a bar a row, evenly down its room (Arrangement.SpaceEvenly: as much room over each as under the last)
+            if !read {
+              c.layer(fn() {
+                c.box(style=figures_spread, fn() {
+                  c.spacer()
+                  for _ in 0..<details.length() {
+                    @sf.bar(c, Px(unread_detail_w), net_bar_h, breathing=true)
+                    c.spacer()
+                  }
+                })
+                |> ignore
+              })
+              |> ignore
+            }
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    },
+  ]
+}
+
+///|
+/// A part's line where it has nothing to show (offline): 13 on 20, muted (Stations.kt StationDevice's, StationMachine's).
+// kept across runs: a value (no field of it changes)
+let part_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5, w=Full)
+
+///|
+/// The parts' choice under the bar (StationScreen's Seg): 12 in from the page's sides as its cards, 10 over the first.
+// kept across runs: a value (no field of it changes)
+let parts_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
+
+///|
+/// The page's part shown, by station (StationScreen's `part`: 0 概览, 1 设置, 2 软件与设备); none, the overview. Kept
+/// while the page is in the stack; a login's link opens the settings (mark_login).
+let station_parts : Map[String, Int] = {}
 
 ///|
 /// A station's page (StationScreen): its bar (back to Station, its name, what the machine is under it, "…" for its
@@ -645,140 +683,181 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
       Some(_) => {
         let overview = field(st, "overview")
         let read = overview is Some(Object(_))
+        let online = flag(st, "online")
+        // in three parts, as the web's (StationPage.tsx Body): how it is and what runs on it; what it is let do and set
+        // to; its software and the machine
+        let part = station_parts.get(address).unwrap_or(0)
         let blocks : Array[() -> Unit] = [
           fn() { gap(c, 12.0) },
           fn() {
-            if flag(st, "online") {
-              card(c, fn() { station_figures(c, core, st) }) |> ignore
-            } else {
-              card(c, fn() {
-                c.box(w=Fill(1.0), gap=4.0, align=ACenter, fn() {
-                  let pic = if t.dark { "illus_station_offline_dark" } else { "illus_station_offline" }
-                  if @sf.has_drawable(pic) {
-                    @sf.drawable(c, pic, 220.0) |> ignore
-                  }
-                  c.text(
-                    fill("android-settings.stations.offline", [("app", "still.fail")]),
-                    size=13.0,
-                    color=t.p.muted,
-                    center=true,
-                    w=Fill(1.0),
-                    line=18.0,
-                  )
+            c.box(style=parts_room, fn() {
+              let i = seg(
+                c,
+                "station-part/" + address,
+                [
+                  tr("web-pages.stations.page.part.overview"),
+                  tr("web-pages.stations.page.part.settings"),
+                  tr("web-pages.stations.page.part.machine"),
+                ],
+                part,
+                fill=true,
+                height=34.0,
+              )
+              if i != part {
+                station_parts[address] = i
+              }
+            })
+            |> ignore
+          },
+        ]
+        let mut logins_at = -1
+        let mut logins_n = 0
+        match part {
+          0 => {
+            blocks.push(fn() {
+              if online {
+                card(c, fn() { station_figures(c, core, st) }) |> ignore
+              } else {
+                card(c, fn() {
+                  c.box(w=Fill(1.0), gap=4.0, align=ACenter, fn() {
+                    let pic = if t.dark { "illus_station_offline_dark" } else { "illus_station_offline" }
+                    if @sf.has_drawable(pic) {
+                      @sf.drawable(c, pic, 220.0) |> ignore
+                    }
+                    c.text(
+                      fill("android-settings.stations.offline", [("app", "still.fail")]),
+                      size=13.0,
+                      color=t.p.muted,
+                      center=true,
+                      w=Fill(1.0),
+                      line=18.0,
+                    )
+                    |> ignore
+                    c.box(pt=6.0, fn() { retry_pill(c, core, flag(field(st, "link"), "retrying")) }) |> ignore
+                  })
                   |> ignore
-                  c.box(pt=6.0, fn() { retry_pill(c, core, flag(field(st, "link"), "retrying")) }) |> ignore
+                })
+                |> ignore
+              }
+            })
+            blocks.push(fn() { section_header(c, tr("android-settings.stations.onIt"), start=S6) })
+            blocks.push(fn() {
+              list_card(c, fn() {
+                let n = fn(key : String) {
+                  if read {
+                    fill("android-settings.count", [("n", items(overview, key).length().to_string())])
+                  } else {
+                    ""
+                  }
+                }
+                if go_row(c, "st-connects", tr("android-settings.connects.title"), value=n("connects")) {
+                  (core.push)(Connects(address))
+                }
+                if go_row(c, "st-profiles", "Profile", value=n("profiles")) {
+                  (core.push)(Profiles(address))
+                }
+                if go_row(c, "st-memory", tr("android-settings.memory")) {
+                  (core.push)(Memory(address))
+                }
+                // this device's adb, lent to its agents (AdbShare.kt)
+                let shared = (core.topic)("adbShare", Map([])).value
+                if go_row(
+                    c,
+                    "st-adb",
+                    tr("android-misc.adb.title"),
+                    value=if flag(shared, "sharing") && text(shared, "station") == address {
+                      tr("android-misc.adb.sharing")
+                    } else {
+                      ""
+                    },
+                  ) {
+                  (core.push)(AdbShare(address))
+                }
+                // the folders it lends its members (docs/drive.md); none offered by a station from before the drive
+                match field(overview, "drive") {
+                  Some(Object(_)) as drive => {
+                    let n = items(drive, "roots").length()
+                    if go_row(
+                        c,
+                        "st-drive",
+                        tr("android-misc.drive.title"),
+                        value=if n == 0 {
+                          tr("android-misc.drive.row.none")
+                        } else {
+                          fill("android-misc.drive.roots.count", [("n", n.to_string())])
+                        },
+                      ) {
+                      (core.open_drive)(address)
+                    }
+                  }
+                  _ => ()
+                }
+              })
+            })
+            for b in station_screens(c, core, address) {
+              blocks.push(b)
+            }
+          }
+          1 => {
+            // what is under it, each from its own topic or the overview's part (none from a station older than it)
+            match field(overview, "permissions") {
+              Some(Object(_)) as p if online =>
+                for b in station_permissions(c, core, address, p) {
+                  blocks.push(b)
+                }
+              _ => ()
+            }
+            // the logins its agents did there (LoginCards.kt StationLogins): those under way as their cards (the
+            // second block of them: where a link's login is brought to)
+            logins_at = blocks.length() + 1
+            let logins = station_logins(c, core, address)
+            logins_n = logins.length()
+            for b in logins {
+              blocks.push(b)
+            }
+            match field(overview, "agentEnv") {
+              Some(Array(env)) =>
+                for b in station_agent_env(c, core, address, env, manager) {
+                  blocks.push(b)
+                }
+              _ => ()
+            }
+            match field(overview, "search") {
+              Some(Object(_)) as sr if online && text(sr, "files") == "spotlight" =>
+                for b in station_search(c, core, address, flag(sr, "personal"), manager) {
+                  blocks.push(b)
+                }
+              _ => ()
+            }
+            if manager {
+              for b in station_workspaces(c, core, address) {
+                blocks.push(b)
+              }
+            }
+          }
+          _ => {
+            // its updates are its home workspace's managers'
+            if online && read {
+              for b in station_versions(c, core, address, items(overview, "updates"), manager, flag(st, "betaOffered")) {
+                blocks.push(b)
+              }
+            } else if !online {
+              blocks.push(fn() { section_header(c, tr("web-pages.stations.software"), start=S6) })
+              blocks.push(fn() {
+                card(c, fn() {
+                  c.text(tr("web-pages.stations.softwareOffline"), style=part_note) |> ignore
                 })
                 |> ignore
               })
-              |> ignore
             }
-          },
-          fn() { section_header(c, tr("android-settings.stations.onIt"), start=S6) },
-          fn() {
-            list_card(c, fn() {
-              let n = fn(key : String) {
-                if read {
-                  fill("android-settings.count", [("n", items(overview, key).length().to_string())])
-                } else {
-                  ""
-                }
-              }
-              if go_row(c, "st-connects", tr("android-settings.connects.title"), value=n("connects")) {
-                (core.push)(Connects(address))
-              }
-              if go_row(c, "st-profiles", "Profile", value=n("profiles")) {
-                (core.push)(Profiles(address))
-              }
-              if go_row(c, "st-memory", tr("android-settings.memory")) {
-                (core.push)(Memory(address))
-              }
-              // this device's adb, lent to its agents (AdbShare.kt)
-              let shared = (core.topic)("adbShare", Map([])).value
-              if go_row(
-                  c,
-                  "st-adb",
-                  tr("android-misc.adb.title"),
-                  value=if flag(shared, "sharing") && text(shared, "station") == address {
-                    tr("android-misc.adb.sharing")
-                  } else {
-                    ""
-                  },
-                ) {
-                (core.push)(AdbShare(address))
-              }
-              // the folders it lends its members (docs/drive.md); none offered by a station from before the drive
-              match field(overview, "drive") {
-                Some(Object(_)) as drive => {
-                  let n = items(drive, "roots").length()
-                  if go_row(
-                      c,
-                      "st-drive",
-                      tr("android-misc.drive.title"),
-                      value=if n == 0 {
-                        tr("android-misc.drive.row.none")
-                      } else {
-                        fill("android-misc.drive.roots.count", [("n", n.to_string())])
-                      },
-                    ) {
-                    (core.open_drive)(address)
-                  }
-                }
-                _ => ()
-              }
-            })
-          },
-        ]
-        // what is under it, each from its own topic or the overview's part (none from a station older than it)
-        let online = flag(st, "online")
-        let more : Array[() -> Unit] = []
-        for b in station_screens(c, core, address) {
-          more.push(b)
-        }
-        match field(overview, "permissions") {
-          Some(Object(_)) as p if online =>
-            for b in station_permissions(c, core, address, p) {
-              more.push(b)
+            for b in station_device(c, st) {
+              blocks.push(b)
             }
-          _ => ()
-        }
-        // the logins its agents did there (LoginCards.kt StationLogins): those under way as their cards (the second
-        // block of them: where a link's login is brought to)
-        let logins_at = blocks.length() + more.length() + 1
-        let logins = station_logins(c, core, address)
-        for b in logins {
-          more.push(b)
-        }
-        match field(overview, "agentEnv") {
-          Some(Array(env)) =>
-            for b in station_agent_env(c, core, address, env, manager) {
-              more.push(b)
-            }
-          _ => ()
-        }
-        match field(overview, "search") {
-          Some(Object(_)) as sr if online && text(sr, "files") == "spotlight" =>
-            for b in station_search(c, core, address, flag(sr, "personal"), manager) {
-              more.push(b)
-            }
-          _ => ()
-        }
-        if manager {
-          for b in station_workspaces(c, core, address) {
-            more.push(b)
           }
         }
-        // its updates are its home workspace's managers'
-        if online && read {
-          for b in station_versions(c, core, address, items(overview, "updates"), manager, flag(st, "betaOffered")) {
-            more.push(b)
-          }
-        }
-        more.push(fn() { gap(c, 30.0) })
-        for b in more {
-          blocks.push(b)
-        }
+        blocks.push(fn() { gap(c, 30.0) })
         scroll_page(c, "station/" + address, blocks)
-        if logins.length() > 1 {
+        if logins_n > 1 {
           bring_marked_login(c, address, "settings/station/" + address, logins_at)
         }
       }

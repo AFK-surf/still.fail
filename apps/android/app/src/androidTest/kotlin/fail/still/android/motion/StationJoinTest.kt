@@ -161,6 +161,8 @@ class StationJoinTest {
         // Its page in its home workspace: the workspaces it is in.
         rule.runOnUiThread { h.app.push(Screen.Station("$ws/studio")) }
         h.settle()
+        rule.onNodeWithText("设置").performClick()
+        h.settle()
         rule.onNodeWithText("加入的 workspace").assertIsDisplayed()
         picture(h, "join-page-workspaces-$tone")
 

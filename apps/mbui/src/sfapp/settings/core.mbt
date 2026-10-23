@@ -464,6 +464,7 @@ pub fn left(route : Route) -> Unit {
         None => ()
       }
     Connects(_) => connects_mine.val = false
+    Station(a) => station_parts.remove(a)
     NewConnect(a) =>
       match left_core.val {
         Some(core) => new_connect_left(core, a)
@@ -517,6 +518,7 @@ pub fn left(route : Route) -> Unit {
 pub fn reset() -> Unit {
   archive_reset()
   login_marked.val = None
+  station_parts.clear()
   lock_prompts_reset()
   fonts_at.val = 0
   adb_reset()

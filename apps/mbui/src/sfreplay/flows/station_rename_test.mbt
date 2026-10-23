@@ -4,7 +4,9 @@
 ///|
 test "35-station-rename" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace("station-rename"), seed~)
+    // (the station's page asked for its logins and its workspaces as the run had it, all in one page; they are its
+    // 设置's now, which this flow does not open: those asks dropped, with what came for them)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("station-rename"), seed~, drop=["machineLogins", "memberships"])
     f.see("端到端测试")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
