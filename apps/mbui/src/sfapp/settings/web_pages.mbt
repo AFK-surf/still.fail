@@ -656,7 +656,7 @@ let way_banner : @ui.Style = @ui.style(w=S10, h=S2, radius=Sm, bg=Faint)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let way_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+let way_name : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -687,7 +687,7 @@ let permission_icon : @ui.Style = @ui.style(w=S9, h=S9, radius=Full, align=ACent
 
 ///|
 // kept across runs: a value (no field of it changes)
-let permission_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+let permission_name : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// What a choice means, under it (chat.css.ts appearanceHint: 12, muted, 8 over it), 16 in.

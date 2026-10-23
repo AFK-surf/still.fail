@@ -22,8 +22,24 @@ pub fn page(
   root_top.val = if root { top } else { 0.0 }
   left_core.val = Some(core)
   fixture_sheet(core, here)
-  route_page(c, core, here, route)
+  // the wide frame's words as the web's settings pages size them (their rows 13, what is under them 12): the scale's
+  // body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them
+  if wide.val {
+    let t = c.theme()
+    c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body } }, fn() {
+      route_page(c, core, here, route)
+    })
+  } else {
+    route_page(c, core, here, route)
+  }
 }
+
+///|
+/// The wide frame's body words (the web's text-ui: 13 on 20) and what is under them (text-meta: 12 on 18).
+let wide_body : (Double, Double) = (13.0, 20.0)
+
+///|
+let wide_small : (Double, Double) = (12.0, 18.0)
 
 ///|
 fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {

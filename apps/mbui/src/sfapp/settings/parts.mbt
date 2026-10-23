@@ -470,7 +470,7 @@ let wide_section_line : @ui.Style = @ui.style(row=true, w=Full, px=S4, pt=S7, pb
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+let wide_section_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -529,7 +529,7 @@ let wide_page_note : @ui.Style = @ui.style(w=Full, px=S4, pb=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_lead : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
+let wide_lead : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, w=Full)
 
 ///|
 /// PageNote's room: 24 in, 10 under it.
@@ -723,11 +723,11 @@ fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 ///|
 /// The wide frame's row words (pages.css.ts listRow, cardRowText: 13; what is under them 12).
 // kept across runs: a value (no field of it changes)
-let wide_row_title : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=Full)
+let wide_row_title : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, w=Full)
+let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -973,7 +973,8 @@ fn seg(
           // Parts.kt:424 (14sp filling, else 13sp)
           c.text(
             st.label,
-            style=@ui.text_style(size=if fill { Base } else { Sm }, color=if st.on { Fg } else { Muted }, wrap=false),
+            // (the wide frame's 13: its scale's Lg, settings' page takes it down there)
+            style=@ui.text_style(size=if pill { Lg } else if fill { Base } else { Sm }, color=if st.on { Fg } else { Muted }, wrap=false),
           )
           |> ignore
         },
