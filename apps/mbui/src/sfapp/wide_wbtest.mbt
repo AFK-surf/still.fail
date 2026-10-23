@@ -824,7 +824,7 @@ test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys 
 }
 
 ///|
-test "wide: 本机 Station as the system says it (a service running in a workspace), stopped from its page" {
+test "wide: 本机 Station as the system says it (a service running in a workspace), stopped from its card's menu" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.set_local_station(
@@ -836,7 +836,9 @@ test "wide: 本机 Station as the system says it (a service running in a workspa
   for words in ["本机 Station", "Studio", "运行中", "单独安装（launchd）", "0.1.4600", "在 星火工作室", "~/.stillfail"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
-  // (its row: the last 停止 on the page, the lead says the word too)
+  // stopped from its card's menu (LocalStation.tsx: its ⋯, the card's)
+  t.click(Button, label="更多操作")
+  t.frame()
   let (sx, sy) = t.find_last("停止").unwrap()
   t.tap(sx, sy)
   t.frame()

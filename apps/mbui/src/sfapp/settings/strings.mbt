@@ -1328,6 +1328,7 @@ let zh : Map[String, String] = {
   "web-pages.automaticDecisions.adminOnly": "只有管理员可以配置自动决策和查看记录",
   "web-pages.automaticDecisions.completion": "归档建议",
   "web-pages.automaticDecisions.disabled": "未启用",
+  "web-main.menu.more": "更多操作",
   "web-pages.vault.deleteBody": "删除后不可恢复，已批准的授权在到期前仍有效",
   "web-pages.vault.deleteTitle": "删除「{name}」？",
   "web-pages.vault.deleteWhat": "删除",
