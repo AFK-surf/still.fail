@@ -38,12 +38,26 @@ export function ViewerBar({ back, name, meta, tools, title, hidden = false, onHe
     if (was.current !== held) told.current?.(held);
     was.current = held;
     if (!held) return;
-    const away = (e: globalThis.PointerEvent) => { if (!el.current?.contains(e.target as Node)) setHeld(false); };
+    // Heard over something else, where the bar does not stand: let go. (Sliding in, it is not yet drawn where it stands,
+    // and what is under it there is heard instead.)
+    const away = (e: globalThis.PointerEvent) => { if (!el.current?.contains(e.target as Node) && !stands(el.current, e.clientX, e.clientY)) setHeld(false); };
     document.addEventListener("pointermove", away, true);
     document.addEventListener("pointerdown", away, true);
     return () => { document.removeEventListener("pointermove", away, true); document.removeEventListener("pointerdown", away, true); };
   }, [held]);
   if (hidden && held) setHeld(false);
+  // Where the mouse was last heard: a bar that comes back under a pointer at rest there (a screen driven brings it as
+  // the pointer reaches the window's top, where it stops) is held at once, else a press there would not drag.
+  const last = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const heard = (e: globalThis.PointerEvent) => { if (e.pointerType === "mouse") last.current = { x: e.clientX, y: e.clientY }; };
+    document.addEventListener("pointermove", heard, true);
+    return () => document.removeEventListener("pointermove", heard, true);
+  }, []);
+  useEffect(() => {
+    const at = last.current;
+    if (!hidden && at && stands(el.current, at.x, at.y)) setHeld(true);
+  }, [hidden]);
   return (
     <header ref={el} className={css.bar} data-hidden={hidden || undefined} data-held={held || undefined} inert={hidden}
       onPointerMove={(e) => { if (e.pointerType === "mouse" && !hidden && !held) setHeld(true); }}>
@@ -55,6 +69,14 @@ export function ViewerBar({ back, name, meta, tools, title, hidden = false, onHe
       <span className={css.tools}>{tools}</span>
     </header>
   );
+}
+
+/** (x, y) is within where the bar stands (not where it is drawn as it slides in or out). */
+function stands(bar: HTMLElement | null, x: number, y: number): boolean {
+  const ground = bar?.offsetParent;
+  if (!bar || !ground) return false;
+  const box = ground.getBoundingClientRect(), top = box.top + bar.offsetTop, left = box.left + bar.offsetLeft;
+  return y >= top && y < top + bar.offsetHeight && x >= left && x < left + bar.offsetWidth;
 }
 
 /** One of a bar's tools: an icon, named on hover; `on` while what it opens is open. */

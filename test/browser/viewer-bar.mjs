@@ -52,10 +52,10 @@ try {
     // Onto the bar's middle (its name): heard coming, held, dragging; then nothing more is heard of the pointer.
     await page.mouse.move(640, 300);
     await page.mouse.move(640, 20, { steps: 4 });
-    // (A screen driven brings its bar only as the pointer gets there: it is heard once it has slid in, the pointer moving on.)
-    while (await bar.evaluate((el) => el.getBoundingClientRect().top !== 0)) await new Promise((ok) => setTimeout(ok, 20));
-    await page.mouse.move(644, 20);
+    // (A screen driven brings its bar only as the pointer gets there, and the pointer may stop there: it drags at once.)
     await is({ hidden: false, drags: true }, 'the pointer on it: there, dragging the window');
+    await page.mouse.move(644, 20);
+    await is({ hidden: false, drags: true }, 'the pointer moving on it: still dragging');
     await page.clock.runFor(REST);
     await is({ hidden: false, drags: true }, 'stays while the pointer is on it, nothing more heard');
     await leave(640, 20);
