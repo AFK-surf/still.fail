@@ -79,8 +79,8 @@ export class Readers {
   /// The answer, as JSON text.
   read(op: string, args: unknown, lang: Ask["lang"]): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
-    // A session's history read where it was read before: that reader keeps it read (read/transcripts.ts), another would
-    // read the whole of it again.
+    // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
+    // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
     const home = session !== null ? this.homes.get(session) : undefined;
     const free = this.slots.find((s) => s.busy === 0);

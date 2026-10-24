@@ -20,8 +20,8 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { homesFirst, readTimeline, transcriptPaths } from "./transcript.ts";
-import { inBrief, stateOf } from "./transcripts.ts";
+import { homesFirst, transcriptPaths } from "./transcript.ts";
+import { chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
@@ -295,23 +295,21 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const found = transcriptsOf(s, key);
   if (found === null) return { start: 0, entries: [], end: 0 };
   const { runtime, paths } = found;
-  // In brief, from what this reader keeps read (read/transcripts.ts); whole, from the files.
-  const entries = briefParam === "1" ? inBrief(runtime, paths) : paths.flatMap((path) => readTimeline(runtime, path));
-  const end = entries.length;
+  // Read on to where they are written now, each stretch from the mark before it (read/transcripts.ts).
+  const chain = chainOf(runtime, paths, marksDir(s.dataDir));
+  const end = lengthOf(chain);
+  const between = (a: number, b: number) => entriesOf(runtime, chain, a, b, briefParam === "1");
   const from = parseUsize(fromParam);
   const to = parseUsize(toParam);
-  if (from !== null && to !== null) {
-    const last = Math.min(to, from + 999, entries.length - 1);
-    return { start: from, entries: entries.slice(from, last + 1), end };
-  }
+  if (from !== null && to !== null) return { start: from, entries: between(from, Math.min(to, from + 999) + 1), end };
   const after = parseUsize(afterParam);
   if (after !== null) {
     const start = Math.min(after + 1, end);
-    return { start, entries: entries.slice(start, start + limit), end };
+    return { start, entries: between(start, start + limit), end };
   }
-  const upto = Math.min(before, entries.length);
+  const upto = Math.min(before, end);
   const start = Math.max(0, upto - limit);
-  return { start, entries: entries.slice(start, upto), end };
+  return { start, entries: between(start, upto), end };
 }
 
 /// A session's transcripts (hub.rs `locate`): those of the runtime sessions it ran in before first (sessions/afresh.ts),
@@ -328,7 +326,7 @@ function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: st
 /// (sessions/live.ts): no read of the transcripts' past on the station's main thread. `states` null: none found.
 export function transcriptState(s: Store, key: string): Json {
   const found = transcriptsOf(s, key);
-  return { states: found === null ? null : stateOf(found.runtime, found.paths) };
+  return { states: found === null ? null : stateOf(found.runtime, found.paths, marksDir(s.dataDir)) };
 }
 
 /// GET /sessions/:key/transcript: where its runtime keeps the session's transcript on this machine (the current runtime

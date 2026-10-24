@@ -231,13 +231,21 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   read: offsets, counts and what a read keeps between lines, `read/tail.ts`
   `snapshot`), counting what came before without keeping it, and a listener
   that lacks some of it is given it from there (what is said meanwhile told
-  after). A reader keeps those it was asked
-  pages of in brief (`read/transcripts.ts`, at most 40,000 entries, the least
-  recently read let go; the pool sends a session's pages to the reader that read
-  it last), so a page is a slice and a read goes on from where the last left
-  off; a stretch read whole is read from the file. A transcript is read 4 MB at
-  a time (`read/tail.ts`), never as one buffer. With `brief=1` on
-  either, entries come in brief, as an execution history shows them before a
+  after). A transcript is read once (`read/transcripts.ts`): as a reader reads
+  it, it marks where every 256th entry starts (its byte offset, with what
+  reading keeps between lines there; or every 8 MB with an entry), and keeps
+  where its reading stands and its marks on disk
+  (`<data>/transcript-marks/<sha1 of its path>.json`, removed with its session),
+  so a reader that starts again (one goes after a minute idle, all of them at
+  every start of the station) reads on from there, not from the transcript's
+  start, and a page or a stretch, whole or in brief, is read from the mark
+  before it: no more than 256 entries or 8 MB before what was asked. An entry's
+  index is what reading counted, kept across starts; what is kept says the way
+  lines were read (`READING`, `read/transcript.ts`), and kept another way it is
+  read anew. The pool sends a session's reads to the reader that read it last,
+  which keeps it in memory. A transcript is read 4 MB at a time
+  (`read/tail.ts`), never as one buffer. With `brief=1` on either, entries come
+  in brief, as an execution history shows them before a
   step is opened (`read/transcript.ts` `brief`, marked `brief: true`): a call
   longer than 600 characters by the fields of its input that say what it does
   (`description`, `command`, `file_path`, … each at most 300; posts, states

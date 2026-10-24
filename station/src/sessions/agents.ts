@@ -444,8 +444,8 @@ export const AgentsLive = (control: Control) =>
       const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
 
       hub.live.heldTold = (key, message) => events.heldTold(key, message);
-      // A transcript's past is read by the readers, which keep it read (read/transcripts.ts): the live view goes on from
-      // where they stand, and gives a listener what it lacks from there, none of it read on the main thread.
+      // A transcript's past is read by the readers, which keep where its reading stands (read/transcripts.ts): the live
+      // view goes on from there, and gives a listener what it lacks from them, none of it read on the main thread.
       hub.live.history = {
         state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
         page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),

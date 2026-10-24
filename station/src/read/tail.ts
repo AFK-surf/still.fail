@@ -5,7 +5,7 @@ import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } fro
 import { dirname, join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "../agents/runtime.ts";
-import { type ReadState, type TimelineEntry, timelineOf } from "./transcript.ts";
+import { type ReadState, type TimelineEntry, timelineOf, utf8 } from "./transcript.ts";
 
 type Json = any;
 
@@ -24,6 +24,15 @@ export const noUsage = (): TranscriptUsage => ({
 
 /// How much of a transcript is read at a time.
 export const PIECE = 4 << 20;
+
+/// A place in a transcript a read can start from (read/transcripts.ts): the end of a line (`offset`, in its bytes as
+/// written), the index of the entry the next line's first is, and what reading keeps between lines there (`inner`).
+export type Mark = { offset: number; index: number; inner: [string, number][] };
+
+/// A mark is taken once at least this many entries came after the last, or this many bytes with at least one entry: a
+/// read from the mark before an entry reads no more than that before it.
+export const MARK_EVERY = 256;
+export const MARK_BYTES = 8 << 20;
 
 /// Where a transcript's reading stands (`snapshot`): where its next read goes on from and what it keeps between reads,
 /// without the entries read. A tail made from it (`TranscriptTail.from`) reads on as the one it was taken of would: what
@@ -59,12 +68,19 @@ export class TranscriptTail {
   /// (sessions/live.ts) needs none of what came before.
   readonly keeps: boolean;
   private count = 0;
+  /// The marks taken as it reads (`marking`: it then gives no entries, only counts them), the first first: none until
+  /// MARK_EVERY entries were read.
+  marks: Mark[] = [];
+  private readonly marking: boolean;
+  /// Whether a read found it written anew and read it again from its start.
+  anew = false;
 
-  constructor(runtime: RuntimeKind, path: string, shape: ((e: TimelineEntry) => TimelineEntry) | null = null, keeps = true) {
+  constructor(runtime: RuntimeKind, path: string, shape: ((e: TimelineEntry) => TimelineEntry) | null = null, keeps = true, marking = false) {
     this.runtime = runtime;
     this.path = path;
     this.shape = shape;
     this.keeps = keeps;
+    this.marking = marking;
   }
 
   /// How many entries it has read.
@@ -80,9 +96,11 @@ export class TranscriptTail {
     };
   }
 
-  /// A tail that goes on from where another's reading stood: it keeps none of what that one read, only counts it.
-  static from(runtime: RuntimeKind, state: TailState): TranscriptTail {
-    const tail = new TranscriptTail(runtime, state.path, null, false);
+  /// A tail that goes on from where another's reading stood: it keeps none of what that one read, only counts it; with
+  /// `marks` (those taken before), it takes marks on as it reads.
+  static from(runtime: RuntimeKind, state: TailState, marks: Mark[] | null = null): TranscriptTail {
+    const tail = new TranscriptTail(runtime, state.path, null, false, marks !== null);
+    if (marks !== null) tail.marks = [...marks];
     tail.offset = state.offset;
     tail.partial = Buffer.from(state.partial, "base64");
     tail.count = state.count;
@@ -95,7 +113,7 @@ export class TranscriptTail {
     return tail;
   }
 
-  /// New entries since the last read, with the index of the first.
+  /// New entries since the last read, with the index of the first (marking: none, only counted).
   read(): [number, TimelineEntry[]] {
     if (this.runtime === "grok") this.grokUsage();
     let start = this.length;
@@ -121,35 +139,54 @@ export class TranscriptTail {
     this.packedStamp = compressed ? stamp : null;
     if (size < this.offset) {
       // Rewritten: start over.
+      this.anew = true;
       this.offset = 0;
       this.partial = Buffer.alloc(0);
       this.entries = [];
       this.count = 0;
+      this.marks = [];
     }
     start = this.length;
     if (size === this.offset) return [start, []];
     const out: TimelineEntry[] = [];
-    // A piece of what came: its whole lines read, a line still being written waiting for the next read.
+    const had = this.length;
+    let read = 0;
+    // A piece of what came (it ends at `offset`): its whole lines read, a line still being written waiting for the next
+    // read. Marking, each line is read on its own, so a mark falls at the end of one.
     const take = (piece: Buffer) => {
       const bytes = this.partial.length > 0 ? Buffer.concat([this.partial, piece]) : piece;
       const cut = bytes.lastIndexOf(0x0a) + 1;
       this.partial = Buffer.from(bytes.subarray(cut));
       if (cut === 0) return;
-      const records: Json[] = [];
-      for (let line of new TextDecoder("utf-8").decode(bytes.subarray(0, cut)).split("\n")) {
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (line === "") continue;
-        try {
-          records.push(JSON.parse(line));
-        } catch {}
+      const base = this.offset - bytes.length;
+      const lines = this.marking ? linesOf(bytes, cut) : [cut];
+      let from = 0;
+      for (const end of lines) {
+        const records: Json[] = [];
+        for (const line of utf8.decode(bytes.subarray(from, end)).split("\n")) {
+          const record = recordOf(line);
+          if (record !== undefined) records.push(record);
+        }
+        from = end;
+        this.addUsage(records);
+        const entries: TimelineEntry[] = [];
+        for (const r of records) timelineOf(this.runtime, r, this.state, entries);
+        read += entries.length;
+        if (!this.marking) {
+          for (const e of entries) out.push(this.shape ? this.shape(e) : e);
+          continue;
+        }
+        const index = had + read;
+        const last = this.marks.at(-1) ?? { offset: 0, index: 0 };
+        if (index - last.index >= MARK_EVERY || (index > last.index && base + end - last.offset >= MARK_BYTES)) this.marks.push({ offset: base + end, index, inner: [...this.state.inner] });
       }
-      this.addUsage(records);
-      const entries: TimelineEntry[] = [];
-      for (const r of records) timelineOf(this.runtime, r, this.state, entries);
-      for (const e of entries) out.push(this.shape ? this.shape(e) : e);
     };
     if (unpacked) {
-      for (let at = this.offset; at < size; at += PIECE) take(unpacked.subarray(at, Math.min(size, at + PIECE)));
+      for (let at = this.offset; at < size; at += PIECE) {
+        const piece = unpacked.subarray(at, Math.min(size, at + PIECE));
+        this.offset = at + piece.length;
+        take(piece);
+      }
       this.offset = size;
     } else {
       try {
@@ -170,7 +207,7 @@ export class TranscriptTail {
       }
     }
     if (this.keeps) for (const e of out) this.entries.push(e);
-    else this.count += out.length;
+    else this.count += read;
     return [start, out];
   }
 
@@ -385,4 +422,22 @@ export class ChainTail {
     if (from === null) return [offset, []];
     return [from, this.keeps ? this.entries.slice(from) : told];
   }
+}
+
+/// A transcript's line as its record (`undefined`: empty, or not JSON). A line's \r before its \n goes.
+export function recordOf(line: string): Json | undefined {
+  const text = line.endsWith("\r") ? line.slice(0, -1) : line;
+  if (text === "") return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/// Where each line of `bytes` up to `cut` ends (just past its \n).
+function linesOf(bytes: Buffer, cut: number): number[] {
+  const out: number[] = [];
+  for (let at = bytes.indexOf(0x0a); at >= 0 && at < cut; at = bytes.indexOf(0x0a, at + 1)) out.push(at + 1);
+  return out;
 }

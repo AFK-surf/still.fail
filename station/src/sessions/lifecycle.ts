@@ -9,12 +9,13 @@ import { PlaceRefused } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
-import { readTimeline, sharedTranscripts } from "../read/transcript.ts";
+import { homesFirst, readTimeline, sharedTranscripts, transcriptPaths } from "../read/transcript.ts";
+import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { AUTO, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
-import { type Runtime, runs, runtimeTitle } from "./config.ts";
+import { type Runtime, runs, runtimeNamed, runtimeTitle } from "./config.ts";
 import { CLIENT_KEY_KEPT_MS, type Hub, connectOf, newChatKey, newSingleSessionKey, newToken } from "./hub.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT } from "./internal.ts";
 
@@ -304,22 +305,27 @@ export function autoArchive(hub: Hub, now: number): number | null {
   return next;
 }
 
-/// Deletes a session: its process ends, its rows go (with the threads only it was in) and its workspace directory and
-/// transcript copy with them. The runtime's transcript stays in the profile's home, which may be a person's own.
+/// Deletes a session: its process ends, its rows go (with the threads only it was in) and its workspace directory,
+/// transcript copy and what the readers kept of its transcripts' reading with them. The runtime's transcript stays in
+/// the profile's home, which may be a person's own.
 export async function deleteSession(hub: Hub, key: string) {
   const row = hub.store.getSession(key);
   if (!row) throw new Error(`unknown session ${key}`);
   const actor = hub.dropActor(key);
   await actor?.dispose();
   hub.live.forget(key);
+  const { dataDir, profiles } = hub.config();
+  const runtime = runtimeNamed(row.runtime);
+  const transcripts = runtime ? transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), hub.store.runtimeSessions(key)).paths : [];
   hub.store.deleteSession(key);
   hub.closed(key);
   rmSync(transcriptCopy(hub, key), { force: true });
+  forgetMarks(marksDir(dataDir), transcripts);
   // Sessions made by the station keep their workspace in a directory of their own.
-  const sessions = join(hub.config().dataDir, "sessions");
+  const sessions = join(dataDir, "sessions");
   const own = basename(row.workspace) === "workspace" && (row.workspace + sep).startsWith(sessions + sep);
   const home = own ? dirname(row.workspace) : row.workspace;
-  const room = roomOf(hub.config().dataDir, row.workspace);
+  const room = roomOf(dataDir, row.workspace);
   if (room !== null) {
     // Git worktrees it archived are let go first, so `git worktree prune` can clean them up.
     await withLock(room, async () => {
