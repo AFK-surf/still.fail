@@ -61,10 +61,16 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
   return added;
 }
 
+/// The turns running, then those ended since `?` (usageActiveSessions).
+export const ACTIVE_SESSIONS = "SELECT session_key FROM turns WHERE ended_at IS NULL UNION ALL SELECT session_key FROM turns WHERE ended_at >= ?";
+
 /// usage_active_sessions: sessions whose transcripts may have grown since `since`: a turn running, or ended since then.
 export function usageActiveSessions(db: DatabaseSync, since: number): string[] {
-  // (Each by the index on when turns ended: as one OR, SQLite scans them all.)
-  return (db.prepare("SELECT session_key FROM turns WHERE ended_at IS NULL UNION SELECT session_key FROM turns WHERE ended_at >= ?").all(since) as Json[]).map((r) => r.session_key);
+  // Each half by the index on when turns ended, the sessions made distinct here: asked as one OR, or as a UNION or a
+  // DISTINCT, the station's SQLite (node's, 3.53; not the sqlite3 command's) answers it in order of session by reading
+  // every turn of the station's, 33 s on ccvm with its pages put out (2026-10-25).
+  const rows = db.prepare(ACTIVE_SESSIONS).all(since) as Json[];
+  return [...new Set(rows.map((r) => r.session_key as string))];
 }
 
 /// What `usageTurns` makes a session's turns of, said short: its turns (how many, the latest's start), the messages it
