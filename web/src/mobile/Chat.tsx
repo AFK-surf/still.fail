@@ -1,3 +1,4 @@
+import { pickAttachment } from "../pickAttachment.ts";
 import { StationUpdate } from "../StationUpdate.tsx";
 // An item's page on a narrow screen: its chat's messages (none before its agent has a chat), the composer, and each
 // agent's execution history as a page opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
@@ -423,13 +424,7 @@ export type Draft = SharedDraft & { focus: number; bumpFocus(): void };
  */
 export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: FileList) => void, onStation?: () => void) {
   const pick = (accept: string, capture: boolean) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = accept;
-    input.multiple = !capture;
-    if (capture) input.setAttribute("capture", "environment");
-    input.onchange = () => { if (input.files?.length) onPicked(input.files); };
-    input.click();
+    pickAttachment(accept, capture, onPicked);
   };
   // From ＋'s left, over all of the capsule (its files and quotes too), as it is once ＋ has taken the focus.
   requestAnimationFrame(() => {
