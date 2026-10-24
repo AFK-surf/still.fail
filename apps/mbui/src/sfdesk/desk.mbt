@@ -6,6 +6,7 @@
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
   wide_reset()
+  new_ws_reset()
   relay_focus.val = ""
   marks_reset()
   context_reset()

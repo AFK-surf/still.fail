@@ -18,4 +18,6 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit
   keys_dialog(c, src, pages)
   // a chat relayed to a channel (relay.mbt)
   relay_dialog(c, src)
+  // a workspace made (new_workspace.mbt)
+  new_workspace_dialog(c, src, pages)
 }

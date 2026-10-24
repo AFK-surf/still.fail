@@ -1114,14 +1114,14 @@ fn rail_ws_menu(c : @ui.Ctx, src : Source, pages : Pages, add : Int) -> Unit {
   let m = @sf.menu(c, "rail/ws-menu", wide.add_open, add, entries, icons, rail_ws_menu_w, side=Right, along=End, offset=rail_ws_menu_off)
   wide.add_open = m.open
   match m.chosen {
-    Some("create") => (pages.new_workspace)()
+    Some("create") => open_new_workspace()
     Some("account") => (src.sign_in)()
     Some(v) if v.has_prefix("join:") || v.has_prefix("ignore:") => {
       let join = v.has_prefix("join:")
       let id = v.view(start_offset=if join { 5 } else { 7 }).to_string()
       for p in pending {
         if text(Some(p.1), "id") == id {
-          (pages.answer)(src, p.0, id, join, text(Some(p.1), "name"))
+          answer_invitation(src, pages, p.0, id, join, text(Some(p.1), "name"))
         }
       }
     }

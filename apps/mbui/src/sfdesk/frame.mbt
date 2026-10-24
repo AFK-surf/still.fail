@@ -31,9 +31,6 @@ pub(all) struct Pages {
   sheet : () -> Bool
   lower : () -> Unit
   home : () -> Unit
-  /// a workspace made, an invitation answered (the account it is for, its id, joined or not, its name)
-  new_workspace : () -> Unit
-  answer : (Source, Json?, String, Bool, String) -> Unit
 }
 
 ///|
