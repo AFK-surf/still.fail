@@ -129,7 +129,7 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
   t.frame()
   app.nav.push(Archived)
   t.frame()
-  t.run_for(@sfdesk.list_slide_ms)
+  t.run_for(@sfpages.list_slide_ms)
   assert_true(t.find("搜索归档") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("试一下新的图标尺寸") is Some(_))
   // the newest beside the list
@@ -355,7 +355,7 @@ test "wide: 已归档 from the lists' filter: its place at the rail's foot while
   assert_true(t.query(Button, label="已归档") is None)
   app.nav.push(Archived)
   t.frame()
-  t.run_for(@sfdesk.list_slide_ms)
+  t.run_for(@sfpages.list_slide_ms)
   assert_true(t.query(Button, label="已归档") is Some(_))
 }
 
@@ -465,7 +465,7 @@ test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has
   t.tap_text("奏")
   t.frame()
   assert_true(app.nav.top() == Decisions)
-  assert_false(@sfdesk.wide.filter_open)
+  assert_false(@sf.presenting())
   // from 奏, 我参与的: the chats, filtered (prefs.set listFilter)
   let (fx, fy, fw, fh) = t.query(Button, label="筛选会话：奏").unwrap().rect
   t.tap(fx + fw / 2.0, fy + fh / 2.0)

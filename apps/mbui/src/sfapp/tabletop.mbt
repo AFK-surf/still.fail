@@ -78,7 +78,7 @@ fn recent_list(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
             _ => false
           }
           c.box(style=if here { recent_row_here } else { recent_row }, fn() {
-            chat_row(c, src, item, v.leading, found=true, opened=fn(r) {
+            @sfpages.chat_row(c, src, item, v.leading, found=true, opened=fn(r) {
               if !here {
                 open_in_place(Chat(r))
               }

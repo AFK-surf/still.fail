@@ -37,7 +37,7 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
 ///|
 /// Whether a row of Home's list moves now: its place, its coming in, its passing over others, a copy of one gone.
 fn home_moving(t : @ui.Tester) -> Array[String] {
-  t.moving().filter(fn(m) { m.contains("a row lifted") || (m.contains("home/") && m.contains("\u{1}")) })
+  t.moving().filter(fn(m) { m.contains("a row lifted") || (m.contains("chats/") && m.contains("\u{1}")) })
 }
 
 ///|
@@ -136,9 +136,9 @@ test "Home: a row swiped off is archived once it has gone, and leaves no copy of
   ignore(x)
   t.drag(300.0, y + h / 2.0, 300.0 - 390.0 * 0.6, y + h / 2.0, steps=12)
   // going off: not archived yet
-  t.run_for(swipe_off_ms / 2.0)
+  t.run_for(@sfpages.swipe_off_ms / 2.0)
   assert_true(t.find("把旧的截图都换成新的") is Some(_))
-  t.run_for(swipe_off_ms)
+  t.run_for(@sfpages.swipe_off_ms)
   t.frame()
   assert_true(t.find("把旧的截图都换成新的") is None)
   // gone with no copy fading where it was; the rows under it close over the room

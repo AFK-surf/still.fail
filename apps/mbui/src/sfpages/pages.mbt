@@ -15,4 +15,8 @@ pub fn reset() -> Unit {
   triple_reset()
   recent_reset()
   attach_reset()
+  chat_rows_reset()
+  sidebar_reset()
+  marks_reset()
+  news_reset()
 }

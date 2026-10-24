@@ -70,27 +70,6 @@ let nav_row_phone : @ui.Style = @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=A
 let nav_row_tall : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 py=S2 gap=S2 align=AStart radius=Xl")
 
 ///|
-/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
-/// 140ms` ease out): the pointer's ground in and out, the lit one's (`lit`, the selected grey by default), as the state
-/// changes.
-pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> Int64 {
-  let t = @sf.theme()
-  let lit = lit.unwrap_or(t.p.selected)
-  let h = @kit.animate(c, key + "/hover", if hover { 1.0 } else { 0.0 }, transition=nav_fade)
-  let o = @kit.animate(c, key + "/on", if on { 1.0 } else { 0.0 }, transition=nav_fade)
-  if h <= 0.0 && o <= 0.0 {
-    0L
-  } else {
-    @sf.over(@sf.alpha(t.p.hover, h * (1.0 - o)), @sf.alpha(lit, o))
-  }
-}
-
-///|
-/// What a state's ground changes over (vars.dur: 140 ms, ease out).
-// kept across runs: a value (no field of it changes)
-pub let nav_fade : @motion.Spec = @motion.tween(@sf.dur_ms, ease=Out)
-
-///|
 /// A heading over a part of a list (Sidebar.css.ts navHeading): 12 on 18, muted, 14 above, 4 under; `phone`, as a
 /// finger's list has it (SidebarList.css.ts phoneHeading: as the chats' days are): 15, bold, in the words' colour, 14
 /// above, 6 under, 20 in.

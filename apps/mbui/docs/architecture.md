@@ -143,12 +143,21 @@ One shell. It arranges the same panes in every tier:
      its side panel's tab (sfdesk's `main_page` lays a detail asked as a page beside its chat, also when the layout
      changes under a stack). sfbase's routers (links, search, jump, the settings' core) and sfpages open so; a merged
      page does too. The phone's and the desk's own pages still push until they merge.
+   - A chat opened on the wide frame (`open_chat_beside`, from a list's row, a search, ⌘K, a link) is the page pane's
+     in place of what was there, never over it; from another place the chats come first; the chat open already,
+     nothing.
 4. **The pages merge, by area, in parallel,** once 2 has landed:
    - the settings and the places;
    - the files and the viewer;
    - the chat: the page, the message list, the composer, the side panel, the history, 奏;
    - the lists and the way in: the chats' list, search and ⌘K, a new chat, sign-in, the landing, the places'
      chooser.
+     - Done: the chats' lists (sfpages' `sidebar.mbt`, `chat_row.mbt`, `chat_mark.mbt`, `row_picture.mbt`,
+       `changelog.mbt`): one track of 全部, 我参与的, 监控中 and its rows in every tier, a finger's rows the phone's and a
+       mouse's the web's desktop's; the frame says what is over them and at their foot and what it adds to them
+       (`ListsFrame`: the phone's search field, the update's news and what is left up long, the desk's 奏 and 已归档). The filter's menu
+       is one (`filter_menu`), each bar's button opening it. The bars over the lists (Home's top bar, the sidebar's
+       band) are left for the places' chooser and the shell.
 
    Each merged page is drawn in all three tiers with both inputs and tested so, its old copies are deleted, and its
    films (old and new) are made per tier.

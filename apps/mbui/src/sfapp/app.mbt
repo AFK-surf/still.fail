@@ -12,6 +12,14 @@ let reset_by_hand : Ref[Bool] = Ref(false)
 /// Every Tester starts from the app as at the start (mbui's on_reset), whatever ran before it in the process: what is
 /// kept here from one Tester to the next would be an input the test does not give.
 fn init {
+  // a chat relayed from its row's menu: the wide frame's dialog, the stack's sheet (until they are one)
+  @sfpages.relay_opener.val = fn(c, src, r, thread) {
+    if @sfdesk.is_wide(c) {
+      @sfdesk.open_relay(src, r, thread)
+    } else {
+      open_relay(c, src, r, thread)
+    }
+  }
   @ui.on_reset(fn() {
     if !reset_by_hand.val {
       reset()
@@ -27,8 +35,6 @@ fn init {
 fn reset() -> Unit {
   @sf.set_language(None)
   files_cornered.val = false
-  felt_menu.val = -1
-  felt_past.clear()
   felt_holds.clear()
   image_quoted_at.val = -1
   bar_glyph.val = None
@@ -39,7 +45,6 @@ fn reset() -> Unit {
   @sfdesk.reset()
   // ＋'s Station 文件 (a composer's, sfpages): the phone's sheet of station files, drawn over the chat (station_files.mbt)
   station_files_asked.val = station_files_open
-  home_rows.val = []
   steadies.clear()
   sheet_host.kind = NoSheet
   sheet_host.serial = 0
@@ -58,12 +63,10 @@ fn reset() -> Unit {
   new_fix.reading = 0
   bar_timing.val = None
   bar_timed.val = None
-  reset_row_menu()
   login_cards_reset()
   update_anchor_reset()
   landing_reset()
   new_ws_reset()
-  news_reset()
   screens_open.clear()
   screens_made.val = 0
   screen_uis.clear()
@@ -130,7 +133,6 @@ fn reset() -> Unit {
   fix_serial.val = 0
   fix_stream_ids.val = 0
   // Home (home.mbt), the host told (above), a chat's page and what is in it
-  marks_seen.clear()
   flying.val = None
   opened_notices.clear()
   tool_parts.clear()
@@ -164,11 +166,43 @@ fn pages_shell() -> Shell {
 /// a chat's detail asked as a page (its history, a service, a file) laid beside its chat by the frame (sfdesk's
 /// main_page); laid out Small on the phone's stack (a new chat risen from the foot).
 fn open_where(p : Page) -> Unit {
-  if @sfdesk.is_wide(@ui.current()) {
-    app.nav.push(p)
-  } else {
+  if !@sfdesk.is_wide(@ui.current()) {
     stack_open(p)
+    return
   }
+  match p {
+    Chat(r) => open_chat_beside(r)
+    _ => app.nav.push(p)
+  }
+}
+
+///|
+/// Chat `r` opened on the wide frame, from anywhere (a list's row, a search's, ⌘K, a link): the chat in the page pane
+/// already, nothing; else the chats the place in view (from settings or another place), and the chat in the page
+/// pane in place of whatever was there, never over it: the stack then holds the list and the chat alone (laid out
+/// Medium, back from it goes to the list).
+fn open_chat_beside(r : ChatRef) -> Unit {
+  // (the chat in the page pane: the stack's last chat, the chats the place in view; what is laid beside it, its
+  // detail asked as a page, stays)
+  if @sfdesk.lit_place() == "chats" && !app.nav.pages().contains(Archived) {
+    let pages = app.nav.pages()
+    for k = pages.length() - 1; k >= 0; k = k - 1 {
+      match pages[k] {
+        Chat(open) if open.station == r.station && open.session == r.session => return
+        Chat(_) => break
+        _ => ()
+      }
+    }
+  }
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+  if app.nav.top() != Home {
+    app.nav.replace(Home)
+  }
+  app.nav.push(Chat(r))
 }
 
 ///|
@@ -389,9 +423,6 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         preview(c, src)
         // a visualization over the whole screen (viz.mbt)
         viz_full_layer(c, src)
-        filter_menu(c, src, w)
-        // a row's menu, held long (home_menu.mbt)
-        home_row_menu(c, src)
       }
       sheet_contents(fn(kind) {
         match kind {

@@ -11,7 +11,6 @@ pub fn reset() -> Unit {
   new_ws_reset()
   share_dialog_reset()
   relay_focus.val = ""
-  marks_reset()
   context_reset()
   switcher_reset()
   browse_reset()
@@ -27,7 +26,6 @@ pub fn reset() -> Unit {
   shell_reset()
   nav_reset()
   go_reset()
-  row_menu_reset()
   attention_reset()
   newchat_reset()
   page_switch_reset()

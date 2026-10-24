@@ -1,6 +1,7 @@
-// What the last update brought, at the top of Home until it is seen (ember apps/android shared/screens/PageParts.kt
-// ChangelogNews; the `changelog` topic's `news`): the build it is now and its first three changes, a tap opens the
-// changelog; its × lets it go at once and tells the core (`changelog.seen`).
+// What the last update brought, at the top of the chats' lists until it is seen (ember web/src/mobile/Changelog.tsx
+// ChangelogNews; the `changelog` topic's `news`), where the frame puts it (the phone's Home: beside the wide frame's
+// rail the web says it in a bubble of its own, cloud/workspace.tsx): the build it is now and its first three changes,
+// a press opens the changelog; its × lets it go at once and tells the core (`changelog.seen`).
 
 ///|
 /// The news let go here (before the core has it): none shows while the core's is this one.
@@ -14,7 +15,7 @@ fn news_reset() -> Unit {
 
 ///|
 /// The news as the core has it, unless let go here.
-fn news_of(src : Source) -> Json? {
+pub fn news_of(src : Source) -> Json? {
   match field((src.topic)("changelog", Map::new()).value, "news") {
     Some(Object(_)) as n if news_gone.val != n => n
     _ => None
@@ -64,8 +65,8 @@ let news_close : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justif
 let news_lines_most : Int = 3
 
 ///|
-/// The news card at Home's top, while there is news.
-fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
+/// The news card at a chats' list's top, while there is news.
+pub fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
   let news = match news_of(src) {
     Some(n) => Some(n)
     None => return
@@ -84,15 +85,15 @@ fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
     c.box(style=news_card, fn() {
       let open = c.id("changelog-news")
       if c.clicked(open) {
-        app.nav.push(Setting(@settings.Route::Changelog))
+        open_page(Setting(@settings.Route::Changelog))
       }
       c.box(style=news_words, id=open, fn() {
         c.box(style=news_head, fn() {
           @sf.icon(c, "sparks", size=16.0, color=t.p.text) |> ignore
           c.text(
-            match opt_text(news, "build") {
-              Some(b) => fill("android-settings.changelog.updatedTo", [("build", b)])
-              None => tr("android-settings.changelog.updated")
+            match @sfbase.opt_text(news, "build") {
+              Some(b) => @sf.t("android-settings.changelog.updatedTo", args=[("build", b)])
+              None => @sf.t("android-settings.changelog.updated")
             },
             style=news_title,
           )
@@ -106,7 +107,7 @@ fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
           c.text(l, style=news_line) |> ignore
         }
         if lines.length() > news_lines_most {
-          c.text(fill("android-settings.changelog.more", [("n", (lines.length() - news_lines_most).to_string())]), style=news_line)
+          c.text(@sf.t("android-settings.changelog.more", args=[("n", (lines.length() - news_lines_most).to_string())]), style=news_line)
           |> ignore
         }
         // PageParts.kt ChangelogNews: clickable, cut to the card's corners
@@ -121,7 +122,7 @@ fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
             news_gone.val = news
             (src.call)("changelog.seen", Json::object({}), fn(_) {  })
           }
-          c.box(style=news_close, id=close, label=tr("android-settings.changelog.dismiss"), fn() {
+          c.box(style=news_close, id=close, label=@sf.t("android-settings.changelog.dismiss"), fn() {
             @sf.icon(c, "close", size=16.0, color=t.p.muted) |> ignore
             @motion.ripple(c, close, 16.0)
           })

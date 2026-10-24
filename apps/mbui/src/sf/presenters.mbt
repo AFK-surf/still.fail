@@ -194,6 +194,12 @@ pub fn presented_drawn() -> Bool {
 }
 
 ///|
+/// Whether the one presented as `serial` is open (not going, nor gone).
+pub fn presented_open_of(serial : Int) -> Bool {
+  presented_now.iter().any(fn(p) { p.serial == serial && p.open })
+}
+
+///|
 /// Whether the one presented as `serial` is still drawn (open, or going).
 pub fn presented_drawn_of(serial : Int) -> Bool {
   presented_now.iter().any(fn(p) { p.serial == serial })
