@@ -114,6 +114,13 @@ export class DriveKept {
   /// Bytes `offset` to `offset + length` of the file `id` as it was (`mtime`, `size`), with its type, if they are kept
   /// (and it is written down as read now); else null. What was kept of it as it was before it changed goes.
   read(id: string, mtime: number, size: number, offset: number, length: number): Effect.Effect<{ type: string; bytes: Uint8Array } | null> {
+    return Effect.map(this.from(id, mtime, size, offset, length), (got) => (got !== null && got.bytes.length === Math.max(0, Math.min(offset + length, size) - offset) ? got : null));
+  }
+
+  /// Bytes from `offset` (`length` at most) of the file `id` as it was (`mtime`, `size`), as far as they are kept on from
+  /// there, with its type: all of them, fewer (those up to the first byte not kept), or null when none from `offset` is.
+  /// What was kept of it as it was before it changed goes.
+  from(id: string, mtime: number, size: number, offset: number, length: number): Effect.Effect<{ type: string; bytes: Uint8Array } | null> {
     return Effect.gen({ self: this }, function* () {
       const sql = yield* this.#db();
       if (sql === null) return null;
@@ -136,20 +143,21 @@ export class DriveKept {
       while (at < end) {
         let best: Part | null = null;
         for (const p of parts) if (p.at <= at && p.at + p.length > at && (best === null || p.at + p.length > best.at + best.length)) best = p;
-        if (best === null) return null;
+        if (best === null) break;
         const bytes = yield* Effect.orElseSucceed(this.#host.storageGet(best.key), () => null);
         if (bytes === null || bytes.length !== best.length) {
           // Gone from under it (the storage cleared by the system, or the part never written whole).
           sql.run("DELETE FROM part WHERE id = ? AND at = ? AND length = ?", [id, best.at, best.length]);
-          return null;
+          break;
         }
         const to = Math.min(end, best.at + best.length);
         out.set(bytes.subarray(at - best.at, to - best.at), at - offset);
         at = to;
       }
+      if (at === offset && end > offset) return null;
       const now = this.#host.nowMs();
       if (now - kept.used >= USED_EVERY_MS) sql.run("UPDATE kept SET used = ? WHERE id = ?", [now, id]);
-      return { type: kept.type, bytes: out };
+      return { type: kept.type, bytes: at === end ? out : out.subarray(0, at - offset) };
     });
   }
 
