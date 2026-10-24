@@ -3,6 +3,20 @@
 
 ///|
 let zh_wide : Map[String, String] = {
+  "web-main.newChat.subChosen": "描述要做的事。将在所选 station 上使用所选模型开启新会话。",
+  "web-main.newChat.thisMachine": "本机",
+  "web-main.newChat.noStation": "没有在线的 station。可在设置中添加，或启动已添加的 station。",
+  "web-main.newChat.down": "暂时连不上 {name}，正在重连。可以继续写，发送后会在连上时自动发出。",
+  "web-main.newChat.noModels": "没有可用模型 · 前往勾选",
+  "web-main.newChat.addProfileFor": "为 {name} 添加 Profile",
+  "web-main.newChat.notShared": "{name} 尚无可用于此 workspace 的 Profile",
+  "web-main.newChat.pickModels": "勾选要使用的模型",
+  "web-main.newChat.noModelsLead": "{name} 的 Profile 尚未启用模型，勾选后即可开始对话",
+  "web-main.newChat.addProfile": "添加 Profile",
+  "web-main.newChat.goPickModels": "勾选模型",
+  "web-pages.profiles.lead": "agent 用它运行模型：{subscription}或模型服务的 key",
+  "web-pages.profiles.leadSubscription": "一份订阅（Claude、ChatGPT），",
+  "web-main.combos.label": "常用搭配",
   "web-main.decisions.title": "奏",
   "web-main.decisions.dismissWhat": "不再提醒",
   "web-main.attention.dismissNote": "忽略：从待处理中移除（选项在对话中仍可使用）",

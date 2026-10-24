@@ -23,6 +23,8 @@ pub fn reset() -> Unit {
   go_reset()
   row_menu_reset()
   attention_reset()
+  newchat_reset()
+  page_switch_reset()
   hover_reset()
   triple_reset()
   history_reset()

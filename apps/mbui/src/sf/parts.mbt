@@ -1981,7 +1981,8 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg
 /// A choice that opens a menu of what it can be (Chooser, controls.css.ts chooser): quiet words (12) and a small
 /// chevron, 28 high, 8 in, 8 round, the hover's ground and the ink pointed at or open; pressed, its menu (@sf.menu) of
 /// `entries` (a choice each: @kit.menu_radio) on `side`, 220 wide at least. `open`: whether its menu is open, the
-/// view's (what it is now comes back with what was chosen).
+/// view's (what it is now comes back with what was chosen). `lead`: what stands before its words (a station's mark),
+/// in the ink its words have.
 pub fn chooser(
   c : @ui.Ctx,
   key : String,
@@ -1989,12 +1990,17 @@ pub fn chooser(
   entries : Array[@kit.Entry],
   open : Bool,
   side? : @ui.Side = Bottom,
+  lead? : (Int64) -> Unit,
 ) -> @kit.Menu {
   let p = theme().p
   let id = c.id(key)
   let opened = if c.clicked(id) { !open } else { open }
   let lit = c.hovered(id) || opened
   let b = c.box(style=chooser_box, selected=opened, id~, fn() {
+    match lead {
+      Some(f) => f(if lit { p.text } else { p.muted })
+      None => ()
+    }
     c.text(words, style=if lit { chooser_words_lit } else { chooser_words }) |> ignore
     icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
   })

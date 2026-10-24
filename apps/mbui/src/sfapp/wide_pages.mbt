@@ -3,19 +3,6 @@
 // chat, the files', the phone's page of the rest, and what the frame asks of the app.
 
 ///|
-/// What the wide frame's pages still here keep of their own (the frame's own is sfdesk's `shell`; the rest is the
-/// stack's and the core's).
-priv struct Wide {
-  /// the new chat's station chooser open (wide_newchat.mbt)
-  mut station_menu : Bool
-}
-
-///|
-let wide : Wide = {
-  station_menu: false,
-}
-
-///|
 /// Whether this frame is drawn wide (what the phone's parts read where they differ: the chat's rows' sides, the
 /// composer's Enter).
 let wide_on : Ref[Bool] = Ref(false)
@@ -25,8 +12,6 @@ fn wide_reset() -> Unit {
   @sfdesk.side_slide_reset()
   find_forget()
   find_around.val = -1.0
-  wide.station_menu = false
-  wide_switch_reset()
   wide_on.val = false
   corners_on.val = false
   recent_open.val = false
@@ -38,14 +23,9 @@ fn wide_reset() -> Unit {
 fn desk_pages() -> @sfdesk.Pages {
   {
     // the chat's page is sfdesk's (chat_page.mbt): its messages and composer this package's (wide_chat.mbt), what
-    // comes and goes with a new chat (wide_newchat.mbt, wide_switch.mbt), what its side panel shows of this package's,
+    // comes and goes with a new chat (sfdesk's newchat.mbt, switch.mbt), what its side panel shows of this package's,
     // how ⌘F goes along its list, its sharing's and publishing's sheets
     talk: fn(c, src, _w, r, over) { chat_talk(c, src, r, over) },
-    chat_after: fn(c, src, w, r) {
-      new_chat_leaving_wide(c, src, w, r)
-      // (come to from a new chat by the sidebar: the new chat fading over it)
-      switch_new_out(c, src, w)
-    },
     panel: fn(c, src, r) { panel_parts(c, src, r) },
     find_list: fn(r) { find_list(r) },
     share: fn(c, r, thread) { open_sheet(c, XShare(r, thread)) },
@@ -61,7 +41,24 @@ fn desk_pages() -> @sfdesk.Pages {
     act: fn(src, what, call, params, done) { act(src, what, "", call, params, done~) },
     core: fn(src, w) { settings_core(src, w) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
-    switching: fn(c) { wide_switch_frame(c) },
+    // the new chat's composer, the chat's (composer.mbt), its first message making the chat (newchat.mbt send_first)
+    new_composer: fn(c, src, w, v, address, name, held, tools, sent) {
+      let r : ChatRef = { station: address, session: "", title: "", station_name: name }
+      composer(c, src, r, None, fresh=Some({
+        key: "new:" + address,
+        placeholder: tr("web-main.newChat.placeholder"),
+        send: fn(d) { send_first(c, src, w, v, address, name, d, wide=true, sent~) },
+        tools: Some(tools),
+        held,
+      }))
+      // the first words sent, where they were typed, while the chat is made (flight.mbt)
+      flight_carry_waiting(c)
+    },
+    drop: fn(c, src, key, pane) {
+      drop_hint(c, pane)
+      chat_drop(c, src, key, pane)
+    },
+    composer_moves: fn(c, chat) { composer_page_starts(c, chat) },
     updating: fn() { side_update_shown() },
     update: fn(c, src, bar, s, inset) { side_update(c, src, bar, s, inset) },
     sheet: fn() { sheet_open() },

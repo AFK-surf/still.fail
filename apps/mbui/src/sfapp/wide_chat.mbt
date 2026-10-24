@@ -142,8 +142,8 @@ fn chat_talk(c : @ui.Ctx, src : Source, r : ChatRef, over : () -> Unit) -> Unit 
       chat_latest(c, src, r, v)
       messages(c, src, r, v, list)
       over()
-      // come to from a new chat: what it showed fading under the composer (wide_switch.mbt)
-      switch_veil(c)
+      // come to from a new chat: what it showed fading under the composer (sfdesk's switch.mbt)
+      @sfdesk.switch_veil(c)
       // a row of the 文件 tab carried over it: frosted, under its composer
       drop_hint(c, pane)
       c.layer(fn() {
