@@ -161,7 +161,7 @@ pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
             open_item(src, ws, address, t.chat, None, None)
           } else {
             (shell.val.close_overlays)()
-            app.nav.push(Chat(r))
+            open_page(Chat(r))
           }
       }
       if t.history != "" {
@@ -182,16 +182,16 @@ pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
         open_item(src, ws, address, t.session, service, at)
       } else if here {
         match service {
-          Some(job) => app.nav.push(Service(address, job))
+          Some(job) => open_page(Service(address, job))
           None => ()
         }
       } else if ws != current {
         open_item(src, ws, address, t.session, service, None)
       } else {
         (shell.val.close_overlays)()
-        app.nav.push(Chat(chat_ref(address, t.session)))
+        open_page(Chat(chat_ref(address, t.session)))
         match service {
-          Some(job) => app.nav.push(Service(address, job))
+          Some(job) => open_page(Service(address, job))
           None => ()
         }
       }
@@ -227,7 +227,7 @@ pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       if t.opens == "login" {
         @settings.mark_login(address, t.login)
       }
-      app.nav.push(Setting(route))
+      open_page(Setting(route))
     }
     // one of a station's screens, as its agent asks a person to take over (docs/remote-screens.md): the viewer over
     // whatever page is open (back comes back to it)
@@ -260,7 +260,7 @@ fn works_in(src : Source, r : ChatRef, session : String) -> Bool {
 fn push_history(r : ChatRef, key : String, entry : Int?) -> Unit {
   let page : Page = History(r, key, entry)
   if app.nav.top() != page {
-    app.nav.push(page)
+    open_page(page)
   }
 }
 
@@ -300,9 +300,9 @@ pub fn open_item(
     }
     None => ()
   }
-  app.nav.push(Chat(r))
+  open_page(Chat(r))
   match service {
-    Some(job) => app.nav.push(Service(station, job))
+    Some(job) => open_page(Service(station, job))
     None => ()
   }
 }
@@ -311,7 +311,7 @@ pub fn open_item(
 /// One of a station's screens in the viewer (AppState.openScreen; remote/ScreenActivity.kt): `title`, the row's,
 /// until the core says one (screen_view.mbt).
 pub fn open_screen(station : String, screen : String, title : String?) -> Unit {
-  app.nav.push(Screen({ station, screen, title: title.unwrap_or("") }))
+  open_page(Screen({ station, screen, title: title.unwrap_or("") }))
 }
 
 ///|
@@ -333,8 +333,4 @@ pub fn open_link(href : String) -> Unit {
   }
 }
 
-///|
-/// A detail of chat `r` asked by a page (an agent's history by its key, jobs, letters, files, a service: the side
-/// panel's tabs), opened where the shell has it (the desktop's side panel, toggled; given as the frame starts).
-// kept across runs: given by the shell as it starts (sfdesk's reset)
-pub let detail_asked : Ref[(Source, ChatRef, String) -> Unit] = Ref(fn(_, _, _) {  })
+

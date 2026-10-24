@@ -251,7 +251,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
   let id = c.id("activity/" + a.key)
   c.cursor(id, Hand)
   if c.clicked(id) {
-    (detail_asked.val)(src, here_ref(here), a.key)
+    open_detail(src, here_ref(here), a.key)
   }
   let row = c.id("activity-row/" + a.key)
   c.box(style=activity_row_box, id=row, fn() {

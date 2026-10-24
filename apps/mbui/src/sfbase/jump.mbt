@@ -26,5 +26,5 @@ pub fn open_chat_found(r : ChatRef, seq : Double, words : Array[String]) -> Unit
   if words.length() > 0 {
     go_to_words[r.station + "\u{1}" + r.session] = words
   }
-  app.nav.push(Chat(r))
+  open_page(Chat(r))
 }

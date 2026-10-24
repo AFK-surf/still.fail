@@ -660,7 +660,7 @@ fn share_opened(
         break
       }
     }
-    app.nav.rise(NewChat)
+    open_page(NewChat)
   } else {
     app.nav.push(Chat({ station, session, title, station_name: "" }))
   }
