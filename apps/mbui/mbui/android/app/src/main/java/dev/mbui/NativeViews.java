@@ -854,6 +854,9 @@ final class NativeViews {
         volatile long total = -1;
         /** the pieces answered (GL thread): the first are logged */
         int pieces;
+        /** since when it has waited once ready (elapsedRealtime; -1 it does not), and the bytes given by then (main thread) */
+        long waitSince = -1;
+        double waitBytes;
         ExoPlayer player;
         TextureView texture;
         final Runnable tick = new Runnable() {
@@ -1344,6 +1347,17 @@ final class NativeViews {
                     // its first frame shows (onRenderedFirstFrame)
                     if (s == Player.STATE_READY && !player.getCurrentTracks().containsType(C.TRACK_TYPE_VIDEO)) tell(1);
                     buffering = s == Player.STATE_BUFFERING ? 1 : 0;
+                    // a wait once ready (a seek, its bytes not here yet), said with how long it took and what came
+                    // through the app meanwhile (none: it waited on its own decoding, not on the network)
+                    if (s == Player.STATE_BUFFERING && state == 1 && waitSince < 0) {
+                        waitSince = android.os.SystemClock.elapsedRealtime();
+                        waitBytes = bytes;
+                        Host.log("view " + id + ": waiting at " + player.getCurrentPosition() + " ms");
+                    } else if (s != Player.STATE_BUFFERING && waitSince >= 0) {
+                        Host.log("view " + id + ": waited " + (android.os.SystemClock.elapsedRealtime() - waitSince) + " ms, "
+                                + (long) (bytes - waitBytes) + " bytes through the app meanwhile");
+                        waitSince = -1;
+                    }
                     ended = s == Player.STATE_ENDED ? 1 : 0;
                     if (s == Player.STATE_ENDED) playing = 0;
                     Host.requestFrame();
