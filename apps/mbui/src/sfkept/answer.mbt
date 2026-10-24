@@ -9,7 +9,7 @@
 // scripts/test.sh fails on it, and scripts/kept has the core work it out and keeps it.
 
 ///|
-/// The kept answers as kept.mbt has them: `markdown` by the text; `code.ink` by the language and the code (a \u{1}
+/// The kept answers as kept.mbt has them (an answer a line), by call: `markdown` by the text; `code.ink` by the language and the code (a \u{1}
 /// between); `reader.book` by "md" or "txt" and the text, each with its answer, its text as joined (where joining
 /// changed it) and its searches by their words.
 let table : Ref[Map[String, Json]?] = Ref(None)
@@ -19,9 +19,21 @@ fn kept(call : String) -> Map[String, Json] {
   let t = match table.val {
     Some(t) => t
     None => {
-      let t = match (@json.parse(kept_answers) catch { _ => Json::null() }) {
-        Object(m) => m
-        _ => {}
+      // an answer a line: [call, key, answer]
+      let t : Map[String, Json] = {}
+      for line in kept_answers.split("\n") {
+        match (@json.parse(line.to_string()) catch { _ => Json::null() }) {
+          Array([String(call), String(key), answer]) =>
+            match t.get(call) {
+              Some(Object(m)) => m[key] = answer
+              _ => {
+                let m : Map[String, Json] = {}
+                m[key] = answer
+                t[call] = Json::object(m)
+              }
+            }
+          _ => ()
+        }
       }
       table.val = Some(t)
       t

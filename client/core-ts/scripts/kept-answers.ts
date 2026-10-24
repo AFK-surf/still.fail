@@ -28,7 +28,9 @@ import { Browsing, withDrive, type BrowsingState, type Ordered } from "../src/dr
 const target = new URL("../../../apps/mbui/src/sfkept/kept.mbt", import.meta.url);
 // The browsing's steps asked, by their key (the made-up core's hash of the ask): what each is worked out from again.
 const browseAsks = new URL("../../../apps/mbui/src/sfkept/browse_asks.json", import.meta.url);
-const HEAD = "// Made by client/core-ts/scripts/kept-answers.ts with the real core, from what the app's runs asked (scripts/kept).\n///|\nlet kept_answers : String =\n  #|";
+// An answer a line (`[call, key, answer]` as JSON, by call and then by key), so that two branches keeping answers
+// of their own change lines of their own and git merges them, as it could not one line of all of them.
+const HEAD = "// Made by client/core-ts/scripts/kept-answers.ts with the real core, from what the app's runs asked (scripts/kept):\n// an answer a line, [call, key, answer].\n///|\nlet kept_answers : String =\n";
 
 const args = process.argv.slice(2);
 const check = args.includes("--check");
@@ -49,7 +51,7 @@ type Kept = {
   railView: Record<string, unknown>;
 };
 const before = readFileSync(target, "utf8");
-const was = (fresh ? {} : JSON.parse(before.slice(before.indexOf("#|") + 2))) as Partial<Kept>;
+const was = (fresh ? {} : keptOf(before)) as Partial<Kept>;
 
 // What is asked: the texts, the codes by their language, the books by whether they are Markdown, each book's searches.
 const texts = new Set(Object.keys(was.markdown ?? {}));
@@ -170,7 +172,7 @@ for (const key of sorted(tools)) {
 }
 const keys = sorted(steps.keys());
 for (const key of keys) kept.browse[key] = browseStep(steps.get(key)!);
-const content = HEAD + JSON.stringify(kept) + "\n";
+const content = HEAD + Object.entries(kept).flatMap(([call, answers]) => sorted(Object.keys(answers)).map((key) => `  #|${JSON.stringify([call, key, (answers as Record<string, unknown>)[key]])}\n`)).join("");
 // (a step a line: what changes of them reads as the steps that came or went)
 const askedSteps = `{\n${keys.map((k) => `${JSON.stringify(k)}: ${JSON.stringify(steps.get(k))}`).join(",\n")}\n}\n`;
 const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs, ${queues.size} queues, ${steps.size} browsing steps, ${rails.size} rails`;
@@ -237,4 +239,20 @@ function browseStep(step: Step): unknown {
   }
   if (need.size) return { need: sorted(need) };
   return { ...(error !== null ? { error } : { value: value ?? null }), state: b.snapshot(), prefs: patches, id };
+}
+
+/// What kept.mbt keeps, by call: each `#|` line one answer (as written above). A file of before that (all of it as one
+/// object on one line) is read too, once, as it is written anew.
+function keptOf(text: string): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const line of text.split("\n")) {
+    const at = line.indexOf("#|");
+    if (at < 0) continue;
+    const v = JSON.parse(line.slice(at + 2)) as unknown;
+    if (Array.isArray(v)) {
+      const [call, key, answer] = v as [string, string, unknown];
+      (out[call] ??= {})[key] = answer;
+    } else Object.assign(out, v as Record<string, Record<string, unknown>>);
+  }
+  return out;
 }
