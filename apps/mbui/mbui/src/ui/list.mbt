@@ -334,6 +334,9 @@ pub fn Ctx::list(
         follow_item: -1,
         follow_margin: 0.0,
         built: -1,
+        laid: -1,
+        began: (0, 0.0, 0.0, false),
+        left: (0, 0.0, 0.0, false),
         scroll_asked: (-1, 0, 0.0),
         fling: 0,
         fling_v: 0.0,
@@ -480,6 +483,20 @@ fn Ctx::place_list(
     None => return
   }
   st.vp_h = ih
+  // laid out again in the same frame (built again from what its layout read: readback.mbt), from where it stood as
+  // the frame's first layout of it began, unless something moved it since its last: a row laid there for the first
+  // time may have been laid at a height it does not keep (a fold's words whole until it knows how tall they are), and
+  // where the list stood said from that row would move what is in view by what the row lost (to the end, past it)
+  let now = (st.anchor, st.anchor_off, st.pending, st.at_end)
+  if st.laid == self.frame_no && now == st.left {
+    st.anchor = st.began.0
+    st.anchor_off = st.began.1
+    st.pending = st.began.2
+    st.at_end = st.began.3
+  } else {
+    st.began = now
+  }
+  st.laid = self.frame_no
   // rows built in the build phase (none, normally) are not shown
   n.first = -1
   n.last = -1
@@ -672,6 +689,7 @@ fn Ctx::place_list(
       st.at_end = to_end < 1.0
     }
   }
+  st.left = (st.anchor, st.anchor_off, st.pending, st.at_end)
   // a finger pulls past the end it reached; a fling stops there
   let drag = st.drag_pending
   st.drag_pending = 0.0
