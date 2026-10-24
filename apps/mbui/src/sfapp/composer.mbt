@@ -1649,7 +1649,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   // what the words refer to, shared before they go (outside.mbt)
   outside_sheet(c, src, d.key)
   // ＋'s Station 文件 (station_files.mbt)
-  station_files_sheet(c, src, workspace_of(r.station), d.key)
   ref_sheet(c, src, d.key, r.station)
 }
 
@@ -2632,7 +2631,9 @@ fn attach_sheet(
     }
     if c.clicked(station) {
       cui.attach = false
-      station_files_open(d.key)
+      // (＋'s panel down first: the picker is not its, to go with it)
+      @sf.close_presented_of(attach_shown.val)
+      @sfdesk.station_files_pick(src, d.key)
     }
     // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
     @sfpages.recent_strip(c, tapped_tile)

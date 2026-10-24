@@ -192,11 +192,11 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the draft, 
   let log = t.drive(
     "tap icon:plus\ntap Station 文件\nuntil 所有位置\nuntil 主目录\ntap =文档\nuntil 整个文件夹\ntap 发布清单.md\ntap 添加 1 个\ngone 所有位置\nuntil Studio · 路径\ntap icon:arrow-up\nuntil Studio 上的文件：/Users/lin/文档/发布清单.md\n",
   )
-  assert_true(log.contains("EXIT 0"))
+  assert_true(log.contains("EXIT 0"), msg="\{log}")
   assert_eq(refs_of("ws1/st1:s-c1").length(), 0)
   // its sheet sunk away, the words sent flown to their row; the station takes them in, its agent answers, its turn
   // ends (the fixture's times: the run ends as it sends)
-  sheet_rested(t, "dv-reader-sheet")
+  sheet_rested(t, "sf-present")
   t.run_for(flight_ms)
   t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms)
   t.assert_idle()

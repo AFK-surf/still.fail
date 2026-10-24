@@ -1,7 +1,7 @@
 // A chat's 文件 tab (src/sfdesk/drive_tab.mbt) drawn alone in a box of a side panel's width, over the fixture.
 
 ///|
-fn tab_tester(calls : Array[Made]) -> @ui.Tester {
+fn tab_tester(calls : Array[Made], platform? : Int = 0) -> @ui.Tester {
   reset()
   let base = fixture("home")
   let src : Source = {
@@ -25,7 +25,7 @@ fn tab_tester(calls : Array[Made]) -> @ui.Tester {
     },
     w=1280.0,
     h=800.0,
-    platform=0,
+    platform~,
   )
 }
 
@@ -87,4 +87,25 @@ test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加�
     }
     None => fail("nothing let go")
   }
+}
+
+///|
+test "a chat's 文件 tab on a touch device: the picker the phone's ＋ opens, its places, a folder entered, a file ticked, 添加 putting it into the chat's message" {
+  let calls : Array[Made] = []
+  let t = tab_tester(calls, platform=2)
+  t.frame()
+  // the places (each station's home and its pinned folders), no ways to switch, nothing to drag
+  assert_true(t.find("所有位置") is Some(_))
+  assert_true(t.query(Radio, label="分栏") is None)
+  t.tap_text("文档")
+  t.frame()
+  assert_true(t.find("整个文件夹") is Some(_))
+  t.tap_text("发布清单.md")
+  t.frame()
+  t.tap_text("添加 1 个")
+  t.frame()
+  let sent = @sfbase.files_taken("s-c1")
+  assert_eq(sent.length(), 1)
+  assert_eq(sent[0].abs, fix_docs + "/发布清单.md")
+  assert_false(sent[0].dir)
 }

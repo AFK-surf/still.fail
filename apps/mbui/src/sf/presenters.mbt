@@ -182,7 +182,8 @@ pub fn last_presented() -> Int {
 }
 
 ///|
-/// Closes the one presented as `serial` (last_presented), and what is over it, as back does; nothing when it is gone.
+/// Closes the one presented as `serial` (last_presented), and what is over it, as back does; nothing when it is gone
+/// or going (closed already: what was opened over it since is not its).
 pub fn close_presented_of(serial : Int) -> Unit {
   close_from_serial(serial)
 }
@@ -703,8 +704,9 @@ fn dialog_built(c : @ui.Ctx, key : String, open : Bool) -> Bool {
 ///|
 fn close_from_serial(serial : Int) -> Unit {
   match presented_now.search_by(fn(q) { q.serial == serial }) {
-    Some(i) => close_from(i)
-    None => ()
+    // (one closed already, going: what was opened over it since is not its, as one opened as it went)
+    Some(i) if presented_now[i].open => close_from(i)
+    _ => ()
   }
 }
 

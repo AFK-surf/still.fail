@@ -12,14 +12,14 @@ test "21-station-files" {
     // ＋'s sheet up
     f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("Station 文件")
-    // ＋'s sheet down, the places' up
-    f.run_to(@kit.sheet_rest("dv-reader-sheet"))
+    // ＋'s sheet down, the picker's up (the library's panel, sfdesk's station_pick.mbt)
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("所有位置")
     f.tap("=e2e-084051")
     f.see("整个文件夹")
     f.tap("说明.txt")
     f.tap("添加 1 个")
-    f.run_to(@kit.sheet_rest("dv-reader-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("所有位置")
     f.see("studio · 路径")
     f.tap("发消息")

@@ -87,8 +87,18 @@ pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
 
 ///|
 /// The tab for the chat `chat` (its key: what 添加到消息 puts things into), whose station is `station`, filling the box
-/// it is drawn in.
+/// it is drawn in, as the screen is: a computer's, the web's tab (its ways, a row's menu, its rows dragged onto the
+/// chat); a touch device's (a phone, a tablet), the picker the phone's ＋ opens (station_pick.mbt): files ticked, 添加
+/// at its foot.
 pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station : String) -> Unit {
+  if @sf.touch_system() {
+    c.box(style=ftab_narrow, fn() {
+      c.box(style=ftab_narrow_list, fn() { station_pick(c, src, ws) }) |> ignore
+      c.box(style=ftab_narrow_foot, fn() { station_pick_add(c, chat) |> ignore }) |> ignore
+    })
+    |> ignore
+    return
+  }
   ftab.scope = ws
   ftab.chat = chat
   // a row let go off the tab (the desk's drag_frame lets the carried go where nothing here takes it)
@@ -549,3 +559,16 @@ let tab_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=@
 ///|
 // kept across runs: a value (no field of it changes)
 let tab_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+
+///|
+/// On a touch device: the picker over 添加, at the foot's end.
+// kept across runs: a value (no field of it changes)
+let ftab_narrow : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftab_narrow_list : @ui.Style = @ui.style(w=Full, h=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftab_narrow_foot : @ui.Style = @ui.css("row w=Full px=S5 pt=S2 pb=S4 justify=JEnd")

@@ -1141,5 +1141,33 @@ pub fn fixture_app(mode : String) -> Source {
   reset()
   let src = fixture(mode)
   open_fixture_mode(mode)
+  open_fixture_src(mode, src)
   src
+}
+
+///|
+/// What the mode opens over the app once its source is made (what is put up reading through it), as open_fixture_mode
+/// opens its pages: ＋'s Station 文件 (chat-station-files).
+pub fn open_fixture_src(mode : String, src : Source) -> Unit {
+  if mode == "chat-station-files" {
+    fixture_station_files(src)
+  }
+}
+
+///|
+/// The first row's chat (opened by sffix for chat… modes): ＋'s Station 文件 in 文档, a file ticked.
+fn fixture_station_files(src : Source) -> Unit {
+  @sfdesk.station_files_pick(src, "ws1/st1:s-c1")
+  @sfdesk.station_pick_set({ station: "ws1/st1", station_name: "Studio", root: fix_docs, root_name: "文档", path: "" }, [
+    {
+      station: "ws1/st1",
+      station_name: "Studio",
+      root: fix_docs,
+      path: "发布清单.md",
+      abs: fix_docs + "/发布清单.md",
+      name: "发布清单.md",
+      size: 4210.0,
+      dir: false,
+    },
+  ])
 }
