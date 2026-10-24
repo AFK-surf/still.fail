@@ -32,7 +32,7 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
     c.focus_editor(field_key)
   }
   // ⌘F: the chat's own find (wide_find.mbt); another chat, its own
-  if wide.find_chat != "" && wide.find_chat != side_key(r) {
+  if @sfdesk.find_chat() != "" && @sfdesk.find_chat() != side_key(r) {
     find_forget()
   }
   if @settings.action_pressed(c, (src.topic)("prefs", {}).value, "chat.find") && view is Some(v) && v.thread is Some(_) {
@@ -318,7 +318,8 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
     |> ignore
     match v {
       // ⌘F's bar, in place of the buttons while it is open
-      Some(view) if wide.find_chat == side_key(r) => find_bar(c, src, r, view)
+      Some(view) if @sfdesk.find_chat() == side_key(r) && view.thread is Some(_) =>
+        @sfdesk.find_bar(c, src, r, view.thread.unwrap_or(0.0), find_list(r))
       Some(view) =>
         c.box(style=bar_buttons, fn() {
           let archive = view.archivable && !view.archived
@@ -524,4 +525,50 @@ fn page_bar_wide(c : @ui.Ctx, title : String, back : Bool, trailing : () -> Unit
   })
   |> ignore
   went
+}
+
+///|
+/// ⌘F's bar (sfdesk/find.mbt) opened in chat `r`, what opens under the chat's bar closed.
+fn find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
+  wide.info_open = false
+  wide.jobs_open = false
+  @sfdesk.find_open(c, side_key(r))
+}
+
+///|
+/// ⌘F's bar closed: what it marked in the chat's list let go with it.
+fn find_forget() -> Unit {
+  let k = @sfdesk.find_chat()
+  match readings.get(k) {
+    Some(rd) => {
+      rd.found_at = ""
+      rd.found_words = []
+    }
+    None => ()
+  }
+  go_tos.remove(k)
+  go_to_words.remove(k)
+  find_around.val = -1.0
+  @sfdesk.find_close()
+}
+
+///|
+/// The message the chat's window was last moved about for what ⌘F found (`chat.around`, once each).
+let find_around : Ref[Double] = Ref(-1.0)
+
+///|
+/// Chat `r`'s list as ⌘F goes along it: the messages showing, a message gone to with the words marked in it.
+fn find_list(r : ChatRef) -> @sfdesk.FindList {
+  let k = side_key(r)
+  {
+    showing: fn() {
+      let rd = reading_of(k)
+      (rd.top_seq, rd.bottom_seq)
+    },
+    go: fn(seq, words) {
+      go_tos[k] = seq
+      go_to_words[k] = words
+    },
+    forget: fn() { find_forget() },
+  }
 }

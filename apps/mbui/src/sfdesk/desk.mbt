@@ -24,4 +24,5 @@ pub fn reset() -> Unit {
   hover_reset()
   triple_reset()
   history_reset()
+  find_close()
 }
