@@ -32,8 +32,9 @@ particular to this app:
 
 - `docs/architecture.md` is how the app is built; read it before changing a page or the frame. In short:
   - It is one app on every device (the user, 2026-10-24); there is no phone app and desktop app.
-  - Its layout follows the screen, in three tiers (`@sf.layout`: Small, Medium, Large). How it answers the hand follows
-    the input (`@ui.pointing()`). Nothing else decides either.
+  - Its layout follows the screen: its kind (`@sf.touch_system()`: a touch device or a computer) and its tier
+    (`@sf.layout`: Small, Medium, Large). How it answers the hand follows the input (`@ui.pointing()`), and only that:
+    the input never decides what is shown, where or how big (2026-10-25).
   - Each page exists once, drawn into the box it gets in any tier with either input. It opens things by saying what,
     and shows menus and dialogs through the library's presenters. The shell arranges the panes per tier.
 - **Packages now, while the two page sets are merged:**
@@ -51,7 +52,8 @@ particular to this app:
   - A page opens what it opens with `@sfbase.open_page(page)` and a chat's detail with `@sfbase.open_detail(src, chat,
     tab)`: the shell's (sfbase's `Shell`) decides where it goes per layout. It never pushes onto `app.nav` itself.
   - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
-    width.
+    width. Nor on `@ui.pointing()`: a page's look and what it offers follow `@sf.touch_system()`, and the hand reaches
+    it only through the library's primitives (`c.lit`, `c.menu_asked`, tips).
 
 ## What is checked, and where
 

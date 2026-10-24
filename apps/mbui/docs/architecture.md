@@ -1,32 +1,43 @@
-# One app: tiers, input, pages and the shell
+# One app: the screen, the input, pages and the shell
 
 still.fail's mbui app is one app on every device (the user, 2026-10-24: 「应该得打成同一个 app 了」). There is no phone
-app and desktop app. How it is laid out follows the screen, in three tiers; how it answers the hand follows the input;
-the two are separate, and nothing else decides either. Each page exists once and is drawn into whichever tier it lands
-in, with either input.
+app and desktop app. How it is laid out follows the screen: its kind (a touch device or a computer) and its size, in
+three tiers. How it answers the hand follows the input, and only that: the input never decides what is shown, where,
+or how big (the user, 2026-10-25: 「布局不是按屏幕类型和尺寸来的，而是跟操作方式有关……我怀疑是系统性问题」). A tablet given a
+trackpad, a laptop touched on its screen, stays laid out as it was. Each page exists once and is drawn into whichever
+tier it lands in, on either kind of screen, with either hand.
 
 This replaces the earlier "the desktop and the phone are two apps" (two page sets: `sfapp`'s, ported from the Kotlin
 app, and `sfdesk`'s, ported from the web's desktop files). The way from here to there is at the end.
 
-## Two axes, read in one place each
+## The screen and the input, each read in one place
 
-| Axis | Read by | What it is |
+| What | Read by | What it is |
 |---|---|---|
-| Tier | `@sf.layout(width)` (sf/tokens.mbt) | `Small`, `Medium`, `Large`. A touch device by its system size classes (and its fold: half open, crease across, is `Small`'s chat); a desktop window by its width (600, 840). Held while the app holds the device sideways (`@hostapi.sideways()`). |
-| Input | `@ui.pointing()` | `Finger` or `Mouse`. |
+| The screen's kind | `@sf.touch_system()` (sf/tokens.mbt) | A touch device (a phone, a tablet: iOS, Android) or a computer (macOS, Windows). The platform's, the same for the whole run; a Tester's by its `platform`. |
+| The tier | `@sf.layout(width)` (sf/tokens.mbt) | `Small`, `Medium`, `Large`. A touch device by its system size classes (and its fold: half open, crease across, is `Small`'s chat); a computer's window by its width (600, 840). Held while the app holds the device sideways (`@hostapi.sideways()`). |
+| The input | `@ui.pointing()` | `Finger` or `Mouse`. It may change while the app runs. |
 
-- **Nothing else decides arrangement or behaviour.** `wide_on`, `@settings.wide`, `t.narrow`, the viewer host's
-  `narrow`, `set_web_lines(wide)`, a theme chosen by "is this a touch system": each goes, and its use reads one of the
-  two axes instead.
-- **The tier decides** how the shell arranges the panes, where something opened goes (pushed, a pane, a side tab),
-  and, with the input, how a menu or a confirm shows (Presenters, below).
-- **The input decides** how a thing answers the hand:
-  - feedback: `c.lit` lights on hover with a mouse and on press with a finger; `c.hovered` only for what a mouse alone sees;
-  - menus: `c.menu_asked`, a right click or a long press;
-  - tips: on hover, or a long press;
-  - Enter: sends with a mouse; a new line with a finger;
-  - dragging, focus as a page comes, and touch targets (44 at least for a finger);
-  - density: the theme's type scale and row heights.
+- **The layout is the screen's.** Its kind and its tier, and a page's own width (below), decide everything about what
+  is shown, where and how big. Nothing else does: `wide_on`, `@settings.wide`, `t.narrow`, the viewer host's `narrow`
+  and `set_web_lines(wide)` go, and so does every use of the input for any of these.
+  - **The tier:** how the shell arranges the panes, and where something opened goes (pushed, a pane, a side tab).
+  - **The kind:**
+    - the look: the theme's palette, type scale and row heights, and touch targets (44 at least on a touch device);
+      a touch device's is the phone's, a computer's the web's;
+    - what a page offers to reach things: on a touch device the search field at the top of the chats' list, on a
+      computer ⌘K;
+    - the keyboard: on a computer Enter sends and the composer takes the focus as a chat opens; on a touch device Enter
+      makes a new line and nothing raises the keyboard unasked.
+  - **Both:** how a menu, a pick or a confirm shows (Presenters, below): a sheet on a touch device short of Large,
+    else a popover or a dialog. And where ⌘K's search shows: its panel over the window, or in `Small` the search page.
+- **The input only says how a thing answers the hand.** Changing hands changes none of the layout:
+  - feedback: `c.lit` lights on hover with a mouse and on press with a finger;
+  - what a pointer over a thing shows (`c.hovered`: a row's time, its 归档), which a finger reaches otherwise (the
+    row's menu);
+  - menus: `c.menu_asked`, a right click or a long press, opening the same menu, shown as the screen says;
+  - tips: on hover, or on a long press;
+  - lists scrolled by a finger's drag or by the wheel, words picked by a drag or a hold, drag and drop.
 - **A page's own width** (the box it is drawn in) decides its inner arrangement: columns that drop, tools that go into
   ⋯, a side part that gives way. This is the web's container query. It is not the tier: a page never asks which tier
   it is in.
@@ -40,7 +51,7 @@ Parts, tokens, motion, the viewers (Reader, Player, ViewerBar and the frame arou
 - `@sf.menu`, `@sf.pick`, `@sf.panel` (a small panel of rows or fields), `@sf.confirm`, `@sf.ask`.
   - A sheet spans the window, not the pane that opened it: on the tape it is over every panel.
 - A page says what it shows; the presenter decides how:
-  - with a finger in Small or Medium, it shows as a bottom sheet;
+  - on a touch device in Small or Medium, it shows as a bottom sheet;
   - otherwise, as a popover anchored to what opened it (menu, pick, panel) or a centred dialog (confirm, ask).
 - One host draws them all, over the shell. Today's hosts become it: the app's `sheet.mbt`, `decide.mbt`'s `dui.sheet`,
   `settings/sheet.mbt`, and sfdesk's dialogs.
@@ -52,7 +63,9 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
 
 - **Its box:** it draws into the box it is given. `c.width` and `c.height` are its pane's; it never subtracts a rail
   or a sidebar itself.
-- **Its interaction:** it reads the input through the library's primitives (above), never the tier.
+- **What it reads:** the screen's kind (`@sf.touch_system()`) for its look and what it offers, its own width for its
+  arrangement, and the input only through the library's primitives (above). Never the tier, and never
+  `@ui.pointing()` itself.
 - **Opening things:** it says what to open: a page (`Page`), or a detail of the chat (a history, a service, a
   visualization, jobs, letters, files). The shell decides where that goes. A page never pushes onto the stack or moves
   the tape itself.
@@ -61,8 +74,8 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
   go to, the window buttons' inset, the glass.
 - **Content and logic:** its content and structure follow the web's files for it, desktop and mobile together. What
   it shows and does is the union of the two, as the core gives it, and its logic is the core's.
-  - With a finger in a narrow box it looks as the web's mobile page does; with a mouse in a wide box, as the web's
-    desktop page does. In between it is the same page, at its width and with its input.
+  - On a touch device in a narrow box it looks as the web's mobile page does; on a computer in a wide box, as the
+    web's desktop page does. In between it is the same page, at its width, for its screen.
 - **Decisions that stay:** the touch idioms the user decided:
   - swipe back, and long-press menus;
   - a row swiped to archive;
@@ -94,7 +107,7 @@ One shell. It arranges the same panes in every tier:
 - **What a page is given:** its box (width and height) and its insets (where its bar's back goes, the room under it:
   a tape panel's own inset, the keyboard). A page does not work these out from the tier.
 - **What it owns:**
-  - reading the two axes;
+  - reading the screen's kind and the tier;
   - the stack's motion, the tape and the columns;
   - back, the bars, the rail and the window's inset;
   - the presenters' host, toasts and the keys (⌘K, ⌘/, the core's keymap);
@@ -111,14 +124,17 @@ One shell. It arranges the same panes in every tier:
 
 - **What goes:** `src/sfapp` and `src/sfdesk`. A merged page moves into `sfpages`; the frames' pieces (the phone's
   stack and bottom bar, the desk's frame, tape, rail and columns) move into `sfshell`.
-- **detlint holds it:** `sfpages` may not read `@sf.layout`, `wide_on`, or the stack's or the tape's state, and may
-  not call a sheet or dialog host but through the presenters.
+- **detlint holds it:** `sfpages` may not read `@sf.layout`, `wide_on`, `@ui.pointing()`, or the stack's or the tape's
+  state, and may not call a sheet or dialog host but through the presenters.
 
 ## Tests
 
-- **Each page** is tested in the Tester at a width of each tier, with a finger and with a mouse.
-  - The Tester sets the input apart from the platform (a `pointing` of its own). The platform also says the tier on a
-    touch system and the core's `client.device`, and a replay recorded on one platform keeps it.
+- **Each page** is tested in the Tester at a width of each tier, on a touch device and on a computer (the Tester's
+  `platform`), each with its usual hand.
+  - And once with the other hand on each (`Tester::new(pointing=…)`): what is laid out is the same, box for box; only
+    how it answers differs.
+  - The platform also says the tier on a touch device and the core's `client.device`, and a replay recorded on one
+    platform keeps it.
 - **The screenshots** (`screens.sh`) cover the three tiers.
 - **Replays** recorded at one tier keep their traces. A flow that only one tier has (the bottom bar, the tape) is that
   tier's.
@@ -126,8 +142,12 @@ One shell. It arranges the same panes in every tier:
 
 ## The way there
 
-1. **The axes read once.** This is the shell's work (the chat 按屏幕分三档布局). The hidden axes go: `wide_on`,
-   `@settings.wide`, the viewer's `narrow`, the touch-system theme. Density follows the input.
+1. **The screen and the input read once.** This is the shell's work (the chat 按屏幕分三档布局). The hidden axes go:
+   `wide_on`, `@settings.wide`, the viewer's `narrow`.
+   - To do (2026-10-25): what was put on the input that is the layout's goes back to the screen's kind: `@sf.begin`'s
+     theme and density, the presenters' sheet, and every page's own read of `@ui.pointing()` for its look, its rows or
+     what it offers (the search field). The pages then read the input only through the library's primitives, and
+     detlint's fence holds it.
    - Done: `wide_on` is gone (the shell reads `@sf.layout` where it arranges, and the phone pages' wide branches,
      never drawn, with it), and `@sf.begin`'s theme follows `@ui.pointing()`, not the system: a finger's the phone's, a
      mouse's the web's; laid out Small still the phone's whatever the hand, as the phone's pages carry its palette in
