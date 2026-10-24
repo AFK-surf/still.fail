@@ -133,6 +133,9 @@ test "small with a mouse, ⌘K: the search's page in the lists' box, the keys in
   t.frame()
   assert_true(@sfpages.search_opened())
   assert_false(@sfdesk.switcher_open())
+  // the lists gone from under it, as under a finger's (not seen through its rows)
+  let row = t.words().iter().find_first(fn(x) { x.0 == "整理发布清单" }).unwrap()
+  assert_true(row.5 < 0.01, msg=row.5.to_string())
   // what can be done here among what it finds: 设置 with its keys, Enter runs it
   t.type_text("设置")
   t.frame()

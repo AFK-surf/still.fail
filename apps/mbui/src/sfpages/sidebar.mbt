@@ -75,9 +75,10 @@ pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame)
     }
   }
   let width = c.width
-  // a finger's search (search.mbt): the lists up and away under it (its page over them: chats_search)
+  // the search's page open over them (search.mbt: from a list's field, or by ⌘K laid out Small): the lists up and
+  // away under it, whatever opened it (its page over them: chats_search)
   search_start(c)
-  let away = if finger { search_away(c) } else { 0.0 }
+  let away = search_away(c)
   c.box(style=lists_fill, fn() {
     let track = c.layer(fn() {
       for p in x.floor().to_int()..=x.ceil().to_int() {
