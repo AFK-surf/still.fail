@@ -172,7 +172,7 @@ pub fn station_mark(
         )
       None => (rest, "")
     }
-    match station_glyph(name) {
+    match glyph_paths(name) {
       Some((lines, dots)) => {
         let layers : Array[@pixels.VectorPath] = []
         for d in lines {
@@ -338,7 +338,7 @@ pub fn station_icon(c : @ui.Ctx, emoji : String, icon_name : String, size : Doub
 ///|
 /// Station glyph `name`'s lines and dots, from its text in drawable_data.mbt ("emoji|line;line|dot;dot"), read the
 /// first time it is asked for.
-fn station_glyph(name : String) -> (Array[String], Array[String])? {
+fn glyph_paths(name : String) -> (Array[String], Array[String])? {
   if glyphs_read.get(name) is Some(g) {
     return Some(g)
   }

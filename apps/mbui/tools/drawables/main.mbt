@@ -439,7 +439,7 @@ fn main {
   }
   line("///|")
   line("/// The station glyphs (StationIcons): each its emoji, its lines (1.75 strokes) and its dots (fills), as one text:")
-  line("/// \"emoji|line;line|dot;dot\", read when it is drawn (station_glyph).")
+  line("/// \"emoji|line;line|dot;dot\", read when it is drawn (glyph_paths).")
   // (text, not a tuple of arrays: as those, 570 KB of start-up code compiled on every build, 2026-10-24)
   line("let station_glyphs : Map[String, String] = {")
   for m in found {

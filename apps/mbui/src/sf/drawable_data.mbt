@@ -3851,7 +3851,7 @@ let drawables : Map[String, @pixels.Vector] = {
 
 ///|
 /// The station glyphs (StationIcons): each its emoji, its lines (1.75 strokes) and its dots (fills), as one text:
-/// "emoji|line;line|dot;dot", read when it is drawn (station_glyph).
+/// "emoji|line;line|dot;dot", read when it is drawn (glyph_paths).
 let station_glyphs : Map[String, String] = {
   "desktop": "🖥️|M6 4h12a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-6a3 3 0 0 1 3 -3Z;M9 20H16 M12 16V20 M6.5 8H10 M6.5 11H8|",
   "laptop": "💻|M5 15V6Q5 4 7 4H17Q19 4 19 6V15 M4.1 16H19.9Q21.5 16 20.784 17.431L20 19Q19.5 20 18 20H6Q4.5 20 4 19L3.216 17.431Q2.5 16 4.1 16Z M10 16H14|",
