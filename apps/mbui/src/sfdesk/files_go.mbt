@@ -286,13 +286,11 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       go.at = 0
     }
     match res.submitted {
-      Some(words) => {
-        go.field.set(words)
+      Some(words) =>
         match go.resolved {
           Some((was, r)) if was == words => enter(r)
           _ => c.tell("files-goto/enter", fn() { go_resolve(src, ws, words, here, enter) })
         }
-      }
       None => ()
     }
   })

@@ -329,9 +329,7 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit
                   field=finder_field(),
                 )
                 match res.submitted {
-                  // (the words as they were: the field gives them up as it sends them)
                   Some(typed) => {
-                    finder_field().set(typed)
                     finder_typed(typed)
                     finder_enter(close)
                   }

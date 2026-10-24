@@ -1957,15 +1957,11 @@ fn composer_bar(
         )
         match res.submitted {
           Some(words) => {
-            // the field gave its words up as sent: the draft has them until they go
+            // (they stay in the field until they go)
             d.text = words
             if draft_ready(d, locked) && (fresh is Some(_) || v is Some(_)) {
-              // (the field gave its words up: they stay in it until they go)
-              ref_field_put(d, words)
               send_sharing(src, d, r.station, go)
               sharing_go(d.key)
-            } else {
-              ref_field_put(d, words)
             }
           }
           None => ()
@@ -2098,8 +2094,6 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
             d.comments[q.id] = res.text
             // its Enter goes on to the words
             if res.submitted is Some(_) {
-              field.set(res.submitted.unwrap())
-              d.comments[q.id] = res.submitted.unwrap()
               d.focus = -1
             }
           })

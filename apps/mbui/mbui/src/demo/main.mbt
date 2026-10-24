@@ -199,7 +199,7 @@ fn view(c : @ui.Ctx) -> Unit {
       fn() {
         let r = c.editor("composer", placeholder="输入消息，回车发送", field=app.draft)
         match r.submitted {
-          Some(t) => send(t)
+          Some(_) => send(app.draft.take())
           None => ()
         }
         if c.button("发送") {

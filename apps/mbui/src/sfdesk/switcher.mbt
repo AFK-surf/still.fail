@@ -108,9 +108,8 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             c.focus_editor("switcher/field")
           }
           match res.submitted {
-            // Enter: the words as they were (the field gives them up as it sends them), the line chosen opened
+            // Enter: the line chosen opened
             Some(typed) => {
-              @sfpages.finder_field().set(typed)
               @sfpages.finder_typed(typed)
               @sfpages.finder_enter(close)
             }

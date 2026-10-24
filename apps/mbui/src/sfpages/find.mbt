@@ -352,12 +352,8 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         enter_sends=true,
         field=finding.field,
       )
-      // (Enter sent the words: they are what was typed, not what is left in the field)
-      let sent = match res.submitted {
-        Some(words) => words
-        None => res.text
-      }
-      let typed = sent.replace_all(old="\n", new="")
+      // (⇧Enter put a new line in it: taken out)
+      let typed = res.text.replace_all(old="\n", new="")
       finding.query = typed
       // looked for 120 ms after the last key; none typed, nothing found at once
       if typed != finding.asked &&
@@ -367,7 +363,9 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         c.tell("find/ask/" + typed, fn() { find_ask(src, r.station, thread, key, list, typed) })
       }
       if back || res.submitted is Some(_) {
-        finding.field.set(typed)
+        if back {
+          finding.field.set(typed)
+        }
         let by = if back { -1 } else { 1 }
         c.tell("find/move", fn() { find_move(src, key, list, by) })
       }

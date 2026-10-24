@@ -76,7 +76,6 @@ priv struct Presented {
   from : Anchor
   mut open : Bool
   line : @ui.Field
-  mut typed : String
   mut focused : Bool
   /// what is let go of as it closes unsaid (back, Escape, a press outside, its close button), and whether it closed
   /// so or was said
@@ -129,7 +128,6 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     from,
     open: true,
     line: @ui.Field::new(text=line),
-    typed: line,
     focused: false,
     gone,
     ended: false,
@@ -501,7 +499,7 @@ fn pick_popover(
       let found = {
         let f = input(c, key + "/search", placeholder=t("common.search"), small=true, field=p.line)
         focus_once(c, p, key + "/search")
-        let found = pick_found(choices, line_of(p, f))
+        let found = pick_found(choices, f.text)
         if f.submitted && !found.is_empty() {
           done_with(c, p, fn() { choose(found[0].key) })
         }
@@ -633,7 +631,7 @@ fn ask_centred(
     title,
     fn() {
       let f = input(c, key + "/line", placeholder~, secret~, field=p.line)
-      words.val = line_of(p, f).trim(chars=" \t\n").to_string()
+      words.val = f.text.trim(chars=" \t\n").to_string()
       focus_once(c, p, key + "/line")
       if hint != "" {
         c.text(hint, style=field_hint) |> ignore
@@ -656,18 +654,6 @@ fn ask_centred(
     done_with(c, p, fn() { run(line) })
   }
   (still && !said && p.open, dialog_built(c, key, p.open))
-}
-
-///|
-/// What is written in `p`'s field: Enter in it (a field's own: it sends and empties it) leaves it as it was, and it is
-/// what was written that Enter says.
-fn line_of(p : Presented, f : @kit.Field) -> String {
-  if f.submitted {
-    p.line.set(p.typed)
-  } else {
-    p.typed = f.text
-  }
-  p.typed
 }
 
 ///|
@@ -860,7 +846,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
             field=p.line,
           )
           let_go(c, p, key + "/search") |> ignore
-          text = line_of(p, f)
+          text = f.text
         })
         |> ignore
         pick_found(choices, text)
@@ -952,7 +938,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           field=p.line,
         )
         focus_once(c, p, key + "/line")
-        let words = line_of(p, f).trim(chars=" \t\n").to_string()
+        let words = f.text.trim(chars=" \t\n").to_string()
         if hint != "" {
           c.text(hint, style=sheet_hint) |> ignore
         }

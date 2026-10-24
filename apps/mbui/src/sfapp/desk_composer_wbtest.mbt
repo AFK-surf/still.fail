@@ -105,6 +105,28 @@ test "desk composer: a quote waiting is its card over the words, its comment tol
 }
 
 ///|
+test "desk composer: Enter in a quote's comment keeps the comment and goes back to the words" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  t.draw()
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_quote(src, w, { "author": "Claude", "text": "其余的行按估计的高度占位" })
+  t.frame()
+  t.frame()
+  t.type_text("这里要对齐")
+  t.frame()
+  t.enter()
+  t.frame()
+  t.frame()
+  // (the core has what its line holds, told every frame it differs: emptied, it would say "")
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  assert_eq(w.quotes.length(), 1)
+  assert_eq(text(Some(w.quotes[0]), "comment"), "这里要对齐")
+  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_eq(named(calls, "chat.send").length(), 0)
+}
+
+///|
 /// What draft s-c1's field holds now.
 fn desk_words(src : Source) -> String {
   @sfbase.writing(src, "ws1/st1:s-c1").field.text()
