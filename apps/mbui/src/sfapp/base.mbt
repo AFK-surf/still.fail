@@ -127,6 +127,7 @@ pub using @sfbase {
   type DvRoot,
   type DvStation,
   type DvUpload,
+  type Dragged,
   type Elsewhere,
   type FoundChat,
   type FoundGroup,

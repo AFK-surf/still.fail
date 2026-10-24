@@ -391,7 +391,7 @@ pub fn open_mode(mode : String) -> Unit {
       "files-list" => fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
       // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
       "files-clash" =>
-        fdrag.asking = Some({
+        @sfdesk.drag_ask({
           into: { station: "ws1/st1", root: Some(fix_docs), path: "会议记录" },
           into_name: "会议记录",
           total: 1,
@@ -415,7 +415,7 @@ pub fn open_mode(mode : String) -> Unit {
           "to": { "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" },
           "move": false,
         })
-        ftransfers.open = true
+        @sfdesk.transfers_open()
       }
       // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
       "files-preview" => {

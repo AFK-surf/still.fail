@@ -5,12 +5,11 @@
 // in front. Each side is a folder's page (its head, then FolderView) under its own station.
 
 ///|
-/// What the files' page around the shell gives it, until each is the desk's own (Transfers, drag): the address moved
-/// (`replace`: in place of where it was), the bar's 传输, a station's folders managed, and what the page draws over
-/// itself (its sheets, a name asked about, what is dragged: given the page's box).
+/// What the files' page around the shell gives it, until each is the desk's own (Drive.tsx's dialogs): the address
+/// moved (`replace`: in place of where it was), a station's folders managed, and what the page draws over itself (its
+/// sheets: given the page's box).
 pub(all) struct FilesAround {
   go : (DriveAt, Bool) -> Unit
-  transfers : (@ui.Ctx) -> Unit
   manage : (DriveAt) -> Unit
   over : (@ui.Ctx, Int) -> Unit
 }
@@ -62,6 +61,8 @@ pub fn files_shell(
   room : Double,
   around : FilesAround,
 ) -> Unit {
+  // what is dragged moved on or let go, before what it goes over is drawn
+  drag_frame(c, src, ws)
   // the address moved (a link, the sidebar, history): the side in front follows it
   let arrive = ws + "\n" + here.station + "\n" + here.root.unwrap_or("") + "\n" + here.path
   if shell.arrived != arrive {
@@ -158,7 +159,7 @@ pub fn files_shell(
         None => ()
       }
       c.box(style=bar_line, fn() {  }) |> ignore
-      (around.transfers)(c)
+      transfers_button(c, src, ws, fn(p) { (around.go)(p, false) })
       let lit = @sf.theme().p.accent
       if @sf.icon_button(
           c,
@@ -196,6 +197,8 @@ pub fn files_shell(
     |> ignore
     go_to(c, src, ws, here, fn(p) { (around.go)(p, false) })
     (around.over)(c, page)
+    clash_dialog(c)
+    drag_ghost(c, page)
   })
   |> ignore
 }

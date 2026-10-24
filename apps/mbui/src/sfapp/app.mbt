@@ -45,8 +45,7 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
-  // what the desk's files and the drive's pages ask of the app: its drag (until it is the desk's), its file preview
-  @sfdesk.desk_drag.val = Some(files_desk_drag())
+  // what the drive's pages ask of the app: its file preview
   @sfbase.drive_viewer.val = open_file
   home_rows.val = []
   steadies.clear()

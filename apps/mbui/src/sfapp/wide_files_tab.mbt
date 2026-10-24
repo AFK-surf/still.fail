@@ -14,10 +14,10 @@ priv struct FChatTab {
   mut building : Bool
   places : Map[String, DriveAt?]
   mut scope : String
-  sent : Array[(String, FDragged)]
+  sent : Array[(String, Dragged)]
   /// the chat whose tab the keys are (the pointer last pressed in it)
   mut keys : String
-  mut let_go : (FDragged, Double, Double, Int)?
+  mut let_go : (Dragged, Double, Double, Int)?
   mut chat : String
 }
 
@@ -51,14 +51,14 @@ fn ftab_go(station : String, root : String, path : String) -> Unit {
 
 ///|
 /// What is carried off the tab now (a row dragged out of it), for the chat's composer to show it would take it.
-fn files_tab_dragging() -> FDragged? {
-  fdrag.item
+fn files_tab_dragging() -> Dragged? {
+  @sfdesk.dragged()
 }
 
 ///|
 /// A row let go off the tab, where (x, y in the window), taken once, in the frame it was let go or the next: for the
 /// chat's composer, when let go over it, to put it into the message.
-fn files_tab_take_drop(c : @ui.Ctx) -> (FDragged, Double, Double)? {
+fn files_tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
   match ftab.let_go {
     Some((item, x, y, frame)) if c.frame_number() - frame <= 1 => {
       ftab.let_go = None
@@ -70,7 +70,7 @@ fn files_tab_take_drop(c : @ui.Ctx) -> (FDragged, Double, Double)? {
 
 ///|
 /// What 添加到消息 put in for the chat `chat` since it was last asked, taken.
-fn files_tab_take_sent(chat : String) -> Array[FDragged] {
+fn files_tab_take_sent(chat : String) -> Array[Dragged] {
   let out = ftab.sent.filter(fn(x) { x.0 == chat }).map(fn(x) { x.1 })
   ftab.sent.retain(fn(x) { x.0 != chat })
   out
@@ -82,11 +82,11 @@ fn files_tab_take_sent(chat : String) -> Array[FDragged] {
 fn files_tab(c : @ui.Ctx, src : Source, w : Workspace, chat : String, station : String) -> Unit {
   ftab.scope = w.id
   ftab.chat = chat
-  // a row let go off the tab (fdrag_frame lets the carried go where nothing here takes it)
-  let carried = fdrag.item
-  fdrag_frame(c, src, w, outside=false)
+  // a row let go off the tab (the desk's drag_frame lets the carried go where nothing here takes it)
+  let carried = @sfdesk.dragged()
+  @sfdesk.drag_frame(c, src, w.id, outside=false)
   match carried {
-    Some(i) if fdrag.item is None => {
+    Some(i) if @sfdesk.dragged() is None => {
       let (px, py, _) = c.pointer()
       ftab.let_go = Some((i, px, py, c.frame_number()))
     }
@@ -188,7 +188,7 @@ fn ftab_trail(abs : String, home : String) -> Array[(String, String)] {
   for part in rest.split("/") {
     if part != "" {
       let (_, last) = out[out.length() - 1]
-      out.push((part.to_string(), fdrag_child(last, part.to_string())))
+      out.push((part.to_string(), ftab_child(last, part.to_string())))
     }
   }
   out
@@ -304,7 +304,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, w : Workspace, st : DvStation, at : Dr
     remove: fn(_) {  },
   })
   b_ref.val = Some(b)
-  let dragged = fn(in_ : DriveAt, e : DvEntry) -> FDragged {
+  let dragged = fn(in_ : DriveAt, e : DvEntry) -> Dragged {
     let path = dv_join(in_.path, e.name)
     { station: in_.station, station_name: st.name, root, path, abs: dv_absolute(root, path), name: e.name, size: e.size, dir: e.dir }
   }
@@ -506,3 +506,13 @@ let ftab_place_words : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 /// Why the folder could not be read, and 重试.
 // kept across runs: a value (no field of it changes)
 let ftab_problem : @ui.Style = @ui.style(w=Full, p=S3, gap=S2_5, align=AStart)
+
+///|
+/// Where `name` goes in the folder `folder`, as an absolute path (useDrive.ts childOf).
+fn ftab_child(folder : String, name : String) -> String {
+  if folder.has_suffix("/") {
+    folder + name
+  } else {
+    folder + "/" + name
+  }
+}
