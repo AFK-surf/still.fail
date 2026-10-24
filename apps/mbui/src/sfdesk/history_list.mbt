@@ -1082,7 +1082,7 @@ let h_state : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=Neutral").then(@sf
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_state_human : @ui.Style = h_state.then(@ui.style(bg=AccentBg))
+let h_state_human : @ui.Style = h_state.then(@ui.css("bg=AccentBg"))
 
 ///|
 /// An event's mark (hIcon): 20 square, on the canvas (the rail passes behind it); in a state's block, on its colour; in a
@@ -1131,7 +1131,7 @@ let h_place : @ui.Style = @ui.css("row gap=S1 align=ACenter radius=Base clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_place_hot : @ui.Style = h_place.then(@ui.style(bg=Hover))
+let h_place_hot : @ui.Style = h_place.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1154,7 +1154,7 @@ let h_card : @ui.Style = @ui.css("w=Full mt=S1 py=S2 px=S3 radius=Xl border=B1 b
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_card_failed : @ui.Style = h_card.then(@ui.style(border_color=Danger))
+let h_card_failed : @ui.Style = h_card.then(@ui.css("border_color=Danger"))
 
 ///|
 /// A fold (fold): its words, cut past its lines; its button under them at their left (textToggle: 12, muted).
@@ -1356,7 +1356,7 @@ let tool_box : @ui.Style = @ui.style(w=Full, py=S2, px=S3, radius=@sf.custom_fie
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_box_red : @ui.Style = tool_box.then(@ui.style(bg=DangerBg))
+let tool_box_red : @ui.Style = tool_box.then(@ui.css("bg=DangerBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1404,12 +1404,12 @@ let tool_diff_line : @ui.Style = @ui.style(w=Full, pl=@sf.diff_line_in, pr=S3)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_diff_out : @ui.Style = tool_diff_line.then(@ui.style(bg=DangerBg))
+let tool_diff_out : @ui.Style = tool_diff_line.then(@ui.css("bg=DangerBg"))
 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_diff_head : @ui.Style = tool_diff_line.then(@ui.style(pt=S1))
+let tool_diff_head : @ui.Style = tool_diff_line.then(@ui.css("pt=S1"))
 
 ///|
 /// The mark before a line taken out or put in, 9 in.
