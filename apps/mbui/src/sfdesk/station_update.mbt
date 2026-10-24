@@ -103,7 +103,7 @@ fn update_panel(c : @ui.Ctx, src : Source, station : String, notice : Json?) -> 
   let versions = [text(notice, "from"), text(notice, "to")].filter(fn(v) { v != "" })
   let can = flag(notice, "canUpdate")
   if versions.length() > 0 || can {
-    c.box(style=update_foot, fn() {
+    c.box(style=update_foot.then(@sf.panel_foot_end), fn() {
       c.box(style=update_versions_room, fn() {
         if versions.length() > 0 {
           c.rich([@ui.span(versions.join(" → "), mono=true)], style=update_versions) |> ignore

@@ -137,7 +137,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   let look = if bar {
     rail_closed
   } else if wide.tape {
-    rail_open_tape
+    rail_open_tape()
   } else {
     rail_open
   }
@@ -147,7 +147,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   } else if inset {
     rail_top_inset + rail_gap
   } else if wide.tape {
-    @sf.rail_in_tape
+    @sf.rail_in_tape()
   } else {
     rail_top_web + rail_gap
   }
@@ -240,15 +240,10 @@ let rail_closed : @ui.Style = @ui.style(w=Fixed(rail_closed_w), h=Full, p=S0_5, 
 
 ///|
 /// The rail open in a panel of the tape (laid out Medium): its places in the panel's corners concentric with it
-/// (@sf.rail_in_tape), what it shows beside the sidebar as much wider.
-// kept across runs: a value (no field of it changes)
-let rail_open_tape : @ui.Style = rail_open.then(
-  @ui.style(
-    w=Fixed(rail_shown_w + rail_tape_more),
-    pl=@sf.rail_in_tape_room,
-    pb=@sf.rail_in_tape_room,
-  ),
-)
+/// (@sf.rail_in_tape, as round as the panel is this frame), what it shows beside the sidebar as much wider.
+fn rail_open_tape() -> @ui.Style {
+  rail_open.then(@ui.style(w=Fixed(rail_shown_w + rail_tape_more()), pl=@sf.rail_in_tape_room(), pb=@sf.rail_in_tape_room()))
+}
 
 ///|
 /// The rail's inset open (rail_in: 9).
@@ -256,7 +251,9 @@ let rail_in_px : Double = 9.0
 
 ///|
 /// How much more of the rail shows on the tape (its places further in: rail_open_tape), the sidebar as much narrower.
-let rail_tape_more : Double = @sf.rail_in_tape - rail_in_px
+fn rail_tape_more() -> Double {
+  @sf.rail_in_tape() - rail_in_px
+}
 
 ///|
 /// What of the rail shows beside the sidebar open: its 56 less the 8 the sidebar reaches over.

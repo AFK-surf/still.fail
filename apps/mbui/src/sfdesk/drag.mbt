@@ -672,7 +672,7 @@ fn dv_kind_of(name : String) -> String {
 
 ///|
 /// A folder of the sidebar that takes a drop (FilesNav.tsx FolderDrop): its row, ringed while what it takes is over it,
-/// saying what a drop does.
+/// saying what a drop does; its corner the row's (`phone`: a finger's list's, square, as its rows are: nav_row).
 fn fdrag_side_row(
   c : @ui.Ctx,
   key : String,
@@ -681,10 +681,17 @@ fn fdrag_side_row(
   write : Bool,
   transfers : Bool,
   row : () -> Unit,
+  phone? : Bool = false,
 ) -> Unit {
   let id = c.id("files/drop/" + key)
   let lit = fdrag_target(c, id, "side/" + key, Some(into), name, write, transfers, 1, outside=false)
-  c.box(style=if lit is Some(_) { fdrag_side_on } else { fdrag_side }, id~, fn() {
+  let look = match (phone, lit) {
+    (false, None) => fdrag_side
+    (false, Some(_)) => fdrag_side_on
+    (true, None) => fdrag_side_phone
+    (true, Some(_)) => fdrag_side_phone_on
+  }
+  c.box(style=look, id~, fn() {
     row()
     match lit {
       Some(l) =>
@@ -737,6 +744,14 @@ let fdrag_side : @ui.Style = @ui.css("w=Full radius=Xl")
 ///|
 // kept across runs: a value (no field of it changes)
 let fdrag_side_on : @ui.Style = fdrag_side.then(@ui.css("bg=AccentBg border=B1 border_color=Accent"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let fdrag_side_phone : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let fdrag_side_phone_on : @ui.Style = fdrag_side_phone.then(@ui.css("bg=AccentBg border=B1 border_color=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)

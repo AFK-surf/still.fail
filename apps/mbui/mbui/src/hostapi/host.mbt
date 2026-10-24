@@ -15,6 +15,7 @@ pub(open) trait Host {
   window_inset(Self) -> Bool = _
   full_screen(Self) -> Bool = _
   set_full_screen(Self, Bool) -> Unit = _
+  window_corner(Self) -> Double = _
   window_drag(Self) -> Unit = _
   set_cursor(Self, Int) -> Unit = _
   set_badge(Self, Int) -> Unit = _
@@ -204,6 +205,11 @@ impl Host with full_screen(_) {
 ///|
 impl Host with set_full_screen(_, _) {
   ()
+}
+
+///|
+impl Host with window_corner(_) {
+  0.0
 }
 
 ///|
@@ -1102,6 +1108,14 @@ pub fn full_screen() -> Bool {
 /// Nothing where there is no window to size.
 pub fn set_full_screen(on : Bool) -> Unit {
   current.val.set_full_screen(on)
+}
+
+///|
+/// How round the system draws the window's corners now, in points: the outermost corner of all, what lies in it
+/// concentric with it as with any container's (@ui's corners.mbt). 0 where they are square (filling the screen,
+/// maximised, a browser's page, Windows 10) or where the system says nothing of them.
+pub fn window_corner() -> Double {
+  current.val.window_corner()
 }
 
 ///|

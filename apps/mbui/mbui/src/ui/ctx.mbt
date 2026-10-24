@@ -404,6 +404,10 @@ pub struct Ctx {
   // the corner ladder of the theme the view was built under (Theme::corner_ladder: the frame's, or one put in force
   // over it with with_theme that says one), what corner_faults holds corners to
   mut corner_ladder : Array[Double]
+  // what the corner rule may make of what lies in a container's corner (Theme::corner_fit), and how round the system
+  // draws the window's corners this frame (window_corner: the outermost container, corners.mbt)
+  mut corner_fit : CornerFit?
+  mut window_corner : Double
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
   // builds; the actions asked of them (by the host's accessibility, a test) for the next frame, and this frame's
@@ -600,6 +604,8 @@ fn Ctx::new() -> Ctx {
     move_seen: {},
     arounds: [],
     corner_ladder: [],
+    corner_fit: None,
+    window_corner: 0.0,
     inner_faults: [],
     direction: Ltr,
     sems: [],

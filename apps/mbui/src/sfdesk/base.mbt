@@ -281,6 +281,7 @@ using @sfpages {
   chat_key,
   chat_list,
   composer_width,
+  composer_side,
   context_tile_id,
   decision_options,
   file_kind,

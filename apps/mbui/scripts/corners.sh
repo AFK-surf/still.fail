@@ -7,7 +7,7 @@
 #                                            perhaps with a drive step after them: `tapxy 830 450`, a pane beside it
 #                                            brought over)
 # WINDOW: phone390, phone360 (a phone's), touch600 (a tablet's, medium), tablet840, tablet1280 (expanded), desk600,
-# desk1280 (a Mac's); LANG: zh or en.
+# desk1280 (a Mac's: its window's corners 16), win600, win1280 (Windows 11's: 8); LANG: zh or en.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
@@ -18,6 +18,9 @@ mkdir -p out/corners
 : > out/corners/faults.txt
 if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win lang mode step; do
   [ -n "$mode" ] || continue
+  # (a desktop's window rounded as its system draws it: a Mac's 16, Windows 11's 8; a phone's or a tablet's app fills
+  # its screen)
+  corner=0
   case $win in
     phone390) w=390; h=844; platform=2; system='' ;;
     phone360) w=360; h=740; platform=2; system='' ;;
@@ -25,8 +28,10 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
     touch839) w=839; h=900; platform=2; system='system {"size_class":{"width":"medium","height":"medium"}}' ;;
     tablet840) w=840; h=900; platform=2; system='system {"size_class":{"width":"expanded","height":"medium"}}' ;;
     tablet1280) w=1280; h=900; platform=2; system='system {"size_class":{"width":"expanded","height":"medium"}}' ;;
-    desk600) w=600; h=760; platform=0; system='' ;;
-    desk1280) w=1280; h=800; platform=0; system='' ;;
+    desk600) w=600; h=760; platform=0; system=''; corner=16 ;;
+    desk1280) w=1280; h=800; platform=0; system=''; corner=16 ;;
+    win600) w=600; h=760; platform=3; system=''; corner=8 ;;
+    win1280) w=1280; h=800; platform=3; system=''; corner=8 ;;
     *) echo "corners.sh: no window $win" >&2; continue ;;
   esac
   dir="out/corners/$win-$lang"
@@ -35,7 +40,7 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
   printf '%s\ntimeout 4000\nwait 1200\n%s\nwait 1200\ncorners\nexit\n' "$system" "$step" > "$script"
   film="$dir/$mode.mp4"
   said="$dir/$mode.txt"
-  MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 \
+  MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 MBUI_FILM_WINDOW_CORNER=$corner \
     MBUI_FILM="$PWD/$film" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" 2>&1 | grep 'DRIVE CORNER' \
     | sed 's|^.*DRIVE CORNER ||' > "$said"
   sed "s|^|$win-$lang $mode: |" "$said" >> out/corners/faults.txt

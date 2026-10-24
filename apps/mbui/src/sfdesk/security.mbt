@@ -246,7 +246,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
           style=sec_state,
         )
         |> ignore
-        @sfpages.pair_steps(c, core, ws)
+        @sfpages.pair_steps(c, core, ws, in_card=true)
       })
     })
   }

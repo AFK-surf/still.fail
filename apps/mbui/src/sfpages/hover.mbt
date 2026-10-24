@@ -87,17 +87,20 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
   let status = text(av, "status")
   let working = status == "running" || status == "queued"
   c.box(style=agent_card_box, fn() {
-    // its mark (28) and label, a stop while it works
+    // its mark (28) and label, a stop while it works (in the card's top right corner)
     c.box(style=agent_card_head, fn() {
-      agent_mark(
-        c,
-        text(field(s, "maker"), "id"),
-        text(s, "runtime"),
-        text(av, "badge"),
-        side=agent_card_mark,
-        said=text(s, "badgeText"),
-      )
-      c.box(style=agent_card_name_room, fn() { c.text(text(s, "agentText"), style=agent_card_name) |> ignore })
+      c.box(style=agent_card_who, fn() {
+        agent_mark(
+          c,
+          text(field(s, "maker"), "id"),
+          text(s, "runtime"),
+          text(av, "badge"),
+          side=agent_card_mark,
+          said=text(s, "badgeText"),
+        )
+        c.box(style=agent_card_name_room, fn() { c.text(text(s, "agentText"), style=agent_card_name) |> ignore })
+        |> ignore
+      })
       |> ignore
       if working {
         agent_card_stop(c, src, station, key)
@@ -540,7 +543,12 @@ let agent_card_box : @ui.Style = @ui.style(w=@sf.agent_card_w, gap=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+let agent_card_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart")
+
+///|
+/// Its mark and name, level with each other: what the stop leaves of the head.
+// kept across runs: a value (no field of it changes)
+let agent_card_who : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2_5, align=ACenter)
 
 ///|
 /// Its name and its account's room: what is left of the row.
@@ -662,11 +670,16 @@ let agent_card_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Fu
 let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
-/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground.
+/// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground; in the card's top right corner
+/// as far from both its edges as makes it concentric with it (a small panel's corner: @sf.capsule_in), out past the
+/// panel's padding and the card's words' (hover_inner's 10) to there.
 // kept across runs: a value (no field of it changes)
 let agent_card_stop_pill : @ui.Style = @ui.css(
   #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter bg=DangerBg hovered{bg=A(Danger,O20)}
-)
+).then(@ui.style(mt=@sf.room_of(agent_card_stop_in), mr=@sf.room_of(agent_card_stop_in)))
+
+///|
+let agent_card_stop_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - 10.0
 
 ///|
 // kept across runs: a value (no field of it changes)

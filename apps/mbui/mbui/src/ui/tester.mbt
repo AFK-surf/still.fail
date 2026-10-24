@@ -170,6 +170,8 @@ fn leaked_state() -> Array[String] {
 /// mbui/src/film; never a test's), recorded as a host's are (MBUI_TEXT_RECORD=1 in `env`); `text` is then not read.
 /// `corners_held`: whether every frame it draws with nothing moving is held to the corner rule where the theme says
 /// its ladder (Tester::hold_corners); false for a test that draws a fault on purpose, to find it.
+/// `window_corner`: how round the system draws the window's corners (@hostapi.window_corner: a Mac's 16, Windows 11's
+/// 8; 0 square), the outermost container what lies in them is held concentric with (corners.mbt).
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -192,6 +194,7 @@ pub fn Tester::new(
   copy_shown? : Bool = false,
   live? : Live,
   corners_held? : Bool = true,
+  window_corner? : Double = 0.0,
 ) -> Tester {
   let f = {
     time,
@@ -246,6 +249,7 @@ pub fn Tester::new(
     dark,
     inset: window_inset,
     full: false,
+    window_corner,
     font_scale: 1.0,
     a11y: false,
     a11y_said: "",

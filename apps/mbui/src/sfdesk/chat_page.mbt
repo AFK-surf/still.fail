@@ -208,9 +208,9 @@ fn chat_bar(
   // (beside the rail its room as the block moves: page_bar_room)
   let (room_l, room_r, ml, mr) = page_bar_room()
   let room = fn(x : Double) { c.box(style=@ui.style(w=Fixed(x), h=Full), fn() {  }) |> ignore }
-  let bar_row = c.box(style=if @sf.in_pane() { chat_bar_row_tape } else { chat_bar_row }, moves="page-bar", fn() {
+  let bar_row = c.box(style=if @sf.in_pane() { chat_bar_row_tape() } else { chat_bar_row }, moves="page-bar", fn() {
   room(ml)
-  c.box(style=if @sf.in_pane() { chat_bar_box_tape } else { chat_bar_box }, id=bar, fn() {
+  c.box(style=if @sf.in_pane() { chat_bar_box_tape() } else { chat_bar_box }, id=bar, fn() {
       room(room_l)
       // the title, its people and agents 10 apart, 8 in from the bar's padding (conversation.css.ts pageBarTitle)
       // (short of room, its people leave first, then its station's update, then its agents but the first, the title cut
@@ -725,15 +725,16 @@ let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_
 let chat_bar_row : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size)
 
 ///|
-/// The same in a panel of the tape: its buttons in the panel's top right corner concentric with it (@sf.tape_bar_over).
-// kept across runs: a value (no field of it changes)
-let chat_bar_box_tape : @ui.Style = chat_bar_box.then(
-  @ui.style(h=Fixed(@sf.wide_bar_h + @sf.tape_bar_over), pt=@sf.tape_bar_over_room),
-)
+/// The same in a panel of the tape: its buttons in the panel's top right corner concentric with it (@sf.tape_bar_over,
+/// as round as the panel is this frame).
+fn chat_bar_box_tape() -> @ui.Style {
+  chat_bar_box.then(@ui.style(h=Fixed(@sf.wide_bar_h + @sf.tape_bar_over()), pt=@sf.tape_bar_over_room()))
+}
 
 ///|
-// kept across runs: a value (no field of it changes)
-let chat_bar_row_tape : @ui.Style = chat_bar_row.then(@ui.style(h=Fixed(@sf.wide_bar_h + @sf.tape_bar_over)))
+fn chat_bar_row_tape() -> @ui.Style {
+  chat_bar_row.then(@ui.style(h=Fixed(@sf.wide_bar_h + @sf.tape_bar_over())))
+}
 
 ///|
 /// Its title, its people and agents 10 apart, 8 in (pageBarTitle), 4 kept past its last for the reach of the badge at

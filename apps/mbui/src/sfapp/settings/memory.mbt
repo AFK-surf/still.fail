@@ -251,7 +251,17 @@ let skill_share_room : @ui.Style = @ui.css("w=Full pt=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let skill_share_line : @ui.Style = @ui.css("row w=Full px=S3 py=S1_5 gap=S2_5 radius=Inner align=ACenter")
+let skill_share_line : @ui.Style = @ui.css("row w=Full pl=S3 py=S1_5 gap=S2_5 radius=Inner align=ACenter").then(
+  @ui.style(pr=@sf.capsule_end_room(share_line_h, share_switch_h)),
+)
+
+///|
+/// The line's height (the switch's 26 and 6 over and under: a capsule, as round as its ends), its switch at its end as
+/// far in as makes it concentric with that end.
+let share_line_h : Double = 38.0
+
+///|
+let share_switch_h : Double = 26.0
 
 ///|
 /// Its words (14, the ink, as wide as the row lets them).

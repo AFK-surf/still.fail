@@ -472,7 +472,7 @@ pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view
 /// time of day and its last output, or its output as it grows.
 fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit {
   let id = text(job, "id")
-  c.box(style=job_detail_box, fn() {
+  c.box(style=job_detail_box.then(@sf.pane_foot_card()), fn() {
     c.box(style=job_detail_head, fn() {
       job_dot(c, text(job, "tone"))
       c.text(text(job, "name"), style=job_detail_name) |> ignore
@@ -881,20 +881,10 @@ let jobs_tab_list_room : @ui.Style = @ui.css("w=Full")
 let jobs_tab_list : @ui.Style = @ui.css("w=Full pt=S1 px=S2 pb=S2")
 
 ///|
-/// The job picked (jobDetail): the ladder's inset from the tab's sides and foot (in a panel's foot corners, round by
-/// the ladder's next step there), 10 over, 6 at its end, 14 at its start, a card of the ladder's, on the paper.
+/// The job picked (jobDetail): a card across the tab's foot (in a panel's foot corners, concentric with them:
+/// @sf.pane_foot_card), 10 over, 6 at its end, 14 at its start, on the paper.
 // kept across runs: a value (no field of it changes)
-let job_detail_box : @ui.Style = @ui.style(
-  w=Full,
-  h=@sf.grow,
-  mx=S2_5,
-  mb=S2_5,
-  pt=S2_5,
-  pr=S1_5,
-  pl=S3_5,
-  radius=@sf.card_radius,
-  bg=Card,
-)
+let job_detail_box : @ui.Style = @ui.style(w=Full, h=@sf.grow, pt=S2_5, pr=S1_5, pl=S3_5, bg=Card)
 
 ///|
 /// Its head (jobDetailHead): 8 apart, its name 13 in 600, its state 12 muted; the choice 120 wide; the stop 28.
