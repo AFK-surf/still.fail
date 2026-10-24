@@ -41,11 +41,12 @@ export type Leaving = { tabs: string[]; shown: string; width: number };
 
 /**
  * The side panel of a page with the tabs `open`, `shown` in front: where it is (`pageRef` on the page, `panelRef` on the
- * panel), what it shows (`side`: its tabs, or while it slides out, what it showed), and `changing`, told before its
- * tabs become `next`. Opened, the panel's column widens from nothing and the page narrows with it, frame by frame;
- * closed, the other way. The panel keeps its whole width all along and shows through its column as it grows, so it
- * comes in from the right edge without its content re-laying out. Turned back on its way, it goes on from the width it
- * has. Where the panel lies over the page (`max-width: 1100px`) it slides instead.
+ * panel), what it shows (`side`: its tabs, or while it slides out, what it showed), and `changing`, told as its tabs
+ * are asked to change whether any will be open (they come as the core has them, a moment later: it slides in once
+ * they are there, out once they are gone). Opened, the panel's column widens from nothing and the page narrows with
+ * it, frame by frame; closed, the other way. The panel keeps its whole width all along and shows through its column
+ * as it grows, so it comes in from the right edge without its content re-laying out. Turned back on its way, it goes
+ * on from the width it has. Where the panel lies over the page (`max-width: 1100px`) it slides instead.
  */
 export function useSidePanel(open: string[], shown: string | null) {
   const pageRef = useRef<HTMLDivElement>(null);
@@ -53,8 +54,8 @@ export function useSidePanel(open: string[], shown: string | null) {
   const [leaving, setLeaving] = useState<Leaving | null>(null);
   // Whether the panel is being opened here (it slides in then), not shown with the page as it was left.
   const [opening, setOpening] = useState(false);
-  const changing = (next: string[]) => {
-    if (next.length) {
+  const changing = (any: boolean) => {
+    if (any) {
       setLeaving(null);
       if (open.length === 0) setOpening(true);
     } else {
@@ -62,7 +63,7 @@ export function useSidePanel(open: string[], shown: string | null) {
       if (open.length && shown && panelRef.current) setLeaving({ tabs: open, shown, width: panelRef.current.getBoundingClientRect().width });
     }
   };
-  const sliding = leaving && !(open.length && shown) ? "out" : opening ? "in" : null;
+  const sliding = leaving && !(open.length && shown) ? "out" : opening && open.length && shown ? "in" : null;
   const slide = useRef<{ run?: AnimationPlaybackControls; value: number } | null>(null);
   // The page's width as last laid out, told by an observer: the panel's width is worked out from it (as its styles
   // have it) rather than read off the panel just made, which laid the whole page out in the middle of the commit and

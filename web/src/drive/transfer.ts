@@ -7,7 +7,6 @@ import { useSyncExternalStore } from "react";
 import { core, topicNow } from "../core/react.ts";
 import type { DriveEntry, DriveFolder } from "../core/shapes.ts";
 import { joinPath, parentOf, refresh, type At } from "./model.ts";
-import { keptName, movesOf } from "./order.ts";
 import type { Dragged } from "./drag.ts";
 
 export type Answer = "replace" | "keep" | "skip";
@@ -24,6 +23,13 @@ const told = () => { for (const f of watchers) f(); };
 /** What the dialog asks now. */
 export function useAsking(): Asking | null {
   return useSyncExternalStore((f) => (watchers.add(f), () => void watchers.delete(f)), () => asking, () => null);
+}
+
+/** The renames a drag of a station's files into a folder makes (the core's `drive.moves`): by a root both places are
+ * under, or the top of the disk for a member who browses every folder (`anywhere`); none for one into itself. */
+export async function movesOf(items: readonly Dragged[], into: At, anywhere: boolean): Promise<{ root: string; from: string; to: string }[]> {
+  const got = await core().call("drive.moves", { items: items.map((i) => ({ station: i.station, root: i.root, abs: i.abs, name: i.name })), into, anywhere }) as { moves: { root: string; from: string; to: string }[] };
+  return got.moves;
 }
 
 /** A folder's entries as its station has them: held, or read once. */
@@ -70,19 +76,20 @@ export async function transfer(items: readonly Dragged[], into: At, move: boolea
   if (going.length === 0) return;
   // Moved within its station by a root both places are under: renamed there, as before.
   if (move && going.every((i) => i.station === into.station)) {
-    const renames = movesOf(going, into, anywhere);
+    const renames = await movesOf(going, into, anywhere);
     if (renames.length === going.length) {
       const answers = await answersFor(going, into, intoName);
       if (answers === null) return;
-      const taken = [...(await entriesOf(into))];
+      const taken = (await entriesOf(into)).map((e) => e.name);
       for (const m of renames) {
         const name = m.to.split("/").at(-1)!;
         const answer = answers[name];
         if (answer === "skip") continue;
         // The one there to the trash first; or this one beside it, named as Finder names a copy kept.
         if (answer === "replace") await core().call("drive.remove", { station: into.station, root: into.root, path: joinPath(into.path, name) });
-        const to = answer === "keep" ? `${m.to.slice(0, m.to.length - name.length)}${keptName(taken, name, going.find((i) => i.name === name)?.dir)}` : m.to;
-        taken.push({ name: to.split("/").at(-1)! } as DriveEntry);
+        const kept = answer === "keep" ? (await core().call("drive.name", { name, taken, beside: true, dir: going.find((i) => i.name === name)?.dir === true }) as { name: string }).name : null;
+        const to = kept !== null ? `${m.to.slice(0, m.to.length - name.length)}${kept}` : m.to;
+        taken.push(to.split("/").at(-1)!);
         await core().call("drive.rename", { station: into.station, ...m, to });
       }
       const left = new Map(going.map((i) => [`${i.root}\n${parentOf(i.path)}`, { root: i.root, path: parentOf(i.path) }]));

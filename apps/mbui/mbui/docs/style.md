@@ -4,13 +4,33 @@ What a box or a line of words looks like is a value, named, made of the theme's 
 builds it:
 
 ```moonbit
-let card : @ui.Style = @ui.style(w=Full, p=S5, radius=Xl3, bg=Card, pressed=@ui.patch(bg=Over(Card, A(Fg, O5))))
+let card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card pressed{bg=Over(Card, A(Fg, O5))}")
 c.box(style=card, id=c.id("row"), fn() { … })
 c.text(title, style=@sf.title)
 c.rich(runs, style=@sf.body)
 ```
 
 `src/ui/style_tokens.mbt` has the tokens, `src/ui/style.mbt` the values, `src/kit/styles.mbt` kit's recipes.
+
+A named style is said in one of two ways, and which is not a choice:
+
+- all tokens and numbers: its text, `@ui.css("…")` (`src/ui/style_css.mbt`). The same items as `style(…)`'s, `row`
+  and `clip` alone for `=true`, a state's block in braces; a `.then(…)` of named styles adds its literal part the
+  same way (`base.then(@ui.css("bg=AccentBg"))`). Longer than a line, its text goes on `#|` lines.
+- naming a variable (`w=@sf.grow`, `Fixed(side_w)`, `shadow=@sf.floating.cast()`) or worked out: `@ui.style(…)`;
+  inside a function always `@ui.style(…)` (made as the frame is built, no constant).
+
+```moonbit
+let card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card pressed{bg=Over(Card, A(Fg, O5))}")
+let card_on : @ui.Style = card.then(@ui.css("bg=Selected"))
+let side : @ui.Style = @ui.style(w=@sf.grow, px=S2) // names the library's length
+```
+
+Why text: a constant is made in the program's start, and moonc made each `style(…)` constant ~5-10 KB of C there (an
+assignment and a release for each of its ~38 optional parameters), ~1400 of them ~11.8 MB of one function built again
+on every build (2026-10-24: 38 s of Windows' MSVC). Said as text it is a string, read once as the app starts into
+the same Style. A word it does not know aborts, naming the text, so a mistyped one fails every test at once.
+detlint's `style-text` holds it (forbidden: none left), and prints the text to write in its place.
 
 ## Tokens
 
@@ -20,13 +40,13 @@ node is built, so one style is a constant and right in light and dark, wide and 
 | token | names | values |
 |---|---|---|
 | `Space` (padding, gaps) | `S0` `SPx` `S0_5` `S1` `S1_25` `S1_5` … `S4` `S4_5` `S5` … `S12` `S14` `S16` `S20` … `S96` | Tailwind v3.4's: a step 4 px; v4's quarter steps where still.fail says them (5, 18) |
-| `Len` (sizes) | `Hug` (what it holds), `Full`, `Grow(k)`, `Fixed(v)`, and every `Space` name | |
+| `Len` (sizes) | `Hug` (what it holds), `Cut` (what it holds, cut short where its row has less), `Full`, `Grow(k)`, `Pct(p)` (a share of the parent's room, CSS's `50%`), `Fixed(v)`, and every `Space` name | |
 | `Radius` | `Sharp` `Sm` `Base` `Md` `Lg` `Xl` `Xl1_5` `Xl2` `Xl3` `Xl4` `Full` (a pill) `Inner` | `Theme.radii` (Tailwind's by default; `Xl1_5` 14, `Xl4` 32) |
 | `TextSize` (size and line) | `Xs3` `Xs2` `Xs` `Sm` `Base` `Lg` `Xl` `Xl2` `Xl3` `Xl4` | `Theme.text` (Tailwind's by default; `Xs2` 11 on 16, `Xs3` 10 on 14) |
 | `Leading` (a line's height said apart from the size's) | `L3` `L4` `L4_75` `L5` … `L10`, `Font` (the font's own) | `Theme.leading` (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40 px; `L4_75` 19) |
 | `Weight` | `Normal` `Medium` `Semibold` `Bold` | 400 … 700 |
 | `Tracking` (letter spacing) | `Tighter` `Tight` `Normal` `Wide` `Wider` `Widest` | Tailwind's, in ems of the words' size; `Exact(px)` in pixels |
-| `Color` | `Bg` `Surface` `Raised` `Card` `Fg` `Muted` `Subtle` `Faint` `Line` `Border` `Accent` `AccentText` `AccentBg` `OnAccent` `Primary` `OnPrimary` `Positive` `Danger` `DangerBg` `OnDanger` `Neutral` `Hover` `Selected` `Focus` `Scrim` `Link` `ShadowC` `Warn` `Tint` `TintStrong` `Floating` `Veil` `VeilDeep` `OnVeil` `Lifted` `Theater` `Wash` `Clear`; `A(c, o)` at an opacity, `Over(under, top)` | the theme's fields (`Tint` the words' colour at 6%, `TintStrong` at 8%, `Floating` Raised at 72% over Bg, `Veil` black at 62%, `VeilDeep` at 92%, `OnVeil` white, `Lifted` a segmented choice's thumb, `Theater` black, `Wash` a quiet wash under what comes onto it: #322D24 at 6.5%, white at 5% in the dark) |
+| `Color` | `Bg` `Surface` `Raised` `Card` `Fg` `Muted` `Subtle` `Faint` `Line` `Border` `Accent` `AccentText` `AccentBg` `OnAccent` `Primary` `OnPrimary` `Positive` `Danger` `DangerBg` `OnDanger` `Neutral` `Hover` `Selected` `Focus` `Scrim` `Link` `ShadowC` `Warn` `Tint` `TintStrong` `Floating` `Veil` `VeilDeep` `OnVeil` `Lifted` `Theater` `Wash` `Sidebar` `FieldHover` `Clear`; `A(c, o)` at an opacity, `Over(under, top)` | the theme's fields (`Tint` the words' colour at 6%, `TintStrong` at 8%, `Floating` Raised at 72% over Bg, `Veil` black at 62%, `VeilDeep` at 92%, `OnVeil` white, `Lifted` a segmented choice's thumb, `Theater` black, `Wash` a quiet wash under what comes onto it: #322D24 at 6.5%, white at 5% in the dark; `Sidebar` a sidebar's ground beside the page, `FieldHover` a field's edge pointed at or written in) |
 | `Opacity` | `O0` `O5` … `O95` `O100` | |
 | `Stroke` (an edge) | `B0` `B0_5` (a hairline) `B1` `B2` `B4` `B8` | |
 | `Shadow` | `NoShadow` `Sm` `Base` `Md` `Lg` `Xl` | Tailwind's first layer, in `Theme.shadow` |
@@ -45,7 +65,8 @@ another under part of a view.
 
 ## Properties
 
-A box: `row`, `w` `h` `min_w` `max_w` `min_h` `max_h`, `p` `px` `py` `pl` `pr` `pt` `pb`, `gap`, `align`, `justify`,
+A box: `row`, `w` `h` `min_w` `max_w` `min_h` `max_h`, `p` `px` `py` `pl` `pr` `pt` `pb`, `m` `mx` `my` `ml` `mr` `mt` `mb`
+(margins, as CSS's), `gap`, `align`, `justify`,
 `bg`, `radius`, `border`, `border_color`, `shadow`, `clip`, `opacity`. Words: `size` (with its line), `weight`, `color`,
 `leading` (the line's height in place of the size's own; `line=` in the call over it), `w`, `center`, `wrap` (false: one
 line, cut with an ellipsis), `tracking`, `max_lines` (wrapped words cut after that
@@ -54,7 +75,7 @@ many lines, the last ending in an ellipsis: what follows of its paragraph up to 
 half of it in; words with it are shaped with no ligatures (`@hostapi.style_no_ligatures`), each cluster spaced on its own.
 Rich text (`Ctx::rich`) has both: letter spacing in every run, and `max_lines` (the ellipsis in the style of the run it
 follows). Behaviour is not a style (`id`, `glass`, `notch_*`,
-`aspect`, `tx`/`ty`).
+`aspect`, `tx`/`ty`, a place in the parent: `left` `top` `right` `bottom`, `moves`).
 
 `radius=Inner`: the corner of the container the corner rule measures against (`Tester::corner_faults`: the nearest
 rounded one round it that shows, through boxes with no corner, or a ground laid beside it as a layer) less how far the
@@ -62,6 +83,29 @@ box lies from that container's edges it is near, as laid out. What lies in a rou
 with it by how it is written. Where it cannot be (in no rounded container, near none of its edges, nearer one edge than
 another: the window narrowed, a `max_w` came into force) it is drawn square and `corner_faults` says so: a test fails,
 a person's screen does not stop.
+
+## Short of room
+
+A box has the room its parent gives it. When that is less than what it holds, these rules decide what happens, and
+nothing else gives way:
+
+- A box sized by what it holds (in a row, with no width of its own) is never laid narrower than what it holds needs at
+  least (CSS's `min-width: auto`): words on one line, icons, boxes of a fixed size, side by side; the widest of what is
+  under each other. Worked out as it is laid out (Node's `least`), it is what its row may squeeze it to. A box sized by
+  its room (`Fill`, `Pct`) takes what it is given, and what it holds is squeezed in it where that is too little: a
+  fault, which `Tester::squeeze_faults` says (two things drawn over each other, something cut off by what clips it or
+  by the window, words cut down to nothing).
+- Words on one line are never laid wider than a column they are in, whatever its alignment: cut with an ellipsis
+  there. In a row they are as wide as they are, unless they say otherwise.
+- What may give way says so, and how:
+  - words cut short with an ellipsis: `w=Cut` (as wide as they are, cut where the row has less), `w=Fill` (what the
+    row leaves, cut where that is less), `min_w` the least of them kept;
+  - a box that takes what its row leaves, but never less than what it holds needs: `w=Fill` with `keep`;
+  - a part left out of its row: `Ctx::box drop=k`, there whole (as wide as what it holds) or not at all, the lowest k
+    first, of the same k the last in the row first; left out, laid out nowhere, drawn and pressed nowhere; `more` is the row's ⋯, there only while something of it is left out, and
+    `Ctx::left_out(id)` says what a row left out, for its ⋯ to offer instead (read back: the frame is built again
+    when it changes as it is laid out). The library's `@sf.tools_row` is a row of tools whose ⋯ does that;
+  - what is cut or scrolled by its own box: `clip`, `sideways`.
 
 ## The three rules
 
@@ -89,9 +133,11 @@ Nothing cascades: no selectors, words do not inherit from the boxes round them. 
 detlint (docs/detlint.md) counts, file by file, only going down:
 
 - `style-literal`: a number in a box's or words' look (`c.box(pad=12.0)`, `c.text(size=13.0)`), in `@ui.style(…)`
-  and its kin, or an `Exact(…)` outside the token files;
+  and its kin (a `@ui.css("…")` text's numbers too), or an `Exact(…)` outside the token files;
 - `box-loose`: a call that says its look loosely (`pad=`, `bg=`, `size=`…) rather than by `style=`;
-- `style-exact`: every `Exact(…)`, the token files' too.
+- `style-exact`: every `Exact(…)`, the token files' too (and a style's text's).
+- `style-text`: a named style (a top-level `let`, a `.then(…)` of one) said as `@ui.style(…)` with nothing but
+  tokens and numbers in it: forbidden; its message is the `@ui.css("…")` to write instead.
 
 `Tester::census()` gives the values the last frame used, by kind (sizes of words, weights, paddings, corners,
 colours): an app counts how many each kind has across its screens, which should go down.

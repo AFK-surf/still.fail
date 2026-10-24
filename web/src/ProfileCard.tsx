@@ -41,7 +41,7 @@ export function ProfileCard({ profile, uses, to, action, framed, state }: { prof
 
 /** The machine's own login, as an account a profile could be made with (`action`: making it), with its allowance. */
 export function MachineLoginCard({ login, action, framed = true }: { login: MachineLogin; action?: ReactNode; framed?: boolean }) {
-  const plan = login.plan ? `${login.plan[0]!.toUpperCase()}${login.plan.slice(1)}` : null;
+  const plan = login.planText || null;
   const quota = login.quota ?? null;
   const blocked = quota?.state === "blocked";
   const trouble = quota && (blocked || quota.state === "unavailable") ? quota.detail : null;

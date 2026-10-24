@@ -22,123 +22,6 @@ priv enum Item {
 }
 
 ///|
-/// The views read, by topic: the version they were read at.
-let read_views : Map[String, (Int, ChatsView)] = {}
-
-///|
-fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, String?) {
-  let params : Map[String, Json] = {
-    "scope": Json::string(scope),
-    "mine": Json::boolean(filter == "mine"),
-  }
-  if filter == "watching" {
-    params["watching"] = Json::boolean(true)
-  }
-  let topic = (src.topic)("chats", params)
-  let error = match topic.error {
-    Some(e) => Some(text(Some(e), "message"))
-    None => None
-  }
-  match topic.value {
-    Some(v) => {
-      let key = scope + "/" + filter
-      match read_views.get(key) {
-        Some((version, view)) if version == topic.version => (Some(view), error)
-        _ => {
-          let view = chats_view(v)
-          read_views[key] = (topic.version, view)
-          (Some(view), error)
-        }
-      }
-    }
-    None => (None, error)
-  }
-}
-
-///|
-/// The list's filter in workspace `ws` (AppState.chatFilter): as chosen here, else as the prefs keep it.
-fn filter_of(src : Source, ws : String) -> String {
-  let f = match app.filters.get(ws) {
-    Some(f) => f
-    None => {
-      let prefs = (src.topic)("prefs", {}).value
-      match field(field(prefs, "listFilter"), ws) {
-        Some(String(f)) => f
-        _ =>
-          if flag(prefs, "onlyWatching") {
-            "watching"
-          } else if flag(prefs, "onlyMine") {
-            "mine"
-          } else {
-            "all"
-          }
-      }
-    }
-  }
-  if f == "mine" || f == "watching" {
-    f
-  } else {
-    "all"
-  }
-}
-
-///|
-/// A chat to open once Home lists it, by words in its title, or `#n` the n-th row (MBUI_OPEN_CHAT, for scripted
-/// runs): "" none.
-pub let open_titled : Ref[String] = { val: "" }
-
-///|
-/// The chat in `view` whose title has `open_titled`'s words: pushed once it is listed; said when the list, all read,
-/// has none.
-fn open_listed(view : ChatsView) -> Unit {
-  let words = open_titled.val
-  if words == "" {
-    return
-  }
-  let mut rows = 0
-  for d in view.days {
-    for item in d.items {
-      rows = rows + 1
-      // #n: the n-th row (from 1)
-      let nth = if words.has_prefix("#") {
-        let mut k = 0
-        for ch in words.view(start_offset=1) {
-          let d = ch.to_int() - 48
-          if d >= 0 && d <= 9 {
-            k = k * 10 + d
-          }
-        }
-        k
-      } else {
-        0
-      }
-      if (nth > 0 && rows == nth) || (nth == 0 && item.title.contains(words)) {
-        open_titled.val = ""
-        @hostapi.log("OPEN found among \{rows}+ rows")
-        app.nav.push(
-          Chat({
-            station: item.station,
-            session: item.session,
-            title: item.title,
-            station_name: item.station_name,
-          }),
-        )
-        return
-      }
-    }
-  }
-  let reading = match view.note {
-    Some(n) => n.reading
-    None => false
-  }
-  // (said of the rows as the core lists them: the same in each build of the frame)
-  if !reading && rows > 0 {
-    open_titled.val = ""
-    @hostapi.log("OPEN not found among \{rows} rows")
-  }
-}
-
-///|
 /// The top bars' height under the status bar (a place's, TopGlassBar, and a chat's, BarFrame: TopBarHeight), what is in
 /// them in its middle; the list starts under it. One length, on the device's pixels at once: 8 + 34 + 8 and 5 + 40 + 5,
 /// each on whole pixels, can come out a pixel apart (at 2.85 pixels a point, 143 and 142), the two bars' lines apart
@@ -327,7 +210,7 @@ fn top_bar(
   invited : Bool,
 ) -> Unit {
   let t = @sf.theme()
-  // frosted glass over the list (the page's paper at 70% over a 24px blur), a hairline under it
+  // frosted glass over the list (the page's paper at 70% over a 24px blur), no line under it
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
@@ -391,7 +274,6 @@ fn top_bar(
       }
     })
     |> ignore
-    c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })
   |> ignore
 }
@@ -447,81 +329,6 @@ fn section_header(c : @ui.Ctx, label : String) -> Int {
     c.text(label, size=15.0, weight=600, color=t.p.text, wrap=false, line=21.0)
     |> ignore
   })
-}
-
-///|
-/// The days as last shown, by list (held_order).
-let shown_days : Map[String, Array[ChatDay]] = {}
-
-///|
-/// `days` as shown (ListMotion.kt HeldOrder): while `hold` (a finger on the list, or it moving) rows keep their
-/// places and their days, each with what is new of it, so the row about to be tapped does not move away; ones gone
-/// go, new ones come in where they would be in their day (a day not shown yet comes where it would be). Let go, the
-/// list is as it is.
-fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[ChatDay] {
-  let shown = shown_days.get(key).unwrap_or([])
-  if !hold || shown.is_empty() {
-    shown_days[key] = days
-    return days
-  }
-  let fresh : Map[String, ChatItem] = {}
-  for d in days {
-    for item in d.items {
-      fresh[row_name(item)] = item
-    }
-  }
-  let held : Map[String, Bool] = {}
-  let out : Array[(String, Array[ChatItem])] = shown.map(fn(d) {
-    let items : Array[ChatItem] = []
-    for item in d.items {
-      match fresh.get(row_name(item)) {
-        Some(now) => {
-          items.push(now)
-          held[row_name(item)] = true
-        }
-        None => ()
-      }
-    }
-    (d.label, items)
-  })
-  for di, d in days {
-    for i, item in d.items {
-      if held.contains(row_name(item)) {
-        continue
-      }
-      let into = match out.search_by(fn(o) { o.0 == d.label }) {
-        Some(k) => k
-        None => {
-          // before the first day shown that comes after it now
-          let mut at = out.length()
-          for k, o in out {
-            let later = days.search_by(fn(x) { x.label == o.0 })
-            match later {
-              Some(j) if j > di => {
-                at = k
-                break
-              }
-              _ => ()
-            }
-          }
-          out.insert(at, (d.label, []))
-          at
-        }
-      }
-      let items = out[into].1
-      items.insert(if i < items.length() { i } else { items.length() }, item)
-    }
-  }
-  let result = out.filter(fn(o) { o.1.length() > 0 }).map(fn(o) { { label: o.0, items: o.1 } })
-  shown_days[key] = result
-  result
-}
-
-///|
-/// A row's name in the list, kept as it changes (ListMotion.kt rowKey): its station and chat, a chat asked for here by
-/// its `clientKey` before and after its station makes it.
-fn row_name(item : ChatItem) -> String {
-  item.station + "/" + (if item.client_key != "" { item.client_key } else { item.id })
 }
 
 ///|
@@ -604,70 +411,20 @@ fn note_marks(c : @ui.Ctx, v : ChatsView) -> Unit {
 }
 
 ///|
-// kept across runs: a table, never written
-let titles : Array[Double] = [150.0, 110.0, 170.0, 130.0, 96.0, 160.0, 120.0]
-
-///|
-// kept across runs: a table, never written
-let lines : Array[Double] = [230.0, 190.0, 250.0, 170.0, 210.0, 200.0, 180.0]
-
-///|
-/// The list read the first time (Waiting.kt Waiting, WaitShapes Rows): rows to come breathing, what is wrong over
-/// them in red (the shapes then still).
+/// The list read the first time (the library's Waiting: @sf.waiting, its rows): rows to come breathing, what is wrong
+/// over them in red (the shapes then still); what it waits on said only to a screen reader while it reads.
 fn waiting(c : @ui.Ctx, n : Int, note : ListNote?, error : String?) -> Unit {
-  let t = @sf.theme()
-  let failing : Array[String] = []
-  match error {
-    Some(e) => failing.push(e)
-    None => ()
-  }
-  match note {
-    Some(nt) => failing.append(nt.failing)
-    None => ()
-  }
-  let reading = error is None &&
-    (match note {
-      Some(nt) => nt.reading
-      None => true
-    })
-  c.box(w=Fill(1.0), fn() {
-    if failing.length() > 0 {
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=14.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-        for f in failing {
-          c.box(padx=12.0, pady=6.0, radius=15.0, bg=t.p.chip, fn() {
-            c.text(f, size=13.0, color=t.p.red, line=18.0, center=true) |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    }
-    let breath = if reading { @sf.breath(c) } else { 0.6 }
-    // what it waits on, said only to a screen reader while it reads (Waiting.kt)
-    let said = if reading {
-      match note {
-        Some({ text: Some(s), .. }) => s
-        _ => tr("common.reading")
-      }
-    } else {
-      ""
-    }
-    c.box(w=Fill(1.0), opacity=breath, label=said, fn() {
-      for i in 0..<n {
-        c.box(dir=Row, w=Fill(1.0), h=Px(66.0), pl=22.0, pr=16.0, gap=12.0, align=ACenter, fn() {
-          c.box(w=Fill(1.0), gap=10.0, fn() {
-            @sf.bar(c, Px(titles[i % titles.length()]), 13.0)
-            @sf.bar(c, Px(lines[i % lines.length()]), 10.0)
-          })
-          |> ignore
-          @sf.bar(c, Px(22.0), 22.0)
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
+  @sf.waiting(
+    c,
+    shape=Rows,
+    count=n,
+    text=tr("common.reading"),
+    error=error.unwrap_or(""),
+    note?=match note {
+      Some(nt) => Some({ reading: nt.reading, text: nt.text.unwrap_or(""), failing: nt.failing })
+      None => None
+    },
+  )
 }
 
 ///|
@@ -807,20 +564,6 @@ fn ring(c : @ui.Ctx, color : Int64) -> Unit {
     fn() {  },
   )
   |> ignore
-}
-
-///|
-/// What a chat's row says of it (Home.kt rowTone): the core's `tone` when it says one, else from its state.
-fn row_tone(item : ChatItem) -> String {
-  match item.tone {
-    "alert" | "busy" | "done" | "wait" | "other" => item.tone
-    _ =>
-      match item.state {
-        "block" | "failed" => "alert"
-        "run" => "busy"
-        _ => if item.unread { "done" } else { "" }
-      }
-  }
 }
 
 ///|
@@ -1065,7 +808,8 @@ fn chat_row(
                 None => item.decision_text
               }
               match state {
-                Some(s) => state_line(c, s, alert=item.unsent)
+                Some(s) =>
+                  state_line(c, s, lead=item.state_lead, lead_text=item.state_lead_text, rest=item.state_rest, alert=item.unsent)
                 None =>
                   match item.last {
                     Some(l) =>
@@ -1136,78 +880,30 @@ fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit
 }
 
 ///|
-/// The length of `word` and what follows it at the start of `s` when `s` starts so: one of `after` next, or
-/// nothing at all when `end` lets it end there.
-fn lead_of(s : String, words : Array[String], after : Array[String], end : Bool) -> Int? {
-  for w in words {
-    if s.has_prefix(w) {
-      let n = w.length()
-      if n == s.length() {
-        if end {
-          return Some(n)
-        }
-        continue
-      }
-      let rest = s.view(start_offset=n).to_owned()
-      for a in after {
-        if rest.has_prefix(a) {
-          let mut k = n + a.length()
-          // what the core's ：or : leaves after it
-          while k < s.length() && s.at(k).to_int() == 32 {
-            k += 1
-          }
-          return Some(k)
-        }
-      }
-    }
-  }
-  None
-}
-
-///|
-/// Where the chat stands, in its last message's place (Home.kt StateLine): a lead said as an icon (要你帮忙 a bell,
-/// in ink; 在等 the wait mark, 监控中 the watch before its words, 做完了 a check) where the title's mark is; 奏 · …
-/// (a card waiting for the viewer) in ink with its 奏 bold; anything else in the secondary colour.
-fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double = 14.0, line? : Double = 20.0) -> Unit {
+/// Where the chat stands, in its last message's place (Home.kt StateLine), by what the core says leads its words
+/// (`lead`: ChatItem's state_lead, `lead_text` its card's lead word, `rest` what follows the lead): needs the viewer a
+/// bell, in ink; waiting the wait mark, watching the watch before its words, done a check, each where the title's mark
+/// is; a card waiting for the viewer (奏 · …) in ink with its lead word bold; anything else in the secondary colour.
+fn state_line(
+  c : @ui.Ctx,
+  state : String,
+  lead? : String = "",
+  lead_text? : String = "",
+  rest? : String = "",
+  alert? : Bool = false,
+  size? : Double = 14.0,
+  line? : Double = 20.0,
+) -> Unit {
   let t = @sf.theme()
-  let need = lead_of(state, ["要你帮忙", "需要你处理", "Needs you"], ["：", ":"], true)
-  let done = if need is None {
-    match lead_of(state, ["做完了", "已完成"], ["："], true) {
-      Some(n) => Some(n)
-      None => lead_of(state, ["Done"], [": "], true)
-    }
-  } else {
-    None
-  }
-  let wait = if need is None && done is None {
-    match lead_of(state, ["在等", "等待"], ["："], false) {
-      Some(n) => Some(n)
-      None =>
-        if state == "等待中" {
-          Some(state.length())
-        } else {
-          lead_of(state, ["Waiting"], [": "], true)
-        }
-    }
-  } else {
-    None
-  }
-  let watch = if need is None && done is None && wait is None {
-    lead_of(state, ["监控中", "Watching"], ["：", ": "], true)
-  } else {
-    None
-  }
-  let (icon, n) = match (need, done, wait, watch) {
-    (Some(n), _, _, _) => ("bell", n)
-    (_, Some(n), _, _) => ("check", n)
-    (_, _, Some(n), _) => ("wait", n)
-    // watching keeps its words after its radar
-    (_, _, _, Some(_)) => ("watch", 0)
-    _ => ("", 0)
+  let icon = match lead {
+    "need" => "bell"
+    "done" => "check"
+    "wait" => "wait"
+    "watch" => "watch"
+    _ => ""
   }
   if icon != "" {
-    let rest = state.view(start_offset=n).to_owned()
-    let tint = if need is Some(_) { t.p.text } else { t.p.muted }
+    let tint = if lead == "need" { t.p.text } else { t.p.muted }
     // (read out whole: StateLine's contentDescription)
     c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, label=state, fn() {
       // the title's mark's place (10), the icon 14 centred on it
@@ -1226,23 +922,15 @@ fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double
     |> ignore
     return
   }
-  // the core's lead in either language: 奏 · …, Decision · …
-  let lead = if state == "奏" || state.has_prefix("奏 · ") {
-    "奏"
-  } else if state == "Decision" || state.has_prefix("Decision · ") {
-    "Decision"
-  } else {
-    ""
-  }
   // (a message that did not go: in red)
-  if lead != "" {
+  if lead == "decision" && lead_text != "" && state.has_prefix(lead_text) {
     let ink = if alert { t.p.red } else { t.p.text }
     c.box(dir=Row, w=Fill(1.0), align=ACenter, fn() {
-      c.text(lead, size~, weight=700, color=ink, wrap=false, line~)
+      c.text(lead_text, size~, weight=700, color=ink, wrap=false, line~)
       |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(
-          state.view(start_offset=lead.length()).to_owned(),
+          state.view(start_offset=lead_text.length()).to_owned(),
           size~,
           color=ink,
           wrap=false,
@@ -1263,14 +951,7 @@ fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double
 /// people, those that lead first; the people only when they lead or someone other than the viewer is in it.
 fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_size? : Double = 18.0) -> Unit {
   let t = @sf.theme()
-  // those that look the same (one maker's models) drawn once
-  let groups : Array[RowAgent] = []
-  for a in item.agents {
-    let key = if a.maker != "" { a.maker } else { a.runtime }
-    if !groups.iter().any(fn(g) { (if g.maker != "" { g.maker } else { g.runtime }) == key }) {
-      groups.push(a)
-    }
-  }
+  let groups = row_agent_groups(item)
   let people = item.people
   let with_people = people.length() > 0 &&
     (lead == "people" || people.iter().any(fn(p) { !p.mine }))
@@ -1338,16 +1019,6 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
     }
   })
   |> ignore
-}
-
-///|
-fn lower(s : String) -> String {
-  let sb = StringBuilder()
-  for ch in s {
-    let k = ch.to_int()
-    sb.write_char(if k >= 65 && k <= 90 { (k + 32).unsafe_to_char() } else { ch })
-  }
-  sb.to_string()
 }
 
 ///|

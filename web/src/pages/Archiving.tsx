@@ -5,7 +5,7 @@ import type { ArchivingView, StationView } from "../core/shapes.ts";
 import { useStations } from "../api.ts";
 import { t } from "../i18n.ts";
 import { StationNamed } from "../StationNamed.tsx";
-import { HINTS, IDLE_DAYS, MODES, SLACK_DAYS, daysLabel, daysOffered, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, summaryOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
+import { HINTS, MODES, daysLabel, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { MobileBack, Section, Segmented, StatusDot, Waiting } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -57,7 +57,7 @@ function StationRow({ workspace, s }: { workspace: string; s: StationView }) {
         <StatusDot state="online" />
         <span className={pagesCss.listRowText}>
           {title}
-          <span className={chatCss.archivingNote} data-bad={stalled || undefined}>{stalled ? t("web-pages.archiving.stalled") : summaryOf(view)}</span>
+          <span className={chatCss.archivingNote} data-bad={stalled || undefined}>{stalled ? t("web-pages.archiving.stalled") : view.summaryText}</span>
         </span>
         <ChevronRight size={16} className={chatCss.archivingNote} />
       </Link>
@@ -99,13 +99,13 @@ function StationArchivingForm({ workspace, s, view }: { workspace: string; s: St
     {mode !== "off" && <Section title={t("web-pages.archiving.idle")}>
       <div className={chatCss.appearanceSetting}>
         <Segmented label={t("web-pages.archiving.idle")} value={String(view.days)} onChange={(d) => save(view, { days: Number(d) })}
-          options={daysOffered(view.days, IDLE_DAYS).map((n) => ({ value: String(n), label: daysLabel(n), disabled: locked }))} />
+          options={(view.daysOffered ?? []).map((n) => ({ value: String(n), label: daysLabel(n), disabled: locked }))} />
       </div>
     </Section>}
     <Section title={t("web-pages.archiving.slack")}>
       <div className={chatCss.appearanceSetting}>
         <Segmented label={t("web-pages.archiving.slack")} value={String(view.slackDays)} onChange={(d) => save(view, { slackDays: Number(d) })}
-          options={daysOffered(view.slackDays, SLACK_DAYS).map((n) => ({ value: String(n), label: daysLabel(n), disabled: locked }))} />
+          options={(view.slackDaysOffered ?? []).map((n) => ({ value: String(n), label: daysLabel(n), disabled: locked }))} />
       </div>
       <p className={chatCss.appearanceHint}>{t("web-pages.archiving.slackHint")}</p>
     </Section>

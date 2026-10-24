@@ -1,66 +1,58 @@
-// An agent's request to use a vault item, in its chat (docs/vault.md 申请和授权): drawn from its card (`card.vaultAsk`,
-// station/src/vault/secrets.ts) in place of the post's words. One card: the item and how it is given, why, the command;
-// under a rule the approval's rows while it waits (VaultApproval.tsx), how it ended once decided.
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import type { ChatMessage, VaultAsk as Ask } from "./core/shapes.ts";
-import { Check, Close, Key, Wait } from "@stillfail/ui/icons.tsx";
+// An agent's request about a vault item, in its chat (docs/vault.md): to use one (申请和授权) or to keep one (agent 存入),
+// drawn from its card (`card.vaultAsk`, station/src/vault/secrets.ts) in place of the post's words. A card of words
+// (docs/ui-panels.md 页面卡片): what is asked, in its title; what will run; a risk, only where there is one; the answer's
+// buttons at its foot (VaultApproval.tsx). Once decided, one line saying how it ended.
+import type { ChatMessage, VaultAsk as Ask, VaultSave } from "./core/shapes.ts";
 import { VaultCard } from "./VaultApproval.tsx";
 import { useStation } from "./station.tsx";
-import { modeName } from "./vault.ts";
+import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./VaultAsk.css.ts";
 import { t } from "./i18n.ts";
+import type { ReactNode } from "react";
 
-/** The command, three lines of it with a way to the rest when it runs longer. */
-function Command({ text }: { text: string }) {
-  const box = useRef<HTMLElement>(null);
-  const [open, setOpen] = useState(false);
-  const [long, setLong] = useState(false);
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (el && !open) setLong(el.scrollHeight > el.clientHeight + 1);
-  }, [text, open]);
-  return <>
-    <pre className={css.command}><code ref={box} className={css.commandText} data-open={open || undefined}>{text}</code></pre>
-    {(long || open) && <button type="button" className={css.more} onClick={() => setOpen(!open)}>{t(open ? "web-pages.vault.ask.less" : "web-pages.vault.ask.more")}</button>}
-  </>;
-}
+/** What a request's card says: the item, how it would be given, the command it is for (or, one to keep, what it is). */
+export type Asked = { name: string; mode: string; command?: string | null | undefined; save?: VaultSave | undefined; station?: string | undefined };
 
-const scopeName = (scope: string | undefined): string => t(`web-pages.vault.approve.${scope === "hour" || scope === "chat" ? scope : "once"}`);
-
-/** How it ended: 已批准 · 仅本次, 已拒绝, 已过期. */
-function Outcome({ ask }: { ask: Ask }) {
-  const [Icon, words] = ask.status === "granted" ? [Check, t("web-pages.vault.ask.granted", { scope: scopeName(ask.scope) })]
-    : ask.status === "denied" ? [Close, t("web-pages.vault.ask.denied")]
-    : [Wait, t("web-pages.vault.ask.expired")];
-  return <div className={css.outcome} data-tone={ask.status}><Icon size={16} />{words}</div>;
-}
+/** Its title: 使用「GitHub token」, 存入密码「UniFi UX7 管理员」. */
+export const askTitle = (a: Asked): string =>
+  a.save ? t("web-pages.vault.ask.save", { kind: t(`web-pages.vault.ask.kind.${a.save.kind}`), name: a.name }) : t("web-pages.vault.ask.use", { name: a.name });
 
 /**
- * The request `ask` the post `m` makes; `children` under it (its 忽略). `rows`: the approval's in it (the decisions page
- * has them at its foot instead).
+ * A request as a card: its title (and, one to keep, the account), the command, a risk; `children` at its foot. `fill`:
+ * as wide as the page's other cards (the vault's page), not as what it says (a chat's).
  */
-export function VaultAsk({ message: m, ask, rows = true, children }: { message: ChatMessage; ask: Ask; rows?: boolean; children?: ReactNode }) {
-  const station = useStation().address;
-  const waiting = rows && !!m.card?.vault && !m.decision?.resolved && !ask.status;
-  return <>
-    <div className={css.card}>
-      <div className={css.info}>
-        <div className={css.head}>
-          <span className={css.key} aria-hidden="true"><Key size={14} /></span>
-          <span className={css.verb}>{t("web-pages.vault.ask.wants")}</span>
-          <span className={css.name}>{ask.name}</span>
-          <span className={css.tag}>{modeName(ask.mode)}</span>
-          {ask.hosts.map((h) => <span key={h} className={`${css.tag} ${css.host}`}>{h}</span>)}
-        </div>
-        {ask.reason && <p className={css.reason}>{ask.reason}</p>}
-        {ask.command && <Command text={ask.command} />}
+export function AskCard({ ask, fill = false, children }: { ask: Asked; fill?: boolean; children?: ReactNode }) {
+  // Only what is out of the ordinary is said: a command that can read the secret itself, or runs on another station.
+  const risky = !ask.save && ask.mode === "env";
+  const elsewhere = !ask.save && ask.station ? t("web-pages.vault.ask.on", { station: ask.station }) : null;
+  return (
+    <div className={`${pagesCss.card} ${fill ? "" : css.card}`}>
+      <div className={css.what}>
+        <div className={css.title}>{askTitle(ask)}{ask.save?.username && <span className={css.sub}>{ask.save.username}</span>}</div>
+        {!ask.save && ask.command && <div className={css.command} title={ask.command}>{ask.command}</div>}
+        {(risky || elsewhere) && <div className={css.note}>{risky && <span className={css.risk}>{t("web-pages.vault.ask.plain")}</span>}{risky && elsewhere && " · "}{elsewhere}</div>}
       </div>
-      {(waiting || ask.status) && <div className={css.rule} />}
-      {ask.status ? <Outcome ask={ask} /> : waiting && <>
-        {m.card?.assigneeText && <p className={css.who}>{m.card.assigneeText}</p>}
-        <div className={css.rows}><VaultCard address={station} id={m.card!.vault!} /></div>
-      </>}
+      {children}
     </div>
-    {children}
-  </>;
+  );
+}
+
+const scopeName = (scope: string | undefined): string => t(`web-pages.vault.scope.${scope === "once" || scope === "hour" ? scope : "chat"}`);
+
+/** How it ended, in a line: 已存入密码「…」, 已允许使用「…」· 本对话内, 已拒绝使用「…」, 已过期. */
+function Outcome({ ask }: { ask: Ask }) {
+  const kind = ask.save ? t(`web-pages.vault.ask.kind.${ask.save.kind}`) : "";
+  const words = ask.status === "granted"
+    ? ask.save ? t("web-pages.vault.ask.kept", { kind, name: ask.name }) : t("web-pages.vault.ask.granted", { name: ask.name, scope: scopeName(ask.scope) })
+    : ask.status === "denied" ? t(ask.save ? "web-pages.vault.ask.notKept" : "web-pages.vault.ask.denied", { name: ask.name })
+    : t("web-pages.vault.ask.expired");
+  return <div className={css.outcome}><span className={css.dot} data-tone={ask.status} aria-hidden="true" />{words}</div>;
+}
+
+/** The request `ask` the post `m` makes. `rows`: the answer's buttons in it (the decisions page has them at its foot). */
+export function VaultAsk({ message: m, ask, rows = true }: { message: ChatMessage; ask: Ask; rows?: boolean }) {
+  const station = useStation().address;
+  if (ask.status) return <Outcome ask={ask} />;
+  const waiting = rows && !!m.card?.vault && !m.decision?.resolved;
+  return <AskCard ask={ask}>{waiting && <VaultCard address={station} id={m.card!.vault!} who={m.card?.assigneeText} />}</AskCard>;
 }

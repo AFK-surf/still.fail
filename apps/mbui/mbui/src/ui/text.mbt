@@ -85,6 +85,8 @@ struct TextCache {
   // on whole pixels
   metrics : Map[Int64, (Double, Double, Double, Double, Double, Bool)]
   glyphs : Map[Int, Glyph]
+  // the glyphs of what was shaped in this frame that it has not drawn yet, for the host to draw ahead (glyphs_ahead)
+  fresh : Array[Int]
   mut generation : Int
   buf : FixedArray[Double]
   gbuf : FixedArray[Double]
@@ -96,6 +98,7 @@ let text_cache : TextCache = {
   shaped: 0,
   metrics: Map::new(),
   glyphs: Map::new(),
+  fresh: [],
   generation: -1,
   buf: FixedArray::make(4 * 8192, 0.0),
   gbuf: FixedArray::make(8, 0.0),
@@ -110,6 +113,7 @@ fn check_atlas() -> Unit {
     let first = text_cache.generation < 0
     text_cache.generation = g
     text_cache.glyphs.clear()
+    text_cache.fresh.clear()
     if !first {
       clear_shapes()
       text_cache.fonts.clear()
@@ -136,6 +140,42 @@ fn font_metrics(
 fn han_metrics(size : Double, weight : Int, style? : Int = 0) -> (Double, Double) {
   let (_, _, _, a, d, _) = all_metrics(size, weight, style)
   (a, d)
+}
+
+///|
+/// Lines set as a browser sets them (Blink's LayoutNG), not as Android does: by the first font's ascent and descent
+/// alone, each on a whole point, what is left of the line halved and rounded down above them (FontHeight::AddLeading);
+/// what falls back to another font (Chinese) on the same baseline. A frame set as a web page is (a desktop's window,
+/// as the desktop app's pages) says so (set_web_lines).
+let web_lines : Ref[Bool] = Ref(false)
+
+///|
+/// Whether lines are set as a browser sets them from now on (web_lines); the layouts made the other way let go.
+pub fn set_web_lines(on : Bool) -> Unit {
+  if web_lines.val != on {
+    web_lines.val = on
+    for f in text_cache.fonts {
+      for _, s in f.map {
+        s.lay = None
+      }
+    }
+  }
+}
+
+///|
+/// A line's ascent and descent as it is set (`cjk`: Chinese in it): the first font's, the taller of it and the font Han
+/// falls back to with Chinese in it, as Android measures a line by the fonts it draws in; as a browser sets it
+/// (web_lines), the first font's alone, each on a whole point.
+fn line_metrics(size : Double, weight : Int, cjk : Bool, style? : Int = 0) -> (Double, Double) {
+  let (a, d, _) = font_metrics(size, weight, style~)
+  if web_lines.val {
+    (a.round(), d.round())
+  } else if cjk {
+    let (ha, hd) = han_metrics(size, weight, style~)
+    (dmax(a, ha), dmax(d, hd))
+  } else {
+    (a, d)
+  }
 }
 
 ///|
@@ -212,6 +252,10 @@ fn set_line(
   px : Bool,
   trim? : Bool = false,
 ) -> (Double, Double, Double) {
+  // as a browser: the room halved, rounded down above; a font taller than its line overflows it, the line as asked
+  if web_lines.val {
+    return (line, asc + ((line - asc - desc) / 2.0).floor(), 0.0)
+  }
   let sc = if sc > 0.0 { sc } else { 1.0 }
   let pitch = if px { (line * sc - 1.0e-6).ceil() / sc } else { line }
   let room = pitch - asc - desc
@@ -442,6 +486,12 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? 
       }
       shapes[text] = s
       text_cache.shaped = text_cache.shaped + 1
+      // its glyphs not drawn yet: drawn ahead unless this frame draws them (glyphs_ahead)
+      for k in keys {
+        if k >= 0 && text_cache.fresh.length() < glyphs_ahead_most && !text_cache.glyphs.contains(k) {
+          text_cache.fresh.push(k)
+        }
+      }
       s
     }
   }
@@ -598,6 +648,34 @@ fn bidi_offset_at(
 }
 
 ///|
+/// The most glyphs a frame asks its host to draw ahead.
+let glyphs_ahead_most : Int = 4096
+
+///|
+/// The glyphs of what the frame shaped and did not draw (a page pushed, still off the screen; the lines below what a
+/// list shows), handed to the host as the frame's painting is over, to draw them ahead, off the frames' thread: there
+/// when they come into view, a frame or more later, not all drawn in the frame they first show in. What is drawn is the
+/// same; only when the work is done changes (@hostapi.glyphs_ahead).
+fn glyphs_ahead() -> Unit {
+  let fresh = text_cache.fresh
+  if fresh.is_empty() {
+    return
+  }
+  let keys = FixedArray::make(fresh.length(), 0)
+  let mut n = 0
+  for k in fresh {
+    if !text_cache.glyphs.contains(k) {
+      keys[n] = k
+      n = n + 1
+    }
+  }
+  fresh.clear()
+  if n > 0 {
+    h_glyphs_ahead(keys, n)
+  }
+}
+
+///|
 fn glyph(key : Int) -> Glyph {
   match text_cache.glyphs.get(key) {
     Some(g) => g
@@ -722,7 +800,7 @@ fn layout_text(
   let lines = line_start.length()
   // a line as high as asked, the glyphs in its middle; measured by the first line's fonts, as Android measures them
   // (Chinese in it: the CJK font's, taller), the lines after it set in the same place
-  let (asc, desc, own_h) = font_metrics(size, weight)
+  let (_, _, own_h) = font_metrics(size, weight)
   let mut cjk = false
   if lines > 0 {
     for c in line_start[0]..<line_end[0] {
@@ -732,12 +810,7 @@ fn layout_text(
       }
     }
   }
-  let (asc, desc) = if cjk {
-    let (ha, hd) = han_metrics(size, weight)
-    (dmax(asc, ha), dmax(desc, hd))
-  } else {
-    (asc, desc)
-  }
+  let (asc, desc) = line_metrics(size, weight, cjk)
   let (line_h, ascent, extra) = set_line(
     if line > 0.0 {
       line

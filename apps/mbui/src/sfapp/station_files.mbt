@@ -375,7 +375,7 @@ fn sf_crumbs(c : @ui.Ctx) -> Unit {
 ///|
 /// The way's room: 8 over the list under it (StationFiles.kt:145).
 // kept across runs: a value (no field of it changes)
-let sf_way_room : @ui.Style = @ui.style(w=Full, pb=S2)
+let sf_way_room : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 /// Each station's places (StationFiles.kt Places): its home (for a member who browses every folder), then its folders
@@ -433,8 +433,7 @@ fn sf_folder(c : @ui.Ctx, src : Source, p : SfPlace) -> Unit {
     "root": Json::string(p.root),
     "path": Json::string(p.path),
   })
-  let (sort, hidden) = dv_views(src)
-  let shown = dv_arranged(items(topic.value, "entries").map(dv_entry), sort, hidden)
+  let shown = dv_shown(src, p.station, p.root, p.path, items(topic.value, "entries").map(dv_entry)).unwrap_or([])
   let whole = draft_ref(p.station, p.station_name, p.root, p.path, if p.path == "" { p.root_name } else { dv_name(p.path) }, true)
   let tick_key = fn(r : DraftRef) { r.station + "\n" + r.path }
   let toggle = fn(r : DraftRef) {
@@ -481,7 +480,7 @@ fn sf_folder(c : @ui.Ctx, src : Source, p : SfPlace) -> Unit {
           c,
           "sf-e/" + e.name,
           e.name,
-          sub=dv_words([if e.size_text == "" { file_size(e.size) } else { e.size_text }, e.time_text], " · "),
+          sub=dv_words([if e.size_text == "" { @sf.file_size(e.size) } else { e.size_text }, e.time_text], " · "),
           icon=dv_kind_icon(e.kind),
           checked=sfs.ticked.contains(tick_key(r)),
         ) {
@@ -525,7 +524,7 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
       Some(p) =>
         match (p.error, p.done) {
           (Some(e), _) => e
-          (_, Some(done)) => file_size(number(Some(done), "size"))
+          (_, Some(done)) => @sf.file_size(number(Some(done), "size"))
           _ => uploading_text(p)
         }
       None => tr("common.uploading")
@@ -640,4 +639,42 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
       |> ignore
     },
   )
+}
+
+///|
+/// A station's files from its 文件 tab (src/sfdesk/drive_tab.mbt: 添加到消息, or dragged onto the chat) into draft `key`, as
+/// the web's droppedFrom: each named by its path, or as a file where the chat says so (a folder only named); what is
+/// already in it not twice.
+fn refs_put(src : Source, key : String, items : Array[Dragged]) -> Unit {
+  if items.is_empty() {
+    return
+  }
+  let have = refs_of(key)
+  let as_files = drops_as_files(src, key)
+  for i in items {
+    if have.iter().any(fn(x) { x.station == i.station && x.path == i.abs }) {
+      continue
+    }
+    let name = if i.station_name != "" { i.station_name } else { station_name_by(src, i.station) }
+    let r = draft_ref(i.station, name, i.root, i.path, i.name, i.dir, size=i.size)
+    have.push({ ..r, mode: if as_files && !i.dir { "file" } else { "path" } })
+  }
+  draft_refs[key] = have
+}
+
+///|
+/// A station's name by its address (`<workspace>/<station>`), as the workspace's stations say it ("" not known).
+fn station_name_by(src : Source, station : String) -> String {
+  let (list, _) = dv_stations(src, workspace_of(station))
+  match list.unwrap_or([]).iter().find_first(fn(s) { s.station == station }) {
+    Some(s) => s.name
+    None => ""
+  }
+}
+
+///|
+/// Whether any of the workspace's stations lends its files (ChatSide.tsx useStationDrive): then a chat has its 文件 tab.
+fn drive_in(src : Source, ws : String) -> Bool {
+  let (list, _) = dv_stations(src, ws)
+  list.unwrap_or([]).iter().any(fn(s) { s.drive })
 }

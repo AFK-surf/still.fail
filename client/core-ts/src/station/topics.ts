@@ -2,8 +2,9 @@
 // a thread's or a transcript's items, and what a link holds beyond them (its state, the sessions at work, host samples,
 // jobs' logs). A topic subscribed makes what it shows more urgent in the sync; it never asks for anything itself. A
 // thread's window and a transcript's page are the topic's own state: where the reader is.
-import { Effect, type Fiber } from "effect";
+import { Deferred, Effect, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
+import { membersOf } from "../db/account.ts";
 import { CoreError } from "../error.ts";
 import { nOf } from "../entries.ts";
 import { t } from "../i18n.ts";
@@ -38,7 +39,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -159,11 +160,22 @@ export class StationTopics implements Owner {
       // in batches behind (sync.ts #history), or as it is scrolled back to.
       else if (this.#sync.channels.latestMissing(entries)) this.#sync.channels.bring(entries, Priority.shown, "latest");
       this.#moveOldPlace(station, id);
+      // Used now: its agents' histories are brought whole, behind the rest (channel-kinds.ts `whole`).
+      for (const key of membersOf(this.summary(station, id))) this.#wholeHistory(station, key);
     }
-    if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown);
+    // Shown: what the sync would bring of it next (its latest page, what came after what is held, a hole) comes first,
+    // nothing it would not read anyway; let go for room before, it is the sync's again from now on. A station whose
+    // stream does not follow the sessions at work itself is told it on the stream instead (`live` named there).
+    if (topic.topic === "live") {
+      const evicted = this.#core.data.opened("transcript", station, topic.key as string, true);
+      const shown = evicted || this.#sync.link(station)?.followsRunning === true ? this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown, "latest") : null;
+      this.#wholeHistory(station, topic.key as string, shown);
+    }
     if (topic.topic === "net" || topic.topic === "way") this.#sampleNet(station, topic.topic);
     // A folder of the drive: kept as it is on the station's disk while shown.
     if (topic.topic === "drive") this.#samplers.set(topicKey(topic), this.#core.runner.fork(this.#sync.driveWatch(station, topic.root as string, topic.path as string)));
+    // What still.fail uses of the station's machine: read every few seconds while shown.
+    if (topic.topic === "stationResources") this.#samplers.set(topicKey(topic), this.#core.runner.fork(this.#sync.resourcesWatch(station)));
     this.resume(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
     if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
@@ -231,6 +243,7 @@ export class StationTopics implements Owner {
         const v = link?.memory.get(topicKey(topic));
         return v === undefined ? undefined : { ok: v };
       }
+      case "stationResources":
       case "stationSearch": {
         if (error) return { err: error };
         const v = link?.memory.get(topicKey(topic));
@@ -370,6 +383,16 @@ export class StationTopics implements Owner {
   // ── threads ──
 
   /// The thread's summary as the station's lists say.
+  /// A session used now: its history brought whole in the background, down to its first entry, as the sync keeps it so
+  /// while it is used lately (a station whose stream follows its sessions at work: it says how far each goes).
+  /// `after`: what is shown of it is brought first (one task a channel: asked for while that one waits, this would be it).
+  #wholeHistory(station: string, key: string, after: Deferred.Deferred<void, CoreError> | null = null): void {
+    if (this.#sync.link(station)?.followsRunning !== true) return;
+    const whole = () => void this.#sync.channels.bring(transcriptOf(station, key), Priority.background, "whole");
+    if (after === null) whole();
+    else this.#core.runner.fork(Effect.ignore(Deferred.await(after)).pipe(Effect.andThen(Effect.sync(whole))));
+  }
+
   summary(station: string, id: number): unknown {
     return this.#core.data.thread(station, id) ?? null;
   }

@@ -63,7 +63,7 @@ fn found_item(kind : String, key : String, title : String, text : String, word :
 }
 
 ///|
-fn fixture_search(params : Map[String, Json]) -> Json? {
+fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
   let query = match params.get("query") {
     Some(String(q)) => q
     _ => ""
@@ -101,6 +101,7 @@ fn fixture_search(params : Map[String, Json]) -> Json? {
               "path": "/Users/lin/docs/签名说明.md",
               "fileKind": "markdown",
               "time": found_time("3 天前"),
+              "open": { "to": "files", "station": "ws1/st1", "root": "/Users/lin/docs", "path": "签名说明.md", "how": "read" },
             }),
           ],
         },
@@ -114,6 +115,7 @@ fn fixture_search(params : Map[String, Json]) -> Json? {
               "chatTitle": "整理发布清单",
               "job": "job-1",
               "port": 5173,
+              "open": { "to": "service", "station": "ws1/st1", "chat": "s-c1", "job": "job-1" },
             }),
           ],
         },
@@ -156,7 +158,23 @@ fn fixture_search(params : Map[String, Json]) -> Json? {
       "note": "还有 1 台 station 离线，没有搜它上面的内容",
     })
   } else {
-    Some({ "items": [], "words": Json::array(if query == "" { [] } else { [Json::string(query)] }), "messages": [], "groups": [], "wait": none })
+    // the device's chats whose titles have the words (with none, the latest), as the core's search lists them
+    let words = query.trim(chars=" ").to_string().to_lower()
+    let chats : Array[Json] = []
+    for d in fixture_days(f) {
+      for c in items(Some(d), "items") {
+        if words == "" || text(Some(c), "title").to_lower().contains(words) {
+          chats.push(c)
+        }
+      }
+    }
+    Some({
+      "items": Json::array(chats),
+      "words": Json::array(if words == "" { [] } else { [Json::string(words)] }),
+      "messages": [],
+      "groups": [],
+      "wait": none,
+    })
   }
 }
 
@@ -203,6 +221,12 @@ fn login_job(chat : Json, id : String, title : String, line : String, port : Int
   match port {
     Some(p) => more["port"] = Json::number(p.to_double())
     None => ()
+  }
+  more["open"] = {
+    "to": if port is Some(_) { "service" } else { "task" },
+    "station": Json::string(text_of(chat, "station")),
+    "chat": Json::string(text_of(chat, "session")),
+    "job": Json::string(id),
   }
   found_item("job", text_of(chat, "station") + "\u{1}j:" + id, title, line, "登录", more)
 }

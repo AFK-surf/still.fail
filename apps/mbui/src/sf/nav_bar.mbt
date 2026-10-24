@@ -11,7 +11,7 @@
 /// Back: a chevron and where to, 6 after it and 4 over and under, its corner 8; rippled where it is pressed
 /// (Parts.kt NavBack: clip(Smooth(8)).clickable).
 // kept across runs: a value (no field of it changes)
-let nav_back_box : @ui.Style = @ui.style(row=true, pr=S1_5, pt=S1, pb=S1, radius=Lg, align=ACenter)
+let nav_back_box : @ui.Style = @ui.css("row pr=S1_5 pt=S1 pb=S1 radius=Lg align=ACenter")
 
 ///|
 /// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent).
@@ -21,11 +21,11 @@ let nav_back_words : @ui.TextStyle = @ui.text_style(size=Xl2, leading=Font, colo
 ///|
 /// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).
 // kept across runs: a value (no field of it changes)
-let nav_bar_box : @ui.Style = @ui.style(w=Full, pl=S2_5, pr=S4, pt=S1_5, pb=S2_5)
+let nav_bar_box : @ui.Style = @ui.css("w=Full pl=S2_5 pr=S4 pt=S1_5 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_bar_inner : @ui.Style = @ui.style(w=Full, align=ACenter)
+let nav_bar_inner : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -34,7 +34,7 @@ let nav_title_column : @ui.Style = @ui.style(pl=nav_title_clear, pr=nav_title_cl
 ///|
 /// The title's first line and back and what is at the end: one 32 line, each in its middle.
 // kept across runs: a value (no field of it changes)
-let nav_line : @ui.Style = @ui.style(h=S8, justify=JCenter, clip=true)
+let nav_line : @ui.Style = @ui.css("h=S8 justify=JCenter clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -46,11 +46,11 @@ let nav_sub_row : @ui.Style = @ui.style(row=true, gap=nav_sub_gap, align=ACenter
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_ends : @ui.Style = @ui.style(row=true, w=Full, h=S8, align=ACenter)
+let nav_ends : @ui.Style = @ui.css("row w=Full h=S8 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_trailing : @ui.Style = @ui.style(row=true, h=S8, align=ACenter)
+let nav_trailing : @ui.Style = @ui.css("row h=S8 align=ACenter")
 
 ///|
 /// Back: a chevron in the accent and where to in a link's ink (Parts.kt NavBack); its word no wider than `max_w` when it is said.

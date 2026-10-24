@@ -11,6 +11,7 @@ import * as present from "../present.ts";
 import * as refs from "../refs.ts";
 import type { Topic } from "../protocol.ts";
 import type { Value } from "../store.ts";
+import { openOf } from "../search-open.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -76,6 +77,14 @@ function chatRow(hit: J, s: { address: string; name: string }, chatTitle: string
     lastActiveAt: num(hit.at) ?? 0, station: s.address, stationName: s.name, ...(hit.archived === true ? archived() : {}),
   };
 }
+
+/// A thing found with where it opens.
+const opened = (item: J): J => {
+  const open = openOf(item);
+  return open === null ? item : { ...item, open };
+};
+
+export { openOf };
 
 export function searchView(src: SearchSource, chats: J, view: Topic): Value {
   const scope = view.scope as string;
@@ -172,7 +181,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
         if (hit.archived === true) item.archived = true;
         if (num(hit.at) !== null) item.createdAt = hit.at;
         const list = found.get(k) ?? [];
-        list.push(present.times(item, clock));
+        list.push(present.times(opened(item), clock));
         found.set(k, list);
       }
     }
@@ -181,7 +190,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
   if (wants("station")) {
     const named = stations.filter((s) => words.every((w) => s.name.toLowerCase().includes(w)));
     if (named.length > 0) {
-      found.set("station", named.map((s) => ({
+      found.set("station", named.map((s) => opened({
         kind: "station", key: s.address, station: s.address, stationName: s.name, ...(s.emoji ? { stationEmoji: s.emoji } : {}), ...(s.icon ? { stationIcon: s.icon } : {}),
         title: s.name, text: s.online ? "" : t("core-views.search.offline"), marks: [],
       })));
@@ -197,7 +206,7 @@ export function searchView(src: SearchSource, chats: J, view: Topic): Value {
       found.set("member", named.map((m: J) => {
         const email = str(m.email)!;
         const name = str(m.name) || email;
-        return { kind: "member", key: `member\u0001${email}`, station: "", stationName: "", title: name, email, ...refs.excerpt(name === email ? "" : email, words) };
+        return opened({ kind: "member", key: `member\u0001${email}`, station: "", stationName: "", title: name, email, ...refs.excerpt(name === email ? "" : email, words) });
       }));
     }
   }

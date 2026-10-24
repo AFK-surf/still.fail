@@ -1,0 +1,9 @@
+# The wide frame: from the made-up chat to a new chat by the sidebar's 新建对话, and back by the chat's row
+# (wide_switch.mbt, the web's dock.tsx useComposerMove): the composer goes between their places, the rest crossfades.
+timeout 20000
+until 按空格输入
+wait 800
+tap 新建对话
+wait 1200
+tap 整理发布清单
+wait 1200

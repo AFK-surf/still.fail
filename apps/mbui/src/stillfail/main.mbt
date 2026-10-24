@@ -333,13 +333,18 @@ fn main {
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
     let started : Map[String, Json] = {}
-    for name in @sfcore.started_by {
+    // (and where the host keeps downloads in a scripted run: what it says of a file kept, which the app tells the core)
+    for name in @sfcore.started_by + ["MBUI_DOWNLOADS_DIR"] {
       let v = @sfcore.env_text(name)
       if v != "" {
         started[name] = Json::string(v)
       }
     }
     @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
+    // and which station this machine is, as its host says it (@ui.local_station: what the files' page lists first), for
+    // a replay's host to say the same
+    let local = @json.parse(@ui.local_station()) catch { _ => Json::null() }
+    @hostapi.log("CORETRACE " + ({ "host": { "localStation": local } } : Json).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
@@ -382,7 +387,9 @@ fn main {
     @sfapp.open_decisions()
   }
   // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
-  // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere)
+  // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere).
+  // A beta's core (MBUI_BETA=1) asks the feed's beta, <feed>/beta, itself: the beta app's feed is android, not
+  // android/beta (which asked android/beta/beta, a 404)
   match @ui.env("MBUI_UPDATE_FEED") {
     "" => ()
     feed => {

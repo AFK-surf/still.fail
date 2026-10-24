@@ -1,0 +1,23 @@
+# The files' sidebar and going somewhere (FilesNav.tsx, FilesGo.tsx: the core's stations {drive, here} and files.go):
+# MBUI_FIXTURE=drive MBUI_WIN=1280x800. A pinned folder of another station from 团队共享, a station's row (its home), ⌘⇧G
+# with a path typed, Tab completing it, Enter going there; then a station's row opened to its places.
+timeout 20000
+until 设计稿
+wait 600
+tap 照片
+wait 900
+tap 备份盘
+wait 900
+key cmd+shift+g
+wait 600
+type ~/
+wait 700
+key down
+wait 400
+key tab
+wait 700
+key enter
+wait 900
+tapxy 115 255
+wait 1200
+exit

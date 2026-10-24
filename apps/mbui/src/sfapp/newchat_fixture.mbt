@@ -1,7 +1,8 @@
 // A new chat over the made-up workspace (fixture.mbt): the `newChat` topic (its stations, what it runs on, the
 // combinations used often) and the model control's (`pick`), in the core's shapes; the picks taken as the core would
 // (`newChat.pick`, `pick.set`, `pick.save`), a chat made at once (`newChat.create`). MBUI_FIXTURE=newchat opens it,
-// newchat-station with its station's sheet, newchat-model with what it runs on; home-bars opens the bar's panel of
+// newchat-station with its station's sheet, newchat-model with what it runs on, newchat-reading while its stations
+// are read, newchat-profiles while its station's profiles are; home-bars opens the bar's panel of
 // the other bars, place the 文件 place (drive.mbt's page at the root).
 
 ///|
@@ -16,6 +17,8 @@ priv struct NewFix {
   mut d_effort : String
   mut d_profile : String
   mut made : Int
+  /// MBUI_FIXTURE=stations-slow: its stations not asked for yet (0), being read (1), read (2)
+  mut reading : Int
 }
 
 ///|
@@ -29,6 +32,7 @@ let new_fix : NewFix = {
   d_effort: "high",
   d_profile: "",
   made: 0,
+  reading: 0,
 }
 
 ///|
@@ -166,18 +170,66 @@ fn fix_pick() -> Json {
 
 ///|
 fn fix_new_chat(f : Fixture) -> Json {
-  ignore(f)
   let n = new_fix
+  // its stations read stations_slow_ms after the page first asks (MBUI_FIXTURE=stations-slow: Home, for the films of
+  // what shows meanwhile)
+  let slow = f.mode == "stations-slow" && n.reading < 2
+  if slow && n.reading == 0 {
+    n.reading = 1
+    fix_later(stations_slow_ms, fn() { n.reading = 2 })
+  }
+  // its stations not read yet: only the one it last started on (MBUI_FIXTURE=newchat-reading)
+  if f.mode == "newchat-reading" || slow {
+    return {
+      "kept": Json::string(n.station),
+      "any": false,
+      "efforts": [],
+      "accounts": [],
+      "pickAccount": false,
+      "waiting": false,
+      "frequent": [],
+    }
+  }
+  // its station's profiles not read yet (newchat-profiles)
+  if f.mode == "newchat-profiles" {
+    return {
+      "kept": Json::string(n.station),
+      "stations": [fix_station("st1"), fix_station("st2")],
+      "any": true,
+      "station": fix_station(n.station),
+      "model": Json::null(),
+      "runtime": "",
+      "effort": "",
+      "efforts": [],
+      "accounts": [],
+      "pickAccount": false,
+      "waiting": true,
+      "problem": "正在读取 Studio 的 Profile",
+      "pick": Json::null(),
+      "frequent": [],
+    }
+  }
   let effort_word = match n.effort {
     "low" => "低"
     "medium" => "中"
     _ => "高"
   }
+  // (MBUI_FIXTURE=newchat-files: its stations lend their files, its 文件 tab open beside it)
+  let lend = fn(s : Json) -> Json {
+    match s {
+      Object(o) if f.mode == "newchat-files" => {
+        let m = o.copy()
+        m["overview"] = { "drive": field(Some(fixture_station_drive(true)), "drive").unwrap_or(Json::null()) }
+        Json::object(m)
+      }
+      _ => s
+    }
+  }
   {
     "kept": Json::string(n.station),
-    "stations": [fix_station("st1"), fix_station("st2")],
+    "stations": [lend(fix_station("st1")), lend(fix_station("st2"))],
     "any": true,
-    "station": fix_station(n.station),
+    "station": lend(fix_station(n.station)),
     "model": fix_model(n.model),
     "runtime": Json::string(n.runtime),
     "effort": Json::string(n.effort),
@@ -212,6 +264,10 @@ fn fix_new_chat(f : Fixture) -> Json {
     "label": Json::string(effort_word),
   }
 }
+
+///|
+/// How long stations-slow's stations take to be read.
+let stations_slow_ms : Double = 1200.0
 
 ///|
 /// The new chat's topics, None for any other.
@@ -300,7 +356,101 @@ pub fn open_mode(mode : String) -> Unit {
     bar.open_panel(true)
   } else if mode == "place" {
     app.nav.replace(Files)
+  } else if mode.has_prefix("place-") {
+    // a place of the rail's in the wide frame (wide_places.mbt): place-stations, place-profiles, place-connects,
+    // place-usage
+    app.nav.replace(Place(mode.view(start_offset=6).to_string()))
+  } else if mode.has_prefix("files-") {
+    // the files' page in the wide frame (wide_files.mbt) at Studio's 文档: files-columns (设计稿 open beside it, chosen),
+    // files-tree (设计稿 opened in place), files-list, files-preview (发布清单.md previewed beside it), files-split (two
+    // tabs, the one shown split)
+    let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
+    app.nav.push(Files)
+    // (in columns, 设计稿 open beside 文档: the page at it, chosen in the column before as coming to it chooses)
+    app.nav.push(Drive(if mode == "files-columns" { { ..docs, path: "设计稿" } } else { docs }))
+    // what the made-up core is told before the first frame: the way shown, a tree's folder open, what is chosen
+    let browse = fn(params : Map[String, Json]) {
+      let o : Map[String, Json] = {
+        "owner": "page",
+        "station": "ws1/st1",
+        "root": Json::string(fix_docs),
+        "path": "",
+        "place": Json::string(@sfdesk.place_name("page/0")),
+      }
+      for k, v in params {
+        o[k] = v
+      }
+      fix_browse_do(None, mode, "drive.browse", Json::object(o)) |> ignore
+    }
+    match mode {
+      "files-tree" => {
+        fix_browse_prefs_set({ "driveViews": { "page": "tree" } }) |> ignore
+        browse({ "act": "tree", "folder": "设计稿", "view": "tree" })
+        @sfdesk.nav_open("ws1/st1")
+      }
+      "files-list" => fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
+      // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
+      "files-clash" =>
+        @sfdesk.drag_ask({
+          into: { station: "ws1/st1", root: Some(fix_docs), path: "会议记录" },
+          into_name: "会议记录",
+          total: 1,
+          clashes: [
+            {
+              name: "说明.txt",
+              dir: false,
+              size: 2048.0,
+              station: "MBA",
+              there: dv_entry(fix_entry("说明.txt", false, 320, "10/01")),
+            },
+          ],
+          answers: {},
+          all: false,
+          done: fn(_) {  },
+        })
+      // the bar's 传输 open: a copy to MBA going (as the core says it)
+      "files-transfers" => {
+        fix_transfer({
+          "from": { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "", "names": ["演示录屏.mp4"] },
+          "to": { "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" },
+          "move": false,
+        })
+        @sfdesk.transfers_open()
+      }
+      // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
+      "files-preview" => {
+        fix_browse_prefs_set({ "driveViews": { "preview": "shown" } }) |> ignore
+        browse({ "act": "choose", "view": "columns", "folder": "", "name": "发布清单.md" })
+      }
+      // two tabs, the one shown split: 文档 in front, the home beside it
+      "files-split" =>
+        fix_browse_prefs_set({ "filesTabs": { "ws1": Json::string(fix_split_tabs().stringify()) } }) |> ignore
+      _ => ()
+    }
+  } else if mode == "switcher" || mode == "switcher-found" {
+    // ⌘K in the wide frame (sfdesk/switcher.mbt): with nothing typed, and with 签名 typed (what the search finds)
+    @sfdesk.switcher_open_with(if mode == "switcher-found" { "签名" } else { "" })
   } else if mode == "home-sheet" {
     raise_sheet(Workspaces)
+  }
+}
+
+///|
+/// The files' page's tabs of files-split, as the core keeps them: two, the one shown split, 文档 in front and the home
+/// beside it; 照片 of MBA the other.
+fn fix_split_tabs() -> Json {
+  {
+    "tabs": [
+      {
+        "id": "t0",
+        "panes": [
+          { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "" },
+          { "station": "ws1/st1", "root": Json::string(fix_home), "path": "" },
+        ],
+        "front": 0,
+      },
+      { "id": "t1", "panes": [{ "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" }], "front": 0 },
+    ],
+    "current": "t0",
   }
 }

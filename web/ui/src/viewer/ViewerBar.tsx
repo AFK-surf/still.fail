@@ -79,6 +79,18 @@ function stands(bar: HTMLElement | null, x: number, y: number): boolean {
   return y >= top && y < top + bar.offsetHeight && x >= left && x < left + bar.offsetWidth;
 }
 
+/** How far a download has come, in its button's place: a ring of the bar's ink, 18 across, its track at 18%, `part` of a
+ * turn from the top clockwise, 2 wide (the mbui app's progress_ring). */
+export function DownloadRing({ part }: { part: number }) {
+  const r = 7, round = 2 * Math.PI * r, share = Math.min(1, Math.max(0, part));
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="2" />
+      {share > 0 && <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray={`${round * share} ${round}`} transform="rotate(-90 9 9)" />}
+    </svg>
+  );
+}
+
 /** One of a bar's tools: an icon, named on hover; `on` while what it opens is open. */
 export function ViewerTool({ label, on = false, onClick, children }: { label: string; on?: boolean; onClick: () => void; children: ReactNode }) {
   return (
@@ -88,9 +100,11 @@ export function ViewerTool({ label, on = false, onClick, children }: { label: st
   );
 }
 
-/** Download, as every bar has it last: a link to what is here already (`href`), or a function that saves it. */
-export function ViewerDownload({ href, name, onSave }: { href?: string | undefined; name: string; onSave?: (() => void) | undefined }) {
+/** Download, as every bar has it last: a link to what is here already (`href`), or a function that saves it.
+ * `coming`: how far a download of it has come (0 to 1), a ring in its place meanwhile, not pressed again. */
+export function ViewerDownload({ href, name, onSave, coming }: { href?: string | undefined; name: string; onSave?: (() => void) | undefined; coming?: number | undefined }) {
   const label = t("web-main.preview.download");
+  if (coming !== undefined) return <Tip label={label}><button type="button" className={`${pageCss.iconBtn} ${css.tool}`} aria-label={label} disabled><DownloadRing part={coming} /></button></Tip>;
   if (onSave || !href) return <ViewerTool label={label} onClick={() => onSave?.()}><Download size={18} /></ViewerTool>;
   return <Tip label={label}><a className={`${pageCss.iconBtn} ${css.tool}`} href={href} download={name} aria-label={label}><Download size={18} /></a></Tip>;
 }

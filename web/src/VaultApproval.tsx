@@ -1,85 +1,74 @@
-// An agent's request to use a vault item (docs/vault.md 申请和授权): under the agent's post in its chat, on the
-// decisions page (奏) and on the vault's page, in place of the card's options. Rows as a decision's options are drawn
-// (Decisions.css.ts): 仅本次 (`once`), 本对话 1 小时内 (`hour`), 本对话直到归档 (`chat`), as far as the item allows
-// (`lasts`), the longest recommended; then 拒绝. A tap asks the core
-// (`vault.approve`, which has the system ask the person; `vault.deny`); once decided the station takes the card back.
-// Only the request's own (the `vaults` topic's requests: one waiting on the viewer) can be answered, and only in an app
-// that keeps keys: a web page shows no rows, only that it is approved in a client (desktop or Android); elsewhere the
-// rows are there, not pressed.
-import { useState } from "react";
+// The answer to an agent's request about a vault item (docs/vault.md), at the foot of its card (VaultAsk.tsx), on the
+// decisions page (奏) and on the vault's page: the answer most give as the one solid button (允许 / 存入), the other as
+// words beside it (拒绝 / 不存); how long a use is allowed, a choice beside them that starts at the longest the item is
+// given for. A tap asks the core (`vault.approve`, which has the system ask the person; `vault.deny`); once decided the
+// station restates the card. Only the viewer's own request (the `vaults` topic's requests) is answered, and only in an
+// app that keeps keys (or without security mode, anywhere); elsewhere a line says whose it is or where it is approved. A
+// secret to keep while the vault is not on on this device: 开启密钥库 in the button's place, to the vault's page.
+import { useState, type ReactNode } from "react";
+import { useGo } from "./go.ts";
 import { scopeOf } from "./station.tsx";
 import { useDoingList, doingMatches, failed } from "./doing.ts";
 import { type Scope, scopesUpTo, useVaultCall, useVaultRequest } from "./vault.ts";
-import { Option1, Option2, Option3, Option4 } from "@stillfail/ui/icons.tsx";
-import * as css from "./Decisions.css.ts";
-import * as own from "./VaultApproval.css.ts";
-import { Spinner } from "@stillfail/ui/waiting.tsx";
+import { Button, Chooser, ChooserItem } from "./ui.tsx";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as css from "./VaultAsk.css.ts";
 import { t } from "./i18n.ts";
 
-type Choice = { scope: Scope | null; label: string; detail: string };
-/** The rows for an item granted up to `lasts`: its scopes, then 拒绝. */
-const choices = (lasts: string | undefined): Choice[] => [
-  ...scopesUpTo(lasts).map((s) => ({ scope: s, label: t(`web-pages.vault.approve.${s}`), detail: t(`web-pages.vault.approve.${s}Detail`) })),
-  { scope: null, label: t("web-pages.vault.approve.deny"), detail: t("web-pages.vault.approve.denyDetail") },
-];
-const DIGITS = [Option1, Option2, Option3, Option4];
+const scopeName = (s: Scope): string => t(`web-pages.vault.scope.${s}`);
 
 /**
- * The approval's rows for request `id` (a station's address or a workspace says where). `onDecided` once it went
- * through (the decisions page sends the card on its way).
+ * The answer to request `id` in `workspace`. `who`: whose it is to decide, said where it is not the viewer's.
+ * `onDecided` once it went through (the decisions page sends the card on its way).
  */
-export function VaultChoices({ workspace, id, onDecided }: { workspace: string; id: string; onDecided?: (() => void) | undefined }) {
+export function VaultActions({ workspace, id, who, onDecided, extra }: { workspace: string; id: string; who?: string | undefined; onDecided?: (() => void) | undefined; extra?: ReactNode }) {
   const { view, request } = useVaultRequest(workspace, id);
   const run = useVaultCall();
+  const go = useGo();
   const doing = useDoingList().filter((d) => !failed(d) && doingMatches(d, ["vault.approve", "vault.deny"], { workspace, request: id }));
-  // What was tapped, while the core has it (and the system asks the person).
-  const [pending, setPending] = useState<Choice["scope"] | undefined>(undefined);
-  // The plain library's (no security mode) are approved anywhere: nothing is unsealed for them.
-  const able = (!!view?.available || view?.plain === true) && request !== undefined;
-  const under = pending !== undefined || doing.length > 0;
-  const busy = (c: Choice) => pending === c.scope || doing.some((d) => (c.scope === null ? d.call === "vault.deny" : d.call === "vault.approve" && d.params.scope === c.scope));
-  const pick = (c: Choice) => {
-    if (!able || under) return;
-    setPending(c.scope);
-    const asked = c.scope === null
-      ? run("vault.deny", { workspace, request: id }, t("web-pages.vault.approve.denyWhat"))
-      : run("vault.approve", { workspace, request: id, scope: c.scope }, t("web-pages.vault.approve.what"));
+  // What was tapped while the core has it (and the system asks the person); the use's length, once picked.
+  const [pending, setPending] = useState<"yes" | "no" | null>(null);
+  const [picked, setPicked] = useState<Scope | null>(null);
+  if (!view) return null;
+  // A web page keeps no keys (the plain library's, without security mode, are approved anywhere).
+  if (!view.available && view.plain !== true) return <p className={css.note}>{t("web-pages.vault.approve.inClient")}</p>;
+  if (!request) return <p className={css.note}>{who ?? t("web-pages.vault.approve.decided")}</p>;
+  const save = request.save !== undefined;
+  const scopes = scopesUpTo(request.lasts);
+  const scope = picked ?? scopes.at(-1)!;
+  const under = pending !== null || doing.length > 0;
+  const busy = (yes: boolean) => pending === (yes ? "yes" : "no") || doing.some((d) => d.call === (yes ? "vault.approve" : "vault.deny"));
+  const answer = (yes: boolean) => {
+    if (under) return;
+    setPending(yes ? "yes" : "no");
+    const asked = yes
+      ? run("vault.approve", { workspace, request: id, scope: save ? "once" : scope }, t(save ? "web-pages.vault.act.saveWhat" : "web-pages.vault.act.allowWhat"))
+      : run("vault.deny", { workspace, request: id }, t("web-pages.vault.act.denyWhat"));
     void asked.then((v) => {
-      setPending(undefined);
+      setPending(null);
       if (v !== undefined) onDecided?.();
     });
   };
-  const rows = choices(request?.lasts);
-  // A web page keeps no keys: no rows to look at, only where to go.
-  if (view && !view.available && view.plain !== true) {
-    return (
-      <div className={`${css.options} ${own.inClient}`}>
-        <span className={own.inClientTitle}>{t("web-pages.vault.approve.inClient")}</span>
-        <span className={own.inClientDetail}>{t("web-pages.vault.approve.inClientDetail")}</span>
-      </div>
-    );
+  const no = <Button variant="ghost" busy={busy(false)} disabled={under} onClick={() => answer(false)}>{t(save ? "web-pages.vault.act.dontSave" : "web-pages.vault.act.deny")}</Button>;
+  // Kept only in a vault that is on here: the way to turn it on first.
+  if (save && view.plain !== true && !view.setUp) {
+    return <div className={pagesCss.cardFoot}><Button variant="primary" onClick={() => go(`/w/${workspace}/settings/vault`)}>{t("web-pages.vault.setUp")}</Button>{no}{extra}</div>;
   }
   return (
-    <div className={css.options} role="group" aria-label={request?.itemName ? t("web-pages.vault.approve.wants", { name: request.itemName }) : t("web-main.decisions.options")}>
-      {rows.map((c, i) => {
-        const Digit = DIGITS[i]!;
-        const now = busy(c);
-        const recommended = i === rows.length - 2;
-        return (
-          <button key={c.label} type="button" className={css.choice} data-recommended={recommended || undefined} data-busy={now || undefined}
-            disabled={!able || under} aria-busy={now || undefined} aria-description={recommended ? t("common.recommended") : undefined} onClick={() => pick(c)}>
-            <span className={css.choiceNumber} aria-hidden="true"><Digit size={20} /></span>
-            <span className={css.choiceLabel}>{c.label}</span>
-            <span className={css.choiceDetail}>{c.detail}</span>
-            {now && <Spinner inline className={css.choiceSpinner} />}
-          </button>
-        );
-      })}
+    <div className={pagesCss.cardFoot}>
+      <Button variant="primary" busy={busy(true)} disabled={under} onClick={() => answer(true)}>{t(save ? "web-pages.vault.act.save" : "web-pages.vault.act.allow")}</Button>
+      {no}
+      {!save && scopes.length > 1 && (
+        <Chooser label={scopeName(scope)}>
+          {scopes.map((s) => <ChooserItem key={s} checked={s === scope} onSelect={() => setPicked(s)}>{scopeName(s)}</ChooserItem>)}
+        </Chooser>
+      )}
+      {extra}
     </div>
   );
 }
 
-/** The approval under a card that names a vault request (`card.vault`), at a station's `address`. */
-export function VaultCard({ address, id, onDecided }: { address: string; id: string; onDecided?: (() => void) | undefined }) {
-  return <VaultChoices workspace={scopeOf(address)} id={id} onDecided={onDecided} />;
+/** The answer under a card that names a vault request (`card.vault`), at a station's `address`. */
+export function VaultCard({ address, id, who, onDecided }: { address: string; id: string; who?: string | undefined; onDecided?: (() => void) | undefined }) {
+  return <VaultActions workspace={scopeOf(address)} id={id} who={who} onDecided={onDecided} />;
 }

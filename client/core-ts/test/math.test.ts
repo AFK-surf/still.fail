@@ -20,6 +20,24 @@ test("formulas reference the packaged alphabet without carrying outlines or fetc
   assert.equal(mathDrawing("xxx", false), d);
 });
 
+test("the core lays formulas out from the glyphs' sizes alone: no outline, and no default font, in its bundle", async () => {
+  const { chars } = await import("../src/math-font.ts");
+  let named = 0;
+  for (const table of Object.values(chars)) {
+    for (const entry of Object.values(table)) {
+      const p = (entry[3] as { p?: string } | undefined)?.p;
+      if (p === undefined || p === "") continue;
+      assert.match(p, /^[0-9a-f]{1,8}$/, "an outline's id in its place");
+      assert(font.glyphs[p] !== undefined, `glyph ${p} in the UIs' alphabet`);
+      named++;
+    }
+  }
+  assert(named > 1900);
+  // MathJax's SVG output imports New Computer Modern as its default font: in its place there is none.
+  const { DefaultFont } = (await import("@mathjax/src/js/output/svg/DefaultFont.js")) as { DefaultFont: unknown };
+  assert.equal(DefaultFont, null);
+});
+
 test("inline formulas are one drawing, display fractions have their own layout", () => {
   const whole = mathDrawing("E=mc^2", false)!;
   assert(whole.draw.length >= 5, "all terms, including the terms after an equality, are carried");

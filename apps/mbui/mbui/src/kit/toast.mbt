@@ -150,7 +150,7 @@ pub fn toaster(
           toast: to,
           t: p.t,
           dx: if live { dx } else { (1.0 - p.t) * width * 0.5 },
-          hovered: c.hovered(tid),
+          hovered: c.lit(tid),
         }
         let i = c.drag_area(if live { tid } else { 0 }, axis=Horizontal, fn() {
           look(

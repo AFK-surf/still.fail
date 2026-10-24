@@ -11,10 +11,11 @@ import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
 import { KindIcon } from "../cloud/Vault.tsx";
-import { VaultChoices } from "../VaultApproval.tsx";
+import { VaultActions } from "../VaultApproval.tsx";
+import { AskCard } from "../VaultAsk.tsx";
 import { stationBase } from "../station.tsx";
 import {
-  ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemLasts, lastsChoice, lastsName, listLine, useVaultUses, type Kind, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, lastsChoice, lastsName, useVaultUses, type Kind, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -148,22 +149,15 @@ function Vaults({ view }: { view: VaultsView }) {
   );
 }
 
-/** A request waiting on the viewer: which item, why, the command, how, its chat; then the approval's rows. */
+/** A request waiting on the viewer (to use an item, or to keep one): its card, as in its chat, and a way to that chat. */
 function Request({ r }: { r: VaultRequest }) {
   const app = useApp();
+  const chat = r.station ? `${stationBase(`${app.entry.id}/${r.station}`)}/chats/${encodeURIComponent(r.session)}` : null;
   return (
     <div className={css.mRequest}>
-      <ListCard><div className={securityCss.mBody}>
-        <b>{t("web-pages.vault.approve.wants", { name: r.itemName ?? r.item })}</b>
-        <dl className={css.mFacts}>
-          <dt>{t("web-pages.vault.reason")}</dt><dd>{r.reason}</dd>
-          {r.command && <><dt>{t("web-pages.vault.command")}</dt><dd><code className={css.mMono}>{r.command}</code></dd></>}
-          <dt>{t("web-pages.vault.how")}</dt><dd>{howLine(r.mode, r.hosts)}</dd>
-        </dl>
-        {r.station && <LinkButton label={t("web-pages.vault.openChat")} className={css.mStart}
-          onClick={() => app.push(`${stationBase(`${app.entry.id}/${r.station}`)}/chats/${encodeURIComponent(r.session)}`)} />}
-      </div></ListCard>
-      <div className={css.mChoices}><VaultChoices workspace={app.entry.id} id={r.id} /></div>
+      <AskCard fill ask={{ name: r.itemName ?? r.item, mode: r.mode, command: r.command, save: r.save }}>
+        <VaultActions workspace={app.entry.id} id={r.id} extra={chat && <LinkButton label={t("web-pages.vault.openChat")} onClick={() => app.push(chat)} />} />
+      </AskCard>
     </div>
   );
 }
@@ -221,7 +215,7 @@ function ItemRow({ row, onOpen }: { row: VaultItemRow; onOpen: (() => void) | un
       <span className={css.mIcon}><KindIcon kind={row.kind} /></span>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}>{row.name}</span>
-        <span className={listsCss.mRowNote}>{itemLine(row)}</span>
+        <span className={listsCss.mRowNote}>{row.agentText}</span>
       </span>
       {opening ? <Spinner inline /> : onOpen && <ChevronRight size={14} className={partsCss.mSubtle} />}
     </ListRow>
@@ -260,11 +254,11 @@ function ItemSheet({ vault, opened, row }: { vault: string; opened: Opened; row:
       <SheetGrab />
       <SheetHead title={p.name} trailing={<LinkButton label={t("common.edit")} onClick={() => openEditor(app, vault, formOf(opened, row), opened.id)} />} />
       <div className={css.mSheetBody}>
-        <span className={listsCss.mRowNote}>{kindName(p.kind)}</span>
-        {fieldsOf(p).map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} />)}
+        <span className={listsCss.mRowNote}>{opened.kindText}</span>
+        {opened.shown.map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} />)}
         <div className={css.mSecret}>
           <span className={css.mLabel}>{t("web-pages.vault.forAgents")}</span>
-          <span>{row.listed ? `${row.modes.map((m) => howLine(m, row.hosts)).join("、")}${row.env ? ` · ${row.env}` : ""}` : t("web-pages.vault.notForAgents")}</span>
+          <span>{row.listed ? `${row.howText}${row.env ? ` · ${row.env}` : ""}` : t("web-pages.vault.notForAgents")}</span>
         </div>
       </div>
     </>
@@ -504,7 +498,7 @@ function LibraryVault({ v, plain }: { v: VaultRow; plain: boolean }) {
               <span className={css.mIcon}><KindIcon kind={row.kind} size={18} /></span>
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
                 <span className={listsCss.mRowTitle}>{row.name}</span>
-                <span className={listsCss.mRowNote}>{plain && <span className={securityCss.mWarn}>{t("web-pages.vault.risk.row")} · </span>}{listLine(row)}</span>
+                <span className={listsCss.mRowNote}>{plain && <span className={securityCss.mWarn}>{t("web-pages.vault.risk.row")} · </span>}{row.lineText}</span>
               </span>
               <ChevronRight size={14} className={partsCss.mSubtle} />
             </ListRow>
@@ -574,7 +568,7 @@ export function VaultItemScreen() {
   const edit = () => (opened ? openEditor(app, vault, formOf(opened, row), opened.id, plain) : open((o) => openEditor(app, vault, formOf(o, row), o.id, plain)));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <NavBar back={back} onBack={app.pop} title={row.name ?? ""} sub={<span>{<StationInWords station={v.station} text={[kindName(row.kind), t("web-pages.vault.storedOn", { station: v.stationName })].join(" · ")} />}</span>}
+      <NavBar back={back} onBack={app.pop} title={row.name ?? ""} sub={<span>{<StationInWords station={v.station} text={[row.kindText, t("web-pages.vault.storedOn", { station: v.stationName })].join(" · ")} />}</span>}
         trailing={<NavButton icon={Edit} label={t("common.edit")} onClick={edit} />} />
       {plain && (
         <ListCard><div className={securityCss.mBody}>
@@ -586,7 +580,7 @@ export function VaultItemScreen() {
       <SectionHeader title={t("web-pages.vault.content")} start={24} />
       <ListCard>
         {opened
-          ? <div className={securityCss.mBody}>{fieldsOf(opened.plain).map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} revealed={revealed} />)}</div>
+          ? <div className={securityCss.mBody}>{opened.shown.map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} revealed={revealed} />)}</div>
           : <div className={securityCss.mBody}><div className={css.mSecretLine}>
               <span className={`${css.mSecretValue} ${css.mMono}`}>{masked("x".repeat(20))}</span>
               <LinkButton label={t("web-pages.vault.show")} busy={opening} onClick={() => open(() => setRevealed(true))} />
@@ -596,9 +590,9 @@ export function VaultItemScreen() {
       <ListCard><div className={securityCss.mBody}>
         {row.listed ? (
           <dl className={css.mFacts}>
-            <dt>{t("web-pages.vault.how")}</dt><dd>{row.modes.map((m) => howLine(m, row.hosts)).join("、")}</dd>
+            <dt>{t("web-pages.vault.how")}</dt><dd>{row.howText}</dd>
             {row.env && <><dt>{t("web-pages.vault.editor.env")}</dt><dd className={css.mMono}>{row.env}</dd></>}
-            <dt>{t("web-pages.vault.editor.lasts")}</dt><dd>{itemLasts(row.lasts, v.lasts)}</dd>
+            <dt>{t("web-pages.vault.editor.lasts")}</dt><dd>{row.lastsText}</dd>
           </dl>
         ) : <span className={partsCss.mSubtle}>{t("web-pages.vault.notForAgents")}</span>}
       </div></ListCard>
@@ -610,7 +604,7 @@ export function VaultItemScreen() {
             <ListRow key={i} onClick={u.station ? () => app.push(`${stationBase(`${ws}/${u.station}`)}/chats/${encodeURIComponent(u.session)}`) : undefined}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
                 <span className={listsCss.mRowTitle}>{u.chatTitle ?? u.session}{u.denied && <span className={securityCss.mWarn}> · {t("web-pages.vault.uses.denied")}</span>}</span>
-                <span className={`${listsCss.mRowNote} ${css.mMono}`}>{u.command ?? howLine(u.mode, u.hosts)}</span>
+                <span className={`${listsCss.mRowNote} ${css.mMono}`}>{u.howText}</span>
               </span>
               <span className={listsCss.mRowNote}>{u.at.ago}</span>
             </ListRow>

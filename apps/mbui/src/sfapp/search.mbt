@@ -7,158 +7,6 @@
 // says of the rest. 取消 (or back) puts the field back in the list.
 
 ///|
-/// A chat the words found (SearchView.items): as Home lists it, and the part of it that has them when its title
-/// shows them late or not at all (`foundText`, `foundMarks`), and whether it was found in its station's archive.
-priv struct FoundChat {
-  item : ChatItem
-  found : String?
-  marks : Array[(Int, Int)]
-  archived : Bool
-}
-
-///|
-/// A message the words found (FoundMessage): its chat opens at it.
-priv struct FoundMessage {
-  station : String
-  seq : Double
-  chat : ChatItem
-  by : String
-  text : String
-  marks : Array[(Int, Int)]
-  ago : String
-}
-
-///|
-/// Something found besides a chat or a message (SearchItem), and what opens it.
-priv struct FoundItem {
-  kind : String
-  key : String
-  station : String
-  station_name : String
-  station_emoji : String
-  station_icon : String
-  title : String
-  text : String
-  marks : Array[(Int, Int)]
-  chat : String?
-  chat_title : String
-  job : String?
-  port : Bool
-  path : String?
-  root : String?
-  rel : String?
-  dir : Bool
-  file_kind : String
-  ago : String
-}
-
-///|
-/// A kind of what was found (SearchGroup): its heading, what of it is listed, whether there is more of it.
-priv struct FoundGroup {
-  kind : String
-  title : String
-  items : Array[FoundItem]
-  more : Bool
-}
-
-///|
-/// What a few words find in a workspace (the `search` topic: SearchView).
-priv struct SearchView {
-  chats : Array[FoundChat]
-  chats_more : Bool
-  words : Array[String]
-  messages : Array[FoundMessage]
-  messages_more : Bool
-  groups : Array[FoundGroup]
-  /// the stations not answered yet (`wait`: ListNote), those that could not be searched
-  reading : Bool
-  wait_text : String?
-  failing : Array[String]
-  /// what the list says under it: stations offline or too old to search
-  note : String?
-}
-
-///|
-fn marks_of(v : Json?, key : String) -> Array[(Int, Int)] {
-  items(v, key).map(fn(m) { (count(Some(m), "from"), count(Some(m), "to")) })
-}
-
-///|
-fn search_view(v : Json) -> SearchView {
-  let s = Some(v)
-  let wait = field(s, "wait")
-  {
-    chats: items(s, "items").map(fn(c) {
-      {
-        item: chat_item(c),
-        found: opt_text(Some(c), "foundText"),
-        marks: marks_of(Some(c), "foundMarks"),
-        archived: flag(Some(c), "archived"),
-      }
-    }),
-    chats_more: flag(s, "chatsMore"),
-    words: items(s, "words").map(fn(w) {
-      match w {
-        String(t) => t
-        _ => ""
-      }
-    }),
-    messages: items(s, "messages").map(fn(m) {
-      let o = Some(m)
-      {
-        station: text(o, "station"),
-        seq: number(o, "seq"),
-        chat: match field(o, "chat") {
-          Some(c) => chat_item(c)
-          None => chat_item(Json::object({}))
-        },
-        by: text(o, "by"),
-        text: text(o, "text"),
-        marks: marks_of(o, "marks"),
-        ago: text(field(field(o, "time"), "createdAt"), "ago"),
-      }
-    }),
-    messages_more: flag(s, "messagesMore"),
-    groups: items(s, "groups").map(fn(g) {
-      let o = Some(g)
-      {
-        kind: text(o, "kind"),
-        title: text(o, "title"),
-        more: flag(o, "more"),
-        items: items(o, "items").map(fn(it) {
-          let i = Some(it)
-          {
-            kind: text(i, "kind"),
-            key: text(i, "key"),
-            station: text(i, "station"),
-            station_name: text(i, "stationName"),
-            station_emoji: text(i, "stationEmoji"),
-            station_icon: text(i, "stationIcon"),
-            title: text(i, "title"),
-            text: text(i, "text"),
-            marks: marks_of(i, "marks"),
-            chat: opt_text(i, "chat"),
-            chat_title: text(i, "chatTitle"),
-            job: opt_text(i, "job"),
-            port: field(i, "port") is Some(Number(_, ..)),
-            path: opt_text(i, "path"),
-            root: opt_text(i, "root"),
-            rel: opt_text(i, "rel"),
-            dir: flag(i, "dir"),
-            file_kind: text(i, "fileKind"),
-            ago: text(field(field(i, "time"), "createdAt"), "ago"),
-          }
-        }),
-      }
-    }),
-    reading: flag(wait, "reading"),
-    wait_text: opt_text(wait, "text"),
-    failing: items(wait, "failing").map(fn(f) { text(Some(f), "text") }),
-    note: opt_text(s, "note"),
-  }
-}
-
-///|
 /// The search as it stands: open (its field off the list: `from`, its top in the window when tapped, and `wide`, its
 /// width there), going back (`leaving`), the words typed and the kind alone looked at ("" every kind); the last view
 /// read, kept while the next words are looked up.
@@ -416,12 +264,12 @@ fn search_rows(view : SearchView?, failed : Bool) -> Array[SearchRow] {
 ///|
 /// The page over Home: all of it, nothing under it touched through it.
 // kept across runs: a value (no field of it changes)
-let search_page_box : @ui.Style = @ui.style(w=Full, h=Full)
+let search_page_box : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// Its bar: under the status bar 8 (the home bar's top), 16 either side, 8 under; 取消 12 after the field.
 // kept across runs: a value (no field of it changes)
-let search_bar_row : @ui.Style = @ui.style(row=true, w=Full, pl=S4, pr=S4, pt=S2, pb=S2, gap=S3, align=ACenter)
+let search_bar_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2 pb=S2 gap=S3 align=ACenter")
 
 ///|
 /// Where the field rests at the top: the room 取消 leaves it.
@@ -446,7 +294,7 @@ let search_field_box : @ui.Style = @ui.style(
 ///|
 /// The field at the list's top: 16 either side, 6 under it.
 // kept across runs: a value (no field of it changes)
-let search_field_line : @ui.Style = @ui.style(w=Full, pl=S4, pr=S4, pb=S1_5)
+let search_field_line : @ui.Style = @ui.css("w=Full pl=S4 pr=S4 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -482,16 +330,7 @@ let search_link_words : @ui.TextStyle = @ui.text_style(size=Base, color=Link, wr
 ///|
 /// 全部结果 (BackRow): 16 in, 10 over, 4 under; its chevron 4 before the words.
 // kept across runs: a value (no field of it changes)
-let search_back_row : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  pl=S4,
-  pr=S4,
-  pt=S2_5,
-  pb=S1,
-  gap=S1,
-  align=ACenter,
-)
+let search_back_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2_5 pb=S1 gap=S1 align=ACenter")
 
 ///|
 /// A line of grey words (SearchNote): 22 in, 16 over and under.
@@ -546,7 +385,7 @@ let found_item_row_short : @ui.Style = found_item_row.then(@ui.style(h=@sf.found
 
 ///|
 // kept across runs: a value (no field of it changes)
-let found_icon_box : @ui.Style = @ui.style(w=S5, h=S5, align=ACenter, justify=JCenter)
+let found_icon_box : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -559,12 +398,8 @@ let found_line_22 : @ui.Style = @ui.style(row=true, w=Full, h=@sf.found_line_h, 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let found_line_20 : @ui.Style = @ui.style(row=true, w=Full, h=S5, gap=S2, align=ACenter)
+let found_line_20 : @ui.Style = @ui.css("row w=Full h=S5 gap=S2 align=ACenter")
 
-///|
-/// A found line (StrokedLine) where it is put: the strokes are drawn in its corner's terms.
-// kept across runs: a value (no field of it changes)
-let found_words_box : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// A hit's line: 15 on 22, one line cut at its end; an item's: 14 on 20.
@@ -758,7 +593,7 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
     Chat(ch) =>
       match ch.found {
         Some(found) => {
-          let meta = join_meta([
+          let meta = @sf.join_meta([
             if ch.archived {
               tr("android-chat.search.archived")
             } else {
@@ -773,7 +608,7 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
         None => chat_row(c, src, ch.item, "agents", found=true) |> ignore
       }
     Message(m) => {
-      let meta = join_meta([m.by, m.ago])
+      let meta = @sf.join_meta([m.by, m.ago])
       let key = "m/" + m.station + "/" + m.chat.session + "/" + m.seq.to_string()
       if hit_row(c, key, m.text, m.marks, meta, m.chat.title) {
         let words = match view {
@@ -810,17 +645,6 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
   }
 }
 
-///|
-/// Words beside each other in a row's meta: the ones said, " · " between them.
-fn join_meta(parts : Array[String]) -> String {
-  parts.filter(fn(p) { p != "" }).join(" · ")
-}
-
-///|
-/// The chat a row lists, as a page opens it.
-fn chat_ref_of(item : ChatItem) -> ChatRef {
-  { station: item.station, session: item.session, title: item.title, station_name: item.station_name }
-}
 
 ///|
 /// A message or a chat found by words (HitRow): what has them on its first line, the row's width (they bold, stroked
@@ -837,7 +661,7 @@ fn hit_row(
   let id = c.id("search/hit/" + key)
   c.box(style=found_hit_row, id~, fn() {
     c.box(style=found_line_22, fn() {
-      found_line(c, key, text, marks, found_hit_words, t.p.text)
+      @sf.found_line(c, key, text, marks, found_hit_words, t.p.text)
     })
     |> ignore
     c.box(style=found_line_20, fn() {
@@ -854,17 +678,6 @@ fn hit_row(
   c.clicked(id)
 }
 
-///|
-/// What a kind is drawn with (web Switcher.tsx's KIND_ICON).
-fn kind_icon(kind : String) -> String {
-  match kind {
-    "file" => "file"
-    "job" => "web"
-    "station" => "server"
-    "member" => "user"
-    _ => "search"
-  }
-}
 
 ///|
 /// Something found besides a chat or a message (ItemRow): its kind's icon (a station its own mark), what it is, where
@@ -879,7 +692,7 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
       } else {
         @sf.icon(
           c,
-          if it.kind == "file" && it.dir { "folder" } else { kind_icon(it.kind) },
+          if it.kind == "file" && it.dir { "folder" } else { @sf.kind_icon(it.kind) },
           size=18.0,
           color=t.p.muted,
         )
@@ -890,7 +703,7 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
     c.box(style=found_column, fn() {
       c.box(style=found_line_22, fn() {
         c.text(it.title, style=found_title) |> ignore
-        let meta = join_meta([
+        let meta = @sf.join_meta([
           if several && it.kind != "station" {
             it.station_name
           } else {
@@ -905,7 +718,7 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
       |> ignore
       if it.text != "" {
         c.box(style=found_line_20, fn() {
-          found_line(c, "i/" + it.key, it.text, it.marks, found_item_words, t.p.text)
+          @sf.found_line(c, "i/" + it.key, it.text, it.marks, found_item_words, t.p.text)
         })
         |> ignore
       }
@@ -918,171 +731,3 @@ fn item_row(c : @ui.Ctx, it : FoundItem, several : Bool) -> Bool {
   c.clicked(id)
 }
 
-///|
-/// A found line (Search.kt StrokedLine over `marked`): `text` on one line cut at its end, in `style`, the words found
-/// (`marks`) in `ink` and bold, a hand-drawn stroke in the accent under each, drawn in from the left one after another
-/// as the line comes (again when it changes).
-fn found_line(
-  c : @ui.Ctx,
-  key : String,
-  text : String,
-  marks : Array[(Int, Int)],
-  style : @ui.TextStyle,
-  ink : Int64,
-) -> Unit {
-  let t = @sf.theme()
-  let runs : Array[@ui.Run] = []
-  let mut at = 0
-  for m in marks {
-    let (from, to) = m
-    if from < at || to > text.length() || from > to {
-      continue
-    }
-    runs.push(@ui.span(text.view(start_offset=at, end_offset=from).to_string()))
-    runs.push(@ui.span(text.view(start_offset=from, end_offset=to).to_string(), weight=600, color=ink))
-    at = to
-  }
-  runs.push(@ui.span(text.view(start_offset=at).to_string()))
-  let wkey = "search/found/" + key
-  // its strokes drawn in as the line comes: 520 ms each, one 180 ms after the other
-  let total = @sf.strokes_ms(marks.length())
-  let drawn = @motion.anim(c, "search/drawn/" + key + "/" + text, 0.0, global=true)
-  if drawn.target() == 0.0 && !drawn.moving() && marks.length() > 0 {
-    drawn.animate(total, @motion.tween(total, ease=Linear))
-  }
-  let at_ms = drawn.get()
-  let box = c.box(style=found_words_box, fn() {
-    // under the words: each mark's stroke, from its first glyph's left to its last's right (2 past either), 3 under
-    // the baseline
-    match c.words_of(wkey) {
-      Some(w) if w.pieces.length() > 0 => {
-        let p = w.pieces[0]
-        let lay = p.layout
-        // a line cut at its end: the words past the ellipsis have no stroke
-        let end = if lay.text != text {
-          lay.text.length() - 1
-        } else {
-          text.length()
-        }
-        let base = if lay.line_y.length() > 0 { lay.line_y[0] + lay.line_base[0] } else { 0.0 }
-        c.layer(fn() {
-          for i, m in marks {
-            let (from, to) = m
-            let to = if to < end { to } else { end }
-            if from >= to {
-              continue
-            }
-            let part = @sf.stroke_part(at_ms, i)
-            if part <= 0.0 {
-              continue
-            }
-            match lay.rects(from, to).get(0) {
-              Some((rx, _, rw, _)) => {
-                let left = rx - 2.0
-                let right = rx + rw + 2.0
-                let (cx, cy) = @sf.stroke_corner(@sf.line_stroke)
-                c.box(tx=left - cx, ty=base + 3.0 - cy, fn() {
-                  @sf.hand_stroke(c, @sf.line_stroke, right - left, part, t.p.accent) |> ignore
-                })
-                |> ignore
-              }
-              None => ()
-            }
-          }
-        })
-        |> ignore
-      }
-      _ => ()
-    }
-    c.rich(runs, key=wkey, style~) |> ignore
-  })
-  c.words(box, wkey)
-}
-
-///|
-/// Where something found opens (Search.kt openFound, the web's Switcher.tsx openOf): a service its chat and its page
-/// over it, a task its chat; a station its page; a member the workspace's page; a file its place in its station's
-/// files; anything else its chat.
-fn open_found(it : FoundItem) -> Unit {
-  let chat : ChatRef? = match it.chat {
-    Some(k) => Some({ station: it.station, session: k, title: it.chat_title, station_name: it.station_name })
-    None => None
-  }
-  match it.kind {
-    "job" =>
-      match chat {
-        Some(r) => {
-          app.nav.push(Chat(r))
-          match it.job {
-            Some(job) if it.port => app.nav.push(Service(it.station, job))
-            _ => ()
-          }
-        }
-        None => ()
-      }
-    "station" => app.nav.push(Setting(@settings.Station(it.station)))
-    "member" => app.nav.push(Setting(@settings.Workspace))
-    "file" =>
-      match file_page(it) {
-        Some(p) => app.nav.push(p)
-        None => ()
-      }
-    _ =>
-      match chat {
-        Some(r) => app.nav.push(Chat(r))
-        None => ()
-      }
-  }
-}
-
-///|
-/// Where a file found opens in its station's files (Search.kt fileScreen, the web's searchOpen.ts): a folder entered,
-/// a text read, a video or song played, anything else shown in its folder; under the folder a read-only member's
-/// workspace pinned (`root`) when found there, else from its own folder.
-fn file_page(it : FoundItem) -> Page? {
-  let path = match it.path {
-    Some(p) => p
-    None => return None
-  }
-  let cut = {
-    let mut k = -1
-    for i in 0..<path.length() {
-      let ch = path.at(i).to_int()
-      if ch == 47 || ch == 92 {
-        k = i
-      }
-    }
-    k
-  }
-  let folder = if cut > 0 { path.view(end_offset=cut).to_string() } else { path }
-  let name = if cut > 0 { path.view(start_offset=cut + 1).to_string() } else { "" }
-  let root = match it.root {
-    Some(r) => r
-    None => if it.dir { path } else { folder }
-  }
-  let rel = match it.root {
-    Some(_) => it.rel.unwrap_or("")
-    None => if it.dir { "" } else { name }
-  }
-  let parent = {
-    let mut k = -1
-    for i in 0..<rel.length() {
-      if rel.at(i).to_int() == 47 {
-        k = i
-      }
-    }
-    if k >= 0 {
-      rel.view(end_offset=k).to_string()
-    } else {
-      ""
-    }
-  }
-  let at : DriveAt = { station: it.station, root: Some(root), path: rel }
-  let kind = if it.dir { "folder" } else { it.file_kind }
-  match kind {
-    "folder" => Some(Drive(at))
-    "text" | "markdown" => Some(DriveRead(at))
-    "video" | "audio" => Some(DrivePlay(at))
-    _ => Some(Drive({ ..at, path: parent }))
-  }
-}

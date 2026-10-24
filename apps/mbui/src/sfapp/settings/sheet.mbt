@@ -65,6 +65,27 @@ pub fn close() -> Unit {
 /// The sheet, over everything the app shows: call after the pages each frame.
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
   menu_overlay(c)
+  // the wide frame's question, while it is asked and as it goes
+  match asked.val {
+    Some(a) => {
+      let r = @sf.confirm(
+        c,
+        "settings-confirm",
+        asking.val is Some(_),
+        a.title,
+        a.words,
+        a.action,
+        cancel=tr("common.cancel"),
+      )
+      if r.confirmed {
+        asking.val = None
+        (a.run)()
+      } else if !r.open {
+        asking.val = None
+      }
+    }
+    None => ()
+  }
   let up = sheet.draw is Some(_)
   if up {
     sheet.last = sheet.draw
@@ -121,7 +142,7 @@ fn sheet_head(c : @ui.Ctx, title : String, lead? : () -> Unit) -> Unit {
 let keyed_fields : Map[String, @ui.Field] = {}
 
 ///|
-fn field_of(key : String) -> @ui.Field {
+pub fn field_of(key : String) -> @ui.Field {
   match keyed_fields.get(key) {
     Some(f) => f
     None => {
@@ -154,7 +175,7 @@ fn field_box(
 /// Asks for a line (PageParts.kt ask): its title, the field (with `value` in it at first), a hint under it, then
 /// 取消 and `action`, which is there once the line has words and differs from `value`. The sheet closes at once and
 /// `run` goes on with the line, trimmed.
-fn ask(
+pub fn ask(
   title : String,
   value : String,
   placeholder : String,
@@ -197,10 +218,34 @@ fn ask(
 }
 
 ///|
+/// What the wide frame asks before something that cannot be undone (the web's Confirm, a dialog: confirm): its title,
+/// what it does, its action, whether in red, and what goes on once it is said.
+priv struct Asking {
+  title : String
+  words : String
+  action : String
+  danger : Bool
+  run : () -> Unit
+}
+
+///|
+/// What is asked now in the wide frame, and what was asked last (drawn while its dialog goes).
+let asking : Ref[Asking?] = Ref(None)
+
+///|
+let asked : Ref[Asking?] = Ref(None)
+
+///|
 /// Asks before something that cannot be undone (PageParts.kt confirm, with `what`): its title, what it does, 取消 and
 /// `action` (red when `danger`); the sheet closes at once and `run` goes on. The app's pages ask so too (a chat archived
-/// while it keeps watch).
+/// while it keeps watch). In the wide frame the web's Confirm instead (@sf.confirm, a dialog in the middle of the window,
+/// drawn by overlay).
 pub fn confirm(title : String, words : String, action : String, run : () -> Unit, danger? : Bool = false) -> Unit {
+  if wide.val {
+    asking.val = Some({ title, words, action, danger, run })
+    asked.val = asking.val
+    return
+  }
   open_sheet(0.36, fn(c, _core) {
     let t = @sf.theme()
     sheet_head(c, title)
@@ -293,7 +338,7 @@ fn menu_overlay(c : @ui.Ctx) -> Unit {
   }
   c.layer(fn() { c.box(w=Fill(1.0), h=Fill(1.0), id=scrim, fn() {  }) |> ignore }) |> ignore
   c.layer(fn() {
-    c.box(w=Px(180.0), tx=dmax(12.0, menu.x), ty=menu.y, pad=menu_pad, radius=@sf.concentric_out(menu_row, menu_pad), bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, fn() {
+    c.box(w=Px(180.0), tx=dmax(12.0, menu.x), ty=menu.y, pad=menu_pad, radius=@sf.surface_corner(menu_pad, menu_row), bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, fn() {
       for i, label in menu.items {
         let id = c.id("settings-menu/" + i.to_string())
         if hit(c, id) {

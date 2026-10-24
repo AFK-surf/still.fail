@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, More, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowUpRight, Boxes, Chats, Close, File, Folder, Info, Monitor, More, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
 import { Letters } from "../Letters.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
@@ -15,7 +15,7 @@ import { memo, useEffect, useRef, useState, type ReactElement, type ReactNode } 
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
-import { keepTabs } from "../chatTabs.ts";
+import { changeTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
 import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
@@ -30,6 +30,8 @@ import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { ChatPanel, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
+import { OpenScreen, screenOfTab, screenTab, useScreenCard } from "../screen/ScreenLink.tsx";
+import { ScreenViewer } from "../screen/ScreenViewer.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
 import { useCommands } from "../commands.ts";
@@ -114,18 +116,19 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   const agents = chatView.value?.agents ?? [];
   // One history tab per agent, by its session's key (a chat may have several agents, each with its own): opened from
   // the agent (its avatar, its name, a row of what it does), closed alone, and with no tab open the panel goes away.
-  // Each chat keeps its own tabs. One not opened before opens none (its agents' histories open from them when wanted),
-  // except an agent with no chat yet, here or in Slack (the core's `noChat`): its page shows its history. Where the
-  // panel would lie over the chat (the styles' `max-width: 1100px`), none opens by itself: the chat comes first.
+  // Each chat keeps its own tabs. Which are open and in front is the core's (the chat's `tabs`: those kept for it that
+  // it has, client/core-ts/src/chat-tabs.ts), as are the changes (`chat.tabs.*`, changeTabs). One not opened before
+  // opens none (its agents' histories open from them when wanted), except an agent with no chat yet, here or in Slack:
+  // its page shows its history (`tabs.auto`). Where the panel would lie over the chat (the styles' `max-width: 1100px`),
+  // none opens by itself: the chat comes first.
   const chatKey = `${station.address}:${"thread" in of ? of.thread : of.session}`;
-  // Kept by the core for each chat (its prefs' `chatTabs`): read from there, written there (keepTabs).
-  const kept = usePrefs((p) => p.chatTabs[chatKey]);
-  const chosen = kept?.tabs ?? null;
   const [folded] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
-  const view = chatView.value;
-  const tabs = chosen ?? (view?.noChat && !folded && "session" in of ? [of.session] : []);
-  const active = kept?.active ?? null;
-  // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
+  const said = chatView.value?.tabs;
+  const bare = !!said?.auto && folded;
+  // The tabs as last left while the chat is not read yet: the page holds the panel's place instead of it coming in later.
+  const kept = usePrefs((p) => (said ? undefined : p.chatTabs[chatKey]?.tabs));
+  const open = said ? (bare ? NO_TABS : said.open) : kept ?? NO_TABS;
+  const shown = said && !bare ? said.shown ?? null : null;
   // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.
   const jobs = agents.flatMap((a) => a.jobs ?? []);
   // As its pages show them (the core's `chatJobs`).
@@ -134,29 +137,18 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   useEffect(() => {
     for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
-  const known = agents.length ? tabs.filter((key) => key === JOBS || key === FILES || key === LETTERS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   const isAgent = (key: string) => agents.some((a) => a.session.key === key);
-  const open = known;
   // The job picked in the 任务 tab.
   const [jobPicked, pickJob] = useState<string | null>(null);
-  const shown = active && open.includes(active) ? active : open[0] ?? null;
   const sidePanel = useSidePanel(open, shown);
   const { pageRef, panelRef, leaving } = sidePanel;
-  // Tabs and the one in front change together, and are kept for this chat in one write.
-  const commit = (next: string[], front: string | null) => {
-    sidePanel.changing(next);
-    keepTabs(chatKey, { tabs: next, active: front });
+  // Asked of the core, the panel told first whether any tab will be open (it slides in or out as they come).
+  const change = (action: "open" | "close" | "front" | "clear", key: string | undefined, any: boolean) => {
+    sidePanel.changing(any);
+    changeTabs(chatKey, action, key, !folded);
   };
-  const saveTabs = (next: string[]) => commit(next, active);
-  const setActive = (key: string | null) => commit(open, key);
-  const openTab = (key: string) => {
-    // An agent's history goes after the histories already open, before the other tabs.
-    if (isAgent(key) && !open.includes(key)) {
-      const at = open.findLastIndex(isAgent) + 1;
-      return commit([...open.slice(0, at), key, ...open.slice(at)], key);
-    }
-    commit(open.includes(key) ? open : [...open, key], key);
-  };
+  const setActive = (key: string) => change("front", key, true);
+  const openTab = (key: string) => change("open", key, true);
   // A web service's or a visualization's tab closed ends it: not left small in the corner (Previews.tsx).
   const endPreview = (key: string) => {
     const file = fileOf(key);
@@ -165,13 +157,12 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   };
   const closeTab = (key: string) => {
     endPreview(key);
-    const next = open.filter((tab) => tab !== key);
-    commit(next, shown === key ? next.at(-1) ?? null : active);
+    change("close", key, open.some((tab) => tab !== key));
   };
   // The panel closed closes all its tabs.
   const closePanel = () => {
     for (const key of open) endPreview(key);
-    saveTabs([]);
+    change("clear", undefined, false);
   };
   const openJobs = (job?: string) => {
     if (job) pickJob(job);
@@ -259,6 +250,12 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   useChatPageActions(chatKey, { history: openHistory, tab: openTab, jobs: openJobs, archive: archiveAsked });
   // A visualization in a message opens in a tab of the side panel: the same function while the page is this chat's.
   const [openFile] = useState(() => (session: string, file: { path: string; name: string }) => chatPage.tab(chatKey, fileTab(session, file.path, file.name)));
+  // A station's screen linked in a message opens beside the chat as well (ScreenLink.tsx), and from there on its own page.
+  const [openScreen] = useState(() => (at: string, screen: string) => chatPage.tab(chatKey, screenTab(at, screen)));
+  const screenPage = (at: string, screen: string) => {
+    const [workspace, id] = at.split("/");
+    navigate(`/w/${workspace}/s/${id}/screen/${encodeURIComponent(screen)}`);
+  };
   const api = stationApi(call);
   const toast = useToast();
   const running = agents.filter((a) => a.status === "running" || a.status === "queued");
@@ -298,7 +295,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // Relayed to a channel (docs/relay.md): a chat with an agent to go on there, from ⌘K and the title bar.
   const relayable = thread !== null && agents.length > 0 && !chatView.value?.archived && !chatView.value?.offline;
   const relay = () => { if (thread !== null) openRelay(station.address, thread); };
-  useCommands(relayable ? [{ id: "chat.relay", group: "chat", words: "relay slack feishu lark channel thread 接力 jieli 频道", label: t("web-main.relay.action"), icon: ArrowUpRight, run: relay }] : []);
+  useCommands(relayable ? [{ id: "chat.relay", icon: ArrowUpRight, run: relay }] : []);
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>{t("web-pages.chat.loadFailed", { error: chatView.error.message })}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
@@ -355,7 +352,9 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
       <OpenFile.Provider value={openFile}>
-        <ChatPanel session={chatSession} draftKey={chatKey} made={sendTo} />
+        <OpenScreen.Provider value={openScreen}>
+          <ChatPanel session={chatSession} draftKey={chatKey} made={sendTo} />
+        </OpenScreen.Provider>
       </OpenFile.Provider>
       </div>
         {side && (
@@ -397,6 +396,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                       </span>
                     );
                   }
+                  const seen = screenOfTab(key);
+                  if (seen) return <ScreenTabTrigger key={key} tab={key} station={seen.station} screen={seen.screen} onClose={() => closeTab(key)} />;
                   const service = jobs.find((j) => j.id === serviceOf(key));
                   if (service) {
                     return (
@@ -454,6 +455,18 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                 return (
                   <SidePane key={key} of={key} shown={side.shown} kept>
                     <PreviewSlot station={station.address} file={file} name={file.name} restarting={null} draftKey={chatKey} />
+                  </SidePane>
+                );
+              }
+              const seen = screenOfTab(key);
+              if (seen) {
+                // Seen only while its tab is in front: a view is not kept open behind another.
+                return (
+                  <SidePane key={key} of={key} shown={side.shown}>
+                    <div className={css.sideScreen}>
+                      <ScreenViewer station={seen.station} screen={seen.screen} backLabel={t("common.close")} onBack={() => closeTab(key)}
+                        panel={{ onExpand: () => screenPage(seen.station, seen.screen) }} />
+                    </div>
                   </SidePane>
                 );
               }
@@ -561,6 +574,34 @@ function useChatAgent(station: string, session: string, key: string): ChatAgent 
   return useTopicSelect<ChatView, ChatAgent | undefined>({ topic: "chat", station, session }, (s) => s.value?.agents.find((a) => a.session.key === key));
 }
 
+/** No tab open. */
+const NO_TABS: string[] = [];
+
+/** A station's screen's tab: its kind's mark and its title, as a link to it says them. */
+function ScreenTabTrigger({ tab, station, screen, onClose }: { tab: string; station: string; screen: string; onClose: () => void }) {
+  const item = useScreenCard(station, screen);
+  const label = item?.title || t("web-pages.screen.title");
+  return (
+    <span className={css.sideTabWrap}>
+      <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={tab} id={tabId(tab)} aria-controls={paneId(tab)}>
+        <span className={css.sideTabAgent}><ScreenMark kind={item?.kind ?? (screen.startsWith("simulator:") ? "simulator" : screen.startsWith("browser:") ? "browser" : "desktop")} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
+      </Tabs.Trigger></Tip>
+      <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: label })} onClick={onClose}><Close size={12} strokeWidth={2} /></button>
+    </span>
+  );
+}
+
+/** A screen's kind at a tab's size: a phone for a simulator, the globe for a browser's tab, a display for a desktop. */
+function ScreenMark({ kind }: { kind: string }) {
+  if (kind === "browser") return <Web size={14} strokeWidth={1.75} />;
+  if (kind !== "simulator") return <Monitor size={14} strokeWidth={1.75} />;
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="6.5" y="2.5" width="11" height="19" rx="2.5" />
+      <path d="M10.5 18.5H13.5" />
+    </svg>
+  );
+}
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
 /** The agent 往来 tab's key: what the chat's agents and other chats' wrote each other (Letters.tsx). */

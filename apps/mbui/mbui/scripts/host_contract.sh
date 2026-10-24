@@ -24,6 +24,10 @@
 #        stream's events as they are sent, the page grabbed; each step begun by the page's last, the run ending itself
 #   scripts/host_contract.sh HOST kinds         the kinds of what the host tells done (outside) named as
 #        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/chk outside-kinds)
+#   scripts/host_contract.sh mac update         a newer build of the app put in its place by the host and opened
+#        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), one signed otherwise refused (below)
+#   scripts/host_contract.sh mac links          a link of a scheme the app's Info.plist names, opened while it runs, said to the app
+#        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -152,6 +156,9 @@ run() {
         --uid $(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
         --end "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done|FATAL EXCEPTION|Fatal signal" || r=1
       $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2"
+      # the system's events over the run (its activities stopped, destroyed, relaunched, its configuration changed, a
+      # dialog over it): kept beside the run's log, what says why when the system disturbed it
+      $ADB logcat -b events -d > "${2%.log}.events.log" 2>/dev/null || true
       return $r ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
@@ -260,6 +267,12 @@ case $CMD in
     set -o pipefail
     { moon_test_native src/kitdemo/gallery/textrec_${NAME}_wbtest.mbt 2>&1 || true; } | tr -d '\r' | grep -v '^TDUMP' | tail -20 | tee $O/test.txt
     if ! grep -q "passed: 1, failed: 0" $O/test.txt; then
+      # the system made the app's activity again during the run (sent behind, destroyed, restored): what it drew after
+      # is not what a Tester replays, and the run says so first (its events beside it: run.events.log)
+      if grep -aq "activity onCreate (restored)" $O/run.log; then
+        echo "host_contract: the system made the activity again during the run (sent behind, then restored); its events:"
+        grep -a -E "am_(on_stop|stop|destroy|relaunch|create|restart|focused|pause)_?|configuration_changed|wm_" $O/run.events.log 2>/dev/null | tail -20 || true
+      fi
       # the first frame as the host drew it (DRAWDUMP) beside a Tester's, over the run cut at that frame: where they part
       awk '/TEXTREC /{print; next} !d && (/INPUT / || /ENV \{/){print} !d && /DRAWHASH /{print; d=1}' $O/run.log > $O/first.log
       scripts/chk textrec $O/first.log ${NAME}_first $PAGE - - $PLATFORM >/dev/null
@@ -404,7 +417,124 @@ open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
       echo "marks contract ($H): the host's PNG is not $REF.png (this run's artifact has it: $O/marks.png)"
       exit 1
     fi ;;
+  update)
+    # (macOS) a newer build put in the app's place by the host (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/
+    # updatecheck.mbt; mac_app.m's Updates): kitdemo bundled as an app of its own (dev.mbui.kitdemo.update), built as 1
+    # and 2 signed by an identity of this run's (made here, in a keychain of its own that is never on the search list)
+    # and as 3 signed ad hoc, the zips of 2 and 3 served over HTTP on this machine. Handed 3, the host refuses it (not
+    # signed as this app) and the run ends; handed 2, it downloads it, checks it, puts it in 1's place and opens it as 1
+    # quits: the app at 1's path is 2, and runs.
+    [ "$H" = mac ] || { echo "update contract: macOS only (the others do not put a build in place themselves)"; exit 1; }
+    U=$PWD/$O/update
+    rm -rf "$U" "$HOME/Library/Caches/dev.mbui.kitdemo.update"
+    mkdir -p "$U"
+    KC=$U/sign.keychain-db
+    ID="mbui update check"
+    # (the system's openssl, LibreSSL: a PKCS #12 the keychain imports, which OpenSSL 3's is not by default)
+    printf '[req]\ndistinguished_name = dn\nx509_extensions = ext\nprompt = no\n[dn]\nCN = %s\n[ext]\nkeyUsage = critical, digitalSignature\nextendedKeyUsage = critical, codeSigning\nbasicConstraints = CA:false\n' "$ID" > "$U/id.cnf"
+    /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 1 -config "$U/id.cnf" -keyout "$U/key.pem" -out "$U/cert.pem" 2> /dev/null
+    /usr/bin/openssl pkcs12 -export -inkey "$U/key.pem" -in "$U/cert.pem" -out "$U/id.p12" -passout pass:mbui
+    security create-keychain -p mbui "$KC"
+    security unlock-keychain -p mbui "$KC"
+    security import "$U/id.p12" -k "$KC" -P mbui -T /usr/bin/codesign > /dev/null
+    security set-key-partition-list -S apple-tool:,apple: -s -k mbui "$KC" > /dev/null
+    bundle() {
+      local app=$U/v$1/kitdemo.app
+      mkdir -p "$app/Contents/MacOS"
+      cp _build/native/release/build/kitdemo/kitdemo.exe "$app/Contents/MacOS/kitdemo"
+      local p=$app/Contents/Info.plist
+      plutil -create xml1 "$p"
+      plutil -insert CFBundleIdentifier -string dev.mbui.kitdemo.update "$p"
+      plutil -insert CFBundleExecutable -string kitdemo "$p"
+      plutil -insert CFBundlePackageType -string APPL "$p"
+      plutil -insert CFBundleVersion -string "$1" "$p"
+      plutil -insert NSPrincipalClass -string NSApplication "$p"
+      if [ "$2" = - ]; then codesign --force --sign - "$app"; else codesign --force --keychain "$KC" --sign "$ID" "$app"; fi
+    }
+    bundle 1 "$ID"
+    bundle 2 "$ID"
+    bundle 3 -
+    security delete-keychain "$KC"
+    for v in 2 3; do (cd "$U/v$v" && ditto -c -k --keepParent kitdemo.app "$U/kitdemo-$v.zip"); done
+    # the zips over HTTP (ranges too: a download picks up where it was cut), its port said once it listens
+    mkfifo "$U/port"
+    node -e '
+const http = require("http"), fs = require("fs"), path = require("path");
+const s = http.createServer((q, r) => {
+  const f = path.join(process.argv[1], path.basename(q.url));
+  fs.stat(f, (e, st) => {
+    if (e) { r.writeHead(404); return r.end(); }
+    const m = /bytes=(\d+)-/.exec(q.headers.range || ""), from = m ? +m[1] : 0;
+    if (m && from >= st.size) { r.writeHead(416); return r.end(); }
+    r.writeHead(m ? 206 : 200, { "content-length": st.size - from });
+    fs.createReadStream(f, { start: from }).pipe(r);
+  });
+});
+s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$U" > "$U/port" &
+    SRV=$!
+    read -r PORT < "$U/port"
+    asked() { echo "http://127.0.0.1:$PORT/kitdemo-$1.zip|$(shasum -a 256 "$U/kitdemo-$1.zip" | cut -d' ' -f1)|$(stat -f%z "$U/kitdemo-$1.zip")|kitdemo-$1.zip"; }
+    EXE=$U/v1/kitdemo.app/Contents/MacOS/kitdemo
+    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_UPDATECHECK="$(asked 3)" "$EXE" > "$U/refused.log" 2>&1 || true
+    grep -a UPDATECHECK "$U/refused.log"
+    if ! grep -aq '"phase":"failed".*not signed as this app' "$U/refused.log"; then
+      kill $SRV; wait $SRV 2> /dev/null || true; echo "update contract: a build signed otherwise was not refused"; exit 1
+    fi
+    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_UPDATECHECK="$(asked 2)" "$EXE" > "$U/updated.log" 2>&1 || true
+    kill $SRV; wait $SRV 2> /dev/null || true
+    grep -a "UPDATECHECK\|^update:" "$U/updated.log"
+    v=$(plutil -extract CFBundleVersion raw "$U/v1/kitdemo.app/Contents/Info.plist")
+    [ "$v" = 2 ] || { echo "update contract: the app at 1's place is $v, not 2"; exit 1; }
+    # opened again (by `open`, once 1 had ended), as the shell that did it says on the update's log; then its process,
+    # by its path
+    if ! scripts/chk logwait --log "$HOME/Library/Caches/dev.mbui.kitdemo.update/update.log" --line "opened $U/v1/kitdemo.app" \
+      --deadline 60 > /dev/null; then
+      echo "update contract: 2 was put in place but not opened"; exit 1
+    fi
+    pid=$(pgrep -f "^$EXE") || { echo "update contract: 2 was opened but is not running"; exit 1; }
+    kill $pid
+    rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
+    echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
+  links)
+    # (macOS) a link the app is opened with (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt; mac_app.m
+    # application:openURLs:, as still.fail's desktop app takes stillfail://o/…): kitdemo bundled as an app whose
+    # Info.plist names a scheme of its own (mbui-kitdemo-links), known to Launch Services for the run (lsregister) and
+    # forgotten after; opened with a link of it while it runs, it says the link and ends.
+    [ "$H" = mac ] || { echo "links contract: macOS only"; exit 1; }
+    U=$PWD/$O/links
+    rm -rf "$U"
+    mkdir -p "$U"
+    LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+    APP=$U/kitdemo.app
+    mkdir -p "$APP/Contents/MacOS"
+    cp _build/native/release/build/kitdemo/kitdemo.exe "$APP/Contents/MacOS/kitdemo"
+    P=$APP/Contents/Info.plist
+    plutil -create xml1 "$P"
+    plutil -insert CFBundleIdentifier -string dev.mbui.kitdemo.links "$P"
+    plutil -insert CFBundleExecutable -string kitdemo "$P"
+    plutil -insert CFBundlePackageType -string APPL "$P"
+    plutil -insert NSPrincipalClass -string NSApplication "$P"
+    plutil -insert CFBundleURLTypes -array "$P"
+    plutil -insert CFBundleURLTypes.0 -dictionary "$P"
+    plutil -insert CFBundleURLTypes.0.CFBundleURLSchemes -array "$P"
+    plutil -insert CFBundleURLTypes.0.CFBundleURLSchemes.0 -string mbui-kitdemo-links "$P"
+    codesign --force --sign - "$APP"
+    "$LSREG" -f "$APP"
+    LINK="mbui-kitdemo-links://o/ws1/st1/chat1?service=web"
+    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_LINKCHECK=1 "$APP/Contents/MacOS/kitdemo" > "$U/links.log" 2>&1 &
+    pid=$!
+    ok=1
+    scripts/chk logwait --log "$U/links.log" --line "LINKCHECK ready" --pid $pid --deadline 60 > /dev/null || ok=0
+    [ $ok = 0 ] || open "$LINK" || ok=0
+    [ $ok = 0 ] || scripts/chk logwait --log "$U/links.log" --line "LINKCHECK link" --pid $pid --deadline 60 > /dev/null || ok=0
+    kill $pid 2> /dev/null || true
+    "$LSREG" -u "$APP"
+    grep -a "LINKCHECK\|^mac: opened" "$U/links.log" || true
+    if [ $ok = 0 ] || ! grep -aqF "LINKCHECK link $LINK" "$U/links.log"; then
+      echo "links contract: opened with $LINK, the app did not say it"; exit 1
+    fi
+    echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links; ios: free, done)" >&2; exit 1 ;;
 esac

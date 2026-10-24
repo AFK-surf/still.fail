@@ -13,8 +13,20 @@
 pub(open) trait Host {
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
+  full_screen(Self) -> Bool = _
+  set_full_screen(Self, Bool) -> Unit = _
   window_drag(Self) -> Unit = _
   set_cursor(Self, Int) -> Unit = _
+  set_badge(Self, Int) -> Unit = _
+  menu_setup(Self, String) -> Unit = _
+  local_station(Self) -> String = _
+  local_station_act(Self, String) -> Unit = _
+  dock_available(Self) -> Bool = _
+  dock_send(Self, String) -> Unit = _
+  dock_stop(Self) -> Unit = _
+  dock_kept(Self) -> String = _
+  dock_keep(Self, String) -> Unit = _
+  mods_held(Self) -> Int = _
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
   wall_ms(Self) -> Double = _
@@ -27,15 +39,19 @@ pub(open) trait Host {
   shape(Self, String, Double, Int, Int, FixedArray[Double]) -> Int = _
   text_key(Self, String, Double, Int, Int) -> Int = _
   glyph(Self, Int, FixedArray[Double]) -> Unit = _
+  glyphs_ahead(Self, FixedArray[Int], Int) -> Unit = _
   face_add(Self, Int, String, Int) -> Bool = _
   face_add_bytes(Self, Int, Bytes, Int) -> Bool = _
   face_clear(Self, Int) -> Unit = _
+  face_add_family(Self, Int, String) -> Bool = _
+  local_font_families(Self) -> String = _
   atlas_generation(Self) -> Int = _
   present(Self, FixedArray[Double], Int, Double, Double, Double) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
   text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
+  clipboard_set_image(Self, Bytes) -> Unit = _
   log(Self, String) -> Unit = _
   bench_mode(Self) -> Int = _
   set_outside(Self, FuncRef[(Int, Int, Int) -> Unit]) -> Bool = _
@@ -83,7 +99,7 @@ pub(open) trait Host {
   view_control(Self, Int, Int, Double) -> Unit = _
   view_info(Self, Int, FixedArray[Double]) -> Int = _
   view_read_next(Self, Int, FixedArray[Double]) -> Int = _
-  view_read_answer(Self, Int, Int, Bytes, Double) -> Unit = _
+  view_read_answer(Self, Int, Int, Bytes, Double, Bool) -> Unit = _
   pdf_open(Self, Bytes) -> Int = _
   pdf_pages(Self, Int) -> Int = _
   pdf_page_size(Self, Int, Int, FixedArray[Double]) -> Unit = _
@@ -178,12 +194,72 @@ impl Host with window_inset(_) {
 }
 
 ///|
+impl Host with full_screen(_) {
+  false
+}
+
+///|
+impl Host with set_full_screen(_, _) {
+  ()
+}
+
+///|
 impl Host with window_drag(_) {
   ()
 }
 
 ///|
 impl Host with set_cursor(_, _) {
+  ()
+}
+
+///|
+impl Host with set_badge(_, _) {
+  ()
+}
+
+///|
+impl Host with menu_setup(_, _) {
+  ()
+}
+
+///|
+impl Host with local_station(_) {
+  ""
+}
+
+///|
+impl Host with local_station_act(_, _) {
+  ()
+}
+
+///|
+impl Host with dock_available(_) {
+  false
+}
+
+///|
+impl Host with mods_held(_) {
+  0
+}
+
+///|
+impl Host with dock_send(_, _) {
+  ()
+}
+
+///|
+impl Host with dock_stop(_) {
+  ()
+}
+
+///|
+impl Host with dock_kept(_) {
+  ""
+}
+
+///|
+impl Host with dock_keep(_, _) {
   ()
 }
 
@@ -248,6 +324,11 @@ impl Host with glyph(_, _, _) {
 }
 
 ///|
+impl Host with glyphs_ahead(_, _, _) {
+  ()
+}
+
+///|
 impl Host with face_add(_, _, _, _) {
   false
 }
@@ -260,6 +341,16 @@ impl Host with face_add_bytes(_, _, _, _) {
 ///|
 impl Host with face_clear(_, _) {
   ()
+}
+
+///|
+impl Host with face_add_family(_, _, _) {
+  false
+}
+
+///|
+impl Host with local_font_families(_) {
+  ""
 }
 
 ///|
@@ -289,6 +380,11 @@ impl Host with clipboard_set(_, _) {
 
 ///|
 impl Host with clipboard_set_secret(_, _, _) {
+  ()
+}
+
+///|
+impl Host with clipboard_set_image(_, _) {
   ()
 }
 
@@ -528,7 +624,7 @@ impl Host with view_read_next(_, _, _) {
 }
 
 ///|
-impl Host with view_read_answer(_, _, _, _, _) {
+impl Host with view_read_answer(_, _, _, _, _, _) {
   ()
 }
 
@@ -977,6 +1073,19 @@ pub fn window_inset() -> Bool {
 }
 
 ///|
+/// Whether the desktop's window fills the screen now (macOS's full screen). False where there is no such window.
+pub fn full_screen() -> Bool {
+  current.val.full_screen()
+}
+
+///|
+/// The desktop's window made to fill the screen, or back as it was (macOS's full screen, as its green button does).
+/// Nothing where there is no window to size.
+pub fn set_full_screen(on : Bool) -> Unit {
+  current.val.set_full_screen(on)
+}
+
+///|
 /// The press under way moves the window (a press on the app's own top row, @ui's Ctx::window_drag): the host's from
 /// here, as its title bar's would be.
 pub fn window_drag() -> Unit {
@@ -989,6 +1098,85 @@ pub fn window_drag() -> Unit {
 pub fn set_cursor(kind : Int) -> Unit {
   current.val.set_cursor(kind)
 }
+
+///|
+/// The number on the app's icon (macOS's Dock tile: what waits for the person); 0 none. Nothing where the system
+/// shows none.
+pub fn set_badge(n : Int) -> Unit {
+  current.val.set_badge(n)
+}
+
+///|
+/// The app's menus in the system's menu bar (macOS's), as JSON: an array of menus, each
+/// `{"title": …, "items": [item, …]}` (the first the app's own, its title the system's), an item
+/// `{"title": …, "role": …}` the system's own (`about`, `hide`, `hideOthers`, `showAll`, `quit`, `undo`, `redo`,
+/// `cut`, `copy`, `paste`, `selectAll`, `services`, `close`, `minimize`, `zoom`, `fullScreen`, `front`: their keys
+/// the system's),
+/// `{"title": …, "action": …, "keys"?: "Mod+Shift+H", "enabled"?: false}` the app's (chosen, said on `system_channel` as
+/// `{"menu": action}`; its keys shown, the app's to take), or `{"separator": true}`; a menu `"role": "window"` is the
+/// system's list of windows too, `"role": "actions"` one of the app's actions only (their keys never taken by the
+/// menu). Given again as what it shows changes. Nothing where the system has no menu bar.
+pub fn menu_setup(json : String) -> Unit {
+  current.val.menu_setup(json)
+}
+
+///|
+/// This machine's station as the system says it (macOS: its data ~/.stillfail, whether it runs and by what, its release,
+/// the workspace its data is in, what is being done to it and what failed last), as JSON; "" where there is none or no
+/// way to it.
+pub fn local_station() -> String {
+  current.val.local_station()
+}
+
+///|
+/// Something done to this machine's station: start, stop, restart (as `local_station` then says), log, folder (opened);
+/// `install {"origin", "token", "channel"}` (the station's installer with a workspace's one-time token: downloaded,
+/// joined, run as a service) and `update {"origin", "channel"}` (the installer with none: the station here brought up
+/// to the latest release, run as a service), `doing` while they run, as the others.
+pub fn local_station_act(action : String) -> Unit {
+  current.val.local_station_act(action)
+}
+
+///|
+/// Whether there is a dock here (macOS: the desktop's SwiftUI helper, apps/desktop/dock, on macOS 14 or later).
+pub fn dock_available() -> Bool {
+  current.val.dock_available()
+}
+
+///|
+/// The keys held down now that change what a press or a drag does (shift 1, control 2, option/alt 4, command 8: as a
+/// key's own modifiers are told): what a drag let go does by them (Finder's ⌥ a copy). None where there is no keyboard.
+pub fn mods_held() -> Int {
+  current.val.mods_held()
+}
+
+///|
+/// A line to the dock (one JSON object; the first starts it): what it says comes back a line each on channel
+/// `dock_channel`, {"type":"gone"} once it has ended.
+pub fn dock_send(line : String) -> Unit {
+  current.val.dock_send(line)
+}
+
+///|
+/// The dock stopped.
+pub fn dock_stop() -> Unit {
+  current.val.dock_stop()
+}
+
+///|
+/// The dock's settings as kept on this device (JSON; "" none), and kept.
+pub fn dock_kept() -> String {
+  current.val.dock_kept()
+}
+
+///|
+pub fn dock_keep(json : String) -> Unit {
+  current.val.dock_keep(json)
+}
+
+///|
+/// Where what the dock says comes (@ui.on_message).
+pub let dock_channel : String = "dock"
 
 ///|
 pub fn run(
@@ -1087,10 +1275,32 @@ pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
+/// The glyphs of the first `n` of `keys`, shaped and not drawn yet (on a page still off the screen, or below what is
+/// shown), for the host to draw ahead, off the frames' thread, so that `glyph` finds them drawn when they come into
+/// view. What `glyph` answers is the same either way: only when the work is done changes. A host may do nothing.
+pub fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  current.val.glyphs_ahead(keys, n)
+}
+
+///|
 /// A font file (TrueType or OpenType, at `path`) made part of face `face` (style.mbt: face_ui, face_text, face_code,
 /// or 4 to 15 for what names it), for `weight` (0: a variable file, every weight from it). False when the host could
 /// not read it as a font (the face as it was). What was shaped or drawn before is the host's to forget
 /// (atlas_generation moves on).
+/// Face `face` set in a family installed on this machine (`family`, as local_font_families names it): its every style
+/// the system's. False where the host has none of that name (or no way to it).
+pub fn face_add_family(face : Int, family : String) -> Bool {
+  current.val.face_add_family(face, family)
+}
+
+///|
+/// The font families installed on this machine, as a JSON array of their names, in the order of the user's
+/// language (the system's hidden ones left out); "" where the host has no way to them (a phone, a browser).
+pub fn local_font_families() -> String {
+  current.val.local_font_families()
+}
+
+///|
 pub fn face_add(face : Int, path : String, weight : Int) -> Bool {
   current.val.face_add(face, path, weight)
 }
@@ -1169,6 +1379,13 @@ pub fn clipboard_set(s : String) -> Unit {
 /// off `clear_ms` later unless something else was copied meanwhile (0: kept). Elsewhere as clipboard_set.
 pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   current.val.clipboard_set_secret(s, clear_ms)
+}
+
+///|
+/// A picture put on the system's clipboard (an image file's bytes: PNG, JPEG…), as a picture other apps paste. A host
+/// with no such clipboard (a browser's page, Android) puts nothing.
+pub fn clipboard_set_image(data : Bytes) -> Unit {
+  current.val.clipboard_set_image(data)
 }
 
 ///|
@@ -1512,35 +1729,38 @@ pub fn view_close(id : Int) -> Unit {
 }
 
 ///|
-/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed; a
-/// site: 5 back, 6 forward, 7 reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's
-/// own size shown smaller).
+/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed, 11
+/// to about `value` ms at once (the nearest key frame: nothing before it decoded); a site: 5 back, 6 forward, 7
+/// reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's own size shown smaller).
 pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
   current.val.view_control(id, op, value)
 }
 
 ///|
 /// How the view stands: -1 failed (a file the player cannot play, a page that cannot load), 0 opening, 1 ready.
-/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1), the picture's own width and height
-/// (pixels), the bytes it has been given, whether a frame has been drawn (a page: loaded), buffering (1), how far on it
-/// has what it needs to play (ms; 0 not said), played to its end (1).
+/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
+/// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
+/// drawn (a page: loaded), buffering (1: waiting on bytes still to come through the app, not a seek within what it
+/// has), how far on it has what it needs to play (ms; 0 not said), played to its end (1).
 pub fn view_info(id : Int, out : FixedArray[Double]) -> Int {
   current.val.view_info(id, out)
 }
 
 ///|
-/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants. Each is
-/// answered once (`view_read_answer`); the host asks for a frame when one comes.
+/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants; or minus
+/// the id of one it let go of (it wants none of what is left of it: the app stops reading it, answers it no more).
+/// Each is answered as its bytes come (`view_read_answer`); the host asks for a frame when one comes.
 pub fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   current.val.view_read_next(id, out)
 }
 
 ///|
-/// Read `req`'s answer: the bytes from its offset (at most as many as it wanted; fewer is fine, none only at the
-/// file's end), `total` the file's whole size (-1 not known: Apple's player needs it, so give it); -2: it could not be
-/// read (the player fails).
-pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
-  current.val.view_read_answer(id, req, data, total)
+/// Read `req`'s next bytes, as they come: those after what it was answered before (all of them at most as many as it
+/// wanted; fewer is fine, none only at the file's end), `more` while more of it comes (its last answer may bring
+/// none); `total` the file's whole size (-1 not known: Apple's player needs it, so give it, at the latest with its
+/// last answer); -2: it could not be read (its last: the player fails).
+pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
+  current.val.view_read_answer(id, req, data, total, more)
 }
 
 ///|

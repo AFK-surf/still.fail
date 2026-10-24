@@ -27,16 +27,19 @@ fn fixture_station_drive(up : Bool) -> Json {
           { "path": "/Volumes/备份盘", "name": "备份盘", "state": "missing" },
         ],
         "anywhere": true,
+        "transfers": true,
         "home": fix_home,
         "trash": true,
         "watch": true,
         "zip": true,
       },
+      // its disk: 380 GB of 1 TB left
+      "disk": { "freeBytes": 380000000000.0, "totalBytes": 1000000000000.0 },
     }
   } else {
     {
       "viewer": { "via": "mesh", "role": "owner" },
-      "drive": { "roots": [{ "path": "/Users/lin/照片", "name": "照片", "state": "ok" }] },
+      "drive": { "roots": [{ "path": "/Users/lin/照片", "name": "照片", "state": "ok" }], "transfers": true },
     }
   }
 }
@@ -52,14 +55,23 @@ fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
     "mtime": Json::number(1792300000000.0 - size.to_double()),
     "type": "",
     "kind": Json::string(kind),
-    "sizeText": Json::string(if dir { "" } else { file_size(size.to_double()) }),
+    "sizeText": Json::string(if dir { "" } else { @sf.file_size(size.to_double()) }),
     "timeText": Json::string(time),
   }
 }
 
 ///|
+/// A made-up file's extension, lower case (what its kind is made up from).
+fn fix_ext(name : String) -> String {
+  match name.rev_find(".") {
+    Some(i) if i > 0 => name.view(start_offset=i + 1).to_owned().to_lower()
+    _ => ""
+  }
+}
+
+///|
 fn fix_kind(name : String) -> String {
-  match dv_ext(name) {
+  match fix_ext(name) {
     "md" => "markdown"
     "txt" | "log" => "text"
     "png" | "jpg" | "jpeg" | "heic" => "image"
@@ -143,10 +155,16 @@ fn fix_folder_json(root : String, path : String) -> Json {
 let fix_places : Map[String, Json] = {}
 
 ///|
+/// The copies asked (`drive.transfer`), as the `driveTransfers` topic shows them, newest first: each copying, 38% on.
+let fix_transfers : Array[Json] = []
+
+///|
 fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let p = Some(Json::object(params))
   match name {
     "workspace" => Some({ "id": "ws1", "name": "星火工作室", "manager": true, "role": "owner" })
+    "driveTransfers" =>
+      Some({ "supported": true, "loaded": true, "transfers": Json::array(fix_transfers.copy()) })
     "drive" =>
       if f.mode == "drive-loading" {
         None
@@ -172,10 +190,55 @@ fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -
 }
 
 ///|
+/// A copy asked (`drive.transfer`), shown in the `driveTransfers` topic as going: 38% on.
+fn fix_transfer(params : Json) -> Unit {
+  let p = Some(params)
+  let from = field(p, "from")
+  let to = field(p, "to")
+  let names = items(from, "names").map(fn(n) {
+    match n {
+      String(s) => s
+      _ => ""
+    }
+  })
+  let title = names.get(0).unwrap_or("")
+  let way = dv_name(dv_absolute(text(to, "root"), text(to, "path")))
+  fix_transfers.insert(0, {
+    "id": Json::string("t\{fix_transfers.length() + 1}"),
+    "station": Json::string(text(to, "station")),
+    "stationName": "MBA",
+    "fromStation": Json::string(text(from, "station")),
+    "fromStationName": "Studio",
+    "fromRoot": Json::string(text(from, "root")),
+    "fromPath": Json::string(text(from, "path")),
+    "names": Json::array(names.map(fn(n) { Json::string(n) })),
+    "toRoot": Json::string(text(to, "root")),
+    "toPath": Json::string(text(to, "path")),
+    "toText": Json::string("MBA › " + way),
+    "title": Json::string(title),
+    "move": Json::boolean(flag(p, "move")),
+    "state": "copying",
+    "active": true,
+    "progress": 0.38,
+    "total": 50541773,
+    "copied": 19205873,
+    "count": 1,
+    "files": 1,
+    "statusText": "18.3 MB / 48.2 MB",
+    "createdAt": 1792300000000,
+  })
+}
+
+///|
 fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   let root = text(p, "root")
   match name {
+    "drive.transfer" => {
+      fix_transfer(params)
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
     "drive.rename" => {
       let from = text(p, "from")
       let to = text(p, "to")
@@ -257,7 +320,13 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
           { "name": "项目", "path": "/Users/lin/项目" },
           { "name": "下载", "path": "/Users/lin/下载", "unreadable": true },
         ],
-        "places": [{ "name": "外接硬盘", "path": "/Volumes/外接硬盘", "disk": true }],
+        // (as a station offers them: its home, the home's own folders, its disks)
+        "places": [
+          { "name": "主目录", "path": fix_home },
+          { "name": "文档", "path": "/Users/lin/文档" },
+          { "name": "下载", "path": "/Users/lin/下载", "unreadable": true },
+          { "name": "外接硬盘", "path": "/Volumes/外接硬盘", "disk": true },
+        ],
       }
       Some(Ok(answer))
     }
@@ -351,10 +420,10 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
       let key = folder_key("ws1/st1", fix_docs, "")
-      // a file being downloaded, a folder being zipped for it (keep.mbt): their rows' progress
+      // a file being downloaded, a folder being zipped for it (the core's downloads, downloads_fixture.mbt): their rows'
+      // progress (keep.mbt)
       if mode == "drive-download" {
-        dv_fetches[dv_fetch_key("ws1/st1", fix_docs, "首页截图.png")] = 40
-        dv_fetches[dv_fetch_key("ws1/st1", fix_docs, "设计稿")] = 0
+        fix_drive_downloads("ws1/st1", fix_docs)
       }
       if mode == "drive-chosen" {
         dv.chosen[key] = ["长篇小说.txt", "首页截图.png"]
@@ -369,9 +438,9 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       }
       if mode == "drive-upload" {
         let up = fn(name : String, size : Int, sent : Int, state : String, error : String) {
-          dv.serial += 1
-          dv.uploads.push({
-            serial: dv.serial,
+          ups.serial += 1
+          ups.uploads.push({
+            serial: ups.serial,
             station: "ws1/st1",
             root: fix_docs,
             dir: "",
@@ -387,7 +456,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         up("旅行照片.zip", 6291456, 2621440, "going", "")
         up("长篇小说.txt", 2048, 0, "taken", "")
         up("会议录音.m4a", 3145728, 0, "failed", "station 已离线")
-        dv.pumping = true
+        ups.pumping = true
       }
     }
     "drive-sub" => {
@@ -405,16 +474,16 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
       app.nav.push(DriveRead(at))
-      let r = reading_for(reader_key(at))
+      let r = @sf.reading_for(reader_key(at))
       if mode != "reader" && mode != "reader-md" {
         r.chrome = true
       }
       if mode == "reader-contents" {
-        r.panel = Contents
+        r.panel = @sf.ReaderPanel::Contents
         r.contents_put = false
       }
       if mode == "reader-layout" {
-        r.panel = Layout
+        r.panel = @sf.ReaderPanel::Layout
         r.contents_put = false
       }
     }

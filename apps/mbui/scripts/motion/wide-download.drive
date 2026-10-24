@@ -1,0 +1,14 @@
+# The wide frame's: 发布包.zip opened from its card (MBUI_FIXTURE=chat-download; its stem and extension two words
+# there), 下载 the page's button; closed (Esc) while it comes, its card saying how far (its sheet filling, the web's
+# FileTile), kept once all of it is here.
+timeout 20000
+until =发布包
+wait 600
+tap =发布包
+until =下载
+wait 800
+tap =下载
+wait 1200
+key esc
+move -20 400
+wait 4500

@@ -105,7 +105,6 @@ fn files_top_bar(c : @ui.Ctx) -> Unit {
       |> ignore
     })
     |> ignore
-    c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })
   |> ignore
 }
@@ -356,8 +355,8 @@ fn root_row(c : @ui.Ctx, station : String, r : DvRoot, first : Bool, last : Bool
     app.nav.push(Drive({ station, root: Some(r.path), path: "" }))
   }
   let trouble = dv_trouble(r.state)
-  dv_card_row(c, first, last, dv_surface(), id, fn() {
-    c.box(dir=Row, w=Fill(1.0), padx=16.0, pady=12.0, gap=12.0, align=ACenter, fn() {
+  dv_card_row(c, first, last, None, id, fn() {
+    c.box(dir=Row, w=Fill(1.0), padx=@sf.card_pad - @sf.list_pad, pady=12.0, gap=12.0, align=ACenter, fn() {
       @sf.icon(c, "folder", size=22.0, color=t.p.muted) |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(r.name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
@@ -466,11 +465,10 @@ fn folder_page(
   }
   // the files picked to go up
   dv_take_picked(src, here, entries)
-  let (sort, hidden) = dv_views(src)
-  let shown = dv_arranged(entries, sort, hidden)
+  let shown = dv_shown(src, station, root, path, entries).unwrap_or([])
   let chosen = dv.chosen.get(key).unwrap_or([])
   let choosing = chosen.length() > 0
-  let ups = dv.uploads.filter(fn(u) { u.station == station && u.root == root && u.dir == path })
+  let ups = ups.uploads.filter(fn(u) { u.station == station && u.root == root && u.dir == path })
   if choosing {
     let all = chosen.length() == shown.length()
     if dv_nav_bar(c, tr("common.cancel"), dv_count("android-misc.drive.chosen", chosen.length()), fn() {
@@ -787,10 +785,6 @@ fn entry_row(
 
   let id = c.id("entry/" + path)
   if !busy {
-    // right clicked (a desktop's): its sheet, as ⋯ on it chosen opens (Drive.tsx's row menu)
-    if wide_on.val && c.right_clicked(id) is Some(_) {
-      dv_open(c, Entry({ station: at.station, root: Some(root), path: at.path }, e, shown.map(fn(x) { x.name })))
-    }
     if dv_held(c, id) {
       toggle()
     }
@@ -802,13 +796,9 @@ fn entry_row(
       }
     }
   }
-  let ground = if chosen {
-    @sf.over(dv_surface(), @sf.alpha(t.p.accent, 0.12))
-  } else {
-    dv_surface()
-  }
+  let ground = if chosen { Some(@sf.over(dv_surface(), @sf.alpha(t.p.accent, 0.12))) } else { None }
   dv_card_row(c, first, last, ground, if busy { 0 } else { id }, fn() {
-    c.box(dir=Row, w=Fill(1.0), padx=16.0, pady=11.0, gap=12.0, align=ACenter, fn() {
+    c.box(dir=Row, w=Fill(1.0), padx=@sf.card_pad - @sf.list_pad, pady=11.0, gap=12.0, align=ACenter, fn() {
       if choosing {
         c.box(
           w=Px(22.0),
@@ -839,7 +829,12 @@ fn entry_row(
         }
       })
       |> ignore
-      let fetching = dv_fetches.get(dv_fetch_key(at.station, root, path))
+      // how far it has come: the core's download of it (a folder's: its zip's, 0 while the station zips it), else a
+      // fetch of it to hand to another app
+      let fetching = match download_of_drive(src, at.station, root, path) {
+        Some(d) if flag(Some(d), "active") => Some((number(Some(d), "progress") * 100.0).floor().to_int())
+        _ => dv_fetches.get(dv_fetch_key(at.station, root, path))
+      }
       if busy {
         @sf.spinner(c, size=12.0) |> ignore
       } else if failed is Some(_) {
@@ -889,163 +884,6 @@ fn read_share(c : @ui.Ctx, src : Source, station : String, root : String, path :
 // ── uploads ──────────────────────────────────────────────────────────────
 
 ///|
-/// The part a file goes up in at most (Calls.kt UPLOAD_PART); the first is a quarter of a megabyte, doubling while
-/// parts go through, so a name taken is told early.
-let dv_part_max : Int = 4 * 1024 * 1024
-
-///|
-let dv_part_first : Int = 256 * 1024
-
-///|
-/// The system's file picker, for files to go up into `at`.
-fn dv_upload(c : @ui.Ctx, at : DriveAt) -> Unit {
-  match @ui.pick(Files) {
-    Some(p) => {
-      dv.picking = Some(p)
-      dv.picking_for = at
-    }
-    None => say(c, tr("android-chat.composer.noFiles"))
-  }
-}
-
-///|
-/// The files picked, once the system has answered: each a row of the folder, going up one after another.
-fn dv_take_picked(src : Source, at : DriveAt, entries : Array[DvEntry]) -> Unit {
-  ignore(entries)
-  match dv.picking {
-    Some(p) if dv.picking_for == at =>
-      match p.files() {
-        Some(files) => {
-          dv.picking = None
-          let root = at.root.unwrap_or("")
-          for f in files {
-            dv.serial += 1
-            dv.uploads.push({
-              serial: dv.serial,
-              station: at.station,
-              root,
-              dir: at.path,
-              name: f.name,
-              bytes: f.bytes,
-              sent: 0,
-              state: "waiting",
-              error: "",
-              replace: false,
-              id: "",
-            })
-          }
-          dv_pump(src)
-        }
-        None => ()
-      }
-    _ => ()
-  }
-}
-
-///|
-/// The next file waiting, up (one at a time, whatever page is shown).
-fn dv_pump(src : Source) -> Unit {
-  if dv.pumping {
-    return
-  }
-  // (the next file waiting, sent once: its bytes are what was picked, whichever build sends it)
-  match dv.uploads.iter().find_first(fn(u) { u.state == "waiting" }) {
-    Some(u) => {
-      if src.read_only {
-        u.state = "failed"
-        u.error = read_only_words
-        dv_pump(src)
-        return
-      }
-      dv.pumping = true
-      u.state = "going"
-      u.sent = 0
-      u.id = upload_id("drive\u{1}\{u.root}\u{1}\{u.dir}\u{1}" + file_seed(u.station, u.name, u.bytes), u.serial)
-      dv_up_part(src, u, 0, dv_part_first)
-    }
-    None => ()
-  }
-}
-
-///|
-fn dv_up_done(src : Source, u : DvUpload) -> Unit {
-  dv.uploads.retain(fn(x) { x.serial != u.serial })
-  dv.pumping = false
-  dv_pump(src)
-}
-
-///|
-/// One part of a file up from `have` (Calls.kt driveUpload): the station answers with what it has (`have`), the last
-/// part in with the entry it now has; a name taken refuses the first part (409), asked in its row.
-fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit {
-  if !dv.uploads.iter().any(fn(x) { x.serial == u.serial }) {
-    dv.pumping = false
-    dv_pump(src)
-    return
-  }
-  let size = u.bytes.length()
-  let len = if size - have < planned { size - have } else { planned }
-  let part = Bytes::makei(len, fn(i) { u.bytes[have + i] })
-  let params : Map[String, Json] = {
-    "station": Json::string(u.station),
-    "root": Json::string(u.root),
-    "path": Json::string(dv_join(u.dir, u.name)),
-    "id": Json::string(u.id),
-    "offset": Json::number(have.to_double()),
-    "total": Json::number(size.to_double()),
-  }
-  if u.replace {
-    params["replace"] = Json::boolean(true)
-  }
-  (src.call_bytes)("drive.upload.part", Json::object(params), part, fn(r) {
-    match r {
-      Ok(answer) => {
-        let entry = match field(Some(answer), "entry") {
-          Some(Null) | None => false
-          _ => true
-        }
-        let next = match field(Some(answer), "have") {
-          Some(Number(n, ..)) => n.to_int()
-          _ => have + len
-        }
-        if entry || next >= size {
-          u.sent = size
-          dv_up_done(src, u)
-        } else if next <= have {
-          u.state = "failed"
-          u.error = tr("android-chat.file.uploadFailed")
-          dv.pumping = false
-          dv_pump(src)
-        } else {
-          u.sent = next
-          let more = if next == have + len {
-            if planned * 2 > dv_part_max {
-              dv_part_max
-            } else {
-              planned * 2
-            }
-          } else {
-            dv_part_first
-          }
-          dv_up_part(src, u, next, more)
-        }
-      }
-      Err(e) => {
-        let taken = number(Some(e), "status") == 409.0 || text(Some(e), "code") == "exists"
-        if taken && !u.replace {
-          u.state = "taken"
-        } else {
-          u.state = "failed"
-          u.error = dv_error(e)
-        }
-        dv.pumping = false
-        dv_pump(src)
-      }
-    }
-  })
-}
-
-///|
 /// A file going up (DriveScreen.kt UploadRow): its name, how far it has got (a thin bar); its name taken there
 /// (替换 or 保留两者), or why it failed (重试); × lets it go.
 fn upload_row(
@@ -1058,15 +896,16 @@ fn upload_row(
 ) -> Unit {
   let t = @sf.theme()
   let k = "up/\{u.serial}"
-  dv_card_row(c, first, last, dv_surface(), 0, fn() {
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=8.0, pt=11.0, pb=11.0, gap=12.0, align=ACenter, fn() {
+  dv_card_row(c, first, last, None, 0, fn() {
+    c.box(dir=Row, w=Fill(1.0), pl=@sf.card_pad - @sf.list_pad, pt=11.0, pb=11.0, gap=12.0, align=ACenter, fn() {
       @sf.icon(c, "upload", size=22.0, color=t.p.muted) |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(u.name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
         match u.state {
           "taken" =>
             c.box(dir=Row, gap=12.0, align=ACenter, fn() {
-              c.text(tr("android-misc.drive.exists.title"), size=12.0, color=t.p.muted, wrap=false, line=16.0)
+              // (short of room, what is asked is cut short, its two answers kept whole)
+              c.text(tr("android-misc.drive.exists.title"), size=12.0, color=t.p.muted, wrap=false, line=16.0, w=Cut)
               |> ignore
               let rid = c.id(k + "/replace")
               let bid = c.id(k + "/both")
@@ -1076,18 +915,18 @@ fn upload_row(
                 dv_pump(src)
               }
               if c.clicked(bid) {
-                let others = dv.uploads.filter(fn(x) { x.serial != u.serial && x.dir == u.dir })
+                let others = ups.uploads.filter(fn(x) { x.serial != u.serial && x.dir == u.dir })
                 let taken = entries.map(fn(e) { e.name }) + others.map(fn(x) { x.name })
                 u.name = dv_free_name(u.name, taken)
                 u.state = "waiting"
                 dv_pump(src)
               }
-              c.box(id=rid, fn() {
+              c.box(style=drive_answer, id=rid, fn() {
                 c.text(tr("android-misc.drive.exists.replace"), size=12.0, weight=600, color=@sf.link_ink(), wrap=false, line=16.0)
                 |> ignore
               })
               |> ignore
-              c.box(id=bid, fn() {
+              c.box(style=drive_answer, id=bid, fn() {
                 c.text(tr("android-misc.drive.exists.both"), size=12.0, weight=600, color=@sf.link_ink(), wrap=false, line=16.0)
                 |> ignore
               })
@@ -1107,8 +946,8 @@ fn upload_row(
             let size = u.bytes.length()
             c.text(
               fill("android-misc.drive.upload.going", [
-                ("sent", file_size(u.sent.to_double())),
-                ("size", file_size(size.to_double())),
+                ("sent", @sf.file_size(u.sent.to_double())),
+                ("size", @sf.file_size(size.to_double())),
               ]),
               size=12.0,
               color=t.p.muted,
@@ -1138,9 +977,9 @@ fn upload_row(
         dv_pump(src)
       }
       if dv_row_key(c, k + "/cancel", "close", tr("common.cancel")) {
-        dv.uploads.retain(fn(x) { x.serial != u.serial })
+        ups.uploads.retain(fn(x) { x.serial != u.serial })
         if u.state == "going" {
-          dv.pumping = false
+          ups.pumping = false
           dv_pump(src)
         }
       }
@@ -1172,3 +1011,8 @@ fn dv_row_key(c : @ui.Ctx, key : String, icon : String, said : String) -> Bool {
   |> ignore
   c.clicked(id)
 }
+
+///|
+/// An answer to what is asked of an upload (替换, 保留两者): its words whole on their line.
+// kept across runs: a value (no field of it changes)
+let drive_answer : @ui.Style = @ui.css("row")

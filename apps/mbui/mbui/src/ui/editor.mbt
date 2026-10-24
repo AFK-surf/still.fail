@@ -169,6 +169,10 @@ fn EditorState::move_to(self : EditorState, off : Int, ext : Bool) -> Unit {
 
 ///|
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
+  // (one the app takes for itself: not the field's)
+  if mods == 0 && self.leaves.contains(code) {
+    return
+  }
   let shift = (mods & mod_shift) != 0
   self.blink0 = now
   self.handle = false
@@ -361,12 +365,14 @@ pub fn Ctx::editor(
   placeholder_color? : Int64 = 0x8E8E93FFL,
   caret_color? : Int64 = 0x0A84FFFFL,
   enter_sends? : Bool = true,
+  leaves? : Array[Int] = [],
   ime_action? : Int = 0,
   paste_limit? : Int = 0,
   secret? : Bool = false,
   words? : Bool = false,
   look? : (String) -> (String, Array[(Int, Int, Int64)]),
   field? : Field,
+  pictures? : Bool = false,
 ) -> EditorResult {
   let id = self.id(key)
   let st = match (self.editors.get(id), field) {
@@ -389,6 +395,7 @@ pub fn Ctx::editor(
   }
   st.limit = paste_limit
   st.enter_sends = enter_sends
+  st.leaves = leaves
   st.ime_action = ime_action
   st.secret = secret
   st.words = words
@@ -405,6 +412,25 @@ pub fn Ctx::editor(
   st.built_frame = self.build_no
   st.built_key = key
   st.built_id = id
+  // ⌘V with a picture on the clipboard, read for it: the picture where it takes pictures (Ctx::field_picture), else
+  // the words with it put in as a paste's
+  match desk.pasting {
+    Some((pid, r)) if pid == id =>
+      match r.got() {
+        Some(got) => {
+          desk.pasting = None
+          match got.picture {
+            Png(png) if pictures => {
+              desk.pictures[id] = png
+              self.read_changed("a picture pasted")
+            }
+            _ => if got.text != "" { st.text_input(0, got.text, 0, 0, self.now) }
+          }
+        }
+        None => ()
+      }
+    _ => ()
+  }
   // Android's long press on it (the finger still, held long_press_ms: one that moves past the slop is no tap, app.mbt): the word there picked, its handles and the
   // floating menu, felt (Compose's text field); the finger sliding on from there widens it by words (`editor_tap`
   // is Android's alone: elsewhere a press on a field puts the caret at once)
@@ -747,6 +773,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     pasted: None,
     limit: 0,
     enter_sends: true,
+    leaves: [],
     ime_action: 0,
     line: 0.0,
     color: 0L,
@@ -822,6 +849,18 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
 }
 
 ///|
+/// Its words from `from` to `to` picked (UTF-16, in its words: the anchor at `from`, the caret at `to`), as a name
+/// changed in place picks it but its extension.
+pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
+  let st = self.st
+  st.anchor = imin(imax(from, 0), st.text.length())
+  st.caret = imin(imax(to, 0), st.text.length())
+  st.pref_x = -1.0
+  st.blink_again = true
+  field_written()
+}
+
+///|
 /// Its words given up (sent): what the input method was composing put in first, then none left in it.
 pub fn Field::take(self : Field) -> String {
   let st = self.st
@@ -854,6 +893,29 @@ fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
       self.own(id)
     }
   }
+}
+
+///|
+/// Pastes what the clipboard holds into the field `id` (an edit menu's 粘贴), as ⌘V (Ctrl+V) with a picture on it
+/// does: read first, then the picture where the field takes pictures (Ctx::field_picture), else its words.
+pub fn Ctx::field_paste(self : Ctx, id : Int) -> Unit {
+  match clipboard_read() {
+    Some(r) => {
+      desk.pasting = Some((id, r))
+      self.focus_on(id)
+    }
+    None => ()
+  }
+}
+
+///|
+/// A picture pasted into the field `key` (one that takes pictures: Ctx::editor `pictures`) with ⌘V (Ctrl+V), as PNG:
+/// taken once, for the app to put in as a file (a page's paste takes a picture as one).
+pub fn Ctx::field_picture(self : Ctx, key : String) -> Bytes? {
+  let id = self.id(key)
+  let got = desk.pictures.get(id)
+  desk.pictures.remove(id)
+  got
 }
 
 ///|
@@ -966,6 +1028,68 @@ fn EditorState::sel_handle_to(self : EditorState, which : Int, x : Double, y : D
 }
 
 ///|
+/// What can be done to the field's words now (hostapi text_menu_*): cut and copy what is picked (not a secret's),
+/// paste always, select all unless all is picked.
+fn EditorState::can(self : EditorState) -> Int {
+  let (a, b) = self.sel()
+  let n = self.text.length()
+  (if a != b && !self.secret { @hostapi.text_menu_cut | @hostapi.text_menu_copy } else { 0 }) |
+  @hostapi.text_menu_paste |
+  (if n > 0 && !(a == 0 && b == n) { @hostapi.text_menu_select_all } else { 0 })
+}
+
+///|
+/// A field right clicked since the last frame (a desktop's secondary button): its id and where, the focus given it (the
+/// edit menu the app puts up there acts on it: field_can, field_edit). None when none was.
+pub fn Ctx::field_right_clicked(self : Ctx) -> (Int, Double, Double)? {
+  for m in desk.menus {
+    for id in m.0 {
+      if self.editors.contains(id) {
+        if self.focus != id {
+          self.focus_on(id)
+        }
+        return Some((id, m.1, m.2))
+      }
+    }
+  }
+  None
+}
+
+///|
+/// What can be done to field `id`'s words now (hostapi text_menu_*: cut, copy, paste, select all); 0 for no field.
+pub fn Ctx::field_can(self : Ctx, id : Int) -> Int {
+  match self.editors.get(id) {
+    Some(st) => st.can()
+    None => 0
+  }
+}
+
+///|
+/// Field `id`'s words cut, copied or all picked (text_menu_cut, _copy, _select_all: as ⌘X, ⌘C, ⌘A do them), or
+/// `paste` put in for what is picked (text_menu_paste: as ⌘V puts the clipboard's in); the focus its again (an edit
+/// menu's choice, the menu having had it).
+pub fn Ctx::field_edit(self : Ctx, id : Int, what : Int, paste? : String = "") -> Unit {
+  match self.editors.get(id) {
+    Some(st) => {
+      if what == @hostapi.text_menu_paste {
+        if paste != "" {
+          st.text_input(0, paste, 0, 0, self.now)
+        }
+      } else if what == @hostapi.text_menu_cut {
+        st.key(key_cut, 0, self.now)
+      } else if what == @hostapi.text_menu_copy {
+        st.key(key_copy, 0, self.now)
+      } else if what == @hostapi.text_menu_select_all {
+        st.key(key_select_all, 0, self.now)
+      }
+      self.focus_on(id)
+      self.read_changed("a field edited")
+    }
+    None => ()
+  }
+}
+
+///|
 /// Tells the host whether the floating text menu is up and over what (Android's: a field's picked words, or its caret
 /// when its handle was tapped): offering cut and copy over words picked (not a secret's), paste always, select all
 /// unless all is picked; each frame, said again only when it changed.
@@ -975,7 +1099,6 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
       match st.tl {
         Some(tl) => {
           let (a, b) = st.sel()
-          let n = st.text.length()
           let (x0, l0) = tl.caret(a)
           let (x1, l1) = tl.caret(b)
           let top = st.oy + l0.to_double() * tl.line_h
@@ -985,14 +1108,7 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
           } else {
             (st.ox, tl.w)
           }
-          let can = (if a != b && !st.secret {
-            @hostapi.text_menu_cut | @hostapi.text_menu_copy
-          } else {
-            0
-          }) |
-            @hostapi.text_menu_paste |
-            (if n > 0 && !(a == 0 && b == n) { @hostapi.text_menu_select_all } else { 0 })
-          Some((x, top, w, bottom - top, can))
+          Some((x, top, w, bottom - top, st.can()))
         }
         None => None
       }

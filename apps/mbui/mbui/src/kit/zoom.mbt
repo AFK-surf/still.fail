@@ -3,8 +3,9 @@
 // or not), zoomed around a point (two fingers' pinch, a double tap, the wheel, a button), panned, and kept within the
 // stage: smaller than it, centred; larger, no gap at its edges (or, free, anywhere: a page on a canvas, dragged about
 // it). A zoom said with a glide goes there over `glide_ms`
-// on (0.16, 1, 0.3, 1), a motion said once as it sets out (Zoom::step reads where it has got to). What the fingers do
-// is the view's: it says what they came to (transform, pan, zoom_to, double_tap).
+// on (0.16, 1, 0.3, 1), a motion said once as it sets out (Zoom::step reads where it has got to); one let go by a
+// finger moving goes on at its speed, slowing, to its edges (fling). What the fingers do is the view's: it says what
+// they came to (transform, pan, fling, zoom_to, double_tap).
 
 ///|
 /// Where a picture shows in its stage: `scale` is stage points per picture pixel, `x` and `y` move its centre from the
@@ -35,7 +36,16 @@ pub struct Zoom {
   glide : @motion.Value
   g_from : FixedArray[Double]
   g_to : FixedArray[Double]
+  // a fling: whether one goes on, where it has x and where y (each a motion: Motion's inertia, stopped at the edges)
+  mut flinging : Bool
+  fling_x : @motion.Value
+  fling_y : @motion.Value
 }
+
+///|
+/// How a picture let go slows: as e^(−t / this) (ms), Motion's inertia's own time constant (about the desktop's coasting,
+/// 0.997 a ms), setting out as fast as the finger went.
+pub let zoom_fling_ms : Double = 325.0
 
 ///|
 /// A picture's zoom, as Zoom.kt's: fitted within a margin (12, or 32 on a stage 640 wide or more), never enlarged;
@@ -72,6 +82,9 @@ pub fn Zoom::new(
     glide: @motion.Value::new(1.0),
     g_from: FixedArray::make(3, 0.0),
     g_to: FixedArray::make(3, 0.0),
+    flinging: false,
+    fling_x: @motion.Value::new(0.0),
+    fling_y: @motion.Value::new(0.0),
   }
 }
 
@@ -248,12 +261,60 @@ pub fn Zoom::fit_now(self : Zoom) -> Unit {
 }
 
 ///|
-/// A glide called off where it is (a finger took it).
+/// A glide or a fling called off where it is (a finger took it).
 pub fn Zoom::stop_glide(self : Zoom) -> Unit {
   if self.gliding {
     self.gliding = false
     self.glide.set(1.0)
   }
+  self.stop_fling() |> ignore
+}
+
+///|
+/// A fling called off where it has got to (a finger came down on it): whether one went on.
+pub fn Zoom::stop_fling(self : Zoom) -> Bool {
+  if !self.flinging {
+    return false
+  }
+  self.flinging = false
+  self.fling_x.stop()
+  self.fling_y.stop()
+  self.x = self.fling_x.get()
+  self.y = self.fling_y.get()
+  self.clamp()
+  true
+}
+
+///|
+/// Let go by a finger moving (vx, vy) (stage points per ms): on at that speed, slowing (zoom_fling_ms), to a stop or, kept
+/// within the stage, to its edge.
+pub fn Zoom::fling(self : Zoom, vx : Double, vy : Double) -> Unit {
+  self.stop_glide()
+  if self.nw <= 0.0 {
+    return
+  }
+  let sx = zmax(0.0, (self.nw * self.scale - self.bw) / 2.0)
+  let sy = zmax(0.0, (self.nh * self.scale - self.bh) / 2.0)
+  let go = fn(v : @motion.Value, from : Double, speed : Double, room : Double) {
+    v.set(from)
+    if speed != 0.0 && (self.free || room > 0.0) {
+      let (min, max) = if self.free { (None, None) } else { (Some(-room), Some(room)) }
+      // at an edge it stops there (Motion's drag with no give past its ends)
+      let spec = @motion.inertia_to(
+        power=zoom_fling_ms / 1000.0,
+        time_constant=zoom_fling_ms,
+        bounce_stiffness=1000000.0,
+        bounce_damping=10000000.0,
+        min?=min,
+        max?=max,
+      )
+      ignore(v.start(from, spec, velocity=speed * 1000.0))
+    }
+  }
+  go(self.fling_x, self.x, vx, sx)
+  go(self.fling_y, self.y, vy, sy)
+  self.fitted = false
+  self.flinging = self.fling_x.is_animating() || self.fling_y.is_animating()
 }
 
 ///|
@@ -278,8 +339,16 @@ fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool)
 }
 
 ///|
-/// Where a glide has got to this frame (a view showing the picture reads it each frame before drawing it).
+/// Where a glide or a fling has got to this frame (a view showing the picture reads it each frame before drawing it).
 pub fn Zoom::step(self : Zoom) -> Unit {
+  if self.flinging {
+    self.x = self.fling_x.get()
+    self.y = self.fling_y.get()
+    self.clamp()
+    if !self.fling_x.is_animating() && !self.fling_y.is_animating() {
+      self.flinging = false
+    }
+  }
   if !self.gliding {
     return
   }

@@ -260,6 +260,7 @@
   "core-logic.format.refill.minutes": "Refills in {n} min",
   "core-logic.format.refill.now": "Refills now",
   "core-logic.format.status.aborted": "Stopped",
+  "core-logic.format.status.aborted.what": "Stopped",
   "core-logic.format.status.block": "Needs you",
   "core-logic.format.status.decision": "Your call",
   "core-logic.format.status.failed": "Failed",
@@ -268,6 +269,7 @@
   "core-logic.format.status.queued": "Queued",
   "core-logic.format.status.running": "Running",
   "core-logic.format.status.unexpected": "Stopped unexpectedly",
+  "core-logic.format.status.unexpected.what": "Stopped unexpectedly",
   "core-logic.format.thread.chat": "{brand} chat",
   "core-logic.format.thread.dm": "DM",
   "core-logic.format.thread.feishu": "Feishu chat",
@@ -571,6 +573,12 @@
   "core-logic.drive.empty": "Empty folder",
   "core-logic.memory.lead": "Beginning",
   "core-logic.memory.whole": "All of it",
+  "core-logic.memory.kind.project": "Project memory",
+  "core-logic.memory.kind.builtin": "Built-in",
+  "core-logic.memory.kind.skill": "Skill",
+  "core-logic.memory.no_when": "(When to use not specified)",
+  "core-logic.memory.overview": "Overview",
+  "core-logic.memory.empty": "(Empty)",
   "core-logic.memory.points": {
     "one": "1 point",
     "other": "{n} points"
@@ -641,6 +649,12 @@
   "core-logic.transfer.moved": "Moved · {total}",
   "core-logic.transfer.cancelled": "Cancelled",
   "core-logic.transfer.failed": "Failed: {error}",
+  "core-logic.download.going": "Downloading {percent}% · {total}",
+  "core-logic.download.zipping": "Zipping",
+  "core-logic.download.ready": "Downloaded · {total}",
+  "core-logic.download.waiting": "Waiting for the station · {percent}%",
+  "core-logic.download.saving": "Saving · {total}",
+  "core-logic.download.failed": "Download failed: {error}",
   "core-logic.transfer.many": {
     "one": "{name} and others ({n} item)",
     "other": "{name} and others ({n} items)"

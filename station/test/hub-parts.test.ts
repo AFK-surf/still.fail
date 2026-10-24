@@ -13,7 +13,8 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { type Counted, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
+import { type Counted, HELD_AFTER_MS, type History, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
+import { inBrief as keptInBrief, stateOf } from "../src/read/transcripts.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
@@ -279,6 +280,132 @@ test("a watcher in brief is told the entries in brief, those it lacks and those 
   // Each by what says what it does: the description that came after its long command too.
   assert.deepEqual(told.map((e) => [e.brief, JSON.parse(e.text).description]), [[true, "Step a"], [true, "Step b"]]);
   assert.ok(told.every((e) => Array.from(e.text).length < 400));
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a session at work is followed by the station itself: told from where it ends, its last entries before it is done, kept a while after", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  writeFileSync(path, line("one", "m1") + line("two", "m2"));
+  const time = testClock();
+  let reads = 0;
+  const hub = new LiveHub(() => (reads++, { runtime: "claude", paths: [path] }), time.clock);
+  const told: LiveMessage[] = [];
+  const lengths: [string, number][] = [];
+  hub.heldTold = (key, m) => void told.push({ ...m, key } as any);
+  hub.lengths = (key, n) => void lengths.push([key, n]);
+  hub.running("s", true);
+  assert.deepEqual(hub.held(), ["s"]);
+  // Where it ends, none of what it said before; the steps in flight.
+  const start = told.find((m) => m.type === "timeline") as any;
+  assert.deepEqual([start.start, start.entries], [2, []]);
+  assert.ok(told.some((m) => m.type === "steps"));
+  assert.deepEqual(lengths, [["s", 2]]);
+  // As a stream that opens finds it.
+  assert.deepEqual(hub.now("s").map((m: any) => [m.type, m.start ?? null]), [["timeline", 2], ["steps", null]]);
+  told.length = 0;
+  // Its last entry, written as its turn ends, is told before it is told to be done (no 40 ms wait).
+  appendFileSync(path, line("three", "m3"));
+  hub.turnEnded("s");
+  const kinds = told.map((m) => m.type);
+  assert.ok(kinds.indexOf("timeline") >= 0 && kinds.indexOf("timeline") < kinds.indexOf("clear"), kinds.join());
+  assert.deepEqual((told.find((m) => m.type === "timeline") as any).entries.map((e: any) => e.text), ["three"]);
+  assert.deepEqual(lengths.at(-1), ["s", 3]);
+  // Done: still followed a while, and at work again within it, not read again from the start.
+  hub.running("s", false);
+  await time.adjust(HELD_AFTER_MS - 1);
+  await settle();
+  assert.deepEqual(hub.held(), ["s"]);
+  hub.running("s", true);
+  await time.adjust(HELD_AFTER_MS * 2);
+  await settle();
+  assert.deepEqual(hub.held(), ["s"]);
+  assert.equal(reads, 1, "located and read once");
+  // Done for longer than the while: let go.
+  hub.running("s", false);
+  await time.adjust(HELD_AFTER_MS);
+  await settle();
+  assert.deepEqual(hub.held(), []);
+  told.length = 0;
+  appendFileSync(path, line("four", "m4"));
+  watched(hub, "s");
+  await time.adjust(40);
+  await settle();
+  assert.equal(told.length, 0, "nothing told of a session let go");
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+/// Where a LiveHub reads a transcript's past (as the readers do: read/transcripts.ts), counting what it is asked.
+function historyOf(path: string, asked: string[] = [], hold?: Promise<void>): History {
+  return {
+    state: async () => (asked.push("state"), stateOf("claude", [path])),
+    page: async (_key, before, limit, briefed) => {
+      asked.push(`page ${before} ${limit} ${briefed}`);
+      await hold;
+      const all = briefed ? keptInBrief("claude", [path]) : readTimeline("claude", path);
+      const upto = Math.min(before, all.length);
+      const start = Math.max(0, upto - limit);
+      return { start, entries: all.slice(start, upto), end: all.length };
+    },
+  };
+}
+
+test("where the readers keep a session's history the live view reads none of its past: it goes on from where they stand, a listener given what it lacks from them, in brief once", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const bash = (id: string, n: number) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-05T00:00:00Z", message: { id, content: [{ type: "tool_use", id, name: "Bash", input: { command: "true && ".repeat(n), description: `Step ${id}` } }] } })}\n`;
+  writeFileSync(path, line("one", "m1") + bash("b", 200) + line("three", "m3"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const asked: string[] = [];
+  hub.history = historyOf(path, asked);
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 1, null, (m) => void got.push(m), true);
+  assert.equal(got.length, 0, "where it stands is read off the main thread first");
+  await settle();
+  const first = got[0] as Extract<LiveMessage, { type: "timeline" }>;
+  assert.deepEqual([first.type, first.start, first.entries.length], ["timeline", 1, 2]);
+  assert.equal(JSON.parse(first.entries[0]!.text).description, "Step b", "in brief, once");
+  assert.equal(got[1]!.type, "steps");
+  assert.deepEqual(asked, ["state", "page 3 2 true"]);
+  // None of it kept here: only where it stands.
+  const watching = (hub as any).watched.get("s");
+  assert.deepEqual([watching.tail.keeps, watching.tail.length, watching.tail.entries.length], [false, 3, 0]);
+  // Written on: read here from where the readers stood, told in brief.
+  got.length = 0;
+  appendFileSync(path, bash("d", 300));
+  watched(hub, "s");
+  await time.adjust(40);
+  await settle();
+  const told = got.find((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline")!;
+  assert.deepEqual([told.start, told.entries[0]!.brief, JSON.parse(told.entries[0]!.text).description], [3, true, "Step d"]);
+  // A page of it (session_history): from the readers, whole.
+  const page = await hub.page("s", Number.MAX_SAFE_INTEGER, 2);
+  assert.deepEqual([page!.start, page!.end, page!.entries.map((e) => e.kind)], [2, 4, ["assistant", "tool_call"]]);
+  assert.ok(Array.from(page!.entries[1]!.text).length > 600, "whole");
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("what is said while a listener joins is told it after what it lacks", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  writeFileSync(path, line("one", "m1") + line("two", "m2"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  let release = () => {};
+  hub.history = historyOf(path, [], new Promise<void>((r) => (release = r)));
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  await settle();
+  hub.event("s", { kind: "phase", phase: "working" });
+  assert.equal(got.length, 0);
+  release();
+  await settle();
+  assert.deepEqual(got.map((m) => m.type), ["timeline", "steps", "step"]);
+  assert.deepEqual((got[0] as any).entries.map((e: any) => e.text), ["one", "two"]);
   hub.close();
   rmSync(dir, { recursive: true, force: true });
 });

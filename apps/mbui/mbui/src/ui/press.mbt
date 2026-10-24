@@ -8,7 +8,8 @@
 /// A press as a frame saw it. `fresh`: it went down since the frame before (a frame saw it up, this one down); `lifted`:
 /// let go since; `x`, `y`: where it went down; `frame`: the frame that first saw it down (its name: what it opened is
 /// not opened again by it); `moved`: past the slop (8) since; `long`: held still there for long_press_ms (what these
-/// two say kept until the next press: a long press let go is no tap).
+/// two say kept until the next press: a long press let go is no tap); `mods`: the keys held as it went down (mod_cmd,
+/// mod_alt…: a press with ⌘ held is the desktop's other press), whatever is held or let go of after.
 pub(all) struct Press {
   down : Bool
   fresh : Bool
@@ -18,6 +19,7 @@ pub(all) struct Press {
   frame : Int
   moved : Bool
   long : Bool
+  mods : Int
 } derive(Eq, Show, Debug)
 
 ///|
@@ -32,6 +34,7 @@ let no_press : Press = {
   frame: 0,
   moved: false,
   long: false,
+  mods: 0,
 }
 
 ///|
@@ -53,12 +56,18 @@ pub fn Ctx::press(self : Ctx) -> Press {
   let lifted = !down && self.press_was_down
   let mut p = { ..was, down, fresh, lifted }
   if fresh {
-    p = { ..p, x: px, y: py, frame: self.frame_no, moved: false, long: false }
+    p = { ..p, x: px, y: py, frame: self.frame_no, moved: false, long: false, mods: self.press_mods }
     self.press_seen_at = self.now
   }
-  // (a tap down and up between two frames: a press of its own, not the long one before it)
-  if !down && !self.press_was_down && self.tapped is Some(_) {
-    p = { ..p, moved: false, long: false }
+  // (a tap down and up between two frames: a press of its own, not the long one before it, gone down and let go there)
+  if !down && !self.press_was_down {
+    match self.tapped {
+      Some((tx, ty)) => {
+        p = { ..p, fresh: true, lifted: true, x: tx, y: ty, frame: self.frame_no, moved: false, long: false, mods: self.press_mods }
+        self.press_seen_at = self.now
+      }
+      None => ()
+    }
   }
   if down && ((px - p.x).abs() > press_slop || (py - p.y).abs() > press_slop) {
     p = { ..p, moved: true }

@@ -18,10 +18,6 @@ fn vault_fields(kind : String) -> Array[String] {
 }
 
 ///|
-// kept across runs: a table of constants, never written
-let open_fields : Array[String] = ["public_key", "username"]
-
-///|
 /// A field's name (Vault.kt fieldName).
 fn field_name(f : String) -> String {
   match f {
@@ -38,7 +34,7 @@ fn field_name(f : String) -> String {
 ///|
 /// What a vault call's failure says (vaultSaid): nothing when the person turned the system's prompt down
 /// (`user_cancelled`), that another device wrote first (`vault_conflict`), else why.
-fn vault_said(e : Json) -> String? {
+pub fn vault_said(e : Json) -> String? {
   match text(Some(e), "code") {
     "user_cancelled" => None
     "vault_conflict" => Some(tr("android-settings.vault.conflict"))
@@ -49,7 +45,7 @@ fn vault_said(e : Json) -> String? {
 ///|
 /// A vault call (`vault.<name>` on the workspace), as act is for others (vaultAct): `done` said once through, a
 /// failure said (a write made elsewhere first said as such; the prompt turned down, nothing).
-fn vault_act(
+pub fn vault_act(
   core : Core,
   ws : String,
   name : String,
@@ -99,7 +95,7 @@ fn vault_act(
 ///|
 /// The recovery words `vault.setup` gave, by workspace, until the person says they have written them down: in memory
 /// only, never kept (the core gives them only the once).
-let recovery_words : Map[String, Array[String]] = Map([])
+pub let recovery_words : Map[String, Array[String]] = Map([])
 
 ///|
 /// This device set up (`vault.setup`): the first time the recovery words come back, to be written down; then (or at
@@ -122,7 +118,7 @@ fn vault_create_first(core : Core, ws : String) -> Unit {
 
 ///|
 /// The 24 recovery words, numbered, three to a row, for the person to copy out (Words).
-fn vault_words(c : @ui.Ctx, words : Array[String]) -> Unit {
+pub fn vault_words(c : @ui.Ctx, words : Array[String]) -> Unit {
   let t = @sf.theme()
   list_card(c, fn() {
     body(c, fn() {
@@ -153,7 +149,7 @@ fn vault_words(c : @ui.Ctx, words : Array[String]) -> Unit {
 
 ///|
 /// The page's foot (Security.kt Foot): what goes on, over the page's ground, a note under it.
-fn vault_foot(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
+pub fn vault_foot(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
   match recovery_words.get(ws) {
     Some(_) =>
       foot(c, words=tr("android-settings.vault.wordsOnce"), fn() {
@@ -179,7 +175,11 @@ fn vault_foot(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
 /// (its rows' words: "web-pages.vault.addKind.profile" "web-pages.vault.addKind.profileDetail" "web-pages.vault.addKind.token" "web-pages.vault.addKind.tokenDetail" "web-pages.vault.addKind.ssh_key" "web-pages.vault.addKind.ssh_keyDetail" "web-pages.vault.addKind.login" "web-pages.vault.addKind.loginDetail")
 /// 添加 in the library (addSheet): a subscription or a model's key (a profile, added from the Profile list), or a secret
 /// of a kind (its editor, the kind fixed); not locked, that such a secret is kept in the clear.
-fn open_vault_add(_core : Core, here : Here) -> Unit {
+pub fn open_vault_add(_core : Core, here : Here) -> Unit {
+  // the desktop's: its dialog (src/sfdesk vault_dialogs.mbt)
+  if wide.val && desk_vault.val is Some(d) {
+    return (d.add)(_core, here)
+  }
   let ws = here.workspace
   open_sheet(0.55, fn(c, core) {
     let t = @sf.theme()
@@ -258,18 +258,20 @@ fn vault_devices(c : @ui.Ctx, core : Core, ws : String, vaults : Array[Json]) ->
 /// What `vault.open` gave of the item on its page (by item), while the page is up; whether it is being opened.
 priv struct Opened {
   plain : Map[String, Json]
+  /// its fields as its page shows them (the core's `shown`: each its key, what it is called, its value, whether secret)
+  fields : Map[String, Array[Json]]
   opening : Map[String, Bool]
   /// the fields shown (by item and field)
   shown : Map[String, Bool]
 }
 
 ///|
-let opened : Opened = { plain: {}, opening: {}, shown: {} }
+let opened : Opened = { plain: {}, fields: {}, opening: {}, shown: {} }
 
 ///|
 /// The item opened (`vault.open`: the system's prompt first where its vault is locked here), then `then` with what it
 /// holds.
-fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit) -> Unit {
+pub fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit) -> Unit {
   if opened.opening.contains(item) {
     return
   }
@@ -281,6 +283,7 @@ fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit) -> 
         match field(Some(v), "plain") {
           Some(Object(_) as p) => {
             opened.plain[item] = p
+            opened.fields[item] = items(Some(v), "shown")
             then(p)
           }
           _ => ()
@@ -296,9 +299,27 @@ fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit) -> 
 }
 
 ///|
+/// What an item opened holds while its page is up (the phone's and the desktop's page alike), its fields as the page
+/// shows them (the core's `shown`), and whether it is being opened.
+pub fn opened_plain(item : String) -> Json? {
+  opened.plain.get(item)
+}
+
+///|
+pub fn opened_fields(item : String) -> Array[Json] {
+  opened.fields.get(item).unwrap_or([])
+}
+
+///|
+pub fn item_opening(item : String) -> Bool {
+  opened.opening.contains(item)
+}
+
+///|
 /// An item's page left: what it held goes.
 fn vault_item_left(item : String) -> Unit {
   opened.plain.remove(item)
+  opened.fields.remove(item)
   opened.opening.remove(item)
   let gone = opened.shown.keys().filter(fn(k) { k.has_prefix(item + "/") }).collect()
   for k in gone {
@@ -343,7 +364,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
       text(rv, "name"),
       sub=fn() {
         c.text(
-          join([tr("android-settings.vault.kind." + text(rv, "kind")), fill("web-pages.vault.storedOn", [("station", text(vv, "stationName"))])], " · "),
+          join([text(rv, "kindText"), fill("web-pages.vault.storedOn", [("station", text(vv, "stationName"))])], " · "),
           size=11.0,
           color=t.p.muted,
           wrap=false,
@@ -394,23 +415,12 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
               }
             })
             |> ignore
-          Some(p) => {
-            let kind = text(Some(p), "kind")
-            let fs = match vault_fields(kind) {
-              [] =>
-                match field(Some(p), "fields") {
-                  Some(Object(m)) => m.keys().collect()
-                  _ => []
-                }
-              x => x
+          Some(_) =>
+            // (the core's: each field as the page shows it)
+            for f in opened.fields.get(item).unwrap_or([]) {
+              let fv = Some(f)
+              field_row(c, core, item, text(fv, "key"), text(fv, "label"), text(fv, "value"), flag(fv, "secret"))
             }
-            for f in fs {
-              let value = text(field(Some(p), "fields"), f)
-              if value != "" {
-                field_row(c, core, item, f, value, !open_fields.contains(f))
-              }
-            }
-          }
         }
       })
     })
@@ -421,17 +431,13 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
           if !flag(rv, "listed") {
             c.text(tr("web-pages.vault.notForAgents"), size=15.0, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
           } else {
-            let hosts = strings(rv, "hosts")
-            fact(c, tr("web-pages.vault.how"), join(strings(rv, "modes").map(fn(m) { how_line(m, hosts) }), tr("web-main.list.separator")))
+            fact(c, tr("web-pages.vault.how"), text(rv, "howText"))
             match opt_text(rv, "env") {
               Some(env) if env != "" => fact(c, tr("android-settings.vault.env"), env, code=true)
               _ => ()
             }
             // its own longest grant, else its vault's (跟随默认 · …)
-            fact(c, tr("android-settings.vault.lasts"), match opt_text(rv, "lasts") {
-              Some(l) if l != "" => lasts_name(l)
-              _ => fill("android-settings.vault.lasts.following", [("lasts", lasts_name(text(vv, "lasts")))])
-            })
+            fact(c, tr("android-settings.vault.lasts"), text(rv, "lastsText"))
           }
         })
       })
@@ -463,6 +469,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
               if list_row(c, key=if station is Some(_) { "vault-use/" + i.to_string() } else { "" }, fn() {
                   c.box(w=Fill(1.0), fn() {
                     c.box(dir=Row, w=Fill(1.0), fn() {
+                      // (its chat's title cut short where the row is, what became of it kept)
                       c.text(
                         match opt_text(uv, "chatTitle") {
                           Some(x) => x
@@ -472,6 +479,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
                         color=t.p.text,
                         wrap=false,
                         line=21.0,
+                        w=Cut,
                       )
                       |> ignore
                       if flag(uv, "denied") {
@@ -483,7 +491,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
                       c,
                       match opt_text(uv, "command") {
                         Some(x) => x
-                        None => how_line(text(uv, "mode"), strings(uv, "hosts"))
+                        None => text(uv, "howText")
                       },
                       size=13.0,
                       color=t.p.muted,
@@ -558,13 +566,13 @@ fn eye_said(shown : Bool) -> String {
 ///|
 /// A field of an opened item (FieldRow): its name over its value (dots until shown, when secret), shown and copied from
 /// beside it.
-fn field_row(c : @ui.Ctx, core : Core, item : String, f : String, value : String, secret : Bool) -> Unit {
+fn field_row(c : @ui.Ctx, core : Core, item : String, f : String, label : String, value : String, secret : Bool) -> Unit {
   let t = @sf.theme()
   let k = item + "/" + f
   let shown = !secret || opened.shown.contains(k)
   c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=8.0, pt=10.0, pb=10.0, gap=2.0, align=ACenter, fn() {
     c.box(w=Fill(1.0), gap=2.0, fn() {
-      c.text(field_name(f), size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
+      c.text(label, size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
       // masked, as long whatever its length
       mono(c, if shown { value } else { "••••••••••••" }, size=14.0, line=20.0, wrap=shown)
     })
@@ -602,7 +610,7 @@ fn copy_secret(c : @ui.Ctx, core : Core, words : String, secret : Bool) -> Unit 
 
 ///|
 /// An item being written (Editor's state): its kind, whether agents may ask for it, how, the error said under it.
-priv struct VaultEditing {
+pub(all) struct VaultEditing {
   mut kind : Int
   mut agent : Bool
   mut mode : String
@@ -616,7 +624,7 @@ priv struct VaultEditing {
 }
 
 ///|
-let vault_serial : Ref[Int] = Ref(0)
+pub let vault_serial : Ref[Int] = Ref(0)
 
 ///|
 /// An item's editor (editorSheet, Editor): its kind (new, and not fixed: picked), name and fields, whether agents may
@@ -624,6 +632,10 @@ let vault_serial : Ref[Int] = Ref(0)
 /// saved (the system's prompt may come up): turned down, nothing lost; refused, why under it. 删除这一条 for one there.
 /// `editing`: the item's row and what it holds as opened.
 fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json, Json)?, kind? : String = "", plain? : Bool = false) -> Unit {
+  // the desktop's: its dialog (src/sfdesk vault_dialogs.mbt)
+  if wide.val && desk_vault.val is Some(d) {
+    return (d.editor)(_core, ws, vault, editing, kind, plain)
+  }
   vault_serial.val += 1
   let was = match editing {
     Some((_, p)) => Some(p)
@@ -842,44 +854,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
       if button(c, key("save"), tr("common.save"), true, busy=e.saving, enabled=ready) {
         e.saving = true
         e.error = ""
-        let fields : Array[(String, Json)] = []
-        for f in vault_fields(k) {
-          // a private key as pasted (its last line break is part of it); the rest without the spaces around them
-          let v = if f == "private_key" { words.get(f).unwrap_or("") } else { got(f) }
-          if v.trim(chars=" \n") != "" {
-            fields.push((f, str(v)))
-          }
-        }
-        let plain_item = obj([
-          ("kind", str(k)),
-          ("name", str(name)),
-          ("fields", obj(fields)),
-          ("domains", Json::array(strings(was, "domains").map(str))),
-          ("notes", str(text(was, "notes"))),
-        ])
-        let params = [("vault", str(vault)), ("plain", plain_item)]
-        match row {
-          Some(r) => params.push(("id", str(text(Some(r), "id"))))
-          None => ()
-        }
-        if e.agent {
-          let modes = if k == "ssh_key" { ["ssh"] } else { [e.mode] }
-          let listing = [
-            ("name", str(name)),
-            ("kind", str(k)),
-            ("modes", Json::array(modes.map(str))),
-            ("hosts", Json::array((if modes == ["proxy"] { host_list } else { [] }).map(str))),
-          ]
-          let env = got("env")
-          if env != "" && k != "ssh_key" {
-            listing.push(("env", str(env)))
-          }
-          // its own longest grant (none: its vault's)
-          if vault_lasts[e.lasts] != "default" {
-            listing.push(("lasts", str(vault_lasts[e.lasts])))
-          }
-          params.push(("listing", obj(listing)))
-        }
+        let params = vault_put_params(vault, row, was, k, words, e.agent, e.mode, vault_lasts[e.lasts])
         c.blur()
         vault_act(
           core,
@@ -914,9 +889,103 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
 }
 
 ///|
+/// What `vault.putItem` is given for an item (Vault.tsx putOf): the vault, the item's id where it is one already, what
+/// it holds (`words`: its fields' words by name, as typed), and, where agents may ask for it, how (`mode`, its hosts,
+/// its variable) and its longest grant (`lasts`: "default" its vault's).
+pub fn vault_put_params(
+  vault : String,
+  row : Json?,
+  was : Json?,
+  k : String,
+  words : Map[String, String],
+  agent : Bool,
+  mode : String,
+  lasts : String,
+) -> Array[(String, Json)] {
+  let got = fn(f : String) { words.get(f).unwrap_or("").trim(chars=" \n").to_owned() }
+  let name = words.get("name").unwrap_or("").trim(chars=" ").to_owned()
+  let fields : Array[(String, Json)] = []
+  for f in vault_fields(k) {
+    // a private key as pasted (its last line break is part of it); the rest without the spaces around them
+    let v = if f == "private_key" { words.get(f).unwrap_or("") } else { got(f) }
+    if v.trim(chars=" \n") != "" {
+      fields.push((f, str(v)))
+    }
+  }
+  let plain_item = obj([
+    ("kind", str(k)),
+    ("name", str(name)),
+    ("fields", obj(fields)),
+    ("domains", Json::array(strings(was, "domains").map(str))),
+    ("notes", str(text(was, "notes"))),
+  ])
+  let params = [("vault", str(vault)), ("plain", plain_item)]
+  match row {
+    Some(r) => params.push(("id", str(text(Some(r), "id"))))
+    None => ()
+  }
+  if agent {
+    let modes = if k == "ssh_key" { ["ssh"] } else { [mode] }
+    let listing = [
+      ("name", str(name)),
+      ("kind", str(k)),
+      ("modes", Json::array(modes.map(str))),
+      ("hosts", Json::array((if modes == ["proxy"] { vault_hosts(words) } else { [] }).map(str))),
+    ]
+    let env = got("env")
+    if env != "" && k != "ssh_key" {
+      listing.push(("env", str(env)))
+    }
+    // its own longest grant (none: its vault's)
+    if lasts != "default" {
+      listing.push(("lasts", str(lasts)))
+    }
+    params.push(("listing", obj(listing)))
+  }
+  params
+}
+
+///|
+/// The hosts typed (`words`' hosts: by commas, spaces or lines).
+pub fn vault_hosts(words : Map[String, String]) -> Array[String] {
+  let out : Array[String] = []
+  for h in words.get("hosts").unwrap_or("").replace_all(old=",", new=" ").replace_all(old="\n", new=" ").split(" ") {
+    if h != "" {
+      out.push(h.to_owned())
+    }
+  }
+  out
+}
+
+///|
+/// Whether an item's words can be saved (Vault.tsx formProblem): its name, what its kind needs, and the hosts where a
+/// proxy gives it; the problem's name, or "" none.
+pub fn vault_problem(k : String, words : Map[String, String], agent : Bool, mode : String) -> String {
+  let got = fn(f : String) { words.get(f).unwrap_or("").trim(chars=" \n").to_owned() }
+  let filled_in = match k {
+    "token" => got("value") != ""
+    "ssh_key" => got("private_key") != ""
+    _ => got("username") != "" || got("password") != ""
+  }
+  if got("name") == "" {
+    "name"
+  } else if !filled_in {
+    "fields"
+  } else if agent && mode == "proxy" && k != "ssh_key" && vault_hosts(words).length() == 0 {
+    "hosts"
+  } else {
+    ""
+  }
+}
+
+///|
 /// This device keyed into the person's vaults again by their 24 recovery words (recoverSheet: `vault.recover`); the
 /// words typed are this sheet's only while it is up.
 fn open_vault_recover(_core : Core, ws : String) -> Unit {
+  // the desktop's: its dialog (src/sfdesk vault_dialogs.mbt)
+  if wide.val && desk_vault.val is Some(d) {
+    return (d.recover)(_core, ws)
+  }
   vault_serial.val += 1
   let key = "vault-recover/" + vault_serial.val.to_string()
   let state : Ref[(Bool, String)] = Ref((false, ""))
@@ -990,8 +1059,23 @@ let hosts_needed_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w
 ///|
 /// A field's note under it, 4 below (Vault.kt Labeled's: 12/18, muted).
 // kept across runs: a value (no field of it changes)
-let vault_note_room : @ui.Style = @ui.style(w=Full, pt=S1)
+let vault_note_room : @ui.Style = @ui.css("w=Full pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let vault_note_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+
+///|
+/// The desktop's dialogs for the vault (src/sfdesk vault_dialogs.mbt), given by its settings as they are drawn: in
+/// the wide frame the settings' pages not ported from the web's yet (a secret's) open them in place of the sheets. A
+/// secret added, one's editor (its vault, the item's row and what it holds, a kind fixed, kept in the clear), this
+/// device keyed in again by the recovery words.
+pub(all) struct DeskVault {
+  add : (Core, Here) -> Unit
+  editor : (Core, String, String, (Json, Json)?, String, Bool) -> Unit
+  recover : (Core, String) -> Unit
+}
+
+///|
+// kept across runs: given again by the desktop's settings as they are drawn, the same each time
+pub let desk_vault : Ref[DeskVault?] = Ref(None)

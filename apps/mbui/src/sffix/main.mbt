@@ -18,13 +18,17 @@ fn main {
     @sf.set_dark(Some(true))
   }
   let mode = @ui.env("MBUI_FIXTURE")
-  // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: client/fixtures/screens, the file still.fail's
-  // Android app draws it from too; scripts/android-ref.sh), its pages opened as it says
+  // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: src/sfapp/fixture_json.mbt), its pages opened
+  // as it says
   let src = if mode == "json" {
     @sfapp.fixture_json(@hostapi.env_text("MBUI_FIXTURE_JSON"))
   } else {
     let src = @sfapp.fixture(mode)
-    // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: src/sfscreens opens the same)
+    // MBUI_UPDATE=<version>: a newer build offered
+    if @ui.env("MBUI_UPDATE") != "" {
+      @sfapp.fixture_update(@ui.env("MBUI_UPDATE"))
+    }
+    // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: screens_wbtest.mbt opens the same)
     @sfapp.open_fixture_mode(mode)
     src
   }

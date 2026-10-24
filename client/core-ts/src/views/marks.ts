@@ -42,9 +42,11 @@ function startedBy(row: J, me: J): boolean {
 }
 
 /// A row's state line as its list says it (its agents presented as the chats view has them).
-function stateText(row: J): string {
+/// Its row's state line, and the same without its lead (奏 · , 需要你处理：, 出错：): what the dot before it does not say.
+function stateText(row: J): [string, string] {
   const shown = isObject(row) && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : row;
-  return present.rowStateText(shown) ?? "";
+  const line = present.rowStateLine(shown);
+  return line === null ? ["", ""] : [line[0], line[2]];
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
@@ -153,6 +155,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       if (!seen && tone === "done" && saidByPerson(row)) said++;
       else if (get(row, "mine") === true && present.rowState(arr(get(row, "agents"))) === "block") elsewhere++;
       if (tone === "alert" || tone === "wait") {
+        const [text, what] = stateText(row);
         const item: J = {
           kind: tone,
           workspace: id,
@@ -162,7 +165,8 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
           session: get(row, "id") ?? null,
           thread: typeof thread === "number" ? thread : null,
           title: str(get(row, "title")) ?? "",
-          text: stateText(row),
+          text,
+          what,
           at: typeof get(row, "lastActiveAt") === "number" ? row.lastActiveAt : 0,
         };
         if (waits && typeof d.seq === "number") item.seq = d.seq;

@@ -15,15 +15,17 @@ import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, typ
 import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
+import { pastedRefs } from "../../client/core-ts/src/refLinks.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Progress, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
 import type { Md } from "./core/md.ts";
 import { placeFiles } from "../../client/core-ts/src/placed.ts";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
-import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
+import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, storedName, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
+import { cancelDownload, retryDownload, useDownload } from "./chatDownloads.ts";
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
@@ -40,7 +42,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ChatAsk, ChatSentElsewhere, RuntimeInstall } from "./core/shapes.ts";
+import type { ChatAsk, ChatSentElsewhere, DownloadShown, NoticeShown, RuntimeInstall } from "./core/shapes.ts";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
@@ -1010,7 +1012,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     );
   }
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice vk={`m:${m.seq}`} notice={m.notice ?? { failed: false, words: m.text }} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = m.by.here ? m.by.agent : undefined;
   const ask = m.card?.vaultAsk;
@@ -1024,9 +1026,10 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} files={m.attachments} />
-      {/* An agent's request for a vault item, as its card says it (VaultAsk.tsx): the card in place of its words. */}
+      {/* An agent's request about a vault item, as its card says it (VaultAsk.tsx): the card in place of its words,
+          answered or turned down on it (nothing to set aside: once decided it is a line). */}
       {ask
-        ? <VaultAsk message={m} ask={ask} rows={options}>{options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={!!(m.decision?.resolved || m.decision?.dismissed)} />}</VaultAsk>
+        ? <VaultAsk message={m} ask={ask} rows={options} />
         : m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files files={besideQuotes(m.quotes, m.attachments)} /></>
         : <ProseWithFiles text={m.text} md={m.md as Md | undefined} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
@@ -1124,13 +1127,10 @@ export function PersonWords({ text }: { text: string }) {
  * One saying the station does not have the chat's runtime, with none of the viewer's messages waiting for it (those say
  * it under them: BlockedLine), ends in installing it.
  */
-function SystemNotice({ text, profile, install, report, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
+function SystemNotice({ notice, profile, install, report, time, ts, enter, caught, vk }: { notice: NoticeShown; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
   const station = useStation();
-  const failed = /^⚠️\s*/u.exec(text);
-  const words = failed ? text.slice(failed[0].length) : text;
-  // A notice is a line of the UI, not prose: no 。 at its end (stations before 2026-09-30 wrote them as sentences).
-  const said = words.replace(/。\s*$/u, "");
-  const colon = profile ? said.indexOf("：") : -1;
+  // As the core says it (notice.ts): a line of the UI, a failure's ⚠️ taken for its red, where a profile's link begins.
+  const { failed, words: said, linkAt } = notice;
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   return (
@@ -1141,8 +1141,8 @@ function SystemNotice({ text, profile, install, report, time, ts, enter, caught,
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
         <div className={css.msgSystemLine}>
           <div className={conversationCss.markdown}>
-            {profile && colon >= 0
-              ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
+            {profile && linkAt !== undefined
+              ? <p>{said.slice(0, linkAt)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(linkAt)}</Link></p>
               : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
           </div>
           {report && <ReportAction thread={report.thread} seq={report.seq} />}
@@ -1451,6 +1451,9 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const url = local ?? fetched.url;
   const failed = !local && fetched.failed;
   const [open, setOpen] = useState(false);
+  // Downloaded by the core (asked from its preview, chatDownloads.ts): how far, on its card (✕ calls it off, ↻ asks a
+  // failed one again) or a video's block.
+  const download = useDownload(station.address, image ? null : sessionKey, storedName(file));
   // An image seen before, or that comes at once, just shows; one that takes a while is brushed in from the top.
   const born = useRef(performance.now());
   const key = `${sessionKey}\n${file.path}`;
@@ -1478,7 +1481,9 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
             {videoFailed ? <><Read size={24} /><span>{t("web-main.file.noPreview")}</span><small>{fileSize(file.size)}</small></> : "▶"}
           </span>
-          <span className={css.msgVideoName}>{file.name}</span>
+          <span className={css.msgVideoName}>{download?.active
+            ? <>{download.statusText}<Progress part={download.progress} label={download.statusText} className={css.msgVideoBar} /></>
+            : file.name}</span>
         </button></Tip>
         {preview}
       </>
@@ -1513,9 +1518,30 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (sessionKey === null) return look.card(file);
   return (
     <>
-      <button type="button" className={look.open} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })}>{look.card(file)}</button>
+      <MessageFileCard file={file} download={download} onOpen={() => setOpen(true)}
+        onCancel={cancelDownload} onRetry={retryDownload} />
       {preview}
     </>
+  );
+}
+
+/**
+ * A message's file as a card, opened by a press; while the core downloads it (`download`, chatDownloads.ts) a button
+ * of its own at its end calls that off (✕), once that failed asks it again (↻): beside the button that opens it, laid
+ * over the room the card keeps for it (a button holds no button).
+ */
+export function MessageFileCard({ file, download, onOpen, onCancel, onRetry }: {
+  file: Pick<Attachment, "name" | "size" | "path">; download: DownloadShown | null; onOpen: () => void; onCancel: (id: string) => void; onRetry: (id: string) => void;
+}) {
+  const act = download === null ? null
+    : download.active ? { label: t("web-main.file.cancelDownload"), icon: <Close size={12} />, run: () => onCancel(download.id) }
+    : download.state === "failed" ? { label: t("web-main.file.retryDownload"), icon: <Retry size={13} />, run: () => onRetry(download.id) }
+    : null;
+  return (
+    <span className={css.fileCardHold}>
+      <button type="button" className={look.open} onClick={onOpen} aria-label={t("web-main.file.view", { name: file.name })}>{look.card(file, download, act !== null)}</button>
+      {act && <Tip label={act.label}><button type="button" className={`${css.fileCardRemove} ${css.fileCardAction}`} aria-label={act.label} onClick={act.run}>{act.icon}</button></Tip>}
+    </span>
   );
 }
 
@@ -1554,7 +1580,7 @@ function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: strin
 }
 
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
-const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
+const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Pick<Attachment, "name" | "size" | "path">, download?: DownloadShown | null, slot?: boolean) => <FileCard file={f} download={download} slot={slot} /> };
 
 const NO_MARK = { current: null };
 
@@ -1602,20 +1628,26 @@ export function FileTile({ name, dir = false, progress, error = false, land = fa
   );
 }
 
-export function FileCard({ file, onRemove, onRetry, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; onRetry?: (() => void) | undefined; pending?: boolean; sent?: number | undefined; error?: string | null }) {
+/** `download`: the core's of it (chatDownloads.ts), how far in its size's place and filling its sheet as an upload does;
+ * failed, why, as an upload's failure. `slot`: room at its end for a button of its own laid over it (a message's
+ * ✕ or ↻, beside the button that opens it). */
+export function FileCard({ file, onRemove, onRetry, pending, sent, error, download, slot }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; onRetry?: (() => void) | undefined; pending?: boolean; sent?: number | undefined; error?: string | null; download?: DownloadShown | null | undefined; slot?: boolean | undefined }) {
   // How far it has gone, once that is known.
   const going = pending && sent !== undefined && file.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
     : t("common.uploading");
+  const coming = download?.active ? download : null;
+  const failed = error ?? (download?.state === "failed" ? download.statusText : null);
   return (
-    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={error ? true : undefined}>
-      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} land={!!onRemove} />
+    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={failed ? true : undefined}>
+      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : coming?.progress} error={!!failed} land={!!onRemove} />
       <span className={css.fileCardText}>
         <FileName name={file.name} />
-        <span className={css.fileCardMeta}>{error ?? (pending ? going : fileSize(file.size))}</span>
+        <span className={css.fileCardMeta}>{failed ?? (pending ? going : coming ? coming.statusText : fileSize(file.size))}</span>
       </span>
       {onRetry && <Tip label={t("web-main.composer.retryUpload")}><button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.retryUpload")} onClick={(e) => { e.stopPropagation(); onRetry(); }}><Retry size={13} /></button></Tip>}
       {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: file.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+      {slot && <span className={css.fileCardSlot} aria-hidden="true" />}
     </span></Tip>
   );
 }
@@ -1882,17 +1914,15 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
   const here = useStation().address;
   const pasteReferences = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = e.clipboardData.getData("text/plain");
-    const found = here.includes("/") ? [...pasted.matchAll(/\[([^\]\n]{1,120})\]\((\S+?)\)/g)].flatMap((m) => {
-      const chat = chatOfLink(m[2]!);
-      return chat && scopeOf(chat.station) === scopeOf(here) ? [{ m, chat }] : [];
-    }) : [];
+    // (the core's reading of what is pasted: refLinks.ts pastedRefs)
+    const found = pastedRefs(pasted, here);
     if (found.length === 0) return;
     e.preventDefault();
     const el = e.currentTarget;
     const [start, end, before] = [el.selectionStart, el.selectionEnd, el.value];
-    const marks = found.map(async ({ m, chat }) => {
+    const marks = found.map(async (chat) => {
       try {
-        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base })) as { mark: string };
+        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: chat.title, base })) as { mark: string };
         // A link to its execution history: the mark kept as that link, not the chat's.
         if (chat.history) {
           const at = chat.station.indexOf("/");
@@ -1901,12 +1931,12 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
         }
         return mark;
       } catch {
-        return m[0];
+        return pasted.slice(chat.start, chat.end);
       }
     });
     void Promise.all(marks).then((made) => {
       let text = "", at = 0;
-      found.forEach(({ m }, i) => { text += pasted.slice(at, m.index) + made[i]; at = m.index + m[0].length; });
+      found.forEach((r, i) => { text += pasted.slice(at, r.start) + made[i]; at = r.end; });
       text += pasted.slice(at);
       // Typed on meanwhile: at the end.
       const now = input.current?.value ?? "";

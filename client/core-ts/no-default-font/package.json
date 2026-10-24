@@ -1,0 +1,10 @@
+{
+  "name": "@mathjax/mathjax-newcm-font",
+  "version": "4.1.3-none",
+  "private": true,
+  "type": "module",
+  "description": "In place of MathJax's default font (pnpm-workspace.yaml overrides): none. MathJax's SVG output imports New Computer Modern as its default (#default-font, a megabyte of outlines in every bundle of the core); the core never draws with it (src/math.ts gives its own TeX font).",
+  "exports": {
+    "./mjs/*": "./mjs/*"
+  }
+}

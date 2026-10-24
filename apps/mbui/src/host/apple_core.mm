@@ -38,6 +38,8 @@
 
 #include "core_api.h"
 #include "listen_api.h"
+#include "electron_sealed.h"
+#include "apple_collate.h"
 
 namespace jsi = facebook::jsi;
 
@@ -246,6 +248,32 @@ static NSMutableDictionary *keychain_query(NSString *key) {
 }
 #pragma clang diagnostic pop
 
+// A key still.fail's desktop app (Electron's) kept, where this app is built in its place and so keeps its data where
+// that one did (src/sfcore/apple_engine.m: <that app's userData>/core): its file in userData/sealed, opened with the
+// password Electron's safeStorage keeps in the Keychain ("<app> Safe Storage", the userData's name being the app's),
+// which this app reads unasked as its designated requirement is that app's; asked about otherwise, it is not read
+// (kSecUseAuthenticationUIFail) and the key is none (electron_sealed.h). nil when there is none.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+static NSData *electron_sealed(NSString *key) {
+  NSString *user_data = [[secure_dir stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+  NSString *file = [[user_data stringByAppendingPathComponent:@"sealed"] stringByAppendingPathComponent:electron_sealed_name(key)];
+  NSData *blob = [NSData dataWithContentsOfFile:file];
+  if (!blob) return nil;
+  NSDictionary *q = @{
+    (id)kSecClass : (id)kSecClassGenericPassword,
+    (id)kSecAttrService : [user_data.lastPathComponent stringByAppendingString:@" Safe Storage"],
+    (id)kSecReturnData : @YES,
+    (id)kSecMatchLimit : (id)kSecMatchLimitOne,
+    (id)kSecUseAuthenticationUI : (id)kSecUseAuthenticationUIFail,
+  };
+  CFTypeRef out = NULL;
+  if (SecItemCopyMatching((__bridge CFDictionaryRef)q, &out) != errSecSuccess) return nil;
+  NSData *password = (__bridge_transfer NSData *)out;
+  return electron_sealed_open(blob, password);
+}
+#pragma clang diagnostic pop
+
 // One secure.* operation, done here and now: its answer's JSON and bytes, or why not (`*error`).
 static void secure_do(NSString *op, NSDictionary *a, NSData *bytes, NSData **json_out, NSData **bytes_out, NSString **error) {
   *json_out = nil;
@@ -291,7 +319,18 @@ static void secure_do(NSString *op, NSDictionary *a, NSData *bytes, NSData **jso
       *json_out = const_json("{}");
       *bytes_out = (__bridge_transfer NSData *)out;
     } else if (st == errSecItemNotFound) {
-      *json_out = const_json("{\"none\":true}");
+      // none here yet: still.fail's desktop app's, where this app is built in its place, sealed here again
+      NSData *old = electron_sealed(key);
+      if (old) {
+        NSMutableDictionary *add = keychain_query(key);
+        add[(id)kSecValueData] = old;
+        add[(id)kSecAttrAccessible] = (id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+        SecItemAdd((__bridge CFDictionaryRef)add, NULL);
+        *json_out = const_json("{}");
+        *bytes_out = old;
+      } else {
+        *json_out = const_json("{\"none\":true}");
+      }
     } else {
       *error = [NSString stringWithFormat:@"secure.get: Keychain %d", (int)st];
     }
@@ -470,6 +509,36 @@ static void core_listen_close_all(void) {
   core_listens = nil;
 }
 
+// ── kept.read (ember client/core-ts hosts/bridge.ts) ──
+//   kept.read {at, start, end} → {} + the bytes, or {none: true}: a file the app saved where the person keeps files
+//   (its path, as the keep said it: apple_views.m keep_answer) read back, bytes start to end (the core's downloads:
+//   drive-kept.ts `saved`). One exported through iOS's Files sheet is named only, out of the app's reach: none.
+
+static void core_kept(double cid, NSString *op, NSData *json) {
+  NSDictionary *a = [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+  if (![op isEqualToString:@"kept.read"] || ![a isKindOfClass:NSDictionary.class]) {
+    answer_later(cid, nil, @"unsupported", nil);
+    return;
+  }
+  NSString *at = [a[@"at"] isKindOfClass:NSString.class] ? a[@"at"] : nil;
+  NSNumber *start = [a[@"start"] isKindOfClass:NSNumber.class] ? a[@"start"] : nil;
+  NSNumber *end = [a[@"end"] isKindOfClass:NSNumber.class] ? a[@"end"] : nil;
+  if (!at || !start || !end || end.longLongValue < start.longLongValue) {
+    answer_later(cid, nil, @"kept.read: at, start and end", nil);
+    return;
+  }
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    NSFileHandle *f = at.isAbsolutePath ? [NSFileHandle fileHandleForReadingAtPath:at] : nil;
+    NSData *d = nil;
+    if (f) {
+      NSError *e = nil;
+      if ([f seekToOffset:start.unsignedLongLongValue error:&e]) d = [f readDataUpToLength:NSUInteger(end.longLongValue - start.longLongValue) error:&e];
+      [f closeAndReturnError:nil];
+    }
+    post([cid, d](jsi::Runtime &) { answer_later(cid, d ? const_json("{}") : const_json("{\"none\":true}"), nil, d); });
+  });
+}
+
 // ── __native ──
 
 static NSData *ns_data(const std::string &s) { return [NSData dataWithBytes:s.data() length:s.size()]; }
@@ -491,7 +560,7 @@ static void install(jsi::Runtime &rt) {
       p = b.data(rt);
       len = b.size(rt);
     }
-    bool here = op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0;
+    bool here = op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0 || op.rfind("kept.", 0) == 0;
     if (tracing())
       fprintf(stderr, "[core trace] -> %llu %s %.*s%s%s\n", (unsigned long long)id, op.c_str(), (int)std::min<size_t>(json.size(), 120), json.c_str(),
               has ? (" +" + std::to_string(len) + " bytes").c_str() : "", here ? " (here)" : "");
@@ -499,6 +568,7 @@ static void install(jsi::Runtime &rt) {
       @autoreleasepool {
         NSString *name = @(op.c_str());
         if (op[0] == 's') core_secure(double(id), name, ns_data(json), p, len);
+        else if (op[0] == 'k') core_kept(double(id), name, ns_data(json));
         else core_listen(double(id), name, ns_data(json), p, len);
       }
       return jsi::Value::undefined();
@@ -510,6 +580,11 @@ static void install(jsi::Runtime &rt) {
     std::string op = a[0].asString(rt).utf8(rt);
     std::string json = a[1].asString(rt).utf8(rt);
     if (tracing()) fprintf(stderr, "[core trace] sync %s %.*s\n", op.c_str(), (int)std::min<size_t>(json.size(), 120), json.c_str());
+    // the order people read names in: the system's (apple_collate.h), not the shell's
+    if (op == "text.collate") {
+      NSData *said = apple_collate_answer([NSData dataWithBytes:json.data() length:json.size()]);
+      return jsi::String::createFromUtf8(rt, static_cast<const uint8_t *>(said.bytes), said.length);
+    }
     size_t len = 0;
     uint8_t *out = sf_shell_call_sync(C.shell, op.c_str(), reinterpret_cast<const uint8_t *>(json.data()), json.size(), &len);
     jsi::String s = jsi::String::createFromUtf8(rt, out, len);
@@ -665,8 +740,18 @@ static void run(void) {
   }
 }
 
+// exit() (a host's, or AppKit's as the app quits) runs what atexit was given, the last first, then the destructors of
+// this file's statics (C's mutex and queues) and Hermes's, registered as the program loaded: a core thread still in a
+// task then locked a destroyed mutex (abort) or read freed memory (SIGSEGV), and the system said the app had crashed.
+// So the core ends first, as mb_core_stop ends it (core/exit_test.m).
+static void stop_at_exit(void) {
+  if (!pthread_equal(pthread_self(), C.thread)) mb_core_stop();
+}
+
 void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
   if (C.running) return;
+  static bool at_exit = false;
+  if (!at_exit) at_exit = atexit(stop_at_exit) == 0;
   C.on_message = on_message;
   C.ctx = ctx;
   C.dead = false;

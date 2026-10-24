@@ -573,6 +573,12 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 @property(nonatomic) BOOL barsSaid;
 // turned sideways for a film (@hostapi.set_sideways)
 @property(nonatomic) BOOL sideways;
+// the size classes last said to the app (`size_class`)
+@property(nonatomic) UIUserInterfaceSizeClass saidWidth, saidHeight;
+// the hinge as the system last said it (a UIHingeStatus; -1 none: no hinge, or not said yet), and the fold last said to
+// the app (`fold`)
+@property(nonatomic) NSInteger hinge;
+@property(nonatomic, copy) NSDictionary *saidFold;
 @end
 
 static MBController *the_controller;
@@ -589,11 +595,77 @@ static MBController *the_controller;
 }
 - (BOOL)prefersStatusBarHidden { return self.sideways; }
 - (BOOL)prefersHomeIndicatorAutoHidden { return self.sideways; }
-// the system's light or dark changed (@hostapi.system_dark, read as frames are built): a frame
+// the system's light or dark changed (@hostapi.system_dark, read as frames are built): a frame; the window's size
+// classes changed (an iPhone Duo opened or closed, the app put beside another): said to the app; the hinge moved: said
 - (void)viewDidLoad {
   [super viewDidLoad];
   [self registerForTraitChanges:@[ UITraitUserInterfaceStyle.class ]
                      withHandler:^(id<UITraitEnvironment> env, UITraitCollection *was) { [the_view requestFrame]; }];
+  [self registerForTraitChanges:@[ UITraitHorizontalSizeClass.class, UITraitVerticalSizeClass.class ]
+                     withHandler:^(id<UITraitEnvironment> env, UITraitCollection *was) { [(MBController *)env saySizeClasses]; }];
+  self.hinge = -1;
+#ifdef __IPHONE_27_1
+  if (@available(iOS 27.1, *)) {
+    // its first state at once, then each change (nil: no hinge where the view is)
+    __weak MBController *weak = self;
+    UIHingeInteraction *h = [[UIHingeInteraction alloc] initWithUpdateHandler:^(UIHingeInteraction *i, UIHingeInteractionUpdate *u) {
+      MBController *c = weak;
+      if (!c) return;
+      c.hinge = u.hinge ? (NSInteger)u.hinge.status : -1;
+      [c sayFold];
+    }];
+    [self.view addInteraction:h];
+  }
+#endif
+}
+// The window's size classes as its traits have them, said to the app as they change (src/hostapi/system.mbt
+// `size_class`): what its layout is chosen by (regular both ways on an opened iPhone Duo, compact in width upright on a
+// phone or beside another app), never the view's width.
+- (void)saySizeClasses {
+  UITraitCollection *t = self.traitCollection;
+  UIUserInterfaceSizeClass w = t.horizontalSizeClass, h = t.verticalSizeClass;
+  if (w == UIUserInterfaceSizeClassUnspecified || h == UIUserInterfaceSizeClassUnspecified) return;
+  if (w == self.saidWidth && h == self.saidHeight) return;
+  self.saidWidth = w;
+  self.saidHeight = h;
+  NSString *(^name)(UIUserInterfaceSizeClass) = ^(UIUserInterfaceSizeClass k) {
+    return k == UIUserInterfaceSizeClassRegular ? @"regular" : @"compact";
+  };
+  say_system(@{@"size_class" : @{@"width" : name(w), @"height" : name(h)}});
+  say([NSString stringWithFormat:@"ios: size classes %@ wide, %@ high", name(w), name(h)]);
+  [the_view requestFrame];
+}
+// The hinge and where its fold divides the app's view, said to the app as they change (src/hostapi/system.mbt `fold`):
+// UIHingeInteraction's status and the view's active division regions (UIView reservedRegionsOfKind:, read as the view is
+// laid out and its safe area changes, as UIKit has them read), in the view's points. iOS 27.1 on, built with its SDK;
+// before, or with no hinge, nothing is said.
+- (void)sayFold {
+#ifdef __IPHONE_27_1
+  if (@available(iOS 27.1, *)) {
+    if (self.hinge < 0 && !self.saidFold) return;
+    NSString *hinge = @"none";
+    switch (self.hinge) {
+      case UIHingeStatusClosed: hinge = @"closed"; break;
+      case UIHingeStatusPartiallyOpen: hinge = @"half"; break;
+      case UIHingeStatusFullyOpen: hinge = @"open"; break;
+      default: break;
+    }
+    NSMutableArray *divisions = [NSMutableArray array];
+    if (the_view) {
+      for (UIViewReservedRegion *r in [the_view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
+        if (!r.active) continue;
+        CGRect f = r.frame;
+        [divisions addObject:@{@"x" : @(f.origin.x), @"y" : @(f.origin.y), @"w" : @(f.size.width), @"h" : @(f.size.height)}];
+      }
+    }
+    NSDictionary *fold = @{@"hinge" : hinge, @"divisions" : divisions};
+    if ([fold isEqual:self.saidFold]) return;
+    self.saidFold = fold;
+    say_system(@{@"fold" : fold});
+    say([NSString stringWithFormat:@"ios: hinge %@, %lu division(s)", hinge, (unsigned long)divisions.count]);
+    [the_view requestFrame];
+  }
+#endif
 }
 - (void)loadView {
   UIView *root = [UIView new];
@@ -621,8 +693,9 @@ static MBController *the_controller;
     [under.trailingAnchor constraintEqualToAnchor:the_view.trailingAnchor],
   ];
   if (edge) {
-    // edge to edge, as Android's app is: from the screen's top to its foot, under the status bar and the home
-    // indicator (said to the app: viewSafeAreaInsetsDidChange); a side's cutout (on its side) kept out of the view.
+    // edge to edge, as Android's app is: from the screen's top to its foot and from side to side, under the status bar,
+    // the home indicator and what is at a side (an iPhone Duo's outer screen has its status bar down its side, iOS
+    // 27.1; a phone on its side its cutout): all said to the app (viewSafeAreaInsetsDidChange), which keeps clear of them.
     // The keyboard's guide reaches the screen's foot (not the safe area's) while it is down, its mark with it.
     root.keyboardLayoutGuide.usesBottomSafeArea = NO;
     self.kbMark = [UIView new];
@@ -633,8 +706,8 @@ static MBController *the_controller;
     [NSLayoutConstraint activateConstraints:[@[
       [the_view.topAnchor constraintEqualToAnchor:root.topAnchor],
       [the_view.bottomAnchor constraintEqualToAnchor:root.bottomAnchor],
-      [the_view.leadingAnchor constraintEqualToAnchor:g.leadingAnchor],
-      [the_view.trailingAnchor constraintEqualToAnchor:g.trailingAnchor],
+      [the_view.leadingAnchor constraintEqualToAnchor:root.leadingAnchor],
+      [the_view.trailingAnchor constraintEqualToAnchor:root.trailingAnchor],
       [self.kbMark.topAnchor constraintEqualToAnchor:root.keyboardLayoutGuide.topAnchor],
       [self.kbMark.leadingAnchor constraintEqualToAnchor:root.leadingAnchor],
       [self.kbMark.widthAnchor constraintEqualToConstant:1],
@@ -651,25 +724,29 @@ static MBController *the_controller;
     self.bottom,
   ] arrayByAddingObjectsFromArray:under_view]];
 }
-// Edge to edge, the bars said to the app as they change (src/hostapi/system.mbt `bars`): the status bar's over the
-// view's top, the home indicator's under its foot (the safe area's), the sides none (kept out of the view).
+// Edge to edge, the bars said to the app as they change (src/hostapi/system.mbt `bars`): the safe area's on each side
+// (the status bar's over the view's top, or down its side on an iPhone Duo's outer screen; the home indicator's under
+// its foot; a cutout at a side).
 - (void)sayBars {
   if (!edge) return;
   UIEdgeInsets in = self.view.safeAreaInsets;
-  UIEdgeInsets b = UIEdgeInsetsMake(in.top, 0, in.bottom, 0);
+  UIEdgeInsets b = UIEdgeInsetsMake(in.top, in.left, in.bottom, in.right);
   if (self.barsSaid && UIEdgeInsetsEqualToEdgeInsets(b, self.saidBars)) return;
   self.barsSaid = YES;
   self.saidBars = b;
-  say_system(@{@"bars" : @{@"top" : @(b.top), @"bottom" : @(b.bottom), @"left" : @0, @"right" : @0}});
+  say_system(@{@"bars" : @{@"top" : @(b.top), @"bottom" : @(b.bottom), @"left" : @(b.left), @"right" : @(b.right)}});
   [the_view requestFrame];
 }
 - (void)viewSafeAreaInsetsDidChange {
   [super viewSafeAreaInsetsDidChange];
   [self sayBars];
+  [self sayFold];
 }
 - (void)viewDidLayoutSubviews {
   [super viewDidLayoutSubviews];
   [self sayBars];
+  [self saySizeClasses];
+  [self sayFold];
   // the keyboard's guide moved (it is coming or going): its motion drawn frame by frame (MBView's tick)
   [the_view requestFrame];
 }
@@ -897,6 +974,12 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
 
 void mb_host_clipboard_set(moonbit_string_t s) {
   UIPasteboard.generalPasteboard.string = mb_ns_from_string(s);
+}
+
+// A picture on the clipboard (@hostapi.clipboard_set_image): the image the bytes are, as other apps paste one.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  UIImage *img = [UIImage imageWithData:[NSData dataWithBytes:data length:Moonbit_array_length(data)]];
+  if (img) UIPasteboard.generalPasteboard.image = img;
 }
 
 // A secret on the clipboard (@hostapi.clipboard_set_secret, as Android's sensitive clip cleared later): kept to this
@@ -1425,8 +1508,25 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
   (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
 }
 int32_t mb_host_window_inset(void) { return 0; }
+// A window filling the screen (@hostapi.full_screen): not one of this host's.
+int32_t mb_host_full_screen(void) { return 0; }
+void mb_host_set_full_screen(int32_t on) { (void)on; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
+void mb_host_set_badge(int32_t n) { (void)n; }
+// The menu bar (@hostapi.menu_setup): none here.
+void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
+moonbit_string_t mb_host_local_station(void) { return mb_string_from_ns(@""); }
+void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
+// (the desktop's dock: the macOS app's only)
+int32_t mb_host_dock_available(void) { return 0; }
+
+// The keys held now (@hostapi.mods_held): none read here.
+int32_t mb_host_mods_held(void) { return 0; }
+void mb_host_dock_send(moonbit_string_t l) { (void)l; }
+void mb_host_dock_stop(void) {}
+moonbit_string_t mb_host_dock_kept(void) { return moonbit_make_string_raw(0); }
+void mb_host_dock_keep(moonbit_string_t j) { (void)j; }
 
 // ---- files picked (pick.mbt) ----
 // Pictures (kind 1) from the system's photo picker (PHPickerViewController: no leave to ask for), any file (kind 2) from

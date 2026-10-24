@@ -247,7 +247,7 @@ fn restart() -> Unit {
 
 ///|
 /// Signs a person in with still.fail cloud: `auth.begin` for the login page, the system's browser session for it
-/// (ASWebAuthenticationSession on Apple's systems), which brings back the `stillfail://auth/callback` URL the cloud
+/// (ASWebAuthenticationSession on iOS), which brings back the `stillfail://auth/callback` URL the cloud
 /// sends the browser to, then `auth.complete` with its query. `on_done` gets `auth.complete`'s answer
 /// (`{account, return_to}`) or why not (the person closed the page, or an error of the core's).
 pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
@@ -289,8 +289,8 @@ pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
 }
 
 ///|
-/// Whether this build has the system's browser session `sign_in` needs (ASWebAuthenticationSession on Apple's
-/// systems); where it has not (Android), an app signs in on `@hostapi.browser_login` (a loopback address) instead.
+/// Whether this build has the system's browser session `sign_in` needs (ASWebAuthenticationSession on iOS); where it
+/// has not (Android, macOS, Windows), an app signs in on `@hostapi.browser_login` (a loopback address) instead.
 pub fn has_browser_session() -> Bool {
   ffi_has_web_auth() != 0
 }

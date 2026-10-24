@@ -244,6 +244,8 @@
   "core-misc.vault.reason.open": "查看「{name}」",
   "core-misc.vault.reason.unlock": "解锁密钥库「{name}」",
   "core-misc.vault.reason.approve": "批准 agent 使用「{name}」",
+  "core-misc.vault.reason.save": "将「{name}」存入密钥库",
+  "core-misc.vault.notSealedHere": "此申请提出时此设备尚未开启密钥库，请在已开启的设备上批准",
   "core-misc.vault.personal": "个人",
   "core-misc.vault.noPlainStation": "没有可存放密钥的 station：请更新 station",
   "core-misc.vault.plainLocked": "已开启安全模式：密钥需存入加密的库",

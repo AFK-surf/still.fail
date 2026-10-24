@@ -29,10 +29,8 @@ export const wordN = style({ minWidth: "1.6em", textAlign: "right", fontSize: va
 /** The settings' sidebar row's: requests waiting, at its end. */
 export const navCount = style({ marginLeft: "auto", fontSize: vars.textMeta, color: vars.red, fontWeight: "500", fontVariantNumeric: "tabular-nums" });
 export const count = style({ fontSize: vars.textMeta, padding: "0 7px", borderRadius: "999px", background: vars.redBg, color: vars.red, fontWeight: "500" });
-/** The requests waiting: each one's facts over its approval's rows. */
-export const requests = style({ display: "grid", gap: "28px" });
-export const request = style({ display: "grid", gap: "8px" });
-export const requestHead = style({ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" });
+/** The requests waiting: each one's card (VaultAsk.tsx AskCard), as in its chat; the cards space themselves (pagesCss.card). */
+export const requests = style({ display: "grid" });
 export const facts = style({
   display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "4px 14px", margin: "0", fontSize: vars.textUi, lineHeight: vars.leadingBody,
 });

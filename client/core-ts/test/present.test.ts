@@ -244,6 +244,13 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：登录失效");
   assert.equal(words({ outcome: "aborted" }), "出错：被停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
+  // Without its lead (the 待处理 list's line, its dot says that much): what it needs, why it stopped.
+  const what = (turn: J) => p.rowStateLine({ agents: [p.session({ process: "warm", lastTurn: turn })] })?.[2];
+  assert.equal(what({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "要 Stripe 的测试 key");
+  assert.equal(what({ declared: "block", outcome: "completed" }), "需要你处理");
+  assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "登录失效");
+  assert.equal(what({ outcome: "aborted" }), "被停止");
+  assert.equal(what({ outcome: "completed" }), "意外停止");
   let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
   decided = p.session(decided);
   assert.equal(decided.mark, "block");
@@ -310,13 +317,13 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const asked = row([done], false);
   asked.card = card;
   // A line that asks for a decision is about no message: the chat leads to what it asks.
-  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null]]);
+  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null, "域名用哪个？", { kind: "decision", text: "奏", rest: " · 域名用哪个？" }]]);
   asked.agents = [agent(null, "running")];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [waits];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [helped];
-  assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null]);
+  assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null, "要 key", { kind: "need", rest: "要 key" }]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
   assert.equal(p.rowStateText(asked), "出错：登录失效");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
@@ -334,12 +341,21 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const about = (a: J) => agent({ declared: "final", ending: "all_done", need: "已合进 main", about: a, outcome: "completed" }, "warm");
   const here = row([about({ thread: 7, seq: 12, ts: "1.2" })], false);
   here.thread = 7;
-  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", 12]);
+  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", 12, "已完成：已合进 main", { kind: "done", rest: "已合进 main" }]);
   here.agents = [about({ thread: 8, seq: 12, ts: "1.2" })];
-  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", null]);
+  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", null, "已完成：已合进 main", { kind: "done", rest: "已合进 main" }]);
   const waiting = row([agent({ declared: "waiting", ending: "waiting", waitFor: "CI", about: { thread: 7, seq: 3, ts: "1.1" }, outcome: "completed", endedAt: 5 }, "warm")], false);
   waiting.thread = 7;
-  assert.deepEqual(p.rowStateLine(waiting), ["等待：CI", 3]);
+  assert.deepEqual(p.rowStateLine(waiting), ["等待：CI", 3, "等待：CI", { kind: "wait", rest: "CI" }]);
+  // What leads a session's words is said with them (not read back out of them): done alone, a need, watching whole.
+  assert.deepEqual([done.statusText, done.statusLead, done.statusRest], ["已完成", "done", ""]);
+  assert.deepEqual([helped.statusLead, helped.statusRest], ["need", "要 key"]);
+  assert.deepEqual([waits.statusText, waits.statusLead, waits.statusRest], ["等待：CI 跑完", "wait", "CI 跑完"]);
+  assert.deepEqual([works.statusLead, works.statusRest], [undefined, undefined]);
+  const failed = agent({ outcome: "failed", detail: "auth: 401" }, "warm");
+  assert.deepEqual([failed.statusText, failed.statusLead], ["出错：登录失效", undefined]);
+  const watching = p.session({ key: "w", process: "warm", pending: 0, lastTurn: { declared: "waiting", ending: "waiting", outcome: "completed", endedAt: 5 }, watch: { every: 60 } });
+  assert.deepEqual([watching.statusText, watching.statusLead, watching.statusRest], ["监控中", "watch", "监控中"]);
 });
 
 test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
@@ -358,6 +374,8 @@ test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
   };
   o = p.decorate({ topic: "overview", station: "w/s" }, o, c);
   assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, false, false]);
+  // its plan as a name for its tag (the web's and the apps' alike)
+  assert.deepEqual(o.machineLogins.map((l: J) => l.planText), ["Max", "Plus", "", "Plus"]);
 });
 
 test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each", () => {
@@ -413,6 +431,24 @@ test("bound_subscriptions_hide_only_the_same_machine_account", () => {
   o.profiles = [];
   o = p.decorate(topic, o, clock);
   assert.ok(o.machineLogins.every((l: J) => l.offered === true));
+});
+
+test("how_a_station_archives_on_its_own_is_said_and_offered_by_the_core", () => {
+  const topic = { topic: "overview", station: "w/s" };
+  const c = { now: 0, offsetMin: 0 };
+  const shown = (archiving: J): J => (p.decorate(topic, { archiving }, c) as J).archiving;
+  const off = shown({ days: 0, slackDays: 3, reviewed: true, canEdit: true });
+  assert.deepEqual([off.mode, off.summaryText], ["off", "不自动归档 · Slack：3 天"]);
+  assert.deepEqual([off.daysOffered, off.slackDaysOffered], [[1, 3, 7, 30], [0, 3, 7, 30]]);
+  const idle = shown({ days: 1, slackDays: 0, reviewed: false, canEdit: false });
+  assert.deepEqual([idle.mode, idle.summaryText], ["idle", "空闲就归档 · 1 天 · Slack：不归档"]);
+  // The days kept are offered among the others, in order, when they are none of them.
+  const reviewed = shown({ days: 14, slackDays: 60, reviewed: true, canEdit: true });
+  assert.deepEqual([reviewed.mode, reviewed.summaryText], ["reviewed", "按模型判断 · 14 天 · Slack：60 天"]);
+  assert.deepEqual([reviewed.daysOffered, reviewed.slackDaysOffered], [[1, 3, 7, 14, 30], [0, 3, 7, 30, 60]]);
+  assert.ok("ok" in conform("ArchivingView", reviewed), JSON.stringify(conform("ArchivingView", reviewed)));
+  // A station from before it: none.
+  assert.equal("archiving" in (p.decorate(topic, { counts: {} }, c) as J), false);
 });
 
 test("what_the_clients_show_is_put_in_here", () => {
@@ -540,4 +576,40 @@ test("a_mac_stations_grants_are_said_in_words_with_what_goes_without_them_and_ho
   assert.equal("permissions" in (p.decorate(topic, { permissions: "?" }, c) as J), false);
   const shown = p.decorate(topic, raw(true, ["desktop"]), c) as J;
   assert.ok("ok" in conform("StationPermissions", shown.permissions), JSON.stringify(conform("StationPermissions", shown.permissions)));
+});
+
+test("a_connect_says_where_it_is_reached_how_it_runs_and_what_switching_it_does", () => {
+  const base: J = { id: "f1", name: "助手", kind: "feishu", mode: "single-session", requireMention: true, session: "s1", feishu: { appId: "cli_1", domain: "lark" }, bind: { runtime: "claude" } };
+  const c = p.connect(base);
+  // a Feishu connect: its groups' words, its platform where no Slack workspace is said
+  assert.equal(c.placeText, "Lark");
+  assert.equal(c.modeLabel, "所有群共用一个会话");
+  assert.ok(c.modeSentence.endsWith("仅在被 @ 时唤醒。"));
+  assert.equal(c.modeWords.single.label, "所有群共用一个会话");
+  assert.equal(p.connect({ ...base, kind: "slack", team: "Acme", feishu: undefined }).placeText, "Acme");
+  // switched to one each, with two running: what that does in its groups' words, then that the running finish
+  const changes = p.modeChanges(base, 2);
+  const multi = changes.find((x: J) => x.mode === "multi-session");
+  assert.deepEqual([multi.changed, multi.action], [true, "改为多会话"]);
+  assert.deepEqual(multi.effects, [
+    "当前绑定的会话将不再接收新消息。此后每个群被 @ 时各开启一个会话。",
+    "如需在群里继续，须重新 @，这将开启一个新会话，不含之前的上下文。",
+    "以后切回单会话时，将继续使用原来的会话。",
+    "当前有 2 个会话正在运行，它们会完成当前这一轮。",
+  ]);
+  // the way it is now changes nothing, so says nothing; answering every message is said on its own
+  const same = changes.find((x: J) => x.mode === "single-session" && x.requireMention);
+  assert.deepEqual([same.changed, same.effects, same.action], [false, [], "确认更改"]);
+  const all = changes.find((x: J) => x.mode === "single-session" && !x.requireMention);
+  assert.equal(all.effects[0], "无需 @：它所在的所有群和私聊中的每条消息都会发送给 agent，用量会明显增加。");
+});
+
+test("a_slack_apps_permissions_are_said_in_sections_those_only_admins_allow_marked", () => {
+  const sections = p.slackSections();
+  assert.deepEqual(sections.map((s: J) => s.title)[0], "消息");
+  assert.deepEqual(sections.flatMap((s: J) => s.groups.map((g: J) => g.id)).length, 16);
+  const base = sections[0].groups[0];
+  assert.deepEqual([base.id, base.fixed, base.admin], ["base", true, null]);
+  const connect = sections[1].groups.find((g: J) => g.id === "connect");
+  assert.equal(connect.tip, `${connect.description} ${connect.admin}`);
 });

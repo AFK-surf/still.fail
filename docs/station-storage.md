@@ -204,19 +204,39 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   (the key the asking client shows the chat by until it is made) is said by
   the chat's sidebar item for ten minutes (in memory only): its `chat` event
   can reach the client before the answer does.
-- A session's transcript comes from `/events?live=<key>&from=N&last=200`
-  (entries from index N, no more than the last 200 — and the usage so far,
-  even when N is all of them — then as they are written; a watcher asking past
-  the end is told where it ends) and `GET /sessions/:key/timeline?before=&limit=`
-  (the pages before); the station keeps each watched transcript parsed
-  incrementally instead of re-reading the file per request. With `brief=1` on
+- A session at work is followed by the station itself, from when its
+  `running` goes on until two minutes after it goes off (`sessions/live.ts`
+  `running`, `HELD_AFTER_MS`): its steps and its transcript's entries as they
+  are written go to every `/events?running=1` stream whose viewer sees it, and
+  such a stream is told as it opens where each stands (no entry of before).
+  How many entries each transcript has is kept as it is read
+  (`transcript_lengths`), and its session's summary says it
+  (`transcriptLength`). A client from before follows a session by name, on
+  `/events?live=<key>&from=N&last=200` (entries from index N, no more than the
+  last 200 — and the usage so far, even when N is all of them — then as they are
+  written; a watcher asking past the end is told where it ends). The rest comes
+  from `GET /sessions/:key/timeline`: `?before=&limit=` (a page before),
+  `?after=&limit=` (what comes after an entry), `?from=&to=` (a stretch), each
+  answer saying how many entries there are (`end`). The live view reads none
+  of a transcript's past on the main thread: a session it starts to watch goes
+  on from where the reader that keeps its history stands (the `transcriptState`
+  read: offsets, counts and what a read keeps between lines, `read/tail.ts`
+  `snapshot`), counting what came before without keeping it, and a listener
+  that lacks some of it is given it from there (what is said meanwhile told
+  after). A reader keeps those it was asked
+  pages of in brief (`read/transcripts.ts`, at most 40,000 entries, the least
+  recently read let go; the pool sends a session's pages to the reader that read
+  it last), so a page is a slice and a read goes on from where the last left
+  off; a stretch read whole is read from the file. A transcript is read 4 MB at
+  a time (`read/tail.ts`), never as one buffer. With `brief=1` on
   either, entries come in brief, as an execution history shows them before a
   step is opened (`read/transcript.ts` `brief`, marked `brief: true`): a call
   longer than 600 characters by the fields of its input that say what it does
   (`description`, `command`, `file_path`, … each at most 300; posts, states
   and Slack calls whole), a result without what it gave (Slack's answer kept to
   `ok` and `ts`), a thought by its first line. `?from=a&to=b` reads entries a
-  to b whole (both included, at most 1000), as such a step is opened.
+  to b (both included, at most 1000), whole as such a step is opened, in brief
+  with `brief=1` (a stretch a stream left out).
 - `GET /chats` — the viewer's sidebar items (The sidebar, below).
 - `POST /batch {gets}` — several reads in one: each path (with its query) is
   answered as its GET is, and the answer is `{ answers: [{ status, body }] }`

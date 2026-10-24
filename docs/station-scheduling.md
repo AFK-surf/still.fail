@@ -11,8 +11,8 @@ estimated beforehand, since the same command takes more or less by its caches.
 Other stations' tasks (`remote_…` jobs) go through it; an agent's own jobs and services do not.
 
 - With none of the queue's tasks running, the first waiting starts, however busy the machine is: one always goes on.
-- Another starts only once the last one started has had 30 s to get going and the CPUs were busy less than 80% over the
-  last 20 s. Tasks come in one by one while there is room.
+- Another starts only once the CPUs, looked at for at least 10 s since the last one started (while it still runs),
+  were busy less than 80% (over the last 20 s when it has ended). Tasks come in one by one while there is room.
 - None starts while the system says its memory is under pressure (macOS's `kern.memorystatus_vm_pressure_level` warn
   or critical; elsewhere under a tenth of the memory available).
 - A task prepared with `screen: true` (windows, a simulator, screenshots) starts only while no other such task runs.

@@ -9,12 +9,13 @@
 
 ///|
 /// What is played: its name, its media type, whether it is known to be a song, and how its bytes are read
-/// (`read(offset, length, answer)`: `answer(bytes, total)`, as `@ui.NativeView::video` reads).
+/// (`read(offset, length, answer)`: `answer(bytes, total, more)` as they come, what it gives back stopping it, as
+/// `@ui.NativeView::video` reads).
 pub(all) struct MediaTrack {
   name : String
   mime : String
   audio : Bool
-  read : (Double, Int, (Bytes, Double) -> Unit) -> Unit
+  read : (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit
 }
 
 ///|
@@ -88,13 +89,15 @@ pub(all) enum MediaNote {
 
 ///|
 /// A frame of the player: how it stands, what is playing, whether it is a song, whether what it waits on has been
-/// waited on long enough to say, how far its controls show (0 … 1, coming or going) and whether they take taps, the
-/// note a double tap said (while it is said), the subtitle's words now ("" none).
+/// waited on long enough to say and how fast its bytes come meanwhile (bytes a second over the wait's last whole
+/// second; -1 not waiting, or not a second yet), how far its controls show (0 … 1, coming or going) and whether they
+/// take taps, the note a double tap said (while it is said), the subtitle's words now ("" none).
 pub(all) struct MediaFrame {
   status : MediaStatus
   phase : MediaPhase
   audio : Bool
   waited : Bool
+  rate : Double
   shown : Double
   on : Bool
   note : MediaNote?
@@ -133,7 +136,19 @@ pub struct Media {
   priv mut tap_waiting : Bool
   /// where the timeline is dragged to (ms); -1: it is not
   priv mut scrub : Double
+  /// where the player was last sent while it is dragged (ms; -1: not yet), whether it played when the finger came
+  priv mut scrub_sent : Double
+  priv mut scrub_played : Bool
   priv mut pinned : MediaStatus?
+  /// how loud (0 … 1), and its sound off, kept for what it plays next
+  priv mut volume : Double
+  priv mut muted : Bool
+  /// while it waits (opening, buffering): whether it does, the last whole second measured and the bytes it had been
+  /// given by then (-1: none yet), how fast they came (Media::rate_now)
+  priv mut waiting : Bool
+  priv mut rate_tick : Int
+  priv mut rate_bytes : Double
+  priv mut rate : Double
 }
 
 ///|
@@ -149,8 +164,8 @@ pub let media_shown_ms : Double = 200.0
 
 ///|
 /// A player with nothing in it yet. Its ways, as Player.kt's: the speeds a tap steps through, what a double tap on a
-/// side jumps, how long its controls stay left alone while it plays, a double tap's second tap's time, how long a note
-/// is said, how long its controls take to come or go, how long it waits before it says it is waiting.
+/// side jumps, how long its controls stay left alone while it plays (0: they stay), a double tap's second tap's time,
+/// how long a note is said, how long its controls take to come or go, how long it waits before it says it is waiting.
 pub fn Media::new(
   key? : String = "media",
   speeds? : Array[Double] = [1.0, 1.25, 1.5, 2.0, 0.5, 0.75],
@@ -187,7 +202,15 @@ pub fn Media::new(
     note: None,
     tap_waiting: false,
     scrub: -1.0,
+    scrub_sent: -1.0,
+    scrub_played: false,
     pinned: None,
+    volume: 1.0,
+    muted: false,
+    waiting: false,
+    rate_tick: 0,
+    rate_bytes: 0.0,
+    rate: -1.0,
   }
 }
 
@@ -199,6 +222,9 @@ pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> U
   if self.speed != 1.0 {
     n.rate(self.speed)
   }
+  if self.muted || self.volume < 1.0 {
+    n.volume(if self.muted { 0.0 } else { self.volume })
+  }
   if start > 0.0 {
     n.seek(start)
   }
@@ -209,6 +235,8 @@ pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> U
   self.started = false
   self.awake = true
   self.scrub = -1.0
+  self.scrub_sent = -1.0
+  self.waiting = false
   @ui.log("player: open \{track.name} (\{track.mime}) from \{start.to_int()} ms")
 }
 
@@ -414,7 +442,16 @@ pub fn Media::seek(self : Media, ms : Double) -> Unit {
 }
 
 ///|
-/// `delta` ms on (back, below 0), within its length.
+/// To about `ms` in, at once (NativeView::seek_near: a jump, the very frame not waited for).
+pub fn Media::seek_near(self : Media, ms : Double) -> Unit {
+  match self.view {
+    Some(n) => n.seek_near(ms)
+    None => ()
+  }
+}
+
+///|
+/// About `delta` ms on (back, below 0), within its length, at once (Media::seek_near).
 pub fn Media::seek_by(self : Media, delta : Double) -> Unit {
   let s = self.status()
   let mut to = s.position + delta
@@ -424,7 +461,7 @@ pub fn Media::seek_by(self : Media, delta : Double) -> Unit {
   if s.duration > 0.0 && to > s.duration {
     to = s.duration
   }
-  self.seek(to)
+  self.seek_near(to)
 }
 
 ///|
@@ -440,6 +477,49 @@ pub fn Media::step_speed(self : Media) -> Unit {
   self.speed = self.speeds[(i + 1) % self.speeds.length()]
   match self.view {
     Some(n) => n.rate(self.speed)
+    None => ()
+  }
+}
+
+///|
+/// The speeds it steps through, in order.
+pub fn Media::speeds(self : Media) -> Array[Double] {
+  self.speeds
+}
+
+///|
+/// At `speed` from now on (one of its speeds, or another: a speed held a while, then let go).
+pub fn Media::set_speed(self : Media, speed : Double) -> Unit {
+  self.speed = speed
+  match self.view {
+    Some(n) => n.rate(speed)
+    None => ()
+  }
+}
+
+///|
+/// How loud it plays (0 … 1), whether its sound is off.
+pub fn Media::volume(self : Media) -> (Double, Bool) {
+  (self.volume, self.muted)
+}
+
+///|
+/// As loud as `volume` (0 … 1), its sound on again (none at 0).
+pub fn Media::set_volume(self : Media, volume : Double) -> Unit {
+  self.volume = if volume < 0.0 { 0.0 } else if volume > 1.0 { 1.0 } else { volume }
+  self.muted = self.volume == 0.0
+  match self.view {
+    Some(n) => n.volume(self.volume)
+    None => ()
+  }
+}
+
+///|
+/// Its sound off, or on again as loud as it was.
+pub fn Media::toggle_mute(self : Media) -> Unit {
+  self.muted = !self.muted
+  match self.view {
+    Some(n) => n.volume(if self.muted { 0.0 } else { self.volume })
     None => ()
   }
 }
@@ -505,14 +585,15 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
     p.rest_key = rest
     after(c, p.key + "/rest", false, p.rest_ms) |> ignore
   }
-  if after(c, p.key + "/rest", p.awake && phase == Playing && !audio, p.rest_ms) {
+  if after(c, p.key + "/rest", p.awake && phase == Playing && !audio && p.rest_ms > 0.0, p.rest_ms) {
     p.awake = false
   }
   if p.note is Some(_) && after(c, p.key + "/note", true, p.note_ms) {
     p.note = None
   }
-  // what it waits on said only once it has waited wait_ms
+  // what it waits on said only once it has waited wait_ms, with how fast its bytes come meanwhile
   let waited = after(c, p.key + "/wait", phase is (Opening | Buffering), p.wait_ms)
+  let rate = p.rate_now(c, phase is (Opening | Buffering))
   // a tap left single: the controls shown or hidden
   if p.tap_waiting && after(c, p.key + "/tap", true, p.double_tap_ms) {
     p.tap_waiting = false
@@ -525,7 +606,41 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
   let target = if p.awake || phase != Playing || audio { 1.0 } else { 0.0 }
   let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(p.shown_ms))
   let said = if p.subs_on { @codec.cues_at(p.cues, s.position) } else { "" }
-  { status: s, phase, audio, waited, shown, on: shown > 0.0, note: p.note, said }
+  { status: s, phase, audio, waited, rate, shown, on: shown > 0.0, note: p.note, said }
+}
+
+///|
+/// How fast its bytes come while it waits (`waiting`: opening or buffering): those its player was given (the host's
+/// count, NativeView::bytes) over each whole second of the clock (Ctx::every) from the first that began after the wait
+/// did, as the last one ended; -1 when it does not wait, or before such a second is over.
+fn Media::rate_now(self : Media, c : @ui.Ctx, waiting : Bool) -> Double {
+  let bytes = match self.view {
+    Some(n) => n.bytes()
+    None => 0.0
+  }
+  if !waiting {
+    self.waiting = false
+    return -1.0
+  }
+  let k = c.every(1000.0)
+  if !self.waiting {
+    // (the second it began in counts for nothing: part of it was not waited)
+    self.waiting = true
+    self.rate_tick = k + 1
+    self.rate_bytes = -1.0
+    self.rate = -1.0
+  }
+  if k >= self.rate_tick {
+    if self.rate_bytes >= 0.0 && k > self.rate_tick {
+      let came = bytes - self.rate_bytes
+      self.rate = (if came > 0.0 { came } else { 0.0 }) / (k - self.rate_tick).to_double()
+    }
+    if self.rate_bytes < 0.0 || k > self.rate_tick {
+      self.rate_tick = k
+      self.rate_bytes = bytes
+    }
+  }
+  self.rate
 }
 
 ///|
@@ -569,23 +684,104 @@ pub fn Media::keep_awake(self : Media, c : @ui.Ctx, id : Int) -> Unit {
 }
 
 ///|
-/// The timeline `id` (taking taps while `on`), tapped or dragged along: where it is dragged to followed as the finger
-/// goes (Media::scrubbing), the player sent there once it is let go.
-pub fn Media::timeline(self : Media, c : @ui.Ctx, id : Int, on : Bool) -> Unit {
+/// The timeline `id` (taking taps while `on`; its track `inset` in from either side), tapped or dragged along to a time
+/// (`snap`: what is gone to for a time, e.g. the start of the frame showing then): dragged, it goes with the finger
+/// (Media::scrub_to) until let go (Media::scrub_done); tapped, there at once, played or paused as it was.
+pub fn Media::timeline(
+  self : Media,
+  c : @ui.Ctx,
+  id : Int,
+  on : Bool,
+  inset? : Double = 0.0,
+  snap? : (Double) -> Double = fn(ms) { ms },
+) -> Unit {
   let dur = self.status().duration
-  match c.rect_of(id) {
-    Some((x, _, w, _)) if on && dur > 0.0 && c.pressed(id) => {
-      let (px, _, _) = c.pointer()
-      let k = (px - x) / (if w < 1.0 { 1.0 } else { w })
-      self.scrub = (if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }) * dur
+  let under = fn() -> Double? {
+    match c.rect_of(id) {
+      Some((x, _, w, _)) if dur > 0.0 => {
+        let (px, _, _) = c.pointer()
+        let track = w - 2.0 * inset
+        let k = (px - x - inset) / (if track < 1.0 { 1.0 } else { track })
+        Some(snap((if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }) * dur))
+      }
+      _ => None
     }
-    _ =>
-      if self.scrub >= 0.0 {
-        self.seek(self.scrub)
-        self.scrub = -1.0
+  }
+  if on && c.pressed(id) {
+    match under() {
+      Some(ms) => self.scrub_to(ms)
+      None => ()
+    }
+  } else if self.scrub >= 0.0 {
+    // let go: where it was let go (its last move and its lifting can be one frame)
+    match under() {
+      Some(ms) if on => self.scrub = ms
+      _ => ()
+    }
+    self.scrub_done()
+  } else if on && c.clicked(id) {
+    match under() {
+      Some(ms) => {
+        self.seek_near(ms)
         self.wake()
       }
+      None => ()
+    }
   }
+}
+
+///|
+/// A finger moving it through the time, at `ms` now: paused while the finger is on it, the player told its seeks come
+/// one after another (NativeView::scrub: each frame gone to shown before the next is taken up), sent there when that
+/// is not where it was last sent; Media::scrubbing says where, until Media::scrub_done.
+pub fn Media::scrub_to(self : Media, ms : Double) -> Unit {
+  if self.scrub < 0.0 {
+    self.scrub_played = self.status().playing
+    self.scrub_sent = -1.0
+    match self.view {
+      Some(n) => {
+        n.pause()
+        n.scrub(true)
+      }
+      None => ()
+    }
+  }
+  self.scrub = ms
+  if ms != self.scrub_sent {
+    self.scrub_sent = ms
+    self.seek(ms)
+  }
+  self.wake()
+}
+
+///|
+/// Whether it plays again once the finger moving it through the time lets go (paused meanwhile).
+pub fn Media::scrub_resumes(self : Media) -> Bool {
+  self.scrub >= 0.0 && self.scrub_played
+}
+
+///|
+/// The finger let go: sent where it was last moved to (when the last seek was not there), its seeks as before, played
+/// again if it played when the finger came.
+pub fn Media::scrub_done(self : Media) -> Unit {
+  if self.scrub < 0.0 {
+    return
+  }
+  if self.scrub != self.scrub_sent {
+    self.seek(self.scrub)
+  }
+  match self.view {
+    Some(n) => {
+      n.scrub(false)
+      if self.scrub_played {
+        n.play()
+      }
+    }
+    None => ()
+  }
+  self.scrub = -1.0
+  self.scrub_sent = -1.0
+  self.wake()
 }
 
 ///|

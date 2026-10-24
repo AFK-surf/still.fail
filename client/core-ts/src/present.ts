@@ -183,6 +183,9 @@ const SHAPED: Record<string, Ty> = {
   vaults: "VaultsView",
   vaultItems: "VaultItemsView",
   driveTransfers: "DriveTransfersView",
+  driveBrowse: "DriveBrowseView",
+  filesTabs: { opt: "FilesTabsView" },
+  downloads: "DownloadsView",
   vaultUses: "VaultUsesView",
   joinable: "JoinableView",
   memberships: "MembershipsView",
@@ -344,16 +347,39 @@ export function stateAbout(agent: J, thread: number | null): number | null {
   return u64(about.seq) ?? null;
 }
 
-/// Where a chat stands, in words, and the message that is about. A line that asks for a decision (奏 · …, 要你帮忙：…)
-/// is about none: the line only says so, and the chat leads to what it asks (`ChatView.asks`).
-export function rowStateLine(row: J): [string, number | null] | null {
+/// What leads a state line, for a client to say as a mark of its own (`StateLead`): a bell for needs-the-viewer, a
+/// check for done, the waiting arc, the watch's radar; a card waiting for the viewer (奏 · …), its lead word (`text`)
+/// in bold. `rest`: what follows the lead (for watching, the whole line: its words stay after the radar).
+export type Lead = { kind: "need" | "done" | "wait" | "watch" | "decision"; text?: string; rest: string };
+
+/// Where a chat stands, in words, and the message that is about; the line without its lead (what the dot before it does
+/// not say); what leads it, if anything does. A line that asks for a decision (奏 · …, 要你帮忙：…) is about none: the
+/// line only says so, and the chat leads to what it asks (`ChatView.asks`).
+export function rowStateLine(row: J): [string, number | null, string, Lead | null] | null {
   const thread = u64(get(row, "thread")) ?? null;
   const p = decisions.pending(row);
-  const card: [string, number | null] | null = p
-    ? [str(p.text) ?? decisions.line(str(get(p.message, "text")) ?? ""), null]
+  const lead = t("core-logic.decisions.line", { text: "" });
+  const given = str(p?.text);
+  const cardLine = p ? (given ?? decisions.line(str(get(p.message, "text")) ?? "")) : "";
+  const word = t("core-logic.decisions.line.empty");
+  const card: [string, number | null, string, Lead | null] | null = p
+    ? [
+      cardLine,
+      null,
+      given !== undefined ? (given.startsWith(lead) ? given.slice(lead.length) : given) : decisions.question(str(get(p.message, "text")) ?? ""),
+      cardLine.startsWith(word) ? { kind: "decision", text: word, rest: cardLine.slice(word.length) } : null,
+    ]
     : null;
   const agents: J[] = arr(get(row, "agents")) ?? [];
   const textOf = (a: J): string | null => str(get(a, "statusText")) ?? null;
+  const leadOf = (a: J): Lead | null => {
+    const kind = str(get(a, "statusLead"));
+    return kind === "need" || kind === "done" || kind === "wait" || kind === "watch" ? { kind, rest: str(get(a, "statusRest")) ?? "" } : null;
+  };
+  const said = (a: J, about: number | null): [string, number | null, string, Lead | null] | null => {
+    const text = textOf(a);
+    return text === null ? null : [text, about, stateWhat(a) ?? text, leadOf(a)];
+  };
   const atWork = agents.some((a) => shownStatus(a) === "queued" || (shownStatus(a) === "running" && waiting(a) === null));
   if (!atWork) {
     // What it asks let go by the viewer (忽略): its agent asking says nothing on their row.
@@ -361,25 +387,19 @@ export function rowStateLine(row: J): [string, number | null] | null {
     if (blocked) {
       const need = nonEmpty(get(get(blocked, "lastTurn"), "need")) !== null;
       if (card && !need) return card;
-      const text = textOf(blocked);
-      return text === null ? null : [text, null];
+      return said(blocked, null);
     }
     const failed = agents.find((a) => ["failed", "unexpected", "aborted"].includes(shownStatus(a)));
-    if (failed) {
-      const text = textOf(failed);
-      return text === null ? null : [text, stateAbout(failed, thread)];
-    }
+    if (failed) return said(failed, stateAbout(failed, thread));
   }
   if (card) return card;
   if (atWork) return null;
   const waits = agents.find((a) => waiting(a) !== null);
-  if (waits) {
-    const text = textOf(waits);
-    return text === null ? null : [text, stateAbout(waits, thread)];
-  }
+  if (waits) return said(waits, stateAbout(waits, thread));
   if (!settled(row)) return null;
   const done = agents.find((a) => nonEmpty(get(get(a, "lastTurn"), "need")) !== null);
   const text = (done && textOf(done)) ?? t("core-views.present.done");
+  const doneLead: Lead = (done && leadOf(done)) ?? { kind: "done", rest: "" };
   let about = done ? stateAbout(done, thread) : null;
   if (about === null) {
     for (const a of agents) {
@@ -387,7 +407,25 @@ export function rowStateLine(row: J): [string, number | null] | null {
       if (about !== null) break;
     }
   }
-  return [text, about];
+  return [text, about, text, doneLead];
+}
+
+export function rowStateText(row: J): string | null {
+  return rowStateLine(row)?.[0] ?? null;
+}
+
+/// An agent's state line without its lead (需要你处理：, 出错：): what it needs, why it stopped; else the line as it is.
+function stateWhat(a: J): string | null {
+  const status = shownStatus(a);
+  const said = (k: string) => nonEmpty(get(get(a, "lastTurn"), k));
+  if (waiting(a) === null) {
+    const need = said("need");
+    if (status === "block" && need !== null) return need;
+    if (status === "failed") return format.failureText(said("detail") ?? "");
+    if (status === "aborted") return t("core-logic.format.status.aborted.what");
+    if (status === "unexpected") return t("core-logic.format.status.unexpected.what");
+  }
+  return str(get(a, "statusText")) ?? null;
 }
 
 /// What a chat's agents are doing, for the 奏 page's 正在办.
@@ -406,9 +444,6 @@ export function workingLine(row: J): string | null {
   return null;
 }
 
-export function rowStateText(row: J): string | null {
-  return rowStateLine(row)?.[0] ?? null;
-}
 
 /// Whether a person is the viewer.
 export function isViewer(me: J, person: string, slackUsers: string[]): boolean {
@@ -535,18 +570,28 @@ export function session(s: J): J {
   let [text, tone] = format.statusText(status);
   const turn = get(s, "lastTurn");
   const said = (k: string) => nonEmpty(get(turn, k));
+  // What leads the words, said by a client as a mark of its own (Lead), and what follows it.
+  let lead: Lead["kind"] | null = null;
+  let rest = "";
   if (status === "block") {
     const need = said("need");
     if (need !== null) text = t("core-views.present.need_help", { need });
+    lead = "need";
+    rest = need ?? "";
   } else if (status === "final") {
     const done = said("need");
     if (done !== null) text = t("core-views.present.done_with", { done });
+    lead = "done";
+    rest = done ?? "";
   } else if (status === "failed") {
     text = t("core-views.present.failed", { why: format.failureText(said("detail") ?? "") });
   }
   if (waiting(s) !== null) {
     const what = nonEmpty(get(turn, "waitFor"));
-    text = isObject(get(s, "watch")) ? t("core-views.present.watching") : what !== null ? t("core-views.present.waiting_for", { what }) : t("core-views.present.waiting");
+    const watching = isObject(get(s, "watch"));
+    text = watching ? t("core-views.present.watching") : what !== null ? t("core-views.present.waiting_for", { what }) : t("core-views.present.waiting");
+    lead = watching ? "watch" : "wait";
+    rest = watching ? text : what ?? "";
   }
   const o = s as J;
   const strOf = (k: string): string | null => (typeof o[k] === "string" ? o[k] : null);
@@ -563,6 +608,7 @@ export function session(s: J): J {
   return {
     ...o,
     statusText: text,
+    ...(lead !== null ? { statusLead: lead, statusRest: rest } : {}),
     tone,
     mark: b,
     badgeText: b !== null ? badgeText(b) : null,
@@ -598,17 +644,95 @@ export function connect(c: J): J {
   const runtime = str(get(bind, "runtime")) ?? "claude";
   const label = format.agentLabel(str(get(bind, "model")), str(get(bind, "effort")));
   const bm = str(get(bind, "model"));
+  const kind = str(o.kind) ?? null;
+  const words = modeWords(kind);
+  const single = mode === "single-session";
+  const feishu = kind === "feishu";
   return {
     ...o,
     statusText: text,
     presence,
     modeText,
     modeShort,
+    modeWords: words,
+    modeLabel: single ? words.single.label : words.multi.label,
+    modeSentence: single
+      ? words.single.description + t(o.requireMention === false ? "web-pages.connect.everyMessageSentence" : "web-pages.connect.mentionOnlySentence")
+      : words.multi.description,
+    placeText: str(o.team) ?? (feishu ? (str(get(o.feishu, "domain")) === "lark" ? "Lark" : t("web-pages.connect.feishu.name")) : "Slack"),
     runtimeText: format.runtimeLabel(runtime),
     runText: `${format.runtimeLabel(runtime)} · ${label}`,
     modelName: bm ? model.name(bm) : null,
     ...(isObject(o.feishu) ? { feishu: feishuApp(o.feishu) } : {}),
   };
+}
+
+/// How a connect of `kind` says how its conversations become sessions (`ModeWords`): each way's name and what it means,
+/// and what waiting for an @ does there, on and off; a Feishu connect's in its groups' words.
+export function modeWords(kind: string | null): J {
+  const feishu = kind === "feishu";
+  const way = (m: string) => ({
+    label: t(feishu ? `web-main.mode.feishu.${m}.label` : `web-main.mode.${m}.label`),
+    description: t(feishu ? `web-main.mode.feishu.${m}.description` : `web-main.mode.${m}.description`),
+  });
+  const k = (key: string) => (feishu ? `${key}.feishu` : key);
+  return { multi: way("multi"), single: way("single"), mentionOn: t(k("web-pages.connect.mentionOn")), mentionOff: t(k("web-pages.connect.mentionOff")) };
+}
+
+/// The ways a connect could be switched to (`ModeChange`: every session in one, one each, and one waiting for an @ or
+/// not), each with whether it changes anything, what it does to the connect's conversations in plain words, and its
+/// button's words. `running`: its sessions running now.
+export function modeChanges(c: J, running: number): J[] {
+  const kind = str(get(c, "kind")) ?? null;
+  const mode = str(get(c, "mode")) ?? "multi-session";
+  const mention = get(c, "requireMention") !== false;
+  // a Feishu connect's groups in place of Slack's threads and channels
+  const say = (key: string, o?: Record<string, unknown>) =>
+    t(kind === "feishu" && ["toSingle", "toMulti", "threadsRestart", "mentionOnly", "noMention"].some((k) => key.endsWith(`.${k}`)) ? `${key}.feishu` : key, o);
+  const effects = (next: string, nextMention: boolean): string[] => {
+    const out: string[] = [];
+    if (mode === "multi-session" && next === "single-session") {
+      out.push(say("web-pages.connect.effects.toSingle"));
+      out.push(say(str(get(c, "session")) ? "web-pages.connect.effects.resumeSingle" : "web-pages.connect.effects.newSingle"));
+      if (!nextMention) out.push(say("web-pages.connect.effects.noMention"));
+    } else if (mode === "single-session" && next === "multi-session") {
+      out.push(say("web-pages.connect.effects.toMulti"));
+      out.push(say("web-pages.connect.effects.threadsRestart"));
+      out.push(say("web-pages.connect.effects.switchBack"));
+    } else if (nextMention !== mention) {
+      out.push(say(nextMention ? "web-pages.connect.effects.mentionOnly" : "web-pages.connect.effects.noMention"));
+    }
+    if (running > 0) out.push(say("web-pages.connect.effects.running", { n: running }));
+    return out;
+  };
+  return ([["multi-session", true], ["single-session", true], ["single-session", false]] as const).map(([next, nextMention]) => {
+    const changed = next !== mode || (next === "single-session" && nextMention !== mention);
+    const action = next === mode ? "web-pages.connect.confirmChange" : next === "single-session" ? "web-pages.connect.toSingle" : "web-pages.connect.toMulti";
+    return { mode: next, requireMention: nextMention, changed, effects: changed ? effects(next, nextMention) : [], action: t(action) };
+  });
+}
+
+/// A Slack app's permissions as its form shows them, in sections (mirrors SLACK_GROUPS on the station): each group's
+/// name, what it lets the app do, and, for those only Slack's admins allow, what they must allow (its tip says both);
+/// `fixed`: always on.
+const SLACK_SECTIONS: [string, string[]][] = [
+  ["messages", ["base", "public", "dm", "customize", "reactions"]],
+  ["channels", ["channels", "topics", "connect"]],
+  ["files", ["files", "canvases", "lists"]],
+  ["people", ["people", "usergroups", "search"]],
+  ["other", ["extras", "more"]],
+];
+const SLACK_ADMIN = new Set(["connect", "usergroups"]);
+
+export function slackSections(): J[] {
+  return SLACK_SECTIONS.map(([section, groups]) => ({
+    title: t(`web-pages.slackApp.section.${section}`),
+    groups: groups.map((g) => {
+      const description = t(`web-pages.slackApp.group.${g}.description`);
+      const admin = SLACK_ADMIN.has(g) ? t(`web-pages.slackApp.group.${g}.admin`) : null;
+      return { id: g, label: t(`web-pages.slackApp.group.${g}`), description, admin, tip: admin !== null ? `${description} ${admin}` : description, fixed: g === "base" };
+    }),
+  }));
 }
 
 /// A Feishu connect's app, with its page in the developer console (Lark's on its own domain).
@@ -674,7 +798,31 @@ export function profile(p: J): J {
   o.modelsText = modelsText;
   o.available = available;
   o.modelsReading = !isObject(o.check) && !decisionOnly;
+  // What it is, in a word (a page's facts): the machine's own login, its provider, else its kind of account.
+  o.kindText = o.machine === true ? t("core-views.present.profile.machine") : (o.providerName ?? accessLabel(str(kind) ?? ""));
+  // Who a sign-in goes to: OpenCode for OpenCode Go, Kimi for Kimi Code, else its runtime's vendor.
+  o.signInProvider = kind === "opencode-go" ? "OpenCode" : get(o.access, "provider") === "kimi-code" ? "Kimi"
+    : (SIGN_IN[str(o.runtime) ?? ""] ?? "ChatGPT");
+  // Its last check in a line (its detail, without the 可用 (Works) a working one starts with: its state says that), or that it
+  // has none yet.
+  const detailOf = str(get(o.check, "detail"));
+  o.checkLine = isObject(o.check) ? (detailOf ?? "").replace(/^(可用[，,]|Works,)\s*/, "") : t("core-views.present.profile.never_checked");
   return o;
+}
+
+/// Who a runtime's subscription signs in to.
+const SIGN_IN: Record<string, string> = { claude: "Claude", grok: "Grok", cursor: "Cursor", devin: "Devin" };
+
+/// A kind of account in words.
+function accessLabel(kind: string): string {
+  switch (kind) {
+    case "subscription": return t("core-views.present.access.subscription");
+    case "opencode-go": return "OpenCode Go";
+    case "anthropic-api": return "Anthropic API";
+    case "api-provider": return t("core-views.present.access.provider");
+    case "env": return t("core-views.present.access.env");
+    default: return "";
+  }
 }
 
 const KINDS = new Set(["subscription", "anthropic-api", "opencode-go", "api-provider", "env"]);
@@ -966,6 +1114,9 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
     case "jobLog":
       value = jobsMod.log(v, c);
       break;
+    case "slackApp":
+      if (isObject(v)) value = { ...v, sections: slackSections() };
+      break;
   }
   const own = DECORATORS[topic.topic];
   if (own) value = own(value, c);
@@ -986,6 +1137,7 @@ function overview(value: J, c: Clock, station: string | null): J {
     if (isObject(decided.policy)) shown.policy = archivePolicy(decided.policy as J, c);
     v.automaticDecisions = shown;
   }
+  if (isObject(v.archiving)) v.archiving = archiving(v.archiving as J);
   const processes = arr(v.processes);
   if (processes) {
     let mb = 0;
@@ -999,7 +1151,7 @@ function overview(value: J, c: Clock, station: string | null): J {
   const connects = arr(v.connects);
   if (connects) v.connects = connects.map(connect);
   const updates = arr(v.updates);
-  if (updates) v.updates = updates.map((u) => (get(u, "id") === "station" ? { ...u, name: "Station" } : u));
+  if (updates) v.updates = updates.map((u) => software(get(u, "id") === "station" ? { ...u, name: "Station" } : u));
   const listed = arr(v.profiles);
   // A stable sort: by kind of account (a station's list is a section each), those in trouble first in each.
   const kindOf = (p: J) => PROFILE_GROUPS.indexOf(get(p, "group"));
@@ -1026,10 +1178,43 @@ function overview(value: J, c: Clock, station: string | null): J {
         plan !== "" &&
         !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
         !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
-      return isObject(l) ? { ...l, offered } : l;
+      // Its plan as a name (pro: Pro), for its tag.
+      const planText = typeof plan === "string" && plan !== "" ? `${plan[0]!.toUpperCase()}${plan.slice(1)}` : "";
+      return isObject(l) ? { ...l, offered, planText } : l;
     });
   }
   return v;
+}
+
+/// The days a station's automatic archiving offers to wait (设置 › 归档): once idle, and heard only in Slack (0: never).
+export const IDLE_DAYS = [1, 3, 7, 30];
+export const SLACK_DAYS = [0, 3, 7, 30];
+
+/// Days, as a choice says them: none is never.
+function daysText(n: number): string {
+  return n <= 0 ? t("web-pages.archiving.never") : t("web-pages.archiving.days", { n });
+}
+
+/// The days offered, with the one kept when it is none of them.
+export function daysOffered(kept: number, base: number[]): number[] {
+  return kept > 0 && !base.includes(kept) ? [...base, kept].sort((a, b) => a - b) : base;
+}
+
+/// How a station archives on its own, as its row and its page in 设置 › 归档 say it: `mode`, never (no days), once
+/// idle, or once idle and recommended by its review (`off`, `idle`, `reviewed`); that in a line with Slack's
+/// (`summaryText`); and the days each choice offers (`daysOffered`, `slackDaysOffered`).
+export function archiving(view: J): J {
+  const days = typeof view.days === "number" ? view.days : 0;
+  const slack = typeof view.slackDays === "number" ? view.slackDays : 0;
+  const mode = days <= 0 ? "off" : view.reviewed === true ? "reviewed" : "idle";
+  const how = mode === "off" ? t(`web-pages.archiving.mode.${mode}`) : `${t(`web-pages.archiving.mode.${mode}`)} · ${daysText(days)}`;
+  return {
+    ...view,
+    mode,
+    summaryText: t("web-pages.archiving.summary", { how, slack: daysText(slack) }),
+    daysOffered: daysOffered(days, IDLE_DAYS),
+    slackDaysOffered: daysOffered(slack, SLACK_DAYS),
+  };
 }
 
 /// The archive policy's lines: the checks it counted, and who changed it last, where, when and what.
@@ -1075,4 +1260,25 @@ export function installView(runtime: string, updates: J[], manages: boolean): J 
   if (can) return { runtime, state: "missing", title, action: t("core-views.install.action") };
   const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
   return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
+}
+
+/// A piece of software as it is said (the web's Versions.tsx describe): its version as shown, what is said of it on
+/// hover (up to date, or that the last check failed), and while it updates or once that failed, in words.
+export function software(u: J): J {
+  const installed = get(u, "installed") === true;
+  const version = typeof get(u, "version") === "string" ? (get(u, "version") as string) : null;
+  const latest = typeof get(u, "latest") === "string" ? (get(u, "latest") as string) : null;
+  const shownText = installed ? (version ?? t(get(u, "id") === "station" ? "core-views.software.dev" : "core-views.software.unknown")) : t("core-views.software.not_installed");
+  const tips = [
+    installed && get(u, "newer") !== true && get(u, "downgrade") !== true && latest !== null ? t("core-views.software.latest") : null,
+    installed && latest === null && typeof get(u, "checkedAt") === "number" ? t("core-views.software.check_failed_retry") : null,
+  ].filter((x): x is string => x !== null);
+  const progress = get(u, "progress");
+  return {
+    ...u,
+    shownText,
+    tipText: tips.join(t("core-views.software.separator")),
+    updatingText: typeof progress === "string" ? progress : t(installed ? "core-views.software.updating" : "core-views.software.installing"),
+    failedText: t(installed ? "core-views.software.update_failed" : "core-views.software.install_failed"),
+  };
 }

@@ -45,6 +45,9 @@ pub(all) struct Core {
   version_words : () -> (String, Bool)
   /// the version row tapped: a newer build installed, or still.fail cloud asked now
   version_tap : () -> Unit
+  /// 本机 Station's installer run (the app's local_station.mbt): `true` a station downloaded and joined to this
+  /// workspace (none here), `false` the one here brought up to the latest release and run as a service
+  local_install : (Bool) -> Unit
   /// a web page to open (a sign-in's, Slack's): handed to the system's browser (@ui.open_url), said so where nothing
   /// took it
   open_link : (String) -> Unit
@@ -76,6 +79,8 @@ pub(all) struct Core {
   own_code_face : () -> Int
   /// the time of day (ms), for what is shown of it (剩余 N 分钟): the source's `now`
   now : () -> Double
+  /// run with MBUI_READONLY=1: what is said in place of an answer sent (a vault request's); "" where answers go
+  read_only : String
 }
 
 ///|
@@ -101,6 +106,8 @@ pub(all) enum Route {
   Profile(String, String)
   /// the step right after a profile is added: its models chosen, or skipped (PickModelsScreen)
   PickModels(String, String)
+  /// which of a profile's models may be used, from its page: its station's address, its id
+  ProfileModels(String, String)
   /// the connects, of every station ("") or of one
   Connects(String)
   /// a connect's page: its station's address, its id
@@ -141,6 +148,17 @@ pub(all) enum Route {
   Changelog
   /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
   About
+  /// the desktop's own pages (src/sfdesk shortcuts.mbt, local_station.mbt): 快捷键, each action's keys changed here; 版本, this build and a newer one
+  Shortcuts
+  Version
+  /// this machine's station (local_station.mbt)
+  LocalStation
+  /// the wide frame's pages as the web's has them (src/sfdesk notifications.mbt, permissions.mbt): 通知, 权限, 归档
+  /// (whether a done chat suggests archiving it, each station's own), a station's archiving
+  Notifications
+  Permissions
+  Archiving
+  StationArchiving(String)
   /// the prices the usage is counted at, over its days (UsagePricesScreen)
   UsagePrices(Int)
   /// how a chat's agent runs (RunSettingsScreen): its station, its session's key
@@ -178,7 +196,7 @@ fn text(v : Json?, key : String) -> String {
 }
 
 ///|
-fn opt_text(v : Json?, key : String) -> String? {
+pub fn opt_text(v : Json?, key : String) -> String? {
   match field(v, key) {
     Some(String(s)) => Some(s)
     _ => None
@@ -194,7 +212,7 @@ fn flag(v : Json?, key : String) -> Bool {
 }
 
 ///|
-fn has(v : Json?, key : String) -> Bool {
+pub fn has(v : Json?, key : String) -> Bool {
   match field(v, key) {
     Some(Null) | None => false
     _ => true
@@ -223,7 +241,7 @@ fn items(v : Json?, key : String) -> Array[Json] {
 }
 
 ///|
-fn strings(v : Json?, key : String) -> Array[String] {
+pub fn strings(v : Json?, key : String) -> Array[String] {
   items(v, key).filter_map(fn(x) {
     match x {
       String(s) => Some(s)
@@ -234,13 +252,13 @@ fn strings(v : Json?, key : String) -> Array[String] {
 
 ///|
 /// A time of `v` in words (`time.<key>.<how>`: ago, until, full), as the core puts them in.
-fn stamp(v : Json?, key : String, how : String) -> String {
+pub fn stamp(v : Json?, key : String, how : String) -> String {
   text(field(field(v, "time"), key), how)
 }
 
 ///|
 /// What a call's error says (errorText): its message, else its code.
-fn error_text(e : Json) -> String {
+pub fn error_text(e : Json) -> String {
   match text(Some(e), "message") {
     "" => text(Some(e), "code")
     m => m
@@ -248,7 +266,7 @@ fn error_text(e : Json) -> String {
 }
 
 ///|
-fn obj(pairs : Array[(String, Json)]) -> Json {
+pub fn obj(pairs : Array[(String, Json)]) -> Json {
   let m : Map[String, Json] = Map::new()
   for p in pairs {
     m[p.0] = p.1
@@ -257,12 +275,12 @@ fn obj(pairs : Array[(String, Json)]) -> Json {
 }
 
 ///|
-fn str(v : String) -> Json {
+pub fn str(v : String) -> Json {
   Json::string(v)
 }
 
 ///|
-fn join(parts : Array[String], sep : String) -> String {
+pub fn join(parts : Array[String], sep : String) -> String {
   let b = StringBuilder()
   let mut first = true
   for p in parts {
@@ -301,13 +319,13 @@ fn dmax(a : Double, b : Double) -> Double {
 
 ///|
 /// Whether one of `calls` about what `on` names is under way (the core's `doing` topic: its params as words).
-fn is_doing(core : Core, calls : Array[String], on : Array[(String, String)]) -> Bool {
+pub fn is_doing(core : Core, calls : Array[String], on : Array[(String, String)]) -> Bool {
   doing_items(core).iter().any(fn(d) { text(Some(d), "stage") != "failed" && doing_matches(d, calls, on) })
 }
 
 ///|
 /// Why one of `calls` about what `on` names failed a moment ago (the core keeps it a few seconds), if it did.
-fn failed_of(core : Core, calls : Array[String], on : Array[(String, String)]) -> String? {
+pub fn failed_of(core : Core, calls : Array[String], on : Array[(String, String)]) -> String? {
   let mut why : String? = None
   for d in doing_items(core) {
     if text(Some(d), "stage") == "failed" && doing_matches(d, calls, on) {
@@ -336,7 +354,7 @@ fn doing_matches(d : Json, calls : Array[String], on : Array[(String, String)]) 
 ///|
 /// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said; gone
 /// through, `done` (when there is one) said and `then` run.
-fn act(
+pub fn act(
   core : Core,
   what : String,
   name : String,
@@ -369,13 +387,13 @@ fn act(
 
 ///|
 /// The workspace's view (`workspace`, still.fail cloud's: its role, members, stations, added, invitations, relays).
-fn workspace_view(core : Core, here : Here) -> Read {
+pub fn workspace_view(core : Core, here : Here) -> Read {
   (core.topic)("workspace", { "workspace": str(here.workspace) })
 }
 
 ///|
 /// The workspace's stations (`stations`: StationView).
-fn stations_of(core : Core, here : Here) -> Read {
+pub fn stations_of(core : Core, here : Here) -> Read {
   (core.topic)("stations", { "scope": str(here.workspace) })
 }
 
@@ -395,7 +413,7 @@ fn manager_of(core : Core, here : Here) -> Bool? {
 
 ///|
 /// A role in words (Accounts.kt ROLE_LABEL).
-fn role_label(role : String) -> String {
+pub fn role_label(role : String) -> String {
   match role {
     "owner" => "Owner"
     "admin" => tr("android-misc.role.admin")
@@ -406,7 +424,7 @@ fn role_label(role : String) -> String {
 
 ///|
 /// A station's name from its address (ChatInk.kt stationName): what is after the workspace.
-fn station_name(address : String) -> String {
+pub fn station_name(address : String) -> String {
   match address.find("/") {
     Some(i) => address.unsafe_substring(start=i + 1, end=address.length())
     None => address
@@ -517,6 +535,8 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  vault_ask_reset()
+  keymap_reset()
   login_marked.val = None
   station_parts.clear()
   lock_prompts_reset()
@@ -529,12 +549,14 @@ pub fn reset() -> Unit {
   connects_mine.val = false
   usage_state.days = 7
   usage_state.day = ""
-  usage_state.list = 0
+  usage_state.list = -1
   usage_state.all = false
   chosen.clear()
   builtin_open.clear()
   doc_picked.clear()
   close_sheet()
+  asking.val = None
+  asked.val = None
   sheet.last = None
   sheet.was_up = false
   sheet.height = 0.5
@@ -650,6 +672,12 @@ pub fn route_of(name : String) -> Route? {
     "kept" => Some(KeptFiles)
     "changelog" => Some(Changelog)
     "about" => Some(About)
+    "shortcuts" => Some(Shortcuts)
+    "version" => Some(Version)
+    "local-station" => Some(LocalStation)
+    "notifications" => Some(Notifications)
+    "permissions" => Some(Permissions)
+    "archiving" => Some(Archiving)
     _ =>
       match name.find(":") {
         Some(i) => {
@@ -669,6 +697,7 @@ pub fn route_of(name : String) -> Route? {
             "slack-app" => Some(SlackApp(address, id))
             "vault-item" => Some(VaultItem(address, id))
             "policy" => Some(AutoPolicy(arg))
+            "archiving" => Some(StationArchiving(arg))
             "prices" => Some(UsagePrices(int_of(arg, 7)))
             "run" => Some(RunSettings(address, id))
             "memory" => Some(Memory(arg))
@@ -676,6 +705,7 @@ pub fn route_of(name : String) -> Route? {
             "profiles" => Some(Profiles(arg))
             "profile" => Some(Profile(address, id))
             "pick-models" => Some(PickModels(address, id))
+            "profile-models" => Some(ProfileModels(address, id))
             "connects" => Some(Connects(arg))
             "connect" => Some(Connect(address, id))
             _ => None
@@ -688,7 +718,7 @@ pub fn route_of(name : String) -> Route? {
 
 ///|
 /// Whether the thing `id` was tapped (what it changed is drawn in the next frame, which a handled click asks for).
-fn hit(c : @ui.Ctx, id : Int) -> Bool {
+pub fn hit(c : @ui.Ctx, id : Int) -> Bool {
   c.clicked(id)
 }
 

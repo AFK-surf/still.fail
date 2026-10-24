@@ -2,8 +2,11 @@
 // does itself in files/fonts, done here in the host's storage. A face chosen is fetched (`fonts.fetch {id}`), each of its
 // files as it is put (gzipped), how far it got said on the `fonts` topic; the app unzips each and checks it by its
 // hash, and that is kept instead (`fonts.keep {sha256}` + the file); `fonts.file {sha256}` gives back either, saying
-// which. Only the files of the faces chosen stay, once nothing is being fetched. A face's preview (`fonts.preview {id}`:
-// the fonts page's characters alone, tens of KB) is fetched once and kept whatever is chosen.
+// which. Where the host keeps each value as a file of its own (the native apps' shell), the prefs' `faces` say where
+// a chosen face's files are (`path`, fonts.ts `setKeptAt`): the app's host reads them there as the app starts, none of
+// them carried through here nor checked again (the app falls back on `fonts.file` where one cannot be read: one kept
+// as fetched). Only the files of the faces chosen stay, once nothing is being fetched. A face's preview
+// (`fonts.preview {id}`: the fonts page's characters alone, tens of KB) is fetched once and kept whatever is chosen.
 import { Effect } from "effect";
 import { CoreError } from "./error.ts";
 import * as fonts from "./fonts.ts";
@@ -140,6 +143,11 @@ export class FontFiles implements Owner {
       yield* this.#prune(id);
       return null;
     });
+  }
+
+  /// Where the host keeps a file, by its hash, as a file of its own: null while none is kept (or not as a file).
+  at(sha256: string): string | null {
+    return this.#host.storagePath?.(fileKey(sha256)) ?? null;
   }
 
   /// A file kept, by its hash: its bytes, and whether they are as fetched (gzipped) or as the app kept them.

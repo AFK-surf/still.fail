@@ -16,8 +16,19 @@ fn main {
   let viewed = @ui.env("MBUI_VIEWCHECK") == "1" || @ui.env("MBUI_VIEWCHECK") == "hold"
   // MBUI_SITECHECK=1: a site's page and a page speaking with the app, each step on the log (sitecheck.mbt)
   let sited = @ui.env("MBUI_SITECHECK") == "1"
+  // MBUI_UPDATECHECK=<url>|<sha256>|<size>|<name>: that build put in this one's place by the host (updatecheck.mbt)
+  let updated = @ui.env("MBUI_UPDATECHECK")
+  // MBUI_LINKCHECK=1: the links the system opens it with, said on the log (linkcheck.mbt)
+  let linked = @ui.env("MBUI_LINKCHECK") == "1"
+  if linked {
+    @ui.on_message(@hostapi.system_channel, fn(json, _) { @gallery.link_check_said(json) })
+  }
   @ui.run("mbui kit", fn(c) {
-    if sited {
+    if updated != "" {
+      @gallery.update_check_run(c, updated)
+    } else if linked {
+      @gallery.link_check_run(c)
+    } else if sited {
       @gallery.site_check_run(c)
     } else if viewed {
       @gallery.view_check_run(c)

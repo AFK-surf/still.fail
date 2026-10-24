@@ -8,24 +8,15 @@
 /// A step's button (StepButton): the card's width, 8 under what is over it, 44 high, solid (the ink, the page's colour
 /// on it) until pressed, else the ink at 6%; its words 15 semibold, ↗ after them when it opens a page.
 // kept across runs: a value (no field of it changes)
-let step_room : @ui.Style = @ui.style(w=Full, pt=S2)
+let step_room : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let step_button : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  h=S11,
-  gap=S1_5,
-  radius=Xl3,
-  bg=Tint,
-  align=ACenter,
-  justify=JCenter,
-)
+let step_button : @ui.Style = @ui.css("row w=Full h=S11 gap=S1_5 radius=Xl3 bg=Tint align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let step_button_solid : @ui.Style = step_button.then(@ui.style(bg=Fg))
+let step_button_solid : @ui.Style = step_button.then(@ui.css("bg=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -43,44 +34,26 @@ let step_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, color=Mut
 ///|
 /// The device code's box: the card's width, on the chips' grey, 14 by 10 in, the code in its middle.
 // kept across runs: a value (no field of it changes)
-let code_box : @ui.Style = @ui.style(w=Full, px=S3_5, py=S2_5, radius=Xl3, bg=Neutral, align=ACenter)
+let code_box : @ui.Style = @ui.css("w=Full px=S3_5 py=S2_5 radius=Xl3 bg=Neutral align=ACenter")
 
 ///|
 /// The code pasted back (CodeField): the card's width, 6 under the step over it, 44 high, on the chips' grey (on the
 /// card's white), 14 in on the left and 6 on the right.
 // kept across runs: a value (no field of it changes)
-let code_field_room : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let code_field_room : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let code_field : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  h=S11,
-  pl=S3_5,
-  pr=S1_5,
-  gap=S1_5,
-  radius=Xl3,
-  bg=Neutral,
-  align=ACenter,
-)
+let code_field : @ui.Style = @ui.css("row w=Full h=S11 pl=S3_5 pr=S1_5 gap=S1_5 radius=Xl3 bg=Neutral align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let code_field_words : @ui.Style = @ui.style(w=Full)
+let code_field_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// 完成 in the field's end: 32 high, solid, 14 in each side.
 // kept across runs: a value (no field of it changes)
-let code_finish : @ui.Style = @ui.style(
-  row=true,
-  h=S8,
-  px=S3_5,
-  radius=Xl1_5,
-  bg=Fg,
-  align=ACenter,
-  justify=JCenter,
-)
+let code_finish : @ui.Style = @ui.css("row h=S8 px=S3_5 radius=Xl1_5 bg=Fg align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

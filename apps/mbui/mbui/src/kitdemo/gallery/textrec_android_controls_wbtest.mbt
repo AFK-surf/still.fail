@@ -3,7 +3,7 @@
 ///|
 test "the controls page under a Tester over android_controls's kept text draws, frame for frame, what it drew" {
   reset()
-  let t = @ui.Tester::new(fn(c) { gallery(c, "controls") }, w=411.4285583496094, h=866.2857055664062, text=run_android_controls, run=run_android_controls, scale=2.625, time=52399.358258 - 16.0, stable=true, platform=2)
+  let t = @ui.Tester::new(fn(c) { gallery(c, "controls") }, w=411.4285583496094, h=817.5238037109375, text=run_android_controls, run=run_android_controls, scale=2.625, time=34835.119631 - 16.0, stable=true, platform=2)
   let frames = t.replay_frames(run_android_controls)
   let apart = frames.filter(fn(f) { f.1 != f.2 })
   println("frames \{frames.length()}, apart \{apart.length()}, text missing \{t.text_missing()}")
@@ -11,6 +11,9 @@ test "the controls page under a Tester over android_controls's kept text draws, 
     println("first apart: frame \{apart[0].0}")
     for line in t.drawn_text().split("\n") {
       println("TDUMP " + line.to_owned())
+    }
+    for f in frames {
+      println("REHASH android_controls \{f.0} \{f.2}")
     }
   }
   assert_true(frames.length() > 0)

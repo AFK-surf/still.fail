@@ -27,6 +27,7 @@ import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbRange, type Hos
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 import { t } from "../i18n.ts";
+import { collate } from "./collate.ts";
 export { CoreFiles } from "./file-port.ts";
 
 /// What the core says to one UI, as JSON; `bytes` beside it for a message that carries some (a screen view's frame,
@@ -84,6 +85,10 @@ export class NodeHost implements Host {
       const ask = sealer.ask?.bind(sealer);
       if (ask) this.secureAsk = (reason) => Effect.tryPromise({ try: () => ask(reason), catch: sealError });
     }
+  }
+
+  collate(names: readonly string[]): number[] {
+    return collate(names);
   }
 
   cloudOrigin(): string {

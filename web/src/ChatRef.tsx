@@ -21,11 +21,8 @@ import { t } from "./i18n.ts";
 /** How many chats the menu offers at once. */
 const SHOWN = 8;
 
-/** The `@words` the caret is at the end of, and where the `@` is; null when it is not in one. */
-export function refAt(text: string, caret: number): { start: number; query: string } | null {
-  const m = /(?:^|\s)@([^\s@[\]()]{0,40})$/.exec(text.slice(0, caret));
-  return m ? { start: caret - m[1]!.length - 1, query: m[1]! } : null;
-}
+/** The `@words` the caret is at the end of, and the mark before it (a backspace takes it whole): the core's reading. */
+export { markBefore, refAt } from "../../client/core-ts/src/refLinks.ts";
 
 /**
  * A reference in a message: a chip that opens the chat (ChatPage opens its link in the page); one on another station of
@@ -135,11 +132,7 @@ export function RefMirror({ text, className, mirror }: { text: string; className
   );
 }
 
-/** The mark just before `caret` (a backspace there takes it whole), or null. */
-export function markBefore(text: string, caret: number): number | null {
-  const m = /@\[[^\]\n]{1,120}\]$/.exec(text.slice(0, caret));
-  return m ? m.index : null;
-}
+
 
 /**
  * Copying a chat's link (shareLink), to paste into another chat for its agent to read: from its row's menu, or from an

@@ -13,7 +13,18 @@ export const mProfileNote = style({ padding: "8px 24px", fontSize: vars.textMeta
 export const mPickFoot = style({ display: "flex", gap: "10px", flex: "none", padding: "10px 16px calc(var(--m-foot) + 12px)" });
 globalStyle(`${mPickFoot} > button`, { flex: "1", justifyContent: "center" });
 export const mRowQuota = style({ display: "flex", marginTop: "6px" });
-export const mCheckPill = style({ marginLeft: "0", fontSize: vars.textCaption });
+/** An account at the top of its card: where it stands, then (in trouble) why and what to do, 12 apart. */
+export const mAccount = style({ display: "flex", flexDirection: "column", gap: "12px", flex: "1", minWidth: "0" });
+/** Its state under its line: a dot, its words and when it was checked; coloured only when something is off. */
+export const mAccountState = style({
+  display: "inline-flex", alignItems: "center", gap: "6px",
+  selectors: { '&[data-tone="red"]': { color: "var(--m-red)" }, '&[data-tone="amber"]': { color: "var(--m-warn)" } },
+});
+/** What a trouble says and its buttons, 10 apart. */
+export const mTrouble = style({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "10px" });
+globalStyle(`${mTrouble} > p`, { margin: "0" });
+/** When an allowance was read: 12 under its windows. */
+export const mQuotaRead = style({ margin: "12px 0 0", fontSize: vars.textCaption, color: "var(--m-muted)" });
 export const mDeviceCode = style({
   alignSelf: "flex-start", padding: "8px 14px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-chip)",

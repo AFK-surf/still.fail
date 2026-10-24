@@ -83,6 +83,20 @@ test("a face's files are fetched once, how far said as they come, kept gzipped u
   await assert.rejects(run(r.files.fetch("comic-sans")));
 });
 
+test("where a file is kept, on a host that keeps values as files; its bytes still given by the call", async () => {
+  const r = rig(() => ({ text: "lxgw-wenkai" }));
+  const first = fonts.faceOf("lxgw-wenkai")!.files[0];
+  // a host without files: nowhere
+  assert.equal(r.files.at(first.sha256), null);
+  r.host.storagePath = (key) => (r.host.storage.has(key) ? `/data/${key}` : null);
+  assert.equal(r.files.at(first.sha256), null);
+  await run(r.files.fetch("lxgw-wenkai"));
+  assert.equal(r.files.at(first.sha256), `/data/fonts/file/${first.sha256}`);
+  await run(r.files.keep(first.sha256, new Uint8Array([1, 2, 3])));
+  const kept = (await run(r.files.file(first.sha256))) as Beside;
+  assert.deepEqual([kept.value, [...kept.bytes]], [{ zipped: false }, [1, 2, 3]]);
+});
+
 test("a fetch that fails says why until the face is fetched again; only the chosen faces' files stay", async () => {
   let chosen: Record<string, string> = { ui: "inter" };
   const r = rig(() => chosen);

@@ -111,15 +111,15 @@ pub let in_lines : @ui.TextStyle = @ui.text_style(wrap=true)
 
 ///|
 /// A page's words in from its sides as a card's (20), a little under them.
-pub let page_words : @ui.Style = @ui.style(w=Full, px=S5, pb=S1)
+pub let page_words : @ui.Style = @ui.css("w=Full px=S5 pb=S1")
 
 ///|
 /// A page's words under a card, in from its sides as the card's words (20), a little over them.
-pub let under_card_words : @ui.Style = @ui.style(w=Full, px=S5, pt=S1_5)
+pub let under_card_words : @ui.Style = @ui.css("w=Full px=S5 pt=S1_5")
 
 ///|
 /// As wide as where it is.
-pub let full_width : @ui.Style = @ui.style(w=Full)
+pub let full_width : @ui.Style = @ui.css("w=Full")
 
 ///|
 pub let centered : @ui.TextStyle = @ui.text_style(w=Full, center=true)
@@ -131,7 +131,7 @@ pub let full_words : @ui.TextStyle = @ui.text_style(w=Full)
 ///|
 /// A page that holds a column a phone's width at most in its middle (phone_column), as far in from the window's
 /// sides as a phone's page (28) where the window is narrower.
-pub let phone_page : @ui.Style = @ui.style(row=true, w=Full, h=Full, px=S7, align=ACenter, justify=JCenter)
+pub let phone_page : @ui.Style = @ui.css("row w=Full h=Full px=S7 align=ACenter justify=JCenter")
 
 ///|
 /// The column in a phone_page: as wide as it, up to a phone's width.
@@ -139,4 +139,4 @@ pub let phone_column : @ui.Style = @ui.style(w=Full, max_w=phone_max)
 
 ///|
 /// Things in a line, centred across it, a small gap between (an icon and its words, a label and its value).
-pub let beside : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+pub let beside : @ui.Style = @ui.css("row gap=S2 align=ACenter")

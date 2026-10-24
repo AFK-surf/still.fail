@@ -17,13 +17,42 @@ pub fn page(
   root? : Bool = false,
   top? : Double = 0.0,
 ) -> Unit {
+  frame(core, here, root~, top~)
+  // the wide frame's words as the web's settings pages size them (their rows 13, what is under them 12, a section's
+  // title 14): the scale's body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them,
+  // and Xl2 (Android's back, 17, which these pages never say) the web's body for a section's title (the desktop's own
+  // pages, ported from the web's, are src/sfdesk's, in the library's sizes)
+  if wide.val {
+    let t = c.theme()
+    c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body, xl2: wide_heading } }, fn() {
+      route_page(c, core, here, route)
+    })
+  } else {
+    route_page(c, core, here, route)
+  }
+}
+
+///|
+/// What a page of the settings is drawn in (`page`'s, and the desktop's own pages', src/sfdesk): its core, where it
+/// stands, the sheet a fixture's mode puts up over it.
+pub fn frame(core : Core, here : Here, root? : Bool = false, top? : Double = 0.0) -> Unit {
   frame_core.val = Some(core)
   at_root.val = root
   root_top.val = if root { top } else { 0.0 }
   left_core.val = Some(core)
   fixture_sheet(core, here)
-  route_page(c, core, here, route)
 }
+
+///|
+/// The wide frame's body words (the web's text-ui: 13 on 20) and what is under them (text-meta: 12 on 18).
+let wide_body : (Double, Double) = (13.0, 20.0)
+
+///|
+let wide_small : (Double, Double) = (12.0, 18.0)
+
+///|
+/// A section's title in the wide frame (the web's text-body: 14 on 22).
+let wide_heading : (Double, Double) = (14.0, 22.0)
 
 ///|
 fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
@@ -40,6 +69,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Profiles(only) => profiles_page(c, core, here, only)
     Profile(a, id) => profile_page(c, core, here, a, id)
     PickModels(a, id) => pick_models_page(c, core, here, a, id)
+    ProfileModels(a, id) => profile_models_page(c, core, here, a, id)
     Connects(only) => connects_page(c, core, here, only)
     Connect(a, id) => connect_page(c, core, here, a, id)
     Memories => memories_page(c, core, here)
@@ -54,7 +84,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     ConnectRun(a, id) => connect_run_page(c, core, a, id)
     SlackApp(a, id) => slack_app_page(c, core, a, id)
     VaultItem(v, item) => vault_item_page(c, core, here, v, item)
-    AutoDecisions => decisions_page(c, core)
+    AutoDecisions => decisions_page(c, core, here)
     AutoCompletion => completion_page(c, core, here)
     AutoPolicy(s) => policy_page(c, core, here, s)
     BarSettings => bars_page(c, core)
@@ -62,6 +92,9 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     Changelog => changelog_page(c, core)
     About => about_page(c, core)
+    LocalStation => local_station_page(c, core)
+    // the desktop's own, drawn by its frame (src/sfdesk)
+    Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()
     UsagePrices(days) => prices_page(c, core, here, days)
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
@@ -82,7 +115,7 @@ let chosen : Map[String, String] = Map::new()
 
 ///|
 /// A pref as the core keeps it (the `prefs` topic), or as it was chosen here a moment ago.
-fn pref(core : Core, name : String) -> String {
+pub fn pref(core : Core, name : String) -> String {
   let kept = text((core.topic)("prefs", Map::new()).value, name)
   match chosen.get(name) {
     Some(v) => {
@@ -98,7 +131,7 @@ fn pref(core : Core, name : String) -> String {
 
 ///|
 /// A pref set (prefs.set), shown as chosen at once; "" takes it away (null: the default).
-fn set_pref(core : Core, name : String, value : String) -> Unit {
+pub fn set_pref(core : Core, name : String, value : String) -> Unit {
   chosen[name] = value
   (core.call)(
     "prefs.set",
@@ -199,46 +232,33 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         (core.push)(Workspace)
       }
     },
-    // who may do what: security mode and the vault, where the workspace has them
+    // who may do what: security mode, where the workspace has it, and the vault. Each row there from the first frame,
+    // its words once the core has said them: a row put in only then pushed the page under it down a row while it was
+    // looked at (security mode's taken out only where the core says there is none, still.fail's always has it)
     fn() {
-      if flag(lock, "available") || vaults is Some(_) {
-        list_card(c, fn() {
-          if flag(lock, "available") {
-            let attention = count(lock, "attention")
-            let said = if !flag(lock, "locked") {
-              tr("web-mobile.settings.securityOff")
-            } else if attention > 0 {
-              fill("web-mobile.settings.securityWaiting", [("n", attention.to_string())])
-            } else {
-              tr("web-mobile.settings.securityOn")
-            }
-            if go_row(c, "go-security", tr("web-pages.security.title"), value=said, bad=attention > 0, icon="shield-check") {
-              (core.push)(Security)
-            }
+      list_card(c, fn() {
+        if lock is None || flag(lock, "available") {
+          let attention = count(lock, "attention")
+          let said = if lock is None {
+            ""
+          } else if !flag(lock, "locked") {
+            tr("web-mobile.settings.securityOff")
+          } else if attention > 0 {
+            fill("web-mobile.settings.securityWaiting", [("n", attention.to_string())])
+          } else {
+            tr("web-mobile.settings.securityOn")
           }
-          // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off
-          match vaults {
-            Some(_) => {
-              let n = items(vaults, "requests").length()
-              let said = if n > 0 {
-                fill("android-settings.vault.waiting", [("n", n.to_string())])
-              } else if items(vaults, "vaults").length() > 0 {
-                let mut total = 0
-                for x in items(vaults, "vaults") {
-                  total += count(Some(x), "items")
-                }
-                fill("android-settings.vault.items", [("n", total.to_string())])
-              } else {
-                tr("android-settings.vault.off")
-              }
-              if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0, icon="key") {
-                (core.push)(Vault)
-              }
-            }
-            None => ()
+          if go_row(c, "go-security", tr("web-pages.security.title"), value=said, bad=attention > 0, icon="shield-check") {
+            (core.push)(Security)
           }
-        })
-      }
+        }
+        // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off (the core's words)
+        let said = text(vaults, "statusText")
+        let n = if flag(vaults, "statusBad") { 1 } else { 0 }
+        if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0, icon="key") {
+          (core.push)(Vault)
+        }
+      })
     },
     // its stations and what they run: the chats' ways in and the agents' accounts
     fn() {
@@ -399,7 +419,7 @@ fn identity_card(c : @ui.Ctx, key : String, lead : () -> Unit, name : String, li
 ///|
 /// A card's row (SettingsHome.kt): what it is by, its words, its chevron, 14 apart, centred across it.
 // kept across runs: a value (no field of it changes)
-let identity_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3_5, align=ACenter)
+let identity_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
 
 ///|
 /// The name on the account's card and the workspace's: 16 bold on one line, its line the theme's (1.4em: 22.4), as
@@ -495,13 +515,13 @@ fn about_page(c : @ui.Ctx, core : Core) -> Unit {
 
 ///|
 /// Notifications as switched here, until the core has answered (AppState.useNotify's `notify` meanwhile).
-let notify_switched : Ref[Bool?] = Ref(None)
+pub let notify_switched : Ref[Bool?] = Ref(None)
 
 ///|
 /// Notifications turned on or off on this device (SettingsHome.kt Notify, AppState.useNotify): turned on, the system
 /// asked to allow them too; the core keeps it (`notify.set`), taking this device's pushes off the accounts when off,
 /// and the push registration follows what it answers (Push.sync). Not done: said in a toast, the switch back.
-fn use_notify(core : Core, on : Bool) -> Unit {
+pub fn use_notify(core : Core, on : Bool) -> Unit {
   if on {
     (core.notify_ask)()
   }
@@ -537,7 +557,7 @@ fn use_notify(core : Core, on : Bool) -> Unit {
 ///|
 /// This build's version, as the version row says it after the app's name (SettingsHome.kt Version: its versionName,
 /// 0.1.<build>): the build where the host knows it (Android's version code), the line alone where it does not.
-fn build_version() -> String {
+pub fn build_version() -> String {
   let v = @ui.app_version()
   if v > 0 {
     "0.1." + v.to_string()
@@ -569,7 +589,11 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
     note : String,
   ) {
     [
-      fn() { section_header(c, title, start=S6) },
+      fn() {
+        section_header(c, title, start=S6)
+        // (the wide frame's says what it is about under its head, as the web's; a phone's under its switch)
+        section_note(c, note)
+      },
       fn() {
         let mut at = fallback
         for i, o in options {
@@ -577,13 +601,12 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
             at = i
           }
         }
-        c.box(w=Fill(1.0), padx=12.0, fn() {
+        inset(c, fn() {
           let picked = seg(c, key, options.map(fn(o) { tr(o.1) }), at, fill=true, height=34.0)
           if picked != at {
             set_pref(core, key, options[picked].0)
           }
         })
-        |> ignore
         if note != "" {
           seg_note(c, note)
         }
@@ -599,7 +622,16 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("android-settings.appearance.title")) },
   ]
-  blocks.append(choice("appearance", tr("android-settings.appearance.theme"), themes, appearance(prefs), 0, ""))
+  blocks.append(
+    choice(
+      "appearance",
+      tr("android-settings.appearance.theme"),
+      themes,
+      appearance(prefs),
+      0,
+      "",
+    ),
+  )
   // SettingsHome.kt: 12 under the theme's switch, the faces' row on a card of its own
   blocks.push(fn() {
     gap(c, 12.0)
@@ -757,7 +789,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 
 ///|
 /// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
-fn legal_url(page : String) -> String {
+pub fn legal_url(page : String) -> String {
   "https://still.fail/" + page
 }
 

@@ -77,6 +77,7 @@ test "style" {
         #|  c.text("c", style=title, max_lines=2, tracking=0.5) |> ignore
         #|}
         #|let clamp : @ui.TextStyle = @ui.text_style(max_lines=2, tracking=Tight)
+        #|let pill : @ui.Style = @ui.css("w=Grow(1.0) px=S1_25 bg=A(Fg,O35) radius=Exact(9.0)")
         #|
       ),
     ),
@@ -86,6 +87,7 @@ test "style" {
         #|
         #|pub let title : @ui.TextStyle = @ui.text_style(size=Exact(15.0, 21.0))
         #|pub let column_max : @ui.Len = Fixed(420.0)
+        #|pub let wide : @ui.Style = @ui.css("w=Fixed(420.0) radius=Exact(2.0)")
         #|
       ),
     ),
@@ -102,15 +104,17 @@ test "style" {
   ]
   // Exact(22.0) once (its number not again), Fixed's 14.0, pad 12.0, size 13.0, the colour: not the token file's,
   // nor the test's, nor aspect (not a look) nor id; tracking's 0.5; not max_lines (a count, not a look's value) in
-  // either
-  assert_eq(lines(lint_of(files, rule="style-literal", cfg~)), [2, 2, 4, 5, 5, 9])
+  // either; in a style's text Grow's 1.0 and the Exact (not S1_25's digits nor O35's), not the token file's
+  assert_eq(lines(lint_of(files, rule="style-literal", cfg~)), [2, 2, 4, 5, 5, 9, 12, 12])
   // the calls said loosely (pad=, size=, max_lines= and tracking=); a box with a style and behaviour alone (id,
   // aspect) is not
   assert_eq(lines(lint_of(files, rule="box-loose", cfg~)), [4, 5, 9])
   // every Exact made, in the token file too
   let exact = lint_of(files, rule="style-exact", cfg~).map(fn(f) { "\{f.file}:\{f.line}" })
   exact.sort_by(@rjson.str_cmp)
-  assert_eq(exact, ["src/app/tokens.mbt:2", "src/app/view.mbt:2"])
+  assert_eq(exact, [
+    "src/app/tokens.mbt:2", "src/app/tokens.mbt:4", "src/app/view.mbt:12", "src/app/view.mbt:2",
+  ])
   // the enum's declaration and a match's patterns are not values made
   let decl = [
     (
@@ -132,6 +136,69 @@ test "style" {
     ),
   ]
   found(decl, "style-exact", 0) |> ignore
+}
+
+///|
+test "style-text" {
+  let files = [
+    (
+      "src/app/look.mbt",
+      (
+        #|
+        #|let card : @ui.Style = @ui.style(row=true, h=S7, px=S2, radius=Lg, bg=A(Fg, O35), clip=false,
+        #|  hovered=@ui.patch(bg=Hover), w=Grow(1.0), shadow=Cast(4.0, -1.0, 0x00000033L))
+        #|let card_on : @ui.Style = card.then(@ui.style(bg=@ui.Accent, border_color=Color::Line))
+        #|let pane : @ui.Style = @ui.css("w=Full px=S2")
+        #|let grown : @ui.Style = @ui.style(w=@sf.grow, px=S2)
+        #|let sided : @ui.Style = @ui.style(w=Fixed(side_w))
+        #|let capped : @ui.Style = @ui.style(h=Fixed(ROW_H))
+        #|let lifted : @ui.Style = card.then(@ui.style(shadow=@sf.floating.cast()))
+        #|let pressing : @ui.Style = @ui.style(pressed=dim_patch)
+        #|let twice : @ui.Style = @ui.style(w=Fixed(2.0 * 7.0))
+        #|fn view(c : @ui.Ctx, wide : Bool) -> Unit {
+        #|  c.box(style=@ui.style(px=S2), fn() {  }) |> ignore
+        #|}
+        #|test "t" {
+        #|  let s = @ui.style(px=S2)
+        #|}
+        #|
+      ),
+    ),
+    (
+      "src/ui/kit_styles.mbt",
+      (
+        #|
+        #|let no_style : Style = style()
+        #|let row_style : Style = style(row=true, gap=S1)
+        #|let words : TextStyle = text_style(size=Lg)
+        #|let other = style(row=true)
+        #|
+      ),
+    ),
+    (
+      "src/app/look_test.mbt",
+      (
+        #|
+        #|let fixture : @ui.Style = @ui.style(px=S2)
+        #|
+      ),
+    ),
+  ]
+  // a named style all tokens and numbers, a .then(…)'s; in mbui's own package the bare style( where its let says
+  // Style. Not one naming a variable (@sf.grow, side_w, a constant ROW_H, a patch by name), a call, an operator, one
+  // in a function or a test, nor already text
+  let got = found(files, "style-text", 4)
+  assert_eq(got.map(fn(f) { "\{f.file}:\{f.line}" }), [
+    "src/app/look.mbt:2", "src/app/look.mbt:4", "src/ui/kit_styles.mbt:2", "src/ui/kit_styles.mbt:3",
+  ])
+  // what to write instead, printed
+  assert_has(
+    got[0].what,
+    "write: @ui.css(\"row h=S7 px=S2 radius=Lg bg=A(Fg,O35) clip=false hovered{bg=Hover} w=Grow(1.0) shadow=Cast(4.0,-1.0,0x00000033)\")",
+  )
+  assert_has(got[1].what, "write: @ui.css(\"bg=Accent border_color=Line\")")
+  assert_has(got[2].what, "write: css(\"\")")
+  assert_has(got[3].what, "write: css(\"row gap=S1\")")
 }
 
 ///|
@@ -544,6 +611,39 @@ test "host-import" {
     0,
   )
   |> ignore
+}
+
+///|
+test "library-import" {
+  let cfg = Config::new(
+    @rjson.parse(
+      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"], "imports": ["mbui/", "moonbitlang/", "app/sf", "app/kept"]}}
+      ,
+    ) catch {
+      _ => panic()
+    },
+  )
+  // the library importing the app's pages, its core
+  assert_eq(
+    lint_of(
+      [("src/sf/moon.pkg", "import {\n  \"mbui/ui\",\n  \"app/pages\",\n  \"app/core\",\n}\n")],
+      rule="library-import",
+      cfg~,
+    ).length(),
+    2,
+  )
+  // the framework, the core library, what it is said to have; the app's pages may import anything
+  assert_eq(
+    lint_of(
+      [
+        ("src/sf/moon.pkg", "import {\n  \"mbui/ui\",\n  \"moonbitlang/core/json\",\n}\n\nimport { \"app/kept\" } for \"test\"\n"),
+        ("src/pages/moon.pkg", "import {\n  \"app/core\",\n  \"app/sf\",\n}\n"),
+      ],
+      rule="library-import",
+      cfg~,
+    ).length(),
+    0,
+  )
 }
 
 ///|

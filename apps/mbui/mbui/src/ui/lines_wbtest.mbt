@@ -54,3 +54,15 @@ test "every line set by the first line's fonts" {
   let (pitch, first, extra) = probe_line(15.0, 37, 10)
   assert_eq((first, pitch + first, 2 * pitch + extra), (37, 77, 88))
 }
+
+///|
+test "a line set as a browser sets it (set_web_lines): the room's half rounded down above, a font taller than its line over it" {
+  set_web_lines(true)
+  // Inter's 12 (its ascent and descent whole: 12 and 3) in lines of 18: the baseline 13; its 13 (13 and 3) in lines
+  // of 20: 15 (what Chrome draws, 2026-10-24)
+  assert_eq(set_line(18.0, 12.0, 3.0, 2.0, false), (18.0, 13.0, 0.0))
+  assert_eq(set_line(20.0, 13.0, 3.0, 2.0, false), (20.0, 15.0, 0.0))
+  // taller than its line: over it by as much above, the line as asked
+  assert_eq(set_line(14.0, 13.0, 3.0, 2.0, true), (14.0, 12.0, 0.0))
+  set_web_lines(false)
+}

@@ -43,23 +43,27 @@ fn ffi_arg(name : String) -> String {
 }
 
 ///|
-fn say(s : String) -> Unit {
+/// (for a film program too: a tool's output and its files)
+pub fn say(s : String) -> Unit {
   println(s)
 }
 
 ///|
-fn read_text(path : String) -> String {
+/// (for a film program too: a tool's output and its files)
+pub fn read_text(path : String) -> String {
   ignore(path)
   ""
 }
 
 ///|
-fn write_text(path : String, text : String) -> Bool {
+/// (for a film program too: a tool's output and its files)
+pub fn write_text(path : String, text : String) -> Bool {
   ignore((path, text))
   false
 }
 
 ///|
-fn exit(code : Int) -> Unit {
+/// (for a film program too: a tool's output and its files)
+pub fn exit(code : Int) -> Unit {
   ignore(code)
 }

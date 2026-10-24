@@ -1,0 +1,17 @@
+# The files' page's tabs (Files.tsx FilesShell, drive/tabs.ts: the core's filesTabs and files.tabs): MBUI_FIXTURE=drive
+# MBUI_WIN=1280x800. A new tab where the front is (the bar's +), the tab shown split in two, a folder opened in the side
+# behind (it comes in front), one again, then the first tab shown.
+timeout 20000
+until 设计稿
+wait 600
+tapxy 1252 22
+wait 900
+tapxy 1220 22
+wait 900
+tap 会议记录
+wait 900
+tapxy 1220 22
+wait 900
+tapxy 400 22
+wait 1200
+exit

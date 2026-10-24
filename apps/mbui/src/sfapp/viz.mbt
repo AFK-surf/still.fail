@@ -41,8 +41,10 @@ fn viz_tr(key : String, args? : Array[(String, String)] = []) -> String {
 }
 
 ///|
-/// Past this the page scrolls within itself.
-let viz_max_height : Int = 1200
+/// A fragment's frame is as tall as its content, however tall (web Viz.tsx RUNAWAY): content sized to its window
+/// (100vh, min-height:100%) grows with each height it is given; grown a little each time this many times running, it
+/// is held where it got to.
+let viz_runaway : Int = 60
 
 ///|
 /// What a widget may keep, as Codex's Visualize allows.
@@ -433,6 +435,9 @@ priv struct VizFrame {
   html : String
   page : Bool
   mut height : Int
+  /// the height it last said, and how many times running it grew a little to it (viz_runaway)
+  mut said_height : Int
+  mut grown : Int
   mut shown : Bool
   mut dark : Bool
   mut ground : Int64
@@ -466,11 +471,26 @@ fn viz_said(f : VizFrame, hears : VizHears, words : String) -> Unit {
     Some(String("height")) =>
       if !f.page {
         match m.get("height") {
-          Some(Number(h, ..)) if h == h && h < 1.0e9 && h > -1.0e9 => {
+          Some(Number(h, ..)) if h == h && h < 1.0e9 && h > 0.0 => {
             let tall = h.ceil().to_int()
-            let shown = if tall > viz_max_height { viz_max_height } else { tall }
-            viz_heights[f.html] = shown
-            f.height = shown
+            // held, it stays so until its content is shorter than where it was held
+            if f.grown > viz_runaway && tall >= f.said_height {
+              return
+            }
+            f.grown = if f.said_height > 0 && tall > f.said_height && tall - f.said_height <= 64 {
+              f.grown + 1
+            } else {
+              0
+            }
+            if f.grown > viz_runaway {
+              return
+            }
+            f.said_height = tall
+            // only a height it did not creep to is kept: one kept mid-run would start the next load's run further on
+            if f.grown == 0 {
+              viz_heights[f.html] = tall
+            }
+            f.height = tall
             f.shown = true
           }
           _ => ()
@@ -545,6 +565,8 @@ fn viz_frame(
         html,
         page,
         height: viz_heights.get(html).unwrap_or(0),
+        said_height: 0,
+        grown: 0,
         shown: false,
         dark,
         ground,
@@ -622,12 +644,12 @@ let viz_page_most : Double = 0.8
 ///|
 /// All the room it is given (a page of its own).
 // kept across runs: a value (no field of it changes)
-let viz_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let viz_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What shows under a page not drawn yet: the chat's ground.
 // kept across runs: a value (no field of it changes)
-let viz_ground : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let viz_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 /// A whole page in a message: its corners the card's (Smooth 20), on the paper (Viz.kt: #F6F2EA, dark #26272B).
@@ -681,8 +703,22 @@ fn viz_follow_up(station : String, session : String) -> (String) -> Bool {
 /// A placed HTML file `a` of the message `ts`, drawn there, with the ways to open it on its own under it (the whole
 /// screen, or a page of its own: 在侧边打开); `failed`: what shows instead when the file cannot be read (its card).
 fn viz_file(c : @ui.Ctx, src : Source, here : Here, ts : String, a : Attachment, failed : () -> Unit) -> Unit {
-  let station = here.station
-  let key = owner_of(here, a)
+  viz_file_of(c, src, here.station, here.session, owner_of(here, a), ts, a, failed)
+}
+
+///|
+/// The visualization a message of chat `session` on `station` places (viz_file), kept by session `key`: the
+/// desktop's messages' too (sfbase's chat_parts).
+fn viz_file_of(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  session : String,
+  key : String,
+  ts : String,
+  a : Attachment,
+  failed : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   match viz_load(c, src, station, key, a.path) {
     Some(Err(_)) => failed()
@@ -694,18 +730,18 @@ fn viz_file(c : @ui.Ctx, src : Source, here : Here, ts : String, a : Attachment,
       })
       |> ignore
     Some(Ok((html, state))) => {
-      let place = "chat/" + here.station + ":" + here.session + "/" + ts + "/" + a.path
+      let place = "chat/" + station + ":" + session + "/" + ts + "/" + a.path
       c.box(style=viz_file_box, fn() {
         viz_frame(c, place, html, state, {
           keep: Some(fn(s) { viz_keep(src, station, key, a.path, s) }),
           failed: None,
-          follow_up: Some(viz_follow_up(here.station, here.session)),
+          follow_up: Some(viz_follow_up(station, session)),
         })
         // under the page, out of its way: the ways to open it on its own, icons in the chat's grey
         c.box(style=viz_ways, fn() {
           let full = c.id("viz/full/" + place)
           if c.clicked(full) {
-            viz_open_full(a.name, station, key, a.path, here)
+            viz_open_full(a.name, station, key, a.path, session)
           }
           viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"))
           let aside = c.id("viz/aside/" + place)
@@ -737,7 +773,7 @@ fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String) -> Unit {
 ///|
 /// Its place while it comes: 120 high, its corners Smooth 12, the bubble's grey, 8 under it.
 // kept across runs: a value (no field of it changes)
-let viz_wait_under : @ui.Style = @ui.style(w=Full, pb=S2)
+let viz_wait_under : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -746,12 +782,12 @@ let viz_wait : @ui.Style = @ui.style(w=Full, h=@sf.viz_wait_h, radius=Xl, bg=Neu
 ///|
 /// The page and the ways under it, 4 under them.
 // kept across runs: a value (no field of it changes)
-let viz_file_box : @ui.Style = @ui.style(w=Full, pb=S1)
+let viz_file_box : @ui.Style = @ui.css("w=Full pb=S1")
 
 ///|
 /// The ways under the page: 2 under it, 22 high, at its end, 2 apart.
 // kept across runs: a value (no field of it changes)
-let viz_ways : @ui.Style = @ui.style(row=true, w=Full, pt=S0_5, h=S6, gap=S0_5, justify=JEnd)
+let viz_ways : @ui.Style = @ui.css("row w=Full pt=S0_5 h=S6 gap=S0_5 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -776,15 +812,32 @@ priv struct VizFull {
   session : String
   /// opened by a link within a sentence (VizOpen): its wait said under the words till it covers the screen
   linked : Bool
+  /// a mermaid chart's source instead of a file (Viz.kt Mermaid): nothing to fetch, nothing kept, no words to send
+  mermaid : String?
 }
 
 ///|
 let viz_full : Ref[VizFull?] = Ref(None)
 
 ///|
-fn viz_open_full(name : String, station : String, key : String, path : String, here : Here, linked? : Bool = false) -> Unit {
+fn viz_open_full(name : String, station : String, key : String, path : String, session : String, linked? : Bool = false) -> Unit {
   viz_close("full/")
-  viz_full.val = Some({ name, station, key, path, session: here.session, linked })
+  viz_full.val = Some({ name, station, key, path, session, linked, mermaid: None })
+}
+
+///|
+/// A mermaid chart over the whole screen (Viz.kt Mermaid: VizFull("Mermaid", …)).
+fn viz_open_mermaid(code : String) -> Unit {
+  viz_close("full/")
+  viz_full.val = Some({
+    name: "Mermaid",
+    station: "",
+    key: "",
+    path: "",
+    session: "",
+    linked: false,
+    mermaid: Some(code),
+  })
 }
 
 ///|
@@ -801,7 +854,11 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
     Some(v) => v
     None => return
   }
-  match viz_load(c, src, v.station, v.key, v.path) {
+  let loaded = match v.mermaid {
+    Some(code) => Some(Ok((viz_mermaid_document(code, full=true), None)))
+    None => viz_load(c, src, v.station, v.key, v.path)
+  }
+  match loaded {
     // fetched once; a link's wait is said under its words (viz_opening)
     None => return
     Some(Err(_)) => {
@@ -811,6 +868,7 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
       return
     }
     Some(Ok((html, state))) => {
+      let chart = v.mermaid is Some(_)
       let t = @sf.theme()
       c.on_back(fn() { viz_close_full() })
       c.layer(fn() {
@@ -833,13 +891,13 @@ fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=viz_full_page, fn() {
             viz_frame(
               c,
-              "full/" + v.station + "/" + v.key + "/" + v.path,
+              if chart { "full/mermaid/" + html } else { "full/" + v.station + "/" + v.key + "/" + v.path },
               html,
               state,
               {
-                keep: Some(fn(s) { viz_keep(src, v.station, v.key, v.path, s) }),
+                keep: if chart { None } else { Some(fn(s) { viz_keep(src, v.station, v.key, v.path, s) }) },
                 failed: None,
-                follow_up: Some(viz_follow_up(v.station, v.session)),
+                follow_up: if chart { None } else { Some(viz_follow_up(v.station, v.session)) },
               },
               fill=true,
               ground=t.p.bg,
@@ -861,7 +919,7 @@ let viz_full_bar : @ui.Style = @ui.style(row=true, w=Full, h=S12, pl=@sf.viz_ful
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viz_full_name_box : @ui.Style = @ui.style(w=Full, clip=true)
+let viz_full_name_box : @ui.Style = @ui.css("w=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -869,22 +927,16 @@ let viz_full_name : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viz_full_close : @ui.Style = @ui.style(
-  w=S9,
-  h=S9,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-)
+let viz_full_close : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// The page under it, 12 in at its sides.
 // kept across runs: a value (no field of it changes)
-let viz_full_page : @ui.Style = @ui.style(w=Full, h=Full, px=S3)
+let viz_full_page : @ui.Style = @ui.css("w=Full h=Full px=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viz_opening_box : @ui.Style = @ui.style(pt=S1_5, pb=S1_5)
+let viz_opening_box : @ui.Style = @ui.css("pt=S1_5 pb=S1_5")
 
 ///|
 /// Under the words whose link opened a visualization, while it is fetched (VizFiles.kt VizOpen: 正在打开).
@@ -904,14 +956,21 @@ fn viz_opening(c : @ui.Ctx, src : Source, here : Here) -> Unit {
 let viz_mermaid : String = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
 
 ///|
-/// A mermaid chart's page: the source, drawn by mermaid in the web's colours, drawn again when the theme changes.
-fn viz_mermaid_document(code : String) -> String {
+/// A mermaid chart's page (Viz.kt mermaidDocument): the source, drawn by mermaid in the web's colours, drawn again when
+/// the theme changes, once the page has a width. In a message fitted to its width but never smaller than 0.8 (wider
+/// than that it scrolls sideways); `full`: over the whole screen, fitted to it, pinched and moved by the page itself.
+fn viz_mermaid_document(code : String, full? : Bool = false) -> String {
   "<pre class=\"mermaid-src\" hidden>" +
   code.replace_all(old="&", new="&amp;").replace_all(old="<", new="&lt;") +
-  "</pre><div id=\"chart\" style=\"display:flex;justify-content:center\"></div>\n" +
+  "</pre><div id=\"chart\"></div>\n<style>" +
+  (if full { "html{overflow:hidden}#chart{position:relative;height:calc(100vh - 4px);overflow:hidden;touch-action:none}" } else { "#chart{overflow-x:auto}" }) +
+  "</style>\n" +
   "<script type=\"module\">\n" +
   "  const post = (m) => parent.postMessage({ emberViz: true, ...m }, \"*\");\n" +
   "  const source = document.querySelector(\".mermaid-src\").textContent;\n" +
+  "  const FULL = " +
+  (if full { "true" } else { "false" }) +
+  ", READABLE = 0.8;\n" +
   "  let mermaid;\n" +
   "  try { mermaid = (await import(\"" +
   viz_mermaid +
@@ -921,9 +980,66 @@ fn viz_mermaid_document(code : String) -> String {
   "  const pixel = document.createElement(\"canvas\").getContext(\"2d\", { willReadFrequently: true });\n" +
   "  const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = \"#000\"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return \"rgb(\" + r + \", \" + g + \", \" + b + \")\"; };\n" +
   "  const v = (name) => { const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return name === \"--font-sans\" ? value : rgb(value); };\n" +
-  "  let n = 0;\n" +
+  "  const chart = document.getElementById(\"chart\");\n" +
+  "  let n = 0, waiting = false, width = 0;\n" +
+  "  const fit = (w) => Math.min(1, chart.clientWidth / w);\n" +
+  "  async function render(s) {\n" +
+  "    const { svg } = await mermaid.render(\"chart-\" + ++n, s);\n" +
+  "    const box = document.createElement(\"div\");\n" +
+  "    box.innerHTML = svg;\n" +
+  "    return box.querySelector(\"svg\");\n" +
+  "  }\n" +
+  "  // Over the whole screen: the chart fitted to the screen (`base`), zoomed `k` times that (1 to `most`), its corner at x, y.\n" +
+  "  let base = 1, most = 4, k = 1, x = 0, y = 0;\n" +
+  "  function show() {\n" +
+  "    const svg = chart.querySelector(\"svg\");\n" +
+  "    if (!svg) return;\n" +
+  "    const { width: w, height: h } = svg.viewBox.baseVal;\n" +
+  "    const s = base * k, cw = chart.clientWidth, ch = chart.clientHeight;\n" +
+  "    // In the middle while it is smaller than the screen; else its edges kept on the screen.\n" +
+  "    x = w * s <= cw ? (cw - w * s) / 2 : Math.min(0, Math.max(cw - w * s, x));\n" +
+  "    y = h * s <= ch ? (ch - h * s) / 2 : Math.min(0, Math.max(ch - h * s, y));\n" +
+  "    svg.style.width = w * s + \"px\";\n" +
+  "    svg.style.height = h * s + \"px\";\n" +
+  "    svg.style.left = x + \"px\";\n" +
+  "    svg.style.top = y + \"px\";\n" +
+  "  }\n" +
+  "  function zoom(to, px, py) {\n" +
+  "    to = Math.min(most, Math.max(1, to));\n" +
+  "    x = px - (px - x) * to / k;\n" +
+  "    y = py - (py - y) * to / k;\n" +
+  "    k = to;\n" +
+  "    show();\n" +
+  "  }\n" +
+  "  // The chart at its size: as written (its viewBox) scaled to fit, no smaller than READABLE in a message.\n" +
+  "  function place() {\n" +
+  "    const svg = chart.querySelector(\"svg\");\n" +
+  "    if (!svg) return;\n" +
+  "    const { width: w, height: h } = svg.viewBox.baseVal;\n" +
+  "    if (!w || !h) return;\n" +
+  "    svg.removeAttribute(\"width\");\n" +
+  "    svg.removeAttribute(\"height\");\n" +
+  "    svg.style.maxWidth = \"none\";\n" +
+  "    svg.style.display = \"block\";\n" +
+  "    if (FULL) {\n" +
+  "      svg.style.position = \"absolute\";\n" +
+  "      base = Math.min(1, chart.clientWidth / w, chart.clientHeight / h);\n" +
+  "      // Up to twice its size as written, or 4 times the screen's fit if more.\n" +
+  "      most = Math.max(4, 2 / base);\n" +
+  "      k = 1;\n" +
+  "      show();\n" +
+  "      return;\n" +
+  "    }\n" +
+  "    const scale = Math.max(fit(w), READABLE);\n" +
+  "    svg.style.margin = \"0 auto\";\n" +
+  "    svg.style.width = w * scale + \"px\";\n" +
+  "    svg.style.height = h * scale + \"px\";\n" +
+  "  }\n" +
   "  async function draw() {\n" +
   "    if (!mermaid) return;\n" +
+  "    if (!chart.clientWidth) { waiting = true; return; }\n" +
+  "    waiting = false;\n" +
+  "    width = chart.clientWidth;\n" +
   "    try {\n" +
   "      mermaid.initialize({ startOnLoad: false, securityLevel: \"strict\", theme: \"base\", fontFamily: v(\"--font-sans\"), themeVariables: {\n" +
   "        darkMode: document.documentElement.dataset.theme === \"dark\", fontSize: \"14px\",\n" +
@@ -932,13 +1048,59 @@ fn viz_mermaid_document(code : String) -> String {
   "        noteBkgColor: v(\"--accent\"), noteTextColor: v(\"--foreground\"), noteBorderColor: v(\"--brand\"),\n" +
   "        actorBkg: v(\"--card\"), actorBorder: v(\"--border-strong\"), actorTextColor: v(\"--foreground\"), signalColor: v(\"--foreground\"), signalTextColor: v(\"--foreground\"),\n" +
   "      } });\n" +
-  "      const { svg } = await mermaid.render(\"chart-\" + ++n, source);\n" +
-  "      document.getElementById(\"chart\").innerHTML = svg;\n" +
+  "      chart.replaceChildren(await render(source));\n" +
+  "      place();\n" +
   "    } catch (e) { post({ type: \"failed\", message: String(e?.message ?? e) }); }\n" +
   "  }\n" +
   "  addEventListener(\"ember-viz:theme\", draw);\n" +
+  "  // A new width (the screen turned): drawn now if it was waiting for one, else sized again. After the observer's turn:\n" +
+  "  // drawing in it changes the layout it reports on.\n" +
+  "  new ResizeObserver(() => {\n" +
+  "    if (!chart.clientWidth || chart.clientWidth === width) return;\n" +
+  "    if (waiting) setTimeout(draw); else { width = chart.clientWidth; setTimeout(place); }\n" +
+  "  }).observe(chart);\n" +
+  "  if (FULL) {\n" +
+  "    // Pinched with two fingers, moved with one; a double tap zooms in to its size as written there, or back out. The\n" +
+  "    // page's own, the same in every app: a WebView's own zoom is not there on every host.\n" +
+  "    const at = (e) => { const r = chart.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };\n" +
+  "    const fingers = new Map();\n" +
+  "    let tap = null;\n" +
+  "    chart.addEventListener(\"pointerdown\", (e) => { chart.setPointerCapture(e.pointerId); fingers.set(e.pointerId, at(e)); });\n" +
+  "    chart.addEventListener(\"pointermove\", (e) => {\n" +
+  "      if (!fingers.has(e.pointerId)) return;\n" +
+  "      const was = [...fingers.values()];\n" +
+  "      fingers.set(e.pointerId, at(e));\n" +
+  "      const now = [...fingers.values()];\n" +
+  "      if (now.length === 1) { x += now[0].x - was[0].x; y += now[0].y - was[0].y; show(); return; }\n" +
+  "      const mid = (p) => ({ x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 });\n" +
+  "      const far = (p) => Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1;\n" +
+  "      const m0 = mid(was), m1 = mid(now);\n" +
+  "      x += m1.x - m0.x;\n" +
+  "      y += m1.y - m0.y;\n" +
+  "      zoom(k * far(now) / far(was), m1.x, m1.y);\n" +
+  "    });\n" +
+  "    const up = (e) => {\n" +
+  "      const p = fingers.get(e.pointerId);\n" +
+  "      const alone = fingers.size === 1;\n" +
+  "      fingers.delete(e.pointerId);\n" +
+  "      if (!p || !alone || e.type !== \"pointerup\") return;\n" +
+  "      if (tap && e.timeStamp - tap.t < 300 && Math.hypot(p.x - tap.x, p.y - tap.y) < 30) {\n" +
+  "        zoom(k > 1.01 ? 1 : Math.max(2, 1 / base), p.x, p.y);\n" +
+  "        tap = null;\n" +
+  "      } else tap = { t: e.timeStamp, x: p.x, y: p.y };\n" +
+  "    };\n" +
+  "    chart.addEventListener(\"pointerup\", up);\n" +
+  "    chart.addEventListener(\"pointercancel\", up);\n" +
+  "    // A mouse's wheel moves it; with ctrl (a trackpad's pinch), zooms it.\n" +
+  "    chart.addEventListener(\"wheel\", (e) => {\n" +
+  "      e.preventDefault();\n" +
+  "      const p = at(e);\n" +
+  "      if (e.ctrlKey) zoom(k * Math.exp(-e.deltaY / 100), p.x, p.y);\n" +
+  "      else { x -= e.deltaX; y -= e.deltaY; show(); }\n" +
+  "    }, { passive: false });\n" +
+  "  }\n" +
   "  draw();\n" +
-  "</script>"
+  "</script>\n"
 }
 
 ///|
@@ -946,7 +1108,8 @@ fn viz_mermaid_document(code : String) -> String {
 let viz_unmade : Map[String, Bool] = Map([])
 
 ///|
-/// A ```mermaid block: drawn as a chart (`place`: the message it is in); shown as code while it will not draw.
+/// A ```mermaid block: drawn as a chart (`place`: the message it is in), with a way under it to open it over the whole
+/// screen; shown as code while it will not draw.
 fn viz_mermaid_block(c : @ui.Ctx, place : String, code : String) -> Unit {
   if viz_unmade.contains(code) {
     @sf.code_block(c, code, "mermaid")
@@ -958,10 +1121,19 @@ fn viz_mermaid_block(c : @ui.Ctx, place : String, code : String) -> Unit {
       failed: Some(fn(_why) { viz_unmade[code] = true }),
       follow_up: None,
     })
+    // under the chart, out of its way, as a placed file has it
+    c.box(style=viz_ways, fn() {
+      let full = c.id("viz/full/" + place + "/mermaid/" + code)
+      if c.clicked(full) {
+        viz_open_mermaid(code)
+      }
+      viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"))
+    })
+    |> ignore
   })
   |> ignore
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viz_mermaid_box : @ui.Style = @ui.style(w=Full)
+let viz_mermaid_box : @ui.Style = @ui.css("w=Full")

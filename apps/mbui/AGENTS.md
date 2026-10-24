@@ -1,22 +1,49 @@
 # Working on still.fail's mbui app (for agents)
 
-The app is still.fail's Android app rebuilt in mbui, which is in this repository at `mbui/` (no pin: a change to
+The app is still.fail's Android app, rebuilt in mbui, which is in this repository at `mbui/` (no pin: a change to
 mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md` applies here as well. In short, and what is
 particular to this app:
 
-## The standard is Android's app
+## The app, and the Kotlin one before it
 
-- What this app looks like and does is held to still.fail's Android app (`apps/android`), the original: sizes, radii,
-  colours, timings and behaviour are taken from its code (`apps/android/shared/.../ui/{Glass,Corners,Parts}.kt` and
-  the screen's own file), not chosen, and not checked against mbui's own earlier drawing. Nothing in this repository
-  compares mbui with itself (#881 took that out); do not bring it back.
+- Since 2026-10-23 this is the Android app that is developed: the beta channel's (the stable channel keeps the Kotlin
+  app at 0.1.4520 until it is said to become this one). The Kotlin app (`apps/android`) is frozen: not developed, not
+  built or checked by CI, and nothing is compared with it any more. New work is this app's own.
+- What it took from the Kotlin app (sizes, radii, colours, timings, behaviour: `apps/android/shared/.../ui/{Glass,
+  Corners,Parts}.kt` and each screen's file) stays as it is unless a change means to differ. Nothing in this
+  repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
 
-## What is compared, and where
+## The component library
 
-- The app's screens are compared in the Tester: its draw list at the declared moment, over the same core JSON
-  Android's app draws (`client/fixtures/screens`). Pixels come from each host's offscreen render of that draw list
-  (`mbui-render-*`), and Android's own pictures (taken by `apps/android`'s tests) are the references.
+- The parts pages are made of are the library's, `src/sf` (docs/library.md): the counterpart of the web's `web/ui`,
+  one of its files for each of the web's. A part used by both the phone's pages and the desktop's lives there once and
+  both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
+  what it needs of the app is given to it as the app starts.
+
+- A named style (a top-level `let`, and a `.then(…)` of one) whose properties are all tokens and numbers is written
+  as its text, `@ui.css("w=Full px=S2 hovered{bg=Hover}")`; `@ui.style(…)` is for one that names a variable or is
+  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui/docs/style.md). Why (2026-10-24): moonc made
+  each `@ui.style(…)` constant ~5-10 KB of C in the program's start, ~1400 of them ~11.8 MB of one function compiled
+  again on every build; as text each is a string read once at start-up. detlint's `style-text` forbids the other
+  way and prints the text to write.
+
+## What the app's packages are
+
+- `src/sf`: the component library (above). `src/sfbase`: what both frames read and the stack they show — the core's
+  topics and calls (`Source`), a workspace, the chats' and a chat's views, the pages (`Page`, `ChatRef`, `DriveAt`,
+  `app.nav`); it imports the library and the settings' routes, nothing of the pages. `src/sfdesk`: the desktop's own
+  pages and what they hold. `src/sfapp`: the phone's pages, and the desktop's not yet in `sfdesk` (`wide_on`
+  branches); it takes `sfbase`'s names in by `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
+- The desktop and the phone are two apps that share the library's parts, its tools and its tokens, and what `sfbase`
+  reads. A desktop page ported from the web's file goes into `sfdesk`, its `wide_on` branches with it out of `sfapp`.
+  `sfdesk` imports the library, `sfbase` and mbui, never `sfapp` (which imports it): what a desk page needs of a phone
+  file that is not a page (a call to the core, a model, a tool) moves down into `sfbase` or the library, once, for
+  both; a phone page is not reused for the desktop, the web's is ported. Its words are `@sf.t` (the app's tables).
+
+## What is checked, and where
+
+- The app's screens are tested in the Tester: its draw list at the declared moment.
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
   with a kept one: that is slow, and what it waits for is never the app's own. A device runs only the host's
   contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their

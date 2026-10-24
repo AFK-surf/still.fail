@@ -1,0 +1,29 @@
+# The wide frame's sidebar as the web's, for people to look at (a desktop's window): open; folded to the rail's bar;
+# shown a while with the pointer on the bar; 自定义侧边条 from the rail's menu; 已归档 among the lists.
+timeout 20000
+until 新建对话
+wait 800
+shot side-open
+key cmd+\
+wait 800
+shot side-folded
+hover icon:folder
+wait 800
+shot side-peek
+move 1000 400
+wait 1500
+key cmd+\
+wait 800
+rightclick icon:folder
+wait 500
+tap 自定义侧边条
+wait 600
+shot side-customize
+key escape
+wait 400
+tap icon:filter
+wait 400
+tap 已归档
+wait 900
+shot side-archive
+exit

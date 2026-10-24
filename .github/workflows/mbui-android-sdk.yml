@@ -1,7 +1,7 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # What the emulator jobs boot (.github/actions/android-emulator), put in the Actions cache once each: the emulator's
 # build the references were made with (16428233, from Google's repository as a zip) and the x86_64 system images
-# (API 34; API 36, mbui-android-ref's), each by its revision (sdkmanager's, here alone): the one put in kept, a newer
+# (API 34), each by its revision (sdkmanager's, here alone): the one put in kept, a newer
 # only by taking it out. Asked each day; what is in already, nothing done. A download that breaks off fails this run
 # alone, the jobs going on with what is in.
 name: mbui-android-sdk
@@ -24,11 +24,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # (each job's device: host-android's pixel_7 on google_apis, render-android's pixel_6 on default)
+        # (each job's device: pixel_6 on default)
         include:
           - { api: 34, target: default, profile: pixel_6, avd: ci-default-pixel_6, keyed: "" }
-          # (mbui-android-ref's: the image Android's references are taken on, API 36)
-          - { api: 36, target: google_apis, profile: pixel_7, avd: ci-36-google_apis-pixel_7, keyed: "36-" }
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

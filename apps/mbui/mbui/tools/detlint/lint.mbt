@@ -21,6 +21,9 @@ priv struct Config {
   effect_fields : Array[String]
   effect_calls : Array[String]
   effect_methods : Array[String]
+  // an app's component library (web/ui's): its packages, and what they may import (prefixes); nothing else of the app
+  library : Array[String]
+  library_imports : Array[String]
 }
 
 ///|
@@ -58,6 +61,8 @@ fn Config::new(d : @rjson.Value) -> Config {
     effect_fields: strs(be.get("fields"), ["call", "subscribe"]),
     effect_calls: strs(be.get("calls"), build_effect_calls),
     effect_methods: strs(be.get("methods"), build_effect_methods),
+    library: strs(sect(d, "library").get("roots"), []),
+    library_imports: strs(sect(d, "library").get("imports"), ["mbui/", "moonbitlang/"]),
   }
 }
 
@@ -434,7 +439,8 @@ fn run_until_still(f : MbtFile) -> Array[Int] {
 // what a box and words look like said loosely (Ctx::box, row, column, layer, text, rich): box-loose; a number in
 // them, or anywhere in a style's constructors (style.mbt), style-literal
 let box_look : Array[String] = [
-  "dir", "w", "h", "pad", "padx", "pady", "pl", "pr", "pt", "pb", "gap", "align", "justify", "bg",
+  "dir", "w", "h", "pad", "padx", "pady", "pl", "pr", "pt", "pb", "m", "mx", "my", "ml", "mr", "mt", "mb",
+  "gap", "align", "justify", "bg",
   "radius", "border", "border_color", "shadow", "shadow_color", "shadow_y", "min_w", "max_w",
   "min_h", "max_h", "clip", "opacity",
 ]
@@ -504,6 +510,30 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
       }
     }
   }
+  // a style said as text (@ui.css("w=Grow(1.0) radius=Exact(9.0)")): what is in it counts as it does in style(…),
+  // each Exact(…) once (its numbers not again), each other number once
+  for c in f.calls {
+    if c.is_def ||
+      f.in_test(c.at) ||
+      c.name != "css" ||
+      !((c.kind == "pkg" && c.qual == "@ui") || c.kind == "bare") {
+      continue
+    }
+    for a in c.args {
+      for i in a.1 {
+        if toks[i].kind == "str" {
+          for what in css_literals(toks[i].text) {
+            if what == "Exact" {
+              add("style-exact", i, f.line_text(c.at))
+            }
+            if !tokens_file {
+              add("style-literal", i, f.line_text(c.at))
+            }
+          }
+        }
+      }
+    }
+  }
   if tokens_file {
     return
   }
@@ -538,6 +568,57 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
       }
     }
   }
+}
+
+///|
+/// What a style's text says off the scale: "Exact" for each Exact(…) (what is in its parentheses not again), "num"
+/// for each other number (one that starts after no name's letter or digit: not S1_25's, O35's).
+fn css_literals(text : String) -> Array[String] {
+  let out = []
+  let s = text.to_array()
+  let n = s.length()
+  fn word(c : Char) -> Bool {
+    (c >= 'a' && c <= 'z') ||
+    (c >= 'A' && c <= 'Z') ||
+    (c >= '0' && c <= '9') ||
+    c == '_' ||
+    c == '.'
+  }
+  let mut i = 0
+  while i < n {
+    let c = s[i]
+    let after_word = i > 0 && word(s[i - 1])
+    if c == 'E' &&
+      !after_word &&
+      i + 5 < n &&
+      s[i + 1] == 'x' &&
+      s[i + 2] == 'a' &&
+      s[i + 3] == 'c' &&
+      s[i + 4] == 't' &&
+      s[i + 5] == '(' {
+      out.push("Exact")
+      let mut depth = 0
+      i += 5
+      while i < n {
+        if s[i] == '(' {
+          depth += 1
+        } else if s[i] == ')' {
+          depth -= 1
+          if depth == 0 {
+            break
+          }
+        }
+        i += 1
+      }
+    } else if c >= '0' && c <= '9' && !after_word {
+      out.push("num")
+      while i + 1 < n && word(s[i + 1]) {
+        i += 1
+      }
+    }
+    i += 1
+  }
+  out
 }
 
 ///|
@@ -863,5 +944,197 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
         "\{name} : \{if tytext == "" { "(inferred)" } else { tytext }}",
       ),
     )
+  }
+}
+
+///|
+/// what `style(…)` (and a state's `patch(…)`) says, as its text says it (src/ui/style_css.mbt): every one of them
+let css_props : Array[String] = [
+  "row", "w", "h", "min_w", "max_w", "min_h", "max_h", "p", "px", "py", "pl", "pr", "pt", "pb", "m", "mx", "my", "ml",
+  "mr", "mt", "mb", "gap", "align", "justify", "bg", "radius", "border", "border_color", "shadow", "clip", "opacity",
+]
+
+///|
+let css_states : Array[String] = [
+  "narrow", "dark", "selected", "hovered", "focused", "pressed", "disabled",
+]
+
+///|
+/// A token's name, not a constant's: a constructor called (`Fixed(`, `A(`), or a name with a small letter (`Full`,
+/// `ACenter`, `SPx`), or capitals and then digits (`S4`, `S1_25`, `O35`, `B0_5`). A `const` is in capitals and
+/// underscores (`ROW_H`): a variable, as a lowercase name is.
+fn css_token_name(s : String, called : Bool) -> Bool {
+  let cs = s.to_array()
+  if cs.length() == 0 || cs[0] < 'A' || cs[0] > 'Z' {
+    return false
+  }
+  if called || cs.iter().any(fn(c) { c >= 'a' && c <= 'z' }) {
+    return true
+  }
+  let mut i = 0
+  while i < cs.length() && cs[i] >= 'A' && cs[i] <= 'Z' {
+    i += 1
+  }
+  i < cs.length() &&
+  cs[i] >= '0' &&
+  cs[i] <= '9' &&
+  cs[i:].iter().all(fn(c) { (c >= '0' && c <= '9') || c == '_' })
+}
+
+///|
+/// A property's value as a style's text says it (`Fixed(14.0)`, `A(Fg,O35)`, `true`), or None when it is not all
+/// literal: a variable, a field, a call of a function, an operator, another package's name. `@ui.` and `Type::`
+/// before a token are left out (the text reads a token as its property's type has it).
+fn css_value(f : MbtFile, idx : Array[Int]) -> String? {
+  let toks = f.toks
+  let out = StringBuilder::new()
+  let mut n = 0
+  while n < idx.length() {
+    let i = idx[n]
+    let t = toks[i]
+    let next = if n + 1 < idx.length() { Some(toks[idx[n + 1]]) } else { None }
+    match t.kind {
+      "at" =>
+        if t.text == "@ui" && next is Some(d) && d.text == "." {
+          n += 2
+          continue
+        } else {
+          return None
+        }
+      "ident" =>
+        if t.text == "true" || t.text == "false" {
+          out.write_string(t.text)
+        } else if next is Some(d) && d.text == "::" && css_token_name(t.text, true) {
+          n += 2
+          continue
+        } else if css_token_name(t.text, next is Some(d) && d.text == "(") {
+          out.write_string(t.text)
+        } else {
+          return None
+        }
+      "num" => {
+        // as its text reads it: an Int64's L, a UInt's U left out
+        let mut s = t.text
+        while s.has_suffix("L") || s.has_suffix("U") {
+          s = s.view(end_offset=s.length() - 1).to_string()
+        }
+        out.write_string(s)
+      }
+      "op" =>
+        if t.text == "(" || t.text == ")" || t.text == "," || t.text == "-" {
+          out.write_string(t.text)
+        } else {
+          return None
+        }
+      _ => return None
+    }
+    n += 1
+  }
+  if idx.length() == 0 {
+    None
+  } else {
+    Some(out.to_string())
+  }
+}
+
+///|
+/// A `style(…)`'s arguments (a state's `patch(…)`'s, with states false) as a style's text, or None when one is not
+/// all literal: `row h=S7 px=S2 hovered{bg=Hover}`
+fn css_of_args(
+  f : MbtFile,
+  args : Array[(String?, Array[Int])],
+  states : Bool,
+) -> String? {
+  let toks = f.toks
+  let items = []
+  for a in args {
+    let (label, idx) = a
+    guard label is Some(lb) else { return None }
+    if states && css_states.contains(lb) {
+      // patch(…) or @ui.patch(…), all of the value
+      let at = if idx.length() >= 3 && toks[idx[0]].kind == "at" { 2 } else { 0 }
+      if !(
+          at < idx.length() &&
+          (at == 0 || (toks[idx[0]].text == "@ui" && toks[idx[1]].text == ".")) &&
+          toks[idx[at]].text == "patch" &&
+          at + 1 < idx.length() &&
+          toks[idx[at + 1]].text == "(" &&
+          toks[idx[at + 1]].end == idx[idx.length() - 1]
+        ) {
+        return None
+      }
+      guard css_of_args(f, f.args_of(idx[at + 1]), false) is Some(inner) else {
+        return None
+      }
+      items.push("\{lb}{\{inner}}")
+    } else if css_props.contains(lb) {
+      guard css_value(f, idx) is Some(v) else { return None }
+      if lb == "row" || lb == "clip" {
+        match v {
+          "true" => items.push(lb)
+          "false" => items.push(lb + "=false")
+          _ => return None
+        }
+      } else {
+        items.push("\{lb}=\{v}")
+      }
+    } else {
+      return None
+    }
+  }
+  Some(items.join(" "))
+}
+
+///|
+/// style-text: a `style(…)` in a top-level `let` (a named style, a `.then(…)` of one) whose properties are all
+/// tokens and numbers is to be its text, `@ui.css("…")` (docs/style.md): moonc makes each such call ~5-10 KB of C in
+/// `moonbit_init`, run as the app starts, built again on every build (2026-10-24). One naming a variable, worked
+/// out, or in a function stays `style(…)`. Bare `style(` is counted where the `let` says `Style` (mbui's own
+/// package).
+fn lint_style_text(f : MbtFile, out : Array[Finding]) -> Unit {
+  if f.test_file {
+    return
+  }
+  let toks = f.toks
+  for c in f.calls {
+    if c.is_def || c.name != "style" || c.item < 0 || f.in_test(c.at) {
+      continue
+    }
+    let it = f.items[c.item]
+    if it.kind != "let" {
+      continue
+    }
+    let ok = if c.kind == "pkg" {
+      c.qual == "@ui"
+    } else if c.kind == "bare" {
+      let mut said = false
+      let mut k = it.start
+      while k < c.at && toks[k].text != "=" {
+        if toks[k].kind == "ident" && toks[k].text == "Style" {
+          said = true
+        }
+        k += 1
+      }
+      said
+    } else {
+      false
+    }
+    if !ok {
+      continue
+    }
+    match css_of_args(f, c.args, true) {
+      Some(text) => {
+        let pre = if c.kind == "pkg" { "@ui." } else { "" }
+        out.push(
+          finding(
+            "style-text",
+            f.rel,
+            toks[c.at].line,
+            "\{f.line_text(c.at)}   write: \{pre}css(\"\{text}\")",
+          ),
+        )
+      }
+      None => ()
+    }
   }
 }

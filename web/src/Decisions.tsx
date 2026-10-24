@@ -190,10 +190,9 @@ export function loginStation(chatStation: string, card: MessageCard): string {
 export const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
 
 /**
- * The decisions waiting for the viewer in a workspace (the core's `decisions` view: those set aside last), as both
- * pages go through them: one answered or dismissed here goes at once, before the core's list says so (back if the call
- * failed); one set aside goes to the back at once, as the core will have it; one whose written reply is on its way
- * stays (`replying`). The pages stay when none is left, for the next to come.
+ * The decisions waiting for the viewer in a workspace (the core's `decisions` view: those set aside last, one answered
+ * or dismissed here gone at once, back if that failed), as both pages go through them: one whose written reply is on
+ * its way stays (`replying`). The pages stay when none is left, for the next to come.
  */
 export function useDecisionQueue(workspace: string) {
   const view = useTopic<DecisionsView>({ topic: "decisions", workspace });
@@ -202,28 +201,12 @@ export function useDecisionQueue(workspace: string) {
   const stations = useStationViews(workspace);
   const call = useCall();
   const act = useAct();
-  const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
-  const [aside, setAside] = useState<readonly string[]>([]);
+  // The core lets go of one answered, dismissed or decided from here at once (back if that fails) and puts one set
+  // aside last; here one being replied to stays in front until its reply is on its way.
   const items = useMemo(() => {
     const source = view.value?.items ?? [];
-    const held = replying ? [replying, ...source.filter((d) => keyOf(d) !== keyOf(replying))] : source;
-    const left = held.filter((d) => !gone.has(keyOf(d)));
-    const at = (d: DecisionItem) => aside.indexOf(keyOf(d));
-    return [...left.filter((d) => at(d) < 0), ...left.filter((d) => at(d) >= 0).sort((a, b) => at(a) - at(b))];
-  }, [view.value, gone, aside, replying]);
-  const drop = (d: DecisionItem) => setGone((was) => new Set(was).add(keyOf(d)));
-  // Once the core's list has let one go (answered from here: its reply on its way; dismissed), it is the core's to
-  // say: one whose reply then could not be sent comes back.
-  const listed = view.value?.items;
-  useLayoutEffect(() => {
-    if (!listed) return;
-    setGone((was) => {
-      const keys = new Set(listed.map(keyOf));
-      const kept = [...was].filter((k) => keys.has(k));
-      return kept.length === was.size ? was : new Set(kept);
-    });
-  }, [listed]);
-  const back = (d: DecisionItem) => setGone((was) => { const now = new Set(was); now.delete(keyOf(d)); return now; });
+    return replying ? [replying, ...source.filter((d) => keyOf(d) !== keyOf(replying))] : source;
+  }, [view.value, replying]);
   const where = (d: DecisionItem) => ({ station: d.station, thread: d.thread, seq: d.seq });
   // Kept by station while the stations are: a new one each render would draw everything under its StationContext again.
   const stationOf = useMemo(() => {
@@ -247,19 +230,18 @@ export function useDecisionQueue(workspace: string) {
     : view.error ? null : { reading: true };
   return {
     view, items, replying, setReplying, waiting,
-    /** Whether it was set aside (待定), here or by the core. */
-    isAside: (d: DecisionItem) => aside.includes(keyOf(d)) || !!d.deferred,
+    /** Whether it was set aside (待定). */
+    isAside: (d: DecisionItem) => !!d.deferred,
     defer(d: DecisionItem) {
-      const key = keyOf(d);
-      setAside((was) => [...was.filter((k) => k !== key), key]);
       act(call("decision.defer", where(d)), t("web-main.decisions.deferWhat"));
     },
     dismiss(d: DecisionItem) {
-      drop(d);
-      act(call("decision.dismiss", where(d)).catch((e: unknown) => { back(d); throw e; }), t("web-main.decisions.dismissWhat"));
+      act(call("decision.dismiss", where(d)), t("web-main.decisions.dismissWhat"));
     },
-    /** Answered here (its option or reply sent): gone. */
-    answered: drop,
+    /** The one the wide page shows from now on (the core's `shown`). */
+    show(d: DecisionItem) {
+      void call("decision.show", { workspace, ...where(d) }).catch(() => {});
+    },
     /** The station a decision is on, for its messages (StationContext): the same object while the stations are. */
     station: stationOf,
   };
@@ -339,7 +321,7 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
     leave("right");
     queue.dismiss(front);
   };
-  const answered = (d: DecisionItem) => { leave("up"); queue.answered(d); };
+  const answered = () => leave("up");
 
   const drag = useSwipe(card, under, { left: defer, right: dismiss });
 
@@ -362,12 +344,12 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
                 <span className={css.count}>1 / {items.length}</span>
               </div>
               <DecisionMessages d={d} inline={inline} />
-              <DecisionPicks d={d} onAnswered={() => answered(d)} onOpen={() => onOpen(path)} />
+              <DecisionPicks d={d} onAnswered={answered} onOpen={() => onOpen(path)} />
             </div>
           </div>
           <DecisionFoot>
             <div className={css.footColumn}>
-              <DecisionAnswer d={d} mobile onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} />
+              <DecisionAnswer d={d} mobile onAnswered={answered} onReplying={(sending) => setReplying(sending ? d : null)} />
               <div className={css.hint} aria-hidden="true"><span>← {t("web-main.decisions.defer")}</span><span>{t("web-main.decisions.dismiss")} →</span></div>
             </div>
           </DecisionFoot>

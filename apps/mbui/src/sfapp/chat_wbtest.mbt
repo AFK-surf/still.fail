@@ -148,9 +148,6 @@ test "images take their own proportions before they load" {
   assert_eq(image_box(a, 16.0), (139.0, 300.0, false))
   assert_eq(image_box({ ..a, width: 1600.0, height: 900.0 }, 16.0), (360.0, 203.0, false))
   assert_eq(image_box({ ..a, width: 0.0, height: 0.0 }, 16.0), (240.0, 160.0, false))
-  assert_eq(file_size(18432.0), "18 KB")
-  assert_eq(file_size(812000.0), "793 KB")
-  assert_eq(file_size(4.5 * 1048576.0), "4.5 MB")
   assert_eq(elapsed(200000.0), "3m 20s")
 }
 
@@ -276,7 +273,7 @@ test "a chat left lets go of all that holds its thread at the core: its view and
     ..base,
     leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
   }
-  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.run_for(@ui.nav_push_ms)
@@ -307,7 +304,7 @@ test "left short of its end, a chat opens again where it was left, though the co
       (base.call)(name, params, done)
     },
   }
-  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.draw()
   open_chat(r)

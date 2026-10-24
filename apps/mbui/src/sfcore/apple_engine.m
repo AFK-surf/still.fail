@@ -2,14 +2,19 @@
 // cc-link-flags go only on a main package, so the app links it: src/coredemo/core_engine.m, src/stillfail/core_engine.m;
 // moon does not track this file: touch the app's stub after changing it). Hermes on the Rust shell (src/host/apple_core.mm,
 // built by scripts/core.sh engine into out/core/<target>/libmbui_core.a, which the app links with
-// out/core/<target>/libstillfail_shell.a and Hermes's framework) and the browser session that brings a sign-in back
-// (src/host/apple_auth.m), handed to mbui/core as the app loads.
+// out/core/<target>/libstillfail_shell.a and Hermes's framework) and, on iOS, the browser session that brings a sign-in
+// back (src/host/apple_auth.m), handed to mbui/core as the app loads. On macOS none (web_auth NULL): the app signs in on
+// @hostapi.browser_login (a loopback listener and the default browser, as the desktop app's), not in
+// ASWebAuthenticationSession's, which is Safari's whatever the browser chosen.
 #include "../host/apple_auth.m"
 #include "../core/core_client.h"
 #include "../host/apple.h"
 
 // $MBUI_CORE_DATA, else ~/Library/Application Support/<bundle id, or mbui>/core: the app's own, never the installed
-// still.fail app's.
+// still.fail app's. Built as still.fail's desktop app itself (scripts/mac-app.sh's stable and beta: Electron's ids,
+// fail.still.desktop and .beta), that app's data where it kept it (its userData, named as the app: still.fail,
+// youdid.wtf; core/ there, as its core's: apps/desktop/src/main.ts): signed in, its prefs and its chats as they were,
+// its sealed keys taken as they are first asked for (src/host/apple_core.mm electron_sealed).
 static const char *core_data_dir(void) {
   static char *dir;
   if (dir) return dir;
@@ -18,14 +23,19 @@ static const char *core_data_dir(void) {
   if (!path) {
     NSURL *support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
     NSString *app = NSBundle.mainBundle.bundleIdentifier ?: @"mbui";
-    path = [[support.path stringByAppendingPathComponent:app] stringByAppendingPathComponent:@"core"];
+    NSString *electron = @{@"fail.still.desktop" : @"still.fail", @"fail.still.desktop.beta" : @"youdid.wtf"}[app];
+    path = [[support.path stringByAppendingPathComponent:electron ?: app] stringByAppendingPathComponent:@"core"];
   }
   [NSFileManager.defaultManager createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
   dir = strdup(path.fileSystemRepresentation);
   return dir;
 }
 
+#if TARGET_OS_IPHONE
 static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_stop, core_data_dir, mb_web_auth, mb_post, mb_post_drop};
+#else
+static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_stop, core_data_dir, NULL, mb_post, mb_post_drop};
+#endif
 
 __attribute__((constructor)) static void use_hermes_engine(void) { mbc_use(&hermes_engine); }
 

@@ -124,6 +124,9 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.equal(view.call.auto, true, "no mode asked: decided as it opens");
   assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", control: true }) as J).call.auto, false);
   assert.throws(() => parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", codecs: ["vp9"] }));
+  // H.265 only from a UI that says it decodes it; none said: what every client decodes.
+  assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", codecs: ["h265", "h264", "jpeg"] }) as J).call.ask.codecs, ["h265", "h264", "jpeg"]);
+  assert.deepEqual((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1" }) as J).call.ask.codecs, ["h264", "jpeg"]);
   assert.throws(() => parseCall("screen.control", { view: "v1" }));
 });
 
@@ -282,6 +285,25 @@ test("a_link_to_a_screen_of_a_station_not_reached_says_what_its_id_does", async 
   core.close();
 });
 
+test("a_simulator_is_listed_and_linked_as_one_and_a_kind_not_known_as_a_display", async () => {
+  const sim = { id: "simulator:5A25EA86-3568-43D6-9068-8B2CB5FADB26", kind: "simulator", title: "iPhone 17 · iOS 26.2", width: 1206, height: 2622, viewers: [], peek: true };
+  const answers = { ...base(), "GET /screens": { screens: [sim, { id: "later:1", kind: "something-later", title: "", width: 0, height: 0, viewers: [] }] } };
+  const { host, core, ui } = await viewing(1, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  subscribe(core, ui, 2, { topic: "screenCard", station: "ws/elsewhere", screen: sim.id });
+  await host.settle();
+  apply(host, values);
+  const v = values.get(1) as J;
+  assert.deepEqual(v.screens.map((x: J) => [x.kind, x.title, x.line]), [
+    ["simulator", "iPhone 17 · iOS 26.2", "iOS 模拟器 · 1206×2622"],
+    ["desktop", "桌面", "桌面"],
+  ]);
+  assert.equal(v.screens[0].peek, true);
+  assert.deepEqual(values.get(2), { kind: "simulator", title: "iOS 模拟器", line: "远程屏幕", link: "/w/ws/s/elsewhere/screen/simulator%3A5A25EA86-3568-43D6-9068-8B2CB5FADB26", gone: false, peek: false, width: 0, height: 0 });
+  core.close();
+});
+
 test("a_preview_only_looks_and_is_asked_only_of_a_screen_its_station_says_can_be_previewed", async () => {
   const answers = { ...base(), "GET /screens": { screens: [SCREENS.screens[0], { ...SCREENS.screens[1], peek: true }] } };
   const { host, core, ui, views } = await viewing(1, answers);
@@ -368,6 +390,31 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   said(host, log);
   const now = lastState(log, 1);
   assert.deepEqual([now.others, now.line, now.cursor], [["Bob"], "控制 · Bob 也在查看", { x: 0.1, y: 0.2, shape: "text" }]);
+  assert.equal(now.scale, undefined, "a station that says no scale: none");
+  // How late its frames are, as the station measures them.
+  v!.send(stateFrame({ latency: { frame: 87, before: 12 } }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(lastState(log, 1).latency, { frame: 87, before: 12 });
+  // How its pictures are made, as the station says it.
+  v!.send(stateFrame({ video: { capture: "ScreenCaptureKit", encoder: "hardware, low latency, HEVC_Main_AutoLevel", hardware: true } }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(lastState(log, 1).video, { capture: "ScreenCaptureKit", encoder: "hardware, low latency, HEVC_Main_AutoLevel", hardware: true });
+  // Its display's scale, as the station says it, to a view that drives it; set with the input it takes.
+  const steps = [100, 125, 150, 175, 200];
+  v!.send(stateFrame({ scale: { percent: 200, recommended: 150, steps } }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(lastState(log, 1).scale, { percent: 200, recommended: 150, steps });
+  call(core, ui, 7, "screen.input", { view: "v", input: { t: "scale", percent: 150 } });
+  await host.settle();
+  assert.deepEqual(v!.got.at(-1), { input: { t: "scale", percent: 150 } });
+  // Not a scale: told as any bad input is.
+  call(core, ui, 8, "screen.input", { view: "v", input: { t: "scale", percent: 99 } });
+  await host.settle();
+  said(host, log);
+  assert.equal(log.find((m) => m.id === 8)?.error?.code, "invalid_params");
   // The page goes: the stream closes.
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();

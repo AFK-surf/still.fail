@@ -52,6 +52,14 @@ export function setOrigin(cloud: string): void {
   origin = cloud.replace(/\/+$/, "");
 }
 
+/// Where this device keeps a face's file, by its hash, as a file the app's host reads there itself (font-files.ts):
+/// set as the core starts; none before (and on the web, whose pages fetch the faces themselves).
+let keptAt: (sha256: string) => string | null = () => null;
+
+export function setKeptAt(at: (sha256: string) => string | null): void {
+  keptAt = at;
+}
+
 /// A choice as kept: a face there is, or one of the device's; anything else is none.
 function known(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -113,10 +121,18 @@ function resolve(id: string | null, place: Place): Record<string, unknown> {
     return { id, name: family, mono: place === "code", family, files: [], bytes: 0 };
   }
   const e = FACES.find((f) => f.id === id);
-  return e ? face(e) : { ...OWN, mono: place === "code" };
+  if (!e) return { ...OWN, mono: place === "code" };
+  // a place's: each file where this device keeps it, so the app sets its pages in it as it starts, asking nothing
+  const f = face(e);
+  const files = (f.files as Record<string, unknown>[]).map((file) => {
+    const path = keptAt(file.sha256 as string);
+    return path === null ? file : { ...file, path };
+  });
+  return { ...f, files };
 }
 
-/// The faces as they go out (`faces`): each place's, whole (text, none chosen: as ui), and every face there is.
+/// The faces as they go out (`faces`): each place's, whole (text, none chosen: as ui; each file's `path` where the
+/// device keeps it), and every face there is.
 export function shown(kept: unknown): Record<string, unknown> {
   const c = choicesOf(kept);
   const ui = resolve(c.ui, "ui");

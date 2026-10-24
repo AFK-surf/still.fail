@@ -95,14 +95,33 @@ pub fn Space::px(self : Space) -> Double {
 }
 
 ///|
-/// A width or a height: what it holds (`Hug`, the default), all of the parent's (`Full`), a share of what is left
-/// along the parent's main axis (`Grow(k)`), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a
-/// list's width; in a token file, a value off the scale).
+/// What a spacing token comes to as a margin: as `px`, and an `Exact` below 0 too (CSS's margins: one taking back a
+/// padding, a list reaching past its column), not NaN.
+pub fn Space::margin_px(self : Space) -> Double {
+  match self {
+    Exact(v) => {
+      if v != v {
+        abort("style: a margin's Exact is NaN")
+      }
+      v
+    }
+    s => s.px()
+  }
+}
+
+///|
+/// A width or a height: what it holds (`Hug`, the default; `Cut` cut short where its row has less), all of the parent's (`Full`), a share of what is left
+/// along the parent's main axis (`Grow(k)`), a share of the parent's room in percent (`Pct(p)`, CSS's 50%; a size only,
+/// not a bound), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a list's width; in a token
+/// file, a value off the scale).
 pub(all) enum Len {
   Hug
+  /// as wide as what it holds, cut short where its row has less (words on one line in an ellipsis)
+  Cut
   Full
   Grow(Double)
   Fixed(Double)
+  Pct(Double)
   S0
   SPx
   S0_5
@@ -192,8 +211,10 @@ fn Len::space(self : Len) -> Space? {
 fn Len::size(self : Len) -> Size {
   match self {
     Hug => Auto
+    Cut => Cut
     Full => Fill(1.0)
     Grow(k) => Fill(k)
+    Pct(p) => Pct(exact_ok(p, "Len Pct"))
     Fixed(v) => Px(exact_ok(v, "Len"))
     l => Px(l.space().unwrap().px())
   }
@@ -203,7 +224,8 @@ fn Len::size(self : Len) -> Size {
 /// A length as a bound (min_w, max_w…): `Hug` none (`none_is`), `Full` none as well.
 fn Len::bound(self : Len, none_is : Double) -> Double {
   match self {
-    Hug | Full | Grow(_) => none_is
+    Hug | Cut | Full | Grow(_) => none_is
+    Pct(p) => abort("style: a bound is not a share (Pct(\{p}))")
     Fixed(v) => exact_ok(v, "Len")
     l => l.space().unwrap().px()
   }
@@ -425,6 +447,14 @@ pub(all) enum Color {
   /// a quiet wash under what comes onto it (still.fail's Android app's way of the web's --hover: a screen's preview
   /// before its picture, ScreenLinks.kt; the offline note, Chat.kt), the same on every width
   Wash
+  /// a sidebar's ground beside the page (still.fail's Sidebar.css.ts vars.sidebar): what stands in it is cut out of it
+  /// (a row's people's pictures, RowPicture.css.ts --mark-around)
+  Sidebar
+  /// a list's ground, a step off the page (still.fail's --list): what a row of words to press lights to under the
+  /// pointer (AutomaticDecisions.css.ts policyWords)
+  ListGround
+  /// a field's edge pointed at or written in, a column's edge in hand (still.fail's --field-hover)
+  FieldHover
   A(Color, Opacity)
   Over(Color, Color)
   Exact(Int64)
@@ -434,11 +464,13 @@ pub(all) enum Color {
 } derive(Eq, Show, Debug)
 
 ///|
-/// An edge's width (Tailwind's border widths, and a hairline: B0_5).
+/// An edge's width (Tailwind's border widths, and a hairline: B0_5; B1_5 a ring a little firmer than a line, as a dot
+/// looked at is drawn round).
 pub(all) enum Stroke {
   B0
   B0_5
   B1
+  B1_5
   B2
   B4
   B8
@@ -450,6 +482,7 @@ fn Stroke::px(self : Stroke) -> Double {
     B0 => 0.0
     B0_5 => 0.5
     B1 => 1.0
+    B1_5 => 1.5
     B2 => 2.0
     B4 => 4.0
     B8 => 8.0

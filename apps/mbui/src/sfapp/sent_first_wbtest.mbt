@@ -1,11 +1,10 @@
-// What is sent is on screen first (chat.mbt LocalSent, flight.mbt): in the list the frame it is sent, whatever the
-// core, the list or anything else in it is doing; the core's row goes on from it once it comes.
+// What is sent is on screen first (sfbase's sent.mbt LocalSent, flight.mbt): in the list the frame it is sent,
+// whatever the core, the list or anything else in it is doing; the core's row goes on from it once it comes.
 
 ///|
 /// The keys of chat s-c1's rows as last built.
 fn sent_rows() -> Array[String] {
-  let rd = reading_of("ws1/st1\u{1}s-c1")
-  rd.sending.map(fn(l) { "o:" + l.row.id })
+  sending_of("ws1/st1\u{1}s-c1").map(fn(l) { "o:" + l.row.id })
 }
 
 ///|
@@ -95,7 +94,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   // the answer to the first words taken: its agent's activity folding, the avatar on its way
   clock.val = clock.val + fix_answer_ms
   t.draw()
-  t.run_for(Fold.ms() + 200.0)
+  t.run_for(Pose::Fold.ms() + 200.0)
   let sent_at = t.time()
   tap_send(t)
   t.draw()
@@ -108,7 +107,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   }
   // the avatar there before the words have landed: the answer waits for them, the list not moved under them; the
   // avatar where the answer will come in, over the words sent (not yet the chat's: under the messages)
-  t.run_for(sent_at + Float.ms() - 200.0 + 60.0 - t.time())
+  t.run_for(sent_at + Pose::Float.ms() - 200.0 + 60.0 - t.time())
   assert_true(t.find("收到：「看一下列表」") is None)
   let em = emits_of("ws1/st1\u{1}s-c1")
   let agents = match em.current {
@@ -153,4 +152,74 @@ test "words sent are seen every frame from the field to their bubble: not gone t
     seen_once(t, "先上屏") |> ignore
   }
   assert_true(send_flight.val is None)
+}
+
+///|
+test "the core's row joined to the viewer's last as the words fly: the rows above go on up with them, never put up at once" {
+  // as the core says it (views.ts drawn): words sent soon after the viewer's last are joined to it, its time going
+  // under them; what was sent from here is drawn apart (LocalSent) until the core has it, a frame or two later
+  let has = Ref::new(false)
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    match (name, tp.value) {
+      ("chat", Some(Object(m))) => {
+        let v = m.copy()
+        let messages = match m.get("messages") {
+          Some(Array(a)) => a.copy()
+          _ => []
+        }
+        let mine : Map[String, Json] = { "mine": true, "author": "lin@example.com" }
+        if has.val {
+          mine["followed"] = true
+          v["outbox"] = [
+            {
+              "id": "out-1",
+              "text": "看看怎么回事",
+              "attachments": [],
+              "quotes": [],
+              "createdAt": 0,
+              "state": "sending",
+              "joined": true,
+            },
+          ]
+        }
+        messages.push(msg(12, "person", by_person("林"), "先看一下列表", "刚刚", mine))
+        v["messages"] = Json::array(messages)
+        { ..tp, value: Some(Json::object(v)), version: if has.val { 2 } else { 1 } }
+      }
+      _ => tp
+    }
+  })
+  t.tap_text("发消息")
+  t.type_text("看看怎么回事")
+  t.draw()
+  let (_, was) = seen_once(t, "先看一下列表")
+  tap_send(t)
+  t.draw()
+  // the core has it: its row, joined, shorter than what was sent from here (and the one before without its time)
+  has.val = true
+  t.frame()
+  let lands = match send_flight.val {
+    Some(f) => {
+      assert_true(f.key == "o:out-1")
+      f.way.ends()
+    }
+    None => fail("nothing flies")
+  }
+  let (_, y) = seen_once(t, "先看一下列表")
+  assert_true((y - was).abs() < 0.5, msg="put up at once: \{was} → \{y}")
+  // every frame on the words' way, up from where it was to where it is at the end, never past it nor back down
+  let ys = [y]
+  while t.time() < lands + 50.0 {
+    t.frame()
+    ys.push(seen_once(t, "先看一下列表").1)
+  }
+  let end = ys[ys.length() - 1]
+  assert_true(end < was - 10.0)
+  for i, y in ys {
+    assert_true(y >= end - 0.5, msg="past its place at frame \{i}: \{y} < \{end}")
+    if i > 0 {
+      assert_true(y <= ys[i - 1] + 0.5, msg="back down at frame \{i}: \{ys[i - 1]} → \{y}")
+    }
+  }
 }

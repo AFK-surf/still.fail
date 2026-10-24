@@ -1,6 +1,6 @@
 // What a UI asks the core to find out (asks.rs): where one of still.fail's links opens in the app, whether a newer
-// app is out, a picture (fetched once), the buddies a Slack app can wear, a dev cloud's sign-in.
-import { Deferred, Effect } from "effect";
+// app is out, a picture (fetched once and kept on the device), the buddies a Slack app can wear, a dev cloud's sign-in.
+import { Deferred, Effect, Semaphore } from "effect";
 import buddiesList from "../../../web/public/avatars/index.json" with { type: "json" };
 import { encodeComponent } from "./accounts.ts";
 import type { AccountSessions } from "./account-provider.ts";
@@ -10,7 +10,7 @@ import { CoreError } from "./error.ts";
 import { header, type Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { Beside } from "./protocol.ts";
-import { fromUtf8, parseJson } from "./util.ts";
+import { fromUtf8, hex, isObject, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -22,8 +22,19 @@ const PICTURES = 256;
 /// A picture that could not be fetched is not asked for again for this long: a Google account's, where Google cannot be
 /// reached, waited 15 s each time it was drawn, about half of a phone's.
 export const PICTURE_RETRY_MS = 10 * 60_000;
+/// Pictures kept on the device past the app's life, so a face is there before (or without) the network: each under
+/// `picture-<sha256 of its address>` (its kind, a newline, its bytes); `pictures` lists them, the least lately had
+/// first, with what stands in for an address not had yet (an account's picture changed: its last one). An address
+/// names one picture for good (still.fail cloud's icons are by their hash, a Google account's changes with its
+/// picture), so one kept is never fetched again. Past either bound the least lately had go.
+export const PICTURES_KEY = "pictures";
+export const PICTURES_KEPT = 256;
+export const PICTURES_BYTES = 32 * 1024 * 1024;
 
 type Picture = Deferred.Deferred<[string, Uint8Array], CoreError>;
+/// What is kept: each picture's name and size, the least lately had first; the name of the one standing in for each
+/// not had yet.
+type Kept = { kept: [string, number][]; standIn: Record<string, string> };
 
 /// What build `to` brings an app at build `from`: the changelog's lines for it (Changelog.brings).
 export type Brings = (app: string, from: number, to: number) => Effect.Effect<string[]>;
@@ -35,6 +46,12 @@ export class Asks {
   readonly #pictures = new Map<string, Picture>();
   /// Pictures that could not be fetched: when, and why.
   readonly #pictureFailed = new Map<string, [number, CoreError]>();
+  /// What is kept on the device, read once.
+  #kept: Kept | null = null;
+  /// The accounts' pictures changed (`[before, now]`), not yet among what is kept: taken in turn, before any picture
+  /// is answered for one not had.
+  readonly #changed: [string, string][] = [];
+  readonly #taking = Semaphore.makeUnsafe(1);
 
   constructor(host: Host, brings: Brings) {
     this.#host = host;
@@ -96,12 +113,13 @@ export class Asks {
     });
   }
 
-  /// A picture by its address, fetched once (those asking together share the one fetch).
+  /// A picture by its address, fetched once (those asking together share the one fetch) and kept: one kept is answered
+  /// from the device. One that cannot be had is answered with what stands in for it, when something does.
   picture(url: string): Effect.Effect<[string, Uint8Array], CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (!(url.startsWith("https://") || url.startsWith("http://"))) return yield* Effect.fail(CoreError.invalid(t("core-misc.ask.bad_picture_url")));
       const failed = this.#pictureFailed.get(url);
-      if (failed !== undefined && this.#host.nowMs() - failed[0] < PICTURE_RETRY_MS) return yield* Effect.fail(failed[1]);
+      if (failed !== undefined && this.#host.nowMs() - failed[0] < PICTURE_RETRY_MS) return yield* this.#standIn(url, failed[1]);
       let picture = this.#pictures.get(url);
       if (!picture) {
         const made = Deferred.makeUnsafe<[string, Uint8Array], CoreError>();
@@ -109,9 +127,13 @@ export class Asks {
         this.#pictures.set(url, made);
         picture = made;
         const fetched = yield* Effect.result(
-          Effect.flatMap(
-            Effect.mapError(this.#host.fetch({ method: "GET", url, headers: [], body: null }), (e) => new CoreError("picture", t("core-misc.ask.picture_failed", { error: e.message }))),
-            (r) => (r.status !== 200 ? Effect.fail(new CoreError("picture", t("core-misc.ask.picture_failed", { error: r.status }))) : Effect.succeed([header(r, "content-type") ?? "", r.body] as [string, Uint8Array])),
+          Effect.flatMap(this.#keptPicture(pictureName(url)), (kept) =>
+            kept !== null
+              ? Effect.succeed(kept)
+              : Effect.flatMap(
+                  Effect.mapError(this.#host.fetch({ method: "GET", url, headers: [], body: null }), (e) => new CoreError("picture", t("core-misc.ask.picture_failed", { error: e.message }))),
+                  (r) => (r.status !== 200 ? Effect.fail(new CoreError("picture", t("core-misc.ask.picture_failed", { error: r.status }))) : Effect.as(this.#keep(url, header(r, "content-type") ?? "", r.body), [header(r, "content-type") ?? "", r.body] as [string, Uint8Array])),
+                ),
           ),
         );
         Deferred.doneUnsafe(made, fetched._tag === "Success" ? Effect.succeed(fetched.success) : Effect.fail(fetched.failure));
@@ -121,12 +143,124 @@ export class Asks {
         if (this.#pictures.get(url) === picture) this.#pictures.delete(url);
         if (this.#pictureFailed.size >= PICTURES) this.#pictureFailed.clear();
         this.#pictureFailed.set(url, [this.#host.nowMs(), got.failure]);
-        return yield* Effect.fail(got.failure);
+        return yield* this.#standIn(url, got.failure);
       }
       this.#pictureFailed.delete(url);
       return got.success;
     });
   }
+
+  /// Follows the accounts' pictures: one changed has its last one stand in for it until it is had (its new address
+  /// not reached yet, as a Google account's where Google cannot be).
+  follow(accounts: AccountSessions): void {
+    const was = new Map(accounts.list().map((a) => [a.sub, a.picture]));
+    accounts.onChange(() => {
+      for (const a of accounts.list()) {
+        const before = was.get(a.sub);
+        was.set(a.sub, a.picture);
+        if (before === undefined || before === "" || a.picture === "" || before === a.picture) continue;
+        this.#changed.push([before, a.picture]);
+        Effect.runFork(this.#takeChanged());
+      }
+    });
+  }
+
+  #takeChanged(): Effect.Effect<void> {
+    return this.#taking.withPermits(1)(Effect.suspend(() => Effect.forEach(this.#changed.splice(0), ([before, now]) => this.replaced(before, now), { discard: true })));
+  }
+
+  /// `now` is the picture `before` was: until `now` is had, `before` (when kept) is answered for it.
+  replaced(before: string, now: string): Effect.Effect<void> {
+    return Effect.flatMap(this.#index(), (kept) => {
+      const [from, to] = [pictureName(before), pictureName(now)];
+      const has = (name: string) => kept.kept.some(([n]) => n === name);
+      // `before` itself, else what stood in for it (never had either): the last picture had.
+      const other = has(from) ? from : kept.standIn[from];
+      if (other === undefined || has(to)) return Effect.void;
+      kept.standIn[to] = other;
+      return this.#writeIndex(kept);
+    });
+  }
+
+  /// What stands in for `url`, or `error`.
+  #standIn(url: string, error: CoreError): Effect.Effect<[string, Uint8Array], CoreError> {
+    return Effect.flatMap(Effect.andThen(this.#takeChanged(), this.#index()), (kept) => {
+      const other = kept.standIn[pictureName(url)];
+      if (other === undefined) return Effect.fail(error);
+      return Effect.flatMap(this.#keptPicture(other), (picture) => (picture === null ? Effect.fail(error) : Effect.succeed(picture)));
+    });
+  }
+
+  /// A kept picture by its name, now the most lately had; null when none is.
+  #keptPicture(name: string): Effect.Effect<[string, Uint8Array] | null> {
+    return Effect.flatMap(this.#index(), (kept) => {
+      const at = kept.kept.findIndex(([n]) => n === name);
+      if (at < 0) return Effect.succeed(null);
+      return Effect.map(Effect.orElseSucceed(this.#host.storageGet(`picture-${name}`), () => null), (bytes) => {
+        const cut = bytes === null ? -1 : bytes.indexOf(10);
+        if (bytes === null || cut < 0) return null;
+        // (Written down with the next one kept: a picture had is not a write.)
+        kept.kept.push(...kept.kept.splice(at, 1));
+        return [fromUtf8(bytes.subarray(0, cut)), bytes.slice(cut + 1)] as [string, Uint8Array];
+      });
+    });
+  }
+
+  /// Keeps a picture fetched, best effort: the least lately had go past the bounds.
+  #keep(url: string, kind: string, body: Uint8Array): Effect.Effect<void> {
+    return Effect.flatMap(this.#index(), (kept) =>
+      Effect.gen({ self: this }, function* () {
+        const name = pictureName(url);
+        const head = utf8(`${kind.replaceAll("\n", "")}\n`);
+        const bytes = new Uint8Array(head.length + body.length);
+        bytes.set(head);
+        bytes.set(body, head.length);
+        if (bytes.length > PICTURES_BYTES) return;
+        const written = yield* Effect.result(this.#host.storageSet(`picture-${name}`, bytes));
+        if (written._tag === "Failure") return;
+        kept.kept = kept.kept.filter(([n]) => n !== name);
+        kept.kept.push([name, bytes.length]);
+        delete kept.standIn[name];
+        let total = kept.kept.reduce((sum, [, size]) => sum + size, 0);
+        while (kept.kept.length > PICTURES_KEPT || total > PICTURES_BYTES) {
+          const [gone, size] = kept.kept.shift()!;
+          total -= size;
+          yield* Effect.ignore(this.#host.storageDelete(`picture-${gone}`));
+        }
+        yield* this.#writeIndex(kept);
+      }),
+    );
+  }
+
+  #index(): Effect.Effect<Kept> {
+    return Effect.suspend(() => {
+      if (this.#kept !== null) return Effect.succeed(this.#kept);
+      return Effect.map(Effect.orElseSucceed(this.#host.storageGet(PICTURES_KEY), () => null), (bytes) => {
+        if (this.#kept === null) this.#kept = readKept(parseJson(bytes));
+        return this.#kept;
+      });
+    });
+  }
+
+  /// Writes what is kept down, what stands in for none kept left out.
+  #writeIndex(kept: Kept): Effect.Effect<void> {
+    const names = new Set(kept.kept.map(([name]) => name));
+    for (const [name, other] of Object.entries(kept.standIn)) if (!names.has(other)) delete kept.standIn[name];
+    return Effect.ignore(this.#host.storageSet(PICTURES_KEY, toJsonBytes(kept)));
+  }
+}
+
+/// A picture's name among those kept: its address's sha256.
+function pictureName(url: string): string {
+  return hex(sha256(utf8(url)));
+}
+
+function readKept(raw: unknown): Kept {
+  const kept: Kept = { kept: [], standIn: {} };
+  if (!isObject(raw)) return kept;
+  if (Array.isArray(raw.kept)) for (const e of raw.kept) if (Array.isArray(e) && typeof e[0] === "string" && typeof e[1] === "number") kept.kept.push([e[0], e[1]]);
+  if (isObject(raw.standIn)) for (const [name, other] of Object.entries(raw.standIn)) if (typeof other === "string") kept.standIn[name] = other;
+  return kept;
 }
 
 /// A dev cloud on this machine or the emulator's host.

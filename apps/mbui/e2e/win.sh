@@ -11,6 +11,9 @@
 # it: the browser came back to the app's own page, the core's store holds alice's sign-in, secure.* round-trips through
 # DPAPI, Home lists the chat the station has, both runs' scripts pass.
 #   apps/mbui/e2e/win.sh        (E2E_PORT: the cloud's ports from it, 18787 by default; the relay's E2E_PORT - 47)
+#   E2E_APP=FILE: the app is waited for, the still.fail it runs against made meanwhile: FILE is what its build writes
+#   once the app is whole (`ok`; anything else: it failed). mbui.yml starts this before the app's build ends: the
+#   cloud, the relay, the station and the chat took ~13 s of the flow's ~18, after the build (2026-10-24, 40065721641).
 # Out: out/e2e/windows/ (the shots, the app's, the browser's and the cloud's logs, verdicts in result.txt).
 set -u
 D="$(cd "$(dirname "$0")" && pwd)"
@@ -24,8 +27,6 @@ ORIGIN=http://127.0.0.1:$PORT
 OUT=$ROOT/out/e2e/windows
 rm -rf "$OUT" && mkdir -p "$OUT/shots"
 CORE=$OUT/core
-EXE=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build stillfail native ${MODE:-release})/stillfail.exe
-[ -x "$EXE" ] || { echo "e2e: no app at $EXE (scripts/win.sh build)"; exit 1; }
 w() { cygpath -w "$1"; }
 
 RELAY_PORT=$((PORT - 47))
@@ -127,6 +128,15 @@ for (const f of walk(process.argv[1])) {
 }
 process.exit(1);' "$(w "$CORE")" "$1"
 }
+
+# the app (E2E_APP: once its build says it is whole)
+if [ -n "${E2E_APP:-}" ]; then
+  node "$ROOT/scripts/waitfor.mjs" --deadline 600 --what "the app's build" --exists "$(w "$E2E_APP")" > /dev/null ||
+    { echo "e2e: the app's build said nothing"; exit 1; }
+  [ "$(cat "$E2E_APP")" = ok ] || { echo "e2e: the app's build failed"; exit 1; }
+fi
+EXE=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build stillfail native ${MODE:-release})/stillfail.exe
+[ -x "$EXE" ] || { echo "e2e: no app at $EXE (scripts/win.sh build)"; exit 1; }
 
 app signin 390x844
 check "the core started in Hermes" 'grep -q "started in Hermes" "$OUT/signin.log"'

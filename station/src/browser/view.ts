@@ -10,7 +10,7 @@
 // Pull-driven: Chrome casts a frame only once those before it are acknowledged (it keeps at most two out), and a frame
 // is acknowledged only when the one after it is asked for (`next`), so a slow viewer slows the casting rather than
 // having frames pile up. Of two waiting, the newer is given and the older let go.
-import { type Clip, type Frame, type FrameConfig, type ScreenInput, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
+import { type Clip, type Frame, type FrameConfig, type ScreenInput, type ScreenVideo, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 
 /// The page's viewport in CSS pixels, as Page.getLayoutMetrics says it (what the screencast's frames show); null when
@@ -190,6 +190,11 @@ export class TabView implements ScreenView {
   #unlisten: () => void;
   /// A preview's (ViewOptions.peek): the tab is not brought forward for it, so what is behind another casts nothing.
   #peek = false;
+
+  /// Chrome's own screencast, a JPEG a picture.
+  video(): ScreenVideo {
+    return { capture: "Chrome screencast", encoder: "JPEG" };
+  }
 
   constructor(p: ViewParts) {
     this.#p = p;

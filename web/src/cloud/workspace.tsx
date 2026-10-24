@@ -50,7 +50,7 @@ import { NavAction, NavList, NavItem, NavSection, NavTop } from "../SidebarList.
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { VaultSettings } from "./Vault.tsx";
 import { VaultItemPage } from "./VaultItem.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, StationArchivingSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, StationArchivingSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, ResourcesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, scopeOf, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Select, Tip, Spinner, Waiting } from "../ui.tsx";
@@ -197,6 +197,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/memory/:station/skill/:name" element={<MemoryDocSettings entry={entry} />} />
             <Route path="settings/usage/prices" element={<UsagePricesSettings entry={entry} />} />
             <Route path="settings/usage" element={<UsageSettings entry={entry} />} />
+            <Route path="settings/resources" element={<ResourcesSettings entry={entry} />} />
             <Route path="settings/stations/:station/footprint" element={<Navigate to={`/w/${entry.id}/settings/stations`} replace />} />
             <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="s/:station/*" element={<StationPages stations={known && stations} />} />

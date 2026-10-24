@@ -7,7 +7,7 @@
 ///|
 /// The last memory read of each station (Memory.kt kept), so a page opened from the list has it at once; whether it
 /// was asked for since its page came; why it could not be read.
-priv struct MemoryRead {
+pub(all) struct MemoryRead {
   mut value : Json?
   mut error : String
   mut asked : Bool
@@ -19,7 +19,7 @@ let memories : Map[String, MemoryRead] = Map::new()
 ///|
 /// A station's memory, asked for once each time one of its pages comes (it changes as agents write it, not while it is
 /// looked at).
-fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
+pub fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
   let m = match memories.get(address) {
     Some(m) => m
     None => {
@@ -50,32 +50,9 @@ fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
 }
 
 ///|
-/// The global memory's parts (Memory.kt sectionsOf): by its headings; all of it in one from a core before them.
-fn sections_of(m : Json?) -> Array[(String, String, String)] {
-  let g = field(m, "global")
-  let parts = items(g, "sections").map(fn(x) { (text(Some(x), "title"), text(Some(x), "text"), text(Some(x), "note")) })
-  if parts.length() > 0 {
-    return parts
-  }
-  let whole = text(g, "text").trim(chars=" \t\n").to_owned()
-  if whole == "" {
-    []
-  } else {
-    [(tr("android-misc.memory.global"), whole, "")]
-  }
-}
-
-///|
-/// What a skill is for, in a line (Memory.kt SkillFile.line).
-fn skill_line(k : Json?) -> String {
-  match opt_text(k, "brief") {
-    Some(b) => b
-    None =>
-      match opt_text(k, "about") {
-        Some(a) => a
-        None => text(k, "description")
-      }
-  }
+/// The global memory's parts (Memory.kt sectionsOf): by its headings, as the core reads them.
+pub fn sections_of(m : Json?) -> Array[(String, String, String)] {
+  items(field(m, "global"), "sections").map(fn(x) { (text(Some(x), "title"), text(Some(x), "text"), text(Some(x), "note")) })
 }
 
 ///|
@@ -122,7 +99,7 @@ fn memories_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 
 ///|
 /// Whose a skill is, after its name (Memory.kt tagOf): another station's, or shared from here.
-fn skill_tag(k : Json?, names : Map[String, String]) -> String {
+pub fn skill_tag(k : Json?, names : Map[String, String]) -> String {
   let share = field(k, "share")
   match text(share, "role") {
     "user" => {
@@ -169,8 +146,11 @@ fn memory_row(c : @ui.Ctx, key : String, title : String, sub : String, value : S
 }
 
 ///|
+pub let memory_chevron : Double = 14.0
+
+///|
 /// Whether the built-in skills are folded open, by station.
-let builtin_open : Map[String, Bool] = Map::new()
+pub let builtin_open : Map[String, Bool] = Map::new()
 
 ///|
 /// A station's memory (MemoryScreen).
@@ -190,7 +170,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
   }
   let read = memory_of(c, core, address)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    nav_bar(c, core, name, tr("android-misc.memory.title"), sub=fn() {
+    nav_bar(c, core, name, tr("android-misc.memory.title"), about=tr("web-pages.settings.memory.lead"), sub=fn() {
       c.text(tr("android-misc.memory.sub"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
     })
     match read.value {
@@ -217,10 +197,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
               c,
               "skill/" + text(kv, "name"),
               text(kv, "name"),
-              match skill_line(kv) {
-                "" => tr("android-misc.memory.noWhen")
-                l => l
-              },
+              text(kv, "line"),
               text(kv, "size"),
               tag=skill_tag(kv, names),
             ) {
@@ -234,7 +211,6 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
           |> ignore
         }
         let blocks : Array[() -> Unit] = [
-          fn() { gap(c, 4.0) },
           fn() {
             section_header(
               c,
@@ -309,6 +285,10 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
             },
           ])
         }
+        // (4 under the bar on a phone; in the wide frame the first section's own room under the head)
+        if !wide.val {
+          blocks.insert(0, fn() { gap(c, 4.0) })
+        }
         blocks.push(fn() { gap(c, 30.0) })
         scroll_page(c, "memory/" + address, blocks)
       }
@@ -339,14 +319,9 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
   }
   let sub = if skill == "" {
     tr("web-main.memory.global.when")
-  } else if kv is None {
-    ""
-  } else if flag(kv, "project") {
-    tr("android-misc.memory.projects")
-  } else if flag(kv, "builtin") {
-    tr("android-misc.memory.builtin")
   } else {
-    tr("web-main.memory.skill")
+    // (the core's: 项目记忆, station 内置, Skill)
+    text(kv, "kindText")
   }
   let key = address + "\u{1}" + skill
   let picked = doc_picked.get(key).unwrap_or(at)
@@ -376,16 +351,8 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
     let pages : Array[(String, String, String)] = if kv is None {
       sections_of(m).map(fn(p) { (p.0, p.2, p.1) })
     } else {
-      let body = match opt_text(kv, "body") {
-        Some(b) => b
-        None => text(kv, "text")
-      }
-      let ps = [(tr("web-main.memory.overview"), "", body)]
-      for f in items(kv, "files") {
-        let fv = Some(f)
-        ps.push((opt_text(fv, "label").unwrap_or(text(fv, "name")), text(fv, "size"), text(fv, "text")))
-      }
-      ps
+      // its SKILL.md (总览), then each other file (the core's)
+      items(kv, "pages").map(fn(p) { (text(Some(p), "label"), text(Some(p), "size"), text(Some(p), "text")) })
     }
     let i = if pages.length() == 0 { 0 } else if picked >= pages.length() { pages.length() - 1 } else if picked < 0 { 0 } else { picked }
     let blocks : Array[() -> Unit] = [fn() { gap(c, 4.0) }]
@@ -398,14 +365,7 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
               c.text(tr("web-main.memory.when"), size=12.0, weight=500, color=t.p.subtle, wrap=false, line=17.0) |> ignore
               c.box(w=Fill(1.0), pt=2.0, fn() {
                 c.text(
-                  match opt_text(kv, "about") {
-                    Some(a) if a != "" => a
-                    _ =>
-                      match text(kv, "description") {
-                        "" => tr("android-misc.memory.noWhen")
-                        d => d
-                      }
-                  },
+                  text(kv, "whenText"),
                   size=13.0,
                   color=t.p.muted,
                   w=Fill(1.0),
@@ -483,36 +443,28 @@ fn doc_chips(c : @ui.Ctx, key : String, pages : Array[(String, String, String)],
 ///|
 /// The pills' room: 10 over what is under them; 12 in from the page's sides as they scroll (Memory.kt:243).
 // kept across runs: a value (no field of it changes)
-let doc_chips_room : @ui.Style = @ui.style(w=Full, pb=S2_5)
+let doc_chips_room : @ui.Style = @ui.css("w=Full pb=S2_5")
 
 ///|
 /// The card a skill's when and sharing are on: a card (20 down, 22 round) whose rows reach 8 from its sides, as
 /// MemoryDocScreen's ShareRow bleeds out of it (CARD_PAD less LIST_PAD).
 // kept across runs: a value (no field of it changes)
-let skill_card : @ui.Style = card_ground.then(@ui.style(px=S2))
+let skill_card : @ui.Style = card_ground.then(@ui.css("px=S2"))
 
 ///|
 /// Its words 12 further in: 20 from its sides, as a card's.
 // kept across runs: a value (no field of it changes)
-let skill_card_words : @ui.Style = @ui.style(w=Full, px=S3)
+let skill_card_words : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 /// The sharing row, 12 under the words: its ground under the finger rounded as the card's less its room
 /// (LIST_ROW_CORNER), its words 12 in, 6 over and under.
 // kept across runs: a value (no field of it changes)
-let skill_share_room : @ui.Style = @ui.style(w=Full, pt=S3)
+let skill_share_room : @ui.Style = @ui.css("w=Full pt=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let skill_share_line : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3,
-  py=S1_5,
-  gap=S2_5,
-  radius=Inner,
-  align=ACenter,
-)
+let skill_share_line : @ui.Style = @ui.css("row w=Full px=S3 py=S1_5 gap=S2_5 radius=Inner align=ACenter")
 
 ///|
 /// Its words (14, the ink, as wide as the row lets them).
@@ -522,7 +474,7 @@ let skill_share_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, w=Fu
 ///|
 /// The edits two stations made at once (12, the warning's ink), 6 under it, 12 in.
 // kept across runs: a value (no field of it changes)
-let skill_conflicts_room : @ui.Style = @ui.style(w=Full, px=S3, pt=S1_5)
+let skill_conflicts_room : @ui.Style = @ui.css("w=Full px=S3 pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

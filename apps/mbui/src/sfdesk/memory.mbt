@@ -1,0 +1,217 @@
+// The desktop's 记忆 (web/src/Memory.tsx MemoryView, cloud/settings.tsx MemorySettings) on the library's parts: every
+// station's agents' memory on one page, its name over it where there are several: the global memory by its parts,
+// the projects', the other skills (the station's own folded in a row), each row opening its page.
+
+///|
+/// 记忆 (MemorySettings): each station's memory, or that it is offline.
+fn memories_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  let topic = @settings.stations_of(core, here)
+  let stations = match topic.value {
+    Some(Array(a)) => a
+    _ => []
+  }
+  let names = station_names(stations)
+  let body : Array[() -> Unit] = []
+  for i, s in stations {
+    let sv = Some(s)
+    body.push(fn() {
+      c.box(style=if i == 0 { mem_station_first } else { mem_station }, fn() {
+        if stations.length() > 1 {
+          c.box(style=mem_station_head, fn() { c.text(text(sv, "name"), style=mem_station_name) |> ignore }) |> ignore
+        }
+        if flag(sv, "online") {
+          memory_view(c, core, text(sv, "station"), names)
+        } else {
+          c.text(@sf.t("web-pages.settings.memory.offline"), style=desk_muted) |> ignore
+        }
+      })
+      |> ignore
+    })
+  }
+  if topic.value is None {
+    body.push(fn() { @sf.wait_line(c, @sf.t("common.readingStations")) })
+  }
+  desk_page(c, core, "memories", @sf.t("web-pages.settings.memory.title"), about=@sf.t("web-pages.settings.memory.lead"), body)
+}
+
+///|
+/// One station's memory, on a page of its own (a link to it): as 记忆 shows it, under its name.
+fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
+  let stations = match @settings.stations_of(core, here).value {
+    Some(Array(a)) => a
+    _ => []
+  }
+  let mut name = @settings.station_name(address)
+  for s in stations {
+    if text(Some(s), "station") == address {
+      name = text(Some(s), "name")
+    }
+  }
+  desk_page(c, core, "memory/" + address, name, about=@sf.t("web-pages.settings.memory.lead"), back=@sf.t("web-pages.settings.memory.title"), [
+    fn() { memory_view(c, core, address, station_names(stations)) },
+  ])
+}
+
+///|
+/// The stations' names by their ids (whose a shared skill is).
+fn station_names(stations : Array[Json]) -> Map[String, String] {
+  let names : Map[String, String] = {}
+  for s in stations {
+    names[text(Some(s), "id")] = text(Some(s), "name")
+  }
+  names
+}
+
+///|
+/// A station's memory as a list (MemoryView): its sections, each a row that opens its page; a wait while it is read.
+fn memory_view(c : @ui.Ctx, core : Core, address : String, names : Map[String, String]) -> Unit {
+  let read = memory_of(c, core, address)
+  guard read.value is Some(_) else {
+    if read.error == "" {
+      @sf.wait_line(c, @sf.t("common.reading"))
+    } else {
+      c.text(@sf.t("web-main.memory.failed", args=[("error", read.error)]), style=desk_note_bad) |> ignore
+    }
+  }
+  let m = read.value
+  let sections = sections_of(m)
+  let skills = items(m, "skills")
+  let projects = skills.filter(fn(k) { flag(Some(k), "project") })
+  let others = skills.filter(fn(k) { !flag(Some(k), "project") && !flag(Some(k), "builtin") })
+  let builtin = skills.filter(fn(k) { !flag(Some(k), "project") && flag(Some(k), "builtin") })
+  let open = builtin_open.get(address).unwrap_or(false)
+  let skill_row = fn(k : Json) {
+    let kv = Some(k)
+    // (the core's: when it is read, in a line)
+    let line = text(kv, "line")
+    if mem_row(c, "memory/" + address + "/skill/" + text(kv, "name"), text(kv, "name"), line, text(kv, "size"), tag=skill_tag(kv, names)) {
+      (core.push)(MemoryDoc(address, text(kv, "name"), 0))
+    }
+  }
+  let global_said = join([@sf.t("web-main.memory.global.when"), text(field(m, "global"), "size")], " · ")
+  @sf.section(c, @sf.t("web-main.memory.global"), note=global_said, fn() {
+    if sections.length() == 0 {
+      c.text(@sf.t("web-main.memory.empty"), style=desk_muted) |> ignore
+    } else {
+      c.box(style=desk_list, fn() {
+        for i, p in sections {
+          if mem_row(c, "memory/" + address + "/part/" + i.to_string(), p.0, "", p.2) {
+            (core.push)(MemoryDoc(address, "", i))
+          }
+        }
+      })
+      |> ignore
+    }
+  })
+  @sf.section(c, @sf.t("web-main.memory.projects"), note=@sf.t("web-main.memory.projects.when"), fn() {
+    if projects.length() == 0 {
+      c.text(@sf.t("web-main.memory.projects.none"), style=desk_muted) |> ignore
+    } else {
+      c.box(style=desk_list, fn() {
+        for k in projects {
+          skill_row(k)
+        }
+      })
+      |> ignore
+    }
+  })
+  if others.length() + builtin.length() > 0 {
+    @sf.section(c, @sf.t("web-main.memory.others"), fn() {
+      c.box(style=desk_list, fn() {
+        for k in others {
+          skill_row(k)
+        }
+        if builtin.length() > 0 {
+          if mem_row(
+              c,
+              "memory/" + address + "/builtin",
+              @sf.t("web-main.memory.builtin"),
+              if open {
+                ""
+              } else {
+                join(builtin.map(fn(k) { text(Some(k), "name") }), @sf.t("web-main.list.separator"))
+              },
+              @sf.t("web-main.memory.count", args=[("n", builtin.length().to_string())]),
+              open~,
+            ) {
+            builtin_open[address] = !open
+          }
+          if open {
+            for k in builtin {
+              skill_row(k)
+            }
+          }
+        }
+      })
+      |> ignore
+    })
+  }
+}
+
+///|
+/// A row that opens a page, or folds a group open (MemoryRow): its name and whose, a line under it (cut short), how
+/// much is in it, a chevron 14 in the subtle grey. True on the frame after a tap.
+fn mem_row(c : @ui.Ctx, key : String, title : String, sub : String, value : String, tag? : String = "", open? : Bool = false) -> Bool {
+  let t = @sf.theme()
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  c.box(style=desk_list_link, id~, fn() {
+    c.box(style=desk_list_text, fn() {
+      c.box(style=mem_title_line, fn() {
+        c.text(title, style=desk_list_title) |> ignore
+        if tag != "" {
+          c.text(tag, style=mem_tag) |> ignore
+        }
+      })
+      |> ignore
+      if sub != "" {
+        c.text(sub, style=mem_sub) |> ignore
+      }
+    })
+    |> ignore
+    if value != "" {
+      c.text(value, style=mem_tag_muted) |> ignore
+    }
+    @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=memory_chevron, color=t.p.subtle) |> ignore
+  })
+  |> ignore
+  hit(c, id)
+}
+
+///|
+/// (memoryStation + memoryStation: 36 between two stations)
+// kept across runs: a value (no field of it changes)
+let mem_station_first : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let mem_station : @ui.Style = @ui.css("w=Full pt=S9")
+
+///|
+/// (memoryStationName: the title's size, 600, 8 over what follows)
+// kept across runs: a value (no field of it changes)
+let mem_station_head : @ui.Style = @ui.css("w=Full pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let mem_station_name : @ui.TextStyle = @ui.text_style(size=Xl, leading=L7, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// (memoryRowTitle: its name and its tags in a line, 8 apart)
+// kept across runs: a value (no field of it changes)
+let mem_title_line : @ui.Style = @ui.css("row gap=S2 align=AEnd")
+
+///|
+/// (memoryTag: the meta's size, subtle)
+// kept across runs: a value (no field of it changes)
+let mem_tag : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+
+///|
+/// (memoryRowValue: the meta's size, muted)
+// kept across runs: a value (no field of it changes)
+let mem_tag_muted : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+
+///|
+/// (memoryRowSub: the meta's size, muted, on one line cut short)
+// kept across runs: a value (no field of it changes)
+let mem_sub : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Full)

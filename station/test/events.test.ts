@@ -22,6 +22,8 @@ function setup(clock?: Clock.Clock) {
     read: async (op: string, args: any) => {
       reads.push(op);
       if (op === "chats") return JSON.stringify(rows[args.viewer.email] ?? []);
+      // The items a change can touch (read/views.ts chatRows): here every one, each a session's.
+      if (op === "chatRows") return JSON.stringify({ rows: rows[args.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[args.viewer.email] ?? []).map((r) => r.id)] });
       if (op === "summary") return JSON.stringify({ key: args.key });
       if (op === "entries") return JSON.stringify({ entries: [{ n: 1, text: "hi" }] });
       if (op === "thread") return JSON.stringify({ id: args.id, last: 1, unread: 1, for: args.viewer.email });
@@ -398,4 +400,70 @@ test("what says a thing whole is kept as it was last told only", async () => {
   assert.deepEqual(back.got.find((e) => e.event === "overview")!.data, { running: 5 });
   await back.close();
   await other.close();
+});
+
+test("a stream that follows the sessions at work is told what each its viewer sees does, from where it stood, naming none", async () => {
+  const { events } = setup(testClock().clock);
+  const seen: Record<string, string> = { k: "a@x", other: "b@x" };
+  const named: string[] = [];
+  events.follow({
+    held: () => ["k", "other"],
+    heldNow: (key) => [{ type: "timeline", start: key === "k" ? 7 : 2, entries: [], usage: null }, { type: "steps", steps: [], phase: null }],
+    // A client that does not know yet names the sessions too: they are not followed by name then.
+    live: (key) => (named.push(key), () => {}),
+  });
+  // Only the viewer's sessions (docs/multi-workspace.md).
+  (events as any).deps.seen = (v: any, of: any) => !("session" in of) || seen[of.session] === v.email;
+  const answer = await events.open(viewer("a@x"), "zh", false, [["k", 0, 200]], [], null, true, [], true);
+  assert.equal(answer.headers?.["stillfail-follows"], "running");
+  const a = reader(answer.body as AsyncIterable<Buffer>);
+  const old = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  assert.deepEqual(named, [], "nothing followed by name");
+  const live = () => a.got.filter((e) => e.event === "live").map((e) => [e.data.key, e.data.type, e.data.start ?? null]);
+  // As it is now: where its transcript ends, nothing of it; its steps.
+  assert.deepEqual(live(), [["k", "timeline", 7], ["k", "steps", null]]);
+  // From now on, what it does as it does it; the other viewer's not at all; a stream from before not at all.
+  events.heldTold("k", { type: "timeline", start: 7, entries: [{ text: "new" }] });
+  events.heldTold("other", { type: "timeline", start: 2, entries: [{ text: "theirs" }] });
+  await settle();
+  assert.deepEqual(live().slice(2), [["k", "timeline", 7]]);
+  assert.equal(old.got.filter((e) => e.event === "live").length, 0);
+  await a.close();
+  await old.close();
+});
+
+test("a stream from before asked nothing new: the sessions it names, as before", async () => {
+  const { events } = setup(testClock().clock);
+  const named: [string, number][] = [];
+  events.follow({ held: () => ["k"], heldNow: () => [], live: (key, from) => (named.push([key, from]), () => {}) });
+  const answer = await events.open(viewer("a@x"), "zh", false, [["k", 3, 200]], []);
+  assert.equal(answer.headers?.["stillfail-follows"], undefined);
+  await settle();
+  assert.deepEqual(named, [["k", 3]]);
+  reader(answer.body as AsyncIterable<Buffer>).close();
+});
+
+test("a change of a session or a thread reads again only the sidebar items it can touch, an item gone told so", async () => {
+  const { events, rows, change, reads } = setup(testClock().clock);
+  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  reads.length = 0;
+  rows["a@x"] = [{ id: "1", title: "renamed" }];
+  change({ type: "session", key: "1" });
+  change({ type: "thread", id: 7, entries: [] });
+  await settle();
+  assert.deepEqual(reads.filter((r) => r === "chats" || r === "chatRows"), ["chatRows"], "no sidebar read whole");
+  assert.deepEqual(a.got.filter((e) => e.event === "chat").map((e) => e.data), [{ id: "1", title: "renamed" }]);
+  // Gone from the sidebar: told so, as one the change could touch.
+  rows["a@x"] = [];
+  change({ type: "session", key: "1" });
+  await settle();
+  assert.deepEqual(a.got.filter((e) => e.event === "chat-removed").map((e) => e.data), [{ id: "1" }]);
+  // What only a viewer's read position changes: only theirs.
+  reads.length = 0;
+  change({ type: "read", viewer: "b@x", thread: 3, n: 1 });
+  await settle();
+  assert.deepEqual(reads, [], "nobody of b@x follows");
+  await a.close();
 });

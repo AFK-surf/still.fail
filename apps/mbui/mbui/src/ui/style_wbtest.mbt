@@ -106,6 +106,13 @@ test "style: what the call says wins over the style's same property; coarser pad
 }
 
 ///|
+test "style: a margin below 0 as CSS's, an Exact one too (a list reaching past its column, a padding taken back)" {
+  let n = style_node(fn(c) { c.box(style=style(mx=Exact(-12.0), mt=Exact(-3.0), px=Exact(12.0)), fn() {  }) |> ignore })
+  assert_eq((n.mar_l, n.mar_r, n.mar_t, n.mar_b), (-12.0, -12.0, -3.0, 0.0))
+  assert_eq((n.pad_l, n.pad_r), (12.0, 12.0))
+}
+
+///|
 test "style: a box with no style is as before, every default" {
   let n = style_node(fn(c) { c.box(fn() {  }) |> ignore })
   assert_true(n.dir == Column && n.w == Auto && n.h == Auto)

@@ -101,12 +101,12 @@ let info_row_radius : Double = 14.0
 ///|
 /// An info card round its rows, INFO_PAD (6.dp) in: Android ChatInfo.kt InfoList, Smooth(concentricOut(INFO_ROW,
 /// INFO_PAD)).
-let info_list_radius : Double = @sf.concentric_out(info_row_radius, 6.0)
+let info_list_radius : Double = @sf.surface_corner(6.0, info_row_radius)
 
 ///|
 /// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows INFO_PAD (6) in, the ink at 5%.
 // kept across runs: a value (no field of it changes)
-let info_list_style : @ui.Style = @ui.style(w=Full, p=S1_5, bg=A(Fg, O5), clip=true)
+let info_list_style : @ui.Style = @ui.css("w=Full p=S1_5 bg=A(Fg,O5) clip")
 
 ///|
 fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
@@ -117,13 +117,13 @@ fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// A row of it (Android InfoRow): 44 high at least, its words INFO_TEXT (10) in from its sides and INFO_IN (4) from
 /// top and bottom, what it holds 12 apart.
 // kept across runs: a value (no field of it changes)
-let info_row_style : @ui.Style = @ui.style(row=true, w=Full, min_h=S11, px=S2_5, py=S1, gap=S3)
+let info_row_style : @ui.Style = @ui.css("row w=Full min_h=S11 px=S2_5 py=S1 gap=S3")
 
 ///|
 /// A row that leads with a tile (a model's mark, 36 and 11 round): INFO_IN (4) in all round, so the tile is
 /// concentric with the row and the card.
 // kept across runs: a value (no field of it changes)
-let info_row_tile : @ui.Style = @ui.style(px=S1)
+let info_row_tile : @ui.Style = @ui.css("px=S1")
 
 ///|
 /// Its ground rounded INFO_ROW, pressed a shade. True on the frame after it was tapped (never when `key` is "": a row
@@ -164,8 +164,8 @@ fn tone_color(tone : String) -> Int64 {
 
 ///|
 /// An allowance's windows, compact (Parts.kt QuotaChips): the settings' boxes (one FillChip, as Android's app has).
-fn quota_chips(c : @ui.Ctx, quota : Json?, small? : Bool = false) -> Unit {
-  @settings.quota_chips(c, quota, small~)
+fn quota_chips(c : @ui.Ctx, quota : Json?, small? : Bool = false, gap? : Double = 8.0, tip? : (Int, Json) -> Unit) -> Unit {
+  @settings.quota_chips(c, quota, small~, gap~, tip?)
 }
 
 ///|
@@ -233,17 +233,6 @@ fn seg(
 }
 
 ///|
-/// The agent of a chat by its session, as the chat's view has it.
-fn agent_json(chat : Json?, key : String) -> Json? {
-  for a in items(chat, "agents") {
-    if text(field(Some(a), "session"), "key") == key {
-      return Some(a)
-    }
-  }
-  None
-}
-
-///|
 /// For how long it has stood where it does (AgentSheet.kt agentSince): at work since its turn began, waiting as long
 /// as it has (of at most), else when it was last at it.
 fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
@@ -300,62 +289,6 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 }
 
 // ── the chat's own sheet (ChatInfo.kt) ──────────────────────────────────
-
-///|
-/// The cloud's address, for a chat's link (the app's MBUI_CLOUD, else still.fail's own).
-fn cloud_origin() -> String {
-  match @ui.env("MBUI_CLOUD") {
-    "" => "https://app.still.fail"
-    o => o
-  }
-}
-
-///|
-/// A chat's still.fail link (ChatLink.kt chatLink): <cloud>/o/<workspace>/<station>/<session>; "" for a station of no
-/// workspace or a chat with no session yet.
-fn chat_link(station : String, session : String) -> String {
-  match station.find("/") {
-    Some(at) if at > 0 && at < station.length() - 1 && session != "" => {
-      let cloud = cloud_origin()
-      let base = if cloud.has_suffix("/") {
-        cloud.view(end_offset=cloud.length() - 1).to_owned()
-      } else {
-        cloud
-      }
-      base +
-      "/o/" +
-      station.view(end_offset=at).to_owned() +
-      "/" +
-      station.view(start_offset=at + 1).to_owned() +
-      "/" +
-      @codec.encode_uri_component(session)
-    }
-    _ => ""
-  }
-}
-
-///|
-/// Copies a chat's link as a reference is sent (ChatLink.kt copyChatLink, chatLinkText): `[title](link)`.
-fn copy_chat_link(c : @ui.Ctx, title : String, link : String) -> Unit {
-  let shown = title.replace_all(old="[", new=" ").replace_all(old="]", new=" ").replace_all(old="\n", new=" ").trim(chars=" ").to_string()
-  let shown = if shown == "" { link } else { shown }
-  // (its first 120 characters, as Android's chatLinkText cuts it)
-  let cut = StringBuilder()
-  let mut n = 0
-  for ch in shown {
-    if n < chat_link_most {
-      cut.write_char(ch)
-    }
-    n += 1
-  }
-  let shown = cut.to_string()
-  c.copy_text("[" + shown + "](" + link + ")")
-  say(c, tr("web-main.chat.linkCopied"))
-}
-
-///|
-/// How much of a chat's title its copied link carries (ChatLink.kt chatLinkText: 120 characters).
-let chat_link_most : Int = 120
 
 ///|
 /// How tall the chat's sheet is over the navigation bar (ChatInfo.kt openChatInfo's fit, Android's reckoning of what it
@@ -1686,90 +1619,6 @@ fn open_outside(url : String) -> Unit {
 }
 
 ///|
-/// A terminal's 16 colours, light and dark (TermInk.kt, as the web's TermText.tsx), RRGGBBAA.
-// kept across runs: a table, never written
-let term_light : Array[Int64] = [
-  0x000000FFL, 0xCD3131FFL, 0x00BC00FFL, 0x949800FFL, 0x0451A5FFL, 0xBC05BCFFL, 0x0598BCFFL, 0x555555FFL, 0x666666FFL,
-  0xCD3131FFL, 0x14CE14FFL, 0xB5BA00FFL, 0x0451A5FFL, 0xBC05BCFFL, 0x0598BCFFL, 0xA5A5A5FFL,
-]
-
-///|
-// kept across runs: a table, never written
-let term_dark : Array[Int64] = [
-  0x6E6E6EFFL, 0xCD3131FFL, 0x0DBC79FFL, 0xE5E510FFL, 0x2472C8FFL, 0xBC3FBCFFL, 0x11A8CDFFL, 0xE5E5E5FFL, 0x8A8A8AFFL,
-  0xF14C4CFFL, 0x23D18BFFL, 0xF5F543FFL, 0x3B8EEAFFL, 0xD670D6FFL, 0x29B8DBFFL, 0xE5E5E5FFL,
-]
-
-///|
-/// A run's colour (TermInk.kt termColor): one of the palette's by number, or #rrggbb; 0 none.
-fn term_color(c : String, dark : Bool) -> Int64 {
-  if c.has_prefix("#") && c.length() == 7 {
-    let mut v = 0L
-    for ch in c.view(start_offset=1) {
-      let d = match ch {
-        '0'..='9' => ch.to_int() - '0'.to_int()
-        'a'..='f' => ch.to_int() - 'a'.to_int() + 10
-        'A'..='F' => ch.to_int() - 'A'.to_int() + 10
-        _ => return 0L
-      }
-      v = v * 16L + d.to_int64()
-    }
-    return (v << 8) | 0xFFL
-  }
-  let mut n = 0
-  if c == "" {
-    return 0L
-  }
-  for ch in c {
-    if ch < '0' || ch > '9' {
-      return 0L
-    }
-    n = n * 10 + (ch.to_int() - '0'.to_int())
-  }
-  if n > 15 {
-    0L
-  } else if dark {
-    term_dark[n]
-  } else {
-    term_light[n]
-  }
-}
-
-///|
-/// A job's output in its styles a line at a time (TermInk.kt termText): each run in its colours, bold, italic and
-/// underlined as said; a dim one its colour (or the words') faded.
-fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@ui.Run]] {
-  let out : Array[Array[@ui.Run]] = [[]]
-  for r in runs {
-    let rv = Some(r)
-    let fg = term_color(text(rv, "fg"), dark)
-    let color = if flag(rv, "dim") { @sf.alpha(if fg != 0L { fg } else { ink }, 0.6) } else { fg }
-    let bg = term_color(text(rv, "bg"), dark)
-    let pieces = text(rv, "text").split("\n").map(fn(p) { p.to_owned() }).to_array()
-    for k, piece in pieces {
-      if k > 0 {
-        out.push([])
-      }
-      if piece != "" {
-        out[out.length() - 1].push(
-          @ui.span(
-            piece,
-            mono=true,
-            color~,
-            bg~,
-            weight=if flag(rv, "bold") { 600 } else { 0 },
-            italic=flag(rv, "italic"),
-            underline=flag(rv, "underline"),
-          ),
-        )
-      }
-    }
-  }
-  // (an empty line still one: a run to stand in for its words)
-  out.map(fn(l) { if l.length() == 0 { [@ui.span(" ", mono=true)] } else { l } })
-}
-
-///|
 /// Opens the chat's letters' sheet at its list; its letters held (the core's `chatLetters`) until the chat is left.
 fn open_letters(c : @ui.Ctx, r : ChatRef, thread : Double) -> Unit {
   dui.letters_open = ""
@@ -1787,12 +1636,12 @@ fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
 /// A chat written with, its row in the letters' sheet (Letters.kt): 18 in, 10 over and under, its two lines 2 apart;
 /// pressed a shade.
 // kept across runs: a value (no field of it changes)
-let letters_row : @ui.Style = @ui.style(w=Full, px=S4_5, py=S2_5, gap=S0_5, pressed=@ui.patch(bg=A(Fg, O5)))
+let letters_row : @ui.Style = @ui.css("w=Full px=S4_5 py=S2_5 gap=S0_5 pressed{bg=A(Fg,O5)}")
 
 ///|
 /// Its first line: its title as wide as there is room, how many and when at its end, 8 apart.
 // kept across runs: a value (no field of it changes)
-let letters_row_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let letters_row_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 /// What fills a line's room (its title, beside what is at its end).
@@ -1811,7 +1660,7 @@ let letters_meta : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=fal
 ///|
 /// None: said 18 in, 12 over and under, 15 muted.
 // kept across runs: a value (no field of it changes)
-let letters_none_box : @ui.Style = @ui.style(px=S4_5, py=S3)
+let letters_none_box : @ui.Style = @ui.css("px=S4_5 py=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1820,33 +1669,26 @@ let letters_none : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted)
 ///|
 /// One opened, its head: back (a round 36, pressed a shade), then its title; 6 in at the start, 18 at the end.
 // kept across runs: a value (no field of it changes)
-let letters_head : @ui.Style = @ui.style(row=true, w=Full, pl=S1_5, pr=S4_5, pb=S1_5, gap=S1, align=ACenter)
+let letters_head : @ui.Style = @ui.css("row w=Full pl=S1_5 pr=S4_5 pb=S1_5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_back : @ui.Style = @ui.style(
-  w=S9,
-  h=S9,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
-)
+let letters_back : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter pressed{bg=A(Fg,O5)}")
 
 ///|
 /// A letter, as the chat draws a message: 14 in, 20 under the one before.
 // kept across runs: a value (no field of it changes)
-let letters_said : @ui.Style = @ui.style(w=Full, px=S3_5, pt=S1, pb=S4)
+let letters_said : @ui.Style = @ui.css("w=Full px=S3_5 pt=S1 pb=S4")
 
 ///|
 /// Older ones on their way: a spinner, 8 under the last.
 // kept across runs: a value (no field of it changes)
-let letters_more : @ui.Style = @ui.style(w=Full, pt=S2, align=ACenter)
+let letters_more : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
 
 ///|
 /// Room under the last row, over the sheet's foot (Letters.kt bottom = 30).
 // kept across runs: a value (no field of it changes)
-let letters_foot : @ui.Style = @ui.style(h=S8)
+let letters_foot : @ui.Style = @ui.css("h=S8")
 
 ///|
 /// What the chat's agents and other chats' wrote each other, not said in it (Letters.kt openLetters): the chats it

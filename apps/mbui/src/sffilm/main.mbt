@@ -6,17 +6,25 @@
 
 ///|
 fn main {
+  // no core here: the real core's answers to its pure calls, kept (src/sfkept), as sffix's
+  @sf.kept_call.val = Some(@sfkept.answer)
   let mode = @film.arg("MBUI_FIXTURE")
   let dark = @film.arg("MBUI_DARK") == "1"
   let late = whole_ms(@film.arg("MBUI_CORE_MS"))
   // (the app made as sffix makes it, at the Tester's first frame: the code face it carries given then, to the
   // Tester's text, which is this Mac's)
   let src : Ref[@sfapp.Source?] = Ref::new(None)
+  // no core here: the real core's answers kept (src/sfkept), as sffix has them
+  @sf.kept_call.val = Some(@sfkept.answer)
   @film.run(fn(c) {
     let s = match src.val {
       Some(s) => s
       None => {
         let s = @sfapp.fixture_app(mode)
+        // MBUI_UPDATE=<version>: a newer build offered
+        if @film.arg("MBUI_UPDATE") != "" {
+          @sfapp.fixture_update(@film.arg("MBUI_UPDATE"))
+        }
         let s = if late > 0.0 { @sfapp.round_trip(s, late) } else { s }
         if dark {
           @sf.set_dark(Some(true))

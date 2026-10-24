@@ -82,11 +82,11 @@ fn files_card() -> @ui.Style {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_card_inner : @ui.Style = @ui.style(radius=Inner)
+let files_card_inner : @ui.Style = @ui.css("radius=Inner")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_card_set : @ui.Style = @ui.style(radius=Xl2)
+let files_card_set : @ui.Style = @ui.css("radius=Xl2")
 
 ///|
 /// Whether the files' row (or the station files') is in the capsule's top left corner this frame (capsule_top).
@@ -115,10 +115,11 @@ fn files_in_corner(v : ChatView?, d : Draft) -> Bool {
 ///|
 /// The capsule's top inset (capsule_top), nothing kept.
 fn capsule_top_of(v : ChatView?, d : Draft) -> Double {
+  let inset = ct().inset
   if files_in_corner(v, d) {
-    composer_inset - picture_remove_out
+    dmax(0.0, inset - picture_remove_out)
   } else {
-    composer_inset
+    inset
   }
 }
 
@@ -128,12 +129,87 @@ fn capsule_top_of(v : ChatView?, d : Draft) -> Double {
 let plus_ink : Double = 9.0 + 18.0 * ((4.5 - 1.75 / 2.0) / 24.0)
 
 ///|
-/// Pasted at once, this many characters or more go as a file; a file of pasted words this long at most can be put
-/// back (PastedText.kt).
-let paste_threshold : Int = 5000
+/// The composer's measures: the phone's (Composer.kt, Glass.kt), or in the wide frame the web's (composer.css.ts,
+/// Chat.css.ts composerText, dock.css.ts): its capsule's inset and, opened, its content's own padding more (the web's 6
+/// as a capsule, 12 as a box); ＋ and send across and their icons; the words' size and line, the field's padding shut
+/// and opened; the gap between the field and the buttons under it, and between what waits over it; the opened box's
+/// corner (shut, a pill); the field's most lines; the room over and under it on the page, and the least room the list
+/// keeps for it (the web's one opened line: 14 × 1.5 + 102).
+priv struct ComposerType {
+  inset : Double
+  open_pad : Double
+  button : Double
+  plus_icon : Double
+  send_icon : Double
+  font : Double
+  line : Double
+  shut : (Double, Double, Double, Double)
+  opened : (Double, Double, Double, Double)
+  open_gap : Double
+  gap : Double
+  corner : Double
+  over : Double
+  under : Double
+  least : Double
+}
 
 ///|
-let paste_restore_limit : Int = 25000
+fn ct() -> ComposerType {
+  if wide_on.val {
+    {
+      inset: 6.0,
+      open_pad: 6.0,
+      button: 32.0,
+      plus_icon: 18.0,
+      send_icon: 16.0,
+      font: 14.0,
+      line: 21.0,
+      // (left, right, top, bottom)
+      shut: (0.0, 8.0, 5.0, 5.0),
+      opened: (8.0, 8.0, 8.0, 0.0),
+      open_gap: 10.0,
+      gap: 10.0,
+      corner: 28.0,
+      over: 12.0,
+      under: 16.0,
+      least: 14.0 * 1.5 + 102.0,
+    }
+  } else {
+    {
+      inset: composer_inset,
+      open_pad: 0.0,
+      button: 36.0,
+      plus_icon: 18.0,
+      send_icon: 18.0,
+      font: send_size,
+      line: send_line,
+      shut: (0.0, 14.0, 7.0, 7.0),
+      opened: (plus_ink, 14.0, 7.0, 7.0),
+      open_gap: 4.0,
+      gap: 8.0,
+      corner: composer_corner,
+      over: 8.0,
+      under: 10.0,
+      least: composer_room,
+    }
+  }
+}
+
+///|
+/// How many lines the field grows to before it scrolls: six (Composer.kt); in the wide frame up to 480 high or 40% of
+/// the window (Chat.tsx useComposerText).
+fn field_lines(c : @ui.Ctx) -> Int {
+  if wide_on.val {
+    let n = (dmin(480.0, c.height * 0.4) / ct().line).to_int()
+    if n < 1 {
+      1
+    } else {
+      n
+    }
+  } else {
+    6
+  }
+}
 
 ///|
 /// A file's part going up (web/src/api.ts UPLOAD_PART), the biggest file taken (1 GB).
@@ -144,7 +220,8 @@ let max_file : Int = 1024 * 1024 * 1024
 
 ///|
 /// A file on its way to the station: going up, up (`done`, the station's Attachment), or failed. `image`: the picture
-/// picked, shown from its bytes (an image's key, "" for any other file); `pasted`: the words it was made of.
+/// picked, shown from its bytes (an image's key, "" for any other file); `pasted`: the words it was made of and what
+/// the core says of them (`paste.info`: their first line, how many characters, the words while they can be put back).
 priv struct Pending {
   id : Int
   name : String
@@ -152,7 +229,7 @@ priv struct Pending {
   image : String
   width : Int
   height : Int
-  pasted : String?
+  pasted : (String, Json)?
   /// a picture's bytes as picked (Composer.kt Pending.local): what the viewer shows it from before it is sent; None
   /// for any other file, and for one of a kept draft (only the file it went up as is kept)
   local : Bytes?
@@ -257,6 +334,9 @@ priv struct Fresh {
   /// the wide frame's new chat (the web's roomy composer): its choices in the row under the words, beside ＋, the
   /// words always over them; None: the capsule as it is
   tools : (() -> Unit)?
+  /// a new chat's while its stations are read: it takes words, but nothing goes and no file is taken in (NewChat.tsx:
+  /// locked until there is a station to write to)
+  held : Bool
 }
 
 ///|
@@ -459,6 +539,100 @@ fn draft_named(d : Draft, v : Json) -> Unit {
 let composer_morph_ms : Double = 260.0
 
 ///|
+/// Laid out for another page (a new chat become its chat, in the wide frame: dock.tsx), the composer goes from where
+/// and how big it was to where and how big it is now, over this long (Ease.Out): one composer changing, its ground
+/// from the shape it had to this one and what it holds from where it showed to its places (morph.ts morph).
+let composer_page_ms : Double = 340.0
+
+///|
+/// The composer's move to another page: the draft whose composer goes (the chat's), from where (x, y, w, h).
+let composer_page_from : Ref[(String, (Double, Double, Double, Double))?] = { val: None }
+
+///|
+/// The page under the composer changes from now (a new chat become chat `chat`'s, in the wide frame; "*": another
+/// page, whose composer is the next drawn): from where its ground was as the frame before laid it out.
+fn composer_page_starts(c : @ui.Ctx, chat : String) -> Unit {
+  composer_page_from.val = None
+  if @ui.reduced_motion() {
+    return
+  }
+  match @motion.measured_rect(c, "composer/ground") {
+    Some(rect) => {
+      composer_page_from.val = Some((chat, rect))
+      let a = @motion.anim(c, "composer/page", 1.0, global=true)
+      a.snap(0.0)
+      a.animate(1.0, @motion.tween(composer_page_ms, ease=Linear))
+    }
+    None => ()
+  }
+}
+
+///|
+/// The composer of chat `chat` on its way from another page's place: where it was, and how far it has come (0 … 1,
+/// Ease.Out); None once there.
+fn composer_page(c : @ui.Ctx, chat : String) -> ((Double, Double, Double, Double), Double)? {
+  match composer_page_from.val {
+    // (another page's, said before it was known whose: the first drawn there takes it)
+    Some(("*", from)) => {
+      composer_page_from.val = Some((chat, from))
+      composer_page(c, chat)
+    }
+    Some((key, from)) if key == chat => {
+      let a = @motion.anim(c, "composer/page", 1.0, global=true)
+      if a.moving() {
+        Some((from, @motion.Out.at(a.get())))
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// The capsule (node `i`, box `cap`) on its way from another page's place (`from`: its ground there) to its own, `p` of
+/// the way: drawn with its bottom left edge from where the other's ground's was to where it is laid out (what it holds stands on that edge,
+/// each part going on from where it showed: their layout motion), its ground from that shape to its own (page_ground).
+fn page_carry(c : @ui.Ctx, i : Int, cap : Int, from : (Double, Double, Double, Double), p : Double) -> Unit {
+  let (fx, fy, _, fh) = from
+  match c.laid_rect(cap) {
+    Some((x, y, _, h)) => c.look(i, @ui.look(dx=(fx - x) * (1.0 - p), dy=(fy + fh - y - h) * (1.0 - p)))
+    // (not laid out yet: built again once it is)
+    None => ()
+  }
+}
+
+///|
+/// The capsule's ground on its way from another page's place (`from`) to its own (box `cap` as this frame lays it out,
+/// `to_h` high when it is not all of it), `p` of the way, on the capsule's bottom left edge (page_carry): its size, and
+/// its corner (a pill's while it is one line high, the box's past that, as in the wide frame).
+fn page_ground(c : @ui.Ctx, cap : Int, from : (Double, Double, Double, Double), p : Double, to_h : Double?) -> Unit {
+  let (_, _, fw, fh) = from
+  match c.laid_rect(cap) {
+    Some((_, _, w, laid_h)) => {
+      let h = to_h.unwrap_or(laid_h)
+      let corner = ct().corner
+      let r0 = dmin(corner, fh / 2.0)
+      let r1 = dmin(corner, h / 2.0)
+      c.box(style=page_ground_room, fn() {
+        c.box(style=@ui.style(w=Fixed(fw + (w - fw) * p), h=Fixed(fh + (h - fh) * p)), fn() {
+          floating_ground(c, Fill(1.0), corner=r0 + (r1 - r0) * p) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+    // (not laid out yet: built again once it is)
+    None => ()
+  }
+}
+
+///|
+/// What the ground stands in on its way: all of the capsule, from its bottom edge.
+// kept across runs: a value (no field of it changes)
+let page_ground_room : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
+
+///|
 /// Words sent from chat `chat`'s composer hold its room as tall as when they went (`room`) for `ms` from the next frame,
 /// then let it go to its own height over the morph's time: all of it said now, as they set off (flight_start), and
 /// anew when they know their way (flight_placed).
@@ -574,7 +748,7 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
 ///|
 /// A quote's own picture in the composer's quote card: 16 in, 6 under its words (Composer.kt DraftExtras).
 // kept across runs: a value (no field of it changes)
-let quote_picture_in : @ui.Style = @ui.style(pl=S4, pt=S1_5)
+let quote_picture_in : @ui.Style = @ui.css("pl=S4 pt=S1_5")
 
 ///|
 /// The file going with a quote (a mark's screenshot, an image of a message quoted), shown in its card rather than
@@ -605,27 +779,6 @@ fn draft_unquote(src : Source, d : Draft, q : DraftQuote) -> Unit {
 }
 
 // ── files ──────────────────────────────────────────────────────────────
-
-///|
-/// An upload's id: 32 hex digits (the Android app's UUID without its dashes), from what goes up and where, never
-/// from a clock: `what` (where it goes, its name, its bytes' hash) and `n` (its place among what goes up there: a
-/// draft's files, a folder's uploads). The same upload made over any run, recorded or replayed, has the same id.
-fn upload_id(what : String, n : Int) -> String {
-  let seed = "\{what}/\{n}"
-  let hex = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-  ]
-  let out = StringBuilder::new()
-  // two FNV-1a (@ui.stable_hash: the same in every run and on js and native), 16 digits each
-  for half in [@ui.stable_hash(seed), @ui.stable_hash(seed + "\u{1}")] {
-    let mut h = half
-    for _ in 0..<16 {
-      out.write_char(hex[(h & 15L).to_int()])
-      h = h >> 4
-    }
-  }
-  out.to_string()
-}
 
 ///|
 /// The pictures of images sent from here, as they were picked (ChatFiles.kt FileData.sentOf): by station and the name
@@ -719,7 +872,14 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
 ///|
 /// A file picked or pasted, into the draft and up to the station at once (Composer.kt upload): over 1 GB it is
 /// refused where it shows; on a read-only run it goes nowhere.
-fn add_file(src : Source, d : Draft, station : String, name : String, bytes : Bytes, pasted : String?) -> Unit {
+fn add_file(
+  src : Source,
+  d : Draft,
+  station : String,
+  name : String,
+  bytes : Bytes,
+  pasted : (String, Json)?,
+) -> Unit {
   let id = next_pending.val
   next_pending.val += 1
   let (w, h) = match @pixels.image_size(bytes) {
@@ -811,39 +971,6 @@ let hashed_max : Int = 32 * 1024 * 1024
 /// nothing of it is kept there; the draft keeps what is written (Composer.kt uploadKey).
 fn upload_key(d : Draft) -> String {
   "mbui:" + d.key
-}
-
-///|
-/// What a file is by its name's ending, for the core (URLConnection.guessContentTypeFromName: a picture's size is read
-/// from its head as it goes up): "" when not known.
-fn file_type(name : String) -> String {
-  let lower = name.to_lower()
-  let ends = fn(e : String) { lower.has_suffix(e) }
-  if ends(".png") {
-    "image/png"
-  } else if ends(".jpg") || ends(".jpeg") {
-    "image/jpeg"
-  } else if ends(".gif") {
-    "image/gif"
-  } else if ends(".webp") {
-    "image/webp"
-  } else if ends(".heic") {
-    "image/heic"
-  } else if ends(".mp4") || ends(".m4v") {
-    "video/mp4"
-  } else if ends(".mov") {
-    "video/quicktime"
-  } else if ends(".webm") {
-    "video/webm"
-  } else if ends(".3gp") {
-    "video/3gpp"
-  } else if ends(".pdf") {
-    "application/pdf"
-  } else if ends(".txt") {
-    "text/plain"
-  } else {
-    ""
-  }
 }
 
 ///|
@@ -943,17 +1070,6 @@ fn up_uploads(d : Draft) -> Array[Json] {
 }
 
 ///|
-/// What a file going up is known by for its id (upload_id): the station, its name, its size and its bytes' hash.
-fn file_seed(station : String, name : String, bytes : Bytes) -> String {
-  "\{station}\u{1}\{name}\u{1}\{bytes.length()}\u{1}\{@ui.stable_hash_bytes(bytes)}"
-}
-
-
-///|
-/// What a read-only run says it does not do.
-let read_only_words : String = "只读运行：不发送，不上传，不保存草稿"
-
-///|
 /// One part of a file up from `have` (Calls.kt upload): said as it goes (`progress`: how much of the part has gone,
 /// heard while it goes), the station answers with what it has so far, or, the last part in, the file as it keeps it
 /// (an image's size put with it).
@@ -1034,16 +1150,26 @@ fn uploading_text(f : Pending) -> String {
   } else {
     fill("android-chat.file.uploading.part", [
       ("percent", "\{(f.sent.to_double() * 100.0 / f.size.to_double()).to_int()}"),
-      ("size", file_size(f.size.to_double())),
+      ("size", @sf.file_size(f.size.to_double())),
     ])
   }
 }
 
 ///|
-/// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name).
+/// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name), with what
+/// the core says of the words (`paste.info`).
 fn paste_as_file(src : Source, d : Draft, station : String, words : String) -> Unit {
   let name = paste_name(d.key + "\u{1}" + d.id, words, d.files.length())
-  add_file(src, d, station, name, @utf8.encode(words), Some(words))
+  (src.call)("paste.info", { "text": Json::string(words) }, fn(r) {
+    match r {
+      Ok(v) =>
+        match field(Some(v), "info") {
+          Some(Object(_) as info) => add_file(src, d, station, name, @utf8.encode(words), Some((words, info)))
+          _ => ()
+        }
+      Err(_) => ()
+    }
+  })
 }
 
 ///|
@@ -1066,23 +1192,6 @@ fn uuid(h : String) -> String {
   "-" +
   h.view(start_offset=20).to_string()
 }
-
-///|
-/// A pasted file's first line (of its first 200 characters).
-fn paste_preview(words : String) -> String {
-  let head = if words.length() > 200 {
-    words.view(end_offset=200).to_string()
-  } else {
-    words
-  }
-  let t = head.trim(chars=" \n\r\t").to_string()
-  match t.find("\n") {
-    Some(i) => t.view(end_offset=i).to_string().trim_end(chars="\r").to_string()
-    None => t
-  }
-}
-
-// ── the composer's state on the page ──────────────────────────────────────
 
 ///|
 /// What the page keeps of its composer: ＋'s sheet (open), the system's picker under way, a finger down
@@ -1153,6 +1262,10 @@ fn composer_morph(c : @ui.Ctx, chat : String, natural : Double?) -> Double? {
     Some(h) => {
       // (one motion wherever it is asked from: the list's rows ask in scopes of their own)
       let a = @motion.anim(c, "composer/morph", h, global=true)
+      // (laid out for another page, it goes there on the page's move, not this: composer_page)
+      if composer_page(c, chat) is Some(_) {
+        a.snap(h)
+      }
       a.follow(h, @motion.tween(composer_morph_ms, ease=Out))
       let m = a.get()
       let (room, share) = composer_held(c, chat)
@@ -1173,7 +1286,7 @@ fn composer_room_for(c : @ui.Ctx, key : String, v : ChatView?) -> Double {
     // (no draft yet: the composer not built; the room it leaves at least)
     None => 0.0
   }
-  dmax(composer_room, room)
+  dmax(ct().least, room)
 }
 
 ///|
@@ -1183,19 +1296,36 @@ fn composer_room_of(c : @ui.Ctx) -> Double {
 }
 
 ///|
+/// The room the composer of chat `key` takes as it is drawn (composer_room_with), not the least a list keeps for it
+/// (composer_room): how far it stays over the keyboard on a device half open (tabletop.mbt). The least until it is
+/// laid out.
+fn composer_own_room(c : @ui.Ctx, key : String, v : ChatView?) -> Double {
+  let room = match drafts.get(key) {
+    Some(d) => composer_room_with(c, d, v)
+    None => 0.0
+  }
+  if room > 0.0 {
+    room
+  } else {
+    composer_room
+  }
+}
+
+///|
 /// The composer's room for draft `d` (composer_room_for).
 fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
   let natural = composer_natural(c)
   let top = capsule_top_of(v, d)
+  let k = ct()
   match (flight_of(d.key), natural, composer_morph(c, d.key, natural)) {
     // while words fly to their row, the list keeps the room the composer will have, so their place is where they
     // land (ChatHost.kt roomForList)
-    (Some(_), Some(h), _) => h + top + composer_inset + 8.0 + 10.0
+    (Some(_), Some(h), _) => h + top + k.inset + k.over + k.under
     // otherwise the room the capsule is drawn with (the list's rows going with it)
-    (None, _, Some(h)) => h + top + composer_inset + 8.0 + 10.0
+    (None, _, Some(h)) => h + top + k.inset + k.over + k.under
     _ =>
       match c.laid_size(cui.cap_id) {
-        Some((_, h)) => h + 8.0 + 10.0
+        Some((_, h)) => h + k.over + k.under
         None => 0.0
       }
   }
@@ -1260,7 +1390,22 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
   let rk = r.station + "\u{1}" + r.session
   let row = sent_local(rk, Some(v), words, files)
-  flight_start(c, d.key, rk, row, words, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
+  let room = @motion.measured(c, "composer/content").unwrap_or(0.0)
+  let chat = d.key
+  flight_start(
+    c,
+    chat,
+    rk,
+    row,
+    words,
+    room,
+    flying,
+    field=field_key,
+    hold=fn(ms) { composer_hold(chat, room, ms) },
+    font=ct().font,
+    line=ct().line,
+    desk=wide_on.val,
+  )
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
@@ -1391,19 +1536,30 @@ fn composer(
         Some(files) => {
           cui.picking = None
           if cui.picking_for == d.key {
-            for f in files {
-              if f.held != 0 {
-                add_held_file(src, d, r.station, f)
-              } else {
-                add_file(src, d, r.station, f.name, f.bytes, None)
+            // (told once the frame's builds are over, as the host's answer is the build's that took it)
+            let station = r.station
+            c.tell("composer/picked", fn() {
+              for f in files {
+                if f.held != 0 {
+                  add_held_file(src, d, station, f)
+                } else {
+                  add_file(src, d, station, f.name, f.bytes, None)
+                }
               }
-            }
+            })
           }
         }
         None => ()
       }
     None => ()
   }
+  // a picture pasted into the field (⌘V with one on the clipboard), as a file, as the web's paste takes one
+  match c.field_picture(field_key) {
+    Some(png) => add_file(src, d, r.station, pasted_picture_name, png, None)
+    None => ()
+  }
+  // what the 文件 tab's 添加到消息 put in for this chat (src/sfdesk/drive_tab.mbt), named by their paths or as files
+  refs_put(src, d.key, @sfdesk.tab_take_sent(d.key))
   // files another app shared into this chat (share.mbt), up as ＋'s are
   // (taken once from where they wait: the files as they were shared, whichever build takes them)
   match shared_into.get(d.key) {
@@ -1437,29 +1593,53 @@ fn composer(
   let top = capsule_top(v, d)
   // `@` and a few letters: the chats they find, over the capsule (chat_refs.mbt)
   chat_ref_menu(c, src, d, r.station, if fresh is Some(_) { "" } else { r.session }, field_key, locked)
-  c.box(w=Fill(1.0), pl=if beside { beside_recent } else { 10.0 }, pr=10.0, pt=8.0, pb=10.0, fn() {
-    c.box(w=Fill(1.0), pad=composer_inset, pt=top, id=cap, fn() {
-      // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller)
+  let k = ct()
+  // (its sides in the wide frame the composer's column's: wide_center)
+  let side = if wide_on.val { 0.0 } else { 10.0 }
+  // laid out for another page (a new chat become its chat, in the wide frame), from where it was (composer_page)
+  let page = composer_page(c, d.key)
+  c.box(w=Fill(1.0), pl=if beside { beside_recent } else { side }, pr=side, pt=k.over, pb=k.under, fn() {
+    let capsule = c.box(w=Fill(1.0), pad=k.inset, pt=top, id=cap, fn() {
+      // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller); in the wide
+      // frame its corner a pill's while it is one line high, the opened box's past that (the web's: its corners go from
+      // capsule to box with its height)
+      let ground_h = match morph {
+        Some(h) => Some(h + top + k.inset)
+        None => composer_natural(c).map(fn(h) { h + top + k.inset })
+      }
+      let corner = match ground_h {
+        Some(h) if wide_on.val => dmin(k.corner, h / 2.0)
+        _ => k.corner
+      }
       let ground = c.layer(fn() {
-        c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
-          floating_ground(c, match morph {
-            Some(h) => Px(h + top + composer_inset)
-            None => Fill(1.0)
-          })
-          |> ignore
-        })
-        |> ignore
+        match page {
+          Some((from, p)) => page_ground(c, cap, from, p, ground_h)
+          None =>
+            c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
+              let g = floating_ground(c, match morph {
+                Some(h) => Px(h + top + k.inset)
+                None => Fill(1.0)
+              }, corner~)
+              // (where it was as its page changes: composer_page_starts)
+              @motion.measure(c, g, "composer/ground")
+            })
+            |> ignore
+        }
       })
       c.draw_only(ground)
       // (named to be measured, not to be pressed: a tap anywhere in the capsule that nothing in it takes is the capsule's,
       // which puts the caret in the field, ChatHost.kt's clickable { draft.focus++ })
-      content = c.box(w=Fill(1.0), gap=8.0, id=composer_content_id(c), taps=false, fn() {
+      content = c.box(w=Fill(1.0), gap=k.gap, pad=if expanded { k.open_pad } else { 0.0 }, id=composer_content_id(c), taps=false, fn() {
         match v {
           Some(v) => composer_notices(c, src, r, v, d.key)
           None => ()
         }
         draft_extras(c, src, r, d, locked)
-        composer_bar(c, src, r, v, d, expanded, locked, locked || offline, fresh)
+        let held = match fresh {
+          Some(f) => f.held
+          None => false
+        }
+        composer_bar(c, src, r, v, d, expanded, locked || held, locked || offline || held, fresh)
         match d.error {
           Some(e) =>
             c.box(padx=6.0, fn() { c.text(e, size=12.0, color=t.p.red, line=16.0) |> ignore })
@@ -1470,22 +1650,30 @@ fn composer(
       @motion.measure(c, content, "composer/content")
       @motion.scope(c, content, bottom=true)
     })
-    |> ignore
+    // on its way from another page's place, carried with what it holds
+    match page {
+      Some((from, p)) => page_carry(c, capsule, cap, from, p)
+      None => ()
+    }
   })
   |> ignore
   match morph {
     // growing: what is above the ground is not drawn yet
-    Some(h) => c.cut_to_bottom(content, h + composer_inset)
+    Some(h) => c.cut_to_bottom(content, h + k.inset)
     None => ()
   }
   keep_draft_soon(c, src, d)
-  // a finger down outside the composer lets go of the keyboard once lifted or moved on (reading on)
+  // a finger down outside the composer (its capsule, the `@` menu over it) lets go of the keyboard once lifted or moved
+  // on (reading on)
   let press = c.press()
   if press.fresh {
-    let off_capsule = match c.rect_of(cap) {
-      Some((x, y, w, h)) => !(press.x >= x && press.x < x + w && press.y >= y && press.y < y + h)
-      None => true
+    let within = fn(id : Int) {
+      match c.rect_of(id) {
+        Some((x, y, w, h)) => press.x >= x && press.x < x + w && press.y >= y && press.y < y + h
+        None => false
+      }
     }
+    let off_capsule = !within(cap) && !within(ref_menu_id(c, d.key))
     cui.outside = off_capsule && !cui.attach
   }
   // (lifted after a long press: not a tap, the keyboard stays: Keyboard.kt letsGoOfKeyboard)
@@ -1513,18 +1701,35 @@ fn composer(
 }
 
 ///|
+/// What a picture pasted is called (a browser's paste names one so).
+let pasted_picture_name : String = "image.png"
+
+///|
+/// The system's file picker for draft `d` (the wide frame's ＋): what is picked comes in as the sheet's files do
+/// (cui.picking, taken in as the capsule is laid out).
+fn pick_files_now(c : @ui.Ctx, d : Draft) -> Unit {
+  match @ui.pick(Files, hold=true) {
+    Some(p) => {
+      cui.picking = Some(p)
+      cui.picking_for = d.key
+    }
+    None => say(c, tr("android-chat.composer.noFiles"))
+  }
+}
+
+///|
 /// The roomy composer's choices beside ＋ (the web's composer toolbar): 4 apart, on ＋'s line.
 // kept across runs: a value (no field of it changes)
-let composer_tools : @ui.Style = @ui.style(row=true, h=S9, gap=S1, align=ACenter)
+let composer_tools : @ui.Style = @ui.css("row h=S9 gap=S1 align=ACenter")
 
 ///|
 /// What floats over the page in the composer's glass (Glass.kt floating, ComposerCorner): the capsule's ground, the
 /// `@` menu's (chat_refs.mbt). `h` tall.
-fn floating_ground(c : @ui.Ctx, h : @ui.Size) -> Int {
+fn floating_ground(c : @ui.Ctx, h : @ui.Size, corner? : Double = composer_corner) -> Int {
   c.box(
     w=Fill(1.0),
     h~,
-    radius=composer_corner,
+    radius=corner,
     glass=@sf.glass_floating(),
     shadow=@sf.floating.sigma,
     shadow_color=@sf.floating.color,
@@ -1546,11 +1751,11 @@ fn workspace_of(station : String) -> String {
 /// A notice over the bar (Composer.kt: 8 in from the capsule's room at its sides, 2 above and under), its words in a
 /// line (13, muted; the restore's in the ink, underlined, as a link), why the restore failed in red under them.
 // kept across runs: a value (no field of it changes)
-let notice_box : @ui.Style = @ui.style(px=S2, py=S0_5)
+let notice_box : @ui.Style = @ui.css("px=S2 py=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_line : @ui.Style = @ui.style(row=true, align=ACenter)
+let notice_line : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1657,9 +1862,20 @@ fn composer_bar(
   let ready = draft_ready(d, locked)
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
-  if c.clicked(plus) && !no_files && (v is Some(_) || fresh is Some(_)) {
-    cui.attach = true
-    c.blur()
+  // ＋ (or its keys, ⌘U): on a phone its sheet (the camera, the photos, the files); in the wide frame the system's file
+  // picker at once, as the web's file field (Chat.tsx ComposerTools)
+  let file_keys = wide_on.val &&
+    (match link_src.val {
+      Some(s) => @settings.action_pressed(c, (s.topic)("prefs", {}).value, "composer.file", in_field=true)
+      None => false
+    })
+  if (c.clicked(plus) || file_keys) && !no_files && (v is Some(_) || fresh is Some(_)) {
+    if wide_on.val {
+      pick_files_now(c, d)
+    } else {
+      cui.attach = true
+      c.blur()
+    }
   }
   // sent once what it refers to can be read in this workspace (outside.mbt send_sharing): at once when it refers to
   // nothing outside, else after the core is asked (and the sheet answered)
@@ -1681,19 +1897,38 @@ fn composer_bar(
   if c.clicked(send) {
     do_send()
   }
+  // (laid out for another page, on its move: composer_page)
+  let part_ms = if composer_page(c, d.key) is Some(_) { composer_page_ms } else { 260.0 }
   let part = fn(i : Int, name : String) {
-    @motion.layout(c, i, "composer/part/" + name, spec=@motion.tween(260.0, ease=Out), listed=false)
+    @motion.layout(c, i, "composer/part/" + name, spec=@motion.tween(part_ms, ease=Out), listed=false)
   }
+  let k = ct()
+  let wide = wide_on.val
+  // in the wide frame grey, its ground and the text's ink under the pointer, its tip with its keys (Chat.tsx
+  // ComposerTools, Chat.css.ts attachBtn)
+  if wide && !no_files {
+    c.cursor(plus, Hand)
+    @sf.tip(c, "composer/plus", plus, tr("web-main.composer.attach"), shortcut="composer.file")
+  }
+  let plus_hot = wide && !no_files && c.lit(plus)
   let plus_button = fn() {
     let b = c.box(
-      w=Px(36.0),
-      h=Px(36.0),
-      radius=18.0,
+      w=Px(k.button),
+      h=Px(k.button),
+      radius=k.button / 2.0,
       align=ACenter,
       justify=JCenter,
+      bg=if plus_hot { t.p.hover } else { 0L },
       id=plus,
       fn() {
-        @sf.icon(c, "plus", size=18.0, color=if no_files { @sf.alpha(t.p.text, 0.35) } else { t.p.text })
+        let ink = if no_files {
+          @sf.alpha(t.p.text, 0.35)
+        } else if wide && !plus_hot {
+          t.p.muted
+        } else {
+          t.p.text
+        }
+        @sf.icon(c, "plus", size=k.plus_icon, color=ink)
         |> ignore
         // Composer.kt: clip(CircleShape).clickable (not when locked)
         if !no_files {
@@ -1708,16 +1943,27 @@ fn composer_bar(
     // not ready: the ink faint over the capsule's own ground, its arrow that ground (Composer.kt: 18% ink over
     // C.surface, the phone's canvas; the web's over --raised on a desktop's width)
     let ground = if t.narrow { t.p.canvas } else { t.p.raised }
+    // (in the wide frame its ink a step lighter under the pointer: Chat.css.ts sendBtn, the text at 82%)
+    let hot = wide && ready && c.lit(send)
+    if wide && ready {
+      c.cursor(send, Hand)
+    }
     let b = c.box(
-      w=Px(36.0),
-      h=Px(36.0),
-      radius=18.0,
+      w=Px(k.button),
+      h=Px(k.button),
+      radius=k.button / 2.0,
       align=ACenter,
       justify=JCenter,
-      bg=if ready { t.p.text } else { @sf.over(ground, @sf.alpha(t.p.text, 0.18)) },
+      bg=if hot {
+        @sf.mix(t.p.text, 0.82, t.p.canvas)
+      } else if ready {
+        t.p.text
+      } else {
+        @sf.over(ground, @sf.alpha(t.p.text, 0.18))
+      },
       id=send,
       fn() {
-        @sf.icon(c, "arrow-up", size=18.0, color=if ready { t.p.bg } else { ground }) |> ignore
+        @sf.icon(c, "arrow-up", size=k.send_icon, color=if ready { t.p.bg } else { ground }) |> ignore
         // Composer.kt: clip(CircleShape).clickable(enabled = ready)
         if ready {
           @motion.ripple(c, send, 18.0)
@@ -1730,19 +1976,21 @@ fn composer_bar(
   let placeholder = match (fresh, v) {
     (Some(f), _) => f.placeholder
     (_, Some(view)) if view.archived => tr("android-chat.composer.archived.placeholder")
-    // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx)
-    _ if wide_on.val && !c.field_focused() =>
+    // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx useSpaceHint
+    // `pointer: fine`; the wide frame's keys take it: wide_keys.mbt)
+    _ if wide_on.val && @ui.pointing() is Mouse && !c.field_focused() =>
       fill("web-main.composer.pressToTypeCjk", [("key", tr("web-main.keymap.space"))])
     _ => tr("android-chat.chat.placeholder")
   }
+  let (fl, fr, ft, fb) = if expanded { k.opened } else { k.shut }
   let field = fn() {
     let f = c.box(
       w=Fill(1.0),
-      min_h=36.0,
-      pl=if expanded { plus_ink } else { 0.0 },
-      pr=14.0,
-      pt=7.0,
-      pb=7.0,
+      min_h=if wide { 0.0 } else { k.button },
+      pl=fl,
+      pr=fr,
+      pt=ft,
+      pb=fb,
       justify=JCenter,
       fn() {
         let hint = @motion.anim(c, "composer/hint", 1.0)
@@ -1752,26 +2000,31 @@ fn composer_bar(
           hint.follow(1.0, @motion.tween(200.0, ease=Arrive))
         }
         // what the input did since the last frame: a mark backspaced whole, a chat's link pasted (chat_refs.mbt)
-        ref_field_edits(src, d, r.station, locked)
+        @sfbase.refs_edits(c, src, d.key, d.field, r.station, locked)
         let res = c.editor(
           field_key,
           placeholder~,
           // in the face chosen for what people write (Composer.kt SendTextFaced)
           words=true,
-          font_size=send_size,
-          line=send_line,
+          font_size=k.font,
+          line=k.line,
           // (SendTextStyle: a TextStyle of its own, no LineHeightStyle)
           trim=true,
-          max_lines=6,
+          max_lines=field_lines(c),
           plain=true,
           color=t.p.text,
           placeholder_color=@sf.alpha(t.p.subtle, hint.get()),
           caret_color=t.p.accent,
-          // at a desktop's width Enter sends and ⇧Enter is a new line (the web's); on a phone Enter is a new line
-          enter_sends=wide_on.val,
-          paste_limit=if no_files { 0 } else { paste_threshold },
+          // pointed at with a mouse (a keyboard at hand) Enter sends and ⇧Enter is a new line; with a finger (the
+          // screen's keyboard) Enter is a new line, whatever the frame (the web's `hover: hover`, mobile/Chat.tsx).
+          // (The phone's layout keeps its new line, a mouse in a narrow desktop window too: its pages are the
+          // phone's, the phone's tests a desktop's system.)
+          enter_sends=wide_on.val && @ui.pointing() is Mouse,
+          paste_limit=if no_files { 0 } else { @sfbase.paste_threshold(c, src) },
+          // ⌘V with a picture on the clipboard: it, as a file (Chat.tsx onPaste: the clipboard's files)
+          pictures=!no_files,
           // references to other chats drawn as marks (chat_refs.mbt RefMarks)
-          look=ref_look(t.p.accent),
+          look=@sfbase.refs_look(d.key, t.p.accent),
           // the draft's words, its own (another chat's draft: another field)
           field=d.field,
         )
@@ -1821,7 +2074,7 @@ fn composer_bar(
     part(f, "field")
   }
   if expanded {
-    c.box(w=Fill(1.0), gap=4.0, fn() {
+    c.box(w=Fill(1.0), gap=k.open_gap, fn() {
       field()
       c.box(dir=Row, w=Fill(1.0), align=AEnd, fn() {
         plus_button()
@@ -1866,8 +2119,8 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
           c.focus_editor(key)
           d.focus = 0
         }
-        // (concentric with the capsule's, a smooth corner's: @ui.concentric, not the radius less the inset)
-        c.box(w=Fill(1.0), radius=@ui.concentric(composer_corner, composer_inset), bg=k.card, fn() {
+        // (concentric with the capsule's, a smooth corner's: @sf.inner_corner, not the radius less the inset)
+        c.box(w=Fill(1.0), radius=@sf.inner_corner(composer_corner, composer_inset), bg=k.card, fn() {
           c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=34.0, pt=9.0, align=AStart, fn() {
             // the quote's mark ahead of whose it is (Composer.kt quoteLine's quoteMark)
             c.box(w=Px(15.0), h=Px(19.5), justify=JCenter, fn() {
@@ -2045,7 +2298,7 @@ fn draft_file(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending, lo
     // never squeezed by a row too narrow for all of them)
     c.box(w=Px(if f.pasted is Some(_) { pasted_card_w } else { file_card_w }), pt=picture_remove_out, fn() {
       let card = match f.pasted {
-        Some(words) => pasted_card(c, src, r, d, f, words, remove, locked)
+        Some((words, info)) => pasted_card(c, src, r, d, f, words, info, remove, locked)
         None => file_tile(c, f, remove, again~)
       }
       @motion.measure(c, card, "composer/tile/\{f.id}")
@@ -2065,7 +2318,7 @@ fn draft_face(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending) ->
       picture_face(c, f, picture, 0) |> ignore
     } else {
       match f.pasted {
-        Some(words) => pasted_card(c, src, r, d, f, words, 0, false) |> ignore
+        Some((words, info)) => pasted_card(c, src, r, d, f, words, info, 0, false) |> ignore
         None => file_tile(c, f, 0) |> ignore
       }
     }
@@ -2211,6 +2464,7 @@ fn pasted_card(
   d : Draft,
   f : Pending,
   words : String,
+  info : Json,
   remove : Int,
   locked : Bool,
 ) -> Int {
@@ -2219,7 +2473,8 @@ fn pasted_card(
   let busy = f.done is None && f.error is None
   let action = c.id("composer/paste-action/\{f.id}")
   let can_retry = f.error is Some(_) && !src.read_only
-  let can_restore = words.length() <= paste_restore_limit && !locked
+  // (words not too long to put back: the core keeps them in what it says of them)
+  let can_restore = field(Some(info), "text") is Some(String(_)) && !locked
   if c.clicked(action) {
     if can_retry {
       take_out(src, d, f)
@@ -2250,7 +2505,7 @@ fn pasted_card(
         @sf.icon(c, "read", size=16.0, color=t.p.muted) |> ignore
       }
       c.box(w=Fill(1.0), fn() {
-        let first = paste_preview(words)
+        let first = text(Some(info), "preview")
         c.text(
           if first == "" { tr("web-main.composer.pastedText") } else { first },
           size=15.0,
@@ -2266,7 +2521,7 @@ fn pasted_card(
               if busy {
                 tr("web-main.composer.pasteUploading")
               } else {
-                fill("web-main.composer.pasteAttachment", [("count", "\{words.length()}")])
+                fill("web-main.composer.pasteAttachment", [("count", "\{number(Some(info), "characters").to_int()}")])
               }
           },
           size=11.0,
@@ -2339,7 +2594,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int, again? : Int = 0, closable?
               "" => text(Some(l), "url")
               site => site
             }
-          (None, None) => if busy { uploading_text(f) } else { file_size(f.size.to_double()) }
+          (None, None) => if busy { uploading_text(f) } else { @sf.file_size(f.size.to_double()) }
         },
         size=11.0,
         color=if f.error is Some(_) { t.p.red } else { t.p.muted },

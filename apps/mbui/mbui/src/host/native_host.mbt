@@ -21,6 +21,16 @@ impl @hostapi.Host for Native with window_inset(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with full_screen(_) {
+  full_screen()
+}
+
+///|
+impl @hostapi.Host for Native with set_full_screen(_, on) {
+  set_full_screen(on)
+}
+
+///|
 impl @hostapi.Host for Native with window_drag(_) {
   window_drag()
 }
@@ -28,6 +38,56 @@ impl @hostapi.Host for Native with window_drag(_) {
 ///|
 impl @hostapi.Host for Native with set_cursor(_, kind) {
   set_cursor(kind)
+}
+
+///|
+impl @hostapi.Host for Native with set_badge(_, n) {
+  set_badge(n)
+}
+
+///|
+impl @hostapi.Host for Native with menu_setup(_, json) {
+  menu_setup(json)
+}
+
+///|
+impl @hostapi.Host for Native with local_station(_) {
+  local_station()
+}
+
+///|
+impl @hostapi.Host for Native with local_station_act(_, a) {
+  local_station_act(a)
+}
+
+///|
+impl @hostapi.Host for Native with dock_available(_) {
+  dock_available()
+}
+
+///|
+impl @hostapi.Host for Native with mods_held(_) {
+  mods_held()
+}
+
+///|
+impl @hostapi.Host for Native with dock_send(_, l) {
+  dock_send(l)
+}
+
+///|
+impl @hostapi.Host for Native with dock_stop(_) {
+  dock_stop()
+}
+
+///|
+impl @hostapi.Host for Native with dock_kept(_) {
+  dock_kept()
+}
+
+///|
+impl @hostapi.Host for Native with dock_keep(_, j) {
+  dock_keep(j)
 }
 
 ///|
@@ -91,6 +151,11 @@ impl @hostapi.Host for Native with glyph(_, key, out) {
 }
 
 ///|
+impl @hostapi.Host for Native with glyphs_ahead(_, keys, n) {
+  glyphs_ahead(keys, n)
+}
+
+///|
 impl @hostapi.Host for Native with face_add(_, face, path, weight) {
   face_add(face, path, weight)
 }
@@ -103,6 +168,16 @@ impl @hostapi.Host for Native with face_add_bytes(_, face, data, weight) {
 ///|
 impl @hostapi.Host for Native with face_clear(_, face) {
   face_clear(face)
+}
+
+///|
+impl @hostapi.Host for Native with face_add_family(_, face, family) {
+  face_add_family(face, family)
+}
+
+///|
+impl @hostapi.Host for Native with local_font_families(_) {
+  local_font_families()
 }
 
 ///|
@@ -128,6 +203,11 @@ impl @hostapi.Host for Native with text_menu(_, shown, x, y, w, h, can) {
 ///|
 impl @hostapi.Host for Native with clipboard_set(_, s) {
   clipboard_set(s)
+}
+
+///|
+impl @hostapi.Host for Native with clipboard_set_image(_, data) {
+  clipboard_set_image(data)
 }
 
 ///|
@@ -371,8 +451,8 @@ impl @hostapi.Host for Native with view_read_next(_, id, out) {
 }
 
 ///|
-impl @hostapi.Host for Native with view_read_answer(_, id, req, data, total) {
-  view_read_answer(id, req, data, total)
+impl @hostapi.Host for Native with view_read_answer(_, id, req, data, total, more) {
+  view_read_answer(id, req, data, total, more)
 }
 
 ///|

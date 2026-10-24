@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SEARCH_SETTLE_MS } from "../src/station/sync.ts";
+import { openOf } from "../src/views/search.ts";
 import { apply, subscribe, v } from "./helpers.ts";
 import { base, started, threadView } from "./station-fixture.ts";
 
@@ -67,6 +68,8 @@ test("a_search_lists_what_the_device_holds_and_what_its_stations_find_each_once"
   assert.deepEqual(view.groups.map((g: J) => [g.kind, g.items.length, g.more]), [["job", 1, true]]);
   const job = view.groups[0].items[0];
   assert.deepEqual([job.title, job.job, job.port, job.chat, job.station], ["部署预览", "j1", 5173, "a", "ws/st"]);
+  // Where it opens: its chat, its page over it.
+  assert.deepEqual(job.open, { to: "service", station: "ws/st", chat: "a", job: "j1" });
   assert.deepEqual(job.marks.length > 0, true);
   assert.equal(view.wait.reading, false);
   core.close();
@@ -129,4 +132,31 @@ test("a_search_shown_is_asked_again_when_its_station_says_a_chat_changed", async
   assert.deepEqual(v(values, 1).items.map((i: J) => [i.id, i.archived ?? false]), [["a", true]]);
   assert.equal(v(values, 1).messages.length, 0);
   core.close();
+});
+
+test("what_a_search_finds_says_where_it_opens_as_every_client_has_a_page_for_it", () => {
+  const at = { station: "ws/st" };
+  // A service its chat and its page over it, a task its chat with it picked, one with no id its chat; none without a chat.
+  assert.deepEqual(openOf({ ...at, kind: "job", chat: "a", job: "j1", port: 5173 }), { to: "service", station: "ws/st", chat: "a", job: "j1" });
+  assert.deepEqual(openOf({ ...at, kind: "job", chat: "a", job: "j2" }), { to: "task", station: "ws/st", chat: "a", job: "j2" });
+  assert.deepEqual(openOf({ ...at, kind: "job", chat: "a" }), { to: "chat", station: "ws/st", chat: "a" });
+  assert.equal(openOf({ ...at, kind: "job", job: "j1" }), null);
+  // A station its page, a member the workspace's members, anything else in a chat that chat.
+  assert.deepEqual(openOf({ ...at, kind: "station" }), { to: "station", station: "ws/st" });
+  assert.deepEqual(openOf({ kind: "member", station: "" }), { to: "members", station: "" });
+  assert.deepEqual(openOf({ ...at, kind: "skill", chat: "b" }), { to: "chat", station: "ws/st", chat: "b" });
+  assert.equal(openOf({ ...at, kind: "skill" }), null);
+  // A folder entered; a text read, a video played, in their folder; anything else its folder shown.
+  const file = (path: string, fileKind: string, more: J = {}) => openOf({ ...at, kind: "file", path, fileKind, dir: fileKind === "folder", ...more });
+  assert.deepEqual(file("/home/a/docs", "folder"), { to: "files", station: "ws/st", root: "/home/a/docs", path: "" });
+  assert.deepEqual(file("/home/a/docs/README.md", "markdown"), { to: "files", station: "ws/st", root: "/home/a/docs", path: "README.md", how: "read" });
+  assert.deepEqual(file("C:\\Users\\a\\clip.mp4", "video"), { to: "files", station: "ws/st", root: "C:\\Users\\a", path: "clip.mp4", how: "play" });
+  assert.deepEqual(file("/home/a/docs/a.png", "image"), { to: "files", station: "ws/st", root: "/home/a/docs", path: "" });
+  // Found under a folder a read-only member's workspace pinned: from there.
+  const pinned = { root: "/srv/share", rel: "photos/2026/a.png" };
+  assert.deepEqual(file("/srv/share/photos/2026/a.png", "image", pinned), { to: "files", station: "ws/st", root: "/srv/share", path: "photos/2026" });
+  assert.deepEqual(file("/srv/share/notes/b.txt", "text", { root: "/srv/share", rel: "notes/b.txt" }), { to: "files", station: "ws/st", root: "/srv/share", path: "notes/b.txt", how: "read" });
+  assert.deepEqual(file("/srv/share/notes", "folder", { root: "/srv/share", rel: "notes" }), { to: "files", station: "ws/st", root: "/srv/share", path: "notes" });
+  // A file with no path opens nowhere.
+  assert.equal(openOf({ ...at, kind: "file", chat: "a" }), null);
 });

@@ -1,12 +1,11 @@
 # Sourced by scripts/android.sh for an app with the still.fail core in it (coredemo, stillfail; MBUI_ANDROID_HOOK):
-# the core as still.fail's own Android app runs it (src/sfcore/android_engine.c, which includes android_core.c). Into
-# out/android/apk, which Gradle packs: still.fail's prebuilt engine and shell (EMBER: still.fail's checkout, as
+# the core on the app's engine (src/sfcore/android_engine.c, which includes android_core.c; its C API apps/mbui/engine's
+# engine.h). Into out/android/apk, which Gradle packs: the prebuilt engine and shell (EMBER: still.fail's checkout, as
 # scripts/core.sh has it; `node scripts/native.ts path engine|shell android-arm64` there, prebuilt or built by it),
 # libhermes.so from React Native's hermes-android (the Hermes the engine is built against: Gradle's cache, else Maven
 # Central), and the core as Hermes bytecode (scripts/core.sh hermes; ENTRY picks the core's entry, by default the one
 # with the media module).
-#   HBC_CACHE (a directory: CI's): core.hbc kept there by what it is made of (still.fail's client/core-ts and media,
-#   this module's core/ and scripts/core.sh, the entry), taken from there when that is the same and both are clean.
+#   HBC_CACHE (a directory: CI's): core.hbc kept there by what it is made of (scripts/core.sh hermes).
 #   CORE_SCRIPT: a script in the core's place (listen-test).
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EMBER=${EMBER:-$(cd "$TOOLS/.." 2>/dev/null && pwd)/ember-src}
@@ -14,6 +13,8 @@ APP_KIND=core
 # mbui/core's queue and the app's engine (src/<app>/android_engine.c, which includes src/sfcore/android_engine.c)
 APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/android_engine.c"
 APP_LINK="-L$jni -lstillfail_hermes"
+# (the engine's C API, engine.h)
+CFLAGS="$CFLAGS -I$H/../engine"
 
 # A .so of an AAR on Maven Central (GROUP/ARTIFACT VERSION FILE LIB SHA-256), fetched once and checked (mbui's
 # scripts/apk fetch: kept in $APK_CACHE), into $jni.
@@ -38,24 +39,8 @@ app_libs() {
   echo "core parts: $(cd $jni && for f in *.so; do printf '%s %s, ' $f $(size $f); done)"
 }
 
-hbc_key() {
-  [ -n "${HBC_CACHE:-}" ] && [ -z "${CORE_SCRIPT:-}" ] || return 1
-  git -C "$EMBER" rev-parse -q --verify HEAD:client/core-ts >/dev/null 2>&1 || return 1
-  [ -z "$(git -C "$EMBER" status --porcelain -uno -- client/core-ts media 2>/dev/null)" ] || return 1
-  { git -C "$EMBER" rev-parse HEAD:client/core-ts HEAD:media
-    (cd core && find . -type f | LC_ALL=C sort | xargs shasum -a 256)
-    shasum -a 256 < "$H/core.sh"
-    echo "${ENTRY:-media-hermes}"; } | shasum -a 256 | cut -c1-24
-}
-
-# the core's bytecode, which only Gradle needs
+# the core's bytecode, which only Gradle needs (HBC_CACHE: scripts/core.sh hermes keeps it there by its inputs)
 app_assets() {
-  local key
-  if key=$(hbc_key) && [ -f "$HBC_CACHE/$key.hbc" ]; then
-    cp -p "$HBC_CACHE/$key.hbc" $apk/assets/core.hbc
-    echo "core.hbc $(size $apk/assets/core.hbc) (cached: $key)"
-    return
-  fi
   if [ -n "${CORE_SCRIPT:-}" ]; then
     # a script in the core's place (listen-test: core/listen-test.js)
     EMBER=$EMBER "$H/core.sh" hermes-script "$CORE_SCRIPT" || { echo "android.sh: $CORE_SCRIPT did not compile" >&2; exit 1; }
@@ -64,11 +49,7 @@ app_assets() {
       || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }  # with media, as on macOS
   fi
   cp -p out/core/core.hbc $apk/assets/
-  if [ -n "$key" ]; then
-    mkdir -p "$HBC_CACHE" && cp -p out/core/core.hbc "$HBC_CACHE/$key.hbc.tmp" && mv "$HBC_CACHE/$key.hbc.tmp" "$HBC_CACHE/$key.hbc"
-    ls -t "$HBC_CACHE"/*.hbc | tail -n +9 | xargs rm -f  # the newest 8
-  fi
-  echo "core.hbc $(size $apk/assets/core.hbc)${key:+ (made, kept as $key)}"
+  echo "core.hbc $(size $apk/assets/core.hbc)"
 }
 
 app_cmd() {

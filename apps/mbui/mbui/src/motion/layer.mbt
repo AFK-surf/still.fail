@@ -121,10 +121,12 @@ priv struct Rec {
   mut vy : Double
   ox : Anim
   oy : Anim
-  /// what the app drives a move by: where the move started from
+  /// what the app drives a move by: its offset as if the progress were 0 (it is drawn off its place by that times what
+  /// is left of the progress), and the progress it was last drawn at
   mut fx : Double
   mut fy : Double
   mut driven : Bool
+  mut drove : Double
   mut enter : Trans?
   ef : Anim
   em : Anim
@@ -143,7 +145,11 @@ priv struct Rec {
   mut was_seen : Int
   mut was_ox : Double
   mut was_oy : Double
-  /// a build of this frame moved it (its offsets set from was_ox, was_oy)
+  /// and its drive then, if driven
+  mut was_driven : Bool
+  mut was_fx : Double
+  mut was_fy : Double
+  /// a build of this frame moved it (its offsets set from was_ox, was_oy, or the drive then)
   mut moved_now : Bool
 }
 
@@ -162,6 +168,7 @@ fn Rec::new() -> Rec {
     fx: 0.0,
     fy: 0.0,
     driven: false,
+    drove: 0.0,
     enter: None,
     ef: Anim::new(1.0),
     em: Anim::new(1.0),
@@ -176,6 +183,9 @@ fn Rec::new() -> Rec {
     was_seen: -10,
     was_ox: 0.0,
     was_oy: 0.0,
+    was_driven: false,
+    was_fx: 0.0,
+    was_fy: 0.0,
     moved_now: false,
   }
 }
@@ -872,6 +882,9 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         r.oy.step(c)
         r.was_ox = r.ox.get()
         r.was_oy = r.oy.get()
+        r.was_driven = r.driven
+        r.was_fx = r.fx
+        r.was_fy = r.fy
         r.moved_now = false
       }
       let lm = if li >= 0 { mo.lists.get(ref) } else { None }
@@ -887,7 +900,9 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       let undo = fn() {
         if r.moved_now {
           r.moved_now = false
-          r.driven = false
+          r.driven = r.was_driven
+          r.fx = r.was_fx
+          r.fy = r.was_fy
           r.ox.value = r.was_ox
           r.oy.value = r.was_oy
           if r.was_ox == 0.0 { r.ox.snap(0.0) } else { r.ox.animate(0.0, e.spec) }
@@ -909,16 +924,28 @@ fn after_layout(c : @ui.Ctx) -> Unit {
             Some(l) => e.gate != 1 || c.now() - l.changed_at < 150.0
             None => true
           }
-          if still || !changed {
+          // what is left of the progress driving it now, and where it is drawn off its place as the frame begins: on
+          // the drive it was on (the same progress, gone on to now) or its spring; a move carries on from there
+          let left = if e.drive >= 0.0 { 1.0 - dclamp(e.drive, 0.0, 1.0) } else { 0.0 }
+          let (cx, cy) = if r.was_driven {
+            let l = if e.drive >= 0.0 { left } else { 1.0 - r.drove }
+            (r.was_fx * l, r.was_fy * l)
+          } else {
+            (r.was_ox, r.was_oy)
+          }
+          if still || !changed || (e.drive >= 0.0 && left <= 0.0) {
             r.ox.snap(0.0)
             r.oy.snap(0.0)
             r.driven = false
             r.moved_now = false
           } else if e.drive >= 0.0 {
-            r.fx = r.was_ox + dx
-            r.fy = r.was_oy + dy
+            // the rest of its way by what is left of the progress (a move as it sets off: all of it)
+            r.fx = (cx + dx) / left
+            r.fy = (cy + dy) / left
             r.driven = true
             r.moved_now = true
+            r.ox.snap(0.0)
+            r.oy.snap(0.0)
           } else {
             // closing over a row gone: a little late, unless it went ahead
             let delay = match lm {
@@ -933,9 +960,9 @@ fn after_layout(c : @ui.Ctx) -> Unit {
             }
             r.driven = false
             r.moved_now = true
-            r.ox.value = r.was_ox + dx
+            r.ox.value = cx + dx
             r.ox.animate(0.0, spec)
-            r.oy.value = r.was_oy + dy
+            r.oy.value = cy + dy
             r.oy.animate(0.0, spec)
           }
         }
@@ -986,6 +1013,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       // its look: on the way to its place, coming in
       let (ox, oy) = if r.driven && e.drive >= 0.0 {
         let p = dclamp(e.drive, 0.0, 1.0)
+        r.drove = p
         if p >= 1.0 {
           r.driven = false
         }

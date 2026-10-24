@@ -6,7 +6,8 @@
 // other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); the wide
 // frame's "chat-letters-pop" (the chat's "…" open), "chat-jobs-pop" (its services' popover), "chat-letters-side",
 // "chat-jobs-side", "chat-history-side" (what is opened beside it), "chat-model-pop" (its agent's model control's panel
-// open), "chat-find" (⌘F's bar, a word typed in it); "home-jobs"
+// open), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
+// what its card over its picture says); "home-jobs"
 // (Home with the jobs left up a long while at its top); "history-link" (Home, the history there for a link to open at
 // an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
 
@@ -17,7 +18,7 @@ fn decide_mode(mode : String) -> Bool {
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
-    "chat-jobs-side", "chat-history-side", "chat-model-pop", "chat-find",
+    "chat-jobs-side", "chat-history-side", "chat-model-pop", "chat-find", "chat-agent-card",
   ].contains(mode)
 }
 
@@ -366,6 +367,7 @@ fn fix_decisions(mode : String) -> Json {
       ],
     },
     "text": "奏 · 要不要把旧的截图也一起换掉？",
+    "question": "要不要把旧的截图也一起换掉？",
   }
   let text_card : Json = {
     "station": "ws1/st2",
@@ -384,6 +386,7 @@ fn fix_decisions(mode : String) -> Json {
     "options": [],
     "card": { "type": "text", "placeholder": "sk_test_…", "assigneeText": "等 林 回复" },
     "text": "奏 · 测试环境要一个 Stripe 的测试 key",
+    "question": "测试环境要一个 Stripe 的测试 key",
   }
   {
     "items": if mode == "decisions-text" { [text_card, options_card] } else { [options_card, text_card] },
@@ -594,24 +597,16 @@ pub fn open_fixture(mode : String) -> Unit {
       dui.sheet = Some(LettersOf(r, 7.0))
     }
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
-    "chat-letters-pop" => wide.info_open = true
-    "chat-jobs-pop" => wide.jobs_open = true
+    "chat-letters-pop" => @sfdesk.open_info_pop()
+    "chat-jobs-pop" => @sfdesk.open_jobs_pop()
+    // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
     "chat-letters-side" => {
       dui.letters_open = ""
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
-      side_open(r, "letters")
     }
-    "chat-jobs-side" => side_open(r, "jobs")
-    "chat-history-side" => side_open(r, "history/s-c1")
-    "chat-model-pop" => {
-      side_open(r, "history/s-c1")
-      wide.triple = r.station + "\u{1}session:s-c1"
-    }
+    "chat-model-pop" => @sfdesk.open_triple(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
-    "chat-find" => {
-      wide.find_chat = side_key(r)
-      wide.find_field.set("截图")
-    }
+    "chat-find" => @sfdesk.find_preset(side_key(r), "截图")
     "chat-letters-open" => {
       dui.letters_open = fix_letters_link
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0

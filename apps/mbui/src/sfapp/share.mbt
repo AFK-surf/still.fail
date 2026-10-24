@@ -110,7 +110,7 @@ let open_app_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, co
 
 ///|
 // kept across runs: a value (no field of it changes)
-let open_app_box : @ui.Style = @ui.style(px=S5, py=S2, pb=S6)
+let open_app_box : @ui.Style = @ui.css("px=S5 py=S2 pb=S6")
 
 ///|
 /// Over another app (ShareActivity): what is shared taken, its sheet over that app and nothing else; the toasts.
@@ -181,7 +181,7 @@ fn share_reading(c : @ui.Ctx) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let share_reading_box : @ui.Style = @ui.style(w=Full, px=S5, pt=S2)
+let share_reading_box : @ui.Style = @ui.css("w=Full px=S5 pt=S2")
 
 ///|
 /// From six chats the list can be searched.
@@ -587,7 +587,7 @@ fn share_open(
         // (the station by its own id, the address's last part, as the core's shareIn.open picks it)
         None => {
           let parts = station.split("/").to_array()
-          pick_new(c, src, w.id, { "station": Json::string(parts[parts.length() - 1].to_owned()) })
+          pick_new(src, w.id, { "station": Json::string(parts[parts.length() - 1].to_owned()) })
         }
         Some(_) => ()
       }
@@ -702,7 +702,7 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
   }
   let head = if one { files[0].name } else { sh("android-settings.files.count", args=[("n", "\{files.length()}")]) }
   let under = if one {
-    file_size(size.to_double())
+    @sf.file_size(size.to_double())
   } else {
     files.map(fn(f) { f.name }).join(tr("web-main.list.separator"))
   }

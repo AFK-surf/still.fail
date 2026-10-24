@@ -30,20 +30,21 @@ fn login_cards_reset() -> Unit {
 ///|
 /// Ended: one quiet line (13 on 19), failed in red, 2 under what is above it.
 // kept across runs: a value (no field of it changes)
-let login_ended_room : @ui.Style = @ui.style(pt=SPx)
+let login_ended_room : @ui.Style = @ui.css("pt=SPx")
 
 
 ///|
-/// The card: 6 under what is above it, as wide as what it holds and at least 280 (LoginCard's widthIn: its step buttons
-/// fill that), 8 in all round, its parts 2 apart, on the chip's grey (the accent at 12% when it is the one a link
-/// pointed to), its corner a pill's half and its padding (22).
+/// The card: 8 under what is above it, as wide as what it holds and at least 360, 8 in all round, its parts 2 apart, on
+/// the ink at 5%, its corner its padding and its × pill's half (the web's MachineLogins.css.ts card). On a phone 6
+/// under, 280 at least (LoginCard's widthIn: its step buttons fill that), on the chip's grey, its corner 22 (its × the
+/// phone's 28). The accent at 12% when it is the one a link pointed to.
 // kept across runs: a value (no field of it changes)
-let login_card_room : @ui.Style = @ui.style(w=Full, pt=S1_5, align=AStart)
+let login_card_room : @ui.Style = @ui.css("w=Full pt=S1_5 align=AStart")
 
 ///|
 /// `fill`: as wide as where it is (a station page's 登录: StationLogins' Modifier.fillMaxWidth()).
 // kept across runs: a value (no field of it changes)
-let login_card_room_fill : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let login_card_room_fill : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 /// The card's least width (LoginCard: widthIn(min = 280.dp)).
@@ -56,38 +57,34 @@ let login_card_box : @ui.Style = @ui.style(min_w=login_card_min_w, p=S2, gap=S0_
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_card_marked : @ui.Style = login_card_box.then(@ui.style(bg=A(Accent, O10)))
+let login_card_marked : @ui.Style = login_card_box.then(@ui.css("bg=A(Accent,O10)"))
 
 ///|
 /// Its title and its × in a row, the × in the card's top corner.
 // kept across runs: a value (no field of it changes)
-let login_head : @ui.Style = @ui.style(row=true, w=Full, align=AStart)
+let login_head : @ui.Style = @ui.css("row w=Full align=AStart")
 
 ///|
-/// Its title (15 on 21, medium, the ink), 10 in from the card's padding and 10 down: as wide as its words (a card
-/// hugging what it holds measures them so).
+/// Its title (13 on 20, medium, the ink; a phone's 15 on 21), 10 in from the card's padding and 10 down: as wide as
+/// its words (a card hugging what it holds measures them so).
 // kept across runs: a value (no field of it changes)
-let login_title_room : @ui.Style = @ui.style(px=S2_5, pt=S2_5)
+let login_title_room : @ui.Style = @ui.css("px=S2_5 pt=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let login_title_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg)
 
 ///|
-/// 取消 as the card's ×: a pill's size (28), round, rippled in the ink (LoginCards.kt CancelLogin: ripple(color = C.ink)).
+/// 取消 as the card's ×: a small panel's pill (24; a phone's 28), round, its ground under the pointer (the web's
+/// panelIcon), rippled in the ink on a phone (LoginCards.kt CancelLogin: ripple(color = C.ink)).
 // kept across runs: a value (no field of it changes)
-let login_cancel : @ui.Style = @ui.style(
-  w=S7,
-  h=S7,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-)
+let login_cancel : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter")
 
 ///|
-/// A line of how it stands or what to do (13 on 19, grey; red what is off), 10 in, a spinner 6 before it.
+/// A line of how it stands or what to do (12 on 18, grey; red what is off; a phone's 13 on 19), 10 in, a spinner 6
+/// before it.
 // kept across runs: a value (no field of it changes)
-let login_said : @ui.Style = @ui.style(row=true, px=S2_5, gap=S1_5, align=ACenter)
+let login_said : @ui.Style = @ui.css("row px=S2_5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -99,40 +96,31 @@ let login_said_red : @ui.TextStyle = login_said_words.then(@ui.text_style(color=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_said_under : @ui.Style = login_said.then(@ui.style(pb=S2_5))
+let login_said_under : @ui.Style = login_said.then(@ui.css("pb=S2_5"))
 
 ///|
 /// The device code (22 on 29, semibold, the code face's), 10 in, 4 over and under; pressed, copied.
 // kept across runs: a value (no field of it changes)
-let login_code_room : @ui.Style = @ui.style(px=S2_5, py=S1)
+let login_code_room : @ui.Style = @ui.css("px=S2_5 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let login_code_words : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-/// A step's button (StepButton): the card's width, 8 under what is above it, a thumb's height (44), its corner the
-/// card's less its padding; solid (the ink, its words the paper's) while it is the next thing to do, else the ink at
-/// 5%; its words 15 semibold, a spinner or ↗ 6 beside them.
+/// A step's button (StepButton): the card's width, 8 under what is above it, 32 high (a phone's: a thumb's, 44), its
+/// corner the card's less its padding; solid (the ink, its words the paper's) while it is the next thing to do, else
+/// the ink at 5%; its words 13 medium (a phone's 15 semibold), a spinner or ↗ 6 beside them.
 // kept across runs: a value (no field of it changes)
-let login_step_room : @ui.Style = @ui.style(w=Full, pt=S2)
+let login_step_room : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_step : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  h=S11,
-  gap=S1_5,
-  radius=Inner,
-  bg=A(Fg, O5),
-  align=ACenter,
-  justify=JCenter,
-)
+let login_step : @ui.Style = @ui.css("row w=Full h=S11 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_step_solid : @ui.Style = login_step.then(@ui.style(bg=Fg))
+let login_step_solid : @ui.Style = login_step.then(@ui.css("bg=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -146,27 +134,19 @@ let login_step_words_solid : @ui.TextStyle = login_step_words.then(@ui.text_styl
 /// The code pasted back (CodeField): the card's width, 6 under the step above, 44 high, on the surface, 14 in on the
 /// left and 6 on the right; 完成 at its end once a code is in, 32 high, solid, its corner the field's less 6.
 // kept across runs: a value (no field of it changes)
-let login_field_room : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let login_field_room : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_field : @ui.Style = @ui.style(row=true, w=Full, h=S11, pl=S3_5, pr=S1_5, gap=S1_5, radius=Inner, bg=Surface, align=ACenter)
+let login_field : @ui.Style = @ui.css("row w=Full h=S11 pl=S3_5 pr=S1_5 gap=S1_5 radius=Inner bg=Surface align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_field_words : @ui.Style = @ui.style(w=Full)
+let login_field_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_finish : @ui.Style = @ui.style(
-  row=true,
-  h=S8,
-  px=S3_5,
-  radius=Inner,
-  bg=Fg,
-  align=ACenter,
-  justify=JCenter,
-)
+let login_finish : @ui.Style = @ui.css("row h=S8 px=S3_5 radius=Inner bg=Fg align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -197,8 +177,10 @@ fn login_card(
     return
   }
   let all = (src.topic)("machineLogins", { "station": Json::string(station) })
-  c.box(style=if fill { login_card_room_fill } else { login_card_room }, fn() {
-    c.box(style=if marked { login_card_marked } else { login_card_box }, fn() {
+  let room = if fill { login_card_room_fill } else { login_card_room }
+  let card = if marked { login_card_marked } else { login_card_box }
+  c.box(style=room, fn() {
+    c.box(style=card, fn() {
       if flag(all.value, "canLogin") {
         c.box(style=login_head, fn() {
           c.box(style=login_title_room, fn() { c.text(text(l, "title"), style=login_title_words) |> ignore }) |> ignore
@@ -250,7 +232,8 @@ fn login_said_line(c : @ui.Ctx, words : String, red? : Bool = false, busy? : Boo
     if busy {
       @sf.spinner(c, size=12.0) |> ignore
     }
-    c.text(words, style=if red { login_said_red } else { login_said_words }) |> ignore
+    let style = if red { login_said_red } else { login_said_words }
+    c.text(words, style~) |> ignore
   })
   |> ignore
 }
@@ -262,16 +245,18 @@ fn login_step_button(c : @ui.Ctx, key : String, label : String, solid : Bool, bu
   let id = if busy { 0 } else { c.id(key) }
   let ink = if solid { t.p.bg } else { t.p.text }
   c.box(style=login_step_room, fn() {
-    c.box(style=if solid { login_step_solid } else { login_step }, id~, fn() {
+    let step = if solid { login_step_solid } else { login_step }
+    let words = if solid { login_step_words_solid } else { login_step_words }
+    c.box(style=step, id~, fn() {
       if busy {
         @sf.spinner(c, size=12.0, arc=ink) |> ignore
       }
-      c.text(label, style=if solid { login_step_words_solid } else { login_step_words }) |> ignore
+      c.text(label, style=words) |> ignore
       if external {
         @sf.icon(c, "arrow-up-right", size=16.0, color=ink) |> ignore
       }
       // LoginCards.kt StepButton: its ripple in its words' colour, STEP_CORNER (concentric(CARD_CORNER, CARD_PAD))
-      @motion.ripple(c, id, 22.0 - 8.0 / @sf.smooth_scale, ink=@sf.alpha(ink, 0.1))
+      @motion.ripple(c, id, @sf.inner_corner(22.0, 8.0), ink=@sf.alpha(ink, 0.1))
     })
     |> ignore
   })
@@ -483,7 +468,7 @@ fn login_paste_steps(c : @ui.Ctx, src : Source, station : String, l : Json?) -> 
             c.text(tr("web-main.logins.finish"), style=login_finish_words) |> ignore
           }
           // LoginCards.kt: 完成 in the page's colour, the step's corner less 6
-          @motion.ripple(c, go, 22.0 - 8.0 / @sf.smooth_scale - 6.0, ink=@sf.alpha(t.p.bg, 0.1))
+          @motion.ripple(c, go, @sf.inner_corner(22.0, 8.0) - 6.0, ink=@sf.alpha(t.p.bg, 0.1))
         })
         |> ignore
       }

@@ -480,8 +480,6 @@ fn Ctx::place_list(
     None => return
   }
   st.vp_h = ih
-  // how it stood after the last layout (Ctx::list_info): what was built from that is drawn again if this one moves it
-  let was = (st.vis_first, st.vis_last, st.at_end, st.below)
   // rows built in the build phase (none, normally) are not shown
   n.first = -1
   n.last = -1
@@ -498,6 +496,8 @@ fn Ctx::place_list(
   let nan = 0.0 / 0.0
   let top_rows : Array[Int] = [] // above the pivot, nearest first
   let rows : Array[Int] = [] // the pivot and below
+  // what the rows built hold near the list's top (Ctx::stick): from where in `stuck`, each row's
+  let stuck_from = self.stuck.length()
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
     let r = self.build_row(li, st, k)
     let h = self.layout(r, ix, y, iw, nan)
@@ -639,12 +639,8 @@ fn Ctx::place_list(
   }
   st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
   st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
-  // what the view built this frame read from the list as it stood (a way back to the end, the rows in view told):
-  // built again where this layout changed that (a scroll that took one frame, a wheel's or a key's, would otherwise
-  // be drawn with what was read before it)
-  if was != (st.vis_first, st.vis_last, st.at_end, st.below) {
-    self.read_changed("a list's rows in view, its end")
-  }
+  // (what the view built this frame read of how the list stood, a way back to the end, the rows in view told, is read
+  // back where it was read: Ctx::list_info; a list scrolled that nothing read builds nothing again)
   if st.glide {
     // how far it is above its end: the rows not laid out by their heights as known (measured, or estimated)
     let to_end = if last == st.count - 1 {
@@ -695,6 +691,52 @@ fn Ctx::place_list(
   if off != 0.0 {
     for r in order {
       self.shift(r, off)
+    }
+  }
+  self.stick_in(li, stuck_from, iy)
+}
+
+///|
+/// The list node `i` is in (its nearest), or -1.
+fn Ctx::list_of(self : Ctx, i : Int) -> Int {
+  let mut p = self.nodes[i].parent
+  while p >= 0 && self.nodes[p].kind != kind_list {
+    p = self.nodes[p].parent
+  }
+  p
+}
+
+///|
+/// Node `i` held `top` below the top of the list it is in while its row scrolls past (CSS's `position: sticky` with
+/// `top`): laid out where it is, it goes down with the view's top as that passes it, never past the foot of its parent
+/// (what a long row keeps in view, its picture at the top of the list). Outside a list's rows it is where it is laid out.
+pub fn Ctx::stick(self : Ctx, i : Int, top : Double) -> Unit {
+  if i < 0 || i >= self.count {
+    return
+  }
+  self.nodes[i].stick = top
+  self.stuck.push(i)
+}
+
+///|
+/// What the rows of list `li` just placed hold near its top (`stuck` from `from`; a list in a row holds its own), its
+/// content starting at `top`: each where its parent lays it, then down to `top` and its own distance, as far as its
+/// parent's foot lets it.
+fn Ctx::stick_in(self : Ctx, li : Int, from : Int, top : Double) -> Unit {
+  for j in from..<self.stuck.length() {
+    let s = self.stuck[j]
+    let n = self.nodes[s]
+    if n.parent < 0 || n.stick != n.stick || self.list_of(s) != li {
+      continue
+    }
+    let p = self.nodes[n.parent]
+    // where its parent lays it (a subtree placed as before keeps where it was held last frame)
+    self.replace(s, p.x, p.y)
+    let held = top + n.stick - n.y
+    let room = p.y + p.fh - p.pad_b - n.fh - n.y
+    let dy = dmin(held, room)
+    if dy > 0.0 {
+      self.shift(s, dy)
     }
   }
 }
@@ -868,9 +910,73 @@ pub(all) struct ListInfo {
 }
 
 ///|
-/// How list `key` stood after the last layout; None before its first.
+/// How list `key` stood after the last layout; None before its first. Read as the view builds, it is read back
+/// (readback.mbt) by its rows in view and how far it is from its end: laid out otherwise this frame (a scroll that took
+/// one frame, a wheel's or a key's), the frame is built again from it. What is built from less of it says what
+/// (Ctx::list_info_as), and is built again only as that changes.
 pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
-  match self.lists.get(self.id(key)) {
+  self.list_info_as(key, rows_and_end)
+}
+
+///|
+/// What Ctx::list_info is read back by: the rows in view, whether the list is at its end and how far from it.
+fn rows_and_end(i : ListInfo?) -> (Int, Int, Bool, Double)? {
+  match i {
+    Some(i) => Some((i.first, i.last, i.at_end, i.below))
+    None => None
+  }
+}
+
+///|
+/// How list `key` stood after the last layout, as Ctx::list_info, read back by what `made` makes of it alone: what
+/// the view builds from it only by whether it is at its end, or far from it, is built again as that changes, not at
+/// every step of a scroll.
+pub fn[T : Eq] Ctx::list_info_as(self : Ctx, key : String, made : (ListInfo?) -> T) -> ListInfo? {
+  let id = self.id(key)
+  let v = self.list_info_of(id)
+  if building.val {
+    let was = made(v)
+    self.info_reads.push((key, fn() { made(self.list_info_of(id)) != was }))
+  }
+  v
+}
+
+///|
+/// A list, to read later as it then stands and never read back: for what a frame works out of where it is once its
+/// builds are over and tells outside (Ctx::after_build: a reader's place, what they have seen whole), never for what it
+/// draws (that reads Ctx::list_info, list_place and list_row_height as it builds).
+pub struct ListReader {
+  priv ctx : Ctx
+  priv id : Int
+}
+
+///|
+/// List `key`, by its id where this is said (the scope it is built in), to read later (ListReader).
+pub fn Ctx::list_reader(self : Ctx, key : String) -> ListReader {
+  { ctx: self, id: self.id(key) }
+}
+
+///|
+/// How the list stands now (Ctx::list_info's).
+pub fn ListReader::info(self : ListReader) -> ListInfo? {
+  self.ctx.list_info_of(self.id)
+}
+
+///|
+/// Where the list is now (Ctx::list_place's).
+pub fn ListReader::place(self : ListReader) -> (Int, Double, Double)? {
+  self.ctx.list_place_of(self.id)
+}
+
+///|
+/// How tall row `item` is now (Ctx::list_row_height's).
+pub fn ListReader::row_height(self : ListReader, item : Int) -> Double? {
+  self.ctx.list_row_height_of(self.id, item)
+}
+
+///|
+fn Ctx::list_info_of(self : Ctx, id : Int) -> ListInfo? {
+  match self.lists.get(id) {
     Some(st) =>
       Some({
         count: st.count,

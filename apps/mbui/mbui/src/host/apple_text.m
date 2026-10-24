@@ -97,7 +97,19 @@ static CTFontRef face_font(int face, double size, int weight) {
     // 'wght': the variable file at this weight
     at = CTFontDescriptorCreateCopyWithVariation(d, (__bridge CFNumberRef)@(0x77676874), (CGFloat)weight);
   }
-  CTFontRef f = CTFontCreateWithFontDescriptor(at ? at : d, size, NULL);
+  // the app's words and what people wrote with the web's alternates (global.css.ts: font-feature-settings "cv11",
+  // "ss01": Inter's single-storey a, its open digits; a face without them is as it is)
+  CTFontDescriptorRef feat = NULL;
+  if (face == 1 || face == 2) {
+    NSArray *fs = @[
+      @{(__bridge id)kCTFontOpenTypeFeatureTag : @"cv11", (__bridge id)kCTFontOpenTypeFeatureValue : @1},
+      @{(__bridge id)kCTFontOpenTypeFeatureTag : @"ss01", (__bridge id)kCTFontOpenTypeFeatureValue : @1},
+    ];
+    feat = CTFontDescriptorCreateCopyWithAttributes(at ? at : d,
+                                                    (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : fs});
+  }
+  CTFontRef f = CTFontCreateWithFontDescriptor(feat ? feat : at ? at : d, size, NULL);
+  if (feat) CFRelease(feat);
   if (at) CFRelease(at);
   return f;
 }
@@ -144,6 +156,62 @@ int32_t mb_host_face_add_bytes(int32_t face, moonbit_bytes_t data, int32_t weigh
   [face_weights[face] addObject:@(weight)];
   faces_changed();
   return 1;
+}
+
+// A family's weight as CSS says it (100 … 900), from Core Text's (-1 … 1; AppKit's NSFontWeight constants).
+static int css_weight(double w) {
+  static const double ct[] = {-0.8, -0.6, -0.4, 0.0, 0.23, 0.3, 0.4, 0.56, 0.62};
+  int best = 3;
+  for (int i = 0; i < 9; i++) {
+    if (fabs(ct[i] - w) < fabs(ct[best] - w)) best = i;
+  }
+  return (best + 1) * 100;
+}
+
+// Face `face` set in the family installed here named `family`: its upright styles, each for its weight (a family's
+// italics are not what its words take).
+int32_t mb_host_face_add_family(int32_t face, moonbit_string_t family) {
+  if (face <= 0 || face >= MB_FACES) return 0;
+  NSDictionary *attrs = @{(id)kCTFontFamilyNameAttribute : mb_ns_from_string(family)};
+  CTFontDescriptorRef base = CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef)attrs);
+  CFArrayRef ds = CTFontDescriptorCreateMatchingFontDescriptors(base, NULL);
+  CFRelease(base);
+  if (!ds) return 0;
+  NSMutableArray *descs = [NSMutableArray new];
+  NSMutableArray<NSNumber *> *weights = [NSMutableArray new];
+  for (CFIndex i = 0; i < CFArrayGetCount(ds); i++) {
+    CTFontDescriptorRef d = (CTFontDescriptorRef)CFArrayGetValueAtIndex(ds, i);
+    NSDictionary *traits = (__bridge_transfer NSDictionary *)CTFontDescriptorCopyAttribute(d, kCTFontTraitsAttribute);
+    uint32_t symbolic = [traits[(id)kCTFontSymbolicTrait] unsignedIntValue];
+    if (symbolic & kCTFontItalicTrait) continue;
+    [descs addObject:(__bridge id)d];
+    [weights addObject:@(css_weight([traits[(id)kCTFontWeightTrait] doubleValue]))];
+  }
+  CFRelease(ds);
+  if (descs.count == 0) return 0;
+  face_descs[face] = descs;
+  face_weights[face] = weights;
+  faces_changed();
+  return 1;
+}
+
+// The font families installed here, as a JSON array of their names (the system's hidden ones, named with a dot first,
+// left out); "" on iOS (no list of them to the app).
+moonbit_string_t mb_host_local_font_families(void) {
+#if TARGET_OS_OSX
+  @autoreleasepool {
+    NSArray<NSString *> *names = (__bridge_transfer NSArray *)CTFontManagerCopyAvailableFontFamilyNames();
+    NSMutableArray<NSString *> *shown = [NSMutableArray new];
+    for (NSString *n in names) {
+      if (![n hasPrefix:@"."]) [shown addObject:n];
+    }
+    [shown sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+    NSData *json = [NSJSONSerialization dataWithJSONObject:shown options:0 error:nil];
+    return mb_string_from_ns(json ? [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] : @"");
+  }
+#else
+  return mb_string_from_ns(@"");
+#endif
 }
 
 void mb_host_face_clear(int32_t face) {
@@ -594,6 +662,12 @@ static void rasterize(int key) {
   CGColorSpaceRelease(cs);
   free(px);
   CFRelease(line);
+}
+
+// (a glyph drawn as it is first asked for: nothing ahead)
+void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
+  (void)keys;
+  (void)n;
 }
 
 void mb_host_glyph(int32_t key, double *out) {

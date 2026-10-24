@@ -17,7 +17,7 @@ const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).fi
 test("a_reached_station_is_linked_read_as_its_stream_opens_and_its_topics_read_only_what_is_held", async () => {
   const { host, core, streams } = await started();
   assert.equal(streams.length, 1, "its events stream is open");
-  assert.equal(streams[0].path, "/events");
+  assert.equal(streams[0].path, "/events?running=1");
   for (const path of ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"]) assert.equal(gets(host, path), 1, path);
   // Its chats' entries are brought onto the device, nobody looking.
   assert.equal(gets(host, "/admin/api/threads/7/entries?limit=50"), 1);

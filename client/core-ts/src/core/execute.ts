@@ -9,6 +9,7 @@ import { inkKept } from "../highlight.ts";
 import { markdown } from "../markdown.ts";
 import { bookAnswer, keepBook, keptBook, searchBook } from "../reader.ts";
 import { Beside } from "../protocol.ts";
+import * as keymap from "../keymap.ts";
 import * as prefs from "../prefs.ts";
 import type { ClientId, RequestId } from "../protocol.ts";
 import type { SpanContext } from "../trace.ts";
@@ -100,6 +101,15 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         break;
       case "prefsSet":
         return Effect.try({ try: () => (prefs.set(inner.data, call.patch, call.fill, inner.host.nowMs()), null), catch: asCoreError });
+      case "keysSet":
+        return Effect.try({
+          try: () => {
+            const { patch, moved, said } = keymap.change(inner.data.shared({ topic: "prefs" }), call.action, call.keys);
+            prefs.set(inner.data, { keys: patch }, false, inner.host.nowMs());
+            return { moved, said };
+          },
+          catch: asCoreError,
+        });
       case "clientDevice":
         return Effect.try({
           try: () => {
@@ -137,6 +147,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.succeed({ at: searchBook(book, call.query, call.limit) });
       }
       case "decisionDefer":
+        inner.views?.decisionDeferred(call.station, call.thread, call.seq);
         prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
         return Effect.succeed(null);
       case "draftPut": {

@@ -918,7 +918,7 @@
     if (!v || v.kind !== 1) return;
     if (op === 1) v.el.play().catch(() => {});
     else if (op === 2) v.el.pause();
-    else if (op === 3) v.el.currentTime = value / 1000;
+    else if (op === 3 || op === 11) v.el.currentTime = value / 1000;
     else if (op === 4) v.el.playbackRate = value;
     // a frame grabbed (op 21, or the one shown: 22): this host grabs none; failed, said so (viewText's 2: "-1", once)
     else if (op === 21 || op === 22) {
@@ -958,16 +958,21 @@
     out[1] = r.length;
     return r.id;
   };
-  H.viewReadAnswer = (id, req, data, total) => {
+  // a read's bytes as they come (more: more of it comes), the next read asked after its last answer
+  H.viewReadAnswer = (id, req, data, total, more) => {
     const v = views.get(id);
-    if (!v || !v.waiting.delete(req)) return;
+    const r = v && v.waiting.get(req);
+    if (!r) return;
+    if (!more || total === -2) v.waiting.delete(req);
     if (total === -2) { v.state = -1; ready(id, v, -1); H.requestFrame(); return; }
     const part = new Uint8Array(data);
     v.parts.push(part);
     v.have += part.length;
+    r.got = (r.got || 0) + part.length;
     v.info[5] = v.have;
     if (total >= 0) v.total = total;
-    if (part.length > 0 && (v.total < 0 || v.have < v.total)) return v.ask(v.have);
+    if (more) return;
+    if (r.got > 0 && (v.total < 0 || v.have < v.total)) return v.ask(v.have);
     v.url = URL.createObjectURL(new Blob(v.parts, { type: v.type }));
     v.el.src = v.url;
   };
@@ -1524,7 +1529,9 @@
       const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
       const [x, y] = pos(e);
       // lines (a mouse wheel's notches, as Firefox says them): eased in by the app (phase 4)
-      cb.wheel(x, y, e.deltaX * k, e.deltaY * k, e.deltaMode === 1 ? 4 : 0);
+      // what is held with it, above the phase (ui's wheel_mod_*: a trackpad's pinch comes as ctrl and the wheel)
+      const mods = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+      cb.wheel(x, y, e.deltaX * k, e.deltaY * k, (e.deltaMode === 1 ? 4 : 0) | (mods << 4));
     }, { passive: false });
     const keymap = { Backspace: 1, Delete: 2, ArrowLeft: 3, ArrowRight: 4, ArrowUp: 5, ArrowDown: 6, Enter: 7, Home: 8, End: 9, PageUp: 15, PageDown: 16, Escape: 17, Tab: 18 };
     // the browser's own shortcuts left to it (reload, close, a new tab or window, the address bar, quit)

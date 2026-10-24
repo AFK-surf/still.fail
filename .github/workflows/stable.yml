@@ -32,6 +32,8 @@ jobs:
           RELEASE_REVISION: ${{ inputs.revision }}
         run: python3 .github/stable-plan.py
 
+  # The Android app is mbui's (apps/mbui, its `stable` variant: fail.still.android, signed as the Kotlin app was, so an
+  # installed one updates in place) since 2026-10-24, as asked; the Kotlin app stopped at 0.1.4520.
   android:
     needs: plan
     runs-on: [self-hosted, mini1]
@@ -41,7 +43,8 @@ jobs:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
-      - name: Publish stable Android with its original signing key
+      - uses: ./.github/actions/natives
+      - name: Publish stable Android (mbui's) with its original signing key
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}

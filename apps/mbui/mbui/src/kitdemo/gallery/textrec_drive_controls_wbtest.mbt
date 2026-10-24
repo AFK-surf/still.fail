@@ -12,6 +12,9 @@ test "the controls page under a Tester over drive_controls's kept text draws, fr
     for line in t.drawn_text().split("\n") {
       println("TDUMP " + line.to_owned())
     }
+    for f in frames {
+      println("REHASH drive_controls \{f.0} \{f.2}")
+    }
   }
   assert_true(frames.length() > 0)
   assert_eq(t.text_missing(), [])

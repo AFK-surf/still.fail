@@ -1,5 +1,5 @@
 // The station's screens (docs/remote-screens.md): the view wire over a member's link in memory (framing, at most
-// UNACKED frames not acknowledged, read-only members, who is on a screen, how a view ends), with a fake source; the
+// as many frames not acknowledged as the pace lets go, read-only members, who is on a screen, how a view ends), with a fake source; the
 // list (GET /screens, `screens` on the event stream); a person's input as macOS posts it; the desktop source with a
 // fake helper (its grants, its view protocol); the clipboard both ways and files dropped (only for a view that drives,
 // within bounds, of the types a source carries). Nothing here captures a screen: side/screen-desktop.test.ts does.
@@ -14,18 +14,22 @@ import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import { Events } from "../src/api/events.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
-import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, UNACKED, answerScreen, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
+import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
 import { Desktop, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
 import { dropFolder } from "../src/drive/drive.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
+import { USAGES, SimInput } from "../src/screens/sim-input.ts";
+import { Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
 import { KEYS, WinInput } from "../src/screens/win-input.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
+import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED } from "../src/mesh/screen-pace.ts";
+import type { Clock } from "effect";
 import { memoryMesh, vanish } from "./memory-mesh.ts";
 import { Superseded } from "../src/mesh/superseded.ts";
 
@@ -71,6 +75,14 @@ class FakeView implements ScreenView {
   }
   async reveal(path: string) {
     this.asks.push({ reveal: path });
+  }
+  /// Who hears the pointer while it is watched.
+  pointer: ((cursor: { x: number; y: number; shape: string }) => void) | null = null;
+  watchCursor(heard: (cursor: { x: number; y: number; shape: string }) => void) {
+    this.pointer = heard;
+    return () => {
+      if (this.pointer === heard) this.pointer = null;
+    };
   }
   close() {
     this.closed = true;
@@ -118,14 +130,14 @@ async function link() {
 }
 
 /// A view opened as a client opens one: its head line, the station answering it (`served`), the answer's head.
-async function open(hub: ScreenHub, viewer: Viewer, screen: unknown = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264", "jpeg"], control: true }, path = "/admin/api/screens/fake/view") {
+async function open(hub: ScreenHub, viewer: Viewer, screen: unknown = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264", "jpeg"], control: true }, path = "/admin/api/screens/fake/view", clock?: Clock.Clock) {
   const { conn, theirs } = await link();
   const stream = await conn.openBi();
   await writeLine(stream, { method: "POST", path, headers: { "stillfail-lang": "en" }, screen });
   const incoming = (await theirs.acceptBi())!;
   const heard = new Reader(incoming);
   const head = await heard.line();
-  const served = answerScreen(hub, incoming, heard.carry, head, viewer, () => true);
+  const served = answerScreen(hub, incoming, heard.carry, head, viewer, () => true, clock);
   const client = new Reader(stream);
   const answer = await client.line();
   return { conn, stream, served, answer, client, frames: new FrameIn(stream, client.carry) };
@@ -154,8 +166,8 @@ test("a view: its answer, what it is, then the config and frames as the source g
   hub.add(source);
   const v = await open(hub, member, { maxWidth: 99999, codecs: ["vp9", "h264"], control: true });
   assert.deepEqual(v.answer, { status: 200, headers: { "content-type": SCREEN_TYPE } });
-  // What it asked, bounded; the codecs ours only; the height as not said.
-  assert.deepEqual(source.opened, [{ maxWidth: 8192, maxHeight: 1080, codecs: ["h264"] }]);
+  // What it asked, bounded; the codecs ours only; the height as not said; at the pace's start rate.
+  assert.deepEqual(source.opened, [{ maxWidth: 8192, maxHeight: 1080, codecs: ["h264"], bitrate: START_RATE }]);
   const states: any[] = [];
   const config = json(await until(v.frames, KIND.config, states));
   assert.deepEqual(states, [{ title: "Tab", control: true }, { viewers: ["Pat"], controlledBy: ["Pat"] }]);
@@ -171,38 +183,97 @@ test("a view: its answer, what it is, then the config and frames as the source g
   await v.served;
 });
 
-test("at most two frames go unacknowledged: the source is asked for the next as one is acknowledged", async () => {
+test("frames go unacknowledged while the link keeps up: two before its round trip is known, none once one waits too long", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
   hub.add(source);
-  const v = await open(hub, member);
+  const time = testClock();
+  const v = await open(hub, member, undefined, undefined, time.clock);
   await until(v.frames, KIND.video);
   await until(v.frames, KIND.video);
   await settle();
   const view = source.views[0]!;
-  assert.equal(UNACKED, 2);
-  assert.equal(view.asked, 2, "no frame is made while two are not acknowledged");
-  // The first decoded: one more.
+  assert.equal(view.asked, START_UNACKED, "before an acknowledgement, two");
+  // The first decoded at once (a round trip of 0 ms): the link keeps up, frames go until MAX_UNACKED are on the way.
   await v.stream.write(frame(KIND.ack, ts8(1000)));
-  assert.equal((await until(v.frames, KIND.video)).readBigUInt64BE(1), 3000n);
   await settle();
-  assert.equal(view.asked, 3);
-  // An ack says all up to it were decoded: two more.
-  await v.stream.write(frame(KIND.ack, ts8(3000)));
-  await until(v.frames, KIND.video);
-  await until(v.frames, KIND.video);
+  assert.equal(view.asked, 1 + MAX_UNACKED);
+  // Later than the round trip and QUEUE_MS: a queue builds, nothing more goes, not even as one is acknowledged.
+  await time.adjust(QUEUE_MS + 1);
+  await v.stream.write(frame(KIND.ack, ts8(2000)));
   await settle();
-  assert.equal(view.asked, 5);
+  assert.equal(view.asked, 1 + MAX_UNACKED);
+  // All of them decoded: they go again.
+  await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+  await settle();
+  assert.equal(view.asked, 1 + 2 * MAX_UNACKED);
   // A short ack says nothing.
   await v.stream.write(frame(KIND.ack, Buffer.alloc(3)));
   await settle();
-  assert.equal(view.asked, 5);
+  assert.equal(view.asked, 1 + 2 * MAX_UNACKED);
   // A key frame asked for goes to the source.
   await v.stream.write(frame(KIND.keyframe, Buffer.alloc(0)));
   await settle();
   assert.equal(view.keyframes, 1);
   await v.stream.finish();
   await v.served;
+});
+
+test("the pointer a source says beside its pictures goes to the view as its state's cursor", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  hub.add(source);
+  const v = await open(hub, member);
+  await until(v.frames, KIND.video);
+  const view = source.views[0]!;
+  assert.ok(view.pointer, "watched as the view opened");
+  view.pointer!({ x: 0.25, y: 0.5, shape: "text" });
+  for (;;) {
+    const got = await v.frames.next();
+    if (got?.kind === KIND.state && json(got.payload).cursor) {
+      assert.deepEqual(json(got.payload).cursor, { x: 0.25, y: 0.5, shape: "text" });
+      break;
+    }
+  }
+  await v.stream.finish();
+  await v.served;
+  assert.equal(view.pointer, null, "no longer heard once the view ended");
+});
+
+test("the display's scale: told to a person who drives it, set as they ask; a read-only member neither hears nor sets it", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  let scale = { percent: 300, recommended: 150, steps: [100, 125, 150, 175, 200, 225, 250, 300, 350] };
+  const set: number[] = [];
+  Object.assign(source, {
+    scale: async () => scale,
+    setScale: async (percent: number) => (set.push(percent), (scale = { ...scale, percent })),
+  });
+  hub.add(source);
+  const driver = await open(hub, member);
+  const states: any[] = [];
+  await until(driver.frames, KIND.video, states);
+  while (!states.some((s) => s.scale)) states.push(json(await until(driver.frames, KIND.state)));
+  assert.deepEqual(states.find((s) => s.scale).scale, { percent: 300, recommended: 150, steps: scale.steps });
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "scale", percent: 150 }))));
+  // Not a percent Windows has, or not a number: dropped before the source.
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "scale", percent: 1000 }))));
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "scale", percent: "150" }))));
+  for (;;) {
+    const got = await driver.frames.next();
+    if (got?.kind === KIND.state && json(got.payload).scale?.percent === 150) break;
+  }
+  assert.deepEqual(set, [150]);
+  const viewer = await open(hub, reader, { codecs: ["h264"], control: true });
+  const seen: any[] = [];
+  await until(viewer.frames, KIND.video, seen);
+  await viewer.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "scale", percent: 100 }))));
+  await settle();
+  assert.deepEqual(set, [150]);
+  assert.ok(!seen.some((s) => s.scale));
+  await driver.stream.finish();
+  await viewer.stream.finish();
+  await Promise.all([driver.served, viewer.served]);
 });
 
 test("input reaches the source from a member who asked to drive, checked; a read-only member's is dropped", async () => {
@@ -539,6 +610,15 @@ const FAKE_SCREEN = `
 const fs = require("node:fs");
 const [mode, log] = process.argv.slice(2);
 if (mode === "status") { console.log(JSON.stringify({ ok: true, display: { id: 1, width: 2560, height: 1600 }, capture: true })); process.exit(0); }
+if (mode === "scale") {
+  const kept = log + ".scale", steps = [100, 125, 150, 175, 200, 225, 250, 300, 350], asked = process.argv[4];
+  if (asked !== undefined) {
+    if (!steps.includes(Number(asked))) { console.log(JSON.stringify({ error: asked + "% is not a step of this display" })); process.exit(0); }
+    fs.writeFileSync(kept, asked); fs.appendFileSync(log, JSON.stringify({ scale: Number(asked) }) + "\\n");
+  }
+  console.log(JSON.stringify({ percent: fs.existsSync(kept) ? Number(fs.readFileSync(kept, "utf8")) : 300, recommended: 150, steps }));
+  process.exit(0);
+}
 const out = (kind, payload) => { const head = Buffer.alloc(5); head[0] = kind; head.writeUInt32BE(payload.length, 1); process.stdout.write(Buffer.concat([head, payload])); };
 let carry = Buffer.alloc(0), request = null, n = 0;
 process.stdin.on("data", (chunk) => {
@@ -589,6 +669,8 @@ test("Windows' desktop: a stillfail-screen process a view, asked for each frame,
   await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: [] }), (e: ScreenRefused) => e.status === 415);
   const view = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264", "jpeg"] });
   assert.deepEqual(started.at(-1), ["view"]);
+  // How its pictures are made, as its info named the encoder (none says "software": the hardware's).
+  assert.deepEqual(view.video?.(), { capture: "Windows.Graphics.Capture", encoder: "fake", hardware: true });
   assert.deepEqual(await view.next(), { key: true, ts: 1000, data: new Uint8Array([0, 0, 0, 1, 1]), config: { codec: "h264", width: 1280, height: 800, description: new Uint8Array([1, 66, 0, 31]) } });
   await view.input({ t: "key", kind: "down", key: "c", code: "KeyC", mods: 0 });
   await view.input({ t: "pointer", kind: "down", x: 0.25, y: 0.5, buttons: 1 });
@@ -604,6 +686,11 @@ test("Windows' desktop: a stillfail-screen process a view, asked for each frame,
   const pending = view.next();
   view.close();
   assert.equal(await pending, null);
+  // H.265 asked of it: as its info says what it made; one that says nothing (from before H.265) made H.264.
+  const asked = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h265", "h264"] });
+  assert.equal((await asked.next())?.config?.codec, "h264");
+  assert.equal(readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).at(-1).codec, "h265");
+  asked.close();
   // One that cannot capture says why.
   await assert.rejects(desktop.open({ maxWidth: 1, maxHeight: 1, codecs: ["jpeg"] }), (e: ScreenRefused) => e.status === 503 && /no display to capture/.test(e.message));
   await desktop.close();
@@ -635,6 +722,35 @@ test("Windows' desktop: a view whose process ends by itself goes on in a new one
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("Windows' desktop: the display's scale set while viewed, put back as it was once the last view ends", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sf-winscreen-"));
+  const script = join(dir, "fake-screen.cjs");
+  const log = join(dir, "log");
+  writeFileSync(script, FAKE_SCREEN);
+  writeFileSync(log, "");
+  const start = (_binary: string, args: string[]) => spawn(process.execPath, [script, args[0]!, log, ...args.slice(1)], { stdio: ["pipe", "pipe", "inherit"] });
+  const desktop = new WindowsDesktop({ binary: "stillfail-screen.exe", changed: () => {}, start });
+  const steps = [100, 125, 150, 175, 200, 225, 250, 300, 350];
+  assert.deepEqual(await desktop.scale(), { percent: 300, recommended: 150, steps });
+  const a = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264"] });
+  const b = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264"] });
+  assert.deepEqual(await desktop.setScale(150), { percent: 150, recommended: 150, steps });
+  assert.deepEqual(await desktop.setScale(125), { percent: 125, recommended: 150, steps });
+  // Not one of its steps: refused as stillfail-screen says, nothing changed.
+  await assert.rejects(desktop.setScale(130), /130% is not a step/);
+  assert.equal((await desktop.scale())?.percent, 125);
+  // One view left: as it was set.
+  a.close();
+  assert.equal((await desktop.scale())?.percent, 125);
+  // The last one gone: as it was before the first change (300%, not 150%).
+  b.close();
+  assert.equal((await desktop.scale())?.percent, 300);
+  const scales = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((l) => "scale" in l).map((l) => l.scale);
+  assert.deepEqual(scales, [150, 125, 300]);
+  await desktop.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 // The real one, where it is built (a Windows machine with a display): a JPEG view of the main display.
 const realScreen = WINDOWS ? screenBinary() : null;
 test("Windows' desktop, for real: stillfail-screen gives a picture of the display", { skip: realScreen === null }, async () => {
@@ -655,7 +771,7 @@ test("Windows' desktop, for real: stillfail-screen gives a picture of the displa
 
 /// still.fail Helper as native/helper's is, in this process: started by `launch` (the station's `open`) with its socket
 /// and token; `status` as `status` is, `permissions.show` noted (its window then up), `quit` noted, `screen.view`
-/// answering with made-up frames and noting the input. `restartOnce`: its next view asks to start again (a grant taken
+/// (and `simulator.view`) answering with made-up frames and noting the input. `restartOnce`: its next view asks to start again (a grant taken
 /// since it started), and it is back on its socket a moment later, as the app started again is.
 class FakeHelperApp {
   launches = 0;
@@ -744,7 +860,8 @@ class FakeHelperApp {
           this.quits++;
           line({ ok: true });
           return this.#stop();
-        case "screen.view": {
+        case "screen.view":
+        case "simulator.view": {
           this.views.push(ask);
           if (this.restartOnce) {
             this.restartOnce = false;
@@ -1196,4 +1313,131 @@ test("the desktop's clipboard: set and pasted, watched and heard, a file reveale
   assert.deepEqual(fake.watches, [1, 0], "no longer watched: the helper stops looking");
   view.close();
   fake.close();
+});
+
+test("input as an iOS Simulator takes it: the left button a finger (from an edge, a system gesture), a wheel, keys by their HID usage, its buttons by Simulator.app's shortcuts, text typed or pasted", () => {
+  const sim = new SimInput();
+  const pointer = (kind: "down" | "up" | "move", x: number, y: number, buttons: number): ScreenInput => ({ t: "pointer", kind, x, y, buttons });
+  // A pointer moving with nothing held, or another button: no finger.
+  assert.deepEqual(sim.ops(pointer("move", 0.5, 0.5, 0)), []);
+  assert.deepEqual(sim.ops(pointer("down", 0.5, 0.5, 2)), []);
+  assert.deepEqual(sim.ops(pointer("down", 0.25, 0.5, 1)), [{ op: "touch", type: "begin", x: 0.25, y: 0.5 }]);
+  assert.deepEqual(sim.ops(pointer("move", 0.3, 0.6, 1)), [{ op: "touch", type: "move", x: 0.3, y: 0.6 }]);
+  assert.deepEqual(sim.ops(pointer("up", 0.3, 0.6, 0)), [{ op: "touch", type: "end", x: 0.3, y: 0.6 }]);
+  // From the bottom edge: the home indicator's swipe, the whole gesture; out of the screen, held within it.
+  assert.deepEqual(sim.ops(pointer("down", 0.5, 0.99, 1)), [{ op: "touch", type: "begin", x: 0.5, y: 0.99, edge: 3 }]);
+  assert.deepEqual(sim.ops(pointer("move", 0.5, -0.2, 1)), [{ op: "touch", type: "move", x: 0.5, y: 0, edge: 3 }]);
+  // The button let go where the page saw no up (the pointer left the view): the finger lifts at the next move.
+  assert.deepEqual(sim.ops(pointer("move", 0.5, 0.4, 0)), [{ op: "touch", type: "end", x: 0.5, y: 0.4, edge: 3 }]);
+  assert.deepEqual(sim.ops(pointer("down", 0.5, 0.01, 1))[0], { op: "touch", type: "begin", x: 0.5, y: 0.01, edge: 2 });
+  sim.ops(pointer("up", 0.5, 0.3, 0));
+  assert.deepEqual(sim.ops({ t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: 120 }), [{ op: "scroll", x: 0.5, y: 0.5, dx: 0, dy: 120 }]);
+  assert.deepEqual(sim.ops({ t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: 0 }), []);
+  const key = (kind: "down" | "up", code: string, mods = 0): ScreenInput => ({ t: "key", kind, key: "", code, mods });
+  assert.deepEqual(sim.ops(key("down", "KeyA")), [{ op: "key", type: "down", usage: 0x04 }]);
+  assert.deepEqual(sim.ops(key("up", "Enter")), [{ op: "key", type: "up", usage: 0x28 }]);
+  assert.equal(USAGES.Digit0, 0x27);
+  assert.equal(USAGES.F12, 0x45);
+  assert.deepEqual(sim.ops(key("down", "Unidentified")), []);
+  // A modifier held from its own key is not pressed again round the next; one only named in `mods` (a phone's keys row) is.
+  assert.deepEqual(sim.ops(key("down", "ShiftLeft", 8)), [{ op: "key", type: "down", usage: 0xe1 }]);
+  assert.deepEqual(sim.ops(key("down", "KeyA", 8)), [{ op: "key", type: "down", usage: 0x04 }]);
+  sim.ops(key("up", "ShiftLeft"));
+  assert.deepEqual(sim.ops(key("down", "KeyA", 2)), [{ op: "key", type: "down", usage: 0xe0 }, { op: "key", type: "down", usage: 0x04 }]);
+  assert.deepEqual(sim.ops(key("up", "KeyA", 2)), [{ op: "key", type: "up", usage: 0x04 }, { op: "key", type: "up", usage: 0xe0 }]);
+  // Simulator.app's shortcuts: the device's buttons, once (as the key goes down).
+  assert.deepEqual(sim.ops(key("down", "KeyH", 12)), [{ op: "button", name: "home" }]);
+  assert.deepEqual(sim.ops(key("up", "KeyH", 12)), []);
+  assert.deepEqual(sim.ops(key("down", "KeyL", 4)), [{ op: "button", name: "lock" }]);
+  assert.deepEqual(sim.ops(key("down", "KeyK", 4)), [{ op: "button", name: "keyboard" }]);
+  assert.deepEqual(sim.ops(key("down", "KeyH", 14)), [{ op: "button", name: "app_switcher" }]);
+  // ⌃⌘ with another key is that key, ⌃⌘ round it.
+  assert.deepEqual(sim.ops(key("down", "KeyL", 6))[0], { op: "key", type: "down", usage: 0xe0 });
+  // Text: a US keyboard's keys, shift round what needs it; anything one does not type, pasted whole.
+  assert.deepEqual(sim.ops({ t: "text", text: "a!" }), [
+    { op: "key", type: "down", usage: 0x04 }, { op: "key", type: "up", usage: 0x04 },
+    { op: "key", type: "down", usage: 0xe1 }, { op: "key", type: "down", usage: 0x1e }, { op: "key", type: "up", usage: 0x1e }, { op: "key", type: "up", usage: 0xe1 },
+  ]);
+  assert.deepEqual(sim.ops({ t: "text", text: "你好 a" }), [{ op: "paste", text: "你好 a" }]);
+  assert.deepEqual(sim.ops({ t: "text", text: "" }), []);
+});
+
+test("the simulators booted, as simctl lists them: their runtime's name, their screen's size", () => {
+  const listed = {
+    devices: {
+      "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [
+        { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", state: "Booted", deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17" },
+        { udid: "422DED77-9031-4A8D-93D7-67F1A7C4A272", name: "iPhone 17", state: "Shutdown" },
+        { udid: "not a udid", name: "x", state: "Booted" },
+      ],
+      "com.apple.CoreSimulator.SimRuntime.xrOS-27-0": [{ udid: "6518D637-E9E0-4293-B844-EAC38471B04F", name: "Apple Vision Pro", state: "Booted" }],
+      broken: "nothing",
+    },
+  };
+  assert.deepEqual(bootedOf(listed), [
+    { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", runtime: "iOS 26.2", type: "com.apple.CoreSimulator.SimDeviceType.iPhone-17" },
+    { udid: "6518D637-E9E0-4293-B844-EAC38471B04F", name: "Apple Vision Pro", runtime: "visionOS 27.0", type: "" },
+  ]);
+  assert.deepEqual(bootedOf(null), []);
+  assert.equal(runtimeName("something else"), "something else");
+  assert.deepEqual(screenOf({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } }), { width: 1206, height: 2622 });
+  assert.deepEqual(screenOf({}), { width: 0, height: 0 });
+});
+
+test("a simulator a screen while it is booted: listed with its device's name and size, a view the helper's simulator.view, input as the device takes it; gone as it shuts down", { skip: WINDOWS }, async () => {
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: false, control: false, display });
+  const helper = new HelperApp({ app, dir, launch: fake.launch });
+  const hub = new ScreenHub();
+  const udid = "5A25EA86-3568-43D6-9068-8B2CB5FADB26";
+  let booted = true;
+  const runs: string[] = [];
+  const run = async (file: string, args: string[]) => {
+    runs.push([file, ...args].join(" "));
+    if (args.join(" ") === "simctl list -j devices")
+      return JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [{ udid, name: "iPhone 17", state: booted ? "Booted" : "Shutdown", deviceTypeIdentifier: "t17" }] } });
+    if (args.join(" ") === "simctl list -j devicetypes") return JSON.stringify({ devicetypes: [{ identifier: "t17", bundlePath: "/t17.simdevicetype" }] });
+    if (file === "plutil") return JSON.stringify({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } });
+    throw new Error(`not run here: ${file}`);
+  };
+  const simulators = new Simulators({ screens: hub, helper, run, devices: join(dir, "no devices here") });
+  await simulators.start();
+  const listed = hub.listed("en").screens.find((s: any) => s.kind === "simulator") as any;
+  assert.equal(listed?.id, `simulator:${udid}`);
+  assert.equal(listed?.title, "iPhone 17 · iOS 26.2");
+  assert.deepEqual([listed?.width, listed?.height], [1206, 2622]);
+  // Its size is asked once a device type, not again as the list is looked at again.
+  await simulators.refresh();
+  assert.equal(runs.filter((r) => r.includes("devicetypes")).length, 1);
+  assert.equal(hub.list().length, 1);
+
+  const view = await hub.get(`simulator:${udid}`)!.open({ maxWidth: 1280, maxHeight: 720, codecs: ["h264", "jpeg"] });
+  assert.deepEqual(fake.views[0], { op: "simulator.view", udid, codec: "h264", maxWidth: 1280, maxHeight: 720, token: fake.views[0].token });
+  assert.equal((await view.next())!.config?.codec, "h264");
+  assert.deepEqual(view.video?.(), { capture: "CoreSimulator", encoder: "fake", hardware: true });
+  await view.input({ t: "pointer", kind: "down", x: 0.5, y: 0.5, buttons: 1 });
+  await view.input({ t: "key", kind: "down", key: "H", code: "KeyH", mods: 12 });
+  await view.next();
+  assert.deepEqual(fake.inputs, [{ op: "touch", type: "begin", x: 0.5, y: 0.5 }, { op: "button", name: "home" }]);
+
+  // Shut down: out of the list, its view ended.
+  booted = false;
+  await simulators.refresh();
+  assert.equal(hub.list().length, 0);
+  assert.equal(await view.next(), null);
+  simulators.close();
+  await helper.quit();
+  fake.close();
+});
+
+test("no simulators where there is no helper, nor where simctl cannot be run", async () => {
+  const hub = new ScreenHub();
+  let asked = 0;
+  await new Simulators({ screens: hub, helper: null, run: async () => (asked++, "") }).start();
+  assert.equal(asked, 0);
+  const { app, dir } = helperRelease();
+  const failing = new Simulators({ screens: hub, helper: new HelperApp({ app, dir, launch: async () => {} }), run: async () => Promise.reject(new Error("xcrun: error: unable to find utility \"simctl\"")), devices: join(dir, "none") });
+  await failing.start();
+  assert.equal(hub.list().length, 0);
+  failing.close();
 });

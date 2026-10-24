@@ -8,7 +8,7 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, seenBy, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, seenBy, sessionThreads, usageGroups, usageSince, usageThreads } from "./store.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
@@ -194,6 +194,24 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     people,
     profiles: configProfiles(s.dataDir),
   };
+}
+
+/// The chats of the resources page (GET /resources): each session's latest thread and its title; null for one `viewer` does
+/// not see (another workspace's).
+export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace | null): Record<string, Json> {
+  const seen = seenBy(s, viewer);
+  const out: Record<string, Json> = {};
+  for (const key of sessions) {
+    if (!seen(key)) {
+      out[key] = null;
+      continue;
+    }
+    const thread = sessionThreads(s, key)[0] ?? null;
+    const [, first] = thread !== null ? (usageThreads(s, [thread.id])[0] ?? [thread, null]) : [null, null];
+    const title = thread !== null ? titleOf(thread, first, thread.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, thread.id), thread.channel)) : null;
+    out[key] = { thread: thread?.id ?? null, title };
+  }
+  return out;
 }
 
 /// The connect a Slack thread came in through: the first of its sessions' that is not the station's own.

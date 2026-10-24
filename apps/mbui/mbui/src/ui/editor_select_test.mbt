@@ -80,3 +80,51 @@ test "the caret's handle tapped: the menu to paste or select all; all selected f
   assert_false(t.text_menu().0)
   assert_eq(f.text(), "x")
 }
+
+///|
+test "desktop: a field right clicked is told with where (its edit menu's) and focused; cut, copy, select all and paste act on it" {
+  let f = @ui.Field::new(text="hello world")
+  let told : Array[(Int, Double, Double)] = []
+  let can = Ref(0)
+  let edits : Array[(Int, String)] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.editor("e", field=f, font_size=10.0) |> ignore
+      match c.field_right_clicked() {
+        Some(x) => told.push(x)
+        None => ()
+      }
+      match told.last() {
+        Some((id, _, _)) => {
+          can.val = c.field_can(id)
+          for e in edits {
+            c.field_edit(id, e.0, paste=e.1)
+          }
+          edits.clear()
+        }
+        None => ()
+      }
+    },
+    w=300.0,
+    h=100.0,
+  )
+  t.draw()
+  t.right_click(16.0, 15.0)
+  assert_true(told.length() > 0)
+  let (_, x, y) = told[0]
+  assert_eq((x, y), (16.0, 15.0))
+  assert_true(t.ctx().editor_focused("e"))
+  // nothing picked: paste or select all
+  assert_eq(can.val & (@hostapi.text_menu_cut | @hostapi.text_menu_copy), 0)
+  edits.push((@hostapi.text_menu_select_all, ""))
+  t.draw()
+  t.draw()
+  assert_eq(f.selection(), (0, 11))
+  assert_true((can.val & @hostapi.text_menu_copy) != 0)
+  edits.push((@hostapi.text_menu_copy, ""))
+  t.draw()
+  assert_eq(t.clipboard(), "hello world")
+  edits.push((@hostapi.text_menu_paste, "bye"))
+  t.draw()
+  assert_eq(f.text(), "bye")
+}

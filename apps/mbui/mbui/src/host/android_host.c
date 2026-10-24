@@ -49,7 +49,7 @@ static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
 static void device_init(JNIEnv *env);  // android_device.h
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
-static jmethodID m_face_add, m_face_add_bytes, m_face_clear;
+static jmethodID m_face_add, m_face_add_bytes, m_face_clear, m_ahead, m_flush;
 static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still;
 static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
@@ -57,6 +57,7 @@ static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m
 static jmethodID m_up_version, m_up_install, m_up_state, m_up_package, m_sh_share, m_sh_in, m_sh_file;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
+static jintArray ahead_buf;
 static int want_frame;
 // A run to a declared moment (MBView's shotFrame, Native.ownClock): the app's clock is its frames', the time the
 // frame being drawn (or the last one) was given.
@@ -119,6 +120,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_face_add = (*env)->GetStaticMethodID(env, text_cls, "faceAdd", "(ILjava/lang/String;I)Z");
   m_face_add_bytes = (*env)->GetStaticMethodID(env, text_cls, "faceAddBytes", "(I[BI)Z");
   m_face_clear = (*env)->GetStaticMethodID(env, text_cls, "faceClear", "(I)V");
+  m_ahead = (*env)->GetStaticMethodID(env, text_cls, "ahead", "([II)V");
+  m_flush = (*env)->GetStaticMethodID(env, text_cls, "flush", "()V");
   m_ref_begin = (*env)->GetStaticMethodID(env, text_cls, "refBegin", "(DDDI)V");
   m_ref_text = (*env)->GetStaticMethodID(env, text_cls, "refText", "(Ljava/lang/String;DIIDDI[D)V");
   m_ref_end = (*env)->GetStaticMethodID(env, text_cls, "refEnd", "(Ljava/lang/String;)Z");
@@ -174,7 +177,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_v_control = (*env)->GetStaticMethodID(env, views_cls, "control", "(IID)V");
   m_v_info = (*env)->GetStaticMethodID(env, views_cls, "info", "(I[D)I");
   m_v_read_next = (*env)->GetStaticMethodID(env, views_cls, "readNext", "(I[D)I");
-  m_v_read_answer = (*env)->GetStaticMethodID(env, views_cls, "readAnswer", "(II[BD)V");
+  m_v_read_answer = (*env)->GetStaticMethodID(env, views_cls, "readAnswer", "(II[BDZ)V");
   m_v_site_next = (*env)->GetStaticMethodID(env, views_cls, "siteNext", "(I)Ljava/lang/String;");
   m_v_site_body = (*env)->GetStaticMethodID(env, views_cls, "siteBody", "(II)[B");
   m_v_site_head = (*env)->GetStaticMethodID(env, views_cls, "siteHead", "(IIILjava/lang/String;)V");
@@ -202,6 +205,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_nt_text = (*env)->GetStaticMethodID(env, notices_cls, "text", "(I)Ljava/lang/String;");
   shape_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 4 * 8192));
   small_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 16));
+  ahead_buf = (*env)->NewGlobalRef(env, (*env)->NewIntArray(env, 4096));
   device_init(env);
   return JNI_VERSION_1_6;
 }
@@ -833,6 +837,9 @@ static void segs_upload(int32_t count) {
 }
 
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
+  // the glyphs placed in the atlas as the frame was painted, uploaded before it is drawn (MBText.flush)
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, text_cls, m_flush);
   glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, 0, fb_w, fb_h);
   if (over_other) glClearColor(0, 0, 0, 0);
@@ -1330,6 +1337,16 @@ void mb_host_glyph(int32_t key, double *out) {
   (*env)->GetDoubleArrayRegion(env, small_buf, 0, 7, out);
 }
 
+// The glyphs shaped and not drawn yet (text.mbt glyphs_ahead): MBText draws them on a thread of its own, for glyph to
+// find drawn.
+void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
+  JNIEnv *env = env_();
+  if (n > 4096) n = 4096;
+  if (n <= 0) return;
+  (*env)->SetIntArrayRegion(env, ahead_buf, 0, n, (const jint *)keys);
+  (*env)->CallStaticVoidMethod(env, text_cls, m_ahead, ahead_buf, n);
+}
+
 int32_t mb_host_atlas_generation(void) {
   JNIEnv *env = env_();
   return (*env)->CallStaticIntMethod(env, text_cls, m_generation);
@@ -1381,6 +1398,10 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);
 }
+
+// A picture on the clipboard (@hostapi.clipboard_set_image): none here (Android's clipboard takes a picture only as a
+// content URI another app can read).
+void mb_host_clipboard_image(moonbit_bytes_t data) { (void)data; }
 
 void mb_host_clipboard_set(moonbit_string_t s) {
   JNIEnv *env = env_();
@@ -1815,10 +1836,10 @@ void mb_host_view_tell(int32_t id, int32_t what, moonbit_string_t text) {
   (*env)->DeleteLocalRef(env, t);
 }
 
-void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {
+void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
   JNIEnv *env = env_();
   jbyteArray b = jbytes(env, data);
-  (*env)->CallStaticVoidMethod(env, views_cls, m_v_read_answer, id, req, b, total);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_read_answer, id, req, b, total, (jboolean)(more != 0));
   (*env)->DeleteLocalRef(env, b);
 }
 
@@ -2073,8 +2094,29 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
   (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
 }
 int32_t mb_host_window_inset(void) { return 0; }
+// A window filling the screen (@hostapi.full_screen): not one of this host's.
+int32_t mb_host_full_screen(void) { return 0; }
+void mb_host_set_full_screen(int32_t on) { (void)on; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
+void mb_host_set_badge(int32_t n) { (void)n; }
+// The menu bar (@hostapi.menu_setup): none here.
+void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
+// (this machine's station: managed from the macOS app only)
+moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
+// (the phone's faces are the files given: no family of the machine's, no list of them)
+int32_t mb_host_face_add_family(int32_t face, moonbit_string_t family) { (void)face; (void)family; return 0; }
+moonbit_string_t mb_host_local_font_families(void) { return moonbit_make_string_raw(0); }
+void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
+// (the desktop's dock: the macOS app's only)
+int32_t mb_host_dock_available(void) { return 0; }
+
+// The keys held now (@hostapi.mods_held): none read here.
+int32_t mb_host_mods_held(void) { return 0; }
+void mb_host_dock_send(moonbit_string_t l) { (void)l; }
+void mb_host_dock_stop(void) {}
+moonbit_string_t mb_host_dock_kept(void) { return moonbit_make_string_raw(0); }
+void mb_host_dock_keep(moonbit_string_t j) { (void)j; }
 
 // ---------------------------------------------------------------------------
 // Streams (src/hostapi/stream.mbt): dev.mbui.Streams decodes (MediaCodec, BitmapFactory) and draws each frame the app

@@ -220,18 +220,6 @@ let zh : Map[String, String] = {
   "web-main.outside.anyway": "仍然发送",
   "web-main.outside.failed": "分享失败：{error}",
   // a vault request on its card (vault_approval.mbt)
-  "android-settings.vault.approve.once": "仅本次",
-  "android-settings.vault.approve.onceDetail": "只给这一条命令用，下次还要再批准",
-  "android-settings.vault.approve.hour": "本对话 1 小时内",
-  "android-settings.vault.approve.hourDetail": "1 小时内这个对话可以反复使用，不用再批准",
-  "android-settings.vault.approve.chat": "本对话直到归档",
-  "android-settings.vault.approve.chatDetail": "这个对话归档或删除前都能用，最长 30 天",
-  "android-settings.vault.approve.deny": "拒绝",
-  "android-settings.vault.approve.denyDetail": "通知 agent 已拒绝",
-  "android-settings.vault.approve.what": "批准",
-  "android-settings.vault.approve.denyWhat": "拒绝",
-  "android-settings.vault.approve.inApp": "请在客户端批准",
-  "android-settings.vault.approve.decided": "此申请已处理",
   // a face's file not what it says (faces.mbt)
   "android-settings.fonts.damaged": "文件已损坏",
   // a phone's or a tablet's wide screen (corners.mbt)
@@ -256,8 +244,8 @@ fn english(key : String, args? : Array[(String, String)] = []) -> String? {
 
 ///|
 /// The words for `key`.
-pub fn tr(key : String) -> String {
-  if english(key) is Some(s) {
+pub fn tr(key : String, args? : Array[(String, String)] = []) -> String {
+  if english(key, args~) is Some(s) {
     return s
   }
   match zh.get(key) {
@@ -274,7 +262,21 @@ pub fn tr(key : String) -> String {
                 None =>
                   match zh_links.get(key) {
                     Some(s) => s
-                    None => zh_screen.get(key).unwrap_or(key)
+                    None =>
+                      match zh_screen.get(key) {
+                        Some(s) => s
+                        // (the preview's own words: the library's player says some of them)
+                        None =>
+                          match pv_zh.get(key) {
+                            Some(s) => s
+                            None =>
+                              match up_zh.get(key) {
+                                Some(s) => s
+                                // (the settings' own words: the desktop's settings pages say them too)
+                                None => @settings.said(key, args).unwrap_or(key)
+                              }
+                          }
+                      }
                   }
               }
           }
@@ -287,7 +289,7 @@ pub fn tr(key : String) -> String {
 pub fn fill(key : String, args : Array[(String, String)]) -> String {
   let mut s = match english(key, args~) {
     Some(w) => w
-    None => tr(key)
+    None => tr(key, args~)
   }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)

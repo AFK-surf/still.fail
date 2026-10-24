@@ -7,8 +7,6 @@ import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.media.MediaDataSource;
-import android.media.MediaExtractor;
-import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.provider.MediaStore;
@@ -35,9 +33,20 @@ import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.BaseDataSource;
 import androidx.media3.datasource.DataSpec;
+import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.SeekParameters;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
+import androidx.media3.extractor.DefaultExtractorInput;
+import androidx.media3.extractor.DiscardingTrackOutput;
+import androidx.media3.extractor.Extractor;
+import androidx.media3.extractor.ExtractorInput;
+import androidx.media3.extractor.ExtractorOutput;
+import androidx.media3.extractor.PositionHolder;
+import androidx.media3.extractor.SeekMap;
+import androidx.media3.extractor.TrackOutput;
+import androidx.media3.extractor.mp4.Mp4Extractor;
+import androidx.media3.extractor.text.SubtitleParser;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -51,7 +60,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -59,7 +67,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * FrameLayout over the MBView in the view tree (so a WebView takes the touches on it) but under its surface on the
  * screen: the MBView's surface is on top of the window and translucent, and the app paints a hole (kind 9,
  * transparent) where a view shows, so what it paints after the hole draws over the view and what it paints around it
- * clips it. Each view sits in a clipping frame at its clip rect, itself at its content rect within it.
+ * clips it. Each view sits in a clipping frame, moved by its translation: a page's or a site's frame is its content's
+ * rect cut to its clip rect by its clip bounds; a video's is its clip rect, the picture at its content rect within it.
  *
  * Kind 1, a video: Media3's ExoPlayer on a TextureView, reading the file through the app (ViewSource: ranged reads
  * the app answers through the core, `station.file.part` or `drive.read`), never from a file or a URL of its own.
@@ -74,19 +83,70 @@ final class NativeViews {
     static final ConcurrentHashMap<Integer, NView> views = new ConcurrentHashMap<>();
     static final AtomicInteger next = new AtomicInteger();
 
-    /** One read the player waits on, answered once by the app. */
+    /**
+     * One read asked of the app (a video's run of blocks, Video.bytesAt): its bytes as they come, the app answering it
+     * in pieces until its last answer; what its readers take of it as soon as it is here. Its monitor guards it: a
+     * piece is put in, and `got` moved on, under it.
+     */
     static final class Read {
         final int id;
         final long offset;
         final int length;
-        byte[] data;
-        double total;
-        boolean done;
+        /** the blocks it brings: the first, how many */
+        final int block, blocks;
+        final byte[] data;
+        /** how many of its bytes have come; when the last of them came (System.nanoTime) */
+        volatile int got;
+        long heard;
+        /** its last answer came; it could not be read (the app said so, or nothing came for STALL_NS); let go of */
+        volatile boolean done;
+        boolean failed, gone;
+        /** the readers whose run it is (Video.Pace.read), under the view's keptLock */
+        int users;
 
-        Read(int id, long offset, int length) {
+        Read(int id, long offset, int length, int block, int blocks) {
             this.id = id;
             this.offset = offset;
             this.length = length;
+            this.block = block;
+            this.blocks = blocks;
+            this.data = new byte[length];
+            this.heard = System.nanoTime();
+        }
+
+        /**
+         * Up to `len` of its bytes at `p` into `buf` once they have come: how many; 0 when it ended short of `p` (its
+         * last answer came, or it was let go of, before); an error when it could not be read. Waits on the reader's
+         * thread; the player's reader (`pace.player`) waiting is the view's waiting for its bytes (Video.bytesWaited).
+         */
+        synchronized int take(Video v, Video.Pace pace, long p, byte[] buf, int off, int len) throws IOException {
+            int at = (int) (p - offset);
+            boolean counted = false;
+            try {
+                while (got <= at && !done) {
+                    if (v.closed) throw new InterruptedIOException("view " + v.id + " closed");
+                    if (pace.player && !counted) {
+                        counted = true;
+                        v.bytesWaited.incrementAndGet();
+                        Host.requestFrame();
+                    }
+                    wait(250);
+                }
+            } catch (InterruptedException e) {
+                throw new InterruptedIOException();
+            } finally {
+                if (counted) {
+                    v.bytesWaited.decrementAndGet();
+                    Host.requestFrame();
+                }
+            }
+            if (got > at) {
+                int k = Math.min(len, got - at);
+                System.arraycopy(data, at, buf, off, k);
+                return k;
+            }
+            if (failed) throw new IOException("view " + v.id + ": the read at " + offset + " failed");
+            return 0;
         }
     }
 
@@ -287,10 +347,13 @@ final class NativeViews {
      * NativeView::touch): its view's ("all"); the canvas's (MBView: "through", none of it to the view); the view's
      * until a second finger comes down ("pinch") or the finger has gone further up or down than across past the slop
      * ("vertical"; a finger that went sideways past it first stays the view's to its end), the canvas's from there: the
-     * view told the touch is called off, the canvas given it from where it went down.
+     * view told the touch is called off, the canvas given it from where it went down. A finger that goes down where the
+     * app draws something that takes a press over the view (view_tell 4: `covers`) is the canvas's.
      */
     static final class TouchFrame extends FrameLayout {
         String mode = "all";
+        /** Where the app draws what takes a press over the view: x0 y0 x1 y1 …, the canvas's pixels. */
+        float[] covers = new float[0];
         float slop;
         float downX, downY;
         boolean taken;
@@ -305,6 +368,13 @@ final class NativeViews {
         public boolean dispatchTouchEvent(MotionEvent e) {
             // (through: none of it is the view's; MBView, under this layer, is given it by the window)
             if (mode.equals("through")) return false;
+            // (a finger down on what its clip bounds cut away is not the view's: the window gives it to MBView)
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                android.graphics.Rect r = getClipBounds();
+                if (r != null && !r.contains((int) e.getX(), (int) e.getY())) return false;
+            }
+            // (down under what the app draws over the view: the canvas's, the rest of the touch with it)
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN && covered(e)) return false;
             return super.dispatchTouchEvent(e);
         }
 
@@ -331,6 +401,16 @@ final class NativeViews {
                 default:
                     return false;
             }
+        }
+
+        /** Whether the finger is where the app draws something that takes a press over the view. */
+        private boolean covered(MotionEvent e) {
+            MBView v = Host.view;
+            if (v == null || covers.length < 4) return false;
+            float x = e.getX() + getLeft() + getTranslationX() - v.getLeft(), y = e.getY() + getTop() + getTranslationY() - v.getTop();
+            for (int j = 0; j + 3 < covers.length; j += 4)
+                if (x >= covers[j] && x < covers[j + 2] && y >= covers[j + 1] && y < covers[j + 3]) return true;
+            return false;
         }
 
         /** The touch the canvas's from now on: it is given it from where it went down (then as it is now). */
@@ -362,7 +442,7 @@ final class NativeViews {
             MBView v = Host.view;
             if (v == null) return;
             MotionEvent m = MotionEvent.obtain(e);
-            m.offsetLocation(getLeft() - v.getLeft(), getTop() - v.getTop());
+            m.offsetLocation(getLeft() + getTranslationX() - v.getLeft(), getTop() + getTranslationY() - v.getTop());
             v.dispatchTouchEvent(m);
             m.recycle();
         }
@@ -478,14 +558,24 @@ final class NativeViews {
             v.shown = shown;
             int l = Math.round(to[4]), t = Math.round(to[5]);
             int cw = Math.max(0, Math.round(to[6]) - l), ch = Math.max(0, Math.round(to[7]) - t);
+            // The frame moved by its translation, never by its margins: a layout each frame a list scrolls (a page
+            // in a message) dropped frames. A page's or a site's frame is its content's rect, cut to the clip by its
+            // clip bounds, so only a new size lays it out again; a video's is the clip's (its picture moved by the
+            // texture's transform).
+            boolean whole = v.kind != 1;
+            int fx = whole ? Math.round(to[0]) : l, fy = whole ? Math.round(to[1]) : t;
+            int fw = whole ? Math.max(0, Math.round(to[2])) : cw, fh = whole ? Math.max(0, Math.round(to[3])) : ch;
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) v.clip.getLayoutParams();
-            if (p.leftMargin != l || p.topMargin != t || p.width != cw || p.height != ch) {
-                p.leftMargin = l;
-                p.topMargin = t;
-                p.width = cw;
-                p.height = ch;
+            if (p.leftMargin != 0 || p.topMargin != 0 || p.width != fw || p.height != fh) {
+                p.leftMargin = 0;
+                p.topMargin = 0;
+                p.width = fw;
+                p.height = fh;
                 v.clip.setLayoutParams(p);
             }
+            v.clip.setTranslationX(fx);
+            v.clip.setTranslationY(fy);
+            if (whole) v.clip.setClipBounds(new android.graphics.Rect(l - fx, t - fy, l - fx + cw, t - fy + ch));
             v.clip.setVisibility(shown && cw > 0 && ch > 0 ? View.VISIBLE : View.GONE);
             v.moved();
             round(v);
@@ -510,7 +600,9 @@ final class NativeViews {
             v.clip.setOutlineProvider(new android.view.ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, android.graphics.Outline o) {
-                    int l = Math.round(v.at[0] - v.at[4]), t = Math.round(v.at[1] - v.at[5]);
+                    // (a page's or a site's frame is its content's rect: the content at its top left)
+                    boolean whole = v.kind != 1;
+                    int l = whole ? 0 : Math.round(v.at[0] - v.at[4]), t = whole ? 0 : Math.round(v.at[1] - v.at[5]);
                     o.setRoundRect(l, t, l + Math.round(v.at[2]), t + Math.round(v.at[3]), v.at[8]);
                 }
             });
@@ -564,6 +656,13 @@ final class NativeViews {
         out[0] = v.duration;
         out[1] = v.position;
         out[2] = v.playing;
+        if (v instanceof Video) {
+            // buffering for the app only while the player's reader waits on the app's bytes; else it plays on, as asked
+            Video vid = (Video) v;
+            boolean waits = vid.bytesWaited.get() > 0;
+            v.buffering = vid.exoBuffering && waits ? 1 : 0;
+            if (vid.exoBuffering && !waits && vid.playWhenReady) out[2] = 1;
+        }
         out[3] = v.nw;
         out[4] = v.nh;
         out[5] = v.bytes;
@@ -607,7 +706,8 @@ final class NativeViews {
 
     /**
      * What the app tells a view beyond its controls (host_native.mbt view_tell): 1 a script for its page, 2 who takes
-     * a finger on it ("MODE SLOP", the slop in points), 3 a site's settings (JSON: head_wait_ms, backlog).
+     * a finger on it ("MODE SLOP", the slop in points), 3 a site's settings (JSON: head_wait_ms, backlog), 4 where the
+     * app draws what takes a press over it ("X0 Y0 X1 Y1 …", points from the canvas's top left; "" none).
      */
     static void tell(int id, int what, String text) {
         NView v = views.get(id);
@@ -628,6 +728,19 @@ final class NativeViews {
                 v.clip.mode = p[0];
                 v.clip.slop = px;
             });
+        } else if (what == 4) {
+            String[] p = text.isEmpty() ? new String[0] : text.split(" ");
+            float d = Host.view.density;
+            float[] covers = new float[p.length - p.length % 4];
+            try {
+                for (int j = 0; j < covers.length; j++) covers[j] = Float.parseFloat(p[j]) * d;
+            } catch (NumberFormatException e) {
+                covers = new float[0];
+            }
+            float[] c = covers;
+            Host.main.post(() -> {
+                if (v.clip != null) v.clip.covers = c;
+            });
         } else if (what == 3 && v instanceof Site) {
             try {
                 org.json.JSONObject o = new org.json.JSONObject(text);
@@ -640,35 +753,49 @@ final class NativeViews {
         }
     }
 
+    /** The next read a video asks of the app (its id, its offset and length in `out`), one it let go of (minus its id), or 0. */
     static int readNext(int id, double[] out) {
         NView v = views.get(id);
         if (!(v instanceof Video)) return 0;
-        Read r = ((Video) v).asked.poll();
+        Video vid = (Video) v;
+        Integer gone = vid.lettingGo.poll();
+        if (gone != null) return -gone;
+        Read r = vid.asked.poll();
         if (r == null) return 0;
         out[0] = r.offset;
         out[1] = r.length;
         return r.id;
     }
 
-    static void readAnswer(int id, int req, byte[] data, double total) {
+    /** Read `req`'s next bytes (after those it was given before), as the app has them; `more` while more of it comes. */
+    static void readAnswer(int id, int req, byte[] data, double total, boolean more) {
         NView v = views.get(id);
         if (!(v instanceof Video)) return;
         Video vid = (Video) v;
-        Read r = vid.waiting.remove(req);
+        Read r = vid.waiting.get(req);
         if (r == null) return;
+        int k;
         synchronized (r) {
-            r.data = data;
-            r.total = total;
-            r.done = true;
+            if (r.done) return;
+            k = Math.min(data.length, r.length - r.got);
+            System.arraycopy(data, 0, r.data, r.got, k);
+            r.got += k;
+            r.heard = System.nanoTime();
+            if (total >= 0) vid.total = (long) total;
+            if (total == -2) r.failed = true;
+            if (!more || total == -2) {
+                r.done = true;
+                vid.waiting.remove(req);
+            }
             r.notifyAll();
         }
-        if (data.length > 0) {
+        if (k > 0) {
             double before = vid.bytes;
-            vid.bytes += data.length;
-            // the first reads, then one line every 4 MB
-            if (vid.reads++ < 4 || Math.floor(before / (4 << 20)) != Math.floor(vid.bytes / (4 << 20))) {
-                Host.log("view " + id + ": read @" + r.offset + " " + data.length + " bytes through the app (total "
-                        + (long) total + ", " + (long) vid.bytes + " so far)");
+            vid.bytes += k;
+            // the first pieces, then one line every 4 MB
+            if (vid.pieces++ < 4 || Math.floor(before / (4 << 20)) != Math.floor(vid.bytes / (4 << 20))) {
+                Host.log("view " + id + ": read @" + r.offset + ": " + r.got + " of " + r.length + " bytes through the app"
+                        + (more ? "" : ", its last") + " (total " + (long) vid.total + ", " + (long) vid.bytes + " so far)");
             }
         } else if (total == -2) {
             Host.log("view " + id + ": read @" + r.offset + " failed");
@@ -738,11 +865,17 @@ final class NativeViews {
 
     static final class Video extends NView {
         final String type;
+        /** Its reads asked of the app and not taken yet; those let go of (their ids) not told yet; those under way. */
         final ConcurrentLinkedQueue<Read> asked = new ConcurrentLinkedQueue<>();
+        final ConcurrentLinkedQueue<Integer> lettingGo = new ConcurrentLinkedQueue<>();
         final ConcurrentHashMap<Integer, Read> waiting = new ConcurrentHashMap<>();
         final AtomicInteger nextRead = new AtomicInteger();
         volatile long total = -1;
-        int reads;
+        /** the pieces answered (GL thread): the first are logged */
+        int pieces;
+        /** since when it has waited once ready (elapsedRealtime; -1 it does not), and the bytes given by then (main thread) */
+        long waitSince = -1;
+        double waitBytes;
         ExoPlayer player;
         TextureView texture;
         final Runnable tick = new Runnable() {
@@ -771,131 +904,216 @@ final class NativeViews {
 
         /**
          * The file's bytes as the app gave them, kept on the disk while the view is open (a file of its own in the
-         * app's cache, in blocks of BLOCK at their place in the file): what the player, its frames' reader and a frame
+         * app's cache, in blocks of BLOCK at their place in the file): what the player, its index's reader and a frame
          * grabbed read is asked of the app once, and read from here again (a seek back over what has played, a finger
-         * along the timeline to and fro, the frames read beside the player). A reader missing a block asks for a run
-         * of them from it (DriveSource.kt's window: one after a jump, twice as many while it reads on from its last
-         * run, up to RUN, a core's part of 4 MB), stopping short of one here or on its way for another reader, whose
-         * run it waits for instead. A run asked goes on to its end when the reader that asked lets go (the player
-         * seeking elsewhere): what it brings is kept all the same.
+         * along the timeline to and fro). A reader missing a block asks for a run of them from it (DriveSource.kt's
+         * window: one after a jump, twice as many while it reads on from its last run, up to RUN, a core's part of 4
+         * MB), stopping short of one here or on its way for another reader, whose run it reads from instead. A run's
+         * bytes are read as they come, not once the whole run is here: on a slow link a player waits for the bytes it
+         * needs, not for the 4 MB around them. A run is let go of (the app stops reading it) once no reader is on it
+         * any more and some of it has not come: the player seeking elsewhere (or ahead of where the run has come to by
+         * a block or more: what lies between is not waited for), a reader done; what came of it is kept.
+         * One that brings nothing for STALL_NS fails (its reader's load tried again by the player).
          */
         static final int BLOCK = 256 << 10, RUN = 16;
+        static final long STALL_NS = TimeUnit.SECONDS.toNanos(120);
         final Object keptLock = new Object();
         /** The blocks here whole (the file's last, to its end), and the runs on their way by the blocks they bring. */
         final java.util.BitSet have = new java.util.BitSet();
-        final java.util.HashMap<Integer, Fetch> coming = new java.util.HashMap<>();
+        final java.util.HashMap<Integer, Read> coming = new java.util.HashMap<>();
         java.io.File cacheDir, diskFile;
         java.nio.channels.FileChannel disk;
         /** No disk to keep it on (its file could not be made or written): each reader reads from its last run alone. */
         volatile boolean noDisk;
-        static final java.util.concurrent.ExecutorService fetchers = java.util.concurrent.Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "mbui-read");
+        static final java.util.concurrent.ExecutorService keepers = java.util.concurrent.Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "mbui-keep");
             t.setDaemon(true);
             return t;
         });
         /** Whether this process has cleared what views of an earlier one left on the disk (main thread). */
         static boolean swept;
 
-        /** A run of blocks asked of the app: what came of it once it is done, or why nothing did. */
-        static final class Fetch {
-            final long from;
-            final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
-            volatile byte[] data = new byte[0];
-            volatile IOException error;
-
-            Fetch(long from) {
-                this.from = from;
-            }
-        }
-
-        /** How one reader of it goes: where its last run of blocks ended and how long it was; what it read last. */
+        /**
+         * How one reader of it goes: where its last run of blocks ended and how long it was; the run it reads from;
+         * whether it is the player's (its waiting is the view's: bytesWaited).
+         */
         static final class Pace {
             int end = -1, run = 1;
-            long from;
-            byte[] data = new byte[0];
+            Read read;
+            boolean player;
         }
+
+        /**
+         * How many times the player's reader waits now for bytes still to come through the app; whether the player
+         * says it buffers, and whether it is to play once it can (main thread's). It buffers for the app (info's 7)
+         * only while its reader waits so: a seek within what is here already (a finger along the timeline over what
+         * has played), the player catching up to the very frame, is not waiting on the network, and it plays on as it
+         * did (info's 2).
+         */
+        final AtomicInteger bytesWaited = new AtomicInteger();
+        volatile boolean exoBuffering, playWhenReady;
 
         /** Up to `len` bytes of the file at `p` into `buf` for the reader `pace`: how many (at least one), -1 at its end. */
         int bytesAt(long p, byte[] buf, int off, int len, Pace pace) throws IOException {
             if (len <= 0) return 0;
             for (;;) {
+                if (closed) throw new InterruptedIOException("view " + id + " closed");
                 if (total >= 0 && p >= total) return -1;
-                // in what it read last
-                if (p >= pace.from && p < pace.from + pace.data.length) {
-                    int k = (int) Math.min(len, pace.from + pace.data.length - p);
-                    System.arraycopy(pace.data, (int) (p - pace.from), buf, off, k);
-                    return k;
+                // in the run it reads from, as it comes; but a jump ahead of where that run has come to by a block or
+                // more (a seek) is not waited for through what lies between: that run let go of, one asked from there
+                Read r = pace.read;
+                if (r != null && p >= r.offset && p < r.offset + r.length && !r.done && p - (r.offset + r.got) >= BLOCK) {
+                    synchronized (keptLock) {
+                        leave(pace);
+                    }
+                    r = null;
+                }
+                if (r != null && p >= r.offset && p < r.offset + r.length) {
+                    int k;
+                    try {
+                        k = r.take(this, pace, p, buf, off, len);
+                    } catch (IOException e) {
+                        // (one that failed: not read from again, its reader's load asking anew)
+                        if (r.failed) {
+                            synchronized (keptLock) {
+                                leave(pace);
+                            }
+                        }
+                        throw e;
+                    }
+                    if (k > 0) return k;
+                    // it ended short of `p`: having brought nothing, at the file's end; else the rest asked again
+                    if (r.got == 0) return -1;
+                    synchronized (keptLock) {
+                        leave(pace);
+                    }
                 }
                 int b = (int) (p / BLOCK);
                 boolean here;
-                Fetch f;
                 synchronized (keptLock) {
                     here = have.get(b);
-                    f = here ? null : coming.get(b);
-                    if (!here && f == null) {
-                        int run = b == pace.end ? Math.min(pace.run * 2, RUN) : 1;
-                        int n = 0;
-                        while (n < run && !have.get(b + n) && !coming.containsKey(b + n)
-                                && (n == 0 || total < 0 || (long) (b + n) * BLOCK < total)) n++;
-                        pace.end = b + n;
-                        pace.run = run;
-                        f = new Fetch((long) b * BLOCK);
-                        for (int i = 0; i < n; i++) coming.put(b + i, f);
-                        fetch(f, b, n);
+                    if (!here) {
+                        Read on = coming.get(b);
+                        // (one ended, its keeper not done with it yet: not to be read from again)
+                        if (on != null && on.done) {
+                            coming.remove(b, on);
+                            on = null;
+                        }
+                        if (on == null) {
+                            int run = b == pace.end ? Math.min(pace.run * 2, RUN) : 1;
+                            int n = 0;
+                            while (n < run && !have.get(b + n) && !coming.containsKey(b + n)
+                                    && (n == 0 || total < 0 || (long) (b + n) * BLOCK < total)) n++;
+                            pace.end = b + n;
+                            pace.run = run;
+                            on = new Read(nextRead.incrementAndGet(), (long) b * BLOCK, n * BLOCK, b, n);
+                            for (int i = 0; i < n; i++) coming.put(b + i, on);
+                            ask(on);
+                        }
+                        if (pace.read != on) {
+                            leave(pace);
+                            pace.read = on;
+                            on.users++;
+                        }
                     }
                 }
-                if (here) {
-                    int k = (int) Math.min(len, (long) (b + 1) * BLOCK - p);
-                    if (total >= 0) k = (int) Math.min(k, total - p);
-                    if (fromDisk(p, buf, off, k)) return k;
-                    // (not read back: asked again)
-                    synchronized (keptLock) {
-                        have.clear(b);
-                    }
-                    continue;
-                }
-                try {
-                    while (!f.done.await(250, TimeUnit.MILLISECONDS)) {
-                        if (closed) throw new InterruptedIOException("view " + id + " closed");
-                    }
-                } catch (InterruptedException e) {
-                    throw new InterruptedIOException();
-                }
-                if (f.error != null) throw f.error;
-                if (f.data.length == 0) return -1;
-                pace.from = f.from;
-                pace.data = f.data;
-                if (p >= f.from + f.data.length) {
-                    // fewer than asked, short of where it reads, before the end: what it asks, as it is
-                    Read r = ask(p, len);
-                    if (r.data.length == 0) return -1;
-                    pace.from = p;
-                    pace.data = r.data;
+                if (!here) continue;
+                int k = (int) Math.min(len, (long) (b + 1) * BLOCK - p);
+                if (total >= 0) k = (int) Math.min(k, total - p);
+                if (fromDisk(p, buf, off, k)) return k;
+                // (not read back: asked again)
+                synchronized (keptLock) {
+                    have.clear(b);
                 }
             }
         }
 
-        /** The run of `n` blocks from block `b` asked of the app, kept as it comes, its waiters told (a reader's thread). */
-        void fetch(Fetch f, int b, int n) {
-            fetchers.execute(() -> {
-                try {
-                    byte[] data = ask(f.from, n * BLOCK).data;
-                    keep(b, data);
-                    f.data = data;
-                } catch (IOException e) {
-                    f.error = e;
-                } finally {
-                    synchronized (keptLock) {
-                        for (int i = 0; i < n; i++) coming.remove(b + i, f);
-                    }
-                    f.done.countDown();
+        /** The reader `pace` off the run it read from: that run let go of when no reader is on it and some of it is to come (keptLock held). */
+        void leave(Pace pace) {
+            Read r = pace.read;
+            if (r == null) return;
+            pace.read = null;
+            if (--r.users > 0) return;
+            boolean drop;
+            synchronized (r) {
+                drop = !r.done && r.got < r.length;
+                if (drop) {
+                    r.done = true;
+                    r.gone = true;
+                    r.notifyAll();
                 }
-            });
+            }
+            if (drop) letGo(r);
         }
 
-        /** What came of a run from block `b`, kept on the disk: its whole blocks, and the file's last to its end. */
-        void keep(int b, byte[] data) {
-            if (noDisk || data.length == 0) return;
+        /** A run no reader wants any more: the app told to stop it, its blocks not to come (keptLock held). */
+        void letGo(Read r) {
+            Host.log("view " + id + ": the read at " + r.offset + " let go of, " + r.got + " of its " + r.length + " bytes here");
+            waiting.remove(r.id);
+            for (int i = 0; i < r.blocks; i++) coming.remove(r.block + i, r);
+            lettingGo.add(r.id);
+            Host.requestFrame();
+        }
+
+        /** The run `r` asked of the app, its bytes kept on the disk as they come, block by block (keptLock held). */
+        void ask(Read r) {
+            waiting.put(r.id, r);
+            askApp(() -> asked.add(r));
+            keepers.execute(() -> keepAsItComes(r));
+        }
+
+        /**
+         * What comes of run `r`, written to the disk a whole block at a time (and the file's last, to its end), until
+         * it ends; nothing for STALL_NS fails it. On a keeper's thread.
+         */
+        void keepAsItComes(Read r) {
+            int kept = 0;
+            for (;;) {
+                int got;
+                boolean done;
+                synchronized (r) {
+                    try {
+                        while (!r.done && r.got < (kept + 1) * BLOCK && !closed) {
+                            long silent = System.nanoTime() - r.heard;
+                            if (silent >= STALL_NS) {
+                                Host.log("view " + id + ": nothing for the read at " + r.offset + " in "
+                                        + TimeUnit.NANOSECONDS.toSeconds(silent) + " s");
+                                r.failed = true;
+                                r.done = true;
+                                r.notifyAll();
+                                break;
+                            }
+                            r.wait(Math.max(1, Math.min(1000, TimeUnit.NANOSECONDS.toMillis(STALL_NS - silent))));
+                        }
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    got = r.got;
+                    done = r.done || closed;
+                }
+                boolean last = total >= 0 && r.offset + got >= total;
+                int upto = done && last ? (got + BLOCK - 1) / BLOCK : got / BLOCK;
+                if (upto > kept) {
+                    keep(r, kept, upto, got);
+                    kept = upto;
+                }
+                if (done) {
+                    synchronized (keptLock) {
+                        // failed or stalled: told to stop, as one let go of
+                        if (r.failed && waiting.remove(r.id) != null && !closed) {
+                            lettingGo.add(r.id);
+                            Host.requestFrame();
+                        }
+                        for (int i = 0; i < r.blocks; i++) coming.remove(r.block + i, r);
+                    }
+                    return;
+                }
+            }
+        }
+
+        /** Blocks `from` to `to` of run `r` (its bytes to `got`), kept on the disk. */
+        void keep(Read r, int from, int to, int got) {
+            if (noDisk) return;
             try {
                 synchronized (keptLock) {
                     if (closed) return;
@@ -906,19 +1124,16 @@ final class NativeViews {
                         disk = new java.io.RandomAccessFile(diskFile, "rw").getChannel();
                     }
                 }
-                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(data);
-                long at = (long) b * BLOCK;
-                while (bb.hasRemaining()) disk.write(bb, at + bb.position());
+                int a = from * BLOCK, z = Math.min(to * BLOCK, got);
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(r.data, a, z - a);
+                while (bb.hasRemaining()) disk.write(bb, r.offset + bb.position());
             } catch (IOException e) {
                 if (!closed) Host.log("view " + id + ": its bytes not kept on the disk: " + e);
                 noDisk = true;
                 return;
             }
             synchronized (keptLock) {
-                for (int i = 0; (long) i * BLOCK < data.length; i++) {
-                    long end = Math.min((long) (i + 1) * BLOCK, data.length);
-                    if (end - (long) i * BLOCK == BLOCK || (total >= 0 && (long) b * BLOCK + end >= total)) have.set(b + i);
-                }
+                for (int i = from; i < to; i++) have.set(r.block + i);
             }
         }
 
@@ -937,7 +1152,31 @@ final class NativeViews {
             }
         }
 
-        /** The file through the app's reads, for the system's extractor and retriever (as the player reads it). */
+        /** The reader `pace` done: off the run it read from (let go of if no other reader is on it). */
+        void done(Pace pace) {
+            synchronized (keptLock) {
+                leave(pace);
+            }
+        }
+
+        /** Until the file's whole size is known: the first run of reader `pace` read to its last answer, which says it. */
+        void awaitTotal(Pace pace) throws IOException {
+            Read r = pace.read;
+            if (total >= 0 || r == null) return;
+            synchronized (r) {
+                try {
+                    while (!r.done && total < 0) {
+                        if (closed) throw new InterruptedIOException("view " + id + " closed");
+                        r.wait(250);
+                    }
+                } catch (InterruptedException e) {
+                    throw new InterruptedIOException();
+                }
+            }
+            if (r.failed) throw new IOException("view " + id + ": the read at " + r.offset + " failed");
+        }
+
+        /** The file through the app's reads, for the system's retriever (as the player reads it). */
         final class Media extends MediaDataSource {
             final Pace pace = new Pace();
 
@@ -955,53 +1194,99 @@ final class NativeViews {
 
             @Override
             public long getSize() throws IOException {
-                if (total < 0) bytesAt(0, new byte[1], 0, 1, pace);
+                if (total < 0) {
+                    bytesAt(0, new byte[1], 0, 1, pace);
+                    awaitTotal(pace);
+                }
                 return total;
             }
 
             @Override
             public void close() {
+                done(pace);
             }
         }
 
-        /** Its frames' times read from the file (MediaExtractor: the video track's samples, sorted), off the main thread. */
+        /**
+         * Its frames' times read from the file's index (an MP4's or a QuickTime file's sample table, in its moov, as
+         * Media3's Mp4Extractor reads it for the player: the video track's samples' presentation times, sorted), off the
+         * main thread. Only the index is read, never the samples (the file's whole video track, on a slow link a race
+         * with the player for every byte); a file with none (another container, a fragmented MP4) has none to read.
+         */
         void readFrames() {
             if (framesAsked) return;
             framesAsked = true;
             new Thread(() -> {
-                MediaExtractor x = new MediaExtractor();
                 StringBuilder out = new StringBuilder();
+                ViewSource src = new ViewSource(this);
                 try {
-                    x.setDataSource(new Media());
-                    int track = -1;
-                    for (int i = 0; i < x.getTrackCount(); i++) {
-                        String mime = x.getTrackFormat(i).getString(MediaFormat.KEY_MIME);
-                        if (mime != null && mime.startsWith("video/")) { track = i; break; }
-                    }
-                    if (track >= 0) {
-                        x.selectTrack(track);
-                        java.util.ArrayList<Long> times = new java.util.ArrayList<>();
-                        while (true) {
-                            long t = x.getSampleTime();
-                            if (t < 0) break;
-                            times.add(t);
-                            if (!x.advance()) break;
-                        }
-                        java.util.Collections.sort(times);
-                        for (int i = 0; i < times.size(); i++) {
+                    long[] times = indexTimes(src);
+                    if (times != null) {
+                        times = times.clone();
+                        java.util.Arrays.sort(times);
+                        for (int i = 0; i < times.length; i++) {
                             if (i > 0) out.append(',');
-                            out.append(times.get(i) / 1000.0);
+                            out.append(times[i] / 1000.0);
                         }
                     }
-                    Host.log("view " + id + ": " + (out.length() == 0 ? 0 : out.toString().split(",").length) + " frames read");
+                    Host.log("view " + id + ": " + (times == null ? "no index to read its frames from" : times.length + " frames read"));
                 } catch (Exception e) {
                     Host.log("view " + id + ": frames not read: " + e);
                 } finally {
-                    x.release();
+                    done(src.pace);
                 }
                 frames = out.toString();
                 Host.requestFrame();
             }, "mbui-frames").start();
+        }
+
+        /**
+         * The video track's samples' times (µs, in decode order) from the file's index, read through `src` as far as
+         * its moov (Mp4Extractor, stopped once it has it: its seek map told); null when it has no such index.
+         */
+        long[] indexTimes(ViewSource src) throws IOException {
+            Mp4Extractor x = new Mp4Extractor(SubtitleParser.Factory.UNSUPPORTED, 0);
+            int[] video = {-1};
+            boolean[] indexed = {false};
+            x.init(new ExtractorOutput() {
+                @Override
+                public TrackOutput track(int track, int kind) {
+                    if (kind == C.TRACK_TYPE_VIDEO && video[0] < 0) video[0] = track;
+                    return new DiscardingTrackOutput();
+                }
+
+                @Override
+                public void endTracks() {
+                }
+
+                @Override
+                public void seekMap(SeekMap map) {
+                    indexed[0] = true;
+                }
+            });
+            Uri uri = Uri.parse("mbview://" + id + "/index");
+            PositionHolder at = new PositionHolder();
+            long from = 0;
+            boolean sniffed = false;
+            while (!indexed[0]) {
+                long length = src.open(new DataSpec.Builder().setUri(uri).setPosition(from).build());
+                try {
+                    ExtractorInput in = new DefaultExtractorInput(src, from, length == C.LENGTH_UNSET ? C.LENGTH_UNSET : from + length);
+                    if (!sniffed) {
+                        if (!x.sniff(in)) return null;
+                        in.resetPeekPosition();
+                        sniffed = true;
+                    }
+                    int r = Extractor.RESULT_CONTINUE;
+                    while (r == Extractor.RESULT_CONTINUE && !indexed[0]) r = x.read(in, at);
+                    if (indexed[0]) break;
+                    if (r != Extractor.RESULT_SEEK) return null;
+                    from = at.position;
+                } finally {
+                    src.close();
+                }
+            }
+            return video[0] < 0 ? new long[0] : x.getSampleTimestampsUs(video[0]);
         }
 
         /** The frame showing at `ms` grabbed whole at its own size (MediaMetadataRetriever, the closest), as a PNG. */
@@ -1010,8 +1295,9 @@ final class NativeViews {
             still = new byte[0];
             new Thread(() -> {
                 MediaMetadataRetriever r = new MediaMetadataRetriever();
+                Media media = new Media();
                 try {
-                    r.setDataSource(new Media());
+                    r.setDataSource(media);
                     Bitmap b = r.getFrameAtTime((long) (ms * 1000), MediaMetadataRetriever.OPTION_CLOSEST);
                     if (b == null) throw new IOException("no frame at " + ms + " ms");
                     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -1025,6 +1311,7 @@ final class NativeViews {
                     stillState = -1;
                 } finally {
                     try { r.release(); } catch (Exception ignored) { }
+                    media.close();
                 }
                 Native.tell(Native.OUTSIDE_GRAB, id, stillState == 2 ? 1 : -1);
             }, "mbui-grab").start();
@@ -1064,34 +1351,6 @@ final class NativeViews {
             }, "mbui-grab").start();
         }
 
-        /** Bytes from `offset` (at most `length`), asked of the app and waited for: on the player's loading thread. */
-        Read ask(long offset, int length) throws IOException {
-            Read r = new Read(nextRead.incrementAndGet(), offset, length);
-            waiting.put(r.id, r);
-            askApp(() -> asked.add(r));
-            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(120);
-            synchronized (r) {
-                while (!r.done) {
-                    if (closed) throw new InterruptedIOException("view " + id + " closed");
-                    long left = until - System.nanoTime();
-                    if (left <= 0) {
-                        waiting.remove(r.id);
-                        throw new IOException("view " + id + ": no answer for the read at " + offset,
-                                new TimeoutException());
-                    }
-                    try {
-                        r.wait(Math.min(250, TimeUnit.NANOSECONDS.toMillis(left) + 1));
-                    } catch (InterruptedException e) {
-                        waiting.remove(r.id);
-                        throw new InterruptedIOException();
-                    }
-                }
-            }
-            if (r.total == -2) throw new IOException("view " + id + ": the read at " + offset + " failed");
-            if (r.total >= 0) total = (long) r.total;
-            return r;
-        }
-
         @Override
         void make(Context c) {
             cacheDir = c.getCacheDir();
@@ -1105,7 +1364,9 @@ final class NativeViews {
             clip.addView(texture, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT));
             texture.addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> moved());
-            player = new ExoPlayer.Builder(c).build();
+            // the frames between a key frame and the one a seek goes to decoded without being put out (Android 14 on:
+            // MediaCodec's decode-only flag), so an exact seek gets there sooner
+            player = new ExoPlayer.Builder(c, new DefaultRenderersFactory(c).experimentalSetEnableMediaCodecBufferDecodeOnlyFlag(true)).build();
             player.setSeekParameters(SeekParameters.EXACT);
             player.setVideoTextureView(texture);
             player.addListener(new Player.Listener() {
@@ -1120,9 +1381,26 @@ final class NativeViews {
                     // a player with no picture (a sound) is ready for the app once it can play; one with a picture once
                     // its first frame shows (onRenderedFirstFrame)
                     if (s == Player.STATE_READY && !player.getCurrentTracks().containsType(C.TRACK_TYPE_VIDEO)) tell(1);
-                    buffering = s == Player.STATE_BUFFERING ? 1 : 0;
+                    exoBuffering = s == Player.STATE_BUFFERING;
+                    // a wait once ready (a seek, its bytes not here yet), said with how long it took and what came
+                    // through the app meanwhile (none: it waited on its own decoding, not on the network)
+                    if (s == Player.STATE_BUFFERING && state == 1 && waitSince < 0) {
+                        waitSince = android.os.SystemClock.elapsedRealtime();
+                        waitBytes = bytes;
+                        Host.log("view " + id + ": waiting at " + player.getCurrentPosition() + " ms");
+                    } else if (s != Player.STATE_BUFFERING && waitSince >= 0) {
+                        Host.log("view " + id + ": waited " + (android.os.SystemClock.elapsedRealtime() - waitSince) + " ms, "
+                                + (long) (bytes - waitBytes) + " bytes through the app meanwhile");
+                        waitSince = -1;
+                    }
                     ended = s == Player.STATE_ENDED ? 1 : 0;
                     if (s == Player.STATE_ENDED) playing = 0;
+                    Host.requestFrame();
+                }
+
+                @Override
+                public void onPlayWhenReadyChanged(boolean will, int reason) {
+                    playWhenReady = will;
                     Host.requestFrame();
                 }
 
@@ -1162,7 +1440,7 @@ final class NativeViews {
                     Host.requestFrame();
                 }
             });
-            ProgressiveMediaSource source = new ProgressiveMediaSource.Factory(() -> new ViewSource(this))
+            ProgressiveMediaSource source = new ProgressiveMediaSource.Factory(() -> new ViewSource(this, true))
                     .createMediaSource(MediaItem.fromUri("mbview://" + id + "/file"));
             player.setMediaSource(source);
             player.prepare();
@@ -1192,12 +1470,21 @@ final class NativeViews {
                 case 3:
                     // whole ms, floored: Media3 shows the first frame from there, so a frame's start (1583.33) is
                     // that frame (to 1584, the next)
+                    player.setSeekParameters(SeekParameters.EXACT);
+                    player.seekTo((long) Math.floor(value));
+                    position = value;
+                    break;
+                // about there, at once: the key frame nearest it (nothing before the frame asked decoded first)
+                case 11:
+                    player.setSeekParameters(SeekParameters.CLOSEST_SYNC);
                     player.seekTo((long) Math.floor(value));
                     position = value;
                     break;
                 case 4: player.setPlaybackParameters(new PlaybackParameters((float) value)); break;
                 // a finger along its timeline: its seeks one after another, each shown (Media3's scrubbing mode)
                 case 9: player.setScrubbingModeEnabled(value > 0); break;
+                // how loud, 0 to 1 (NativeView::volume)
+                case 10: player.setVolume((float) Math.max(0, Math.min(1, value))); break;
                 case 20: readFrames(); break;
                 case 21: grab(value); break;
                 case 22: grabShown(value); break;
@@ -1208,6 +1495,7 @@ final class NativeViews {
         @Override
         void destroy() {
             Host.main.removeCallbacks(tick);
+            // its readers and keepers woken: the view is closed (the app stops its reads as it closes it)
             for (Read r : waiting.values()) {
                 synchronized (r) {
                     r.notifyAll();
@@ -1240,8 +1528,14 @@ final class NativeViews {
         boolean opened;
 
         ViewSource(Video v) {
+            this(v, false);
+        }
+
+        /** The view's file read through the app; `player`: the player's own reader (Pace.player). */
+        ViewSource(Video v, boolean player) {
             super(true);
             this.v = v;
+            pace.player = player;
         }
 
         @Override
@@ -1250,8 +1544,9 @@ final class NativeViews {
             long start = spec.position;
             position = start;
             transferInitializing(spec);
-            // its size, from the first read (none there: it ends where it is opened)
+            // its size, from the first read (none there: it ends where it is opened; its size said with its last answer)
             if (v.total < 0 && v.bytesAt(start, probe, 0, 1, pace) < 0 && v.total < 0) v.total = start;
+            v.awaitTotal(pace);
             if (start > v.total) throw new IOException("the file is " + v.total + " bytes, opened at " + start);
             remaining = spec.length == C.LENGTH_UNSET ? v.total - start : Math.min(spec.length, v.total - start);
             opened = true;
@@ -1340,23 +1635,9 @@ final class NativeViews {
                 }
             });
             bytes = html.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
-            clip.addView(web, new FrameLayout.LayoutParams(0, 0));
+            // (its frame is its rect: put moves and sizes it, nothing here)
+            clip.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
             web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
-        }
-
-        @Override
-        void moved() {
-            if (web == null) return;
-            FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) web.getLayoutParams();
-            int l = Math.round(at[0] - at[4]), t = Math.round(at[1] - at[5]);
-            int w = Math.round(at[2]), h = Math.round(at[3]);
-            if (p.leftMargin != l || p.topMargin != t || p.width != w || p.height != h) {
-                p.leftMargin = l;
-                p.topMargin = t;
-                p.width = w;
-                p.height = h;
-                web.setLayoutParams(p);
-            }
         }
 
         @Override
@@ -1650,12 +1931,12 @@ final class NativeViews {
         void moved() {
             if (web == null) return;
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) web.getLayoutParams();
-            int l = Math.round(at[0] - at[4]), t = Math.round(at[1] - at[5]);
-            // laid out at its rect over its scale, drawn at its scale from its top left
+            // laid out at its rect over its scale, drawn at its scale from its top left (its frame's: the frame is its
+            // rect, put moves it)
             int w = Math.round(at[2] / scale), h = Math.round(at[3] / scale);
-            if (p.leftMargin != l || p.topMargin != t || p.width != w || p.height != h) {
-                p.leftMargin = l;
-                p.topMargin = t;
+            if (p.leftMargin != 0 || p.topMargin != 0 || p.width != w || p.height != h) {
+                p.leftMargin = 0;
+                p.topMargin = 0;
                 p.width = w;
                 p.height = h;
                 web.setLayoutParams(p);

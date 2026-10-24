@@ -12,7 +12,7 @@ extern "js" fn trace_text(name : String) -> String =
   #|}
 
 ///|
-fn read_trace(name : String) -> String? {
+pub fn read_trace(name : String) -> String? {
   let t = trace_text(name)
   if t == "\u0000" {
     None

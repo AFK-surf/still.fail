@@ -36,6 +36,13 @@ pub(all) struct Palette {
   warn_ink : Int64
   red : Int64
   red_bg : Int64
+  /// the grounds of a pill in a tone (parts.css.ts pill: --green-bg, --blue-bg, --amber-bg; the amber's ink is
+  /// warn_ink)
+  green_bg : Int64
+  blue_bg : Int64
+  amber_bg : Int64
+  /// a station online (--online: a status dot, parts.css.ts statusDot)
+  online : Int64
   /// placeholders' grey (waiting), a quiet pill's ground
   neutral_bg : Int64
   overlay : Int64
@@ -88,20 +95,7 @@ pub(all) struct Theme {
 // ---------------------------------------------------------------------------
 // Measures (docs/ui-panels.md; styles/align.ts, pages.css.ts)
 
-///|
-/// A small panel's padding: as far as what has a ground of its own (a row,
-/// a button) stands from its edge.
-pub let panel_pad : Double = 6.0
-
-///|
-/// Words stand in from a row's ground by this, so a panel's words and its
-/// rows' words are on one line, panel_pad + text_in from its edge.
-pub let text_in : Double = 10.0
-
-///|
-/// A small panel's buttons: pills this high (24), and its icon buttons
-/// circles as wide.
-pub let panel_pill : Double = 24.0
+// (a small panel's padding, its words' room and its pills: align.mbt panel_pad, text_in, panel_pill)
 
 ///|
 /// A page card of words: this in from every side.
@@ -109,7 +103,7 @@ pub let card_pad : Double = 20.0
 
 ///|
 /// A command's box's corner: its copy button's (8), 10 in from its edges, concentric (Settings.kt COMMAND_BOX_CORNER).
-pub let command_box_corner : Double = concentric_out(8.0, 10.0)
+pub let command_box_corner : Double = surface_corner(10.0, 8.0)
 
 ///|
 /// A card's corner with nothing in its corners.
@@ -213,6 +207,10 @@ let wide_light : Palette = {
   warn_ink: 0x7F5306FFL,
   red: 0xA12F35FFL,
   red_bg: 0xFFF0EFFFL,
+  green_bg: 0xE7F6EDFFL,
+  blue_bg: 0xEAF2FFFFL,
+  amber_bg: 0xFEF4E0FFL,
+  online: 0x45B164FFL,
   neutral_bg: 0xEDEFF1FFL,
   overlay: 0x13161B33L,
   shadow: 0x13161B1AL,
@@ -251,6 +249,10 @@ let wide_dark : Palette = {
   warn_ink: 0xE6B55DFFL,
   red: 0xF68482FFL,
   red_bg: 0x442322FFL,
+  green_bg: 0x1B3426FFL,
+  blue_bg: 0x1F2E47FFL,
+  amber_bg: 0x403012FFL,
+  online: 0x45B164FFL,
   neutral_bg: 0x2A2B2FFFL,
   overlay: 0x00000080L,
   shadow: 0x00000073L,
@@ -364,7 +366,9 @@ pub fn set_dark(dark : Bool?) -> Unit {
 
 ///|
 /// Whether the system is a phone's or a tablet's (iOS, Android), whose app is still.fail's Android app at any width
-/// (an opened foldable, a phone on its side): its own theme and pages, never the desktop's.
+/// (an opened foldable, a phone on its side): what the layout and the theme go by, with the system's size classes (its
+/// own theme and pages; the wide frame only where the system calls the window regular both ways). How things answer
+/// the hand is not this: @ui.pointing.
 pub fn touch_system() -> Bool {
   let p = @ui.platform()
   p == 1 || p == 2
@@ -504,17 +508,24 @@ pub let message_line : @ui.Leading = Exact(24.75)
 ///|
 /// A card with a button (a capsule) in its corner: concentric with it, card_pad and the button's half (Parts.kt:607
 /// Card foot: CARD_PAD + BUTTON_HEIGHT 38 / 2): worked out as Android does, no step of the scale.
-pub let card_foot_radius : @ui.Radius = Exact(card_pad + 19.0)
+pub let card_foot_radius : @ui.Radius = rounded(around(card_pad, 19.0))
 
 ///|
 /// A list card's corner: concentric round its rows (row_corner, list_pad in), as Android works it out (Parts.kt:640
 /// LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER 18, LIST_PAD 8)); its rows take theirs from it (radius=Inner).
-pub let list_card_radius : @ui.Radius = Exact(concentric_out(row_corner, list_pad))
+pub let list_card_radius : @ui.Radius = surface(list_pad, row_corner).radius()
+
+///|
+/// A drive's card (its corner 16, DriveScreen.kt) and a row's ground at its ends: concentric in it, list_pad in.
+pub let drive_card_corner : Double = 16.0
+
+///|
+pub let drive_row_end_radius : @ui.Radius = rounded(inner_corner(drive_card_corner, list_pad))
 
 ///|
 /// A card with a Seg (rounded 10) in its top corners: concentric with it (Usage.kt:204 concentricOut(10, CARD_PAD)):
 /// worked out as Android does, no step of the scale.
-pub let seg_card_radius : @ui.Radius = Exact(concentric_out(10.0, card_pad))
+pub let seg_card_radius : @ui.Radius = surface(card_pad, 10.0).radius()
 
 ///|
 /// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 16 wide at most (BAR), how far a line of the
@@ -731,6 +742,20 @@ pub let custom_field_r : @ui.Radius = Exact(10.0)
 // them.
 
 ///|
+/// A chat's row in the wide frame's sidebar (Sidebar.css.ts navSession: two lines, 20 and 18, 2 apart, 7 above and
+/// under).
+pub let side_row_h : @ui.Len = Fixed(54.0)
+
+///|
+/// A person's picture after the first at a sidebar row's end (RowPicture.css.ts: 16 across, 3 over the one before):
+/// the room it takes.
+pub let side_face_step : @ui.Len = Fixed(13.0)
+
+///|
+/// The dot before a chat that wants the viewer in 待处理's panel (Attention.css.ts dot): 7 across.
+pub let attention_dot : @ui.Len = Fixed(7.0)
+
+///|
 /// The side rail (60), a file's key (34), a progress track's height (3), the bounds of what floats over the frame
 /// (接管 480, the rail's line 280, what an ended view says 320).
 pub let rail_w : @ui.Len = Fixed(60.0)
@@ -780,7 +805,6 @@ pub let face_status_most : @ui.Len = Fixed(140.0)
 /// A Slack app's icon as it is in its look (SlackApp.kt AppLook: 72 square), off the scale.
 pub let app_icon_side : @ui.Len = Fixed(72.0)
 
-
 ///|
 /// A choice's line on a card (Parts.kt PickLine): 11 over and under (as files_gap), rounded 10 (as custom_field_r),
 /// its check in a room 18 wide at its end.
@@ -800,4 +824,436 @@ pub let face_ink : Int64 = 0xFFFFFFFFL
 /// A sheet's grabber (Sheet.kt SheetGrab): 38 × 5, round at its ends (its 3 capped at half its height, as every
 /// renderer draws it; its colour the palette's line, said where it is drawn).
 // kept across runs: a value (no field of it changes)
-pub let sheet_grabber : @ui.Style = @ui.style(w=Fixed(38.0), h=Fixed(5.0), radius=Full)
+pub let sheet_grabber : @ui.Style = @ui.css("w=Fixed(38.0) h=Fixed(5.0) radius=Full")
+
+///|
+/// A tip's widest (the web's parts.css.ts tooltip: 300).
+pub let tip_max : @ui.Len = Fixed(300.0)
+
+///|
+/// A login card's on a desktop's width (the web's MachineLogins.css.ts card): 360 at least where there is the room
+/// (min(100%, 360px)), and its corner its padding and its × pill's half (8 + 12: the web's card's 20, as a
+/// visualization's).
+pub let login_card_least : Double = 360.0
+
+///|
+pub let login_card_corner : @ui.Radius = viz_card_radius
+
+///|
+/// A file's card in a message on a desktop's width (the web's Chat.css.ts fileCard): its sheet (30 by 36) 7 in from its
+/// side, as the sheet's own 9.75 less the 2.75 it is drawn in (FILE_CARD_PAD); its corner the sheet's room and its own
+/// 3.25 (MESSAGE_FILE_CORNER, 13), a message's pictures' too.
+pub let file_sheet_in : @ui.Space = files_row_end
+
+///|
+pub let file_sheet_w : @ui.Len = Fixed(30.0)
+
+///|
+pub let file_sheet_h : @ui.Len = Fixed(36.0)
+
+///|
+/// A file card's own button (Chat.css.ts fileCardRemove: 22 round).
+pub let file_card_button : @ui.Len = Fixed(22.0)
+
+///|
+/// A name over a message at its widest (Chat.css.ts msgHead msgName: 240).
+pub let name_max : @ui.Len = Fixed(240.0)
+
+///|
+/// A small square button beside a line (the web's activityStop, a file card's remove: 22).
+pub let small_button : @ui.Len = Fixed(22.0)
+
+///|
+/// The pill offering to quote what is picked (the web's Chat.css.ts quotePop: 26 high).
+pub let quote_pop_h : @ui.Len = Fixed(26.0)
+
+///|
+/// A page's bar in the wide frame (the web's sidebar.css.ts pageBar: 45 high).
+pub let wide_bar_h_size : @ui.Len = Fixed(45.0)
+
+///|
+/// A card over what the pointer rests on (the web's Hover.css.ts card: 320 wide; a tile's 220 at least), and an
+/// agent's in it (AgentCard.css.ts: 288).
+pub let hover_card_w : @ui.Len = Fixed(320.0)
+
+///|
+pub let hover_tile_least : @ui.Len = Fixed(220.0)
+
+///|
+pub let agent_card_w : @ui.Len = Fixed(288.0)
+
+///|
+/// parts.tsx's measures off the scale (parts.css.ts, own.css.ts, styles/spinner.css.ts): a switch (36 by 22, its thumb
+/// 2 in; small 26 by 16), a pill (22 high, 9 in), a status dot's ring (1.5), a section's note (3 under its title, 52em
+/// of its 12 at most), the first one (480 at most, its line 34em of its 13), a spinner (14; in a line of small text 12).
+pub let switch_w : Double = 36.0
+
+///|
+pub let switch_h : Double = 22.0
+
+///|
+pub let switch_small_w : Double = 26.0
+
+///|
+pub let switch_small_h : Double = 16.0
+
+///|
+pub let switch_in : Double = 2.0
+
+///|
+pub let pill_h : Double = 22.0
+
+///|
+pub let pill_in : Double = 9.0
+
+///|
+pub let status_ring : Double = 1.5
+
+///|
+pub let section_note_gap : Double = 3.0
+
+///|
+pub let section_note_most : @ui.Len = Fixed(624.0)
+
+///|
+pub let first_most : @ui.Len = Fixed(480.0)
+
+///|
+pub let first_lead_most : @ui.Len = Fixed(442.0)
+
+///|
+pub let spinner_size : Double = 14.0
+
+///|
+pub let spinner_inline : Double = 12.0
+
+///|
+/// A dialog's widths (parts.css.ts dialog 520, dialogWide 640), how far short of the window's it stays at most (32),
+/// and its close button (32 round).
+pub let dialog_w : Double = 520.0
+
+///|
+pub let dialog_wide_w : Double = 640.0
+
+///|
+pub let dialog_margin : Double = 32.0
+
+///|
+pub let dialog_close : Double = 32.0
+
+///|
+/// A dialog's corner (DIALOG_PAD 24 and a pill's half height 18) and shadow (0 24px 64px: a blur's deviation half its
+/// CSS radius).
+pub let dialog_r : Double = 42.0
+
+///|
+pub let dialog_shadow : Double = 32.0
+
+///|
+pub let dialog_shadow_y : Double = 24.0
+
+///|
+/// A select (parts.css.ts select: 200 wide by default; its chevron 14), choices 8 apart; a confirm (dialogAlert, 420
+/// wide); a small panel's icon button's icon (16); a chooser's chevron (12); a copy's check (1.6 s).
+pub let select_w : Double = 200.0
+
+///|
+pub let select_chevron : Double = 14.0
+
+///|
+pub let choice_gap : Double = 8.0
+
+///|
+pub let confirm_w : Double = 420.0
+
+///|
+pub let panel_icon_size : Double = 16.0
+
+///|
+pub let chooser_chevron : Double = 12.0
+
+///|
+pub let command_copied_ms : Double = 1600.0
+
+///|
+/// A menu's item at least (controls.css.ts menuItem: 34 high).
+pub let menu_row_min : Double = 34.0
+
+///|
+/// Nothing under it, no ring round it.
+pub let no_ground : Int64 = 0L
+
+///|
+pub let no_ring : Double = 0.0
+
+///|
+/// A length off the scale, as a style's room (padding, margins: below 0 for a margin): align.mbt's.
+fn room(x : Double) -> @ui.Space {
+  Exact(x)
+}
+
+///|
+/// A corner off the scale, as a style's: align.mbt's.
+fn rounded(x : Double) -> @ui.Radius {
+  Exact(x)
+}
+
+///|
+/// The waiting shapes (waiting.css.ts): a row 66 high, 22 in at its start, its title 13 and line 10 high 10 apart, its
+/// picture 22; dense 10 in, the bars 0.6 as long, 10 and 8 high, 7 apart; a message's bubble 18 round, 70% of the
+/// width at most.
+pub let wait_row_h : Double = 66.0
+
+///|
+pub let wait_row_in : Double = 22.0
+
+///|
+pub let wait_row_gap : Double = 10.0
+
+///|
+pub let wait_title_h : Double = 13.0
+
+///|
+pub let wait_line_h : Double = 10.0
+
+///|
+pub let wait_picture : Double = 22.0
+
+///|
+pub let wait_dense_in : Double = 10.0
+
+///|
+pub let wait_dense_share : Double = 0.6
+
+///|
+pub let wait_title_dense : Double = 10.0
+
+///|
+pub let wait_line_dense : Double = 8.0
+
+///|
+pub let wait_dense_gap : Double = 7.0
+
+///|
+pub let wait_bubble_r : Double = 18.0
+
+///|
+pub let wait_bubble_share : Double = 0.7
+
+///|
+/// A toast (toast.css.ts): 9 in over and under its words, 20 round, 560 wide at most, 24 over the window's foot, a
+/// floating shadow (0 8px 24px), coming in from 8 below.
+pub let toast_py : Double = 9.0
+
+///|
+pub let toast_r : Double = 20.0
+
+///|
+pub let toast_max : Double = 560.0
+
+///|
+pub let toast_bottom : Double = 24.0
+
+///|
+pub let toast_shadow : Double = 12.0
+
+///|
+pub let toast_shadow_y : Double = 8.0
+
+///|
+pub let toast_rise : Double = 8.0
+
+
+///|
+/// A column's edge (parts.css.ts resizeHandle, own.css.ts): a strip 7 wide, 4 of it past the column's edge; its bar 5
+/// wide, 24 high and 48 on the strip; its line 8 short of the strip's ends, in 40 steps of its fade; dragged once 3
+/// from where it went down.
+pub let handle_w : Double = 7.0
+
+///|
+pub let handle_out : Double = 4.0
+
+///|
+pub let edge_bar_w : Double = 5.0
+
+///|
+pub let edge_line_steps : Int = 40
+
+///|
+pub let handle_slop : Double = 3.0
+
+///|
+/// A tip that follows the pointer along an edge (usePointerTip): 300 ms after the pointer comes, 14 beside it.
+pub let edge_tip_ms : Double = 300.0
+
+///|
+pub let edge_tip_gap : Double = 14.0
+
+// ---------------------------------------------------------------------------
+// The desktop's sidebar and rail (sfdesk: ember web/src/Rail.css.ts, ChatMark.css.ts, styles/shell.css.ts)
+
+///|
+/// A chat's marks' colours, bright in both themes (ChatMark.css.ts: #3b82f6 done and waiting on the viewer, #e5484d to
+/// be seen now and its halo at 25%, #f2b01e at work).
+pub let mark_blue : @ui.Color = Exact(0x3B82F6FFL)
+
+///|
+pub let mark_red : @ui.Color = Exact(0xE5484DFFL)
+
+///|
+pub let mark_halo : @ui.Color = A(mark_red, O25)
+
+///|
+pub let mark_yellow : Int64 = 0xF2B01EFFL
+
+///|
+/// The rail's places 9 from its edges open, in its 56's middle (Rail.css.ts rail: 9 under the last, its 38s 9 in).
+pub let rail_in : @ui.Space = room(9.0)
+
+///|
+/// A square of the rail (a place's ground, a workspace's): its corner (Rail.css.ts item, workspaceItem: 9).
+pub let rail_corner : @ui.Radius = rounded(9.0)
+
+///|
+/// What sits in a small panel's corner (--panel-in: a menu's rows, a popover's), concentric with the panel's.
+pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
+
+///|
+/// The `@` menu over the desktop's composer (ChatRef.css.ts refMenu: a small panel in the composer's corner, 32, padded
+/// panel_pad) and its rows' corner (refItem: concentric with it), its rows at their lowest (38).
+pub let ref_menu_corner : @ui.Radius = rounded(ref_menu_round)
+
+///|
+pub let ref_item_corner : @ui.Radius = rounded(ref_menu_round - panel_pad)
+
+///|
+pub let ref_item_min_h : @ui.Len = Fixed(38.0)
+
+///|
+let ref_menu_round : Double = 32.0
+
+///|
+/// The closed bar's corner (shell.css.ts dock, closed: calc(9px * scale + 6px)): concentric with the places' grounds
+/// 6 in.
+pub let closed_bar_corner : @ui.Radius = rounded(surface_corner(6.0, 9.0))
+
+///|
+/// The sidebar's edge's look 3 in its strip (Rail.css.ts edge: its line 6 in, its bar 4 in, the library's 7 wide).
+pub let edge_in : @ui.Space = room(3.0)
+
+///|
+/// A chat's row in the sidebar 7 in from its top and foot (Sidebar.css.ts navSession: padding 7 10).
+pub let row_in : @ui.Space = room(7.0)
+
+///|
+/// An agent's mark (the web's ui.css.ts agentMark): its corner .3 of its side, a 28 one's 8.4 (an agent's card).
+pub let agent_mark_28_corner : @ui.Radius = rounded(28.0 * 0.3)
+
+
+///|
+/// (a 16 one's, 4.8: a line of an agent's history's details)
+pub let agent_mark_16_corner : @ui.Radius = rounded(16.0 * 0.3)
+
+///|
+/// A chat's jobs (the web's Jobs.css.ts): a job's action 26 high, the popover's foot's rows 38.
+pub let job_action_h : @ui.Len = Fixed(26.0)
+
+///|
+pub let jobs_row_h : @ui.Len = Fixed(38.0)
+
+
+///|
+/// A tab of a chat's side panel (the web's ChatPage.css.ts sideTab: 30 high).
+pub let side_tab_h : @ui.Len = Fixed(30.0)
+
+///|
+/// A device's code read aloud, large (Security.css.ts bigCode): the web's display size, 28, its line 1.3 of it, off
+/// the scale; its letters 6 apart.
+pub let code_big_size : @ui.TextSize = Exact(28.0, 36.4)
+
+///|
+pub let code_big_tracking : @ui.Tracking = Exact(6.0)
+
+///|
+/// A chat's bar (the web's ChatPage.css.ts): its station's tag 160 wide at most, 7 in; an agent's station's part 140 at
+/// most, in by .19 of its 20 tile and 1.
+pub let chat_station_most : @ui.Len = Fixed(160.0)
+
+///|
+pub let chat_station_in : @ui.Space = room(7.0)
+
+///|
+pub let agent_station_most : @ui.Len = Fixed(140.0)
+
+///|
+pub let agent_station_in : @ui.Space = room(20.0 * 0.19 + 1.0)
+
+///|
+/// A person in a chat's stack of people (the web's later.css.ts peopleStack): 16 ringed 1.5.
+pub let person_ringed : @ui.Len = Fixed(19.0)
+
+///|
+/// The people a day's usage is split by, in the order the core's usage view ranks them (the web's Usage.css.ts, the
+/// phone's Usage.kt): four of their own in light and in dark, the first still.fail's accent.
+// kept across runs: a table, never written
+let usage_light : Array[Int64] = [0xEF6A3CFFL, 0x2A78D6FFL, 0x1BAF7AFFL, 0x4A3AA7FFL]
+
+///|
+// kept across runs: a table, never written
+let usage_dark : Array[Int64] = [0xE0602FFFL, 0x3987E5FFL, 0x199E70FFL, 0x9085E9FFL]
+
+///|
+/// The `i`th person's colour in the theme shown.
+pub fn usage_series(i : Int) -> Int64 {
+  (if theme().dark { usage_dark } else { usage_light })[i % 4]
+}
+
+///|
+/// An agent's history's steps (the web's History.css.ts, ToolStep.css.ts): the turn's rail 9.5 in, how much of a wait
+/// has gone a bar 3 high; a diff's line 22 in, its mark 9.
+pub let history_rail_in : @ui.Space = room(9.5)
+
+///|
+pub let wait_bar_h : @ui.Len = Fixed(3.0)
+
+///|
+pub let diff_line_in : @ui.Space = room(22.0)
+
+///|
+pub let diff_mark_in : @ui.Space = room(9.0)
+
+///|
+/// A message's picture out in the margin before its words (align.ts columns.avatar: 29), 3 down (Chat.css.ts msgRow >
+/// msgAvatar).
+pub let message_avatar_out : @ui.Space = room(-29.0)
+
+///|
+pub let message_avatar_down : @ui.Space = room(3.0)
+
+///|
+/// A message's head in past its picture where the picture is over its start (Chat.css.ts inlineHeads: 25).
+pub let message_head_in : @ui.Space = room(25.0)
+
+///|
+/// An agent's activity line out in the margin with the messages' pictures (align.ts columns.activity: its 24 picture
+/// and the 11 beside it, 35 before the words).
+pub let activity_out : @ui.Space = room(-35.0)
+
+///|
+/// What says a chat is archived or its station down, over its composer (Chat.css.ts offlineNotice: 760 at most, 64
+/// less than the pane).
+pub let notice_w : @ui.Len = Fixed(760.0)
+
+///|
+/// A message's video (Chat.css.ts msgVideo, msgVideoPlay, msgVideoName): black under its still, black at 65% under its
+/// play mark and its name, which are white.
+pub let video_ground : @ui.Color = Data(0x000000FFL)
+
+///|
+pub let video_shade : @ui.Color = Data(0x000000A6L)
+
+///|
+pub let white_ink : @ui.Color = Data(0xFFFFFFFFL)
+
+///|
+pub let white : Int64 = 0xFFFFFFFFL

@@ -188,3 +188,72 @@ test "a new chat's first words not sent (the chat not made): they leave the scre
   let (_, back, _, _) = t.ime()
   assert_eq(back, words)
 }
+
+///|
+/// Home over the made-up chats with the new chat's stations not read while `reading` says (the core's `newChat` with
+/// no `stations`: only the station it last started on, `kept`), the new chats asked for counted in `made`.
+fn reading_core(reading : Ref[Bool], made : Ref[Int]) -> @ui.Tester {
+  reset()
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "newChat.create" {
+        made.val += 1
+      }
+      (base.call)(name, params, done)
+    },
+    topic: fn(name, params) {
+      if name == "newChat" && reading.val {
+        {
+          value: Some({
+            "kept": "st1",
+            "any": false,
+            "efforts": [],
+            "accounts": [],
+            "pickAccount": false,
+            "waiting": false,
+            "frequent": [],
+          }),
+          error: None,
+          version: 0,
+        }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+}
+
+///|
+test "a new chat while its stations are read: its page and composer as they will be, only the station's parts waiting" {
+  let reading = Ref(true)
+  let made = Ref(0)
+  let t = reading_core(reading, made)
+  let (_, y) = bar_places_at()
+  t.tap(195.0, y - 28.0 - 4.0)
+  t.run_for(@ui.nav_rise_ms)
+  // the page's own words and its composer, nothing said of a station not known yet
+  assert_true(t.find("想让 agent 做什么？") is Some(_))
+  assert_true(t.find("它会在") is None)
+  assert_true(t.find("没有可用模型") is None)
+  // words taken while they are read, nothing sent
+  t.tap_text("做任何事")
+  t.type_text("先写一半")
+  t.draw()
+  tap_send(t)
+  t.draw()
+  assert_eq(made.val, 0)
+  let (_, field, _, _) = t.ime()
+  assert_eq(field, "先写一半")
+  // read: the page on the station it started on, the same words in the same field, and they go
+  reading.val = false
+  t.draw()
+  assert_true(t.find("它会在 Studio 上") is Some(_))
+  let (_, kept, _, _) = t.ime()
+  assert_eq(kept, "先写一半")
+  tap_send(t)
+  t.draw()
+  assert_eq(made.val, 1)
+}

@@ -8,8 +8,9 @@ description: The latest MoonBit, from the cache the moonbit workflow fills
 runs:
   using: composite
   steps:
+    # The newest release put in, looked up only: nothing downloaded yet
     - uses: actions/cache/restore@v4
-      id: moon
+      id: newest
       with:
         # (in the runner's own tool cache: two runners on one machine (Mini1's) shared ~/.moon-ci, and one's restore wrote
         # over the MoonBit the other's tests were running with: moon test said nothing, run 39532570138)
@@ -17,14 +18,46 @@ runs:
         # (no key is this one: the newest of this prefix, the latest release the moonbit workflow put in)
         key: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-none
         restore-keys: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-
-    - shell: bash
+        lookup-only: true
+    # A self-hosted runner's tool cache stays from one job to the next: the release restored there before (its key in
+    # moon-ci.key beside it) is not downloaded again. Mini1's mbui jobs each took the same ~104 MB from the Actions
+    # cache through the proxy its DNS sends GitHub to, ~13 GB a day (2026-10-23). GitHub's runners start with none.
+    - id: kept
+      shell: bash
+      env:
+        KEY: ${{ steps.newest.outputs.cache-matched-key }}
       run: |
-        m="$RUNNER_TOOL_CACHE/moon-ci"; [ "${{ runner.os }}" != Windows ] || m=$(cygpath -u "$m")
+        t="$RUNNER_TOOL_CACHE"; [ "${{ runner.os }}" != Windows ] || t=$(cygpath -u "$t")
+        if [ -n "$KEY" ] && [ "$(cat "$t/moon-ci.key" 2>/dev/null)" = "$KEY" ] && { [ -x "$t/moon-ci/bin/moon" ] || [ -x "$t/moon-ci/bin/moon.exe" ]; }; then
+          echo "MoonBit $KEY kept in the tool cache: not downloaded again"
+          echo "kept=true" >> "$GITHUB_OUTPUT"
+        fi
+    # (its key said only once it is restored: a download that breaks off is a warning of actions/cache's, the files
+    # left as they were)
+    - if: steps.newest.outputs.cache-matched-key != '' && steps.kept.outputs.kept != 'true'
+      shell: bash
+      run: |
+        t="$RUNNER_TOOL_CACHE"; [ "${{ runner.os }}" != Windows ] || t=$(cygpath -u "$t")
+        rm -f "$t/moon-ci.key"
+    - if: steps.newest.outputs.cache-matched-key != '' && steps.kept.outputs.kept != 'true'
+      uses: actions/cache/restore@v4
+      id: moon
+      with:
+        path: ${{ runner.tool_cache }}/moon-ci
+        key: ${{ steps.newest.outputs.cache-matched-key }}
+    - shell: bash
+      env:
+        KEY: ${{ steps.newest.outputs.cache-matched-key }}
+        RESTORED: ${{ steps.moon.outputs.cache-matched-key }}
+      run: |
+        t="$RUNNER_TOOL_CACHE"; [ "${{ runner.os }}" != Windows ] || t=$(cygpath -u "$t")
+        m="$t/moon-ci"
         if [ ! -x "$m/bin/moon" ] && [ ! -x "$m/bin/moon.exe" ]; then
           echo "::error::no MoonBit for ${{ runner.os }} ${{ runner.arch }} in the Actions cache: run the moonbit workflow (it puts each new release in once)"
           exit 1
         fi
-        echo "MoonBit: ${{ steps.moon.outputs.cache-matched-key }}"
+        [ -z "$KEY" ] || [ "$RESTORED" != "$KEY" ] || printf '%s' "$KEY" > "$t/moon-ci.key"
+        echo "MoonBit: $KEY"
         if [ "${{ runner.os }}" = Windows ]; then m=$(cygpath -w "$m"); echo "$m\\bin" >> "$GITHUB_PATH"; else echo "$m/bin" >> "$GITHUB_PATH"; fi
         echo "MOON_HOME=$m" >> "$GITHUB_ENV"
     - shell: bash

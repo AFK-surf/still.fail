@@ -22,11 +22,12 @@ web 的设计系统单独成包，在 `web/ui`（`web/ui/package.json`）。app�
 | `styles/page.css.ts`、`styles/spinner.css.ts` | 图标按钮和 section；spinner |
 | `parts.tsx`、`parts.css.ts` | 共用部件：Button、IconButton、Tip、Field、Segmented、Choices、Switch、Select、Dialog、Confirm、Menu、Panel*、Chooser、Loading、FirstOne、ResizeHandle… |
 | `toast.tsx`、`Avatar.tsx`、`backClose.ts` | toast、字母头像、返回键关闭浮层 |
-| `viewer/Reader.tsx`、`viewer/Player.tsx`、`viewer/ViewerBar.tsx` | 阅读器、播放器和它们共用的顶栏；`viewer/media.css.ts` 是浮在画面上的媒体控件 |
+| `viewer/Reader.tsx`、`viewer/Player.tsx`、`viewer/ViewerBar.tsx` | 阅读器、播放器（网盘和聊天里的视频、歌都用这一个）和它们共用的顶栏；`viewer/media.css.ts` 是浮在画面上的媒体控件 |
+| `viewer/frames.ts`、`viewer/playing.ts`、`viewer/zoom.ts` | 播放器读文件自己的帧（逐帧、帧数、帧率，Mediabunny 解码）；播放器的时间写法、倍速、选集；画面的缩放和拖动（预览的图片也用它） |
 | `viewer/file.ts` | 查看器打开的「文件」接口：读全部、流地址、旁边的文件、上次的位置、保存；`blobFile` 包一个已经在手里的 Blob |
 | `viewer/host.ts` | 查看器向页面要的东西：窄屏、深色、Markdown 怎么画、手机的弹层、阅读排版存在哪（`setViewerHost`） |
 | `strokes.ts` | 找到的字下面的手画线 |
-| `icons.tsx` | 图标（由 `scripts/icons.py` 从 `design/icons` 生成） |
+| `icons.tsx` | 图标（由 `apps/mbui/scripts/icons` 从 `design/icons` 生成） |
 | `motion.ts`、`fileSize.ts`、`i18n.ts`、`shortcuts.ts` | 动效规律、文件大小、文案、快捷键接口 |
 
 app 自己的部件（模型和 connect 的标记、时间、返回链接、splash、页面切换）留在 `web/src/ui.tsx`，它同时转出包里的全部部件，所以 app 里照旧 `from "./ui.tsx"` 也行。

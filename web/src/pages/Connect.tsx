@@ -6,7 +6,7 @@ import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
 import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "@stillfail/ui/icons.tsx";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type Connect, type ModelOption, type Overview, type MadeSlackApp } from "../api.ts";
+import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type Connect, type ModeChange, type ModeWords, type ModelOption, type Overview, type MadeSlackApp } from "../api.ts";
 import { kindKey, modeOf } from "../format.ts";
 import { AppFields, ConfigTokenForm, NEW_APP, SlackAppSection } from "./SlackApp.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
@@ -30,7 +30,6 @@ import * as shellCss from "../styles/shell.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { StationNamedAt } from "../StationNamed.tsx";
-const tr = t;
 export function ConnectPage() {
   const { id } = useParams();
   const station = useStation();
@@ -105,7 +104,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
                 : failing ? <><DoingShown state={{ running: false, error: failing.error }} inline />{failing.text}</>
                 : <><StatusDot state={connect.presence} />{connect.statusText}</>}
             </span>
-            <span className={css.kindTag}><ConnectKindIcon kind={connect.kind} size={13} />{connect.team ?? (feishu ? (connect.feishu?.domain === "lark" ? "Lark" : t("web-pages.connect.feishu.name")) : "Slack")}</span>
+            <span className={css.kindTag}><ConnectKindIcon kind={connect.kind} size={13} />{connect.placeText}</span>
             {station.name && <span className={cloudCss.stationTag}><StationNamedAt station={station.address} name={station.name} size={11} /></span>}
             <span className={css.ownerLine}>{t("web-pages.connect.owner")} <OwnerLabel owner={connect.createdBy} /></span>
           </p>
@@ -191,21 +190,31 @@ function TokenDialog({ connect, onClose }: { connect: Connect; onClose(): void }
   );
 }
 
-/** The mode picker, shared by the connect page and the new-connect dialog. */
-export function ModeChoices({ mode, requireMention, onChange, disabled, kind }:
-  { mode: ConnectMode; requireMention: boolean; onChange(next: { mode: ConnectMode; requireMention: boolean }): void; disabled?: boolean | undefined; kind?: string | undefined }) {
-  const MODE = modeOf(kind);
+/** A core from before it said them (the legacy dialog's): Slack's words. */
+const LEGACY_WORDS = (): ModeWords => ({
+  multi: modeOf("slack")["multi-session"], single: modeOf("slack")["single-session"],
+  mentionOn: t("web-pages.connect.mentionOn"), mentionOff: t("web-pages.connect.mentionOff"),
+});
+
+/** The mode picker, shared by the connect page and the new-connect dialog; `words`: the core's, as its kind says them. */
+export function ModeChoices({ mode, requireMention, onChange, disabled, words = LEGACY_WORDS() }:
+  { mode: ConnectMode; requireMention: boolean; onChange(next: { mode: ConnectMode; requireMention: boolean }): void; disabled?: boolean | undefined; words?: ModeWords | undefined }) {
   return (
     <Choices label={t("web-pages.connect.mode")} value={mode} onChange={(m) => onChange({ mode: m, requireMention: m === "multi-session" ? true : requireMention })}
       options={(["multi-session", "single-session"] as const).map((m) => ({
-        value: m, title: MODE[m].label, description: MODE[m].description, disabled,
+        value: m, title: (m === "multi-session" ? words.multi : words.single).label, description: (m === "multi-session" ? words.multi : words.single).description, disabled,
         extra: m === "single-session" ? (
           <SwitchRow title={t("web-pages.connect.mentionOnly")} checked={requireMention} disabled={disabled}
-            description={requireMention ? t(kindKey("web-pages.connect.mentionOn", kind)) : t(kindKey("web-pages.connect.mentionOff", kind))}
+            description={requireMention ? words.mentionOn : words.mentionOff}
             onChange={(v) => onChange({ mode, requireMention: v })} />
         ) : undefined,
       }))} />
   );
+}
+
+/** The core's word on switching a connect to `next` (one each takes no @ to choose from). */
+export function modeChange(item: ConnectItem, next: { mode: ConnectMode; requireMention: boolean }): ModeChange | undefined {
+  return item.changes.find((c) => c.mode === next.mode && (next.mode === "multi-session" || c.requireMention === next.requireMention));
 }
 
 /**
@@ -238,8 +247,8 @@ function RunSection({ item }: { item: ConnectItem }) {
         <div className={css.runCardRow}>
           <span className={css.runCardLabel}>{t("web-pages.connect.session")}</span>
           <span className={css.runCardText}>
-            <strong>{modeOf(connect.kind)[connect.mode].label}</strong>
-            <span className={shellCss.muted}>{modeOf(connect.kind)[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? t("web-pages.connect.mentionOnlySentence") : t("web-pages.connect.everyMessageSentence"))}</span>
+            <strong>{connect.modeLabel}</strong>
+            <span className={shellCss.muted}>{connect.modeSentence}</span>
           </span>
           <button type="button" className={chatCss.textButton} onClick={() => setChangingMode(true)}>{t("web-pages.connect.change")}</button>
         </div>
@@ -258,40 +267,20 @@ function RunSection({ item }: { item: ConnectItem }) {
         {(save.error ?? saveBind.error) && <p className={controlsCss.fieldError} role="alert">{(save.error ?? saveBind.error)!.message}</p>}
         <p className={`${controlsCss.cardFoot} ${shellCss.muted}`}>{t("web-pages.connect.runtimeNote", { runtime: connect.runtimeText })}</p>
       </div>
-      {changingMode && <ModeDialog connect={connect} running={item.running} onClose={() => setChangingMode(false)} />}
+      {changingMode && <ModeDialog item={item} onClose={() => setChangingMode(false)} />}
       {choosing && <ChooseSessionDialog item={item} onClose={() => setChoosing(false)} />}
     </Section>
   );
 }
 
-/** What switching to `next` does to this connect's conversations, in plain words. */
-export function consequences(connect: Connect, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
-  const out: string[] = [];
-  // A Feishu connect's groups in place of Slack's threads and channels.
-  const t = (key: string, o?: Parameters<typeof tr>[1]) => tr(["toSingle", "toMulti", "threadsRestart", "mentionOnly", "noMention"].some((k) => key.endsWith(`.${k}`)) ? kindKey(key, connect.kind) : key, o);
-  if (connect.mode === "multi-session" && next.mode === "single-session") {
-    out.push(t("web-pages.connect.effects.toSingle"));
-    out.push(connect.session ? t("web-pages.connect.effects.resumeSingle") : t("web-pages.connect.effects.newSingle"));
-    if (!next.requireMention) out.push(t("web-pages.connect.effects.noMention"));
-  } else if (connect.mode === "single-session" && next.mode === "multi-session") {
-    out.push(t("web-pages.connect.effects.toMulti"));
-    out.push(t("web-pages.connect.effects.threadsRestart"));
-    out.push(t("web-pages.connect.effects.switchBack"));
-  } else if (next.requireMention !== connect.requireMention) {
-    out.push(next.requireMention
-      ? t("web-pages.connect.effects.mentionOnly")
-      : t("web-pages.connect.effects.noMention"));
-  }
-  if (running > 0) out.push(t("web-pages.connect.effects.running", { n: running }));
-  return out;
-}
-
-function ModeDialog({ connect, running, onClose }: { connect: Connect; running: number; onClose(): void }) {
+function ModeDialog({ item, onClose }: { item: ConnectItem; onClose(): void }) {
+  const { connect } = item;
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [next, setNext] = useState({ mode: connect.mode, requireMention: connect.requireMention });
-  const changed = next.mode !== connect.mode || (next.mode === "single-session" && next.requireMention !== connect.requireMention);
-  const effects = changed ? consequences(connect, next, running) : [];
+  const change = modeChange(item, next);
+  const changed = change?.changed ?? false;
+  const effects = change?.effects ?? [];
   return (
     <Dialog open onClose={onClose} wide title={t("web-pages.connect.modeTitle")}
       description={t("web-pages.connect.modeLead")}
@@ -300,10 +289,10 @@ function ModeDialog({ connect, running, onClose }: { connect: Connect; running: 
         {/* Closes at once: the page's status line says it is saving, a failure said by toast. */}
         <Button variant="primary" disabled={!changed}
           onClick={() => { save.put(next, () => toast(t("web-pages.connect.modeChanged"))); onClose(); }}>
-          {next.mode === connect.mode ? t("web-pages.connect.confirmChange") : next.mode === "single-session" ? t("web-pages.connect.toSingle") : t("web-pages.connect.toMulti")}
+          {change?.action}
         </Button>
       </>}>
-      <ModeChoices mode={next.mode} requireMention={next.requireMention} onChange={setNext} kind={connect.kind} />
+      <ModeChoices mode={next.mode} requireMention={next.requireMention} onChange={setNext} words={connect.modeWords} />
       {effects.length > 0 && (
         <div className={additionsCss.callout} data-tone="amber" role="note">
           <strong>{t("web-pages.connect.afterChange")}</strong>
@@ -365,7 +354,7 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
             const row = (
               <>
                 <span className={pagesCss.listRowTitle}>{s.titleText}</span>
-                <Pill tone={s.tone}><StatusText text={s.statusText} /></Pill>
+                <Pill tone={s.tone}><StatusText text={s.statusText} lead={s.statusLead} rest={s.statusRest} /></Pill>
                 <Time className={`${shellCss.muted} ${css.listRowTime}`} stamp={s.time?.lastActiveAt} />
               </>
             );
@@ -431,7 +420,7 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
   // Only the input's immediate echo belongs to React; all decisions use the core's view.
   const [echo, setEcho] = useState<SlackAppSettings | null>(null);
   // The platform first, then Feishu's own steps (./FeishuConnect.tsx).
-  const other = useFeishuStep(flow.view, flow, onClose, (v) => <ModeChoices mode={v.mode} requireMention={v.requireMention} onChange={(m) => flow.edit(m)} kind="feishu" />);
+  const other = useFeishuStep(flow.view, flow, onClose, (v) => <ModeChoices mode={v.mode} requireMention={v.requireMention} onChange={(m) => flow.edit(m)} words={v.modeWords} />);
   if (flow.unsupported) return <LegacyNewConnectDialog open={open} onClose={onClose} resume={resume} />;
   const view = flow.view;
   if (!view) return <Dialog open={open} onClose={onClose} title={t("web-pages.connects.add")}><WaitLine /></Dialog>;
@@ -510,7 +499,7 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
       )}
       {step === "app" && (
         <div className="slack-app">
-          <AppFields fresh settings={app} onChange={setApp} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
+          <AppFields fresh settings={app} onChange={setApp} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} sections={view.sections} />
           {iconError && <p className={controlsCss.fieldError} role="alert">{iconError}</p>}
           {makeApp.error && <p className={controlsCss.fieldError} role="alert">{makeApp.error.message}</p>}
         </div>
@@ -536,7 +525,7 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
               : <ModelTriple pick={pick} onConfirm={() => act(pick.save(), t("web-pages.connect.changeModel"))} />}
           </Field>
           <Field label={t("web-pages.connect.mode")}>
-            <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} />
+            <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} words={view.modeWords} />
           </Field>
           {create.error && <p className={controlsCss.fieldError} role="alert">{create.error.message}</p>}
         </>
@@ -643,7 +632,7 @@ function LegacyNewConnectDialog({ open, onClose, resume }: { open: boolean; onCl
       )}
       {step === "app" && (
         <div className="slack-app">
-          <AppFields fresh settings={app} onChange={setApp} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
+          <AppFields fresh settings={app} onChange={setApp} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} sections={[]} />
           {iconError && <p className={controlsCss.fieldError} role="alert">{iconError}</p>}
           {makeApp.error && <p className={controlsCss.fieldError} role="alert">{makeApp.error.message}</p>}
         </div>

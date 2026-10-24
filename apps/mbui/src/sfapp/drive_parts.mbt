@@ -30,24 +30,6 @@ priv enum DvSheet {
 }
 
 ///|
-/// A file going up into a folder of a drive (DriveScreen.kt DriveUpload): its row in the folder's list until it is
-/// there.
-priv struct DvUpload {
-  serial : Int
-  station : String
-  root : String
-  dir : String
-  mut name : String
-  bytes : Bytes
-  mut sent : Int
-  /// waiting | going | taken | failed
-  mut state : String
-  mut error : String
-  mut replace : Bool
-  mut id : String
-}
-
-///|
 /// The drive's state while the app runs.
 priv struct DriveUi {
   mut sheet : DvSheet
@@ -59,9 +41,6 @@ priv struct DriveUi {
   mut building : String
   /// what is chosen in a folder (by its page's key), by name
   chosen : Map[String, Array[String]]
-  uploads : Array[DvUpload]
-  mut serial : Int
-  mut pumping : Bool
   /// what is under way on an entry ("remove|<station>|<root>|<path>"), and what failed a moment ago (its words: shown
   /// on its row for dv_failed_ms)
   busy : Map[String, Bool]
@@ -74,9 +53,6 @@ priv struct DriveUi {
   /// the views chosen here, before the prefs say
   mut sort_set : String?
   mut hidden_set : Bool?
-  /// a file being picked to go up, and where to
-  mut picking : @ui.Pick?
-  mut picking_for : DriveAt
   /// what is asked for in an Ask sheet, the folder picker's place and filter
   mut asked : String
   mut picker_at : String?
@@ -99,9 +75,6 @@ let dv : DriveUi = {
   sheet_on: "",
   building: "",
   chosen: {},
-  uploads: [],
-  serial: 0,
-  pumping: false,
   busy: {},
   failed: {},
   refreshing: {},
@@ -109,8 +82,6 @@ let dv : DriveUi = {
   held_done: false,
   sort_set: None,
   hidden_set: None,
-  picking: None,
-  picking_for: { station: "", root: None, path: "" },
   asked: "",
   picker_at: None,
   picker: None,
@@ -130,9 +101,6 @@ fn dv_reset() -> Unit {
   dv.sheet_on = ""
   dv.building = ""
   dv.chosen.clear()
-  dv.uploads.clear()
-  dv.serial = 0
-  dv.pumping = false
   dv.busy.clear()
   dv.failed.clear()
   dv.refreshing.clear()
@@ -140,8 +108,6 @@ fn dv_reset() -> Unit {
   dv.held_done = false
   dv.sort_set = None
   dv.hidden_set = None
-  dv.picking = None
-  dv.picking_for = { station: "", root: None, path: "" }
   dv.asked = ""
   // (a new one: an editor knows its Field by the build it was last given in, and a run started again counts builds
   // from the start)
@@ -153,11 +119,10 @@ fn dv_reset() -> Unit {
   dv.picker_denied = false
   dv.picker_serial = 0
   dv.picker_asking = false
-  reader_ui.clear()
   reader_set.clear()
-  dv_reads.clear()
   fix_folders.clear()
   fix_places.clear()
+  fix_transfers.clear()
   fix_reads.clear()
   draft_refs.clear()
   sfs.open = false
@@ -395,6 +360,7 @@ fn dv_sheet_frame(
   close? : (() -> Unit)? = None,
   gone? : () -> Unit = fn() { dv.closing = NoSheet },
   ground? : Int64 = 0L,
+  trailing? : String = "",
 ) -> Unit {
   let t = @sf.theme()
   let r = @kit.sheet(
@@ -410,8 +376,15 @@ fn dv_sheet_frame(
       })
       |> ignore
       if title != "" {
-        c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, fn() {
+        c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
           c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false) |> ignore
+          // what is said beside it (SheetHead's trailing: the contents' count and how far read)
+          if trailing != "" {
+            c.box(style=dv_sheet_trailing, fn() {
+              c.text(trailing, style=dv_sheet_trailing_words) |> ignore
+            })
+            |> ignore
+          }
         })
         |> ignore
       }
@@ -431,56 +404,63 @@ fn dv_sheet_frame(
 
 ///|
 /// The rows of a card in a list (DriveScreen.kt cardRow): 12 in from the sides, the first and last carrying its 16
-/// corners, 10 under the last.
+/// corners, 10 under the last; each row list_pad in from the card's sides (and from its top on the first, its bottom
+/// on the last), pressed and grounded (`ground`: a chosen row's, none for the card's own) in a row_corner, concentric
+/// with the card's.
 fn dv_card_row(
   c : @ui.Ctx,
   first : Bool,
   last : Bool,
-  ground : Int64,
+  ground : Int64?,
   id : Int,
   body : () -> Unit,
 ) -> Unit {
-  let t = @sf.theme()
+  let card = dv_surface()
   c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=if last { 10.0 } else { 0.0 }, fn() {
     c.box(w=Fill(1.0), fn() {
+      // the card's ground: rounded where it ends (its first row's top, its last's bottom), square between rows; the
+      // rounded part only where the card has its corners (so what is in a row between is in no corner of it)
       c.layer(fn() {
-        c.box(
-          w=Fill(1.0),
-          h=Fill(1.0),
-          radius=if first || last { 16.0 } else { 0.0 },
-          bg=ground,
-          fn() {  },
-        )
+        c.box(style=dv_card_whole, fn() {
+          if !first {
+            c.box(style=dv_card_corner_room, fn() {  }) |> ignore
+          }
+          c.box(w=Fill(1.0), h=Fill(1.0), radius=if first || last { @sf.drive_card_corner } else { 0.0 }, bg=card, fn() {  })
+          |> ignore
+          if !last {
+            c.box(style=dv_card_corner_room, fn() {  }) |> ignore
+          }
+        })
         |> ignore
       })
       |> ignore
-      // the corners the card does not have here: squared again
-      if first != last || (!first && !last) {
-        if !first {
-          c.layer(fn() { c.box(w=Fill(1.0), h=Px(16.0), bg=ground, fn() {  }) |> ignore })
-          |> ignore
-        }
-        if !last {
-          c.layer(fn() {
-            c.spacer()
-            c.box(w=Fill(1.0), h=Px(16.0), bg=ground, fn() {  }) |> ignore
-          })
-          |> ignore
-        }
+      // between rows, the card goes on square to the row's edge
+      if !first {
+        c.layer(fn() { c.box(w=Fill(1.0), h=Px(@sf.drive_card_corner * 2.0), bg=card, fn() {  }) |> ignore })
+        |> ignore
       }
-      c.box(w=Fill(1.0), id~, fn() {
-        body()
-        // DriveScreen.kt cardRow: clickable inside the card's padding (LIST_PAD), clip(Smooth(LIST_ROW_CORNER))
-        if id != 0 {
-          @motion.ripple(
-            c,
-            id,
-            @sf.row_corner,
-            out_x=-@sf.list_pad,
-            out_top=if first { -@sf.list_pad } else { 0.0 },
-            out_bottom=if last { -@sf.list_pad } else { 0.0 },
-          )
-        }
+      if !last {
+        c.layer(fn() {
+          c.spacer()
+          c.box(w=Fill(1.0), h=Px(@sf.drive_card_corner * 2.0), bg=card, fn() {  }) |> ignore
+        })
+        |> ignore
+      }
+      let room = match (first, last) {
+        (true, true) => dv_row_room_only
+        (true, false) => dv_row_room_first
+        (false, true) => dv_row_room_last
+        (false, false) => dv_row_room
+      }
+      c.box(style=room, fn() {
+        // (at the card's ends concentric in its corner, as it is list_pad in)
+        c.box(style=if first || last { dv_row_ground_end } else { dv_row_ground }, bg?=ground, id~, fn() {
+          body()
+          if id != 0 {
+            @motion.ripple(c, id, if first || last { @sf.inner_corner(@sf.drive_card_corner, @sf.list_pad) } else { @sf.row_corner })
+          }
+        })
+        |> ignore
       })
       |> ignore
     })
@@ -488,6 +468,42 @@ fn dv_card_row(
   })
   |> ignore
 }
+
+///|
+/// A card's row's room in it (DriveScreen.kt cardRow, Parts.kt LIST_PAD): 8 in from the card's sides, and from its top
+/// on the first row, its bottom on the last.
+// kept across runs: a value (no field of it changes)
+let dv_row_room : @ui.Style = @ui.css("w=Full px=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_row_room_first : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_row_room_last : @ui.Style = @ui.css("w=Full px=S2 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_row_room_only : @ui.Style = @ui.css("w=Full p=S2")
+
+///|
+/// A card's row's own ground (pressed, chosen): rounded LIST_ROW_CORNER, concentric with the card's.
+// kept across runs: a value (no field of it changes)
+let dv_row_ground : @ui.Style = @ui.css("w=Full radius=Xl2")
+
+///|
+/// The card's ground as tall as its row; where the card goes on past it, its corner's room.
+// kept across runs: a value (no field of it changes)
+let dv_card_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_card_corner_room : @ui.Style = @ui.style(w=Full, h=Fixed(@sf.drive_card_corner))
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_row_ground_end : @ui.Style = @ui.style(w=Full, radius=@sf.drive_row_end_radius)
 
 ///|
 /// A row held (a long press, 400 ms as the system's): true on the frame the hold acts, once; the tap that ends it is
@@ -549,14 +565,6 @@ fn dv_act(c : @ui.Ctx, what : String, done? : String = "") -> (Result[Json, Json
 }
 
 ///|
-fn dv_error(e : Json) -> String {
-  match text(Some(e), "message") {
-    "" => tr("android-misc.failed")
-    m => m
-  }
-}
-
-///|
 /// An entry's key for what is under way on it.
 fn dv_key(op : String, station : String, root : String, path : String) -> String {
   op + "|" + station + "|" + root + "|" + path
@@ -588,3 +596,12 @@ fn dv_doing(
     }
   })
 }
+
+///|
+/// What a sheet's head says beside its title (the web's headNote: the page's meta size, quiet, at its end).
+// kept across runs: a value (no field of it changes)
+let dv_sheet_trailing : @ui.Style = @ui.style(w=@sf.grow, align=AEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dv_sheet_trailing_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)

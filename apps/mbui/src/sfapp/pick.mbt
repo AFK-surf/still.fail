@@ -106,6 +106,24 @@ fn pickable(
   } else if (down && pressed_in) || !found.is_empty() {
     c.words(box, key)
   }
+  // in the wide frame a mouse picks words as a browser's selection (Ctx::selectable, sfdesk's frame.mbt); what of
+  // this message is picked so is told the pick's pop (pick_pop: 引用), whose message it is with it; no long press
+  // there. A finger picks them as on a phone, whatever the frame
+  if desk_picks() {
+    match c.selection_box() {
+      Some((sx, sy, sw, sh)) =>
+        match c.rect_of(id) {
+          Some((x, y, w, h)) if sx >= x - 1.0 && sy >= y - 1.0 && sx + sw <= x + w + 1.0 && sy + sh <= y + h + 1.0 => {
+            pk.ts = ts
+            pk.author = author
+            pk.role = role
+          }
+          _ => ()
+        }
+      None => ()
+    }
+    return
+  }
   let mine = pk.ts == ts
   // the press went down in it and holds still: a long press's time on, the word under the finger picked
   let holding = down &&
@@ -131,10 +149,22 @@ fn pickable(
 }
 
 ///|
+/// Whether words are picked as a desktop's (a mouse's selection over the wide frame's page, its pop) rather than as a
+/// phone's (held, the handles, the bar): by the hand, a finger's the phone's way in any frame (the phone's frame has
+/// no mouse's selection: a mouse there holds too).
+fn desk_picks() -> Bool {
+  wide_on.val && @ui.pointing() is Mouse
+}
+
+///|
 /// Over the list (MessagePick.kt PickLayer): the picked passage's handles and its bar (over it; under it when the bar
 /// over the list is too near), the bar gone while the list moves or the passage is being changed. A tap anywhere else
 /// lets go of it, as back does.
 fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
+  if desk_picks() {
+    pick_pop(c, src, r)
+    return
+  }
   if pk.ts == "" {
     return
   }
@@ -215,10 +245,10 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   }
   // over the passage; under it (clear of the end's knob) when the bar over the list is too near; on the screen when
   // the passage runs past it
-  let top = status_top() + chat_bar_h + 8.0
+  let top = bar_foot() + 8.0
   let over = first.1 - 52.0
   let y = if over < top { last.1 + last.3 + 28.0 } else { over }
-  let y = dmax(top, dmin(y, dmax(c.height - composer_room_of(c) - 48.0, top)))
+  let y = dmax(top, dmin(y, dmax(c.height - dmax(composer_room_of(c), tabletop_clear(c)) - 48.0, top)))
   let x = if lines.length() > 1 { c.width / 2.0 } else { first.0 + first.2 / 2.0 }
   let x = dmax(130.0, dmin(x, dmax(c.width - 130.0, 130.0)))
   let everything = pk.sel.a == 0 && pk.sel.b >= words.text.length()
@@ -274,3 +304,88 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// What the mouse picked in a message in the wide frame (Chat.tsx useSelectionQuote, Chat.css.ts quotePop): once it is
+/// let go, a small dark pill 8 over the middle of what is picked, 引用 with its mark, quoting it into the chat's draft
+/// (whose words they are, as the message says: pickable). ⌘C copies it (Ctx::selectable); a press elsewhere lets it go.
+fn pick_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
+  let (x, y) = match c.selection_box() {
+    Some((sx, sy, sw, _)) if pk.ts != "" => (sx + sw / 2.0, sy - 8.0 - pick_pop_h)
+    _ => {
+      pk.ts = ""
+      return
+    }
+  }
+  let pop = c.id("pick/pop")
+  if c.clicked(pop) {
+    let text = c.selected_text().trim(chars=" \n\t").to_string()
+    if text != "" {
+      draft_quote(draft_of(c, src, r), pk.author, text, pk.ts, pk.role)
+    }
+    c.selection_clear()
+    pk.ts = ""
+    return
+  }
+  c.cursor(pop, Hand)
+  // (pressed, what is picked stays picked: it is what is quoted)
+  c.keeps_selection(pop)
+  // (where the layer it is in starts in the window, as this frame lays it out: what is picked is said in the window's)
+  let frame = c.id("pick/pop-frame")
+  let (fx, fy, fw) = match c.laid_rect(frame) {
+    Some((fx, fy, fw, _)) => (fx, fy, fw)
+    None => (0.0, 0.0, c.width)
+  }
+  c.layer(fn() {
+    c.box(style=pick_pop_frame, id=frame, fn() {
+      c.box(style=pick_pop_row, ty=dmax(0.0, y - fy), fn() {
+        c.box(tx=x - fx - fw / 2.0, fn() {
+          let hot = c.lit(pop)
+          c.box(style=if hot { pick_pop_hot } else { pick_pop_box }, id=pop, fn() {
+            @sf.icon(c, "quote", size=12.0, color=@sf.theme().p.on_primary) |> ignore
+            c.text(tr("web-main.chat.quote"), style=pick_pop_words) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// What the pill is placed in: all of the layer.
+// kept across runs: a value (no field of it changes)
+let pick_pop_frame : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The pill's height (quotePop: 26).
+let pick_pop_h : Double = 26.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_pop_row : @ui.Style = @ui.css("row w=Full justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_pop_box : @ui.Style = @ui.style(
+  row=true,
+  h=@sf.quote_pop_h,
+  px=S2_5,
+  gap=S1,
+  radius=Full,
+  bg=Primary,
+  shadow=Md,
+  align=ACenter,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.css("bg=A(Primary,O80)"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_pop_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=OnPrimary, wrap=false)

@@ -28,6 +28,8 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     (at("数据.csv", 200.0, 0.0, 0.0), fn() { @utf8.encode(fixture_csv) }),
     (at("备份.bin", 4096.0, 0.0, 0.0), fn() { Bytes::makei(4096, fn(i) { (i % 7).to_byte() }) }),
     (at("测试版.apk", 8192.0, 0.0, 0.0), fn() { Bytes::makei(8192, fn(i) { (i % 5).to_byte() }) }),
+    // the build its agent sent (MBUI_FIXTURE=chat-download, downloads_fixture.mbt): 50 MB as its message says
+    (at("发布包.zip", 52428800.0, 0.0, 0.0), fn() { Bytes::makei(4096, fn(i) { (i % 3).to_byte() }) }),
   ]
 }
 
@@ -110,7 +112,7 @@ fn fixture_fetch(
   match name {
     "station.file" => done(Ok(({ "type": "" }, bytes)))
     "station.file.part" => {
-      if lower(file).has_suffix(".mp4") || lower(file).has_suffix(".m4a") {
+      if @sf.lower(file).has_suffix(".mp4") || @sf.lower(file).has_suffix(".m4a") {
         // the player waits on the network
         return
       }
@@ -261,11 +263,13 @@ let fixture_csv : String =
   #|"设置, 外观",web,0.66,否
 
 ///|
-/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it.
+/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it, the first of the two.
 fn fixture_image_near(params : Map[String, Json]) -> Json? {
   match params.get("path") {
     Some(String("uploads/fx/界面草图.png")) =>
       Some({
+        "index": 0,
+        "count": 2,
         "after": {
           "name": "第二版.png",
           "path": "uploads/fx/第二版.png",
@@ -277,6 +281,8 @@ fn fixture_image_near(params : Map[String, Json]) -> Json? {
       })
     Some(String("uploads/fx/第二版.png")) =>
       Some({
+        "index": 1,
+        "count": 2,
         "before": {
           "name": "界面草图.png",
           "path": "uploads/fx/界面草图.png",

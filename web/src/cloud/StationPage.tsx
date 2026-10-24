@@ -17,7 +17,7 @@ import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, Segmented, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import { HostDetails, joinedText, LanKept, Net, problems, state, useLong, useStationNet } from "./StationCards.tsx";
+import { HostDetails, joinedText, LanKept, Net, silentOf, state, useStationNet } from "./StationCards.tsx";
 import { useLanKept } from "../localNetwork.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
@@ -158,9 +158,9 @@ function Head({ s, here, manager, edits }: { s: StationView; here: StoppedHere; 
   const [name, setName] = useState(s.name);
   useEffect(() => setName(s.name), [s.name]);
   const keep = () => { const to = name.trim(); if (!to) setName(s.name); else edits.rename(s, to); };
-  const silent = useLong(s.online && !s.host, 15_000);
+  const silent = silentOf(s);
   // Stopped here: its 启动 says what to do, not how to reach it again.
-  const wrong = here.stopped ? [] : problems(s, silent);
+  const wrong = here.stopped ? [] : s.problems;
   const items = edits.menu(s, manager, false);
   return (
     <>

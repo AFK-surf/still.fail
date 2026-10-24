@@ -24,16 +24,16 @@ fn update_anchor_reset() -> Unit {
 ///|
 /// The control's dot and word, 5 apart, at least 32 high.
 // kept across runs: a value (no field of it changes)
-let update_control_row : @ui.Style = @ui.style(row=true, min_h=S8, gap=S1_25, align=ACenter)
+let update_control_row : @ui.Style = @ui.css("row min_h=S8 gap=S1_25 align=ACenter")
 
 ///|
 /// Its dot (6, round) and its word (12 on 18), in the accent's ink; red when it is in trouble.
 // kept across runs: a value (no field of it changes)
-let update_dot : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=AccentText)
+let update_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=AccentText")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_dot_trouble : @ui.Style = update_dot.then(@ui.style(bg=Danger))
+let update_dot_trouble : @ui.Style = update_dot.then(@ui.css("bg=Danger"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -129,15 +129,15 @@ let update_pop : @ui.Style = @ui.style(
 ///|
 /// Its head: what is said and its close button, 8 apart.
 // kept across runs: a value (no field of it changes)
-let update_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=AStart)
+let update_head : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_words : @ui.Style = @ui.style(w=Full, gap=SPx)
+let update_words : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_name_row : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let update_name_row : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 /// The station's name, or what is said where there is none (13 on 19, medium, the ink).
@@ -161,31 +161,17 @@ let update_versions : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, lead
 ///|
 /// Its close button: 32, round, 4 up.
 // kept across runs: a value (no field of it changes)
-let update_close : @ui.Style = @ui.style(
-  w=S8,
-  h=S8,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-)
+let update_close : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// The versions and 立即更新, 12 apart.
 // kept across runs: a value (no field of it changes)
-let update_foot : @ui.Style = @ui.style(row=true, w=Full, pr=SPx, gap=S3, align=ACenter)
+let update_foot : @ui.Style = @ui.css("row w=Full pr=SPx gap=S3 align=ACenter")
 
 ///|
 /// 立即更新: a pill on the accent's ground, 12 and 6 in, its spinner and word 4 apart.
 // kept across runs: a value (no field of it changes)
-let update_now : @ui.Style = @ui.style(
-  row=true,
-  px=S3,
-  py=S1_5,
-  gap=S1,
-  radius=Full,
-  bg=AccentBg,
-  align=ACenter,
-)
+let update_now : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S1 radius=Full bg=AccentBg align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -194,7 +180,7 @@ let update_now_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, co
 ///|
 /// How far the update is, 4 short of its right.
 // kept across runs: a value (no field of it changes)
-let update_progress_room : @ui.Style = @ui.style(w=Full, pr=S1)
+let update_progress_room : @ui.Style = @ui.css("w=Full pr=S1")
 
 ///|
 /// The popover under the control while the core says it is open, in mbui's layer over the page (modal, its ground

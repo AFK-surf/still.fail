@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import react from '@vitejs/plugin-react';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import { uiAlias } from '../../web/ui/alias.ts';
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium, webkit } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const engine = process.env.BROWSER === 'webkit' ? webkit : chromium;
 const fixture = new URL('../../web/composer-station-check.tsx', import.meta.url);
 const html = new URL('../../web/composer-station-check.html', import.meta.url);
 let server, browser;
@@ -13,6 +14,7 @@ try {
   await writeFile(fixture, `import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useDraft } from './src/draft.ts';
+import { pickAttachment } from './src/pickAttachment.ts';
 import { setCore } from './src/core/react.ts';
 import { StationContext } from './src/station.tsx';
 import { ToastProvider } from '@stillfail/ui/toast.tsx';
@@ -78,7 +80,7 @@ setCore({
 function Draft({ workspace }: { workspace: string }) {
   const draft = useDraft({ key: \`new:ws/\${workspace}\`, station: \`ws/\${workspace}\` });
   Object.assign(window, { draft });
-  return <div><input type='file' onChange={e => draft.add(e.target.files!)} />{draft.files.map(f => <img key={f.id} src={f.preview} alt={f.name} />)}</div>;
+  return <div><button onClick={() => pickAttachment('image/*', false, draft.add)}>Pick photo</button><input type='file' onChange={e => draft.add(e.target.files!)} />{draft.files.map(f => <img key={f.id} src={f.preview} alt={f.name} />)}</div>;
 }
 function Page() {
   const [workspace, change] = useState('a'); Object.assign(window, { change });
@@ -88,7 +90,7 @@ createRoot(document.getElementById('root')!).render(<Page />);`, { flag: 'wx' })
   await writeFile(html, '<div id="root"></div><script type="module" src="/composer-station-check.tsx"></script>', { flag: 'wx' });
   server = await createServer({ configFile: false, root: 'web', plugins: [react(), vanillaExtractPlugin()], resolve: {alias:[uiAlias]}, define:{__POSTHOG__:'null',__BUILD__:'null'}, server: { port: 0, host: '127.0.0.1' } });
   await server.listen();
-  browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
+  browser = await engine.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
   const page = await browser.newPage();
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(server.resolvedUrls.local[0] + 'composer-station-check.html');
@@ -103,6 +105,16 @@ createRoot(document.getElementById('root')!).render(<Page />);`, { flag: 'wx' })
     return page.locator('img').getAttribute('src');
   }
   await page.waitForFunction(() => window.draft);
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', {name:'Pick photo'}).click();
+  await (await chooser).setFiles({name:'first.png', mimeType:'image/png', buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=', 'base64')});
+  await page.waitForFunction(() => window.draft.files[0]?.name === 'first.png');
+  assert.equal(await page.locator('img').count(), 1, 'first native picker result must appear in the draft');
+  await page.waitForFunction(() => { const image = document.querySelector('img'); return image?.complete && image.naturalWidth > 0; });
+  assert.equal(await page.locator('input[hidden]').count(), 0, 'finished picker is removed');
+  await page.evaluate(() => window.draft.remove(window.draft.files[0].id));
+  await page.waitForFunction(() => window.draft.files.length === 0);
+  await page.evaluate(() => window.uploads.length = 0);
   await paste('red');
   await page.evaluate(() => window.draft.setText('Keep this image'));
   const original = await page.evaluate(async () => Array.from(new Uint8Array(await window.uploads[0].blob.arrayBuffer())));
@@ -142,5 +154,5 @@ createRoot(document.getElementById('root')!).render(<Page />);`, { flag: 'wx' })
   assert.equal(await page.evaluate(() => window.sent.length), 1);
   assert.ok(await page.evaluate(() => window.draft.error));
   assert.deepEqual(errors, []);
-  console.log('PASS: pasted image retained and identical bytes uploaded to the selected station across 20 switches');
+  console.log('PASS: first picker selection appears in the draft; image retained and identical bytes uploaded across 20 station switches');
 } finally { await browser?.close(); await server?.close(); await rm(fixture, {force:true}); await rm(html, {force:true}); }

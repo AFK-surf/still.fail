@@ -57,17 +57,18 @@ try {
     await page.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && Number.isFinite(a.effect.getTiming().iterations)));
     for (const width of [1280, 390]) {
       await page.setViewportSize({width, height: 844});
-      const slider = page.getByRole('slider');
+      const slider = page.getByRole('slider', {name: '位置'});
       const rect = await slider.boundingBox();
       for (const share of [.25, .75, 0]) {
         await slider.click({position:{x:Math.max(1,rect.width * share),y:rect.height / 2}});
         await page.waitForFunction(share => {
-          const el = document.querySelector('[role=slider]');
+          const el = document.querySelector('[role=slider][aria-label="位置"]');
           return Math.abs(Number(el.getAttribute('aria-valuenow')) - Number(el.getAttribute('aria-valuemax')) * share) <= 40;
         }, share);
         const drawn = await slider.evaluate(el => {
-          const box = el.getBoundingClientRect(), fill = el.firstElementChild.firstElementChild.getBoundingClientRect();
-          const head = el.lastElementChild.lastElementChild.getBoundingClientRect();
+          // (the track, its played part last in it; the head on the rail after it)
+          const box = el.getBoundingClientRect(), fill = el.children[0].lastElementChild.getBoundingClientRect();
+          const head = el.children[1].firstElementChild.getBoundingClientRect();
           return {width: box.width, fill: fill.width, head: head.x + head.width / 2 - box.x,
             share: Number(el.getAttribute('aria-valuenow')) / Number(el.getAttribute('aria-valuemax'))};
         });
@@ -85,7 +86,7 @@ try {
     }
     await page.getByRole('button',{name:'播放 later.mp4'}).scrollIntoViewIfNeeded();
     await page.waitForFunction(()=>window.calls.some(c=>c.name==='later.mp4'));
-    console.log(`PASS ${engine}: decoded still, broken-video fallback, lazy loading, modal playback, seek positions, cache reuse, desktop and phone widths`);
+    console.log(`PASS ${engine}: decoded still, broken-video fallback, lazy loading, the one player's playback, seek positions, cache reuse, desktop and phone widths`);
     await browser.close(); browser = null;
   }
 } finally {

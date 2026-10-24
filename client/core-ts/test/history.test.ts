@@ -165,6 +165,8 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   const h = presentHistory(live, cx(threads, members, slack));
   const items = h.items;
   assert.deepEqual(items.map((i: J) => i.body.kind), ["received", "group", "post", "mark", "text"]);
+  // What 只看收发 leaves out: its steps and thoughts, and its words to itself; what came in and went out, and how it ended, stay.
+  assert.deepEqual(items.map((i: J) => i.work === true), [false, true, false, false, true]);
   const m = items[0].body.content.messages[0];
   assert.deepEqual([m.from.name, m.text, m.place.name, m.place.session], ["你", "hi @ds-ember", "#ops", "s1"]);
   const g = items[1].body.content;

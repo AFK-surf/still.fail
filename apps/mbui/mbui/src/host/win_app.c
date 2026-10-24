@@ -203,7 +203,17 @@ static void key_down(WPARAM vk) {
       case 'A': code = 12; break;
       case 'C': code = 13; break;
       case 'X': code = 14; break;
-      case 'V': paste(); return;
+      case 'V':
+        // a picture on it (PNG, or a bitmap; not files dropped there): the app's Ctrl+V (1000 + v), which reads the
+        // clipboard for it (@hostapi.clip_read), as a page's paste takes a picture as a file; else its words
+        if (!IsClipboardFormatAvailable(CF_HDROP) &&
+            (IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
+             IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP))) {
+          mb_cb.key(1000 + 'v', mods);
+        } else {
+          paste();
+        }
+        return;
     }
     // any other Ctrl key with a character: the app's shortcut (1000 + the character, lower case)
     if (!code) {
@@ -290,8 +300,10 @@ static void wheel(WPARAM wp, LPARAM lp, int horizontal) {
   // a notch is WHEEL_DELTA; a line 100/3 points, as a browser scrolls (100 a notch of three lines), eased in by the
   // app (phase 4)
   double d = GET_WHEEL_DELTA_WPARAM(wp) / (double)WHEEL_DELTA * lines * (100.0 / 3.0);
-  if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 4);
-  else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4);
+  // what is held with it, above the phase (ui's wheel_mod_*: a precision touchpad's pinch comes as Ctrl and the wheel)
+  int mods = (GetKeyState(VK_SHIFT) < 0 ? 1 : 0) | (GetKeyState(VK_CONTROL) < 0 ? 2 : 0) | (GetKeyState(VK_MENU) < 0 ? 4 : 0);
+  if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 4 | (mods << 4));
+  else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4 | (mods << 4));
 }
 
 static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
@@ -666,6 +678,29 @@ void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   mb_host_clipboard_set(s);
 }
 
+// A picture on the clipboard (@hostapi.clipboard_set_image): a PNG's bytes under the "PNG" format other programs paste
+// (Office, browsers, Paint.NET); what is not a PNG is put nowhere.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  int n = Moonbit_array_length(data);
+  static const unsigned char sig[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+  if (n < 8 || memcmp(data, sig, 8) != 0) return;
+  UINT png = RegisterClipboardFormatW(L"PNG");
+  HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, (size_t)n);
+  if (!png || !h) {
+    if (h) GlobalFree(h);
+    return;
+  }
+  memcpy(GlobalLock(h), data, (size_t)n);
+  GlobalUnlock(h);
+  if (!OpenClipboard(hwnd)) {
+    GlobalFree(h);
+    return;
+  }
+  EmptyClipboard();
+  if (!SetClipboardData(png, h)) GlobalFree(h);
+  CloseClipboard();
+}
+
 
 void mb_host_log(moonbit_string_t s) {
   int n = Moonbit_array_length(s);
@@ -866,6 +901,9 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
 
 // The system's title bar holds the window's buttons: none in the app's top row.
 int32_t mb_host_window_inset(void) { return 0; }
+// A window filling the screen (@hostapi.full_screen): not one of this host's.
+int32_t mb_host_full_screen(void) { return 0; }
+void mb_host_set_full_screen(int32_t on) { (void)on; }
 
 // The press under way moves the window (the app's top row), as the title bar's would.
 void mb_host_window_drag(void) {
@@ -874,6 +912,23 @@ void mb_host_window_drag(void) {
 }
 
 // The pointer's shape (@hostapi.set_cursor), shown at once where it is over the window.
+// The number on the app's icon (@hostapi.set_badge): none on Windows here (its taskbar's overlay is not drawn yet).
+void mb_host_set_badge(int32_t n) { (void)n; }
+// The menu bar (@hostapi.menu_setup): none on Windows (its windows' own menus are not the app's).
+void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
+// (this machine's station: managed from the macOS app only)
+moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
+void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
+// (the desktop's dock: the macOS app's only)
+int32_t mb_host_dock_available(void) { return 0; }
+
+// The keys held now (@hostapi.mods_held), as a key's are told.
+int32_t mb_host_mods_held(void) { return mods_now(); }
+void mb_host_dock_send(moonbit_string_t l) { (void)l; }
+void mb_host_dock_stop(void) {}
+moonbit_string_t mb_host_dock_kept(void) { return moonbit_make_string_raw(0); }
+void mb_host_dock_keep(moonbit_string_t j) { (void)j; }
+
 void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
   POINT p;

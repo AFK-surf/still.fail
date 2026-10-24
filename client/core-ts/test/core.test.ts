@@ -512,6 +512,18 @@ test("a_screen_s_picture_size_is_kept_on_the_device", async () => {
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).screenQuality, undefined);
+  // The codec: H.264 only, or none (the best both ends have); nothing else.
+  call(core, ui, 5, "prefs.set", { screenCodec: "h264" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenCodec, "h264");
+  call(core, ui, 6, "prefs.set", { screenCodec: "vp9" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 6).length, 1);
+  call(core, ui, 7, "prefs.set", { screenCodec: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenCodec, undefined);
 });
 
 test("the_language_is_as_chosen_else_as_the_device_is", async () => {

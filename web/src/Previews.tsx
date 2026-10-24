@@ -14,7 +14,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { useHref, useLocation, useNavigate } from "react-router";
 import { fileService, ServiceFrame, type FileSource, type Restarting } from "./Preview.tsx";
 import { useLink } from "./station.tsx";
-import { dropTab } from "./chatTabs.ts";
+import { changeTabs } from "./chatTabs.ts";
 import { Close, Minus, Web } from "@stillfail/ui/icons.tsx";
 import { Tip } from "./ui.tsx";
 import { previewKey, viewportOf } from "./viewport.ts";
@@ -459,7 +459,7 @@ export function Previews() {
               <button type="button" className={css.action} aria-label={t("web-main.previews.close", { name: entry.name })} onClick={(e) => {
                 e.stopPropagation();
                 closePreview(entry.key);
-                if (entry.draftKey) dropTab(entry.draftKey, entry.tab);
+                if (entry.draftKey) changeTabs(entry.draftKey, "close", entry.tab);
               }}>
                 <Close size={12} strokeWidth={2} />
               </button>

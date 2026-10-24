@@ -37,6 +37,9 @@
 //                               home, end, pageup, pagedown, backspace, a character; cmd+ (⌘ on macOS, Ctrl
 //                               elsewhere), ctrl+, alt+, shift+ (cmd+k, shift+enter, alt+down)
 //   resize W H                  the window's content resized to W by H (the host's own window, where it can)
+//   system JSON                 under a Tester (a film's run), the system says JSON on its channel as a host says it
+//                               (@hostapi.system_channel: a size class, the hinge and its fold, the bars), taken at
+//                               the next frame; a real host's system says its own, and the run fails
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, where the frame has it
@@ -1084,6 +1087,17 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
         }
+      "system" => {
+        match fake.val {
+          Some(f) => fake_post(f, @hostapi.system_channel, arg, None)
+          None => {
+            drive_fail(c, d, "system: only a Tester's system says what a script tells it")
+            return
+          }
+        }
+        acted()
+        return
+      }
       "resize" => {
         let wh = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
         if wh.length() < 2 {
@@ -1114,6 +1128,13 @@ fn drive_steps(c : Ctx) -> Unit {
         }
       "log" => {
         h_log("DRIVE LOG " + arg)
+        next()
+      }
+      // what the frame shows squeezed (squeeze.mbt), a line each
+      "squeeze" => {
+        for f in c.squeeze_faults() {
+          h_log("DRIVE SQUEEZE " + f)
+        }
         next()
       }
       "exit" => {

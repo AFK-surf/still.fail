@@ -16,6 +16,32 @@ test "signed out: the sign-in page" {
 }
 
 ///|
+test "signed out in a desktop's window: 登录或注册 alone, no wider than the desktop app's; a phone's across the page" {
+  reset()
+  let pressed = Ref::new(0)
+  let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  // no words but its own
+  assert_true(t.find("让 agent 持续工作") is None)
+  assert_true(t.find("可同时登录多个账号，随时切换 workspace。") is None)
+  let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
+  let (mid, at) = (x + w / 2.0, y + h / 2.0)
+  // beside it, where it ended when it was as wide as the page: nothing
+  t.tap(mid - 160.0, at)
+  t.tap(mid + 160.0, at)
+  assert_eq(pressed.val, 0)
+  // on it, near its end
+  t.tap(mid + 140.0, at)
+  assert_eq(pressed.val, 1)
+  // a phone's: as wide as the page less its sides
+  reset()
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
+  t.tap(x + w / 2.0 + 160.0, y + h / 2.0)
+  assert_eq(pressed.val, 2)
+}
+
+///|
 test "Home: the workspace's name, the search, the days and their rows" {
   let t = tester("home")
   assert_true(t.find("星火工作室") is Some(_))
@@ -178,12 +204,27 @@ test "the list while it is read: no rows, the shapes" {
 }
 
 ///|
-test "state leads, in either language" {
-  assert_eq(lead_of("要你帮忙：看一下", ["要你帮忙"], ["：", ":"], true), Some(5))
-  assert_eq(lead_of("要你帮忙", ["要你帮忙"], ["：", ":"], true), Some(4))
-  assert_eq(lead_of("Needs you: look", ["Needs you"], ["：", ":"], true), Some(11))
-  assert_eq(lead_of("在等", ["在等"], ["："], false), None)
-  assert_eq(lead_of("做完了吗", ["做完了"], ["："], true), None)
+test "a state line's lead is the core's: an icon in its words' place with what follows; none, the words as they are" {
+  reset()
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), fn() {
+        state_line(c, "要你帮忙：看一下", lead="need", rest="看一下")
+        // (words that look like a lead, said by none: as they are)
+        state_line(c, "要你帮忙看一眼")
+        state_line(c, "奏 · 用哪个？", lead="decision", lead_text="奏", rest=" · 用哪个？")
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=120.0,
+  )
+  t.draw()
+  assert_true(t.find("看一下") is Some(_))
+  assert_true(t.find("要你帮忙：看一下") is None, msg="the lead said by its icon")
+  assert_true(t.find("要你帮忙看一眼") is Some(_))
+  assert_true(t.find("奏") is Some(_))
+  assert_true(t.find(" · 用哪个？") is Some(_))
 }
 
 ///|

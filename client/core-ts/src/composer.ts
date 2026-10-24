@@ -19,6 +19,7 @@ import { draftAt } from "./refs.ts";
 import { StationAddr } from "./station/addr.ts";
 import { isObject } from "./util.ts";
 import { FileSource, isBlob } from "./file-source.ts";
+import { sentKeptId } from "./drive-kept.ts";
 import { headerSize } from "./imageSize.ts";
 import { localId } from "./ids.ts";
 
@@ -85,6 +86,24 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 const PART = 4 * 1024 * 1024;
 /// How much more of a file has gone before it is said again, at the least.
 const SENT_STEP = 64 * 1024;
+/// The biggest image kept on the device as it is sent up (`keepSent`).
+const KEEP_SENT_MOST = 64 * 1024 * 1024;
+
+/// An image sent up from here, kept on the device as it is, a part at a time, under the name its station keeps it by
+/// (drive-kept.ts `sent`): its chat shows it, and opens it, from here, not read back from the station it went to. One
+/// that could not be read again whole is not kept (its chat reads it from its station).
+function keepSent(inner: Inner, station: string, path: string, blob: Blob | FileSource, size: number): Effect.Effect<void> {
+  const name = path.split("/").at(-1)!;
+  const id = sentKeptId(station, name);
+  const keep = Effect.gen(function* () {
+    for (let at = 0; at < size; at += PART) {
+      const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => blob.slice(at, at + PART).arrayBuffer(), catch: asCoreError }));
+      if (bytes.length !== Math.min(PART, size - at)) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name })));
+      yield* inner.driveKept.keep(id, "sent", 0, size, blob.type, at, bytes);
+    }
+  });
+  return Effect.flatMap(Effect.result(keep), (kept) => (kept._tag === "Failure" ? inner.driveKept.forget(id) : Effect.void));
+}
 
 const topicOf = (key: string): Topic => ({ topic: "composer", key });
 const empty = (db?: AccountDb): State => ({ db, edited: 0, joined: null, text: "", rev: 0, quotes: [], focus: null, files: [], starting: false, error: null, version: 0, taken: null, id: "" });
@@ -512,6 +531,9 @@ export class Composers {
         else have = told.have;
         went(told.file !== undefined ? f.size : have);
       }
+      // Kept before its message can name it, so its chat neither reads it back nor waits for it.
+      const path = isObject(saved) ? saved.path : undefined;
+      if (local && local.type.startsWith("image/") && f.size <= KEEP_SENT_MOST && typeof path === "string") yield* keepSent(inner, station, path, local, f.size);
       const size = yield* Effect.promise(() => sizing);
       if (size) saved = { ...saved, ...size };
       return saved;

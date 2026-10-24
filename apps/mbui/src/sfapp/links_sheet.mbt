@@ -83,25 +83,17 @@ fn invitation_token(words : String) -> String? {
 ///|
 /// The sheet's body: in 20 from its sides, its parts 10 apart (InviteLinkSheet's Column).
 // kept across runs: a value (no field of it changes)
-let invite_body : @ui.Style = @ui.style(w=Full, h=Full, px=S5, gap=S2_5, clip=true)
+let invite_body : @ui.Style = @ui.css("w=Full h=Full px=S5 gap=S2_5 clip")
 
 ///|
 /// Its buttons at the end of a row, 8 apart, 6 over them and 24 under (InviteLinkSheet's Row).
 // kept across runs: a value (no field of it changes)
-let invite_buttons : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pb=S6, gap=S2, justify=JEnd)
+let invite_buttons : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S6 gap=S2 justify=JEnd")
 
 ///|
 /// The field a link is pasted in (Controls.kt Field): the surface, a line round it, 12 round, 12 and 10 in.
 // kept across runs: a value (no field of it changes)
-let invite_field : @ui.Style = @ui.style(
-  w=Full,
-  px=S3,
-  py=S2_5,
-  radius=Xl,
-  bg=Card,
-  border=B1,
-  border_color=Line,
-)
+let invite_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card border=B1 border_color=Line")
 
 ///|
 /// What it says (14, muted), the account's label (13, semibold), why it failed (13, red).

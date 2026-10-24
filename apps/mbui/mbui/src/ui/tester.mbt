@@ -48,13 +48,16 @@ fn reset_globals() -> Unit {
   text_cache.fonts.clear()
   text_cache.metrics.clear()
   text_cache.glyphs.clear()
+  text_cache.fresh.clear()
   text_cache.generation = -1
+  web_lines.val = false
   faces_reset()
   text_table.val = None
   inputs_since.val = false
   in_frame.val = false
   building.val = false
   messages_reset()
+  drop_reset()
   image_cache.clear()
   views_told_text.clear()
   views_told_info.clear()
@@ -72,6 +75,8 @@ fn reset_globals() -> Unit {
   native_nodes.clear()
   picture_at.clear()
   wheels.clear()
+  wheels_x.clear()
+  wheel_mods.clear()
   captures.clear()
   drags.clear()
   sideways.clear()
@@ -195,7 +200,19 @@ pub fn Tester::new(
     text_menu: (false, 0.0, 0.0, 0.0, 0.0, 0),
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
+    badge: 0,
+    local_station: "",
+    local_acts: [],
+    local_fonts: "",
+    families_given: {},
+    unreadable_fonts: [],
+    dock_on: false,
+    dock_lines: [],
+    dock_stops: 0,
+    dock_kept: "",
+    mods: 0,
     clipboard_secret: -1.0,
+    clipboard_image: -1,
     back_on: false,
     platform,
     reduce_transparency: false,
@@ -205,6 +222,7 @@ pub fn Tester::new(
     image_loads: [],
     images: {},
     bold: 0.0,
+    ui_face: 0.0,
     views: [],
     view_ids: 0,
     view_ready: {},
@@ -216,6 +234,7 @@ pub fn Tester::new(
     opened: [],
     dark,
     inset: window_inset,
+    full: false,
     font_scale: 1.0,
     a11y: false,
     a11y_said: "",
@@ -237,6 +256,7 @@ pub fn Tester::new(
     reads: [],
     read_ids: 0,
     read_answers: [],
+    read_from: {},
     players: {},
     share: None,
     share_files: [],
@@ -253,6 +273,7 @@ pub fn Tester::new(
     view_kinds: {},
     view_at: {},
     view_touch: {},
+    view_covers: {},
     touch_view: 0,
     touch_down: (0.0, 0.0),
     touch_at: (0.0, 0.0),
@@ -713,6 +734,66 @@ pub fn Tester::clipboard(self : Tester) -> String {
 }
 
 ///|
+/// The number on the app's icon as the app last told it (@ui.set_badge).
+pub fn Tester::badge(self : Tester) -> Int {
+  self.fake.badge
+}
+
+///|
+/// This machine's station as its host says it from now on (@ui.local_station), "" none.
+pub fn Tester::set_local_station(self : Tester, json : String) -> Unit {
+  self.fake.local_station = json
+}
+
+///|
+/// The font families installed here from now on, as a JSON array of their names (@ui.local_font_families); "" none.
+pub fn Tester::set_local_fonts(self : Tester, json : String) -> Unit {
+  self.fake.local_fonts = json
+}
+
+///|
+/// A font file (by where it is) its host cannot read as a font from now on (@ui.face_add says false): one damaged, or
+/// not a font.
+pub fn Tester::set_unreadable_font(self : Tester, path : String) -> Unit {
+  self.fake.unreadable_fonts.push(path)
+}
+
+///|
+/// The family of this machine's given to face `face` last (@ui.face_add_family), "" none.
+pub fn Tester::family_given(self : Tester, face : Int) -> String {
+  self.fake.families_given.get(face).unwrap_or("")
+}
+
+///|
+/// What was done to this machine's station (@ui.local_station_act), oldest first.
+pub fn Tester::local_acts(self : Tester) -> Array[String] {
+  self.fake.local_acts
+}
+
+///|
+/// Whether there is a dock here from now on (@ui.dock_available).
+pub fn Tester::set_dock(self : Tester, on : Bool) -> Unit {
+  self.fake.dock_on = on
+}
+
+///|
+/// The keys held down from now on (@ui.mods_held: @ui.mod_alt, mod_cmd…; 0 none).
+pub fn Tester::hold_mods(self : Tester, mods : Int) -> Unit {
+  self.fake.mods = mods
+}
+
+///|
+/// The lines sent to the dock (@ui.dock_send), oldest first, and how often it was stopped.
+pub fn Tester::dock_lines(self : Tester) -> Array[String] {
+  self.fake.dock_lines
+}
+
+///|
+pub fn Tester::dock_stops(self : Tester) -> Int {
+  self.fake.dock_stops
+}
+
+///|
 /// How the app over another app was ended (@ui.over_done), oldest first: whether on into the app.
 pub fn Tester::overs_done(self : Tester) -> Array[Bool] {
   self.fake.overs_done.copy()
@@ -728,6 +809,16 @@ pub fn Tester::hold_words(self : Tester) -> (String, String, String)? {
 /// The packages the app handed to the system's installer (@ui.install_package), oldest first.
 pub fn Tester::installs(self : Tester) -> Array[String] {
   self.fake.installs.copy()
+}
+
+///|
+/// The picture last put on the clipboard (Ctx::copy_image): its bytes' length, None when none was.
+pub fn Tester::clipboard_image(self : Tester) -> Int? {
+  if self.fake.clipboard_image < 0 {
+    None
+  } else {
+    Some(self.fake.clipboard_image)
+  }
 }
 
 ///|
@@ -1443,6 +1534,13 @@ pub fn Tester::bold_wider(self : Tester, em : Double) -> Unit {
 }
 
 ///|
+/// What is set in the app's words' face `em` ems wider a character once one is given (face_add @hostapi.face_ui) than
+/// in the system's, from now on (the fake host's shapes ignore faces otherwise).
+pub fn Tester::ui_face_wider(self : Tester, em : Double) -> Unit {
+  self.fake.ui_face = em
+}
+
+///|
 /// Where the first text node containing `s` is drawn (its top left), moved as it and what holds it move
 /// (draw.mbt).
 pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
@@ -1598,6 +1696,13 @@ pub fn Tester::leave(self : Tester) -> Unit {
 /// notch (eased in over the next frames). One frame drawn, not settled.
 pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, phase : Int) -> Unit {
   finger_wheel(x, y, 0.0, dy, phase)
+  self.draw()
+}
+
+///|
+/// The wheel turned both ways (`dx`, `dy`) at (x, y) with `mods` held (wheel_mod_*: ⌘ to zoom a picture, a pinch).
+pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> Unit {
+  finger_wheel(x, y, dx, dy, mods * 16)
   self.draw()
 }
 

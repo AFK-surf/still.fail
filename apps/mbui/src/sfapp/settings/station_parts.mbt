@@ -458,7 +458,7 @@ fn version_call(core : Core, station : String, name : String, params : Array[(St
 ///|
 /// A moment (ms since 1970) as Android's short date and time say it in Chinese (DateFormat.SHORT, SHORT: 2026/9/21
 /// 22:13), in the device's local time.
-fn short_date_time(ms : Double) -> String {
+pub fn short_date_time(ms : Double) -> String {
   let day_ms = 86400000.0
   let local = ms + @ui.utc_offset_min(ms).to_double() * 60000.0
   let days = (local / day_ms).floor()
@@ -608,26 +608,15 @@ fn version_row(c : @ui.Ctx, v : Json?, manager : Bool, busy : Bool, update : () 
   let t = @sf.theme()
   let id = text(v, "id")
   let installed = flag(v, "installed")
-  let shown = if installed {
-    match opt_text(v, "version") {
-      Some(x) => x
-      None => tr(if id == "station" { "android-misc.versions.dev" } else { "android-misc.versions.unknown" })
-    }
-  } else {
-    tr("android-misc.versions.notInstalled")
-  }
+  // its version as shown and what is said of it (the core's: present.ts software)
+  let shown = text(v, "shownText")
   let state = text(v, "state")
   let latest = opt_text(v, "latest")
   let note = join(
     [
       if state == "idle" { text(v, "done") } else { "" },
       text(v, "note"),
-      if installed && !flag(v, "newer") && !flag(v, "downgrade") && latest is Some(_) {
-        tr("android-misc.updates.latest")
-      } else {
-        ""
-      },
-      if installed && latest is None && has(v, "checkedAt") { tr("android-misc.versions.checkFailed") } else { "" },
+      text(v, "tipText"),
       if state == "failed" { text(v, "message") } else { "" },
     ].map(fn(s) { s.trim(chars=" \t\n").to_owned() }),
     tr("android-misc.versions.sep"),
@@ -1141,7 +1130,7 @@ fn adb_state(c : @ui.Ctx, view : Json?, now : Double) -> String {
 
 ///|
 /// The station at `address` as the workspace's `stations` has it.
-fn station_of(core : Core, here : Here, address : String) -> Json? {
+pub fn station_of(core : Core, here : Here, address : String) -> Json? {
   match stations_of(core, here).value {
     Some(Array(a)) => a.iter().find_first(fn(x) { text(Some(x), "station") == address })
     _ => None

@@ -39,6 +39,31 @@ pub fn face_add_bytes(face : Int, data : Bytes, weight? : Int = 0) -> Bool {
 }
 
 ///|
+/// Face `face` set in a family installed on this machine (`family`, one of local_font_families'): its every style the
+/// system's. False where the host has none of it (the face as it was). Every word shaped before is shaped again.
+pub fn face_add_family(face : Int, family : String) -> Bool {
+  if face <= 0 || face >= @hostapi.faces_most || family == "" {
+    return false
+  }
+  let ok = h_face_add_family(face, family)
+  if ok {
+    faces_given[face] = true
+    words_forgotten()
+  }
+  ok
+}
+
+///|
+/// The font families installed on this machine (@hostapi.local_font_families), a JSON array of their names; "" where
+/// there is no way to them. Under a Tester: as it is set (Tester::set_local_fonts).
+pub fn local_font_families() -> String {
+  match fake.val {
+    Some(f) => f.local_fonts
+    None => @hostapi.local_font_families()
+  }
+}
+
+///|
 /// Face `face` given up: its words in the system's face again.
 pub fn face_clear(face : Int) -> Unit {
   if face <= 0 || face >= @hostapi.faces_most {
@@ -66,7 +91,8 @@ fn faces_style(words : Bool, face : Int) -> Int {
 }
 
 ///|
-/// How many times the faces changed: a paragraph laid out before (its node's layout kept) is laid out again.
+/// How many times the faces changed: words laid out before (a text's or a paragraph's, its node's layout kept) are laid
+/// out again.
 let words_shaped_in : Ref[Int] = Ref::new(0)
 
 ///|
@@ -77,6 +103,7 @@ fn words_forgotten() -> Unit {
   text_cache.fonts.clear()
   text_cache.metrics.clear()
   text_cache.glyphs.clear()
+  text_cache.fresh.clear()
   text_cache.generation = -1
 }
 

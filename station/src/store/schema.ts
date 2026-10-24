@@ -327,6 +327,12 @@ CREATE TABLE IF NOT EXISTS relayed_to (
   at INTEGER NOT NULL,
   PRIMARY KEY (connect, channel)
 );
+-- How many entries each session's transcript has, as the station last read it while the session was at work
+-- (sessions/live.ts): its summary says so, and a device that missed some of them knows to read them.
+CREATE TABLE IF NOT EXISTS transcript_lengths (
+  session TEXT PRIMARY KEY,
+  n INTEGER NOT NULL
+);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.

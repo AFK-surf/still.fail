@@ -1,13 +1,15 @@
 // The real core's answers to its pure calls, kept for the app's runs without a core: the Tester's tests (src/sf,
-// src/sfapp, src/sfscreens), the screenshots' app (src/sffix), the design system's (src/sfkit), and the replays of tapes
+// src/sfapp with its screens), the screenshots' app (src/sffix), the design system's (src/sfkit), and the replays of tapes
 // older than a call (src/sfreplay). `markdown` (a text's tree), `code.ink` (what each piece of a code is), `reader.book`,
-// `reader.text` and `reader.search` (a text as the drive's reader shows it) answer the same for the same words, so the
+// `reader.text` and `reader.search` (a text as the drive's reader shows it), `commands.find` (what ⌘K lists of what is
+// offered), `chat.tabs` and `decisions.queue` (a chat's side panel's tabs and the 奏 page's queue, for a run's made-up
+// core: chat-tabs.ts, decisions.ts), `chat.find.go` (where a chat's find goes: chat-find.ts) answer the same for the same words, so the
 // TypeScript core's answers are kept here (kept.mbt, made by client/core-ts/scripts/kept-answers.ts) and nothing in the
 // app reads Markdown or code itself. An answer asked and not kept is said on the run's output (`kept-answers-ask {…}`):
 // scripts/test.sh fails on it, and scripts/kept has the core work it out and keeps it.
 
 ///|
-/// The kept answers as kept.mbt has them: `markdown` by the text; `code.ink` by the language and the code (a \u{1}
+/// The kept answers as kept.mbt has them (an answer a line), by call: `markdown` by the text; `code.ink` by the language and the code (a \u{1}
 /// between); `reader.book` by "md" or "txt" and the text, each with its answer, its text as joined (where joining
 /// changed it) and its searches by their words.
 let table : Ref[Map[String, Json]?] = Ref(None)
@@ -17,9 +19,21 @@ fn kept(call : String) -> Map[String, Json] {
   let t = match table.val {
     Some(t) => t
     None => {
-      let t = match (@json.parse(kept_answers) catch { _ => Json::null() }) {
-        Object(m) => m
-        _ => {}
+      // an answer a line: [call, key, answer]
+      let t : Map[String, Json] = {}
+      for line in kept_answers.split("\n") {
+        match (@json.parse(line.to_string()) catch { _ => Json::null() }) {
+          Array([String(call), String(key), answer]) =>
+            match t.get(call) {
+              Some(Object(m)) => m[key] = answer
+              _ => {
+                let m : Map[String, Json] = {}
+                m[key] = answer
+                t[call] = Json::object(m)
+              }
+            }
+          _ => ()
+        }
       }
       table.val = Some(t)
       t
@@ -73,11 +87,14 @@ fn book_key(markdown : Bool, text : String) -> String {
 
 ///|
 /// Whether the core's answer to `name` with its `params` is kept (a call answered here, not asked of a core): Markdown
-/// read and code coloured. Nothing is said on the output of one that is not.
+/// read and code coloured; a text's book and what is asked of it (`reader.*`: always answered here, its text beside the
+/// call where params cannot say it; one not kept is said on the output and kept by scripts/kept). Nothing is said on
+/// the output of one that is not.
 pub fn has(name : String, params : Json) -> Bool {
   match name {
     "markdown" => kept("markdown").contains(word(params, "text"))
     "code.ink" => kept("code.ink").contains(word(params, "lang") + "\u{1}" + word(params, "code"))
+    "reader.book" | "reader.text" | "reader.search" => true
     _ => false
   }
 }
@@ -87,6 +104,14 @@ pub fn has(name : String, params : Json) -> Bool {
 /// beside it; an error where it is not kept (said on the output); None for a call that is not one of these.
 pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Bytes?), Json]? {
   match name {
+    // the rail as drawn from the prefs kept (`rail`, `rails`: rail.ts railView), by them as JSON
+    "railView" => {
+      let key = params.stringify()
+      match kept("railView").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "railView", "prefs": params })
+      }
+    }
     "markdown" => {
       let text = word(params, "text")
       match kept("markdown").get(text) {
@@ -132,6 +157,66 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
           Some(Ok((Json::object(out), None)))
         }
         _ => not_kept({ "call": "reader.book", "markdown": Json::boolean(markdown), "text": Json::string(text) })
+      }
+    }
+    // what ⌘K lists of what the app offers (the made-up core says in which language: `lang`), by what is asked as said
+    "commands.find" => {
+      let key = params.stringify()
+      match kept("commands.find").get(key) {
+        Some(found) => Some(Ok((found, None)))
+        None => not_kept({ "call": "commands.find", "key": Json::string(key) })
+      }
+    }
+    // a chat's side panel's tabs (chat-tabs.ts) for a made-up core that keeps them: those shown for what is kept
+    // (`kept`, its `agents`, `noChat`, `session`), or what is kept after a `change` (`next`), as asked
+    "chat.tabs" => {
+      let key = params.stringify()
+      match kept("chat.tabs").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "chat.tabs", "key": Json::string(key) })
+      }
+    }
+    "browse" => browse_answer(params)
+    // what a history step's call and result are (tool-step.ts), by what is asked as said
+    "history.tool" => {
+      let key = params.stringify()
+      match kept("history.tool").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "history.tool", "key": Json::string(key) })
+      }
+    }
+    // where a chat's find goes (chat-find.ts): from what was found and where the reader is, which way, what shows
+    // what is written, read (refLinks.ts refAt, markBefore, marksIn, pastedRefs; pasted.ts): by the call and its words
+    "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => {
+      let ask : Map[String, Json] = { "call": Json::string(name), "text": Json::string(word(params, "text")) }
+      match param(params, "caret") {
+        Some(Number(_, ..) as n) => ask["caret"] = n
+        _ => ()
+      }
+      match word(params, "here") {
+        "" => ()
+        h => ask["here"] = Json::string(h)
+      }
+      let key = Json::object(ask).stringify()
+      match kept("words").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "words", "key": Json::string(key) })
+      }
+    }
+    "chat.find.go" => {
+      let key = params.stringify()
+      match kept("chat.find.go").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "chat.find.go", "key": Json::string(key) })
+      }
+    }
+    // the 奏 page's queue (decisions.ts) for a made-up core that keeps one: its items in order and the one shown, or
+    // what is kept after a pick or a setting aside, as asked
+    "decisions.queue" => {
+      let key = params.stringify()
+      match kept("decisions.queue").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "decisions.queue", "key": Json::string(key) })
       }
     }
     "reader.text" =>

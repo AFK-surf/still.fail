@@ -1,4 +1,4 @@
-// The core's engine, linked into this app (src/sfcore/apple_engine.m: Hermes on the Rust shell, the browser
+// The core's engine, linked into this app (src/sfcore/apple_engine.m: Hermes on the Rust shell, on iOS the browser
 // session for signing in). moon does not track the file it includes: touch this one after changing that.
 #include "../sfcore/apple_engine.m"
 

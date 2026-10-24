@@ -649,6 +649,8 @@ export class ConnectFlows {
     v.made = made;
     v.pick = picked;
     v.feishu = feishuView(v.feishu, overview, d.pending);
+    v.modeWords = present.modeWords(feishu ? "feishu" : null);
+    v.sections = present.slackSections();
     return v;
   }
 

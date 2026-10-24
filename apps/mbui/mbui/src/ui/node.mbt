@@ -7,6 +7,11 @@ pub(all) enum Size {
   Auto
   Px(Double)
   Fill(Double)
+  /// as wide as what it holds, cut short where its row has less room (words on one line end in an ellipsis: CSS's
+  /// min-width: 0 with text-overflow), not grown past that
+  Cut
+  /// a share of the parent's room inside its padding, in percent (CSS's `width: 50%`)
+  Pct(Double)
 } derive(Eq)
 
 ///|
@@ -138,6 +143,19 @@ struct Node {
   mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
+  // its margins (CSS's: outside its border, below 0 pulling what is beside it over it)
+  mut mar_l : Double
+  mut mar_t : Double
+  mut mar_r : Double
+  mut mar_b : Double
+  // where it is put in its parent, out of the flow, from the parent's edges, its padding not kept (CSS's position:
+  // absolute with left, top, right, bottom; NaN: not said); any said, it is placed so
+  mut at_l : Double
+  mut at_t : Double
+  mut at_r : Double
+  mut at_b : Double
+  // the name it is moved by (Ctx::move_state: the web's moveState's selector), "" none
+  mut moves : String
   // a row laid out right to left (built where Ctx::rtl)
   mut rtl : Bool
   // its width over its height, its height following its width (0: none; Ctx::box `aspect`)
@@ -150,8 +168,17 @@ struct Node {
   // content, at any depth (none of it shrinks to the box: Ctx::layout_node)
   mut sideways : Bool
   mut in_sideways : Bool
+  // kept to what is left of its column's room when that is short (Ctx::capped `shrinks`: CSS's flex-shrink with
+  // overflow: auto, a dialog's body under its maximum height), else as tall as what it holds
+  mut shrinks : Bool
   // as wide as its content in a row, not squeezed where the row is short (Ctx::box `keep`): only its siblings shrink
   mut keep : Bool
+  // left out of its row when the row has not the room (Ctx::box `drop`): k > 0 the k-th to go, -1 the row's ⋯ (there
+  // only while something of it is left out), 0 always there
+  mut drop : Int
+  // the least it is laid out across in a row, as worked out from what it holds (Ctx::flex_tree): narrower, what it
+  // holds would lie over what is beside it
+  mut least : Double
   // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
   // as wide as it is
   mut flow : Bool
@@ -160,6 +187,9 @@ struct Node {
   // what it is called where it shows no words of its own (an icon's button: Compose's contentDescription), found by
   // them as words are (Ctx::box `label`; a drive's or a test's `=WORDS`)
   mut label : String
+  // the name of what it stands for in another app's tree (Ctx::box `name`: a web page's class, `shellCss.dock`), read
+  // only by a tool comparing the two (Tester::boxes), "" none
+  mut name : String
   // layout results, absolute, in logical pixels, kept from frame to frame
   // in the slot (a subtree laid out as last frame is moved, not laid out)
   mut x : Double
@@ -186,6 +216,9 @@ struct Node {
   mut rl_for : Rich?
   // list rows: index of the item this child shows
   mut item : Int
+  // held this far below the top of the list it is in as its row scrolls past, within its parent (Ctx::stick; NaN:
+  // where it is laid out)
+  mut stick : Double
   // its node in the flex engine, and how the engine measures it as a leaf
   fl : @flex.Node
   mut leaf : ((Double, @flex.MeasureMode, Double, @flex.MeasureMode) -> (
@@ -204,6 +237,8 @@ struct Node {
   mut lk_wrap : Bool
   mut lk_spacing : Double
   mut lk_max_lines : Int
+  // the faces as they were given when its words were laid out (faces.mbt words_shaped_in)
+  mut lk_shaped : Int
   mut lk_rich : Rich?
   mut lk_iw : Double
   mut lk_ih : Double
@@ -277,16 +312,29 @@ fn Node::new() -> Node {
     page_no: -1,
     pager: 0,
     layer: false,
+    mar_l: 0.0,
+    mar_t: 0.0,
+    mar_r: 0.0,
+    mar_b: 0.0,
+    at_l: 0.0 / 0.0,
+    at_t: 0.0 / 0.0,
+    at_r: 0.0 / 0.0,
+    at_b: 0.0 / 0.0,
+    moves: "",
     rtl: false,
     aspect: 0.0,
     portal: false,
     blocks: false,
     sideways: false,
     in_sideways: false,
+    shrinks: false,
     keep: false,
+    drop: 0,
+    least: 0.0,
     flow: false,
     line_gap: -1.0,
     label: "",
+    name: "",
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -302,6 +350,7 @@ fn Node::new() -> Node {
     rl_max: 0.0,
     rl_for: None,
     item: -1,
+    stick: 0.0 / 0.0,
     fl: @flex.Node::new(),
     leaf: None,
     lk_kind: -1,
@@ -313,6 +362,7 @@ fn Node::new() -> Node {
     lk_wrap: false,
     lk_spacing: 0.0,
     lk_max_lines: 0,
+    lk_shaped: -1,
     lk_rich: None,
     lk_iw: -1.0,
     lk_ih: -1.0,
@@ -345,19 +395,32 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.page_no = -1
   self.pager = 0
   self.layer = false
+  self.mar_l = 0.0
+  self.mar_t = 0.0
+  self.mar_r = 0.0
+  self.mar_b = 0.0
+  self.at_l = 0.0 / 0.0
+  self.at_t = 0.0 / 0.0
+  self.at_r = 0.0 / 0.0
+  self.at_b = 0.0 / 0.0
+  self.moves = ""
   self.portal = false
   self.blocks = false
   self.sideways = false
   self.in_sideways = false
+  self.shrinks = false
   self.keep = false
+  self.drop = 0
   self.flow = false
   self.line_gap = -1.0
   self.label = ""
+  self.name = ""
   self.rich = None
   self.lines = []
   self.shapes = []
   // (its cut runs go with its layout, kept with it: rl, rl_for)
   self.item = -1
+  self.stick = 0.0 / 0.0
 }
 
 ///|
@@ -410,6 +473,12 @@ fn Node::reset_words(self : Node) -> Unit {
   self.line_trim = false
   self.spacing = 0.0
   self.max_lines = 0
+}
+
+///|
+/// Whether it is put in its parent by where it is said to be (`at_*`), out of the flow.
+fn Node::placed_at(self : Node) -> Bool {
+  !self.at_l.is_nan() || !self.at_t.is_nan() || !self.at_r.is_nan() || !self.at_b.is_nan()
 }
 
 ///|

@@ -24,7 +24,9 @@ import { ofAddress } from "./workspace.ts";
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-export const CODECS = ["h264", "jpeg"];
+/// The codecs a view may ask for; one asking none takes those every client decodes (H.265 only where the UI said it does).
+export const CODECS = ["h265", "h264", "jpeg"];
+const DEFAULT_CODECS = ["h264", "jpeg"];
 export const MAX_WIDTH = 1920;
 export const MAX_HEIGHT = 1080;
 /// The largest frame a client may ask for (an 8K screen's).
@@ -64,7 +66,7 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
     case "screen.view": {
       const station = text(params, "station");
       StationAddr.parse(station);
-      const codecs = Array.isArray(get(params, "codecs")) ? (get(params, "codecs") as unknown[]).filter((c): c is string => typeof c === "string" && CODECS.includes(c)) : CODECS;
+      const codecs = Array.isArray(get(params, "codecs")) ? (get(params, "codecs") as unknown[]).filter((c): c is string => typeof c === "string" && CODECS.includes(c)) : DEFAULT_CODECS;
       if (codecs.length === 0) throw CoreError.invalid(t("core-misc.screen.noCodec"));
       const size = (field: string, otherwise: number) => {
         const v = get(params, field);
@@ -118,6 +120,13 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
 }
 
 /// A person's input as the station takes it (station/src/screens/source.ts `ScreenInput`), or why it is none.
+/// A display's scale as a station says it (`state.scale`), checked: null when it is not one.
+function scaleOf(v: unknown): { percent: number; recommended: number; steps: number[] } | null {
+  const pct = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 100 && n <= 500;
+  if (!isObject(v) || !pct(v.percent) || !pct(v.recommended) || !Array.isArray(v.steps) || v.steps.length === 0 || !v.steps.every(pct)) return null;
+  return { percent: v.percent, recommended: v.recommended, steps: [...v.steps] };
+}
+
 export function checkInput(input: unknown): J {
   const bad = () => CoreError.invalid(t("core-misc.screen.badInput"));
   if (!isObject(input)) throw bad();
@@ -144,6 +153,10 @@ export function checkInput(input: unknown): J {
     case "text":
       if (typeof input.text !== "string" || input.text === "" || input.text.length > TEXT_MAX) throw bad();
       return { t: "text", text: input.text };
+    // The display's scale, one of its steps (a screen whose state says `scale`).
+    case "scale":
+      if (!finite(input.percent) || !Number.isInteger(input.percent) || input.percent < 100 || input.percent > 500) throw bad();
+      return { t: "scale", percent: input.percent };
     // A file dropped into the view, shown in the machine's file manager (a screen whose `drop` says `reveal`).
     case "reveal":
       if (typeof input.path !== "string" || input.path === "" || input.path.length > 4096) throw bad();
@@ -201,9 +214,14 @@ function listed(names: string[]): string {
   return names.length <= 2 ? names.join(t("core-views.screen.and")) : t("core-views.screen.many", { names: names.slice(0, 2).join(t("core-views.screen.and")), more: names.length - 2 });
 }
 
+/// The kinds of screen a station lists (one it names otherwise, from a newer station, is shown as its display).
+type Kind = "desktop" | "browser" | "simulator";
+const kindOf = (v: unknown): Kind => (v === "browser" || v === "simulator" ? v : "desktop");
+const kindWords = (kind: Kind) => t(`core-views.screen.kind.${kind}`);
+
 /// What a screen is, in words: its kind, its size, the chat that opened it, who is on it.
 function itemLine(item: J): string {
-  const parts = [item.kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop")];
+  const parts = [kindWords(item.kind)];
   if (item.width > 0 && item.height > 0) parts.push(`${item.width}×${item.height}`);
   if (item.chat) parts.push(t("core-views.screen.openedBy", { title: item.chat.title }));
   const on = names(item.viewers);
@@ -239,11 +257,11 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
   const screens = held.screens.flatMap((s) => {
     const id = get(s, "id");
     if (typeof id !== "string" || id === "") return [];
-    const kind = get(s, "kind") === "browser" ? "browser" : "desktop";
+    const kind = kindOf(get(s, "kind"));
     const size = (v: unknown) => (finite(v) ? Math.max(0, Math.round(v)) : 0);
     const width = size(get(s, "width"));
     const height = size(get(s, "height"));
-    const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop");
+    const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kindWords(kind);
     const by = get(s, "openedBy");
     const chat = typeof by === "string" && by !== "" ? chatOf(inner, station, by) : null;
     const item = {
@@ -265,10 +283,10 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
 export function screenCard(inner: Inner, station: string, id: string, held: Held | undefined, online: boolean): J {
   const listed = screensView(inner, station, held, online).screens.find((s: J) => s.id === id);
   if (listed) return { kind: listed.kind, title: listed.title, line: listed.line, link: listed.link, gone: false, peek: listed.peek === true, width: listed.width, height: listed.height };
-  const kind = id.startsWith("browser:") ? "browser" : "desktop";
+  const kind = kindOf(id.split(":")[0]);
   const gone = held !== undefined && !held.outdated && online;
   const line = gone ? t("core-views.screen.gone") : held?.outdated ? t("core-views.screen.outdated") : t("core-views.screen.remote");
-  return { kind, title: kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop"), line, link: screenPath(station, id), gone, peek: false, width: 0, height: 0 };
+  return { kind, title: kindWords(kind), line, link: screenPath(station, id), gone, peek: false, width: 0, height: 0 };
 }
 
 /// The clipboard types a station says a screen carries (`clipboard`): ours only.
@@ -383,6 +401,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     const state: J = { phase: "connecting", title: "", control: false, may, others: [], line: "" };
     // Who is on it as the view's own stream says (else as the station's list does).
     let onIt: string[] | null = null;
+    // Its display's scale as the stream last said (a Windows station's desktop, to a view that drives it).
+    let displayScale: { percent: number; recommended: number; steps: number[] } | null = null;
     let driving: string[] | null = null;
     // Decided once the station's list is read (below) for a view opened with no `control` asked.
     let wanted = c.ask.control && may;
@@ -425,7 +445,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       state.clipboard = clipboard;
       if (drop) state.drop = drop;
       else delete state.drop;
-      progress({ state: { ...state, others: [...others], controllers: [...controllers], clipboard: [...clipboard], ...(drop ? { drop: { ...drop } } : {}) } });
+      const scale = state.control ? displayScale : null;
+      if (scale) state.scale = scale;
+      else delete state.scale;
+      progress({ state: { ...state, others: [...others], controllers: [...controllers], clipboard: [...clipboard], ...(drop ? { drop: { ...drop } } : {}), ...(scale ? { scale: { ...scale, steps: [...scale.steps] } } : {}) } });
     };
     const write = (bytes: Uint8Array) => {
       if (out !== null) Queue.offerUnsafe(out, bytes);
@@ -561,6 +584,17 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (access) state.access = access;
                 if (Array.isArray(s.viewers)) onIt = names(s.viewers);
                 if (Array.isArray(s.controlledBy)) driving = names(s.controlledBy);
+                const ms = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 600_000;
+                if (isObject(s.latency) && ms(s.latency.frame) && ms(s.latency.before)) state.latency = { frame: Math.round(s.latency.frame), before: Math.round(s.latency.before) };
+                if (isObject(s.video) && typeof s.video.capture === "string") {
+                  state.video = {
+                    capture: s.video.capture.slice(0, 80),
+                    ...(typeof s.video.encoder === "string" ? { encoder: s.video.encoder.slice(0, 200) } : {}),
+                    ...(typeof s.video.hardware === "boolean" ? { hardware: s.video.hardware } : {}),
+                  };
+                }
+                const scale = scaleOf(s.scale);
+                if (scale) displayScale = scale;
                 if (s.ended !== undefined && s.ended !== null && s.ended !== false) {
                   // The station stopping (an update, a restart): opened again once it is back.
                   if (s.ended === "stopping") return { dropped: true, seen } as Outcome;

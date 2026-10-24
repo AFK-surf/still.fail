@@ -1,5 +1,6 @@
-// A phone's or a tablet's wide screen (corners.mbt) over the fixture: Android's (Wide.kt), not the desktop's frame. A
-// film turned sideways makes a phone's screen this wide.
+// A phone's or a tablet's wide screen (corners.mbt) over the fixture: Android's (Wide.kt), not the desktop's frame,
+// chosen by the size classes the host says (@hostapi.system_channel `size_class`). A film turned sideways makes an
+// Android phone's window this wide (its WindowSizeClass expanded).
 
 ///|
 /// Where the widget said as `label` is (x, y, w, h).
@@ -10,6 +11,13 @@ fn said_at(t : @ui.Tester, label : String) -> (Double, Double, Double, Double)? 
     }
   }
   None
+}
+
+///|
+/// The window's size classes as a phone's or a tablet's host says them (@hostapi.system_channel `size_class`): taken at
+/// the next frame.
+fn say_room(t : @ui.Tester, width : String, height : String) -> Unit {
+  t.post(@hostapi.system_channel, "{\"size_class\":{\"width\":\"\{width}\",\"height\":\"\{height}\"}}")
 }
 
 ///|
@@ -29,18 +37,20 @@ test "a phone turned sideways for a film: the player the whole screen, no rail n
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   nav_rested(t)
   tap_said(t, "全屏")
-  // the host turns the phone for it (Host.setSideways: landscape)
+  // the host turns the phone for it (Host.setSideways: landscape), its window's classes said as they change
+  say_room(t, "regular", "compact")
   t.resize(844.0, 390.0)
   assert_true(corners_on.val)
   assert_false(wide_on.val)
   assert_true(app.nav.top() is DrivePlay(_))
   // its back key at the screen's own left edge, not beside a rail and a list; nothing at its corners
   let (bx, _, _, _) = said_at(t, "返回").unwrap()
-  assert_true(bx < rail_w, msg="the player's back at \{bx}")
+  assert_true(bx < @sfdesk.rail_w, msg="the player's back at \{bx}")
   assert_true(said_at(t, "最近会话") is None)
   assert_true(said_at(t, "退出全屏") is Some(_))
   // back turns it upright first (Player.kt BackHandler(sideways)), the host turning the phone back
   t.back()
+  say_room(t, "compact", "regular")
   t.resize(390.0, 844.0)
   assert_false(corners_on.val)
   assert_true(app.nav.top() is DrivePlay(_))
@@ -53,6 +63,7 @@ test "a chat on a wide phone: the screen's width, a finger drags its list, the l
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=844.0, h=390.0, platform=2)
+  say_room(t, "regular", "compact")
   t.run_for(@ui.nav_push_ms)
   assert_true(corners_on.val)
   assert_false(wide_on.val)
@@ -84,6 +95,7 @@ test "a chat on a wide phone: the screen's width, a finger drags its list, the l
   assert_true(said_at(t, "最近会话") is None)
   assert_false(bar_tabs(t))
   // upright: the phone's bottom bar again, no corners
+  say_room(t, "compact", "regular")
   t.resize(390.0, 844.0)
   t.run_for(bar_show_ms)
   assert_false(corners_on.val)
@@ -97,14 +109,25 @@ fn bar_tabs(t : @ui.Tester) -> Bool {
 }
 
 ///|
-test "a desktop as wide has its own frame; a tablet's and a phone's do not" {
-  for p in [(0, true), (3, true), (1, false), (2, false)] {
-    let (platform, frame) = p
+test "the frame: a desktop's as wide; a phone's or a tablet's regular both ways; one regular in width alone has the corners" {
+  // (platform, the size classes its host says, the frame, the corners)
+  for p in [
+    (0, "", true, false),
+    (3, "", true, false),
+    (1, "regular", true, false),
+    (2, "regular", true, false),
+    (1, "compact", false, true),
+    (2, "compact", false, true),
+  ] {
+    let (platform, height, frame, corners) = p
     reset()
     let src = fixture("home")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1024.0, h=768.0, platform~)
+    if height != "" {
+      say_room(t, "regular", height)
+    }
     t.draw()
-    assert_eq(wide_on.val, frame, msg="platform \{platform}")
-    assert_eq(corners_on.val, !frame, msg="platform \{platform}")
+    assert_eq(wide_on.val, frame, msg="platform \{platform} \{height}")
+    assert_eq(corners_on.val, corners, msg="platform \{platform} \{height}")
   }
 }

@@ -6,7 +6,7 @@
 
 ///|
 /// A device's name as people know it (Security.kt deviceName): its label, or what kind of client it is.
-fn device_name(kind : String, label : String, older? : Bool = false) -> String {
+pub fn device_name(kind : String, label : String, older? : Bool = false) -> String {
   if older {
     if label == "" {
       tr("web-pages.security.olderClient")
@@ -24,7 +24,7 @@ fn device_name(kind : String, label : String, older? : Bool = false) -> String {
 
 ///|
 /// `lock.<name>` on this workspace, let go on by itself and said how it ended (AppState.lockCall).
-fn lock_call(
+pub fn lock_call(
   core : Core,
   ws : String,
   name : String,
@@ -41,7 +41,7 @@ fn lock_call(
 
 ///|
 /// Whether the security page is turning the lock on (SecurityOpen) rather than showing it.
-let opening_lock : Ref[Bool] = Ref(false)
+pub let opening_lock : Ref[Bool] = Ref(false)
 
 ///|
 fn security_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
@@ -109,7 +109,7 @@ fn foot(c : @ui.Ctx, f : () -> Unit, words? : String = "") -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_ground : @ui.Style = @ui.style(w=Full, bg=Bg)
+let foot_ground : @ui.Style = @ui.css("w=Full bg=Bg")
 
 ///|
 /// Off (Security.kt Off): what it is now and once on, how new devices come in; who may turn it on.
@@ -430,7 +430,7 @@ fn confirm_device(core : Core, ws : String, r : Json) -> Unit {
 ///|
 /// 确认 over 拒绝, 10 apart, 4 under the note (Security.kt:349).
 // kept across runs: a value (no field of it changes)
-let confirm_buttons : @ui.Style = @ui.style(w=Full, pt=S1, gap=S2_5)
+let confirm_buttons : @ui.Style = @ui.css("w=Full pt=S1 gap=S2_5")
 
 ///|
 /// A code's letters a little apart (letterSpacing 5): a thin space between each two.

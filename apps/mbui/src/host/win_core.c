@@ -9,6 +9,8 @@
 //     key (its UTF-8 in hex). secure.get {key, user} -> {} + the bytes, or {none: true}; secure.set {key, user} + the
 //     bytes -> {}; secure.delete {key} -> {}; asking the person (`user`, secure.ask: Windows Hello) is unsupported yet,
 //     as on Android and Apple.
+//   kept.read {at, start, end} -> {} + the bytes, or {none: true}: a file the app saved (its path, as mb_host_keep_where
+//     said it) read back, bytes start to end (the core's downloads: drive-kept.ts `saved`).
 //   listen.* (a login's loopback listener, mbui's win_listen.c): listen.open {port, host} -> {id, port};
 //     listen.next {id} -> {request, method, path, headers} + the body, or {end: true}; listen.respond {id, request,
 //     status, headers} + the body -> {}; listen.close {id} -> {}.
@@ -517,6 +519,45 @@ static void on_say(void *ctx, const char *json, size_t len, const uint8_t *bytes
   if (W.on_message) W.on_message(json, len, bytes, blen, W.ctx);
 }
 
+// ── kept.read ──
+
+static void core_kept(uint64_t id, const char *op, const char *json) {
+  if (strcmp(op, "kept.read") != 0) {
+    answer(id, NULL, "unsupported", NULL, 0);
+    return;
+  }
+  char *at = jstr(jget(json, "at"));
+  double start = 0, end = 0;
+  if (!at || !jnum(jget(json, "start"), &start) || !jnum(jget(json, "end"), &end) || end < start || end - start > 64.0 * 1024 * 1024) {
+    free(at);
+    answer(id, NULL, "kept.read: at, start and end", NULL, 0);
+    return;
+  }
+  WCHAR *path = wide(at);
+  free(at);
+  HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  free(path);
+  if (f == INVALID_HANDLE_VALUE) {
+    answer(id, "{\"none\":true}", NULL, NULL, 0);
+    return;
+  }
+  size_t want = (size_t)(end - start), got = 0;
+  uint8_t *buf = malloc(want ? want : 1);
+  LARGE_INTEGER at_byte;
+  at_byte.QuadPart = (LONGLONG)start;
+  int ok = SetFilePointerEx(f, at_byte, NULL, FILE_BEGIN);
+  while (ok && got < want) {
+    DWORD n = 0;
+    DWORD ask = (DWORD)((want - got) > 0x7fffffff ? 0x7fffffff : (want - got));
+    if (!ReadFile(f, buf + got, ask, &n, NULL) || n == 0) break;
+    got += n;
+  }
+  CloseHandle(f);
+  if (!ok) answer(id, "{\"none\":true}", NULL, NULL, 0);
+  else answer(id, "{}", NULL, buf, got);
+  free(buf);
+}
+
 static void on_app_call(void *ctx, uint64_t id, const char *op, const char *json, size_t len, const uint8_t *bytes, size_t blen) {
   (void)ctx;
   char *j = malloc(len + 1);
@@ -524,6 +565,7 @@ static void on_app_call(void *ctx, uint64_t id, const char *op, const char *json
   j[len] = 0;
   if (tracing()) fprintf(stderr, "[core trace] -> %llu %s %.*s (here)\n", (unsigned long long)id, op, (int)(len < 120 ? len : 120), j);
   if (strncmp(op, "secure.", 7) == 0) core_secure(id, op, j, bytes, blen);
+  else if (strncmp(op, "kept.", 5) == 0) core_kept(id, op, j);
   else core_listen(id, op, j, bytes, blen);
   free(j);
 }

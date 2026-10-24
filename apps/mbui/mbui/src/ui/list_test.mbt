@@ -79,9 +79,9 @@ test "list: rows far smaller than the estimate fill the first frame" {
   let (first, last) = t.visible()
   assert_true(first == 0 && last >= 133)
   t.check_rows(0.0, 400.0)
-  // the first frame lays them out, and builds the view again in it over the rows in view as they are now told (what
-  // it read of them first was from before they were laid out)
-  assert_eq(frames[0], 2)
+  // the first frame lays them out, built once: the view read nothing of the list (what reads its rows in view is built
+  // again from them in that frame: readback_test)
+  assert_eq(frames[0], 1)
   assert_eq(t.ctx().frame_number(), 1)
 }
 
@@ -506,3 +506,45 @@ test "a row followed from its top: a glide to the end stops with its top under t
 ///|
 /// How far under the view's top a followed row stops in this test.
 let test_follow_margin : Double = 12.0
+
+///|
+/// Rows 300 high, each with its words at its top and a mark 18 square held 8 under the list's top (Ctx::stick) as the
+/// row scrolls past.
+fn stuck_rows() -> (@ui.Ctx) -> Unit {
+  fn(c) {
+    c.list("list", 20, 300.0, fn(i) {
+      c.box(h=Px(300.0), fn() {
+        c.text("Row \{i}", wrap=false) |> ignore
+        c.layer(fn() {
+          let mark = c.box(w=Px(18.0), h=Px(18.0), fn() { c.text("Mark \{i}", wrap=false) |> ignore })
+          c.stick(mark, 8.0)
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "list: what a row holds stuck stays under the list's top as the row scrolls past, and leaves with its foot" {
+  let t = @ui.Tester::new(stuck_rows(), w=300.0, h=400.0)
+  // its row at the list's top: held 8 under it already (as CSS's sticky is), its words at the top
+  let (_, y0, _, _) = t.rect_of("Mark 0").unwrap()
+  assert_eq(y0, 8.0)
+  assert_eq(t.rect_of("Row 0").unwrap().1, 0.0)
+  // the row 100 up: the mark 8 under the list's top, its words gone up with the row
+  t.move(100.0, 100.0)
+  t.wheel(100.0, 100.0, 100.0)
+  let (_, y1, _, _) = t.rect_of("Mark 0").unwrap()
+  assert_eq(y1, 8.0)
+  assert_eq(t.rect_of("Row 0").unwrap().1, -100.0)
+  // the row's foot coming up past it: it goes with the foot, 18 over it
+  t.wheel(100.0, 100.0, 190.0)
+  let (_, y2, _, _) = t.rect_of("Mark 0").unwrap()
+  assert_eq(y2, 300.0 - 290.0 - 18.0)
+  // the next row's own, where it is laid out
+  let (_, y3, _, _) = t.rect_of("Mark 1").unwrap()
+  assert_eq(y3, 10.0)
+}

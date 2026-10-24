@@ -845,7 +845,8 @@ fn marks_any() -> Bool {
 ///|
 /// In the top bar while marking (ImageMarks.kt MarksActions): why it failed, 取消, 下载标注后的图片, 添加到对话 (when
 /// there is a chat's draft to put it in). True on the frame one of them is tapped: `go(draft)`.
-fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit) -> Unit {
+/// `ink`: what its words and icons are drawn in (a desktop's bar is the page's, preview_desk.mbt).
+fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : Int64 = dark_muted) -> Unit {
   let ready = !marking.busy && marks_any()
   // as wide as they are: the file's name before them cut short instead
   c.box(dir=Row, gap=4.0, align=ACenter, keep=true, fn() {
@@ -860,10 +861,10 @@ fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit) -> Unit {
       marks_leave()
     }
     c.box(h=Px(32.0), padx=10.0, radius=picture_key, justify=JCenter, id=cancel, fn() {
-      c.text(pv("common.cancel"), size=13.0, color=dark_muted, wrap=false) |> ignore
+      c.text(pv("common.cancel"), size=13.0, color=ink, wrap=false) |> ignore
     })
     |> ignore
-    if picture_button(c, "marks/download", "download", dark_muted, true, enabled=ready, said=pv("android-chat.marks.downloadMarked")) {
+    if picture_button(c, "marks/download", "download", ink, true, enabled=ready, said=pv("android-chat.marks.downloadMarked")) {
       go(false)
     }
     if can_draft {
@@ -909,7 +910,7 @@ let picture_key : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let marks_put_room : @ui.Style = @ui.style(pl=S1)
+let marks_put_room : @ui.Style = @ui.css("pl=S1")
 
 ///|
 /// The foot while marking (ImageMarks.kt MarksFoot, in the viewer's dark): the note being written in its box over the
@@ -1127,19 +1128,19 @@ fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
 /// A note's box's head (its pin and what it is: 8 in, 6 apart), the row under it (the bin, the field, the tick: 2
 /// apart, at its foot), a card's head (6 apart); the room either side of a tools' gap (4).
 // kept across runs: a value (no field of it changes)
-let note_head : @ui.Style = @ui.style(row=true, px=S2, gap=S1_5, align=ACenter)
+let note_head : @ui.Style = @ui.css("row px=S2 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_row : @ui.Style = @ui.style(row=true, w=Full, gap=S0_5, align=AEnd)
+let note_row : @ui.Style = @ui.css("row w=Full gap=S0_5 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_head : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let card_head : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_gap_room : @ui.Style = @ui.style(px=S1)
+let mark_gap_room : @ui.Style = @ui.css("px=S1")
 
 ///|
 /// The dark theme's colours the notes take (Theme.kt Dark): the page, its words, muted, subtle, the accent; their
@@ -1167,7 +1168,7 @@ let note_box_corner : Double = 26.0
 
 ///|
 /// The bars' corner over a picture (ImageMarks.kt PictureBar: concentric out of a key's 12 by the bar's 6).
-let picture_bar_corner : Double = @sf.concentric_out(picture_key, 6.0)
+let picture_bar_corner : Double = @sf.surface_corner(6.0, picture_key)
 
 ///|
 /// Between the tools' groups (ImageMarks.kt Gap): a line 1 by 18, white at 10%, 4 either side.

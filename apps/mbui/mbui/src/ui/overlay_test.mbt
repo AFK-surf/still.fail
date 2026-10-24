@@ -234,3 +234,58 @@ test "place: below its anchor, flipped above when there is no room, kept in the 
   // start is the right: their right edges line up
   assert_eq(out[3], (120.0, 134.0, Bottom))
 }
+
+///|
+test "a layer dismissed as the view closed it its own way is not dismissed by that when it opens again" {
+  let open = Ref(true)
+  let log = []
+  let t = Tester::new(fn(c) {
+    c.column(gap=4.0, fn() {
+      if btn(c, "open").clicked {
+        open.val = true
+      }
+      // closes the layer itself (as a key of the view's own would), the press outside it dismissing it too
+      if btn(c, "close").clicked {
+        open.val = false
+      }
+      if open.val {
+        let o = c.overlay("layer", fn() {
+          c.box(tx=100.0, ty=200.0, pad=10.0, bg=0xFFFFFFFFL, fn() { btn(c, "inside") |> ignore }) |> ignore
+        })
+        if o.dismissed is Some(d) {
+          log.push("dismissed \{d}")
+          open.val = false
+        }
+      }
+    })
+    |> ignore
+  })
+  t.click(Button, label="close")
+  assert_false(open.val)
+  t.click(Button, label="open")
+  t.frame()
+  assert_true(open.val, msg="open again")
+  assert_true(t.query(Button, label="inside") is Some(_))
+  assert_eq(log, [])
+}
+
+///|
+test "a layer opened by a list's row (built as the list is laid out) is laid out over the window as any other is" {
+  let t = Tester::new(fn(c) {
+    c.list("rows", 3, 40.0, fn(k) {
+      c.text("row \{k}") |> ignore
+      if k == 1 {
+        c.overlay("row-layer", fn() {
+          c.box(tx=100.0, ty=200.0, w=Px(80.0), pad=10.0, fn() { c.text("card") |> ignore }) |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  })
+  let card = t.words().filter(fn(w) { w.0 == "card" })
+  assert_eq(card.length(), 1)
+  // where its box puts it, in what the box holds
+  assert_eq((card[0].1, card[0].2), (110.0, 210.0))
+  assert_true(card[0].3 > 0.0 && card[0].3 <= 60.0, msg="\{card[0].3} wide")
+}

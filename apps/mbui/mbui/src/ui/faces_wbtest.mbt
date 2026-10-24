@@ -52,3 +52,28 @@ test "faces: a face given as its file's bytes is given as one from a path; none 
   assert_false(face_add_bytes(@hostapi.face_ui, b""))
   assert_false(face_given(@hostapi.face_ui))
 }
+
+///|
+test "faces: words laid out before the app's face is given are laid out again in it, nothing else of them changed" {
+  // (a settings page's rows, laid out in the system's face, then the face chosen: its words kept their old widths, the
+  // new face's letters drawn where the old one's went)
+  let shown = Ref(true)
+  let t = Tester::new(fn(c) {
+    if shown.val {
+      c.box(dir=Row, fn() { c.text("lin@example.com", size=14.0, wrap=false) |> ignore }) |> ignore
+    }
+  })
+  t.ui_face_wider(0.1)
+  let w0 = t.rect_of("lin@example.com").unwrap().2
+  assert_true(face_add(@hostapi.face_ui, "/fonts/ui.ttf"))
+  t.draw()
+  // each of its 15 letters a tenth of 14 wider
+  assert_true((t.rect_of("lin@example.com").unwrap().2 - (w0 + 15.0 * 1.4)).abs() < 0.001)
+  // away while the face goes back to the system's, and shown again: in the system's again
+  shown.val = false
+  t.draw()
+  face_clear(@hostapi.face_ui)
+  shown.val = true
+  t.draw()
+  assert_eq(t.rect_of("lin@example.com").unwrap().2, w0)
+}

@@ -21,7 +21,7 @@ import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -120,8 +120,9 @@ export class Desktop implements ScreenSource {
     const helper = this.#o.helper;
     if (!this.#o.supported) throw new ScreenRefused(501, "station.screen.unsupported", {}, this.access());
     if (helper === null) throw new ScreenRefused(501, "station.screen.noHelper", {}, this.access());
-    // H.264 where it is taken (the hardware's, small); else a JPEG a picture (an agent's view, a client without H.264).
-    const codec: Codec | undefined = options.codecs.includes("h264") ? "h264" : options.codecs.includes("jpeg") ? "jpeg" : undefined;
+    // H.265 where it is taken (the hardware's, smallest; the helper makes H.264 where this Mac encodes no H.265), H.264,
+    // else a JPEG a picture (an agent's view, a client without either).
+    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh(true);
     const synthetic = this.#o.synthetic !== undefined;
@@ -130,7 +131,7 @@ export class Desktop implements ScreenSource {
     if (!synthetic && this.#status?.capture !== true) throw this.#refused();
     // Granted since the helper started: it starts itself again to have it, and is asked once more.
     for (let attempt = 0; ; attempt++) {
-      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view));
+      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view));
       this.#views.add(view);
       try {
         await view.ready;
@@ -188,8 +189,11 @@ type HelperError = Error & { code?: string };
 
 /// The helper's messages: a kind byte, the payload's length (4 bytes), the payload (native/helper's ScreenView.swift).
 /// To it: 1 next, 2 keyframe, 3 input, 4 clipboard (flags: bit 0 paste; type: 1 text, 2 PNG; the bytes), 5 watch the
-/// clipboard (1 on, 0 off), 6 reveal (the path). From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes).
-export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6 } as const;
+/// clipboard (1 on, 0 off), 6 reveal (the path), 7 rate (bits a second, 4 bytes), 8 bounds (JSON {maxWidth, maxHeight});
+/// a helper from before 7 and 8 lets them be.
+/// From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes), 6 cursor (JSON {x, y, shape}: a video's
+/// pictures leave the pointer out).
+export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6, rate: 7, bounds: 8 } as const;
 const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
 
 /// A clip as the helper's `clipboard` message has it: from the helper (`flags` none) or to it.
@@ -225,11 +229,21 @@ export class HelperView implements ScreenView {
   readonly #gone: () => void;
   /// Who hears the clipboard as it changes, while it is watched.
   #clipboard: ((clip: Clip) => void) | null = null;
+  /// Who hears the pointer, and the last it said (told at once to one who starts to hear it).
+  #cursor: ((cursor: ScreenCursor) => void) | null = null;
+  #lastCursor: ScreenCursor | null = null;
 
-  readonly #codec: Codec;
+  /// What it was asked for, then what it encodes (its `info`).
+  #codec: Codec;
 
-  constructor(codec: Codec, socket: HelperPipe, gone: () => void, input: InputOps = new MacInput()) {
+  /// What captures its pictures (still.fail Helper's ScreenCaptureKit, stillfail-screen's Windows.Graphics.Capture), and
+  /// the encoder as its info named it.
+  readonly #capture: string;
+  #encoder = "";
+
+  constructor(codec: Codec, socket: HelperPipe, gone: () => void, input: InputOps = new MacInput(), capture = "ScreenCaptureKit") {
     this.#codec = codec;
+    this.#capture = capture;
     this.#socket = socket;
     this.#input = input;
     this.#gone = gone;
@@ -260,13 +274,17 @@ export class HelperView implements ScreenView {
         const info = JSON.parse(payload.toString());
         if (typeof info.error === "string") this.#settle.reject(Object.assign(new Error(info.error), { code: info.code }));
         else {
-          log.info("screens", "a view of the desktop opened", { width: info.width, height: info.height, encoder: info.encoder });
+          // What it encodes: as it says (H.264 where H.265 was asked and this Mac has no encoder of it; a helper from
+          // before H.265 says nothing and makes H.264 of anything but JPEG).
+          this.#codec = info.codec === "h265" || info.codec === "h264" || info.codec === "jpeg" ? info.codec : this.#codec === "jpeg" ? "jpeg" : "h264";
+          log.info("screens", "a view opened", { capture: this.#capture, width: info.width, height: info.height, encoder: info.encoder });
+          if (typeof info.encoder === "string") this.#encoder = info.encoder.slice(0, 200);
           this.#settle.resolve({ width: info.width, height: info.height });
         }
         return;
       }
       case 2:
-        this.#config = { codec: this.#codec, width: payload.readUInt32BE(0), height: payload.readUInt32BE(4), ...(this.#codec === "h264" ? { description: new Uint8Array(payload.subarray(8)) } : {}) };
+        this.#config = { codec: this.#codec, width: payload.readUInt32BE(0), height: payload.readUInt32BE(4), ...(this.#codec !== "jpeg" ? { description: new Uint8Array(payload.subarray(8)) } : {}) };
         return;
       case 3: {
         const frame: Frame = { key: (payload[0]! & 1) === 1, ts: Number(payload.readBigUInt64BE(1)), data: new Uint8Array(payload.subarray(9)) };
@@ -280,6 +298,17 @@ export class HelperView implements ScreenView {
       case 4:
         log.info("screens", "still.fail Helper", { said: payload.toString() });
         return;
+      case 6: {
+        let said: any = null;
+        try {
+          said = JSON.parse(payload.toString());
+        } catch {}
+        const unit = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1;
+        if (said === null || !unit(said.x) || !unit(said.y)) return;
+        this.#lastCursor = { x: said.x, y: said.y, shape: typeof said.shape === "string" && /^[a-z-]{1,24}$/.test(said.shape) ? said.shape : "default" };
+        this.#cursor?.(this.#lastCursor);
+        return;
+      }
       case 5: {
         const body = payload.subarray(1);
         const clip: Clip | null = payload[0] === 1 ? { type: "text", text: body.toString("utf8") } : payload[0] === 2 ? { type: "png", data: new Uint8Array(body) } : null;
@@ -306,6 +335,23 @@ export class HelperView implements ScreenView {
     this.#send(TO_HELPER.keyframe);
   }
 
+  video(): ScreenVideo {
+    // The helpers name a software encoder so ("software", "Microsoft H.264 (software)"); a JPEG is no encoder's.
+    if (this.#codec === "jpeg" || this.#encoder === "") return { capture: this.#capture, ...(this.#encoder ? { encoder: this.#encoder } : {}) };
+    return { capture: this.#capture, encoder: this.#encoder, hardware: !/software/i.test(this.#encoder) };
+  }
+
+  rate(bitsPerSecond: number) {
+    if (this.#codec === "jpeg") return;
+    const payload = Buffer.alloc(4);
+    payload.writeUInt32BE(Math.min(0xffff_ffff, Math.max(0, Math.round(bitsPerSecond))));
+    this.#send(TO_HELPER.rate, payload);
+  }
+
+  bounds(maxWidth: number, maxHeight: number) {
+    this.#send(TO_HELPER.bounds, Buffer.from(JSON.stringify({ maxWidth: Math.round(maxWidth), maxHeight: Math.round(maxHeight) })));
+  }
+
   async input(event: ScreenInput): Promise<void> {
     for (const op of this.#input.ops(event, wall.now())) this.#send(TO_HELPER.input, Buffer.from(JSON.stringify(op)));
   }
@@ -326,6 +372,14 @@ export class HelperView implements ScreenView {
 
   async reveal(path: string): Promise<void> {
     this.#send(TO_HELPER.reveal, Buffer.from(path, "utf8"));
+  }
+
+  watchCursor(heard: (cursor: ScreenCursor) => void): () => void {
+    this.#cursor = heard;
+    if (this.#lastCursor) heard(this.#lastCursor);
+    return () => {
+      if (this.#cursor === heard) this.#cursor = null;
+    };
   }
 
   close() {

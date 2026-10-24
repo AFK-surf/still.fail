@@ -1589,11 +1589,11 @@ fn toolbar_tool(c : @ui.Ctx, key : String, icon : String, on : Bool) -> Bool {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_off : @ui.Style = @ui.style(w=S9, h=S9, radius=Full, align=ACenter, justify=JCenter)
+let tool_off : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_on : @ui.Style = tool_off.then(@ui.style(bg=Accent))
+let tool_on : @ui.Style = tool_off.then(@ui.css("bg=Accent"))
 
 ///|
 /// A tool's icon (Preview.kt Tool: 18).
@@ -1603,11 +1603,11 @@ let tool_icon : Double = 18.0
 /// The tools after the sizes (4 in from them, 2 apart), and the 适应 capsule there (36 high, 12 in, the surface's
 /// ground; 13, medium, the ink).
 // kept across runs: a value (no field of it changes)
-let tools_row : @ui.Style = @ui.style(row=true, pl=S1, gap=S0_5, align=ACenter)
+let tools_row : @ui.Style = @ui.css("row pl=S1 gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fit_view_pill : @ui.Style = @ui.style(h=S9, radius=Full, bg=Card, px=S3, align=ACenter, justify=JCenter)
+let fit_view_pill : @ui.Style = @ui.css("h=S9 radius=Full bg=Card px=S3 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1727,15 +1727,15 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
 /// 36, 10 round, the chip's ground, 10 in, 15 (what it is for in the subtle grey); × 14 muted; the turn key a tool's
 /// (faint when there is nothing to turn).
 // kept across runs: a value (no field of it changes)
-let custom_gap : @ui.Style = @ui.style(h=S2_5)
+let custom_gap : @ui.Style = @ui.css("h=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let custom_row : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, gap=S2, align=ACenter)
+let custom_row : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let custom_name : @ui.Style = @ui.style(w=Full)
+let custom_name : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1751,7 +1751,7 @@ let custom_by : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, wrap=fals
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_faint : @ui.Style = tool_off.then(@ui.style(opacity=O35))
+let tool_faint : @ui.Style = tool_off.then(@ui.css("opacity=O35"))
 
 ///|
 /// The smallest and largest a size may be (Preview.kt LIMIT_MIN, LIMIT_MAX).
@@ -2021,15 +2021,15 @@ fn preview_file_page(c : @ui.Ctx, src : Source, station : String, key : String, 
 /// The page, on the page's ground; what it waits on where its note would be (PreviewWait: 20 in, 8 over and under,
 /// in the middle); the name in the address's place (13, medium, the ink, one line).
 // kept across runs: a value (no field of it changes)
-let file_view_page : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let file_view_page : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_wait : @ui.Style = @ui.style(w=Full, px=S5, py=S2, align=ACenter)
+let file_wait : @ui.Style = @ui.css("w=Full px=S5 py=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_name_box : @ui.Style = @ui.style(w=Full, clip=true)
+let file_name_box : @ui.Style = @ui.css("w=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)

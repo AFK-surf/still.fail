@@ -22,6 +22,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        // this build's code in memory before the drawing thread comes to it (a build just installed has none of it)
+        ReadAhead.start(this);
         Host.log("activity onCreate " + (saved != null ? "(restored)" : ""));
         Host.activity = this;
         // `--es env K=V;K2=V2`: environment variables for the app's MoonBit (as a desktop run has them: the core
@@ -92,6 +94,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(over() ? Color.TRANSPARENT : night(getResources().getConfiguration()) ? Host.groundDark : Host.groundLight);
         MBView view = new MBView(this);
         mbView = view;
+        folds = new Folds(this, view);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
         root.addView(view, lp);
@@ -128,6 +131,8 @@ public class MainActivity extends Activity {
                 layer.setLayoutParams(q);
             }
             if (!imeMoving) keyboardAt(insets);
+            // the window laid out again (opened, folded, split, turned): its size classes and the fold in it said
+            folds.laidOut();
             // the keyboard put away by the person (its own key, Back, a swipe), not by the app: what was typed into
             // lets go of the focus, as the Android app's composer does; tapped again, it takes it and the keyboard
             // comes back (the app's own hiding comes after its focus went: Host.imeActive is off by then; a hiding seen
@@ -215,6 +220,8 @@ public class MainActivity extends Activity {
             }
         }
         if (multicast != null) multicast.acquire();
+        // the window's size classes and the device's fold, said to the app as they change (src/hostapi/system.mbt)
+        folds.start();
         // back on screen after a while off it: said to the app (src/hostapi/system.mbt)
         if (hiddenAt != 0) {
             long away = Math.max(0, android.os.SystemClock.elapsedRealtime() - hiddenAt);
@@ -228,6 +235,7 @@ public class MainActivity extends Activity {
         // the drawing paused once the window is off the screen, not as it starts going: the system's animation of
         // the window going (into the launcher's icon, to the recent apps) moves what it last drew, as a View's
         mbView.onPause();
+        folds.stop();
         if (multicast != null) multicast.release();
         if (hiddenAt == 0) hiddenAt = android.os.SystemClock.elapsedRealtime();
         super.onStop();
@@ -248,6 +256,8 @@ public class MainActivity extends Activity {
     /** This activity's own view and native views' layer: the host's (Host.view, NativeViews.layer) while it is resumed. */
     private MBView mbView;
     private FrameLayout layer;
+    /** The window's size classes and the device's fold as the system says them (Folds). */
+    private Folds folds;
 
     /** Whether this is the app over another app (OverActivity, a subclass: a share sheet over the app it came from). */
     boolean over() {
@@ -383,6 +393,8 @@ public class MainActivity extends Activity {
             Host.systemDark = dark;
             Host.requestFrame();
         }
+        // (configChanges has screenSize, smallestScreenSize and screenLayout: an opened or folded phone's window too)
+        folds.laidOut();
     }
 
     @Override

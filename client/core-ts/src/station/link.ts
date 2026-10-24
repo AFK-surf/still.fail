@@ -17,7 +17,7 @@ import { GONE, NETWORK } from "../wake.ts";
 import { StationAddr } from "./addr.ts";
 import { TRANSCRIPT_PAGE } from "./channel-kinds.ts";
 import { Cursor } from "./cursor.ts";
-import { RESUMED, type Requests } from "./requests.ts";
+import { FOLLOWS, RESUMED, type Requests } from "./requests.ts";
 import { SseParser } from "./sse.ts";
 import { replyHeader } from "./wire.ts";
 
@@ -108,6 +108,9 @@ export class Link {
   readonly viewed = new Map<number, number>();
   /// Whether it follows jobs' logs on its stream (as it said); null until one is read.
   followsLogs: boolean | null = null;
+  /// Whether its stream follows the sessions at work itself (FOLLOWS: it said so as the last stream opened): then none
+  /// is named on it, and one starting opens no stream; null until a stream opened.
+  followsRunning: boolean | null = null;
   /// What a read of a topic failed with while nothing is held of it.
   readonly errors = new Map<string, CoreError>();
   /// Host samples and jobs' logs as they come (measurements and output shown while watched).
@@ -338,7 +341,10 @@ export class Links {
     link.state = value;
     this.#told.changed(address, "link");
     // Reached again: what was to go to it while it was not goes now.
-    if (state === "online" && was !== "online") this.#core.viewCalls?.stationBack(address);
+    if (state === "online" && was !== "online") {
+      this.#core.viewCalls?.stationBack(address);
+      this.#core.downloads?.stationBack(address);
+    }
   }
 
   /// Down, and tried again now, until the try ends: one found offline is still taken for down (views.ts `down`), what
@@ -353,15 +359,19 @@ export class Links {
 
   // ── the events stream ──
 
-  /// What the stream is to be opened for now: host samples while shown; the sessions at work (as the rows say) and
-  /// those shown; the logs shown.
+  /// What the stream is to be opened for now: host samples while shown; the logs shown; and of a station whose stream
+  /// does not follow the sessions at work itself (one from before, or not known yet), those at work (as the rows say)
+  /// and those shown, by name.
   #wants(address: string): EventsFor {
     const shown = this.#told.wanted(address);
-    const live = new Set(shown.live);
-    for (const row of this.#core.data.running(address)) {
-      for (const agent of (get(row, "agents") as unknown[] | undefined) ?? []) {
-        const key = str(get(agent, "key"));
-        if (key && get(agent, "process") === "running") live.add(key);
+    const live = new Set<string>();
+    if (this.#links.get(address)?.followsRunning !== true) {
+      for (const key of shown.live) live.add(key);
+      for (const row of this.#core.data.running(address)) {
+        for (const agent of (get(row, "agents") as unknown[] | undefined) ?? []) {
+          const key = str(get(agent, "key"));
+          if (key && get(agent, "process") === "running") live.add(key);
+        }
       }
     }
     return { host: shown.host, live: [...live].sort(), logs: [...shown.logs].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1])), logins: [...(shown.logins ?? [])].sort() };
@@ -369,7 +379,9 @@ export class Links {
 
   /// Opens the station's stream for what it is wanted for now, unless the one open gives that (or `anew`): the new one
   /// opens first, and the old one goes once it has. An agent ending its turn opens none: as agents started and ended
-  /// turns, a client's stream to a busy station was opened anew some 90 times an hour.
+  /// turns, a client's stream to a busy station was opened anew some 90 times an hour. Nor does one starting, where the
+  /// station follows the sessions at work itself (`followsRunning`): only what a page shows of the host, a job's log or a
+  /// login does.
   openEvents(address: string, anew: boolean): void {
     const link = this.#links.get(address);
     if (!link || !this.reachable(address)) return;
@@ -391,7 +403,8 @@ export class Links {
   /// The stream's path for `wants`, each session asked for from the transcript items held; `since`: the last event the
   /// stream it takes over from gave (what was told after it comes first, else `missed`).
   #path(address: string, wants: EventsFor, since: string | null = null): string {
-    const query: string[] = [];
+    // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS).
+    const query: string[] = ["running=1"];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
       const held = this.#core.data.logSpan("transcript", address, key);
@@ -404,7 +417,7 @@ export class Links {
     // The logins' terminals shown (docs/remote-login.md).
     for (const id of wants.logins ?? []) query.push(`login=${encode(id)}`);
     if (since !== null) query.push(`since=${encode(since)}`);
-    return query.length === 0 ? "/events" : `/events?${query.join("&")}`;
+    return `/events?${query.join("&")}`;
   }
 
   /// Holds the station's stream open; its events keep the records current. Each open reads the station again.
@@ -494,6 +507,12 @@ export class Links {
             // its connecting; unless this stream took over from one still open (a station from before resuming says
             // `missed` when it cannot tell all it missed).
             const resumed = since !== null && replyHeader(opened.success, RESUMED) === "1";
+            // Following the sessions at work itself (FOLLOWS): none is named from now on. One that stopped saying so (a
+            // station gone back to an older version) has them named again, on a stream of their own.
+            const follows = replyHeader(opened.success, FOLLOWS) === "running";
+            const followed = link.followsRunning;
+            link.followsRunning = follows;
+            if (followed === true && !follows) self.openEvents(address, false);
             span.set("stillfail.resumed", resumed);
             if (link.cursor.restored) span.set("stillfail.restored", true);
             span.end();

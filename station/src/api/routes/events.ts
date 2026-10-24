@@ -38,7 +38,8 @@ export const routes = ({ events, sessionExists, store }: Tools): Route[] => [
       // sessions' transcript entries in brief (what a history shows unopened).
       // `login=<id>`, repeated: those logins' terminals as they change (docs/remote-login.md); not for a read-only member.
       const logins = readOnly(r.viewer) ? [] : all(r, "login").filter((id) => /^[0-9a-z]{1,40}$/.test(id));
-      return events.open(r.viewer, r.lang, param(r, "host") === "1", live, logs, param(r, "since") ?? null, param(r, "brief") === "1", logins);
+      // `running=1`: every session at work the viewer sees, as it runs, the station's to follow (no `live` named then).
+      return events.open(r.viewer, r.lang, param(r, "host") === "1", live, logs, param(r, "since") ?? null, param(r, "brief") === "1", logins, param(r, "running") === "1");
     },
   },
 ];

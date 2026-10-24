@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import "@fontsource-variable/inter";
 import { setPageRoot } from "../brand.tsx";
+import { t } from "../i18n.ts";
 import { withoutDownloads } from "../downloads.ts";
 import { Tooltip } from "radix-ui";
 import { ToastProvider } from "@stillfail/ui/toast.tsx";
@@ -16,17 +17,25 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, CoreError, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
-import type { ChatItem, ChatMessage, ChatView, ComposerLink, SearchView, ShareInView } from "../core/shapes.ts";
+import type { ChatItem, ChatMessage, ChatView, ComposerLink, DriveFolder, SearchView, ShareInView, StationView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY, STATION } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
 import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
 import * as fonts from "../../../client/core-ts/src/fonts.ts";
+import { railView } from "../../../client/core-ts/src/rail.ts";
+import { lang } from "../i18n.ts";
+import { changed, tabsOf } from "../../../client/core-ts/src/chat-tabs.ts";
 import { followFonts } from "../fonts.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
+import * as keymap from "../../../client/core-ts/src/keymap.ts";
 import { inkKept } from "../../../client/core-ts/src/highlight.ts";
 import { bookAnswer, keepBook, keptBook, searchBook } from "../../../client/core-ts/src/reader.ts";
+import { find as findCommands } from "../../../client/core-ts/src/commands.ts";
+import { openOf } from "../../../client/core-ts/src/search-open.ts";
+import { Browsing, CALLS as BROWSE_CALLS, withDrive } from "../../../client/core-ts/src/drive-browse.ts";
+import { collate } from "../../../client/core-ts/src/hosts/collate.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
 let root: HTMLElement;
@@ -39,6 +48,8 @@ let mounted = false;
 
 const chats = openingChats();
 const subs = new Map<number, Topic>();
+/** Every topic the page has subscribed to, by its JSON (demoTape). */
+const seen = new Map<string, Topic>();
 /** The calls under way, to cancel. */
 const under = new Map<number, AbortController>();
 let post: (message: unknown) => void = () => undefined;
@@ -75,8 +86,28 @@ function extendedValueOf(topic: Topic): unknown {
   for (const e of extensions) { const v = e.topic?.(topic); if (v !== undefined) return v; }
   let value = demoValueOf(topic);
   for (const e of extensions) { const v = e.then?.(topic, value); if (v !== undefined) value = v; }
+  // Those with a drive, this machine's first, as the core gives them.
+  if (topic.topic === "stations" && topic.drive && Array.isArray(value)) return withDrive(value as StationView[], topic.here ?? null);
   return value;
 }
+
+/** How the station's files are browsed here: as the core does it (drive-browse.ts), on what the demo has. */
+const browsing = new Browsing({
+  prefs: () => prefs,
+  // Names in the order the page's language reads them, as the core's web host has them.
+  collate,
+  setPrefs: (patch) => void answer("prefs.set", patch),
+  entries: (at, root, path) => {
+    const folder = extendedValueOf({ topic: "drive", station: at, root, path }) as DriveFolder | null;
+    return folder && !(folder instanceof CoreError) ? folder.entries : null;
+  },
+  stations: (scope) => ((extendedValueOf({ topic: "stations", scope }) ?? []) as StationView[])
+    .flatMap((s) => (s.overview?.drive ? [{ station: s.station, name: s.name, home: s.overview.drive.home ?? null }] : [])),
+  now: () => Date.now(),
+  newId: () => Math.random().toString(36).slice(2, 10),
+  invalid: (what) => new Error(what),
+  changed: () => { setTimeout(publish, 0); },
+});
 
 function demoValueOf(topic: Topic): unknown {
   const chat = "key" in topic ? chats.find((c) => c.key === topic.key) : "session" in topic ? chats.find((c) => c.key === topic.session) : undefined;
@@ -85,12 +116,12 @@ function demoValueOf(topic: Topic): unknown {
     case "status": return { items: [] };
     case "connection": return { items: [] };
     // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
-    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts) };
+    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts), keymap: keymap.view({ ...prefs, device: DEVICE }), railView: railView(prefs, lang()) };
     case "doing": return { doing: [] };
     // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
     case "composer": return composerView(String(topic.key ?? ""));
     case "chats": return chatsView(chats);
-    case "chat": return chat ? chatView(chat, station.runs()) : null;
+    case "chat": return chat ? withTabs(chatView(chat, station.runs()), `${String(topic.station)}:${chat.key}`, chat.key) : null;
     case "slackApp": return station.slackApp();
     case "live": return chat ? liveView(chat) : null;
     case "history": return chat ? historyView(chat) : null;
@@ -102,9 +133,12 @@ function demoValueOf(topic: Topic): unknown {
     case "archive": return station.archive(topic.q, topic.limit);
     case "profiles": return station.profiles();
     case "usage": return station.usage(topic.days ?? 7);
+    case "resources": return station.resources();
     case "decisions": return station.decisions(chats);
     case "drive": return station.driveFolder(topic.root, topic.path);
     case "drivePlace": return null;
+    case "driveBrowse": return browsing.view(topic);
+    case "filesTabs": return browsing.tabsView(topic.workspace);
     // A station's screens: none here (the stories add theirs).
     case "screens": return null;
     // What the core puts together of them (client/core-ts/src/choose.ts), as a new chat and a model control start.
@@ -211,7 +245,11 @@ function searchView(query: string, kind: string | null): SearchView {
       { kind: "member", key: "m1", station: "", stationName: "", title: `${q} 组 · 林`, ...said(`lin@example.com`), email: "lin@example.com" },
     ] },
   ];
-  const shown = kind ? groups.filter((g) => g.kind === kind) : groups;
+  // Each says where it opens, as the core says it (search-open.ts).
+  const shown = (kind ? groups.filter((g) => g.kind === kind) : groups).map((g) => ({ ...g, items: g.items.map((i) => {
+    const open = openOf(i);
+    return open ? { ...i, open } : i;
+  }) }));
   return {
     items: kind && kind !== "chat" ? [] : items.slice(0, kind ? 50 : 8), chatsMore: !kind && items.length > 8, words: [q],
     groups: kind === "chat" ? [] : shown.map((g) => ({ ...g, more: !kind && g.more })), wait, note: "MacBook Air 离线，其上的内容未搜索",
@@ -271,6 +309,14 @@ const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BA
 
 /** The prefs as the visitor set them here (the sidebar's list, …), kept for the page's life as a core keeps them. */
 const prefs: Record<string, unknown> = {};
+/** This device as a core told it would have it (prefs.ts device): what its keymap goes by. */
+const DEVICE = { app: window.stillfailDesktop ? "desktop" : "web", mac: /Mac|iPhone|iPad/.test(navigator.platform) };
+
+/** A chat's side-panel tabs, as the core says them (client/core-ts/src/chat-tabs.ts): from what is kept for it here. */
+function withTabs(view: ChatView, key: string, session: string): ChatView {
+  const kept = (prefs.chatTabs as Record<string, unknown> | undefined)?.[key];
+  return { ...view, tabs: tabsOf(kept, view.agents, view.noChat === true, session) };
+}
 
 /** A message no longer asking anything of the viewer. */
 const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
@@ -278,6 +324,7 @@ const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
 function answer(name: string, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void = () => undefined, signal: AbortSignal = new AbortController().signal): unknown {
   for (const e of extensions) { const v = e.stream?.(name, params, emit, signal); if (v !== undefined) return v; }
   for (const e of extensions) { const v = e.call?.(name, params); if (v !== undefined) return v; }
+  if (BROWSE_CALLS.includes(name)) return browsing.call(name, params);
   if (name === "markdown") return { md: markdown(String(params.text ?? "")) };
   if (name === "code.ink") return { ink: inkKept(String(params.code ?? ""), String(params.lang ?? "")) };
   if (name === "reader.book") {
@@ -297,6 +344,31 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
       else prefs[field] = value;
     }
     setTimeout(publish, 0);
+    return null;
+  }
+  if (name === "keys.set") {
+    const { patch, moved, said } = keymap.change({ ...prefs, device: DEVICE }, typeof params.action === "string" ? params.action : null, Array.isArray(params.keys) ? params.keys.map((k) => keymap.binding(k) ?? String(k)) : null);
+    // As prefs.set keeps a map: null takes an action's entry out.
+    if (patch) prefs.keys = Object.fromEntries(Object.entries({ ...(prefs.keys as Record<string, unknown> | undefined), ...patch }).filter(([, v]) => v !== null));
+    else delete prefs.keys;
+    setTimeout(publish, 0);
+    return { moved, said };
+  }
+  // A chat's tabs changed as the core changes them (chat-tabs.ts), kept with the prefs (`chatTabs`).
+  if (name.startsWith("chat.tabs.") && typeof params.chat === "string") {
+    const action = name.slice("chat.tabs.".length);
+    if (action !== "open" && action !== "close" && action !== "front" && action !== "clear") return null;
+    const key = params.chat;
+    const at = key.indexOf(":");
+    const session = at > 0 ? key.slice(at + 1) : "";
+    const chat = key.startsWith("new:") ? undefined : chats.find((c) => c.key === session);
+    const view = chat ? chatView(chat, station.runs()) : undefined;
+    const tabs = (prefs.chatTabs ?? {}) as Record<string, unknown>;
+    const next = changed(tabs[key], view?.agents ?? [], view?.noChat === true, view ? session : null, { action, tab: typeof params.tab === "string" ? params.tab : null, auto: params.auto !== false });
+    if (next) {
+      prefs.chatTabs = { ...tabs, [key]: next };
+      setTimeout(publish, 0);
+    }
     return null;
   }
   if (name === "shareIn.open" && typeof params.source === "string") {
@@ -338,6 +410,8 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
   // Its chats are whole, never a window short of their end: nothing to move along, nowhere to keep a place.
   if (name === "chat.newer" || name === "chat.latest" || name === "chat.place" || name === "chat.around") return name === "chat.newer" ? { more: false } : null;
   if (name === "chat.find") return { words: [], hits: [], held: 0, of: 0, whole: true };
+  // ⌘K's commands, found as the core finds them (client/core-ts/src/commands.ts), in the page's words.
+  if (name === "commands.find") return findCommands(String(params.query ?? ""), Array.isArray(params.offered) ? params.offered : [], t);
   const chat = chats.find((c) => c.thread === params.thread || c.key === params.session);
   // A card's option picked: its label sent, quoting the post, as the core sends it (and the card answered at once).
   if (name === "decision.answer" && chat && typeof params.option === "string") {
@@ -403,6 +477,7 @@ setCore(new CoreClient((onMessage) => {
       const message = raw as { id: number; subscribe?: Topic; unsubscribe?: boolean; call?: string; params?: Record<string, unknown>; cancel?: boolean };
       if (message.subscribe) {
         subs.set(message.id, message.subscribe);
+        seen.set(JSON.stringify(message.subscribe), message.subscribe);
         post(said(message.id, message.subscribe));
       } else if (message.unsubscribe) {
         subs.delete(message.id);
@@ -506,6 +581,16 @@ export function DemoApp({ phone }: { phone: boolean }) {
 /** The made-up core's chats, and telling the page they changed: for the browser checks (test/browser), which play
  * what a station would say into a chat. */
 export const demoCore = { chats, publish };
+
+/**
+ * Every topic the page has subscribed to and what it says now, and those of `extra` (apps/mbui/scripts/web-layout.mjs:
+ * the same data given to mbui's app, to hold its layout against the page's). Its errors left out.
+ */
+export function demoTape(extra: Topic[] = []): { topic: Topic; value: unknown }[] {
+  const all = new Map(seen);
+  for (const t of extra) all.set(JSON.stringify(t), t);
+  return [...all.values()].flatMap((topic) => { const v = valueOf(topic); return v instanceof CoreError || v === undefined ? [] : [{ topic, value: v }]; });
+}
 
 /** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */
 /** The demo's chats stop where they are, nobody at work any more (the stories' tests, to look at a page that holds still). */

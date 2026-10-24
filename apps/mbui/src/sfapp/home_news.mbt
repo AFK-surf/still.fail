@@ -24,29 +24,22 @@ fn news_of(src : Source) -> Json? {
 ///|
 /// Its room in the list: 12 from the sides, 4 over it, 10 under.
 // kept across runs: a value (no field of it changes)
-let news_room : @ui.Style = @ui.style(w=Full, px=S3, pt=S1, pb=S2_5)
+let news_room : @ui.Style = @ui.css("w=Full px=S3 pt=S1 pb=S2_5")
 
 ///|
 /// The card (22 round: its × 6 in, and its half, on the surface).
 // kept across runs: a value (no field of it changes)
-let news_card : @ui.Style = @ui.style(w=Full, radius=Xl3, bg=Surface, clip=true)
+let news_card : @ui.Style = @ui.css("w=Full radius=Xl3 bg=Surface clip")
 
 ///|
 /// What it says, 16 in (44 on the right, for the ×), 12 over and under, its lines 2 apart; rippled where it is pressed.
 // kept across runs: a value (no field of it changes)
-let news_words : @ui.Style = @ui.style(
-  w=Full,
-  pl=S4,
-  pr=S11,
-  pt=S3,
-  pb=S3,
-  gap=S0_5,
-)
+let news_words : @ui.Style = @ui.css("w=Full pl=S4 pr=S11 pt=S3 pb=S3 gap=S0_5")
 
 ///|
 /// Its head: the sparks and the build, 6 apart, 2 over the lines.
 // kept across runs: a value (no field of it changes)
-let news_head : @ui.Style = @ui.style(row=true, pb=S0_5, gap=S1_5, align=ACenter)
+let news_head : @ui.Style = @ui.css("row pb=S0_5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -60,17 +53,11 @@ let news_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5,
 ///|
 /// Its ×: 32, round, 6 from the card's top and right.
 // kept across runs: a value (no field of it changes)
-let news_close_place : @ui.Style = @ui.style(w=Full, p=S1_5, align=AEnd)
+let news_close_place : @ui.Style = @ui.css("w=Full p=S1_5 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let news_close : @ui.Style = @ui.style(
-  w=S8,
-  h=S8,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-)
+let news_close : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// How many of its changes it says before "还有 n 项".

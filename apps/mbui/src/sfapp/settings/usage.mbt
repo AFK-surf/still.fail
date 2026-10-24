@@ -7,22 +7,14 @@ priv struct UsageState {
   mut days : Int
   /// the day tapped ("" the last)
   mut day : String
-  /// the list shown, and whether all of it
+  /// the list shown (-1: none picked yet, the first), and whether all
+  /// of it
   mut list : Int
   mut all : Bool
 }
 
 ///|
-let usage_state : UsageState = { days: 7, day: "", list: 0, all: false }
-
-///|
-/// The people a day's bar is split by (Usage.kt LIGHT, DARK); the rest in the subtle grey.
-// kept across runs: a table, never written
-let usage_light : Array[Int64] = [0xEF6A3CFFL, 0x2A78D6FFL, 0x1BAF7AFFL, 0x4A3AA7FFL]
-
-///|
-// kept across runs: a table, never written
-let usage_dark : Array[Int64] = [0xE0602FFFL, 0x3987E5FFL, 0x199E70FFL, 0x9085E9FFL]
+let usage_state : UsageState = { days: 7, day: "", list: -1, all: false }
 
 ///|
 fn series_color(series : Array[Json], i : Int) -> Int64 {
@@ -30,7 +22,7 @@ fn series_color(series : Array[Json], i : Int) -> Int64 {
   if i < series.length() && text(Some(series[i]), "key") == "" {
     @sf.alpha(t.p.subtle, 0.45)
   } else {
-    (if t.dark { usage_dark } else { usage_light })[i % 4]
+    @sf.usage_series(i)
   }
 }
 
@@ -45,6 +37,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     c,
     core,
     tr("android-misc.bar.place.usage"),
+    about=tr("web-pages.settings.usage.lead"),
     actions=fn() {
       let at = if days == 30 { 1 } else { 0 }
       let picked = seg(c, "usage-days", choices.map(fn(n) { fill("android-misc.usage.days", [("n", n.to_string())]) }), at)
@@ -78,7 +71,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             blocks.push(fn() { usage_lists(c, core, v) })
           }
           blocks.push(fn() {
-            c.box(w=Fill(1.0), padx=24.0, pady=6.0, gap=4.0, fn() {
+            c.box(style=usage_notes, fn() {
               // how it is counted, under what was counted (nothing counted: the empty place says it already)
               let lines = strings(v, "notes")
               if !flag(v, "empty") {
@@ -86,7 +79,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
               }
               for l in lines {
                 if l != "" {
-                  c.text(l, size=12.0, color=t.p.subtle, w=Fill(1.0), line=17.0) |> ignore
+                  c.text(l, style=usage_note) |> ignore
                 }
               }
             })
@@ -101,16 +94,29 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 }
 
 ///|
+/// How it is counted, under what was counted: 24 in on a phone, 6 over and under, 4 apart; the meta's 12 subtle.
+// kept across runs: a value (no field of it changes)
+let usage_notes : @ui.Style = @ui.css("w=Full px=S6 py=S1_5 gap=S1")
+
+
+///|
+// kept across runs: a value (no field of it changes)
+let usage_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, w=Full)
+
+///|
 /// The totals, two to a row (Usage.kt Tiles); the first one's last line the way to the prices.
 fn usage_tiles(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let t = @sf.theme()
   let tiles = items(v, "tiles")
-  c.box(w=Fill(1.0), padx=12.0, pb=10.0, gap=10.0, fn() {
+  let per = 2
+  c.box(style=usage_tiles_box, fn() {
     let mut i = 0
     while i < tiles.length() {
       let pair = [tiles[i]]
-      if i + 1 < tiles.length() {
-        pair.push(tiles[i + 1])
+      for j in 1..<per {
+        if i + j < tiles.length() {
+          pair.push(tiles[i + j])
+        }
       }
       let first = i == 0
       c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
@@ -121,35 +127,30 @@ fn usage_tiles(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
           if pid != 0 && hit(c, pid) {
             (core.push)(UsagePrices(usage_state.days))
           }
+          let sub = if first && k == 0 { tr("android-misc.usage.seePrices") } else { text(tv, "sub") }
           c.box(w=Fill(1.0), padx=16.0, pady=14.0, radius=18.0, bg=t.p.card, id=pid, fn() {
             c.text(text(tv, "label"), size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
             c.text(text(tv, "value"), style=@sf.title.then(@sf.one_line)) |> ignore
-            c.text(
-              if first && k == 0 {
-                tr("android-misc.usage.seePrices")
-              } else {
-                text(tv, "sub")
-              },
-              size=12.0,
-              color=t.p.subtle,
-              wrap=false,
-              w=Fill(1.0),
-              line=17.0,
-            )
-            |> ignore
+            c.text(sub, size=12.0, color=t.p.subtle, wrap=false, w=Fill(1.0), line=17.0) |> ignore
           })
           |> ignore
         }
-        if pair.length() == 1 {
+        for _ in pair.length()..<per {
           c.box(w=Fill(1.0), fn() {  }) |> ignore
         }
       })
       |> ignore
-      i += 2
+      i += per
     }
   })
   |> ignore
 }
+
+///|
+/// The totals' room: 12 in on a phone, 10 under them.
+// kept across runs: a value (no field of it changes)
+let usage_tiles_box : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5 gap=S2_5")
+
 
 ///|
 /// Each day's cost as a bar on the scale's lines, split by who it was for (Usage.kt Days): the day tapped (the last at
@@ -327,7 +328,7 @@ let usage_day_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=f
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_figures : @ui.Style = @ui.style(row=true, pt=S0_5, pb=S4, gap=S2, align=AEnd)
+let usage_figures : @ui.Style = @ui.css("row pt=S0_5 pb=S4 gap=S2 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -335,7 +336,7 @@ let usage_cost_words : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_calls_box : @ui.Style = @ui.style(pb=S1)
+let usage_calls_box : @ui.Style = @ui.css("pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -348,11 +349,11 @@ let usage_plot_box : @ui.Style = @ui.style(w=Full, h=@sf.usage_plot_h)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_tick_rule : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+let usage_tick_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_tick_row : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd)
+let usage_tick_row : @ui.Style = @ui.css("row w=Full justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -360,15 +361,15 @@ let usage_tick_words : @ui.TextStyle = @ui.text_style(size=Xs3, color=Subtle, wr
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_days_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S6, gap=S1_5)
+let usage_days_row : @ui.Style = @ui.css("row w=Full h=Full pr=S6 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_days_row_many : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S6, gap=S0_5)
+let usage_days_row_many : @ui.Style = @ui.css("row w=Full h=Full pr=S6 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_day_col : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JEnd)
+let usage_day_col : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JEnd")
 
 ///|
 /// A bar: at most 16 wide, cut at the foot; its parts 1 apart, round 4 (2 when many).
@@ -377,36 +378,36 @@ let usage_bar_box : @ui.Style = @ui.style(w=Full, max_w=@sf.usage_bar_max, clip=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_bar_many : @ui.Style = @ui.style(w=Full, clip=true)
+let usage_bar_many : @ui.Style = @ui.css("w=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_bar_parts : @ui.Style = @ui.style(w=Full, gap=SPx)
+let usage_bar_parts : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_part : @ui.Style = @ui.style(w=Full, radius=Base)
+let usage_part : @ui.Style = @ui.css("w=Full radius=Base")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_part_many : @ui.Style = @ui.style(w=Full, radius=Sm)
+let usage_part_many : @ui.Style = @ui.css("w=Full radius=Sm")
 
 ///|
 /// The days' foot and their dates under it.
 // kept across runs: a value (no field of it changes)
-let usage_base : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+let usage_base : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_labels : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pr=S6, gap=S1_5)
+let usage_labels : @ui.Style = @ui.css("row w=Full pt=S1_5 pr=S6 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_labels_many : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pr=S6, gap=S0_5)
+let usage_labels_many : @ui.Style = @ui.css("row w=Full pt=S1_5 pr=S6 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_label_cell : @ui.Style = @ui.style(w=Full, align=ACenter)
+let usage_label_cell : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -420,19 +421,19 @@ let usage_label_on : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Medium, col
 /// Each of the day's people: a dot of theirs, their name, what they spent, its share under the name on the chip's
 /// ground.
 // kept across runs: a value (no field of it changes)
-let usage_people : @ui.Style = @ui.style(w=Full, pt=S4, gap=S3)
+let usage_people : @ui.Style = @ui.css("w=Full pt=S4 gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_person : @ui.Style = @ui.style(w=Full, gap=S1_5)
+let usage_person : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_person_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let usage_person_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_person_dot : @ui.Style = @ui.style(w=S2, h=S2, radius=Full)
+let usage_person_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -444,15 +445,15 @@ let usage_person_part : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=f
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_share_room : @ui.Style = @ui.style(row=true, w=Full, h=S1, pl=S4)
+let usage_share_room : @ui.Style = @ui.css("row w=Full h=S1 pl=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_share_track : @ui.Style = @ui.style(row=true, w=Full, h=Full, radius=Sm, bg=Neutral, clip=true)
+let usage_share_track : @ui.Style = @ui.css("row w=Full h=Full radius=Sm bg=Neutral clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_share_fill : @ui.Style = @ui.style(h=Full, radius=Sm)
+let usage_share_fill : @ui.Style = @ui.css("h=Full radius=Sm")
 
 ///|
 /// The lists, one at a time, the first eight until asked for all (Usage.kt Lists).
@@ -462,11 +463,15 @@ fn usage_lists(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   if lists.length() == 0 {
     return
   }
-  let at = if usage_state.list < lists.length() { usage_state.list } else { 0 }
+  let at = if usage_state.list >= 0 && usage_state.list < lists.length() {
+    usage_state.list
+  } else {
+    0
+  }
   let list = Some(lists[at])
   let kind = text(list, "key")
   // (its Seg, rounded 10, in its top corners: the card's corner taken from it, concentric: Usage.kt:204)
-  card(c, corner=@sf.seg_card_radius, fn() {
+  let body = fn() {
     let picked = seg(c, "usage-lists", lists.map(fn(l) { text(Some(l), "title") }), at, fill=true)
     if picked != at {
       usage_state.list = picked
@@ -501,8 +506,8 @@ fn usage_lists(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
       })
       |> ignore
     }
-  })
-  |> ignore
+  }
+  card(c, corner=@sf.seg_card_radius, body) |> ignore
 }
 
 ///|

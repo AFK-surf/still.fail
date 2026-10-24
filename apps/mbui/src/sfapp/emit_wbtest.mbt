@@ -26,7 +26,7 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
 ///|
 /// A message's whole way out of its avatar: fold, float, spit, return.
 fn emit_all_ms() -> Double {
-  Fold.ms() + Float.ms() + Spit.ms() + Return.ms()
+  Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms()
 }
 
 ///|
@@ -47,9 +47,9 @@ test "an answer said while its agent's activity shows waits, then comes out of i
   assert_eq(em.queue.length() + (if em.current is Some(_) { 1 } else { 0 }), 1)
   assert_true(t.find("收到：「看一下列表」") is None)
   // fold and float: it comes into the list as the avatar lands
-  t.run_for(Fold.ms() + Float.ms())
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms())
   assert_true(t.find("收到：「看一下列表」") is Some(_))
-  t.run_for(Spit.ms() + Return.ms())
+  t.run_for(Pose::Spit.ms() + Pose::Return.ms())
   assert_true(em.current is None)
   assert_true(t.find("收到：「看一下列表」") is Some(_))
   emit_restore()

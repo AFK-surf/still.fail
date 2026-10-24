@@ -1,48 +1,5 @@
-// References to other chats in the composer (chat_refs.mbt; Composer.kt ChatRefs, RefMarks, ChatRefMenu, markPasted).
-
-///|
-test "marks: where they are, the `@words` at the caret, the mark just before it" {
-  assert_eq(ref_marks("看 @[首页] 和 @[x]。"), [(2, 7), (10, 14)])
-  // a title of none, or with a new line in it, is no mark
-  assert_eq(ref_marks("@[] @[a\nb]"), [])
-  assert_eq(ref_at("看 @首页", 5), Some((2, "首页")))
-  assert_eq(ref_at("@", 1), Some((0, "")))
-  // not after a letter (an address), nor past a space
-  assert_eq(ref_at("me@x", 4), None)
-  assert_eq(ref_at("@a b", 4), None)
-  assert_eq(ref_before("看 @[首页]", 7), Some(2))
-  assert_eq(ref_before("看 @[首页] ", 8), None)
-  assert_eq(inserted_range("ab", "aXYb"), Some((1, 3)))
-  assert_eq(inserted_range("abc", "ac"), None)
-}
-
-///|
-test "a mark drawn: the same letters in the same places, `[@` for `@[`, its brackets clear, the rest in the accent" {
-  let (shown, spans) = (ref_look(0xE5704AFFL))("看 @[首页] 了")
-  assert_eq(shown, "看 [@首页] 了")
-  assert_eq(spans, [(2, 3, 0L), (3, 6, 0xE5704AFFL), (6, 7, 0L)])
-}
-
-///|
-test "a chat's link, as one is copied: the chat it names, of this workspace only" {
-  match linked_chat("https://app.still.fail/o/ws1/st1/ember%3Ac-1") {
-    Some(l) => {
-      assert_eq(l.station, "ws1/st1")
-      assert_eq(l.id, "ember:c-1")
-    }
-    None => fail("not a chat's link")
-  }
-  match linked_chat("https://app.still.fail/w/ws1/s/st1/chats/s-c2?history=k&entry=3") {
-    Some(l) => {
-      assert_eq(l.id, "s-c2")
-      assert_eq(l.history, "?history=k&entry=3")
-    }
-    None => fail("not a chat's page")
-  }
-  let refs = linked_refs("看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 和 [别处](https://app.still.fail/w/ws9/s/st1/chats/x)", "ws1/st1")
-  assert_eq(refs.length(), 1)
-  assert_eq(refs[0].1, "首页")
-}
+// References to other chats in the phone's composer (chat_refs.mbt over sfbase's refs.mbt; Composer.kt ChatRefMenu,
+// markPasted): what the field holds read as the core reads it (its answers kept, src/sfkept).
 
 ///|
 test "`@` and words: the chats they find over the composer; one picked goes in as its mark, a backspace takes it whole" {
@@ -85,60 +42,6 @@ test "`@` with nothing found says so; another workspace's chat says whose" {
   t.type_text("路线")
   assert_true(t.find("季度路线图") is Some(_))
   assert_true(t.find_last("个人") is Some(_))
-}
-
-///|
-test "marks and `@words` as Android's regexes take them: 120 at most, `\\s` its ASCII spaces only" {
-  let long = "@[" + "字".repeat(120) + "]"
-  assert_eq(ref_marks(long), [(0, 123)])
-  assert_eq(ref_marks("@[" + "字".repeat(121) + "]"), [])
-  // a mark's title takes `@[`; the next mark after it
-  assert_eq(ref_marks("@[a@[b] @[c]"), [(0, 7), (8, 12)])
-  // U+3000 is no space to java.util.regex: not before an `@`, and in its words
-  assert_eq(ref_at("看\u{3000}@x", 4), None)
-  assert_eq(ref_at("@a\u{3000}b", 4), Some((0, "a\u{3000}b")))
-  assert_eq(ref_at("看\t@x", 4), Some((2, "x")))
-  // 40 letters at most after the `@`; brackets and `@` end it
-  assert_eq(ref_at("@" + "a".repeat(40), 41), Some((0, "a".repeat(40))))
-  assert_eq(ref_at("@" + "a".repeat(41), 42), None)
-  assert_eq(ref_at("@a(b", 4), None)
-  assert_eq(ref_at("@a@b", 4), None)
-  // a caret past the words: at their end
-  assert_eq(ref_at("@ab", 9), Some((0, "ab")))
-  assert_eq(ref_before("@[a]@[b]", 8), Some(4))
-  assert_eq(ref_before("@[a]x", 5), None)
-  // one change replacing words: what went in
-  assert_eq(inserted_range("abc", "aXYc"), Some((1, 3)))
-  assert_eq(inserted_range("", "ab"), Some((0, 2)))
-}
-
-///|
-test "a chat's link: its key decoded as UTF-8, one ill-formed kept as it is" {
-  assert_eq(@codec.percent_decoded("%E9%A6%96%E9%A1%B5"), "首页")
-  assert_eq(@codec.percent_decoded("a%20b"), "a b")
-  assert_eq(@codec.percent_decoded("%E9%A6"), "%E9%A6")
-  assert_eq(@codec.percent_decoded("100%"), "100%")
-  assert_true(linked_chat("https://app.still.fail/o/ws1/st1") is None)
-  assert_true(linked_chat("https://example.com/x") is None)
-  match linked_chat("https://app.still.fail/o/ws1/st1/s-c2/") {
-    Some(l) => assert_eq(l.id, "s-c2")
-    None => fail("a trailing slash")
-  }
-}
-
-///|
-test "links pasted as Android's findAll takes them: past one that names no chat, none in a space" {
-  let chat = "https://app.still.fail/w/ws1/s/st1/chats/s-c2"
-  // `\\S+?` runs to the first `)`: the first's link takes in the second, and ends as a chat's page does, so the first
-  // is that chat (titled x), the second not looked for inside it
-  assert_eq(linked_refs("[x](y[b](" + chat + "))", "ws1/st1").map(fn(r) { (r.0, r.1) }), [((0, 55), "x")])
-  // an execution history's end as Android's takes it, or no chat
-  assert_true(linked_chat(chat + "?history=k&entry=x") is None)
-  assert_true(linked_chat(chat + "?history=") is None)
-  assert_eq(linked_refs("[x](a b) [首页](" + chat + ")", "ws1/st1").length(), 1)
-  assert_eq(linked_refs("[首页](" + chat + ") [又](" + chat + ")", "ws1/st1").map(fn(r) { r.0 }), [(0, 51), (52, 102)])
-  // of no workspace: none
-  assert_eq(linked_refs("[首页](" + chat + ")", "st1").length(), 0)
 }
 
 ///|

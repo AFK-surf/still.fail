@@ -26,7 +26,7 @@ void mb_host_view_close(int32_t);
 void mb_host_view_control(int32_t, int32_t, double);
 int32_t mb_host_view_info(int32_t, double *);
 int32_t mb_host_view_read_next(int32_t, double *);
-void mb_host_view_read_answer(int32_t, int32_t, moonbit_bytes_t, double);
+void mb_host_view_read_answer(int32_t, int32_t, moonbit_bytes_t, double, int32_t);
 int32_t mb_host_pdf_open(moonbit_bytes_t);
 int32_t mb_host_pdf_pages(int32_t);
 void mb_host_pdf_page_size(int32_t, int32_t, double *);
@@ -114,19 +114,24 @@ static void video_steps(NSString *file, NSString *mime, double dur, double vw, d
   __block int state = 0;
   NSString *tag = file.lastPathComponent;
   const double X = 40, Y = 30, VW = 320, VH = 240;
-  // the app's half of the player: every read waiting answered from the file, at most 1 MB at once (fewer than
-  // asked is allowed)
+  // the app's half of the player: every read waiting answered from the file, at most 1 MB of it (fewer than asked
+  // is allowed), in pieces of 64 KB as they would come, then its last answer with none (one let go of: nothing)
   void (^pump)(void) = ^{
     double o[2];
     int32_t rid;
-    while ((rid = mb_host_view_read_next(vid, o)) > 0) {
+    while ((rid = mb_host_view_read_next(vid, o)) != 0) {
+      if (rid < 0) continue;
       reads++;
       if (o[1] > maxlen) maxlen = o[1];
       long long off = (long long)o[0], len = (long long)o[1];
       long long n = MAX(0, MIN(len, (long long)data.length - off));
       if (n > (1 << 20)) { n = 1 << 20; partial++; }
       given += n;
-      mb_host_view_read_answer(vid, rid, mbytes((const uint8_t *)data.bytes + off, (size_t)n), (double)data.length);
+      for (long long at = 0; at < n; at += 64 << 10) {
+        long long k = MIN(n - at, 64 << 10);
+        mb_host_view_read_answer(vid, rid, mbytes((const uint8_t *)data.bytes + off + at, (size_t)k), (double)data.length, 1);
+      }
+      mb_host_view_read_answer(vid, rid, mbytes((const uint8_t *)data.bytes, 0), (double)data.length, 0);
     }
     state = mb_host_view_info(vid, info);
   };

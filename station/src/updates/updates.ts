@@ -39,7 +39,7 @@
 import { createHash } from "node:crypto";
 import { type FSWatcher, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse } from "node:path";
 import { type Clock, Effect, Fiber } from "effect";
 import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
@@ -681,8 +681,11 @@ export class Updates {
     log.info("updates", "updating or installing a runtime", { runtime: kind, program: how.program, args: how.args });
     let failed: Words | null = null;
     try {
-      const [ok, said] = await this.install(kind, how);
-      if (!ok) failed = { text: tail(said, stationLang()) };
+      const [ok, said, code] = await this.install(kind, how);
+      // Its package manager has nothing newer to apply yet (winget's sources behind npm's latest): said as that, with
+      // what it said.
+      if (!ok && how.noUpdate !== undefined && code === how.noUpdate) failed = { key: "station.updates.noApplicableUpdate", args: { program: parse(how.program).name, said: tail(said, stationLang()) } };
+      else if (!ok) failed = { text: tail(said, stationLang()) };
     } catch (e) {
       failed = e instanceof NotFinished ? { key: "station.updates.timedOut" } : e instanceof Failed ? e.words : { text: (e as Error).message };
     }
@@ -710,7 +713,7 @@ export class Updates {
   /// Runs `how`, saying where it is as it goes: a download that can be measured, by how much of it is in (Codex's
   /// build for this machine, fetched here first; Claude Code's, as its installer writes it), else the step the command
   /// says it is at (Homebrew's, Claude Code's installer's).
-  private async install(kind: Kind, how: How): Promise<[boolean, string]> {
+  private async install(kind: Kind, how: How): Promise<[boolean, string, number | null]> {
     if (how.node) await this.installNode(kind, how.node);
     const npm = isNpmInstall(how);
     if (kind === "codex" && npm) {

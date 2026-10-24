@@ -4,10 +4,19 @@
 // the native views' (apple_views.m) and, over them, the canvas's.
 #import <Cocoa/Cocoa.h>
 #import <UserNotifications/UserNotifications.h>
+#import <Network/Network.h>
+#import <CommonCrypto/CommonDigest.h>
+#import <Security/Security.h>
+#include <dlfcn.h>
 #import <mach/mach.h>
+#include <pwd.h>
 #import "apple.h"
 #include "post.h"
 #include "done_watch.h"
+
+// (Network's path monitor, below: the framework asked of the linker by this file, as an app of mbui's links what its
+// own moon.pkg names, which need not be Network)
+__asm__(".linker_option \"-framework\", \"Network\"");
 
 mb_callbacks mb_cb;
 
@@ -51,6 +60,7 @@ static NSEvent *down_event;
 static int down_secondary;
 static const char *shot_path;
 static void tell_state(void);
+static void bring_back(void);  // the window out again (below: the app's life on the Mac)
 static const char *script;
 
 // A scripted run in stable mode (MBUI_SCRIPT with MBUI_BENCH=-1: screenshots) is settled, not paced: its frames are
@@ -89,10 +99,34 @@ static void send_text(int kind, NSString *s, int a, int b) {
   mb_cb.text(kind, mb_string_from_ns(s ?: @""), a, b);
 }
 
+// ⌘V (the key, or the menu bar's 粘贴): a picture on the clipboard (not a file's icon beside its name, as the Finder
+// copies one) is the app's ⌘V (1000 + v), which reads the clipboard for it (@hostapi.clip_read), as a page's paste takes
+// a picture as a file; else its words, typed
+static void paste_now(int mods) {
+  NSPasteboard *pb = [NSPasteboard generalPasteboard];
+  BOOL files = [pb canReadObjectForClasses:@[ NSURL.class ] options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  if (!files && [pb canReadItemWithDataConformingToTypes:@[ NSPasteboardTypePNG, NSPasteboardTypeTIFF, @"public.image" ]]) {
+    mb_cb.key(1000 + 'v', mods);
+  } else {
+    NSString *s = [pb stringForType:NSPasteboardTypeString];
+    if (s.length) send_text(0, s, 0, 0);
+  }
+}
+
 static void run_script_step(int step);
 
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake, haptics
 #include "apple_device.h"
+
+static int32_t drop_pick(NSArray<NSURL *> *urls);
+
+// Files dragged in from outside (Finder) and let go on the window (ui/drop.mbt): where they are held, posted on
+// `mbui.drop` as they move ({"type":"over","x","y"}, {"type":"left"}), then let go, their files read as a pick's
+// ({"type":"drop","x","y","pick"}).
+static void drop_post(NSString *json) {
+  NSData *d = [json dataUsingEncoding:NSUTF8StringEncoding];
+  mb_post("mbui.drop", (const char *)d.bytes, d.length, NULL, 0);
+}
 
 @implementation MBView
 
@@ -100,7 +134,33 @@ static void run_script_step(int step);
   self = [super initWithFrame:f];
   self.wantsLayer = YES;
   self.mirror = @"";
+  [self registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
   return self;
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info {
+  return [self draggingUpdated:info];
+}
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)info {
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  drop_post([NSString stringWithFormat:@"{\"type\":\"over\",\"x\":%.1f,\"y\":%.1f}", p.x, p.y]);
+  return NSDragOperationCopy;
+}
+- (void)draggingExited:(id<NSDraggingInfo>)info {
+  (void)info;
+  drop_post(@"{\"type\":\"left\"}");
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
+  NSArray<NSURL *> *urls = [info.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
+                                                                  options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  if (urls.count == 0) {
+    drop_post(@"{\"type\":\"left\"}");
+    return NO;
+  }
+  NSPoint p = [self convertPoint:info.draggingLocation fromView:nil];
+  int32_t pid = drop_pick(urls);
+  drop_post([NSString stringWithFormat:@"{\"type\":\"drop\",\"x\":%.1f,\"y\":%.1f,\"pick\":%d}", p.x, p.y, pid]);
+  return YES;
 }
 
 - (CALayer *)makeBackingLayer {
@@ -340,10 +400,47 @@ static NSCursor *cursor_of(int kind) {
   double dy = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 40.0;
   double dx = e.hasPreciseScrollingDeltas ? e.scrollingDeltaX : e.scrollingDeltaX * 40.0;
   int phase = !e.hasPreciseScrollingDeltas ? 4 : e.momentumPhase != NSEventPhaseNone ? 3 : (e.phase != NSEventPhaseNone ? 1 : 0);
-  mb_cb.wheel(p.x, p.y, -dx, -dy, phase);
+  // what is held with it, above the phase (ui's wheel_mod_*)
+  NSEventModifierFlags m = e.modifierFlags;
+  int mods = ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
+             ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
+  mb_cb.wheel(p.x, p.y, -dx, -dy, phase | (mods << 4));
+}
+// a trackpad's pinch: a wheel with ⌃ held and marked a pinch (ui's wheel_mod_pinch), as a browser gives one: a
+// picture zooms by it (its magnification as a hundredth of a wheel's point each way), no list scrolls
+- (void)magnifyWithEvent:(NSEvent *)e {
+  NSPoint p = [self pt:e];
+  mb_cb.wheel(p.x, p.y, 0, -e.magnification * 100.0, 1 | ((2 | 16) << 4));
 }
 
 // ---- keys ----
+
+// A key with ⌘ is the view's first, as it was before the app had a menu bar (the app's shortcuts, a field's editing
+// keys, a key catcher's): only those the menu bar keeps for the system go on to it (⌘Q, ⌘W, ⌘H, ⌥⌘H, ⌘M, ⌃⌘F), and
+// with no menu bar given (a bare run) they come back here as keys (keyDown).
+- (BOOL)performKeyEquivalent:(NSEvent *)e {
+  if (e.type != NSEventTypeKeyDown || !(e.modifierFlags & NSEventModifierFlagCommand) || self.window.firstResponder != self)
+    return [super performKeyEquivalent:e];
+  NSEventModifierFlags m = e.modifierFlags & (NSEventModifierFlagShift | NSEventModifierFlagControl |
+                                              NSEventModifierFlagOption | NSEventModifierFlagCommand);
+  NSString *c = e.charactersIgnoringModifiers.lowercaseString;
+  NSEventModifierFlags cmd = NSEventModifierFlagCommand;
+  BOOL system = (m == cmd && ([c isEqualToString:@"q"] || [c isEqualToString:@"w"] || [c isEqualToString:@"h"] ||
+                              [c isEqualToString:@"m"])) ||
+                (m == (cmd | NSEventModifierFlagOption) && [c isEqualToString:@"h"]) ||
+                (m == (cmd | NSEventModifierFlagControl) && [c isEqualToString:@"f"]);
+  if (system && NSApp.mainMenu) return NO;
+  [self keyDown:e];
+  return YES;
+}
+
+// The menu bar's editing items (the system's Edit menu, mb_host_menu_setup): each the key it names, pressed.
+- (void)cut:(id)sender { mb_cb.key(14, 8); }
+- (void)copy:(id)sender { mb_cb.key(13, 8); }
+- (void)paste:(id)sender { paste_now(8); }
+- (void)selectAll:(id)sender { mb_cb.key(12, 8); }
+- (void)undo:(id)sender { mb_cb.key(1000 + 'z', 8); }
+- (void)redo:(id)sender { mb_cb.key(1000 + 'z', 9); }
 
 - (void)keyDown:(NSEvent *)e {
   // a key catcher's focus (apple_device.h): its keys (a composition under way keeps them)
@@ -363,10 +460,8 @@ static NSCursor *cursor_of(int kind) {
     else if ([c isEqualToString:@"a"]) mb_cb.key(12, mods);
     else if ([c isEqualToString:@"c"]) mb_cb.key(13, mods);
     else if ([c isEqualToString:@"x"]) mb_cb.key(14, mods);
-    else if ([c isEqualToString:@"v"]) {
-      NSString *s = [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
-      if (s.length) send_text(0, s, 0, 0);
-    } else if (c.length == 1) {
+    else if ([c isEqualToString:@"v"]) paste_now(mods);
+    else if (c.length == 1) {
       // any other ⌘ key: the app's shortcut (1000 + the character)
       mb_cb.key(1000 + [c characterAtIndex:0], mods);
     }
@@ -733,6 +828,17 @@ int32_t mb_host_window_inset(void) {
   return setup_inset && w && !(w.styleMask & NSWindowStyleMaskFullScreen) ? 1 : 0;
 }
 
+// Whether the window fills the screen now (@hostapi.full_screen), and made to or back (as its green button does).
+int32_t mb_host_full_screen(void) {
+  NSWindow *w = the_view.window;
+  return w && (w.styleMask & NSWindowStyleMaskFullScreen) ? 1 : 0;
+}
+
+void mb_host_set_full_screen(int32_t on) {
+  NSWindow *w = the_view.window;
+  if (w && (on != 0) != ((w.styleMask & NSWindowStyleMaskFullScreen) != 0)) [w toggleFullScreen:nil];
+}
+
 // The press under way drags the window (the app's top row: @hostapi.window_drag); twice, what the system's title bar
 // does on a double click (zoom, minimize or nothing, as set in the system's settings).
 void mb_host_window_drag(void) {
@@ -748,11 +854,631 @@ void mb_host_window_drag(void) {
   [w performWindowDragWithEvent:e];
 }
 
+// The desktop's dock (@hostapi.dock_send; apps/desktop/dock, docs/desktop-dock.md): the SwiftUI helper the desktop
+// app carries (Resources/dock/StillfailDock; MBUI_DOCK: one built elsewhere), on macOS 14 or later on Apple silicon.
+// Started by the first line sent, a JSON object a line on its stdin; what it says, a line each, posted on the "dock"
+// channel, and {"type":"gone"} when it ends. Its settings are kept here, as the desktop app keeps them in a file of
+// its own (@hostapi.dock_kept, dock_keep).
+static NSTask *dock_task = nil;
+static NSFileHandle *dock_in = nil;
+static NSString *dock_helper(void) {
+#if defined(__arm64__)
+  if (@available(macOS 14, *)) {
+    const char *own = getenv("MBUI_DOCK");
+    NSString *p = own ? @(own) : [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"dock/StillfailDock"];
+    return [NSFileManager.defaultManager isExecutableFileAtPath:p] ? p : nil;
+  }
+#endif
+  return nil;
+}
+int32_t mb_host_dock_available(void) { return dock_helper() ? 1 : 0; }
+
+// The keys held now (@hostapi.mods_held), as a key's are told: shift 1, control 2, option 4, command 8.
+int32_t mb_host_mods_held(void) {
+  NSEventModifierFlags m = [NSEvent modifierFlags];
+  return ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
+         ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
+}
+static void dock_heard(NSData *line) {
+  if (!line.length) return;
+  // a chat opened from it: the app's window in front, as the desktop app's (app.focus)
+  NSString *s = [[NSString alloc] initWithData:line encoding:NSUTF8StringEncoding];
+  if ([s containsString:@"\"type\":\"open\""]) {
+    dispatch_async(dispatch_get_main_queue(), ^{ bring_back(); });
+  }
+  mb_post("dock", (const char *)line.bytes, line.length, NULL, 0);
+}
+static BOOL dock_spawn(void) {
+  NSString *path = dock_helper();
+  if (!path) return NO;
+  // (a write to a helper that has gone is an error, not the app's end)
+  signal(SIGPIPE, SIG_IGN);
+  NSTask *t = [NSTask new];
+  t.executableURL = [NSURL fileURLWithPath:path];
+  NSPipe *in = [NSPipe pipe], *out = [NSPipe pipe];
+  t.standardInput = in;
+  t.standardOutput = out;
+  t.standardError = [NSFileHandle fileHandleWithNullDevice];
+  NSMutableData *buf = [NSMutableData data];
+  out.fileHandleForReading.readabilityHandler = ^(NSFileHandle *h) {
+    NSData *d = h.availableData;
+    if (d.length == 0) {
+      h.readabilityHandler = nil;
+      return;
+    }
+    [buf appendData:d];
+    for (;;) {
+      NSRange nl = [buf rangeOfData:[NSData dataWithBytes:"\n" length:1] options:0 range:NSMakeRange(0, buf.length)];
+      if (nl.location == NSNotFound) break;
+      dock_heard([buf subdataWithRange:NSMakeRange(0, nl.location)]);
+      [buf replaceBytesInRange:NSMakeRange(0, nl.location + 1) withBytes:NULL length:0];
+    }
+  };
+  t.terminationHandler = ^(NSTask *task) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (dock_task != task) return;
+      dock_task = nil;
+      dock_in = nil;
+      dock_heard([@"{\"type\":\"gone\"}" dataUsingEncoding:NSUTF8StringEncoding]);
+    });
+  };
+  NSError *e = nil;
+  if (![t launchAndReturnError:&e]) return NO;
+  dock_task = t;
+  dock_in = in.fileHandleForWriting;
+  return YES;
+}
+void mb_host_dock_send(moonbit_string_t line) {
+  if (!dock_task && !dock_spawn()) return;
+  NSData *d = [[mb_ns_from_string(line) stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding];
+  NSError *e = nil;
+  if (@available(macOS 10.15, *)) [dock_in writeData:d error:&e];
+}
+void mb_host_dock_stop(void) {
+  if (!dock_task) return;
+  NSTask *t = dock_task;
+  dock_task = nil;
+  [dock_in closeFile];
+  dock_in = nil;
+  [t terminate];
+}
+moonbit_string_t mb_host_dock_kept(void) {
+  NSString *s = [NSUserDefaults.standardUserDefaults stringForKey:@"fail.still.mbui.dock"];
+  return mb_string_from_ns(s ?: @"");
+}
+void mb_host_dock_keep(moonbit_string_t json) {
+  [NSUserDefaults.standardUserDefaults setObject:mb_ns_from_string(json) forKey:@"fail.still.mbui.dock"];
+}
+
+// This machine's station (@hostapi.local_station; apps/desktop/src/main.ts localStation, installed.ts): its data
+// (~/.stillfail), whether it runs (run/station.json's pid alive) and by what (a launchd service the installer made, or a
+// process started by hand), its release, the workspace its data is in; what is being done to it and what went wrong
+// last. "" where there is neither data nor a service. Its acts (@hostapi.local_station_act) run off the main thread:
+// start, stop, restart (the service's launchctl, a hand-started one only stopped), the log or the folder opened.
+static NSString *local_doing = nil;
+static NSString *local_failed = nil;
+static int local_percent = -1;   // how far the installer's download is (local_heard, below), -1 not said
+static NSString *local_said = nil; // the last step the installer said
+static NSString *local_data(void) { return [NSHomeDirectory() stringByAppendingPathComponent:@".stillfail"]; }
+static NSString *local_service(void) {
+  for (NSString *label in @[ @"fail.still.station", @"org.3720.ember.station" ]) {
+    NSString *plist = [NSString stringWithFormat:@"%@/Library/LaunchAgents/%@.plist", NSHomeDirectory(), label];
+    if ([NSFileManager.defaultManager fileExistsAtPath:plist]) return label;
+  }
+  return nil;
+}
+static NSDictionary *local_json(NSString *path) {
+  NSData *d = [NSData dataWithContentsOfFile:path];
+  if (!d) return nil;
+  id v = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+  return [v isKindOfClass:NSDictionary.class] ? v : nil;
+}
+static pid_t local_pid(NSString *data, NSString **version) {
+  NSDictionary *s = local_json([data stringByAppendingPathComponent:@"run/station.json"]);
+  id pid = s[@"pid"];
+  if (![pid isKindOfClass:NSNumber.class] || [pid intValue] <= 0) return 0;
+  if (kill([pid intValue], 0) != 0 && errno != EPERM) return 0;
+  if ([s[@"version"] isKindOfClass:NSString.class]) *version = s[@"version"];
+  return [pid intValue];
+}
+moonbit_string_t mb_host_local_station(void) {
+  NSString *data = local_data();
+  NSString *service = local_service();
+  BOOL there = [NSFileManager.defaultManager fileExistsAtPath:data];
+  // none here, and nothing being done or gone wrong about it: ""; one being installed is said before it is there
+  if (!there && !service && !local_doing && !local_failed) return mb_string_from_ns(@"");
+  NSString *version = nil;
+  pid_t pid = local_pid(data, &version);
+  NSMutableDictionary *o = [NSMutableDictionary dictionary];
+  if (there || service) o[@"data"] = [data stringByAbbreviatingWithTildeInPath];
+  o[@"runner"] = pid == 0 ? @"none" : service ? @"service" : @"other";
+  if (!version && service) {
+    NSString *build = [NSString stringWithContentsOfFile:[data stringByAppendingPathComponent:@"app/BUILD"] encoding:NSUTF8StringEncoding error:nil];
+    build = [build stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (build.length) version = [@"0.1." stringByAppendingString:build];
+  }
+  if (version) o[@"version"] = version;
+  if (service) o[@"service"] = @{ @"kind" : @"launchd", @"name" : service };
+  NSDictionary *c = local_json([data stringByAppendingPathComponent:@"mesh/cloud.json"]);
+  if ([c[@"workspace"] isKindOfClass:NSString.class] && [c[@"workspace"] length]) {
+    NSMutableDictionary *w = [NSMutableDictionary dictionaryWithObject:c[@"workspace"] forKey:@"id"];
+    for (NSString *k in @[ @"workspace_name", @"station", @"name" ]) {
+      if ([c[k] isKindOfClass:NSString.class] && [c[k] length]) w[[k isEqualToString:@"workspace_name"] ? @"name" : [k isEqualToString:@"name"] ? @"stationName" : k] = c[k];
+    }
+    w[@"removed"] = @(c[@"removed_at"] != nil && c[@"removed_at"] != NSNull.null);
+    o[@"workspace"] = w;
+  }
+  if (local_doing) {
+    o[@"doing"] = local_doing;
+    if (local_percent >= 0) o[@"percent"] = @(local_percent);
+    if (local_said) o[@"said"] = local_said;
+  }
+  if (local_failed) o[@"failed"] = local_failed;
+  NSData *json = [NSJSONSerialization dataWithJSONObject:o options:0 error:nil];
+  return mb_string_from_ns(json ? [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] : @"");
+}
+// launchctl with these arguments: nil when it did, else what it said last.
+static NSString *local_launchctl(NSArray<NSString *> *args) {
+  NSTask *t = [NSTask new];
+  t.executableURL = [NSURL fileURLWithPath:@"/bin/launchctl"];
+  t.arguments = args;
+  NSPipe *out = [NSPipe pipe];
+  t.standardOutput = out;
+  t.standardError = out;
+  NSError *e = nil;
+  if (![t launchAndReturnError:&e]) return e.localizedDescription ?: @"launchctl";
+  NSData *said = [out.fileHandleForReading readDataToEndOfFile];
+  [t waitUntilExit];
+  if (t.terminationStatus == 0) return nil;
+  NSString *s = [[NSString alloc] initWithData:said encoding:NSUTF8StringEncoding] ?: @"";
+  s = [s stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  return s.length ? s : [NSString stringWithFormat:@"launchctl %d", t.terminationStatus];
+}
+// The person's login shell's PATH and proxy variables, read once (as still.fail's desktop app reads them: station.ts
+// ofShell): an app opened from the Finder or the Dock has neither, and the station the installer sets up runs with the
+// PATH it is installed from (where the agents are found: nvm's Node, Homebrew's). A shell that does not answer in 5 s
+// gives nothing.
+static NSDictionary<NSString *, NSString *> *login_env(void) {
+  static NSDictionary *env;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSString *shell = NSProcessInfo.processInfo.environment[@"SHELL"];
+    if (!shell.length) {
+      struct passwd *pw = getpwuid(getuid());
+      shell = pw && pw->pw_shell ? @(pw->pw_shell) : @"/bin/zsh";
+    }
+    NSString *mark = @"__stillfail_env__";
+    NSTask *t = [NSTask new];
+    t.executableURL = [NSURL fileURLWithPath:shell];
+    t.arguments = @[ @"-ilc", [NSString stringWithFormat:@"printf '%@'; env; printf '%@'", mark, mark] ];
+    t.standardInput = [NSFileHandle fileHandleWithNullDevice];
+    t.standardError = [NSFileHandle fileHandleWithNullDevice];
+    NSPipe *out = [NSPipe pipe];
+    t.standardOutput = out;
+    NSMutableDictionary *got = [NSMutableDictionary dictionary];
+    if ([t launchAndReturnError:nil]) {
+      dispatch_semaphore_t done = dispatch_semaphore_create(0);
+      __block NSData *said = nil;
+      dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        said = [out.fileHandleForReading readDataToEndOfFile];
+        dispatch_semaphore_signal(done);
+      });
+      if (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
+        [t terminate];
+        dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
+      }
+      NSString *s = [[NSString alloc] initWithData:said ?: [NSData data] encoding:NSUTF8StringEncoding] ?: @"";
+      NSArray<NSString *> *parts = [s componentsSeparatedByString:mark];
+      if (parts.count >= 3) {
+        for (NSString *line in [parts[1] componentsSeparatedByString:@"\n"]) {
+          NSRange eq = [line rangeOfString:@"="];
+          if (eq.location == NSNotFound) continue;
+          NSString *k = [line substringToIndex:eq.location];
+          if ([k isEqualToString:@"PATH"] || [k.lowercaseString hasSuffix:@"_proxy"])
+            got[k] = [line substringFromIndex:eq.location + 1];
+        }
+      }
+    }
+    env = got;
+  });
+  return env;
+}
+
+// The station's installer (still.fail cloud's /install.sh, as 添加 station hands it out and still.fail's desktop app
+// runs it: cloud/src/install.ts), run here as the person would in a terminal (their shell's PATH and proxies): with a
+// token (`install`: one-time, for a workspace: the core's workspace.enroll) it downloads the release, puts it in
+// ~/.stillfail/app, joins the workspace and runs the station as a launchd service; without one (`update`) it brings the
+// station here up to the latest release and runs it as a service (a station's data with none, as the desktop app ran
+// it, becomes one). `ask`: {"origin", "token"?, "channel": stable | beta}. nil when it did, else the last it said.
+// How far it is, as it goes (local_station's `percent` and `said`): the percent its downloads' curl shows
+// (--progress-bar: "#### 45.2%", each redrawn after a \r), and the last other line it said (its step: downloading,
+// installing, starting): local_percent, local_said (above).
+
+static void local_heard(NSData *piece) {
+  NSString *s = [[NSString alloc] initWithData:piece encoding:NSUTF8StringEncoding];
+  s = [s stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  if (!s.length) return;
+  static NSRegularExpression *bar;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ bar = [NSRegularExpression regularExpressionWithPattern:@"^#*\\s*([0-9]+(\\.[0-9]+)?)%$" options:0 error:nil]; });
+  NSTextCheckingResult *m = [bar firstMatchInString:s options:0 range:NSMakeRange(0, s.length)];
+  int percent = m ? [[s substringWithRange:[m rangeAtIndex:1]] intValue] : -1;
+  if (!m && [s rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"#"] invertedSet]].location == NSNotFound) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (m) {
+      local_percent = percent;
+    } else {
+      local_said = s;
+      local_percent = -1;
+    }
+    [the_view requestFrame];
+  });
+}
+
+static NSString *local_install(NSDictionary *ask) {
+  NSString *origin = [ask[@"origin"] isKindOfClass:NSString.class] ? ask[@"origin"] : @"";
+  if (![origin hasPrefix:@"https://"] && ![origin hasPrefix:@"http://"]) return @"origin";
+  NSMutableArray *args = [@[
+    @"-c",
+    @"f=$(mktemp) && curl -fsSL \"$0/install.sh\" -o \"$f\" && sh \"$f\" \"$@\"; s=$?; rm -f \"$f\"; exit $s",
+    origin
+  ] mutableCopy];
+  if ([ask[@"token"] isKindOfClass:NSString.class] && [ask[@"token"] length]) [args addObject:ask[@"token"]];
+  NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
+  [env addEntriesFromDictionary:login_env()];
+  if ([ask[@"channel"] isEqual:@"beta"]) env[@"STILLFAIL_CHANNEL"] = @"beta";
+  NSTask *t = [NSTask new];
+  t.executableURL = [NSURL fileURLWithPath:@"/bin/sh"];
+  t.arguments = args;
+  t.environment = env;
+  t.standardInput = [NSFileHandle fileHandleWithNullDevice];
+  NSPipe *out = [NSPipe pipe];
+  t.standardOutput = out;
+  t.standardError = out;
+  NSError *e = nil;
+  if (![t launchAndReturnError:&e]) return e.localizedDescription ?: @"sh";
+  // what it says as it says it: each piece ended by a \r (curl's bar redrawn) or a \n heard (local_heard)
+  NSMutableData *said = [NSMutableData data];
+  NSUInteger from = 0;
+  for (;;) {
+    NSData *d = [out.fileHandleForReading availableData];
+    if (d.length == 0) break;
+    [said appendData:d];
+    const uint8_t *b = (const uint8_t *)said.bytes;
+    for (NSUInteger i = from; i < said.length; i++) {
+      if (b[i] != '\r' && b[i] != '\n') continue;
+      local_heard([said subdataWithRange:NSMakeRange(from, i - from)]);
+      from = i + 1;
+    }
+  }
+  [t waitUntilExit];
+  NSString *s = [[NSString alloc] initWithData:said encoding:NSUTF8StringEncoding] ?: @"";
+  fprintf(stdout, "mac: the station's installer (%s) exited %d\n%s\n", ask[@"token"] ? "install" : "update",
+          t.terminationStatus, s.UTF8String);
+  fflush(stdout);
+  if (t.terminationStatus == 0) return nil;
+  NSString *last = @"";
+  for (NSString *line in [s componentsSeparatedByString:@"\n"]) {
+    NSString *l = [line stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (l.length) last = l;
+  }
+  return last.length ? last : [NSString stringWithFormat:@"install.sh %d", t.terminationStatus];
+}
+
+void mb_host_local_station_act(moonbit_string_t action) {
+  NSString *a = mb_ns_from_string(action);
+  NSString *data = local_data();
+  // `install {…}`, `update {…}`: the installer (local_install), off the main thread, as the others
+  NSRange space = [a rangeOfString:@" "];
+  if (space.location != NSNotFound && ([a hasPrefix:@"install "] || [a hasPrefix:@"update "])) {
+    NSString *verb = [a substringToIndex:space.location];
+    NSData *j = [[a substringFromIndex:space.location + 1] dataUsingEncoding:NSUTF8StringEncoding];
+    NSDictionary *ask = j ? [NSJSONSerialization JSONObjectWithData:j options:0 error:nil] : nil;
+    if (![ask isKindOfClass:NSDictionary.class]) return;
+    if (local_doing) {
+      local_failed = @"busy";
+      [the_view requestFrame];
+      return;
+    }
+    local_doing = verb;
+    local_failed = nil;
+    local_percent = -1;
+    local_said = nil;
+    [the_view requestFrame];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+      NSString *failed = local_install(ask);
+      dispatch_async(dispatch_get_main_queue(), ^{
+        local_doing = nil;
+        local_failed = failed;
+        [the_view requestFrame];
+      });
+    });
+    return;
+  }
+  if ([a isEqualToString:@"log"]) {
+    [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:[data stringByAppendingPathComponent:@"stillfail.log"]]];
+    return;
+  }
+  if ([a isEqualToString:@"folder"]) {
+    [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:data]];
+    return;
+  }
+  if (![@[ @"start", @"stop", @"restart" ] containsObject:a]) return;
+  if (local_doing) {
+    local_failed = @"busy";
+    [the_view requestFrame];
+    return;
+  }
+  local_doing = a;
+  local_failed = nil;
+  [the_view requestFrame];
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSString *failed = nil;
+    NSString *service = local_service();
+    NSString *version = nil;
+    pid_t pid = local_pid(data, &version);
+    if (service) {
+      NSString *domain = [NSString stringWithFormat:@"gui/%d", getuid()];
+      NSString *target = [NSString stringWithFormat:@"%@/%@", domain, service];
+      if ([a isEqualToString:@"stop"]) {
+        failed = local_launchctl(@[ @"bootout", target ]);
+      } else if (local_launchctl([a isEqualToString:@"restart"] ? @[ @"kickstart", @"-k", target ] : @[ @"kickstart", target ])) {
+        // not loaded (stopped here, or never since login): loaded, which starts it (RunAtLoad)
+        NSString *plist = [NSString stringWithFormat:@"%@/Library/LaunchAgents/%@.plist", NSHomeDirectory(), service];
+        failed = local_launchctl(@[ @"bootstrap", domain, plist ]);
+      }
+    } else if (pid != 0) {
+      // started by hand (`stillfail start`): only stopped from here, it has nothing to start it again
+      if ([a isEqualToString:@"stop"]) {
+        if (kill(pid, SIGTERM) != 0) failed = [NSString stringWithUTF8String:strerror(errno)];
+      } else {
+        failed = @"byHand";
+      }
+    } else {
+      failed = @"noService";
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+      local_doing = nil;
+      local_failed = failed;
+      [the_view requestFrame];
+    });
+  });
+}
+
+// The number on the Dock's tile (@hostapi.set_badge): what waits for the person; 0 none.
+void mb_host_set_badge(int32_t n) {
+  NSString *label = n > 0 ? [NSString stringWithFormat:@"%d", n] : nil;
+  if ([NSThread isMainThread]) {
+    NSApp.dockTile.badgeLabel = label;
+  } else {
+    dispatch_async(dispatch_get_main_queue(), ^{ NSApp.dockTile.badgeLabel = label; });
+  }
+}
+
 // The pointer's shape (@hostapi.set_cursor): 0 the arrow, 1 a hand, 2 the I-beam, 3 and 4 resizing sideways and up and
 // down, 5 an open hand.
 void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
   [cursor_of(kind) set];
+}
+
+// ---- The app's life on the Mac, and what the system says of it ----
+// As still.fail's desktop app is on macOS (Electron's): closing the window puts it away and the app goes on (its core,
+// its notifications, the Dock's badge, the dock's helper); the Dock's icon clicked, the app opened again, a
+// notification or the dock's helper opening a chat brings it back; ⌘Q (the menu bar's 退出) quits. A program run bare
+// (not an app's bundle: a developer's run, a script's, a test's) ends as its window closes, as before. Said to the app
+// on the system's channel (hostapi's system.mbt): `shown` with how long it was away as the window comes back, and as
+// the Mac wakes from sleep (a clock that counts the sleep, as iOS's and Android's); `network` as the default network
+// becomes another one (Network's path monitor, as iOS's); `menu` as one of the app's items in the menu bar is chosen.
+
+static void say_system(NSDictionary *said) {
+  NSData *json = [NSJSONSerialization dataWithJSONObject:said options:0 error:NULL];
+  if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
+}
+
+static BOOL in_bundle(void) {
+  NSBundle *b = NSBundle.mainBundle;
+  return b.bundleIdentifier && [b.bundlePath.pathExtension isEqualToString:@"app"];
+}
+
+static uint64_t put_away_at;  // CLOCK_MONOTONIC's ns as the window was closed (0: it is out)
+static uint64_t asleep_at;    // as the Mac went to sleep (0: awake)
+
+static void say_shown(uint64_t since) {
+  double away = (clock_gettime_nsec_np(CLOCK_MONOTONIC) - since) / 1e6;
+  say_system(@{@"shown" : @{@"away" : @(away)}});
+}
+
+static void bring_back(void) {
+  NSWindow *w = the_view.window;
+  if (!w) return;
+  if (w.isMiniaturized) [w deminiaturize:nil];
+  [w makeKeyAndOrderFront:nil];
+  [NSApp activateIgnoringOtherApps:YES];
+  if (put_away_at) {
+    say_shown(put_away_at);
+    put_away_at = 0;
+  }
+}
+
+@interface MBAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
+@end
+@implementation MBAppDelegate
+- (BOOL)windowShouldClose:(NSWindow *)w {
+  if (!in_bundle()) return YES;
+  [w orderOut:nil];
+  if (!put_away_at) put_away_at = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+  return NO;
+}
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible {
+  bring_back();
+  return NO;
+}
+// a link of one of the schemes its Info.plist names (CFBundleURLTypes) opened, the app started by it or brought back:
+// to the app (the system's `link`), its window out
+- (void)application:(NSApplication *)app openURLs:(NSArray<NSURL *> *)urls {
+  for (NSURL *u in urls) {
+    if (!u.absoluteString.length) continue;
+    fprintf(stdout, "mac: opened with a link (%s://)\n", u.scheme.UTF8String ?: "");
+    fflush(stdout);
+    say_system(@{@"link" : u.absoluteString});
+  }
+  bring_back();
+}
+// one of the app's items in the menu bar (mb_host_menu_setup)
+- (void)menuChosen:(NSMenuItem *)item {
+  if ([item.representedObject isKindOfClass:NSString.class]) say_system(@{@"menu" : item.representedObject});
+}
+@end
+static MBAppDelegate *app_delegate;
+
+// The default network as it changes: another one than before (Wi-Fi to a cable, back online after none), not the
+// first seen (ios_app.m's network_start)
+static nw_path_monitor_t network_monitor;
+static void network_start(void) {
+  network_monitor = nw_path_monitor_create();
+  nw_path_monitor_set_queue(network_monitor, dispatch_get_main_queue());
+  static NSString *was;
+  nw_path_monitor_set_update_handler(network_monitor, ^(nw_path_t path) {
+    NSMutableString *now = [NSMutableString string];
+    if (nw_path_get_status(path) == nw_path_status_satisfied) {
+      nw_path_enumerate_interfaces(path, ^bool(nw_interface_t i) {
+        [now appendFormat:@"%s/%d", nw_interface_get_name(i), (int)nw_interface_get_type(i)];
+        return false;  // the first: the one used
+      });
+    }
+    BOOL changed = was && ![was isEqualToString:now] && now.length > 0;
+    was = now;
+    if (changed) {
+      fprintf(stdout, "mac: network now %s\n", now.UTF8String);
+      fflush(stdout);
+      say_system(@{@"network" : @YES});
+    }
+  });
+  nw_path_monitor_start(network_monitor);
+}
+
+// The Mac asleep and awake again: how long, to the app (a sleep whose start was not seen is taken as a minute's, as
+// the desktop app's followSleep)
+static void watch_sleep(void) {
+  NSNotificationCenter *ws = NSWorkspace.sharedWorkspace.notificationCenter;
+  [ws addObserverForName:NSWorkspaceWillSleepNotification object:nil queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification *n) { asleep_at = clock_gettime_nsec_np(CLOCK_MONOTONIC); }];
+  [ws addObserverForName:NSWorkspaceDidWakeNotification object:nil queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification *n) {
+                say_shown(asleep_at ? asleep_at : clock_gettime_nsec_np(CLOCK_MONOTONIC) - 60000000000ull);
+                asleep_at = 0;
+              }];
+}
+
+// ---- The menu bar (@hostapi.menu_setup) ----
+// The app's menus with its words: the system's items by their role (their actions AppKit's, or the view's for the
+// editing ones: MBView's cut: …), with the keys macOS gives them; the app's own said back on the system's channel.
+static NSMenuItem *menu_item(NSDictionary *it) {
+  if (![it isKindOfClass:NSDictionary.class] || [it[@"separator"] isEqual:@YES]) return [NSMenuItem separatorItem];
+  // (`{app}` in its words: the app's name, as the system shows it)
+  NSString *title = [it[@"title"] isKindOfClass:NSString.class] ? it[@"title"] : @"";
+  title = [title stringByReplacingOccurrencesOfString:@"{app}"
+                                           withString:NSRunningApplication.currentApplication.localizedName ?: @""];
+  NSString *role = it[@"role"], *action = it[@"action"];
+  NSEventModifierFlags cmd = NSEventModifierFlagCommand;
+  // role: its action, its key, the modifiers with it
+  NSDictionary<NSString *, NSArray *> *roles = @{
+    @"about" : @[ @"orderFrontStandardAboutPanel:", @"", @0 ],
+    @"hide" : @[ @"hide:", @"h", @(cmd) ],
+    @"hideOthers" : @[ @"hideOtherApplications:", @"h", @(cmd | NSEventModifierFlagOption) ],
+    @"showAll" : @[ @"unhideAllApplications:", @"", @0 ],
+    @"quit" : @[ @"terminate:", @"q", @(cmd) ],
+    @"undo" : @[ @"undo:", @"z", @(cmd) ],
+    @"redo" : @[ @"redo:", @"z", @(cmd | NSEventModifierFlagShift) ],
+    @"cut" : @[ @"cut:", @"x", @(cmd) ],
+    @"copy" : @[ @"copy:", @"c", @(cmd) ],
+    @"paste" : @[ @"paste:", @"v", @(cmd) ],
+    @"selectAll" : @[ @"selectAll:", @"a", @(cmd) ],
+    @"close" : @[ @"performClose:", @"w", @(cmd) ],
+    @"minimize" : @[ @"performMiniaturize:", @"m", @(cmd) ],
+    @"zoom" : @[ @"performZoom:", @"", @0 ],
+    @"fullScreen" : @[ @"toggleFullScreen:", @"f", @(cmd | NSEventModifierFlagControl) ],
+    @"front" : @[ @"arrangeInFront:", @"", @0 ],
+  };
+  if ([role isKindOfClass:NSString.class] && [role isEqualToString:@"services"]) {
+    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
+    item.submenu = [[NSMenu alloc] initWithTitle:title];
+    NSApp.servicesMenu = item.submenu;
+    return item;
+  }
+  NSArray *r = [role isKindOfClass:NSString.class] ? roles[role] : nil;
+  if (r) {
+    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:NSSelectorFromString(r[0]) keyEquivalent:r[1]];
+    item.keyEquivalentModifierMask = [r[2] unsignedIntegerValue];
+    return item;
+  }
+  // (to whoever takes it: the app's delegate, last of those asked)
+  NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:@selector(menuChosen:) keyEquivalent:@""];
+  item.representedObject = [action isKindOfClass:NSString.class] ? action : @"";
+  // its keys as the app has them ("Mod+Shift+H", "Alt+Up", "Mod+\\"): shown; the view takes them before the menu does
+  // (an app's menu is MBShownKeysMenu, below), so the app does what they say once
+  if ([it[@"keys"] isKindOfClass:NSString.class]) {
+    NSArray<NSString *> *parts = [it[@"keys"] componentsSeparatedByString:@"+"];
+    NSEventModifierFlags mods = 0;
+    for (NSUInteger i = 0; i + 1 < parts.count; i++) {
+      NSString *p = parts[i];
+      if ([p isEqualToString:@"Mod"]) mods |= NSEventModifierFlagCommand;
+      else if ([p isEqualToString:@"Alt"]) mods |= NSEventModifierFlagOption;
+      else if ([p isEqualToString:@"Shift"]) mods |= NSEventModifierFlagShift;
+      else if ([p isEqualToString:@"Ctrl"]) mods |= NSEventModifierFlagControl;
+    }
+    NSDictionary *named = @{
+      @"Up" : [NSString stringWithFormat:@"%C", (unichar)NSUpArrowFunctionKey],
+      @"Down" : [NSString stringWithFormat:@"%C", (unichar)NSDownArrowFunctionKey],
+      @"Left" : [NSString stringWithFormat:@"%C", (unichar)NSLeftArrowFunctionKey],
+      @"Right" : [NSString stringWithFormat:@"%C", (unichar)NSRightArrowFunctionKey],
+      @"Space" : @" ",
+      @"Escape" : @"\e",
+      @"Enter" : @"\r",
+    };
+    NSString *key = parts.lastObject;
+    NSString *k = named[key] ?: key.lowercaseString;
+    if (k.length) {
+      item.keyEquivalent = k;
+      item.keyEquivalentModifierMask = mods;
+    }
+  }
+  // (what cannot be done now, greyed: the app says)
+  if ([it[@"enabled"] isEqual:@NO]) item.enabled = NO;
+  return item;
+}
+
+// A menu of the app's own actions: its keys shown, never taken (the view has them first, MBView performKeyEquivalent:,
+// and does what they say: a key it let go of is no action of the menu's either)
+@interface MBShownKeysMenu : NSMenu
+@end
+@implementation MBShownKeysMenu
+- (BOOL)performKeyEquivalent:(NSEvent *)e { return NO; }
+@end
+
+void mb_host_menu_setup(moonbit_string_t json_s) {
+  [NSApplication sharedApplication];
+  NSData *d = [mb_ns_from_string(json_s) dataUsingEncoding:NSUTF8StringEncoding];
+  NSArray *menus = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL] : nil;
+  if (![menus isKindOfClass:NSArray.class]) return;
+  NSMenu *bar = [NSMenu new];
+  for (NSDictionary *m in menus) {
+    if (![m isKindOfClass:NSDictionary.class]) continue;
+    NSString *title = [m[@"title"] isKindOfClass:NSString.class] ? m[@"title"] : @"";
+    // (`"role": "actions"`: one of the app's actions only, MBShownKeysMenu; what is enabled the app says, not AppKit)
+    NSMenu *menu = [m[@"role"] isEqual:@"actions"] ? [[MBShownKeysMenu alloc] initWithTitle:title]
+                                                   : [[NSMenu alloc] initWithTitle:title];
+    menu.autoenablesItems = NO;
+    if ([m[@"items"] isKindOfClass:NSArray.class])
+      for (NSDictionary *it in m[@"items"]) [menu addItem:menu_item(it)];
+    NSMenuItem *top = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
+    top.submenu = menu;
+    [bar addItem:top];
+    // the window menu: the system's list of windows in it
+    if ([m[@"role"] isEqual:@"window"]) NSApp.windowsMenu = menu;
+  }
+  NSApp.mainMenu = bar;
 }
 
 void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointer,
@@ -767,6 +1493,9 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    // the app's life (put away as its window closes, back from the Dock) and its menu bar's items: MBAppDelegate
+    if (!app_delegate) app_delegate = [MBAppDelegate new];
+    NSApp.delegate = app_delegate;
     notice_start();
     // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)
     // (else the app's own, @hostapi.window_setup; else 900×720)
@@ -852,10 +1581,14 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       }
     }
     [NSApp activateIgnoringOtherApps:YES];
+    // closed, the program ends (an app's bundle's window is put away instead: MBAppDelegate windowShouldClose)
+    w.delegate = app_delegate;
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillCloseNotification
                                                       object:w
                                                        queue:nil
                                                   usingBlock:^(NSNotification *n) { exit(0); }];
+    watch_sleep();
+    network_start();
     for (NSNotificationName name in @[ NSWindowDidBecomeKeyNotification, NSWindowDidResignKeyNotification,
                                        NSWindowDidMiniaturizeNotification, NSWindowDidDeminiaturizeNotification,
                                        NSWindowDidChangeOcclusionStateNotification ]) {
@@ -956,6 +1689,15 @@ void mb_host_clipboard_set(moonbit_string_t s) {
 
 // A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) { mb_host_clipboard_set(s); }
+
+// A picture on the clipboard (@hostapi.clipboard_set_image): the image the bytes are, as other apps paste one.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  NSImage *img = [[NSImage alloc] initWithData:[NSData dataWithBytes:data length:Moonbit_array_length(data)]];
+  if (!img) return;
+  NSPasteboard *pb = [NSPasteboard generalPasteboard];
+  [pb clearContents];
+  [pb writeObjects:@[ img ]];
+}
 
 
 void mb_host_log(moonbit_string_t s) {
@@ -1110,8 +1852,6 @@ moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
   return out;
 }
 
-// Updates (@hostapi.app_version, update_install, update_state): this app does not update itself here.
-int32_t mb_host_app_version(void) { return 0; }
 // A package for the system's installer (@hostapi.install_package): none here, said on the system channel (system.mbt).
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   NSDictionary *said = @{@"install" : @{@"name" : mb_ns_from_string(name), @"error" : @"unsupported"}};
@@ -1119,10 +1859,323 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
 }
 
-void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
-  (void)url; (void)sha256; (void)size; (void)name;
+// ---- Updates (@hostapi.app_version, update_install, update_state) ----
+// The app keeping itself current, as still.fail's desktop app does (Electron's autoUpdater; on macOS Squirrel's
+// ShipIt): a newer build the core found (`app.update`: the release's zip) downloaded into the app's caches, picking up
+// where a cut connection left off (the bytes so far kept in `<name>.part`, the rest asked for as a range, a few times
+// over with a growing pause while each try gets further: Android's Updates.java), checked against its size and
+// SHA-256, unzipped beside the app (on its volume), and taken only when it is this app, newer, and signed as this one
+// is (its signature valid and meeting this app's designated requirement: still.fail's team and this app's id; a build
+// signed ad hoc, a developer's, takes none). It is put in this app's place (the bundles swapped, this one's thrown
+// away), and opened as this one quits (a shell waits for this process to end first: two cores never share the
+// data). How it goes the app reads (`update_state`: the phase, how far, what went wrong), told each time it changes
+// (MB_OUTSIDE_UPDATE, id 1: 0 while the host works at it, -1 failed). Only an app's bundle has a version here (a
+// build run as a bare program, 0, never asks).
+
+static NSString *update_phase = @"idle";  // idle | downloading | retrying | installing | failed
+static int update_percent = -1;
+static NSString *update_error = @"";
+static BOOL update_working;
+
+int32_t mb_host_app_version(void) {
+  NSBundle *b = NSBundle.mainBundle;
+  if (!b.bundleIdentifier || ![b.bundlePath.pathExtension isEqualToString:@"app"]) return 0;
+  return [[b objectForInfoDictionaryKey:@"CFBundleVersion"] intValue];
 }
-moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
+
+// How it goes, from the worker: kept and told on the main thread (where the frames read it).
+static void update_say(NSString *phase, int percent, NSString *error) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    BOOL changed = ![phase isEqualToString:update_phase] || percent != update_percent;
+    update_phase = phase;
+    update_percent = percent;
+    update_error = error ?: @"";
+    if ([phase isEqualToString:@"failed"]) update_working = NO;
+    if (changed) {
+      mb_host_outside(MB_OUTSIDE_UPDATE, 1, [phase isEqualToString:@"failed"] ? -1 : 0);
+      [the_view requestFrame];
+    }
+  });
+}
+
+// What an update did, on the log and in the app's caches (<caches>/<id>/update.log: an app's stdout goes nowhere), where
+// the shell that opens the new build adds its own line.
+static NSString *update_log_path(void) {
+  NSString *caches = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+  return [[caches stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier] stringByAppendingPathComponent:@"update.log"];
+}
+
+static void update_log(NSString *s) {
+  fprintf(stdout, "update: %s\n", s.UTF8String);
+  fflush(stdout);
+  NSString *path = update_log_path();
+  [NSFileManager.defaultManager createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES
+                                           attributes:nil error:NULL];
+  NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
+  if (!h) {
+    [NSFileManager.defaultManager createFileAtPath:path contents:nil attributes:nil];
+    h = [NSFileHandle fileHandleForWritingAtPath:path];
+  }
+  [h seekToEndOfFile];
+  [h writeData:[[NSString stringWithFormat:@"%@ %@\n", [NSDate date], s] dataUsingEncoding:NSUTF8StringEncoding]];
+  [h closeFile];
+}
+
+// One try of the download (a data task, its bytes appended to the part as they come): whether the file is whole, or
+// why not (`retry`: a cut connection or the server's trouble, tried again; else given up at once).
+@interface MBUpdateFetch : NSObject <NSURLSessionDataDelegate>
+@property(nonatomic, strong) NSFileHandle *out;
+@property(nonatomic) long long done, size;
+@property(nonatomic) NSInteger status;
+@property(nonatomic, strong) NSError *error;
+@property(nonatomic, strong) dispatch_semaphore_t finished;
+@end
+@implementation MBUpdateFetch
+- (void)URLSession:(NSURLSession *)s
+              dataTask:(NSURLSessionDataTask *)t
+    didReceiveResponse:(NSURLResponse *)r
+     completionHandler:(void (^)(NSURLSessionResponseDisposition))h {
+  self.status = [(NSHTTPURLResponse *)r statusCode];
+  if (self.status == 200) {
+    // the whole file again (the server took no range): from its start
+    [self.out truncateFileAtOffset:0];
+    self.done = 0;
+  }
+  h(self.status == 200 || self.status == 206 ? NSURLSessionResponseAllow : NSURLSessionResponseCancel);
+}
+- (void)URLSession:(NSURLSession *)s dataTask:(NSURLSessionDataTask *)t didReceiveData:(NSData *)d {
+  [self.out writeData:d];
+  self.done += d.length;
+  if (self.size > 0) update_say(@"downloading", (int)(self.done * 100 / self.size), nil);
+}
+- (void)URLSession:(NSURLSession *)s task:(NSURLSessionTask *)t didCompleteWithError:(NSError *)e {
+  self.error = e;
+  dispatch_semaphore_signal(self.finished);
+}
+@end
+
+static BOOL update_fetch(NSURL *url, NSString *part, long long size, BOOL *retry, NSString **why) {
+  if (![NSFileManager.defaultManager fileExistsAtPath:part])
+    [NSFileManager.defaultManager createFileAtPath:part contents:nil attributes:nil];
+  MBUpdateFetch *f = [MBUpdateFetch new];
+  f.out = [NSFileHandle fileHandleForWritingAtPath:part];
+  f.done = (long long)[f.out seekToEndOfFile];
+  f.size = size;
+  f.finished = dispatch_semaphore_create(0);
+  NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.ephemeralSessionConfiguration;
+  cfg.timeoutIntervalForRequest = 30;
+  cfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+  NSURLSession *session = [NSURLSession sessionWithConfiguration:cfg delegate:f delegateQueue:nil];
+  NSMutableURLRequest *rq = [NSMutableURLRequest requestWithURL:url];
+  if (f.done > 0) [rq setValue:[NSString stringWithFormat:@"bytes=%lld-", f.done] forHTTPHeaderField:@"Range"];
+  [[session dataTaskWithRequest:rq] resume];
+  dispatch_semaphore_wait(f.finished, DISPATCH_TIME_FOREVER);
+  [session finishTasksAndInvalidate];
+  [f.out closeFile];
+  *retry = NO;
+  if (f.status == 416) return YES;  // asked from its end: it is all here
+  if (f.status != 200 && f.status != 206) {
+    *why = f.status ? [NSString stringWithFormat:@"status %ld", (long)f.status] : (f.error.localizedDescription ?: @"failed");
+    *retry = f.status == 0 || f.status >= 500;
+    return NO;
+  }
+  if (f.error) {
+    *why = f.error.localizedDescription;
+    *retry = YES;
+    return NO;
+  }
+  if (size > 0 && f.done < size) {
+    *why = [NSString stringWithFormat:@"connection closed at %lld of %lld", f.done, size];
+    *retry = YES;
+    return NO;
+  }
+  return YES;
+}
+
+static NSString *update_sha256(NSString *path) {
+  NSFileHandle *h = [NSFileHandle fileHandleForReadingAtPath:path];
+  if (!h) return @"";
+  CC_SHA256_CTX ctx;
+  CC_SHA256_Init(&ctx);
+  for (;;) {
+    @autoreleasepool {
+      NSData *d = [h readDataOfLength:1 << 20];
+      if (d.length == 0) break;
+      CC_SHA256_Update(&ctx, d.bytes, (CC_LONG)d.length);
+    }
+  }
+  [h closeFile];
+  unsigned char md[CC_SHA256_DIGEST_LENGTH];
+  CC_SHA256_Final(md, &ctx);
+  NSMutableString *s = [NSMutableString string];
+  for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) [s appendFormat:@"%02x", md[i]];
+  return s;
+}
+
+// The release downloaded whole into `dir` (what is there from before kept only if it is the part of this one), checked
+// against its SHA-256: its path, or nil and why not.
+static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, long long size, NSString *name,
+                                 NSString **why) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:NULL];
+  NSString *zip = [dir stringByAppendingPathComponent:name];
+  NSString *part = [zip stringByAppendingString:@".part"];
+  for (NSString *f in [fm contentsOfDirectoryAtPath:dir error:NULL]) {
+    NSString *p = [dir stringByAppendingPathComponent:f];
+    if (![p isEqualToString:zip] && ![p isEqualToString:part]) [fm removeItemAtPath:p error:NULL];
+  }
+  if ([fm fileExistsAtPath:zip]) {
+    if ([update_sha256(zip) caseInsensitiveCompare:sha256] == NSOrderedSame) return zip;
+    [fm removeItemAtPath:zip error:NULL];
+  }
+  long long have = (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize];
+  if (size > 0 && have > size) [fm removeItemAtPath:part error:NULL];
+  // tries in a row that got no further before it gives up (pauses of 1, 2, 4, 8, 16 s between them)
+  const int retries = 6;
+  int failures = 0;
+  for (;;) {
+    long long before = (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize];
+    BOOL retry = NO;
+    if (update_fetch(url, part, size, &retry, why)) break;
+    if (!retry) return nil;
+    if ((long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize] > before) failures = 0;
+    if (++failures >= retries) return nil;
+    update_say(@"retrying", update_percent, nil);
+    [NSThread sleepForTimeInterval:(double)(1 << (failures - 1))];
+    update_say(@"downloading", update_percent, nil);
+  }
+  NSString *got = update_sha256(part);
+  if ([got caseInsensitiveCompare:sha256] != NSOrderedSame) {
+    [fm removeItemAtPath:part error:NULL];
+    *why = @"incomplete";
+    return nil;
+  }
+  if (![fm moveItemAtPath:part toPath:zip error:NULL]) {
+    *why = @"incomplete";
+    return nil;
+  }
+  update_log([NSString stringWithFormat:@"%@ downloaded, sha256 %@ as the feed says", name, got]);
+  return zip;
+}
+
+// Whether the app at `app` is signed as this one must be: valid, all of it, and meeting this app's designated
+// requirement (its id and its signer's team); why not otherwise. (Security's code signing calls found as they are
+// first needed: an app of mbui's links what its own moon.pkg says, which need not name Security.)
+static BOOL update_signed_as_this(NSURL *app, NSString **why) {
+  static OSStatus (*copy_self)(SecCSFlags, SecCodeRef *);
+  static OSStatus (*copy_designated)(SecStaticCodeRef, SecCSFlags, SecRequirementRef *);
+  static OSStatus (*static_create)(CFURLRef, SecCSFlags, SecStaticCodeRef *);
+  static OSStatus (*check_validity)(SecStaticCodeRef, SecCSFlags, SecRequirementRef);
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    void *sec = dlopen("/System/Library/Frameworks/Security.framework/Security", RTLD_LAZY);
+    if (!sec) return;
+    copy_self = dlsym(sec, "SecCodeCopySelf");
+    copy_designated = dlsym(sec, "SecCodeCopyDesignatedRequirement");
+    static_create = dlsym(sec, "SecStaticCodeCreateWithPath");
+    check_validity = dlsym(sec, "SecStaticCodeCheckValidity");
+  });
+  if (!copy_self || !copy_designated || !static_create || !check_validity) {
+    *why = @"no code signing here";
+    return NO;
+  }
+  SecCodeRef me = NULL;
+  SecRequirementRef req = NULL;
+  SecStaticCodeRef it = NULL;
+  OSStatus st = copy_self(kSecCSDefaultFlags, &me);
+  if (st == errSecSuccess) st = copy_designated((SecStaticCodeRef)me, kSecCSDefaultFlags, &req);
+  if (st == errSecSuccess) st = static_create((__bridge CFURLRef)app, kSecCSDefaultFlags, &it);
+  if (st == errSecSuccess)
+    st = check_validity(it, kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate, req);
+  if (me) CFRelease(me);
+  if (req) CFRelease(req);
+  if (it) CFRelease(it);
+  if (st != errSecSuccess) *why = [NSString stringWithFormat:@"not signed as this app (%d)", (int)st];
+  return st == errSecSuccess;
+}
+
+// The zip unzipped beside this app (a folder the system gives for replacing it, on its volume), its app checked, and
+// swapped into this one's place: nil, or why not.
+static NSString *update_put(NSString *zip) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  NSURL *here = NSBundle.mainBundle.bundleURL;
+  NSError *e = nil;
+  NSURL *stage = [fm URLForDirectory:NSItemReplacementDirectory inDomain:NSUserDomainMask appropriateForURL:here
+                              create:YES error:&e];
+  if (!stage) return [NSString stringWithFormat:@"can't write beside %@: %@", here.path, e.localizedDescription];
+  NSTask *unzip = [NSTask new];
+  unzip.launchPath = @"/usr/bin/ditto";
+  unzip.arguments = @[ @"-x", @"-k", zip, stage.path ];
+  [unzip launch];
+  [unzip waitUntilExit];
+  NSURL *app = nil;
+  for (NSURL *u in [fm contentsOfDirectoryAtURL:stage includingPropertiesForKeys:nil options:0 error:NULL])
+    if ([u.pathExtension isEqualToString:@"app"]) app = u;
+  NSString *why = nil;
+  NSBundle *b = app ? [NSBundle bundleWithURL:app] : nil;
+  if (unzip.terminationStatus != 0 || !b) why = @"incomplete";
+  else if (![b.bundleIdentifier isEqualToString:NSBundle.mainBundle.bundleIdentifier])
+    why = [NSString stringWithFormat:@"another app (%@)", b.bundleIdentifier];
+  else if ([[b objectForInfoDictionaryKey:@"CFBundleVersion"] intValue] <= mb_host_app_version())
+    why = @"not newer";
+  else update_signed_as_this(app, &why);
+  if (!why && ![fm replaceItemAtURL:here withItemAtURL:app backupItemName:nil options:0 resultingItemURL:NULL error:&e])
+    why = [NSString stringWithFormat:@"can't replace %@: %@", here.path, e.localizedDescription];
+  [fm removeItemAtURL:stage error:NULL];
+  return why;
+}
+
+void mb_host_update_install(moonbit_string_t url_s, moonbit_string_t sha256_s, double size, moonbit_string_t name_s) {
+  if (update_working || mb_host_app_version() <= 0) return;
+  NSURL *url = [NSURL URLWithString:mb_ns_from_string(url_s)];
+  NSString *sha256 = mb_ns_from_string(sha256_s), *name = mb_ns_from_string(name_s).lastPathComponent;
+  if (!url || !name.length) return;
+  update_working = YES;
+  update_phase = @"downloading";
+  update_percent = -1;
+  update_error = @"";
+  mb_host_outside(MB_OUTSIDE_UPDATE, 1, 0);
+  NSString *caches = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+  NSString *dir = [[caches stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier]
+      stringByAppendingPathComponent:@"updates"];
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    NSString *why = nil;
+    NSString *zip = update_download(dir, url, sha256, (long long)size, name, &why);
+    if (zip) {
+      update_say(@"installing", -1, nil);
+      why = update_put(zip);
+    }
+    if (why) {
+      update_log([NSString stringWithFormat:@"failed: %@", why]);
+      update_say(@"failed", -1, why);
+      return;
+    }
+    [NSFileManager.defaultManager removeItemAtPath:zip error:NULL];
+    update_log(@"in place; opened again as this one quits");
+    dispatch_async(dispatch_get_main_queue(), ^{
+      // opened again once this process has ended, said on the update's log (the app's path as $0, the log's as $1:
+      // nothing in them read as the shell's)
+      NSTask *again = [NSTask new];
+      again.launchPath = @"/bin/sh";
+      again.arguments = @[
+        @"-c",
+        [NSString stringWithFormat:@"while /bin/kill -0 %d 2>/dev/null; do /bin/sleep 0.2; done; "
+                                   @"/usr/bin/open \"$0\" && echo \"$(/bin/date) opened $0\" >> \"$1\"",
+                                   getpid()],
+        NSBundle.mainBundle.bundlePath, update_log_path()
+      ];
+      [again launch];
+      [NSApp terminate:nil];
+    });
+  });
+}
+
+moonbit_string_t mb_host_update_state(void) {
+  if (mb_host_app_version() <= 0) return moonbit_make_string_raw(0);
+  NSDictionary *st = @{@"phase" : update_phase, @"percent" : @(update_percent), @"error" : update_error};
+  NSData *json = [NSJSONSerialization dataWithJSONObject:st options:0 error:NULL];
+  return mb_string_from_ns([[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] ?: @"");
+}
 
 // Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }
@@ -1173,8 +2226,7 @@ static BOOL notice_system(void) { return NSBundle.mainBundle.bundleIdentifier !=
     }]];
     fprintf(stdout, "NOTICE TAP %s\n", tag.UTF8String);
     fflush(stdout);
-    [NSApp activateIgnoringOtherApps:YES];
-    [the_view.window makeKeyAndOrderFront:nil];
+    bring_back();
     [the_view requestFrame];
   });
   done();
@@ -1363,6 +2415,18 @@ double mb_host_mem_bytes(void) {
 static NSMutableDictionary<NSNumber *, NSMutableDictionary *> *picks;
 static int32_t next_pick = 1;
 
+static void pick_told(int32_t pid, NSArray *names, NSArray *datas) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSMutableDictionary *p = picks[@(pid)];
+    if (!p) return;
+    p[@"names"] = names;
+    p[@"datas"] = datas;
+    p[@"state"] = @(names.count > 0 ? 1 : -1);
+    mb_host_outside(MB_OUTSIDE_PICK, pid, names.count > 0 ? 1 : -1);
+    [the_view requestFrame];
+  });
+}
+
 static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     NSMutableArray *names = [NSMutableArray new], *datas = [NSMutableArray new];
@@ -1372,16 +2436,51 @@ static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
       [names addObject:u.lastPathComponent ?: @"file"];
       [datas addObject:d];
     }
-    dispatch_async(dispatch_get_main_queue(), ^{
-      NSMutableDictionary *p = picks[@(pid)];
-      if (!p) return;
-      p[@"names"] = names;
-      p[@"datas"] = datas;
-      p[@"state"] = @(names.count > 0 ? 1 : -1);
-      mb_host_outside(MB_OUTSIDE_PICK, pid, names.count > 0 ? 1 : -1);
-      [the_view requestFrame];
-    });
+    pick_told(pid, names, datas);
   });
+}
+
+// Files let go on the window (ui/drop.mbt): read as a pick's, a folder's files by their way down from where it was
+// dropped ("照片/2026/a.jpg"), each folder itself named with a "/" at its end and no bytes (so an empty one is made
+// too); Finder's .DS_Store left out.
+static int32_t drop_pick(NSArray<NSURL *> *urls) {
+  if (!picks) picks = [NSMutableDictionary new];
+  int32_t pid = next_pick++;
+  picks[@(pid)] = [@{@"state" : @0} mutableCopy];
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSMutableArray *names = [NSMutableArray new], *datas = [NSMutableArray new];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    void (^one)(NSURL *, NSString *) = ^(NSURL *u, NSString *name) {
+      NSNumber *dir = nil;
+      [u getResourceValue:&dir forKey:NSURLIsDirectoryKey error:nil];
+      if (dir.boolValue) {
+        [names addObject:[name stringByAppendingString:@"/"]];
+        [datas addObject:[NSData data]];
+        return;
+      }
+      if ([u.lastPathComponent isEqualToString:@".DS_Store"]) return;
+      NSData *d = [NSData dataWithContentsOfURL:u options:NSDataReadingMappedIfSafe error:nil];
+      if (!d || d.length > (1ull << 30)) return;
+      [names addObject:name];
+      [datas addObject:d];
+    };
+    for (NSURL *u in urls) {
+      NSString *top = u.lastPathComponent ?: @"file";
+      one(u, top);
+      NSNumber *dir = nil;
+      [u getResourceValue:&dir forKey:NSURLIsDirectoryKey error:nil];
+      if (!dir.boolValue) continue;
+      NSDirectoryEnumerator *walk = [fm enumeratorAtURL:u includingPropertiesForKeys:@[ NSURLIsDirectoryKey ] options:0 errorHandler:nil];
+      NSString *base = u.URLByStandardizingPath.path;
+      for (NSURL *v in walk) {
+        NSString *path = v.URLByStandardizingPath.path;
+        if (![path hasPrefix:base]) continue;
+        one(v, [top stringByAppendingString:[path substringFromIndex:base.length]]);
+      }
+    }
+    pick_told(pid, names, datas);
+  });
+  return pid;
 }
 
 int32_t mb_host_pick_start(int32_t kind) {

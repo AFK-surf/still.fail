@@ -2,7 +2,9 @@ import {
   "mbui/host",
   "mbui/film",
   "stillfail/sf",
+  "stillfail/sfkept",
   "stillfail/sfapp",
+  "stillfail/sfkept",
 }
 
 options(

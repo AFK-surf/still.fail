@@ -1,0 +1,16 @@
+# The rail's places on the desktop (sfdesk places.mbt, the web's cloud/workspace.tsx): MBUI_WIN=1280x800 over the
+# made-up chat. Profile (its list, the first picked, then the second), 连接, 用量, Station (its list, the first).
+timeout 30000
+until 按空格输入
+wait 600
+tap icon:quota
+wait 1200
+tapxy 184 160
+wait 1200
+tap icon:im
+wait 1200
+tap icon:chart
+wait 1200
+tap icon:server
+wait 1500
+exit

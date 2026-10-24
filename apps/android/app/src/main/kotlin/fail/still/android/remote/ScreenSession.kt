@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntSize
 import fail.still.android.data.ScreenDrop
+import fail.still.android.data.ScreenScale
 import fail.still.android.data.ScreenViewState
 import fail.still.android.data.decode
 import fail.still.core.CoreException
@@ -41,7 +42,8 @@ class Picture(val bitmap: Bitmap, val ts: Long)
 
 /**
  * `station` is its address (`<workspace>/<station>`), `screen` its id there; `limit`: the largest frame worth sending
- * (the phone's screen, in px, its longer side first); `h264`: the phone decodes it (else JPEG only).
+ * (the phone's screen, in px, its longer side first); `h264`: the phone decodes it (else JPEG only); `h265`: it decodes
+ * that on its hardware (asked first: the same picture in a third of the bits).
  */
 class ScreenSession(
     private val core: StillFailCore,
@@ -49,7 +51,8 @@ class ScreenSession(
     val screen: String,
     private val scope: CoroutineScope,
     private val limit: IntSize = IntSize(1920, 1080),
-    private val h264: Boolean = H264Decoder.available,
+    private val h264: Boolean = VideoDecoder.available,
+    private val h265: Boolean = VideoDecoder.hevc,
 ) {
     /** The name the core knows this view by (unique per viewer). */
     val view = "android-" + UUID.randomUUID().toString().take(8)
@@ -99,7 +102,12 @@ class ScreenSession(
     private val drawn = ArrayDeque<Picture>()
     private var surface: Surface? = null
 
-    private val video = H264Decoder(shown = { ts -> ack(ts); main.post { shownAny = true } }, broken = { core.tell("screen.keyframe", viewParams()) })
+    private val video = VideoDecoder(
+        shown = { ts -> ack(ts); main.post { shownAny = true } },
+        broken = { core.tell("screen.keyframe", viewParams()) },
+        // H.265 does not play here after all: opened again, asking H.264.
+        unplayable = { main.post { pause(); open() } },
+    )
     private val jpeg = JpegDecoder(decoded = { bitmap, ts -> main.post { picture = Picture(bitmap, ts) } }, failed = { ts -> ack(ts) })
 
     /** What the phase is as the viewer shows it: the call's own failure and end over what the state last said. */
@@ -120,6 +128,9 @@ class ScreenSession(
      * nor from a station (or helper) from before them.
      */
     val clipTypes: List<String> get() = if (driving) state?.clipboard.orEmpty() else emptyList()
+
+    /** The screen's display scale, while driving one whose station changes it (a Windows station's desktop). */
+    val scale: ScreenScale? get() = if (driving) state?.scale?.takeIf { it.steps.isNotEmpty() } else null
 
     /** The phone's clipboard is pasted into the screen (`screen.clipboard`): driving it, and the station carries some. */
     val pastes: Boolean get() = clipTypes.any { it == "text" || it == "png" }
@@ -144,7 +155,7 @@ class ScreenSession(
             put("station", station)
             put("screen", screen)
             put("view", view)
-            put("codecs", JsonArray(listOfNotNull(if (h264) "h264" else null, "jpeg").map(::JsonPrimitive)))
+            put("codecs", JsonArray(listOfNotNull(if (h265 && !VideoDecoder.hevcFailed) "h265" else null, if (h264) "h264" else null, "jpeg").map(::JsonPrimitive)))
             put("maxWidth", limit.width)
             put("maxHeight", limit.height)
             // Not said until the person chooses: the core decides (only looking while another drives).
@@ -194,6 +205,9 @@ class ScreenSession(
         core.tell("screen.input", buildJsonObject { put("view", view); put("input", input) })
     }
 
+    /** Its display's scale set to one of its steps (`screen.input` scale); the station says it back. */
+    fun setScale(percent: UInt) = input(buildJsonObject { put("t", "scale"); put("percent", percent.toLong()) })
+
     /** `text` onto the screen's clipboard and pasted where its focus is (`screen.clipboard`). Throws [CoreException]. */
     suspend fun paste(text: String) {
         core.call("screen.clipboard", buildJsonObject { put("view", view); put("text", text); put("paste", true) })
@@ -239,7 +253,7 @@ class ScreenSession(
             val kind = (c["codec"] as? JsonPrimitive)?.contentOrNull ?: return@let
             val w = (c["width"] as? JsonPrimitive)?.intOrNull ?: (c["width"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toInt() ?: 0
             val h = (c["height"] as? JsonPrimitive)?.intOrNull ?: (c["height"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()?.toInt() ?: 0
-            if (kind == "h264" && bytes != null) video.configure(bytes, w, h)
+            if ((kind == "h264" || kind == "h265") && bytes != null) video.configure(kind, bytes, w, h)
             main.post { codec = kind; if (w > 0 && h > 0) size = IntSize(w, h) }
             synchronized(lock) { this.kind = kind }
         }
@@ -257,7 +271,7 @@ class ScreenSession(
             val key = (f["key"] as? JsonPrimitive)?.booleanOrNull ?: false
             if (bytes == null) { ack(ts); return@let }
             when (synchronized(lock) { kind }) {
-                "h264" -> video.frame(bytes, key, ts)
+                "h264", "h265" -> video.frame(bytes, key, ts)
                 "jpeg" -> jpeg.frame(bytes, ts)
                 else -> ack(ts)
             }

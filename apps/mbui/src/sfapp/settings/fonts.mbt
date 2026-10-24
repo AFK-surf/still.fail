@@ -5,11 +5,11 @@
 
 ///|
 // kept across runs: a table, never written
-let font_places : Array[String] = ["ui", "text", "code"]
+pub let font_places : Array[String] = ["ui", "text", "code"]
 
 ///|
 /// The place in view on the fonts page (its switch).
-let fonts_at : Ref[Int] = Ref(0)
+pub let fonts_at : Ref[Int] = Ref(0)
 
 ///|
 /// 外观's row: the faces chosen at a glance (their names, "·" between), opening the page.
@@ -121,7 +121,7 @@ fn fonts_page(c : @ui.Ctx, core : Core) -> Unit {
 
 ///|
 /// A place's face chosen (None: back to the app's own), kept as the device's.
-fn set_font(core : Core, place : String, id : String?) -> Unit {
+pub fn set_font(core : Core, place : String, id : String?) -> Unit {
   let v = match id {
     Some(s) => s.to_json()
     None => Json::null()
@@ -198,12 +198,12 @@ fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
 ///|
 /// The places' switch's room: 12 in from the page's sides (Fonts.kt:93).
 // kept across runs: a value (no field of it changes)
-let fonts_seg_room : @ui.Style = @ui.style(w=Full, px=S3)
+let fonts_seg_room : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 /// A face's name over a line of it, 2 apart (Fonts.kt:138), each on one line: 16 in the ink, 13 in the muted.
 // kept across runs: a value (no field of it changes)
-let face_lines : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let face_lines : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -226,19 +226,19 @@ let face_status_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wr
 /// The preview's two messages 12 apart (Fonts.kt:152): theirs at the end in a bubble (18 round on the page's ground,
 /// 14 by 8 in), the agent's name (14 semibold in the accent's ink) and when (12 subtle) over its words, 4 apart.
 // kept across runs: a value (no field of it changes)
-let preview_column : @ui.Style = @ui.style(w=Full, gap=S3)
+let preview_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_mine_room : @ui.Style = @ui.style(w=Full, align=AEnd)
+let preview_mine_room : @ui.Style = @ui.css("w=Full align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_bubble : @ui.Style = @ui.style(radius=Xl2, bg=Bg, px=S3_5, py=S2)
+let preview_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_agent : @ui.Style = @ui.style(w=Full, gap=S1)
+let preview_agent : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -6,8 +6,19 @@
 ///|
 /// The status bar's height: what a page's top bar is padded by.
 fn status_top() -> Double {
-  @ui.system_bars().top
+  let top = @ui.system_bars().top
+  // a desktop's window with its buttons in the app's top row (macOS: its title bar the app's), a phone's page in it:
+  // the buttons' band over the page, as a status bar is
+  if top == 0.0 && !wide_on.val && @ui.window_inset() {
+    window_band
+  } else {
+    top
+  }
 }
+
+///|
+/// The band a window's buttons take at the top of a phone's page in it (macOS's title bar: 28).
+let window_band : Double = 28.0
 
 ///|
 /// A top bar's least height, the status bar's and its own (bar_h) as one length (TopGlassBar, Chat.kt BarFrame: the
@@ -55,7 +66,7 @@ fn bar_room_box(c : @ui.Ctx, h : Double) -> Unit {
 ///|
 /// What is inside the bars: all of the window.
 // kept across runs: a value (no field of it changes)
-let bars_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let bars_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What is between them: the room they leave.

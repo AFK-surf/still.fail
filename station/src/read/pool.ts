@@ -15,8 +15,13 @@ const IDLE_MS = 60_000;
 /// `held`: the reads it is answering, by id, with their ops (said when it fails).
 type Slot = { worker: Worker; busy: number; held: Map<number, string>; idle?: () => void };
 
+/// How many sessions' readers are remembered (the most recently read).
+const HOMES = 4096;
+
 export class Readers {
   private slots: Slot[] = [];
+  /// The reader each session's history was last read in (`timeline`).
+  private homes = new Map<string, Slot>();
   private waiting = new Map<number, { resolve: (text: string) => void; reject: (error: Error) => void }>();
   private next = 0;
   private closed = false;
@@ -74,8 +79,17 @@ export class Readers {
   /// The answer, as JSON text.
   read(op: string, args: unknown, lang: Ask["lang"]): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    // A session's history read where it was read before: that reader keeps it read (read/transcripts.ts), another would
+    // read the whole of it again.
+    const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
+    const home = session !== null ? this.homes.get(session) : undefined;
     const free = this.slots.find((s) => s.busy === 0);
-    const slot = free ?? (this.slots.length < this.size ? this.start() : this.slots.reduce((a, b) => (b.busy < a.busy ? b : a)));
+    const slot = home !== undefined && this.slots.includes(home) ? home : (free ?? (this.slots.length < this.size ? this.start() : this.slots.reduce((a, b) => (b.busy < a.busy ? b : a))));
+    if (session !== null) {
+      this.homes.delete(session);
+      this.homes.set(session, slot);
+      while (this.homes.size > HOMES) this.homes.delete(this.homes.keys().next().value!);
+    }
     slot.idle?.();
     const id = this.next++;
     slot.busy++;
