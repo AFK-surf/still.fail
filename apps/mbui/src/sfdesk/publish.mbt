@@ -1,0 +1,409 @@
+// A chat made public (docs/public-share.md; ember web/src/Publish.tsx PublishDialog, PublishMessages, FileToggle;
+// Publish.css.ts, FilePreview.css.ts fp): from its info's 公开分享 row, over the whole window as a file is previewed,
+// what a snapshot would hold now (`chat.publishPreview`, asked as it opens: nothing is kept until it is published) laid
+// out as the chat lays out messages, each attachment where its message has it with its box to tick (all at first); a
+// bar floating at the top with how much was hidden, 发布 and close. Published (`chat.publish`), a small dialog has its
+// link to copy; the chat's info lists it from then on. Which files an agent's words place, and those words as
+// Markdown, are the core's (the preview's `placed`, `md`).
+
+///|
+/// The publishing as it stands: the chat it is of and its thread (None: closed), the preview as read (0 being read,
+/// 1 read, 2 not: `error` says why), the attachments left out (by their `k`), being published, the snapshot made.
+priv struct Publishing {
+  mut of : (ChatRef, Double)?
+  mut read : Int
+  mut preview : Json?
+  mut error : String
+  off : Map[String, Bool]
+  mut busy : Bool
+  mut made : Json?
+}
+
+///|
+let publishing : Publishing = {
+  of: None,
+  read: 0,
+  preview: None,
+  error: "",
+  off: {},
+  busy: false,
+  made: None,
+}
+
+///|
+fn publish_reset() -> Unit {
+  publishing.of = None
+  publishing.read = 0
+  publishing.preview = None
+  publishing.error = ""
+  publishing.off.clear()
+  publishing.busy = false
+  publishing.made = None
+}
+
+///|
+/// Opened for chat `r`'s `thread`: what a snapshot would hold asked now (usePublishPreview).
+fn open_publish(src : Source, r : ChatRef, thread : Double) -> Unit {
+  publish_reset()
+  publishing.of = Some((r, thread))
+  (src.call)("chat.publishPreview", { "station": Json::string(r.station), "thread": Json::number(thread) }, fn(res) {
+    match publishing.of {
+      Some((o, th)) if o.station == r.station && th == thread =>
+        match res {
+          Ok(v) => {
+            publishing.preview = Some(v)
+            publishing.read = 1
+          }
+          Err(e) => {
+            publishing.error = error_words(e)
+            publishing.read = 2
+          }
+        }
+      _ => ()
+    }
+  })
+}
+
+///|
+/// Published (`chat.publish`): up to the message the preview ended at, with the attachments ticked; its link in the
+/// small dialog that follows, why not said.
+fn publish_go(src : Source, r : ChatRef, thread : Double, p : Json?) -> Unit {
+  let ticked = items(p, "files").map(fn(f) { text(Some(f), "k") }).filter(fn(k) { !publishing.off.contains(k) })
+  publishing.busy = true
+  act(
+    src,
+    @sf.t("web-pages.chat.publish.verb"),
+    "",
+    "chat.publish",
+    {
+      "station": Json::string(r.station),
+      "thread": Json::number(thread),
+      "upto": Json::number(number(p, "upto")),
+      "files": Json::array(ticked.map(Json::string(_))),
+    },
+    ok=fn(v) {
+      publishing.busy = false
+      publishing.made = Some(v)
+    },
+    failed=fn() { publishing.busy = false },
+  )
+}
+
+///|
+/// What is open of it, drawn over the frame: the snapshot made's dialog, else the page that publishes it.
+fn publish_dialog(c : @ui.Ctx, src : Source) -> Unit {
+  let (r, thread) = match publishing.of {
+    Some(o) => o
+    None => return
+  }
+  match publishing.made {
+    Some(made) => publish_made(c, made)
+    None => publish_page(c, src, r, thread)
+  }
+}
+
+///|
+/// Published (PublishDialog's `made`): 已公开分享, who can read it, its link as a one-line field shows it; 完成 and 复制链接.
+fn publish_made(c : @ui.Ctx, made : Json) -> Unit {
+  let link = text(Some(made), "link")
+  let shown = @sf.dialog(
+    c,
+    "publish-made",
+    true,
+    @sf.t("web-pages.chat.publish.made"),
+    description=@sf.t("web-pages.chat.publish.lead"),
+    wide=true,
+    footer=fn() {
+      if @sf.button(c, @sf.t("common.done"), key="publish-made/done", tone=Ghost) {
+        publish_reset()
+      }
+      if @sf.button(c, @sf.t("web-pages.chat.publish.copyLink"), key="publish-made/copy", tone=Primary, icon="copy") {
+        c.copy_text(link)
+        toast_later(@sf.t("common.link.copied"))
+      }
+    },
+    fn() { c.box(style=publish_made_link, fn() { c.text(link, style=publish_made_words) |> ignore }) |> ignore },
+  )
+  if !shown {
+    publish_reset()
+  }
+}
+
+///|
+/// The page that publishes it (PublishDialog): over the whole window on the canvas, its bar floating at its top
+/// (公开分享, how much was hidden, 发布, close), what it would hold under it at the chat's width; Esc closes it.
+fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
+  let p = publishing.preview
+  let messages = items(p, "messages")
+  let o = c.overlay("publish", modal=true, scrim=@sf.theme().p.bg, fn() {
+    c.box(style=publish_fill, fn() {
+      match publishing.read {
+        0 => c.box(style=publish_note, fn() { @sf.wait_line(c, @sf.t("web-pages.chat.publish.reading"), key="publish/reading") }) |> ignore
+        2 => c.box(style=publish_note, fn() { c.text(publishing.error, style=publish_problem) |> ignore }) |> ignore
+        _ if messages.length() == 0 =>
+          c.box(style=publish_note, fn() { c.text(@sf.t("web-pages.chat.publish.empty"), style=publish_note_words) |> ignore })
+          |> ignore
+        _ =>
+          c.list("publish/page/" + r.station + "/" + thread.to_string(), 1, c.height, fn(_) {
+            c.box(style=publish_column_room, fn() {
+              c.box(style=publish_column, fn() {
+                c.text(@sf.t("web-pages.chat.publish.lead"), style=publish_lead) |> ignore
+                let here : MessageHere = {
+                  station: r.station,
+                  session: r.session,
+                  view: chat_view((src.topic)("chat", chat_params(r)).value.unwrap_or(Json::null())),
+                  go: None,
+                  inline: true,
+                  list: None,
+                  core: None,
+                }
+                for m in messages {
+                  publish_message(c, src, here, Some(m))
+                }
+              })
+              |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+      }
+      // its bar, floating at the top (fpHead with Publish.css.ts head: a pill, 20 in at its start, 4 at its end)
+      c.layer(fn() {
+        c.box(style=publish_bar_room, fn() {
+          c.box(style=publish_bar, glass=@sf.glass_floating(), fn() {
+            c.box(style=publish_title, fn() {
+              c.text(@sf.t("web-pages.chat.publish"), style=publish_name) |> ignore
+              match text(p, "hiddenText") {
+                "" => ()
+                hidden =>
+                  c.box(style=publish_head_note, fn() {
+                    @sf.icon(c, "shield-check", size=publish_note_icon, color=@sf.theme().p.muted) |> ignore
+                    c.text(hidden, style=publish_meta) |> ignore
+                  })
+                  |> ignore
+              }
+            })
+            |> ignore
+            if @sf.button(
+                c,
+                @sf.t("web-pages.chat.publish.go"),
+                key="publish/go",
+                tone=Primary,
+                busy=publishing.busy,
+                disabled=p is None || messages.length() == 0,
+              ) {
+              publish_go(src, r, thread, p)
+            }
+            let close = c.id("publish/close")
+            if @sf.icon_button(c, "close", key="publish/close", round=true, label=@sf.t("common.close")) {
+              publish_reset()
+            }
+            @sf.tip(c, "publish/close-tip", close, @sf.t("web-main.preview.closeKey"))
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  if o.dismissed is Some(_) && !publishing.busy {
+    publish_reset()
+  }
+}
+
+///|
+/// A snapshot's message as the chat draws others' (PreviewMessage: each one's head in line with its avatar): an agent's
+/// Markdown with the attachments its words place where they place them, a person's as written; the rest under it,
+/// each to tick; under one with something hidden, how many.
+fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?) -> Unit {
+  let n = number(m, "n").to_int64().to_string()
+  let agent = flag(m, "agent")
+  let files = items(m, "files")
+  let placed = items(m, "placed").map(fn(x) { match x { String(s) => s; _ => "" } })
+  let named : Map[String, Json] = {}
+  for f in files {
+    named[text(Some(f), "name")] = f
+  }
+  let under = files.filter(fn(f) { !placed.contains(text(Some(f), "name")) })
+  others_message(
+    c,
+    true,
+    "publish/" + n,
+    stamp_of(m, "createdAt"),
+    fn() {
+      if agent {
+        agent_avatar(c, src, here, "publish/" + n, text(field(m, "maker"), "id"), text(m, "runtime"), "", "")
+      } else {
+        person_avatar(c, src, text(m, "author"), text(m, "author"), text(m, "picture"))
+      }
+    },
+    fn() { c.box(style=msg_name_room, fn() { c.text(text(m, "author"), style=msg_name) |> ignore }) |> ignore },
+    None,
+    fn() {
+      if agent {
+        @sf.markdown(
+          c,
+          text(m, "text"),
+          tree=field(m, "md"),
+          key="publish-md/" + n,
+          size=body_size,
+          files=fn(name) {
+            if placed.contains(name) {
+              named.get(name).map(fn(f) { fn() { publish_file(c, src, here, f) } })
+            } else {
+              None
+            }
+          },
+        )
+        |> ignore
+      } else {
+        person_words(c, text(m, "text"), "publish/" + n)
+      }
+      if under.length() > 0 {
+        c.box(style=publish_files, fn() {
+          for f in under {
+            publish_file(c, src, here, f)
+          }
+        })
+        |> ignore
+      }
+      match text(m, "hiddenText") {
+        "" => ()
+        hidden =>
+          c.box(style=publish_head_note, fn() {
+            @sf.icon(c, "shield-check", size=publish_note_icon_small, color=@sf.theme().p.muted) |> ignore
+            c.text(hidden, style=publish_meta) |> ignore
+          })
+          |> ignore
+      }
+    },
+  )
+}
+
+///|
+/// An attachment in the preview, as the chat shows it (FileToggle): ticked (its box in its top right corner), it goes
+/// with the snapshot; unticked, it fades.
+fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json) -> Unit {
+  let k = text(Some(f), "k")
+  let on = !publishing.off.contains(k)
+  let card = c.box(style=publish_file_box, fn() {
+    message_files(c, src, here, [@sfbase.attachment_of(field(Some(f), "file").unwrap_or(Json::null()))], false)
+    c.layer(fn() {
+      c.box(style=publish_tick, fn() {
+        let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=text(Some(f), "name")).value
+        if (now == On) != on {
+          if now == On {
+            publishing.off.remove(k)
+          } else {
+            publishing.off[k] = true
+          }
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  if !on {
+    c.look(card, @ui.look(alpha=publish_off_alpha))
+  }
+}
+
+///|
+/// An attachment left out (file[data-off]: .45); the shield before how much was hidden, in the bar (14) and under a
+/// message (13).
+let publish_off_alpha : Double = 0.45
+
+///|
+let publish_note_icon : Double = 14.0
+
+///|
+let publish_note_icon_small : Double = 13.0
+
+///|
+/// The page over the whole window (fp): the canvas.
+// kept across runs: a value (no field of it changes)
+let publish_fill : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
+
+///|
+/// Being read, not read, nothing to hold (fpNote: in the middle, muted, the ui's size).
+// kept across runs: a value (no field of it changes)
+let publish_note : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter gap=S3_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_note_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_problem : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
+
+///|
+/// What it would hold (page): the chat's width (760 at most) in the middle, 84 down, 32 in, 96 under, 16 apart.
+// kept across runs: a value (no field of it changes)
+let publish_column_room : @ui.Style = @ui.css("w=Full align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_column : @ui.Style = @ui.css("w=Full px=S8 pt=S20 pb=S24 gap=S4").then(@ui.style(max_w=Fixed(publish_page_w)))
+
+///|
+let publish_page_w : Double = 760.0
+
+///|
+/// Who can read it (lead: the ui's size, muted).
+// kept across runs: a value (no field of it changes)
+let publish_lead : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
+
+///|
+/// The bar's place: 16 down, in the middle.
+// kept across runs: a value (no field of it changes)
+let publish_bar_room : @ui.Style = @ui.css("w=Full pt=S4 align=ACenter")
+
+///|
+/// The bar (fpHead, Publish.css.ts head): 44 high, a pill, 20 in at its start and 4 at its end, its parts 12 apart, a
+/// line round it and a shadow under it.
+// kept across runs: a value (no field of it changes)
+let publish_bar : @ui.Style = @ui.css("row h=S11 pl=S5 pr=S1 gap=S3 radius=Full align=ACenter border=B1 border_color=Line shadow=Md")
+
+///|
+/// Its name and what was hidden (fpTitle: 10 apart, 12 before what follows).
+// kept across runs: a value (no field of it changes)
+let publish_title : @ui.Style = @ui.css("row gap=S2_5 pr=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_name : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// How much was hidden (headNote, note: its shield 4 or 6 before it, the meta's size, muted).
+// kept across runs: a value (no field of it changes)
+let publish_head_note : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// The attachments under a message (files: 8 apart, 6 under its words).
+// kept across runs: a value (no field of it changes)
+let publish_files : @ui.Style = @ui.css("row gap=S2 pt=S1_5")
+
+///|
+/// An attachment to tick (file), its box 8 in from its top right (tick).
+// kept across runs: a value (no field of it changes)
+let publish_file_box : @ui.Style = @ui.css("align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_tick : @ui.Style = @ui.css("w=Full pt=S2 pr=S2 align=AEnd")
+
+///|
+/// The link once published (madeLink: a pill 40 high, 18 in, on the card's ground, cut short at its end).
+// kept across runs: a value (no field of it changes)
+let publish_made_link : @ui.Style = @ui.css("w=Full h=S10 px=S4_5 radius=Full bg=Card justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let publish_made_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, max_lines=1)

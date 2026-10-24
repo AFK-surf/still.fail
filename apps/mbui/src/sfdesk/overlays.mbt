@@ -22,4 +22,6 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit
   new_workspace_dialog(c, src, pages)
   // a chat shared with the viewer's other workspaces (share_dialog.mbt)
   share_dialog(c, src)
+  // a chat made public (publish.mbt)
+  publish_dialog(c, src)
 }

@@ -94,6 +94,26 @@ test("a_preview_says_how_many_things_each_message_had_hidden_and_has_its_attachm
   assert.equal(shown.files[1].sizeText, "11 MB");
 });
 
+test("an_agents_words_in_a_preview_are_read_as_markdown_with_the_files_they_place", () => {
+  const shown = previewShown({
+    upto: 2,
+    entries: [
+      { n: 1, at: 1, authorKind: "person", author: "安", text: "看 ![](a.png)", files: ["f0"] },
+      { n: 2, at: 2, authorKind: "agent", author: "奏", text: "截图 ![](shot.png)，日志在 `deploy.log`", files: ["f1", "f2"] },
+    ],
+    files: [
+      { k: "f0", name: "a.png", size: 1, type: "image/png", n: 1 },
+      { k: "f1", name: "shot.png", size: 1, type: "image/png", n: 2 },
+      { k: "f2", name: "deploy.log", size: 1, type: "text/plain", n: 2 },
+    ],
+  }, { now: 3, offsetMin: 0 });
+  // A person's words place nothing and are not read; an agent's place what they link (not a name in code).
+  assert.equal(shown.messages[0].placed, undefined);
+  assert.equal(shown.messages[0].md, undefined);
+  assert.deepEqual(shown.messages[1].placed, ["shot.png"]);
+  assert.ok(shown.messages[1].md, "read as Markdown");
+});
+
 test("the_chats_links_are_listed_newest_first_and_each_is_revoked_by_its_publisher_or_a_manager", async () => {
   const thread = { ...threadView(7, 3), published: [published("p1", 1_000, "b@x.com", "Bo"), published("p2", 2_000, "A@x.com", "安")] };
   {
