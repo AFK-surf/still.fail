@@ -38,9 +38,24 @@ pub fn history_only_io() -> Bool {
 }
 
 ///|
+/// Agent `key`'s history beside its chat `r`, in front (not toggled), brought to transcript entry `entry` if one is
+/// asked (ChatPage.tsx history): the page the chat's, in place of the one that asked.
+fn history_beside(src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
+  match app.nav.top() {
+    History(_, _, _) => app.nav.replace(Chat(r))
+    _ => ()
+  }
+  match entry {
+    Some(e) => history_focus(r.station, key, e)
+    None => ()
+  }
+  side_change(src, r, "open", Some(key))
+}
+
+///|
 /// Agent `key`'s history on `station` (`a` as its chat's view has it): its head and, unfolded, its details, a line
 /// under them; its steps in the rest (history_list.mbt).
-pub fn agent_history(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
+fn agent_history(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
   history_head(c, src, station, key, a)
   c.box(style=wh_fill, fn() { history_list(c, src, station, key) }) |> ignore
 }

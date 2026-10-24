@@ -687,6 +687,12 @@ fn main_page(
 ) -> Unit {
   match page {
     Chat(r) => chat_page(c, src, w, r, pages)
+    // an agent's history, asked as a page (a link's `?history=…&entry=…`): on the desktop its chat with the history
+    // open beside it at the entry asked (ChatPage.tsx's `history`), the page the chat's
+    History(r, key, entry) => {
+      c.tell("history-page/" + key, fn() { history_beside(src, r, key, entry) })
+      chat_page(c, src, w, r, pages)
+    }
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
     // settings' own home is its first page (the web goes to 外观)
