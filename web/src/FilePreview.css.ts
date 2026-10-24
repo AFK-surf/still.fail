@@ -56,6 +56,13 @@ globalStyle(`${fp}[data-awake] ${fpHead}, ${fpHead}:hover, ${fpHead}:has(:focus-
 export const fpHeadProgress = style({
   display: "flex", alignItems: "center", gap: "10px", padding: "0 8px", color: vars.muted, fontSize: vars.textMeta,
   fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+  // Loading must not push the close button beyond a phone's viewport.
+  "@media": {
+    "(max-width: 640px)": {
+      ...pageGlass, position: "absolute", top: "calc(100% + 8px)", left: "0", right: "0",
+      height: "36px", borderRadius: "inherit",
+    },
+  },
 });
 globalStyle(`${fpHeadProgress} b`, { color: vars.text, fontWeight: "600" });
 export const fpTitle = style({ flex: "0 1 auto", minWidth: "0", display: "flex", alignItems: "baseline", gap: "10px", marginRight: "auto", paddingRight: "12px" });
