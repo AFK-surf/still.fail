@@ -30,6 +30,14 @@ export const warn = style({
 globalStyle(`${warn} [data-level="amber"]`, { color: vars.amber });
 globalStyle(`${warn} [data-level="red"]`, { color: vars.red });
 export const cardVersions = style({ marginLeft: "17px", selectors: { "&:empty": { display: "none" } } });
+/** What still.fail uses of the machine: a quiet line, the whole of it opening the resources page. */
+export const uses = style({
+  display: "flex", alignItems: "center", gap: "14px", marginLeft: "17px", minWidth: "0",
+  fontSize: vars.textUi, color: vars.muted, textDecoration: "none", fontVariantNumeric: "tabular-nums",
+  selectors: { "&:hover": { color: vars.text }, "&[data-flush]": { marginLeft: "0" } },
+});
+export const usesFigures = style({ flex: "1", display: "flex", flexWrap: "wrap", gap: "0 14px", minWidth: "0" });
+globalStyle(`${usesFigures} b`, { fontWeight: "500", color: vars.text });
 export const cardFoot = style({
   display: "flex", flexWrap: "wrap", gap: "0 12px", marginLeft: "17px", fontSize: vars.textMeta, color: vars.muted,
 });

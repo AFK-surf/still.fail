@@ -17,7 +17,8 @@ import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, Segmented, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import { HostDetails, joinedText, LanKept, Net, silentOf, state, useStationNet } from "./StationCards.tsx";
+import { HostDetails, joinedText, LanKept, Net, silentOf, state, Uses, useStationNet } from "./StationCards.tsx";
+import { useResources } from "../Resources.tsx";
 import { useLanKept } from "../localNetwork.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
@@ -145,7 +146,7 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
       {side ? <MobileBack to={back} label="Station" /> : <BackLink to={back} label="Station" />}
       <Head s={s} here={here} manager={manager} edits={edits} />
       {edits.dialogs}
-      <Body s={s} manager={manager} />
+      <Body s={s} manager={manager} workspace={entry.id} />
     </div>
   );
 }
@@ -200,7 +201,7 @@ type Part = "overview" | "settings" | "machine";
 const PARTS: Part[] = ["overview", "settings", "machine"];
 
 /** The rest of it in its parts (`?part=`, the overview by default), each section once there is something to show of it. */
-function Body({ s, manager }: { s: StationView; manager: boolean }) {
+function Body({ s, manager, workspace }: { s: StationView; manager: boolean; workspace: string }) {
   // A login's link (`/w/<ws>/s/<station>/login/<id>`, workspace.tsx) comes here with it: its card brought into view.
   const [search, setSearch] = useSearchParams();
   const asked = search.get("part") as Part | null;
@@ -212,7 +213,7 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
         <Segmented<Part> label={t("web-pages.stations.page.parts")} value={part} onChange={show}
           options={PARTS.map((p) => ({ value: p, label: t(`web-pages.stations.page.part.${p}`) }))} />
       </div>
-      {part === "overview" && <Overview s={s} />}
+      {part === "overview" && <Overview s={s} workspace={workspace} />}
       {part === "settings" && <Settings s={s} manager={manager} marked={search.get("login")} />}
       {part === "machine" && <Machine s={s} manager={manager} />}
     </>
@@ -221,8 +222,10 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
 
 /** What is left of the machine (and what its agents take of it), and what runs on it: its screens, profiles, connects and
  * folders (its agents at work are in its head). */
-function Overview({ s }: { s: StationView }) {
+function Overview({ s, workspace }: { s: StationView; workspace: string }) {
   const navigate = useGo();
+  // What still.fail itself uses of the machine, opening the resources page: read (the station looking often) while shown.
+  const uses = useResources(workspace).value?.stations.find((r) => r.station === s.station)?.use;
   const o = s.overview;
   const base = stationBase(s.station);
   const folders = o?.drive?.roots ?? [];
@@ -237,6 +240,7 @@ function Overview({ s }: { s: StationView }) {
             {net && <LanKept lan={net.lan} />}
             {/* What its agents' processes take of the memory. */}
             {o && o.processes.length > 0 && <p className={css.memory}>{o.processesText}</p>}
+            {uses && <Uses use={uses} to={`/w/${workspace}/settings/resources`} flush />}
           </div>
         </Section>
       )}

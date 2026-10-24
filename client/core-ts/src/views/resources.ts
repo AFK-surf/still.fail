@@ -78,6 +78,7 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
   // The last minutes' totals, each station's points summed by when (a look of each is some seconds apart).
   const lines: Map<number, Use>[] = [];
   const groups: J[] = [];
+  const each: J[] = [];
   for (const s of sources) {
     if (!s.online) {
       notes.push(t("core-views.resources.note.offline", { name: s.name }));
@@ -103,6 +104,7 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
     cores += num(get(get(v, "machine"), "cores"));
     machineMemory += num(get(get(v, "machine"), "memory"));
     total = plus(total, useOf(get(v, "total")));
+    each.push({ station: s.address, use: said(useOf(get(v, "total"))) });
     lines.push(new Map(arr(get(v, "history")).map((p) => [Math.round(num(get(p, "at")) / 5000), useOf(p)])));
     for (const h of arr(get(v, "hours"))) {
       if (num(get(h, "at")) <= now - HOURS * HOUR_MS) continue;
@@ -149,6 +151,7 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
     tiles,
     kinds: KINDS.map((k) => ({ key: k, label: t(`core-views.resources.kind.${k}`) })),
     groups: groups.sort((a, b) => b.use.cpu - a.use.cpu),
+    stations: each,
     notes,
     basis: t("core-views.resources.basis"),
   };

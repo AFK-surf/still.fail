@@ -5127,6 +5127,12 @@ export interface ResourceKind {
 	label: string;
 }
 
+/** What still.fail uses of one station's machine now. */
+export interface ResourceStation {
+	station: string;
+	use: ResourceUse;
+}
+
 /** A total now (CPU, memory, power, wakeups), said, and how it went. */
 export interface ResourceTile {
 	key: string;
@@ -5154,6 +5160,8 @@ export interface ResourcesView {
 	kinds: ResourceKind[];
 	/** Whose uses what, the most CPU first. */
 	groups: ResourceGroup[];
+	/** Each station's total, for its card (the stations' settings page); the stations not read left out. */
+	stations: ResourceStation[];
 	notes: string[];
 	basis: string;
 }

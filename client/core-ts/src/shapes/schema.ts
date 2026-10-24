@@ -2462,6 +2462,7 @@ export const SHAPES: Record<string, Shape> = {
     ["tiles", vec("ResourceTile")],
     ["kinds", vec("ResourceKind"), { doc: "What the page filters the groups by, in its order." }],
     ["groups", vec("ResourceGroup"), { doc: "Whose uses what, the most CPU first." }],
+    ["stations", vec("ResourceStation"), { doc: "Each station's total, for its card (the stations' settings page); the stations not read left out." }],
     ["notes", vec("String")],
     ["basis", "String"],
   ], { doc: "What of the machines of a workspace's stations still.fail uses now, as Activity Monitor says it (the `resources` view,\nclient/core-ts/src/views/resources.ts): CPU, memory, power and wakeups in total, with the last minutes' line, and by\nwhose (a chat, the agents, the desktop app, the station), each with its processes.", keepNone: true }),
@@ -2472,6 +2473,10 @@ export const SHAPES: Record<string, Shape> = {
     ["sub", "String"],
     ["points", vec("f64"), { doc: "The last minutes' values, the oldest first, for a line." }],
   ], { doc: "A total now (CPU, memory, power, wakeups), said, and how it went." }),
+  ResourceStation: struct([
+    ["station", "String"],
+    ["use", "ResourceUse"],
+  ], { doc: "What still.fail uses of one station's machine now." }),
   ResourceKind: struct([
     ["key", "String"],
     ["label", "String"],

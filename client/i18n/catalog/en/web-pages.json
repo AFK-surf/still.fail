@@ -1123,6 +1123,7 @@
   "web-pages.stations.lanKeptOpen": "Open System Settings",
   "web-pages.stations.software": "Software",
   "web-pages.stations.softwareOffline": "The station is offline. Updates appear once it connects.",
+  "web-pages.stations.uses": "{name} uses",
   "web-pages.stations.total": "{total} total",
   "web-pages.stations.ways": "Latency per route (ping round trip)",
   "web-pages.stations.wayNone": "unreachable",

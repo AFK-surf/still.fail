@@ -1054,6 +1054,7 @@
   "web-pages.stations.lanKeptOpen": "打开系统设置",
   "web-pages.stations.software": "软件与更新",
   "web-pages.stations.softwareOffline": "station 离线，连接后可查看更新",
+  "web-pages.stations.uses": "{name} 占用",
   "web-pages.stations.total": "共 {total}",
   "web-pages.stations.ways": "各线路延迟（ping 往返）",
   "web-pages.stations.wayNone": "未连接",
