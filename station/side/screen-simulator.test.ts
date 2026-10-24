@@ -1,9 +1,10 @@
 // An iOS Simulator as a screen (docs/remote-screens.md "Simulators") on a real Mac with Xcode: a simulator of this
 // test's own made and booted (deleted afterwards), found as the station finds it, viewed through still.fail Helper
 // (native/helper, prebuilt by scripts/native.ts; STILLFAIL_HELPER another) as the station starts it. A finger dragged
-// across its home screen: says how soon the first picture after it came, the frames a second while it moved, and
-// that a still screen sends nothing; keeps the last picture (a JPEG view) in SIM_OUT. Real time, a real device: a side
-// test. SIM_CODEC: the view's codec (default h264; jpeg where this Mac encodes no video, a virtual one).
+// across its home screen: says how soon the first picture after it came, the frames a second while it moved, and how
+// many came in 2 s once it settled (said, not asserted: the device draws when it will, a home screen just booted
+// still animating); keeps the last picture (a JPEG view) in SIM_OUT. Real time, a real device: a side test.
+// SIM_CODEC: the view's codec (default h264; jpeg where this Mac encodes no video, a virtual one).
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -92,14 +93,13 @@ test("a simulator, seen and driven through still.fail Helper", { skip: !hasSimct
       await sleep(1000);
     }
     const seconds = (performance.now() - started) / 1000;
-    // Settled: a still screen sends nothing.
+    // Settled: what the device drew by itself meanwhile, if anything.
     await sleep(1500);
     const still = frames.length;
     await sleep(2000);
     const stillFrames = frames.length - still;
     console.log(`a picture ${after.join(", ")} ms after the finger went down; ${(moving / seconds).toFixed(1)} frames a second over ${seconds.toFixed(1)} s of dragging and settling; ${stillFrames} in 2 s still`);
     assert.equal(after.length, 4, "every drag showed");
-    assert.equal(stillFrames, 0, "a still screen sends nothing");
     const last = frames.at(-1)!.frame;
     if (config.codec === "jpeg") writeFileSync(join(OUT, "simulator.jpg"), last.data);
     ended = true;
