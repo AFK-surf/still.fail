@@ -658,8 +658,11 @@ FileData; Zoom.kt):
   is on top of the window and translucent (setZOrderOnTop), the views in a layer over it in the view tree (a page
   takes its touches) under it on the screen; the video is Media3's ExoPlayer (1.8.0, as the Android app's) on a
   TextureView whose transform puts the picture in its rect, reading through ViewSource (DriveSource.kt's window: 256 KB
-  first, doubling to 4 MB while reads run on, served from the window around the extractor's reopenings), each read
-  asked of the app (`view_read_next`) and answered from the core (`view_read_answer`); the page is a WebView with the
+  first, doubling to 4 MB while reads run on, kept on the disk while the view is open), each read asked of the app
+  (`view_read_next`) and answered from the core as its bytes come (`view_read_answer` piece by piece: the core's part
+  read with `stream`), the player going on with the first of them while the rest is on its way (on a slow link it
+  waits for what it needs, not for the 4 MB around it); a read no reader is on any more (a seek elsewhere) is let go
+  of, the app stopping the core's read; the page is a WebView with the
   Android app's HtmlPage settings (JavaScript on, no file or content access, no DOM storage, shouldOverrideUrlLoading
   true). macOS and iOS (apple_views.m): the Metal layer non-opaque over a views root, AVPlayerLayer with an
   AVAssetResourceLoaderDelegate on a scheme of its own reading through the same calls, WKWebView with a
@@ -912,9 +915,10 @@ VideoViewer.kt frameStarts, saveFrame, landscape; ImageMarks.kt):
   @hostapi.draw_marks: Android's Canvas, Core Graphics), then it is kept with the downloads or put in the chat's draft with
   a quote per numbered mark (图片 … 标注 n: where it is, on which image, what was said), and the viewer closes to the
   chat (已添加到对话，返回对话发送). Back steps out of a note, the words, the colours, the pick, then marking.
-- A video's frames: their times read from the file as the system reads it (mbui's NativeView::frames: Android's
-  MediaExtractor over the same reads as the player, Apple's sample cursor), so ‹ › step to the very next frame the file
-  has whatever its rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
+- A video's frames: their times read from the file's index (mbui's NativeView::frames: Android's Mp4Extractor reading
+  an MP4's or a QuickTime file's moov over the same reads as the player, Apple's sample cursor; never the samples, which
+  would be the whole video track read beside the player), so ‹ › step to the very next frame the file has whatever its
+  rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
   (paused): the frame showing grabbed at its own size (MediaMetadataRetriever, AVAssetImageGenerator) and kept with the
   downloads as name-n.png. 横屏: the phone turned for it, upright again as the viewer closes.
 - `APP=sffix MBUI_FIXTURE=chat-preview-step | chat-preview-swipe` (a second picture beside the first: the ways to it;

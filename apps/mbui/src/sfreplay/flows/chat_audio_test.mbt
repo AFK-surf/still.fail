@@ -1,7 +1,7 @@
 // 46-chat-audio (e2e/traces/chat-audio.trace: Mini1 against the local still.fail, 54 messages): a song sent in a chat
 // by alice's other device (peer createfiles), opened from its card: the preview's small player (AudioViewer), its name,
-// play; the system's player reads the song through the core a part at a time (station.file.part: its head, then all
-// of it, as the run's AVPlayer asked), and plays on (2 s in: 0:02). Back closes it.
+// play; the system's player reads the song through the core a part at a time (station.file.part, each part as it
+// comes, as the run's AVPlayer asked: its trace's read lines), and plays on (2 s in: 0:02). Back closes it.
 
 ///|
 /// The native view the preview opened last (the fake host's `open ID KIND …`).
@@ -39,11 +39,12 @@ test "46-chat-audio" {
     f.run_to(@sfapp.preview_rest())
     let v = opened_view(f)
     assert_true(v > 0)
-    // the system's player asks for the song's head, then all of it
-    player_reads(f, v, 177424)
+    // the system's player reads the song as the run's asked (the trace's read lines)
+    player_opened(f, v)
     // ready and playing as the Mac's player said (the trace's info lines, Replay::host), 2 s in
     f.t.draw()
     f.see("0:02 /")
+    read_whole(f, v, 177424)
     // left alone, its bars fade
     f.run_for(@sfapp.rest_ms)
     f.back()

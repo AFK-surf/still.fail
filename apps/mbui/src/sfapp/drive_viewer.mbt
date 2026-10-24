@@ -61,17 +61,10 @@ fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerFile 
         Some((mtime, size)) => drive_keep(p, "played", mtime, size)
         None => ()
       }
-      (src.read_bytes)("drive.read", Json::object(p), fn(r) {
+      stream_part(src, "drive.read", p, listed.map(fn(l) { l.1 }).unwrap_or(0.0), answer, ended=fn(r) {
         match r {
-          Ok((answer_json, bytes)) =>
-            answer(bytes, match field(Some(answer_json), "total") {
-              Some(Number(t, ..)) => t
-              _ => -1.0
-            })
-          Err(e) => {
-            @ui.log("player: \{name} @\{offset.to_int()} failed: \{e.stringify()}")
-            answer(b"", -2.0)
-          }
+          Ok(_) => ()
+          Err(e) => @ui.log("player: \{name} @\{offset.to_int()} failed: \{e.stringify()}")
         }
       })
     }),

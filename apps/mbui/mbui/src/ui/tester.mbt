@@ -256,6 +256,7 @@ pub fn Tester::new(
     reads: [],
     read_ids: 0,
     read_answers: [],
+    read_from: {},
     players: {},
     share: None,
     share_files: [],

@@ -863,8 +863,8 @@ extern "C" int32_t mb_host_view_info(int32_t vid, double *out) {
 
 // a player's: none here
 extern "C" int32_t mb_host_view_read_next(int32_t vid, double *out) { (void)vid; (void)out; return 0; }
-extern "C" void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total) {
-  (void)vid; (void)req; (void)data; (void)total;
+extern "C" void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
+  (void)vid; (void)req; (void)data; (void)total; (void)more;
 }
 // a page's grab: how it stands (what 2), the PNG
 extern "C" moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {

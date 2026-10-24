@@ -254,8 +254,8 @@ impl @hostapi.Host for FakeHost with view_read_next(_, a0, a1) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with view_read_answer(_, a0, a1, a2, a3) {
-  h_view_read_answer(a0, a1, a2, a3)
+impl @hostapi.Host for FakeHost with view_read_answer(_, a0, a1, a2, a3, a4) {
+  h_view_read_answer(a0, a1, a2, a3, a4)
 }
 
 ///|

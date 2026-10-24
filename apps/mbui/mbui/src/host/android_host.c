@@ -177,7 +177,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_v_control = (*env)->GetStaticMethodID(env, views_cls, "control", "(IID)V");
   m_v_info = (*env)->GetStaticMethodID(env, views_cls, "info", "(I[D)I");
   m_v_read_next = (*env)->GetStaticMethodID(env, views_cls, "readNext", "(I[D)I");
-  m_v_read_answer = (*env)->GetStaticMethodID(env, views_cls, "readAnswer", "(II[BD)V");
+  m_v_read_answer = (*env)->GetStaticMethodID(env, views_cls, "readAnswer", "(II[BDZ)V");
   m_v_site_next = (*env)->GetStaticMethodID(env, views_cls, "siteNext", "(I)Ljava/lang/String;");
   m_v_site_body = (*env)->GetStaticMethodID(env, views_cls, "siteBody", "(II)[B");
   m_v_site_head = (*env)->GetStaticMethodID(env, views_cls, "siteHead", "(IIILjava/lang/String;)V");
@@ -1836,10 +1836,10 @@ void mb_host_view_tell(int32_t id, int32_t what, moonbit_string_t text) {
   (*env)->DeleteLocalRef(env, t);
 }
 
-void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {
+void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
   JNIEnv *env = env_();
   jbyteArray b = jbytes(env, data);
-  (*env)->CallStaticVoidMethod(env, views_cls, m_v_read_answer, id, req, b, total);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_read_answer, id, req, b, total, (jboolean)(more != 0));
   (*env)->DeleteLocalRef(env, b);
 }
 

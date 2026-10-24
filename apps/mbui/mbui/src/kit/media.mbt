@@ -9,12 +9,13 @@
 
 ///|
 /// What is played: its name, its media type, whether it is known to be a song, and how its bytes are read
-/// (`read(offset, length, answer)`: `answer(bytes, total)`, as `@ui.NativeView::video` reads).
+/// (`read(offset, length, answer)`: `answer(bytes, total, more)` as they come, what it gives back stopping it, as
+/// `@ui.NativeView::video` reads).
 pub(all) struct MediaTrack {
   name : String
   mime : String
   audio : Bool
-  read : (Double, Int, (Bytes, Double) -> Unit) -> Unit
+  read : (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit
 }
 
 ///|
@@ -88,13 +89,15 @@ pub(all) enum MediaNote {
 
 ///|
 /// A frame of the player: how it stands, what is playing, whether it is a song, whether what it waits on has been
-/// waited on long enough to say, how far its controls show (0 … 1, coming or going) and whether they take taps, the
-/// note a double tap said (while it is said), the subtitle's words now ("" none).
+/// waited on long enough to say and how fast its bytes come meanwhile (bytes a second over the wait's last whole
+/// second; -1 not waiting, or not a second yet), how far its controls show (0 … 1, coming or going) and whether they
+/// take taps, the note a double tap said (while it is said), the subtitle's words now ("" none).
 pub(all) struct MediaFrame {
   status : MediaStatus
   phase : MediaPhase
   audio : Bool
   waited : Bool
+  rate : Double
   shown : Double
   on : Bool
   note : MediaNote?
@@ -140,6 +143,12 @@ pub struct Media {
   /// how loud (0 … 1), and its sound off, kept for what it plays next
   priv mut volume : Double
   priv mut muted : Bool
+  /// while it waits (opening, buffering): whether it does, the last whole second measured and the bytes it had been
+  /// given by then (-1: none yet), how fast they came (Media::rate_now)
+  priv mut waiting : Bool
+  priv mut rate_tick : Int
+  priv mut rate_bytes : Double
+  priv mut rate : Double
 }
 
 ///|
@@ -198,6 +207,10 @@ pub fn Media::new(
     pinned: None,
     volume: 1.0,
     muted: false,
+    waiting: false,
+    rate_tick: 0,
+    rate_bytes: 0.0,
+    rate: -1.0,
   }
 }
 
@@ -223,6 +236,7 @@ pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> U
   self.awake = true
   self.scrub = -1.0
   self.scrub_sent = -1.0
+  self.waiting = false
   @ui.log("player: open \{track.name} (\{track.mime}) from \{start.to_int()} ms")
 }
 
@@ -568,8 +582,9 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
   if p.note is Some(_) && after(c, p.key + "/note", true, p.note_ms) {
     p.note = None
   }
-  // what it waits on said only once it has waited wait_ms
+  // what it waits on said only once it has waited wait_ms, with how fast its bytes come meanwhile
   let waited = after(c, p.key + "/wait", phase is (Opening | Buffering), p.wait_ms)
+  let rate = p.rate_now(c, phase is (Opening | Buffering))
   // a tap left single: the controls shown or hidden
   if p.tap_waiting && after(c, p.key + "/tap", true, p.double_tap_ms) {
     p.tap_waiting = false
@@ -582,7 +597,41 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
   let target = if p.awake || phase != Playing || audio { 1.0 } else { 0.0 }
   let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(p.shown_ms))
   let said = if p.subs_on { @codec.cues_at(p.cues, s.position) } else { "" }
-  { status: s, phase, audio, waited, shown, on: shown > 0.0, note: p.note, said }
+  { status: s, phase, audio, waited, rate, shown, on: shown > 0.0, note: p.note, said }
+}
+
+///|
+/// How fast its bytes come while it waits (`waiting`: opening or buffering): those its player was given (the host's
+/// count, NativeView::bytes) over each whole second of the clock (Ctx::every) from the first that began after the wait
+/// did, as the last one ended; -1 when it does not wait, or before such a second is over.
+fn Media::rate_now(self : Media, c : @ui.Ctx, waiting : Bool) -> Double {
+  let bytes = match self.view {
+    Some(n) => n.bytes()
+    None => 0.0
+  }
+  if !waiting {
+    self.waiting = false
+    return -1.0
+  }
+  let k = c.every(1000.0)
+  if !self.waiting {
+    // (the second it began in counts for nothing: part of it was not waited)
+    self.waiting = true
+    self.rate_tick = k + 1
+    self.rate_bytes = -1.0
+    self.rate = -1.0
+  }
+  if k >= self.rate_tick {
+    if self.rate_bytes >= 0.0 && k > self.rate_tick {
+      let came = bytes - self.rate_bytes
+      self.rate = (if came > 0.0 { came } else { 0.0 }) / (k - self.rate_tick).to_double()
+    }
+    if self.rate_bytes < 0.0 || k > self.rate_tick {
+      self.rate_tick = k
+      self.rate_bytes = bytes
+    }
+  }
+  self.rate
 }
 
 ///|

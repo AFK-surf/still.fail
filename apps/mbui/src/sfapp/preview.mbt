@@ -432,16 +432,7 @@ fn first_frame(c : @ui.Ctx, src : Source, station : String, key : String, a : At
           "length": Json::number(length.to_double()),
         }
         chat_keep(p, a.size)
-        (src.read_bytes)("station.file.part", Json::object(p), fn(r) {
-          match r {
-            Ok((j, bytes)) =>
-              answer(bytes, match field(Some(j), "total") {
-                Some(Number(t, ..)) => t
-                _ => -1.0
-              })
-            Err(_) => answer(b"", -2.0)
-          }
-        })
+        stream_part(src, "station.file.part", p, a.size, answer)
       })
       if !n.here() {
         f.picture = "!"
@@ -849,6 +840,12 @@ fn Viewer::read_part(
   keep : String,
   done : (Result[(Json, Bytes), Json]) -> Unit,
 ) -> Unit {
+  (src.read_bytes)(self.part_call(), Json::object(self.part_params(offset, length, keep)), done)
+}
+
+///|
+/// What a part of it is asked by: `length` bytes from `offset`, kept as `keep` (Viewer::read_part).
+fn Viewer::part_params(self : Viewer, offset : Double, length : Int, keep : String) -> Map[String, Json] {
   let p = match self.drive {
     Some(d) => {
       let p : Map[String, Json] = {
@@ -869,7 +866,69 @@ fn Viewer::read_part(
   }
   p["offset"] = Json::number(offset)
   p["length"] = Json::number(length.to_double())
-  (src.read_bytes)(self.part_call(), Json::object(p), done)
+  p
+}
+
+///|
+/// Its size as its message or its folder says it (0: not known).
+fn Viewer::listed_size(self : Viewer) -> Double {
+  match self.drive {
+    Some(d) => d.size
+    None => self.file.size
+  }
+}
+
+///|
+/// A part read for the player (`call` with `p`), its bytes handed on as they come (the core's part read with
+/// `stream`: each piece as it arrives, never the whole part waited for), as a player's read takes them:
+/// `answer(bytes, total, more)`, the whole's size as `size` says it (its message's, its folder's; 0 not known) until
+/// the core's answer says it. `ended` hears how it ended: the bytes it brought, or why it failed. What it gives back
+/// stops it (the core's read let go of: nothing more of it comes over the network).
+fn stream_part(
+  src : Source,
+  call : String,
+  p : Map[String, Json],
+  size : Double,
+  answer : (Bytes, Double, Bool) -> Unit,
+  ended? : (Result[Int, Json]) -> Unit = fn(_) {  },
+) -> () -> Unit {
+  p["stream"] = Json::boolean(true)
+  let known = if size > 0.0 { size } else { -1.0 }
+  let got = Ref(0)
+  let id = (src.stream)(
+    call,
+    Json::object(p),
+    None,
+    fn(_, bytes) {
+      match bytes {
+        Some(b) if b.length() > 0 => {
+          got.val += b.length()
+          answer(b, known, true)
+        }
+        _ => ()
+      }
+    },
+    fn(r) {
+      match r {
+        Ok(said) => {
+          ended(Ok(got.val))
+          answer(
+            b"",
+            match field(Some(said), "total") {
+              Some(Number(t, ..)) => t
+              _ => known
+            },
+            false,
+          )
+        }
+        Err(e) => {
+          ended(Err(e))
+          answer(b"", -2.0, false)
+        }
+      }
+    },
+  )
+  fn() { (src.cancel)(id) }
 }
 
 ///|
@@ -1009,25 +1068,15 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
             mime: v.mime,
             audio: v.shown_kind() == Some(KAudio),
             read: fn(offset, length, answer) {
-              v.read_part(src, offset, length, "played", fn(r) {
+              stream_part(src, v.part_call(), v.part_params(offset, length, "played"), v.listed_size(), answer, ended=fn(r) {
                 match r {
-                  Ok((answer_json, bytes)) => {
-                    let total = match field(Some(answer_json), "total") {
-                      Some(Number(t, ..)) => t
-                      _ => -1.0
-                    }
+                  Ok(bytes) => {
                     if v.reads < 3 {
-                      @ui.log(
-                        "preview: \{v.name} @\{offset.to_int()} \{bytes.length()} bytes through the core (\{v.part_call()}, total \{total.to_int()})",
-                      )
+                      @ui.log("preview: \{v.name} @\{offset.to_int()} \{bytes} bytes through the core (\{v.part_call()})")
                     }
                     v.reads += 1
-                    answer(bytes, total)
                   }
-                  Err(e) => {
-                    @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
-                    answer(b"", -2.0)
-                  }
+                  Err(e) => @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
                 }
               })
             },
