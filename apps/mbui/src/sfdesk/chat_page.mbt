@@ -100,9 +100,16 @@ let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 /// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
-/// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped.
+/// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped, its services
+/// and jobs (chat.jobs); Space with no field focused, the composer (composer.focus).
 fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?, pages : Pages) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
+  if @settings.action_pressed(c, prefs, "chat.jobs") {
+    toggle_jobs_pop()
+  }
+  if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
+    composer_focus()
+  }
   if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && !v.archived && !v.offline {
     c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat, pages) })
   }

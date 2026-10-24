@@ -59,10 +59,8 @@ fn desk_chat_parts() -> @sfbase.ChatParts {
     viz: viz_file_of,
     viz_open: fn(station, session, owner, a) { viz_open_full(a.name, station, owner, a.path, session, linked=true) },
     mermaid: viz_mermaid_block,
-    link_held,
     screens: fn(c, src, key) { Some(screen_links(c, src, key)) },
     open_link,
-    pick: fn(c, ts, author, role, words, fill, body) { pickable(c, ts, author, role, words, fill, body) },
     in_front: app_in_front,
   }
 }

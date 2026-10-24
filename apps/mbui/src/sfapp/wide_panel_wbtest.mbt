@@ -110,6 +110,17 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
   assert_eq(text(field(Some(refs[0]), "ref"), "stationName"), "Studio")
+  // another row dragged off the tab onto the chat (ChatSide.tsx useChatDrop): let go there, into its draft too
+  let (x, y) = match t.find("长篇小说.txt") {
+    Some(at) => at
+    None => fail("no 长篇小说.txt in the tab")
+  }
+  t.drag(x, y, 400.0, 400.0)
+  t.frame()
+  t.frame()
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
+  assert_eq(refs.length(), 2)
+  assert_eq(text(field(refs.get(1), "ref"), "path"), fix_docs + "/长篇小说.txt")
 }
 
 ///|

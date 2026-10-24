@@ -616,13 +616,20 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : 
   if view is Some(_) {
     switch_veil(c)
   }
-  (pages.chat_layers)(c, src, r, view, pane, fn() {
-    c.layer(fn() {
-      c.spacer()
-      chat_composer(c, src, w, pages, r, view)
-    })
-    |> ignore
+  // a row of the 文件 tab carried over the pane: frosted under the composer (chat_layers.mbt)
+  if view is Some(_) {
+    drop_hint(c, pane)
+  }
+  c.layer(fn() {
+    c.spacer()
+    chat_composer(c, src, w, pages, r, view)
   })
+  |> ignore
+  // over it, what is picked in the messages; a row let go over the pane, into the draft
+  if view is Some(_) {
+    chat_layers(c, src, r, draft, pane, room)
+  }
+  chat_drop(c, src, r.station, draft, pane)
   flight_waiting(c, draft)
   flight_files(c, draft)
 }
