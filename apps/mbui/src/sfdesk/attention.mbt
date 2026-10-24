@@ -51,7 +51,7 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     side=if railed { Right } else { Bottom },
     along=Start,
     offset=if railed { attention_off_rail } else { attention_off_side },
-    look=fn(c, _, body) { @sf.panel(c, w=Px(attention_w), fn() { c.box(style=att_list, body) |> ignore }) |> ignore },
+    look=fn(c, _, body) { @sf.small_panel(c, w=Px(attention_w), fn() { c.box(style=att_list, body) |> ignore }) |> ignore },
     fn() { attention_rows(c, src, w, railed, close) },
   )
   wide.attention_open = p.value

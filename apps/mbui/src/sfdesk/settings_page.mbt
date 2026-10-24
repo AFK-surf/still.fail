@@ -337,7 +337,7 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
     @kit.menu_radio("all", !mine, label=@sf.t("web-main.filter." + of + ".all")),
     @kit.menu_radio("mine", mine, label=@sf.t("web-main.filter." + of + ".mine")),
   ]
-  let m = @sf.menu(c, key + "/menu", open, id, entries, {}, mine_filter_menu_w)
+  let m = @sf.dropdown(c, key + "/menu", open, id, entries, {}, mine_filter_menu_w)
   if open && !m.open {
     mine_filter_open[key] = false
   }

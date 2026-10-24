@@ -159,7 +159,7 @@ fn cn_add(c : @ui.Ctx, src : Source, core : Core, here : Here, targets : Array[J
   for s in targets {
     entries.push(@kit.menu_item(text(Some(s), "station"), label=text(Some(s), "name")))
   }
-  let m = @sf.menu(c, key + "/stations", open, c.id(key), entries, {}, @sf.menu_w, along=if primary { Middle } else { End })
+  let m = @sf.dropdown(c, key + "/stations", open, c.id(key), entries, {}, @sf.menu_w, along=if primary { Middle } else { End })
   if open && !m.open {
     cn_add_open.val = ""
   }
@@ -336,7 +336,7 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, a : Json,
         @sf.icon(c, "more", size=cn_more_icon, color=@sf.theme().p.muted) |> ignore
       })
       c.semantics(b, Button, id=mid, label=@sf.t("web-pages.connects.removeHere"), expanded=open)
-      let m = @sf.menu(c, "waiting-menu/" + app_id, open, mid, [@kit.menu_item("remove", label=@sf.t("web-pages.connects.removeHere"))], {}, @sf.menu_w, along=End)
+      let m = @sf.dropdown(c, "waiting-menu/" + app_id, open, mid, [@kit.menu_item("remove", label=@sf.t("web-pages.connects.removeHere"))], {}, @sf.menu_w, along=End)
       if open && !m.open {
         waiting_menu.val = ""
       }

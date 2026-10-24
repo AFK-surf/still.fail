@@ -258,7 +258,7 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
   }
   let b = c.box(style=st_more, id=mid, fn() { @sf.icon(c, "more", size=st_more_icon, color=t.p.muted) |> ignore })
   c.semantics(b, Button, id=mid, label=@sf.t("common.more"), expanded=open)
-  let m = @sf.menu(
+  let m = @sf.dropdown(
     c,
     "station-menu/" + address,
     open,

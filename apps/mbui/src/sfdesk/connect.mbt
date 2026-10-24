@@ -252,7 +252,7 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
   entries.push(@kit.menu_item("owner", label=@sf.t("web-pages.connect.changeOwner")))
   entries.push(@kit.menu_separator())
   entries.push(@kit.menu_item("delete", label=@sf.t("web-pages.connect.delete")))
-  let m = @sf.menu(
+  let m = @sf.dropdown(
     c,
     "connect-menu/" + me,
     open,

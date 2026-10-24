@@ -341,7 +341,7 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
   let open = go.switching == chip
   let entries = stations.map(fn(s) { @kit.menu_radio(s.station, s.station == at.station, label=s.name, disabled=!s.online) })
   entries.push(@kit.menu_label(@sf.t("web-pages.files.switchNote")))
-  let m = @sf.menu(c, "files/switch/" + chip.to_string(), open, chip, entries, {}, switch_menu_w, row_end=fn(c, s) {
+  let m = @sf.dropdown(c, "files/switch/" + chip.to_string(), open, chip, entries, {}, switch_menu_w, row_end=fn(c, s) {
     let meta : Array[String] = []
     if s.entry.value == here {
       meta.push(@sf.t("web-pages.files.thisMachine"))

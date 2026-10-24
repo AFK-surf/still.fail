@@ -293,7 +293,7 @@ fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
   let b = c.box(style=st_more, id=mid, fn() { @sf.icon(c, "more", size=st_more_icon, color=t.p.muted) |> ignore })
   c.semantics(b, Button, id=mid, label=@sf.t("common.more"), expanded=open)
   let item = if machine { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.profiles.delete") }
-  let m = @sf.menu(c, "profile-menu/" + key, open, mid, [@kit.menu_item("remove", label=item)], { "remove": "trash" }, @sf.menu_w, along=End)
+  let m = @sf.dropdown(c, "profile-menu/" + key, open, mid, [@kit.menu_item("remove", label=item)], { "remove": "trash" }, @sf.menu_w, along=End)
   if open && !m.open {
     profile_menu_open.val = ""
   }

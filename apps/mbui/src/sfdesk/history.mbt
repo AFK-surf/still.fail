@@ -361,7 +361,7 @@ fn wh_context_menu(
   if clears {
     entries.push(@kit.menu_item("clear", label=@sf.t("web-pages.chat.clear"), disabled=busy))
   }
-  let m = @sf.menu(c, "context-menu/" + me, open, anchor, entries, { "compact": "shrink", "clear": "refresh" }, 180.0)
+  let m = @sf.dropdown(c, "context-menu/" + me, open, anchor, entries, { "compact": "shrink", "clear": "refresh" }, 180.0)
   if open && !m.open {
     history_own.context_menu = ""
   }
@@ -378,7 +378,7 @@ fn wh_context_menu(
     _ => ()
   }
   // asked as the web asks it (ChatPage.tsx: Confirm)
-  let asked = @sf.confirm(
+  let asked = @sf.confirm_dialog(
     c,
     "clear-context/" + me,
     history_own.clear_asking == me,

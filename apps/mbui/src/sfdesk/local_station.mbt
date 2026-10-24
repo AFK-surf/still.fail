@@ -131,7 +131,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       entries.push(
         @kit.menu_item("folder", label=@sf.t(if pc { "web-pages.localStation.openFolderPc" } else { "web-pages.localStation.openFolder" })),
       )
-      let m = @sf.menu(
+      let m = @sf.dropdown(
         c,
         "local/menu-list",
         open,

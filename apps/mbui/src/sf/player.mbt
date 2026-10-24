@@ -607,7 +607,7 @@ fn player_still(c : @ui.Ctx, n : @ui.NativeView, still : String, x : Double, y :
 /// What the speed shows as and the speeds to pick (the menu under it: each a choice, the one it plays at checked).
 fn speed_menu(c : @ui.Ctx, v : PlayerView, p : @kit.Media, trigger : Int) -> Unit {
   let entries = player_speeds.map(fn(sp) { @kit.menu_radio(sp.to_string(), sp == p.speed(), label=speed_label(sp)) })
-  let m = menu(c, p.key() + "/speeds", v.rates, trigger, entries, {}, player_speeds_w, side=Top)
+  let m = dropdown(c, p.key() + "/speeds", v.rates, trigger, entries, {}, player_speeds_w, side=Top)
   if !m.open {
     v.rates = false
   }

@@ -409,7 +409,7 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     @kit.menu_separator(),
     @kit.menu_radio("archive", shown == "archive", label=@sf.t("web-main.filter.archived")),
   ]
-  let m = @sf.menu(c, "filter-menu", wide.filter_open, c.id("side/filter"), entries, {}, @sf.chooser_menu_w, along=End)
+  let m = @sf.dropdown(c, "filter-menu", wide.filter_open, c.id("side/filter"), entries, {}, @sf.chooser_menu_w, along=End)
   wide.filter_open = m.open
   match m.chosen {
     Some("decisions") => go_place("decisions")

@@ -747,7 +747,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let (place, _, _) = match wide.rail_menu {
     Some(m) => m
     None => {
-      @sf.menu(c, "rail-menu", false, 0, [], {}, @sf.menu_w) |> ignore
+      @sf.dropdown(c, "rail-menu", false, 0, [], {}, @sf.menu_w) |> ignore
       return
     }
   }
@@ -779,7 +779,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let (ax, ay, aw, ah) = by.unwrap_or((0.0, rail_menu_clear, rail_w - side_into_rail, 0.0))
   // a place's ＋: put in, the rail changed from there (once the menu has gone)
   let added : Ref[String] = Ref("")
-  let m = @sf.menu(
+  let m = @sf.dropdown(
     c,
     "rail-menu",
     true,
@@ -965,7 +965,7 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     offset=rail_adder_off,
     at=(0.0, rail_menu_clear, rail_w, 0.0),
     look=fn(c, _, body) {
-      @sf.panel(c, w=Px(rail_adder_w), fn() { c.box(style=adder_body, body) |> ignore }) |> ignore
+      @sf.small_panel(c, w=Px(rail_adder_w), fn() { c.box(style=adder_body, body) |> ignore }) |> ignore
     },
     fn() {
       c.box(style=adder_head, fn() {
@@ -1146,7 +1146,7 @@ fn rail_ws_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
     }
   }
   // beside it, its foot level with the ＋'s (side right, align end, sideOffset 10)
-  let m = @sf.menu(c, "rail/ws-menu", wide.add_open, add, entries, icons, rail_ws_menu_w, side=Right, along=End, offset=rail_ws_menu_off)
+  let m = @sf.dropdown(c, "rail/ws-menu", wide.add_open, add, entries, icons, rail_ws_menu_w, side=Right, along=End, offset=rail_ws_menu_off)
   wide.add_open = m.open
   match m.chosen {
     Some("create") => open_new_workspace()

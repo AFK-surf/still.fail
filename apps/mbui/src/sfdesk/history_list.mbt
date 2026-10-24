@@ -622,7 +622,7 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, key : String, user : 
   })
   |> ignore
   let words = if bound { @sf.t("web-main.history.notMe") } else { @sf.t("web-main.history.isMe") }
-  let m = @sf.menu(c, menu_key, open, id, [@kit.menu_item("say", label=words)], {}, 140.0)
+  let m = @sf.dropdown(c, menu_key, open, id, [@kit.menu_item("say", label=words)], {}, 140.0)
   if open && !m.open {
     steps_own.opened.remove(menu_key)
   }

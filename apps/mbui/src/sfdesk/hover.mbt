@@ -28,7 +28,7 @@ pub fn hover(
     offset=hover_offset,
     look=fn(c, st, body) {
       let card = c.box(style=if tile { hover_tile } else { hover_card }, fn() {
-        @sf.panel(c, w=Fill(1.0), fn() { c.box(style=hover_inner, body) |> ignore }) |> ignore
+        @sf.small_panel(c, w=Fill(1.0), fn() { c.box(style=hover_inner, body) |> ignore }) |> ignore
       })
       // (growing out of the edge it is on, from .96 of its size: Hover.css.ts enter)
       if st.t < 1.0 {

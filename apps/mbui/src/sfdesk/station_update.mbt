@@ -32,7 +32,7 @@ fn station_update(c : @ui.Ctx, src : Source, station : String, notice : Json?) -
     c.id("station-update/dot"),
     side=Bottom,
     along=Middle,
-    look=fn(c, _, body) { @sf.panel(c, w=@ui.Size::Px(update_pop_w), body) |> ignore },
+    look=fn(c, _, body) { @sf.small_panel(c, w=@ui.Size::Px(update_pop_w), body) |> ignore },
     fn() { update_panel(c, src, station, notice) },
   )
   // (closed as a popover closes: Escape, a press outside; the core keeps it so)

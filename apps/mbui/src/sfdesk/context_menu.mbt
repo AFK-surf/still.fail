@@ -1,7 +1,7 @@
 // What a right click in the desktop's window offers, as the desktop app's own (ember apps/desktop/src/context-menu.mts:
 // Electron shows none of its own): a link's (在浏览器中打开链接 and 复制链接), an image's (复制图片), then the words: a
 // field's editing (剪切, 复制, 粘贴, 全选, each as it can be done now), elsewhere the words picked (复制); a line between
-// them; nothing where there is none of these (the page's ground). The library's menu (@sf.menu) at the pointer.
+// them; nothing where there is none of these (the page's ground). The library's menu (@sf.dropdown) at the pointer.
 
 ///|
 /// The menu while it is open: where (the pointer), the link right clicked ("" none), the image (its source, "" none),
@@ -139,11 +139,11 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
   }
   if entries.is_empty() {
     context.open = false
-    @sf.menu(c, "context-menu", false, 0, [], {}, context_menu_w) |> ignore
+    @sf.dropdown(c, "context-menu", false, 0, [], {}, context_menu_w) |> ignore
     return
   }
   let at = (context.x, context.y, 0.0, 0.0)
-  let m = @sf.menu(c, "context-menu", true, 0, entries, {}, context_menu_w, offset=0.0, at~)
+  let m = @sf.dropdown(c, "context-menu", true, 0, entries, {}, context_menu_w, offset=0.0, at~)
   if !m.open {
     context.open = false
   }

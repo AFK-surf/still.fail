@@ -447,7 +447,7 @@ fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> 
       }
       let b = c.box(style=ws_more, id=mid, fn() { @sf.icon(c, "more", size=ws_more_icon, color=t.p.muted) |> ignore })
       c.semantics(b, Button, id=mid, label=@sf.t("web-pages.settings.members.remove"), expanded=open)
-      let m = @sf.menu(
+      let m = @sf.dropdown(
         c,
         "ws-member-menu/" + sub,
         open,

@@ -247,7 +247,7 @@ pub fn drive_dialogs(c : @ui.Ctx, src : Source, ws : String) -> Unit {
       dialogs.roots = ""
     }
     // a folder taken back, asked first
-    let asked = @sf.confirm(
+    let asked = @sf.confirm_dialog(
       c,
       "drive/roots/unpin",
       dialogs.unpin is Some(_),
