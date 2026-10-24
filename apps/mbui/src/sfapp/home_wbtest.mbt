@@ -130,12 +130,12 @@ test "a row a finger scrolls the list from: not lit" {
 test "the workspaces' sheet: another workspace tapped is the one in view" {
   let t = tester("home")
   t.tap_text("星火工作室")
-  assert_true(sheet_open())
+  assert_true(@sf.presenting())
   assert_true(t.find("切换 workspace") is Some(_))
   assert_true(t.find("当前使用") is Some(_))
   assert_true(t.find("其他 workspace") is Some(_))
   t.tap_text("个人")
-  assert_true(!sheet_open())
+  assert_true(!@sf.presenting())
   assert_true(t.find("个人") is Some(_))
   // no station there yet: adding the first one is the page
   assert_true(t.find("添加第一台 station") is Some(_))

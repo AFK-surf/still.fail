@@ -385,12 +385,8 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
     c.lit(area) ||
     c.lit(add) ||
     all.iter().any(fn(x) { c.lit(c.id("rail/ws/" + x.id)) })
-  let waiting = invitations_waiting(src).length() > 0
-  let switch_to = fn(x : Workspace) {
-    app.picked = x.id
-    (src.call)("prefs.set", Json::object({ "workspace": Json::string(x.id) }), fn(_) {  })
-    desk_home()
-  }
+  let waiting = @sfpages.invitations_waiting(src).length() > 0
+  let switch_to = fn(x : Workspace) { @sfpages.switch_workspace(src, x.id) }
   // ⌃1 … ⌃9 on a Mac (Alt elsewhere): the workspace at that place, as the web's keys (keymap.ts workspaceIndexOf)
   let held = if @ui.platform() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
   for k in 0..<dmin(9.0, all.length().to_double()).to_int() {
@@ -1102,22 +1098,6 @@ let adder_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L
 pub let rail_closed_w : Double = 42.0
 
 ///|
-/// The invitations waiting for any account signed in, with the account each is for.
-pub fn invitations_waiting(src : Source) -> Array[(Json?, Json)] {
-  let pending : Array[(Json?, Json)] = []
-  match (src.topic)("workspaces", {}).value {
-    Some(Array(a)) =>
-      for e in a {
-        for i in items(Some(e), "invitations") {
-          pending.push((field(Some(e), "account"), i))
-        }
-      }
-    _ => ()
-  }
-  pending
-}
-
-///|
 /// The ＋'s menu, beside it, its foot level with the ＋'s (WorkspaceSwitcher `adder`): 新建 workspace, 添加另一个账号,
 /// then the invitations waiting, each joined or ignored.
 fn rail_ws_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
@@ -1126,7 +1106,7 @@ fn rail_ws_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
     @kit.menu_item("account", label=@sf.t("web-pages.workspace.addAccount")),
   ]
   let icons : Map[String, String] = { "create": "plus", "account": "user-plus" }
-  let pending = invitations_waiting(src)
+  let pending = @sfpages.invitations_waiting(src)
   if pending.length() > 0 {
     entries.push(@kit.menu_separator())
     entries.push(@kit.menu_label(@sf.t("web-pages.workspace.invitations")))
@@ -1148,14 +1128,14 @@ fn rail_ws_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
   let m = @sf.dropdown(c, "rail/ws-menu", wide.add_open, add, entries, icons, rail_ws_menu_w, side=Right, along=End, offset=rail_ws_menu_off)
   wide.add_open = m.open
   match m.chosen {
-    Some("create") => open_new_workspace()
+    Some("create") => @sfpages.open_new_workspace(src)
     Some("account") => (src.sign_in)()
     Some(v) if v.has_prefix("join:") || v.has_prefix("ignore:") => {
       let join = v.has_prefix("join:")
       let id = v.view(start_offset=if join { 5 } else { 7 }).to_string()
       for p in pending {
         if text(Some(p.1), "id") == id {
-          answer_invitation(src, p.0, id, join, text(Some(p.1), "name"))
+          @sfpages.answer_invitation(src, p.0, id, join, text(Some(p.1), "name"), fn() {  })
         }
       }
     }

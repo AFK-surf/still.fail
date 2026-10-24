@@ -13,8 +13,6 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   attention_panel(c, src, w)
   // a chat relayed to a channel (relay.mbt)
   relay_dialog(c, src)
-  // a workspace made (new_workspace.mbt)
-  new_workspace_dialog(c, src)
   // a chat shared with the viewer's other workspaces (share_dialog.mbt)
   share_dialog(c, src)
   // a chat made public (publish.mbt)

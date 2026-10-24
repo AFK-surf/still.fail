@@ -7,8 +7,6 @@
 /// Which sheet: what it shows and how it sits.
 priv enum SheetKind {
   NoSheet
-  /// the workspaces (Workspaces.kt WorkspacesSheet): 70%, draggable
-  Workspaces
   /// where a new chat runs (NewChat.kt pickStation): half the screen
   PickStation(String)
   /// what a new chat runs on (NewChat.kt openRunPicker): 66%; its accounts' list in place of it while `accounts`
@@ -21,21 +19,17 @@ priv enum SheetKind {
   ShareSheet
   /// what an invitation's link leads to, before it is accepted (Workspaces.kt InviteLinkSheet): half the screen
   InviteLink
-  /// a workspace of the viewer's own made (Workspaces.kt openNewWorkspace): 80%
-  NewWorkspace
 } derive(Eq)
 
 ///|
 /// How a sheet sits: its share of the screen at first, whether its top drags it between half and full.
 fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
   match kind {
-    Workspaces => (0.7, true)
     PickStation(_) => (0.5, false)
     RunPicker(_) => (0.66, false)
     LoadOf(_, _) | PageSizes(_) => (0.62, false)
     ShareSheet => (0.72, true)
     InviteLink => (0.5, false)
-    NewWorkspace => (0.8, false)
     NoSheet => (0.5, false)
   }
 }
@@ -45,10 +39,8 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
 /// load, what is shared, an invitation).
 fn sheet_title(kind : SheetKind) -> String {
   match kind {
-    Workspaces => tr("android-misc.workspace.sheet.title")
     PickStation(_) => tr("android-chat.new.station.pick")
     PageSizes(_) => svc("android-chat.preview.size.title")
-    NewWorkspace => tr("android-misc.workspace.new")
     _ => ""
   }
 }
