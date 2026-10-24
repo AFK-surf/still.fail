@@ -381,6 +381,7 @@ let building : Ref[Bool] = Ref::new(false)
 /// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
 fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.inners.clear()
+  c.inners_or.clear()
   c.moves_build_start()
   c.arounds.clear()
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)

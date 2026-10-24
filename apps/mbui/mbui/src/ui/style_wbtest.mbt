@@ -347,6 +347,69 @@ test "style: radius=Inner that cannot be concentric is drawn square and said, no
 }
 
 ///|
+/// A capsule 44 high, `pad` in from a panel rounded `corner` at its sides and foot (`corner` 0: no panel, the capsule
+/// alone), holding a round button 32 across 6 in at its start: both `InnerOr(Full)`.
+fn capsule_in_panel(corner : Double, pad : Double) -> (Ctx) -> Unit {
+  let capsule = fn(c : Ctx) {
+    c.box(style=style(w=Full, h=Fixed(44.0), p=S1_5, radius=InnerOr(Full), bg=Faint), fn() {
+      c.box(style=style(w=S8, h=S8, radius=InnerOr(Full), bg=Card), fn() {  }) |> ignore
+    })
+    |> ignore
+  }
+  fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      if corner > 0.0 {
+        c.box(w=Px(300.0), h=Px(200.0), radius=corner, bg=0xEEEEEEFFL, pad~, justify=JEnd, fn() { capsule(c) })
+        |> ignore
+      } else {
+        c.box(w=Px(300.0), fn() { capsule(c) }) |> ignore
+      }
+    })
+    |> ignore
+  }
+}
+
+///|
+test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel's, whatever the panel's is, and what lies in it the same" {
+  // alone: a capsule, and its button round
+  let t = Tester::new(capsule_in_panel(0.0, 0.0))
+  t.draw()
+  let c = g()
+  let (capsule, button) = (c.count - 2, c.count - 1)
+  assert_eq(c.nodes[capsule].corner(), 22.0)
+  assert_eq(c.nodes[button].corner(), 16.0)
+  assert_eq(t.corner_faults(), [])
+  // in the corner of a panel rounded as far in as the capsule's half height (12 + 22): a capsule still
+  let t = Tester::new(capsule_in_panel(34.0, 12.0))
+  t.draw()
+  let c = g()
+  assert_eq(c.nodes[capsule].corner(), 22.0)
+  assert_eq(c.nodes[button].corner(), 16.0)
+  assert_eq(t.corner_faults(), [])
+  // a panel less round: the capsule concentric with it, and its button concentric with the capsule; nothing rounder
+  // than what holds it
+  let t = Tester::new(capsule_in_panel(24.0, 12.0))
+  t.draw()
+  let c = g()
+  assert_eq(c.nodes[capsule].corner(), concentric(24.0, 12.0))
+  assert_eq(c.nodes[button].corner(), concentric(concentric(24.0, 12.0), 6.0))
+  assert_eq(t.corner_faults(), [])
+  // nearer the panel's foot than its sides: its own corner kept, and said
+  let t = Tester::new(fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(w=Px(300.0), h=Px(200.0), radius=24.0, bg=0xEEEEEEFFL, padx=12.0, pb=4.0, justify=JEnd, fn() {
+        c.box(style=style(w=Full, h=Fixed(44.0), radius=InnerOr(Full), bg=Faint), fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_eq(g().nodes[g().count - 1].corner(), 22.0)
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("at different distances") }), msg=t.corner_faults().join("\n"))
+}
+
+///|
 test "style: Ctx's tokens outside a style: space, color, text_size" {
   let got : Ref[(Double, Bool, Bool, (Double, Double))] = Ref::new((0.0, false, false, (0.0, 0.0)))
   let t = Tester::new(fn(c) {

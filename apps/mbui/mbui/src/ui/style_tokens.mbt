@@ -234,7 +234,9 @@ fn Len::bound(self : Len, none_is : Double) -> Double {
 ///|
 /// A corner, the theme's scale (Tailwind's names, and Xl1_5 between Xl and Xl2, Xl4 past Xl3), a pill (`Full`: half the shorter side), or `Inner`: the corner of
 /// the rounded container it lies in less how far in it lies, so that what lies in a container's corner is concentric
-/// with it by how it is written (worked out once laid out: corners.mbt's corners_after_layout); `Around` the other way
+/// with it by how it is written (worked out once laid out: corners.mbt's corners_after_layout); `InnerOr(r)` the same
+/// where it lies in a rounded container's corner and `r` where it lies in none (the web's innerOr: a capsule standing
+/// alone that, in a panel's corner, follows the panel's, which so is the panel's own to choose); `Around` the other way
 /// round, the container's own corner from what lies in it.
 pub(all) enum Radius {
   Sharp
@@ -249,6 +251,7 @@ pub(all) enum Radius {
   Xl4
   Full
   Inner
+  InnerOr(Radius)
   /// the other way from `Inner`: the corner round what lies in its corner, worked out once laid out (a circle or a
   /// capsule there: its distance from the two edges and its own corner; a smooth one: smooth.mbt concentric_out)
   Around

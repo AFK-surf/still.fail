@@ -263,3 +263,54 @@ test "on the tape the composer is drawn with its page as the page moves, never a
     same("going back, step \{k}")
   }
 }
+
+///|
+/// The composer's box as drawn (the glass round its field) and its send button (the last grounded round 32 in it):
+/// their corners.
+fn composer_corners(t : @ui.Tester) -> (Double, Double)? {
+  let bs = t.boxes()
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
+  let mut box : @ui.Laid? = None
+  for b in bs {
+    if b.glass && b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h {
+      box = Some(b)
+    }
+  }
+  guard box is Some(k) else { return None }
+  let mut send = 0.0
+  for b in bs {
+    if b.w == 32.0 && b.h == 32.0 && b.bg != 0L && b.x >= k.x && b.x + b.w <= k.x + k.w && b.y >= k.y &&
+      b.y + b.h <= k.y + k.h {
+      send = dmin(b.radius, 16.0)
+    }
+  }
+  Some((dmin(k.radius, k.h / 2.0), send))
+}
+
+///|
+test "on the tape the page panel's corner is its own: the composer and its buttons in its corners follow it, one line or more" {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  t.tap(650.0, 400.0)
+  t.run_for(@sfdesk.side_move_ms * 2.0)
+  let panel = match @sf.page_panel_corner {
+    Exact(r) => r
+    _ => abort("the panels' corner is a number")
+  }
+  // one line: as round as the panel's corner leaves it at 12 in (a capsule at most), its button as round as the box's
+  // leaves it at 6 in
+  let box = dmin(@ui.concentric(panel, @sf.page_panel_in), 22.0)
+  guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
+  assert_eq(k, box)
+  assert_eq(s, dmin(@ui.concentric(box, 6.0), 16.0))
+  assert_eq(t.corner_faults(), [])
+  // lines more: the box concentric with the panel, the send button with the box, 12 in
+  t.tap_text("发消息")
+  t.type_text("第一行\n第二行\n第三行")
+  t.run_for(@sfdesk.morph_ms)
+  guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
+  let open = @ui.concentric(panel, @sf.page_panel_in)
+  assert_eq(k, open)
+  assert_eq(s, dmin(@ui.concentric(open, 12.0), 16.0))
+  assert_eq(t.corner_faults(), [])
+}

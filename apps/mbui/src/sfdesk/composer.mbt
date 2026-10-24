@@ -648,7 +648,8 @@ fn composer_picture(
 let let_go_ms : Double = 300.0
 
 ///|
-let morph_ms : Double = 260.0
+/// (what a test runs to once the composer changes shape)
+pub let morph_ms : Double = 260.0
 
 ///|
 /// Laid out for the other page, how long it goes there (dock.tsx: 340, the ease out).
@@ -729,19 +730,20 @@ let thumb_side : Double = 56.0
 let on_veil : Int64 = 0xFFFFFFFFL
 
 ///|
-/// The capsule (composerBox, one line): its parts on its centre line, 2 apart, 6 in at its start, a pill.
+/// The capsule (composerBox, one line): its parts on its centre line, 2 apart, 6 in at its start, a pill; in a panel's
+/// corners (the tape's page) concentric with them.
 // kept across runs: a value (no field of it changes)
-let composer_box : @ui.Style = @ui.css("row w=Full gap=SPx pl=S1_5 pr=S1_5 py=S1_5 radius=Full align=ACenter")
+let composer_box : @ui.Style = @ui.css("row w=Full gap=SPx pl=S1_5 pr=S1_5 py=S1_5 radius=InnerOr(Full) align=ACenter")
 
 ///|
 /// The box (composerBox[data-multiline]): a column 12 in, its parts 10 apart, its corner its buttons' pill's with its
-/// padding (COMPOSER_INNER + 12).
+/// padding (COMPOSER_INNER + 12); in a panel's corners concentric with them.
 // kept across runs: a value (no field of it changes)
 let composer_box_open : @ui.Style = @ui.style(
   w=Full,
   p=S3,
   gap=S2_5,
-  radius=@sf.composer_corner,
+  radius=InnerOr(@sf.composer_corner),
 )
 
 ///|
@@ -768,9 +770,9 @@ let choices : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1, align=ACenter)
 let tools_gap : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
-/// ＋ and send: 32 round, centred.
+/// ＋ and send: 32 round, centred; in the box's corners concentric with them (the box in a panel's, less round).
 // kept across runs: a value (no field of it changes)
-let round_button : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+let round_button : @ui.Style = @ui.css("w=S8 h=S8 radius=InnerOr(Full) align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -955,8 +957,8 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     },
   }
   let width = composer_width(c.width)
-  // (on the tape the page a panel of its own: the composer as far from its foot as from its sides, concentric with its
-  // corners: @sf.page_panel_corner)
+  // (on the tape the page a panel of its own: the composer as far from its foot as from its sides, so it stands in the
+  // panel's corners and follows them: InnerOr)
   let foot = c.box(style=if wide.tape { chat_foot_apart } else { chat_foot }, fn() {
     match v {
       Some(v) => chat_notices(c, src, r, v)

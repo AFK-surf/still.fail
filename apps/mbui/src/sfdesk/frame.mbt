@@ -912,8 +912,8 @@ let tape_apart : Double = closed_bar_in + closed_bar_gap
 let frame_tape : @ui.Style = @ui.css("w=Full h=Full bg=Sidebar")
 
 ///|
-/// The page's panel on the tape: the page's ground, its corner concentric with its composer's capsule (@sf.page_panel_corner),
-/// a line round it, what goes past its edges cut.
+/// The page's panel on the tape: the page's ground, the tape's panels' corner (@sf.page_panel_corner), a line round it,
+/// what goes past its edges cut.
 // kept across runs: a value (no field of it changes)
 let page_apart : @ui.Style = @ui.style(bg=Bg, radius=@sf.page_panel_corner, border=B1, border_color=Line, clip=true)
 
