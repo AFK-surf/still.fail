@@ -1,8 +1,8 @@
 # The component library (`src/sf`)
 
 still.fail's design system for mbui, the counterpart of the web's `web/ui` (`@stillfail/ui`, docs/ui-package.md in the
-repository's root): the tokens, the alignment, the icons, the motion, and the parts every page is made of. The phone's
-pages (`src/sfapp`) and the desktop's take them from here: a part used by both lives here once, and both use it
+repository's root): the tokens, the alignment, the icons, the motion, and the parts every page is made of. The pages (one
+for every tier: docs/architecture.md) take them from here: a part used by both lives here once, and both use it
 directly; neither keeps a copy of its own.
 
 ## Its edge

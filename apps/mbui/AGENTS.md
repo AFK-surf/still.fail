@@ -28,18 +28,28 @@ particular to this app:
   again on every build; as text each is a string read once at start-up. detlint's `style-text` forbids the other
   way and prints the text to write.
 
-## What the app's packages are
+## One app: tiers, input, pages, shell
 
-- `src/sf`: the component library (above). `src/sfbase`: what both frames read and the stack they show — the core's
-  topics and calls (`Source`), a workspace, the chats' and a chat's views, the pages (`Page`, `ChatRef`, `DriveAt`,
-  `app.nav`); it imports the library and the settings' routes, nothing of the pages. `src/sfdesk`: the desktop's own
-  pages and what they hold. `src/sfapp`: the phone's pages, and the desktop's not yet in `sfdesk` (`wide_on`
-  branches); it takes `sfbase`'s names in by `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
-- The desktop and the phone are two apps that share the library's parts, its tools and its tokens, and what `sfbase`
-  reads. A desktop page ported from the web's file goes into `sfdesk`, its `wide_on` branches with it out of `sfapp`.
-  `sfdesk` imports the library, `sfbase` and mbui, never `sfapp` (which imports it): what a desk page needs of a phone
-  file that is not a page (a call to the core, a model, a tool) moves down into `sfbase` or the library, once, for
-  both; a phone page is not reused for the desktop, the web's is ported. Its words are `@sf.t` (the app's tables).
+- `docs/architecture.md` is how the app is built; read it before changing a page or the frame. In short:
+  - It is one app on every device (the user, 2026-10-24); there is no phone app and desktop app.
+  - Its layout follows the screen, in three tiers (`@sf.layout`: Small, Medium, Large). How it answers the hand follows
+    the input (`@ui.pointing()`). Nothing else decides either.
+  - Each page exists once, drawn into the box it gets in any tier with either input. It opens things by saying what,
+    and shows menus and dialogs through the library's presenters. The shell arranges the panes per tier.
+- **Packages now, while the two page sets are merged:**
+  - `src/sf` is the component library (above).
+  - `src/sfbase` is the model: the core's topics and calls (`Source`), the views, the pages (`Page`, `app.nav`), the
+    app-level things, and the shared machinery. It imports the library and the settings' routes, nothing of the pages.
+  - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
+  - `src/sfapp` holds the pages ported from the Kotlin app and the Small frame. It takes `sfbase`'s names in by
+    `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
+  - Both go into `sfpages` and `sfshell` as pages merge (`docs/architecture.md`, the way there).
+- **What doesn't change:**
+  - Something both need moves down into `sfbase` or the library, once.
+  - Logic is the core's, never a page's.
+  - Words are `@sf.t` (the app's tables).
+  - Don't add a branch on `wide_on` or on the tier inside a page. A page that needs another arrangement asks its own
+    width.
 
 ## What is checked, and where
 
