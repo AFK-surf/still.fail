@@ -27,6 +27,8 @@ priv struct Go {
   mut folders : (String, String, Array[String])?
   mut asked : String
   mut switching : Int
+  /// its dialog as presented (@sf.last_presented; 0 none)
+  mut shown : Int
 }
 
 ///|
@@ -41,6 +43,7 @@ let go : Go = {
   folders: None,
   asked: "",
   switching: 0,
+  shown: 0,
 }
 
 ///|
@@ -54,6 +57,7 @@ fn go_reset() -> Unit {
   go.folders = None
   go.asked = ""
   go.switching = 0
+  go.shown = 0
 }
 
 ///|
@@ -123,13 +127,34 @@ fn place_of(stations : Array[DvStation], station : String, abs : String) -> Driv
 }
 
 ///|
-/// ⌘⇧G (GoTo) of workspace `ws` from `here` (the side in front): a field, where it goes under it; the stations while
-/// their name is typed, then the folders whose name starts with what is typed of the last part (Tab completes the one
-/// chosen, ↑ / ↓ choose, Enter goes); Esc closes it. `to`: a folder gone to.
+/// ⌘⇧G (GoTo) of workspace `ws` from `here` (the side in front), while it is asked for (go_to_open): the library's
+/// dialog (@sf.panel, opened by nothing); closed (Esc, ✕, a press outside), not asked for any more. `to`: a folder
+/// gone to.
 pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt) -> Unit) -> Unit {
-  if !go.open {
-    return
+  ignore(c)
+  if go.open && go.shown == 0 {
+    @sf.panel(
+      @sf.t("web-pages.files.goTo"),
+      fn(c, _) { go_body(c, src, ws, here, to) },
+      from=Unanchored,
+      description=@sf.t("web-pages.files.goToNote"),
+      gone=fn() {
+        go.open = false
+        go.shown = 0
+      },
+    )
+    go.shown = @sf.last_presented()
+  } else if !go.open && go.shown > 0 {
+    // (a folder gone to: down)
+    @sf.close_presented_of(go.shown)
+    go.shown = 0
   }
+}
+
+///|
+/// What the dialog holds: a field, where it goes under it; the stations while their name is typed, then the folders
+/// whose name starts with what is typed of the last part (Tab completes the one chosen, ↑ / ↓ choose, Enter goes).
+fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt) -> Unit) -> Unit {
   let t = @sf.theme()
   let stations = drive_stations(src, ws).0.unwrap_or([])
   let typed = go.typed
@@ -221,100 +246,86 @@ pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (Drive
       _ => ()
     }
   }
-  let shown = @sf.dialog(
-    c,
-    "files-goto",
-    go.open,
-    @sf.t("web-pages.files.goTo"),
-    description=@sf.t("web-pages.files.goToNote"),
-    w=dmin(go_w, c.width - go_margin),
-    close_label=@sf.t("common.close"),
-    fn() {
-      // ↓ ↑ move what is chosen, Tab completes it (read in the dialog: its keys while it is open)
-      if c.key_pressed(@ui.key_code_down, in_field=true) && go.at < rows.length() - 1 {
-        go.at += 1
+  // ↓ ↑ move what is chosen, Tab completes it (read in the dialog: its keys while it is open)
+  if c.key_pressed(@ui.key_code_down, in_field=true) && go.at < rows.length() - 1 {
+    go.at += 1
+  }
+  if c.key_pressed(@ui.key_code_up, in_field=true) && go.at > 0 {
+    go.at -= 1
+  }
+  if c.key_pressed(@ui.key_tab, in_field=true) {
+    match rows.get(go.at) {
+      Some((_, complete, _)) => {
+        go.field.set(complete)
+        go.typed = complete
+        go.at = 0
       }
-      if c.key_pressed(@ui.key_code_up, in_field=true) && go.at > 0 {
-        go.at -= 1
-      }
-      if c.key_pressed(@ui.key_tab, in_field=true) {
-        match rows.get(go.at) {
-          Some((_, complete, _)) => {
-            go.field.set(complete)
-            go.typed = complete
-            go.at = 0
-          }
-          None => ()
+      None => ()
+    }
+  }
+  c.box(style=go_field_box, fn() {
+    let res = c.editor(
+      "files-goto/field",
+      placeholder=@sf.t("web-pages.files.goToPlaceholder"),
+      font_size=go_font,
+      line=go_line,
+      max_lines=1,
+      plain=true,
+      color=t.p.text,
+      placeholder_color=t.p.subtle,
+      caret_color=t.p.accent,
+      enter_sends=true,
+      field=go.field,
+    )
+    // (a dialog's only field: it has the keys while it is open, a composer's given up as it opens)
+    if !res.focused {
+      c.focus_editor("files-goto/field")
+    }
+    if res.text != go.typed {
+      go.typed = res.text
+      go.at = 0
+    }
+    match res.submitted {
+      Some(words) => {
+        go.field.set(words)
+        match go.resolved {
+          Some((was, r)) if was == words => enter(r)
+          _ => c.tell("files-goto/enter", fn() { go_resolve(src, ws, words, here, enter) })
         }
       }
-      c.box(style=go_field_box, fn() {
-        let res = c.editor(
-          "files-goto/field",
-          placeholder=@sf.t("web-pages.files.goToPlaceholder"),
-          font_size=go_font,
-          line=go_line,
-          max_lines=1,
-          plain=true,
-          color=t.p.text,
-          placeholder_color=t.p.subtle,
-          caret_color=t.p.accent,
-          enter_sends=true,
-          field=go.field,
-        )
-        // (a dialog's only field: it has the keys while it is open, a composer's given up as it opens)
-        if !res.focused {
-          c.focus_editor("files-goto/field")
+      None => ()
+    }
+  })
+  |> ignore
+  match (resolved, named) {
+    (Some(r), Some(n)) => c.box(style=go_where_box, fn() { c.text(n.name + " › " + r.abs, style=go_where) |> ignore }) |> ignore
+    _ => ()
+  }
+  if rows.length() > 0 {
+    let list = c.box(style=go_list, fn() {
+      for i, r in rows {
+        let (label, _, target) = r
+        let id = c.id("files-goto/row/" + label)
+        c.cursor(id, Hand)
+        if c.clicked(id) {
+          open(target)
         }
-        if res.text != go.typed {
-          go.typed = res.text
-          go.at = 0
+        if c.lit(id) {
+          go.at = i
         }
-        match res.submitted {
-          Some(words) => {
-            go.field.set(words)
-            match go.resolved {
-              Some((was, r)) if was == words => enter(r)
-              _ => c.tell("files-goto/enter", fn() { go_resolve(src, ws, words, here, enter) })
-            }
-          }
-          None => ()
-        }
-      })
-      |> ignore
-      match (resolved, named) {
-        (Some(r), Some(n)) => c.box(style=go_where_box, fn() { c.text(n.name + " › " + r.abs, style=go_where) |> ignore }) |> ignore
-        _ => ()
-      }
-      if rows.length() > 0 {
-        let list = c.box(style=go_list, fn() {
-          for i, r in rows {
-            let (label, _, target) = r
-            let id = c.id("files-goto/row/" + label)
-            c.cursor(id, Hand)
-            if c.clicked(id) {
-              open(target)
-            }
-            if c.lit(id) {
-              go.at = i
-            }
-            let row = c.box(style=if i == go.at { go_row_on } else { go_row }, id~, fn() {
-              @sf.icon(c, "folder", size=go_icon, color=t.p.muted) |> ignore
-              c.text(label, style=go_row_words) |> ignore
-              if i == go.at {
-                c.box(style=go_key_box, fn() { c.text("Tab", style=go_key) |> ignore }) |> ignore
-              }
-            })
-            c.semantics(row, Option, id~, label~, selected=i == go.at)
+        let row = c.box(style=if i == go.at { go_row_on } else { go_row }, id~, fn() {
+          @sf.icon(c, "folder", size=go_icon, color=t.p.muted) |> ignore
+          c.text(label, style=go_row_words) |> ignore
+          if i == go.at {
+            c.box(style=go_key_box, fn() { c.text("Tab", style=go_key) |> ignore }) |> ignore
           }
         })
-        c.semantics(list, Listbox)
+        c.semantics(row, Option, id~, label~, selected=i == go.at)
       }
-      c.box(style=go_keys_box, fn() { c.text(@sf.t("web-pages.files.goToKeys"), style=go_keys) |> ignore }) |> ignore
-    },
-  )
-  if !shown {
-    go.open = false
+    })
+    c.semantics(list, Listbox)
   }
+  c.box(style=go_keys_box, fn() { c.text(@sf.t("web-pages.files.goToKeys"), style=go_keys) |> ignore }) |> ignore
 }
 
 ///|
@@ -327,90 +338,74 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
   let at = f.at
   let here = this_machine()
   let chip = c.id("files/station-switch/" + at.station + "/" + at.root.unwrap_or("") + "/" + at.path)
+  let stations = drive_stations(src, f.ws).0.unwrap_or([])
+  // picked: the same folder there when it has one, else its home (said so); ⌥ held as it is picked, in a new tab
+  let picked = fn(st : String) {
+    match stations.iter().find_first(fn(s) { s.station == st }) {
+      Some(s) if st != at.station && s.online => {
+        let tab = (@ui.mods_held() & @ui.mod_alt) != 0
+        let open_at = fn(root : String, same : Bool) {
+          if !same {
+            say(c, @sf.t("web-pages.files.notThere", args=[("name", s.name)]))
+          }
+          let pane : DriveAt = { station: st, root: Some(root), path: "" }
+          match f.open_in {
+            Some(o) if tab => o(pane, false)
+            _ => (f.go)(pane, false)
+          }
+        }
+        let abs = dv_absolute(at.root.unwrap_or(""), at.path)
+        if s.anywhere && s.home != "" {
+          (src.call)("drive.folders", { "station": Json::string(st), "path": Json::string(abs) }, fn(r) {
+            match r {
+              Ok(v) if !flag(Some(v), "unreadable") => open_at(abs, true)
+              _ => open_at(s.home, false)
+            }
+          })
+        } else {
+          match s.roots.get(0) {
+            Some(r) => open_at(r.path, false)
+            None => ()
+          }
+        }
+      }
+      _ => ()
+    }
+  }
   c.cursor(chip, Hand)
   if c.clicked(chip) {
     front_it()
-    go.switching = if go.switching == chip { 0 } else { chip }
+    // the stations with a drive (this machine, the one shown, one away said beside each), the one shown chosen: the
+    // library's pick under it
+    let choices = stations.map(fn(s) {
+      let meta : Array[String] = []
+      if s.station == here {
+        meta.push(@sf.t("web-pages.files.thisMachine"))
+      }
+      if s.station == at.station {
+        meta.push(@sf.t("web-pages.files.current"))
+      }
+      if !s.online {
+        meta.push(@sf.t("web-pages.stations.offline"))
+      }
+      @sf.choice(s.station, s.name, note=meta.join(" · "))
+    })
+    @sf.pick(@sf.t("web-pages.files.switchNote"), choices, at.station, picked, from=Of(chip))
+    go.switching = @sf.last_presented()
   }
   let b = c.box(style=switch_button, id=chip, fn() {
     @sf.station_icon(c, f.st.emoji, f.st.icon, switch_icon, t.p.muted, here=f.st.station == here)
     c.text(f.st.name, style=switch_words) |> ignore
     @sf.icon(c, "chevron-down", size=switch_chevron, color=t.p.muted) |> ignore
   })
-  c.semantics(b, Button, id=chip, label=@sf.t("web-pages.files.switchStation"), expanded=go.switching == chip)
-  let stations = drive_stations(src, f.ws).0.unwrap_or([])
-  let open = go.switching == chip
-  let entries = stations.map(fn(s) { @kit.menu_radio(s.station, s.station == at.station, label=s.name, disabled=!s.online) })
-  entries.push(@kit.menu_label(@sf.t("web-pages.files.switchNote")))
-  let m = @sf.dropdown(c, "files/switch/" + chip.to_string(), open, chip, entries, {}, switch_menu_w, row_end=fn(c, s) {
-    let meta : Array[String] = []
-    if s.entry.value == here {
-      meta.push(@sf.t("web-pages.files.thisMachine"))
-    }
-    if s.entry.value == at.station {
-      meta.push(@sf.t("web-pages.files.current"))
-    }
-    match stations.iter().find_first(fn(x) { x.station == s.entry.value }) {
-      Some(x) if !x.online => meta.push(@sf.t("web-pages.stations.offline"))
-      _ => ()
-    }
-    if meta.length() > 0 {
-      c.text(meta.join(" · "), style=switch_meta) |> ignore
-    }
-  })
-  if open && !m.open {
-    go.switching = 0
-  }
-  match m.chosen {
-    Some(st) if st != at.station =>
-      match stations.iter().find_first(fn(s) { s.station == st }) {
-        Some(s) => {
-          go.switching = 0
-          // ⌥ held as it is picked: it opens in a new tab
-          let tab = (@ui.mods_held() & @ui.mod_alt) != 0
-          let open_at = fn(root : String, same : Bool) {
-            if !same {
-              say(c, @sf.t("web-pages.files.notThere", args=[("name", s.name)]))
-            }
-            let pane : DriveAt = { station: st, root: Some(root), path: "" }
-            match f.open_in {
-              Some(o) if tab => o(pane, false)
-              _ => (f.go)(pane, false)
-            }
-          }
-          let abs = dv_absolute(at.root.unwrap_or(""), at.path)
-          if s.anywhere && s.home != "" {
-            c.tell("files/switch", fn() {
-              (src.call)("drive.folders", { "station": Json::string(st), "path": Json::string(abs) }, fn(r) {
-                match r {
-                  Ok(v) if !flag(Some(v), "unreadable") => open_at(abs, true)
-                  _ => open_at(s.home, false)
-                }
-              })
-            })
-          } else {
-            match s.roots.get(0) {
-              Some(r) => open_at(r.path, false)
-              None => ()
-            }
-          }
-        }
-        None => ()
-      }
-    _ => ()
-  }
+  let open = go.switching != 0 && @sf.presented_drawn_of(go.switching)
+  c.semantics(b, Button, id=chip, label=@sf.t("web-pages.files.switchStation"), expanded=open)
 }
 
 ///|
-/// ⌘⇧G's: at most this many folders listed; its dialog 480 wide (16 in from the window's sides at least); its field's
-/// words 14 on 20; a row's mark 16; the stations' menu 240 (stations); the button's mark 14, its chevron 12.
+/// ⌘⇧G's: at most this many folders listed; its field's
+/// words 14 on 20; a row's mark 16; the button's mark 14, its chevron 12.
 let go_most : Int = 8
-
-///|
-let go_w : Double = 480.0
-
-///|
-let go_margin : Double = 32.0
 
 ///|
 let go_font : Double = 14.0
@@ -420,9 +415,6 @@ let go_line : Double = 20.0
 
 ///|
 let go_icon : Double = 16.0
-
-///|
-let switch_menu_w : Double = 240.0
 
 ///|
 let switch_icon : Double = 14.0
@@ -492,6 +484,3 @@ let switch_button : @ui.Style = @ui.css(
 // kept across runs: a value (no field of it changes)
 let switch_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, wrap=false)
 
-///|
-// kept across runs: a value (no field of it changes)
-let switch_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)

@@ -3,18 +3,20 @@
 // how it stands, stopped, tried again, its folder shown once done; each download, how far, stopped, tried again).
 
 ///|
-/// Whether the bar's 传输 has its list open.
+/// Whether the bar's 传输 has its list open, and the list as presented (@sf.last_presented; 0 none).
 priv struct Transfers {
   mut open : Bool
+  mut shown : Int
 }
 
 ///|
 // kept across runs: the list's state (transfers_reset puts it back)
-let ftransfers : Transfers = { open: false }
+let ftransfers : Transfers = { open: false, shown: 0 }
 
 ///|
 fn transfers_reset() -> Unit {
   ftransfers.open = false
+  ftransfers.shown = 0
 }
 
 ///|
@@ -48,6 +50,10 @@ pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -
   let id = c.id("files/transfers")
   if all.length() == 0 && downloads.length() == 0 {
     ftransfers.open = false
+    if ftransfers.shown > 0 {
+      @sf.close_presented_of(ftransfers.shown)
+      ftransfers.shown = 0
+    }
     return
   }
   let going = all.filter(fn(x) { flag(Some(x), "active") })
@@ -81,26 +87,30 @@ pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -
     c.text(label, style=words) |> ignore
   })
   c.semantics(b, Button, id~, label~)
-  let p = @kit.popover(
-    c,
-    "files/transfers-pop",
-    ftransfers.open,
-    id,
-    side=Bottom,
-    along=End,
-    look=fn(c, _, body) { @sf.small_panel(c, w=Px(ftransfers_w), body) |> ignore },
-    fn() {
-      c.box(style=ftransfers_head, fn() { c.text(@sf.t("web-pages.files.transfers"), style=ftransfers_head_words) |> ignore })
-      |> ignore
-      for d in downloads {
-        download_row(c, src, d)
-      }
-      for x in all {
-        transfer_row(c, src, x, go)
-      }
-    },
-  )
-  ftransfers.open = ftransfers.open && p.value
+  // its list: the library's panel under it, along its end (what is in it read as it is drawn)
+  if ftransfers.open && ftransfers.shown == 0 {
+    @sf.panel(
+      @sf.t("web-pages.files.transfers"),
+      fn(c, _) {
+        for d in download_list(src, ws) {
+          download_row(c, src, d)
+        }
+        for x in transfer_list(src, ws) {
+          transfer_row(c, src, x, go)
+        }
+      },
+      from=Of(id),
+      w=ftransfers_w,
+      gone=fn() {
+        ftransfers.open = false
+        ftransfers.shown = 0
+      },
+    )
+    ftransfers.shown = @sf.last_presented()
+  } else if !ftransfers.open && ftransfers.shown > 0 {
+    @sf.close_presented_of(ftransfers.shown)
+    ftransfers.shown = 0
+  }
 }
 
 ///|
@@ -234,14 +244,6 @@ let ftransfers_chip_going_words : @ui.TextStyle = @ui.text_style(size=Xs, color=
 ///|
 // kept across runs: a value (no field of it changes)
 let ftransfers_chip_failed_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ftransfers_head : @ui.Style = @ui.css("w=Full px=S2 pt=S1 pb=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ftransfers_head_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A transfer (transfer: its mark 18, its words, its keys; 8 in, 8 apart, a line over it).
