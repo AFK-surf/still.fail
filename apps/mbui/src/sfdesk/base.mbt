@@ -1,5 +1,11 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  core_doing,
+  core_failed,
+  stations_of,
+  type Station,
+  error_words,
+  toast_later,
   act,
   doing,
   each_second,

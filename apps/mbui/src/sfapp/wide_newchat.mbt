@@ -252,7 +252,7 @@ fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json
   let hot = c.hovered(sid) || wide.station_menu
   let b = c.box(style=if hot { new_chooser_on } else { new_chooser }, id=sid, fn() {
     @sf.station_icon(c, text(station, "emoji"), text(station, "icon"), 14.0, if hot { t.p.text } else { t.p.muted })
-    c.text(text(station, "name"), style=if hot { triple_words_xs } else { triple_muted_xs }) |> ignore
+    c.text(text(station, "name"), style=if hot { @sfdesk.triple_words_xs } else { @sfdesk.triple_muted_xs }) |> ignore
     @sf.icon(c, "chevron-down", size=12.0, color=t.p.muted) |> ignore
   })
   c.semantics(b, Button, id=sid, label=text(station, "name"))
@@ -284,7 +284,7 @@ fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json
     c.box(style=new_chooser, id~, fn() { c.text(tr("web-main.newChat.noModels"), style=new_link) |> ignore })
     |> ignore
   } else {
-    model_triple(c, src, address, "new", up=true, page=p, small=true)
+    @sfdesk.model_triple(c, src, address, "new", up=true, page=p, small=true)
   }
 }
 

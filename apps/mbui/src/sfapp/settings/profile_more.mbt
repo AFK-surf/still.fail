@@ -16,7 +16,7 @@ let keyed : Array[String] = ["anthropic-api", "api-provider", "opencode-go"]
 
 ///|
 /// A machine login's runtime by name (RUNTIME_LABEL).
-fn runtime_label(rt : String) -> String {
+pub fn runtime_label(rt : String) -> String {
   match rt {
     "claude" => "Claude Code"
     "codex" => "Codex"

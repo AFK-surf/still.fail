@@ -22,4 +22,6 @@ pub fn reset() -> Unit {
   nav_reset()
   go_reset()
   hover_reset()
+  triple_reset()
+  history_reset()
 }
