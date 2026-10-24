@@ -61,8 +61,8 @@ fn station_ids(core : Core, here : Here) -> Array[String]? {
 
 ///|
 /// A place's primary action (PlaceAction: the bar's notch, a pushed page's ＋), None where it has none now: Station's
-/// adds a station (its owners and admins, once its stations are read), Profile's a profile and 连接's a connect (once a
-/// station is online).
+/// adds a station (its owners and admins, once its stations are read), Profile's a profile (once a station is online).
+/// 连接's is its page's (src/sfdesk connects.mbt connects_add).
 pub fn place_action(core : Core, here : Here, place : String) -> (() -> Unit)? {
   match place {
     "stations" =>
@@ -70,25 +70,19 @@ pub fn place_action(core : Core, here : Here, place : String) -> (() -> Unit)? {
         Some(ids) if manager_of(core, here) == Some(true) => Some(fn() { open_add_station(core, here, ids) })
         _ => None
       }
-    // a profile or a connect is added on a station online (the only one, without asking)
-    "profiles" | "connects" => {
+    // a profile is added on a station online (the only one, without asking)
+    "profiles" => {
       let online = online_stations(core, here)
       if online.length() == 0 {
         return None
       }
-      let go = fn(station : String) {
-        if place == "profiles" {
-          (core.push)(NewProfile(station))
-        } else {
-          open_new_connect(core, station)
-        }
-      }
+      let go = fn(station : String) { (core.push)(NewProfile(station)) }
       Some(fn() {
         if online.length() == 1 {
           go(text(Some(online[0]), "station"))
         } else {
           open_pick_station(
-            tr(if place == "profiles" { "android-settings.profile.add" } else { "android-settings.flow.title" }),
+            tr("android-settings.profile.add"),
             online,
             go,
           )

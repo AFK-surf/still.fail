@@ -31,7 +31,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
     return
   }
   @settings.frame(core, here)
-  settings_fixture(core)
+  settings_fixture(src, core)
   match route {
     Appearance => appearance_page(c, core)
     Station(a) => station_page(c, core, here, a)
@@ -56,7 +56,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   @settings.frame(core, here)
-  settings_fixture(core)
+  settings_fixture(src, core)
   match route {
     About => about_page(c, core, frame)
     Changelog => changelog_page(c, core, frame)
@@ -94,7 +94,7 @@ let settings_deep : Ref[Bool] = Ref(false)
 ///|
 /// A dialog a fixture's mode puts up over its page (MBUI_FIXTURE=settings-policy-text, settings-security-confirm, …:
 /// @settings.fixture_desk), once the page is drawn with what it needs.
-fn settings_fixture(core : Core) -> Unit {
+fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => fx_policy_up.val = "text"
     "policy-option" => fx_policy_up.val = "option"
@@ -106,6 +106,12 @@ fn settings_fixture(core : Core) -> Unit {
     "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => local_open.val = true
+    "connect-mode" =>
+      match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).value, "items") {
+        [item, ..] => cd_mode_dialog(core, "ws1/st1", Some(item))
+        _ => ()
+      }
+    "new-connect" => new_connect_dialog(src, core, @settings.here_of(core, "ws1", "星火工作室"), "ws1/st1")
     "vault-add" => vault_add_dialog(core, @settings.here_of(core, "ws1", "星火工作室"))
     "vault-editor" => vault_editor_dialog(core, "ws1", "v1", None, kind="token")
     "vault-recover" => vault_recover_dialog(core, "ws1")

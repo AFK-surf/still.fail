@@ -1070,6 +1070,10 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   // a folder (Files.kt), none on the others yet
   // (Station's ＋ adds a station, Profile's a profile, 连接's a connect: what the settings' page of the place says)
   let place_add = match active {
+    Some("connects") => {
+      let core = settings_core(src, ws)
+      @sfdesk.connects_add(src, core, @settings.here_of(core, ws.id, ws.name))
+    }
     Some(a) => @settings.place_action(settings_core(src, ws), @settings.here_of(settings_core(src, ws), ws.id, ws.name), a)
     None => None
   }

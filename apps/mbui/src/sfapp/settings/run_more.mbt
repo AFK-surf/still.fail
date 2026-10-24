@@ -798,3 +798,12 @@ let account_note_room : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 /// 12sp, muted.
 // kept across runs: a value (no field of it changes)
 let account_note_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+
+///|
+/// The pickers opened (their `pick.set {open}` sent once a page), and which list a run page shows ("" its first view).
+// kept across runs: said as a run's page opens; the settings' reset empties it
+let run_opened : Map[String, Bool] = Map([])
+
+///|
+// kept across runs: said by a run's page; the settings' reset empties it
+let run_list : Map[String, String] = Map([])

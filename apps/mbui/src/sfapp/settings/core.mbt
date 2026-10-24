@@ -129,12 +129,6 @@ pub(all) enum Route {
   NewProfile(String)
   /// an account on several stations (ProfileAccountScreen), by its key in the workspace's profiles
   ProfileAccount(String)
-  /// a new connect on a station (NewConnectScreen), by its address
-  NewConnect(String)
-  /// what a connect runs (ConnectRunScreen): its station's address, its id
-  ConnectRun(String, String)
-  /// a connect's Slack app (SlackAppScreen): its station's address, its id
-  SlackApp(String, String)
   /// a secret's page (VaultItemScreen): its vault, its id
   VaultItem(String, String)
   /// the automatic decisions (AutomaticDecisionsScreen), the completion rule's page, a station's archive policy
@@ -484,21 +478,11 @@ pub fn left(route : Route) -> Unit {
       }
     Connects(_) => connects_mine.val = false
     Station(a) => station_parts.remove(a)
-    NewConnect(a) =>
-      match left_core.val {
-        Some(core) => new_connect_left(core, a)
-        None => ()
-      }
     NewProfile(a) =>
       match left_core.val {
         Some(core) => new_profile_left(core, a)
         None => ()
       }
-    ConnectRun(a, id) => {
-      run_opened.remove("connect:" + id)
-      run_list.remove("connect:" + id)
-      ignore(a)
-    }
     VaultItem(_, item) => vault_item_left(item)
     AutoCompletion | AutoPolicy(_) =>
       match left_core.val {
@@ -515,11 +499,6 @@ pub fn left(route : Route) -> Unit {
     RunSettings(_, key) => {
       run_opened.remove("session:" + key)
       run_list.remove("session:" + key)
-    }
-    SlackApp(a, id) => {
-      app_drafts.remove(a + "/" + id)
-      slack_adding.remove(a + "/" + id)
-      app_looks.remove("slack-app/" + a + "/" + id)
     }
     _ => ()
   }
@@ -564,14 +543,6 @@ pub fn reset() -> Unit {
   top_label.val = ""
   on_card.val = false
   // the pages' own state (settings complete): drafts, fields filled once, what was being done, as a run starts
-  tokens_sent.app_token = ""
-  tokens_sent.bot_token = ""
-  tokens_form.val = 0
-  connect_forms.val = 0
-  config_sent.val = ""
-  new_filled.clear()
-  feishu_made.clear()
-  feishu_typed.clear()
   login_state.copied.clear()
   login_state.manual.clear()
   login_state.error.clear()
@@ -612,10 +583,6 @@ pub fn reset() -> Unit {
   kept.read = -1
   run_opened.clear()
   run_list.clear()
-  new_connects.clear()
-  app_drafts.clear()
-  slack_adding.clear()
-  app_looks_reset()
   new_profiles.clear()
   bar_adding.val = false
   bar_moves.clear()
@@ -672,9 +639,6 @@ pub fn route_of(name : String) -> Route? {
             "station" => Some(Station(arg))
             "adb" => Some(AdbShare(arg))
             "new-profile" => Some(NewProfile(arg))
-            "new-connect" => Some(NewConnect(arg))
-            "connect-run" => Some(ConnectRun(address, id))
-            "slack-app" => Some(SlackApp(address, id))
             "vault-item" => Some(VaultItem(address, id))
             "policy" => Some(AutoPolicy(arg))
             "archiving" => Some(StationArchiving(arg))

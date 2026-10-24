@@ -343,7 +343,7 @@ test "添加成员: what is typed counts at once, 添加 lit by it" {
 
 ///|
 test "飞书: a new connect picks its platform first, Slack's and 飞书's said (FeishuConnect.kt)" {
-  let t = settings_tester("new-connect:ws1/st1", shows="settings-new-connect-platform")
+  let t = settings_tester("connects", mode="settings-new-connect-platform", shows="settings-new-connect-platform")
   assert_true(t.find("选择平台") is Some(_))
   assert_true(t.find("在 Slack 的频道和私信中使用") is Some(_))
   assert_true(t.find("在飞书的群和私聊中使用，含国际版 Lark") is Some(_))
@@ -354,9 +354,9 @@ test "飞书: a new connect picks its platform first, Slack's and 飞书's said 
 
 ///|
 test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed to the system" {
-  let t = settings_tester("new-connect:ws1/st1", shows="settings-new-connect-scan")
+  let t = settings_tester("connects", mode="settings-new-connect-scan", shows="settings-new-connect-scan")
   assert_true(t.find("使用飞书扫描二维码，按提示创建机器人") is Some(_))
-  assert_true(t.find("也可用另一台设备上的飞书扫码") is Some(_))
+  assert_true(t.find("本机已登录飞书时，也可直接打开") is Some(_))
   // the code's dark runs, black on the white square
   let dark = t.drawn_rects().filter(fn(r) { r.4 == 0x000000FFL })
   assert_true(dark.length() > 25)
