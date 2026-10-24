@@ -6,8 +6,6 @@
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
   @sfpages.reset()
-  // what a page asks of the chat beside it: the side panel's tab, toggled (panel.mbt)
-  detail_asked.val = side_toggle
   wide_reset()
   publish_reset()
   new_ws_reset()
@@ -32,9 +30,11 @@ pub fn reset() -> Unit {
   row_menu_reset()
   attention_reset()
   newchat_reset()
-  composing_reset()
   page_switch_reset()
-  triple_reset()
+  // what the pages ask of the frame: what a row dragged carries, the chats either side of the one open
+  @sfbase.drag_carried.val = dragged
+  @sfbase.neighbour_go.val = neighbour
+  @sfbase.neighbour_held.val = switcher_open
   history_reset()
   find_close()
   jobs_reset()
@@ -53,7 +53,6 @@ pub fn reset() -> Unit {
   places_reset()
   chat_page_reset()
   usage_reset()
-  steps_reset()
   layers_reset()
   zou_page_reset()
 }

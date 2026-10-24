@@ -452,6 +452,7 @@
   "core-views.usage.tile.input_sub": "{percent} from cache",
   "core-views.usage.tile.output": "Output tokens",
   "core-views.usage.tile.output_sub": "{n}/call avg",
+  "core-views.usage.today": "Today",
   "core-views.usage.unknown_account": "Unknown account",
   "core-views.usage.unknown_model": "Unknown model",
   "core-views.usage.unknown_person": "Unknown person",

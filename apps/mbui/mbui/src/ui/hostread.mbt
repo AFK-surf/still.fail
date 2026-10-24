@@ -57,8 +57,25 @@ pub(all) enum Pointing {
 pub fn pointing() -> Pointing {
   match fake.val {
     Some(f) => f.pointing
-    None => platform_pointing(h_platform())
+    None =>
+      match said_pointing.val {
+        Some(p) => p
+        None => platform_pointing(h_platform())
+      }
   }
+}
+
+///|
+/// The hand a program says it is pointed at with, over its system's (set_pointing); None: its system's.
+// kept across runs: what the program says once as it starts, before any frame
+let said_pointing : Ref[Pointing?] = Ref(None)
+
+///|
+/// The hand this program is pointed at with from now on, over its system's (None: its system's again): a run on one
+/// system made as another's (a phone's screens drawn on a Mac, pointed at as a phone is: sffix's MBUI_POINTING). A
+/// Tester's own (Tester::new's `pointing`) is over it.
+pub fn set_pointing(p : Pointing?) -> Unit {
+  said_pointing.val = p
 }
 
 ///|

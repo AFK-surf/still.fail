@@ -32,25 +32,63 @@ fn menus_reset() -> Unit {
 ///|
 /// A link in a message held or right clicked: its menu at the pointer.
 fn link_held(c : @ui.Ctx, href : String) -> Unit {
+  // (the press is the link's menu's, not a passage's pick)
+  pk.taken_at = c.press().frame
   let (x, y, _) = c.pointer()
+  // with a finger the phone's words (Links.kt), felt as it opens; with a mouse the desktop's (its context menu's)
+  let finger = @ui.pointing() is Finger
+  if finger {
+    c.after_build("haptic/hold/link", fn() { @ui.haptic(LongPress) })
+  }
   let items : Array[@sf.MenuItem?] = []
   if href.has_prefix("https://") || href.has_prefix("http://") {
-    items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.openLink"), fn() { menu_doing.open = href }, icon="external")))
+    items.push(
+      Some(
+        @sf.menu_item_of(
+          @sf.t(if finger { "common.link.open" } else { "desktop.contextMenu.openLink" }),
+          fn() { menu_doing.open = href },
+          icon="external",
+        ),
+      ),
+    )
   }
-  items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyLink"), fn() { menu_doing.copy = href }, icon="copy")))
+  items.push(
+    Some(
+      @sf.menu_item_of(
+        @sf.t(if finger { "common.link.copy" } else { "desktop.contextMenu.copyLink" }),
+        fn() { menu_doing.copy = href },
+        icon="copy",
+      ),
+    ),
+  )
   @sf.menu(items, from=@sf.at_point(x, y))
 }
 
 ///|
-/// A picture in a message (box `id`, its image `src`) held or right clicked: its menu there.
-fn image_menu(c : @ui.Ctx, id : Int, src : String) -> Unit {
+/// A picture in a message (box `id`, its image `src`) held or right clicked: its menu there, as a passage's (pick.mbt):
+/// 引用 into the chat's draft (`quote`, where it is a message's), then copy it.
+fn image_menu(c : @ui.Ctx, id : Int, src : String, quote? : (() -> Unit)? = None) -> Unit {
   match c.menu_asked(id) {
-    Some((x, y)) if src != "" && src != "!" => {
+    Some((x, y)) => {
       menu_doing.offered = src
-      @sf.menu(
-        [Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { menu_doing.image = src }, icon="copy"))],
-        from=@sf.at_point(x, y),
-      )
+      // held with a finger: the press is the menu's (lifting it opens nothing), felt
+      if @ui.pointing() is Finger {
+        // (the press is the picture's menu's, not a passage's pick)
+        pk.taken_at = c.press().frame
+        c.take_press()
+        c.after_build("haptic/hold/image", fn() { @ui.haptic(LongPress) })
+      }
+      let items : Array[@sf.MenuItem?] = []
+      match quote {
+        Some(q) => items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.quote"), q, icon="quote")))
+        None => ()
+      }
+      if src != "" && src != "!" {
+        items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { menu_doing.image = src }, icon="copy")))
+      }
+      if items.length() > 0 {
+        @sf.menu(items, from=@sf.at_point(x, y))
+      }
     }
     _ => ()
   }
@@ -68,6 +106,7 @@ fn menus_frame(c : @ui.Ctx) -> Unit {
   if menu_doing.copy != "" {
     c.copy_text(menu_doing.copy)
     menu_doing.copy = ""
+    say(c, @sf.t("common.link.copied"))
   }
   if menu_doing.image != "" {
     match c.image_pixels(menu_doing.image, image_copy_px) {

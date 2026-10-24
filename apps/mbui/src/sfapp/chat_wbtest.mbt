@@ -41,7 +41,7 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   // it comes up growing (its presence, "chat-jump"): tapped once it is there, as a person can only tap what shows
   t.run_for(t.rest_of("chat-jump") - t.time())
   // over the send button, the composer's room under it
-  t.tap(390.0 - 18.0 - 18.0, 844.0 - 112.0 - 18.0)
+  t.click(Button, label=@sf.t("web-main.chat.toLatest"))
   // back at its end by the list's own rest (mbui's list_to_end: a glide solved in time, or at once from further than
   // its rows; and its scroll bar faded): what it says of itself
   let rest = t.rest_of("a list")
@@ -51,6 +51,8 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   }
   assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
   assert_true(!rd.jump)
+  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
@@ -59,11 +61,11 @@ test "the viewer's words on the right, everyone else's under their name" {
   let t = chat_tester("chat")
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -500.0)
-  // a bubble ending at the list's right edge (14 in), an agent's words from its left
+  // a bubble at the list's right (16 in: the web's narrow chatList), an agent's words from its left
   let (bx, _, bw, _) = t.rect_of("还有深色模式也看一下").unwrap()
-  assert_true(bx > 195.0 && (bx + bw - (390.0 - 14.0 - 14.0)).abs() < 1.0)
+  assert_true(bx > 195.0 && bx + bw <= 390.0 - 16.0 + 0.5 && bx + bw > 390.0 - 16.0 - 24.0)
   let (ax, _, _, _) = t.rect_of("高度先按 90 估").unwrap()
-  assert_eq(ax, 14.0)
+  assert_eq(ax, 16.0)
 }
 
 ///|
@@ -109,6 +111,8 @@ test "a reference to another chat is its chip, and opens that chat" {
   if scrolled >= 0.0 {
     t.run_for(scrolled + @ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms - t.time())
   }
+  // (the pictures of the chat under it brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
@@ -162,8 +166,18 @@ test "a file card in the chat opens its preview" {
   t.draw()
   t.run_for(@ui.nav_push_ms)
   t.move(195.0, 400.0)
-  t.wheel(195.0, 400.0, -600.0)
-  t.tap_text("build.log")
+  // (up the list till its card shows: its name's stem, its extension after it)
+  let mut tries = 0
+  while t.find(".log") is None && tries < 12 {
+    t.wheel(195.0, 400.0, -300.0)
+    tries += 1
+  }
+  // (clear of the bar over the list's top)
+  match t.find(".log") {
+    Some((_, y)) if y < 200.0 => t.wheel(195.0, 400.0, y - 400.0)
+    _ => ()
+  }
+  t.tap_text(".log")
   assert_true(viewer.val is Some(_))
   assert_eq(viewer.val.unwrap().file.name, "build.log")
   // the preview flown open, its bars left alone till they rest
@@ -186,15 +200,15 @@ test "what waits to be decided and is out of view: a bell over the way to the en
   assert_true(rd.jump)
   // over the way to the end, once it has risen (the list, still flung, is stopped by a tap first: it takes that one)
   t.run_for(ask_lift_ms)
-  let (bx, by) = (390.0 - 18.0 - 18.0, 844.0 - composer_room_of(t.ctx()) - 2.0 - 44.0 - 18.0)
+  let bell = @sf.t("web-main.chat.asks.go")
   if t.list_moving() {
-    t.tap(bx, by)
+    t.click(Button, label=bell)
   }
   assert_true(!t.list_moving())
-  t.tap(bx, by)
+  t.click(Button, label=bell)
   assert_eq(rd.flash, "ts8")
   // the next tap goes to the next one's
-  assert_eq(ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
+  assert_eq(@sfpages.ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
 }
 
 ///|

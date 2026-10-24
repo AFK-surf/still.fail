@@ -15,7 +15,7 @@ fn touch_wide_tester() -> @ui.Tester raise {
 ///|
 test "touch wide: the desktop's frame, a chat's row held opens its menu (no right click there), the chat not opened" {
   let t = touch_wide_tester()
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
   let log = t.drive("hold 700 首页的列表改成按天分组\nuntil 复制会话链接\nuntil 归档\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
   assert_true(
@@ -74,7 +74,7 @@ fn tap_place(t : @ui.Tester, label : String) -> Unit raise {
 ///|
 test "touch wide, a small tablet held upright: the chats' list folded to the rail for the page's room, what was chosen kept; its place tapped shows it over the page, a chat chosen there opens and folds it, a tap on the page folds it" {
   let t = touch_narrow_tester()
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
   assert_true(@sfdesk.wide.crowded)
   assert_false(@sfdesk.wide.folded)
   // the page from the rail's bar on: no row of the list, the chat's words where the list would be

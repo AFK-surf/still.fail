@@ -1138,7 +1138,7 @@ function overview(value: J, c: Clock, station: string | null): J {
     if (isObject(decided.policy)) shown.policy = archivePolicy(decided.policy as J, c);
     v.automaticDecisions = shown;
   }
-  if (isObject(v.archiving)) v.archiving = archiving(v.archiving as J);
+  if (isObject(v.archiving)) v.archiving = archiving(v.archiving as J, v.automaticDecisions);
   const processes = arr(v.processes);
   if (processes) {
     let mb = 0;
@@ -1201,20 +1201,59 @@ export function daysOffered(kept: number, base: number[]): number[] {
   return kept > 0 && !base.includes(kept) ? [...base, kept].sort((a, b) => a - b) : base;
 }
 
+/// The ways a station can archive on its own, in their order.
+const ARCHIVE_MODES = ["off", "idle", "reviewed"] as const;
+
+/// Whether a station's archive review (自动决策 › 归档建议) is on, and that said alone, by which model (`decided`: its
+/// overview's `automaticDecisions`).
+export function archiveReview(decided: J): { on: boolean; text: string } {
+  const rule = get(get(decided, "settings"), "completion");
+  const on = get(rule, "enabled") === true;
+  const id = typeof get(rule, "model") === "string" ? (get(rule, "model") as string) : "";
+  const model = (arr(get(decided, "models")) ?? []).find((m) => get(m, "id") === id);
+  const name = typeof get(model, "name") === "string" ? (get(model, "name") as string) : id;
+  return { on, text: on ? t("web-pages.archiving.reviewOnShort", { model: name }) : t("web-pages.archiving.reviewOffShort") };
+}
+
 /// How a station archives on its own, as its row and its page in 设置 › 归档 say it: `mode`, never (no days), once
 /// idle, or once idle and recommended by its review (`off`, `idle`, `reviewed`); that in a line with Slack's
-/// (`summaryText`); and the days each choice offers (`daysOffered`, `slackDaysOffered`).
-export function archiving(view: J): J {
+/// (`summaryText`); and the days each choice offers (`daysOffered`, `slackDaysOffered`, with their words). With its
+/// review (`decided`: its overview's `automaticDecisions`): whether it is on (`reviewOn`, `reviewText`), whether what is
+/// set waits on a review that is off (`stalled`, its row's line `lineText` then saying so), each way to choose and what
+/// choosing it saves (`modes`: its days and whether reviewed; not `allowed` to be recommended by a review that is off),
+/// and what the way chosen does (`modeNote`).
+export function archiving(view: J, decided?: J): J {
   const days = typeof view.days === "number" ? view.days : 0;
   const slack = typeof view.slackDays === "number" ? view.slackDays : 0;
   const mode = days <= 0 ? "off" : view.reviewed === true ? "reviewed" : "idle";
   const how = mode === "off" ? t(`web-pages.archiving.mode.${mode}`) : `${t(`web-pages.archiving.mode.${mode}`)} · ${daysText(days)}`;
+  const review = archiveReview(decided);
+  const summaryText = t("web-pages.archiving.summary", { how, slack: daysText(slack) });
+  const stalled = mode === "reviewed" && !review.on;
+  const offered = daysOffered(days, IDLE_DAYS);
+  const slackOffered = daysOffered(slack, SLACK_DAYS);
+  const note = t(`web-pages.archiving.mode.${mode}Hint`);
   return {
     ...view,
     mode,
-    summaryText: t("web-pages.archiving.summary", { how, slack: daysText(slack) }),
-    daysOffered: daysOffered(days, IDLE_DAYS),
-    slackDaysOffered: daysOffered(slack, SLACK_DAYS),
+    summaryText,
+    daysOffered: offered,
+    slackDaysOffered: slackOffered,
+    daysOfferedText: offered.map(daysText),
+    slackDaysOfferedText: slackOffered.map(daysText),
+    reviewOn: review.on,
+    reviewText: review.text,
+    stalled,
+    lineText: stalled ? t("web-pages.archiving.stalled") : summaryText,
+    modes: ARCHIVE_MODES.map((m) => ({
+      mode: m,
+      label: t(`web-pages.archiving.mode.${m}`),
+      // off forgets the days; idle or reviewed keeps those kept, or one
+      days: m === "off" ? 0 : days > 0 ? days : 1,
+      reviewed: m === "reviewed",
+      allowed: !(m === "reviewed" && !review.on && mode !== "reviewed"),
+    })),
+    modeNote: review.on ? note : `${note} ${t(mode === "reviewed" ? "web-pages.archiving.reviewNeeded" : "web-pages.archiving.stationNeedsReview")}`,
   };
 }
 

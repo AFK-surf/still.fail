@@ -127,10 +127,10 @@ pub fn new_nav() -> @ui.Nav[Page] {
 /// (@settings.route_of).
 pub fn open_setting(name : String) -> Unit {
   match @settings.route_of(name) {
-    Some(@settings.Route::Home) => app.nav.push(Settings)
+    Some(@settings.Route::Home) => open_page(Settings)
     Some(r) => {
-      app.nav.push(Settings)
-      app.nav.push(Setting(r))
+      open_page(Settings)
+      open_page(Setting(r))
     }
     None => ()
   }
@@ -150,13 +150,14 @@ pub fn nav_home() -> Unit {
 ///|
 /// A chat opened over Home from the start (a link, a scripted run).
 pub fn open_chat(r : ChatRef) -> Unit {
-  app.nav.push(Chat(r))
+  open_page(Chat(r))
 }
 
 ///|
-/// A page pushed over Home from the start (a scripted run; the bottom bar's places until there is one).
+/// Page `p` opened, where the layout has it (Shell's `open`: the pane table, docs/architecture.md): what pages, links
+/// and the app's own doings call, never the stack themselves.
 pub fn open_page(p : Page) -> Unit {
-  app.nav.push(p)
+  (shell.val.open)(p)
 }
 
 
@@ -207,6 +208,8 @@ pub fn reset() -> Unit {
   service_pages_reset()
   // a file open over the pages, what it flew from and kept (viewer.mbt, viewer_marks.mbt)
   file_viewer_reset()
+  // what comes and goes under the posts (under_post.mbt)
+  under_reset()
   machine_here.val = None
   // a station's screens' cards live in a chat (screen_links.mbt)
   peeks_reset()

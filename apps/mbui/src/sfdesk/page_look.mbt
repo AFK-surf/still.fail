@@ -45,6 +45,7 @@ fn look_page(
   lead? : String = "",
   about? : String = "",
   actions? : () -> Unit,
+  head? : () -> Unit,
 ) -> Unit {
   match look {
     Wide =>
@@ -59,6 +60,7 @@ fn look_page(
         back=frame.back.unwrap_or(""),
         deep=frame.back is Some(_),
         actions?,
+        head?,
         top=frame.top,
         foot=frame.foot,
       )
@@ -80,7 +82,13 @@ fn look_page(
           })
         None => ()
       }
-      // (a place's top page: the frame's bar over it names it)
+      // (a place's top page: the frame's bar over it names it, and holds what it does at its end)
+      if frame.named {
+        match actions {
+          Some(f) => @settings.root_bar_actions.val = Some(f)
+          None => ()
+        }
+      }
       if !frame.named {
         blocks.push(fn() {
           c.box(style=narrow_title_box, fn() {
@@ -230,6 +238,64 @@ let narrow_card_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 /// ListCard: its rows 8 in, its corner concentric round theirs.
 // kept across runs: a value (no field of it changes)
 let narrow_card : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, bg=Card, clip=true)
+
+///|
+/// A choice of a few (narrow: Seg as wide as the page less 12 each side, 34 high; wide: the web's Segmented at the
+/// column's start). Answers the one chosen (a press's, this frame).
+fn look_choice(c : @ui.Ctx, look : Look, key : String, labels : Array[String], at : Int) -> Int {
+  let mut picked = at
+  match look {
+    Narrow =>
+      c.box(style=narrow_choice_box, fn() { picked = @sf.seg(c, key, labels, at, fill=true, height=narrow_choice_h) })
+      |> ignore
+    Wide => desk_choice(c, fn() { picked = @sf.segmented(c, key, labels, at) })
+  }
+  picked
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_choice_box : @ui.Style = @ui.css("w=Full px=S3")
+
+///|
+let narrow_choice_h : Double = 34.0
+
+///|
+/// What the choice over it does, in a line or two (narrow: mSegNote, 24 in, 8 over; wide: the web's hint under it).
+fn look_note(c : @ui.Ctx, look : Look, words : String, bad? : Bool = false) -> Unit {
+  match look {
+    Narrow =>
+      c.box(style=narrow_note_box, fn() { c.text(words, style=if bad { narrow_note_bad } else { narrow_note }) |> ignore })
+      |> ignore
+    Wide =>
+      if bad {
+        c.box(style=desk_hint_box, fn() { c.text(words, style=desk_note_bad) |> ignore }) |> ignore
+      } else {
+        desk_hint(c, words)
+      }
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_note_box : @ui.Style = @ui.css("w=Full px=S6 pt=S2 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_note : @ui.TextStyle = @sf.secondary.then(@sf.full_words)
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_note_bad : @ui.TextStyle = narrow_note.then(@sf.bad)
+
+///|
+/// A note's words in a line, as wide as they are (a link after them).
+// kept across runs: a value (no field of it changes)
+let narrow_note_inline : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_hint_inline : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// A card of words on the page (narrow: Card, 12 from the page's sides, 10 under it; wide: pages.css.ts card, at the
@@ -418,6 +484,10 @@ pub fn back_label(p : Page) -> String {
     Setting(Route::Version) => @sf.t("web-pages.settings.nav.version")
     Setting(Route::Memories) => @sf.t("web-pages.settings.memory.title")
     Setting(Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
+    Setting(Route::Archiving) => @sf.t("web-pages.archiving.title")
+    Setting(Route::Shortcuts) => @sf.t("web-main.shortcuts.title")
+    Setting(Route::Usage) => @sf.t("web-pages.settings.nav.usage")
+    Place("usage") => @sf.t("web-pages.settings.nav.usage")
     _ => @sf.t("common.back")
   }
 }

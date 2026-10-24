@@ -28,6 +28,8 @@ test "a message's Markdown: its blocks, their margins collapsed, links and copy"
     },
     w=390.0,
     h=844.0,
+    // (a phone's: its words a finger's size)
+    platform=2,
   )
   // the heading first, its top margin dropped
   let (_, hy, _, _) = t.rect_of("今天的进度").unwrap()

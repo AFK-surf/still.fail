@@ -128,8 +128,21 @@ One shell. It arranges the same panes in every tier:
 
 1. **The axes read once.** This is the shell's work (the chat 按屏幕分三档布局). The hidden axes go: `wide_on`,
    `@settings.wide`, the viewer's `narrow`, the touch-system theme. Density follows the input.
+   - Done: `wide_on` is gone (the shell reads `@sf.layout` where it arranges, and the phone pages' wide branches,
+     never drawn, with it), and `@sf.begin`'s theme follows `@ui.pointing()`, not the system: a finger's the phone's, a
+     mouse's the web's; laid out Small still the phone's whatever the hand, as the phone's pages carry its palette in
+     places, until step 4 makes them one with the web's. A Tester or a program says the hand apart from its system
+     (`Tester::new(pointing=…)`, `@ui.set_pointing`: the phone's screens recorded on a Mac are a finger's).
+   - Done too: the viewer host's `narrow` (the reader and the player go by the tier, as the file viewer's frame does).
+   - Left to the merge that rewrites its readers: `@settings.wide` (the settings pages, merged, go by their own width).
 2. **The presenters** land in the library, and the three sheet hosts and the desk's dialogs move onto them.
 3. **Navigation by what is opened,** with the pane table in the shell.
+   - Begun: sfbase's `Shell` has `open` (a `Page`) and `detail` (a chat's tab), called as `@sfbase.open_page` and
+     `@sfbase.open_detail`; the shell (sfapp's `pages_shell`) answers by the layout at the moment (`open_where`,
+     `detail_where`): Small the phone's stack (a new chat risen), the wide frame the page pushed and a chat's detail
+     its side panel's tab (sfdesk's `main_page` lays a detail asked as a page beside its chat, also when the layout
+     changes under a stack). sfbase's routers (links, search, jump, the settings' core) and sfpages open so; a merged
+     page does too. The phone's and the desk's own pages still push until they merge.
 4. **The pages merge, by area, in parallel,** once 2 has landed:
    - the settings and the places;
    - the files and the viewer;

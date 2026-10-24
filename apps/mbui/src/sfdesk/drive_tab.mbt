@@ -14,7 +14,6 @@ priv struct FChatTab {
   mut building : Bool
   places : Map[String, DriveAt?]
   mut scope : String
-  sent : Array[(String, Dragged)]
   /// the chat whose tab the keys are (the pointer last pressed in it)
   mut keys : String
   mut let_go : (Dragged, Double, Double, Int)?
@@ -27,7 +26,6 @@ let ftab : FChatTab = {
   building: false,
   places: {},
   scope: "",
-  sent: [],
   keys: "",
   let_go: None,
   chat: "",
@@ -38,7 +36,6 @@ fn tab_reset() -> Unit {
   ftab.building = false
   ftab.places.clear()
   ftab.scope = ""
-  ftab.sent.clear()
   ftab.keys = ""
   ftab.let_go = None
   ftab.chat = ""
@@ -86,14 +83,6 @@ pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
     }
     _ => None
   }
-}
-
-///|
-/// What 添加到消息 put in for the chat `chat` since it was last asked, taken.
-pub fn tab_take_sent(chat : String) -> Array[Dragged] {
-  let out = ftab.sent.filter(fn(x) { x.0 == chat }).map(fn(x) { x.1 })
-  ftab.sent.retain(fn(x) { x.0 != chat })
-  out
 }
 
 ///|
@@ -336,7 +325,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
           return [
             Some(@sf.menu_item_of(@sf.t("web-pages.drive.sendManyToChat", args=[("n", all.length().to_string())]), icon="send", fn() {
               for x in all {
-                ftab.sent.push((ftab.chat, dragged(x.0, x.1)))
+                files_into(ftab.chat, dragged(x.0, x.1))
               }
             })),
             Some(@sf.menu_item_of(@sf.t("web-pages.drive.copyPaths"), icon="copy", fn() {
@@ -346,7 +335,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
         }
         let abs = dv_absolute(root, dv_join(in_.path, e.name))
         let out : Array[@sf.MenuItem?] = [
-          Some(@sf.menu_item_of(@sf.t("web-pages.drive.sendToChat"), icon="send", fn() { ftab.sent.push((ftab.chat, dragged(in_, e))) })),
+          Some(@sf.menu_item_of(@sf.t("web-pages.drive.sendToChat"), icon="send", fn() { files_into(ftab.chat, dragged(in_, e)) })),
           Some(@sf.menu_item_of(@sf.t("web-pages.drive.copyPath"), icon="copy", fn() { copy_path(c, abs) })),
         ]
         if !e.dir {

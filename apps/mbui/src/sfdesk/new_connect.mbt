@@ -341,7 +341,7 @@ fn nc_models(c : @ui.Ctx, src : Source, core : Core, f : NcFlow, v : Json?) -> U
         (core.push)(Profiles(f.station))
       }
     } else {
-      model_triple(c, src, f.station, "connect-new:" + f.form)
+      @sfpages.model_triple(c, src, f.station, "connect-new:" + f.form)
     }
   })
 }

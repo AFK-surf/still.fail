@@ -8,6 +8,7 @@ fn drive_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_drive_fixture(mode)
+  // (a phone's: a finger)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the fixture's pages in
   nav_rested(t)
@@ -45,25 +46,21 @@ fn sheet_rested(t : @ui.Tester, key : String) -> Unit {
 }
 
 ///|
-/// Held on `s` (a long press), then let go.
+/// Held on `s` (a long press), then let go; what it opened (a presenter's sheet) risen.
 fn hold(t : @ui.Tester, s : String) -> Unit {
   let (x, y) = t.find(s).unwrap()
   t.press_at(x, y)
-  // (a finger's press in a list shows a moment after it goes down: @ui.tap_indication_ms)
-  t.run_for(@ui.tap_indication_ms + dv_hold_ms)
+  t.run_for(@ui.long_press_ms)
   t.release(x, y)
+  sheet_rested(t, "sf-present")
 }
 
 ///|
-test "文件: each station's home and folders lent under its name; one away faint, said so" {
+test "文件: the files' places (the wide frame's sidebar's list): 个人收藏, each station with a drive, one away said so; 团队共享 the folders pinned" {
   let t = drive_tester("files")
-  assert_true(t.find("文件") is Some(_))
-  assert_true(t.find("Studio") is Some(_))
-  assert_true(t.find("主目录") is Some(_))
-  assert_true(t.find("文档") is Some(_))
-  assert_true(t.find("备份盘") is Some(_))
-  assert_true(t.find("MBA · 离线") is Some(_))
-  assert_true(t.find("照片") is Some(_))
+  for words in ["文件", "个人收藏", "Station", "Studio", "离线", "团队共享", "文档", "照片"] {
+    assert_true(t.find(words) is Some(_), msg=words)
+  }
   // back says the page under it
   assert_true(t.find("对话") is Some(_))
   t.assert_idle()
@@ -97,31 +94,31 @@ test "a folder: what it holds in a line, folders first, hidden files left out; i
 }
 
 ///|
-test "held: chosen; its sheet renames it, the folder shows the new name" {
+test "held: what can be done to it in a sheet (EntrySheet); 重命名 asks its new name, the folder shows it" {
   let t = drive_tester("drive")
   hold(t, "季度数据.csv")
-  assert_true(t.find("已选 1 项") is Some(_))
-  let log = t.drive("tap icon:more\nuntil 复制路径\nuntil 移到废纸篓\ntap 重命名\nuntil 保存\ntap 季度数据.csv\nclear\ntype 年度数据.csv\ntap 保存\ngone 保存\n")
+  let log = t.drive("until 复制路径\nuntil 移到废纸篓\ntap 重命名\nuntil 保存\ntap 季度数据.csv\nclear\ntype 年度数据.csv\ntap 保存\ngone 保存\n")
   assert_true(log.contains("EXIT 0"))
-  assert_true(dv.sheet is NoSheet)
+  assert_true(!@sf.presenting())
   // (its sheet sunk away)
-  sheet_rested(t, "dv-sheet")
+  sheet_rested(t, "sf-present")
+  t.draw()
   assert_true(t.find("年度数据.csv") is Some(_))
   assert_true(t.find("季度数据.csv") is None)
-  assert_true(t.find("已选 1 项") is None)
   t.assert_idle()
 }
 
 ///|
-test "deleted to the station's trash, said so; a new folder made" {
+test "held: deleted to the station's trash, said so; ＋'s 新建文件夹 asks its name and makes it" {
   let t = drive_tester("drive")
   hold(t, "合同草稿.pdf")
-  let log = t.drive("tap icon:more\ntap 移到废纸篓\ngone 合同草稿.pdf\nuntil 已移到 station 的废纸篓\n")
+  let log = t.drive("tap 移到废纸篓\ngone 合同草稿.pdf\nuntil 移到 station 的废纸篓\n")
   assert_true(log.contains("EXIT 0"))
+  sheet_rested(t, "sf-present")
   let log = t.drive("tap icon:plus\ntap 新建文件夹\ntap 文件夹名\ntype 新的文件夹\ntap =新建\nuntil 新的文件夹\n")
   assert_true(log.contains("EXIT 0"))
   assert_true(t.find("新的文件夹") is Some(_))
-  sheet_rested(t, "dv-sheet")
+  sheet_rested(t, "sf-present")
   t.assert_idle()
 }
 
@@ -241,11 +238,9 @@ test "a Markdown file read as a chat's Markdown is drawn, its words searched whe
 }
 
 ///|
-test "a folder's buttons said to a screen reader as Android's: 刷新, 添加, 显示方式" {
+test "a folder's buttons said to a screen reader: 刷新, 添加, 更多操作" {
   let t = drive_tester("drive")
-  t.tap_text("文档")
-  nav_rested(t)
   assert_true(t.query(Button, label="刷新") is Some(_))
   assert_true(t.query(Button, label="添加") is Some(_))
-  assert_true(t.query(Button, label="显示方式") is Some(_))
+  assert_true(t.query(Button, label="更多操作") is Some(_))
 }

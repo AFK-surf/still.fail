@@ -127,6 +127,10 @@ pub let row_corner : Double = 18.0
 pub let row_icon : Double = 22.0
 
 ///|
+/// A finger's list row in from its box's left (SidebarList.css.ts phone: a chat row's 22).
+pub let phone_row_in : @ui.Space = room(22.0)
+
+///|
 /// The account's picture and the workspace's mark, each on its card atop settings (SettingsHome.kt): 46.
 pub let identity_mark : Double = 46.0
 
@@ -440,11 +444,13 @@ fn screen_layout(width : Double) -> Layout {
 }
 
 ///|
-/// The theme for this frame: a phone's or a tablet's always its own, a desktop's the narrow screen's where its window
-/// shows one page at a time (layout): call at the top of a view.
+/// The theme for this frame, by the hand (@ui.pointing), never what the system is: pointed at with a finger the phone's
+/// (its palette, its type a finger's size: Android's app, a tablet's too), with a mouse the web's. Laid out Small the
+/// phone's whatever the hand, as its pages are the phone's, which carry its palette in places (sfapp messages.mbt
+/// `ink`) until they and the web's are one (docs/architecture.md, the way there 4): call at the top of a view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = touch_system() || layout(c.width) is Small
+  let narrow = @ui.pointing() is Finger || layout(c.width) is Small
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark
@@ -1302,6 +1308,10 @@ pub let message_head_in : @ui.Space = room(25.0)
 /// An agent's activity line out in the margin with the messages' pictures (align.ts columns.activity: its 24 picture
 /// and the 11 beside it, 35 before the words).
 pub let activity_out : @ui.Space = room(-35.0)
+
+///|
+/// Narrow (columns.activityNarrow): 9 out into the list's 16.
+pub let activity_out_narrow : @ui.Space = room(-9.0)
 
 ///|
 /// What says a chat is archived or its station down, over its composer (Chat.css.ts offlineNotice: 760 at most, 64

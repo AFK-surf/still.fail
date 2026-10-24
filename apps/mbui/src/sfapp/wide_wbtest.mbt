@@ -29,7 +29,7 @@ fn wide_tester(
 test "wide: the rail, the chats' list beside it and a page in the rest; below the breakpoint the phone's Home" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
   // the list's band and its days
   assert_true(t.find("新建对话") is Some(_))
   assert_true(t.find("今天") is Some(_))
@@ -39,7 +39,7 @@ test "wide: the rail, the chats' list beside it and a page in the rest; below th
   assert_true(app.nav.top() == NewChat)
   // a phone's width: the phone's Home, the same stack
   t.resize(390.0, 844.0)
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
   assert_true(t.find("新建对话") is None)
 }
 
@@ -416,7 +416,8 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
   t.tap_text("复制链接")
   t.frame()
   assert_eq(t.clipboard(), "https://example.com/review/42")
-  t.frame()
+  // (its menu, the presenters', gone as it goes)
+  t.run_for(@kit.presence_out_ms)
   assert_true(t.find("在浏览器中打开链接") is None)
   // the words before it with nothing picked: no menu
   let (px, py, pw, ph) = words_rect(t, "第二屏的插画")
@@ -429,7 +430,8 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
   assert_eq(t.ctx().selected_text(), "第二屏的插画")
   t.right_click(px + pw / 2.0, py + ph / 2.0)
   t.frame()
-  assert_true(t.find("复制链接") is None)
+  // (no link's item: 已复制链接 said a moment ago is the toast's)
+  assert_true(!t.words().iter().any(fn(w) { w.0 == "复制链接" }))
   t.tap_text("复制")
   t.frame()
   assert_eq(t.clipboard(), "第二屏的插画")

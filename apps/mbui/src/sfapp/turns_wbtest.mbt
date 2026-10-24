@@ -107,7 +107,7 @@ test "a decision answered: its options close in their turn after the answer has 
   // their turn: after your answer's (its rise), the list at rest after it
   t.draw()
   let at = tu.start_of("ask/ts8")
-  assert_true(at >= tu.started_at("m:ts108") + row_turn_ms && at < @double.infinity)
+  assert_true(at >= tu.started_at("m:ts108") + @sf.enter_ms && at < @double.infinity)
   t.run_for(at - t.time())
   assert_eq(tu.shown.get("ask/ts8"), Some(false))
   assert_eq(tu.started_at("ask/ts8"), at)

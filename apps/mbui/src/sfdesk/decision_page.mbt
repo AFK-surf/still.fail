@@ -191,7 +191,7 @@ fn zou_card(c : @ui.Ctx, src : Source, w : Workspace, core : Core, x : Json, liv
   }
   let draft = "decision:" + station + ":" + number(v, "thread").to_int().to_string() + ":" +
     number(v, "seq").to_int().to_string()
-  let room = if replies { composer_room(c, draft) } else { 0.0 }
+  let room = if replies { @sfpages.composer_room(c, draft) } else { 0.0 }
   let pre = if live { "zou/" } else { "zou-out/" }
   let lkey = pre + "messages/" + decision_key(x)
   let rows : Array[() -> Unit] = []
@@ -303,7 +303,7 @@ fn zou_picks(c : @ui.Ctx, src : Source, core : Core, here : MessageHere, x : Jso
 fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String, placeholder : String) -> Unit {
   let v = Some(x)
   let station = text(v, "station")
-  let spec : ComposerSpec = {
+  let spec : @sfpages.ComposerSpec = {
     station,
     draft,
     session: text(v, "session"),
@@ -317,12 +317,12 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
   let foot = c.box(style=zp_foot, fn() {
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
-        composer(c, src, w, spec, fn(wr) {
+        @sfpages.composer(c, src, w, spec, fn(wr) {
           if src.read_only {
             toast_later(read_only_words)
             return
           }
-          let going = going_up(wr)
+          let going = @sfpages.going_up(wr)
           zou_leave(c, x, 3)
           writing_take(src, wr, fn(taken) {
             guard taken is Some(_) else { return }

@@ -7,7 +7,14 @@
 
 ///|
 /// A message's files (Files), at the column's end when it is the viewer's (`mine`).
-pub fn message_files(c : @ui.Ctx, src : Source, here : MessageHere, list : Array[Attachment], mine : Bool) -> Unit {
+pub fn message_files(
+  c : @ui.Ctx,
+  src : Source,
+  here : MessageHere,
+  list : Array[Attachment],
+  mine : Bool,
+  by? : (String, String, String)? = None,
+) -> Unit {
   if list.length() == 0 {
     return
   }
@@ -41,7 +48,8 @@ pub fn message_files(c : @ui.Ctx, src : Source, here : MessageHere, list : Array
       c.box(style=files_row, fn() {
         for i in r {
           // (each in a box of its own: where a file sent from the composer flies to, sfbase's flight.mbt)
-          let item = c.box(fn() { file_item(c, src, here, list[i], widths[i]) })
+          // (as wide as laid out for it: a card does not give way to the picture beside it)
+          let item = c.box(style=@ui.style(w=Fixed(widths[i])), fn() { file_item(c, src, here, list[i], widths[i], by~) })
           match flight_here(here) {
             Some(f) => flight_landing(c, f, item, list[i].path)
             None => ()
@@ -130,9 +138,9 @@ fn thumb_ratio(hash : String) -> Double? {
 
 ///|
 /// One of a message's files (FileItem), `w` wide.
-fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double) -> Unit {
+fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
   match file_kind(a.name) {
-    "image" => image_item(c, src, here, a, w)
+    "image" => image_item(c, src, here, a, w, by~)
     "video" => video_item(c, src, here, a, w)
     _ => card_item(c, src, here, a)
   }
@@ -142,7 +150,7 @@ fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : 
 /// An image (FileItem's image): in its box on the neutral ground, what it waits on until it is decoded (its ThumbHash's
 /// likeness), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
 /// cannot be had says so. Pressed, the preview; right-clicked, 复制图片.
-fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double) -> Unit {
+fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
 
   let open = c.id("msg-file/" + a.path)
   let owner = owner_of(here, a)
@@ -160,7 +168,12 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // where it is, for the preview to fly from and back into; hidden while the preview is its picture
   let thumb = here.station + "/" + owner + "/" + a.path
   note_thumb(c, thumb, open, @sf.message_file_corner, letterbox~)
-  image_menu(c, open, key)
+  image_menu(c, open, key, quote=by.map(fn(b) {
+    let (author, role, ts) = b
+    let file = attachment_json(a, owner)
+    let draft = here.station + ":" + here.session
+    fn() { quote_file_into(draft, author, ts, role, file) }
+  }))
   let fit : @ui.Fit = if letterbox { FitContain } else { FitCover }
   let b = c.box(style=image_box_style(w, h, key != "" && key != "!" || letterbox), id=open, fn() {
     if key == "!" {
@@ -384,7 +397,7 @@ fn message_reset() -> Unit {
 ///|
 /// How long an image comes in, how blurred and how much larger it starts (a blur under a quarter is none), and when
 /// and how fast what it waited on goes; its edge's steps.
-let reveal_ms : Double = 1100.0
+pub let reveal_ms : Double = 1100.0
 
 ///|
 let reveal_blur : Double = 14.0

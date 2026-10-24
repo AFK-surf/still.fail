@@ -9,7 +9,7 @@ fn status_top() -> Double {
   let top = @ui.system_bars().top
   // a desktop's window with its buttons in the app's top row (macOS: its title bar the app's), a phone's page in it:
   // the buttons' band over the page, as a status bar is
-  if top == 0.0 && !wide_on.val && @ui.window_inset() {
+  if top == 0.0 && !@sfdesk.is_wide(@ui.current()) && @ui.window_inset() {
     window_band
   } else {
     top
@@ -19,7 +19,7 @@ fn status_top() -> Double {
 ///|
 /// Whether the pages have the bottom bar under them: the phone's pages do (laid out Small), the wide frame's not.
 fn has_bar() -> Bool {
-  !wide_on.val
+  !@sfdesk.is_wide(@ui.current())
 }
 
 ///|

@@ -46,6 +46,8 @@ let writing_n : Ref[Int] = { val: 0 }
 
 ///|
 pub fn writings_reset() -> Unit {
+  quoted_into.clear()
+  files_put.clear()
   writings.clear()
   writing_pictures.clear()
   writing_went.clear()
@@ -419,3 +421,74 @@ pub fn file_type(name : String) -> String {
     ""
   }
 }
+
+///|
+/// A file as the core gives it (Attachment), kept by `owner`'s workspace.
+pub fn attachment_json(a : Attachment, owner : String) -> Json {
+  let o : Map[String, Json] = {
+    "name": Json::string(a.name),
+    "path": Json::string(a.path),
+    "size": Json::number(a.size),
+  }
+  if a.width > 0.0 && a.height > 0.0 {
+    o["width"] = Json::number(a.width)
+    o["height"] = Json::number(a.height)
+  }
+  if a.thumbhash != "" {
+    o["thumbhash"] = Json::string(a.thumbhash)
+  }
+  if owner != "" {
+    o["owner"] = Json::string(owner)
+  }
+  Json::object(o)
+}
+
+///|
+/// A message's file quoted into a chat's draft (a picture's menu, 引用): by the draft's key, whose (`author`), the
+/// message's `ts`, its role, the file as the core gives it; taken by whichever composer the draft's is, as it is next
+/// drawn (its quote with the file in its card, the file going again with the message as the station has it).
+pub fn quote_file_into(draft : String, author : String, ts : String, role : String, file : Json) -> Unit {
+  let list = quoted_into.get(draft).unwrap_or([])
+  list.push((author, ts, role, file))
+  quoted_into[draft] = list
+}
+
+///|
+/// Files (a 文件 row) put into a chat's message from elsewhere (the files' tab: 添加到消息, a row let go on the chat), by
+/// the chat's key; taken by its composer as it is next drawn (files_taken).
+pub fn files_into(chat : String, d : Dragged) -> Unit {
+  files_put.push((chat, d))
+}
+
+///|
+/// What was put into the chat `chat`'s message since it was last asked, taken.
+pub fn files_taken(chat : String) -> Array[Dragged] {
+  let out = files_put.filter(fn(x) { x.0 == chat }).map(fn(x) { x.1 })
+  files_put.retain(fn(x) { x.0 != chat })
+  out
+}
+
+///|
+// kept across runs: put back by writings_reset (sfbase's reset)
+let files_put : Array[(String, Dragged)] = []
+
+///|
+/// What a row dragged now carries, as the frame that drags it says (sfdesk's drag.mbt), for a composer it goes over.
+// kept across runs: what the app says once as it starts
+pub let drag_carried : Ref[() -> Dragged?] = Ref(fn() { None })
+
+///|
+/// The chat before (-1) or after (1) the one open, gone to by a composer's ↑ or ↓ (empty, focused), as the shell
+/// says as the app starts (its list's order); none while the shell has the arrows itself (its switcher open).
+// kept across runs: what the app says once as it starts
+pub let neighbour_go : Ref[(Source, Workspace, Int) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
+/// Whether the shell has the arrows now (neighbour_go).
+// kept across runs: what the app says once as it starts
+pub let neighbour_held : Ref[() -> Bool] = Ref(fn() { false })
+
+///|
+/// The files quoted, by draft key, not yet taken by a composer.
+// kept across runs: put back by writings_reset (sfbase's reset)
+pub let quoted_into : Map[String, Array[(String, String, String, Json)]] = {}

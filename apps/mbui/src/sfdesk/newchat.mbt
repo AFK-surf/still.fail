@@ -255,7 +255,7 @@ fn new_composer(
   held : Bool,
   tools : (() -> Unit)?,
 ) -> Unit {
-  let spec : ComposerSpec = {
+  let spec : @sfpages.ComposerSpec = {
     station: address,
     draft: "new:" + address,
     session: "",
@@ -265,7 +265,7 @@ fn new_composer(
     locked: held || text(v, "runtime") == "" || field(v, "model") is None,
     offline: false,
   }
-  composer(c, src, w, spec, fn(d) { new_send(c, src, w, v, address, name, d) })
+  @sfpages.composer(c, src, w, spec, fn(d) { new_send(c, src, w, v, address, name, d) })
   @sfbase.flight_carry_waiting(c)
 }
 
@@ -286,16 +286,16 @@ fn new_send(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Strin
   }
   let words = d.text.trim(chars=" \n\t").to_string()
   let up = d.files.filter_map(fn(f) { field(Some(f), "done") })
-  let going = going_up(d)
+  let going = @sfpages.going_up(d)
   // (its words where they were typed while the chat is made: carried; the desktop's flight, the web's)
   @sfbase.flight_carry_start(
     c,
     d.key,
     words,
     [],
-    field=composer_field_key,
-    font=text_size,
-    line=text_line,
+    field=@sfpages.composer_field_key,
+    font=@sfpages.text_size,
+    line=@sfpages.text_line,
     desk=true,
   )
   fresh.starting = true
@@ -453,7 +453,7 @@ fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json
     let b = c.box(style=new_link_box, id~, fn() { c.text(@sf.t("web-main.newChat.noModels"), style=new_link) |> ignore })
     c.semantics(b, Link, id~, label=@sf.t("web-main.newChat.noModels"))
   } else {
-    model_triple(c, src, address, "new", up=true, page=p, small=true)
+    @sfpages.model_triple(c, src, address, "new", up=true, page=p, small=true)
   }
 }
 

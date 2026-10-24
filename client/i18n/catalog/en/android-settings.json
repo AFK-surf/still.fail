@@ -581,6 +581,7 @@
   "android-settings.waiting.remove": "Remove",
   "android-settings.waiting.removeText": "Removes it from {app} only; the app stays in Slack. Delete it from the app's settings in Slack if you no longer need it.",
   "android-settings.waiting.removeWhat": "remove the app",
+  "android-settings.workspace.title": "Workspace",
   "android-settings.workspace.about": "Role: {role} · {people} · {stations}",
   "android-settings.workspace.aboutRename": "Role: {role} · {people} · {stations} · Tap name to rename",
   "android-settings.workspace.delete": "Delete workspace",

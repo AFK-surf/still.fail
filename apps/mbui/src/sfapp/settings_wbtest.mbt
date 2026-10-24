@@ -65,7 +65,7 @@ test "settings: the account, the workspace's rows and how each stands, this devi
   // a tap on the account's card: the account
   t.tap_text("lin@example.com")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("lin@example.com · Google") is Some(_))
+  assert_true(t.find("lin@example.com · Google 账号") is Some(_))
   assert_true(t.find("Chrome · macOS") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t.run_for(bar.rest() - t.time())
@@ -259,7 +259,8 @@ test "memory: a station's global memory, its projects, a skill's page" {
 test "usage: the totals, the days, 30 天 picked" {
   let t = settings_tester("usage")
   assert_true(t.find("$118") is Some(_))
-  assert_true(t.find("整理发布清单") is Some(_))
+  // the lists, the people's first (the web's)
+  assert_true(t.find("68%") is Some(_))
   t.tap_text("30 天")
   assert_true(t.find("$486") is Some(_))
   // (not idle yet: a Ctx::spring still moves, till mbui#25 declares its end)
@@ -336,7 +337,9 @@ test "下方栏: a screen reader moves a place one slot along" {
 ///|
 test "添加成员: what is typed counts at once, 添加 lit by it" {
   let t = settings_tester("workspace")
-  t.tap(362.0, 22.0)
+  // (the ＋ at the title's end)
+  let (x, y, w, h) = t.query(Button, label="添加成员").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(t.find("添加成员") is Some(_))
   t.tap_text("name@example.com")
   t.type_text("he2@example.com")
@@ -376,7 +379,7 @@ test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed
 test "settings: the account's page has the accounts on this device on its one card (Me.kt): 退出登录 beside who it is" {
   let t = settings_tester("me")
   assert_true(t.find("此设备上的账号") is None)
-  let (_, name_y) = t.find("lin@example.com · Google").unwrap()
+  let (_, name_y) = t.find("lin@example.com · Google 账号").unwrap()
   let (_, out_y) = t.find("退出登录").unwrap()
   // on the account's own row, not on one of its own below it
   assert_true((out_y - name_y).abs() < row_h)

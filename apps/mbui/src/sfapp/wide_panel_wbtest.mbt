@@ -8,7 +8,7 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.nav_push_ms)
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
   assert_true(t.find("agent 往来") is None)
   // what is done with it, under its "…": agent 往来 among it, saying how many
   t.click(Button, label="对话信息")
@@ -62,7 +62,7 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   if steps is Some(_) {
     assert_true(t.find("读了 src/ui/list.mbt 等 2 个文件，跑了测试") is None)
   }
-  assert_true(@sfdesk.history_only_io())
+  assert_true(@sfpages.history_only_io())
 }
 
 ///|

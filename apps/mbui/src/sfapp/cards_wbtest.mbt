@@ -119,5 +119,7 @@ test "忽略: it and the ask go at once (decision.dismiss), drawn going, then go
   assert_true(t.find("忽略") is None)
   // the ask's room closed after it
   t.run_for(options_gone_ms())
+  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }

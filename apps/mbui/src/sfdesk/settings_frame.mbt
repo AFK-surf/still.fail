@@ -33,28 +33,19 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   @settings.frame(core, here)
   settings_fixture(core)
   match route {
-    Me => me_page(c, core, here)
     Appearance => appearance_page(c, core)
-    Workspace => workspace_page(c, core, here)
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
     VaultItem(v, item) => vault_item_page(c, core, here, v, item)
     Connects("") => connects_page(c, src, core, here)
     Connect(station, id) => connect_page(c, src, core, here, station, id)
-    Usage => usage_page(c, core, here)
-    UsagePrices(days) => usage_prices_page(c, core, here, days)
     Station(a) => station_page(c, core, here, a)
     Profile(a, id) => profile_page(c, core, here, a, id)
     NewProfile(a) => add_profile_page(c, core, here, a)
-    PickModels(a, id) => pick_models_page(c, core, here, a, id)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
     AutoCompletion => completion_page(c, core, here)
     AutoPolicy(s) => policy_page(c, core, here, s)
-    Shortcuts => shortcuts_page(c, core)
     LocalStation => local_station_page(c, core)
-    Notifications => notify_page(c, core, here)
-    Archiving => archiving_page(c, core, here)
-    StationArchiving(s) => station_archiving_page(c, core, here, s)
     _ => @settings.page(c, core, here, route)
   }
 }
@@ -64,7 +55,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version)) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace)) {
     return false
   }
   let core = settings_core(src, w)
@@ -78,6 +69,16 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     AutoDecisions => decisions_page(c, core, here, frame)
     Permissions => permissions_page(c, core, frame)
     Version => version_page(c, core, frame)
+    UsagePrices(days) => usage_prices_page(c, core, here, frame, days)
+    Usage => usage_page(c, core, here, frame)
+    Archiving => archiving_page(c, core, here, frame)
+    StationArchiving(st) => station_archiving_page(c, core, here, frame, st)
+    Notifications => notify_page(c, core, here, frame)
+    PickModels(a, id) => pick_models_page(c, core, here, frame, a, id)
+    ProfileModels(a, id) => profile_models_page(c, core, here, frame, a, id)
+    Shortcuts => shortcuts_page(c, core, frame)
+    Me => me_page(c, core, here, frame)
+    Workspace => workspace_page(c, core, here, frame)
     _ => ()
   }
   true

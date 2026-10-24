@@ -1,9 +1,11 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { VirtualList } from "./list.tsx";
 
 /** Load once per entry cursor. A request owns its edge until both its answer and the
- * advanced cursor's measured, committed layout arrive. Failure never schedules a retry. */
-export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
+ * advanced cursor's measured, committed layout arrive. Failure waits for an explicit retry; layout notifications never retry it. */
+export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): { failed: boolean; retry(): void } {
+  const [failed, setFailed] = useState(false);
+  const retry = useRef<(() => void) | null>(null);
   const latest = useRef({ virtual, can, at, load });
   const changed = useRef<(() => void) | null>(null);
   // Publish only committed props; an interrupted render must not release an in-flight request.
@@ -14,6 +16,9 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
   const { model } = virtual;
   useEffect(() => {
     let live = true;
+    // Only an edge present when this list opens gets an initial approach. An
+    // opposite edge revealed by paging waits for a scroll unless the page fits.
+    let initial = latest.current.can;
     let asked: number | string | undefined;
     let busy: { at: number | string; answered: boolean } | null = null;
     let top = model.layout().scrollTop;
@@ -21,7 +26,7 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
     const check = (scrolled = false) => {
       moved ||= scrolled;
       const now = latest.current;
-      if (!live || !now.virtual.committed()) return;
+      if (!live || now.virtual.model !== model || !now.virtual.committed()) return;
       if (busy) {
         if (!busy.answered || now.at === busy.at) return;
         busy = null;
@@ -34,8 +39,10 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       const approached = moved;
       moved = false;
       if (!now.can || now.at === undefined || asked === now.at) return;
-      if (asked !== undefined && !approached && !model.fits) return;
+      if (!initial && !approached && !model.fits) return;
       if (model.paneHeight <= 0 || (edge === "top" ? model.toStart : model.toEnd) > model.paneHeight) return;
+      setFailed(false);
+      initial = false;
       asked = now.at;
       const request: { at: number | string; answered: boolean } = { at: now.at, answered: false };
       busy = request;
@@ -45,8 +52,14 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
         check();
       }, () => {
         // Keep the attempted cursor: layout notifications must not retry this failure.
-        if (live && busy === request) busy = null;
+        if (live && busy === request) { busy = null; setFailed(true); }
       });
+    };
+    retry.current = () => {
+      if (busy) return;
+      initial = true;
+      asked = undefined;
+      check();
     };
     changed.current = () => check();
     const stop = virtual.watch(() => {
@@ -56,6 +69,19 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       check(scrolled);
     });
     check();
-    return () => { live = false; changed.current = null; stop(); };
+    return () => { live = false; changed.current = null; retry.current = null; stop(); };
   }, [model, edge]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { failed, retry: () => retry.current?.() };
+}
+
+/** Empty entry windows can contain only letters or edits. Search one way at a time
+ * so opposite requests cannot shuttle a bounded window over the same records. */
+export function usePagingEdges(empty: boolean, more: boolean, newer: boolean, place: string): { older: boolean; newer: boolean } {
+  // A reused chat page starts its search anew when it shows another chat.
+  const held = useRef<{ place: string; direction: "top" | "bottom" | null } | null>(null);
+  const previous = held.current?.place === place ? held.current.direction : null;
+  let direction = empty ? previous ?? (newer ? "bottom" : "top") : null;
+  if (direction === "bottom" && !newer) direction = "top";
+  useLayoutEffect(() => { held.current = { place, direction }; });
+  return { older: more && direction !== "bottom", newer: newer && direction !== "top" };
 }

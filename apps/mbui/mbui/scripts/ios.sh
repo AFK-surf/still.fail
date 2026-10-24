@@ -9,7 +9,8 @@
 # An app of a module outside this repository (one whose moon.work names mbui as a member, as scripts/android.sh says):
 #   MBUI_APP_MOD     that module's directory (APP is its src/<APP>; out/ and _build/ are its own); default this repo
 #   MBUI_IOS_ID      the app's bundle id (default dev.mbui.demo); MBUI_IOS_PLIST its Info.plist (default ios/Info.plist)
-#   MBUI_IOS_BUILD   the build's number: its CFBundleVersion (@hostapi.app_version) and version 0.1.<it>
+#   MBUI_IOS_BUILD   the build's number: its CFBundleVersion (@hostapi.app_version)
+#   MBUI_IOS_VERSION explicit marketing version (otherwise legacy 0.1.<build>)
 #   MBUI_IOS_SHARE_PLIST  its share extension's Info.plist (src/host/ios_share.m built as PlugIns/Share.appex: what
 #     another app shares kept for the app in the app group the two share, group.<its id>, MBUIAppGroup in both
 #     Info.plists; both signed with that group, a device's by its packer, whose profile must have it)
@@ -146,7 +147,7 @@ case "${1:-build}" in
     plutil -replace CFBundleIdentifier -string $BID $APPDIR/Info.plist
     if [ -n "${MBUI_IOS_BUILD:-}" ]; then
       plutil -replace CFBundleVersion -string "$MBUI_IOS_BUILD" $APPDIR/Info.plist
-      plutil -replace CFBundleShortVersionString -string "0.1.$MBUI_IOS_BUILD" $APPDIR/Info.plist
+      plutil -replace CFBundleShortVersionString -string "${MBUI_IOS_VERSION:-0.1.$MBUI_IOS_BUILD}" $APPDIR/Info.plist
     fi
     if [ -n "${MBUI_IOS_ASSETS:-}" ]; then
       xcrun actool --compile $APPDIR --platform $IOS_SDK --minimum-deployment-target 17.0 --target-device iphone \
@@ -170,11 +171,7 @@ case "${1:-build}" in
       for p in $APPDIR/Info.plist $EXT/Info.plist; do plutil -replace MBUIAppGroup -string group.$BID $p; done
     fi
     if [ $IOS_SDK = iphoneos ]; then
-      for p in $APPDIR/Info.plist ${EXT:+$EXT/Info.plist}; do
-        plutil -replace CFBundleSupportedPlatforms -json '["iPhoneOS"]' $p
-        plutil -replace DTPlatformName -string iphoneos $p
-        plutil -replace DTSDKName -string "iphoneos$(xcrun --sdk iphoneos --show-sdk-version)" $p
-      done
+      bash "$D/ios-metadata.sh" "$APPDIR/Info.plist" ${EXT:+"$EXT/Info.plist"}
     fi
     if type app_bundle >/dev/null 2>&1; then app_bundle || exit 1; fi
     # what the app carries signed first, then the app (ad hoc: the simulator asks no more; a device's: the packer's)

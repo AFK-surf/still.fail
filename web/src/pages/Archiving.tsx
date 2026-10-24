@@ -5,7 +5,7 @@ import type { ArchivingView, StationView } from "../core/shapes.ts";
 import { useStations } from "../api.ts";
 import { t } from "../i18n.ts";
 import { StationNamed } from "../StationNamed.tsx";
-import { HINTS, MODES, daysLabel, hintLabel, hintNote, hintReviews, modeLabel, modeNote, modeOf, modePatch, reviewOf, useArchiveHint, useArchivingSave } from "../archiving.ts";
+import { HINTS, hintLabel, hintNote, useArchiveHint, useArchivingSave, useSettingsView } from "../archiving.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { MobileBack, Section, Segmented, StatusDot, Waiting } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -14,7 +14,8 @@ import * as chatCss from "../styles/chat.css.ts";
 export function ArchivingPage({ back, workspace }: { back: string; workspace: string }) {
   const [hint, setHint] = useArchiveHint();
   const stations = useStations(workspace);
-  const reviews = hintReviews(stations.value);
+  const settings = useSettingsView(workspace);
+  const reviews = settings?.hintReviewText ? { none: settings.hintNoReview === true, text: settings.hintReviewText } : null;
   const decisions = `/w/${workspace}/settings/automatic-decisions/completion`;
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
@@ -50,14 +51,14 @@ function StationRow({ workspace, s }: { workspace: string; s: StationView }) {
       </li>
     );
   }
-  const stalled = view.reviewed && view.days > 0 && !reviewOf(s).on;
+  const stalled = view.stalled === true;
   return (
     <li>
       <Link className={pagesCss.listRow} to={`/w/${workspace}/settings/archive/${encodeURIComponent(s.station)}`}>
         <StatusDot state="online" />
         <span className={pagesCss.listRowText}>
           {title}
-          <span className={chatCss.archivingNote} data-bad={stalled || undefined}>{stalled ? t("web-pages.archiving.stalled") : view.summaryText}</span>
+          <span className={chatCss.archivingNote} data-bad={stalled || undefined}>{view.lineText ?? view.summaryText}</span>
         </span>
         <ChevronRight size={16} className={chatCss.archivingNote} />
       </Link>
@@ -77,35 +78,32 @@ export function StationArchiving({ workspace, station }: { workspace: string; st
 
 function StationArchivingForm({ workspace, s, view }: { workspace: string; s: StationView; view: ArchivingView }) {
   const { save, busy } = useArchivingSave(s.station);
-  const review = reviewOf(s);
-  const mode = modeOf(view);
   const locked = !view.canEdit || busy;
+  const modes = view.modes ?? [];
+  const label = (n: number, i: number, words?: string[]) => words?.[i] ?? String(n);
   return <>
     {!view.canEdit && <p className={chatCss.appearanceHint}>{t("web-pages.archiving.adminOnly")}</p>}
-    <Section title={t("web-pages.archiving.review")} description={<>{review.short}{" · "}<Link className={chatCss.inlineLink} to={`/w/${workspace}/settings/automatic-decisions/completion`}>{t("web-pages.archiving.reviewGo")}</Link></>}>
+    <Section title={t("web-pages.archiving.review")} description={<>{view.reviewText}{" · "}<Link className={chatCss.inlineLink} to={`/w/${workspace}/settings/automatic-decisions/completion`}>{t("web-pages.archiving.reviewGo")}</Link></>}>
       <></>
     </Section>
     <Section title={t("web-pages.archiving.mode")}>
       <div className={chatCss.appearanceSetting}>
-        <Segmented label={t("web-pages.archiving.mode")} value={mode} onChange={(m) => save(view, modePatch(view, m))}
-          options={MODES.map((m) => ({ value: m, label: modeLabel(m), disabled: locked || (m === "reviewed" && !review.on && mode !== "reviewed") }))} />
+        <Segmented label={t("web-pages.archiving.mode")} value={view.mode ?? "off"}
+          onChange={(m) => { const c = modes.find((x) => x.mode === m); if (c) save(view, { days: c.days, reviewed: c.reviewed }); }}
+          options={modes.map((m) => ({ value: m.mode, label: m.label, disabled: locked || !m.allowed }))} />
       </div>
-      <p className={chatCss.appearanceHint}>
-        {modeNote(mode)}
-        {mode === "reviewed" && !review.on && <> {t("web-pages.archiving.reviewNeeded")}</>}
-        {mode !== "reviewed" && !review.on && <> {t("web-pages.archiving.stationNeedsReview")}</>}
-      </p>
+      <p className={chatCss.appearanceHint}>{view.modeNote}</p>
     </Section>
-    {mode !== "off" && <Section title={t("web-pages.archiving.idle")}>
+    {view.mode !== "off" && <Section title={t("web-pages.archiving.idle")}>
       <div className={chatCss.appearanceSetting}>
         <Segmented label={t("web-pages.archiving.idle")} value={String(view.days)} onChange={(d) => save(view, { days: Number(d) })}
-          options={(view.daysOffered ?? []).map((n) => ({ value: String(n), label: daysLabel(n), disabled: locked }))} />
+          options={(view.daysOffered ?? []).map((n, i) => ({ value: String(n), label: label(n, i, view.daysOfferedText), disabled: locked }))} />
       </div>
     </Section>}
     <Section title={t("web-pages.archiving.slack")}>
       <div className={chatCss.appearanceSetting}>
         <Segmented label={t("web-pages.archiving.slack")} value={String(view.slackDays)} onChange={(d) => save(view, { slackDays: Number(d) })}
-          options={(view.slackDaysOffered ?? []).map((n) => ({ value: String(n), label: daysLabel(n), disabled: locked }))} />
+          options={(view.slackDaysOffered ?? []).map((n, i) => ({ value: String(n), label: label(n, i, view.slackDaysOfferedText), disabled: locked }))} />
       </div>
       <p className={chatCss.appearanceHint}>{t("web-pages.archiving.slackHint")}</p>
     </Section>

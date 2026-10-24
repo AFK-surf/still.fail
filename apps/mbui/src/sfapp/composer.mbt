@@ -129,8 +129,7 @@ fn capsule_top_of(v : ChatView?, d : Draft) -> Double {
 let plus_ink : Double = 9.0 + 18.0 * ((4.5 - 1.75 / 2.0) / 24.0)
 
 ///|
-/// The composer's measures: the phone's (Composer.kt, Glass.kt), or in the wide frame the web's (composer.css.ts,
-/// Chat.css.ts composerText, dock.css.ts): its capsule's inset and, opened, its content's own padding more (the web's 6
+/// The composer's measures (Composer.kt, Glass.kt): its capsule's inset and, opened, its content's own padding more (the web's 6
 /// as a capsule, 12 as a box); ＋ and send across and their icons; the words' size and line, the field's padding shut
 /// and opened; the gap between the field and the buttons under it, and between what waits over it; the opened box's
 /// corner (shut, a pill); the field's most lines; the room over and under it on the page, and the least room the list
@@ -155,61 +154,28 @@ priv struct ComposerType {
 
 ///|
 fn ct() -> ComposerType {
-  if wide_on.val {
-    {
-      inset: 6.0,
-      open_pad: 6.0,
-      button: 32.0,
-      plus_icon: 18.0,
-      send_icon: 16.0,
-      font: 14.0,
-      line: 21.0,
-      // (left, right, top, bottom)
-      shut: (0.0, 8.0, 5.0, 5.0),
-      opened: (8.0, 8.0, 8.0, 0.0),
-      open_gap: 10.0,
-      gap: 10.0,
-      corner: 28.0,
-      over: 12.0,
-      under: 16.0,
-      least: 14.0 * 1.5 + 102.0,
-    }
-  } else {
-    {
-      inset: composer_inset,
-      open_pad: 0.0,
-      button: 36.0,
-      plus_icon: 18.0,
-      send_icon: 18.0,
-      font: send_size,
-      line: send_line,
-      shut: (0.0, 14.0, 7.0, 7.0),
-      opened: (plus_ink, 14.0, 7.0, 7.0),
-      open_gap: 4.0,
-      gap: 8.0,
-      corner: composer_corner,
-      over: 8.0,
-      under: 10.0,
-      least: composer_room,
-    }
+  {
+    inset: composer_inset,
+    open_pad: 0.0,
+    button: 36.0,
+    plus_icon: 18.0,
+    send_icon: 18.0,
+    font: send_size,
+    line: send_line,
+    shut: (0.0, 14.0, 7.0, 7.0),
+    opened: (plus_ink, 14.0, 7.0, 7.0),
+    open_gap: 4.0,
+    gap: 8.0,
+    corner: composer_corner,
+    over: 8.0,
+    under: 10.0,
+    least: composer_room,
   }
 }
 
 ///|
-/// How many lines the field grows to before it scrolls: six (Composer.kt); in the wide frame up to 480 high or 40% of
-/// the window (Chat.tsx useComposerText).
-fn field_lines(c : @ui.Ctx) -> Int {
-  if wide_on.val {
-    let n = (dmin(480.0, c.height * 0.4) / ct().line).to_int()
-    if n < 1 {
-      1
-    } else {
-      n
-    }
-  } else {
-    6
-  }
-}
+/// How many lines the field grows to before it scrolls: six (Composer.kt).
+let field_lines : Int = 6
 
 ///|
 /// A file's part going up (web/src/api.ts UPLOAD_PART), the biggest file taken (1 GB).
@@ -1383,7 +1349,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     hold=fn(ms) { composer_hold(chat, room, ms) },
     font=ct().font,
     line=ct().line,
-    desk=wide_on.val,
+    desk=false,
   )
   ref_field_put(d, "")
   d.files.clear()
@@ -1498,6 +1464,16 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     }
     None => ()
   }
+  // a message's files quoted from their menus (sfpages menus.mbt): each a quote with its file in its card
+  match quoted_into.get(d.key) {
+    Some(list) => {
+      quoted_into.remove(d.key)
+      for q in list {
+        draft_quote_file(d, q.0, q.1, q.2, q.3)
+      }
+    }
+    None => ()
+  }
   // words a visualization of this chat asked to send (sfbase viz_page.mbt): after what is written, the field focused
   match followed_into.get(d.key) {
     Some(words) => {
@@ -1540,7 +1516,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     None => ()
   }
   // what the 文件 tab's 添加到消息 put in for this chat (src/sfdesk/drive_tab.mbt), named by their paths or as files
-  refs_put(src, d.key, @sfdesk.tab_take_sent(d.key))
+  refs_put(src, d.key, @sfbase.files_taken(d.key))
   // files another app shared into this chat (share.mbt), up as ＋'s are
   // (taken once from where they wait: the files as they were shared, whichever build takes them)
   match shared_into.get(d.key) {
@@ -1575,8 +1551,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   // `@` and a few letters: the chats they find, over the capsule (chat_refs.mbt)
   chat_ref_menu(c, src, d, r.station, if fresh is Some(_) { "" } else { r.session }, field_key, locked)
   let k = ct()
-  // (its sides in the wide frame the composer's column's: wide_center)
-  let side = if wide_on.val { 0.0 } else { 10.0 }
+  let side = 10.0
   // laid out for another page (a new chat become its chat, in the wide frame), from where it was (composer_page)
   let page = composer_page(c, d.key)
   c.box(w=Fill(1.0), pl=side, pr=side, pt=k.over, pb=k.under, fn() {
@@ -1588,10 +1563,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
         Some(h) => Some(h + top + k.inset)
         None => composer_natural(c).map(fn(h) { h + top + k.inset })
       }
-      let corner = match ground_h {
-        Some(h) if wide_on.val => dmin(k.corner, h / 2.0)
-        _ => k.corner
-      }
+      let corner = k.corner
       let ground = c.layer(fn() {
         match page {
           Some((from, p)) => page_ground(c, cap, from, p, ground_h)
@@ -1684,19 +1656,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
 ///|
 /// What a picture pasted is called (a browser's paste names one so).
 let pasted_picture_name : String = "image.png"
-
-///|
-/// The system's file picker for draft `d` (the wide frame's ＋): what is picked comes in as the sheet's files do
-/// (cui.picking, taken in as the capsule is laid out).
-fn pick_files_now(c : @ui.Ctx, d : Draft) -> Unit {
-  match @ui.pick(Files, hold=true) {
-    Some(p) => {
-      cui.picking = Some(p)
-      cui.picking_for = d.key
-    }
-    None => say(c, tr("android-chat.composer.noFiles"))
-  }
-}
 
 ///|
 /// The roomy composer's choices beside ＋ (the web's composer toolbar): 4 apart, on ＋'s line.
@@ -1843,21 +1802,11 @@ fn composer_bar(
   let ready = draft_ready(d, locked)
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
-  // ＋ (or its keys, ⌘U): on a phone its sheet (the camera, the photos, the files); in the wide frame the system's file
-  // picker at once, as the web's file field (Chat.tsx ComposerTools)
-  let file_keys = wide_on.val &&
-    (match link_src.val {
-      Some(s) => @settings.action_pressed(c, (s.topic)("prefs", {}).value, "composer.file", in_field=true)
-      None => false
-    })
-  if (c.clicked(plus) || file_keys) && !no_files && (v is Some(_) || fresh is Some(_)) {
-    if wide_on.val {
-      pick_files_now(c, d)
-    } else {
-      cui.attach = true
-      c.blur()
-      attach_open(plus)
-    }
+  // ＋: its sheet (the camera, the photos, the files)
+  if c.clicked(plus) && !no_files && (v is Some(_) || fresh is Some(_)) {
+    cui.attach = true
+    c.blur()
+    attach_open(plus)
   }
   // sent once what it refers to can be read in this workspace (outside.mbt send_sharing): at once when it refers to
   // nothing outside, else after the core is asked (and the sheet answered)
@@ -1885,8 +1834,7 @@ fn composer_bar(
     @motion.layout(c, i, "composer/part/" + name, spec=@motion.tween(part_ms, ease=Out), listed=false)
   }
   let k = ct()
-  let wide = wide_on.val
-  // in the wide frame grey; pointed at with a mouse, in any layout, its ground and the text's ink under the pointer,
+  // pointed at with a mouse, its ground and the text's ink under the pointer,
   // its tip with its keys (Chat.tsx ComposerTools, Chat.css.ts attachBtn)
   let mouse = @ui.pointing() is Mouse
   if mouse && !no_files {
@@ -1906,8 +1854,6 @@ fn composer_bar(
       fn() {
         let ink = if no_files {
           @sf.alpha(t.p.text, 0.35)
-        } else if wide && !plus_hot {
-          t.p.muted
         } else {
           t.p.text
         }
@@ -1959,17 +1905,13 @@ fn composer_bar(
   let placeholder = match (fresh, v) {
     (Some(f), _) => f.placeholder
     (_, Some(view)) if view.archived => tr("android-chat.composer.archived.placeholder")
-    // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx useSpaceHint
-    // `pointer: fine`; the wide frame's keys take it: sfdesk chat_page.mbt)
-    _ if wide_on.val && @ui.pointing() is Mouse && !c.field_focused() =>
-      fill("web-main.composer.pressToTypeCjk", [("key", tr("web-main.keymap.space"))])
     _ => tr("android-chat.chat.placeholder")
   }
   let (fl, fr, ft, fb) = if expanded { k.opened } else { k.shut }
   let field = fn() {
     let f = c.box(
       w=Fill(1.0),
-      min_h=if wide { 0.0 } else { k.button },
+      min_h=k.button,
       pl=fl,
       pr=fr,
       pt=ft,
@@ -1993,7 +1935,7 @@ fn composer_bar(
           line=k.line,
           // (SendTextStyle: a TextStyle of its own, no LineHeightStyle)
           trim=true,
-          max_lines=field_lines(c),
+          max_lines=field_lines,
           plain=true,
           color=t.p.text,
           placeholder_color=@sf.alpha(t.p.subtle, hint.get()),

@@ -133,6 +133,25 @@ test "panic: one Field given to two editors in one build stops the app, naming b
 }
 
 ///|
+test "a Field kept over one Tester's end (an app's own) and given to another editor by the next is no second editor" {
+  let field = @ui.Field::new()
+  let first = @ui.Tester::new(
+    fn(c) { c.scope(1, fn() { c.editor("search", font_size=10.0, field~) |> ignore }) },
+    w=300.0,
+    h=100.0,
+  )
+  ignore(first)
+  // a new run (its first frame drawn as it begins): its builds counted on from the last, not again from the first, so
+  // the Field's last editor (the run before's, its build the same count in) is not this build's
+  let next = @ui.Tester::new(
+    fn(c) { c.scope(2, fn() { c.editor("search", font_size=10.0, field~) |> ignore }) },
+    w=300.0,
+    h=100.0,
+  )
+  next.frame()
+}
+
+///|
 test "panic: one Field given to the same key's editors in two scopes (a list's rows) stops the app too" {
   let field = @ui.Field::new()
   let t = @ui.Tester::new(

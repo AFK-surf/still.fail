@@ -17,6 +17,13 @@ fn main {
   if @ui.env("MBUI_DARK") == "1" {
     @sf.set_dark(Some(true))
   }
+  // MBUI_POINTING=finger: pointed at as a phone is (its screens drawn on a Mac: scripts/screens.sh rec); mouse, as a
+  // desktop is
+  match @ui.env("MBUI_POINTING") {
+    "finger" => @ui.set_pointing(Some(Finger))
+    "mouse" => @ui.set_pointing(Some(Mouse))
+    _ => ()
+  }
   let mode = @ui.env("MBUI_FIXTURE")
   // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: src/sfapp/fixture_json.mbt), its pages opened
   // as it says
@@ -32,6 +39,9 @@ fn main {
     @sfapp.open_fixture_mode(mode)
     src
   }
+  // no machine of its own among the made-up stations (the files' places list this machine's first): as the Tester has
+  // none
+  @sfdesk.set_this_machine("")
   // the faces the app carries (code's JetBrains Mono), as the app has them
   @sf.give_faces()
   @sfapp.host_setup()

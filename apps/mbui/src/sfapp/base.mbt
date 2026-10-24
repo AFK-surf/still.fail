@@ -3,6 +3,21 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  archive_ease,
+  archive_ms,
+  archive_scale,
+  archive_tween,
+  close_gap,
+  options_ease,
+  options_out_ms,
+  options_scale,
+  under_post,
+  under_rest,
+  quoted_into,
+  quote_file_into,
+  attachment_json,
+  open_detail,
+  stack_open,
   viz_full_layer,
   open_link,
   peek_ms,

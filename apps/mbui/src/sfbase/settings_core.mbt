@@ -32,8 +32,8 @@ pub fn settings_core_of(
     call: fn(name, params, done) { (src.call)(name, params, done) },
     push: fn(r) {
       match r {
-        @settings.Route::Home => app.nav.push(Settings)
-        _ => app.nav.push(Setting(r))
+        @settings.Route::Home => open_page(Settings)
+        _ => open_page(Setting(r))
       }
     },
     pop: fn() { app.nav.pop() |> ignore },
@@ -51,9 +51,9 @@ pub fn settings_core_of(
           }
         _ => ()
       }
-      app.nav.push(Chat({ station, session, title, station_name: name }))
+      open_page(Chat({ station, session, title, station_name: name }))
     },
-    open_drive: fn(station) { app.nav.push(Drive({ station, root: None, path: "" })) },
+    open_drive: fn(station) { open_page(Drive({ station, root: None, path: "" })) },
     sign_in: fn() { (src.sign_in)() },
     say: fn(words) {
       app.toast = words

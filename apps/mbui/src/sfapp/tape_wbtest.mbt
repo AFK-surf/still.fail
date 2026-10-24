@@ -78,7 +78,7 @@ test "the layout by the screen alone: a desktop's by its width, a phone's or a t
     let t = tape_chat(platform, w, h, width~, height~)
     let said = "platform \{platform} \{w}x\{h} \{width} \{height}"
     assert_eq(@sf.layout(w), layout, msg=said)
-    assert_eq(wide_on.val, layout != Small, msg=said)
+    assert_eq(@sfdesk.is_wide(t.ctx()), layout != Small, msg=said)
     assert_eq(@sfdesk.wide.tape, layout == Medium, msg=said)
     ignore(t)
   }
@@ -209,7 +209,7 @@ test "a phone turned sideways for a film: the layout it had (the player the whol
   t.resize(844.0, 390.0)
   // the app turned it, not another screen: the phone's pages under the player as before
   assert_true(@sf.layout(844.0) is Small)
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
   assert_true(app.nav.top() is DrivePlay(_))
   // its back key at the screen's own left edge, not beside a rail and a list
   match said_at(t, "返回") {
@@ -221,7 +221,7 @@ test "a phone turned sideways for a film: the layout it had (the player the whol
   t.back()
   say_room(t, "compact", "medium")
   t.resize(390.0, 844.0)
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
   assert_true(app.nav.top() is DrivePlay(_))
   assert_true(said_at(t, "全屏") is Some(_))
 }
@@ -307,7 +307,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   // lines more: the box concentric with the panel, the send button with the box, 12 in
   t.tap_text("发消息")
   t.type_text("第一行\n第二行\n第三行")
-  t.run_for(@sfdesk.morph_ms)
+  t.run_for(@sfpages.morph_ms)
   guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
   let open = @ui.concentric(panel, @sf.page_panel_in)
   assert_eq(k, open)

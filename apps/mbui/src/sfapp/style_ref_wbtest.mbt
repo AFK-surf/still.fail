@@ -12,12 +12,23 @@ fn fnv(s : String) -> String {
 }
 
 ///|
+/// The hand a screen this wide is drawn for: a phone's width a finger's (the phone the screens are of), a desktop's
+/// a mouse's.
+fn hand_of(w : Double) -> @ui.Pointing {
+  if w < @sf.medium_from {
+    Finger
+  } else {
+    Mouse
+  }
+}
+
+///|
 /// The app over fixture `mode`, `w` × `h`, its first frame (and, with `page`, a settings page pushed): the draw list.
 fn screen_drawlist(mode : String, w : Double, h : Double, page? : String = "") -> String {
   reset()
   @settings.reset()
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, pointing=hand_of(w))
   if page != "" {
     open_setting(page)
   }
@@ -122,17 +133,18 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   inspect(out.to_string(), content=(
     #|settings narrow 81183:b241c4bb
     #|station narrow 57285:ffeeaf6
-    #|me-reading narrow 9158:e5206a82
+    #|me-reading narrow 9975:c0fc5797
     #|settings wide 196154:58a21f75
     #|station wide 219977:bbd2cfb3
-    #|me-reading wide 169026:cd5bf0eb
+    #|me-reading wide 171039:65806681
     #|settings-dark narrow 81287:2abbe2eb
     #|station-dark narrow 57077:347438b7
-    #|me-reading-dark narrow 9207:dcd8ab45
+    #|me-reading-dark narrow 10016:b1a05c78
     #|settings-dark wide 195778:551ad4d4
     #|station-dark wide 219612:f9567b43
-    #|me-reading-dark wide 168701:8649ea97
+    #|me-reading-dark wide 170684:d92fcbb7
     #|
+
 
 
 

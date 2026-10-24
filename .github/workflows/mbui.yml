@@ -3,8 +3,8 @@
 # GitHub's own runners (no machine of ours: 2026-10-21, a push to four packages in three minutes): its Android app
 # signed with every still.fail Android release's key (/releases/latest/android-mbui, its feed android/mbui/latest.json,
 # still.fail's AppRelease), its macOS app signed with still.fail's Developer ID (/releases/latest/mac-mbui), its
-# Windows app zipped (/releases/latest/win-mbui), side by side; its iOS app built for a device (signed and put on
-# TestFlight by mbui-testflight.yml). A branch's push builds them (no key, nothing put).
+# Windows app zipped (/releases/latest/win-mbui), side by side; its iOS app built unsigned for a device and kept as
+# an Actions artifact. TestFlight is the separate manual mbui-testflight.yml workflow.
 # A workflow of its own, not a job of pipeline.yml: nothing of the pipeline waits for it or fails with it. As asked
 # (2026-10-19), its tests do not hold it back: it is a test app (Windows' e2e runs after its zip is out). A feed moves
 # only once its file is fetched back from where it is served, the same bytes.
@@ -37,8 +37,9 @@ permissions:
   contents: read
 jobs:
   # Which packages main's push makes: those whose app changed since the build their feed names (beta.sh changed: its
-  # code, not its tests, docs, scripts or CI; a push of those alone is no new package, 2026-10-21); iOS as Android
-  # (no feed of its own yet). A run by hand builds them all; a branch's push only Android and Windows: its macOS and iOS
+  # code, not its tests, docs, scripts or CI; a push of those alone is no new package, 2026-10-21). iOS has no
+  # feed: every matching main push builds a downloadable unsigned artifact. A run by hand builds them all;
+  # a branch's push only Android and Windows: its macOS and iOS
   # builds put nothing and took two of the organization's 5 macOS jobs at once for each push, check-mbui's native
   # waiting 1.5 to 15 minutes for one (2026-10-21).
   what:
@@ -58,7 +59,8 @@ jobs:
         run: |
           branch=; [ "$GITHUB_REF" = refs/heads/main ] || [ "$GITHUB_EVENT_NAME" != push ] || branch=1
           for p in android mac win ios; do
-            if [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed ${p/ios/android}); else v=yes; fi
+            # iOS has no feed: build every matching main push, independently of Android.
+            if [ "$p" != ios ] && [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed "$p"); else v=yes; fi
             case "$branch$p" in 1mac|1ios) v=no ;; esac
             echo "$p=$v" >> "$GITHUB_OUTPUT"
             echo "$p: $v"
@@ -264,12 +266,18 @@ jobs:
         with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
       - uses: ./.github/actions/mbui-moonbit
       - run: touch "$RUNNER_TEMP/start"
-      # (unsigned: mbui-testflight.yml signs it for TestFlight)
+      # Always unsigned. TestFlight signing/upload is a separate manual workflow.
       - name: The iOS app for a device, as an .ipa
         run: |
           APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
           cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/
           zip -qry stillfail-mbui.ipa Payload && ls -la stillfail-mbui.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mbui-ios-unsigned-${{ github.sha }}
+          path: apps/mbui/out/ios-device/stillfail-mbui.ipa
+          if-no-files-found: error
+          retention-days: 14
       # (by what it holds, as the android job's)
       - name: The cache's key, by what it holds
         if: github.ref == 'refs/heads/main'

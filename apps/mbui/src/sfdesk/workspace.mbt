@@ -1,13 +1,19 @@
-// The workspace's page in the wide frame, as the web's (ember web/src/cloud/settings.tsx WorkspaceSettings, Members,
+// The workspace's page, one in every frame (laid out by its width, page_look.mbt): wide as the web's (ember web/src/cloud/settings.tsx WorkspaceSettings, Members,
 // Relays; settings.css.ts workspaceHead, workspaceFacts, titleCount, memberGroup, dangerList): at its head its mark (a
 // square, its letter till one is picked; its managers pick it) and its name (renamed by them), who the viewer is there
 // and how many it holds; then its people (成员 N, 添加成员; each their picture, name and email, their role in a pill,
 // what can be done to them under ⋯; those added who have not signed in, the invitations out), its relays (中继, what
-// they are, 添加中继), and leaving or deleting it at the end, each a row with its button. The phone's page is
-// workspace.mbt's.
+// they are, 添加中继), and leaving or deleting it at the end, each a row with its button. Narrow as the web's mobile
+// page (mobile/WorkspacePage.tsx): its name, its mark, its people in one list (a person pressed: what can be done
+// about them, a menu), its relays, leaving or deleting it in red at its foot.
 
 ///|
-fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+/// The workspace's page, one in every frame: narrow as the narrow app's (workspace_narrow), wide as the web's.
+fn workspace_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+  if look_of(c) == Narrow {
+    workspace_narrow(c, core, here, frame)
+    return
+  }
   let t = @sf.theme()
   let topic = workspace_view(core, here)
   let v = topic.value
@@ -313,6 +319,429 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   })
   desk_lanes(c, "workspace", blocks)
 }
+
+///|
+/// The workspace's page in a narrow box (WorkspaceScreen): who the viewer is there and how many it holds; its name and
+/// its mark, renamed and picked by its managers; its people in one list (those in it, those added who have not signed
+/// in, the invitations out), 添加成员 at the title's end; its relays; leaving or deleting it in red, asked first.
+fn workspace_narrow(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+  let look = Narrow
+  let t = @sf.theme()
+  let topic = workspace_view(core, here)
+  let v = topic.value
+  let title = @sf.t("android-settings.workspace.title")
+  guard v is Some(_) else {
+    look_page(c, core, frame, look, "workspace", title, [
+      fn() {
+        waiting_cards(
+          c,
+          error=match topic.error {
+            Some(e) => error_text(e)
+            None => ""
+          },
+        )
+      },
+    ])
+  }
+  let role = text(v, "role")
+  let manager = role == "owner" || role == "admin"
+  let ws = text(v, "id")
+  let name = text(v, "name")
+  let members = items(v, "members")
+  let added = items(v, "added")
+  let invitations = items(v, "invitations")
+  let relays = strings(v, "relays")
+  let waiting = if manager { added.length() + invitations.length() } else { 0 }
+  let n = members.length().to_string()
+  let blocks : Array[() -> Unit] = []
+  // who the viewer is there and how many it holds
+  blocks.push(fn() {
+    look_note(
+      c,
+      look,
+      @sf.t(if manager { "android-settings.workspace.aboutRename" } else { "android-settings.workspace.about" }, args=[
+        ("role", role_label(role)),
+        ("people", @sf.t("android-settings.members.count", args=[("n", n)])),
+        ("stations", @sf.t("android-settings.workspace.stations", args=[("n", items(v, "stations").length().to_string())])),
+      ]),
+    )
+  })
+  // its name and its mark: renamed, picked by its managers
+  blocks.push(fn() {
+    look_group(c, look, fn() {
+      if look_link(c, look, "ws-name", @sf.t("android-settings.workspace.name"), value=name, chevron=manager) && manager {
+        ask(@sf.t("android-settings.workspace.name"), name, @sf.t("android-settings.workspace.namePlaceholder"), @sf.t("common.save"), fn(
+          line,
+        ) {
+          @settings.act(
+            core,
+            @sf.t("android-settings.workspace.renameWhat"),
+            "workspace.rename",
+            obj([("workspace", str(ws)), ("name", str(line)), ("account", str(here.sub))]),
+            done=@sf.t("android-settings.renamed"),
+          )
+        })
+      }
+      if manager {
+        let emoji = text(v, "emoji")
+        let icon = text(v, "icon")
+        let id = c.id("ws-mark")
+        c.cursor(id, Hand)
+        if c.clicked(id) {
+          open_mark_pick(core, name, emoji, icon, @sf.t("android-settings.workspace.iconWhat"), fn(emoji, icon, done) {
+            (core.call)(
+              "workspace.rename",
+              obj([("workspace", str(ws)), ("emoji", str(emoji)), ("icon", str(icon)), ("account", str(here.sub))]),
+              done,
+            )
+          })
+        }
+        let b = c.box(style=narrow_row, id~, fn() {
+          c.text(@sf.t("android-settings.workspace.icon"), style=narrow_row_title) |> ignore
+          let on = [("workspace", ws)]
+          doing_mark(c, is_doing(core, ["workspace.rename"], on), failed_of(core, ["workspace.rename"], on))
+          if @sf.has_station_mark(emoji, icon) {
+            @sf.station_mark(c, emoji, icon, ws_mark_narrow, t.p.text)
+          } else {
+            c.text(@sf.t("android-settings.workspace.iconNone"), style=narrow_value) |> ignore
+          }
+          @sf.icon(c, "chevron-right", size=narrow_chevron, color=t.p.subtle) |> ignore
+          finger_ripple(c, id)
+        })
+        c.semantics(b, Button, id~, label=@sf.t("android-settings.workspace.icon"))
+      }
+    })
+  })
+  // its people in one list
+  blocks.push(fn() {
+    look_heading(
+      c,
+      look,
+      @sf.t("android-settings.members.title"),
+      note=if waiting > 0 {
+        @sf.t("android-settings.members.waiting", args=[("n", n), ("waiting", waiting.to_string())])
+      } else {
+        @sf.t("android-settings.members.count", args=[("n", n)])
+      },
+    )
+  })
+  blocks.push(fn() {
+    look_group(c, look, fn() {
+      for m in members {
+        ws_member_narrow(c, core, here, v, m)
+      }
+      if manager {
+        for a in added {
+          let email = text(Some(a), "email")
+          c.box(style=narrow_said_row, fn() {
+            avatar(c, core, email, email, ws_avatar)
+            c.box(style=narrow_row_words, fn() {
+              c.text(email, style=narrow_row_title) |> ignore
+              c.text(@sf.t("android-settings.members.added", args=[("role", role_label(text(Some(a), "role")))]), style=narrow_note) |> ignore
+            })
+            |> ignore
+            let on = [("workspace", ws), ("email", email)]
+            if ws_row_action(c, "remove-added/" + email, @sf.t("android-settings.members.remove"), core, ["workspace.removeAdded"], on) {
+              @settings.act(
+                core,
+                @sf.t("android-settings.members.removeWhat"),
+                "workspace.removeAdded",
+                obj([("workspace", str(ws)), ("email", str(email)), ("account", str(here.sub))]),
+                done=@sf.t("android-settings.members.removed"),
+              )
+            }
+          })
+          |> ignore
+        }
+        for i in invitations {
+          let iv = Some(i)
+          let id = text(iv, "id")
+          let email = text(iv, "email")
+          c.box(style=narrow_said_row, fn() {
+            avatar(c, core, if email != "" { email } else { id }, if email != "" { email } else { "?" }, ws_avatar)
+            c.box(style=narrow_row_words, fn() {
+              c.text(if email != "" { email } else { @sf.t("android-settings.members.anyone") }, style=narrow_row_title) |> ignore
+              c.text(
+                @sf.t("android-settings.members.invitation", args=[("role", role_label(text(iv, "role"))), ("until", stamp(iv, "expires_at", "until"))]),
+                style=narrow_note,
+              )
+              |> ignore
+            })
+            |> ignore
+            let on = [("workspace", ws), ("invitation", id)]
+            if ws_row_action(c, "revoke/" + id, @sf.t("android-settings.members.revoke"), core, ["workspace.revokeInvitation"], on) {
+              @settings.act(
+                core,
+                @sf.t("android-settings.members.revokeWhat"),
+                "workspace.revokeInvitation",
+                obj([("workspace", str(ws)), ("invitation", str(id)), ("account", str(here.sub))]),
+                done=@sf.t("android-settings.members.revoked"),
+              )
+            }
+          })
+          |> ignore
+        }
+      }
+    })
+  })
+  // its own relays
+  if manager || relays.length() > 0 {
+    blocks.push(fn() { look_heading(c, look, @sf.t("android-settings.relays.title")) })
+    blocks.push(fn() {
+      let busy = is_doing(core, ["workspace.setRelays"], [("workspace", ws)])
+      look_group(c, look, fn() {
+        for url in relays {
+          c.box(style=narrow_said_row, fn() {
+            c.text(url.replace(old="https://", new="").replace(old="http://", new=""), style=narrow_row_title) |> ignore
+            if manager && !busy && acc_sign_out_link(c, "relay/" + url, @sf.t("android-settings.members.remove")) {
+              @settings.act(
+                core,
+                @sf.t("android-settings.relays.removeWhat"),
+                "workspace.setRelays",
+                obj([("workspace", str(ws)), ("relays", Json::array(relays.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
+                done=@sf.t("android-settings.relays.removed"),
+              )
+            }
+          })
+          |> ignore
+        }
+        if manager && look_link(c, look, "relay-add", @sf.t(if busy { "common.saving" } else { "android-settings.relays.add" }), chevron=false) && !busy {
+          ask(
+            @sf.t("android-settings.relays.add"),
+            "",
+            "https://relay.example.com",
+            @sf.t("android-settings.relays.addAction"),
+            hint=@sf.t("android-settings.relays.hint"),
+            fn(line) {
+              let next = relays.copy()
+              next.push(line)
+              @settings.act(
+                core,
+                @sf.t("android-settings.relays.add"),
+                "workspace.setRelays",
+                obj([("workspace", str(ws)), ("relays", Json::array(next.map(str))), ("account", str(here.sub))]),
+                done=@sf.t("android-settings.relays.added"),
+              )
+            },
+          )
+        }
+      })
+      look_note(c, look, @sf.t("android-settings.relays.lead", args=[("app", "still.fail")]))
+    })
+  }
+  // leaving or deleting it, in red at the foot, asked first
+  blocks.push(fn() {
+    c.box(style=ws_narrow_foot, fn() {
+      look_group(c, look, fn() {
+        if ws_red_row(c, "ws-leave", @sf.t("android-settings.workspace.leaveRow")) {
+          confirm(
+            @sf.t("android-settings.workspace.leaveTitle", args=[("name", name)]),
+            @sf.t("android-settings.workspace.leaveText"),
+            @sf.t("android-settings.workspace.leave"),
+            danger=true,
+            fn() {
+              (core.home)()
+              @settings.act(
+                core,
+                @sf.t("android-settings.workspace.leaveWhat"),
+                "workspace.removeMember",
+                obj([("workspace", str(ws)), ("member", str(here.sub)), ("account", str(here.sub))]),
+                done=@sf.t("android-settings.workspace.left"),
+              )
+            },
+          )
+        }
+        if role == "owner" && ws_red_row(c, "ws-delete", @sf.t("android-settings.workspace.delete")) {
+          confirm(
+            @sf.t("android-settings.workspace.deleteTitle", args=[("name", name)]),
+            @sf.t("android-settings.workspace.deleteText", args=[("n", items(v, "stations").length().to_string()), ("app", "still.fail")]),
+            @sf.t("android-settings.workspace.delete"),
+            danger=true,
+            fn() {
+              (core.home)()
+              @settings.act(
+                core,
+                @sf.t("android-settings.workspace.deleteWhat"),
+                "workspace.delete",
+                obj([("workspace", str(ws)), ("account", str(here.sub))]),
+                done=@sf.t("android-settings.workspace.deleted"),
+              )
+            },
+          )
+        }
+      })
+    })
+    |> ignore
+  })
+  look_page(
+    c,
+    core,
+    frame,
+    look,
+    "workspace",
+    name,
+    blocks,
+    // adding people, by email or from Slack: its managers'
+    actions?=if manager {
+      Some(fn() {
+        let id = c.id("ws-add-people")
+        c.cursor(id, Hand)
+        if c.clicked(id) {
+          open_add_people(core, here, v)
+        }
+        let b = c.box(style=ws_add_box, id~, fn() { @sf.icon(c, "user-plus", size=ws_add_icon, color=@sf.link_ink()) |> ignore })
+        c.semantics(b, Button, id~, label=@sf.t("web-pages.settings.members.add"))
+      })
+    } else {
+      None
+    },
+  )
+}
+
+///|
+/// A person on the narrow page (MemberRow): their picture, name (你 for the viewer) and email, their role at its end;
+/// pressed (where the viewer may), what can be done about them: their role (by the owner), moving them out, asked
+/// first (ws_member_panel: a sheet with a finger).
+fn ws_member_narrow(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> Unit {
+  let mv = Some(m)
+  let sub = text(mv, "sub")
+  let email = text(mv, "email")
+  let name = match text(mv, "name") {
+    "" => email
+    x => x
+  }
+  let role = text(v, "role")
+  let manager = role == "owner" || role == "admin"
+  let ws = text(v, "id")
+  let now = text(mv, "role")
+  let can = sub != here.sub && manager && (now != "owner" || role == "owner")
+  let id = if can { c.id("member/" + sub) } else { 0 }
+  if can {
+    c.cursor(id, Hand)
+    if c.clicked(id) {
+      ws_member_panel(core, here, v, m, name, Of(id))
+    }
+  }
+  let b = c.box(style=if can { narrow_row } else { narrow_said_row }, id~, fn() {
+    avatar(c, core, email, name, ws_avatar, picture=text(mv, "picture"))
+    c.box(style=narrow_row_words, fn() {
+      c.box(style=desk_named, fn() {
+        c.text(name, style=mem_narrow_title) |> ignore
+        if sub == here.sub {
+          you(c, @sf.t("android-settings.members.you"))
+        }
+      })
+      |> ignore
+      c.text(email, style=narrow_note) |> ignore
+    })
+    |> ignore
+    let on = [("workspace", ws), ("member", sub)]
+    let calls = ["workspace.setRole", "workspace.removeMember"]
+    doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on))
+    c.text(role_label(now), style=narrow_value) |> ignore
+    if can {
+      finger_ripple(c, id)
+    }
+  })
+  if can {
+    c.semantics(b, Button, id~, label=name)
+  }
+}
+
+///|
+/// What can be done about a person (MemberSheet), by what pressed them: their role (by the owner: each with what it may
+/// do, the one now checked), moving them out (in red, asked first). A panel: a sheet with a finger.
+fn ws_member_panel(core : Core, here : Here, v : Json?, m : Json, name : String, from : @sf.Anchor) -> Unit {
+  let mv = Some(m)
+  let sub = text(mv, "sub")
+  let email = text(mv, "email")
+  let ws = text(v, "id")
+  @sf.panel(name, from~, fn(c, close) {
+    let t = @sf.theme()
+    if text(v, "role") == "owner" {
+      let setting = is_doing(core, ["workspace.setRole"], [("workspace", ws), ("member", sub)])
+      for r in ["owner", "admin", "member"] {
+        if @settings.pick_row(
+            c,
+            "role/" + r,
+            role_label(r),
+            sub=@sf.t("android-misc.role." + r + ".hint"),
+            checked=text(mv, "role") == r,
+            enabled=!setting,
+          ) {
+          close()
+          if r != text(mv, "role") {
+            @settings.act(
+              core,
+              @sf.t("android-settings.members.roleWhat"),
+              "workspace.setRole",
+              obj([("workspace", str(ws)), ("member", str(sub)), ("role", str(r)), ("account", str(here.sub))]),
+              done=@sf.t("android-settings.members.roleSet"),
+            )
+          }
+        }
+      }
+    }
+    if @settings.pick_row(c, "move-out", @sf.t("android-settings.members.moveOutRow"), color=t.p.red) {
+      close()
+      confirm(
+        @sf.t("android-settings.members.moveOutTitle", args=[("email", email), ("name", text(v, "name"))]),
+        @sf.t("android-settings.members.moveOutText"),
+        @sf.t("android-settings.members.moveOut"),
+        danger=true,
+        fn() {
+          @settings.act(
+            core,
+            @sf.t("android-settings.members.moveOutWhat"),
+            "workspace.removeMember",
+            obj([("workspace", str(ws)), ("member", str(sub)), ("account", str(here.sub))]),
+            done=@sf.t("android-settings.members.movedOut"),
+          )
+        },
+      )
+    }
+  })
+}
+
+///|
+/// What a row does at its end, in red (RowAction): a spinner while it is under way, the failure mark a moment after.
+fn ws_row_action(c : @ui.Ctx, key : String, words : String, core : Core, calls : Array[String], on : Array[(String, String)]) -> Bool {
+  let busy = is_doing(core, calls, on)
+  doing_mark(c, busy, failed_of(core, calls, on))
+  !busy && acc_sign_out_link(c, key, words)
+}
+
+///|
+/// A row in red that does something asked first (leaving, deleting).
+fn ws_red_row(c : @ui.Ctx, key : String, words : String) -> Bool {
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let b = c.box(style=narrow_row, id~, fn() {
+    c.text(words, style=ws_red_words) |> ignore
+    finger_ripple(c, id)
+  })
+  c.semantics(b, Button, id~, label=words)
+  c.clicked(id)
+}
+
+///|
+let ws_mark_narrow : Double = 20.0
+
+///|
+let ws_add_icon : Double = 20.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_add_box : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_red_words : @ui.TextStyle = @sf.body.then(@sf.bad).then(@sf.one_line).then(@sf.full_words)
+
+///|
+/// (the narrow page's foot: leaving, deleting, 18 over it)
+// kept across runs: a value (no field of it changes)
+let ws_narrow_foot : @ui.Style = @ui.css("w=Full pt=S4")
 
 ///|
 /// A titled block (ui Section): its title (and how many, subtle), what it is under it, its buttons at its end; then

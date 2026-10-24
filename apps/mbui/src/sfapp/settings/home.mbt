@@ -58,22 +58,17 @@ let wide_heading : (Double, Double) = (14.0, 22.0)
 fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
   match route {
     Home => settings_home(c, core, here)
-    Me => me_page(c, core, here)
     Appearance => appearance_page(c, core)
     Fonts => fonts_page(c, core)
-    Workspace => workspace_page(c, core, here)
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
     Stations => stations_page(c, core, here)
     Station(a) => station_page(c, core, here, a)
     Profiles(only) => profiles_page(c, core, here, only)
     Profile(a, id) => profile_page(c, core, here, a, id)
-    PickModels(a, id) => pick_models_page(c, core, here, a, id)
-    ProfileModels(a, id) => profile_models_page(c, core, here, a, id)
     Connects(only) => connects_page(c, core, here, only)
     Connect(a, id) => connect_page(c, core, here, a, id)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
-    Usage => usage_page(c, core, here)
     Archive => archive_page(c, core, here)
     AdbShare(a) => adb_page(c, core, here, a)
     NewProfile(a) => new_profile_page(c, core, here, a)
@@ -88,11 +83,10 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     // one page for every frame (src/sfdesk about.mbt), drawn by the frame's setting_route
-    Changelog | About | Memories | Memory(_) | AutoDecisions => ()
+    Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace => ()
     LocalStation => local_station_page(c, core)
     // the desktop's own, drawn by its frame (src/sfdesk)
     Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()
-    UsagePrices(days) => prices_page(c, core, here, days)
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
 }
@@ -449,6 +443,12 @@ fn workspace_tile(c : @ui.Ctx, name : String, emoji : String, icon : String) -> 
 }
 
 ///|
+/// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
+pub fn legal_url(page : String) -> String {
+  "https://still.fail/" + page
+}
+
+///|
 /// Notifications as switched here, until the core has answered (AppState.useNotify's `notify` meanwhile).
 pub let notify_switched : Ref[Bool?] = Ref(None)
 
@@ -614,194 +614,3 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
   scroll_page(c, "appearance", blocks)
 }
 
-///|
-/// The account (Me.kt MeScreen): who is signed in, the accounts on this device (signing each out, adding another), and
-/// where it is signed in (Devices).
-fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let t = @sf.theme()
-  let accounts = match (core.topic)("accounts", Map::new()).value {
-    Some(Array(a)) => a
-    _ => []
-  }
-  let me_name = if here.person != "" { here.person } else { here.email }
-  scroll_page(c, "me", [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("android-settings.me.title")) },
-    // the accounts on this device, on one card (Me.kt): the one in view first, with who it is, then the others; each
-    // signed out of by itself (with one account it is just 退出登录), and another can be added
-    fn() {
-      let sign_out = fn(a : Json) {
-        let sub = text(Some(a), "sub")
-        let email = text(Some(a), "email")
-        if is_doing(core, ["auth.signOut"], [("account", sub)]) {
-          spinner(c, inline=true)
-        } else if tap_text(
-            c,
-            "sign-out/" + sub,
-            if accounts.length() > 1 {
-              tr("android-settings.me.signOut")
-            } else {
-              tr("android-settings.me.signOutOnly")
-            },
-            color=t.p.red,
-          ) {
-          (core.home)()
-          act(
-            core,
-            tr("android-settings.me.signOutWhat"),
-            "auth.signOut",
-            obj([("account", str(sub))]),
-            done=if accounts.length() > 1 {
-              fill("android-settings.me.signedOut", [("email", email)])
-            } else {
-              ""
-            },
-          )
-        }
-      }
-      list_card(c, fn() {
-        list_row(c, fn() {
-          avatar(c, core, here.email, me_name, 46.0, picture=here.picture)
-          c.box(w=Fill(1.0), fn() {
-            c.text(me_name, size=16.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
-            c.text(here.email + " · Google", size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0)
-            |> ignore
-          })
-          |> ignore
-          for a in accounts {
-            if text(Some(a), "sub") == here.sub {
-              sign_out(a)
-            }
-          }
-        })
-        |> ignore
-        for a in accounts {
-          if text(Some(a), "sub") != here.sub {
-            list_row(c, fn() {
-              row_title(c, text(Some(a), "email"))
-              sign_out(a)
-            })
-            |> ignore
-          }
-        }
-        if list_row(c, key="add-account", fn() {
-            c.text(tr("android-settings.me.addAccount"), size=15.0, color=@sf.link_ink(), wrap=false, w=Fill(1.0), line=21.0)
-            |> ignore
-          }) {
-          (core.sign_in)()
-        }
-      })
-    },
-    fn() { section_header(c, tr("android-settings.me.devices"), start=S6) },
-    fn() { devices(c, core, here) },
-    // deleting the account in view, at the foot as deleting a workspace is: asked first (Me.kt)
-    fn() { gap(c, 18.0) },
-    fn() {
-      list_card(c, fn() {
-        if list_row(c, key="delete-account", fn() { row_title(c, tr("android-settings.me.delete"), color=t.p.red) }) {
-          confirm(
-            tr("android-settings.me.deleteTitle"),
-            fill("android-settings.me.deleteText", [("email", here.email)]),
-            tr("android-settings.me.deleteAction"),
-            danger=true,
-            fn() {
-              (core.home)()
-              act(
-                core,
-                tr("android-settings.me.deleteAction"),
-                "auth.deleteAccount",
-                obj([("account", str(here.sub))]),
-                done=fill("android-settings.me.deleted", [("email", here.email)]),
-              )
-            },
-          )
-        }
-      })
-    },
-    fn() { gap(c, 30.0) },
-  ])
-}
-
-///|
-/// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
-pub fn legal_url(page : String) -> String {
-  "https://still.fail/" + page
-}
-
-///|
-/// Where the account is signed in (Settings.kt Devices, the `loginSessions` topic): each, this one marked 本机; one
-/// not this signed out from here (`loginSession.revoke`).
-fn devices(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let t = @sf.theme()
-  let topic = (core.topic)("loginSessions", { "account": str(here.sub) })
-  let list = match topic.value {
-    Some(Array(a)) => a
-    _ => {
-      match topic.error {
-        Some(e) =>
-          wait_line(c, fill("android-settings.devices.failed", [("error", error_text(e))]), error=true, pad=true)
-        None => wait_line(c, tr("common.reading"), pad=true)
-      }
-      return
-    }
-  }
-  list_card(c, fn() {
-    for d in list {
-      let id = text(Some(d), "id")
-      let current = flag(Some(d), "current")
-      list_row(c, fn() {
-        c.box(w=Fill(1.0), fn() {
-          c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-            c.text(
-              match text(Some(d), "name") {
-                "" => tr("android-settings.devices.unnamed")
-                n => n
-              },
-              size=15.0,
-              color=t.p.text,
-              wrap=false,
-              line=21.0,
-            )
-            |> ignore
-            if current {
-              you(c, tr("android-settings.devices.here"))
-            }
-          })
-          |> ignore
-          c.text(
-            fill("android-settings.devices.times", [
-              ("ago", stamp(Some(d), "created_at", "ago")),
-              ("until", stamp(Some(d), "expires_at", "until")),
-            ]),
-            size=13.0,
-            color=t.p.muted,
-            w=Fill(1.0),
-            line=18.0,
-          )
-          |> ignore
-        })
-        |> ignore
-        if !current {
-          if is_doing(core, ["loginSession.revoke"], [("id", id)]) {
-            spinner(c)
-          } else {
-            c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-              doing_mark(c, false, failed_of(core, ["loginSession.revoke"], [("id", id)]))
-              if tap_text(c, "revoke/" + id, tr("android-settings.devices.signOut"), color=t.p.red) {
-                act(
-                  core,
-                  tr("android-settings.devices.signOutWhat"),
-                  "loginSession.revoke",
-                  obj([("id", str(id)), ("account", str(here.sub))]),
-                  done=tr("android-settings.devices.signedOut"),
-                )
-              }
-            })
-            |> ignore
-          }
-        }
-      })
-      |> ignore
-    }
-  })
-}

@@ -129,7 +129,8 @@ fn set_keys(core : Core, action : String?, keys : Json) -> Unit {
 /// 快捷键 (Shortcuts.tsx ShortcutsPage): each group's actions, their keys; pressed, the next key press is its new keys
 /// (Esc leaves them, ⌫ clears them; keys another action had are moved here, said so); 恢复默认 an action's own again,
 /// 全部恢复默认 every one's. Kept on this device.
-fn shortcuts_page(c : @ui.Ctx, core : Core) -> Unit {
+fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+  let look = look_of(c)
   let prefs = (core.topic)("prefs", Map::new()).value
   let keymap = field(prefs, "keymap")
   // recording: the next key press
@@ -163,33 +164,45 @@ fn shortcuts_page(c : @ui.Ctx, core : Core) -> Unit {
   for i, g in items(keymap, "groups") {
     let group = text(Some(g), "group")
     blocks.push(fn() {
-      @sf.section(
-        c,
-        text(Some(g), "name"),
-        note=if i == 0 { @sf.t("web-main.shortcuts.hint") } else { "" },
-        actions?=if i == 0 && any {
-          Some(fn() {
-            if keys_toggle(c, "keys-reset-all", @sf.t("web-main.shortcuts.resetAll")) {
-              c.after_build("keys-reset-all", fn() { set_keys(core, None, Json::null()) })
+      let rows = fn() {
+        c.box(style=keys_rows, fn() {
+          for a in listed {
+            if text(Some(a), "group") == group {
+              keys_row(c, core, a)
             }
-          })
-        } else {
-          None
-        },
-        fn() {
-          c.box(style=keys_rows, fn() {
-            for a in listed {
-              if text(Some(a), "group") == group {
-                keys_row(c, core, a)
-              }
+          }
+        })
+        |> ignore
+      }
+      let reset_all = fn() {
+        if keys_toggle(c, "keys-reset-all", @sf.t("web-main.shortcuts.resetAll")) {
+          c.after_build("keys-reset-all", fn() { set_keys(core, None, Json::null()) })
+        }
+      }
+      match look {
+        Wide =>
+          @sf.section(
+            c,
+            text(Some(g), "name"),
+            note=if i == 0 { @sf.t("web-main.shortcuts.hint") } else { "" },
+            actions?=if i == 0 && any { Some(reset_all) } else { None },
+            rows,
+          )
+        // narrow: its heading, its rows on a card, what the keys do under the first
+        Narrow => {
+          look_heading(c, look, text(Some(g), "name"))
+          look_card(c, look, rows)
+          if i == 0 {
+            look_note(c, look, @sf.t("web-main.shortcuts.hint"))
+            if any {
+              c.box(style=narrow_note_box, reset_all) |> ignore
             }
-          })
-          |> ignore
-        },
-      )
+          }
+        }
+      }
     })
   }
-  desk_page(c, core, "shortcuts", @sf.t("web-main.shortcuts.title"), blocks)
+  look_page(c, core, frame, look, "shortcuts", @sf.t("web-main.shortcuts.title"), blocks)
 }
 
 ///|

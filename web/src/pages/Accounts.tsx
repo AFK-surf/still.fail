@@ -725,7 +725,7 @@ function ModelChecklist({ profile, found, onSave }: { profile: Profile; found: s
   const all = [...new Set([...(found ?? []), ...profile.models])].sort();
   const name = (m: string) => profile.names[m] ?? m;
   const shown = all.filter((m) => [m, name(m)].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
-  const commit = (next: Set<string>) => { void onSave([...next].sort()); };
+  const commit = (next: Set<string>) => { void onSave([...next]); };
   const toggle = (m: string) => {
     const next = new Set(enabled);
     if (next.has(m)) next.delete(m); else next.add(m);

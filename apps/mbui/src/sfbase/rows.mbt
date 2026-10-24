@@ -98,7 +98,7 @@ pub fn open_listed(view : ChatsView) -> Unit {
       if (nth > 0 && rows == nth) || (nth == 0 && item.title.contains(words)) {
         open_titled.val = ""
         @hostapi.log("OPEN found among \{rows}+ rows")
-        app.nav.push(
+        open_page(
           Chat({
             station: item.station,
             session: item.session,

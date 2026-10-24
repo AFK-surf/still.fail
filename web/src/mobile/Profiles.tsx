@@ -860,7 +860,7 @@ function Models({ p, put, bare = false, page = false }: { p: Profile; put: (mode
   const models = p.models;
   const busy = p.modelsSaving != null;
   const ask = (models: string[]) => act(put(models), t("web-mobile.profiles.what.models"));
-  const save = (next: string[]) => ask([...new Set(next)].sort());
+  const save = (next: string[]) => ask(next);
   const filtered = !!filter.trim();
   const [typed, setTyped] = useState("");
   const adding = useDoing("profile.addModel", { station: station.address, id: p.id });

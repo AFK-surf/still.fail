@@ -218,7 +218,7 @@ test "a chat opened from a found message: the words bold in it, stroked under, n
   let rd = reading_of("ws1/st1\u{1}s-c1")
   assert_eq(rd.found_at, "ts2")
   assert_eq(rd.flash, "")
-  assert_eq(found_words_of("ts2"), ["虚拟列表"])
+  assert_eq(rd.found_words, ["虚拟列表"])
   // bold where they are in the bubble
   match t.rich_of("帮我把聊天页的列表做成虚拟列表") {
     Some((rl, _, _)) => {
@@ -229,7 +229,8 @@ test "a chat opened from a found message: the words bold in it, stroked under, n
   }
   t.run_for(found_draw_ms)
   // still marked once drawn in: for as long as the chat shows
-  assert_eq(found_words_of("ts2"), ["虚拟列表"])
+  assert_eq(rd.found_at, "ts2")
+  assert_eq(rd.found_words, ["虚拟列表"])
   t.assert_idle()
 }
 

@@ -1,124 +1,10 @@
-// The small parts the drive's pages are made of, as the Android app draws them (shared ui/Parts.kt NavBar, NavBack,
-// NavButton, SectionHeader; ui/Controls.kt Button, Field, PickRow; ui/Sheet.kt SheetHost, SheetGrab, SheetHead;
-// screens/PageParts.kt ask, confirm; screens/PlaceRows.kt PlaceRow), and what the drive keeps while the app runs: the
-// sheet open, what is chosen, the files going up, what is under way.
-
-///|
-/// A sheet of the drive's (one at a time, over the page that opened it).
-priv enum DvSheet {
-  NoSheet
-  /// ＋: upload, a new folder, the folders lent (owners and admins, at the drive's top)
-  Add(DriveAt, String, Bool)
-  /// how the folder is shown: its order, hidden files; the folders lent for those who name them
-  View(DriveAt, Bool)
-  /// one entry: rename, download, share, copy its path, delete
-  Entry(DriveAt, DvEntry, Array[String])
-  /// several chosen: download, copy their paths, delete
-  Chosen(DriveAt, Array[DvEntry])
-  /// a line asked for (a name): its title, the words in it at first, the placeholder, the action; what it does
-  Ask(String, String, String, String, (String) -> Unit)
-  /// asked first: its title, the words, the action, whether it is a danger; what it does
-  Confirm(String, String, String, Bool, () -> Unit)
-  /// the folders a station lends (owners and admins)
-  Roots(String)
-  /// a root held: stop lending it
-  RootHeld(String, DvRoot)
-  /// on which station to lend another folder
-  LendOn(Array[DvStation])
-  /// the station's folders, to lend one
-  Picker(String, Array[String])
-}
-
-///|
-/// The drive's state while the app runs.
-priv struct DriveUi {
-  mut sheet : DvSheet
-  /// the sheet closing, what it showed kept until it is down
-  mut closing : DvSheet
-  /// the page the sheet is over (dv_page_of: the one that opened it), and the page being built: a page under another
-  /// one (a folder pushed over 文件, both drawn while it slides in) draws no sheet of the other's
-  mut sheet_on : String
-  mut building : String
-  /// what is chosen in a folder (by its page's key), by name
-  chosen : Map[String, Array[String]]
-  /// what is under way on an entry ("remove|<station>|<root>|<path>"), and what failed a moment ago (its words: shown
-  /// on its row for dv_failed_ms)
-  busy : Map[String, Bool]
-  failed : Map[String, String]
-  /// folders being read again
-  refreshing : Map[String, Bool]
-  /// a row held: its id, whether the hold has acted
-  mut held : Int
-  mut held_done : Bool
-  /// the views chosen here, before the prefs say
-  mut sort_set : String?
-  mut hidden_set : Bool?
-  /// what is asked for in an Ask sheet, the folder picker's place and filter
-  mut asked : String
-  mut picker_at : String?
-  mut picker : Json?
-  mut picker_error : String
-  mut picker_denied : Bool
-  mut picker_serial : Int
-  /// the folder picker's last ask (`picker_serial`) on its way, not answered yet: what is shown is coming, not asked
-  /// again
-  mut picker_asking : Bool
-  /// the Ask sheet's words and the folder picker's filter (their fields show them)
-  mut ask_field : @ui.Field
-  mut picker_filter : @ui.Field
-}
-
-///|
-let dv : DriveUi = {
-  sheet: NoSheet,
-  closing: NoSheet,
-  sheet_on: "",
-  building: "",
-  chosen: {},
-  busy: {},
-  failed: {},
-  refreshing: {},
-  held: 0,
-  held_done: false,
-  sort_set: None,
-  hidden_set: None,
-  asked: "",
-  picker_at: None,
-  picker: None,
-  picker_error: "",
-  picker_denied: false,
-  picker_serial: 0,
-  picker_asking: false,
-  ask_field: @ui.Field::new(),
-  picker_filter: @ui.Field::new(),
-}
+// The small parts the phone's sheets are made of, as the Android app draws them (shared ui/Parts.kt NavBar, NavButton,
+// SectionHeader; ui/Controls.kt Button, PickRow; ui/Sheet.kt SheetHost, SheetGrab, SheetHead): Station 文件's and the
+// reader's panels (station_files.mbt, viewer_host.mbt) until they are the library's presenters, and 文件's bar.
 
 ///|
 /// As at the start (tests).
 fn dv_reset() -> Unit {
-  dv.sheet = NoSheet
-  dv.closing = NoSheet
-  dv.sheet_on = ""
-  dv.building = ""
-  dv.chosen.clear()
-  dv.busy.clear()
-  dv.failed.clear()
-  dv.refreshing.clear()
-  dv.held = 0
-  dv.held_done = false
-  dv.sort_set = None
-  dv.hidden_set = None
-  dv.asked = ""
-  // (a new one: an editor knows its Field by the build it was last given in, and a run started again counts builds
-  // from the start)
-  dv.ask_field = @ui.Field::new()
-  dv.picker_filter = @ui.Field::new()
-  dv.picker_at = None
-  dv.picker = None
-  dv.picker_error = ""
-  dv.picker_denied = false
-  dv.picker_serial = 0
-  dv.picker_asking = false
   reader_set.clear()
   fix_folders.clear()
   fix_places.clear()
@@ -132,49 +18,6 @@ fn dv_reset() -> Unit {
   sfs.ticked.clear()
   sfs.ref = None
   sfs.ref_closing = false
-}
-
-///|
-fn dv_open(c : @ui.Ctx, s : DvSheet) -> Unit {
-  c.blur()
-  dv.sheet = s
-  dv.sheet_on = dv.building
-}
-
-///|
-/// A drive's page by what it shows (文件, a station's drive or one of its folders): the page a sheet is over.
-fn dv_page_of(at : DriveAt?) -> String {
-  match at {
-    None => "files"
-    Some(a) =>
-      "drive\u{1}" +
-      a.station +
-      "\u{1}" +
-      (match a.root {
-        Some(r) => r
-        None => ""
-      }) +
-      "\u{1}" +
-      a.path
-  }
-}
-
-///|
-fn dv_close(c : @ui.Ctx) -> Unit {
-  match dv.sheet {
-    NoSheet => ()
-    s => {
-      dv.closing = s
-    }
-  }
-  dv.sheet = NoSheet
-  c.blur()
-}
-
-///|
-/// A card's ground (C.surface).
-fn dv_surface() -> Int64 {
-  @sf.theme().p.card
 }
 
 // ── the bar ──────────────────────────────────────────────────────────────
@@ -326,12 +169,6 @@ fn dv_pick_row(
   c.clicked(id)
 }
 
-///|
-/// A line to type in (Controls.kt Field): mbui's field in its look (@sf.field_look), its words 15 on 21.
-fn dv_field(c : @ui.Ctx, key : String, placeholder : String, field : @ui.Field) -> String {
-  @kit.text_field(c, key, placeholder~, size=15.0, line=21.0, look=@sf.field_look, field~).text
-}
-
 // ── sheets ───────────────────────────────────────────────────────────────
 
 ///|
@@ -353,8 +190,8 @@ fn dv_sheet_frame(
   body : () -> Unit,
   closing~ : Bool,
   reader? : Bool = false,
-  close? : (() -> Unit)? = None,
-  gone? : () -> Unit = fn() { dv.closing = NoSheet },
+  close~ : () -> Unit,
+  gone~ : () -> Unit,
   ground? : Int64 = 0L,
   trailing? : String = "",
 ) -> Unit {
@@ -391,206 +228,8 @@ fn dv_sheet_frame(
     gone()
   }
   if !closing && !r.open {
-    match close {
-      Some(f) => f()
-      None => dv_close(c)
-    }
+    close()
   }
-}
-
-///|
-/// The rows of a card in a list (DriveScreen.kt cardRow): 12 in from the sides, the first and last carrying its 16
-/// corners, 10 under the last; each row list_pad in from the card's sides (and from its top on the first, its bottom
-/// on the last), pressed and grounded (`ground`: a chosen row's, none for the card's own) in a row_corner, concentric
-/// with the card's.
-fn dv_card_row(
-  c : @ui.Ctx,
-  first : Bool,
-  last : Bool,
-  ground : Int64?,
-  id : Int,
-  body : () -> Unit,
-) -> Unit {
-  let card = dv_surface()
-  c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=if last { 10.0 } else { 0.0 }, fn() {
-    c.box(w=Fill(1.0), fn() {
-      // the card's ground: rounded where it ends (its first row's top, its last's bottom), square between rows; the
-      // rounded part only where the card has its corners (so what is in a row between is in no corner of it)
-      c.layer(fn() {
-        c.box(style=dv_card_whole, fn() {
-          if !first {
-            c.box(style=dv_card_corner_room, fn() {  }) |> ignore
-          }
-          c.box(w=Fill(1.0), h=Fill(1.0), radius=if first || last { @sf.drive_card_corner } else { 0.0 }, bg=card, fn() {  })
-          |> ignore
-          if !last {
-            c.box(style=dv_card_corner_room, fn() {  }) |> ignore
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-      // between rows, the card goes on square to the row's edge
-      if !first {
-        c.layer(fn() { c.box(w=Fill(1.0), h=Px(@sf.drive_card_corner * 2.0), bg=card, fn() {  }) |> ignore })
-        |> ignore
-      }
-      if !last {
-        c.layer(fn() {
-          c.spacer()
-          c.box(w=Fill(1.0), h=Px(@sf.drive_card_corner * 2.0), bg=card, fn() {  }) |> ignore
-        })
-        |> ignore
-      }
-      let room = match (first, last) {
-        (true, true) => dv_row_room_only
-        (true, false) => dv_row_room_first
-        (false, true) => dv_row_room_last
-        (false, false) => dv_row_room
-      }
-      c.box(style=room, fn() {
-        // (at the card's ends concentric in its corner, as it is list_pad in)
-        c.box(style=if first || last { dv_row_ground_end } else { dv_row_ground }, bg?=ground, id~, fn() {
-          body()
-          if id != 0 {
-            @motion.ripple(c, id, if first || last { @sf.inner_corner(@sf.drive_card_corner, @sf.list_pad) } else { @sf.row_corner })
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// A card's row's room in it (DriveScreen.kt cardRow, Parts.kt LIST_PAD): 8 in from the card's sides, and from its top
-/// on the first row, its bottom on the last.
-// kept across runs: a value (no field of it changes)
-let dv_row_room : @ui.Style = @ui.css("w=Full px=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let dv_row_room_first : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let dv_row_room_last : @ui.Style = @ui.css("w=Full px=S2 pb=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let dv_row_room_only : @ui.Style = @ui.css("w=Full p=S2")
-
-///|
-/// A card's row's own ground (pressed, chosen): rounded LIST_ROW_CORNER, concentric with the card's.
-// kept across runs: a value (no field of it changes)
-let dv_row_ground : @ui.Style = @ui.css("w=Full radius=Xl2")
-
-///|
-/// The card's ground as tall as its row; where the card goes on past it, its corner's room.
-// kept across runs: a value (no field of it changes)
-let dv_card_whole : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let dv_card_corner_room : @ui.Style = @ui.style(w=Full, h=Fixed(@sf.drive_card_corner))
-
-///|
-// kept across runs: a value (no field of it changes)
-let dv_row_ground_end : @ui.Style = @ui.style(w=Full, radius=@sf.drive_row_end_radius)
-
-///|
-/// A row held (a long press, 400 ms as the system's): true on the frame the hold acts, once; the tap that ends it is
-/// then no tap (`dv_tapped`).
-fn dv_held(c : @ui.Ctx, id : Int) -> Bool {
-  let pressed = c.pressed(id)
-  if pressed && dv.held != id {
-    dv.held = id
-    dv.held_done = false
-  }
-  // (`after` asks for the frame it acts on)
-  if @kit.after(c, "dv-held/\{id}", pressed && dv.held == id && !dv.held_done && !c.press().moved, dv_hold_ms) {
-    dv.held_done = true
-    return true
-  }
-  if !pressed && dv.held == id && !c.clicked(id) {
-    dv.held = 0
-  }
-  false
-}
-
-///|
-/// How long a row is held before the hold acts (the system's long press).
-
-let dv_hold_ms : Double = 400.0
-
-///|
-/// How long what failed on a row is said on it.
-let dv_failed_ms : Double = 4000.0
-
-///|
-/// A tap on a row that was not a hold.
-fn dv_tapped(c : @ui.Ctx, id : Int) -> Bool {
-  if c.clicked(id) {
-    let was_hold = dv.held == id && dv.held_done
-    if dv.held == id {
-      dv.held = 0
-      dv.held_done = false
-    }
-    !was_hold
-  } else {
-    false
-  }
-}
-
-///|
-/// What the viewer set going, done: its failure said in a toast (AppState.act: 无法{what}：{error}).
-fn dv_act(c : @ui.Ctx, what : String, done? : String = "") -> (Result[Json, Json]) -> Unit {
-  fn(r) {
-    match r {
-      Ok(_) => if done != "" { say(c, done) }
-      Err(e) =>
-        say(
-          c,
-          fill("android-misc.act.failed", [("what", what), ("error", dv_error(e))]),
-        )
-    }
-  }
-}
-
-///|
-/// An entry's key for what is under way on it.
-fn dv_key(op : String, station : String, root : String, path : String) -> String {
-  op + "|" + station + "|" + root + "|" + path
-}
-
-///|
-/// A call on an entry, marked under way on its row while it goes (DoingMark), its failure a moment's red mark there and
-/// a toast.
-fn dv_doing(
-  c : @ui.Ctx,
-  src : Source,
-  key : String,
-  what : String,
-  call : String,
-  params : Json,
-  then? : (Json) -> Unit = fn(_) {  },
-) -> Unit {
-  dv.busy[key] = true
-  dv.failed.remove(key)
-  (src.call)(call, params, fn(r) {
-    dv.busy.remove(key)
-    match r {
-      Ok(v) => then(v)
-      Err(e) => {
-        dv.failed[key] = dv_error(e)
-
-        (dv_act(c, what))(r)
-      }
-    }
-  })
 }
 
 ///|

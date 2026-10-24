@@ -160,7 +160,30 @@ fn reset() -> Unit {
 /// What the app's own doings ask of the pages (sfbase shell.mbt): home and what is over the pages put their sheets
 /// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind.
 fn pages_shell() -> Shell {
-  { home, close_overlays, open_invite, behind: peeks_stop_all }
+  { home, close_overlays, open_invite, behind: peeks_stop_all, open: open_where, detail: detail_where }
+}
+
+///|
+/// Page `p` opened where the layout has it (the pane table, docs/architecture.md): on the wide frame the page pushed,
+/// a chat's detail asked as a page (its history, a service, a file) laid beside its chat by the frame (sfdesk's
+/// main_page); laid out Small on the phone's stack (a new chat risen from the foot).
+fn open_where(p : Page) -> Unit {
+  if @sfdesk.is_wide(@ui.current()) {
+    app.nav.push(p)
+  } else {
+    stack_open(p)
+  }
+}
+
+///|
+/// Chat `r`'s detail `tab` opened where the layout has it: on the wide frame its side panel's tab, toggled; laid out
+/// Small the page it is (an agent's history, what the pages' message rows ask).
+fn detail_where(src : Source, r : ChatRef, tab : String) -> Unit {
+  if @sfdesk.is_wide(@ui.current()) {
+    @sfdesk.side_toggle(src, r, tab)
+  } else {
+    app.nav.push(History(r, tab, None))
+  }
 }
 
 ///|
@@ -220,10 +243,10 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   c.set_clear((t.p.bg >> 8) & 0xFFFFFFL)
   // laid out Medium or Large (@sf.layout: the screen's room and kind, never what it is pointed with): the web app's
   // wide frame (sfdesk's frame.mbt: on a tape, Medium); Small, the phone's pages
-  wide_on.val = @sfdesk.is_wide(c)
+  let wide = @sfdesk.is_wide(c)
   // the wide frame's lines set as the desktop app's pages set them (a browser's way)
-  @ui.set_web_lines(wide_on.val)
-  @settings.wide.val = wide_on.val
+  @ui.set_web_lines(wide)
+  @settings.wide.val = wide
   @settings.status_top.val = status_top()
   @settings.nav_foot.val = nav_foot()
   @settings.bar_room.val = bar_room_now()
@@ -308,7 +331,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       share_in_frame(c)
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
-      if wide_on.val {
+      if @sfdesk.is_wide(c) {
         // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
         // frame.mbt); what opens over them after them
         @sfdesk.keys(c, src, w)
@@ -488,7 +511,7 @@ fn page_view(
         |> ignore
       }
       // in a window with its buttons in the app's top row, their band drags it (as a title bar does)
-      if @ui.window_inset() && !wide_on.val {
+      if @ui.window_inset() && !@sfdesk.is_wide(c) {
         c.layer(fn() {
           let id = c.id("window-band")
           c.window_drag(id)
@@ -623,7 +646,7 @@ fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   // the wide frame's the web's (the library's: @sf.toast_look, 24 over the window's foot, what an unconfirmed write
   // did said as not known)
-  if wide_on.val {
+  if @sfdesk.is_wide(c) {
     let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", @sf.toast_said(app.toast))] } else { [] }
     let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=@sf.toast_bottom, look=fn(c, s, _action, _close) {
       @sf.toast_look(c, s)
@@ -860,16 +883,10 @@ fn page_ready(src : Source, p : Page) -> Bool {
 }
 
 ///|
-/// Whether this frame is drawn wide (what the phone's parts read where they differ: the chat's rows' sides, the
-/// composer's Enter).
-let wide_on : Ref[Bool] = Ref(false)
-
-///|
 fn wide_reset() -> Unit {
   @sfdesk.side_slide_reset()
   @sfpages.find_forget()
   find_around.val = -1.0
-  wide_on.val = false
 }
 
 ///|

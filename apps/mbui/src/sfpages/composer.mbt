@@ -115,7 +115,7 @@ pub fn composer(
     c.focus_editor(composer_field_key)
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
-  let dragging = !no_files && dragged() is Some(_) && c.lit(cap)
+  let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
   let box = c.box(
     style=if multiline { composer_box_open } else { composer_box },
     // (the raised ground's glass, the accent's over it while dragged over)
@@ -180,6 +180,30 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     Some(png) if !no_files => writing_add(src, w, spec.station, pasted_picture_name, png)
     _ => ()
   }
+  // a message's files quoted from their menus (sfpages menus.mbt): each a quote with its file in its card
+  match quoted_into.get(w.key) {
+    Some(list) if !no_files => {
+      quoted_into.remove(w.key)
+      c.tell("composer/quoted/" + w.key, fn() {
+        for q in list {
+          let name = text(Some(q.3), "name")
+          writing_quote(
+            src,
+            w,
+            {
+              "author": Json::string(q.0),
+              "text": Json::string(name),
+              "ts": Json::string(q.1),
+              "role": Json::string(q.2),
+              "file": Json::string(name),
+            },
+            file=q.3,
+          )
+        }
+      })
+    }
+    _ => ()
+  }
   // words a visualization of this chat asked to send (sfbase viz_page.mbt): after what is written, the cursor in it
   match followed_into.get(w.key) {
     Some(words) => {
@@ -215,7 +239,7 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     }
     _ => ()
   }
-  let sent = tab_take_sent(w.key)
+  let sent = @sfbase.files_taken(w.key)
   if !sent.is_empty() && !no_files {
     writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))
   }
@@ -224,7 +248,7 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
 ///|
 /// Whether what is carried into draft `key` goes as files (the chat's own choice, else the device's: prefs
 /// `dropFiles`, `dropAs`), not named by its path.
-fn drops_as_files(src : Source, key : String) -> Bool {
+pub fn drops_as_files(src : Source, key : String) -> Bool {
   let prefs = (src.topic)("prefs", {}).value
   match field(field(prefs, "dropFiles"), key) {
     Some(True) => true
@@ -236,7 +260,7 @@ fn drops_as_files(src : Source, key : String) -> Bool {
 ///|
 /// A station's file or folder carried in (Drive.tsx droppedFrom): which station has it and where, and where it is in
 /// that station's drive.
-fn dropped_of(d : Dragged) -> Json {
+pub fn dropped_of(d : Dragged) -> Json {
   {
     "name": Json::string(d.name),
     "size": Json::number(d.size),
@@ -316,11 +340,11 @@ fn composer_text(
         }
     }
     // nothing typed: the chat above or below, as the list shows them now
-    if res.focused && w.text == "" && !switcher_open() && !menu {
+    if res.focused && w.text == "" && !(@sfbase.neighbour_held.val)() && !menu {
       if c.key_pressed(@ui.key_code_up, in_field=true) {
-        neighbour(src, ws, -1)
+        (@sfbase.neighbour_go.val)(src, ws, -1)
       } else if c.key_pressed(@ui.key_code_down, in_field=true) {
-        neighbour(src, ws, 1)
+        (@sfbase.neighbour_go.val)(src, ws, 1)
       }
     }
   })
@@ -665,10 +689,10 @@ let pasted_picture_name : String = "image.png"
 
 ///|
 /// The words' size and line (composerText: 14 on 1.5), the most it grows to (480, or 40% of the window).
-let text_size : Double = 14.0
+pub let text_size : Double = 14.0
 
 ///|
-let text_line : Double = 21.0
+pub let text_line : Double = 21.0
 
 ///|
 let text_most : Double = 480.0
@@ -919,7 +943,7 @@ pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
 ///|
 /// The files of draft `w` still going up, as a message sent before they are up names them (`uploads`: the core sends
 /// it once they are).
-fn going_up(w : Writing) -> Array[Json] {
+pub fn going_up(w : Writing) -> Array[Json] {
   w.files.filter_map(fn(f) {
     let o = Some(f)
     if field(o, "done") is None && text(o, "error") == "" && field(o, "ref") is None && field(o, "link") is None {
@@ -934,8 +958,9 @@ fn going_up(w : Writing) -> Array[Json] {
 /// A chat's composer at its pane's foot (dock.tsx's chat place; cloud.css.ts composerWrap: 12 over it, 16 under it;
 /// dock.css.ts: 12 clear of the pane's sides, the column and its curve wide at most, in the middle): the chat's draft
 /// (ChatPage.tsx chatKey), what it sends going into the chat (send_in_chat), locked while the chat is archived, no
-/// file taken in while its station is down. Its place measured (composer_room).
-pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v : ChatView?) -> Unit {
+/// file taken in while its station is down. Its place measured (composer_room). `apart`: the page a panel of its own (the
+/// frame's tape), the composer as far from its foot as from its sides.
+pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v : ChatView?, apart? : Bool = false) -> Unit {
   let spec : ComposerSpec = {
     station: r.station,
     draft: r.station + ":" + r.session,
@@ -957,9 +982,9 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     },
   }
   let width = composer_width(c.width)
-  // (on the tape the page a panel of its own: the composer as far from its foot as from its sides, so it stands in the
-  // panel's corners and follows them: InnerOr)
-  let foot = c.box(style=if wide.tape { chat_foot_apart } else { chat_foot }, fn() {
+  // (apart: the composer as far from its foot as from its sides, so it stands in the panel's corners and follows them:
+  // InnerOr)
+  let foot = c.box(style=if apart { chat_foot_apart } else { chat_foot }, fn() {
     match v {
       Some(v) => chat_notices(c, src, r, v)
       None => ()

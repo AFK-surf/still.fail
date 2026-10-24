@@ -40,10 +40,8 @@ pub(all) struct FolderOf {
 }
 
 ///|
-/// What is asked about before it goes for good (no trash takes it), by the place's key; the name being changed in place
-/// and whether its field had the focus (it is done once it leaves).
+/// The name being changed in place and whether its field had the focus (it is done once it leaves).
 priv struct DriveHeld {
-  removing : Map[String, Array[(DriveAt, DvEntry)]]
   mut naming : String
   mut naming_had : Bool
   refreshing : Map[String, Bool]
@@ -51,11 +49,10 @@ priv struct DriveHeld {
 }
 
 ///|
-let held : DriveHeld = { removing: {}, naming: "", naming_had: false, refreshing: {}, row_frame: -1 }
+let held : DriveHeld = { naming: "", naming_had: false, refreshing: {}, row_frame: -1 }
 
 ///|
 fn drive_reset() -> Unit {
-  held.removing.clear()
   held.naming = ""
   held.naming_had = false
   held.refreshing.clear()
@@ -168,6 +165,37 @@ pub fn save_entry(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit 
 }
 
 ///|
+/// A file of the drive handed to another app (分享): read through the core a part at a time, how far on its row
+/// meanwhile (drive_fetch), then the system's share sheet; said when nothing takes it.
+pub fn share_entry(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
+  let root = at.root.unwrap_or("")
+  let all = Buffer(size_hint=if e.size > 0.0 { e.size.to_int() } else { 0 })
+  c.tell("share/" + at.station + "/" + root + "/" + dv_join(at.path, e.name), fn() {
+    drive_fetch(
+      src,
+      at.station,
+      root,
+      dv_join(at.path, e.name),
+      fn(b) {
+        all.write_bytes(b)
+        true
+      },
+      fn(err) {
+        match err {
+          None =>
+            if !@ui.share("", e.name, e.mime, all.to_bytes()) {
+              say(c, @sf.t("android-misc.drive.noApp"))
+            }
+          Some(err) =>
+            say(c, @sf.t("android-misc.drive.fetchFailed", args=[("name", e.name), ("error", dv_error(err))]))
+        }
+      },
+      listed=Some((e.mtime, e.size)),
+    )
+  })
+}
+
+///|
 /// An entry of the folder `in_` opened as its kind wants (FolderView openIn): a folder gone into, a text read, a video
 /// played, a picture or code previewed (with the pictures beside it, `near`), the rest downloaded; kept as what was
 /// last opened there.
@@ -185,8 +213,8 @@ pub fn open_entry(
   keep_opened(c, src, owner, in_, e.name)
   match opener_of(if e.dir { "folder" } else { e.kind }) {
     "folder" => go({ ..in_, path: full })
-    "read" => app.nav.push(DriveRead({ station: in_.station, root: Some(root), path: full }))
-    "play" => app.nav.push(DrivePlay({ station: in_.station, root: Some(root), path: full }))
+    "read" => open_page(DriveRead({ station: in_.station, root: Some(root), path: full }))
+    "play" => open_page(DrivePlay({ station: in_.station, root: Some(root), path: full }))
     "preview" => {
       let pictures = if e.kind == "image" {
         near.filter(fn(x) { x.kind == "image" }).map(fn(x) { dv_file(in_.station, root, in_.path, x) })
@@ -201,19 +229,19 @@ pub fn open_entry(
 
 ///|
 /// Deleted (FolderView remove): to the machine's trash, as Finder does, nothing asked (said once done); where none takes
-/// them, asked first (`key`: the place asking), then for good.
-pub fn remove_entries(c : @ui.Ctx, src : Source, key : String, st : DvStation, items : Array[(DriveAt, DvEntry)]) -> Unit {
+/// them, asked first (the library's confirm), then for good.
+pub fn remove_entries(c : @ui.Ctx, src : Source, st : DvStation, items : Array[(DriveAt, DvEntry)]) -> Unit {
   if items.is_empty() {
     return
   }
   if !st.trash {
-    held.removing[key] = items
+    ask_remove(c, src, items)
     return
   }
   let what = @sf.t("web-pages.drive.deleteWhat")
   let left : Array[(DriveAt, DvEntry)] = []
   let answered = Ref(0)
-  c.tell("remove/" + key, fn() {
+  c.tell("remove/" + st.station, fn() {
     for x in items {
       let (at, e) = x
       (src.call)(
@@ -232,7 +260,7 @@ pub fn remove_entries(c : @ui.Ctx, src : Source, key : String, st : DvStation, i
           }
           if answered.val == items.length() {
             if left.length() > 0 {
-              held.removing[key] = left
+              ask_remove(c, src, left)
             } else {
               say(c, @sf.t("web-pages.drive.trashed", args=[("n", items.length().to_string())]))
             }
@@ -245,10 +273,8 @@ pub fn remove_entries(c : @ui.Ctx, src : Source, key : String, st : DvStation, i
 
 ///|
 /// What is asked before something goes for good (Confirm): the one, the folder, or how many; 删除 does it.
-fn remove_confirm(c : @ui.Ctx, src : Source, key : String) -> Unit {
-  let asking = held.removing.get(key).unwrap_or([])
+fn ask_remove(c : @ui.Ctx, src : Source, asking : Array[(DriveAt, DvEntry)]) -> Unit {
   let title = match asking {
-    [] => ""
     [(_, e)] =>
       @sf.t(if e.dir { "web-pages.drive.deleteFolderAsk" } else { "web-pages.drive.deleteAsk" }, args=[("name", e.name)])
     many => @sf.t("web-pages.drive.deleteManyAsk", args=[("n", many.length().to_string())])
@@ -258,36 +284,22 @@ fn remove_confirm(c : @ui.Ctx, src : Source, key : String) -> Unit {
   } else {
     @sf.t("web-pages.drive.deleteText")
   }
-  let r = @sf.confirm_dialog(
-    c,
-    "files/remove/" + key,
-    !asking.is_empty(),
-    title,
-    words,
-    @sf.t("web-pages.drive.delete"),
-    cancel=@sf.t("common.cancel"),
-  )
-  if r.confirmed {
-    held.removing.remove(key)
-    let what = @sf.t("web-pages.drive.deleteWhat")
-    c.tell("remove-for-good/" + key, fn() {
-      for x in asking {
-        let (at, e) = x
-        (src.call)(
-          "drive.remove",
-          {
-            "station": Json::string(at.station),
-            "root": Json::string(at.root.unwrap_or("")),
-            "path": Json::string(dv_join(at.path, e.name)),
-            "permanent": Json::boolean(true),
-          },
-          act_done(c, what),
-        )
-      }
-    })
-  } else if !r.open {
-    held.removing.remove(key)
-  }
+  let what = @sf.t("web-pages.drive.deleteWhat")
+  @sf.confirm(title, words, @sf.t("web-pages.drive.delete"), fn() {
+    for x in asking {
+      let (at, e) = x
+      (src.call)(
+        "drive.remove",
+        {
+          "station": Json::string(at.station),
+          "root": Json::string(at.root.unwrap_or("")),
+          "path": Json::string(dv_join(at.path, e.name)),
+          "permanent": Json::boolean(true),
+        },
+        act_done(c, what),
+      )
+    }
+  }, danger=true)
 }
 
 ///|
@@ -338,7 +350,7 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
     open: open_row,
     preview: open_row,
     go: fn(p, replace) { (f.go)({ ..at, path: p }, replace) },
-    remove: fn(items) { remove_entries(c, src, f.key, st, items) },
+    remove: fn(items) { remove_entries(c, src, st, items) },
   })
   b_ref.val = Some(b)
   let name = folder_name(st, at)
@@ -519,7 +531,6 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
     }
   })
   |> ignore
-  remove_confirm(c, src, f.key)
 }
 
 ///|
@@ -546,7 +557,8 @@ pub fn folder_name(st : DvStation, at : DriveAt) -> String {
 }
 
 ///|
-/// A row's menu (FolderView itemsIn): about what is chosen when it is among it and more than it, else about it alone.
+/// A row's menu (FolderView itemsIn): about what is chosen when it is among it and more than it, else about it alone;
+/// `narrow`, as the narrow app's sheet has it (EntrySheet: a press opens it, a name is asked for).
 fn row_items(
   c : @ui.Ctx,
   src : Source,
@@ -555,6 +567,7 @@ fn row_items(
   in_ : DriveAt,
   e : DvEntry,
   favs : Array[Favorite],
+  narrow? : Bool = false,
 ) -> Array[@sf.MenuItem?] {
   let all = b.chosen_with(src, in_.path, e)
   let root = in_.root.unwrap_or("")
@@ -582,7 +595,7 @@ fn row_items(
             @sf.t(if st.trash { "web-pages.drive.toTrashMany" } else { "web-pages.drive.deleteMany" }, args=[("n", all.length().to_string())]),
             icon="trash",
             danger=true,
-            fn() { remove_entries(c, src, f.key, st, all) },
+            fn() { remove_entries(c, src, st, all) },
           ),
         ),
       )
@@ -591,11 +604,15 @@ fn row_items(
   }
   let full = dv_join(in_.path, e.name)
   let abs = dv_absolute(root, full)
-  item(@sf.t("web-pages.drive.open"), "", fn() {
-    open_entry(c, src, "page", in_, e, [e], fn(to) { (f.go)(to, false) })
-  })
+  // (narrow, a press opens it: what is offered is what else can be done, EntrySheet's)
+  if !narrow {
+    item(@sf.t("web-pages.drive.open"), "", fn() {
+      open_entry(c, src, "page", in_, e, [e], fn(to) { (f.go)(to, false) })
+    })
+  }
   if !e.dir {
     item(@sf.t("web-pages.drive.download"), "download", fn() { save_entry(c, src, in_, e) })
+    item(@sf.t("android-misc.drive.share"), "external", fn() { share_entry(c, src, in_, e) })
   } else if f.rights.zip {
     item(@sf.t("web-pages.drive.downloadZip"), "download", fn() { save_entry(c, src, in_, e) })
   }
@@ -619,14 +636,21 @@ fn row_items(
     })
   }
   if write {
-    item(@sf.t("web-pages.drive.rename"), "edit", fn() { b.start_rename(c, src, in_.path, e) })
+    // (narrow, asked for: wide, changed in place)
+    item(@sf.t("web-pages.drive.rename"), "edit", fn() {
+      if narrow {
+        ask_rename(c, src, b, in_, e)
+      } else {
+        b.start_rename(c, src, in_.path, e)
+      }
+    })
     out.push(
       Some(
         @sf.menu_item_of(
           @sf.t(if st.trash { "web-pages.drive.toTrash" } else { "web-pages.drive.delete" }),
           icon="trash",
           danger=true,
-          fn() { remove_entries(c, src, f.key, st, [(in_, e)]) },
+          fn() { remove_entries(c, src, st, [(in_, e)]) },
         ),
       ),
     )
