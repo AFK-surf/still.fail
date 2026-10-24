@@ -26,8 +26,6 @@ fn init {
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
   @sf.set_language(None)
-  vault_menu.val = ""
-  vault_picked.clear()
   reveals.clear()
   files_cornered.val = false
   felt_menu.val = -1
@@ -798,6 +796,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
     face_here: face_here,
     face_failed: face_failed,
     own_code_face: own_code_preview,
+    read_only: if src.read_only { read_only_words } else { "" },
   }
 }
 
