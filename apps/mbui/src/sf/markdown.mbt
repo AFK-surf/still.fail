@@ -1060,7 +1060,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     |> ignore
     if over {
       let b = c.layer(fn() { bar() |> ignore })
-      c.look(b, @ui.look(alpha=if c.hovered(block) || c.hovered(id) { 1.0 } else { 0.55 }))
+      c.look(b, @ui.look(alpha=if c.lit(block) || c.lit(id) { 1.0 } else { 0.55 }))
     }
   })
   |> ignore

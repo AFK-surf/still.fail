@@ -5,12 +5,22 @@
 // (AgentCard.tsx, AgentCard.css.ts), the same over its picture beside its messages and over its mark in the chat's bar.
 
 ///|
-/// `key`'s card over the trigger `trigger` (its id) while the pointer rests on it, holding `body`. Whether it is open.
-pub fn hover(c : @ui.Ctx, key : String, trigger : Int, tile? : Bool = false, body : () -> Unit) -> Bool {
+/// `key`'s card over the trigger `trigger` (its id) while the pointer rests on it, holding `body`; to a finger, as it
+/// holds the trigger, or with `tap` (a trigger that does nothing else) as it taps it (@kit.hover_card). Whether it is
+/// open.
+pub fn hover(
+  c : @ui.Ctx,
+  key : String,
+  trigger : Int,
+  tile? : Bool = false,
+  tap? : Bool = false,
+  body : () -> Unit,
+) -> Bool {
   @kit.hover_card(
     c,
     key,
     trigger,
+    tap~,
     open_delay=hover_open_ms,
     close_delay=hover_close_ms,
     side=Bottom,

@@ -106,7 +106,7 @@ fn zou_row(c : @ui.Ctx, src : Source, w : Workspace, d : Json, on : Bool, more :
     "" => text(v, "title")
     q => q
   }
-  let ground = nav_ground(c, key, c.hovered(id) || c.pressed(id), on)
+  let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   let look = if flag(v, "deferred") { zou_row_look.then(zou_aside) } else { zou_row_look }
   c.box(style=if more { side_row_more } else { side_row_last }, fn() {
     c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {

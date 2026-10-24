@@ -288,7 +288,7 @@ fn attention_item(
   if c.clicked(id) {
     go()
   }
-  let hover = c.hovered(id) || c.hovered(drop)
+  let hover = c.lit(id) || c.lit(drop)
   let alert = kind == "alert"
   let b = c.box(style=if hover { att_item_on } else { att_item }, id~, fn() {
     // (its kind in words: role="img")
@@ -309,7 +309,7 @@ fn attention_item(
         if c.clicked(drop) {
           d()
         }
-        let on = c.hovered(drop)
+        let on = c.lit(drop)
         let x = c.box(style=if on { att_dismiss_on } else { att_dismiss }, id=drop, fn() {
           c.text(@sf.t("web-main.attention.dismiss"), style=if on { att_dismiss_on_words } else { att_dismiss_words })
           |> ignore
@@ -328,7 +328,7 @@ fn attention_item(
 fn attention_link(c : @ui.Ctx, key : String, label : String) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
-  let b = c.box(id~, fn() { c.text(label, style=if c.hovered(id) { att_link_on } else { att_link }) |> ignore })
+  let b = c.box(id~, fn() { c.text(label, style=if c.lit(id) { att_link_on } else { att_link }) |> ignore })
   c.semantics(b, Link, id~, label~)
   c.clicked(id)
 }

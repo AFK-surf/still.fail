@@ -373,7 +373,7 @@ fn filter_button(c : @ui.Ctx, filter : String, shown : String, narrowed : Bool, 
   }
   let narrowed = narrowed || filter != "all"
   // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
-  let hot = @kit.animate(c, "side/filter/hover", if c.hovered(id) || wide.filter_open { 1.0 } else { 0.0 }, transition=nav_fade)
+  let hot = @kit.animate(c, "side/filter/hover", if c.lit(id) || wide.filter_open { 1.0 } else { 0.0 }, transition=nav_fade)
   let lit = @kit.animate(c, "side/filter/on", if narrowed { 1.0 } else { 0.0 }, transition=nav_fade)
   let ground = @sf.over(@sf.alpha(t.p.hover, hot * (1.0 - lit)), @sf.alpha(t.p.accent_bg, lit))
   // (in the closed bar's corner, concentric with it as the rail's places are: Sidebar.css.ts navNew, closed)
@@ -496,6 +496,7 @@ fn side_chat_row(
       }
     _ => false
   }
+  // (pointed at by a mouse, or held by a finger: its menu open; not a finger's tap, which would flash its time)
   let hover = parts.iter().any(fn(p) { c.hovered(p) }) || c.hovered(archive) || menu_on
   // its 归档 key while pointed at by a mouse; a finger holding it has its menu, 归档 in it (held, the row shows its
   // time in place of who is in it, as the phone's: mobile/Home.css.ts mRowAside `data-held`)
@@ -609,7 +610,7 @@ fn side_chat_row(
             archive_row(c, src, item)
           }
           let b = c.box(style=side_archive, id=archive, fn() {
-            @sf.icon(c, "archive", size=side_icon, color=if c.hovered(archive) { t.p.text } else { t.p.muted }) |> ignore
+            @sf.icon(c, "archive", size=side_icon, color=if c.lit(archive) { t.p.text } else { t.p.muted }) |> ignore
           })
           c.semantics(b, Button, id=archive, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item.title)]))
           @sf.tip(c, "side/archive-tip/" + key, archive, @sf.t("web-main.chat.archive"))

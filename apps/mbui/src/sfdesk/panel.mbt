@@ -432,7 +432,7 @@ pub fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "
   let t = @sf.theme()
   let id = c.id(key)
   c.cursor(id, Hand)
-  let hot = c.hovered(id) || c.pressed(id)
+  let hot = c.lit(id) || c.pressed(id)
   let b = c.box(style=bar_icon_button, id~, fn() {
     @sf.icon(c, icon, size=16.0, color=if hot { t.p.text } else { t.p.muted }) |> ignore
   })

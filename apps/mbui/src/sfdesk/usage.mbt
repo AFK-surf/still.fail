@@ -197,7 +197,7 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
           if c.clicked(id) {
             usage_pick.day = key
           }
-          if c.hovered(id) {
+          if c.lit(id) {
             pointed = key
           }
           let b = c.box(style=ug_day, id~, fn() { usage_bar(c, dv, series, top, many) })
@@ -368,7 +368,7 @@ fn usage_rankings(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
           @sf.t("web-main.usage.showAll", args=[("n", all_items.length().to_string())])
         }
         let b = c.box(style=ug_more, id~, fn() {
-          c.text(words, style=if c.hovered(id) { ug_more_lit } else { ug_more_words }) |> ignore
+          c.text(words, style=if c.lit(id) { ug_more_lit } else { ug_more_words }) |> ignore
         })
         c.semantics(b, Button, id~, label=words)
       }

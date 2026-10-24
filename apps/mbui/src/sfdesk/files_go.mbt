@@ -292,7 +292,7 @@ pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (Drive
             if c.clicked(id) {
               open(target)
             }
-            if c.hovered(id) {
+            if c.lit(id) {
               go.at = i
             }
             let row = c.box(style=if i == go.at { go_row_on } else { go_row }, id~, fn() {

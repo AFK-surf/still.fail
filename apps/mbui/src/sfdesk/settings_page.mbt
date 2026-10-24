@@ -260,7 +260,7 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
     mine_filter_open[key] = !open
   }
   let named = if mine { @sf.t("web-main.filter." + of + ".mine") } else { @sf.t("web-main.filter.all") }
-  let lit = c.hovered(id) || open
+  let lit = c.lit(id) || open
   let ink = if mine {
     t.p.accent_text
   } else if lit {

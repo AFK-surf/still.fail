@@ -935,7 +935,7 @@ pub fn list_head(c : @ui.Ctx, a : Arrangement, on_sort : (String) -> Unit) -> Un
     }
     let on = a.by == by
     let b = c.box(style~, id~, fn() {
-      c.text(words, style=if on || c.hovered(id) { head_words_on } else { head_words }) |> ignore
+      c.text(words, style=if on || c.lit(id) { head_words_on } else { head_words }) |> ignore
       if on {
         @sf.icon(c, if a.down { "chevron-up" } else { "chevron-down" }, size=head_chevron, color=t.p.text) |> ignore
       }

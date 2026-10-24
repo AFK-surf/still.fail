@@ -330,7 +330,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
   }
   let busy = archive_doing(src, station, session)
   // (always to a finger, which hovers over nothing: Archive.css.ts actions `hover: none`)
-  let over = c.hovered(id) || c.hovered(back) || c.hovered(drop) || busy || @ui.pointing() is Finger
+  let over = c.lit(id) || c.lit(back) || c.lit(drop) || busy || @ui.pointing() is Finger
   c.box(style=if more { arch_wrap } else { arch_wrap_last }, fn() {
     c.box(style=arch_row, selected=on, id~, fn() {
       c.box(style=arch_text, fn() {
@@ -346,7 +346,8 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
         |> ignore
         c.box(style=arch_meta, fn() {
           c.text(text(v, "last"), style=arch_last) |> ignore
-          if c.hovered(id) {
+          // (its clock while pointed at; always to a finger, which hovers over nothing)
+          if c.hovered(id) || @ui.pointing() is Finger {
             c.text(text(v, "clock"), style=arch_clock) |> ignore
           }
         })
@@ -367,7 +368,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
             if busy {
               @sf.spinner(c, size=12.0) |> ignore
             } else {
-              @sf.icon(c, "retry", size=14.0, color=if c.hovered(back) { t.p.text } else { t.p.muted }) |> ignore
+              @sf.icon(c, "retry", size=14.0, color=if c.lit(back) { t.p.text } else { t.p.muted }) |> ignore
             }
           })
           c.semantics(b, Button, id=back, label=@sf.t("web-pages.archive.restoreNamed", args=[("title", title)]))
@@ -392,7 +393,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
               )
             }
             let d = c.box(style=arch_action, id=drop, fn() {
-              @sf.icon(c, "trash", size=14.0, color=if c.hovered(drop) { t.p.red } else { t.p.muted }) |> ignore
+              @sf.icon(c, "trash", size=14.0, color=if c.lit(drop) { t.p.red } else { t.p.muted }) |> ignore
             })
             c.semantics(d, Button, id=drop, label=@sf.t("web-pages.archive.deleteNamed", args=[("title", title)]))
           }

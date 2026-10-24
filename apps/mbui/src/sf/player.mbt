@@ -1215,7 +1215,7 @@ fn desk_play_timeline(c : @ui.Ctx, p : @kit.Media, s : @kit.MediaStatus, fr : Fr
     c.layer(fn() { media_head(c, shown, ink.text, rail=true) }) |> ignore
     // with a mouse over it (or dragging), the time where it points, over it
     match c.rect_of(id) {
-      Some((x, _, w, _)) if on && dur > 0.0 && (c.hovered(id) || c.pressed(id)) => {
+      Some((x, _, w, _)) if on && dur > 0.0 && (c.lit(id) || c.pressed(id)) => {
         let (px, _, _) = c.pointer()
         let track = dmax(desk_whole, w - 2.0 * player_track_inset)
         let at = dmin(desk_whole, dmax(desk_none, (px - x - player_track_inset) / track))
@@ -1279,7 +1279,7 @@ fn desk_play_list(
             if c.clicked(id) && !now {
               go(list[i])
             }
-            let hot = c.hovered(id) || c.pressed(id)
+            let hot = c.lit(id) || c.pressed(id)
             c.box(style=desk_list_row.then(@ui.style(bg=Data(if now { chosen } else if hot { alpha(words, media_hot_share) } else { no_ground }))), id~, fn() {
               c.box(style=desk_chapter_number, fn() {
                 c.text("\{i + 1}", style=desk_chapter_n_words.then(@ui.text_style(color=Data(quiet)))) |> ignore

@@ -817,13 +817,27 @@ fn whole_of(s : String) -> Int? {
 ///|
 /// Folded, the sidebar shown a while over the page as the pointer comes onto the rail's closed bar (Rail.tsx
 /// peekSidebar), until the pointer has been off it a moment (PEEK_LEAVE, 400 ms) and nothing from it is open (a row's
-/// menu, the filter's, a row renamed in place, the workspaces' ＋).
+/// menu, the filter's, a row renamed in place, the workspaces' ＋); to a finger, from its press on the bar until a tap
+/// off them.
 fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b : Double) -> Unit {
   if !wide.folded {
     wide.peeking = false
     return
   }
   let (px, py, _) = c.pointer()
+  // a finger, which rests on nothing: shown as it presses the bar, until a tap off the bar and the sidebar shown
+  if @ui.pointing() is Finger {
+    let on_bar = fn(x : Double, y : Double) { x >= bar_x && x < bar_r && y >= bar_y && y < bar_b }
+    if on_bar(px, py) && px < bar_x + rail_closed_w {
+      wide.peeking = true
+    }
+    match c.tapped_anywhere() {
+      Some((x, y)) if wide.peeking && !on_bar(x, y) && x >= closed_bar_in + rail_closed_w + wide.side_w =>
+        wide.peeking = false
+      _ => ()
+    }
+    return
+  }
   // on it, or on its edge at its right (Rail.tsx PEEK_ON: the dock, the edge, what pops up from it)
   let over = (px >= bar_x && px < bar_r && py >= bar_y && py < bar_b) ||
     (wide.peeking && px >= bar_r - 2.0 && px < bar_r + 10.0)

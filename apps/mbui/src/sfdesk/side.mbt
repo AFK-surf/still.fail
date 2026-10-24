@@ -44,7 +44,7 @@ pub fn nav_row(
   let id = c.id(key)
   c.cursor(id, Hand)
   let look = if tall { nav_row_tall } else { nav_row_look.then(@ui.style(align~)) }
-  let ground = nav_ground(c, key, c.hovered(id) || c.pressed(id), on)
+  let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   c.box(style=look.then(@ui.style(bg=Data(ground))), id~, body) |> ignore
   c.clicked(id)
 }

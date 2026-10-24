@@ -245,7 +245,7 @@ pub fn file_card(
 fn card_button(c : @ui.Ctx, id : Int, icon_name : String, label : String) -> Unit {
   let p = theme().p
   c.cursor(id, Hand)
-  let hot = c.hovered(id)
+  let hot = c.lit(id)
   let b = c.box(style=if hot { card_button_hot } else { card_button_box }, id~, fn() {
     icon(c, icon_name, size=if icon_name == "close" { card_close_icon } else { card_button_icon }, color=if hot {
       p.text
@@ -390,7 +390,7 @@ pub fn quote_card(
   } else if pin != "" {
     tip(c, key + "/pin-tip", source, words)
   }
-  let hot = jump && c.hovered(source)
+  let hot = jump && c.lit(source)
   c.box(style=if composer { quote_box_composer } else { quote_box }, fn() {
     c.box(style=if composer { quote_source_composer } else { quote_source }, id=source, fn() {
       c.box(style=quote_words, fn() {

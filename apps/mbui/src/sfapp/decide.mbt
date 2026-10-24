@@ -304,7 +304,7 @@ fn ask_dismiss(
       if shown && wide_on.val {
         c.cursor(id, Hand)
       }
-      let hot = wide_on.val && shown && c.hovered(id)
+      let hot = wide_on.val && shown && c.lit(id)
       let ink = if !wide_on.val { t.p.muted } else if hot { t.p.text } else { t.p.subtle }
       // (6 under the options: the message's own gap of 4 taken in the wide frame, the web's 忽略 in their box)
       c.box(pt=if wide_on.val { dismiss_wide_pt } else { 6.0 }, fn() {

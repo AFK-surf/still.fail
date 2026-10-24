@@ -214,7 +214,7 @@ fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "", a
   let t = @sf.theme()
   let id = c.id(key)
   c.cursor(id, Hand)
-  let hot = c.hovered(id) || c.pressed(id)
+  let hot = c.lit(id) || c.pressed(id)
   let b = c.box(
     w=Px(32.0),
     h=Px(32.0),
