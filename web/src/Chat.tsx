@@ -1,4 +1,4 @@
-import { useLoadNear } from "./virtual/load.ts";
+import { useLoadNear, usePagingEdges } from "./virtual/load.ts";
 export { useLoadNear } from "./virtual/load.ts";
 import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // still.fail's own chat with a session, after Zork's: your messages sit right in a
@@ -256,14 +256,16 @@ function useKeeper(): (file: Attachment) => string | null {
  * it) the core says on the message.
  */
 export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null }) {
-  const { messages, shown, rowOf, caughtAgent, poseOf, virtual } = rows;
+  const { messages, shown, rowOf, caughtAgent, poseOf, virtual, olderPage, newerPage, canOlder, canNewer } = rows;
   // Where a decision's options answer: none while nothing can be sent.
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
   const locked = chat.offline || !!chat.archived;
   // What each item is: only those the list makes (virtual/list.tsx) are drawn.
   const drawn = new Map<string, () => ReactNode>();
   const sent = (list: ChatSentElsewhere[] | undefined) => { for (const s of list ?? []) drawn.set(`e:${s.key}`, () => <SentElsewhere key={`e:${s.key}`} sent={s} />); };
-  drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder} aria-hidden="true"><Spinner /></div>);
+  drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder}>
+    {olderPage.failed ? <button type="button" className={css.msgUnsentBtn} onClick={olderPage.retry} aria-label={t("common.retry")}><Retry size={16} />{t("common.retry")}</button> : <Spinner />}
+  </div>);
   drawn.set("line", () => <div key="line" data-vk="line" className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div>);
   sent(chat.elsewhere);
   for (const m of messages) {
@@ -274,13 +276,15 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
     sent(m.elsewhere);
   }
   // The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it.
-  drawn.set("newer", () => <div key="newer" data-vk="newer" className={css.chatNewer} aria-hidden="true"><Spinner /></div>);
+  drawn.set("newer", () => <div key="newer" data-vk="newer" className={css.chatNewer}>
+    {newerPage.failed ? <button type="button" className={css.msgUnsentBtn} onClick={newerPage.retry} aria-label={t("common.retry")}><Retry size={16} />{t("common.retry")}</button> : <Spinner />}
+  </div>);
   for (const o of chat.outbox) drawn.set(`o:${o.id}`, () => <OutboxRow key={`o:${o.id}`} o={o} to={to} locked={locked} />);
   // A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does.
   for (const { agent, leaving } of shown) {
     drawn.set(`a:${agent.key}`, () => <Activity key={`a:${agent.key}`} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} stoppable={chat.agents.length > 1} />);
   }
-  const empty = messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length;
+  const empty = messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length && !canOlder && !canNewer;
   return (
     <ChatAgents.Provider value={chat.agents}>
     <ChatAgentKeys.Provider value={chat.agents.map((a) => a.session.key).join("\n")}>
@@ -550,9 +554,12 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, saidHere, new Set(shown.map((s) => s.agent.key)));
 
+  const emptyWindow = messages.length === 0 && !chat.elsewhere?.length;
+  const { older: canOlder, newer: canNewer } = usePagingEdges(emptyWindow, !!chat.more, short);
+
   // The list's items, in order: each a row of its own.
   const items: Item[] = [];
-  if (chat.more) items.push({ key: "older", estimate: 30, place: false });
+  if (canOlder) items.push({ key: "older", estimate: 30, place: false });
   for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   for (const m of messages) {
     if (m.seq === divider) items.push({ key: "line", estimate: 20 });
@@ -561,7 +568,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
     items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
     for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   }
-  if (chat.newer) items.push({ key: "newer", estimate: 30, place: false });
+  if (canNewer) items.push({ key: "newer", estimate: 30, place: false });
   for (const o of chat.outbox) items.push({ key: `o:${o.id}`, estimate: 44 });
   for (const { agent } of shown) items.push({ key: `a:${agent.key}`, estimate: 24, place: false });
 
@@ -598,10 +605,10 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   // Loaded as far as entries go, not messages: a page of what is not a message here (letters, edits) moves it too.
-  useLoadNear(virtual, "top", !!chat.more, chat.firstEntry ?? chat.messages[0]?.seq, older);
+  const olderPage = useLoadNear(virtual, "top", canOlder, chat.firstEntry ?? chat.messages[0]?.seq, older);
   useJumpTo(list, virtual, station, id, messages, chat.more, older);
   const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
-  useLoadNear(virtual, "bottom", short, chat.lastEntry ?? chat.messages.at(-1)?.seq, newer);
+  const newerPage = useLoadNear(virtual, "bottom", canNewer, chat.lastEntry ?? chat.messages.at(-1)?.seq, newer);
   useShowing(virtual, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
   const away = useAwayFromBottom(virtual);
   const toEnd = useToEnd(list, virtual, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));
@@ -631,7 +638,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   const caughtAgent = (key: string) => (started.has(key) ? undefined : true);
   // Short of the end, the way there shows wherever the reader is, with how many wait there.
   const waiting = short ? chat.thread?.unread ?? 0 : 0;
-  return { messages, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf, virtual };
+  return { olderPage, newerPage, canOlder, canNewer, messages, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf, virtual };
 }
 
 /**

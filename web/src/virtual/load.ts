@@ -1,9 +1,11 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { VirtualList } from "./list.tsx";
 
 /** Load once per entry cursor. A request owns its edge until both its answer and the
- * advanced cursor's measured, committed layout arrive. Failure never schedules a retry. */
-export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
+ * advanced cursor's measured, committed layout arrive. Failure waits for an explicit retry; layout notifications never retry it. */
+export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): { failed: boolean; retry(): void } {
+  const [failed, setFailed] = useState(false);
+  const retry = useRef<(() => void) | null>(null);
   const latest = useRef({ virtual, can, at, load });
   const changed = useRef<(() => void) | null>(null);
   // Publish only committed props; an interrupted render must not release an in-flight request.
@@ -36,6 +38,7 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       if (!now.can || now.at === undefined || asked === now.at) return;
       if (asked !== undefined && !approached && !model.fits) return;
       if (model.paneHeight <= 0 || (edge === "top" ? model.toStart : model.toEnd) > model.paneHeight) return;
+      setFailed(false);
       asked = now.at;
       const request: { at: number | string; answered: boolean } = { at: now.at, answered: false };
       busy = request;
@@ -45,8 +48,13 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
         check();
       }, () => {
         // Keep the attempted cursor: layout notifications must not retry this failure.
-        if (live && busy === request) busy = null;
+        if (live && busy === request) { busy = null; setFailed(true); }
       });
+    };
+    retry.current = () => {
+      if (busy) return;
+      asked = undefined;
+      check();
     };
     changed.current = () => check();
     const stop = virtual.watch(() => {
@@ -56,6 +64,17 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       check(scrolled);
     });
     check();
-    return () => { live = false; changed.current = null; stop(); };
+    return () => { live = false; changed.current = null; retry.current = null; stop(); };
   }, [model, edge]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { failed, retry: () => retry.current?.() };
+}
+
+/** Empty entry windows can contain only letters or edits. Search one way at a time
+ * so opposite requests cannot shuttle a bounded window over the same records. */
+export function usePagingEdges(empty: boolean, more: boolean, newer: boolean): { older: boolean; newer: boolean } {
+  const held = useRef<"top" | "bottom" | null>(null);
+  let direction = empty ? held.current ?? (newer ? "bottom" : "top") : null;
+  if (direction === "bottom" && !newer) direction = "top";
+  useLayoutEffect(() => { held.current = direction; });
+  return { older: more && direction !== "bottom", newer: newer && direction !== "top" };
 }
