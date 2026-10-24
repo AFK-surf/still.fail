@@ -65,6 +65,16 @@ for t in ${TARGETS:-native}; do
     [ -n "$(ls "$d"/*_wbtest.mbt 2>/dev/null)" ] || empty="$empty ${p#stillfail/}/$n.whitebox_test"
   done
   export MBC_EMPTY_TESTS="$empty"
+  # The app part's small packages' programs (the library's, the settings', gallery's, player's: a few tests each, the
+  # whole of mbui in each) compiled without optimising (MBC_LIGHT_TESTS): a change to mbui compiled its units again in
+  # each of them beside sfapp's, ~80 s of four programs' compile on CI's four cores, 2026-10-24, 40127533069
+  light=""
+  for p in $pkgs; do
+    case $p in -p | stillfail/sfapp | stillfail/core | stillfail/sfreplay/*) continue ;; esac
+    n=$(basename "$p")
+    light="$light ${p#stillfail/}/$n.internal_test ${p#stillfail/}/$n.blackbox_test ${p#stillfail/}/$n.whitebox_test"
+  done
+  export MBC_LIGHT_TESTS="$light"
   out=$(mktemp)
   # Built first on its own (TIMES=1, as CI's: each said with how long it took; its errors shown by the run), then run.
   s=$(date +%s)
