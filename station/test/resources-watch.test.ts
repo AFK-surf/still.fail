@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resourceRoutes } from "../src/api/routes/usage.ts";
 import { parseNettop } from "../src/resources/module.ts";
-import { ResourceWatch, type Traffic, type Usage, whoseOf } from "../src/resources/watch.ts";
+import { FIRST_MS, LOOK_MS, ResourceWatch, type Traffic, type Usage, WANTED_MS, whoseOf } from "../src/resources/watch.ts";
+import { testClock } from "./hub-fakes.ts";
 import type { ProcessInfo } from "../src/platform/index.ts";
 
 const p = (pid: number, ppid: number, pgid: number, command: string): ProcessInfo => ({ pid, ppid, pgid, bytes: 0, command });
@@ -57,12 +58,12 @@ test("whose: what runs on its own naming a chat's directory is that chat's, with
   assert.equal(whose.get(80), undefined);
 });
 
-const used = (cpuS: number, mb: number, wakeups: number, joules: number): Usage => ({ cpuNs: cpuS * 1e9, footprint: mb * 1e6, wakeups, energyNj: joules * 1e9 });
+const used = (cpuS: number, mb: number): Usage => ({ cpuNs: cpuS * 1e9, footprint: mb * 1e6 });
 
 test("what each used since the last look, by whose and process; one begun since counts whole; no one's is not read", async () => {
   let now = 1_000_000;
   let rows = table;
-  let counts = new Map<number, Usage>(table.map((r) => [r.pid, used(1, 100, 10, 1)]));
+  let counts = new Map<number, Usage>(table.map((r) => [r.pid, used(1, 100)]));
   const asked: number[][] = [];
   const watch = new ResourceWatch({
     clock: { currentTimeMillisUnsafe: () => now } as never,
@@ -77,36 +78,67 @@ test("what each used since the last look, by whose and process; one begun since 
   await watch.look();
   assert.equal(watch.snapshot().at, null);
   assert.ok(!asked[0]!.includes(60), "Safari is not read");
-  // 10 s later: the browser used 5 s of CPU, 30 J, woke 1000 times; the app's helper 1 s and 5 J; a new command of the
-  // chat's began and used 2 s and 2 J.
+  // 10 s later: the browser used 5 s of CPU; the app's helper 1 s; a new command of the chat's began and used 2 s.
   now += 10_000;
   rows = [...table, p(23, 21, 23, "node")];
   counts = new Map(counts);
-  counts.set(22, used(6, 400, 1010, 31));
-  counts.set(51, used(2, 500, 10, 6));
-  counts.set(23, used(2, 50, 0, 2));
+  counts.set(22, used(6, 400));
+  counts.set(51, used(2, 500));
+  counts.set(23, used(2, 50));
   await watch.look();
   const shot = watch.snapshot();
   const by = Object.fromEntries(shot.groups.map((g) => [g.key, g]));
   const s1 = by["chat:s1"]!;
   assert.ok(Math.abs(s1.cpu - 70) < 1e-9, "50% + 20%");
-  assert.ok(Math.abs(s1.watts - 3.2) < 1e-9);
-  assert.ok(Math.abs(s1.wakeups - 100) < 1e-9);
   assert.equal(s1.memory, 400e6 + 50e6 + 100e6 * 2, "the footprints now: the browser, the command, the runner and claude");
   assert.deepEqual(s1.processes.map((x) => x.name), ["chrome-headless-shell", "node", "stillfail-runner", "claude"]);
   assert.ok(Math.abs(by.app!.cpu - 10) < 1e-9);
   assert.equal(by.app!.processes[0]!.name, "youdid.wtf Helper (Renderer)");
   assert.equal(shot.groups[0]!.key, "chat:s1");
-  assert.ok(Math.abs(shot.total.watts - 3.7) < 1e-9);
   assert.equal(shot.history.length, 1);
-  assert.ok(Math.abs(shot.hours[0]!.joules["chat:s1"]! - 32) < 1e-6);
+  // A minute on (no one asked meanwhile): only counted from, not a minute's average.
+  now += 60_000;
+  counts.set(22, used(66, 400));
+  await watch.look();
+  assert.equal(watch.snapshot().at, now - 60_000);
+  await watch.close();
+});
+
+test("looked at only while asked: nothing read before; woken, at once and again a moment later, then every few seconds", async () => {
+  const t = testClock();
+  let looks = 0;
+  let cpu = 0;
+  const watch = new ResourceWatch({
+    clock: t.clock,
+    table: async () => {
+      looks++;
+      return table;
+    },
+    usage: (pids) => pids.map(() => used((cpu += 0.5), 1)),
+    ...options,
+  });
+  await t.adjust(120_000);
+  assert.equal(looks, 0, "no page: nothing read");
+  const asked = watch.want();
+  await t.begun(1);
+  await t.adjust(FIRST_MS);
+  await asked;
+  assert.equal(looks, 2);
+  assert.notEqual(watch.snapshot().at, null, "figures in its first answer");
+  await t.adjust(LOOK_MS);
+  assert.equal(looks, 3);
+  // No one asks again: it stops after WANTED_MS.
+  await t.adjust(WANTED_MS + LOOK_MS);
+  const stopped = looks;
+  await t.adjust(10 * LOOK_MS);
+  assert.equal(looks, stopped);
   await watch.close();
 });
 
 test("a process there before but no one's (its chat begun since) counts from the next look, not whole", async () => {
   let now = 0;
   let runners = [{ runner: 20, pid: 21, session: "s1" }];
-  const counts = new Map<number, Usage>(table.map((r) => [r.pid, used(1000, 100, 0, 1000)]));
+  const counts = new Map<number, Usage>(table.map((r) => [r.pid, used(1000, 100)]));
   const watch = new ResourceWatch({
     clock: { currentTimeMillisUnsafe: () => now } as never,
     table: async () => table,
@@ -133,7 +165,7 @@ test("network: bytes a second since the last look; one missing from nettop's lis
   const watch = new ResourceWatch({
     clock: { currentTimeMillisUnsafe: () => now } as never,
     table: async () => table,
-    usage: (pids) => pids.map(() => used(1, 1, 0, 0)),
+    usage: (pids) => pids.map(() => used(1, 1)),
     traffic: async () => traffic,
     ...options,
   });
@@ -162,7 +194,7 @@ test("network: bytes a second since the last look; one missing from nettop's lis
 
 test("GET /resources: the chats named; one the asker does not see counted as the agents'", async () => {
   let wanted = 0;
-  const use = (cpu: number) => ({ cpu, memory: 1, watts: cpu / 10, wakeups: 1, netIn: cpu, netOut: 0 });
+  const use = (cpu: number) => ({ cpu, memory: 1, netIn: cpu, netOut: 0 });
   const watch = {
     want: async () => void wanted++,
     snapshot: () => ({
@@ -171,7 +203,6 @@ test("GET /resources: the chats named; one the asker does not see counted as the
         { key: "chat:mine", kind: "chat", session: "mine", ...use(2), processes: [{ pid: 5, name: "node", ...use(2) }] },
         { key: "chat:theirs", kind: "chat", session: "theirs", ...use(1), processes: [{ pid: 6, name: "cargo", ...use(1) }] },
       ],
-      hours: [{ at: 0, joules: { "chat:mine": 10, "chat:theirs": 5, app: 1 } }],
     }),
   } as unknown as ResourceWatch;
   let asked: unknown = null;
@@ -186,6 +217,5 @@ test("GET /resources: the chats named; one the asker does not see counted as the
   const body = JSON.parse((answer.body as Buffer).toString("utf8"));
   assert.deepEqual(body.groups.map((g: { key: string; cpu: number }) => [g.key, g.cpu]), [["chat:mine", 2], ["agents", 1]]);
   assert.deepEqual(body.groups[1].processes.map((x: { name: string }) => x.name), ["cargo"]);
-  assert.deepEqual(body.hours[0].joules, { "chat:mine": 10, agents: 5, app: 1 });
   assert.deepEqual(body.chats, { mine: { thread: 7, title: "排查 p99" } });
 });

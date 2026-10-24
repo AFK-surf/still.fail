@@ -568,8 +568,6 @@
   "web-main.resources.column.name": "名称",
   "web-main.resources.column.net": "网络",
   "web-main.resources.column.process": "进程",
-  "web-main.resources.column.wakeups": "唤醒/s",
-  "web-main.resources.column.watts": "功率",
   "web-main.resources.column.whose": "归属",
   "web-main.resources.all": "全部",
   "web-main.resources.every": "每 {n} 秒刷新",

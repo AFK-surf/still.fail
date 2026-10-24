@@ -5087,9 +5087,6 @@ export interface ResourceUse {
 	cpu: number;
 	/** Its footprint, in bytes. */
 	memory: number;
-	watts: number;
-	/** A second. */
-	wakeups: number;
 	/** Bytes taken in over the network, a second. */
 	netIn: number;
 	/** Bytes sent out, a second. */
@@ -5098,8 +5095,6 @@ export interface ResourceUse {
 	net: number;
 	cpuText: string;
 	memoryText: string;
-	wattsText: string;
-	wakeupsText: string;
 	netText: string;
 }
 
@@ -5154,7 +5149,7 @@ export interface ResourceTile {
 
 /**
  * What of the machines of a workspace's stations still.fail uses now, as Activity Monitor says it (the `resources` view,
- * client/core-ts/src/views/resources.ts): CPU, memory, power and wakeups in total, with the last minutes' line, and by
+ * client/core-ts/src/views/resources.ts): CPU, memory and network in total, with the last minutes' line, and by
  * whose (a chat, the agents, the desktop app, the station), each with its processes.
  */
 export interface ResourcesView {

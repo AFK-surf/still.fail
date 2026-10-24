@@ -41,7 +41,6 @@ export function Uses({ use, net, to, flush = false }: { use: ResourceUse; net: b
       <span className={css.usesFigures}>
         <span>CPU <b>{use.cpuText}</b></span>
         <span>{t("web-main.resources.column.memory")} <b>{use.memoryText}</b></span>
-        <span>{t("web-main.resources.column.watts")} <b>{use.wattsText}</b></span>
         {net && <span>{t("web-main.resources.column.net")} <b>{use.netText}</b></span>}
       </span>
       <ChevronRight size={14} />

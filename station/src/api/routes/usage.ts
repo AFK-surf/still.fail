@@ -99,7 +99,7 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] =>
 ];
 
 /// GET /resources, the resources part's (resources/module.ts): what still.fail uses of this machine now, by whose and
-/// process, the last minutes' totals and the last hours' joules (resources/watch.ts), the chats named. A chat the asker
+/// process, and the last minutes' totals (resources/watch.ts), the chats named. A chat the asker
 /// does not see (another workspace's) is the agents'. Asked, the station looks often for a while. `watch`: none where
 /// processes are not read (not macOS).
 export const resourceRoutes = ({ read }: Tools, watch: ResourceWatch | null): Route[] => [
@@ -108,8 +108,8 @@ export const resourceRoutes = ({ read }: Tools, watch: ResourceWatch | null): Ro
     pattern: /^\/resources$/,
     handle: async (r: Request): Promise<Answer> => {
       await watch?.want();
-      const shot = watch?.snapshot() ?? { at: null, everyMs: 0, counted: false, net: false, total: { cpu: 0, memory: 0, watts: 0, wakeups: 0, netIn: 0, netOut: 0 }, groups: [], history: [], hours: [] };
-      const sessions = [...new Set([...shot.groups.flatMap((g) => (g.session ? [g.session] : [])), ...shot.hours.flatMap((h) => Object.keys(h.joules).filter((k) => k.startsWith("chat:")).map((k) => k.slice(5)))])];
+      const shot = watch?.snapshot() ?? { at: null, everyMs: 0, counted: false, net: false, total: { cpu: 0, memory: 0, netIn: 0, netOut: 0 }, groups: [], history: [] };
+      const sessions = [...new Set(shot.groups.flatMap((g) => (g.session ? [g.session] : [])))];
       const named = await read(r, "resourceChats", { sessions, viewer: r.viewer });
       if (named.status !== 200) return named;
       const chats = JSON.parse((named.body as Buffer).toString("utf8")) as Record<string, { thread: number | null; title: string | null } | null>;
@@ -125,21 +125,14 @@ export const resourceRoutes = ({ read }: Tools, watch: ResourceWatch | null): Ro
         if (agents) {
           agents.cpu += g.cpu;
           agents.memory += g.memory;
-          agents.watts += g.watts;
-          agents.wakeups += g.wakeups;
           agents.netIn += g.netIn;
           agents.netOut += g.netOut;
           agents.processes = [...agents.processes, ...g.processes];
         } else groups.push({ ...g, key: "agents", kind: "agents", session: null });
       }
-      const hours = shot.hours.map((h) => {
-        const joules: Record<string, number> = {};
-        for (const [k, j] of Object.entries(h.joules)) joules[seen(k) ? k : "agents"] = (joules[seen(k) ? k : "agents"] ?? 0) + j;
-        return { at: h.at, joules };
-      });
       const shown = Object.fromEntries(Object.entries(chats).filter(([, c]) => c != null));
       // The machine, for what is used to be said against.
-      return json(200, JSON.stringify({ ...shot, groups, hours, chats: shown, machine: { cores: cpus().length, memory: totalmem() } }));
+      return json(200, JSON.stringify({ ...shot, groups, chats: shown, machine: { cores: cpus().length, memory: totalmem() } }));
     },
   },
 ];

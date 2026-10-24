@@ -1,9 +1,10 @@
-// What of this machine still.fail uses (resources/watch.ts), as a part of the station (parts.ts): looked at while the
-// station runs, often while a page asks; GET /resources.
+// What of this machine still.fail uses (resources/watch.ts), as a part of the station (parts.ts): looked at while a
+// page asks; GET /resources.
 import { execFile, execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { Effect, Layer } from "effect";
 import { resourceRoutes } from "../api/routes/usage.ts";
@@ -12,7 +13,7 @@ import { loadMesh } from "../mesh/native.ts";
 import { platform } from "../platform/index.ts";
 import { Agents } from "../sessions/agents.ts";
 import { Parts, Paths, Store } from "../services.ts";
-import { ResourceWatch, hoursFile } from "./watch.ts";
+import { ResourceWatch } from "./watch.ts";
 
 /// The desktop app's bundle ids begin so (apps/desktop: fail.still.desktop, fail.still.desktop.beta, …).
 const APP_ID = "fail.still.desktop";
@@ -98,11 +99,11 @@ export const ResourcesLive = Layer.effectDiscard(
         jobs: () => watchedJobs(store),
         isApp,
         self: [process.pid, ...(launcher() ? [process.ppid] : [])],
-        file: hoursFile(data),
       })),
       (w) => Effect.promise(() => w.close()),
     );
-    watch.start();
+    // What was kept of the hours' energy before (no longer counted).
+    void rm(join(data, "resources", "hours.json"), { force: true }).catch(() => {});
     (yield* Parts).routes((tools) => resourceRoutes(tools, watch));
   }),
 );

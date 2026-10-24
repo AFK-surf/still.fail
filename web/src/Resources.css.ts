@@ -58,5 +58,5 @@ export const shareFill = style({ display: "block", height: "100%", background: v
 
 export const foot = style({ display: "grid", gap: "4px", margin: "0", padding: "0", listStyle: "none", fontSize: vars.textMeta, color: vars.subtle });
 export const empty = style({ margin: "0", padding: "28px 0", textAlign: "center", color: vars.muted });
-export const tone = styleVariants({ cpu: { color: vars.accent }, memory: { color: vars.blue }, watts: { color: vars.amber }, net: { color: vars.muted }, wakeups: { color: vars.green } });
+export const tone = styleVariants({ cpu: { color: vars.accent }, memory: { color: vars.blue }, net: { color: vars.green } });
 export const scroll = style({ overflowX: "auto" });

@@ -1,5 +1,5 @@
 // What of the stations' machines still.fail uses (the core's `resources` view, client/core-ts/src/views/resources.ts),
-// as Activity Monitor says it: four totals with the last minutes' line, then one table, grouped by whose (a chat, the
+// as Activity Monitor says it: its totals (CPU, memory, network) with the last minutes' line, then one table, grouped by whose (a chat, the
 // agents, the desktop app, the station; each opens to its processes) or every process flat with its whose, filtered by
 // kind and sorted by a column. A station's page draws it, its 进程 (cloud/StationPage.tsx).
 import { Fragment, useState } from "react";
@@ -17,9 +17,9 @@ export function useResources(scope: string, station?: string) {
   return useTopic<ResourcesView>(station === undefined ? { topic: "resources", scope } : { topic: "resources", scope, station });
 }
 
-type Column = "cpu" | "memory" | "watts" | "net" | "wakeups";
+type Column = "cpu" | "memory" | "net";
 const ALL: { key: Column; text: keyof ResourceUse }[] = [
-  { key: "cpu", text: "cpuText" }, { key: "memory", text: "memoryText" }, { key: "watts", text: "wattsText" }, { key: "net", text: "netText" }, { key: "wakeups", text: "wakeupsText" },
+  { key: "cpu", text: "cpuText" }, { key: "memory", text: "memoryText" }, { key: "net", text: "netText" },
 ];
 /// The network's column only where some station reads it.
 const columnsOf = (net: boolean) => ALL.filter((c) => net || c.key !== "net");

@@ -2466,7 +2466,7 @@ export const SHAPES: Record<string, Shape> = {
     ["stations", vec("ResourceStation"), { doc: "Each station's total, for its card (the stations' settings page); the stations not read left out." }],
     ["notes", vec("String")],
     ["basis", "String"],
-  ], { doc: "What of the machines of a workspace's stations still.fail uses now, as Activity Monitor says it (the `resources` view,\nclient/core-ts/src/views/resources.ts): CPU, memory, power and wakeups in total, with the last minutes' line, and by\nwhose (a chat, the agents, the desktop app, the station), each with its processes.", keepNone: true }),
+  ], { doc: "What of the machines of a workspace's stations still.fail uses now, as Activity Monitor says it (the `resources` view,\nclient/core-ts/src/views/resources.ts): CPU, memory and network in total, with the last minutes' line, and by\nwhose (a chat, the agents, the desktop app, the station), each with its processes.", keepNone: true }),
   ResourceTile: struct([
     ["key", "String"],
     ["label", "String"],
@@ -2486,15 +2486,11 @@ export const SHAPES: Record<string, Shape> = {
   ResourceUse: struct([
     ["cpu", "f64", { doc: "100 a whole core." }],
     ["memory", "f64", { doc: "Its footprint, in bytes." }],
-    ["watts", "f64"],
-    ["wakeups", "f64", { doc: "A second." }],
     ["netIn", "f64", { doc: "Bytes taken in over the network, a second." }],
     ["netOut", "f64", { doc: "Bytes sent out, a second." }],
     ["net", "f64", { doc: "In and out together." }],
     ["cpuText", "String"],
     ["memoryText", "String"],
-    ["wattsText", "String"],
-    ["wakeupsText", "String"],
     ["netText", "String"],
   ], { doc: "What a process, or a whose's processes together, use now, and each said." }),
   ResourceGroup: struct([
