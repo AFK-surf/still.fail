@@ -1588,9 +1588,10 @@ let pf_spin : Double = 14.0
 let pf_user_avatar : Double = 24.0
 
 ///|
-/// Who the account is (identity: its mark 48, its words beside it, 16 apart, 28 over what follows).
+/// Who the account is (identity: its mark 48, its words beside it, 16 apart, 28 over what follows), where the page's
+/// frame puts it (the page's own top is the frame's: desk_own_head).
 // kept across runs: a value (no field of it changes)
-let pf_head : @ui.Style = @ui.css("row w=Full pt=S10 pb=S7 gap=S4 align=ACenter")
+let pf_head : @ui.Style = @ui.css("row w=Full pb=S7 gap=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

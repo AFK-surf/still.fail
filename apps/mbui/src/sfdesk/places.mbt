@@ -10,8 +10,9 @@
 fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
-  // (at the stack's root: no back over its head)
+  // (at the stack's root: no back over its head, its own or the settings' pages')
   @settings.wide_deep.val = false
+  settings_deep.val = false
   @settings.frame(core, here, root=true)
   match place {
     "stations" | "profiles" => place_split(c, src, w, place)

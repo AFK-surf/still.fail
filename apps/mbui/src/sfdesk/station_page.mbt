@@ -35,8 +35,7 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, addres
       match list.search_by(fn(s) { text(Some(s), "station") == address }) {
         Some(i) => {
           let s = Some(list[i])
-          let blocks : Array[() -> Unit] = [fn() { station_head(c, core, here, s, manager) }]
-          blocks.push(fn() { station_parts_choice(c, address) })
+          let blocks : Array[() -> Unit] = [fn() { station_parts_choice(c, address) }]
           // (the part shown, by station: the settings' own, which a login's card also moves to 设置)
           let part = match @settings.station_parts.get(address) {
             Some(i) if i >= 0 && i < station_part_names.length() => station_part_names[i]
@@ -49,7 +48,10 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, addres
           }
           blocks.append(body)
           let parts = blocks.map(fn(b) { fn() { cn_gutter(c, look, b) } })
-          look_page(c, core, frame, look, "station/" + address, text(s, "name"), parts, titled=look == Wide)
+          // its head says its name: no title over it (StationSettings: Head, then Body)
+          look_page(c, core, frame, look, "station/" + address, text(s, "name"), parts, head=fn() {
+            station_head(c, core, here, s, manager)
+          })
         }
         // (removed, or a link from before: its list)
         None => look_page(c, core, frame, look, "station/" + address, back, [fn() { cn_gutter(c, look, fn() { @sf.waiting(c, shape=Cards) }) }])
@@ -993,9 +995,10 @@ let st_profile_glyph : Double = 18.0
 let st_grant_glyph : Double = 18.0
 
 ///|
-/// The head (workspaceHead): its mark, its name and facts, its actions; 16 apart, 8 under the page's top, 36 over its parts.
+/// The head (workspaceHead): its mark, its name and facts, its actions; 16 apart, 8 under where the page's frame puts it
+/// (the page's own top is the frame's: desk_own_head), 36 over its parts.
 // kept across runs: a value (no field of it changes)
-let st_head : @ui.Style = @ui.css("row w=Full pt=S12 pb=S9 gap=S4 align=ACenter")
+let st_head : @ui.Style = @ui.css("row w=Full pt=S2 pb=S9 gap=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

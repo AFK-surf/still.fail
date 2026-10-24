@@ -33,7 +33,7 @@ let narrow_most : Double = 640.0
 /// A page of the settings: `title`'s, holding `content` a block at a time (each laid out as it comes into view), in the
 /// frame it is given (`frame`: back where there is somewhere to go back to, the room over and under it). `lead`: what
 /// it is for, under its title; `about`: what it is for said by a mark beside its title (wide); `actions`: what it does,
-/// at its title's end.
+/// at its title's end; `head`: a head of its own in place of the title, which says its name (a station's, an account's).
 fn look_page(
   c : @ui.Ctx,
   core : Core,
@@ -46,7 +46,6 @@ fn look_page(
   about? : String = "",
   actions? : () -> Unit,
   head? : () -> Unit,
-  titled? : Bool = true,
 ) -> Unit {
   match look {
     Wide =>
@@ -90,8 +89,12 @@ fn look_page(
           None => ()
         }
       }
-      // (`titled` false: what it holds first says its name, a station's head)
-      if !frame.named && titled {
+      // (a head of its own says its name in place of the title, in the page's room as its cards)
+      match head {
+        Some(h) if !frame.named => blocks.push(fn() { c.box(style=narrow_card_room, h) |> ignore })
+        _ => ()
+      }
+      if !frame.named && head is None {
         blocks.push(fn() {
           c.box(style=narrow_title_box, fn() {
             c.box(style=narrow_title_line, fn() {
