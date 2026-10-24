@@ -272,6 +272,7 @@ fn reset() -> Unit {
   mo.lists.clear()
   mo.ghosts.clear()
   anims.clear()
+  ripples.clear()
   reset_fx()
   motion_log.val = -1
 }

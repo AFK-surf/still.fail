@@ -14,6 +14,9 @@ fn tab_tester(calls : Array[Made]) -> @ui.Tester {
   let w : Workspace = { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "" }
   @ui.Tester::new(
     fn(c) {
+      // (the library's words as the app's view says them: the tab's labels are found by them, and were its keys unless
+      // another test had drawn the app first, 2026-10-24)
+      @sf.set_words(fill)
       // (a desktop's: the mouse drags no list, as the wide frame says)
       c.mouse_drags_lists(false)
       c.box(w=Px(480.0), h=Fill(1.0), fn() { @sfdesk.files_tab(c, src, w.id, "s-c1", "ws1/st1") }) |> ignore

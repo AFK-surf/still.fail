@@ -39,6 +39,9 @@ pub fn pick_reset() -> Unit {
   pk.role = ""
   pk.taken_at = -1
   pk.sel.reset()
+  // (the press last felt, by its frame: a Tester's frames count from 0 again, and a press another test's pick was felt
+  // at took this one's feel, run after composer_wbtest or motion_wbtest, 2026-10-24)
+  pick_felt.val = -1
 }
 
 ///|

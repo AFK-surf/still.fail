@@ -20,6 +20,9 @@ fn desk_composer_tester(
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   let t = @ui.Tester::new(
     fn(c) {
+      // (the library's words as the app's view says them: without, the composer said its keys, and passed only after
+      // another test had drawn the app, 2026-10-24)
+      @sf.set_words(fill)
       let _ = @sf.begin(c)
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
       c.box(style=@ui.css("w=Full h=Full p=S4 justify=JEnd"), fn() {
