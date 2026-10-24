@@ -309,6 +309,32 @@ fn fill_chip(
 }
 
 ///|
+/// A machine's CPU, memory and disk (components.tsx MeterChips), each a chip (MeterChip) with what it is in its tip;
+/// `alerts`: only those running low. 8 apart.
+pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bool = false) -> Unit {
+  c.box(style=peek_meters, fn() {
+    for m in meters {
+      let mv = Some(m)
+      if alerts && text(mv, "level") == "ok" {
+        continue
+      }
+      let id = c.id(key + "/meter/" + text(mv, "label"))
+      c.box(id~, taps=false, fn() {
+        fill_chip(c, 100 - clamp(count(mv, "left")), text(mv, "level"), text(mv, "short"), text(mv, "remaining"))
+      })
+      |> ignore
+      let note = text(mv, "note")
+      @sf.tip(c, key + "/meter/" + text(mv, "label"), id, text(mv, "label") + " " + text(mv, "value") + (if note != "" {
+        " · " + note
+      } else {
+        ""
+      }))
+    }
+  })
+  |> ignore
+}
+
+///|
 /// This device's connection to a station (Stations.kt NetLine): how it goes (and packets lost) over its round trip on
 /// the left; on the right ↑ over ↓, the speed each way and what went that way.
 fn net_line(c : @ui.Ctx, net : Json?) -> Unit {

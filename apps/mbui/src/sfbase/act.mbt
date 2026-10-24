@@ -111,3 +111,35 @@ pub fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
     None => false
   }
 }
+
+///|
+/// Whether one of `calls` about what `on` names is under way, as the core's `doing` says (doing.ts useDoing: its
+/// params as words).
+pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, String)]) -> Bool {
+  items((src.topic)("doing", {}).value, "doing").iter().any(fn(d) {
+    text(Some(d), "stage") != "failed" && doing_of(d, calls, on)
+  })
+}
+
+///|
+/// Why one of `calls` about what `on` names failed a moment ago (the core keeps it a few seconds: doing.ts
+/// useDoingFailed), if it did.
+pub fn core_failed(src : Source, calls : Array[String], on : Array[(String, String)]) -> String? {
+  let mut why : String? = None
+  for d in items((src.topic)("doing", {}).value, "doing") {
+    if text(Some(d), "stage") == "failed" && doing_of(d, calls, on) {
+      why = Some(
+        match text(Some(d), "error") {
+          "" => @sf.t("android-misc.failed")
+          e => e
+        },
+      )
+    }
+  }
+  why
+}
+
+///|
+fn doing_of(d : Json, calls : Array[String], on : Array[(String, String)]) -> Bool {
+  calls.contains(text(Some(d), "call")) && on.iter().all(fn(kv) { text(field(Some(d), "params"), kv.0) == kv.1 })
+}

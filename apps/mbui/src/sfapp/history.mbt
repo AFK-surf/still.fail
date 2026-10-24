@@ -78,8 +78,7 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
   }
   // in the wide frame, the web's head (wide_history.mbt)
   if wide_on.val {
-    wide_history_head(c, src, r, key, a)
-    c.box(style=wh_fill, fn() { history_steps(c, src, r, key, entry) }) |> ignore
+    @sfdesk.agent_history(c, src, r.station, key, a, fn() { history_steps(c, src, r, key, entry) })
     return
   }
   let s = field(a, "session")
@@ -277,7 +276,7 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : I
     return
   }
   // 只看收发 (the wide frame's, History.tsx onlyIo): its steps and its own words left out
-  let io = wide_on.val && wide.history_io
+  let io = wide_on.val && @sfdesk.history_only_io()
   let its = items(h, "items").filter(fn(i) { !io || !history_work(Some(i)) })
   let lines : Array[HLine] = [HEdge]
   for i in its {

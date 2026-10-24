@@ -3,8 +3,8 @@
 // yellow spokes stepping round at work, red when it wants someone (blocked, failed), ringed in the page's ground.
 
 ///|
-/// `maker`'s mark (of `runtime`) on its tile, `side` 20 (the chat's bar) or 28 (an agent's card), `badge` (run, block,
-/// failed, or none) at its corner, said as `said` to a screen reader.
+/// `maker`'s mark (of `runtime`) on its tile, `side` 16 (a line of a history's details), 20 (the chat's bar) or 28 (an
+/// agent's card), `badge` (run, block, failed, or none) at its corner, said as `said` to a screen reader.
 pub fn agent_mark(
   c : @ui.Ctx,
   maker : String,
@@ -13,8 +13,14 @@ pub fn agent_mark(
   side? : Double = 20.0,
   said? : String = "",
 ) -> Unit {
-  let big = side > 20.0
-  c.box(style=if big { agent_mark_28 } else { agent_mark_20 }, label=said, fn() {
+  let style = if side > 20.0 {
+    agent_mark_28
+  } else if side < 20.0 {
+    agent_mark_16
+  } else {
+    agent_mark_20
+  }
+  c.box(style~, label=said, fn() {
     @sf.maker_mark(c, maker, runtime, (side * agent_logo_of).round()) |> ignore
     agent_badge(c, badge, side)
   })
@@ -48,7 +54,18 @@ let agent_logo_of : Double = 0.62
 let agent_spokes : Double = 10.0
 
 ///|
-/// A tile 20 across (the chat's bar), its corner 6; 28 (an agent's card), 8.4.
+/// A tile 16 across, its corner 4.8; 20 (the chat's bar), 6; 28 (an agent's card), 8.4.
+// kept across runs: a value (no field of it changes)
+let agent_mark_16 : @ui.Style = @ui.style(
+  w=S4,
+  h=S4,
+  radius=@sf.agent_mark_16_corner,
+  bg=Neutral,
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
 // kept across runs: a value (no field of it changes)
 let agent_mark_20 : @ui.Style = @ui.style(w=S5, h=S5, radius=Md, bg=Neutral, align=ACenter, justify=JCenter)
 
