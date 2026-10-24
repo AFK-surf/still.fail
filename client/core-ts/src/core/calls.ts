@@ -16,6 +16,7 @@ import * as ops from "../ops.ts";
 import type { Topic } from "../protocol.ts";
 import { draftAt } from "../refs.ts";
 import { StationAddr } from "../station/addr.ts";
+import type { FindAt, FindHit } from "../chat-find.ts";
 import { fromBase64, get, isObject } from "../util.ts";
 import { orEmpty, read } from "./params.ts";
 
@@ -129,6 +130,8 @@ export type Call =
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
   | { kind: "commandsFind"; query: string; offered: unknown[] }
+  /// Where a chat's find goes (chat-find.ts): what was found, where the reader is, which way, what the view shows.
+  | { kind: "chatFindGo"; hits: FindHit[]; at: FindAt | null; by: -1 | 0 | 1; from: number | null; to: number | null; drawn: Record<string, number> }
   /// A face's files on a device that keeps none of its own (font-files.ts): fetched, kept, given back.
   | { kind: "fonts"; call: FontsCall }
   | { kind: "ask"; ask: Ask }
@@ -740,6 +743,31 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       return { kind: "clientDevice", facts: orEmpty(params) };
     case "changelog.seen":
       return { kind: "changelogSeen" };
+    case "chat.find.go": {
+      const p = read(params, [
+        ["hits", "values", "default"],
+        ["at", "value", "opt"],
+        ["by", "value", "req"],
+        ["from", "f64", "opt"],
+        ["to", "f64", "opt"],
+        ["drawn", "value", "opt"],
+      ]);
+      const bad = (what: string) => CoreError.invalid(t("core-misc.params.invalid", { error: what }));
+      const num = (v: unknown, what: string) => {
+        if (typeof v !== "number" || !Number.isFinite(v)) throw bad(what);
+        return v;
+      };
+      const by = p.by;
+      if (by !== -1 && by !== 0 && by !== 1) throw bad("by");
+      const hits = (p.hits as unknown[]).map((h) => (isObject(h) ? { seq: num(h.seq, "hits"), count: num(h.count, "hits") } : (() => { throw bad("hits"); })()));
+      const at = p.at === null ? null : isObject(p.at) ? { seq: num(p.at.seq, "at"), k: num(p.at.k, "at") } : (() => { throw bad("at"); })();
+      const drawn: Record<string, number> = {};
+      if (p.drawn !== null) {
+        if (!isObject(p.drawn)) throw bad("drawn");
+        for (const [seq, n] of Object.entries(p.drawn)) drawn[seq] = num(n, "drawn");
+      }
+      return { kind: "chatFindGo", hits, at, by, from: p.from as number | null, to: p.to as number | null, drawn };
+    }
     case "commands.find": {
       const p = read(params, [
         ["query", S, "default"],

@@ -29,6 +29,9 @@ priv struct Finding {
   mut found : Found?
   mut at : Int
   mut k : Int
+  mut position : Int
+  mut total : Int
+  mut moves : Int
   mut bringing : Bool
 }
 
@@ -41,6 +44,9 @@ let finding : Finding = {
   found: None,
   at: -1,
   k: 0,
+  position: 0,
+  total: 0,
+  moves: 0,
   bringing: false,
 }
 
@@ -85,6 +91,9 @@ pub fn find_close() -> Unit {
   finding.found = None
   finding.at = -1
   finding.k = 0
+  finding.position = 0
+  finding.total = 0
+  finding.moves = 0
   finding.bringing = false
 }
 
@@ -141,37 +150,74 @@ fn found_of(v : Json) -> Found {
 }
 
 ///|
-/// Where the reader starts among `hits`: one in the messages showing, else the nearest before them, else the first.
-fn find_start(list : FindList, hits : Array[(Double, Int)]) -> Int {
-  if hits.length() == 0 {
-    return -1
-  }
-  let (from, to) = (list.showing)()
-  for i, h in hits {
-    if from >= 0.0 && h.0 >= from && (to < 0.0 || h.0 <= to) {
-      return i
-    }
-  }
-  let mut before = -1
-  for i, h in hits {
-    if from >= 0.0 && h.0 < from {
-      before = i
-    }
-  }
-  if before >= 0 {
-    before
-  } else {
-    0
-  }
-}
-
-///|
 /// The list to the time the reader is at: its message gone to, the words marked there.
 fn find_go(list : FindList) -> Unit {
   match finding.found {
     Some(f) if finding.at >= 0 && finding.at < f.hits.length() => (list.go)(f.hits[finding.at].0, f.words)
     _ => ()
   }
+}
+
+///|
+/// Where the reader goes among what was found, as the core says (`chat.find.go`, chat-find.ts): with `by` 0 where they
+/// are while what was found still has it, else where they start (from the messages showing); else the next (1) or the
+/// one before (-1). The list goes there as the reader moves to another message or another time in one.
+fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
+  let f = match finding.found {
+    Some(f) => f
+    None => return
+  }
+  let at : Json = if finding.at >= 0 && finding.at < f.hits.length() {
+    { "seq": Json::number(f.hits[finding.at].0), "k": Json::number(finding.k.to_double()) }
+  } else {
+    Json::null()
+  }
+  let (from, to) = (list.showing)()
+  let params : Map[String, Json] = {
+    "hits": Json::array(
+      f.hits.map(fn(h) { { "seq": Json::number(h.0), "count": Json::number(h.1.to_double()) } }),
+    ),
+    "at": at,
+    "by": Json::number(by.to_double()),
+  }
+  if from >= 0.0 && to >= 0.0 {
+    params["from"] = Json::number(from)
+    params["to"] = Json::number(to)
+  }
+  finding.moves += 1
+  let n = finding.moves
+  (src.call)("chat.find.go", Json::object(params), fn(res) {
+    // (closed, typed on, or moved again since: an answer to what is no longer asked)
+    if finding.chat != key || finding.moves != n {
+      return
+    }
+    match (res, finding.found) {
+      (Ok(j), Some(now)) => {
+        let was = (finding.at, finding.k)
+        let seq = match field(Some(j), "at") {
+          Some(Object(_)) as a => Some((number(a, "seq"), number(a, "k").to_int()))
+          _ => None
+        }
+        match seq {
+          Some((s, k)) => {
+            finding.at = now.hits.search_by(fn(h) { h.0 == s }).unwrap_or(-1)
+            finding.k = k
+          }
+          None => {
+            finding.at = -1
+            finding.k = 0
+          }
+        }
+        finding.position = number(Some(j), "position").to_int()
+        finding.total = number(Some(j), "total").to_int()
+        if (finding.at, finding.k) != was {
+          find_go(list)
+        }
+      }
+      // the core an older one: where the reader is stays as it is
+      _ => ()
+    }
+  })
 }
 
 ///|
@@ -188,6 +234,8 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
     finding.found = None
     finding.at = -1
     finding.k = 0
+    finding.position = 0
+    finding.total = 0
     finding.bringing = false
     return
   }
@@ -208,21 +256,21 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
         match res {
           Ok(j) => {
             let f = found_of(j)
+            // where the reader was, as a message of what is found now (gone: none)
             let was = match finding.found {
               Some(o) if bring && finding.at >= 0 && finding.at < o.hits.length() => o.hits[finding.at].0
               _ => -1.0
             }
             finding.found = Some(f)
             finding.bringing = false
-            // what the reader was at kept where it is still found
-            match f.hits.search_by(fn(h) { h.0 == was }) {
-              Some(i) => finding.at = i
-              None => {
-                finding.at = find_start(list, f.hits)
-                finding.k = 0
-                find_go(list)
-              }
+            finding.at = f.hits.search_by(fn(h) { h.0 == was }).unwrap_or(-1)
+            if finding.at < 0 {
+              finding.k = 0
             }
+            finding.position = 0
+            finding.total = f.hits.fold(init=0, fn(n, h) { n + h.1 })
+            // kept where it is still found, else where the reader starts (the core's)
+            find_move(src, key, list, 0)
             if !bring && !f.whole {
               finding.bringing = true
               ask(true)
@@ -239,50 +287,9 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
 }
 
 ///|
-/// The next time the words are in the chat (`by` 1) or the one before (-1), round from an end to the other.
-fn find_step(list : FindList, by : Int) -> Unit {
-  let hits = match finding.found {
-    Some(f) if f.hits.length() > 0 => f.hits
-    _ => return
-  }
-  let n = hits.length()
-  if finding.at < 0 || finding.at >= n {
-    finding.at = if by > 0 { 0 } else { n - 1 }
-    finding.k = 0
-  } else {
-    let k = finding.k + by
-    if k >= 0 && k < hits[finding.at].1 {
-      finding.k = k
-    } else {
-      finding.at = (finding.at + by + n) % n
-      finding.k = if by > 0 { 0 } else { dmax(0.0, (hits[finding.at].1 - 1).to_double()).to_int() }
-    }
-  }
-  find_go(list)
-}
-
-///|
-/// Which of how many times the words are in the chat the reader is at (1 the first; 0 none).
+/// Which of how many times the words are in the chat the reader is at (1 the first; 0 none), as the core said it.
 pub fn find_position() -> (Int, Int) {
-  match finding.found {
-    Some(f) => {
-      let mut total = 0
-      let mut at = 0
-      for i, h in f.hits {
-        if i < finding.at {
-          at = at + h.1
-        }
-        total = total + h.1
-      }
-      if finding.at >= 0 && finding.at < f.hits.length() {
-        let k = if finding.k < f.hits[finding.at].1 { finding.k } else { f.hits[finding.at].1 - 1 }
-        (at + dmax(0.0, k.to_double()).to_int() + 1, total)
-      } else {
-        (0, total)
-      }
-    }
-    None => (0, 0)
-  }
+  (finding.position, finding.total)
 }
 
 ///|
@@ -352,12 +359,14 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
       }
       if back || res.submitted is Some(_) {
         finding.field.set(typed)
-        find_step(list, if back { -1 } else { 1 })
+        let by = if back { -1 } else { 1 }
+        c.tell("find/move", fn() { find_move(src, key, list, by) })
       }
       let (at, total) = find_position()
       match finding.found {
         // (nothing found yet while the rest is read is not "nothing found")
-        Some(_) if !(finding.bringing && total == 0) =>
+        // (nor before the core has said where the reader is among them)
+        Some(_) if !(finding.bringing && total == 0) && !(total > 0 && at == 0) =>
           c.box(style=find_count_box, fn() {
             let words = if total > 0 { "\{at}/\{total}" } else { @sf.t("web-main.find.none") }
             c.text(words, style=find_meta) |> ignore
@@ -366,10 +375,10 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         _ => ()
       }
       if find_button(c, "find/prev", "chevron-up", @sf.t("web-main.find.prev"), total > 0) {
-        find_step(list, -1)
+        c.tell("find/move", fn() { find_move(src, key, list, -1) })
       }
       if find_button(c, "find/next", "chevron-down", @sf.t("web-main.find.next"), total > 0) {
-        find_step(list, 1)
+        c.tell("find/move", fn() { find_move(src, key, list, 1) })
       }
       if find_button(c, "find/close", "close", @sf.t("web-main.find.close"), true) {
         (list.forget)()

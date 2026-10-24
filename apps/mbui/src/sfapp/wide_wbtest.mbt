@@ -197,6 +197,8 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   // gone to: its words marked in it
   let first = @sfdesk.find_at()
   t.enter()
+  // (where the reader goes is the core's: asked once the frame is built, answered the next)
+  t.frame()
   t.frame()
   let (next, _) = @sfdesk.find_position()
   assert_eq(next, if at == total { 1 } else { at + 1 })

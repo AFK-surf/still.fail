@@ -1,5 +1,6 @@
 // The core's answers to its pure calls (`markdown`, `code.ink`, `reader.book`, `reader.text`, `reader.search`,
-// `commands.find`, a chat's side panel's tabs: chat-tabs.ts, the 奏 page's queue: decisions.ts), and to each step of a device's browsing (drive-browse.ts
+// `commands.find`, a chat's side panel's tabs: chat-tabs.ts, the 奏 page's queue: decisions.ts, where a chat's find goes:
+// chat-find.ts), and to each step of a device's browsing (drive-browse.ts
 // `Browsing`: a topic of it or a call, given what it held before and what it reads, answering with what it holds
 // after; and the rail as drawn from the prefs kept, `railView`), worked
 // out by the real core and kept for the mbui app's runs without one (apps/mbui/src/sfkept: its Tester's tests, the
@@ -18,6 +19,7 @@ import { find } from "../src/commands.ts";
 import { railView } from "../src/rail.ts";
 import { changed, tabsOf, type Change } from "../src/chat-tabs.ts";
 import { order, picked, setAside, shownIn, type Shown } from "../src/decisions.ts";
+import { findGo, type FindAt, type FindHit } from "../src/chat-find.ts";
 import { tr, type Lang } from "../src/i18n.ts";
 import { Browsing, withDrive, type BrowsingState, type Ordered } from "../src/drive-browse.ts";
 
@@ -38,6 +40,7 @@ type Kept = {
   "commands.find": Record<string, unknown>;
   "chat.tabs": Record<string, unknown>;
   "decisions.queue": Record<string, unknown>;
+  "chat.find.go": Record<string, unknown>;
   browse: Record<string, unknown>;
   railView: Record<string, unknown>;
 };
@@ -55,6 +58,8 @@ const finds = new Set(Object.keys(was["commands.find"] ?? {}));
 const tabs = new Set(Object.keys(was["chat.tabs"] ?? {}));
 // The 奏 page's queue: by what was asked (its items, the one shown as kept, a pick or a setting aside).
 const queues = new Set(Object.keys(was["decisions.queue"] ?? {}));
+// Where a chat's find goes: by what was asked (what was found, where the reader is, which way, what shows).
+const goes = new Set(Object.keys(was["chat.find.go"] ?? {}));
 // the prefs a rail is drawn from, as JSON (the app's runs say them in Chinese, as its fixtures are)
 const rails = new Set(Object.keys(was.railView ?? {}));
 const bookKey = (md: unknown, text: unknown) => `${md === true ? "md" : "txt"}\u0001${String(text ?? "")}`;
@@ -76,6 +81,7 @@ for (const file of outputs) {
     } else if (ask.call === "commands.find") finds.add(String(ask.key ?? ""));
     else if (ask.call === "chat.tabs") tabs.add(String(ask.key ?? ""));
     else if (ask.call === "decisions.queue") queues.add(String(ask.key ?? ""));
+    else if (ask.call === "chat.find.go") goes.add(String(ask.key ?? ""));
     else if (ask.call === "railView") rails.add(JSON.stringify(ask.prefs ?? {}));
     else if (ask.call === "browse") {
       const { call: _call, key, ...step } = ask;
@@ -86,7 +92,7 @@ for (const file of outputs) {
 
 // Each worked out by the core as it is now.
 const sorted = (keys: Iterable<string>) => [...keys].sort();
-const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, browse: {}, railView: {} };
+const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, "chat.find.go": {}, browse: {}, railView: {} };
 for (const text of sorted(texts)) kept.markdown[text] = markdown(text);
 for (const key of sorted(rails)) kept.railView[key] = railView(JSON.parse(key) as { rail?: unknown; rails?: unknown }, "zh");
 for (const key of sorted(codes)) {
@@ -132,6 +138,10 @@ for (const key of sorted(queues)) {
     const { at, next } = shownIn(was, keys);
     kept["decisions.queue"][key] = { order: keys, shown: at, was: next };
   }
+}
+for (const key of sorted(goes)) {
+  const ask = JSON.parse(key) as { hits?: FindHit[]; at?: FindAt | null; by?: -1 | 0 | 1; from?: number | null; to?: number | null; drawn?: Record<string, number> };
+  kept["chat.find.go"][key] = findGo(ask.hits ?? [], ask.at ?? null, ask.by ?? 0, ask.from ?? null, ask.to ?? null, ask.drawn ?? {});
 }
 const keys = sorted(steps.keys());
 for (const key of keys) kept.browse[key] = browseStep(steps.get(key)!);
