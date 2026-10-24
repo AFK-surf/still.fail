@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
 import type { WorkspaceMark } from "./core/shapes.ts";
-import { play } from "@stillfail/ui/motion.ts";
+import { play, restingLoop } from "@stillfail/ui/motion.ts";
 import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
@@ -87,7 +87,7 @@ export function WaitingText({ text, lead, leadText, rest, className, slot = fals
         <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label} data-motion={motion}>
           {icon === "need" ? <Bell size={14} /> : icon === "done" ? <Check size={14} strokeWidth={1.7} /> : icon === "watch" ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
           {/* What moves, each part on a copy of its own (ChatMark.css.ts leadSlot). */}
-          {motion && MOVING[motion].map((n) => <span key={n} data-part={n}><Moving size={14} strokeWidth={1.7} /></span>)}
+          {motion && MOVING[motion].map(([n, plays]) => <span key={n} ref={plays} data-part={n}><Moving size={14} strokeWidth={1.7} /></span>)}
         </span></Tip>
         {after && <span className={css.leadRest}>{after}</span>}
       </span>
@@ -102,7 +102,23 @@ export function WaitingText({ text, lead, leadText, rest, className, slot = fals
 }
 
 /** The parts of the icons that move, by their place among the icon's children: waiting's three dots; watching's dot and arcs. */
-const MOVING = { wait: [2, 3, 4], watch: [1, 2, 3] } as const;
+/**
+ * The lead icons' motions on one beat of 3.1s (motion.ts restingLoop: played while they move, nothing at all between;
+ * as CSS loops, the compositor drew every frame of their rests too, 2026-10-24): waiting's dots breathe in turn, 0.3s
+ * apart, in the first half; watching's dot beats, then its arcs light up, inner then outer. From and back to how they
+ * stand between (ChatMark.css.ts leadSlot).
+ */
+const BEAT = 3100;
+const BREATHE: Keyframe[] = [{ opacity: 0.35, easing: "ease-in-out" }, { opacity: 1, offset: 23 / 52, easing: "ease-in-out" }, { opacity: 0.35 }];
+const PULSE: Keyframe[] = [{ transform: "scale(1)", easing: "ease-out" }, { transform: "scale(1.35)", offset: 8 / 22, easing: "ease-out" }, { transform: "scale(1)" }];
+const LIT: Keyframe[] = [{ opacity: 0.3, easing: "ease-out" }, { opacity: 1, offset: 10 / 32, easing: "ease-out" }, { opacity: 0.3 }];
+const onBeat = (frames: Keyframe[], at: number, share: number) => (el: HTMLElement | null) =>
+  (el ? restingLoop(el, frames, { period: BEAT, at, duration: BEAT * share }) : undefined);
+/** Each moving part (its place among the icon's children) with what plays it. */
+const MOVING = {
+  wait: [[2, onBeat(BREATHE, 0, 0.52)], [3, onBeat(BREATHE, 300, 0.52)], [4, onBeat(BREATHE, 600, 0.52)]],
+  watch: [[1, onBeat(PULSE, 0, 0.22)], [2, onBeat(LIT, 180, 0.32)], [3, onBeat(LIT, 420, 0.32)]],
+} as const;
 
 /**
  * A row pressed on its state line (WaitingText) when the core says which message the state is about (`stateAbout`):

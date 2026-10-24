@@ -80,18 +80,43 @@ export function followMotion(choice: () => string | undefined = () => undefined)
   };
   apply();
   system.addEventListener("change", apply);
+  stepSpokes();
   return apply;
+}
+
+/** What shows the spokes (styles/spokes.ts): a chat's mark at work, an agent's badge, the ring round an agent at work. */
+const SPOKES_SHOWN = '[data-tone="busy"], [data-badge="run"], [data-spokes]';
+let spokesStepping = false;
+
+/**
+ * The spokes' one clock (styles/spokes.ts spokesTurn): a step every 100 ms said on the root as `data-spoke`, while any
+ * show and the page is seen; with motion reduced, none said (they stand at the first step).
+ */
+function stepSpokes(): void {
+  if (spokesStepping) return;
+  spokesStepping = true;
+  const root = document.documentElement;
+  let step = 0;
+  setInterval(() => {
+    if (document.hidden) return;
+    if (reducedMotion() || !document.querySelector(SPOKES_SHOWN)) {
+      if (root.dataset.spoke) delete root.dataset.spoke;
+      return;
+    }
+    step = (step + 1) % 8;
+    root.dataset.spoke = String(step);
+  }, 100);
 }
 
 /**
  * A motion that plays for `duration` ms in every `period` and rests the rest of it (a blink, a beat, a breath and then
  * still), starting `at` ms into the period, on one beat for every such loop (performance.now()'s): played once a period,
  * the rest waited out on a timer. As one infinite CSS animation, one the compositor can't run (anything inside an SVG)
- * had the whole page drawn anew every frame, its rests too, at the screen's rate for as long as it showed. Stopped by
- * what it returns; with motion reduced, never played.
+ * had the whole page drawn anew every frame, its rests too, at the screen's rate for as long as it showed; one it can
+ * run still had it draw every frame of the rests (2026-10-24). Stopped by what it returns; while motion is reduced or
+ * it is not drawn, not played.
  */
 export function restingLoop(el: Element, frames: Keyframe[], { period, at = 0, duration }: { period: number; at?: number; duration: number }): () => void {
-  if (reducedMotion()) return () => undefined;
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let run: Animation | undefined;
@@ -99,10 +124,13 @@ export function restingLoop(el: Element, frames: Keyframe[], { period, at = 0, d
     if (stopped) return;
     const now = performance.now();
     timer = setTimeout(() => {
+      // With motion reduced, or not drawn (in a pane gone hidden: content-visibility), not played: hidden, it could not
+      // go to the compositor, and the page would be drawn anew every frame of it for nothing.
+      if (reducedMotion() || el.checkVisibility?.() === false) return next();
       run = el.animate(frames, { duration });
       // Cut short (cancelled) it goes on all the same, till stopped.
       run.finished.then(next, next);
-    }, Math.ceil((now - at) / period) * period + at - now);
+    }, Math.ceil((now - at + 1) / period) * period + at - now);
   };
   next();
   return () => { stopped = true; clearTimeout(timer); run?.cancel(); };

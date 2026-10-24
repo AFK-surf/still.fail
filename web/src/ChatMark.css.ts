@@ -1,7 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { spokesBox } from "@stillfail/ui/styles/spokes.ts";
-import { leadBeatKeyframes, leadBreatheKeyframes, leadLitKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { spokesBox, spokesTurn } from "@stillfail/ui/styles/spokes.ts";
 import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /**
@@ -38,6 +37,7 @@ export const chatMark = style({
     [`${STILL} &[data-tone="busy"]::after`]: stillLoop(),
   },
 });
+spokesTurn(`${chatMark}[data-tone="busy"]::after`);
 
 /** The same state as a dot in a line, before the chat's title: no gap round it, the row's ground is behind it. */
 export const chatMarkInline = style({
@@ -55,6 +55,7 @@ export const chatMarkInline = style({
     [`${STILL} &[data-tone="busy"]`]: stillLoop(),
   },
 });
+spokesTurn(`${chatMarkInline}[data-tone="busy"]`);
 
 /** A workspace's counts (ChatMark.tsx MarkCounts): each dot with its number, small and quiet beside its name. */
 export const markCounts = style({ display: "inline-flex", alignItems: "center", gap: 10, flex: "none", fontSize: vars.textMeta, lineHeight: 1, fontVariantNumeric: "tabular-nums" });
@@ -73,7 +74,8 @@ export const leadSlot = style({ display: "flex", flex: "none", width: 10, height
 globalStyle(`${leadSlot} svg`, { flex: "none" });
 /**
  * Waiting's dots breathe once, one after another, then rest; watching's dot beats and its arcs light up after it, inner
- * then outer, then rest (icons wait, watch: one path each). Every 3.1s.
+ * then outer, then rest (icons wait, watch: one path each). Every 3.1s, played from script (ChatMark.tsx LEAD_PLAYS):
+ * here, how they stand between.
  *
  * Each part that moves is a copy of the icon showing that part alone, in a box of its own (`data-part`, the part's place
  * among the icon's children) laid over the icon and moved whole; the icon shows what stays. A part inside an SVG, or an
@@ -85,12 +87,6 @@ globalStyle(`${leadSlot}[data-motion] > [data-part]`, { position: "absolute", le
 globalStyle(`${leadSlot}[data-motion] > [data-part] > svg`, { display: "block" });
 globalStyle(`${leadSlot}[data-motion="wait"] > svg > :not(:first-child), ${leadSlot}[data-motion="watch"] > svg > *, ${leadSlot}[data-motion] > [data-part] > svg > *`, { visibility: "hidden" });
 for (const n of [1, 2, 3, 4]) globalStyle(`${leadSlot}[data-motion] > [data-part="${n}"] > svg > :nth-child(${n})`, { visibility: "visible" });
-globalStyle(`${leadSlot}[data-motion="wait"] > [data-part]`, { opacity: .35, animation: `${leadBreatheKeyframes} 3.1s ease-in-out infinite` });
-globalStyle(`${leadSlot}[data-motion="wait"] > [data-part="3"]`, { animationDelay: ".3s" });
-globalStyle(`${leadSlot}[data-motion="wait"] > [data-part="4"]`, { animationDelay: ".6s" });
-globalStyle(`${leadSlot}[data-motion="watch"] > [data-part="1"]`, { animation: `${leadBeatKeyframes} 3.1s ease-out infinite` });
-globalStyle(`${leadSlot}[data-motion="watch"] > :is([data-part="2"], [data-part="3"])`, { opacity: .3, animation: `${leadLitKeyframes} 3.1s ease-out .18s infinite` });
-globalStyle(`${leadSlot}[data-motion="watch"] > [data-part="3"]`, { animationDelay: ".42s" });
-// Still, as between beats: the dots and arcs dim.
-globalStyle(`${STILL} ${leadSlot}[data-motion] > [data-part]`, stillLoop());
+globalStyle(`${leadSlot}[data-motion="wait"] > [data-part]`, { opacity: .35 });
+globalStyle(`${leadSlot}[data-motion="watch"] > :is([data-part="2"], [data-part="3"])`, { opacity: .3 });
 export const leadRest = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });

@@ -2698,7 +2698,7 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
     <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-vk={`a:${agent.key}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
       <div className={css.activityRow}>
       <button ref={line} type="button" className={css.activityLine} onClick={() => { if (chat) chatPage.history(chat, agent.key); }} aria-label={`${agent.who}：${now.current.text}`}>
-        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span><span className={css.activityRing} /></span>
+        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span><span className={css.activityRing} data-spokes="" /></span>
         <span ref={tail} className={css.activityTail}>
           <span className={css.activityNow}>
             {now.previous && <span key={`was-${now.n - 1}`} className={css.activityNowText} data-out="">{now.previous.text}</span>}

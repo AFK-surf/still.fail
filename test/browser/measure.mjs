@@ -217,6 +217,8 @@ export function drawn() {
     const target = a.effect?.target;
     if (target && a.effect.getTiming().iterations === Infinity) looping.add(path(target));
   }
+  // The spokes loop too, stepped by the page's clock rather than an animation (web/ui/src/motion.ts stepSpokes).
+  for (const el of document.querySelectorAll('[data-tone="busy"], [data-badge="run"], [data-spokes]')) looping.add(path(el));
   // A scale's or a colour's share to a hundredth, a length to a pixel.
   const round = (v) => v.replace(/-?\d+\.\d+/g, (n) => String(Math.abs(Number(n)) < 2 ? Math.round(Number(n) * 100) / 100 : Math.round(Number(n))));
   const lines = [];

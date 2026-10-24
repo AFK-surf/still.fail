@@ -1,6 +1,6 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { spokesBox } from "@stillfail/ui/styles/spokes.ts";
+import { spokesBox, spokesTurn } from "@stillfail/ui/styles/spokes.ts";
 import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /** None left: the day, then where the next may come from and what was answered, in a column. */
@@ -33,6 +33,7 @@ export const busy = style({
   flex: "none", width: 12, height: 12, marginTop: 4, ...spokesBox("#f2b01e"),
   selectors: { [`${STILL} &`]: stillLoop() },
 });
+spokesTurn(busy);
 /** Answered: a quiet dot. */
 export const done = style({ flex: "none", width: 6, height: 6, margin: "7px 3px 0", borderRadius: "50%", background: vars.subtle });
 export const words = style({ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 });

@@ -12,7 +12,7 @@ import { glass } from "@stillfail/ui/styles/glass.ts";
 import { bleedX, columns, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { STILL, stillAtOnce, stillLoop } from "@stillfail/ui/styles/still.ts";
-import { segments, spokesStep, wholeRing } from "@stillfail/ui/styles/spokes.ts";
+import { segments, spokesTurn, wholeRing } from "@stillfail/ui/styles/spokes.ts";
 
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
@@ -448,13 +448,14 @@ export const activityAvatar = style({
  */
 export const activityRing = style({
   position: "absolute", inset: "-3px", pointerEvents: "none",
-  background: vars.accent, mask: `${segments} center / 100% no-repeat`, animation: spokesStep,
+  background: vars.accent, mask: `${segments} center / 100% no-repeat`, willChange: "rotate",
   selectors: {
-    [`${agentActivity}[data-waiting] &`]: { background: vars.line, maskImage: wholeRing, animation: "none" },
+    [`${agentActivity}[data-waiting] &`]: { background: vars.line, maskImage: wholeRing },
     [`${agentActivity}[data-leaving] &`]: { opacity: "0", transition: "opacity 160ms" },
     [`${STILL} &`]: stillLoop(),
   },
 });
+spokesTurn(activityRing);
 export const activityTail = style({
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", maxWidth: "100%",
   selectors: {
