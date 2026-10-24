@@ -56,6 +56,14 @@ globalStyle(`${fp}[data-awake] ${fpHead}, ${fpHead}:hover, ${fpHead}:has(:focus-
 export const fpHeadProgress = style({
   display: "flex", alignItems: "center", gap: "10px", padding: "0 8px", color: vars.muted, fontSize: vars.textMeta,
   fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+  // Loading must not push the close button beyond a phone's viewport.
+  "@media": {
+    "(max-width: 640px)": {
+      ...pageGlass, position: "absolute", top: "calc(100% + 8px)", left: "0", right: "0",
+      display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "8px", padding: "8px",
+      borderRadius: "inherit",
+    },
+  },
 });
 globalStyle(`${fpHeadProgress} b`, { color: vars.text, fontWeight: "600" });
 export const fpTitle = style({ flex: "0 1 auto", minWidth: "0", display: "flex", alignItems: "baseline", gap: "10px", marginRight: "auto", paddingRight: "12px" });
@@ -215,7 +223,10 @@ export const fpFactsName = style({
   maxWidth: "min(480px, 100%)", color: vars.text, fontSize: vars.textBody, fontWeight: "600", textAlign: "center", overflowWrap: "anywhere",
 });
 export const fpFactsFailed = style({ color: vars.red, textAlign: "center" });
-globalStyle(`${fpHeadProgress} ${fpProgressTrack}`, { width: "120px" });
+globalStyle(`${fpHeadProgress} ${fpProgressTrack}`, {
+  width: "120px",
+  "@media": { "(max-width: 640px)": { width: "100%" } },
+});
 globalStyle(`${fpHead} ${segmented}`, {
   width: "120px",
   vars: { "--pad": "2px" },
@@ -244,7 +255,10 @@ globalStyle(`${tokenGuide} li > ${btn}`, { width: "max-content" });
 /** Here rather than with its class: it comes after .token-guide li > .btn, and wins over it. */
 globalStyle(`${avatarTile} img[data-maker]`, { width: "55%", height: "55%", transform: "none" });
 
-/** Room for the widest it says ("15.0 MB / 15.0 MB"), so the bar does not grow as the numbers do. */
-globalStyle(`${fpHeadProgress} ${fpProgressText}`, { minWidth: "172px", textAlign: "right" });
+/** Desktop reserves room for changing numbers; the phone's separate row fits its bar, even without zoom tools. */
+globalStyle(`${fpHeadProgress} ${fpProgressText}`, {
+  minWidth: "172px", textAlign: "right",
+  "@media": { "(max-width: 640px)": { minWidth: "0", textAlign: "center", whiteSpace: "normal" } },
+});
 /** The bar's buttons (its close in its right end): 6 in from its edges, rounded as the bar less that (concentric). */
 globalStyle(`${fpHead} ${iconBtn}`, { borderRadius: `calc(14px * ${vars.cornerScale} - 6px)`, cornerShape: vars.cornerShape });
