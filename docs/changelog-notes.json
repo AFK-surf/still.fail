@@ -490,5 +490,10 @@
       "android",
       "desktop"
     ]
+  },
+  "66fad1ba": {
+    "text": [
+      "改进：Claude agent 每次开始对话时载入的内容减少约三分之一，更省用量"
+    ]
   }
 }
