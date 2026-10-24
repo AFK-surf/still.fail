@@ -225,6 +225,9 @@ export const AgentsLive = (control: Control) =>
         cold: new ColdRooms(() => hub),
         places,
       });
+      // No turn until the agents' door is open: a runtime started before has no MCP endpoint, and Codex does not
+      // connect to it again for that thread.
+      hub.hold("starting");
       // Background jobs and web services: their agents told through the hub; a service's link is its session's page
       // with its port.
       const jobs = new Jobs({
@@ -586,6 +589,7 @@ export const AgentsLive = (control: Control) =>
         hub.toolsAt(opened.url);
         parts.doorOpen(opened.url);
         taken = true;
+        hub.release("starting");
         if (inWorkspace) {
           for (const a of along) await a.taken?.();
           hub.recover();
