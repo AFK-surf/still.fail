@@ -1161,3 +1161,21 @@ pub let code_big_size : @ui.TextSize = Exact(28.0, 36.4)
 
 ///|
 pub let code_big_tracking : @ui.Tracking = Exact(6.0)
+
+///|
+/// A chat's bar (the web's ChatPage.css.ts): its station's tag 160 wide at most, 7 in; an agent's station's part 140 at
+/// most, in by .19 of its 20 tile and 1.
+pub let chat_station_most : @ui.Len = Fixed(160.0)
+
+///|
+pub let chat_station_in : @ui.Space = room(7.0)
+
+///|
+pub let agent_station_most : @ui.Len = Fixed(140.0)
+
+///|
+pub let agent_station_in : @ui.Space = room(20.0 * 0.19 + 1.0)
+
+///|
+/// A person in a chat's stack of people (the web's later.css.ts peopleStack): 16 ringed 1.5.
+pub let person_ringed : @ui.Len = Fixed(19.0)

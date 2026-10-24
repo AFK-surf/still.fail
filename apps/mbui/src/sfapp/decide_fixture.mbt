@@ -597,8 +597,8 @@ pub fn open_fixture(mode : String) -> Unit {
       dui.sheet = Some(LettersOf(r, 7.0))
     }
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
-    "chat-letters-pop" => wide.info_open = true
-    "chat-jobs-pop" => wide.jobs_open = true
+    "chat-letters-pop" => @sfdesk.open_info_pop()
+    "chat-jobs-pop" => @sfdesk.open_jobs_pop()
     // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
     "chat-letters-side" => {
       dui.letters_open = ""

@@ -19,7 +19,7 @@ fn page_keys(c : @ui.Ctx, src : Source, w : Workspace, escape : Bool) -> Unit {
     }
   }
   if pressed("chat.jobs") && app.nav.top() is Chat(_) {
-    wide.jobs_open = !wide.jobs_open
+    @sfdesk.toggle_jobs_pop()
   }
   if escape {
     if @sfdesk.find_chat() != "" {
@@ -89,7 +89,7 @@ fn chat_offered(c : @ui.Ctx, src : Source) -> Array[@sfdesk.Offered] {
           icon: "web",
           keys: keys("chat.jobs"),
           typed: false,
-          run: fn() { wide.jobs_open = true },
+          run: fn() { @sfdesk.open_jobs_pop() },
         },
       ]
     _ => []
