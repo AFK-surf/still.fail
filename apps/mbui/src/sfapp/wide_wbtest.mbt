@@ -1687,7 +1687,7 @@ test "wide: 文件's rows as the core says them (driveBrowse, drive.browse): a p
   t.frame()
   assert_true(t.find("重命名") is Some(_), msg="its menu")
   t.key(@ui.key_escape)
-  t.frame()
+  t.run_for(@kit.presence_out_ms)
   // (the menu gone: the page's rows to be asked of again)
   assert_true(files_row_chosen(t, "发布清单.md"), msg="chosen by its right click")
   assert_false(files_row_chosen(t, "设计稿"))

@@ -145,3 +145,41 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
   assert_true(set[0].params.stringify().contains("/Users/lin/项目"))
   assert_true(!@sf.presenting())
 }
+
+///|
+test "a wide folder's rows: the ⋯ of a row under the pointer, its menu beside it through the presenters; a right click on a row, its menu alone (Escape closes it); where there is no row, the folder's" {
+  for platform in [0, 2] {
+    let at = "\{platform}"
+    let t = files_page_tester(1280.0, 800.0, platform)
+    // (with a mouse, the ⋯ shows under the pointer; to a finger, always)
+    let (x, y) = rightmost(t, "季度数据.csv")
+    t.move(x, y)
+    t.draw()
+    // (its ⋯: the one on its line)
+    let more = t.all(Button, label="更多操作").filter(fn(b) { b.rect.1 <= y && b.rect.1 + b.rect.3 >= y })
+    assert_eq(more.length(), 1, msg=at)
+    let (bx, by, bw, bh) = more[0].rect
+    t.tap(bx + bw / 2.0, by + bh / 2.0)
+    t.run_for(@kit.presence_in_ms)
+    assert_true(@sf.presenting(), msg=at)
+    assert_true(t.find("重命名") is Some(_), msg=at)
+    @sf.close_presented()
+    t.run_for(@kit.presence_out_ms)
+    if platform == 0 {
+      // a right click on a row: its menu alone (not the folder's too, under it), Escape closing it
+      let before = @sf.last_presented()
+      t.right_click(x, y)
+      t.run_for(@kit.presence_in_ms)
+      assert_eq(@sf.last_presented(), before + 1, msg=at)
+      t.key(@ui.key_escape)
+      t.run_for(@kit.presence_out_ms)
+      assert_false(@sf.presenting(), msg=at)
+      // a right click under the rows: the folder's menu, at the pointer
+      t.right_click(x, 760.0)
+      t.run_for(@kit.presence_in_ms)
+      assert_true(t.find("按名称排列") is Some(_), msg=at)
+      let (_, my) = t.find("按名称排列").unwrap()
+      assert_true(my > 400.0, msg=at)
+    }
+  }
+}

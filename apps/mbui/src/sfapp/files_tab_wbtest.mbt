@@ -20,6 +20,8 @@ fn tab_tester(calls : Array[Made]) -> @ui.Tester {
       // (a desktop's: the mouse drags no list, as the wide frame says)
       c.mouse_drags_lists(false)
       c.box(w=Px(480.0), h=Fill(1.0), fn() { @sfdesk.files_tab(c, src, w.id, "s-c1", "ws1/st1") }) |> ignore
+      // (what the tab presents, its menus, over it, as the shell draws them)
+      @sf.presented(c)
     },
     w=1280.0,
     h=800.0,
@@ -63,7 +65,7 @@ test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加�
   t.frame()
   let (x, y) = t.find("发布清单.md").unwrap()
   t.right_click(x, y)
-  t.frame()
+  t.run_for(@kit.presence_in_ms)
   t.tap_text("添加到消息")
   t.frame()
   let sent = @sfbase.files_taken("s-c1")
@@ -71,7 +73,7 @@ test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加�
   assert_eq(sent[0].abs, fix_docs + "/发布清单.md")
   let (x, y) = t.find("长篇小说.txt").unwrap()
   t.right_click(x, y)
-  t.frame()
+  t.run_for(@kit.presence_in_ms)
   t.tap_text("复制路径")
   t.frame()
   assert_eq(t.clipboard(), fix_docs + "/长篇小说.txt")

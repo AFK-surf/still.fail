@@ -40,16 +40,28 @@ pub(all) struct FolderOf {
 }
 
 ///|
-/// The name being changed in place and whether its field had the focus (it is done once it leaves).
+/// The name being changed in place and whether its field had the focus (it is done once it leaves); the row whose menu
+/// is presented (its key, the presenter's serial: @sf.last_presented), marked while it is drawn.
 priv struct DriveHeld {
   mut naming : String
   mut naming_had : Bool
   refreshing : Map[String, Bool]
   mut row_frame : Int
+  mut menu_row : String
+  mut menu_serial : Int
+  menu_items : Array[@sf.MenuItem?]
 }
 
 ///|
-let held : DriveHeld = { naming: "", naming_had: false, refreshing: {}, row_frame: -1 }
+let held : DriveHeld = {
+  naming: "",
+  naming_had: false,
+  refreshing: {},
+  row_frame: -1,
+  menu_row: "",
+  menu_serial: 0,
+  menu_items: [],
+}
 
 ///|
 fn drive_reset() -> Unit {
@@ -57,6 +69,40 @@ fn drive_reset() -> Unit {
   held.naming_had = false
   held.refreshing.clear()
   held.row_frame = -1
+  held.menu_row = ""
+  held.menu_serial = 0
+}
+
+///|
+/// `items` presented as row `key`'s menu (@sf.menu `from`), the row marked while it is drawn; what it offers kept as
+/// the row's are each frame it is built (drive_row_menu_now: what is chosen, as the core says it, may come after it
+/// opened, as the web's menu renders its items from what is chosen).
+fn drive_row_menu(key : String, items : Array[@sf.MenuItem?], from : @sf.Anchor, along? : @ui.Along = Start) -> Unit {
+  held.menu_items.clear()
+  held.menu_items.push_iter(items.iter())
+  @sf.menu(held.menu_items, from~, along~)
+  held.menu_row = key
+  held.menu_serial = @sf.last_presented()
+}
+
+///|
+/// Row `key`'s menu, while it is drawn, offering `items` as they are now.
+fn drive_row_menu_now(key : String, items : Array[@sf.MenuItem?]) -> Unit {
+  if drive_row_menu_drawn(key) {
+    held.menu_items.clear()
+    held.menu_items.push_iter(items.iter())
+  }
+}
+
+///|
+/// What a right click in a folder's list opens is told under this key: the folder's where there is no row, a row's
+/// over it (the row, built later than its list's box, says it last).
+let context_menu_key : String = "files/context-menu"
+
+///|
+/// Whether row `key`'s menu is drawn (drive_row_menu).
+fn drive_row_menu_drawn(key : String) -> Bool {
+  held.menu_row == key && @sf.presented_drawn_of(held.menu_serial)
 }
 
 ///|
@@ -378,7 +424,8 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
     transfers: st.transfers,
   }
   let previewing = preview_shown(src, "page")
-  if f.front && !c.field_focused() {
+  // (what is presented over the page has the keys: Escape closes it, not what is chosen)
+  if f.front && !c.field_focused() && !@sf.presenting() {
     b.keys(c, src)
     if write && c.shortcut('u') {
       dv_upload(c, at)
@@ -394,7 +441,25 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
   let empty = fn() {
     folder_empty(c, @sf.t("web-pages.drive.emptyFolder"), if write { Some(fn() { dv_upload(c, at) }) } else { None })
   }
-  let list_menu = "files/list-menu/" + f.key
+  // a right click where there is no row: what can be done to the folder
+  let folder_menu = fn() -> Array[@sf.MenuItem?] {
+    let a = b.arrangement()
+    let menu : Array[@sf.MenuItem?] = []
+    if write {
+      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.mkdir"), icon="folder-plus", fn() { b.new_folder(c, src, at.path) })))
+      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.upload"), icon="upload", fn() { dv_upload(c, at) })))
+    }
+    for by in ["name", "time", "size", "kind"] {
+      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), icon=if a.by == by { "check" } else { "" }, fn() {
+        b.arrange_as(c, src, by~, down=false)
+      })))
+    }
+    menu.push(Some(@sf.menu_item_of(@sf.t(if a.hidden { "web-pages.drive.hideHidden" } else { "web-pages.drive.showHidden" }), fn() {
+      b.arrange_as(c, src, hidden=!a.hidden)
+    })))
+    menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", fn() { refresh_folder(c, src, at) })))
+    menu
+  }
   // (short of room for the list beside the preview, the preview gives way: the list keeps a few names' width)
   let pane_slot = c.id("files/pane-slot/" + f.key)
   let pane_shown = previewing && !c.left_out(pane_slot)
@@ -469,29 +534,17 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
           b.clear(c, src)
         }
         match c.menu_asked(lid) {
-          Some((x, y)) => @sf.menu_open_here(list_menu, x, y)
+          // (said under the key a row's own says its menu under: a row is built after this, as its list lays it out,
+          // and the last said is the one told)
+          Some((x, y)) => {
+            let items = folder_menu()
+            c.tell(context_menu_key, fn() { @sf.menu(items, from=@sf.at_point(x, y)) })
+          }
           None => ()
         }
       }
     })
     |> ignore
-    // a right click where there is no row: what can be done to the folder
-    let a = b.arrangement()
-    let menu : Array[@sf.MenuItem?] = []
-    if write {
-      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.mkdir"), icon="folder-plus", fn() { b.new_folder(c, src, at.path) })))
-      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.upload"), icon="upload", fn() { dv_upload(c, at) })))
-    }
-    for by in ["name", "time", "size", "kind"] {
-      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), icon=if a.by == by { "check" } else { "" }, fn() {
-        b.arrange_as(c, src, by~, down=false)
-      })))
-    }
-    menu.push(Some(@sf.menu_item_of(@sf.t(if a.hidden { "web-pages.drive.hideHidden" } else { "web-pages.drive.showHidden" }), fn() {
-      b.arrange_as(c, src, hidden=!a.hidden)
-    })))
-    menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", fn() { refresh_folder(c, src, at) })))
-    @sf.context_items(c, list_menu, menu) |> ignore
     if previewing {
       let ch = b.chosen()
       let p : Previewed = if ch.names.length() > 1 {
@@ -809,7 +862,7 @@ pub fn drive_row(
   let key = "files/row/" + s.b.key + "/" + at.station + "/" + root + "/" + full
   let id = c.id(key)
   let did = c.id(key + "/open")
-  let menu_key = key + "/menu"
+  let more = c.id(key + "/menu/more")
   let busy = entry_busy(src, at, e.name)
   let live = !busy && !row.renaming
   if live {
@@ -831,7 +884,8 @@ pub fn drive_row(
       Some((x, y)) => {
         held.row_frame = c.frame_number()
         (row.menu)()
-        @sf.menu_open_here(menu_key + "/at", x, y)
+        let items = (row.items)()
+        c.tell(context_menu_key, fn() { drive_row_menu(key, items, @sf.at_point(x, y)) })
       }
       None => ()
     }
@@ -853,7 +907,10 @@ pub fn drive_row(
     Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
     None => false
   }
-  let open = @sf.menu_is_open(menu_key) || @sf.menu_is_open(menu_key + "/at")
+  let open = drive_row_menu_drawn(key)
+  if open {
+    drive_row_menu_now(key, (row.items)())
+  }
   let ground = if lit is Some(_) {
     entry_drop
   } else if row.chosen {
@@ -921,14 +978,16 @@ pub fn drive_row(
           if busy {
             @sf.spinner(c) |> ignore
           } else if over || open || finger {
-            @sf.menu_of(
-              c,
-              menu_key,
-              if open { (row.items)() } else { [] },
-              label=@sf.t("web-main.menu.more"),
-              size=if compact { more_compact } else { more_size },
-            )
-            |> ignore
+            if @sf.icon_button(
+                c,
+                "more",
+                key=key + "/menu/more",
+                size=if compact { more_compact } else { more_size },
+                on=open,
+                label=@sf.t("web-main.menu.more"),
+              ) {
+              drive_row_menu(key, (row.items)(), Of(more), along=End)
+            }
           } else if column && e.dir && along {
             c.box(style=next_box, fn() {
               @sf.icon(c, "chevron-right", size=disclosure_icon, color=t.p.muted) |> ignore
@@ -943,10 +1002,6 @@ pub fn drive_row(
     c.semantics(box, Button, id~, label=e.name, selected=row.chosen, expanded?=if tree && e.dir { Some(expanded == Some(true)) } else { None })
   })
   |> ignore
-  // its menu on a right click, at the pointer
-  if @sf.menu_is_open(menu_key + "/at") {
-    @sf.context_items(c, menu_key + "/at", (row.items)()) |> ignore
-  }
 }
 
 ///|
