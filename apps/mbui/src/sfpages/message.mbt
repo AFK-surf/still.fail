@@ -8,15 +8,18 @@
 ///|
 /// Where a message is shown: its chat (its station, its session, its view), and, in a list, how that list goes to a
 /// message (by its seq: a quote's card pressed); None out of one (a letter, a decision's). `inline`: no margin for
-/// the pictures (a side panel's, the 奏 page's: Chat.css.ts inlineHeads), each over its head's start. In its chat's
-/// list (`list`), how it moves there: its list's turns (what it asks closes in one), its messages out of avatars (by
-/// the chat's key), the words sent flying to this row.
+/// the pictures (a side panel's, the 奏 page's: Chat.css.ts inlineHeads), each over its head's start. `gutter`: the
+/// room beside the words either side that is only the page's margin (`--list-gutter`: a narrow list's sides, where
+/// the pictures are inline; none where the margin holds them or out of a list), which the message's own tables scroll
+/// out over to the screen's edges. In its chat's list (`list`), how it moves there: its list's turns (what it asks
+/// closes in one), its messages out of avatars (by the chat's key), the words sent flying to this row.
 pub(all) struct MessageHere {
   station : String
   session : String
   view : ChatView
   go : ((Double) -> Unit)?
   inline : Bool
+  gutter : Double
   list : ListMotion?
   /// the core as the settings' pages have it, over the chat's workspace (a login's card, a vault request's answer);
   /// None where nothing is answered (a letter's)
@@ -450,6 +453,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       key="msg-md/" + m.ts,
       size=body_size,
       found=marked_of(here, m.ts),
+      bleed=here.gutter,
       on_link=fn(h) {
         match placed.get(@sf.file_name_of(h)) {
           Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)

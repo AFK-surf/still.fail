@@ -55,6 +55,8 @@ pub fn chat_list(
   act_rooms(c, rd, key, keys)
   let floor = floor_of(c, rd, key, keys)
   let side = if narrow { row_side_narrow } else { row_side(c) }
+  // the sides are only margin where the pictures are inline; wider, the margin holds them
+  let gutter = if narrow { side } else { 0.0 }
   let list_box = c.box(style=chat_list_box, ty=lf.carry.unwrap_or(0.0), fn() {
     c.list(
       key,
@@ -96,7 +98,7 @@ pub fn chat_list(
             let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(linger_out_ms))
             let p = open.get()
             rd.act_whole[keys[i]] = p >= 1.0 && !open.moving()
-            let here = here_of(r, v, rk, turns, em, None, core, inline=narrow)
+            let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
             @motion.reveal(c, mk, p, fn() {
               let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
               @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)), by=rows_over(i))
@@ -115,7 +117,7 @@ pub fn chat_list(
               Some(f) if flies => flight_placed(c, f)
               _ => ()
             }
-            let here = here_of(r, v, rk, turns, em, if flies { flight } else { None }, core, inline=narrow)
+            let here = here_of(r, v, rk, turns, em, if flies { flight } else { None }, core, inline=narrow, gutter~)
             let ri = row_box(c, side, top, fn() {
               // (where a message out of a picture comes in over it: emit.mbt)
               if keys[i] == em.out_key {
@@ -231,6 +233,7 @@ pub fn here_of(
   flight : SendFlight?,
   core : Core,
   inline? : Bool = false,
+  gutter? : Double = 0.0,
 ) -> MessageHere {
   {
     station: r.station,
@@ -238,6 +241,7 @@ pub fn here_of(
     view: v,
     go: Some(fn(seq) { @sfbase.go_to(r, seq) }),
     inline: inline,
+    gutter: gutter,
     list: Some({ rk, turns, emits: em, flight }),
     core: Some(core),
   }
@@ -396,7 +400,7 @@ fn emit_flyer(c : @ui.Ctx, rk : String, em : Emits, v : ChatView, src : Source, 
     Some(a) => (a.maker, a.runtime, a.wait is Some(_))
     None => ("", "", false)
   }
-  let here = { station: r.station, session: r.session, view: v, go: None, inline: false, list: None, core: None }
+  let here = { station: r.station, session: r.session, view: v, go: None, inline: false, gutter: 0.0, list: None, core: None }
   c.layer(fn() {
     let b = c.box(style=activity_face, fn() {
       agent_avatar(c, src, here, "flyer", maker, runtime, "", "")

@@ -158,6 +158,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
                   view: @sfbase.chat_view((src.topic)("chat", chat_params(r)).value.unwrap_or(Json::null())),
                   go: None,
                   inline: true,
+                  gutter: 0.0,
                   list: None,
                   core: None,
                 }
