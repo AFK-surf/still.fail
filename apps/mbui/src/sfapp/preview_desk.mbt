@@ -107,7 +107,7 @@ fn desk_kind_label(kind : PKind?) -> String {
 
 ///|
 /// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind; a video's own facts after
-/// them (VideoViewer.tsx onMeta: its size in pixels, how long, its rate).
+/// them (the web player's bar: its size in pixels, how long, its rate).
 fn Viewer::desk_meta(self : Viewer, src : Source) -> String {
   let (at, count) = self.place(src)
   let parts : Array[String] = []
@@ -139,7 +139,7 @@ fn Viewer::desk_meta(self : Viewer, src : Source) -> String {
 }
 
 ///|
-/// A time as a video's facts say it (VideoViewer.tsx clock): m:ss.mmm.
+/// A time as a video's facts say it (web/ui viewer/playing.ts clockMs): m:ss.mmm.
 fn desk_clock(ms : Double) -> String {
   let total = ms.round().to_int()
   let m = total / 60000

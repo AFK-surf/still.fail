@@ -1,4 +1,4 @@
-// The one player of films and songs (web/ui viewer/Player.tsx and the app's VideoViewer, made one): a video is a video,
+// The one player of films and songs (web/ui viewer/Player.tsx, the web's one player too): a video is a video,
 // whether a chat's recording of a screen or a film of a station's drive, and is watched both ways. To look closely:
 // paused, a step to the frame before or after (the file's own frames, read by the host), the time to the millisecond
 // and which frame of how many at what rate, slow speeds (0.1×, 0.25×, 0.5×), the picture zoomed and moved, the frame
@@ -36,7 +36,7 @@ pub fn clock(ms : Double) -> String {
 }
 
 ///|
-/// `m:ss.mmm` (`h:mm:ss.mmm` past an hour): a frame's time, to the millisecond (VideoViewer.tsx clock).
+/// `m:ss.mmm` (`h:mm:ss.mmm` past an hour): a frame's time, to the millisecond (web/ui viewer/playing.ts clockMs).
 pub fn clock_ms(ms : Double) -> String {
   let all = (if ms < 0.0 { 0.0 } else { ms }).round().to_int64()
   let total = all / 1000L

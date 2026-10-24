@@ -54,7 +54,7 @@ export interface ViewerFlight {
   stop(): void;
 }
 
-/** The flights of the viewer drawn by `root` (its picture: `[data-viewer-picture]` in an fpStage `stage`; its grounds: itself and `[data-viewer-ground]`; its bars: `[data-floats]` and `steps`). */
+/** The flights of the viewer drawn by `root` (its picture: `[data-viewer-picture]` in an fpStage `stage` or a player's `[data-viewer-stage]`; its grounds: itself and `[data-viewer-ground]`; its bars: `[data-floats]` and `steps`). */
 export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass, steps }: { stage: string; steps: string }): ViewerFlight {
   let p = 1;
   let clock: Animation | null = null;
@@ -79,7 +79,7 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
   /** Where everything is drawn at `p`, from the thumbnail `thumb`. */
   const draw = (el: HTMLElement, thumb: HTMLElement, at: number) => {
     const picture = el.querySelector<HTMLElement>("[data-viewer-picture]");
-    const stage = picture?.closest<HTMLElement>(`.${stageClass}`);
+    const stage = picture?.closest<HTMLElement>(`.${stageClass}, [data-viewer-stage]`);
     if (!picture || !stage) return false;
     // Where the picture is in place (the stage unmoved), and where the thumbnail is.
     stage.style.transform = "none";
@@ -112,7 +112,7 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
     settle();
     const start = p;
     const picture = el.querySelector<HTMLElement>("[data-viewer-picture]");
-    const stage = picture?.closest<HTMLElement>(`.${stageClass}`);
+    const stage = picture?.closest<HTMLElement>(`.${stageClass}, [data-viewer-stage]`);
     if (!stage) { landed(); return; }
     // What comes in with the picture, each from what it would show at rest (a bar faded stays faded).
     const grounds = [el, ...el.querySelectorAll<HTMLElement>("[data-viewer-ground]")];
