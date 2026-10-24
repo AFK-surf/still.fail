@@ -11,4 +11,6 @@ pub fn reset() -> Unit {
   list_reset()
   menus_reset()
   steps_reset()
+  composing_reset()
+  triple_reset()
 }

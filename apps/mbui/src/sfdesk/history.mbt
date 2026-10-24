@@ -58,7 +58,7 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
   let t = @sf.theme()
   c.box(style=wh_head, fn() {
     c.box(style=wh_identity, fn() {
-      model_triple(c, src, station, "session:" + key)
+      @sfpages.model_triple(c, src, station, "session:" + key)
       if items(a, "attention").length() > 0 {
         wh_summary(c, a)
       }
@@ -100,7 +100,7 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
   |> ignore
   if !history_own.shut {
     wh_details(c, src, station, key, a)
-    c.box(style=triple_rule_h, fn() {  }) |> ignore
+    c.box(style=@sfpages.triple_rule_h, fn() {  }) |> ignore
   }
 }
 

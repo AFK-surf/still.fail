@@ -5,7 +5,7 @@
 /// The desk's composer for chat s-c1, over the chat fixture; what the core was asked kept in `calls`.
 fn desk_composer_tester(
   calls : Array[Made],
-  spec_of? : (ComposerFor) -> @sfdesk.ComposerSpec = default_spec,
+  spec_of? : (ComposerFor) -> @sfpages.ComposerSpec = default_spec,
 ) -> (@ui.Tester, Source) {
   reset()
   let base = fixture("chat")
@@ -25,9 +25,9 @@ fn desk_composer_tester(
       let _ = @sf.begin(c)
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
       c.box(style=@ui.css("w=Full h=Full p=S4 justify=JEnd"), fn() {
-        @sfdesk.composer(c, src, ws, spec_of({ station: r.station, key: "ws1/st1:s-c1" }), fn(w) {
+        @sfpages.composer(c, src, ws, spec_of({ station: r.station, key: "ws1/st1:s-c1" }), fn(w) {
           match (src.topic)("chat", chat_params(r)).value {
-            Some(v) => @sfdesk.send_in_chat(c, src, r, chat_view(v), w)
+            Some(v) => @sfpages.send_in_chat(c, src, r, chat_view(v), w)
             None => ()
           }
         })
@@ -48,7 +48,7 @@ priv struct ComposerFor {
 }
 
 ///|
-fn default_spec(f : ComposerFor) -> @sfdesk.ComposerSpec {
+fn default_spec(f : ComposerFor) -> @sfpages.ComposerSpec {
   {
     station: f.station,
     draft: f.key,
@@ -68,7 +68,7 @@ test "desk composer: typed words are the core's draft (composer.text); Enter sen
   t.draw()
   // (with a mouse and nothing focused it says which key brings the cursor there: pressed in its middle)
   t.tap(450.0, 500.0 - 16.0 - 22.0)
-  assert_true(t.ctx().editor_focused(@sfdesk.composer_field_key))
+  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
   t.type_text("先看第三项")
   t.frame()
   assert_true(named(calls, "composer.text").length() > 0)
@@ -107,7 +107,7 @@ fn desk_words(src : Source) -> String {
 fn desk_focus(t : @ui.Tester) -> Unit raise {
   t.draw()
   t.tap(450.0, 500.0 - 16.0 - 22.0)
-  assert_true(t.ctx().editor_focused(@sfdesk.composer_field_key))
+  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
 }
 
 ///|
@@ -123,7 +123,7 @@ test "desk composer: `@` and words offer the chats they find over it (ChatRefMen
   t.key(@ui.key_code_down)
   t.key(@ui.key_code_up)
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").field.selection(), (5, 5))
-  assert_true(t.ctx().editor_focused(@sfdesk.composer_field_key))
+  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
   assert_true(t.find("引用对话") is Some(_))
   t.enter()
   t.frame()

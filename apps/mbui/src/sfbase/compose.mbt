@@ -47,6 +47,7 @@ let writing_n : Ref[Int] = { val: 0 }
 ///|
 pub fn writings_reset() -> Unit {
   quoted_into.clear()
+  files_put.clear()
   writings.clear()
   writing_pictures.clear()
   writing_went.clear()
@@ -451,6 +452,41 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
   list.push((author, ts, role, file))
   quoted_into[draft] = list
 }
+
+///|
+/// Files (a 文件 row) put into a chat's message from elsewhere (the files' tab: 添加到消息, a row let go on the chat), by
+/// the chat's key; taken by its composer as it is next drawn (files_taken).
+pub fn files_into(chat : String, d : Dragged) -> Unit {
+  files_put.push((chat, d))
+}
+
+///|
+/// What was put into the chat `chat`'s message since it was last asked, taken.
+pub fn files_taken(chat : String) -> Array[Dragged] {
+  let out = files_put.filter(fn(x) { x.0 == chat }).map(fn(x) { x.1 })
+  files_put.retain(fn(x) { x.0 != chat })
+  out
+}
+
+///|
+// kept across runs: put back by writings_reset (sfbase's reset)
+let files_put : Array[(String, Dragged)] = []
+
+///|
+/// What a row dragged now carries, as the frame that drags it says (sfdesk's drag.mbt), for a composer it goes over.
+// kept across runs: what the app says once as it starts
+pub let drag_carried : Ref[() -> Dragged?] = Ref(fn() { None })
+
+///|
+/// The chat before (-1) or after (1) the one open, gone to by a composer's ↑ or ↓ (empty, focused), as the shell
+/// says as the app starts (its list's order); none while the shell has the arrows itself (its switcher open).
+// kept across runs: what the app says once as it starts
+pub let neighbour_go : Ref[(Source, Workspace, Int) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
+/// Whether the shell has the arrows now (neighbour_go).
+// kept across runs: what the app says once as it starts
+pub let neighbour_held : Ref[() -> Bool] = Ref(fn() { false })
 
 ///|
 /// The files quoted, by draft key, not yet taken by a composer.

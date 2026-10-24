@@ -307,7 +307,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   // lines more: the box concentric with the panel, the send button with the box, 12 in
   t.tap_text("发消息")
   t.type_text("第一行\n第二行\n第三行")
-  t.run_for(@sfdesk.morph_ms)
+  t.run_for(@sfpages.morph_ms)
   guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
   let open = @ui.concentric(panel, @sf.page_panel_in)
   assert_eq(k, open)
