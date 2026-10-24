@@ -25,7 +25,9 @@ jobs:
   # into kept in the Actions cache by content (MBC_STORE: main's newest and a branch's own together): 667 tests,
   # ~170 s a part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the app's beta (mbui.yml),
   # which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in
-  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's: no macOS
+  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's, and sfapp's
+  # tests in one process on a third (`whole`: what one file leaves behind that a later one trips on, which the app
+  # part's shards hide, 2026-10-24): no macOS
   # runner (a test's program is the same C on any system; the Apple toolchain builds the apps, mbui.yml). No ThinLTO
   # parts: the apps are not built with it (scripts/mbc's lto_for, 2026-10-24).
   native:
@@ -35,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [app, replay]
+        part: [app, replay, whole]
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
       CACHE_PREFIX: mbui-linux-store-${{ matrix.part }}-
