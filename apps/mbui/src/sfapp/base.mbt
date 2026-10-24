@@ -3,6 +3,9 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  shared_into,
+  station_files_asked,
+  files_into,
   archive_ease,
   archive_ms,
   archive_scale,

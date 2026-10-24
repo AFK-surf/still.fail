@@ -48,6 +48,7 @@ let writing_n : Ref[Int] = { val: 0 }
 pub fn writings_reset() -> Unit {
   quoted_into.clear()
   files_put.clear()
+  shared_into.clear()
   writings.clear()
   writing_pictures.clear()
   writing_went.clear()
@@ -206,6 +207,63 @@ pub fn writing_add(src : Source, w : Writing, station : String, name : String, b
     bytes~,
   )
 }
+
+///|
+/// A file the host holds, too big to be read whole (a video: @hostapi.Picked.held), into the draft: the core sends it
+/// up to `station`, reading it from the host a part at a time as it goes (`composer.add` with `blob: {hostFile, size,
+/// type}`: still.fail's Android app's PickedFiles.kt); its tile the host's picture of it (a video's still).
+pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostapi.Picked) -> Unit {
+  writing_n.val += 1
+  let id = "f" + upload_id(w.key + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{f.size}", writing_n.val)
+  if f.src != "" {
+    writing_pictures[id] = f.src
+  }
+  let one : Map[String, Json] = {
+    "id": Json::string(id),
+    "name": Json::string(f.name),
+    "size": Json::number(f.size),
+    "blob": Json::object({
+      "hostFile": Json::number(f.held.to_double()),
+      "size": Json::number(f.size),
+      "type": Json::string(file_type(f.name)),
+    }),
+  }
+  let shown : Map[String, Json] = {
+    "id": Json::string(id),
+    "name": Json::string(f.name),
+    "size": Json::number(f.size),
+  }
+  writing_act(
+    src,
+    w,
+    "add",
+    { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
+    show=fn(w) { w.files = w.files + [Json::object(shown)] },
+  )
+}
+
+///|
+/// A file the system picked (or shared into the app) into the draft: held by the host (writing_add_held), or its bytes
+/// (writing_add).
+pub fn writing_add_picked(src : Source, w : Writing, station : String, f : @hostapi.Picked) -> Unit {
+  if f.held != 0 {
+    writing_add_held(src, w, station, f)
+  } else {
+    writing_add(src, w, station, f.name, f.bytes)
+  }
+}
+
+///|
+/// Files shared into the app from another (Android's share sheet), waiting for their chat's composer to take them, by
+/// its draft's key.
+// kept across runs: put back by writings_reset (sfbase's reset)
+pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
+
+///|
+/// The station files sheet (a phone's ＋ → Station 文件) put up for draft `key`, as the shell draws it; what is ticked
+/// there comes into the draft as files_into does.
+// kept across runs: what the app says once as it starts
+pub let station_files_asked : Ref[(String) -> Unit] = Ref(fn(_) {  })
 
 ///|
 /// Files and folders dragged in from where they are (a station's files: `ref` with its station, its name and path, a

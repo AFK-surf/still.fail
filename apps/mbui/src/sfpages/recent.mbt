@@ -31,6 +31,27 @@ priv struct Recent {
 let recent : Recent = { open: false, answers: -1, access: NoGallery, reading: None, photos: [] }
 
 ///|
+fn recent_reset() -> Unit {
+  recent.open = false
+  recent.answers = -1
+  recent.access = NoGallery
+  recent.reading = None
+  recent.photos = []
+}
+
+///|
+/// The strip's photo `i` (its first after the camera: 0).
+pub fn recent_photo(i : Int) -> @hostapi.GalleryPhoto? {
+  recent.photos.get(i)
+}
+
+///|
+/// Whether and how the gallery may be read, as last asked.
+pub fn recent_access() -> @hostapi.GalleryAccess {
+  recent.access
+}
+
+///|
 /// The ids of the `n` photos latest at `now` (seconds), newest first (Attach.kt latest): each by the latest of its times
 /// that can be believed, a time in milliseconds taken as the seconds it means and one still ahead of now (by more than a
 /// day) left out; the gallery's own order (its id) between photos of the same time.
@@ -74,7 +95,7 @@ fn latest_photos(photos : Array[@hostapi.GalleryPhoto], now : Int64, n : Int) ->
 
 ///|
 /// Each frame ＋'s sheet is drawn: the gallery read again as it opens and on each of the system's answers.
-fn recent_frame(src : Source, open : Bool) -> Unit {
+pub fn recent_frame(src : Source, open : Bool) -> Unit {
   let answers = @hostapi.gallery_answers()
   if open && (!recent.open || answers != recent.answers) {
     recent.answers = answers
@@ -106,13 +127,13 @@ fn recent_frame(src : Source, open : Bool) -> Unit {
 ///|
 /// The strip (Attach.kt RecentPhotos): the camera, the recent photos, the tile that asks; `tapped(i)` with the tile
 /// tapped: 0 the camera, 1… a photo, -1 the asking tile.
-fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
+pub fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   let t = @sf.theme()
   let photos = recent.photos
   let ask = match recent.access {
     Whole => None
-    Chosen => Some(tr("android-chat.attach.recent.more"))
-    _ => Some(tr("android-chat.attach.recent.allow"))
+    Chosen => Some(@sf.t("android-chat.attach.recent.more"))
+    _ => Some(@sf.t("android-chat.attach.recent.allow"))
   }
   let tiles = 1 + photos.length() + (if ask is Some(_) { 1 } else { 0 })
   let width = c.width
@@ -149,16 +170,16 @@ fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   let off = a.get()
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=recent_strip_row, fn() {
-      c.box(dir=Row, gap=6.0, tx=off, fn() {
+      c.box(style=recent_tiles, tx=off, fn() {
         recent_tile(c, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
         for p in photos {
           recent_tile(c, fn() {
-            c.image(p.src, w=Px(92.0), h=Px(122.0), radius=14.0, fit=FitCover, bg=0L) |> ignore
+            c.image(p.src, w=Px(recent_tile_w), h=Px(recent_tile_h), radius=14.0, fit=FitCover, bg=0L) |> ignore
             // a video's still, its play mark in its corner (Attach.kt Thumbnail: 22 round, black at 45%, 6 in)
             if p.video {
               c.layer(fn() {
                 c.box(style=recent_video_room, fn() {
-                  c.box(w=Px(22.0), h=Px(22.0), radius=11.0, bg=0x00000073L, align=ACenter, justify=JCenter, fn() {
+                  c.box(style=recent_play, fn() {
                     @sf.icon(c, "play", size=14.0, color=0xFFFFFFFFL) |> ignore
                   })
                   |> ignore
@@ -172,9 +193,9 @@ fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
         match ask {
           Some(words) =>
             recent_tile(c, fn() {
-              c.box(padx=8.0, gap=8.0, align=ACenter, fn() {
+              c.box(style=recent_ask, fn() {
                 @sf.icon(c, "photo", size=22.0, color=t.p.muted) |> ignore
-                c.text(words, size=12.0, color=t.p.muted, line=16.0, center=true) |> ignore
+                c.text(words, style=recent_ask_words) |> ignore
               })
               |> ignore
             })
@@ -202,7 +223,53 @@ let recent_video_room : @ui.Style = @ui.css("w=Full h=Full p=S1_5 justify=JEnd a
 ///|
 /// A tile of the strip (92 × 122, the chip's grey under it).
 fn recent_tile(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Px(92.0), h=Px(122.0), radius=14.0, bg=t.p.chip, clip=true, align=ACenter, justify=JCenter, body)
-  |> ignore
+  c.box(style=recent_tile_box, body) |> ignore
 }
+
+///|
+/// A tile: 92 × 122, 14 round, a quiet ground under it.
+// kept across runs: a value (no field of it changes)
+let recent_tile_box : @ui.Style = @ui.style(
+  w=Fixed(recent_tile_w),
+  h=Fixed(recent_tile_h),
+  radius=Xl1_5,
+  bg=Neutral,
+  clip=true,
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
+let recent_tile_w : Double = 92.0
+
+///|
+let recent_tile_h : Double = 122.0
+
+///|
+/// The tiles, 6 apart, slid across by the finger.
+// kept across runs: a value (no field of it changes)
+let recent_tiles : @ui.Style = @ui.css("row gap=S1_5")
+
+///|
+/// A video's play mark (Attach.kt Thumbnail: 22 round, black at 45%).
+// kept across runs: a value (no field of it changes)
+let recent_play : @ui.Style = @ui.style(
+  w=Fixed(recent_play_side),
+  h=Fixed(recent_play_side),
+  radius=Full,
+  bg=A(Theater, O45),
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
+let recent_play_side : Double = 22.0
+
+///|
+/// The tile that asks for the gallery: its picture over what it asks, 8 in.
+// kept across runs: a value (no field of it changes)
+let recent_ask : @ui.Style = @ui.css("px=S2 gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let recent_ask_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4, center=true)

@@ -246,8 +246,7 @@ let sfs : StationFilesUi = {
 
 ///|
 /// ＋'s Station 文件 tapped: the places, for the draft `key`.
-fn station_files_open(c : @ui.Ctx, key : String) -> Unit {
-  ignore(c)
+fn station_files_open(key : String) -> Unit {
   sfs.open = true
   sfs.closing = false
   sfs.draft = key
@@ -308,15 +307,20 @@ fn station_files_sheet(c : @ui.Ctx, src : Source, w : String, key : String) -> U
             primary=true,
             enabled=n > 0,
           ) {
-          let have = refs_of(key)
-          // as files where the chat says so (a folder only named); the composer puts those up (ref_send_up)
-          let as_files = drops_as_files(src, key)
+          // into the draft as the files' tab puts them (sfbase's files_into): named by their paths, or as files where
+          // the chat says so, as its composer takes them
           for _, r in sfs.ticked {
-            if !have.iter().any(fn(x) { x.station == r.station && x.path == r.path }) {
-              have.push({ ..r, mode: if as_files && !r.dir { "file" } else { "path" }, up: None })
-            }
+            files_into(key, {
+              station: r.station,
+              station_name: r.station_name,
+              root: r.root,
+              path: r.at,
+              abs: r.path,
+              name: r.name,
+              size: r.size,
+              dir: r.dir,
+            })
           }
-          draft_refs[key] = have
           station_files_close(c)
         }
       })

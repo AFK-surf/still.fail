@@ -128,6 +128,9 @@ using @sfbase {
   type Writing,
   type Dragged,
   type Workspace,
+  writing_add_picked,
+  shared_into,
+  type FlyingFile,
 }
 
 ///|

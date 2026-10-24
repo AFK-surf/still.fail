@@ -37,6 +37,8 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
+  // ＋'s Station 文件 (a composer's, sfpages): the phone's sheet of station files, drawn over the chat (station_files.mbt)
+  station_files_asked.val = station_files_open
   home_rows.val = []
   steadies.clear()
   sheet_host.kind = NoSheet
@@ -144,13 +146,7 @@ fn reset() -> Unit {
   quote_fields.clear()
   rename_field.set("")
   rename_given.val = ""
-  shared_into.clear()
   share_files_made.val = 0
-  recent.open = false
-  recent.answers = -1
-  recent.access = NoGallery
-  recent.reading = None
-  recent.photos = []
   fix_fetches.clear()
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
   reset_by_hand.val = true
