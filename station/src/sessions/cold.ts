@@ -8,7 +8,7 @@ import { rm, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { log } from "../ops/log.ts";
 import { realOutside } from "../ops/places.ts";
-import { transcriptPath } from "../read/transcript.ts";
+import { homesFirst, transcriptPaths } from "../read/transcript.ts";
 import * as archive from "./archive.ts";
 import { runtimeNamed } from "./config.ts";
 import { measureRoom, roomOf, safeToRemove, within } from "./footprint.ts";
@@ -104,15 +104,15 @@ export class ColdRooms implements ColdStorage {
     )
       return [];
     const config = hub.config();
-    const profile = config.profiles.find((p) => p.id === row.profile);
     const runtime = runtimeNamed(row.runtime);
-    if (!profile || !runtime) return [];
+    if (!runtime) return [];
     const root = realpathSync(config.dataDir);
     const files: string[] = [];
-    // With those of the runtime sessions it ran in before (sessions/afresh.ts).
+    const homes = homesFirst(config.profiles, row.profile);
+    // With those of the runtime sessions it ran in before (sessions/afresh.ts), each found as its history finds it.
     for (const each of hub.store.runtimeSessions(key)) {
-      const path = transcriptPath(runtime, profile.home, each);
-      if (path === null) continue;
+      const path = transcriptPaths(runtime, config.dataDir, homes, [each]).paths[0];
+      if (path === undefined) continue;
       const parent = realpathSync(dirname(path));
       if (!within(parent, root)) continue;
       files.push(join(parent, basename(path)));

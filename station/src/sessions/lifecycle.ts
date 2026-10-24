@@ -9,7 +9,7 @@ import { PlaceRefused } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
-import { readTimeline, transcriptPath } from "../read/transcript.ts";
+import { readTimeline, sharedTranscripts } from "../read/transcript.ts";
 import { AUTO, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
@@ -400,11 +400,10 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
   const keptModel = found.model !== null && profiles.some((p) => p.models.includes(found.model!)) ? found.model : null;
   const profile = hub.accounts.pick(profiles, keptModel, false);
   const model = keptModel ?? profile.model ?? profile.models[0] ?? null;
-  const copy = copyTranscript(roots, found, join(config.dataDir, "transcripts", runtime));
-  // Where its execution history is when it comes here: its last entry, read as the history reads it (from the file the
-  // profile's home finds).
-  const read = transcriptPath(runtime, profile.home, found.id) ?? copy;
-  const entries = readTimeline(runtime, read).length;
+  const copy = copyTranscript(roots, found, sharedTranscripts(config.dataDir, runtime));
+  // Where its execution history is when it comes here: its last entry, read as the history reads it (from the shared
+  // place, read/transcript.ts `transcriptPaths`).
+  const entries = readTimeline(runtime, copy).length;
   const last = entries > 0 ? entries - 1 : null;
   const key = newChatKey();
   const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");

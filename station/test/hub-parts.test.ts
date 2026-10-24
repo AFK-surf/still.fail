@@ -465,16 +465,22 @@ test("a session gone on in a new runtime session: its history reads on from the 
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("a session's transcripts are found in the home of whichever account wrote them, the current one's once written", () => {
+test("a session's transcripts are found in the shared place, else in the home of whichever account wrote them; the current one's once written", () => {
   const dir = temp();
   const [a, b] = [join(dir, "a"), join(dir, "b")];
   mkdirSync(join(a, "projects", "w"), { recursive: true });
   mkdirSync(join(b, "projects", "w"), { recursive: true });
+  mkdirSync(join(dir, "transcripts", "claude", "w"), { recursive: true });
   writeFileSync(join(a, "projects", "w", "one.jsonl"), line("one", "m1"));
   writeFileSync(join(b, "projects", "w", "two.jsonl"), line("two", "m2"));
-  assert.deepEqual(transcriptPaths("claude", [b, a], ["one", "two", "three"]), { paths: [join(a, "projects", "w", "one.jsonl"), join(b, "projects", "w", "two.jsonl")], current: false });
+  // Written in a home no profile has any more: in the shared place, as every home the station keeps writes there.
+  writeFileSync(join(dir, "transcripts", "claude", "w", "zero.jsonl"), line("zero", "m0"));
+  assert.deepEqual(transcriptPaths("claude", dir, [b, a], ["zero", "one", "two", "three"]), {
+    paths: [join(dir, "transcripts", "claude", "w", "zero.jsonl"), join(a, "projects", "w", "one.jsonl"), join(b, "projects", "w", "two.jsonl")],
+    current: false,
+  });
   writeFileSync(join(b, "projects", "w", "three.jsonl"), line("three", "m3"));
-  assert.equal(transcriptPaths("claude", [b, a], ["one", "two", "three"]).current, true);
+  assert.equal(transcriptPaths("claude", dir, [b, a], ["one", "two", "three"]).current, true);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -572,16 +578,72 @@ test("profile homes link to the shared memory and skills under their runtimes' n
 
 test("every profile's transcripts are a runtime's one shared place", () => {
   const root = temp();
-  const [both, own] = [join(root, "both"), join(root, "own")];
+  const data = join(root, "data");
+  const [both, own] = [join(data, "homes", "both"), join(root, "own")];
   mkdirSync(join(own, "sessions"), { recursive: true });
-  linkTranscripts(root, [
+  linkTranscripts(data, [
     { id: "both", runtimes: ["claude", "codex"], home: both },
     { id: "own", runtimes: ["codex"], home: own },
   ]);
-  assert.equal(readlinkSync(join(both, "projects")), join(root, "transcripts/claude"));
-  assert.equal(readlinkSync(join(both, "sessions")), join(root, "transcripts/codex"));
+  assert.equal(readlinkSync(join(both, "projects")), join(data, "transcripts/claude"));
+  assert.equal(readlinkSync(join(both, "sessions")), join(data, "transcripts/codex"));
+  // A home outside the data directory whose runtime keeps its transcripts there already: the person's own, left.
   assert.ok(lstatSync(join(own, "sessions")).isDirectory());
   rmSync(root, { recursive: true, force: true });
+});
+
+test("transcripts a home kept itself go to the shared place, a runtime still writing them goes on there, and a home no profile names any more gives its own", () => {
+  const data = temp();
+  const shared = join(data, "transcripts", "claude", "w");
+  const [now, was, gone] = [join(data, "homes", "a-sync"), join(data, "homes", "a"), join(data, "homes", "b")];
+  const put = (home: string, name: string, text: string) => {
+    mkdirSync(join(home, "projects", "w", "s1", "subagents"), { recursive: true });
+    writeFileSync(join(home, "projects", "w", name), text);
+  };
+  // The profile's home was copied (a-sync) while a runtime went on writing in the one it started in (a), which no
+  // profile names now; another (b) is a profile's that was removed.
+  put(was, "s1.jsonl", line("one", "m1") + line("two", "m2"));
+  writeFileSync(join(was, "projects", "w", "s1", "subagents", "agent-x.jsonl"), line("sub", "m9"));
+  put(now, "s1.jsonl", line("one", "m1"));
+  put(now, "s2.jsonl", line("new", "m3"));
+  put(gone, "s0.jsonl", line("old", "m0"));
+  // Claude Code's own sessions/ in a home of its: not Codex's transcripts.
+  mkdirSync(join(gone, "sessions"), { recursive: true });
+  writeFileSync(join(gone, "sessions", "123.json"), "{}");
+  linkTranscripts(data, [{ id: "a", runtimes: ["claude"], home: now }]);
+  for (const home of [now, was, gone]) assert.equal(readlinkSync(join(home, "projects")), join(data, "transcripts", "claude"));
+  assert.ok(lstatSync(join(gone, "sessions")).isDirectory());
+  assert.equal(readFileSync(join(shared, "s1.jsonl"), "utf8"), line("one", "m1") + line("two", "m2"), "the copy from before it grew gives way");
+  assert.equal(readFileSync(join(shared, "s1", "subagents", "agent-x.jsonl"), "utf8"), line("sub", "m9"));
+  assert.equal(readFileSync(join(shared, "s2.jsonl"), "utf8"), line("new", "m3"));
+  assert.equal(readFileSync(join(shared, "s0.jsonl"), "utf8"), line("old", "m0"));
+  for (const home of [now, was, gone]) assert.deepEqual(readdirSync(home).filter((n) => n.startsWith("projects.")), [], "nothing kept aside");
+  // The runtime started in the home it ran in goes on writing there: the same transcript.
+  appendFileSync(join(was, "projects", "w", "s1.jsonl"), line("three", "m4"));
+  assert.deepEqual(transcriptPaths("claude", data, [now], ["s0", "s1", "s2"]).paths.map((p) => readTimeline("claude", p).map((e) => e.text)), [["old"], ["one", "two", "three"], ["new"]]);
+  // Linked again (the config changed): as it is.
+  linkTranscripts(data, [{ id: "a", runtimes: ["claude"], home: now }]);
+  assert.equal(readFileSync(join(shared, "s1.jsonl"), "utf8"), line("one", "m1") + line("two", "m2") + line("three", "m4"));
+  rmSync(data, { recursive: true, force: true });
+});
+
+test("a transcript that went its own way in two homes keeps the shared place's and is left aside, not lost", () => {
+  const data = temp();
+  const [a, b] = [join(data, "homes", "a"), join(data, "homes", "b")];
+  for (const [home, text] of [[a, "mine"], [b, "theirs"]] as const) {
+    mkdirSync(join(home, "projects", "w"), { recursive: true });
+    writeFileSync(join(home, "projects", "w", "s.jsonl"), line(text, "m"));
+  }
+  linkTranscripts(data, [
+    { id: "a", runtimes: ["claude"], home: a },
+    { id: "b", runtimes: ["claude"], home: b },
+  ]);
+  assert.equal(readFileSync(join(data, "transcripts", "claude", "w", "s.jsonl"), "utf8"), line("mine", "m"));
+  assert.equal(readlinkSync(join(b, "projects")), join(data, "transcripts", "claude"));
+  const aside = readdirSync(b).filter((n) => n.startsWith("projects.unshared"));
+  assert.equal(aside.length, 1);
+  assert.equal(readFileSync(join(b, aside[0]!, "w", "s.jsonl"), "utf8"), line("theirs", "m"));
+  rmSync(data, { recursive: true, force: true });
 });
 
 test("the station's own skills are written and kept as the station has them; the feedback skill on the stable channel only", () => {

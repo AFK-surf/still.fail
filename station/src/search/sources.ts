@@ -10,7 +10,7 @@ import { isAbsolute, join } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import * as store from "../read/store.ts";
 import type { MessageRow, SessionRow, Store } from "../read/store.ts";
-import { type ReadState, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
+import { homesFirst, type ReadState, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
 import { readFrom } from "../usage/counter.ts";
 import { agentHomeOf, memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
@@ -131,11 +131,9 @@ function historyText(e: TimelineEntry): string | null {
 
 /// A session's transcript files, and the runtime that wrote them.
 export function transcriptFiles(s: Store, session: SessionRow, profiles: Profiles): { paths: string[]; runtime: NonNullable<ReturnType<typeof runtimeKind>> } | null {
-  const profile = profiles.find((p) => p.id === session.profile);
   const runtime = runtimeKind(session.runtime) ?? null;
-  if (!profile || runtime === null || store.runtimeSessions(s, session.key).length === 0) return null;
-  const homes = [profile.home, ...profiles.map((p) => p.home).filter((h) => h !== profile.home)];
-  const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, session.key));
+  if (runtime === null || store.runtimeSessions(s, session.key).length === 0) return null;
+  const { paths } = transcriptPaths(runtime, s.dataDir, homesFirst(profiles, session.profile), store.runtimeSessions(s, session.key));
   return { paths, runtime };
 }
 

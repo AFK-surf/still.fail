@@ -32,7 +32,7 @@ const SCRUBBED = ["DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", DSH_KEY, "DSH_HOME", 
 const ROUTE = "stillfail";
 const DEEPSEEK_ROUTE = "deepseek-official";
 /// Where in its home a profile's dsh keeps its sessions (not dsh's own sessions/: a profile home's is Codex's too,
-/// agent-home.ts `transcriptDir`).
+/// read/transcript.ts `transcriptDir`).
 export const SESSIONS = "dsh-sessions";
 /// dsh's own model when a DeepSeek profile names none.
 const DEEPSEEK_MODEL = "deepseek-v4-flash";

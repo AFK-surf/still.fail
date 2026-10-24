@@ -20,7 +20,7 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { readTimeline, transcriptPaths } from "./transcript.ts";
+import { homesFirst, readTimeline, transcriptPaths } from "./transcript.ts";
 import { inBrief, stateOf } from "./transcripts.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
@@ -310,15 +310,14 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   return { start, entries: entries.slice(start, upto), end };
 }
 
-/// A session's transcripts, through its profile (hub.rs `locate`): those of the runtime sessions it ran in before first
-/// (sessions/afresh.ts), and none now (its context cleared) still reads those it ran in. Null: none found.
+/// A session's transcripts (hub.rs `locate`): those of the runtime sessions it ran in before first (sessions/afresh.ts),
+/// and none now (its context cleared) still reads those it ran in; found whatever profile it is on now, if any. Null:
+/// none found.
 function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: string[] } | null {
   const row = sessionRow(s, key);
-  const profile = configOf(s).profiles.find((p) => p.id === row.profile);
   const runtime = runtimeKind(row.runtime) ?? null;
-  if (!profile || runtime === null || store.runtimeSessions(s, key).length === 0) return null;
-  const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
-  return { runtime, paths: transcriptPaths(runtime, homes, store.runtimeSessions(s, key)).paths };
+  if (runtime === null || store.runtimeSessions(s, key).length === 0) return null;
+  return { runtime, paths: transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key)).paths };
 }
 
 /// Where the reading of a session's transcripts stands (read/transcripts.ts `stateOf`), for its live view to go on from
@@ -333,11 +332,9 @@ export function transcriptState(s: Store, key: string): Json {
 export function transcriptFile(s: Store, key: string, lang: Lang): Json {
   setLang(lang);
   const row = sessionRow(s, key);
-  const profile = configOf(s).profiles.find((p) => p.id === row.profile);
   const runtime = runtimeKind(row.runtime) ?? null;
-  if (!profile || runtime === null || row.runtimeSessionId === null) return { path: null };
-  const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
-  const { paths, current } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));
+  if (runtime === null || row.runtimeSessionId === null) return { path: null };
+  const { paths, current } = transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key));
   return { path: current ? paths.at(-1)! : null };
 }
 

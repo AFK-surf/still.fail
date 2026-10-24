@@ -11,7 +11,7 @@
 //
 // JSON is read with JSON.parse, so a value shows as JavaScript has it: a number written `1.0` shows `1`, a key that is
 // an integer comes first, a number past 2^53 rounds (serde_json keeps each as written). Transcripts rarely have them.
-import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import { tr } from "./spoken.ts";
@@ -128,17 +128,32 @@ const entriesOf = (dir: string): string[] | null => {
   }
 };
 
-/// transcript_path: where a runtime keeps a session's transcript, if it is there.
+/// Where in a home a runtime keeps its transcripts: Claude Code's projects/, Codex's sessions/, DeepSeek Harness's
+/// dsh-sessions/ as dsh.ts sets it, Grok Build's grok/sessions/, Cursor's and Devin's cursor/sessions/ and devin/sessions/
+/// as cursor.ts and devin.ts keep them. In a home the station keeps it is a link to the runtime's shared place
+/// (`sharedTranscripts`, sessions/agent-home.ts `linkTranscripts`).
+export const transcriptDir = (runtime: string) => (runtime === "claude" ? "projects" : runtime === "codex" ? "sessions" : runtime === "grok" ? "grok/sessions" : runtime === "cursor" ? "cursor/sessions" : runtime === "devin" ? "devin/sessions" : "dsh-sessions");
+
+/// The one place a runtime's transcripts are kept on the station, whichever account's home wrote them.
+export const sharedTranscripts = (dataDir: string, runtime: string) => join(dataDir, "transcripts", runtime);
+
+/// transcript_path: where a runtime keeps a session's transcript in a home, if it is there.
 export function transcriptPath(runtime: RuntimeKind, home: string, id: string): string | null {
-  if (runtime === "dsh") return dshTranscript(home, id);
-  if (runtime === "grok") return grokTranscript(home, id);
+  return transcriptIn(runtime, join(home, transcriptDir(runtime)), id);
+}
+
+/// Where a session's transcript is in a directory of the runtime's transcripts (a home's, `transcriptDir`, or the shared
+/// place), if it is there.
+function transcriptIn(runtime: RuntimeKind, dir: string, id: string): string | null {
+  if (runtime === "dsh") return dshTranscript(dir, id);
+  if (runtime === "grok") return grokTranscript(dir, id);
   if (runtime === "cursor" || runtime === "devin") {
-    const path = join(home, runtime, "sessions", `${id}.jsonl`);
+    const path = join(dir, `${id}.jsonl`);
     return isFile(storage(path)) ? path : null;
   }
   if (runtime === "claude") {
-    for (const dir of entriesOf(join(home, "projects")) ?? []) {
-      const path = join(home, "projects", dir, `${id}.jsonl`);
+    for (const project of entriesOf(dir) ?? []) {
+      const path = join(dir, project, `${id}.jsonl`);
       if (isFile(storage(path))) return path;
     }
     return null;
@@ -157,13 +172,12 @@ export function transcriptPath(runtime: RuntimeKind, home: string, id: string): 
     }
     return null;
   };
-  return find(join(home, "sessions"));
+  return find(dir);
 }
 
 /// dsh's: the session's directory holds one file per format it was written in (session.v<N>.jsonl); the current is the
 /// highest N. Its directory is under one named for its working directory (any).
-function dshTranscript(home: string, id: string): string | null {
-  const root = join(home, "dsh-sessions");
+function dshTranscript(root: string, id: string): string | null {
   for (const dir of entriesOf(root) ?? []) {
     const files = (entriesOf(join(root, dir, id)) ?? [])
       .map((name) => [name, /^session\.v(\d+)\.jsonl$/.exec(name)?.[1]] as const)
@@ -174,9 +188,8 @@ function dshTranscript(home: string, id: string): string | null {
   return null;
 }
 
-/// Grok Build's: its home's sessions/<working directory, escaped>/<id>/chat_history.jsonl (agents/grok.ts).
-function grokTranscript(home: string, id: string): string | null {
-  const root = join(home, "grok", "sessions");
+/// Grok Build's: sessions/<working directory, escaped>/<id>/chat_history.jsonl in its home (agents/grok.ts).
+function grokTranscript(root: string, id: string): string | null {
   for (const dir of entriesOf(root) ?? []) {
     const path = join(root, dir, id, "chat_history.jsonl");
     if (isFile(storage(path))) return path;
@@ -184,14 +197,33 @@ function grokTranscript(home: string, id: string): string | null {
   return null;
 }
 
-/// The transcripts of a session's runtime sessions (`ids`, the first first, ending with its current one), each looked
-/// for in the homes given (its profile's first): a runtime session that ran on another account may have written into
-/// that account's home (one whose transcript directory is not the shared one, agent-home.ts `linkTranscripts`).
-/// `current` is whether the current one's is there: a runtime writes it only once its conversation has begun.
-export function transcriptPaths(runtime: RuntimeKind, homes: string[], ids: string[]): { paths: string[]; current: boolean } {
+/// Profiles' homes, `first`'s (a session's profile, if it still has one) first.
+export const homesFirst = (profiles: readonly { id: string; home: string }[], first: string | null): string[] => [
+  ...profiles.filter((p) => p.id === first).map((p) => p.home),
+  ...profiles.filter((p) => p.id !== first).map((p) => p.home),
+];
+
+/// The transcripts of a session's runtime sessions (`ids`, the first first, ending with its current one): each looked
+/// for in the runtime's shared place in data directory `dataDir`, where every home the station keeps has its runtimes
+/// write them, whichever account and home a runtime session ran on and whatever the config says now; then in each of
+/// `homes` (its profile's first) for a home that keeps its own (one outside the data directory that had transcripts in
+/// it before it was a profile's, agent-home.ts `linkTranscripts`). `current` is whether the current one's is there: a
+/// runtime writes it only once its conversation has begun.
+export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: string[], ids: string[]): { paths: string[]; current: boolean } {
+  // Each directory once, however it is reached (a home's that links to the shared place is that place).
+  const seen = new Set<string>();
+  const dirs = [sharedTranscripts(dataDir, runtime), ...homes.map((home) => join(home, transcriptDir(runtime)))].filter((dir) => {
+    let real: string;
+    try {
+      real = realpathSync(dir);
+    } catch {
+      return false;
+    }
+    return !seen.has(real) && (seen.add(real), true);
+  });
   const found = ids.map((id) => {
-    for (const home of homes) {
-      const path = transcriptPath(runtime, home, id);
+    for (const dir of dirs) {
+      const path = transcriptIn(runtime, dir, id);
       if (path !== null) return path;
     }
     return null;
