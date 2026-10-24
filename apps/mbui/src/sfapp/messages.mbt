@@ -102,7 +102,9 @@ fn entry_view(c : @ui.Ctx, src : Source, here : Here, e : Entry, list : Array[En
       })
       |> ignore
     Line => unread_line(c)
-    Said(m) => said(c, src, here, m, list, quotes=true)
+    // (in the list's row: its tables scroll out over the row's margin to the list's edges, where the margin holds
+    // nothing: not in the wide frame, whose pictures are out in it, said_avatar)
+    Said(m) => said(c, src, here, m, list, quotes=true, bleed=if wide_on.val { 0.0 } else { row_side(c) })
     Sent(s) => sent_elsewhere(c, src, here, s)
     Out(o) => outgoing(c, src, here, o)
     Working(a) => activity(c, src, here, a)
@@ -234,7 +236,8 @@ fn agent_avatar(c : @ui.Ctx, maker : String, runtime : String) -> Unit {
 
 ///|
 /// A message (Chat.kt SaidRow): still.fail's own a notice across the chat; the viewer's on the right in a bubble;
-/// anyone else's under their picture, name and time, an agent's as Markdown with its files placed in it.
+/// anyone else's under their picture, name and time, an agent's as Markdown with its files placed in it, its tables
+/// scrolling out to `bleed` past it either side.
 fn said(
   c : @ui.Ctx,
   src : Source,
@@ -243,6 +246,7 @@ fn said(
   list : Array[Entry],
   decide? : Bool = true,
   quotes? : Bool = false,
+  bleed? : Double = 0.0,
 ) -> Unit {
   ignore(list)
   let k = ink()
@@ -321,7 +325,7 @@ fn said(
         }
         files(c, src, here, beside_quotes(m.quotes, m.attachments), false, quote~)
       } else {
-        pickable(c, m.ts, who, role, m.text, true, fn() { agent_words(c, src, here, m, quote~) })
+        pickable(c, m.ts, who, role, m.text, true, fn() { agent_words(c, src, here, m, quote~, bleed~) })
       }
       // what it asks, under it: not on the 奏 page, which has its options at its foot (Chat.kt SaidAlone)
       if !decide {
@@ -809,13 +813,15 @@ fn open_link(href : String) -> Unit {
 
 ///|
 /// An agent's Markdown with its files (Prose.kt AgentWords): those its text names (`placed`) drawn there, the rest
-/// below it; its links to a station's screens as their cards (screen_links.mbt).
+/// below it; its links to a station's screens as their cards (screen_links.mbt); its tables scrolling out to `bleed`
+/// past it either side.
 fn agent_words(
   c : @ui.Ctx,
   src : Source,
   here : Here,
   m : Message,
   quote? : ((Attachment) -> Unit)? = None,
+  bleed? : Double = 0.0,
 ) -> Unit {
   // an agent's request about a vault item: its card in place of the words, answered on it (vault_approval.mbt)
   match m.card {
@@ -886,6 +892,7 @@ fn agent_words(
         },
         // its links to a station's screens and 共享调试 as their cards (screen_links.mbt)
         screens=Some(screen_links(c, src, here.station + "/" + here.session + "/" + m.ts)),
+        bleed~,
       )
       |> ignore
     }

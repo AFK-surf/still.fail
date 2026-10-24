@@ -7,8 +7,9 @@ import { COMPOSER_INNER, composerBox } from "./styles/composer.css.ts";
 import { tokenStart } from "./pages/Connect.css.ts";
 import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
+import { tableScroll } from "./Prose.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
-import { columns, outsetStart } from "@stillfail/ui/styles/align.ts";
+import { bleedX, columns, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { STILL, stillAtOnce, stillLoop } from "@stillfail/ui/styles/still.ts";
 import { segments, spokesStep, wholeRing } from "@stillfail/ui/styles/spokes.ts";
@@ -242,6 +243,12 @@ export const msgMain = style({
     },
   },
 });
+/**
+ * A message's own table (not one in a list item or a quote) scrolls through the room its list leaves beside the words
+ * too, where that room is only the page's margin (`--list-gutter`, set by such a list: the phone's; the wide screen's
+ * holds the avatars): scrolled, it runs to the screen's edge, and at either end it lines up with the words.
+ */
+globalStyle(`${msgMain} > ${markdown} > ${tableScroll}`, { ...bleedX("var(--list-gutter, 0px)"), maxWidth: "calc(100% + 2 * var(--list-gutter, 0px))" });
 export const msgAvatarAgent = style({
   background: vars.neutralBg,
   // Slack's mark on its corner (msgAvatarSlack) is out past its round.

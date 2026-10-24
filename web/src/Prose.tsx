@@ -194,8 +194,15 @@ const attrsOf = (node: Kind): Record<string, unknown> => ((Array.isArray(node[1]
 const kidsOf = (node: Kind): MdNode[] => (Array.isArray(node[1]) ? node[1] : []);
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const ALIGN = new Set(["left", "right", "center"]);
+/** A table's cell keeps its words on one line while they are this short (in ems of its font); a longer one wraps, this
+ * wide at least. */
+const LINE = 14;
+const WIDE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff01-\uff60\uffe0-\uffe6]/u;
+/** About how wide words are on one line, in ems: a CJK or full-width character about one, any other about half. */
+const emsOf = (words: string) => [...words].reduce((n, c) => n + (WIDE.test(c) ? 1 : 0.55), 0);
 
-const mdText = (node: MdNode, cx: Cx): string => (isWords(node) ? wordsOf(node, cx.source) : kidsOf(node).map((k) => mdText(k, cx)).join(""));
+/** A node's words, inline code's too. */
+const mdText = (node: MdNode, cx: Cx): string => (isWords(node) ? wordsOf(node, cx.source) : node[0] === "code" ? wordsOf(attrsOf(node).content, cx.source) : kidsOf(node).map((k) => mdText(k, cx)).join(""));
 
 function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
   if (isWords(node)) return wordsOf(node, cx.source);
@@ -246,13 +253,18 @@ function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
         if (!r || isWords(r)) return null;
         return <tr key={i}>{kidsOf(r).map((cell, j) => {
           if (isWords(cell)) return null;
-          const style = ALIGN.has(String(align[j])) ? { textAlign: align[j] as "left" } : undefined;
+          // No column narrower than its widest cell's words on one line, or LINE of them where they are longer (nor
+          // than a word of them; its padding besides): the browser would else squeeze a CJK column to a character or
+          // two a line.
+          const style: CSSProperties = emsOf(mdText(cell, cx)) < LINE ? { whiteSpace: "nowrap" } : { minWidth: `${LINE}em`, boxSizing: "content-box" };
+          if (ALIGN.has(String(align[j]))) style.textAlign = align[j] as "left";
           const inner = kidsOf(cell).map((k, n) => drawMd(k, n, cx));
           return cell[0] === "th" ? <th key={j} style={style}>{inner}</th> : <td key={j} style={style}>{inner}</td>;
         })}</tr>;
       };
-      // A table wider than the message scrolls sideways within it, its cells keeping their words whole.
-      return <div key={key} className={css.tableScroll}><table><thead>{row(head, 0)}</thead>{rows.length > 0 && <tbody>{rows.map((r, i) => row(r, i))}</tbody>}</table></div>;
+      // A table wider than the message scrolls sideways within it, its cells keeping their words whole; its frame is
+      // the table's, scrolling with it.
+      return <div key={key} className={css.tableScroll}><div className={css.tableFrame}><table><thead>{row(head, 0)}</thead>{rows.length > 0 && <tbody>{rows.map((r, i) => row(r, i))}</tbody>}</table></div></div>;
     }
     case "hr": return <hr key={key} />;
     case "b": return <strong key={key}>{kids()}</strong>;

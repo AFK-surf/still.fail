@@ -63,16 +63,19 @@ export const codeCopy = style({
   },
 });
 /**
- * A table in its own sideways scroll: the message's `overflow-wrap: anywhere` would else break its cells' words to fit.
- * Framed as a card (its corners, a faint ground), the rows ruled between them only.
+ * A table in its own sideways scroll: the message's `overflow-wrap: anywhere` would else break its cells' words to fit,
+ * and each cell is no narrower than Prose says (its words on one line, or a readable width for long ones).
  */
-export const tableScroll = style({
-  width: "fit-content", maxWidth: "100%", overflowX: "auto", margin: "0 0 8px", border: `1px solid ${vars.line}`,
-  borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.text} 2%, ${vars.canvas})`,
-});
+export const tableScroll = style({ width: "fit-content", maxWidth: "100%", overflowX: "auto", margin: "0 0 8px" });
 globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
-globalStyle(`${tableScroll} > table`, { margin: "0" });
 globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
+/** The table framed as a card (its corners, which clip its head's tint, a faint ground), the rows ruled between them
+ * only: within the scroll, sliding with it. */
+export const tableFrame = style({
+  width: "fit-content", overflow: "hidden", border: `1px solid ${vars.line}`, borderRadius: vars.rCard,
+  cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.text} 2%, ${vars.canvas})`,
+});
+globalStyle(`${tableFrame} > table`, { margin: "0" });
 /** A code block's code: square in its block's frame, on its ground, wherever the words around it frame their own `pre`
  * (the reader's page). */
 export const codePre = style({});
