@@ -320,7 +320,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   }
   let busy = archive_doing(src, station, session)
   // (always to a finger, which hovers over nothing: Archive.css.ts actions `hover: none`)
-  let over = c.lit(id) || c.lit(back) || c.lit(drop) || busy || @ui.pointing() is Finger
+  let over = @sf.pointed_or_finger(c.lit(id) || c.lit(back) || c.lit(drop) || busy)
   c.box(style=if more { arch_wrap } else { arch_wrap_last }, fn() {
     c.box(style=arch_row, selected=on, id~, fn() {
       c.box(style=arch_text, fn() {
@@ -337,7 +337,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
         c.box(style=arch_meta, fn() {
           c.text(text(v, "last"), style=arch_last) |> ignore
           // (its clock while pointed at; always to a finger, which hovers over nothing)
-          if c.hovered(id) || @ui.pointing() is Finger {
+          if @sf.pointed_or_finger(c.hovered(id)) {
             c.text(text(v, "clock"), style=arch_clock) |> ignore
           }
         })

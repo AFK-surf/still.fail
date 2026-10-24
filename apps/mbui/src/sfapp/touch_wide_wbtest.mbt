@@ -94,3 +94,13 @@ test "touch wide: a message's words held, the passage's handles at its ends in t
   let (_, quote_y) = t.find("引用").unwrap()
   assert_true(quote_y < py && quote_y > py - 60.0, msg="引用 at \{quote_y}, passage at \{py}")
 }
+
+///|
+test "touch wide: the sidebar drawn on its own ground, a step under the page's beige, the panes told apart" {
+  let t = touch_wide_tester()
+  let p = @sf.theme().p
+  assert_true(p.sidebar != p.bg)
+  let grounds = t.drawn_rects().map(fn(r) { r.4 })
+  assert_true(grounds.contains(p.sidebar), msg="no rect on the sidebar's ground")
+  assert_true(grounds.contains(p.bg), msg="no rect on the page's ground")
+}

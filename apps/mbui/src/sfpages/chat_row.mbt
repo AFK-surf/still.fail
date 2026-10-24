@@ -23,7 +23,6 @@ priv struct Rows {
   swiped_off : Map[String, Bool]
   mut transcripts : (String, Array[String])?
   felt_past : Map[String, Bool]
-  mut felt_menu : Int
 }
 
 ///|
@@ -37,7 +36,6 @@ let rows : Rows = {
   swiped_off: {},
   transcripts: None,
   felt_past: {},
-  felt_menu: -1,
 }
 
 ///|
@@ -51,7 +49,6 @@ fn chat_rows_reset() -> Unit {
   rows.swiped_off.clear()
   rows.transcripts = None
   rows.felt_past.clear()
-  rows.felt_menu = -1
 }
 
 ///|
@@ -126,6 +123,8 @@ pub fn chat_row(
   unghost? : (Bool) -> Unit = fn(_) {  },
 ) -> Int {
   let t = @sf.theme()
+  // (how it looks and what it offers by the screen; how it answers by the hand: docs/architecture.md)
+  let touch = @sf.touch_system()
   let finger = @ui.pointing() is Finger
   let key = @sfbase.row_name(item)
   let id = c.id("row/" + key)
@@ -196,13 +195,13 @@ pub fn chat_row(
   let shows_time = hover || held || (finger && menu_on)
   // its 归档 key while pointed at by a mouse; a finger has 归档 at the row's start or in its menu
   let archive_key = hover && menu && !renaming
-  let archivable = finger && item.archivable && item.offline is None && !item.pending && !found
+  let archivable = touch && item.archivable && item.offline is None && !item.pending && !found
   let busy = row_busy(src, item)
   let failed = row_failed(src, item)
   let offline = item.offline is Some(_)
-  let look = if finger { touch_look } else { mouse_look }
+  let look = if touch { touch_look } else { mouse_look }
   let draw = fn(tx : Double) -> Int {
-    let ground = if finger {
+    let ground = if touch {
       // held, its menu open, or pressed where it rests (not swiped over its 归档): the ink at 5%
       if held || menu_on || (pressed && tx == 0.0 && !found) {
         @sf.alpha(t.p.text, 0.05)
@@ -222,7 +221,7 @@ pub fn chat_row(
     }
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, ground)
-    c.box(style=if more && !finger { row_more } else { row_last }, tx~, fn() {
+    c.box(style=if more && !touch { row_more } else { row_last }, tx~, fn() {
       c.box(style=look.row.then(@ui.style(bg=Data(ground))), id~, fn() {
         if archivable {
           archive_chip(c, src, item, busy)
@@ -358,7 +357,8 @@ pub fn chat_row(
 let lift_ms : Double = 480.0
 
 ///|
-/// A row's looks, by the hand (mobile/Home.css.ts mChatRow… with a finger, Sidebar.css.ts navSession… with a mouse).
+/// A row's looks, by the screen (mobile/Home.css.ts mChatRow… on a touch device, Sidebar.css.ts navSession… on a
+/// computer).
 priv struct RowLook {
   row : @ui.Style
   text : @ui.Style
@@ -472,18 +472,8 @@ let archive_button : @ui.Style = @ui.css("w=S6 h=S6 radius=Lg align=ACenter just
 /// 转到频道 (a thread with an agent), 复制 session 文件路径, 归档. Held by a finger, felt as it opens and from the row
 /// (a sheet, or under it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
-  let finger = @ui.pointing() is Finger
-  if finger {
-    // (the press is the menu's: lifting the finger opens nothing)
-    c.take_press()
-    let at = c.press().frame
-    c.after_build("haptic/hold/row", fn() {
-      if rows.felt_menu != at {
-        rows.felt_menu = at
-        @ui.haptic(LongPress)
-      }
-    })
-  }
+  // (held by a finger: the press is the menu's, felt; the menu from the row)
+  let finger = @sf.menu_held(c, "row")
   let r = row_ref(item)
   let items : Array[@sf.MenuItem?] = []
   match item.pinned {
@@ -506,8 +496,8 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
   items.push(
     Some(
       @sf.menu_item_of(@sf.t("web-main.chat.rename"), icon="edit", fn() {
-        // with a mouse in place (Rename.tsx TitleInput); with a finger asked (mobile/Home.tsx ask)
-        if finger {
+        // on a computer in place (Rename.tsx TitleInput); on a touch device asked (mobile/Home.tsx ask)
+        if @sf.touch_system() {
           @sf.ask(
             @sf.t("android-chat.rename.title"),
             @sf.t("common.save"),

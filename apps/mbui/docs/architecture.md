@@ -45,6 +45,9 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
   - menus: `c.menu_asked`, a right click or a long press, opening the same menu, shown as the screen says;
   - tips: on hover, or on a long press;
   - lists scrolled by a finger's drag or by the wheel, words picked by a drag or a hold, drag and drop.
+
+  A page asks these of the library (`c.lit`, `c.menu_asked`; sf/hand.mbt: `pointed_or_finger` for what a pointer
+  over a thing shows, `press_ripple`, `menu_held`), not `@ui.pointing()`.
 - **A page's own width** (the box it is drawn in) decides its inner arrangement: columns that drop, tools that go into
   ⋯, a side part that gives way. This is the web's container query. It is not the tier: a page never asks which tier
   it is in.

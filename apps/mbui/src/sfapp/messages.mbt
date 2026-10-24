@@ -257,7 +257,7 @@ fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) 
   c.box(dir=Row, w=Fill(1.0), pl=head_in, min_h=24.0, gap=6.0, align=ACenter, fn() {
     c.box(max_w=240.0, id~, fn() {
       // (a mouse's pointer on one that opens something: the hand, as in the wide frame)
-      if id != 0 && @ui.pointing() is Mouse {
+      if id != 0 {
         c.cursor(id, Hand)
       }
       c.text(name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0) |> ignore

@@ -133,7 +133,7 @@ pub fn state_line(
 ) -> Unit {
   let turn = lead == "decision" || lead == "need"
   // (a finger's row's size: mobile/Home.css.ts mLast, 14 on 20)
-  let finger = @ui.pointing() is Finger
+  let finger = @sf.touch_system()
   let words = if alert {
     if finger { state_alert_touch } else { state_alert }
   } else if turn {

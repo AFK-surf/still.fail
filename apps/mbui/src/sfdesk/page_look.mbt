@@ -437,9 +437,7 @@ let narrow_said_row : @ui.Style = @ui.css("row w=Full gap=S3 radius=Inner align=
 ///|
 /// A finger's press rippling over a row (ListRow's, its corner concentric with its card's).
 fn finger_ripple(c : @ui.Ctx, id : Int) -> Unit {
-  if @ui.pointing() is Finger {
-    @motion.ripple(c, id, @sf.row_corner)
-  }
+  @sf.press_ripple(c, id, @sf.row_corner)
 }
 
 ///|
