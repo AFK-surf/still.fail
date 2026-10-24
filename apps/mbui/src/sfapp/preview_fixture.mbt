@@ -28,6 +28,8 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     (at("数据.csv", 200.0, 0.0, 0.0), fn() { @utf8.encode(fixture_csv) }),
     (at("备份.bin", 4096.0, 0.0, 0.0), fn() { Bytes::makei(4096, fn(i) { (i % 7).to_byte() }) }),
     (at("测试版.apk", 8192.0, 0.0, 0.0), fn() { Bytes::makei(8192, fn(i) { (i % 5).to_byte() }) }),
+    // the build its agent sent (MBUI_FIXTURE=chat-download, downloads_fixture.mbt): 50 MB as its message says
+    (at("发布包.zip", 52428800.0, 0.0, 0.0), fn() { Bytes::makei(4096, fn(i) { (i % 3).to_byte() }) }),
   ]
 }
 

@@ -41,6 +41,7 @@ const SPECS: Record<string, Spec> = {
   vaults: { fields: { vaults: items("id"), requests: items("id") } },
   vaultItems: { fields: { items: items("id") } },
   driveTransfers: { fields: { transfers: { key: ["station", "id"] } } },
+  downloads: { fields: { downloads: items("id") } },
 };
 
 export function specOf(topic: Topic): Spec | null {

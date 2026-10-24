@@ -259,6 +259,8 @@ priv struct Viewer {
   /// a file told of (not shown): asked for (to save)
   mut asked : Bool
   mut save_after : Bool
+  /// a chat's file asked to be downloaded by the core (downloads.mbt), said to it in the next frame
+  mut download_asked : Bool
   /// …or to be installed (an APK)
   mut install_after : Bool
   /// the bars shown, and how long they stay when left alone (-1: till a tap), counted anew each time they wake
@@ -587,6 +589,7 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     error: None,
     asked: false,
     save_after: false,
+    download_asked: false,
     install_after: false,
     awake: true,
     rest_len: -1.0,
@@ -1206,6 +1209,13 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     }
   })
   |> ignore
+  // 下载 tapped (on the page or its bar, just built): asked of the core, on by itself whatever becomes of this viewer
+  // (told once the frame's builds are over, as the tap is the build's that took it)
+  if v.download_asked {
+    v.download_asked = false
+    let (station, key, name, size) = (v.station, v.key, v.name, v.file.size)
+    c.tell("download/" + name, fn() { download_start(src, station, key, name, size) })
+  }
   // (one going takes back no more: it is the page's)
   if !v.closing {
     c.take_back(fn() { if marking.on { marks_back(c) } else { v.shut(c) } })
@@ -1448,7 +1458,8 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
           None => ()
         }
       } else if v.told_of() {
-        v.note(c, fn() { if wide_on.val { v.desk_facts(c) } else { v.facts(c) } })
+        let dl = v.download(src)
+        v.note(c, fn() { if wide_on.val { v.desk_facts(c, dl) } else { v.facts(c, dl) } })
       } else if (v.kind is None && v.sniffed is None) || (v.bytes is None && v.error is None) {
         tap_stage(c, v, stage)
         v.note(c, fn() { if wide_on.val { v.desk_coming(c) } else { v.coming_note(c) } })
@@ -1522,8 +1533,9 @@ fn Viewer::coming_note(self : Viewer, c : @ui.Ctx) -> Unit {
 ///|
 /// How much of a file has come, out of its size, the station's else the one sent with it (FilePreview.kt
 /// FileProgress): "正在读取 **4 MB** / 12 MB" over a bar, on the surface (surface2 dark), 14 round, 14 and 12 in, 220
-/// wide; its size not known, 正在读取 over a bar that sweeps.
-fn file_progress(c : @ui.Ctx, got : (Double, Double?), sent : Double) -> Unit {
+/// wide; its size not known, 正在读取 over a bar that sweeps. `said`: other words in its words' place (the core's of a
+/// download: 正在下载 42% · 18.3 MB, FilePreview.tsx DownloadComing).
+fn file_progress(c : @ui.Ctx, got : (Double, Double?), sent : Double, said? : String) -> Unit {
   let t = @sf.theme()
   let total = match got.1 {
     Some(n) => Some(n)
@@ -1534,8 +1546,9 @@ fn file_progress(c : @ui.Ctx, got : (Double, Double?), sent : Double) -> Unit {
     _ => None
   }
   c.box(style=file_progress_card, radius=file_progress_corner, bg=if t.dark { surface2_dark } else { t.p.card }, fn() {
-    match total {
-      Some(n) => {
+    match (said, total) {
+      (Some(words), _) => c.text(words, style=file_progress_words) |> ignore
+      (None, Some(n)) => {
         // the size so far in bold, where the sentence has it
         let words = pv("android-chat.file.loading.size")
         let (before, after) = match words.find("{size}") {
@@ -1552,7 +1565,7 @@ fn file_progress(c : @ui.Ctx, got : (Double, Double?), sent : Double) -> Unit {
         )
         |> ignore
       }
-      None => c.text(pv("common.reading"), style=file_progress_words) |> ignore
+      (None, None) => c.text(pv("common.reading"), style=file_progress_words) |> ignore
     }
     @sf.progress(c, part)
   })
@@ -1577,7 +1590,7 @@ let surface2_dark : Int64 = 0x2C2D31FFL
 ///|
 /// A file told of, not shown (FilePreview.kt Facts and its buttons): its kind's mark, its name, its size and
 /// extension, why it is not shown; 下载.
-fn Viewer::facts(self : Viewer, c : @ui.Ctx) -> Unit {
+fn Viewer::facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
   let v = self
   let t = @sf.theme()
   let kind = v.shown_kind()
@@ -1617,7 +1630,15 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx) -> Unit {
     v.coming_note(c)
     return
   }
+  // downloaded by the core (downloads.mbt): how far it has come, on by itself as this closes
+  if downloading(dl) {
+    file_progress(c, (number(dl, "loaded"), Some(number(dl, "size"))), v.file.size, said=text(dl, "statusText"))
+    return
+  }
   c.box(w=Px(220.0), gap=8.0, fn() {
+    if text(dl, "state") == "failed" {
+      c.text(text(dl, "statusText"), style=note_failed) |> ignore
+    }
     match v.error {
       Some(e) =>
         c.text(pv_fill("android-chat.file.loadFailed", [("error", e)]), size=14.0, color=t.p.red, center=true)
@@ -1706,17 +1727,35 @@ fn Viewer::ask_install(self : Viewer, c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// 下载: the file into the system's downloads, once it is here (fetched first when it was only told of).
+/// 下载: the file into the system's downloads, once it is here. A chat's not read yet is downloaded by the core
+/// (downloads.mbt): on by itself whatever becomes of this viewer, how far it has come said here and on its message,
+/// kept once it is all here; a drive's is fetched first.
 fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
   match self.bytes {
     // kept where the system keeps downloads, said once the host has answered (keep.mbt)
     Some(b) => keep_bytes(c, self.file.name, self.mime, b)
+    None if self.drive is None => self.download_asked = true
     None => {
       self.error = None
       self.asked = true
       self.save_after = true
     }
   }
+}
+
+///|
+/// The core's download of this chat's file while it is listed (under way, ready, failed): None for a drive's.
+fn Viewer::download(self : Viewer, src : Source) -> Json? {
+  if self.drive is Some(_) {
+    return None
+  }
+  download_of(src, self.station, self.key, self.name)
+}
+
+///|
+/// Whether the core's download `dl` is under way.
+fn downloading(dl : Json?) -> Bool {
+  text(dl, "state") == "going"
 }
 
 // ── an image ───────────────────────────────────────────────────────────
@@ -2950,7 +2989,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
           _ => ()
         }
         if !v.coming() && !marking.on {
-          let saving = v.bytes is Some(_) || (v.told_of() && !v.asked)
+          let saving = v.bytes is Some(_) || (v.told_of() && !v.asked && !downloading(v.download(src)))
           if picture_button(c, "preview/download", "download", tint, on && saving, said=pv("android-chat.file.download")) {
             v.ask_save(c)
           }
@@ -2964,3 +3003,8 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
   })
   |> ignore
 }
+
+///|
+/// Why the core's download of a file told of failed, over its 下载 again (14, red, centred).
+// kept across runs: a value (no field of it changes)
+let note_failed : @ui.TextStyle = @ui.text_style(size=Base, color=Danger, center=true)

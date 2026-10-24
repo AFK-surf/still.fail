@@ -94,7 +94,9 @@ test "desk: a file told of says so, 下载 the page's button; the bar's own down
   assert_true(t.find("此文件类型不支持预览") is Some(_))
   assert_true(t.find("4 KB · BIN") is Some(_))
   t.tap_text("下载")
-  assert_true(viewer.val.unwrap().asked)
+  t.frame()
+  // downloaded by the core: how far, in the button's place
+  assert_true(t.find("正在下载 0% · 4 KB") is Some(_))
 }
 
 ///|

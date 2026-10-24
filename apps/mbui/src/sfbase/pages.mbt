@@ -175,5 +175,7 @@ pub fn reset() -> Unit {
   read_views.clear()
   open_titled.val = ""
   shown_days.clear()
+  // the core's downloads being taken and kept (downloads.mbt)
+  downloads_reset()
 }
 

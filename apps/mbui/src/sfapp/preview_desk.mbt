@@ -207,7 +207,7 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
   let hidden = kind == Some(KImage) && !v.bars_shown()
   let n = c.box(style=desk_layer, fn() {
     if @sf.viewer_bar(c, "preview/bar", v.desk_back(src), v.file.name, v.desk_meta(src), hidden, ink, fn() {
-        v.desk_tools(c, ink)
+        v.desk_tools(c, ink, downloading(v.download(src)))
       }) &&
       !v.closing {
       v.shut(c)
@@ -219,7 +219,7 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
 ///|
 /// The bar's tools by what it shows (FilePreview.tsx: its `controls`, then copy and download): an image's zoom and its
 /// marks, a page's or a table's 预览 / 源码, download last.
-fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk) -> Unit {
+fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, downloading : Bool) -> Unit {
   let v = self
   match v.shown_kind() {
     Some(KImage) if marking.on =>
@@ -282,7 +282,8 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk) -> Unit {
   if !v.coming() && !marking.on {
     // what is here saved at once; one told of, or played as it comes, read whole first
     let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
-    let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked)
+    // (not while the core downloads it: once it is all here it is kept by itself)
+    let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked && !downloading)
     if @sf.viewer_download(c, "preview/download", ink, disabled=!saving) {
       v.ask_save(c)
     }
@@ -355,8 +356,9 @@ fn Viewer::desk_steps(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) 
 
 ///|
 /// A file told of, not shown (FilePreview.tsx fpNote, toldOf): its kind's mark, its name, its size and extension,
-/// that it cannot be shown here; 下载 as the page's primary button, or how far it has come once asked for.
-fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx) -> Unit {
+/// that it cannot be shown here; 下载 as the page's primary button, or how far it has come once asked for (`dl`: the
+/// core's download of it, downloads.mbt).
+fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
   let v = self
   let p = @sf.theme().p
   @sf.icon(c, "file", size=desk_facts_icon, color=p.muted) |> ignore
@@ -380,6 +382,14 @@ fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx) -> Unit {
   if v.asked && v.bytes is None && v.error is None {
     v.desk_coming(c)
     return
+  }
+  // downloaded by the core: how far it has come (on by itself as this closes), why it failed
+  if downloading(dl) {
+    file_progress(c, (number(dl, "loaded"), Some(number(dl, "size"))), v.file.size, said=text(dl, "statusText"))
+    return
+  }
+  if text(dl, "state") == "failed" {
+    c.text(text(dl, "statusText"), style=desk_facts_failed) |> ignore
   }
   match v.error {
     Some(e) => c.text(fill("web-main.preview.loadFailed", [("error", e)]), style=desk_facts_failed) |> ignore

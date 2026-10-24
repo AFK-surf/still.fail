@@ -134,6 +134,7 @@ export const TOPICS: Record<string, Spec> = {
   driveTransfers: { workspace: S },
   driveBrowse: { owner: S, place: S, view: S, station: S, root: S, path: ["string", "def"], write: ["bool", "skipFalse"] },
   filesTabs: { workspace: S },
+  downloads: {},
   vaultUses: { workspace: S, vault: S, item: S },
 };
 

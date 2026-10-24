@@ -1411,15 +1411,18 @@ fn file_item(
       })
       |> ignore
     }
-    _ => file_card(c, a, w, id=open)
+    // (downloaded by the core: how far it has come, here too, downloads.mbt)
+    _ => file_card(c, a, w, id=open, dl=download_of(src, here.station, owner_of(here, a), base_name(a.path)))
   }
 }
 
 ///|
-/// A file as a card (ChatFiles.kt FileCard): its kind's mark, its name, its size, on the neutral ground.
-fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
+/// A file as a card (ChatFiles.kt FileCard): its kind's mark, its name, its size, on the neutral ground. While the core
+/// downloads it (`dl`, downloads.mbt) how far it has come in its size's place and as a ring in its mark's; failed, why,
+/// in red.
+fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json? = None) -> Unit {
   if wide_on.val {
-    file_card_wide(c, a, w, id)
+    file_card_wide(c, a, w, id, dl)
     return
   }
   let t = @sf.theme()
@@ -1434,10 +1437,14 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
     gap=10.0,
     align=ACenter,
     fn() {
-      @sf.icon(c, "read", size=16.0, color=t.p.muted) |> ignore
+      match file_card_coming(dl) {
+        Some(part) => @sf.progress_ring(c, 16.0, part, t.p.accent) |> ignore
+        None => @sf.icon(c, "read", size=16.0, color=t.p.muted) |> ignore
+      }
+      let (meta, failed) = file_card_said(a, dl)
       c.box(w=Fill(1.0), fn() {
         c.text(a.name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
-        c.text(@sf.file_size(a.size), size=11.0, color=t.p.muted, wrap=false, line=16.0)
+        c.text(meta, size=11.0, color=if failed { t.p.red } else { t.p.muted }, wrap=false, line=16.0)
         |> ignore
       })
       |> ignore
@@ -1451,21 +1458,42 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
 /// what is cut its middle, never its extension) over its size (11, grey), 236 wide at most, 8 by 10 in and 7 at the
 /// sheet's side, rounded as the sheet stands in (13), on the neutral ground; under the pointer the pointer's, its path
 /// said (the web's Tip).
-fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int) -> Unit {
+fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?) -> Unit {
   if id != 0 {
     c.cursor(id, Hand)
     wide_tip(c, "file-card/" + a.path, id, if a.path != "" { a.path } else { a.name })
   }
   let hot = id != 0 && c.hovered(id)
   c.box(style=if hot { file_card_hot } else { file_card_box }, w=Px(w), radius=message_file_corner, id~, fn() {
-    file_sheet(c, a.name)
+    let (meta, failed) = file_card_said(a, dl)
+    file_sheet(c, a.name, filled=file_card_coming(dl), failed~)
     c.box(style=file_card_words, fn() {
       file_name_line(c, a.name)
-      c.text(@sf.file_size(a.size), style=file_card_meta) |> ignore
+      c.text(meta, style=if failed { file_card_failed } else { file_card_meta }) |> ignore
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What a file's card says under its name: its size, or while the core downloads it how far it has come (正在下载 42% ·
+/// 18.3 MB), failed why (the core's words); and whether that is a failure.
+fn file_card_said(a : Attachment, dl : Json?) -> (String, Bool) {
+  match text(dl, "state") {
+    "going" | "failed" as state => (text(dl, "statusText"), state == "failed")
+    _ => (@sf.file_size(a.size), false)
+  }
+}
+
+///|
+/// How far the core has downloaded a file (0 to 1) while it does; None while it does not.
+fn file_card_coming(dl : Json?) -> Double? {
+  if text(dl, "state") == "going" {
+    Some(number(dl, "progress"))
+  } else {
+    None
+  }
 }
 
 ///|
@@ -1643,12 +1671,19 @@ let file_card_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L
 let file_card_meta : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, leading=L4, wrap=false)
 
 ///|
+/// Why the core's download of it failed, in its size's place.
+// kept across runs: a value (no field of it changes)
+let file_card_failed : @ui.TextStyle = @ui.text_style(size=Xs2, color=Danger, leading=L4, wrap=false)
+
+///|
 // kept across runs: a value (no field of it changes)
 let file_name_row : @ui.Style = @ui.style(row=true, w=Full)
 
 ///|
+/// As wide as it is, short of the room the extension leaves (Chat.css.ts fileCardStem: flex's 0 1 auto, cut with an
+/// ellipsis): the extension right after it, not at the card's end.
 // kept across runs: a value (no field of it changes)
-let file_name_stem : @ui.Style = @ui.style(w=Grow(1.0))
+let file_name_stem : @ui.Style = @ui.style(w=Hug)
 
 ///|
 /// A file's name on one line, what is cut short the middle of it, never its extension (Chat.tsx FileName: an extension
@@ -1670,7 +1705,9 @@ fn file_name_line(c : @ui.Ctx, name : String) -> Unit {
 ///|
 /// What a file is, at a glance (Chat.tsx FileTile): a sheet 30 by 36, its top corner folded, drawn in the muted ink
 /// 1.5 wide, its extension on it in the text's ink (six letters at most, upper case), or two lines where it has none.
-fn file_sheet(c : @ui.Ctx, name : String) -> Unit {
+/// `filled`: how far it has come (one downloaded), the sheet filling from its foot with the accent at 22%; `failed`:
+/// its extension red.
+fn file_sheet(c : @ui.Ctx, name : String, filled? : Double? = None, failed? : Bool = false) -> Unit {
   let t = @sf.theme()
   let dot = name.rev_find(".")
   let ext = match dot {
@@ -1678,16 +1715,21 @@ fn file_sheet(c : @ui.Ctx, name : String) -> Unit {
     _ => ""
   }
   let lines = if ext == "" { file_sheet_lines } else { "" }
-  let shapes = [
+  let shapes = match filled {
+    Some(part) => [file_sheet_fill(c.scale, part, @sf.alpha(t.p.accent, file_sheet_fill_share))]
+    None => []
+  }
+  shapes.push(
     @ui.shape_of(@pixels.svg_path(file_sheet_outline + file_sheet_fold + lines, c.scale), stroke=t.p.muted, width=1.5),
-  ]
+  )
   c.box(style=file_sheet_box, fn() {
     c.shapes(shapes, w=Px(file_sheet_side.0), h=Px(file_sheet_side.1), name="file-sheet") |> ignore
     if ext != "" {
       // on the sheet's lower part, its middle at 14.5 (FileTile's <text x=14.5 y=27>), .62 of the card's 14
       c.layer(fn() {
         c.box(style=file_sheet_ext_room, fn() {
-          c.text(ext, size=file_sheet_ext_size, weight=600, color=t.p.text, wrap=false) |> ignore
+          c.text(ext, size=file_sheet_ext_size, weight=600, color=if failed { t.p.red } else { t.p.text }, wrap=false)
+          |> ignore
         })
         |> ignore
       })
@@ -1696,6 +1738,45 @@ fn file_sheet(c : @ui.Ctx, name : String) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// The sheet filled from its foot `part` of its height (FileTile's rect from y = 36 − 36 × part, cut to the sheet's
+/// outline): the outline's inside (a convex shape) cut below that line, in the sheet's points (its curves cut for
+/// `scale` pixels a point).
+fn file_sheet_fill(scale : Double, part : Double, color : Int64) -> @ui.Shape {
+  let share = if part < 0.0 { 0.0 } else if part > 1.0 { 1.0 } else { part }
+  let from = file_sheet_side.1 * (1.0 - share)
+  let cut = @pixels.svg_path(file_sheet_outline, scale).filter_map(fn(o) {
+    let (pts, closed) = o
+    let n = pts.length() / 2
+    let out : Array[Double] = []
+    for i in 0..<n {
+      let (ax, ay) = (pts[2 * i], pts[2 * i + 1])
+      let j = (i + 1) % n
+      let (bx, by) = (pts[2 * j], pts[2 * j + 1])
+      if ay >= from {
+        out.push(ax)
+        out.push(ay)
+      }
+      if (ay >= from) != (by >= from) {
+        let k = (from - ay) / (by - ay)
+        out.push(ax + (bx - ax) * k)
+        out.push(from)
+      }
+    }
+    // (nothing of it come yet: nothing filled)
+    if out.length() < 6 {
+      None
+    } else {
+      Some((out, closed))
+    }
+  })
+  @ui.shape_of(cut, fill=color)
+}
+
+///|
+/// How much of the accent fills a sheet as it comes (FileTile's color-mix 22%).
+let file_sheet_fill_share : Double = 0.22
 
 ///|
 /// The sheet's outline, its fold, and its lines where it has no extension (FileTile's paths, in its 30 by 36).

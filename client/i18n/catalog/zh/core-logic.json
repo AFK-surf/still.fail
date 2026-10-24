@@ -538,6 +538,9 @@
   "core-logic.transfer.moved": "已移动 · {total}",
   "core-logic.transfer.cancelled": "已取消",
   "core-logic.transfer.failed": "失败：{error}",
+  "core-logic.download.going": "正在下载 {percent}% · {total}",
+  "core-logic.download.ready": "已下载 · {total}",
+  "core-logic.download.failed": "下载失败：{error}",
   "core-logic.transfer.many": {
     "one": "{name} 等 {n} 项",
     "other": "{name} 等 {n} 项"

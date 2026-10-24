@@ -598,6 +598,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
   let value : Json? = match name {
     "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
+    // a chat's files downloaded (downloads_fixture.mbt)
+    "downloads" => Some(fixture_downloads_topic())
     // a draft's files going up in the core (composer.add): up at once
     "composer" =>
       Some({ "files": Json::array(fix_composers.get(text(Some(Json::object(params)), "key")).unwrap_or([])) })
@@ -852,6 +854,14 @@ pub fn fixture(mode : String) -> Source {
       // the faces' files (fonts_fixture.mbt)
       if fixture_fonts_call(f, name, params, done) {
         return
+      }
+      // a chat's files downloaded (downloads_fixture.mbt)
+      match fixture_downloads_call(f, name, params) {
+        Some(r) => {
+          done(r)
+          return
+        }
+        None => ()
       }
       match name {
         "chat.archive" => {

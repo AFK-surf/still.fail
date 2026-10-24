@@ -8,7 +8,8 @@ import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "
 import { useTopic, useTopicSelect } from "./core/react.ts";
 import { useNarrow } from "./mobile/narrow.ts";
 import { useBarOnScroll, ViewerBar, ViewerDownload } from "@stillfail/ui/viewer/ViewerBar.tsx";
-import type { ChatView, DriveEntry, ImageNear } from "./core/shapes.ts";
+import type { ChatView, DownloadShown, DriveEntry, ImageNear } from "./core/shapes.ts";
+import { saveBlob, startDownload, useDownload } from "./chatDownloads.ts";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "@stillfail/ui/icons.tsx";
 import { Prose } from "./Prose.tsx";
 import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
@@ -84,7 +85,8 @@ export const isImage = (name: string) => kindOf(name).kind === "image";
 
 // ── fetching ───────────────────────────────────────────────────────────
 
-const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
+/** The name the station keeps a file by (the last part of its path), as its calls take it. */
+export const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
 
 // Files sent never change: each is fetched once per page, and the most recent are kept for a chat opened again.
 const blobs = new Map<string, Promise<Blob>>();
@@ -244,14 +246,6 @@ function useHead(sessionKey: string, file: Attachment, enabled: boolean): "text"
     return () => { live = false; };
   }, [api, station.address, sessionKey, file.path, enabled, source]); // eslint-disable-line react-hooks/exhaustive-deps
   return enabled && head?.path === file.path ? head.is : null;
-}
-
-/** A blob handed to the browser to download, as the bar's link would. */
-function saveBlob(url: string, name: string) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
 }
 
 /** A text file's content, fetched from the station once. */
@@ -520,6 +514,10 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   // (its name, size and kind) and fetched only when asked to be downloaded.
   const front = useHead(sessionKey, file, known.kind === null && !local);
   const toldOf = !local && known.kind === null && front === "binary";
+  // A chat's: downloaded by the core (chatDownloads.ts), on as the preview closes; how far it has come said here.
+  const byCore = toldOf && !source;
+  const download = useDownload(station.address, byCore ? sessionKey : null, storedName(file));
+  const downloading = download?.state === "going";
   const [asked, setAsked] = useState<{ path: string; tries: number; save: boolean } | null>(null);
   const askedNow = asked?.path === file.path ? asked : null;
   const fetched = useFile(sessionKey, file, !local && (known.kind !== null || front === "text" || front === "whole" || askedNow !== null), false, askedNow?.tries ?? 0);
@@ -533,6 +531,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   }); // eslint-disable-line react-hooks/exhaustive-deps
   const ask = () => {
     if (loaded.state === "ready") save(loaded);
+    else if (byCore) startDownload(station.address, sessionKey, storedName(file), file.size);
     else setAsked({ path: file.path, tries: (askedNow?.tries ?? 0) + (loaded.state === "error" ? 1 : 0), save: true });
   };
   // An image stands in as the chat showed it (its thumbnail, kept) while the whole of it comes.
@@ -584,9 +583,11 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
       <div className={css2.fpFactsName}>{file.name}</div>
       <div>{[fileSize(file.size), ext && ext.length <= 12 ? ext : ""].filter(Boolean).join(" · ")}</div>
       <div>{t("web-main.preview.unsupported")}</div>
-      {askedNow && loaded.state === "loading"
+      {download?.state === "going" ? <DownloadComing download={download} />
+        : askedNow && loaded.state === "loading"
         ? (loaded.got ? <FileComing got={loaded.got} size={file.size} /> : <Spinner />)
         : <>
+          {download?.state === "failed" && <div className={css2.fpFactsFailed}>{download.statusText}</div>}
           {loaded.state === "error" && <div className={css2.fpFactsFailed}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>}
           <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} onClick={ask}><Download size={16} />{t("web-main.preview.download")}</button>
         </>}
@@ -676,7 +677,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           ? <CopyImage key={file.path} image={loaded.blob} />
           : <span className={pageCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Copy size={18} /></span>)}
         {marking ? null : toldOf && loaded.state !== "ready"
-          ? <Tip label={t("web-main.preview.download")}><button type="button" className={pageCss.iconBtn} onClick={ask} disabled={askedNow !== null && loaded.state === "loading"} aria-label={t("web-main.preview.download")}><Download size={18} /></button></Tip>
+          ? <Tip label={t("web-main.preview.download")}><button type="button" className={pageCss.iconBtn} onClick={ask} disabled={downloading || (askedNow !== null && loaded.state === "loading")} aria-label={t("web-main.preview.download")}><Download size={18} /></button></Tip>
           : loaded.state === "ready"
           ? <Tip label={t("web-main.preview.download")}>{source?.save
             ? <button type="button" className={pageCss.iconBtn} onClick={() => source.save?.(file, loaded.blob)} aria-label={t("web-main.preview.download")}><Download size={18} /></button>
@@ -808,6 +809,16 @@ function FileComing({ got, size, inBar = false }: { got: FileProgress | null | u
     <div className={inBar ? css2.fpHeadProgress : css2.fpProgress}>
       <span className={css2.fpProgressText}>{got && total ? <>{t("web-main.preview.loadingLabel")} <b>{fileSize(got.loaded)}</b> / {fileSize(total)}</> : t("common.opening")}</span>
       <Progress part={part} label={t("web-main.preview.loadingLabel")} className={css2.fpProgressTrack} />
+    </div>
+  );
+}
+
+/** How far the core has downloaded a file (chatDownloads.ts): its words (正在下载 42% · 18.3 MB) over its bar. */
+function DownloadComing({ download }: { download: DownloadShown }) {
+  return (
+    <div className={css2.fpProgress}>
+      <span className={css2.fpProgressText}>{download.statusText}</span>
+      <Progress part={download.progress} label={download.statusText} className={css2.fpProgressTrack} />
     </div>
   );
 }
