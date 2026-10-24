@@ -225,6 +225,7 @@
     "style-exact": {
       "src/sf/tokens.mbt": 26
     },
+    "style-text": {},
     "build-effect": {},
     "unsettled-ok": {},
     "host-delay": {},
@@ -260,6 +261,7 @@
       "src/sf/nav_bar.mbt": 1
     },
     "style-exact": {},
+    "style-text": {},
     "build-effect": {
       "src/sfbase/drive_upload.mbt": 1
     },

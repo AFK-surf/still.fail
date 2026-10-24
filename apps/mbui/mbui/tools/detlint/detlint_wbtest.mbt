@@ -139,6 +139,69 @@ test "style" {
 }
 
 ///|
+test "style-text" {
+  let files = [
+    (
+      "src/app/look.mbt",
+      (
+        #|
+        #|let card : @ui.Style = @ui.style(row=true, h=S7, px=S2, radius=Lg, bg=A(Fg, O35), clip=false,
+        #|  hovered=@ui.patch(bg=Hover), w=Grow(1.0), shadow=Cast(4.0, -1.0, 0x00000033L))
+        #|let card_on : @ui.Style = card.then(@ui.style(bg=@ui.Accent, border_color=Color::Line))
+        #|let pane : @ui.Style = @ui.css("w=Full px=S2")
+        #|let grown : @ui.Style = @ui.style(w=@sf.grow, px=S2)
+        #|let sided : @ui.Style = @ui.style(w=Fixed(side_w))
+        #|let capped : @ui.Style = @ui.style(h=Fixed(ROW_H))
+        #|let lifted : @ui.Style = card.then(@ui.style(shadow=@sf.floating.cast()))
+        #|let pressing : @ui.Style = @ui.style(pressed=dim_patch)
+        #|let twice : @ui.Style = @ui.style(w=Fixed(2.0 * 7.0))
+        #|fn view(c : @ui.Ctx, wide : Bool) -> Unit {
+        #|  c.box(style=@ui.style(px=S2), fn() {  }) |> ignore
+        #|}
+        #|test "t" {
+        #|  let s = @ui.style(px=S2)
+        #|}
+        #|
+      ),
+    ),
+    (
+      "src/ui/kit_styles.mbt",
+      (
+        #|
+        #|let no_style : Style = style()
+        #|let row_style : Style = style(row=true, gap=S1)
+        #|let words : TextStyle = text_style(size=Lg)
+        #|let other = style(row=true)
+        #|
+      ),
+    ),
+    (
+      "src/app/look_test.mbt",
+      (
+        #|
+        #|let fixture : @ui.Style = @ui.style(px=S2)
+        #|
+      ),
+    ),
+  ]
+  // a named style all tokens and numbers, a .then(…)'s; in mbui's own package the bare style( where its let says
+  // Style. Not one naming a variable (@sf.grow, side_w, a constant ROW_H, a patch by name), a call, an operator, one
+  // in a function or a test, nor already text
+  let got = found(files, "style-text", 4)
+  assert_eq(got.map(fn(f) { "\{f.file}:\{f.line}" }), [
+    "src/app/look.mbt:2", "src/app/look.mbt:4", "src/ui/kit_styles.mbt:2", "src/ui/kit_styles.mbt:3",
+  ])
+  // what to write instead, printed
+  assert_has(
+    got[0].what,
+    "write: @ui.css(\"row h=S7 px=S2 radius=Lg bg=A(Fg,O35) clip=false hovered{bg=Hover} w=Grow(1.0) shadow=Cast(4.0,-1.0,0x00000033)\")",
+  )
+  assert_has(got[1].what, "write: @ui.css(\"bg=Accent border_color=Line\")")
+  assert_has(got[2].what, "write: css(\"\")")
+  assert_has(got[3].what, "write: css(\"row gap=S1\")")
+}
+
+///|
 test "frame-request" {
   found(
     [
