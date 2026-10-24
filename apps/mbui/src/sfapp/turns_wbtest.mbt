@@ -130,7 +130,7 @@ test "turns: words sent wait for nothing (a row before them, a list never at res
       match phase.val {
         0 => {
           tu.admit(c, "a", row_turn_ms)
-          tu.send(c)
+          tu.send(c, flight_wait_ms + flight_ms)
           tu.admit(c, "b", row_turn_ms)
           phase.val = 1
         }

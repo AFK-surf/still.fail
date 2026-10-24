@@ -15,7 +15,7 @@
 ///|
 /// What a turn is for: a row coming in (by its key), something under a post shown or not (by its key), words sent,
 /// messages coming out of avatars.
-priv enum TurnFor {
+pub(all) enum TurnFor {
   Admit(String)
   Change(String)
   Send
@@ -25,7 +25,7 @@ priv enum TurnFor {
 ///|
 /// A turn asked for: what for, how long its motion takes (inf: till said over), and whether it goes after the others
 /// asked with it (an agent's line, after what closes under a post as it starts: Chat.kt `after`).
-priv struct TurnAsk {
+pub(all) struct TurnAsk {
   what : TurnFor
   ms : Double
   after : Bool
@@ -35,7 +35,7 @@ priv struct TurnAsk {
 }
 
 ///|
-priv struct Turns {
+pub(all) struct Turns {
   asks : Array[TurnAsk]
   /// the turn under way and until when (its start and its motion's length; one lasting till said over, till then at
   /// most turn_most_ms: `open`); -1: none since
@@ -64,11 +64,11 @@ priv struct Turns {
 }
 
 ///|
-let turns_by : Map[String, Turns] = {}
+pub let turns_by : Map[String, Turns] = {}
 
 ///|
 /// Chat `key`'s turns (its station and session, as emits_of's).
-fn turns_of(key : String) -> Turns {
+pub fn turns_of(key : String) -> Turns {
   match turns_by.get(key) {
     Some(t) => t
     None => {
@@ -97,7 +97,7 @@ fn turns_of(key : String) -> Turns {
 
 ///|
 /// The key messages out of avatars' turn's start is kept by (Turns::started_at).
-let emits_turn : String = "\u{1}emits"
+pub let emits_turn : String = "\u{1}emits"
 
 ///|
 /// How close to a frame's time a turn's start counts as in it (sums of declared lengths in ms round off).
@@ -110,14 +110,14 @@ let turn_owed_ms : Double = 1.0
 ///|
 /// How long after its motion a turn holds the next (ListTurns.kt: the list looked at from two frames on, still in
 /// both, at 60 frames a second), and how much later than the others asked with it one going after them is asked.
-let turn_calm_ms : Double = 2.0 * 1000.0 / 60.0
+pub let turn_calm_ms : Double = 2.0 * 1000.0 / 60.0
 
 ///|
 /// The most a turn holds the next one back, whatever it does (one whose motion never ends: ListTurns.kt MOST_MS).
-let turn_most_ms : Double = 3000.0
+pub let turn_most_ms : Double = 3000.0
 
 ///|
-fn Turns::ask(self : Turns, c : @ui.Ctx, what : TurnFor, ms : Double, after? : Bool = false) -> Unit {
+pub fn Turns::ask(self : Turns, c : @ui.Ctx, what : TurnFor, ms : Double, after? : Bool = false) -> Unit {
   self.asked_n = self.asked_n + 1
   // (said once as it is asked, from the moment it is: frames until its turn is played, Moving below)
   let at = self.moment(c)
@@ -127,13 +127,13 @@ fn Turns::ask(self : Turns, c : @ui.Ctx, what : TurnFor, ms : Double, after? : B
 
 ///|
 /// The moment now, as what is said to move sets out (Ctx::set_out): they are said to move from it.
-fn Turns::moment(self : Turns, c : @ui.Ctx) -> Double {
+pub fn Turns::moment(self : Turns, c : @ui.Ctx) -> Double {
   c.set_out(self.mover, self as &@ui.Moving, what="a chat's list turns")
 }
 
 ///|
 /// The row `key` comes into the list in its turn, its own motion taking `ms` (`after`: see TurnAsk).
-fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after? : Bool = false) -> Unit {
+pub fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after? : Bool = false) -> Unit {
   if self.waiting.contains(key) {
     return
   }
@@ -143,14 +143,14 @@ fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after? : B
 
 ///|
 /// Words sent: on their way at once, whatever plays; what is asked after them waits for them to land (Turns::over).
-fn Turns::send(self : Turns, c : @ui.Ctx) -> Unit {
+pub fn Turns::send(self : Turns, c : @ui.Ctx, way_ms : Double) -> Unit {
   self.sent_at = self.moment(c)
-  self.sent_until = self.sent_at + flight_wait_ms + flight_len() + turn_calm_ms
+  self.sent_until = self.sent_at + way_ms + turn_calm_ms
 }
 
 ///|
 /// Messages out of avatars: one turn from the first setting out till none is left (Turns::over).
-fn Turns::emits(self : Turns, c : @ui.Ctx) -> Unit {
+pub fn Turns::emits(self : Turns, c : @ui.Ctx) -> Unit {
   // (one under way, or asked: none more; one over, a new one for what came since)
   if self.emitting() || self.asks.iter().any(fn(a) { a.what == Emits }) {
     return
@@ -160,7 +160,7 @@ fn Turns::emits(self : Turns, c : @ui.Ctx) -> Unit {
 
 ///|
 /// Whether messages out of avatars have their turn now.
-fn Turns::emitting(self : Turns) -> Bool {
+pub fn Turns::emitting(self : Turns) -> Bool {
   self.on == Some(Emits) && self.open
 }
 
@@ -168,7 +168,7 @@ fn Turns::emitting(self : Turns) -> Bool {
 /// `target` (something under a post shown or not: a decision's options, 忽略) as it shows, changed in its turn among
 /// what changes the list's height: the change waits for it, and holds the next for `ms` (its motion) once made. The
 /// first time it is asked, as it is.
-fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : Double) -> Bool {
+pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : Double) -> Bool {
   match self.shown.get(key) {
     None => {
       self.shown[key] = target
@@ -187,13 +187,13 @@ fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : D
 
 ///|
 /// When what is under a post `key` last changed in its turn, or a row came in (-1: not in one).
-fn Turns::started_at(self : Turns, key : String) -> Double {
+pub fn Turns::started_at(self : Turns, key : String) -> Double {
   self.started.get(key).unwrap_or(-1.0)
 }
 
 ///|
 /// The turn under way, of words sent or messages out of avatars, is over (`at`: when it was declared to end).
-fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Unit {
+pub fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Unit {
   // (words sent landed: what waits for them goes from here)
   if what == Send && self.sent_at >= 0.0 {
     self.sent_until = dmin(self.sent_until, at + turn_calm_ms)
@@ -214,7 +214,7 @@ fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Unit {
 
 ///|
 /// The next ask in order: the first asked, those going after the others asked with them last.
-fn Turns::next_ask(self : Turns) -> Int? {
+pub fn Turns::next_ask(self : Turns) -> Int? {
   let mut best = -1
   for i, a in self.asks {
     if best < 0 {
@@ -237,13 +237,13 @@ fn Turns::next_ask(self : Turns) -> Int? {
 ///|
 /// When the next turn may start (inf: not known yet): the one under way over (at most turn_most_ms after it began), the
 /// list at rest, and it asked.
-fn Turns::free_at(self : Turns, a : TurnAsk) -> Double {
+pub fn Turns::free_at(self : Turns, a : TurnAsk) -> Double {
   dmax(dmax(dmax(self.until, self.list_rest), a.at), self.after_sent(a))
 }
 
 ///|
 /// What ask `a` waits for of words sent: their landing, asked after they were sent (-1: nothing).
-fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
+pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
   if self.sent_at >= 0.0 && a.at >= self.sent_at {
     self.sent_until
   } else {
@@ -254,7 +254,7 @@ fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
 ///|
 /// Plays the turns on, before the page is built (chat_tick): each one whose turn has come starts, from when it came.
 /// `list_rest`: when the list's own motion is at rest (Ctx::list_info's `rest`; inf: under way, its end not known).
-fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
+pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
   self.list_rest = list_rest
   self.stepped = c.frame_number()
   let mut steps = 0
@@ -322,22 +322,22 @@ impl @ui.Moving for Turns with rest_at(self, now, frame) {
 /// How long a turn holds the next: a row coming in (its rise: Chat.kt admit, 320), an agent's line (its room opening,
 /// 220), a decision's options closing (their leave and the delayed close: ListMotion.kt CLOSE_TURN_MS), 忽略 going
 /// (Chat.kt AskDismiss, 280).
-let row_turn_ms : Double = 320.0
+pub let row_turn_ms : Double = 320.0
 
 ///|
-let working_turn_ms : Double = 220.0
+pub let working_turn_ms : Double = 220.0
 
 ///|
-let close_turn_ms : Double = 520.0
+pub let close_turn_ms : Double = 520.0
 
 ///|
-let dismiss_turn_ms : Double = 280.0
+pub let dismiss_turn_ms : Double = 280.0
 
 ///|
 /// When what is under a post `key` changes, or row `key` comes in: when it did, or, still to come, when its turn is
 /// declared to start (the turns before it in order each from where the one before them ends, the list at rest); inf
 /// while that is not known (a turn before it lasts till said over, the list's glide not set out).
-fn Turns::start_of(self : Turns, key : String) -> Double {
+pub fn Turns::start_of(self : Turns, key : String) -> Double {
   let order = self.asks.copy()
   order.sort_by(fn(a, b) {
     if a.at != b.at {
@@ -385,3 +385,4 @@ pub fn under_turn(prefix : String) -> Double {
     last
   }
 }
+

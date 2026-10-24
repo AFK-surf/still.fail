@@ -1397,7 +1397,22 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
   let rk = r.station + "\u{1}" + r.session
   let row = sent_local(rk, Some(v), words, files)
-  flight_start(c, d.key, rk, row, words, @motion.measured(c, "composer/content").unwrap_or(0.0), flying)
+  let room = @motion.measured(c, "composer/content").unwrap_or(0.0)
+  let chat = d.key
+  flight_start(
+    c,
+    chat,
+    rk,
+    row,
+    words,
+    room,
+    flying,
+    field=field_key,
+    hold=fn(ms) { composer_hold(chat, room, ms) },
+    font=ct().font,
+    line=ct().line,
+    desk=wide_on.val,
+  )
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
