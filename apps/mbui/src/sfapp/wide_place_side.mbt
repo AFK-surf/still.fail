@@ -1,13 +1,12 @@
-// The sidebars of the wide frame's places other than the chats' (the chats' lists are sfdesk's: lists.mbt, chats.mbt),
-// given to it as `desk_pages().side`: the settings' pages (cloud/settings.tsx SettingsNav), the folders each station
-// lends (wide_files.mbt), the stations' and the profiles' lists (wide_places.mbt).
+// The sidebars of the wide frame's places other than the chats' and the files' (sfdesk's: lists.mbt, chats.mbt,
+// files_nav.mbt), given to it as `desk_pages().side`: the settings' pages (cloud/settings.tsx SettingsNav), the
+// stations' and the profiles' lists (wide_places.mbt).
 
 ///|
 /// A place's sidebar `width` wide.
 fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
   ignore(width)
   match @sfdesk.lit_place() {
-    "files" => files_side(c, src, w)
     "stations" => stations_side(c, src, w)
     "profiles" => profiles_side(c, src, w)
     _ => settings_side(c, src, w)

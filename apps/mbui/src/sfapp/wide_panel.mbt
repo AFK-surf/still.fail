@@ -302,8 +302,8 @@ fn side_panel(
       if front == "jobs" {
         side_jobs(c, src, r)
       } else if front == "files" {
-        // the workspace's stations' files (wide_files_tab.mbt), what is added from them going into the chat's draft
-        files_tab(c, src, w, draft_key(r), r.station)
+        // the workspace's stations' files (src/sfdesk/drive_tab.mbt), what is added from them going into the chat's draft
+        @sfdesk.files_tab(c, src, w.id, draft_key(r), r.station)
       } else if front == "letters" {
         match v.thread {
           Some(th) => letters_body(c, src, r, th)

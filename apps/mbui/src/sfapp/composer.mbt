@@ -1579,8 +1579,8 @@ fn composer(
     Some(png) => add_file(src, d, r.station, pasted_picture_name, png, None)
     None => ()
   }
-  // what the 文件 tab's 添加到消息 put in for this chat (wide_files_tab.mbt), named by their paths or as files
-  refs_put(src, d.key, files_tab_take_sent(d.key))
+  // what the 文件 tab's 添加到消息 put in for this chat (src/sfdesk/drive_tab.mbt), named by their paths or as files
+  refs_put(src, d.key, @sfdesk.tab_take_sent(d.key))
   // files another app shared into this chat (share.mbt), up as ＋'s are
   // (taken once from where they wait: the files as they were shared, whichever build takes them)
   match shared_into.get(d.key) {

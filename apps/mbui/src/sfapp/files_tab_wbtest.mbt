@@ -1,4 +1,4 @@
-// A chat's 文件 tab (wide_files_tab.mbt) drawn alone in a box of a side panel's width, over the fixture.
+// A chat's 文件 tab (src/sfdesk/drive_tab.mbt) drawn alone in a box of a side panel's width, over the fixture.
 
 ///|
 fn tab_tester(calls : Array[Made]) -> @ui.Tester {
@@ -16,7 +16,7 @@ fn tab_tester(calls : Array[Made]) -> @ui.Tester {
     fn(c) {
       // (a desktop's: the mouse drags no list, as the wide frame says)
       c.mouse_drags_lists(false)
-      c.box(w=Px(480.0), h=Fill(1.0), fn() { files_tab(c, src, w, "s-c1", "ws1/st1") }) |> ignore
+      c.box(w=Px(480.0), h=Fill(1.0), fn() { @sfdesk.files_tab(c, src, w.id, "s-c1", "ws1/st1") }) |> ignore
     },
     w=1280.0,
     h=800.0,
@@ -46,7 +46,7 @@ test "a chat's 文件 tab (DriveTab.tsx): at the chat's station's home, the trai
   t.tap(x, y)
   t.frame()
   assert_true(t.find("图标.png") is Some(_), msg="设计稿 open beside")
-  match ftab.places.get("ws1") {
+  match @sfdesk.tab_place("ws1") {
     Some(Some(at)) => assert_eq(at.path, "设计稿")
     _ => fail("the tab not in 设计稿")
   }
@@ -56,14 +56,14 @@ test "a chat's 文件 tab (DriveTab.tsx): at the chat's station's home, the trai
 test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加到消息) or copies its path; a row dragged off it is let go for the composer" {
   let calls : Array[Made] = []
   let t = tab_tester(calls)
-  ftab.places["ws1"] = Some({ station: "ws1/st1", root: Some(fix_docs), path: "" })
+  @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.frame()
   let (x, y) = t.find("发布清单.md").unwrap()
   t.right_click(x, y)
   t.frame()
   t.tap_text("添加到消息")
   t.frame()
-  let sent = files_tab_take_sent("s-c1")
+  let sent = @sfdesk.tab_take_sent("s-c1")
   assert_eq(sent.length(), 1)
   assert_eq(sent[0].abs, fix_docs + "/发布清单.md")
   let (x, y) = t.find("长篇小说.txt").unwrap()
@@ -75,7 +75,7 @@ test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加�
   // dragged off the tab (to where the composer is): let go there, for it to take
   let (x, y) = t.find("首页截图.png").unwrap()
   t.drag(x, y, 900.0, 600.0)
-  match files_tab_take_drop(t.ctx()) {
+  match @sfdesk.tab_take_drop(t.ctx()) {
     Some((item, dx, _)) => {
       assert_eq(item.name, "首页截图.png")
       assert_true(dx > 800.0)

@@ -105,7 +105,6 @@ fn wide_reset() -> Unit {
   wide.clear_asking = ""
   wide.station_menu = false
   wide.place_pick.clear()
-  ftab_reset()
   wide_switch_reset()
   wide.gone.clear()
   wide.trouble_seen = None
@@ -288,4 +287,49 @@ pub fn host_setup() -> Unit {
   if @ui.platform() == 1 {
     @ui.feel_as(2)
   }
+}
+
+///|
+/// The files' place with no folder open: the first station's start (none with a drive: the phone's page of the files).
+fn files_landing(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let (list, _) = dv_stations(src, w.id)
+  let first = match list {
+    Some(l) => l.iter().find_first(fn(s) { s.drive && @sfdesk.drive_start(s) is Some(_) })
+    None => None
+  }
+  match first {
+    Some(s) => wide_folder(c, src, w, { station: s.station, root: @sfdesk.drive_start(s), path: "" })
+    None => files_page(c, src, w)
+  }
+}
+
+///|
+/// The files' page at a folder (src/sfdesk/files.mbt), the sidebar's width off it; a station without a drive, or one
+/// that pins nothing for its viewer, on the phone's page of a station's files.
+fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
+  let stations = dv_stations(src, w.id).0.unwrap_or([])
+  let st = match stations.iter().find_first(fn(x) { x.station == at.station }) {
+    Some(v) if v.drive => v
+    _ => {
+      drive_page(c, src, w, at)
+      return
+    }
+  }
+  let root = match at.root {
+    Some(r) => r
+    None =>
+      match @sfdesk.drive_start(st) {
+        Some(r) => r
+        None => {
+          drive_page(c, src, w, at)
+          return
+        }
+      }
+  }
+  let here : DriveAt = { station: at.station, root: Some(root), path: at.path }
+  dv.building = dv_page_of(Some(here))
+  // the files picked to go up
+  dv_take_picked(src, here, [])
+  let room = c.width - @sfdesk.rail_w - (if @sfdesk.wide.folded { 0.0 } else { @sfdesk.wide.side_w })
+  @sfdesk.files_shell(c, src, w.id, stations, here, room)
 }

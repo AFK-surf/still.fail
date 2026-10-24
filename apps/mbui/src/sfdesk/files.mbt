@@ -5,13 +5,19 @@
 // in front. Each side is a folder's page (its head, then FolderView) under its own station.
 
 ///|
-/// What the files' page around the shell gives it, until each is the desk's own (Drive.tsx's dialogs): the address
-/// moved (`replace`: in place of where it was), a station's folders managed, and what the page draws over itself (its
-/// sheets: given the page's box).
-pub(all) struct FilesAround {
-  go : (DriveAt, Bool) -> Unit
-  manage : (DriveAt) -> Unit
-  over : (@ui.Ctx, Int) -> Unit
+/// A folder opened in the side in front (the stack's page above the files' place, in place of what was open); in the
+/// chat's 文件 tab while it is built, there.
+pub fn files_go(at : DriveAt) -> Unit {
+  if tab_building() {
+    tab_go(at)
+    return
+  }
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+  app.nav.push(Drive(at))
 }
 
 ///|
@@ -59,7 +65,6 @@ pub fn files_shell(
   stations : Array[DvStation],
   here : DriveAt,
   room : Double,
-  around : FilesAround,
 ) -> Unit {
   // what is dragged moved on or let go, before what it goes over is drawn
   drag_frame(c, src, ws)
@@ -87,7 +92,7 @@ pub fn files_shell(
     c.tell("files-tabs/" + act, fn() {
       files_tabs_act(src, ws, act, pane?, id?, side?, fn(next) {
         match next {
-          Some(n) => if !same_pane(n.front, here) { (around.go)(n.front, true) }
+          Some(n) => if !same_pane(n.front, here) { files_go(n.front) }
           None => ()
         }
       })
@@ -132,10 +137,10 @@ pub fn files_shell(
           at: p,
           front: i == tab.front,
           room: 0.0,
-          go: fn(to, replace) { (around.go)(to, replace) },
+          go: fn(to, _) { files_go(to) },
           open_in: Some(fn(to, beside) { show(if beside { "besides" } else { "open" }, Some(to), None, None) }),
           go_to: Some(go_to_open),
-          manage: Some(fn() { (around.manage)(p) }),
+          manage: Some(fn() { manage_roots(p.station) }),
         })
       None => None
     }
@@ -159,7 +164,7 @@ pub fn files_shell(
         None => ()
       }
       c.box(style=bar_line, fn() {  }) |> ignore
-      transfers_button(c, src, ws, fn(p) { (around.go)(p, false) })
+      transfers_button(c, src, ws, files_go)
       let lit = @sf.theme().p.accent
       if @sf.icon_button(
           c,
@@ -195,8 +200,8 @@ pub fn files_shell(
       }
     })
     |> ignore
-    go_to(c, src, ws, here, fn(p) { (around.go)(p, false) })
-    (around.over)(c, page)
+    go_to(c, src, ws, here, files_go)
+    drive_dialogs(c, src, ws)
     clash_dialog(c)
     drag_ghost(c, page)
   })

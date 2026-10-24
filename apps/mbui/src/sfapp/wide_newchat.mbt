@@ -112,7 +112,7 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
       }
     })
     |> ignore
-    c.box(style=side_pane, fn() { files_tab(c, src, w, "new:" + address, address) }) |> ignore
+    c.box(style=side_pane, fn() { @sfdesk.files_tab(c, src, w.id, "new:" + address, address) }) |> ignore
   })
   |> ignore
 }
