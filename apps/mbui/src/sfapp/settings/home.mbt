@@ -88,11 +88,10 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     // one page for every frame (src/sfdesk about.mbt), drawn by the frame's setting_route
-    Changelog | About | Memories | Memory(_) | AutoDecisions => ()
+    Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) => ()
     LocalStation => local_station_page(c, core)
     // the desktop's own, drawn by its frame (src/sfdesk)
     Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()
-    UsagePrices(days) => prices_page(c, core, here, days)
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
 }
