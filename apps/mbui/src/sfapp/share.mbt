@@ -734,35 +734,3 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
   |> ignore
 }
 
-///|
-/// A file of a drive handed to another app (DriveScreen.kt openElsewhere, share): read through the core a part at a
-/// time, how far on its row meanwhile (keep.mbt drive_fetch), then the system's share sheet; said when nothing takes it.
-fn share_drive_file(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
-  let root = at.root.unwrap_or("")
-  let path = dv_join(at.path, e.name)
-  let all = Buffer(size_hint=if e.size > 0.0 { e.size.to_int() } else { 0 })
-  drive_fetch(
-    src,
-    at.station,
-    root,
-    path,
-    fn(b) {
-      all.write_bytes(b)
-      true
-    },
-    fn(err) {
-      match err {
-        None =>
-          if !@ui.share("", e.name, e.mime, all.to_bytes()) {
-            app.toast = sh("android-misc.drive.noApp")
-            app.toast_n += 1
-          }
-        Some(err) => {
-          app.toast = fill("android-misc.drive.fetchFailed", [("name", e.name), ("error", dv_error(err))])
-          app.toast_n += 1
-        }
-      }
-    },
-    listed=Some((e.mtime, e.size)),
-  )
-}

@@ -212,16 +212,16 @@ pub fn dv_absolute(root : String, path : String) -> String {
 }
 
 ///|
-/// Why a root cannot be browsed and what to do about it (DriveScreen.kt rootTrouble); None while it can.
+/// Why a root cannot be browsed and what to do about it (useDrive.ts rootTrouble); None while it can.
 pub fn dv_trouble(state : String) -> (String, String)? {
   match state {
     "ok" | "" => None
     "missing" =>
-      Some((@sf.t("android-misc.drive.root.missing"), @sf.t("android-misc.drive.root.missingHint")))
+      Some((@sf.t("web-pages.drive.root.missing"), @sf.t("web-pages.drive.root.missingHint")))
     "not_a_directory" =>
-      Some((@sf.t("android-misc.drive.root.notFolder"), @sf.t("android-misc.drive.root.notFolderHint")))
+      Some((@sf.t("web-pages.drive.root.notFolder"), @sf.t("web-pages.drive.root.notFolderHint")))
     _ =>
-      Some((@sf.t("android-misc.drive.root.unreadable"), @sf.t("android-misc.drive.root.unreadableHint")))
+      Some((@sf.t("web-pages.drive.root.unreadable"), @sf.t("web-pages.drive.root.unreadableHint")))
   }
 }
 

@@ -358,14 +358,13 @@ test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under 
 }
 
 ///|
-test "a drive sheet going down takes no tap: its 重命名 tapped meanwhile does nothing" {
+test "a row's sheet going down takes no tap: its 重命名 tapped meanwhile does nothing" {
   let t = drive_tester("drive")
   // the drive pushed in over Home
   t.run_for(@ui.nav_push_ms)
+  // held: what can be done to it, a sheet from the foot
   hold(t, "季度数据.csv")
-  let log = t.drive("tap icon:more\nuntil 重命名\n")
-  assert_true(log.contains("EXIT 0"))
-  t.draw()
+  assert_true(t.find("重命名") is Some(_))
   t.tap_once(195.0, 60.0)
   t.frame()
   assert_true(t.find("重命名") is Some(_))

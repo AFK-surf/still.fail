@@ -24,6 +24,13 @@ fn nav_reset() -> Unit {
 }
 
 ///|
+/// The station this machine is said to be, in place of its host's (a made-up app's: the fixtures show no real
+/// machine's).
+pub fn set_this_machine(station : String) -> Unit {
+  @sfbase.machine_here.val = Some(station)
+}
+
+///|
 /// Where a station's drive starts for its viewer: its home for one who browses everywhere, else the first folder it
 /// pins.
 pub fn drive_start(s : DvStation) -> String? {
@@ -38,117 +45,188 @@ pub fn drive_start(s : DvStation) -> String? {
 }
 
 ///|
-/// The files' sidebar of workspace `ws` (FilesNav).
+/// The files' sidebar of workspace `ws` (FilesNav): its band (Pin 文件夹, the folders of the one station it can be done
+/// on, else which first), then the places.
 pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   // what is dragged over it moved on or let go
   drag_frame(c, src, ws)
-  let t = @sf.theme()
+  c.box(style=nav_side, fn() {
+    side_top(c)
+    let pins = pin_stations(src, ws)
+    if pins.length() > 0 {
+      c.box(style=nav_band, fn() { nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(pins) })) })
+      |> ignore
+    }
+    files_places(c, src, ws, top=if pins.length() > 0 { 0.0 } else { nav_top })
+  })
+  |> ignore
+}
+
+///|
+/// What the places' list holds, in order.
+priv enum PlaceItem {
+  PTop(Double)
+  PTrouble(String)
+  PReading
+  PNone
+  PFavorites
+  PHeading(String)
+  PStation(DvStation)
+  PShared(DvStation, DvRoot)
+  PFoot(Double)
+}
+
+///|
+/// The files' places of workspace `ws` (FilesNav's list; the phone's 文件, Files.tsx, is the same list), in the box it
+/// is given, scrolling: the person's own folders kept at hand (个人收藏), every station with a drive (its places under
+/// it, opened), the folders the stations pin for everyone (团队共享). With a finger, its rows as a finger's list has them
+/// (a size up, the box's width: SidebarList.tsx NavPhone). `top`, `foot`: room kept at its ends for what is over it;
+/// `go`: a folder opened (the side in front, by default).
+pub fn files_places(
+  c : @ui.Ctx,
+  src : Source,
+  ws : String,
+  top? : Double = 0.0,
+  foot? : Double = 0.0,
+  go? : (DriveAt) -> Unit = files_go,
+) -> Unit {
+  drag_frame(c, src, ws)
   let here = this_machine()
+  let phone = @ui.pointing() is Finger
   // those with a drive, this machine's first, then as the workspace lists them
   let (known, error) = drive_stations(src, ws)
   let stations = known.unwrap_or([])
-  let views = dv_stations(src, ws).0.unwrap_or([])
-  // the folder shown (the side in front), its row lit
-  let shown = match app.nav.top() {
-    Drive(at) => Some(at)
-    _ => None
+  // (what the stations pin and the favourites' stations are among those with a drive: the one list read)
+  let views = stations
+  let rows : Array[PlaceItem] = [PTop(top)]
+  match (known, error) {
+    (None, Some(e)) => rows.push(PTrouble(e))
+    (None, None) => rows.push(PReading)
+    _ => ()
   }
-  let lit = fn(station : String, root : String, path : String) {
-    match shown {
-      Some(h) => h.station == station && h.root == Some(root) && h.path == path
-      None => false
+  if known is Some(_) && stations.length() == 0 {
+    rows.push(PNone)
+  }
+  rows.push(PFavorites)
+  if stations.length() > 0 {
+    rows.push(PHeading("Station"))
+  }
+  for s in stations {
+    rows.push(PStation(s))
+  }
+  let pinned : Array[PlaceItem] = []
+  for s in views {
+    for r in s.roots {
+      pinned.push(PShared(s, r))
     }
   }
-  let writes = fn(s : DvStation) { dv_rights(src, ws, Some(s)).write }
-  c.box(style=nav_side, fn() {
-    side_top(c)
-    c.box(style=nav_list, fn() {
-      // Pin 文件夹 (useAddFolder): the folders of the one station it can be done on, else which first
-      let pins = pin_stations(src, ws)
-      if pins.length() > 0 {
-        nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(pins) }))
-      }
-      match (known, error) {
-        (None, Some(e)) => c.text(e, style=nav_trouble) |> ignore
-        (None, None) => side_breathing(c)
-        _ => ()
-      }
-      if known is Some(_) && stations.length() == 0 {
-        c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta) |> ignore }) |> ignore
-      }
-      // 个人收藏: a folder dragged onto it kept there
-      let favs = favorites(src, ws)
-      let kid = c.id("files/keep")
-      let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
-      c.box(style=if keeping { keep_on } else { keep_off }, id=kid, fn() {
-        nav_heading(c, @sf.t("web-pages.files.favorites"))
-        if favs.length() == 0 {
-          c.box(style=nav_hint, fn() {
-            @sf.icon(c, "star", size=nav_icon, color=t.p.subtle) |> ignore
-            c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta) |> ignore
-          })
-          |> ignore
-        }
-        for f in favs {
-          match views.iter().find_first(fn(x) { x.station == f.station }) {
-            Some(st) => {
-              let place = f.station + "/" + f.root + "/" + f.path
-              let rid = c.id("files/unfav/" + place)
-              let into : DriveAt = { station: f.station, root: Some(f.root), path: f.path }
-              fdrag_side_row(c, "fav/" + place, into, f.name, writes(st), st.transfers, fn() {
-                if c.clicked(rid) {
-                  favorite_remove(src, ws, f.station, f.root, f.path)
-                } else if nav_row(c, "files/fav/" + place, lit(f.station, f.root, f.path), fn() {
-                    @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
-                    nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) })
-                    c.text(st.name, style=nav_meta) |> ignore
-                    let ub = c.box(style=unkeep, id=rid, fn() {
-                      @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
-                    })
-                    c.semantics(ub, Button, id=rid, label=@sf.t("web-pages.files.unfavorite", args=[("name", f.name)]))
-                  }) {
-                  files_go(into)
-                }
-              })
+  if pinned.length() > 0 {
+    rows.push(PHeading(@sf.t("web-pages.files.shared")))
+    rows.append(pinned)
+  }
+  rows.push(PFoot(foot))
+  c.box(style=if phone { places_phone } else { nav_list }, fn() {
+    c.list("files/places/" + ws, rows.length(), place_est, fn(i) {
+      match rows[i] {
+        PTop(h) | PFoot(h) => c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
+        PTrouble(e) => c.text(e, style=nav_trouble) |> ignore
+        PReading => side_breathing(c)
+        PNone =>
+          c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta) |> ignore }) |> ignore
+        PFavorites => places_favorites(c, src, ws, views, phone, go)
+        PHeading(h) => nav_heading(c, h, phone~)
+        PStation(s) => station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, phone, go)
+        PShared(s, r) => {
+          let t = @sf.theme()
+          let name = if r.name != "" { r.name } else { dv_name(r.path) }
+          let into : DriveAt = { station: s.station, root: Some(r.path), path: "" }
+          fdrag_side_row(c, "shared/" + s.station + "/" + r.path, into, name, dv_rights(src, ws, Some(s)).write, s.transfers, fn() {
+            if nav_row(
+                c,
+                "files/shared/" + s.station + "/" + r.path,
+                place_lit(s.station, r.path, ""),
+                fn() {
+                  @sf.icon(c, "pin", size=nav_icon, color=t.p.muted) |> ignore
+                  nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) }, phone~)
+                  c.text(s.name, style=nav_meta) |> ignore
+                },
+                phone~,
+              ) {
+              go(into)
             }
-            None => ()
-          }
+          })
         }
-      })
-      |> ignore
-      // Station: each, opened to its places
-      if stations.length() > 0 {
-        nav_heading(c, "Station")
-      }
-      for s in stations {
-        station_row(c, src, s, s.station == here, writes(s), lit)
-      }
-      // 团队共享: the folders each station pins
-      let pinned : Array[(DvStation, DvRoot)] = []
-      for s in views {
-        for r in s.roots {
-          pinned.push((s, r))
-        }
-      }
-      if pinned.length() > 0 {
-        nav_heading(c, @sf.t("web-pages.files.shared"))
-      }
-      for x in pinned {
-        let (s, r) = x
-        let name = if r.name != "" { r.name } else { dv_name(r.path) }
-        let into : DriveAt = { station: s.station, root: Some(r.path), path: "" }
-        fdrag_side_row(c, "shared/" + s.station + "/" + r.path, into, name, writes(s), s.transfers, fn() {
-          if nav_row(c, "files/shared/" + s.station + "/" + r.path, lit(s.station, r.path, ""), fn() {
-              @sf.icon(c, "pin", size=nav_icon, color=t.p.muted) |> ignore
-              nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
-              c.text(s.name, style=nav_meta) |> ignore
-            }) {
-            files_go(into)
-          }
-        })
       }
     })
     |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Whether the folder is the one shown (the side in front: the stack's top), its row lit.
+fn place_lit(station : String, root : String, path : String) -> Bool {
+  match app.nav.top() {
+    Drive(h) => h.station == station && h.root == Some(root) && h.path == path
+    _ => false
+  }
+}
+
+///|
+/// 个人收藏 (the person's own folders kept at hand, of any station): a folder dragged onto it kept there; none yet, where
+/// they go.
+fn places_favorites(
+  c : @ui.Ctx,
+  src : Source,
+  ws : String,
+  views : Array[DvStation],
+  phone : Bool,
+  go : (DriveAt) -> Unit,
+) -> Unit {
+  let t = @sf.theme()
+  let favs = favorites(src, ws)
+  let kid = c.id("files/keep")
+  let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
+  c.box(style=if keeping { keep_on } else { keep_off }, id=kid, fn() {
+    nav_heading(c, @sf.t("web-pages.files.favorites"), phone~)
+    if favs.length() == 0 {
+      c.box(style=if phone { nav_hint_phone } else { nav_hint }, fn() {
+        @sf.icon(c, "star", size=nav_icon, color=t.p.subtle) |> ignore
+        c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta) |> ignore
+      })
+      |> ignore
+    }
+    for f in favs {
+      match views.iter().find_first(fn(x) { x.station == f.station }) {
+        Some(st) => {
+          let place = f.station + "/" + f.root + "/" + f.path
+          let rid = c.id("files/unfav/" + place)
+          let into : DriveAt = { station: f.station, root: Some(f.root), path: f.path }
+          fdrag_side_row(c, "fav/" + place, into, f.name, dv_rights(src, ws, Some(st)).write, st.transfers, fn() {
+            if c.clicked(rid) {
+              favorite_remove(src, ws, f.station, f.root, f.path)
+            } else if nav_row(
+                c,
+                "files/fav/" + place,
+                place_lit(f.station, f.root, f.path),
+                fn() {
+                  @sf.icon(c, "folder", size=nav_icon, color=t.p.muted) |> ignore
+                  nav_words(c, f.name, color?=if st.online { None } else { Some(t.p.muted) }, phone~)
+                  c.text(st.name, style=nav_meta) |> ignore
+                  let ub = c.box(style=unkeep, id=rid, fn() {
+                    @sf.icon(c, "close", size=nav_icon, color=t.p.subtle) |> ignore
+                  })
+                  c.semantics(ub, Button, id=rid, label=@sf.t("web-pages.files.unfavorite", args=[("name", f.name)]))
+                },
+                phone~,
+              ) {
+              go(into)
+            }
+          })
+        }
+        None => ()
+      }
+    }
   })
   |> ignore
 }
@@ -162,66 +240,84 @@ fn station_row(
   s : DvStation,
   here : Bool,
   write : Bool,
-  lit : (String, String, String) -> Bool,
+  phone : Bool,
+  go : (DriveAt) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
-  let open = nav.open.contains(s.station)
-  let start = drive_start(s)
   let did = c.id("files/station-open/" + s.station)
   if c.clicked(did) {
-    if open {
+    if nav.open.contains(s.station) {
       nav.open.remove(s.station)
     } else {
       nav.open[s.station] = true
     }
-  } else {
-    let row = fn() {
-      if nav_row(
-          c,
-          "files/station/" + s.station,
-          match start {
-            Some(r) => lit(s.station, r, "")
-            None => false
-          },
-          fn() {
-            let d = c.box(style=disclosure, id=did, fn() {
-              @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=nav_icon, color=t.p.subtle) |> ignore
-            })
-            c.semantics(
-              d,
-              Button,
-              id=did,
-              label=@sf.t(if open { "web-pages.files.collapse" } else { "web-pages.files.expand" }, args=[("name", s.name)]),
-              expanded=open,
-            )
-            @sf.station_icon(c, s.emoji, s.icon, @sf.row_icon, t.p.muted, here~)
-            nav_words(c, s.name, color?=if s.online { None } else { Some(t.p.muted) })
-            if here {
-              c.box(style=here_chip, fn() { c.text(@sf.t("web-pages.files.thisMachine"), style=here_words) |> ignore })
-              |> ignore
-            }
-            if s.online {
-              disk_bar(c, s)
-            } else {
-              c.text(@sf.t("web-pages.stations.offline"), style=nav_meta) |> ignore
-            }
-          },
-        ) {
+  }
+  let open = nav.open.contains(s.station)
+  let start = drive_start(s)
+  let row = fn() {
+    if nav_row(
+        c,
+        "files/station/" + s.station,
         match start {
-          Some(r) => files_go({ station: s.station, root: Some(r), path: "" })
-          None => ()
-        }
+          Some(r) => place_lit(s.station, r, "")
+          None => false
+        },
+        fn() {
+          let d = c.box(style=disclosure, id=did, fn() {
+            @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=nav_icon, color=t.p.subtle) |> ignore
+          })
+          c.semantics(
+            d,
+            Button,
+            id=did,
+            label=@sf.t(if open { "web-pages.files.collapse" } else { "web-pages.files.expand" }, args=[("name", s.name)]),
+            expanded=open,
+          )
+          @sf.station_icon(c, s.emoji, s.icon, @sf.row_icon, t.p.muted, here~)
+          nav_words(c, s.name, color?=if s.online { None } else { Some(t.p.muted) }, phone~)
+          if here {
+            c.box(style=here_chip, fn() { c.text(@sf.t("web-pages.files.thisMachine"), style=here_words) |> ignore })
+            |> ignore
+          }
+          if s.online {
+            disk_bar(c, s)
+          } else {
+            c.text(@sf.t("web-pages.stations.offline"), style=nav_meta) |> ignore
+          }
+        },
+        phone~,
+      ) &&
+      !c.clicked(did) {
+      match start {
+        Some(r) => go({ station: s.station, root: Some(r), path: "" })
+        None => ()
       }
     }
+  }
+  c.box(style=station_item, fn() {
     match start {
       Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
       None => row()
     }
-  }
-  if !open {
-    return
-  }
-  // its places as its drive offers them to one who browses everywhere, read as its row opens; else what it pins
+    if open {
+      station_places(c, src, s, write, phone, go)
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A station's places, under its row opened: as its drive offers them to one who browses everywhere (its home, the
+/// home's own folders, its disks: read as its row opens), else the folders it pins.
+fn station_places(
+  c : @ui.Ctx,
+  src : Source,
+  s : DvStation,
+  write : Bool,
+  phone : Bool,
+  go : (DriveAt) -> Unit,
+) -> Unit {
+  let t = @sf.theme()
   if s.anywhere && !nav.asked.contains(s.station) {
     c.after_build("files-places/" + s.station, fn() {
       if !nav.asked.contains(s.station) {
@@ -252,11 +348,17 @@ fn station_row(
       let (name, path, disk) = p
       let into : DriveAt = { station: s.station, root: Some(path), path: "" }
       fdrag_side_row(c, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
-        if nav_row(c, "files/place/" + s.station + "/" + path, lit(s.station, path, ""), fn() {
-            @sf.icon(c, if disk { "disk" } else { "folder" }, size=nav_icon, color=t.p.muted) |> ignore
-            nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
-          }) {
-          files_go(into)
+        if nav_row(
+            c,
+            "files/place/" + s.station + "/" + path,
+            place_lit(s.station, path, ""),
+            fn() {
+              @sf.icon(c, if disk { "disk" } else { "folder" }, size=nav_icon, color=t.p.muted) |> ignore
+              nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) }, phone~)
+            },
+            phone~,
+          ) {
+          go(into)
         }
       })
     }
@@ -303,7 +405,35 @@ let nav_side : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_list : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S1")
+let nav_list : @ui.Style = @ui.css("w=Full h=Full px=S2")
+
+///|
+/// The list 4 under the band (Sidebar.css.ts navList).
+let nav_top : Double = 4.0
+
+///|
+/// With a finger, as wide as its box (SidebarList.css.ts phone: its rows in by their own).
+// kept across runs: a value (no field of it changes)
+let places_phone : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The band over the list (NavTop's NavAction): 8 in at its sides, as the list is.
+// kept across runs: a value (no field of it changes)
+let nav_band : @ui.Style = @ui.css("w=Full px=S2 pt=S1")
+
+///|
+/// A station's row and its places under it, one item of the list.
+// kept across runs: a value (no field of it changes)
+let station_item : @ui.Style = @ui.css("w=Full")
+
+///|
+/// A row of the list as a guess at its height, before it is laid out.
+let place_est : Double = 36.0
+
+///|
+/// With a finger, where favourites go while there are none: as a row of a finger's list.
+// kept across runs: a value (no field of it changes)
+let nav_hint_phone : @ui.Style = @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=@sf.phone_row_in))
 
 ///|
 // kept across runs: a value (no field of it changes)

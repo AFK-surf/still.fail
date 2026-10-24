@@ -406,16 +406,6 @@ test "drive-sub" {
 }
 
 ///|
-test "drive-chosen" {
-  check("drive-chosen", @ui.nav_push_ms)
-}
-
-///|
-test "drive-entry" {
-  check("drive-entry", @ui.nav_push_ms)
-}
-
-///|
 test "drive-upload" {
   check("drive-upload", @ui.nav_push_ms)
 }

@@ -127,6 +127,10 @@ pub let row_corner : Double = 18.0
 pub let row_icon : Double = 22.0
 
 ///|
+/// A finger's list row in from its box's left (SidebarList.css.ts phone: a chat row's 22).
+pub let phone_row_in : @ui.Space = room(22.0)
+
+///|
 /// The account's picture and the workspace's mark, each on its card atop settings (SettingsHome.kt): 46.
 pub let identity_mark : Double = 46.0
 

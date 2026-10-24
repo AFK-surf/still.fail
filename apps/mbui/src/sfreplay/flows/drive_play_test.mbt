@@ -57,7 +57,7 @@ test "45-drive-play" {
     f.tap("第01集.mp4")
     f.run_to(@ui.nav_rest())
     f.see("1 / 2")
-    let first = opened_view(f)
+    let first = opened_after(f, -1)
     player_opened(f, first)
     // playing (what the Mac's player said of itself, on the trace: Replay::host), its first subtitle at its time
     player_told(f)
@@ -94,11 +94,10 @@ test "45-drive-play" {
     f.back()
     f.run_to(@ui.nav_rest())
     f.see("片尾曲.m4a")
-    // each read through the core to its end, as the run's player had it
+    // each film read through the core to its end, as the run's player had it (the song, left at once, is not)
     read_whole(f, first, 2276541)
     read_whole(f, again, 2276541)
     read_whole(f, next, 461621)
-    read_whole(f, song, 45252)
     f.end()
   })
 }

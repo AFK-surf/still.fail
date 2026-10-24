@@ -135,8 +135,6 @@ let drive_zh : Map[String, String] = {
   "android-misc.drive.view": "显示方式",
   "android-misc.failed": "失败",
   "android-misc.files.lendOn": "选择文件夹所在的 station",
-  "android-misc.files.none.manager": "暂无借出的文件夹。点 + 选择某台 station 上的文件夹后，workspace 成员即可在这里浏览。",
-  "android-misc.files.none.member": "workspace 管理员尚未借出文件夹",
   "android-settings.title": "设置",
   "common.cancel": "取消",
   "common.folderOn": "{station} 上的文件夹：{path}",

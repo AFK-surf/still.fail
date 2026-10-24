@@ -17,7 +17,7 @@ fn viewer_host_of(c : @ui.Ctx, src : Source) -> @sf.ViewerHost {
         s.body,
         closing=s.closing,
         reader=true,
-        close=Some(s.close),
+        close=s.close,
         gone=s.gone,
         trailing=s.trailing,
       )
