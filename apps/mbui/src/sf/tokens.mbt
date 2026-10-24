@@ -704,6 +704,14 @@ pub let tag_max : @ui.Len = Fixed(104.0)
 pub let ref_row_min_h : @ui.Len = Fixed(44.0)
 
 ///|
+/// The sign-in page's (SignIn.kt): its title 28, bold, on the font's own line (28.sp), off the scale between Xl3's
+/// 22 and Xl4's 32; its sides 30 (padding(horizontal = 30.dp)), between S7's 28 and S8's 32.
+pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
+
+///|
+pub let sign_in_side : @ui.Space = Exact(30.0)
+
+///|
 /// The search (Search.kt): its field 38 high (FIELD) on the ink at 6%; a row found 66 high (HitRow, ItemRow; 50 an item
 /// with no line of words), its first line 22; what a row found says starts 22 in.
 pub let search_field_h : @ui.Len = Fixed(38.0)
