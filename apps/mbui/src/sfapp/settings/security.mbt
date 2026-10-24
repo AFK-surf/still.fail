@@ -537,7 +537,7 @@ fn turn_off(core : Core, ws : String, name : String) -> Unit {
 ///|
 /// 开启安全模式 (Security.kt SecurityOpenScreen, the core's `lockDraft`): its members, the devices and stations it would
 /// sign (each ticked in or out: `lock.toggle`), then 签名并开启 (`lock.open`) along the foot.
-fn security_open_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+pub fn security_open_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let t = @sf.theme()
   let ws = here.workspace
   let topic = (core.topic)("lockDraft", { "workspace": str(ws) })
