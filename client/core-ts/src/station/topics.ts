@@ -39,7 +39,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -174,6 +174,8 @@ export class StationTopics implements Owner {
     if (topic.topic === "net" || topic.topic === "way") this.#sampleNet(station, topic.topic);
     // A folder of the drive: kept as it is on the station's disk while shown.
     if (topic.topic === "drive") this.#samplers.set(topicKey(topic), this.#core.runner.fork(this.#sync.driveWatch(station, topic.root as string, topic.path as string)));
+    // What still.fail uses of the station's machine: read every few seconds while shown.
+    if (topic.topic === "stationResources") this.#samplers.set(topicKey(topic), this.#core.runner.fork(this.#sync.resourcesWatch(station)));
     this.resume(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
     if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
@@ -241,6 +243,7 @@ export class StationTopics implements Owner {
         const v = link?.memory.get(topicKey(topic));
         return v === undefined ? undefined : { ok: v };
       }
+      case "stationResources":
       case "stationSearch": {
         if (error) return { err: error };
         const v = link?.memory.get(topicKey(topic));

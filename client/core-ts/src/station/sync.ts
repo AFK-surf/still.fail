@@ -58,6 +58,8 @@ export const RECHECKING = "等它回来确认";
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
+/// How often a shown resources page asks its station again (the station, asked, looks as often itself).
+export const RESOURCES_EVERY_MS = 5_000;
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
@@ -555,6 +557,29 @@ export class StationsSync {
   /// A folder of the drive shown, kept as it is on the station's disk (an agent writing there, a file renamed on the
   /// machine): the station answers GET /drive/watch once something in it changes (else after a while), and it is read
   /// again. A station from before watching, or a folder gone, answers 4xx: then it is read only as it is shown.
+  /// What still.fail uses of the station's machine now (GET /resources), read every RESOURCES_EVERY_MS while shown (a
+  /// fiber of the topic's, topics.ts). A station from before has none: its refusal is said, and asked again each time.
+  resourcesWatch(address: string): Effect.Effect<void, never> {
+    const key = topicKey({ topic: "stationResources", station: address });
+    return Effect.forever(
+      Effect.gen({ self: this }, function* () {
+        const link = this.#links.get(address);
+        if (link && this.reachable(address)) {
+          const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/resources", null, { quiet: true }));
+          if (answer._tag === "Success") {
+            link.errors.delete(key);
+            link.memory.set(key, answer.success);
+            this.onChange(address, "log", key);
+          } else if (answer.failure.status !== undefined && answer.failure.status < 500) {
+            link.errors.set(key, answer.failure);
+            this.onChange(address, "errors", key);
+          }
+        }
+        yield* Effect.sleep(RESOURCES_EVERY_MS);
+      }),
+    );
+  }
+
   driveWatch(address: string, root: string, path: string): Effect.Effect<void, never> {
     const id = Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(16).padStart(2, "0")).join("");
     const asked = `/drive/watch?root=${encode(root)}&path=${encode(path)}&id=${id}`;

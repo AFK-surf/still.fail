@@ -4931,6 +4931,90 @@ export interface PublishPreview {
 	hiddenText?: string;
 }
 
+/** Where a chat in the usage lists opens: its station, and its thread, or its agent's session. */
+export interface UsageChat {
+	station: string;
+	thread?: number;
+	session?: string;
+}
+
+/** What a process, or a whose's processes together, use now, and each said. */
+export interface ResourceUse {
+	/** 100 a whole core. */
+	cpu: number;
+	/** Its footprint, in bytes. */
+	memory: number;
+	watts: number;
+	/** A second. */
+	wakeups: number;
+	cpuText: string;
+	memoryText: string;
+	wattsText: string;
+	wakeupsText: string;
+}
+
+export interface ResourceProcess {
+	key: string;
+	pid: number;
+	name: string;
+	use: ResourceUse;
+}
+
+/** Whose uses what: a chat, the agents (no one chat's), the desktop app, the station. */
+export interface ResourceGroup {
+	key: string;
+	/** Its ResourceKind's key. */
+	kind: string;
+	title: string;
+	/**
+	 * What it is where its title does not say it (对话), after its station's name when there are
+	 * several; empty for the app and the station of a lone station.
+	 */
+	kindText: string;
+	/** A chat's page. */
+	chat?: UsageChat;
+	use: ResourceUse;
+	/** The most CPU first. */
+	processes: ResourceProcess[];
+}
+
+/** A kind of whose to filter by: chats (the agents' with them), the app, the station. */
+export interface ResourceKind {
+	key: string;
+	label: string;
+}
+
+/** A total now (CPU, memory, power, wakeups), said, and how it went. */
+export interface ResourceTile {
+	key: string;
+	label: string;
+	value: string;
+	sub: string;
+	/** The last minutes' values, the oldest first, for a line. */
+	points: number[];
+}
+
+/**
+ * What of the machines of a workspace's stations still.fail uses now, as Activity Monitor says it (the `resources` view,
+ * client/core-ts/src/views/resources.ts): CPU, memory, power and wakeups in total, with the last minutes' line, and by
+ * whose (a chat, the agents, the desktop app, the station), each with its processes.
+ */
+export interface ResourcesView {
+	/** What it still waits on (looks.ts waitNote): the stations not read yet, those that could not be. */
+	wait: ListNote;
+	/** No station reads what its processes use (none answered yet, none on macOS, all from before). */
+	empty: boolean;
+	/** How often it is read again while shown, for the page to say. */
+	everyMs: number;
+	tiles: ResourceTile[];
+	/** What the page filters the groups by, in its order. */
+	kinds: ResourceKind[];
+	/** Whose uses what, the most CPU first. */
+	groups: ResourceGroup[];
+	notes: string[];
+	basis: string;
+}
+
 /**
  * What a screen's station lacks for it (docs/remote-screens.md `access`): macOS's Screen Recording and Accessibility
  * grants, or a machine it is not supported on.
@@ -5373,13 +5457,6 @@ export interface StatusView {
 	state?: string;
 	text?: string;
 	items: StatusItem[];
-}
-
-/** Where a chat in the usage lists opens: its station, and its thread, or its agent's session. */
-export interface UsageChat {
-	station: string;
-	thread?: number;
-	session?: string;
 }
 
 /**

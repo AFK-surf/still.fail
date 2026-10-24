@@ -17,7 +17,7 @@
 import { totalmem } from "node:os";
 import type { Clock } from "effect";
 import { runnerId } from "../agents/process.ts";
-import { existingRunners } from "../agents/runner.ts";
+import { existingRunners, type RunnerInfo } from "../agents/runner.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
@@ -231,6 +231,19 @@ export class MemoryWatch {
   }
 }
 
+/// The jobs running now, as the watches see them (the resources' too, resources/watch.ts).
+export function watchedJobs(store: Store): WatchedJob[] {
+  return store.listJobs(null).flatMap((j) => (j.state === "running" && j.pgid !== null ? [{ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }] : []));
+}
+
+/// The runners alive (<data>/run/runners), each with its session: a runner is a session's (its id made of the
+/// session's key) or a profile's, shared by its sessions (codex: none).
+export function runnersWithSessions(data: string, store: Store): (RunnerInfo & { session: string | null })[] {
+  const whose = new Map<string, string>();
+  for (const s of store.listSessions()) for (const kind of RUNTIME_KINDS) whose.set(runnerId(kind, s.key), s.key);
+  return existingRunners(data).map((r) => ({ ...r, session: whose.get(r.id) ?? null }));
+}
+
 /// The watch as the station runs it: over its jobs (`jobs`' store) and the commands of its runtimes (the runners of
 /// before and now, <data>/run/runners), on this machine's memory.
 export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock }): MemoryWatch {
@@ -241,14 +254,8 @@ export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: 
     table: (exact) => platform.processTable(exact),
     totalBytes: () => totalmem(),
     cwds: (pids) => platform.cwds(pids),
-    jobs: () =>
-      store.listJobs(null).flatMap((j) => (j.state === "running" && j.pgid !== null ? [{ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }] : [])),
-    agents: () => {
-      // A runner is a session's (its id made of the session's key) or a profile's, shared by its sessions (codex).
-      const whose = new Map<string, string>();
-      for (const s of store.listSessions()) for (const kind of RUNTIME_KINDS) whose.set(runnerId(kind, s.key), s.key);
-      return existingRunners(o.data).map((r) => ({ pid: r.pid, session: whose.get(r.id) ?? null }));
-    },
+    jobs: () => watchedJobs(store),
+    agents: () => runnersWithSessions(o.data, store).map((r) => ({ pid: r.pid, session: r.session })),
     sessionAt: (dir) => {
       let best: { key: string; length: number } | null = null;
       for (const s of store.listSessions()) {

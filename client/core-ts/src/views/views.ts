@@ -33,6 +33,7 @@ import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
+import { resourcesView } from "./resources.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes, servingIn } from "./models.ts";
@@ -55,7 +56,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -635,6 +636,10 @@ export class Views implements Owner {
         scope = view.scope as string;
         perStation = (s) => [{ topic: "stationUsage", station: s }];
         break;
+      case "resources":
+        scope = view.scope as string;
+        perStation = (s) => [{ topic: "stationResources", station: s }];
+        break;
       case "connects":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "overview", station: s }, { topic: "sessions", station: s }, { topic: "threads", station: s }];
@@ -998,6 +1003,12 @@ export class Views implements Owner {
         const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
         const now = this.#core.host.nowMs();
         return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_) };
+      }
+      case "resources": {
+        const stations = this.#stationsOr(view.scope as string);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationResources", station: s.address }) : undefined }));
+        return { ok: resourcesView(sources, this.#core.host.nowMs(), looks.waitNote) };
       }
       case "longJobs": {
         const stations = this.#stationsOr(view.scope as string);
