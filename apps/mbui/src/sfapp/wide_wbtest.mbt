@@ -134,6 +134,27 @@ test "wide: ⌘K over a chat lists what can be done only as the core finds it fo
 }
 
 ///|
+test "wide: the 奏 page shows the decision the core shows: a row pressed (decision.show), ⌥↓ and ⌥↑ through its list" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="decisions")
+  open_decisions()
+  t.run_for(@ui.nav_push_ms)
+  // nothing picked yet: the first
+  assert_true(t.find("1 / 2") is Some(_))
+  // ⌥↓: the next one shown (the core keeps which), ⌥↑ back
+  t.key(@ui.key_code_down, mods=@ui.mod_alt)
+  t.frame()
+  assert_eq(named(calls, "decision.show").length(), 1)
+  assert_true(t.find("2 / 2") is Some(_))
+  t.key(@ui.key_code_down, mods=@ui.mod_alt)
+  t.frame()
+  assert_eq(named(calls, "decision.show").length(), 1, msg="none past the last")
+  t.key(@ui.key_code_up, mods=@ui.mod_alt)
+  t.frame()
+  assert_true(t.find("1 / 2") is Some(_))
+}
+
+///|
 test "wide: settings from the rail's gear, its list in the sidebar; back to the chats" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

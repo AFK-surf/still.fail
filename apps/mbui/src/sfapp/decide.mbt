@@ -62,11 +62,7 @@ priv struct Decide {
   mut history_asked : String
   /// the steps asked to be read whole (`history.detail`), and when the answer came, by their entries
   detail_at : Map[String, Double]
-  /// the 奏 page: decisions answered or let go here (not shown) and set aside here (last), until the core's list
-  /// has them so (Decisions.kt DecisionsLocal)
-  dgone : Array[String]
-  dlater : Array[String]
-  /// the front decision: its key, how far across it is dragged, whether a finger has it (its moves and speed the
+  /// the 奏 page's front decision: its key, how far across it is dragged, whether a finger has it (its moves and speed the
   /// framework's drag's: decisions.mbt)
   mut front : String
   mut drag : Double
@@ -99,8 +95,6 @@ let dui : Decide = {
   opened: {},
   history_asked: "",
   detail_at: {},
-  dgone: [],
-  dlater: [],
   front: "",
   drag: 0.0,
   held: false,
@@ -133,8 +127,6 @@ fn decide_reset() -> Unit {
   history_short.clear()
   history_marked.val = ("", "")
   dui.detail_at.clear()
-  dui.dgone.clear()
-  dui.dlater.clear()
   dui.front = ""
   dui.drag = 0.0
   dui.held = false

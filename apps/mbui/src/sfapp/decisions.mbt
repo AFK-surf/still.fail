@@ -59,21 +59,43 @@ fn decision_key(item : Json) -> String {
 }
 
 ///|
-/// The decisions as this device shows them (DecisionsLocal.shown): those answered or let go here gone, those set
-/// aside here last; what the core's list no longer has forgotten.
-fn shown_decisions(all : Array[Json]) -> Array[Json] {
-  let keys = all.map(decision_key)
-  dui.dgone.retain(fn(k) { keys.contains(k) })
-  dui.dlater.retain(fn(k) { keys.contains(k) })
-  let rest = all.filter(fn(i) { !dui.dgone.contains(decision_key(i)) })
-  let first = rest.filter(fn(i) { !dui.dlater.contains(decision_key(i)) })
-  for k in dui.dlater {
-    match rest.iter().find_first(fn(i) { decision_key(i) == k }) {
-      Some(i) => first.push(i)
-      None => ()
-    }
+/// Which of the 奏 page's `shown` decisions is in front: on the phone the first, in the wide frame the one the core
+/// shows (`shown`: the one picked, else the one now in its place; DecisionDesk.tsx).
+fn decision_front(view : Json?, shown : Array[Json]) -> Int {
+  if !wide_on.val {
+    return 0
   }
-  first
+  let at = number(view, "shown").to_int()
+  if at >= 0 && at < shown.length() {
+    at
+  } else {
+    0
+  }
+}
+
+///|
+/// `d` the one the wide 奏 page shows from now on (`decision.show`: the core keeps it; DecisionDesk.tsx pick).
+fn decision_show(src : Source, w : Workspace, d : Json) -> Unit {
+  let v = Some(d)
+  let p : Map[String, Json] = {
+    "workspace": Json::string(w.id),
+    "station": Json::string(text(v, "station")),
+    "thread": Json::number(number(v, "thread")),
+    "seq": Json::number(number(v, "seq")),
+  }
+  (src.call)("decision.show", Json::object(p), fn(_) {  })
+}
+
+///|
+/// The decision before (-1) or after (1) the one the wide 奏 page shows, shown in its place (DecisionDesk.tsx step:
+/// ⌥↑ ⌥↓, the chats' keys); none past either end.
+fn decision_step(src : Source, w : Workspace, way : Int) -> Unit {
+  let view = (src.topic)("decisions", { "workspace": Json::string(w.id) }).value
+  let shown = items(view, "items")
+  let next = decision_front(view, shown) + way
+  if next >= 0 && next < shown.length() {
+    decision_show(src, w, shown[next])
+  }
 }
 
 ///|
@@ -85,7 +107,9 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Some(Object(_)) as v => v
     _ => None
   }
-  let shown = shown_decisions(items(view, "items"))
+  // as the core lists them: those answered, let go or decided here gone at once (back if that could not be done), those
+  // set aside last (client/core-ts decisions.ts)
+  let shown = items(view, "items")
   // the bar's 奏 at the stack's root: a place's top bar, room at its foot for the bar (slice 7's); else pushed
   let place = app.nav.depth() == 1
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
@@ -112,7 +136,7 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           deck_out(c, src, c.width, c.height)
           return
         }
-        deck(c, src, shown)
+        deck(c, src, shown, decision_front(view, shown))
       })
       |> ignore
     })
@@ -394,9 +418,9 @@ fn go_decision(c : @ui.Ctx, dir : Int, item : Json, after : () -> Unit) -> Unit 
 ///|
 /// The deck (Decisions.kt Deck): the decision in front, swiped where it rests (across first: the swipe; up or down
 /// first: the messages'); under it, as it moves, what letting it go that way does; the hint and where this one is.
-fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
+fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
   let t = @sf.theme()
-  let item = shown[0]
+  let item = shown[at]
   let key = decision_key(item)
   let n = shown.length()
   if dui.front != key {
@@ -418,18 +442,13 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
   let width = dmax(fw, 1.0)
   let height = dmax(fh, 1.0)
   let vk = Some(item)
+  // (what could not be done: the core puts it back in its place)
   let say_failed = fn(what : String) {
-    fn(e : Json) {
-      dui.dgone.retain(fn(k) { k != key })
-      dui.dlater.retain(fn(k) { k != key })
-      toast_later(fill("android-misc.act.failed", [("what", what), ("error", error_words(e))]))
-    }
+    fn(e : Json) { toast_later(fill("android-misc.act.failed", [("what", what), ("error", error_words(e))])) }
   }
   let call = fn(name : String, what : String, extra : Map[String, Json]) {
     if src.read_only {
       toast_later(read_only_words)
-      dui.dgone.retain(fn(k) { k != key })
-      dui.dlater.retain(fn(k) { k != key })
       return
     }
     let p : Map[String, Json] = {
@@ -449,21 +468,13 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
     })
   }
   let set_aside = fn() {
-    go_decision(c, -1, item, fn() {
-      dui.dlater.retain(fn(k) { k != key })
-      dui.dlater.push(key)
-      call("decision.defer", tr("android-misc.decisions.deferWhat"), {})
-    })
+    go_decision(c, -1, item, fn() { call("decision.defer", tr("android-misc.decisions.deferWhat"), {}) })
   }
   let dismiss = fn() {
-    go_decision(c, 1, item, fn() {
-      dui.dgone.push(key)
-      call("decision.dismiss", tr("android-misc.decisions.dismissWhat"), {})
-    })
+    go_decision(c, 1, item, fn() { call("decision.dismiss", tr("android-misc.decisions.dismissWhat"), {}) })
   }
   let answer = fn(o : Choice) {
     go_decision(c, 2, item, fn() {
-      dui.dgone.push(key)
       call("decision.answer", tr("android-misc.decisions.answerWhat"), { "option": Json::string(o.label) })
     })
   }
@@ -587,7 +598,7 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
         c.text(tr("android-misc.decisions.hint"), size=12.0, color=t.p.subtle, wrap=false) |> ignore
       })
       |> ignore
-      c.text("1 / \{n}", size=12.0, color=t.p.subtle, wrap=false) |> ignore
+      c.text("\{at + 1} / \{n}", size=12.0, color=t.p.subtle, wrap=false) |> ignore
     })
     |> ignore
   })
@@ -826,7 +837,7 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
   sent_draft(d, taken_files.length())
   save_draft(src, d)
   c.blur()
-  go_decision(c, 2, item, fn() { dui.dgone.push(key) })
+  go_decision(c, 2, item, fn() {  })
   let reply : Map[String, Json] = {
     "station": Json::string(text(v, "station")),
     "thread": Json::number(number(v, "thread")),
@@ -845,7 +856,6 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
     fn(res) {
       match res {
         Err(e) => {
-          dui.dgone.retain(fn(k) { k != key })
           if text(Some(e), "code") == "invalid_params" && draft_empty(d) {
             d.text = taken_text
             d.put_text = Some(taken_text)

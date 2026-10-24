@@ -9,7 +9,12 @@ fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
     ..base,
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
-      done(Ok(Json::object({})))
+      // the 奏 page's taken by the made-up core (its queue as the core keeps it); a chat's answered, nothing more
+      if mode.has_prefix("decisions") {
+        (base.call)(name, params, done)
+      } else {
+        done(Ok(Json::object({})))
+      }
     },
   }
   if mode.has_prefix("chat") {

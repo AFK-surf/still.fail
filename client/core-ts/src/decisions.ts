@@ -375,6 +375,29 @@ export function reply(card: J, text: string, hasExtras: boolean): [string, J[]] 
   return q === null ? null : [text.trim(), q];
 }
 
+/// The decision the wide 奏 page shows, kept between its views: its key (null: none picked yet; "": the one in the place
+/// of the one set aside) and where in the list it was last.
+export type Shown = { key: string | null; at: number };
+
+/// Picked (`decision.show`): shown from now on.
+export function picked(was: Shown, key: string): Shown {
+  return { key, at: was.at };
+}
+
+/// Set aside (`decision.defer`): if it is the one shown, the one then in its place shows (itself if it is the only one).
+export function setAside(was: Shown, key: string): Shown {
+  return was.key === key ? { key: "", at: was.at } : was;
+}
+
+/// Where the one shown is in the list's `keys`: the one picked while it is there, else the one now where it was (the
+/// last when the list got shorter), which is then the one shown (`next`, kept for the next view); null for none.
+/// Nothing picked yet, the first shows, whichever it is.
+export function shownIn(was: Shown, keys: string[]): { at: number | null; next: Shown } {
+  const found = was.key === null ? -1 : keys.indexOf(was.key);
+  const at = found >= 0 ? found : Math.min(was.at, keys.length - 1);
+  return { at: at >= 0 ? at : null, next: { key: was.key !== null && at >= 0 ? keys[at]! : was.key, at: Math.max(at, 0) } };
+}
+
 /// The order of the 奏 page: not set aside first (oldest asked first), then set aside (latest last).
 export function order<T>(items: [T, number, number | null][]): [T, number, number | null][] {
   return [...items].sort((a, b) => {
