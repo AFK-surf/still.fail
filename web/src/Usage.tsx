@@ -201,12 +201,12 @@ export function PriceTables({ view }: { view: UsageView }) {
     {tables.map((table, i) => <section className={css.card} key={i}>
       <h2 className={css.priceStation}>{table.station}</h2>
       <p className={css.priceNote}>{table.note}</p>
-      {table.rows.length === 0 ? <p className={css.priceNote}>{t("web-main.usage.noModelUsage")}</p> : <div className={conversationCss.markdown} style={{ paddingTop: 8 }}><div className={proseCss.tableScroll} style={{ width: "100%" }}>
+      {table.rows.length === 0 ? <p className={css.priceNote}>{t("web-main.usage.noModelUsage")}</p> : <div className={conversationCss.markdown} style={{ paddingTop: 8 }}><div className={proseCss.tableScroll} style={{ width: "100%" }}><div className={proseCss.tableFrame} style={{ minWidth: "100%" }}>
         <table style={{ width: "100%" }}>
           <thead><tr><th scope="col">{t("web-main.model.models")}</th>{table.rows[0]?.rates.map((r) => <th scope="col" key={r.label}>{r.label}</th>)}</tr></thead>
           <tbody>{table.rows.map((row) => <tr key={row.model}><td>{row.model}</td>{row.rates.map((rate) => <td key={rate.label}>{rate.value}</td>)}</tr>)}</tbody>
         </table>
-      </div></div>}
+      </div></div></div>}
     </section>)}
   </div>;
 }
