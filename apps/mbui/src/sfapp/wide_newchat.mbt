@@ -56,7 +56,7 @@ fn new_chat_page_wide(
     |> ignore
   }
   // its panel slides in and out as a chat's does (NewChat.tsx useSidePanel)
-  side_beside(c, "new:" + w.id, files, side_width(c.width), scene, fn() {
+  @sfdesk.side_beside(c, "new:" + w.id, files, @sfdesk.side_width(c.width), scene, fn() {
     // (leaving: the chat it became has it now)
     if going is None {
       new_files_panel(c, src, w, address)
@@ -80,7 +80,7 @@ fn new_files_open(src : Source, ws : String) -> Bool {
 /// The workspace's new chat's 文件 tab opened or closed, kept by the core on this device (`chat.tabs.*`).
 fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
   let open = new_files_open(src, ws)
-  side_changing("new:" + ws, if open { ["files"] } else { [] }, if open { "files" } else { "" }, on)
+  @sfdesk.side_changing("new:" + ws, if open { ["files"] } else { [] }, if open { "files" } else { "" }, on)
   let call = if on { "chat.tabs.open" } else { "chat.tabs.close" }
   (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, fn(_) {  })
 }
@@ -90,18 +90,18 @@ fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
 /// workspace's stations, what is added going into the new chat's draft.
 fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -> Unit {
   let t = @sf.theme()
-  c.box(style=side_panel_style, fn() {
-    c.box(style=side_bar, fn() {
-      c.box(style=side_tab_list, fn() {
+  c.box(style=@sfdesk.side_panel_style, fn() {
+    c.box(style=@sfdesk.side_bar, fn() {
+      c.box(style=@sfdesk.side_tab_list, fn() {
         let close = c.id("new/files-tab-close")
         c.cursor(close, Hand)
         if c.clicked(close) {
           new_files_set(src, w.id, false)
         }
-        c.box(style=side_tab, selected=true, fn() {
+        c.box(style=@sfdesk.side_tab, selected=true, fn() {
           @sf.icon(c, "folder", size=14.0, color=t.p.text) |> ignore
-          c.text(tr("web-pages.chat.files"), style=side_tab_front) |> ignore
-          c.box(style=side_tab_close, id=close, fn() { @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore })
+          c.text(tr("web-pages.chat.files"), style=@sfdesk.side_tab_front) |> ignore
+          c.box(style=@sfdesk.side_tab_close, id=close, fn() { @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore })
           |> ignore
         })
         |> ignore
@@ -112,7 +112,7 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
       }
     })
     |> ignore
-    c.box(style=side_pane, fn() { @sfdesk.files_tab(c, src, w.id, "new:" + address, address) }) |> ignore
+    c.box(style=@sfdesk.side_pane, fn() { @sfdesk.files_tab(c, src, w.id, "new:" + address, address) }) |> ignore
   })
   |> ignore
 }

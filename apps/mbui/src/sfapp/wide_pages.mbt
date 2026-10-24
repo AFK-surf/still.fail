@@ -10,8 +10,6 @@ priv struct Wide {
   /// the chat's "…" open (what is done with it), its services' popover open
   mut info_open : Bool
   mut jobs_open : Bool
-  /// the job picked in the 任务 tab ("" the first)
-  mut job_picked : String
   /// the new chat's station chooser open (wide_newchat.mbt)
   mut station_menu : Bool
   /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
@@ -22,7 +20,6 @@ priv struct Wide {
 let wide : Wide = {
   info_open: false,
   jobs_open: false,
-  job_picked: "",
   station_menu: false,
   place_pick: {},
 }
@@ -36,8 +33,7 @@ let wide_on : Ref[Bool] = Ref(false)
 fn wide_reset() -> Unit {
   wide.info_open = false
   wide.jobs_open = false
-  wide.job_picked = ""
-  side_slide_reset()
+  @sfdesk.side_slide_reset()
   find_forget()
   find_around.val = -1.0
   wide.station_menu = false

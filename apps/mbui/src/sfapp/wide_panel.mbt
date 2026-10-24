@@ -1,406 +1,71 @@
-// Beside a chat in the wide frame (ember web/src/pages/ChatPage.tsx, ChatSide.tsx, ChatPage.css.ts sidePanel and
-// sideTab, Jobs.tsx JobsPopover and JobsTab): the side panel at the pane's right, a tab each for what is opened in it
-// (an agent's execution history, the chat's services and jobs, what its agents and other chats' wrote each other), the
-// one in front shown, the panel closed with its switch; and what opens under the chat's bar as the web's does, not as
-// a phone's sheets: its "…" (what is done with the chat) and its services' popover. Each chat keeps its own tabs.
+// What opens under a chat's bar in the wide frame (ember web/src/pages/ChatPage.tsx ChatInfo, JobsPanel), as the
+// web's does, not as a phone's sheets: its "…" (what is done with the chat) and its services' popover (sfdesk/jobs.mbt).
+// The side panel beside the chat is sfdesk's (panel.mbt); what this package asks of it goes through the names below.
 
 ///|
 /// A chat's key among the frame's own: its station and session.
 fn side_key(r : ChatRef) -> String {
-  r.station + "\u{1}" + r.session
+  @sfdesk.chat_key(r)
 }
 
 ///|
-/// A chat's tabs' key as the core keeps them (the prefs' `chatTabs`: `<station>:<session>`, as its page names it).
-fn tabs_key(r : ChatRef) -> String {
-  r.station + ":" + r.session
-}
-
-///|
-/// Whether this panel shows `tab` beside a chat of `v`: one of its agents' histories (by its session's key), 任务, 文件,
-/// agent 往来 (not yet the web's services and visualizations).
-fn side_shows(v : ChatView, tab : String) -> Bool {
-  tab == "jobs" || tab == "files" || tab == "letters" || v.agents.iter().any(fn(a) { a.key == tab })
-}
-
-///|
-/// The chat's side panel's tabs, in their order, and the one in front: the core's (the chat view's `tabs`: those kept
-/// for it on this device that it has, ChatPage.tsx), of those this panel shows.
+/// The chat's side panel's tabs, in their order, and the one in front (sfdesk/panel.mbt).
 fn side_of(v : ChatView) -> (Array[String], String) {
-  let tabs = v.tabs.open.filter(fn(t) { side_shows(v, t) })
-  let front = match v.tabs.shown {
-    Some(f) if tabs.contains(f) => f
-    _ => tabs.get(0).unwrap_or("")
-  }
-  (tabs, front)
+  @sfdesk.side_of(v)
 }
 
 ///|
 /// Chat `r`'s tabs as its view has them now.
 fn side_now(r : ChatRef) -> (Array[String], String) {
   match link_src.val {
-    Some(src) =>
-      match (src.topic)("chat", chat_params(r)).value {
-        Some(v) => side_of(chat_view(v))
-        None => ([], "")
-      }
+    Some(src) => @sfdesk.side_now(src, r)
     None => ([], "")
   }
 }
 
 ///|
-/// Chat `r`'s tabs changed by the core, which keeps them on this device (ChatPage.tsx change): `tab` opened in front (an
-/// agent's history after the histories open, any other last), closed (the last left in front, if it was), brought to
-/// the front; all of them closed (`clear`). The panel is told first whether any will be open, to slide as they come.
+/// Chat `r`'s tabs changed by the core, the panel told first whether any will be open (sfdesk's side_change).
 fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
-  let (tabs, front) = side_now(r)
-  let any = match action {
-    "open" | "front" => true
-    "close" => tabs.iter().any(fn(t) { Some(t) != tab })
-    _ => false
-  }
-  side_changing(side_key(r), tabs, front, any)
-  side_ask(r, action, tab)
-}
-
-///|
-/// The change asked of the core alone (changeTabs, `chat.tabs.*`), the panel told nothing: as a chat made from the new
-/// chat's page starts with what it had beside it.
-fn side_ask(r : ChatRef, action : String, tab : String?) -> Unit {
   match link_src.val {
-    Some(src) => {
-      let params : Map[String, Json] = { "chat": Json::string(tabs_key(r)) }
-      match tab {
-        Some(t) => params["tab"] = Json::string(t)
-        None => ()
-      }
-      (src.call)("chat.tabs." + action, Json::object(params), fn(_) {  })
-    }
+    Some(src) => @sfdesk.side_change(src, r, action, tab)
     None => ()
   }
 }
 
 ///|
-/// An agent's history pressed (its mark in the bar), or the chat's files (its info's 文件): in front, closed; else
-/// opened in front.
+/// The change asked of the core alone, the panel told nothing (sfdesk's side_ask).
+fn side_ask(r : ChatRef, action : String, tab : String?) -> Unit {
+  match link_src.val {
+    Some(src) => @sfdesk.side_ask(src, r, action, tab)
+    None => ()
+  }
+}
+
+///|
+/// An agent's history pressed, or the chat's files: in front, closed; else opened in front (sfdesk's side_toggle).
 fn side_toggle(r : ChatRef, tab : String) -> Unit {
-  let (tabs, front) = side_now(r)
-  side_change(r, if tabs.contains(tab) && front == tab { "close" } else { "open" }, Some(tab))
-}
-
-///|
-/// How wide the panel is (ChatSide.tsx: 38% of the page, at least 360; between PANEL_MIN 320 and PANEL_MAX 960), the
-/// chat keeping 360 at least.
-fn side_width(pane : Double) -> Double {
-  let wanted = dmin(960.0, dmax(320.0, dmax(360.0, (pane * 0.38).floor())))
-  dmax(0.0, dmin(wanted, pane - 360.0))
-}
-
-///|
-/// The chat and the panel side by side.
-// kept across runs: a value (no field of it changes)
-let side_row : @ui.Style = @ui.style(row=true, w=Full, h=Full)
-
-///|
-/// The panel: its ground the canvas, a hairline at its left.
-// kept across runs: a value (no field of it changes)
-let side_panel_style : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
-
-///|
-// kept across runs: a value (no field of it changes)
-let side_rule : @ui.Style = @ui.style(w=SPx, h=Full, bg=Line)
-
-///|
-/// How wide that hairline is (its SPx), the panel's column being it and the panel.
-let side_rule_w : Double = 1.0
-
-///|
-/// Its bar (sideBar): 45 high, the tabs from 8 in, the panel's switch at its right 12 in.
-// kept across runs: a value (no field of it changes)
-let side_bar : @ui.Style = @ui.style(row=true, w=Full, h=S11, pl=S2, pr=S3, gap=S2, align=ACenter)
-
-///|
-/// Its tabs (sideTabList), 2 apart.
-// kept across runs: a value (no field of it changes)
-let side_tab_list : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S0_5, align=ACenter, clip=true)
-
-///|
-/// A tab (sideTabWrap, sideTab): its icon and label 6 apart, 12 in (8 before its close), the pointer's ground on it, the
-/// selected ground under the one in front.
-// kept across runs: a value (no field of it changes)
-let side_tab : @ui.Style = @ui.style(
-  row=true,
-  h=S8,
-  pl=S3,
-  pr=S1,
-  gap=S1_5,
-  align=ACenter,
-  radius=Xl,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Selected),
-)
-
-///|
-/// Its label: muted, 13; the one in front in the words' colour and 500.
-// kept across runs: a value (no field of it changes)
-let side_tab_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let side_tab_front : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
-
-///|
-/// Its close (sideTabClose): 20 square, round 6 (a small mark of its own), the line's ground on it.
-// kept across runs: a value (no field of it changes)
-let side_tab_close : @ui.Style = @ui.style(w=S5, h=S5, radius=Md, align=ACenter, justify=JCenter, hovered=@ui.patch(bg=Line))
-
-///|
-/// What the tab in front shows, under the bar.
-// kept across runs: a value (no field of it changes)
-let side_pane : @ui.Style = @ui.style(w=Full, h=Full, clip=true)
-
-///|
-/// How long the side panel takes to slide in and out (ChatSide.tsx useSidePanel: 0.28 s and 0.24 s, the page's ease-out).
-pub let side_in_ms : Double = 280.0
-
-///|
-pub let side_out_ms : Double = 240.0
-
-///|
-/// The side panel's slide (ChatSide.tsx useSidePanel), for the page it is beside (a chat's, a workspace's new chat's):
-/// what it was last built as (open or not), whether a change asked of the core here opens or closes it (`opening`,
-/// `leaving`: it slides then), and while it slides out, what it showed (its tabs and the one in front).
-priv struct SideSlide {
-  mut was : (String, Bool)?
-  mut asked : String
-  mut leaving : (String, Array[String], String)?
-}
-
-///|
-let side_slide_of : SideSlide = { was: None, asked: "", leaving: None }
-
-///|
-fn side_slide_reset() -> Unit {
-  side_slide_of.was = None
-  side_slide_of.asked = ""
-  side_slide_of.leaving = None
-}
-
-///|
-/// A change of page `key`'s tabs asked of the core, from `tabs` (`front` in front), leaving `any` open (useSidePanel
-/// changing): from none to some, the panel slides in once they come; from some to none, out, showing them as it goes.
-fn side_changing(key : String, tabs : Array[String], front : String, any : Bool) -> Unit {
-  let open = tabs.length() > 0
-  if any {
-    side_slide_of.leaving = None
-  }
-  if open != any {
-    side_slide_of.asked = key
-    if !any {
-      side_slide_of.leaving = Some((key, tabs, front))
-    }
-  } else {
-    side_slide_of.asked = ""
+  match link_src.val {
+    Some(src) => @sfdesk.side_toggle(src, r, tab)
+    None => ()
   }
 }
 
 ///|
-/// What page `key`'s panel shows while it slides out, its last tab closed: the tabs it had, the one in front.
-fn side_leaving(key : String) -> (Array[String], String)? {
-  match side_slide_of.leaving {
-    Some((k, tabs, front)) if k == key => Some((tabs, front))
-    _ => None
-  }
-}
-
-///|
-/// Page `key` (`page`) and its side panel (`panel`, `whole` wide at rest) side by side, the panel `open` or not. Opened by
-/// a change asked here, the panel's column widens from nothing over 280 ms and the page narrows with it, frame by frame;
-/// closed, the other way over 240 ms (ChatSide.tsx useSidePanel). The panel keeps its whole width all along and shows
-/// through its column as it grows, so it comes in from the right edge without what it holds laid out again; turned back
-/// on its way, it goes on from where it is. Open or closed otherwise (a page opened with its tabs as they were left),
-/// it is so at once.
-fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page : () -> Unit, panel : () -> Unit) -> Unit {
-  let name = "--side-panel/" + key
-  match side_slide_of.was {
-    Some((k, was)) if k == key && was != open && side_slide_of.asked == key => {
-      side_slide_of.asked = ""
-      c.move_state([("side-panel", [name])], duration=if open { side_in_ms } else { side_out_ms })
-    }
-    _ => ()
-  }
-  side_slide_of.was = Some((key, open))
-  // its column (the rule, then the panel) as wide as it has got
-  let col = c.moved(name, if open { whole + side_rule_w } else { 0.0 })
-  if col <= 0.0 {
-    if !open && side_leaving(key) is Some(_) {
-      side_slide_of.leaving = None
-    }
-    page()
-    return
-  }
-  let left = c.width - col
-  c.box(style=side_row, fn() {
-    c.box(style=@ui.style(w=Fixed(left), h=Full), fn() { c.sized(left, c.height, page) }) |> ignore
-    c.box(style=@ui.style(w=Fixed(col), h=Full, clip=true), fn() {
-      c.box(style=@ui.style(row=true, w=Fixed(whole + side_rule_w), h=Full), fn() {
-        c.box(style=side_rule, fn() {  }) |> ignore
-        c.box(style=@ui.style(w=Fixed(whole), h=Full), fn() { c.sized(whole, c.height, panel) }) |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The chat's page with its side panel beside it: its tabs, or while the panel slides out the ones it had.
-fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : () -> Unit) -> Unit {
-  let key = side_key(r)
-  let (tabs, front) = match v {
-    Some(view) => side_of(view)
-    None => ([], "")
-  }
-  let open = tabs.length() > 0
-  side_beside(c, key, open, side_width(c.width), chat, fn() {
-    match v {
-      Some(view) => {
-        let (tabs, front) = if open { (tabs, front) } else { side_leaving(key).unwrap_or(([], "")) }
-        side_panel(c, src, w, r, view, tabs, front)
-      }
-      None => ()
-    }
-  })
-}
-
-///|
-/// The panel: its tabs and its switch over what the one in front shows.
-fn side_panel(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  r : ChatRef,
-  v : ChatView,
-  tabs : Array[String],
-  front : String,
-) -> Unit {
-  c.box(style=side_panel_style, fn() {
-    c.box(style=side_bar, fn() {
-      c.box(style=side_tab_list, fn() {
-        for tab in tabs {
-          side_tab_of(c, r, v, tab, tab == front)
-        }
-      })
-      |> ignore
-      if icon_button(c, "side/close", "panel-close", label=tr("web-pages.chat.closePanel")) {
-        side_change(r, "clear", None)
-      }
-    })
-    |> ignore
-    c.box(style=side_pane, fn() {
-      if front == "jobs" {
-        side_jobs(c, src, r)
-      } else if front == "files" {
-        // the workspace's stations' files (src/sfdesk/drive_tab.mbt), what is added from them going into the chat's draft
-        @sfdesk.files_tab(c, src, w.id, draft_key(r), r.station)
-      } else if front == "letters" {
-        match v.thread {
-          Some(th) => letters_body(c, src, r, th)
-          None => ()
-        }
-      } else if front != "" {
-        // one of its agents' execution histories
-        history_body(c, src, r, front, None, (src.topic)("chat", chat_params(r)))
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// A tab: an agent's by its maker's mark and label, 任务's, agent 往来's; a press brings it in front, its × closes it.
-fn side_tab_of(c : @ui.Ctx, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
-  let t = @sf.theme()
-  let id = c.id("side/tab/" + tab)
-  c.cursor(id, Hand)
-  if c.clicked(id) {
-    side_change(r, "front", Some(tab))
-  }
-  let close = c.id("side/tab-close/" + tab)
-  c.cursor(close, Hand)
-  if c.clicked(close) {
-    side_change(r, "close", Some(tab))
-  }
-  c.box(style=side_tab, selected=front, id~, fn() {
-    match v.agents.iter().find_first(fn(a) { a.key == tab }) {
-      Some(a) => {
-        @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
-        c.text(a.who, style=if front { side_tab_front } else { side_tab_words }) |> ignore
-      }
-      None => {
-        let (icon, label) = if tab == "jobs" {
-          ("boxes", tr("web-pages.chat.jobs"))
-        } else if tab == "files" {
-          ("folder", tr("web-pages.chat.files"))
-        } else {
-          ("chats", tr("web-main.letters.title"))
-        }
-        @sf.icon(c, icon, size=14.0, color=if front { t.p.text } else { t.p.muted }) |> ignore
-        c.text(label, style=if front { side_tab_front } else { side_tab_words }) |> ignore
-      }
-    }
-    c.box(style=side_tab_close, id=close, fn() { @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The 任务 tab (Jobs.tsx JobsTab): every service and job of the chat's, those that matter first, the one picked (the
-/// first job while none is) shown under them.
-fn side_jobs(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
-  let topic = (src.topic)("chatJobs", chat_params(r))
-  let view = match topic.value {
-    Some(Object(_)) as v => v
-    _ => {
-      waiting_rows(c, 3, topic.error)
-      return
-    }
-  }
-  let jobs = items(view, "jobs")
-  if jobs.length() == 0 {
-    c.box(style=letters_none_box, fn() { c.text(tr("android-misc.jobs.none"), style=letters_none) |> ignore }) |> ignore
-    return
-  }
-  let picked = match jobs.iter().find_first(fn(j) { text(Some(j), "id") == wide.job_picked }) {
-    Some(j) => Some(j)
-    None => jobs.iter().find_first(fn(j) { !flag(Some(j), "service") })
-  }
-  c.list(
-    "side-jobs/" + r.station + "/" + r.session,
-    2,
-    120.0,
-    fn(i) {
-      if i == 0 {
-        c.box(style=side_jobs_list, fn() { job_groups(c, r, view, jobs, pick=Some(fn(id) { wide.job_picked = id })) })
-        |> ignore
-      } else {
-        match picked {
-          Some(j) => job_detail(c, src, r, text(Some(j), "id"), Some(j))
-          None => ()
-        }
+/// What the side panel shows of this package's beside chat `r`: an agent's history's steps (history.mbt), a letter as
+/// the chat draws a message, a link opened as the chat opens one.
+fn panel_parts(c : @ui.Ctx, src : Source, r : ChatRef) -> @sfdesk.PanelParts {
+  {
+    steps: fn(key) { history_steps(c, src, r, key, None) },
+    message: fn(m) {
+      match view_of_chat(src, r) {
+        (Some(v), _, _) =>
+          said(c, src, { station: r.station, session: r.session, view: v }, message_of(m), [], decide=false)
+        _ => ()
       }
     },
-  )
-  |> ignore
+    link: fn(href) { open_link(href) },
+  }
 }
-
-///|
-/// The 任务 tab's list, at the panel's sides.
-// kept across runs: a value (no field of it changes)
-let side_jobs_list : @ui.Style = @ui.style(w=Full, px=S4, pb=S3)
 
 ///|
 /// What opens under the chat's bar (wide_chat.mbt): its "…" and its services' popover, each by its button.
@@ -425,7 +90,17 @@ fn bar_popovers(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     side=Bottom,
     along=End,
     look=fn(c, _, body) { @sf.panel(c, w=Px(360.0), body) |> ignore },
-    fn() { jobs_rows(c, src, r) },
+    fn() {
+      let open = fn(id : String) {
+        wide.jobs_open = false
+        if id != "" {
+          @sfdesk.pick_job(id)
+        }
+        side_change(r, "open", Some("jobs"))
+      }
+      // (a service's own tab is not here yet: it opens in 任务 too)
+      @sfdesk.jobs_popover(c, src, r.station, (src.topic)("chatJobs", chat_params(r)).value, open, open)
+    },
   )
   wide.jobs_open = wide.jobs_open && jobs.value
 }
@@ -592,6 +267,7 @@ fn chat_info_rows(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit 
           wide.info_open = false
           dui.letters_open = ""
           dui.letters_held[side_key(r)] = id
+          @sfdesk.letters_to_list(r)
           side_change(r, "open", Some("letters"))
         }
       _ => ()
@@ -637,60 +313,5 @@ fn chat_info_rows(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit 
   |> ignore
 }
 
-///|
-/// What matters now of the chat's services and jobs, from the bar's button (Jobs.tsx JobsPopover): those that matter now,
-/// a job pressed opened in the 任务 tab; at its foot all of them there, and clearing what ended.
-fn jobs_rows(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
-  let topic = (src.topic)("chatJobs", chat_params(r))
-  let view = match topic.value {
-    Some(Object(_)) as v => v
-    _ => return
-  }
-  let jobs = items(view, "jobs")
-  let shown = jobs.filter(fn(j) { flag(Some(j), "current") })
-  c.box(style=side_jobs_pop, fn() {
-    job_groups(
-      c,
-      r,
-      view,
-      shown,
-      pick=Some(fn(id) {
-        wide.jobs_open = false
-        wide.job_picked = id
-        side_change(r, "open", Some("jobs"))
-      }),
-    )
-  })
-  |> ignore
-  c.box(style=info_tools, fn() {
-    if info_tool_row(c, "jobs-pop/all", "panel-open", text(view, "allText"), "") {
-      wide.jobs_open = false
-      side_change(r, "open", Some("jobs"))
-    }
-    if number(view, "ended") > 0.0 {
-      let clear_key = "clear/" + r.station
-      if info_tool_row(c, "jobs-pop/clear", "trash", text(view, "clearText"), "") && !doing(clear_key) {
-        for session in items(view, "clear") {
-          match session {
-            String(s) =>
-              act(
-                src,
-                tr("android-misc.jobs.clearWhat"),
-                clear_key,
-                "job.clearEnded",
-                { "station": Json::string(r.station), "session": Json::string(s) },
-              )
-            _ => ()
-          }
-        }
-      }
-    }
-  })
-  |> ignore
-}
 
-///|
-/// The services' popover's groups, at the panel's words' inset.
-// kept across runs: a value (no field of it changes)
-let side_jobs_pop : @ui.Style = @ui.style(w=Full, px=S1)
 

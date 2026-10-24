@@ -567,3 +567,9 @@ pub fn stations_of(v : Json?) -> Array[Station] {
     _ => []
   }
 }
+
+///|
+/// A chat's topics' params: its station and session.
+pub fn chat_params(r : ChatRef) -> Map[String, Json] {
+  { "station": Json::string(r.station), "session": Json::string(r.session) }
+}
