@@ -224,9 +224,22 @@ pub fn chip(
 let chip_inner : @ui.Style = @ui.css("radius=Inner")
 
 ///|
+/// How far an option's words stand in from its column's sides (segmentedOption: 0 12).
+let segmented_in : Double = 12.0
+
+///|
+/// What a segmented track scrolls: its options in a line, 2 apart (segmented's --gap), each kept whole.
+// kept across runs: a value (no field of it changes)
+let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
+
+///|
 /// A choice of a few (Segmented; the kit's sliding toggle group): a quiet
-/// pill track, the chosen raised on the canvas and sliding to it. Returns the
-/// chosen index.
+/// pill track, the chosen raised on the canvas and sliding to it; its options
+/// equal columns, as wide as the widest in the chosen weight with 12 either
+/// side (segmented, segmentedOption, segmentedSizer), `item_w` at least; its
+/// words never cut: where they need more room than there is, they scroll
+/// sideways in the track (as Seg's).
+/// Returns the chosen index.
 pub fn segmented(
   c : @ui.Ctx,
   key : String,
@@ -239,9 +252,12 @@ pub fn segmented(
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let thumb = thumb.unwrap_or(t.p.canvas)
-  // as wide as the widest, each, unless told
-  let w = if item_w > 0.0 { item_w } else { 76.0 }
+  // as wide as the widest in the chosen weight (as wide unchosen as chosen: no column changes as the choice does)
+  let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, @ui.text_advance(l, size=t.t.ui, weight=500)) })
+  let w = dmax(item_w, widest + 2.0 * segmented_in)
   let items = labels.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
+  // (the group's id, as it takes it: its options' are its parts')
+  let group = c.id(key)
   let now = @kit.toggle_group(
     c,
     key,
@@ -277,7 +293,15 @@ pub fn segmented(
       |> ignore
     },
     ground=fn(c, _, items) {
-      c.box(dir=Row, pad=3.0, gap=2.0, bg=alpha(ink, 0.06), radius=18.0, items) |> ignore
+      // never wider than where it is; where its options need more, they scroll sideways in it, whole, the chosen one
+      // brought into view (as Seg's)
+      c.box(dir=Row, w=Cut, pad=3.0, bg=alpha(ink, 0.06), radius=18.0, fn() {
+        c.sideways(key, w=Cut, show=@kit.part_id(group, chosen), fn() {
+          c.box(style=segmented_strip, keep=true, items) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
     },
   ).value
   // the chosen one tapped again stays chosen

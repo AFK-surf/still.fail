@@ -479,16 +479,8 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
       c.text(text(job, "detail"), style=job_detail_state) |> ignore
       c.box(style=job_detail_grow, fn() {  }) |> ignore
       c.box(style=job_detail_choice, fn() {
-        // (its options as wide as the widest of them in the chosen weight, 12 either side: Segmented's columns)
         let labels = [@sf.t("web-main.jobs.notices"), @sf.t("web-main.jobs.output")]
-        let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, @ui.text_advance(l, size=@sf.theme().t.ui, weight=500)) })
-        let picked = @sf.segmented(
-          c,
-          "jobs-tab/show",
-          labels,
-          if jobs_own.output { 1 } else { 0 },
-          item_w=widest + 2.0 * job_choice_in,
-        )
+        let picked = @sf.segmented(c, "jobs-tab/show", labels, if jobs_own.output { 1 } else { 0 })
         jobs_own.output = picked == 1
       })
       |> ignore
@@ -925,9 +917,6 @@ let job_detail_grow : @ui.Style = @ui.style(w=@sf.grow)
 // kept across runs: a value (no field of it changes)
 let job_detail_choice : @ui.Style = @ui.css("row")
 
-///|
-/// A choice's option's words from its sides (segmentedOption: 12).
-let job_choice_in : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
