@@ -116,15 +116,6 @@ createRoot(document.getElementById('root')!).render(mode === 'long' ? <LongList 
   await page.clock.runFor(3000);
   await page.waitForFunction(() => window.last === 1, null, { polling: 50, timeout: 5000 });
   assert.deepEqual((await state()).loads, ['newer:250', 'newer:300', 'newer:350', 'newer:400', 'older:301', 'older:251', 'older:201', 'older:151', 'older:101', 'older:51'], 'empty bounded window searches forward then backward without oscillating');
-  await open('switch');
-  await page.clock.runFor(3000);
-  await page.waitForFunction(() => window.last === 1 && window.committed(), null, { polling: 50 });
-  assert.equal(await page.evaluate(() => window.found), false, 'a letter-only chat exhausts both directions');
-  await page.evaluate(() => window.switchChat());
-  await page.clock.runFor(3000);
-  await page.waitForFunction(() => window.place === 'next-chat' && window.committed(), null, { polling: 50 });
-  assert.deepEqual((await state()).loads, ['newer:150', 'newer:200', 'newer:250', 'newer:300', 'newer:350', 'newer:400'], 'switching chats starts a fresh empty-window search');
-  assert.equal(await page.evaluate(() => window.found), true, 'the next chat finds its visible message');
   await open('failure');
   await page.clock.runFor(10000);
   assert.deepEqual(await state(), { loads: [50], last: 50 }, 'failure does not retry itself');
@@ -160,6 +151,17 @@ createRoot(document.getElementById('root')!).render(mode === 'long' ? <LongList 
   });
   await page.waitForFunction(() => window.last === 51, null, { polling: 50 });
   assert.deepEqual(await state(), { loads: [151, 101], last: 51 }, 'a scroll replacing visible rows still fetches the next page');
+  // The new list must measure and commit its first visible message after the
+  // switch. Let frames run and wait for that result, rather than sample mid-page.
+  await page.clock.resume();
+  await open('switch');
+  await page.waitForFunction(() => window.last === 1 && window.committed(), null, { polling: 50 });
+  assert.equal(await page.evaluate(() => window.found), false, 'a letter-only chat exhausts both directions');
+  await page.evaluate(() => window.switchChat());
+  await page.waitForFunction(() => window.found && window.committed(), null, { polling: 50, timeout: 5000 });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.deepEqual((await state()).loads, ['newer:150', 'newer:200', 'newer:250', 'newer:300', 'newer:350', 'newer:400'], 'switching chats starts a fresh empty-window search');
+  assert.equal(await page.evaluate(() => window.found), true, 'the recovered message stays visible instead of being paged out again');
   assert.deepEqual(errors, []);
   console.log('PASS pagination: folded/empty/edit-only pages, bounded empty-window search, explicit retry, answer/commit ordering, and long-list scrolling');
 

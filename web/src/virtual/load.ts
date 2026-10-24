@@ -16,6 +16,9 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
   const { model } = virtual;
   useEffect(() => {
     let live = true;
+    // Only an edge present when this list opens gets an initial approach. An
+    // opposite edge revealed by paging waits for a scroll unless the page fits.
+    let initial = latest.current.can;
     let asked: number | string | undefined;
     let busy: { at: number | string; answered: boolean } | null = null;
     let top = model.layout().scrollTop;
@@ -23,7 +26,7 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
     const check = (scrolled = false) => {
       moved ||= scrolled;
       const now = latest.current;
-      if (!live || !now.virtual.committed()) return;
+      if (!live || now.virtual.model !== model || !now.virtual.committed()) return;
       if (busy) {
         if (!busy.answered || now.at === busy.at) return;
         busy = null;
@@ -36,9 +39,10 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
       const approached = moved;
       moved = false;
       if (!now.can || now.at === undefined || asked === now.at) return;
-      if (asked !== undefined && !approached && !model.fits) return;
+      if (!initial && !approached && !model.fits) return;
       if (model.paneHeight <= 0 || (edge === "top" ? model.toStart : model.toEnd) > model.paneHeight) return;
       setFailed(false);
+      initial = false;
       asked = now.at;
       const request: { at: number | string; answered: boolean } = { at: now.at, answered: false };
       busy = request;
@@ -53,6 +57,7 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
     };
     retry.current = () => {
       if (busy) return;
+      initial = true;
       asked = undefined;
       check();
     };
