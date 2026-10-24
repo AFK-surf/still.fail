@@ -7,7 +7,6 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-answered draft.get
 shot 1-chat
 tap 发消息
 type 第一条来自 mbui 的消息 {T}

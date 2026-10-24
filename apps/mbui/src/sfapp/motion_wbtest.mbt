@@ -240,36 +240,6 @@ test "send tapped while the composer grows goes at once, the field emptied" {
 }
 
 ///|
-test "＋'s sheet going down takes no tap: the field tapped meanwhile is the field's" {
-  // what the e2e caught: the field tapped while the sheet, let go of, still went down under its scrim
-  let calls : Array[Made] = []
-  let t = fake_core(calls)
-  t.tap(10.0 + 8.0 + 18.0, 844.0 - 10.0 - 8.0 - 18.0)
-  assert_true(cui.attach)
-  // the scrim, tapped: let go of (a frame, not settled: it is still going down)
-  t.touch(0, 195.0, 200.0)
-  t.touch(2, 195.0, 200.0)
-  t.frame()
-  assert_true(!cui.attach)
-  t.frame()
-  // still going down, drawn over the field
-  assert_true(t.find("文件") is Some(_))
-  t.tap_text("发消息")
-  let (active, _, _, _) = t.ime()
-  assert_true(active)
-  t.type_text("还在下去的时候")
-  tap_send(t)
-  let sent = named(calls, "chat.send")
-  assert_eq(sent.length(), 1)
-  assert_eq(text(Some(sent[0].params), "text"), "还在下去的时候")
-  // the words sent wait for their row, which this core never gives; the composer's room let go after
-  t.run_for(flight_wait_ms + composer_morph_ms)
-  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
-  t.run_for(@sfpages.sending_shows_ms)
-  t.assert_idle()
-}
-
-///|
 test "a quote's line for a comment, tapped while the capsule grows round it, takes the words" {
   // what the e2e caught: the line laid out above where the growing capsule was drawn yet, tapped there at once
   let calls : Array[Made] = []

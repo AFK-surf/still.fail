@@ -102,6 +102,8 @@ pub(all) struct Reading {
   sent : Map[Double, String]
   /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220): Lingering
   linger : Map[String, Lingering]
+  /// how many have lingered (Lingering.id)
+  mut lingered : Int
   /// the room agents' lines left as they went from the list (Chat.kt floor): the list never gets shorter under the
   /// reader. What comes in next takes it back (`floor_takers`: each row by key, as tall as the build last read it;
   /// `floor_laid`: as the frame before laid it out). Each agent's line's room (its row, the gap over it with it) as last
@@ -112,8 +114,12 @@ pub(all) struct Reading {
   act_room : Map[String, Double]
   act_whole : Map[String, Bool]
   mut floor_frame : Int
+  /// the room as it was last counted (more since: what went new, the rows making way for it from where they stood)
+  mut floor_was : Double
   /// the agents running as last drawn
   running : Map[String, Agent]
+  /// each agent's last turn as last ticked (Agent.last_turn)
+  last_turns : Map[String, String]
   /// a message gone to (a notification's, "" none: ChatMotion.kt flashed) and how lit it is (flash_of)
   mut flash : String
   flash_lit : @motion.Anim
@@ -175,13 +181,16 @@ pub fn reading_of(key : String) -> Reading {
         follow_key: "",
         sent: {},
         linger: {},
+        lingered: 0,
         floor: 0.0,
         floor_takers: {},
         floor_laid: {},
         act_room: {},
         act_whole: {},
         floor_frame: -1,
+        floor_was: 0.0,
         running: {},
+        last_turns: {},
         flash: "",
         flash_lit: @motion.Anim::new(0.0),
         flash_n: 0,
@@ -292,6 +301,8 @@ pub let linger_ms : Double = linger_fade_ms + linger_out_ms
 /// messages stop coming out of its avatar), past its 600 ms (fading).
 pub(all) struct Lingering {
   agent : Agent
+  /// which of the chat's lingerings it is (Reading.lingered): its timers its own, never an earlier one's run out
+  id : Int
   mut n : Int
   mut leaving : Bool
 }
@@ -374,7 +385,26 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   // its turn over: it stays a moment
   for k, a in rd.running {
     if !running.contains(k) && !rd.linger.contains(k) {
-      rd.linger[k] = { agent: a, n: 0, leaving: false }
+      rd.lingered += 1
+      rd.linger[k] = { agent: a, id: rd.lingered, n: 0, leaving: false }
+    }
+  }
+  // a turn begun and over between two ticks, its agent never seen running, stays a moment all the same: that a frame
+  // fell inside it is the moment's (how what came was taken), not the chat's
+  if !v.newer {
+    for a in v.agents {
+      match rd.last_turns.get(a.key) {
+        Some(was) if a.last_turn != was &&
+          a.last_turn != "" &&
+          !running.contains(a.key) &&
+          !rd.running.contains(a.key) &&
+          !rd.linger.contains(a.key) => {
+          rd.lingered += 1
+          rd.linger[a.key] = { agent: a, id: rd.lingered, n: 0, leaving: false }
+        }
+        _ => ()
+      }
+      rd.last_turns[a.key] = a.last_turn
     }
   }
   rd.running.clear()
@@ -394,7 +424,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     if keeps.contains(k) {
       l.n += 1
     }
-    let at = "linger/" + rk + "/" + k + "/\{l.n}"
+    let at = "linger/" + rk + "/" + k + "/\{l.id}/\{l.n}"
     let held = keeps.contains(k)
     // (asked while held too: its count starts at the last build they were still coming)
     let faded = @kit.after(c, at + "/fade", true, linger_fade_ms)
@@ -455,10 +485,14 @@ pub fn act_rooms(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) 
 /// begins, from what the frame before laid out: once they fill it, it is gone; one gone from the list (an outbox entry
 /// become its message, by another key), its height is taken for good.
 pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -> Double {
+  // (how much of it is still kept: the rows making way for the line gone, from the frame it went)
+  let out = @motion.anim(c, "floor/out/" + key, 0.0, global=true)
   if rd.floor <= 0.0 {
     rd.floor = 0.0
     rd.floor_takers.clear()
     rd.floor_laid.clear()
+    rd.floor_was = 0.0
+    out.snap(0.0)
     return 0.0
   }
   if rd.floor_frame != c.frame_number() {
@@ -490,7 +524,23 @@ pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -
       took += h
     }
   }
-  dmax(0.0, rd.floor - took)
+  // the rows over it making way for the line gone (docs/motion.md kind 3, its cause the line's going): from where they
+  // stood, on the rows' spring, nothing dropped at once and no room left empty for good (whether rows came before
+  // the line went or after, the list at rest the same)
+  if rd.floor > rd.floor_was {
+    out.snap(out.get() + rd.floor - rd.floor_was)
+    out.animate(0.0, @sf.move_spring)
+  }
+  rd.floor_was = rd.floor
+  // (made way: none left)
+  if out.target() == 0.0 && out.get() <= 0.0 {
+    rd.floor = 0.0
+    rd.floor_was = 0.0
+    rd.floor_takers.clear()
+    rd.floor_laid.clear()
+    return 0.0
+  }
+  dmax(0.0, dmin(out.get(), rd.floor - took))
 }
 
 ///|

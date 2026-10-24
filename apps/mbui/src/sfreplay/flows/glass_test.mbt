@@ -52,7 +52,28 @@ test "29-glass" {
     if turns > f.t.time() && turns < @double.infinity {
       f.run_to(turns)
     }
-    // the first ran on under the top bar's glass
+    // (the list come to its end after them)
+    let glide = f.t.rest_of("a list gliding")
+    if glide > f.t.time() && glide < @double.infinity {
+      f.run_to(glide)
+    }
+    // the first scrolled to run on under the top bar's glass (how far it went up past it the layout's: the composer's
+    // room under the list, the words' lines)
+    let (_, top_y, _, top_h, _, _) = f.t.drawn_glass().filter(fn(g) { g.4 == 5 && g.1 < 100.0 })[0]
+    match f.t.rect_of(glass_words[0]) {
+      Some((_, y, _, h)) => {
+        // (whole points: as the scripted run is told it)
+        let down = (top_y + top_h / 2.0 - (y + h / 2.0)).to_int().to_double()
+        if down.abs() >= 1.0 {
+          f.wheel(-down)
+          let eased = f.t.rest_of("wheel ease")
+          if eased > f.t.time() && eased < @double.infinity {
+            f.run_to(eased)
+          }
+        }
+      }
+      None => ()
+    }
     assert_true(under_glass(f, top=true))
     f.wheel(-500.0)
     // (eased where its lists have it: a phone's, Android's, go there at once)

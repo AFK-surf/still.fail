@@ -567,8 +567,12 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
       self.t.run_for(toast - self.t.time())
       continue
     }
-    // (the frame the last one left owed: what it asks (a page gone, its player's place told) answered too)
+    // (the frame the last one left owed: what it asks (a page gone, its player's place told) answered too; what it sets
+    // moving (a box laid out anew by what came last) run to its end as the others)
     self.t.draw()
+    if self.t.rest_of("") > self.t.time() {
+      continue
+    }
     // (and what is told to happen at a time of its own (a timer: an agent's activity lingering), to that time, as a
     // motion to its end; one that keeps telling itself again never ends: said, not run on)
     match self.t.next_wake() {

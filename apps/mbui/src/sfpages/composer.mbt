@@ -43,8 +43,10 @@ priv struct Composing {
   mut frame : Int
   restoring : Map[String, Bool]
   restore_errors : Map[String, String]
-  /// a finger went down outside it (keyboard_let_go)
+  /// a finger went down outside it (keyboard_let_go); its `@` menu up over it as it was last drawn (a press in it is
+  /// the composer's own)
   mut outside : Bool
+  mut menu_up : Bool
 }
 
 ///|
@@ -61,6 +63,7 @@ let composing : Composing = {
   restoring: {},
   restore_errors: {},
   outside: false,
+  menu_up: false,
 }
 
 ///|
@@ -77,6 +80,7 @@ fn composing_reset() -> Unit {
   composing.restoring.clear()
   composing.restore_errors.clear()
   composing.outside = false
+  composing.menu_up = false
 }
 
 ///|
@@ -100,7 +104,7 @@ pub fn composer(
   // this frame); the files pasted into the field; what 文件's 添加到消息 put in for this draft
   take_in(c, src, spec, w, no_files)
   // switched to another chat (Chat.tsx: its thread another; a new chat's has none, whichever station): the cursor in
-  // it, with a mouse, before it is first drawn; not taken from a field in use (the switcher's, a dialog's)
+  // it on a computer (its keyboard at hand), before it is first drawn; not taken from a field in use (the switcher's, a dialog's)
   let whose = "\u{1}" + spec.session
   if composing.frame != c.frame_number() {
     composing.frame = c.frame_number()
@@ -109,7 +113,7 @@ pub fn composer(
   }
   if whose != composing.draft {
     composing.draft = whose
-    if @ui.pointing() is Mouse && !c.field_focused() {
+    if !@sf.touch_system() && !c.field_focused() {
       c.focus_editor(composer_field_key)
     }
   }
@@ -129,7 +133,10 @@ pub fn composer(
     w.text != "" ||
     w.files.length() > 0 ||
     w.quotes.length() > 0
-  let ready = w.ready && !spec.locked
+  // ready as the core says, or as soon as there are words in the field: the core's say comes a moment after them (its
+  // topic), and send pressed meanwhile is not lost (what goes is the core's to take: composer.take, nothing taken
+  // nothing sent)
+  let ready = (w.ready || (w.text.trim() != "" && !w.starting)) && !spec.locked
   // sent once what it refers to can be read in this workspace (OutsideShare.tsx, sfbase's outside.mbt): at once when
   // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
   @sfbase.sharing_go(w.key)
@@ -209,7 +216,7 @@ fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
       Some((x, y, w, h)) => press.x >= x && press.x < x + w && press.y >= y && press.y < y + h
       None => false
     }
-    composing.outside = !within && !@sf.presenting()
+    composing.outside = !within && !@sf.presenting() && !composing.menu_up
   }
   if composing.outside && c.editor_focused(composer_field_key) && (press.moved || (press.lifted && !press.long)) {
     composing.outside = false
@@ -388,7 +395,7 @@ fn composer_text(
       color=p.text,
       placeholder_color=p.subtle,
       caret_color=p.accent,
-      enter_sends=@ui.pointing() is Mouse,
+      enter_sends=!@sf.touch_system(),
       // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
       leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
       files=!no_files,
@@ -403,6 +410,7 @@ fn composer_text(
     }
     // `@` and a few letters: the chats they find over the composer (Enter picks one there)
     let menu = ref_menu(c, src, spec, w, cap, res.focused)
+    composing.menu_up = menu
     match res.submitted {
       // (they stay in the field until they go)
       Some(words) => {
@@ -430,10 +438,10 @@ fn composer_text(
 }
 
 ///|
-/// What the box says instead of its placeholder with a mouse and nothing that takes keys focused: that the composer's
+/// What the box says instead of its placeholder on a computer and nothing that takes keys focused: that the composer's
 /// key puts the cursor there ("" otherwise).
 fn space_hint(c : @ui.Ctx, prefs : Json?, locked : Bool) -> String {
-  if locked || @ui.pointing() is Finger || c.field_focused() {
+  if locked || @sf.touch_system() || c.field_focused() {
     return ""
   }
   match @settings.key_label(prefs, "composer.focus") {
@@ -468,9 +476,9 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
   if !no_files {
     c.cursor(id, Hand)
     @sf.tip(c, "composer/plus", id, @sf.t("web-main.composer.attach"), shortcut="composer.file")
-    // with a finger the phone's sheet of what can go in (attach.mbt), with a mouse the system's picker at once
+    // on a touch system the phone's sheet of what can go in (attach.mbt), on a computer the system's picker at once
     if c.clicked(id) {
-      if @ui.pointing() is Finger {
+      if @sf.touch_system() {
         attach_open(id, src, w.key)
       } else {
         pick_files(w)
@@ -490,11 +498,6 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.attach"), disabled=no_files)
 }
-
-///|
-/// A file's place in the files' row, measured.
-// kept across runs: a value (no field of it changes)
-let file_tile : @ui.Style = @ui.css("")
 
 ///|
 /// The system's file picker for draft `w`: what is picked comes in as the composer is next drawn (take_in).
@@ -606,9 +609,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
   if rest.length() > 0 {
     c.box(style=files_flow, flow=true, fn() {
       for f in rest {
-        // (where it is, for the file to fly from as the message goes: send_in_chat)
-        let tile = c.box(style=file_tile, fn() { composer_file(c, src, spec, w, f) })
-        @motion.measure(c, tile, "composer/tile/" + text(Some(f), "id"))
+        composer_file(c, src, spec, w, f)
       }
     })
     |> ignore
@@ -629,76 +630,111 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
   match writing_pictures.get(id) {
     Some(picture) => composer_picture(c, src, w, key, id, name, picture, pending, error)
     None => {
-      let ref_ = field(v, "ref")
-      let said = match ref_ {
-        // named by its path: its station and that it goes as a path
-        Some(Object(_)) if text(ref_, "mode") != "file" =>
-          @sf.file_card(
-            c,
-            key,
-            name,
-            number(v, "size"),
-            path=text(ref_, "path"),
-            error=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
-            remove=true,
-          )
-        // pasted words (PendingFile's pasted card): what they begin with, how many, put back as words while not too
-        // long; failed, made again from them
-        _ if field(v, "pasted") is Some(Object(_)) => {
-          let info = field(v, "pasted")
-          let can_restore = field(info, "text") is Some(String(_)) && !w.starting
-          let card = @sf.file_card(
-            c,
-            key,
-            name,
-            number(v, "size"),
-            pending~,
-            error~,
-            title=match text(info, "preview") {
-              "" => @sf.t("web-main.composer.pastedText")
-              first => first
-            },
-            meta=@sf.t("web-main.composer.pasteAttachment", args=[("count", @sf.grouped(number(info, "characters")))]),
-            remove=true,
-            remove_label=@sf.t("web-main.composer.removePaste"),
-            retry=error != "",
-            restore=can_restore,
-          )
-          if card.restored {
-            let words = if w.text == "" { text(info, "text") } else { w.text + "\n" + text(info, "text") }
-            @sfbase.refs_put(w.key, w.field, words)
-            writing_text(src, w, words)
-            writing_remove(src, w, id)
-            c.focus_editor(composer_field_key)
+      // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
+      // left for them (its words squeezed to …)
+      c.box(style=@ui.style(w=Fixed(dmin(@sf.file_card_w, c.width))), fn() {
+        let ref_ = field(v, "ref")
+        let said = match ref_ {
+          // named by its path: its station and that it goes as a path
+          Some(Object(_)) if text(ref_, "mode") != "file" =>
+            @sf.file_card(
+              c,
+              key,
+              name,
+              number(v, "size"),
+              path=text(ref_, "path"),
+              error=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
+              open=true,
+              remove=true,
+            )
+          // a link shared in (share-in.ts): its title and its site, drawn as a file is; tapped, it opens (Composer.kt
+          // LinkCard); sent as words, nothing going up
+          _ if field(v, "link") is Some(Object(_)) => {
+            let l = field(v, "link")
+            let url = text(l, "url")
+            let card = @sf.file_card(
+              c,
+              key,
+              url,
+              0.0,
+              open=true,
+              title=match text(l, "title") {
+                "" => url
+                t => t
+              },
+              meta=text(l, "site"),
+              remove=true,
+            )
+            if card.opened {
+              c.tell("composer/link/" + id, fn() { open_link(url) })
+            }
+            card
           }
-          if card.retried {
-            @sfbase.writing_paste_again(src, w, id)
+          // pasted words (PendingFile's pasted card): what they begin with, how many, put back as words while not too
+          // long; failed, made again from them
+          _ if field(v, "pasted") is Some(Object(_)) => {
+            let info = field(v, "pasted")
+            let can_restore = field(info, "text") is Some(String(_)) && !w.starting
+            let card = @sf.file_card(
+              c,
+              key,
+              name,
+              number(v, "size"),
+              pending~,
+              error~,
+              title=match text(info, "preview") {
+                "" => @sf.t("web-main.composer.pastedText")
+                first => first
+              },
+              meta=@sf.t("web-main.composer.pasteAttachment", args=[("count", @sf.grouped(number(info, "characters")))]),
+              remove=true,
+              remove_label=@sf.t("web-main.composer.removePaste"),
+              retry=error != "",
+              restore=can_restore,
+            )
+            if card.restored {
+              let words = if w.text == "" { text(info, "text") } else { w.text + "\n" + text(info, "text") }
+              @sfbase.refs_put(w.key, w.field, words)
+              writing_text(src, w, words)
+              writing_remove(src, w, id)
+              c.focus_editor(composer_field_key)
+            }
+            if card.retried {
+              @sfbase.writing_paste_again(src, w, id)
+            }
+            { ..card, retried: false }
           }
-          { ..card, retried: false }
+          _ =>
+            @sf.file_card(
+              c,
+              key,
+              name,
+              number(done, "size") + (if done is None { number(v, "size") } else { 0.0 }),
+              path=text(done, "path"),
+              pending~,
+              sent=match field(v, "sent") {
+                Some(Number(n, ..)) => Some(n)
+                _ => None
+              },
+              error~,
+              // (a station's file going as the file: how it goes, pressed)
+              open=ref_ is Some(Object(_)),
+              remove=true,
+              retry=error != "" && field(v, "pasted") is None,
+            )
         }
-        _ =>
-          @sf.file_card(
-            c,
-            key,
-            name,
-            number(done, "size") + (if done is None { number(v, "size") } else { 0.0 }),
-            path=text(done, "path"),
-            pending~,
-            sent=match field(v, "sent") {
-              Some(Number(n, ..)) => Some(n)
-              _ => None
-            },
-            error~,
-            remove=true,
-            retry=error != "" && field(v, "pasted") is None,
-          )
-      }
-      if said.removed {
-        writing_remove(src, w, id)
-      }
-      if said.retried {
-        writing_retry(src, w, id)
-      }
+        // a station's file (by its path or as the file): pressed, how it goes (composer_ref.mbt)
+        if said.opened && field(v, "ref") is Some(Object(_)) {
+          c.tell(key + "/ref", fn() { ref_panel(src, w, spec.station, id, name, c.id(key)) })
+        }
+        if said.removed {
+          writing_remove(src, w, id)
+        }
+        if said.retried {
+          writing_retry(src, w, id)
+        }
+          })
+      |> ignore
     }
   }
   ignore(spec)
@@ -722,22 +758,30 @@ fn composer_picture(
   let x = c.id(key + "/remove")
   let again = c.id(key + "/retry")
   @sf.tip(c, key + "/tip", thumb, if error != "" { error } else { name })
-  c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
-    c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
-    if pending {
-      c.layer(fn() { c.box(style=thumb_veil, fn() { @sf.spinner(c, size=send_icon) |> ignore }) |> ignore })
-      |> ignore
-    }
-    if error != "" {
-      c.layer(fn() {
-        c.box(style=thumb_veil, id=again, fn() { @sf.icon(c, "refresh", size=retry_icon, color=on_veil) |> ignore })
+  // on a touch system its remove hangs over its corner, out of it (Composer.kt): a fingertip's reach round it (44)
+  // takes little of the picture, a tap on which opens it; on a computer it sits in the corner, as the web's
+  let finger = @sf.touch_system()
+  c.box(style=if finger { thumb_reach } else { thumb_room }, fn() {
+    c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
+      c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
+      if pending {
+        c.layer(fn() { c.box(style=thumb_veil, fn() { @sf.spinner(c, size=send_icon) |> ignore }) |> ignore })
         |> ignore
-      })
-      |> ignore
-    }
+      }
+      if error != "" {
+        c.layer(fn() {
+          c.box(style=thumb_veil, id=again, fn() { @sf.icon(c, "refresh", size=retry_icon, color=on_veil) |> ignore })
+          |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
     c.layer(fn() {
-      c.box(style=thumb_x_at, fn() {
-        c.box(style=thumb_x, id=x, fn() { @sf.icon(c, "close", size=thumb_x_icon, color=on_veil) |> ignore })
+      c.box(style=if finger { thumb_x_out } else { thumb_x_at }, fn() {
+        c.box(style=thumb_x, id=x, tx=if finger { thumb_x_reach } else { 0.0 }, fn() {
+          @sf.icon(c, "close", size=thumb_x_icon, color=on_veil) |> ignore
+        })
         |> ignore
       })
       |> ignore
@@ -755,11 +799,44 @@ fn composer_picture(
       writing_retry(src, w, id)
     }
   }
+  // tapped, it opens in the viewer, growing out of its tile, from the bytes picked (`draft:<id>`, no session's: nothing
+  // to mark it into, it is in the draft already); one whose bytes are not here (a draft kept) opens nothing
+  match @sfbase.writing_went_to(id) {
+    Some((station, _, bytes)) => {
+      let a : Attachment = {
+        name,
+        path: "draft:" + id,
+        size: bytes.length().to_double(),
+        width: 0.0,
+        height: 0.0,
+        thumbhash: "",
+        owner: "",
+        upload: "",
+      }
+      // the viewer's id of it (its station, no session, its path), its tile kept for it to fly from
+      let seen = station + "//" + a.path
+      c.cursor(thumb, Hand)
+      if c.clicked(thumb) {
+        @sfbase.keep_read(seen, bytes)
+        @sfbase.open_preview(station, "", a)
+      }
+      @sfbase.note_thumb(c, seen, thumb, thumb_corner)
+      // (not drawn while the viewer is its picture: one picture on the screen, never two)
+      if @sfbase.pv_hidden.val == seen {
+        c.look(thumb, @ui.look(alpha=0.0))
+      }
+    }
+    None => ()
+  }
 }
 
 ///|
+/// A waiting picture's corner, as its tile's.
+let thumb_corner : Double = @sf.message_file_corner
+
+///|
 /// How long it stays a box after it loses the cursor (LET_GO_MS); how long its change of shape takes (morph.ts).
-let let_go_ms : Double = 300.0
+pub let let_go_ms : Double = 300.0
 
 ///|
 /// (what a test runs to once the composer changes shape)
@@ -918,6 +995,22 @@ let thumb_veil : @ui.Style = @ui.css("w=Full h=Full bg=Veil align=ACenter justif
 let thumb_x_at : @ui.Style = @ui.css("w=Full pt=S1 pr=S1 align=AEnd")
 
 ///|
+/// With a finger: the picture 6 down, its remove over its top corner, 6 past its edge.
+// kept across runs: a value (no field of it changes)
+let thumb_reach : @ui.Style = @ui.css("pt=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let thumb_room : @ui.Style = @ui.css("")
+
+///|
+// kept across runs: a value (no field of it changes)
+let thumb_x_out : @ui.Style = @ui.css("w=Full align=AEnd")
+
+///|
+let thumb_x_reach : Double = 6.0
+
+///|
 // kept across runs: a value (no field of it changes)
 let thumb_x : @ui.Style = @ui.css("w=S5 h=S5 radius=Full bg=Veil align=ACenter justify=JCenter")
 
@@ -953,7 +1046,8 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let flying : Array[FlyingFile] = w.files.filter_map(fn(f) {
     let v = Some(f)
     let id = text(v, "id")
-    match (field(v, "done"), @motion.measured_rect(c, "composer/tile/" + id)) {
+    // (from where its card or its picture is: its box's, keyed composer/file/<id>)
+    match (field(v, "done"), c.rect_of(c.id("composer/file/" + id))) {
       (Some(done), Some(from)) if text(Some(done), "path") != "" => {
         let picture = writing_pictures.get(id).unwrap_or("")
         Some({
@@ -1213,6 +1307,12 @@ let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Dange
 ///|
 /// A chat's composer's place while it is a capsule: its buttons (32) 8 in, 12 over it and 16 under it.
 let capsule_room : Double = 32.0 + 2.0 * 8.0 + 12.0 + 16.0
+
+///|
+/// The room a chat's composer takes opened with one line at its pane's foot (its box 12 in, the line under 8, its
+/// buttons' row 10 under it; 12 over and 16 under the box): what a list that keeps its words in place as the composer
+/// closes keeps clear at least (ChatHost.kt roomForList).
+pub let composer_open_room : Double = 12.0 + (8.0 + text_line) + 10.0 + 32.0 + 12.0 + 12.0 + 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)

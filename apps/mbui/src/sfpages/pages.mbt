@@ -23,4 +23,5 @@ pub fn reset() -> Unit {
   news_reset()
   landing_reset()
   workspace_reset()
+  outside_reset()
 }

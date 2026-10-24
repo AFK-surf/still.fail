@@ -132,8 +132,8 @@ test "words a visualization asks to send go into the composer, said so; the pers
   t.frame()
   // (left for the chat's composer, whichever frame's: taken as it is next drawn)
   t.frame()
-  let d = drafts.get("ws1/st1:s-c1").unwrap()
-  assert_eq(d.text, "把周五的发布挪到周四")
+  let d = @sfbase.writings.get("ws1/st1:s-c1").unwrap()
+  assert_eq(d.field.text(), "把周五的发布挪到周四")
   t.frame()
   assert_true(t.find("已添加到输入框，确认后发送") is Some(_))
 }

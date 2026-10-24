@@ -184,22 +184,23 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
 }
 
 ///|
-test "＋'s Station 文件: a file ticked in a folder lent goes into the draft, and with the message as its path" {
+test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's draft, named by its path" {
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   let log = t.drive(
-    "tap icon:plus\ntap Station 文件\nuntil 所有位置\nuntil 主目录\ntap =文档\nuntil 整个文件夹\ntap 发布清单.md\ntap 添加 1 个\ngone 所有位置\nuntil Studio · 路径\ntap icon:arrow-up\nuntil Studio 上的文件：/Users/lin/文档/发布清单.md\n",
+    "tap icon:plus\ntap Station 文件\nuntil 所有位置\nuntil 主目录\ntap =文档\nuntil 整个文件夹\ntap 发布清单.md\ntap 添加 1 个\ngone 所有位置\n",
   )
   assert_true(log.contains("EXIT 0"), msg="\{log}")
-  assert_eq(refs_of("ws1/st1:s-c1").length(), 0)
-  // its sheet sunk away, the words sent flown to their row; the station takes them in, its agent answers, its turn
-  // ends (the fixture's times: the run ends as it sends)
+  // in the draft as the core keeps it, where it is on the station (sent, the core names it in the message)
+  t.draw()
+  let files = @sfbase.writing(src, "ws1/st1:s-c1").files
+  assert_eq(files.length(), 1)
+  assert_eq(text(field(Some(files[0]), "ref"), "path"), "/Users/lin/文档/发布清单.md")
+  assert_true(t.find("发布清单") is Some(_))
+  // its sheet sunk away
   sheet_rested(t, "sf-present")
-  t.run_for(flight_ms)
-  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms)
-  t.assert_idle()
 }
 
 ///|

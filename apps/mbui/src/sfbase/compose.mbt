@@ -41,6 +41,11 @@ pub let writing_pictures : Map[String, String] = {}
 let writing_went : Map[String, (String, String, Bytes)] = {}
 
 ///|
+/// The station each file added here goes up to, by its id.
+// kept across runs: put back by writings_reset (sfbase's reset)
+let writing_stations : Map[String, String] = {}
+
+///|
 /// The files added here, counted (each its own id).
 let writing_n : Ref[Int] = { val: 0 }
 
@@ -48,6 +53,7 @@ let writing_n : Ref[Int] = { val: 0 }
 pub fn writings_reset() -> Unit {
   quoted_into.clear()
   files_put.clear()
+  writing_stations.clear()
   shared_into.clear()
   writings.clear()
   writing_pictures.clear()
@@ -98,6 +104,15 @@ fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
   w.adopted = version
   w.quotes = items(v, "quotes")
   w.files = items(v, "files")
+  // a picture picked here, up: its message drawn from it as picked, by the name the station keeps it under (sent.mbt)
+  for f in w.files {
+    let o = Some(f)
+    match (writing_pictures.get(text(o, "id")), writing_stations.get(text(o, "id")), field(o, "done")) {
+      (Some(picture), Some(station), Some(done)) if text(Some(done), "path") != "" =>
+        sent_pictures[sent_key(station, text(Some(done), "path"))] = picture
+      _ => ()
+    }
+  }
   w.focus = text(v, "focus")
   w.starting = flag(v, "starting")
   w.error = text(v, "error")
@@ -170,11 +185,14 @@ pub fn writing_add(src : Source, w : Writing, station : String, name : String, b
         let key = "mem:writing/" + id
         @ui.add_image(key, bytes)
         writing_pictures[id] = key
+        // its message drawn from it, as picked, sent before it is up (it names its upload: sent.mbt)
+        sent_pictures["upload\u{1}" + id] = key
       }
       None => ()
     }
   }
   writing_went[id] = (station, name, bytes)
+  writing_stations[id] = station
   let blob : Map[String, Json] = {
     "hostBytes": [0, Json::number(bytes.length().to_double())],
     "type": Json::string(file_type(name)),
@@ -217,7 +235,9 @@ pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostap
   let id = "f" + upload_id(w.key + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{f.size}", writing_n.val)
   if f.src != "" {
     writing_pictures[id] = f.src
+    sent_pictures["upload\u{1}" + id] = f.src
   }
+  writing_stations[id] = station
   let one : Map[String, Json] = {
     "id": Json::string(id),
     "name": Json::string(f.name),

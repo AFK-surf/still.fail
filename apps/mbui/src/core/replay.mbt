@@ -86,12 +86,18 @@ pub(all) enum Pace {
 } derive(Eq, Show)
 
 ///|
-/// Asks that only tell the core what the app sees or keeps (where its chat's list is, a draft, where it was read to,
+/// Asks that only tell the core what the app sees or keeps (where its chat's list is, a draft and what is typed in it, where it was read to,
 /// where a player was left): how many and when depends on the run's timing, and what they say with it (a player's
 /// place is how far it played: the frames had them, the run's or the app's). Strict or not (Replay::pace), they wait
 /// nothing, none is required and one the run did not make is not where the two went apart; one made again with other
 /// params is the run's next of its name, not said to differ.
-let reports : Array[String] = ["client.focus", "chat.place", "draft.put", "drive.place"]
+let reports : Array[String] = [
+  "client.focus", "chat.place", "draft.put", "drive.place", "composer.text", "composer.comment",
+  // the core's pure calls a replay's app answers from what is kept (src/sfkept) when it has the answer, and asks the
+  // tape for when not: a tape's that the app answered itself is not where the two went apart, nor one it asks of a tape
+  // from before the call (sfreplay's source.mbt tells the tape of each it answered, as a report)
+  "markdown", "code.ink", "history.tool", "ref.at", "ref.before", "ref.marks", "ref.pasted", "paste.info", "drive.check",
+]
 
 ///|
 /// Topics the app watches from its start whatever the person does (the device's downloads, sfbase/downloads.mbt): a

@@ -37,6 +37,18 @@ fn fix_write(f : Fixture, key : String) -> FixWrite {
         taken: None,
       }
       fix_writes[key] = w
+      // its files up already, as the core keeps them in the draft
+      let seeded = items(seed, "files")
+      if !seeded.is_empty() && !fix_composers.contains(key) {
+        fix_composers[key] = seeded.mapi(fn(i, a) {
+          {
+            "id": Json::string("seed-\{i}"),
+            "name": Json::string(text(Some(a), "name")),
+            "size": Json::number(number(Some(a), "size")),
+            "done": a,
+          }
+        })
+      }
       w
     }
   }

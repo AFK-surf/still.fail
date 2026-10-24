@@ -81,6 +81,8 @@ test "an option answered: the options go, how it went comes in their place, the 
   assert_true(t.find("忽略") is None)
   // (and the list's scroll bar, out since the list was scrolled to the card, gone)
   t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
+  // (the pictures over the cards come in on their own clock: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
@@ -102,6 +104,8 @@ test "the options' room closes on the rows' spring, a little late, and the line 
   // and their room closed
   t.run_for(options_gone_ms())
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
+  // (the pictures over the cards come in on their own clock: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 

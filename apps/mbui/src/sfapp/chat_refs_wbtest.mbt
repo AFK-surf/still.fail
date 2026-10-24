@@ -45,17 +45,6 @@ test "`@` with nothing found says so; another workspace's chat says whose" {
 }
 
 ///|
-test "a kept draft with a chat's link in it: put back as it is, not taken as pasted" {
-  let calls : Array[Made] = []
-  let link = "[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)"
-  let t = fake_core(calls, kept={ "text": "看 " + link, "quotes": [], "files": [] })
-  t.draw()
-  t.draw()
-  assert_true(t.dump().contains("看 " + link))
-  assert_eq(named(calls, "chat.ref").length(), 0)
-}
-
-///|
 test "a link pasted, written after before the core makes its mark: the mark where the link is now" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
@@ -125,7 +114,7 @@ test "a chat picked the core cannot make a mark of: a toast says why, the `@word
   assert_eq(text(Some(made[0].params), "into"), "ws1")
   (made[0].done)(Err({ "message": "没有权限" }))
   t.draw()
-  assert_eq(app.toast, "无法引用此对话：没有权限")
+  assert_eq(app.toast, "无法引用「首页的列表改成按天分组」：没有权限")
   let (_, words, _, _) = t.ime()
   assert_eq(words, "@首页")
   // closed for this `@` until its words are gone

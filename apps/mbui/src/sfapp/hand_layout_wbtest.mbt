@@ -22,13 +22,8 @@ let hand_modes : Array[String] = [
 ]
 
 ///|
-/// Where a finger's and a mouse's differ still, and why: the composer, which reads the hand itself until the chat's
-/// conversation moves it to the screen (detlint's page-hand bars in sfpages/composer.mbt): taller with a finger, the
-/// list over it shorter (a chat's, 奏's).
-let hand_known : Array[String] = [
-  "touch medium chat", "touch large chat", "computer medium chat", "computer large chat", "touch medium decisions",
-  "touch large decisions", "computer medium decisions", "computer large decisions",
-]
+/// Where a finger's and a mouse's differ still, and why (none now: the composer's look is the screen's).
+let hand_known : Array[String] = []
 
 ///|
 /// Page `mode` in window `win`, pointed at by `hand`, as laid out once it has opened.

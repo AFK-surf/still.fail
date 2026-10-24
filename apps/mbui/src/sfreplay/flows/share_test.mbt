@@ -3,6 +3,8 @@
 // sheet of chats (发到, shareIn.open); the test chat tapped: the link a card in its composer, sent as its words (its
 // title, then the link). Then a file of the drive right clicked, 分享: read through the core (drive.read) and handed to the
 // system's share sheet (@ui.share).
+// (its folder lent first: e2e/flows/15-drive-lend)
+// before it: 15-drive-lend
 
 ///|
 test "48-share" {

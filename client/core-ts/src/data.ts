@@ -745,6 +745,14 @@ export class Data {
     );
   }
 
+  /// What is held to be written a moment after its last change (setSoon), written now: the app's attention moved (a
+  /// chat left, the app put behind), and the app may be gone before the moment is.
+  flushSoon(): void {
+    const soon = [...this.#soon.values()];
+    this.#soon.clear();
+    for (const [t, v] of soon) this.set(t, v, false);
+  }
+
   /// Changes a held document in place (an event); does nothing while nothing is known of it.
   update(topic: Topic, change: (value: unknown) => unknown): void {
     if (LIST_OF[topic.topic]) throw new Error(`a list is changed row by row: ${topic.topic}`);
