@@ -169,7 +169,11 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
     })
     |> ignore
     c.spacer()
-    rail_workspaces(c, src, w, all)
+    // the workspaces (sfpages' workspace.mbt), on the rail's squares and with its corner's marks
+    @sfpages.workspace_squares(c, src, w, all, {
+      square: fn(ground, body, id) { rail_square(c, ground, body, id~) },
+      corner: fn(tone) { rail_corner_mark(c, tone) },
+    })
     // settings
     let gear = c.id("rail/settings")
     c.cursor(gear, Hand)
@@ -363,127 +367,6 @@ pub fn closed_ground() -> Int64 {
     t.p.canvas
   }
 }
-
-///|
-/// The workspaces at the rail's foot (Rail.tsx RailWorkspaces, Rail.css.ts workspaces, workspaceItem): each on a
-/// square, 6 apart; a letter on a square of its own, a mark (an icon, an emoji) on nothing, the places' ground under
-/// the pointer; the one in view a short bar at its left; another with what waits in it (the core's marks' tone) its
-/// mark at its corner. Over them the ＋ (making one, another account, invitations), seen as the pointer comes over them
-/// or while an invitation waits. Pressed, that workspace.
-fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
-  let t = @sf.theme()
-  let marks = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "workspaces")
-  let area = c.id("rail/workspaces")
-  let add = c.id("rail/ws-add")
-  let open = wide.add_open
-  // (always to a finger, which hovers over nothing: Rail.css.ts workspaceAdd `hover: none`)
-  let over = open ||
-    @ui.pointing() is Finger ||
-    c.lit(area) ||
-    c.lit(add) ||
-    all.iter().any(fn(x) { c.lit(c.id("rail/ws/" + x.id)) })
-  let waiting = @sfpages.invitations_waiting(src).length() > 0
-  let switch_to = fn(x : Workspace) { @sfpages.switch_workspace(src, x.id) }
-  // ⌃1 … ⌃9 on a Mac (Alt elsewhere): the workspace at that place, as the web's keys (keymap.ts workspaceIndexOf)
-  let held = if @ui.platform() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
-  for k in 0..<dmin(9.0, all.length().to_double()).to_int() {
-    if c.key_pressed(@ui.key_of_char((49 + k).unsafe_to_char()), mods=held, in_field=true) && all[k].id != w.id {
-      switch_to(all[k])
-    }
-  }
-  c.box(style=rail_ws_list, id=area, fn() {
-    // the ＋
-    c.cursor(add, Hand)
-    if c.clicked(add) {
-      wide.add_open = !open
-    }
-    let hot = c.lit(add) || open
-    let plus = rail_square(
-      c,
-      if hot { t.p.hover } else { 0L },
-      fn() {
-        if over || waiting {
-          @sf.icon(c, "plus", size=rail_plus_size, color=if hot { t.p.text } else { t.p.muted }) |> ignore
-        }
-        // an invitation waiting: the accent's dot (workspace.css.ts inviteDot)
-        if waiting {
-          rail_corner_mark(c, "invite")
-        }
-      },
-      id=add,
-    )
-    c.semantics(plus, Button, id=add, label=@sf.t("web-main.rail.addWorkspace"))
-    @sf.tip(c, "rail/ws-add-tip", add, @sf.t("web-main.rail.addWorkspace"), side=Right)
-    for x in all {
-      let id = c.id("rail/ws/" + x.id)
-      c.cursor(id, Hand)
-      if c.clicked(id) && x.id != w.id {
-        switch_to(x)
-      }
-      let on = x.id == w.id
-      let hot = c.lit(id)
-      let marked = @sfpages.workspace_marked(x)
-      let square = rail_square(c, if !marked || hot { t.p.hover } else { 0L }, fn() {
-        @sfpages.workspace_mark(c, x, rail_ws_mark, t.p.text, if on || hot { rail_letter_on } else { rail_letter })
-        // the one in view: a short bar in the margin at its left
-        if on {
-          c.layer(fn() {
-            c.box(style=rail_bar_at, fn() { c.box(style=rail_bar, tx=-rail_bar_out, fn() {  }) |> ignore }) |> ignore
-          })
-          |> ignore
-        }
-        // another's: what waits there, as its rows' marks
-        let tone = if on { "" } else { text(field(marks, x.id), "tone") }
-        if tone != "" {
-          rail_corner_mark(c, tone)
-        }
-      }, id~)
-      let said = text(field(marks, x.id), "label")
-      let label = if on || said == "" { x.name } else { x.name + " · " + said }
-      c.semantics(square, Button, id~, label~)
-      @sf.tip(c, "rail/ws-tip/" + x.id, id, label, side=Right)
-    }
-  })
-  |> ignore
-  rail_ws_menu(c, src, add)
-}
-
-///|
-/// The ＋'s icon (16), a workspace's mark (18).
-let rail_plus_size : Double = 16.0
-
-///|
-let rail_ws_mark : Double = 18.0
-
-///|
-/// A workspace's letter (Rail.css.ts workspaceItem: textUi, 600), muted unless it is the one in view or pointed at.
-// kept across runs: a value (no field of it changes)
-let rail_letter : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let rail_letter_on : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
-
-///|
-/// The workspaces' column: 4 in from the rail's 38 (its squares where the places' grounds are), 4 above and under, 6
-/// between.
-// kept across runs: a value (no field of it changes)
-let rail_ws_list : @ui.Style = @ui.css("pl=S1 pt=S1 pb=S1 gap=S1_5")
-
-///|
-/// The bar at the left of the workspace in view: 8 down its square, 6 out past it, 3 by 14, its corner 2.
-// kept across runs: a value (no field of it changes)
-let rail_bar_at : @ui.Style = @ui.css("pt=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let rail_bar : @ui.Style = @ui.style(w=Fixed(rail_bar_w), h=S3_5, radius=Sm, bg=Fg)
-
-///|
-let rail_bar_w : Double = 3.0
-
-///|
-let rail_bar_out : Double = 6.0
 
 ///|
 /// What waits on a place: its dot 4 in from its 38's top right (Rail.css.ts count: 6 from the 38's corner, 2 of it the
@@ -850,9 +733,6 @@ let rail_menu_off : Double = 8.0
 ///|
 let rail_menu_clear : Double = 52.0
 
-///|
-/// The rail's ＋'s menu (workspace.tsx accountMenu): 260 at least.
-let rail_ws_menu_w : Double = 260.0
 
 ///|
 /// A rail's place to the next (its 38 and the 6 between), and how far a press goes before it is a drag.
@@ -1088,55 +968,6 @@ let adder_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L
 ///|
 /// The rail in the closed bar (Rail.css.ts rail, closed): as narrow as the bar, its places 2 from its every edge.
 pub let rail_closed_w : Double = 42.0
-
-///|
-/// The ＋'s menu, beside it, its foot level with the ＋'s (WorkspaceSwitcher `adder`): 新建 workspace, 添加另一个账号,
-/// then the invitations waiting, each joined or ignored.
-fn rail_ws_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
-  let entries : Array[@kit.Entry] = [
-    @kit.menu_item("create", label=@sf.t("web-pages.workspace.create")),
-    @kit.menu_item("account", label=@sf.t("web-pages.workspace.addAccount")),
-  ]
-  let icons : Map[String, String] = { "create": "plus", "account": "user-plus" }
-  let pending = @sfpages.invitations_waiting(src)
-  if pending.length() > 0 {
-    entries.push(@kit.menu_separator())
-    entries.push(@kit.menu_label(@sf.t("web-pages.workspace.invitations")))
-    for p in pending {
-      let iv = Some(p.1)
-      let id = text(iv, "id")
-      let inviter = match text(iv, "inviter") {
-        "" => @sf.t("web-pages.cloud.someone")
-        x => x
-      }
-      entries.push(
-        @kit.menu_label(@sf.t("web-pages.workspace.invitedYou", args=[("inviter", inviter), ("name", text(iv, "name"))])),
-      )
-      entries.push(@kit.menu_item("join:" + id, label=@sf.t("web-pages.cloud.join")))
-      entries.push(@kit.menu_item("ignore:" + id, label=@sf.t("web-pages.workspace.ignore")))
-    }
-  }
-  // beside it, its foot level with the ＋'s (side right, align end, sideOffset 10)
-  let m = @sf.dropdown(c, "rail/ws-menu", wide.add_open, add, entries, icons, rail_ws_menu_w, side=Right, along=End, offset=rail_ws_menu_off)
-  wide.add_open = m.open
-  match m.chosen {
-    Some("create") => @sfpages.open_new_workspace(src)
-    Some("account") => (src.sign_in)()
-    Some(v) if v.has_prefix("join:") || v.has_prefix("ignore:") => {
-      let join = v.has_prefix("join:")
-      let id = v.view(start_offset=if join { 5 } else { 7 }).to_string()
-      for p in pending {
-        if text(Some(p.1), "id") == id {
-          @sfpages.answer_invitation(src, p.0, id, join, text(Some(p.1), "name"), fn() {  })
-        }
-      }
-    }
-    _ => ()
-  }
-}
-
-///|
-let rail_ws_menu_off : Double = 10.0
 
 ///|
 /// What the stations' place says on hover (RailStations): what is wrong with them, else what the core waits on, else
