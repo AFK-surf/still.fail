@@ -58,7 +58,7 @@ fn inter_face() -> Bytes? {
   match inter_bytes.val {
     Some(b) => Some(b)
     None =>
-      match @zip.gunzip(@codec.from_base64(inter_gz_b64)) {
+      match @zip.gunzip(inter_gz) {
         Some(b) => {
           inter_bytes.val = Some(b)
           Some(b)

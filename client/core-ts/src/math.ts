@@ -1,17 +1,38 @@
 // TeX is parsed and laid out in the core, including native cores running in Hermes. MathJax's LiteDOM is only a
-// transient layout tree: no DOM, HTML, WebView, remote font or executable markup reaches a client. The bundled TeX
-// font supplies the glyph outlines; the result is the same small drawing on every platform.
+// transient layout tree: no DOM, HTML, WebView, remote font or executable markup reaches a client. The TeX font here
+// has its glyphs' sizes alone, each outline in its place replaced by its id (math-font.ts): the UIs hold the outlines
+// and draw them, the core only lays them out and says which. The result is the same small drawing on every platform.
+// (MathJax's default font, New Computer Modern, is not carried at all: pnpm-workspace.yaml's overrides.)
 import { mathjax } from "@mathjax/src/js/mathjax.js";
 import { TeX } from "@mathjax/src/js/input/tex.js";
 import { SVG } from "@mathjax/src/js/output/svg.js";
+import { SvgFontData } from "@mathjax/src/js/output/svg/FontData.js";
 import { liteAdaptor } from "@mathjax/src/js/adaptors/liteAdaptor.js";
 import { RegisterHTMLHandler } from "@mathjax/src/js/handlers/html.js";
-import { MathJaxTexFont } from "@mathjax/mathjax-tex-font/js/svg.js";
+import { CommonMathJaxTexFontMixin } from "@mathjax/mathjax-tex-font/js/common.js";
+import { delimiters } from "@mathjax/mathjax-tex-font/js/svg/delimiters.js";
 import "@mathjax/src/js/input/tex/base/BaseConfiguration.js";
 import "@mathjax/src/js/input/tex/ams/AmsConfiguration.js";
 import "@mathjax/src/js/input/tex/newcommand/NewcommandConfiguration.js";
 import "@mathjax/src/js/input/tex/boldsymbol/BoldsymbolConfiguration.js";
-import { mathGlyphId, type MathDrawing } from "./mathDrawing.ts";
+import * as font from "./math-font.ts";
+import type { MathDrawing } from "./mathDrawing.ts";
+
+// deno-lint-ignore no-explicit-any
+type J = any;
+// The TeX font as @mathjax/mathjax-tex-font's svg.js makes it, from math-font.ts's tables.
+const Base = CommonMathJaxTexFontMixin(SvgFontData) as J;
+class TexFont extends Base {
+  static NAME = font.NAME;
+  static OPTIONS = { ...Base.OPTIONS, dynamicPrefix: font.dynamicPrefix };
+  static defaultDelimiters = delimiters;
+  static defaultChars = font.chars;
+  static variantCacheIds = font.variantCacheIds;
+  constructor(options: J = {}) {
+    super(options);
+    for (const variant of Object.keys(this.variant)) this.variant[variant].cacheID = "TEX-" + (font.variantCacheIds[variant] ?? "N");
+  }
+}
 
 type Element = { kind: string; attributes?: Record<string, string>; children?: Element[]; value?: string };
 type Move = [sx: number, sy: number, x: number, y: number];
@@ -50,7 +71,7 @@ function typeset(source: string, display: boolean): MathDrawing {
     packages: ["base", "ams", "newcommand", "boldsymbol"], maxBuffer: 8192, maxMacros: 1000,
     formatError(_jax: unknown, error: Error) { throw error; },
   });
-  output ??= new SVG({ fontData: MathJaxTexFont, fontCache: "local", linebreaks: { inline: false }, displayOverflow: "overflow" });
+  output ??= new SVG({ fontData: TexFont, fontCache: "local", linebreaks: { inline: false }, displayOverflow: "overflow" });
   const doc = mathjax.document("", { InputJax: input, OutputJax: output });
   try {
     const container = doc.convert(source, { display, em: 16, ex: 8, containerWidth: 100000 }) as Element;
@@ -66,9 +87,12 @@ function typeset(source: string, display: boolean): MathDrawing {
       for (const child of node.children ?? []) collect(child);
     };
     collect(svg);
+    // A glyph's path is `M<its id>Z` (MathJax writes `M` + the font's outline + `Z`); any other is no glyph of the font.
     const path = (d: string, move: Move) => {
       if (!d) return;
-      result.draw.push([mathGlyphId(d), ...move]);
+      const id = /^M([0-9a-f]{1,8})Z$/.exec(d)?.[1];
+      if (id === undefined) throw new Error("Unsupported formula path");
+      result.draw.push([id, ...move]);
       if (result.draw.length > 4096) throw new Error("Formula too complex");
     };
     const walk = (node: Element, parent: Move) => {
