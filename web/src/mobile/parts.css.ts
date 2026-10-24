@@ -53,7 +53,9 @@ export const mSegOption = style({
   border: "0", background: "none", padding: "0 10px", fontSize: `${vars.textMeta} !important`, color: "var(--m-muted) !important",
   whiteSpace: "nowrap", cursor: "pointer", position: "relative",
   selectors: {
-    [`${mSeg}[data-fill] &`]: { flex: "1", padding: "0 12px", fontSize: `${vars.textUi} !important` },
+    // Filling: an equal share each, never narrower than its words and 8 either side (a flex item's own minimum), so five
+    // parts' English words fit a phone's 320 whole.
+    [`${mSeg}[data-fill] &`]: { flex: "1", padding: "0 8px", fontSize: `${vars.textUi} !important` },
     "&[data-on]": { color: "var(--m-ink) !important" },
     [`${mSeg}:not([data-track]) &[data-on]`]: { fontWeight: "600" },
   },

@@ -474,6 +474,37 @@ test "toggle group that grows: as wide as where it is, its items equal shares" {
 }
 
 ///|
+test "toggle group that grows, short of room for equal shares: an item as wide as its words need, the other the rest" {
+  let v : Ref[Array[String]] = Ref(["a"])
+  let long = "Bbbbbbbbbbbbbbbb"
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Px(200.0), fn() {
+        v.val = toggle_group(
+          c,
+          "g",
+          [item("a", label="A"), item("b", label=long)],
+          v.val,
+          grow=true,
+          label="G",
+          ground=fn(c, _, items) { c.box(dir=Row, w=Fill(1.0), items) |> ignore },
+        ).value
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  // its words whole, not cut to the half it would share
+  assert_eq(t.lines_of(long), [long])
+  let (ax, _, aw, _) = t.get(@ui.Radio, label="A").rect
+  let (bx, _, bw, _) = t.get(@ui.Radio, label=long).rect
+  assert_true(bw > 100.0)
+  assert_true(bx >= ax + aw - 0.5)
+  assert_true((ax + aw + bw - 200.0).abs() < 0.5)
+}
+
+///|
 test "switch: its knob slides to the side it was turned to by a rest of its own (switch_rest)" {
   let on = Ref(false)
   let t = @ui.Tester::new(fn(c) { on.val = switch(c, "wifi", on.val, label="Wi-Fi").value })
