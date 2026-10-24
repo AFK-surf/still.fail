@@ -24,6 +24,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, route :
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
     Connects("") => connects_page(c, core, here)
+    Connect(station, id) => connect_page(c, src, core, here, station, id)
     Memories => memories_page(c, core, here)
     Usage => usage_page(c, core, here)
     Station(a) => station_page(c, core, here, a)
@@ -95,6 +96,7 @@ fn settings_reset() -> Unit {
   fx_policy_up.val = ""
   local_menu.val = false
   settings_deep.val = false
+  connect_reset()
 }
 
 ///|

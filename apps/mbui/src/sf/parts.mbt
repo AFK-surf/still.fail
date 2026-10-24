@@ -1122,8 +1122,9 @@ pub(all) enum PillTone {
 
 ///|
 /// A pill (parts.tsx Pill, parts.css.ts pill): words 12, 500, on one line, 22 high, 9 in, round; on the quiet grey in
-/// the muted ink, or in a tone (its pale ground, its ink).
-pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral) -> Unit {
+/// the muted ink, or in a tone (its pale ground, its ink). `icon`: what leads it, 14, in its ink (a status's check or
+/// wait: ui.tsx StatusText), 4 before its words.
+pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : String = "") -> Unit {
   let p = theme().p
   let (ground, ink) = match tone {
     Neutral => (p.neutral_bg, p.muted)
@@ -1133,13 +1134,86 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral) -> Unit {
     Red => (p.red_bg, p.red)
     Accented => (p.accent_bg, p.accent_text)
   }
-  c.box(style=pill_box, padx=pill_in, bg=ground, fn() { c.text(words, style=pill_words, color=ink) |> ignore })
+  c.box(style=pill_box, padx=pill_in, bg=ground, fn() {
+    if icon != "" {
+      draw_icon(c, icon, pill_icon, ink)
+    }
+    if words != "" {
+      c.text(words, style=pill_words, color=ink) |> ignore
+    }
+  })
   |> ignore
 }
 
 ///|
+let pill_icon : Double = 14.0
+
+///|
+/// Steps to take in order (controls.css.ts steps: an ordered list, its numbers in the muted ink in 20 at its start,
+/// 8 apart, the ui's 13): each what `steps` draws for it (its words, a button after them), their parts 8 apart in a
+/// line, going on in the next where they do not fit.
+pub fn steps(c : @ui.Ctx, steps : Array[() -> Unit]) -> Unit {
+  c.box(style=steps_box, fn() {
+    for i, step in steps {
+      c.box(style=step_row, fn() {
+        c.box(style=step_number, fn() { c.text((i + 1).to_string() + ".", style=step_number_words) |> ignore }) |> ignore
+        c.box(style=step_body, flow=true, fn() { step() }) |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A step's words (the ui's 13 on 20).
+pub let step_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg)
+
+///|
 // kept across runs: a value (no field of it changes)
-let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), radius=Full, align=ACenter)
+let steps_box : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_row : @ui.Style = @ui.css("row w=Full align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_number : @ui.Style = @ui.css("w=S5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_number_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_body : @ui.Style = @ui.style(row=true, w=grow, gap=S2, align=ACenter)
+
+///|
+/// What was checked and found right (controls.css.ts verifyOk): a ticked circle 16 and its words, 6 apart, the ui's 13
+/// in green.
+pub fn verify_ok(c : @ui.Ctx, words : String) -> Unit {
+  c.box(style=verify_line, fn() {
+    draw_icon(c, "check-circle", verify_icon, theme().p.green_ink)
+    c.text(words, style=verify_words) |> ignore
+  })
+  |> ignore
+}
+
+///|
+let verify_icon : Double = 16.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let verify_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let verify_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Positive)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), gap=S1, radius=Full, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1570,33 +1644,55 @@ let select_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Mute
 
 ///|
 /// Exclusive options that need a sentence each (parts.tsx Choices: mbui's radio group, @kit.radio_group): bordered
-/// cards 8 apart, each its title (13, 600) and `description` (12, muted) beside a radio mark at its end; the chosen one
-/// edged in the ink. `options`: each value, title and description. What is chosen now.
+/// cards 8 apart, each its `icon` (by its value) before its title (13, 600) and `description` (12, muted), a radio mark
+/// at its end; the chosen one edged in the ink, what it holds more (`extra`, by its value: a switch of it) under a line
+/// in it; those `disabled` faded and not chosen. `options`: each value, title and description. What is chosen now.
 pub fn choices(
   c : @ui.Ctx,
   key : String,
   value : String,
   options : Array[(String, String, String)],
   label? : String = "",
+  icon? : (String) -> Unit,
+  extra? : (String) -> Unit,
+  disabled? : Array[String] = [],
 ) -> String {
-  let t = theme()
-  let items = options.map(fn(o) { @kit.item(o.0, label=o.1) })
+  let items = options.map(fn(o) { @kit.item(o.0, label=o.1, disabled=disabled.contains(o.0)) })
   @kit.radio_group(c, key, items, value, label~, gap=choice_gap, look=fn(c, s) {
+      let at = options.search_by(fn(o) { o.1 == s.label })
+      let v = at.map(fn(i) { options[i].0 }).unwrap_or("")
+      let note = at.map(fn(i) { options[i].2 }).unwrap_or("")
       c.box(style=if s.on { choice_card_on } else if s.hovered { choice_card_hot } else { choice_card }, disabled=s.disabled, fn() {
-          c.box(style=choice_words, fn() {
-            c.text(s.label, style=choice_title) |> ignore
-            let note = options.search_by(fn(o) { o.1 == s.label }).map(fn(i) { options[i].2 }).unwrap_or("")
-            if note != "" {
-              c.text(note, style=choice_note) |> ignore
+          c.box(style=choice_hit, fn() {
+            match icon {
+              Some(f) => f(v)
+              None => ()
             }
+            c.box(style=choice_words, fn() {
+              c.text(s.label, style=choice_title) |> ignore
+              if note != "" {
+                c.text(note, style=choice_note) |> ignore
+              }
+            })
+            |> ignore
+            c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
+              if s.on {
+                c.box(style=radio_dot, fn() {  }) |> ignore
+              }
+            })
+            |> ignore
           })
           |> ignore
-          c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
-            if s.on {
-              c.box(style=radio_dot, fn() {  }) |> ignore
-            }
-          })
-          |> ignore
+          // (parts.css.ts choiceExtra: 14 in at its sides, under a line, 12 over and 14 under what it holds)
+          match extra {
+            Some(f) if s.on =>
+              c.box(style=choice_extra, fn() {
+                c.box(style=choice_rule, fn() {  }) |> ignore
+                c.box(style=choice_extra_in, fn() { f(v) }) |> ignore
+              })
+              |> ignore
+            _ => ()
+          }
       })
       |> ignore
     }).value
@@ -1605,8 +1701,7 @@ pub fn choices(
 ///|
 // kept across runs: a value (no field of it changes)
 let choice_card : @ui.Style = @ui.css(
-  #|row w=Full px=S3_5 py=S3 gap=S3 radius=Xl1_5 bg=Surface border=B1 border_color=Border align=ACenter
-  #|disabled{opacity=O55}
+  #|w=Full radius=Xl1_5 bg=Surface border=B1 border_color=Border disabled{opacity=O55}
 )
 
 ///|
@@ -1617,6 +1712,23 @@ let choice_card_hot : @ui.Style = choice_card.then(@ui.css("border_color=FieldHo
 ///|
 // kept across runs: a value (no field of it changes)
 let choice_card_on : @ui.Style = choice_card.then(@ui.css("border=B2 border_color=Fg"))
+
+///|
+/// What is pressed of it (choiceHit): 12 by 14 in, its parts 12 apart.
+// kept across runs: a value (no field of it changes)
+let choice_hit : @ui.Style = @ui.css("row w=Full px=S3_5 py=S3 gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_extra : @ui.Style = @ui.css("w=Full px=S3_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_extra_in : @ui.Style = @ui.css("w=Full pt=S3 pb=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
