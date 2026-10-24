@@ -272,7 +272,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
   let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
   let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
-  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
+  let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
       v.title,
@@ -359,7 +359,8 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
       on_more=fn() { open_sheet(c, Info(r)) },
     )
   })
-  |> ignore
+  // over what runs under it: the scroll bar there keeps clear of it
+  c.floats_over(glass_top)
 }
 
 ///|

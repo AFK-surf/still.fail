@@ -1610,6 +1610,8 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       @motion.measure(c, content, "composer/content")
       @motion.scope(c, content, bottom=true)
     })
+    // over the messages: their scroll bar keeps clear of it
+    c.floats_over(capsule)
     // on its way from another page's place, carried with what it holds
     match page {
       Some((from, p)) => page_carry(c, capsule, cap, from, p)

@@ -899,9 +899,10 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
   let h = bottom - top
   let corner = dmin(rad, h / 2.0)
   match notch_lips(w, cy, r) {
-    None => at(c, 0.0, top, w, h, radius=corner, glass=@sf.glass_bottom_bar()) |> ignore
+    // (over what runs under it: the scroll bar there keeps clear of it)
+    None => c.floats_over(at(c, 0.0, top, w, h, radius=corner, glass=@sf.glass_bottom_bar()))
     Some((l, rr)) => {
-      at(
+      let glass = at(
         c,
         0.0,
         top,
@@ -913,7 +914,7 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
         notch_r=r,
         notch_fillet=fillet,
       )
-      |> ignore
+      c.floats_over(glass)
       // the notch's outline alone: the glass's outline grown by half the line, its line inside that, seen between
       // the lips and under the glass's top; its foot below the clip (else its bottom edge was a white line under the
       // bar's middle, between the lips)
@@ -1790,7 +1791,7 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
   let actions = @settings.root_bar_actions.val
   @settings.root_bar_actions.val = None
-  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
+  let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings")) {
@@ -1807,5 +1808,6 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
     })
     |> ignore
   })
-  |> ignore
+  // over what runs under it: the scroll bar there keeps clear of it
+  c.floats_over(glass_top)
 }

@@ -71,7 +71,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   c.box(style=foot_fill, fn() {
     // (on the sidebar's own ground, whole, as the band over the lists: lists_band)
-    c.box(style=foot_band.then(@ui.style(bg=Data(@sf.mix(closed_ground(), wide.band, t.p.sidebar)))), fn() {
+    let band = c.box(style=foot_band.then(@ui.style(bg=Data(@sf.mix(closed_ground(), wide.band, t.p.sidebar)))), fn() {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")
@@ -117,7 +117,8 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         wide.jobs_open = p.value
       }
     })
-    |> ignore
+    // over the lists: their scroll bar keeps clear of it (the web's --nav-foot)
+    c.floats_over(band)
   })
   |> ignore
 }

@@ -79,6 +79,8 @@ test "an option answered: the options go, how it went comes in their place, the 
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("你 选择了「一起换」") is Some(_))
   assert_true(t.find("忽略") is None)
+  // (and the list's scroll bar, out since the list was scrolled to the card, gone)
+  t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
   t.assert_idle()
 }
 

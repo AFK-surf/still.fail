@@ -208,7 +208,7 @@ fn chat_bar(
   // (beside the rail its room as the block moves: page_bar_room)
   let (room_l, room_r, ml, mr) = page_bar_room()
   let room = fn(x : Double) { c.box(style=@ui.style(w=Fixed(x), h=Full), fn() {  }) |> ignore }
-  c.box(style=if @sf.in_pane() { chat_bar_row_tape } else { chat_bar_row }, moves="page-bar", fn() {
+  let bar_row = c.box(style=if @sf.in_pane() { chat_bar_row_tape } else { chat_bar_row }, moves="page-bar", fn() {
   room(ml)
   c.box(style=if @sf.in_pane() { chat_bar_box_tape } else { chat_bar_box }, id=bar, fn() {
       room(room_l)
@@ -272,7 +272,8 @@ fn chat_bar(
   |> ignore
   room(mr)
   })
-  |> ignore
+  // over the messages: their scroll bar keeps clear of it
+  c.floats_over(bar_row)
   // a chat keeping watch, archived once asked (the core's words)
   let asked = @sf.confirm_dialog(
     c,

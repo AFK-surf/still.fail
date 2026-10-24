@@ -44,6 +44,10 @@ struct ListState {
   mut follow_margin : Double
   // the frame it was last built in (one not built is shown by nothing: at rest)
   mut built : Int
+  // gliding to its end where it showed as the glide set out: its scroll bar shows meanwhile (not where it is put)
+  mut glide_shows : Bool
+  // its scroll bar (scroll_bar.mbt)
+  bar : Bar
   // the frame it was last laid out in; where it stood as that frame's first layout of it began and where that frame's
   // last left it (the row it is anchored to, how far into it, what was scrolled not laid yet, whether at its end): laid
   // out again in that frame, it is laid from where it began, unless something moved it since (Ctx::place_list)
@@ -225,6 +229,16 @@ pub struct Ctx {
   mut scroll_rects : Array[Double]
   mut next_scroll_ids : Array[Int]
   mut next_scroll_rects : Array[Double]
+  /// the scroll bars the last frame drew, and those being drawn (scroll_bar.mbt): where each runs, for the pointer;
+  /// boxes scrolled as one seen in the rows being drawn (their id, x and width), drawn along their list; what floats
+  /// over what scrolls, built this frame (Ctx::floats_over); the bar the pointer is along the edge of, and the one
+  /// whose thumb it holds (0 none)
+  mut bars : Array[BarAt]
+  mut next_bars : Array[BarAt]
+  across_seen : Array[(Int, Double, Double)]
+  floating : Array[Int]
+  mut bar_near : Int
+  mut bar_drag : Int
   // pointer
   mut px : Double
   mut py : Double
@@ -479,6 +493,12 @@ fn Ctx::new() -> Ctx {
     scroll_rects: [],
     next_scroll_ids: [],
     next_scroll_rects: [],
+    bars: [],
+    next_bars: [],
+    across_seen: [],
+    floating: [],
+    bar_near: 0,
+    bar_drag: 0,
     px: -1.0,
     py: -1.0,
     down: false,

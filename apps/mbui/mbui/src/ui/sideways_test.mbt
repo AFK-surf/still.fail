@@ -2,7 +2,8 @@
 // wide at size 10.
 
 ///|
-/// A list of rows, the second holding a line 600 wide that scrolls sideways.
+/// A list of rows, the second holding a line 600 wide that scrolls sideways; pressed by a finger (a mouse's press along
+/// its foot is its scroll bar's: scroll_bar.mbt).
 fn sideways_view(at : Ref[Double]) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
@@ -22,6 +23,7 @@ fn sideways_view(at : Ref[Double]) -> @ui.Tester {
     },
     w=300.0,
     h=300.0,
+    platform=2,
   )
 }
 

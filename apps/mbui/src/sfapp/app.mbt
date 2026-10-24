@@ -889,7 +889,7 @@ fn wide_reset() -> Unit {
 /// 560, a phone's page below the breakpoint; on macOS its title bar the app's (its buttons in its top row, as the
 /// desktop app's hiddenInset: the rail's and the sidebar's tops, a phone's page under their band), on Windows the
 /// system's. On a phone the app is
-/// Android's whatever the phone: on iOS too its lists fling, give at their edges and show no scroll bar as Android's,
+/// Android's whatever the phone: on iOS too its lists fling and give at their edges as Android's,
 /// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
 pub fn host_setup() -> Unit {
   @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0, inset=true)
