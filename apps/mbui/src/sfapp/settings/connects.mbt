@@ -9,30 +9,6 @@
 pub let connects_mine : Ref[Bool] = Ref(false)
 
 ///|
-/// How a connect's conversations become sessions, in words (Words.kt MODE_LABEL, MODE_TEXT).
-/// A Feishu connect's (`kind` feishu) in its groups' words (modeLabel, modeText).
-fn mode_label(mode : String, kind? : String = "") -> String {
-  match (mode, kind == "feishu") {
-    ("multi-session", false) => tr("android-misc.mode.multi")
-    ("single-session", false) => tr("android-misc.mode.single")
-    ("multi-session", true) => tr("web-main.mode.feishu.multi.label")
-    ("single-session", true) => tr("web-main.mode.feishu.single.label")
-    (m, _) => m
-  }
-}
-
-///|
-fn mode_text(mode : String, kind? : String = "") -> String {
-  match (mode, kind == "feishu") {
-    ("multi-session", false) => tr("android-misc.mode.multi.text")
-    ("single-session", false) => tr("android-misc.mode.single.text")
-    ("multi-session", true) => tr("web-main.mode.feishu.multi.description")
-    ("single-session", true) => tr("web-main.mode.feishu.single.description")
-    _ => ""
-  }
-}
-
-///|
 /// A connect as its people see it in Slack (ConnectAvatar): its bot's picture; Slack's mark until Slack said it.
 fn connect_avatar(c : @ui.Ctx, core : Core, cv : Json?, size : Double) -> Unit {
   match opt_text(cv, "botImage") {
@@ -347,17 +323,8 @@ fn connect_page(c : @ui.Ctx, core : Core, here : Here, station : String, id : St
                 label(tr("android-settings.connect.sessions"))
                 row_lines(
                   c,
-                  mode_label(mode, kind=text(cv, "kind")),
-                  mode_text(mode, kind=text(cv, "kind")) +
-                  (if mode == "single-session" {
-                    if flag(cv, "requireMention") {
-                      tr("android-settings.connect.mentionOnly")
-                    } else {
-                      tr("android-settings.connect.everyMessage")
-                    }
-                  } else {
-                    ""
-                  }),
+                  text(cv, "modeLabel"),
+                  text(cv, "modeSentence"),
                   wrap_sub=true,
                 )
                 chevron(c)
