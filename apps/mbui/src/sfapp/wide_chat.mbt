@@ -5,43 +5,22 @@
 // its end, the way to the newest, telling the core what shows) is the same page's.
 
 ///|
-/// The column the messages keep to (later.css.ts: 760), and the least room at its sides (session.css.ts: 40).
-let column_w : Double = 760.0
-
-///|
 /// A page's bar in the wide frame (styles/sidebar.css.ts pageBar: 45, its 1 at the foot).
 let wide_bar_h : Double = 45.0
 
 ///|
-/// What a chat's rows stand in from the pane's sides: 14 on a phone; in the wide frame, the column in the middle.
+/// What a chat's rows stand in from the pane's sides: 14.
 fn row_side(c : @ui.Ctx) -> Double {
-  if wide_on.val {
-    dmax(40.0, (c.width - column_w) / 2.0)
-  } else {
-    14.0
-  }
+  ignore(c)
+  14.0
 }
 
 ///|
 /// What the composer's column holds, in the pane's middle (the column and the capsule's curve each side, 804 wide at
 /// most, 12 from the pane's sides: dock.css.ts), in the wide frame; as it is elsewhere.
 fn wide_center(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  if !wide_on.val {
-    body()
-    return
-  }
-  let inner = wide_composer_w(c)
-  c.box(style=wide_centred, fn() {
-    c.box(w=Px(inner), fn() { c.sized(inner, c.height, body) }) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The composer's width in the wide frame's pane `c.width` wide (dock.css.ts composerBox: the column and 22 each side,
-/// 12 from the pane's sides).
-fn wide_composer_w(c : @ui.Ctx) -> Double {
-  dmin(c.width - 24.0, column_w + 44.0)
+  ignore(c)
+  body()
 }
 
 ///|
@@ -57,10 +36,6 @@ let bar_title_room : @ui.Style = @ui.css("w=Full")
 /// What is done in a page's bar, at its end, 2 apart (ChatPage.css.ts pageBarActions).
 // kept across runs: a value (no field of it changes)
 let bar_buttons : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_centred : @ui.Style = @ui.css("row w=Full justify=JCenter")
 
 ///|
 /// An icon button of a page's bar (page.css.ts iconBtn): 32 square, the nav's corner, the pointer's ground and ink

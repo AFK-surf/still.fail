@@ -26,15 +26,6 @@ fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
 }
 
 ///|
-/// An agent's history pressed, or the chat's files: in front, closed; else opened in front (sfdesk's side_toggle).
-fn side_toggle(r : ChatRef, tab : String) -> Unit {
-  match link_src.val {
-    Some(src) => @sfdesk.side_toggle(src, r, tab)
-    None => ()
-  }
-}
-
-///|
 /// What the desktop's messages (sfdesk/message.mbt) draw that is this package's: the file preview (preview.mbt) and
 /// the thumbnails it flies from, a video's still, a picture sent from here, a visualization (viz.mbt), a link opened
 /// and its menu, a station's screens' cards (screen_links.mbt).
