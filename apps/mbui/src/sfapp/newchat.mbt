@@ -46,7 +46,7 @@ fn fill_words(key : String, error : String) -> String {
 /// The page's bar (Parts.kt NavBar): 取消 back, 新对话 in the middle.
 fn new_chat_bar(c : @ui.Ctx) -> Unit {
   if @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg, top=status_top()) {
-    app.nav.pop() |> ignore
+    @sfbase.close_page(NewChat) |> ignore
   }
 }
 

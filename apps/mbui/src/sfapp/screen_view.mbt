@@ -96,6 +96,8 @@ let rail_say_ms : Double = 3000.0
 /// was opened from).
 fn screen_page(c : @ui.Ctx, src : Source, station : String, screen : String, title : String) -> Unit {
   let key = screen_key(station, screen)
+  // its 关闭: closed through the shell, the page it is
+  let close = fn() { @sfbase.close_page(Screen({ station, screen, title })) |> ignore }
   let s = screen_sess(src, station, screen)
   let u = screen_ui(key)
   // open while the app is in sight (ScreenActivity onStart / onStop): the last frame kept between
@@ -163,7 +165,7 @@ fn screen_page(c : @ui.Ctx, src : Source, station : String, screen : String, tit
       |> ignore
     } else if sideways {
       c.box(style=screen_row, fn() {
-        screen_rail(c, s, u, typing, catcher)
+        screen_rail(c, s, u, typing, catcher, close)
         c.box(style=screen_fill, fn() {
           screen_stage(c, s, u, key)
           // sideways the frame takes the height: who drives it floats over its top, while it does
@@ -192,7 +194,7 @@ fn screen_page(c : @ui.Ctx, src : Source, station : String, screen : String, tit
       })
       |> ignore
     } else {
-      screen_top_bar(c, s, u, title)
+      screen_top_bar(c, s, u, title, close)
       if s.can_take_over() {
         c.box(style=take_over_place, fn() { take_over(c, s) }) |> ignore
       }
@@ -457,10 +459,10 @@ fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : 
 ///|
 /// Upright: close, the title over the core's line (只看 or 控制, who else is on it), 只看/控制, the clipboard and files,
 /// 全屏.
-fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String) -> Unit {
+fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
   c.box(style=screen_bar, fn() {
     if round_button(c, "screen-close", "close", tr("android-misc.screen.close")) {
-      app.nav.pop() |> ignore
+      close()
     }
     c.box(style=screen_bar_words, fn() {
       let said = match opt_text(s.state, "title") {
@@ -607,7 +609,14 @@ fn full_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catcher 
 
 ///|
 /// Sideways: the same down the side, the line said when the people on it are tapped.
-fn screen_rail(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catcher : String) -> Unit {
+fn screen_rail(
+  c : @ui.Ctx,
+  s : ScreenSess,
+  u : ScreenUi,
+  typing : Bool,
+  catcher : String,
+  close : () -> Unit,
+) -> Unit {
   // said for 3 s once asked for
   if u.saying && @kit.after(c, "screen-saying/\{u.sayings}", true, rail_say_ms) {
     u.saying = false
@@ -616,7 +625,7 @@ fn screen_rail(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catcher
   c.box(fn() {
     c.box(style=rail_box, fn() {
       if round_button(c, "screen-close", "close", tr("android-misc.screen.close")) {
-        app.nav.pop() |> ignore
+        close()
       }
       c.spacer()
       if s.state is Some(_) && line != "" && s.open_now() {

@@ -54,6 +54,30 @@ pub fn back_step() -> (() -> Unit)? {
 }
 
 ///|
+/// Page `p` closed, as a page asks for itself (its 关闭, 取消, the player or the reader shut, a chat archived): taken
+/// off the stack where it lies, the pages over it with it; not on the stack, nothing. Whether it was there. What a page
+/// calls, never the stack itself; its bar's back is go_back.
+pub fn close_page(p : Page) -> Bool {
+  let pages = app.nav.pages()
+  let mut at = -1
+  for k = pages.length() - 1; k >= 1; k = k - 1 {
+    if pages[k] == p {
+      at = k
+      break
+    }
+  }
+  if at < 0 {
+    return false
+  }
+  while app.nav.depth() > at {
+    if !app.nav.pop() {
+      break
+    }
+  }
+  true
+}
+
+///|
 /// Back, where there is one to go to (Shell's `back`). Whether it went.
 pub fn go_back() -> Bool {
   match back_step() {

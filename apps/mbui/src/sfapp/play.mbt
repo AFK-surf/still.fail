@@ -7,7 +7,7 @@
 ///|
 /// The file `at.path` of `at.root` on `at.station`, played; the next or the one before in its place.
 pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
-  drive_player(c, src, at, fn() { app.nav.pop() |> ignore }, fn(other) { app.nav.replace(DrivePlay(other)) })
+  drive_player(c, src, at, fn() { @sfbase.close_page(DrivePlay(at)) |> ignore }, fn(other) { app.nav.replace(DrivePlay(other)) })
 }
 
 ///|

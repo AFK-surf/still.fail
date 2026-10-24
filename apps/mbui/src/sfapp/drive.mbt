@@ -22,7 +22,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
             @sfdesk.add_folder(src, w.id, lenders)
           }
         }) {
-        app.nav.pop() |> ignore
+        @sfbase.go_back() |> ignore
       }
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -102,7 +102,7 @@ pub fn drive_page(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Uni
     settings_core(src, w),
     at,
     c.width,
-    narrow={ frame: { back, top: status_top(), foot: nav_foot(), named: false }, back: fn() { app.nav.pop() |> ignore } },
+    narrow={ frame: { back, top: status_top(), foot: nav_foot(), named: false }, back: fn() { @sfbase.go_back() |> ignore } },
     go=fn(to) { drive_go_back_to(to.station, to.root.unwrap_or(""), to.path) },
   )
 }

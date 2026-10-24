@@ -164,7 +164,7 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
     neighbour(src, w, -1)
   }
   if here() {
-    app.nav.pop() |> ignore
+    @sfbase.close_page(Chat(r)) |> ignore
     wide.landed = ""
   }
   let p : Map[String, Json] = {
