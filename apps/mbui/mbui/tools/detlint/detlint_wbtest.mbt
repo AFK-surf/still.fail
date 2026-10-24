@@ -1094,8 +1094,17 @@ test "reset-wire" {
           #|///|
           #|fn reset() -> Unit {
           #|  shown.val = 0
-          #|  // (state it marks, not a wire)
+          #|  // (state it marks, not a wire; one a call makes)
           #|  by_hand.val = true
+          #|  made.val = make(1)
+          #|}
+          #|
+          #|///|
+          #|let made : Ref[Int] = Ref(make(0))
+          #|
+          #|///|
+          #|fn make(n : Int) -> Int {
+          #|  n
           #|}
           #|
         ),

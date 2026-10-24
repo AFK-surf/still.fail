@@ -185,7 +185,8 @@
       "src/host/win_app.c": 1,
       "web/host.js": 1
     },
-    "library-import": {}
+    "library-import": {},
+    "reset-wire": {}
   },
   "excused": {
     "frame-request": {},
@@ -222,6 +223,7 @@
     "build-effect": {},
     "unsettled-ok": {},
     "host-delay": {},
-    "library-import": {}
+    "library-import": {},
+    "reset-wire": {}
   }
 }
