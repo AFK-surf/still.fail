@@ -808,26 +808,62 @@ static void run_script_step(int step) {
 }
 
 // The window's buttons in the app's top row (an inset window): 16 from its left, centred on its 44, as still.fail's
-// desktop app has them (Electron's trafficLightPosition {16, 15}); placed again as the window resizes.
+// desktop app has them (Electron's trafficLightPosition {16, 15}). AppKit lays its title bar out again when it likes
+// (the window resized, its appearance set dark or light, a button shown), its container back at its own height and
+// the buttons left where they were in it (high in the row): placed again each time it does (watch_buttons).
+// Not while the system has them: from as it starts taking the window full screen till it has given it back (its own
+// bar there, the buttons moved by it as it goes); nor what is laid out while they are being placed, this placing's
+// own doing or AppKit's answer to it (in the move to full screen a button keeps its own place, told again each time:
+// placed again on that, they went back and forth till the stack ran out).
+static bool buttons_system, buttons_placing;
+
 static void place_buttons(NSWindow *w) {
   NSButton *close = [w standardWindowButton:NSWindowCloseButton];
   NSButton *mini = [w standardWindowButton:NSWindowMiniaturizeButton];
   NSButton *zoom = [w standardWindowButton:NSWindowZoomButton];
   NSView *bar = close.superview.superview;
-  if (!close || !bar || (w.styleMask & NSWindowStyleMaskFullScreen)) return;
+  if (!setup_inset || !close || !bar || buttons_system || buttons_placing || (w.styleMask & NSWindowStyleMaskFullScreen))
+    return;
+  buttons_placing = true;
   double bh = close.frame.size.height, gap = mini.frame.origin.x - close.frame.origin.x;
   double h = bh + 2 * 15.0;
   NSRect f = bar.frame;
   f.size.height = h;
   f.origin.y = w.frame.size.height - h;
-  bar.frame = f;
+  if (!NSEqualRects(bar.frame, f)) bar.frame = f;
   NSArray<NSButton *> *bs = @[ close, mini, zoom ];
   for (NSUInteger i = 0; i < bs.count; i++) {
-    NSRect b = bs[i].frame;
-    b.origin.x = 16.0 + i * gap;
-    b.origin.y = (h - bh) / 2.0;
-    bs[i].frame = b;
+    NSPoint o = NSMakePoint(16.0 + i * gap, (h - bh) / 2.0);
+    if (!NSEqualPoints(bs[i].frame.origin, o)) [bs[i] setFrameOrigin:o];
   }
+  buttons_placing = false;
+}
+
+// The buttons the app's again: the window back from full screen, or it did not go (MBAppDelegate).
+static void buttons_back(NSWindow *w) {
+  buttons_system = false;
+  place_buttons(w);
+}
+
+// The buttons placed as the window opens, and again whenever their title bar's container or one of them is laid out
+// anew (by AppKit, whatever made it: NSViewFrameDidChangeNotification), not after each thing known to do it; the
+// system's from as the window starts going full screen till it is back (or did not go).
+static void watch_buttons(NSWindow *w) {
+  NSButton *close = [w standardWindowButton:NSWindowCloseButton];
+  NSView *bar = close.superview.superview;
+  if (!close || !bar) return;
+  NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+  for (NSView *v in @[ bar, close, [w standardWindowButton:NSWindowMiniaturizeButton],
+                       [w standardWindowButton:NSWindowZoomButton] ]) {
+    v.postsFrameChangedNotifications = YES;
+    [nc addObserverForName:NSViewFrameDidChangeNotification object:v queue:nil
+                usingBlock:^(NSNotification *n) { place_buttons(w); }];
+  }
+  [nc addObserverForName:NSWindowWillEnterFullScreenNotification object:w queue:nil
+              usingBlock:^(NSNotification *n) { buttons_system = true; }];
+  [nc addObserverForName:NSWindowDidExitFullScreenNotification object:w queue:nil
+              usingBlock:^(NSNotification *n) { buttons_back(w); }];
+  place_buttons(w);
 }
 
 // ---------------------------------------------------------------------------
@@ -1330,6 +1366,9 @@ static void bring_back(void) {
   if (!put_away_at) put_away_at = clock_gettime_nsec_np(CLOCK_MONOTONIC);
   return NO;
 }
+- (void)windowDidFailToEnterFullScreen:(NSWindow *)w {
+  buttons_back(w);
+}
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)app hasVisibleWindows:(BOOL)visible {
   bring_back();
   return NO;
@@ -1590,14 +1629,12 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
     if (setup_inset) {
-      place_buttons(w);
-      for (NSNotificationName name in @[ NSWindowDidResizeNotification, NSWindowDidEnterFullScreenNotification,
-                                         NSWindowDidExitFullScreenNotification ]) {
+      watch_buttons(w);
+      // in full screen the buttons are out of the app's top row (the system's own bar), and back in it after: the app
+      // told (mb_host_window_inset)
+      for (NSNotificationName name in @[ NSWindowDidEnterFullScreenNotification, NSWindowDidExitFullScreenNotification ]) {
         [[NSNotificationCenter defaultCenter] addObserverForName:name object:w queue:nil
-                                                      usingBlock:^(NSNotification *n) {
-                                                        place_buttons(w);
-                                                        [the_view requestFrame];
-                                                      }];
+                                                      usingBlock:^(NSNotification *n) { [the_view requestFrame]; }];
       }
     }
     [NSApp activateIgnoringOtherApps:YES];
