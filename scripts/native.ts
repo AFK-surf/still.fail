@@ -826,7 +826,9 @@ function gh(args: string[], options: { allowFail?: boolean } = {}): string {
   return done.status === 0 ? done.stdout : "";
 }
 function published(): Set<string> | null {
-  const out = gh(["api", "--paginate", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", ".assets[].name"], { allowFail: true });
+  // (one request: the release's own answer lists every asset, 180 of them as they are kept. With --paginate it took
+  // 22 s on GitHub's Windows runner against 1 s without, the same 180 names, each mbui windows run, 2026-10-24)
+  const out = gh(["api", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", ".assets[].name"], { allowFail: true });
   return out ? new Set(out.split("\n").filter(Boolean)) : null;
 }
 async function exists(name: string): Promise<boolean> {
