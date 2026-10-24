@@ -276,3 +276,54 @@ test "one over another: a confirm from a menu's item comes when the menu has gon
   assert_true(!presenting())
   assert_eq(said, [])
 }
+
+///|
+/// A panel opened by nothing (a form's dialog): its words, its foot's button closing it as said; what it lets go of
+/// as it closes unsaid.
+fn dialog_panel(said : Array[String]) -> (Anchor) -> Unit {
+  fn(_) {
+    panel(
+      "添加一项",
+      fn(c, _) { c.text("填好下面的内容", style=paragraph) |> ignore },
+      from=Unanchored,
+      description="每项都会加密保存",
+      foot=fn(c, close) {
+        if button(c, "确认添加", key="add") {
+          said.push("added")
+          close()
+        }
+      },
+      gone=fn() { said.push("gone") },
+    )
+  }
+}
+
+///|
+test "a panel opened by nothing with a mouse at Large: a dialog in the middle; Escape lets go of it, its foot says it" {
+  let said : Array[String] = []
+  let t = presenting_tester(desk, dialog_panel(said))
+  open_it(t)
+  assert_eq(presented_how, [AsDialog])
+  assert_true(t.find("每项都会加密保存") is Some(_))
+  let (x, _) = where_is(t, "填好下面的内容")
+  assert_true(x > desk.1 / 2.0 - dialog_w / 2.0 && x < desk.1 / 2.0 + dialog_w / 2.0)
+  assert_true(t.key_named("esc"))
+  assert_true(!presenting())
+  assert_eq(said, ["gone"])
+  open_it(t)
+  t.tap_text("确认添加")
+  assert_true(!presenting())
+  assert_eq(said, ["gone", "added"])
+}
+
+///|
+test "a panel opened by nothing with a finger at Small: a sheet with its words and its foot" {
+  let said : Array[String] = []
+  let t = presenting_tester(phone, dialog_panel(said))
+  open_it(t)
+  assert_eq(presented_how, [AsSheet])
+  assert_true(t.find("每项都会加密保存") is Some(_))
+  t.tap_text("确认添加")
+  assert_eq(said, ["added"])
+  assert_true(!presenting())
+}

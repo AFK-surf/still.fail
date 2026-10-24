@@ -367,7 +367,6 @@ fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
     n => n
   }
   open_dialog(
-    "lock-confirm/" + device,
     @sf.t("web-pages.security.confirmTitle", args=[("name", who)]),
     description=@sf.t("web-pages.security.confirmBody", args=[
       ("device", device_name(text(rv, "kind"), text(rv, "label"))),
@@ -410,7 +409,6 @@ fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
 /// A station of the workspace not in the lock, taken in once its owner says it is theirs (Security.tsx's join dialog).
 fn join_dialog(core : Core, ws : String, station : String, name : String) -> Unit {
   open_dialog(
-    "lock-join/" + station,
     @sf.t("web-pages.security.joinTitle", args=[("name", name)]),
     description=@sf.t("web-pages.security.joinBody"),
     fn(_, _) {  },
@@ -446,7 +444,6 @@ fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
     @settings.act(core, @sf.t("web-pages.security.turnOff"), "lock.disable", obj([("workspace", str(ws))]))
   }
   open_dialog(
-    key,
     @sf.t("web-pages.security.turnOffTitle"),
     description=@sf.t("web-pages.security.turnOffBody"),
     fn(c, shut) {

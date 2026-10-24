@@ -214,7 +214,7 @@ fn sa_token_card(c : @ui.Ctx, core : Core, station : String, me : String, words 
 /// A Slack workspace's app configuration token added, in a dialog (SlackAppSection's Dialog: ConfigTokenForm).
 fn config_token_dialog(core : Core, station : String) -> Unit {
   let key = "config-token/" + (desk_dialogs.val + 1).to_string()
-  open_dialog(key, @sf.t("web-pages.slackApp.addTokenTitle"), wide=true, fn(c, shut) {
+  open_dialog(@sf.t("web-pages.slackApp.addTokenTitle"), wide=true, fn(c, shut) {
       config_token_form(c, core, station, key, fn() { shut() })
     }, fn(_, _) {  })
 }

@@ -566,7 +566,6 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
   }
   if id == "" && key == "" {
     open_dialog(
-      "policy/" + serial,
       @sf.t("web-pages.archivePolicy.title"),
       description=@sf.t("web-pages.archivePolicy.textLead"),
       wide=true,
@@ -584,7 +583,6 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
   }
   let fresh = key != ""
   open_dialog(
-    "policy/" + serial,
     if fresh {
       @sf.t("web-pages.archivePolicy.newOption")
     } else {

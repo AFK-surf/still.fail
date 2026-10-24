@@ -403,80 +403,26 @@ let mine_filter_lit_words : @ui.TextStyle = mine_filter_words.then(@ui.text_styl
 let mine_filter_on_words : @ui.TextStyle = mine_filter_words.then(@ui.text_style(color=AccentText))
 
 ///|
-/// A dialog over a desktop page (parts.tsx Dialog: the library's): its title, what it is about, what it holds, its
-/// buttons at its foot; each given what closes it.
-priv struct DeskDialog {
-  key : String
-  title : String
-  description : String
-  wide : Bool
-  /// its title, its step's count beside it and what it is about as they are now (a wizard's), over those given
-  live : (() -> (String, String, String))?
-  /// what is let go of as it closes by its ✕, Esc or a press outside
-  gone : (() -> Unit)?
-  body : (@ui.Ctx, () -> Unit) -> Unit
-  foot : (@ui.Ctx, () -> Unit) -> Unit
-}
-
-///|
-/// The dialog up ("None": none), and the last one put up, drawn as it goes.
-// kept across runs: said by open_dialog and its close; settings_reset empties them
-let desk_dialog : Ref[DeskDialog?] = Ref(None)
-
-///|
-// kept across runs: said by open_dialog; settings_reset empties it
-let desk_dialog_last : Ref[DeskDialog?] = Ref(None)
-
-///|
 /// How many dialogs were put up (a dialog's fields' keys, new each time it opens).
 // kept across runs: counted by open_dialog; settings_reset puts it back
 let desk_dialogs : Ref[Int] = Ref(0)
 
 ///|
-/// Puts up a dialog over the page.
+/// Puts up a dialog over the page (parts.tsx Dialog: the library's panel opened by nothing, @sf.panel): its title,
+/// what it is about, what it holds, its buttons at its foot, each given what closes it; `wide`, 640 wide; `live`: its
+/// title, its step's count and what it is about as they are now (a wizard's); `gone`: what is let go of as it closes
+/// by its ✕, Esc or a press outside.
 fn open_dialog(
-  key : String,
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
   foot : (@ui.Ctx, () -> Unit) -> Unit,
   description? : String = "",
   wide? : Bool = false,
   live? : () -> (String, String, String),
-  gone? : () -> Unit,
+  gone? : () -> Unit = fn() {  },
 ) -> Unit {
-  let d = { key, title, description, wide, live, gone, body, foot }
   desk_dialogs.val += 1
-  desk_dialog.val = Some(d)
-  desk_dialog_last.val = Some(d)
-}
-
-///|
-/// The dialog, over everything the page shows (sheet.mbt overlay): while up, and as it goes.
-fn desk_dialog_overlay(c : @ui.Ctx) -> Unit {
-  match desk_dialog_last.val {
-    Some(d) => {
-      let shut = fn() { desk_dialog.val = None }
-      let open = match desk_dialog.val {
-        Some(now) => now.key == d.key
-        None => false
-      }
-      let (title, step, description) = match d.live {
-        Some(f) => f()
-        None => (d.title, "", d.description)
-      }
-      let still = @sf.dialog(c, d.key, open, title, fn() { (d.body)(c, shut) }, description~, wide=d.wide, close_label=@sf.t("common.close"), step~, footer=fn() {
-        (d.foot)(c, shut)
-      })
-      if open && !still {
-        shut()
-        match d.gone {
-          Some(f) => f()
-          None => ()
-        }
-      }
-    }
-    None => ()
-  }
+  @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone~)
 }
 
 ///|

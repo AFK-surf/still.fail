@@ -7,7 +7,7 @@
 /// the kind fixed); not locked, that such a secret is kept in the clear.
 fn vault_add_dialog(core : Core, here : Here) -> Unit {
   let ws = here.workspace
-  open_dialog("vault-add/" + (desk_dialogs.val + 1).to_string(), @sf.t("web-pages.vault.addKind.title"), fn(c, shut) {
+  open_dialog(@sf.t("web-pages.vault.addKind.title"), fn(c, shut) {
     let t = @sf.theme()
     let v = (core.topic)("vaults", { "workspace": str(ws) }).value
     let mine = items(v, "vaults").iter().find_first(fn(x) { flag(Some(x), "mine") })
@@ -131,7 +131,6 @@ fn vault_editor_dialog(
     Some(p) => text(Some(p), "name")
   }
   open_dialog(
-    key("dialog"),
     title,
     fn(c, _) {
       let k = vault_kinds[e.kind]
@@ -270,7 +269,6 @@ fn vault_recover_dialog(core : Core, ws : String) -> Unit {
   let words = Ref("")
   let count_of = fn() { words.val.replace_all(old="\n", new=" ").split(" ").filter(fn(w) { w != "" }).count() }
   open_dialog(
-    key,
     @sf.t("web-pages.vault.recover"),
     description=@sf.t("web-pages.vault.recoverLead"),
     fn(c, _) {

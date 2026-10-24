@@ -822,7 +822,6 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
               disabled=moving || targets.length() == 0,
             ) {
             open_dialog(
-              "profile-move/" + address + "/" + id,
               @sf.t("web-pages.profiles.share.moveTitle"),
               description=@sf.t("web-pages.profiles.share.moveLead", args=[("station", text(s, "name"))]),
               fn(c, shut) {
@@ -908,7 +907,6 @@ fn pick_stations(core : Core, address : String, id : String, stations : Array[Js
   }
   let all = fn() { stations.iter().all(fn(x) { text(Some(x), "id") == own || ticked.get(text(Some(x), "id")).unwrap_or(false) }) }
   open_dialog(
-    "profile-pick/" + address + "/" + id,
     @sf.t("web-pages.profiles.share.stations"),
     fn(c, _) {
       c.text(if all() { @sf.t("web-pages.profiles.share.futureIn") } else { @sf.t("web-pages.profiles.share.futureOut") }, style=desk_muted) |> ignore

@@ -119,20 +119,12 @@ fn settings_fixture(core : Core) -> Unit {
 }
 
 ///|
-/// The settings pages' dialogs over everything the frame shows (the app draws them, under the settings' questions).
-pub fn settings_overlay(c : @ui.Ctx) -> Unit {
-  desk_dialog_overlay(c)
-}
-
-///|
 /// What the settings pages here keep put back as the app begins anew.
 fn settings_reset() -> Unit {
   notify_page_reset()
   waiting_menu.val = ""
   ws_menu.val = ""
   mine_filter_open.clear()
-  desk_dialog.val = None
-  desk_dialog_last.val = None
   desk_dialogs.val = 0
   fx_policy_up.val = ""
   local_menu.val = false
