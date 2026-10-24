@@ -732,18 +732,6 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
 }
 
 ///|
-/// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one of still.fail's opens here as the core
-/// says (links.mbt); any other is handed to the system (its browser, or the app that takes it: mbui's open_url), said
-/// when nothing took it.
-fn open_link(href : String) -> Unit {
-  let elsewhere = fn() { if !@ui.open_url(href) { toast_later(tr("android-misc.link.cantOpen")) } }
-  match link_src.val {
-    Some(src) => open_link_in(src, href, or_else=elsewhere)
-    None => elsewhere()
-  }
-}
-
-///|
 /// An agent's Markdown with its files (Prose.kt AgentWords): those its text names (`placed`) drawn there, the rest
 /// below it; its links to a station's screens as their cards (screen_links.mbt); its tables scrolling out to `bleed`
 /// past it either side.

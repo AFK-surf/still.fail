@@ -5,39 +5,39 @@
 // messages' list builds only the rows in view) and the app is shown: `screen.view` with `peek`, JPEG only, small, each
 // frame acknowledged peek_ms after the one before (the station sends the next once the last is acknowledged); stopped
 // (the call cancelled) as the card goes from view or the app behind. A card's tap opens its link, as a tap on the link
-// does (messages.mbt open_link).
+// does (open_links.mbt open_link).
 
 ///|
 /// A preview's pace (ScreenLinks.kt PEEK_MS): a picture at most this often.
-let peek_ms : Double = 500.0
+pub let peek_ms : Double = 500.0
 
 ///|
 /// The picture a preview asks for, in pixels at most (ScreenLinks.kt PEEK_SIZE): the card's width, twice over.
-let peek_size : Double = 640.0
+pub let peek_size : Double = 640.0
 
 ///|
 /// The marks' grid (ScreenLinks.kt tile: 30 by 36, as the web's) and their strokes' width.
-let mark_grid_w : Double = 30.0
+pub let mark_grid_w : Double = 30.0
 
 ///|
-let mark_grid_h : Double = 36.0
+pub let mark_grid_h : Double = 36.0
 
 ///|
-let mark_stroke : Double = 1.5
+pub let mark_stroke : Double = 1.5
 
 ///|
 /// A preview's shape when its station has not said the screen's size (16:10), and the shapes it is kept within.
-let peek_ratio : Double = 1.6
+pub let peek_ratio : Double = 1.6
 
 ///|
-let peek_ratio_least : Double = 0.75
+pub let peek_ratio_least : Double = 0.75
 
 ///|
-let peek_ratio_most : Double = 2.0
+pub let peek_ratio_most : Double = 2.0
 
 ///|
 /// A mark: its name (its pictures kept by it) and its paths on the marks' grid.
-priv struct LinkMark {
+pub(all) struct LinkMark {
   name : String
   paths : Array[String]
 }
@@ -45,7 +45,7 @@ priv struct LinkMark {
 ///|
 /// A desktop's mark (ScreenLinks.kt Monitor).
 // kept across runs: a value (never written)
-let monitor_mark : LinkMark = {
+pub let monitor_mark : LinkMark = {
   name: "screen-desktop",
   paths: [
     "M6.25 8H23.75A2.5 2.5 0 0 1 26.25 10.5V21A2.5 2.5 0 0 1 23.75 23.5H6.25A2.5 2.5 0 0 1 3.75 21V10.5A2.5 2.5 0 0 1 6.25 8Z",
@@ -56,7 +56,7 @@ let monitor_mark : LinkMark = {
 ///|
 /// A browser tab's mark (ScreenLinks.kt Globe).
 // kept across runs: a value (never written)
-let globe_mark : LinkMark = {
+pub let globe_mark : LinkMark = {
   name: "screen-browser",
   paths: [
     "M3.75 18A11.25 11.25 0 1 0 26.25 18A11.25 11.25 0 1 0 3.75 18Z",
@@ -67,7 +67,7 @@ let globe_mark : LinkMark = {
 ///|
 /// A phone, 共享调试's mark (AdbLinks.kt Phone).
 // kept across runs: a value (never written)
-let phone_mark : LinkMark = {
+pub let phone_mark : LinkMark = {
   name: "adb-phone",
   paths: [
     "M11 5.25H19A2.75 2.75 0 0 1 21.75 8V28A2.75 2.75 0 0 1 19 30.75H11A2.75 2.75 0 0 1 8.25 28V8A2.75 2.75 0 0 1 11 5.25Z",
@@ -80,7 +80,7 @@ let phone_mark : LinkMark = {
 ///|
 /// A card: a row 236 wide, 8 round, on the chat's bubble ground; 10 in across, 8 down; its mark and its words 10 apart.
 // kept across runs: a value (no field of it changes)
-let link_card : @ui.Style = @ui.style(
+pub let link_card : @ui.Style = @ui.style(
   row=true,
   w=@sf.link_card_w,
   px=S2_5,
@@ -94,56 +94,56 @@ let link_card : @ui.Style = @ui.style(
 ///|
 /// A screen's card with its preview: a column 280 wide, the preview across its top, clipped to its corners.
 // kept across runs: a value (no field of it changes)
-let peek_card : @ui.Style = @ui.style(w=@sf.peek_card_w, radius=Lg, bg=Neutral, clip=true)
+pub let peek_card : @ui.Style = @ui.style(w=@sf.peek_card_w, radius=Lg, bg=Neutral, clip=true)
 
 ///|
 /// The words under a preview: 10 in across, 8 down.
 // kept across runs: a value (no field of it changes)
-let peek_card_words : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
+pub let peek_card_words : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
 
 ///|
 /// The preview: on its ground, its mark in its middle until a picture comes.
 // kept across runs: a value (no field of it changes)
-let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter bg=Wash clip")
+pub let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter bg=Wash clip")
 
 ///|
 /// A mark's room: 30 by 36.
 // kept across runs: a value (no field of it changes)
-let link_mark_box : @ui.Style = @ui.style(w=@sf.link_mark_w, h=S9)
+pub let link_mark_box : @ui.Style = @ui.style(w=@sf.link_mark_w, h=S9)
 
 ///|
 /// The words beside the mark (or under the preview): what is left across.
 // kept across runs: a value (no field of it changes)
-let link_words : @ui.Style = @ui.css("w=Full")
+pub let link_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Each of the two lines a line high, words or none (minLines = maxLines = 1): the title's 20, the line's 16.
 // kept across runs: a value (no field of it changes)
-let link_title_line : @ui.Style = @ui.css("w=Full h=S5")
+pub let link_title_line : @ui.Style = @ui.css("w=Full h=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let link_line_line : @ui.Style = @ui.css("w=Full h=S4")
+pub let link_line_line : @ui.Style = @ui.css("w=Full h=S4")
 
 ///|
 /// The title (15/20, on one line); quieter for a screen its station no longer has.
 // kept across runs: a value (no field of it changes)
-let link_title : @ui.TextStyle = @sf.card_title.then(@sf.one_line).then(@sf.full_words)
+pub let link_title : @ui.TextStyle = @sf.card_title.then(@sf.one_line).then(@sf.full_words)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let link_title_gone : @ui.TextStyle = link_title.then(@sf.quiet)
+pub let link_title_gone : @ui.TextStyle = link_title.then(@sf.quiet)
 
 ///|
 /// What its station says of it (11/16, muted, on one line).
 // kept across runs: a value (no field of it changes)
-let link_line : @ui.TextStyle = @sf.card_line.then(@sf.full_words)
+pub let link_line : @ui.TextStyle = @sf.card_line.then(@sf.full_words)
 
 // ── what the core says of them ──
 
 ///|
 /// A link to a screen as a message shows it (the `screenCard` topic, client/core-ts/src/screens.ts screenCard).
-priv struct ScreenCard {
+pub(all) struct ScreenCard {
   kind : String
   title : String
   line : String
@@ -155,7 +155,7 @@ priv struct ScreenCard {
 
 ///|
 /// The card of the screen `href` names, once the core has said (ScreenLinks.kt screenCardOf).
-fn screen_card_of(src : Source, href : String) -> ScreenCard? {
+pub fn screen_card_of(src : Source, href : String) -> ScreenCard? {
   guard @sf.screen_of_link(href) is Some((station, screen)) else { return None }
   let v = (src.topic)("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).value
   guard v is Some(Object(_)) else { return None }
@@ -172,7 +172,7 @@ fn screen_card_of(src : Source, href : String) -> ScreenCard? {
 
 ///|
 /// The card of the 共享调试 `href` names, once the core has said (AdbLinks.kt adbCardOf: the `adbCard` topic).
-fn adb_card_of(src : Source, href : String) -> Json? {
+pub fn adb_card_of(src : Source, href : String) -> Json? {
   guard @sf.adb_of_link(href) is Some(station) else { return None }
   match (src.topic)("adbCard", { "station": Json::string(station) }).value {
     Some(Object(_)) as v => v
@@ -184,7 +184,7 @@ fn adb_card_of(src : Source, href : String) -> Json? {
 /// The links to screens in an agent's words as a chat draws them (ScreenLinks.kt ScreenLinks): their cards, and a bare
 /// one's title (屏幕 until it is known); a station's 共享调试 as its own (AdbLinks.kt). `message` names the message
 /// (a screen's preview is its card's own).
-fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
+pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
   {
     card: fn(href, words) {
       if @sf.adb_of_link(href) is Some(_) {
@@ -199,7 +199,7 @@ fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
       } else {
         match screen_card_of(src, href) {
           Some(card) => card.title
-          None => tr("android-misc.screen.title")
+          None => @sf.t("android-misc.screen.title")
         }
       }
     },
@@ -208,10 +208,10 @@ fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
 
 ///|
 /// A bare link to a station's 共享调试: what it reads as within a sentence (AdbLinks.kt adbTitle).
-fn adb_title(src : Source, href : String) -> String {
+pub fn adb_title(src : Source, href : String) -> String {
   match adb_card_of(src, href) {
     Some(_) as v => text(v, "title")
-    None => tr("android-misc.adb.title")
+    None => @sf.t("android-misc.adb.title")
   }
 }
 
@@ -219,7 +219,7 @@ fn adb_title(src : Source, href : String) -> String {
 
 ///|
 /// A mark in its room, in `tint`; none (its room kept) while what it is is not known.
-fn link_mark(c : @ui.Ctx, mark : LinkMark?, tint : @ui.Color) -> Unit {
+pub fn link_mark(c : @ui.Ctx, mark : LinkMark?, tint : @ui.Color) -> Unit {
   c.box(style=link_mark_box, fn() {
     match mark {
       Some(m) =>
@@ -233,7 +233,7 @@ fn link_mark(c : @ui.Ctx, mark : LinkMark?, tint : @ui.Color) -> Unit {
 
 ///|
 /// A card's two lines: its title over what is said of it, each a line high.
-fn link_card_words(c : @ui.Ctx, title : String, line : String, gone : Bool, style : @ui.Style) -> Unit {
+pub fn link_card_words(c : @ui.Ctx, title : String, line : String, gone : Bool, style : @ui.Style) -> Unit {
   c.box(style~, fn() {
     c.box(style=link_title_line, fn() {
       c.text(title, style=if gone { link_title_gone } else { link_title }) |> ignore
@@ -250,7 +250,7 @@ fn link_card_words(c : @ui.Ctx, title : String, line : String, gone : Bool, styl
 /// the core has not said, its lines empty. One its station previews (a tab of its browser) is the screen live across
 /// the card's top, the words under it. A tap opens it, as the link does. `key`: the card's own (its message's and its
 /// link's), its preview's.
-fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, words : String?) -> Unit {
+pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, words : String?) -> Unit {
   let card = screen_card_of(src, href)
   let open = c.id("screen-link/" + href)
   if c.clicked(open) {
@@ -295,7 +295,7 @@ fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, word
 /// A station's 共享调试 as a card (AdbLinks.kt AdbLinkCard): a phone, its title (the link's own words, when it has
 /// them) over how this phone's sharing with that station stands, the phone in the accent while it is shared there.
 /// Its size kept while the core has not said. A tap opens the page, as the link does.
-fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) -> Unit {
+pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) -> Unit {
   let card = adb_card_of(src, href)
   let open = c.id("adb-link/" + href)
   if c.clicked(open) {
@@ -317,7 +317,7 @@ fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) -> U
 ///|
 /// How a card's preview stands: not asked for, coming (its call), or ended by the station (refused, or the screen no
 /// longer previewed: its picture, or its mark, stays until the card goes from view).
-priv enum PeekRun {
+pub(all) enum PeekRun {
   PeekOff
   PeekOn
   PeekEnded
@@ -325,7 +325,7 @@ priv enum PeekRun {
 
 ///|
 /// A card's preview (ScreenLinks.kt Peek).
-priv struct Peek {
+pub(all) struct Peek {
   station : String
   screen : String
   mut run : PeekRun
@@ -344,25 +344,25 @@ priv struct Peek {
 
 ///|
 /// The cards' previews, by card.
-let peeks : Map[String, Peek] = {}
+pub let peeks : Map[String, Peek] = {}
 
 ///|
 /// The cards with a preview built in this pass of the frame (on the screen).
-let peeks_built : Map[String, Bool] = {}
+pub let peeks_built : Map[String, Bool] = {}
 
 ///|
 /// Previews asked for so far: each view's name its own.
-let peek_views : Ref[Int] = Ref(0)
+pub let peek_views : Ref[Int] = Ref(0)
 
 ///|
-fn peeks_reset() -> Unit {
+pub fn peeks_reset() -> Unit {
   peeks.clear()
   peeks_built.clear()
   peek_views.val = 0
 }
 
 ///|
-fn peek_for(key : String, station : String, screen : String) -> Peek {
+pub fn peek_for(key : String, station : String, screen : String) -> Peek {
   match peeks.get(key) {
     Some(p) => p
     None => {
@@ -388,7 +388,7 @@ fn peek_for(key : String, station : String, screen : String) -> Peek {
 /// forward), its mark until a picture comes (a tab behind another casts none); in its shape as its station lists it,
 /// within bounds, so the card does not change size as it comes. The newest picture decoded is shown, cropped to the
 /// preview from its top; a newer one is drawn over it once it is decoded.
-fn screen_peek(c : @ui.Ctx, key : String, station : String, screen : String, card : ScreenCard) -> Unit {
+pub fn screen_peek(c : @ui.Ctx, key : String, station : String, screen : String, card : ScreenCard) -> Unit {
   let p = peek_for(key, station, screen)
   peeks_built[key] = true
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
@@ -428,7 +428,7 @@ fn screen_peek(c : @ui.Ctx, key : String, station : String, screen : String, car
 ///|
 /// A picture over the preview as Android's Crop at TopCenter: as wide as the preview from its top when it is
 /// taller than the preview, else as high, its middle across.
-fn peek_picture(c : @ui.Ctx, key : String, shape : Double, ratio : Double) -> Unit {
+pub fn peek_picture(c : @ui.Ctx, key : String, shape : Double, ratio : Double) -> Unit {
   if shape > 0.0 && shape < ratio {
     c.image(key, w=Fill(1.0), h=Px(@sf.peek_card_px / shape), fit=FitFill, bg=0L, fade=false)
     |> ignore
@@ -439,7 +439,7 @@ fn peek_picture(c : @ui.Ctx, key : String, shape : Double, ratio : Double) -> Un
 
 ///|
 /// A frame of a preview as it comes: its picture (a JPEG) handed over under a key of its own, its `ts` to acknowledge.
-fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
+pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
   if p.view != view {
     return
   }
@@ -467,7 +467,7 @@ fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
 
 ///|
 /// The preview of `p` asked for (`screen.view` with `peek`: JPEG only, small).
-fn peek_start(src : Source, p : Peek) -> Unit {
+pub fn peek_start(src : Source, p : Peek) -> Unit {
   peek_views.val += 1
   let view = "mbui-peek-\{peek_views.val}"
   p.view = view
@@ -499,7 +499,7 @@ fn peek_start(src : Source, p : Peek) -> Unit {
 
 ///|
 /// The preview of `p` no longer asked for: its call cancelled.
-fn peek_stop(src : Source, p : Peek) -> Unit {
+pub fn peek_stop(src : Source, p : Peek) -> Unit {
   if p.call != 0 {
     (src.cancel)(p.call)
   }
@@ -511,7 +511,7 @@ fn peek_stop(src : Source, p : Peek) -> Unit {
 
 ///|
 /// Every preview stopped (the app gone behind: no frame may come after it).
-fn peeks_stop_all(src : Source) -> Unit {
+pub fn peeks_stop_all(src : Source) -> Unit {
   for _, p in peeks {
     if p.run == PeekOn {
       peek_stop(src, p)
@@ -523,7 +523,7 @@ fn peeks_stop_all(src : Source) -> Unit {
 /// The previews as this frame has them, at its start (app.mbt view): the cards built in it say so as they are built;
 /// each frame waiting is acknowledged peek_ms after the one before (the first at once); the previews started and
 /// stopped once the frame's builds are over (peeks_settle).
-fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
+pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
   peeks_built.clear()
   for key, p in peeks {
     if p.run != PeekOn {
@@ -552,7 +552,7 @@ fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
 /// Once the frame's builds are over: a preview asked for where its card is on the screen and the app shown, stopped
 /// where it is not (and its card let go of, as Android's list lets go of a row out of view); the pictures under the
 /// one shown let go of (their bytes, emptied: nothing draws them again).
-fn peeks_settle(src : Source) -> Unit {
+pub fn peeks_settle(src : Source) -> Unit {
   let shown = @ui.app_visible()
   let gone = []
   for key, p in peeks {

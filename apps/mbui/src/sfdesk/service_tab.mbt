@@ -169,7 +169,7 @@ fn sv_page(
   src_now.val = src.now
   let site = service_site(src, p, file, fn(url) {
     // a link elsewhere: one of still.fail's opened here as the core says, any other in the system's browser
-    (chat_parts.val.open_link)(url)
+    open_link(url)
   })
   // up again after a restart: the page loads anew (Restart)
   if p.restarting && !restarting {

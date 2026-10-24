@@ -2,6 +2,7 @@
 // client/i18n/catalog/zh: web-main.json, web-pages.json, common.json); `tr` looks here after the others.
 
 ///|
+// kept across runs: a table, never written
 let zh_wide : Map[String, String] = {
   "web-main.draft.notSent": "发送失败：{error}",
   "web-main.composer.send": "发送",

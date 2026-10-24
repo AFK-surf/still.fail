@@ -3,6 +3,7 @@
 // the catalog has a word for one and for several, the several's (the same in Chinese), but for `.one` keys.
 
 ///|
+// kept across runs: a table, never written
 let drive_zh : Map[String, String] = {
   // the library's player and reader (src/sf player.mbt, reader.mbt)
   "android-misc.drive.player.ahead": "快进 {n} 秒",

@@ -340,7 +340,7 @@ fn message_name(
         side_toggle(src, here_ref(here), agent)
       } else {
         let to = from
-        c.tell("msg-name/" + key, fn() { (chat_parts.val.open_link)(to) })
+        c.tell("msg-name/" + key, fn() { open_link(to) })
       }
     }
   }
@@ -378,7 +378,7 @@ fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[String
     key="msg-words/" + key,
     style=msg_plain,
     link_color=p.blue,
-    on_link=fn(h) { (chat_parts.val.open_link)(h) },
+    on_link=fn(h) { open_link(h) },
     on_link_hold=Some(fn(href, _) { context_link(c, href) }),
     words=true,
   )
@@ -447,7 +447,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         match placed.get(@sf.file_name_of(h)) {
           Some(a) if is_viz(a.name) => (parts.viz_open)(here.station, here.session, owner_of(here, a), a)
           Some(a) => open_file(here, a)
-          None => (parts.open_link)(h)
+          None => open_link(h)
         }
       },
       on_link_hold=Some(fn(href, _) { context_link(c, href) }),
@@ -474,7 +474,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           None
         }
       },
-      screens=(parts.screens)(c, src, here.station + "/" + here.session + "/" + m.ts),
+      screens=Some(screen_links(c, src, here.station + "/" + here.session + "/" + m.ts)),
     )
     |> ignore
   }
@@ -769,7 +769,7 @@ pub fn sent_elsewhere(c : @ui.Ctx, src : Source, here : MessageHere, s : Elsewhe
     Some(fn() { elsewhere_route(c, key, s) }),
     fn() {
       @sf.markdown(c, s.text, key="msg-elsewhere/" + s.key, size=body_size, on_link=fn(h) {
-        (chat_parts.val.open_link)(h)
+        open_link(h)
       })
       |> ignore
     },

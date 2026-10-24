@@ -2,6 +2,7 @@
 // (ember client/i18n/catalog/zh); `tr` looks here after strings.mbt's.
 
 ///|
+// kept across runs: a table, never written
 let zh_decide : Map[String, String] = {
   "android-chat.agent.account": "账号",
   "web-pages.chat.compact": "压缩上下文",
