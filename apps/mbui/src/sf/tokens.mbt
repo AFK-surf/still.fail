@@ -1119,3 +1119,7 @@ pub let closed_bar_corner : @ui.Radius = rounded(surface_corner(6.0, 9.0))
 ///|
 /// The sidebar's edge's look 3 in its strip (Rail.css.ts edge: its line 6 in, its bar 4 in, the library's 7 wide).
 pub let edge_in : @ui.Space = room(3.0)
+
+///|
+/// A chat's row in the sidebar 7 in from its top and foot (Sidebar.css.ts navSession: padding 7 10).
+pub let row_in : @ui.Space = room(7.0)

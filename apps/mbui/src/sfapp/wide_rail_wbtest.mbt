@@ -129,7 +129,7 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
   t.frame()
   app.nav.push(Archived)
   t.frame()
-  t.run_for(list_slide_ms)
+  t.run_for(@sfdesk.list_slide_ms)
   assert_true(t.find("搜索归档") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("试一下新的图标尺寸") is Some(_))
   // the newest beside the list
@@ -339,7 +339,7 @@ test "wide: 已归档 from the lists' filter: its place at the rail's foot while
   assert_true(t.query(Button, label="已归档") is None)
   app.nav.push(Archived)
   t.frame()
-  t.run_for(list_slide_ms)
+  t.run_for(@sfdesk.list_slide_ms)
   assert_true(t.query(Button, label="已归档") is Some(_))
 }
 

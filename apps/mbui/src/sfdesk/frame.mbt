@@ -25,12 +25,17 @@ pub(all) struct Pages {
   /// 文件, and a folder of a station's drive
   files : (@ui.Ctx, Source, Workspace) -> Unit
   folder : (@ui.Ctx, Source, Workspace, DriveAt) -> Unit
-  /// what is shown of the archive with none of its chats open beside it
-  archive : (@ui.Ctx, Source, Workspace) -> Unit
   /// any other page: the phone's of it, its bar at its top (the workspaces, whether invitations wait)
   other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
-  /// the sidebar `width` wide, as the place in view has it
+  /// the sidebar of a place other than the chats' (the settings', the files', the stations', the profiles'), `width`
+  /// wide
   side : (@ui.Ctx, Source, Workspace, Double) -> Unit
+  /// a row's title renamed in place (Rename.tsx TitleInput), the services left up long (OpenJobs.tsx, over the lists'
+  /// foot)
+  rename : (@ui.Ctx, Source, ChatItem) -> Unit
+  jobs : (@ui.Ctx, Source, Workspace) -> Unit
+  /// the core asked to do something, said once done (`what` it is, the call, its params, what is said then)
+  act : (Source, String, String, Json, String) -> Unit
   /// whether this device waits to be confirmed in the workspace's safe mode, and what it sees then
   gated : (Source, Workspace) -> Bool
   gate : (@ui.Ctx, Source, Workspace) -> Unit
@@ -382,7 +387,7 @@ fn dock(
             if shown && s > 0.0 {
               // (in the bar: what the web's sidebar does there, at once, as the bar starts out)
               wide.in_bar = wide.folded
-              (pages.side)(c, src, w, side_w)
+              sidebar(c, src, w, pages, side_w)
               wide.in_bar = false
             }
           })
@@ -696,7 +701,7 @@ fn main_page(
     // the pane
     Screen(_) | DriveRead(_) | DrivePlay(_) => ()
     // 已归档, none of its chats open beside the list: what it is
-    Archived => (pages.archive)(c, src, w)
+    Archived => archive_main(c)
     _ => (pages.other)(c, src, w, all, invited, page)
   }
 }

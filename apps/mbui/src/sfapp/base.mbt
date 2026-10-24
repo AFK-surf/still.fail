@@ -3,6 +3,10 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  decision_key,
+  decision_show,
+  long_jobs,
+  seq_key,
   stations_at_glance,
   agent_of,
   app,

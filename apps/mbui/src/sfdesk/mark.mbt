@@ -55,3 +55,54 @@ let mark_other : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, border=B2, b
 ///|
 // kept across runs: a value (no field of it changes)
 let mark_busy : @ui.Style = @ui.style(w=S2_5, h=S2_5)
+
+///|
+/// A row's mark (ChatMark.tsx ChatMark, its row's `key`): one that comes while the chat is in view (a new message, work
+/// begun) pops in (scale 0, 1.3 at 60%, 1: 320 ms, ease-out); one there as the list is first drawn does not.
+pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
+  let pop = @motion.anim(c, "side/mark-pop/" + key, 1.0, global=true)
+  match marks_seen.get(key) {
+    Some(was) if was != tone => {
+      marks_seen[key] = tone
+      if tone != "" && !@ui.reduced_motion() {
+        pop.snap(0.0)
+        pop.animate(1.0, @motion.tween(mark_pop_ms, ease=CssOut))
+      }
+    }
+    None => marks_seen[key] = tone
+    _ => ()
+  }
+  let mark = chat_mark(c, tone)
+  let v = pop.get()
+  if mark != 0 && v < 1.0 {
+    c.look(mark, @ui.look(scale=pop_scale(v)))
+  }
+}
+
+///|
+/// The mark each chat has had, as its row was last drawn (ChatMark.tsx `shown`).
+let marks_seen : Map[String, String] = {}
+
+///|
+fn marks_reset() -> Unit {
+  marks_seen.clear()
+}
+
+///|
+/// The pop's length, and its size at `v` of the way (0, 1.3 at 60%, 1).
+let mark_pop_ms : Double = 320.0
+
+///|
+fn pop_scale(v : Double) -> Double {
+  if v < mark_pop_peak_at {
+    mark_pop_peak * v / mark_pop_peak_at
+  } else {
+    mark_pop_peak - (mark_pop_peak - 1.0) * (v - mark_pop_peak_at) / (1.0 - mark_pop_peak_at)
+  }
+}
+
+///|
+let mark_pop_peak : Double = 1.3
+
+///|
+let mark_pop_peak_at : Double = 0.6

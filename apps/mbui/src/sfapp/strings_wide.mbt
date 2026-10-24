@@ -3,6 +3,10 @@
 
 ///|
 let zh_wide : Map[String, String] = {
+  "web-main.chat.archiveNamed": "归档「{title}」",
+  "web-main.decisions.defer": "待定",
+  "web-main.status.done": "已完成",
+  "web-main.status.waiting": "等待",
   "web-main.chatMark.alert": "需要处理",
   "web-main.chatMark.busy": "工作中",
   "web-main.chatMark.done": "已完成，有新消息",

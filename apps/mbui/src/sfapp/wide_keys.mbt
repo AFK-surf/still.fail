@@ -15,7 +15,7 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     @sfdesk.wide.attention_open = false
   }
   if pressed("chat.new") {
-    new_chat_wide()
+    @sfdesk.new_chat(desk_pages())
   }
   if pressed("sidebar.toggle") {
     @sfdesk.wide.folded = !@sfdesk.wide.folded
@@ -122,7 +122,7 @@ fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
   if next < 0 || next >= rows.length() {
     return
   }
-  open_row(rows[next])
+  @sfdesk.open_row(desk_pages(), rows[next])
 }
 
 ///|
@@ -230,7 +230,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
         [] => [item.session]
         keys => keys
       })
-    Some("archive") => archive_row(c, src, item)
+    Some("archive") => @sfdesk.archive_row(c, src, item)
     _ => ()
   }
 }
@@ -485,7 +485,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source) -> Array[@sfdesk.Offered] {
     icon: "compose",
     keys: keys("chat.new"),
     typed: false,
-    run: new_chat_wide,
+    run: fn() { @sfdesk.new_chat(desk_pages()) },
   })
   all.push({
     id: "sidebar.toggle",

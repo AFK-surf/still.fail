@@ -1,7 +1,7 @@
 // The wide frame's pages still in this package (the frame itself, the rail and their parts are sfdesk's: frame.mbt,
 // rail.mbt), given to it as it is drawn (desk_pages): the chat, a settings page, a place's, the files', the phone's page
-// of the rest, the sidebars of the places other than the chats' and the chats' lists themselves (wide_side.mbt,
-// wide_lists.mbt), and what the frame asks of the app.
+// of the rest, the sidebars of the places other than the chats' (wide_place_side.mbt), and what the frame asks
+// of the app.
 
 ///|
 /// What the wide frame's pages still here keep of their own (the frame's own is sfdesk's `shell`; the rest is the
@@ -145,10 +145,12 @@ fn desk_pages() -> @sfdesk.Pages {
     // 文件: a folder under its bar, as the web's (wide_files.mbt)
     files: fn(c, src, w) { files_landing(c, src, w) },
     folder: fn(c, src, w, at) { wide_folder(c, src, w, at) },
-    // 已归档, none of its chats open beside the list (wide_lists.mbt)
-    archive: fn(c, src, w) { archive_main(c, src, w) },
     other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
+    // the settings', the files', the stations', the profiles' (wide_place_side.mbt)
     side: fn(c, src, w, width) { sidebar(c, src, w, width) },
+    rename: fn(c, src, item) { side_rename(c, src, item) },
+    jobs: fn(c, src, w) { open_jobs(c, src, w) },
+    act: fn(src, what, call, params, done) { act(src, what, "", call, params, done~) },
     gated: fn(src, w) { @settings.lock_waiting(settings_core(src, w), w.id) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
     switching: fn(c) { wide_switch_frame(c) },
@@ -249,59 +251,6 @@ let bar_update_inset : Double = 84.0
 /// 更新's box: its pill's size.
 // kept across runs: a value (no field of it changes)
 let update_at : @ui.Style = @ui.style(row=true)
-
-///|
-/// A new chat (新建对话, ⌘N): its page beside the list.
-fn new_chat_wide() -> Unit {
-  match app.nav.top() {
-    NewChat => ()
-    _ => {
-      lower_sheet()
-      while app.nav.depth() > 1 {
-        if !app.nav.pop() {
-          break
-        }
-      }
-      if app.nav.top() != Home {
-        app.nav.replace(Home)
-      }
-      app.nav.push(NewChat)
-    }
-  }
-}
-
-///|
-/// A chat's row pressed: its chat the page beside the list (in place of what was open), the list's place kept.
-fn open_row(item : ChatItem) -> Unit {
-  let r : ChatRef = {
-    station: item.station,
-    session: item.session,
-    title: item.title,
-    station_name: item.station_name,
-  }
-  match app.nav.top() {
-    Chat(open) if open.station == r.station && open.session == r.session => return
-    _ => ()
-  }
-  lower_sheet()
-  @sfdesk.wide.menu = None
-  // the chats' place under it: settings or another place left for the chat
-  if @sfdesk.lit_place() != "chats" {
-    while app.nav.depth() > 1 {
-      if !app.nav.pop() {
-        break
-      }
-    }
-    app.nav.replace(Home)
-    app.nav.push(Chat(r))
-    return
-  }
-  if app.nav.depth() > 1 {
-    app.nav.replace(Chat(r))
-  } else {
-    app.nav.push(Chat(r))
-  }
-}
 
 ///|
 /// A place of the rail's (Station, Profile, 连接, 用量) in the pane: its title as a page's head (pages.css.ts), what
