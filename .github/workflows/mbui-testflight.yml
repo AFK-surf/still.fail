@@ -1,0 +1,139 @@
+# Dedicated owner-supplied CI credentials only; no AirBuild or existing production secrets.
+name: mbui TestFlight
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mbui/**'
+      - 'client/**'
+      - 'media/**'
+      - 'vendor/**'
+      - 'scripts/native.ts'
+      - '.github/workflows/mbui-testflight.yml'
+      - '.github/actions/setup/**'
+      - '.github/actions/mbui-moonbit/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mbui-testflight-main
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: xcode-27
+    environment: ios-testflight
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      MBUI_RELEASE_PRIVATE: ${{ runner.temp }}/mbui-testflight-private
+      MBUI_RELEASE_SAFE: ${{ runner.temp }}/mbui-testflight-artifacts
+      # Explicit allowlist; owner must independently authorize each tester's geography.
+      MBUI_TESTFLIGHT_GROUP_ID: ${{ vars.MBUI_TESTFLIGHT_GROUP_ID }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - name: Restore this run's immutable build reservation on rerun
+        if: github.run_attempt > 1
+        uses: actions/download-artifact@v4
+        with:
+          name: mbui-testflight-reservation-${{ github.run_id }}
+          path: ${{ env.MBUI_RELEASE_SAFE }}
+      - name: Restore original IPA identity receipt for resume
+        if: github.run_attempt > 1
+        uses: actions/download-artifact@v4
+        with:
+          name: mbui-testflight-identity-${{ github.run_id }}
+          path: ${{ env.MBUI_RELEASE_SAFE }}
+      - name: Validate credentials, Apple app/group, signing, and reserve build number
+        env:
+          GH_RELEASE_TOKEN: ${{ github.token }}
+          MBUI_IOS_CERTIFICATE_P12_BASE64: ${{ secrets.MBUI_IOS_CERTIFICATE_P12_BASE64 }}
+          MBUI_IOS_CERTIFICATE_PASSWORD: ${{ secrets.MBUI_IOS_CERTIFICATE_PASSWORD }}
+          MBUI_IOS_APP_PROFILE_BASE64: ${{ secrets.MBUI_IOS_APP_PROFILE_BASE64 }}
+          MBUI_IOS_SHARE_PROFILE_BASE64: ${{ secrets.MBUI_IOS_SHARE_PROFILE_BASE64 }}
+          MBUI_ASC_KEY_ID: ${{ secrets.MBUI_ASC_KEY_ID }}
+          MBUI_ASC_ISSUER_ID: ${{ secrets.MBUI_ASC_ISSUER_ID }}
+          MBUI_ASC_PRIVATE_KEY_BASE64: ${{ secrets.MBUI_ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          umask 077
+          ruby apps/mbui/scripts/ios-testflight.rb prepare
+      # Uploaded before compilation/upload. A rerun with no receipt fails closed.
+      - name: Retain immutable run/build/source reservation
+        if: github.run_attempt == 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbui-testflight-reservation-${{ github.run_id }}
+          path: ${{ env.MBUI_RELEASE_SAFE }}/stamp.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Require iOS SDK 27.1 or later
+        run: |
+          v=$(xcrun --sdk iphoneos --show-sdk-version)
+          ruby -e 'abort "iOS SDK 27.1+ required" unless Gem::Version.new(ARGV[0]) >= Gem::Version.new("27.1")' "$v"
+      - uses: ./.github/actions/setup
+        if: github.run_attempt == 1
+      - uses: ./.github/actions/mbui-moonbit
+        if: github.run_attempt == 1
+      - name: Cloud tools and core packages
+        if: github.run_attempt == 1
+        run: |
+          rustup target add aarch64-apple-ios > /dev/null
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+      - name: Compile real app, Share extension, Hermes, and core bytecode
+        if: github.run_attempt == 1
+        env:
+          APP: stillfail
+          MBUI_IOS_SDK: iphoneos
+          MBUI_IOS_ID: fail.still.mbui
+          EMBER: ${{ github.workspace }}
+        run: bash apps/mbui/scripts/ios.sh build
+      - name: Archive/export and verify approved IPA privately
+        if: github.run_attempt == 1
+        env:
+          GH_RELEASE_TOKEN: ${{ github.token }}
+          MBUI_IOS_CERTIFICATE_P12_BASE64: ${{ secrets.MBUI_IOS_CERTIFICATE_P12_BASE64 }}
+          MBUI_IOS_CERTIFICATE_PASSWORD: ${{ secrets.MBUI_IOS_CERTIFICATE_PASSWORD }}
+          MBUI_IOS_APP_PROFILE_BASE64: ${{ secrets.MBUI_IOS_APP_PROFILE_BASE64 }}
+          MBUI_IOS_SHARE_PROFILE_BASE64: ${{ secrets.MBUI_IOS_SHARE_PROFILE_BASE64 }}
+          MBUI_ASC_KEY_ID: ${{ secrets.MBUI_ASC_KEY_ID }}
+          MBUI_ASC_ISSUER_ID: ${{ secrets.MBUI_ASC_ISSUER_ID }}
+          MBUI_ASC_PRIVATE_KEY_BASE64: ${{ secrets.MBUI_ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          umask 077
+          ruby apps/mbui/scripts/ios-testflight.rb package
+      - name: Retain immutable IPA identity for safe upload/group resume
+        if: github.run_attempt == 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbui-testflight-identity-${{ github.run_id }}
+          path: ${{ env.MBUI_RELEASE_SAFE }}/build-identity.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Upload once, verify Apple processing and explicit group assignment
+        env:
+          MBUI_IOS_CERTIFICATE_P12_BASE64: ${{ secrets.MBUI_IOS_CERTIFICATE_P12_BASE64 }}
+          MBUI_IOS_CERTIFICATE_PASSWORD: ${{ secrets.MBUI_IOS_CERTIFICATE_PASSWORD }}
+          MBUI_IOS_APP_PROFILE_BASE64: ${{ secrets.MBUI_IOS_APP_PROFILE_BASE64 }}
+          MBUI_IOS_SHARE_PROFILE_BASE64: ${{ secrets.MBUI_IOS_SHARE_PROFILE_BASE64 }}
+          MBUI_ASC_KEY_ID: ${{ secrets.MBUI_ASC_KEY_ID }}
+          MBUI_ASC_ISSUER_ID: ${{ secrets.MBUI_ASC_ISSUER_ID }}
+          MBUI_ASC_PRIVATE_KEY_BASE64: ${{ secrets.MBUI_ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          umask 077
+          ruby apps/mbui/scripts/ios-testflight.rb release
+      - name: Retain only approved IPA and redacted identity/result manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbui-testflight-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.MBUI_RELEASE_SAFE }}/*.ipa
+            ${{ env.MBUI_RELEASE_SAFE }}/stamp.json
+            ${{ env.MBUI_RELEASE_SAFE }}/release.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Always remove private keychain, profiles, keys, and intermediates
+        if: always()
+        run: ruby apps/mbui/scripts/ios-testflight-cleanup.rb

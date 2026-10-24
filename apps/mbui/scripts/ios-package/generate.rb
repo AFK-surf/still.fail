@@ -131,6 +131,16 @@ project_configs = config_list.call('project', common)
     'SKIP_INSTALL' => kind == 'app' ? 'NO' : 'YES',
     'INSTALL_PATH' => kind == 'app' ? '$(LOCAL_APPS_DIR)' : '$(LOCAL_LIBRARY_DIR)/PlugIns'
   }
+  # Explicit cloud-only mapping; managed/local signing remains entirely untouched.
+  if ENV['MBUI_IOS_CI_PROFILES']
+    abort 'Cloud profiles cannot override managed signing' if ENV['AIRBUILD_SIGN'] == '1' || ENV['XCODE_XCCONFIG_FILE']
+    profiles = JSON.parse(ENV.fetch('MBUI_IOS_CI_PROFILES'))
+    abort 'Cloud profile mapping must cover exactly app and Share' unless profiles.keys.sort == %w[fail.still.mbui fail.still.mbui.share]
+    profile = profiles.fetch(bundle_id)
+    abort 'Invalid cloud profile UUID' unless profile.match?(/\A[0-9A-Fa-f-]{36}\z/)
+    settings.merge!('CODE_SIGN_STYLE' => 'Manual', 'DEVELOPMENT_TEAM' => 'D9AAN3VJK8',
+      'CODE_SIGN_IDENTITY' => 'Apple Distribution', 'PROVISIONING_PROFILE_SPECIFIER' => profile)
+  end
   settings['APPLICATION_EXTENSION_API_ONLY'] = 'YES' if kind == 'share'
   configs = config_list.call(kind, settings)
   add.call("#{kind}-target", 'PBXNativeTarget',
