@@ -308,10 +308,15 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   let words = "把发布说明写一下"
   t.type_text(words)
   t.draw()
-  let title = match t.drawn_of("新对话") {
-    Some((_, y)) => y
+  // its heading (the chat's bar says 新对话 too, smaller: told apart by their height)
+  let heading_h = match t.words().iter().find_first(fn(w) { w.0 == "新对话" }) {
+    Some(w) => w.4
     None => fail("no 新对话")
   }
+  let heading = fn() {
+    t.words().iter().find_first(fn(w) { w.0 == "新对话" && (w.4 - heading_h).abs() < 0.5 }).map(fn(w) { w.2 })
+  }
+  let title = heading().unwrap()
   let (bx, by, bw, bh) = composer_glass(t)
   t.enter()
   t.draw()
@@ -323,8 +328,8 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
   // half way: the scene gone up as it fades, the composer on its way down and wider
   t.run_for(new_leave_ms / 2.0)
-  let up = match t.drawn_of("新对话") {
-    Some((_, y)) => y
+  let up = match heading() {
+    Some(y) => y
     None => fail("the scene gone at once")
   }
   assert_true(up < title - 8.0, msg="the scene goes up: \{title} → \{up}")
@@ -334,7 +339,7 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   assert_true(my > by + 20.0 && mx < bx && mw > bw, msg="the composer on its way: \{(mx, my, mw, mh)} from \{(bx, by, bw, bh)}")
   // the scene gone at 140 ms
   t.run_for(new_leave_ms / 2.0 + 1.0)
-  assert_true(t.drawn_of("新对话") is None)
+  assert_true(heading() is None)
   // the composer at the chat's foot at 340 ms, a capsule as wide as the column and its curves
   t.run_for(sent + composer_page_ms + 1.0 - t.time())
   let (ex, ey, ew, eh) = composer_glass(t)

@@ -332,8 +332,9 @@ fn new_send(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Strin
             fresh.sent = true
             fresh.starting = false
             @sfbase.writing_starting(src, d, false)
-            // the page becomes the chat, in place, its first words in its list from now and going on there
-            let r : ChatRef = { station, session: key, title: "", station_name: name }
+            // the page becomes the chat, in place, its first words in its list from now and going on there; called
+            // what the page was (新对话) until someone names it, as the core calls it
+            let r : ChatRef = { station, session: key, title: @sf.t("web-main.newChat.title"), station_name: name }
             let rk = station + "\u{1}" + key
             @sfbase.flight_carry_into(d.key, station + ":" + key, rk, sent_local(rk, None, words, up))
             // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)

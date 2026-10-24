@@ -43,8 +43,8 @@ let spokenLang: Lang = "zh";
 export const setSpoken = (lang: Lang) => (spokenLang = lang);
 const tr = (key: string, args: Record<string, string> = {}) => translate(spokenLang, key, args);
 
-/// What a chat with nothing to be called by is called.
-export const noWords = () => tr("station.chat.noWords");
+/// What a chat with no name yet is called.
+export const untitled = () => tr("station.chat.untitled");
 
 // ---- Rust's whitespace (char::is_whitespace), for trim and split_whitespace ----
 
@@ -115,28 +115,26 @@ function given(thread: ThreadRow): string | null {
   return [thread.title, thread.autoTitle].filter((s): s is string => s !== null).map(trim).find((s) => s !== "") ?? null;
 }
 
-/// Whether a chat has a title of its own, or something a person said in it to take one from.
-function hasWords(t: ThreadSummary): boolean {
-  return given(t.thread) !== null || (t.firstText !== null && trim(t.firstText) !== "");
-}
-
 /// What a thread is called (title_of over a summary).
 export function chatTitle(t: ThreadSummary, channelName: string | null): string {
   return titleOf(t.thread, t.firstText, channelName);
 }
 
-/// What a thread is called: the name people gave it, else the one its agent gave it, else the first line a person
-/// wrote in it (Slack mentions left out, spaces collapsed), else its Slack channel (`#name`, 私信 for a direct message).
+/// What a thread is called: the name people gave it, else the one its agent gave it. A chat of still.fail's own is a
+/// new chat (新对话) until it has one, the same all along, not named by what is said in it as that comes in. A Slack
+/// or Feishu thread is called by the first line a person wrote in it (Slack mentions left out, spaces collapsed), else
+/// by its channel (`#name`, 私信 for a direct message).
 export function titleOf(thread: ThreadRow, firstText: string | null, channelName: string | null): string {
   const title = given(thread);
   if (title !== null) return title;
+  if (thread.surface === STILLFAIL_SURFACE) return untitled();
   const text = withoutMentions(firstText ?? "");
   const first = text.split("\n").map((line) => splitWhitespace(line).join(" ")).find((l) => l !== "");
   if (first !== undefined) return first;
   const name = channelName === null ? "" : trim(channelName);
   if (name !== "") return `#${name}`;
-  if (thread.surface !== STILLFAIL_SURFACE && thread.channel.startsWith("D")) return tr("station.chat.directMessage");
-  return noWords();
+  if (thread.channel.startsWith("D")) return tr("station.chat.directMessage");
+  return untitled();
 }
 
 /// `<@U…>` mentions taken out.
@@ -446,7 +444,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     const lastView = t.lastMessage === null ? null : messageView(t.lastMessage, names);
     const starters = agents.map((a) => creator(all.get(a.key)?.createdBy ?? null));
     const key = agents[0].key;
-    const title = from !== null && origin_ !== null && !hasWords(t) ? chatTitle(from, origin_.channelName) : chatTitle(t, null);
+    // with no name of its own, the Slack thread its agent came from names it
+    const title = from !== null && origin_ !== null && given(t.thread) === null ? chatTitle(from, origin_.channelName) : chatTitle(t, null);
     let last: Json = null;
     if (lastView !== null) {
       const text0 = trim(typeof lastView.text === "string" ? lastView.text : "");
@@ -517,7 +516,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     const from = origins.get(key) ?? null;
     const origin_ = from === null ? null : origin(from);
     const own = x.title === null ? "" : trim(x.title);
-    const title = own !== "" ? own : from !== null && origin_ !== null ? chatTitle(from, origin_.channelName) : noWords();
+    const title = own !== "" ? own : from !== null && origin_ !== null ? chatTitle(from, origin_.channelName) : untitled();
     const starter = creator(x.createdBy);
     const row: Json = {
       id: key, session: key, thread: null,
