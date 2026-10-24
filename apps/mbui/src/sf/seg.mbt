@@ -4,9 +4,11 @@
 ///|
 /// A segmented choice (Seg): mbui's sliding toggle group (@kit.toggle_group: the arrows move along it, a screen reader
 /// reads its options) in Seg's look: a track the ink at 6%, a light thumb (a hairline round it) sliding to the one
-/// chosen. `fill`: as wide as where it is, each option an equal share. `pill`: the web's wide pill (controls.css.ts
-/// seg: options as wide as their words, 105 at least, `compact` as wide as their words alone; 36 high). Answers the one
-/// chosen (a tap's, this frame).
+/// chosen; an option's words are never cut. `fill`: as wide as where it is, each option an equal share, none narrower
+/// than its words (one that needs more keeps that, the others sharing what is left); where they all need more than
+/// its width, they scroll sideways in it, the chosen one brought into view. `pill`: the web's wide pill
+/// (controls.css.ts seg: options as wide as their words, 105 at least, `compact` as wide as their words alone; 36
+/// high). Answers the one chosen (a tap's, this frame).
 pub fn seg(
   c : @ui.Ctx,
   key : String,
@@ -25,6 +27,8 @@ pub fn seg(
   let inset = 2.0
   let thumb = if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL }
   let items = options.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
+  // (the group's id, as it takes it: its options' are its parts')
+  let group = c.id(key)
   let now = @kit.toggle_group(
     c,
     key,
@@ -41,6 +45,7 @@ pub fn seg(
         } else {
           seg_option
         },
+        keep=fill,
         fn() {
           // Parts.kt:424 (14sp filling, else 13sp; the pill the wide pages' 13)
           c.text(
@@ -60,9 +65,21 @@ pub fn seg(
       |> ignore
     },
     ground=fn(c, _, options) {
+      // filling, where its options need more than its width: they scroll sideways in the track, whole, the chosen one
+      // brought into view as it is shown and as another is chosen
+      let held = if fill {
+        fn() {
+          c.sideways(key, fill=true, show=@kit.part_id(group, selected), fn() {
+            c.box(style=seg_strip, keep=true, options) |> ignore
+          })
+          |> ignore
+        }
+      } else {
+        options
+      }
       let track = fn() {
         // det-ok(box-loose, style-literal): its height and corner said where it is used (34 on a page), the ink at 6%
-        c.box(style=if fill { seg_track_full } else { seg_track }, h=Px(height), radius~, bg=alpha(t.p.text, 0.06), options)
+        c.box(style=if fill { seg_track_full } else { seg_track }, h=Px(height), radius~, bg=alpha(t.p.text, 0.06), held)
         |> ignore
       }
       // (in a row, as wide as its options: not stretched to its parent's width)
@@ -91,13 +108,20 @@ let seg_track : @ui.Style = @ui.css("row p=S0_5")
 let seg_track_full : @ui.Style = seg_track.then(@ui.css("w=Full"))
 
 ///|
-/// An option: its words in its middle, 10 in; 12 in and an equal share where the track fills; the pill's 101 at least.
+/// What a filling track scrolls: its options in a line, as wide as it at least, as high.
 // kept across runs: a value (no field of it changes)
-let seg_option : @ui.Style = @ui.css("h=Full px=S2_5 align=ACenter justify=JCenter")
+let seg_strip : @ui.Style = @ui.css("row w=Full h=Full")
+
+///|
+/// An option: its words in its middle, 10 in (in a row: as wide as its words at least); where the track fills, an
+/// equal share, 8 in at least (the web's narrow Seg: five parts' English words in a phone's 320); the pill's 101 at
+/// least.
+// kept across runs: a value (no field of it changes)
+let seg_option : @ui.Style = @ui.css("row h=Full px=S2_5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_full_option : @ui.Style = seg_option.then(@ui.css("w=Full px=S3"))
+let seg_full_option : @ui.Style = seg_option.then(@ui.css("w=Full px=S2"))
 
 ///|
 // kept across runs: a value (no field of it changes)
