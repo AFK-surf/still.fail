@@ -97,6 +97,9 @@ priv struct Desk {
   mutable_menus : Array[(Array[Int], Double, Double)]
   /// what this frame reads of them (moved over from `mutable_menus` as a frame starts)
   menus : Array[(Array[Int], Double, Double)]
+  /// what asked for a menu (Ctx::menu_asked) as the frame those targets are of was built, and as this one is
+  askers : Array[Int]
+  next_askers : Array[Int]
   /// keys since the last frame: code, modifiers, whether a field took it
   mutable_keys : Array[(Int, Int, Bool)]
   keys : Array[(Int, Int, Bool)]
@@ -160,6 +163,8 @@ let picked : Picked = { base: 0, a: 0, b: 0, dragging: false, text: "", target: 
 let desk : Desk = {
   mutable_menus: [],
   menus: [],
+  askers: [],
+  next_askers: [],
   mutable_keys: [],
   keys: [],
   next_cursors: {},
@@ -183,6 +188,8 @@ let desk : Desk = {
 fn desk_reset() -> Unit {
   desk.mutable_menus.clear()
   desk.menus.clear()
+  desk.askers.clear()
+  desk.next_askers.clear()
   desk.mutable_keys.clear()
   desk.keys.clear()
   desk.next_cursors.clear()
@@ -213,6 +220,12 @@ fn desk_frame_start() -> Unit {
     desk.menus.push(m)
   }
   desk.mutable_menus.clear()
+  // (what asked in the frame before: what was under a right click since was laid out by it)
+  desk.askers.clear()
+  for a in desk.next_askers {
+    desk.askers.push(a)
+  }
+  desk.next_askers.clear()
   desk.keys.clear()
   for k in desk.mutable_keys {
     desk.keys.push(k)
@@ -305,9 +318,28 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
 ///|
 /// Where a menu of `id` was asked for since the last frame, in the window's terms: by a mouse, its secondary button
 /// clicked on it (Ctx::right_clicked); by a finger, held on it (long_press_ms, still: the press is then no click).
-/// For a menu the web's `contextmenu` opens (a row's, a place's), on either hand.
+/// For a menu the web's `contextmenu` opens (a row's, a place's), on either hand. One press, one menu: a right click is
+/// the innermost asker's under it (a row's, not the list's it sits in, though the list is asked first: its rows are
+/// built after it), as a press goes to one target; a hold is already the target's held.
 pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
-  match self.right_clicked(id) {
+  if id != 0 {
+    desk.next_askers.push(id)
+  }
+  let mut at : (Double, Double)? = None
+  for m in desk.menus {
+    if m.0.contains(id) {
+      // (the first under it, topmost first, that asked for a menu as the frame it was laid out in was built: what
+      // asks for the first time this frame goes by itself)
+      let innermost = match m.0.iter().find_first(fn(u) { desk.askers.contains(u) }) {
+        Some(u) => u
+        None => id
+      }
+      if innermost == id {
+        at = Some((m.1, m.2))
+      }
+    }
+  }
+  match at {
     Some(at) => Some(at)
     None =>
       if pointing() is Finger && self.held_long(id) {
@@ -348,7 +380,10 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field
 /// took: an Enter it sent, an arrow it moved by).
 pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Bool = false) -> Bool {
-  ignore(self)
+  // (under an open menu or dialog, none: they are its)
+  if !self.keys_here() {
+    return false
+  }
   for k in desk.keys {
     if k.0 == code && k.1 == mods && (in_field || !k.2) {
       return true
@@ -361,7 +396,9 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
-  ignore(self)
+  if !self.keys_here() {
+    return false
+  }
   for k in 0..<desk.keys.length() {
     let (kc, km, taken) = desk.keys[k]
     if kc == code && km == mods && !taken {
@@ -381,9 +418,12 @@ pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
 }
 
 ///|
-/// The keys since the last frame (code, modifiers, whether a field took it).
+/// The keys since the last frame (code, modifiers, whether a field took it); none under an open menu or dialog (they
+/// are its).
 pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
-  ignore(self)
+  if !self.keys_here() {
+    return []
+  }
   desk.keys
 }
 

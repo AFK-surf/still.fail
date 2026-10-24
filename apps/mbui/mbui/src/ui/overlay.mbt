@@ -258,8 +258,15 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
     self.dismissals.remove(id)
   }
   let top = self.top_layer()
+  // the keys this frame the topmost open layer's that has them: a modal one (a menu, a dialog, a sheet), one the focus
+  // is in — not the page's under it, as a modal layer takes its presses. One the focus stayed outside of (a field's
+  // suggestions, a menubar's menu opened by the pointer: the field, the bar, move in it) leaves them where the focus is.
+  self.keys_layer = match top {
+    Some(l) if l.modal || self.focus_in_layer(l.id) => l.id
+    _ => 0
+  }
   match top {
-    Some(l) =>
+    Some(l) => {
       for k in 0..<desk.keys.length() {
         let (code, mods, taken) = desk.keys[k]
         if code == key_escape && !taken {
@@ -269,6 +276,12 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
           desk.keys[k] = (code, mods, true)
         }
       }
+      // (an Escape that dismissed it is its, gone for everything else: not even what reads the keys a field took
+      // sees it, a page's own Escape under it)
+      if l.escape && self.dismissals.get(l.id) == Some(Escape) {
+        desk.keys.retain(fn(k) { k.0 != key_escape })
+      }
+    }
     None => ()
   }
   match self.press_down {
@@ -295,6 +308,62 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
     None => ()
   }
   self.press_down = None
+}
+
+///|
+/// Whether the focus is in layer `id` (or one built in it), as the frame before built them.
+fn Ctx::focus_in_layer(self : Ctx, id : Int) -> Bool {
+  if self.focus == 0 {
+    return false
+  }
+  match self.last_focusables.iter().find_first(fn(f) { f.id == self.focus }) {
+    Some(f) => {
+      let mut at = f.layer
+      for _ in 0..<64 {
+        if at == id {
+          return true
+        }
+        match self.last_layers.iter().find_first(fn(l) { l.id == at }) {
+          Some(l) if at != 0 => at = l.parent
+          _ => return false
+        }
+      }
+      false
+    }
+    None => false
+  }
+}
+
+///|
+/// Whether what is being built now reads the keys: it is in the layer they go to (or one built in it), or none takes
+/// them.
+fn Ctx::keys_here(self : Ctx) -> Bool {
+  if self.keys_layer == 0 {
+    return true
+  }
+  let mut at = self.layer_cur
+  // (up the layers it was built in, as this frame and the one before built them)
+  for _ in 0..<64 {
+    if at == self.keys_layer {
+      return true
+    }
+    if at == 0 {
+      return false
+    }
+    let parent = match self.layers.iter().find_first(fn(l) { l.id == at }) {
+      Some(l) => Some(l.parent)
+      None =>
+        match self.last_layers.iter().find_first(fn(l) { l.id == at }) {
+          Some(l) => Some(l.parent)
+          None => None
+        }
+    }
+    match parent {
+      Some(p) => at = p
+      None => return false
+    }
+  }
+  false
 }
 
 ///|

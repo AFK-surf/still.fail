@@ -52,7 +52,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// Esc to what the frame opened, the one on top first: the rail changed, ⌘K (one kind's list back to all of them,
-/// else closed), ⌘/, 待处理's panel, what the presenters show (their host closes it), a row's title renamed. Whether it took it.
+/// else closed), ⌘/, 待处理's panel, a row's title renamed (what is presented over the frame has Escape before it: overlay.mbt). Whether it took it.
 fn frame_escape(c : @ui.Ctx) -> Bool {
   if wide.editing {
     wide.editing = false
@@ -62,9 +62,6 @@ fn frame_escape(c : @ui.Ctx) -> Bool {
     wide.keys_open = false
   } else if wide.attention_open {
     wide.attention_open = false
-  } else if @sf.presenting() {
-    // (a menu, a pick, a dialog of the presenters': theirs, the topmost closed by their host)
-    ()
   } else if @sfpages.rename_escape(c) {
     ()
   } else {

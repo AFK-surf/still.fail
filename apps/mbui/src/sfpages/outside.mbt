@@ -9,10 +9,6 @@
 fn outside_dialog(c : @ui.Ctx, src : Source, key : String) -> Unit {
   guard @sfbase.outside_asking(key) is Some(s) else { return }
   let sharable = @sfbase.outside_sharable(s)
-  // Enter sent it, so Enter again says yes
-  if s.open && c.key_pressed(@ui.key_code_enter) {
-    @sfbase.outside_yes(src, s)
-  }
   let shown = @sf.dialog(
     c,
     "outside-share",
@@ -30,6 +26,10 @@ fn outside_dialog(c : @ui.Ctx, src : Source, key : String) -> Unit {
       }
     },
     fn() {
+      // Enter sent it, so Enter again says yes (read in the dialog: its keys while it is open)
+      if s.open && c.key_pressed(@ui.key_code_enter) {
+        @sfbase.outside_yes(src, s)
+      }
       c.box(style=outside_list, fn() {
         for x in s.chats {
           c.box(style=outside_item, flow=true, fn() {

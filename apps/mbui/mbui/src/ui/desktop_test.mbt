@@ -546,3 +546,34 @@ test "a field leaving keys to the app: ↑ keeps its caret, Enter sends nothing;
   t.key(@ui.key_code_up)
   assert_true(f.selection().1 < 4)
 }
+
+///|
+test "desktop: one right click, one menu: the innermost asker's under it (a row's, not its list's, though the list asks first)" {
+  let menus : Array[String] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      let list = c.id("list")
+      let row = c.id("row")
+      c.box(id=list, w=Px(300.0), h=Px(200.0), fn() {
+        // (the list asks before its row is built, as a list's box does before it lays its rows out)
+        if c.menu_asked(list) is Some(_) {
+          menus.push("list")
+        }
+        c.box(id=row, w=Px(300.0), h=Px(40.0), fn() {  }) |> ignore
+        if c.menu_asked(row) is Some(_) {
+          menus.push("row")
+        }
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  t.draw()
+  t.right_click(20.0, 20.0)
+  assert_eq(menus, ["row"])
+  menus.clear()
+  // under the row, the list's alone
+  t.right_click(20.0, 120.0)
+  assert_eq(menus, ["list"])
+}

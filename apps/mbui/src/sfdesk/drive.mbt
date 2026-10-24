@@ -95,11 +95,6 @@ fn drive_row_menu_now(key : String, items : Array[@sf.MenuItem?]) -> Unit {
 }
 
 ///|
-/// What a right click in a folder's list opens is told under this key: the folder's where there is no row, a row's
-/// over it (the row, built later than its list's box, says it last).
-let context_menu_key : String = "files/context-menu"
-
-///|
 /// Whether row `key`'s menu is drawn (drive_row_menu).
 fn drive_row_menu_drawn(key : String) -> Bool {
   held.menu_row == key && @sf.presented_drawn_of(held.menu_serial)
@@ -424,8 +419,7 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
     transfers: st.transfers,
   }
   let previewing = preview_shown(src, "page")
-  // (what is presented over the page has the keys: Escape closes it, not what is chosen)
-  if f.front && !c.field_focused() && !@sf.presenting() {
+  if f.front && !c.field_focused() {
     b.keys(c, src)
     if write && c.shortcut('u') {
       dv_upload(c, at)
@@ -534,12 +528,7 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
           b.clear(c, src)
         }
         match c.menu_asked(lid) {
-          // (said under the key a row's own says its menu under: a row is built after this, as its list lays it out,
-          // and the last said is the one told)
-          Some((x, y)) => {
-            let items = folder_menu()
-            c.tell(context_menu_key, fn() { @sf.menu(items, from=@sf.at_point(x, y)) })
-          }
+          Some((x, y)) => @sf.menu(folder_menu(), from=@sf.at_point(x, y))
           None => ()
         }
       }
@@ -884,8 +873,7 @@ pub fn drive_row(
       Some((x, y)) => {
         held.row_frame = c.frame_number()
         (row.menu)()
-        let items = (row.items)()
-        c.tell(context_menu_key, fn() { drive_row_menu(key, items, @sf.at_point(x, y)) })
+        drive_row_menu(key, (row.items)(), @sf.at_point(x, y))
       }
       None => ()
     }

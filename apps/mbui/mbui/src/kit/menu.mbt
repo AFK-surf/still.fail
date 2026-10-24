@@ -555,6 +555,7 @@ pub fn menubar(
     let mk = key + "/" + k.to_string()
     let pid = c.id(mk + "/panel")
     let mut out : PanelOut = { chosen: None, back: false }
+    let mut step = 0
     // opened by the keyboard (its trigger's focus shows): at its first item
     let o = c.overlay(mk, anchor=tids[k], trap=true, initial_focus=pick(c.focus_shown(tids[k]), first_item(c, mk, menus[k].1), pid), fn() {
       out = menu_panel(
@@ -573,30 +574,31 @@ pub fn menubar(
         look,
         item_look,
       )
+      // Left and Right not taken by a submenu: the menu beside, at its first item (read in the menu: its keys while
+      // the focus is in it)
+      if out.chosen is None {
+        let (prev, next) = if c.rtl() {
+          (@ui.key_code_right, @ui.key_code_left)
+        } else {
+          (@ui.key_code_left, @ui.key_code_right)
+        }
+        step = if c.take_key(next) {
+          1
+        } else if c.take_key(prev) {
+          -1
+        } else {
+          0
+        }
+      }
     })
     if out.chosen is Some(_) {
       chosen = out.chosen
       open = -1
     } else if o.dismissed is Some(_) {
       open = -1
-    } else {
-      // Left and Right not taken by a submenu: the menu beside, at its first item
-      let (prev, next) = if c.rtl() {
-        (@ui.key_code_right, @ui.key_code_left)
-      } else {
-        (@ui.key_code_left, @ui.key_code_right)
-      }
-      let step = if c.take_key(next) {
-        1
-      } else if c.take_key(prev) {
-        -1
-      } else {
-        0
-      }
-      if step != 0 {
-        open = (k + step + n) % n
-        c.focus_on(tids[open], visible=true)
-      }
+    } else if step != 0 {
+      open = (k + step + n) % n
+      c.focus_on(tids[open], visible=true)
     }
   }
   kit.val.bars[id] = open

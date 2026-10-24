@@ -411,6 +411,9 @@ pub struct Ctx {
   /// (Ctx::tell)
   told : Array[(Int, () -> Unit)]
   mut layer_cur : Int
+  /// the layer the keys go to this frame (the topmost open one that takes them, as the frame before built it; 0: the
+  /// page): what is built under it reads none (Ctx::key_pressed, Ctx::keys)
+  mut keys_layer : Int
   dismissals : Map[Int, Dismiss]
   layer_return : Map[Int, Int]
   mut press_down : (Double, Double)?
@@ -585,6 +588,7 @@ fn Ctx::new() -> Ctx {
     tells: [],
     told: [],
     layer_cur: 0,
+    keys_layer: 0,
     dismissals: Map::new(),
     layer_return: Map::new(),
     press_down: None,

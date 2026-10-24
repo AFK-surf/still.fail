@@ -368,7 +368,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
   }
   // the keys are the tab's while the pointer was last pressed in it
   let lid = c.id("files-tab/list")
-  if !c.field_focused() && ftab.keys == ftab.chat && !@sf.presenting() {
+  if !c.field_focused() && ftab.keys == ftab.chat {
     b.keys(c, src)
   }
   c.box(style=ftab_list, id=lid, fn() {
