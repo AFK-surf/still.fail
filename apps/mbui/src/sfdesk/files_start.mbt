@@ -5,9 +5,10 @@
 // or one from before drives) is its list of the folders it pins, or why there is none.
 
 ///|
-/// The pane's width beside the rail and the sidebar (as it is shown: folded, none).
+/// The pane's width: what the frame lays its page out in (Ctx::sized: the window less the rail and the sidebar, or on
+/// the tape the page's panel), the page's own `c.width` already.
 fn files_room(c : @ui.Ctx) -> Double {
-  c.width - rail_w - (if wide.folded { 0.0 } else { wide.side_w })
+  c.width
 }
 
 ///|

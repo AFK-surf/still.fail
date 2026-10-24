@@ -1,0 +1,11 @@
+# Laid out Medium on an opened fold's inner screen (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2): 文件 from the rail, the
+# folder's page brought over, its rows and the preview beside them as wide as the page's panel allows.
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 发消息
+wait 600
+tap icon:folder
+wait 1200
+tapxy -80 420
+wait 1500
+exit

@@ -957,7 +957,9 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     },
   }
   let width = composer_width(c.width)
-  let foot = c.box(style=chat_foot, fn() {
+  // (on the tape the page a panel of its own: the composer as far from its foot as from its sides, concentric with its
+  // corners: @sf.page_panel_corner)
+  let foot = c.box(style=if wide.tape { chat_foot_apart } else { chat_foot }, fn() {
     match v {
       Some(v) => chat_notices(c, src, r, v)
       None => ()
@@ -1082,3 +1084,7 @@ let capsule_room : Double = 32.0 + 2.0 * 6.0 + 12.0 + 16.0
 ///|
 // kept across runs: a value (no field of it changes)
 let chat_foot : @ui.Style = @ui.css("w=Full pt=S3 pb=S4 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let chat_foot_apart : @ui.Style = @ui.css("w=Full pt=S3 pb=S3 align=ACenter")
