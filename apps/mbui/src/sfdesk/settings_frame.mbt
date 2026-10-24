@@ -21,6 +21,8 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, route :
   match route {
     Me => me_page(c, core, here)
     Appearance => appearance_page(c, core)
+    About => about_page(c, core)
+    Changelog => changelog_page(c, core)
     Workspace => workspace_page(c, core, here)
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)

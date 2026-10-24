@@ -470,10 +470,6 @@ fn workspace_tile(c : @ui.Ctx, name : String, emoji : String, icon : String) -> 
 /// changelog; whether it reports; the terms and privacy policy on the web.
 fn about_page(c : @ui.Ctx, core : Core) -> Unit {
   let t = @sf.theme()
-  if wide.val {
-    about_page_wide(c, core)
-    return
-  }
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("web-pages.settings.nav.about")) },
@@ -530,67 +526,6 @@ fn about_page(c : @ui.Ctx, core : Core) -> Unit {
   blocks.push(fn() { gap(c, 30.0) })
   scroll_page(c, "about", blocks)
 }
-
-///|
-/// 关于 in the wide frame, as the web's (pages/About.tsx): 隐私, whether this device reports, on a card; 条款与政策,
-/// the terms and the privacy policy as a list's rows, the arrow out. (This build and the changelog have pages of their
-/// own in the sidebar: 版本, 更新日志.)
-fn about_page_wide(c : @ui.Ctx, core : Core) -> Unit {
-  let t = @sf.theme()
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-pages.settings.nav.about")) },
-  ]
-  match (core.reporting)() {
-    Some(on) => {
-      blocks.push(fn() { section_header(c, tr("web-pages.about.privacy")) })
-      blocks.push(fn() {
-        list_card(c, boxed=true, fn() {
-          if list_row(c, key="reporting", fn() {
-              c.box(style=about_switch_words, fn() {
-                c.text(tr("android-settings.telemetry.title"), style=about_row_title) |> ignore
-                c.text(fill("android-settings.telemetry.note", [("app", "still.fail")]), style=about_row_note) |> ignore
-              })
-              |> ignore
-              switch(c, "reporting", on)
-            }) {
-            (core.set_reporting)(!on)
-          }
-        })
-      })
-    }
-    None => ()
-  }
-  blocks.push(fn() { section_header(c, tr("web-pages.about.legal")) })
-  blocks.push(fn() {
-    list_card(c, fn() {
-      for l in [("terms", "android-settings.legal.terms"), ("privacy", "android-settings.legal.privacy")] {
-        if list_row(c, key="go-" + l.0, fn() {
-            c.text(tr(l.1), style=about_row_title) |> ignore
-            @sf.icon(c, "arrow-up-right", size=about_out_icon, color=t.p.muted) |> ignore
-          }) {
-          (core.open_link)(legal_url(l.0))
-        }
-      }
-    })
-  })
-  scroll_page(c, "about", blocks)
-}
-
-///|
-let about_out_icon : Double = 16.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let about_switch_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let about_row_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let about_row_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
 
 ///|
 /// Notifications as switched here, until the core has answered (AppState.useNotify's `notify` meanwhile).
@@ -868,7 +803,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 
 ///|
 /// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
-fn legal_url(page : String) -> String {
+pub fn legal_url(page : String) -> String {
   "https://still.fail/" + page
 }
 
