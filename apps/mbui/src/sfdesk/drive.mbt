@@ -162,7 +162,7 @@ pub fn save_entry(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit 
       download_drive_zip(c, src, at.station, root, path)
     } else {
       say(c, @sf.t("android-misc.drive.downloading", args=[("name", e.name)]))
-      download_drive_file(c, src, at.station, root, path, e.name, e.mime, listed=Some((e.mtime, e.size)))
+      download_drive_file(c, src, at.station, root, path, e.name, listed=Some((e.mtime, e.size)))
     }
   })
 }

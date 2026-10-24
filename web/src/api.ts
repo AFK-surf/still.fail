@@ -265,9 +265,8 @@ export interface StationCall {
   upload(file: File, onProgress?: (sent: number) => void): Promise<Attachment>;
   /** A file sent to the session, as a blob for previews; `thumb`: an image as a chat shows it (its thumbnail, where the station keeps one). */
   /** `onProgress`: bytes so far and the whole size (null when the station does not say) as a whole file comes. `size`:
-   * the file's, as its message says: a big one comes a part at a time (`station.file.part`), never all through at once.
-   * `kept`: read as the core keeps it with its chat (`keep` with its size: a download's, off the device). */
-  file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void, size?: number, kept?: boolean): Promise<Blob>;
+   * the file's, as its message says: a big one comes a part at a time (`station.file.part`), never all through at once. */
+  file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void, size?: number): Promise<Blob>;
   /** A video's poster as the station makes it (a small JPEG of its first frame); null when it has none. */
   poster(key: string, name: string): Promise<Blob | null>;
   /** A file's first `length` bytes (`station.file.part`): enough to tell what it is without fetching all of it. Throws
@@ -338,11 +337,9 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
       }
       return saved;
     },
-    file: async (key, name, thumb = false, onProgress, size, kept = false) => {
-      // (as kept with its chat: read off the device, the station asked only for what is not there)
-      const keep = kept && size !== undefined && size > 0 ? { keep: true, size } : {};
+    file: async (key, name, thumb = false, onProgress, size) => {
       const whole = async () => {
-        const got = await core().callBytes("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}), ...keep }, undefined,
+        const got = await core().callBytes("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}) }, undefined,
           onProgress && ((p) => onProgress(p as FileProgress)));
         return blobOf(got.bytes, (got.value as { type: string }).type);
       };
@@ -357,7 +354,7 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
         let got: { value: unknown; bytes?: Uint8Array };
         const from = at;
         try {
-          got = await core().callBytes("station.file.part", { station, key, name, offset: at, length: FILE_PART, ...(onProgress ? { progress: true } : {}), ...keep }, undefined,
+          got = await core().callBytes("station.file.part", { station, key, name, offset: at, length: FILE_PART, ...(onProgress ? { progress: true } : {}) }, undefined,
             onProgress && ((p) => onProgress({ loaded: from + (p as { loaded: number }).loaded, total })));
         } catch (e) {
           // A station from before parts sends it whole, as long as it is not too big for that.

@@ -833,7 +833,12 @@ fn entry_row(
         }
       })
       |> ignore
-      let fetching = dv_fetches.get(dv_fetch_key(at.station, root, path))
+      // how far it has come: the core's download of it (a folder's: its zip's, 0 while the station zips it), else a
+      // fetch of it to hand to another app
+      let fetching = match download_of_drive(src, at.station, root, path) {
+        Some(d) if flag(Some(d), "active") => Some((number(Some(d), "progress") * 100.0).floor().to_int())
+        _ => dv_fetches.get(dv_fetch_key(at.station, root, path))
+      }
       if busy {
         @sf.spinner(c, size=12.0) |> ignore
       } else if failed is Some(_) {

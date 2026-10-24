@@ -99,16 +99,15 @@ export function readKept(at: At, entry: Pick<DriveEntry, "size" | "mtime">, type
   return kept;
 }
 
-/** Saves a file of the drive to this device (the browser's download), read whole first; `onProgress` as it comes. */
-export async function download(at: At, entry: Pick<DriveEntry, "size" | "name" | "type">, onProgress?: (got: Got) => void): Promise<void> {
-  const blob = await readWhole(at, entry.size, { type: entry.type || "application/octet-stream", ...(onProgress ? { onProgress } : {}) });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = entry.name;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+/** Saves a file of the drive to this device: downloaded by the core (chatDownloads.ts), whatever becomes of the page,
+ * how far in the files' transfers, saved by the browser once all of it is here (chatDownloadsSaved.ts). */
+export async function download(at: At, entry: Pick<DriveEntry, "size" | "name" | "mtime">): Promise<void> {
+  await core().call("download.start", { station: at.station, root: at.root, path: at.path, name: entry.name, size: entry.size, mtime: entry.mtime });
+}
+
+/** A folder of the drive saved to this device as a zip: the core has the station zip it, then downloads that. */
+export async function downloadZip(at: At): Promise<void> {
+  await core().call("download.start", { station: at.station, root: at.root, path: at.path, name: `${nameOf(at.path) || at.root}.zip`, zip: true });
 }
 
 // ── what opens an entry ────────────────────────────────────────────────

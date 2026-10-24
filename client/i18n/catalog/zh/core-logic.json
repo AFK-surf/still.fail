@@ -539,6 +539,7 @@
   "core-logic.transfer.cancelled": "已取消",
   "core-logic.transfer.failed": "失败：{error}",
   "core-logic.download.going": "正在下载 {percent}% · {total}",
+  "core-logic.download.zipping": "正在打包",
   "core-logic.download.ready": "已下载 · {total}",
   "core-logic.download.waiting": "等待连接 station · {percent}%",
   "core-logic.download.saving": "正在保存 · {total}",

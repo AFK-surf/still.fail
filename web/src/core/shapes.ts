@@ -2780,14 +2780,20 @@ export interface DoingView {
 /** How a download stands: coming, waiting for its station to be reached (it goes on once it is), all here to be saved, being saved, or failed. */
 export type DownloadState = "going" | "waiting" | "ready" | "saving" | "failed";
 
-/** A chat's file being downloaded to this device, as the pages show it. */
+/** A chat's file, a drive's file or a folder of it being downloaded to this device, as the pages show it. */
 export interface DownloadShown {
 	/** Its own (`download.take`, `download.cancel`). */
 	id: string;
 	station: string;
-	/** The session that keeps the file. */
-	key: string;
-	/** The file's name as the station keeps it (the last part of its path). */
+	/** A chat's file's: the session that keeps it. */
+	key?: string;
+	/** A drive's file's or folder's: the root it is in. */
+	root?: string;
+	/** A drive's file's or folder's: where it is in its root. */
+	path?: string;
+	/** A folder, zipped on the station to be downloaded. */
+	zip?: boolean;
+	/** A chat's file's name as the station keeps it (the last part of its path); a drive's file's name, a folder's zip's. */
 	name: string;
 	size: number;
 	/** How much of it is here. */
@@ -2803,7 +2809,7 @@ export interface DownloadShown {
 	startedAt: number;
 }
 
-/** A chat's files being downloaded to this device (the `downloads` topic): under way, ready to be saved, or failed. */
+/** The files being downloaded to this device (the `downloads` topic): under way, ready to be saved, or failed. */
 export interface DownloadsView {
 	/** This device's, newest first. */
 	downloads: DownloadShown[];

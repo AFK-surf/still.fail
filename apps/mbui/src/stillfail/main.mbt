@@ -333,7 +333,8 @@ fn main {
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
     let started : Map[String, Json] = {}
-    for name in @sfcore.started_by {
+    // (and where the host keeps downloads in a scripted run: what it says of a file kept, which the app tells the core)
+    for name in @sfcore.started_by + ["MBUI_DOWNLOADS_DIR"] {
       let v = @sfcore.env_text(name)
       if v != "" {
         started[name] = Json::string(v)

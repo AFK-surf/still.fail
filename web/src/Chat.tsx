@@ -24,7 +24,7 @@ import type { Md } from "./core/md.ts";
 import { placeFiles } from "../../client/core-ts/src/placed.ts";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, storedName, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
-import { cancelDownload, startDownload, useDownload } from "./chatDownloads.ts";
+import { cancelDownload, retryDownload, useDownload } from "./chatDownloads.ts";
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
@@ -1521,7 +1521,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   return (
     <>
       <MessageFileCard file={file} download={download} onOpen={() => setOpen(true)}
-        onCancel={(id) => cancelDownload(id)} onRetry={() => startDownload(station.address, sessionKey, storedName(file), file.size)} />
+        onCancel={cancelDownload} onRetry={retryDownload} />
       {preview}
     </>
   );
@@ -1533,11 +1533,11 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
  * over the room the card keeps for it (a button holds no button).
  */
 export function MessageFileCard({ file, download, onOpen, onCancel, onRetry }: {
-  file: Pick<Attachment, "name" | "size" | "path">; download: DownloadShown | null; onOpen: () => void; onCancel: (id: string) => void; onRetry: () => void;
+  file: Pick<Attachment, "name" | "size" | "path">; download: DownloadShown | null; onOpen: () => void; onCancel: (id: string) => void; onRetry: (id: string) => void;
 }) {
   const act = download === null ? null
     : download.active ? { label: t("web-main.file.cancelDownload"), icon: <Close size={12} />, run: () => onCancel(download.id) }
-    : download.state === "failed" ? { label: t("web-main.file.retryDownload"), icon: <Retry size={13} />, run: onRetry }
+    : download.state === "failed" ? { label: t("web-main.file.retryDownload"), icon: <Retry size={13} />, run: () => onRetry(download.id) }
     : null;
   return (
     <span className={css.fileCardHold}>

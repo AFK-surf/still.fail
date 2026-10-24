@@ -205,14 +205,20 @@ pub fn Keep::finish(self : Keep) -> Unit {
 
 ///|
 /// How it stands: under a Tester, kept from the frame after it was finished, where the system keeps downloads
-/// ("Download/" and its name).
+/// ("Download/" and its name; in MBUI_DOWNLOADS_DIR, as a scripted run's host keeps there, its path).
 pub fn Keep::kept(self : Keep) -> @hostapi.Kept {
   match self.host {
     Some(k) => k.kept()
     None =>
       match self.faked() {
         Some(k) if k.ended && k.finished < 0 => CalledOff
-        Some(k) if k.finished >= 0 && g().frame_no > k.finished => KeptAt("Download/" + k.name)
+        Some(k) if k.finished >= 0 && g().frame_no > k.finished =>
+          KeptAt(
+            match env("MBUI_DOWNLOADS_DIR") {
+              "" => "Download/" + k.name
+              dir => dir + "/" + k.name
+            },
+          )
         Some(_) => Keeping
         None => Failed
       }
