@@ -99,7 +99,7 @@ let workspaces_tall : Double = 0.7
 fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], close : () -> Unit) -> Unit {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let by_ws = field(marks.value, "workspaces")
-  let any_marked = all.iter().any(fn(x) { @sf.has_station_mark(x.emoji, x.icon) })
+  let any_marked = all.iter().any(workspace_marked)
   let lead = fn(x : Workspace) { if any_marked { Some(x) } else { None } }
   c.box(style=ws_list, fn() {
     ws_label(c, @sf.t("android-misc.workspace.current"))
@@ -207,12 +207,8 @@ fn workspace_row(
       match lead {
         Some(w) =>
           c.box(style=ws_row_lead, fn() {
-            if @sf.has_station_mark(w.emoji, w.icon) {
-              // a GIF moving only for the workspace in use (Workspaces.kt: still for the others)
-              @sf.station_mark(c, w.emoji, w.icon, ws_row_mark, t.p.text, still=!checked)
-            } else {
-              c.text(@sf.initial(w.name), style=ws_row_letter) |> ignore
-            }
+            // (a GIF moving only for the workspace in use: Workspaces.kt, still for the others)
+            workspace_mark(c, w, ws_row_mark, t.p.text, ws_row_letter, still=!checked)
           })
           |> ignore
         None => ()

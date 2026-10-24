@@ -98,12 +98,12 @@ fn top_bar(
         |> ignore
         let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
         match field(marks.value, "others") {
-          Some(String(tone)) => workspace_mark(c, tone, text(marks.value, "othersLabel"))
-          _ =>
-            if invited {
-              c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, label=tr("android-chat.home.invited"), fn() {  })
-              |> ignore
-            }
+          // what the others have waiting, as their rows' marks (sfpages' chat_mark), said as the core says it; else an
+          // invitation waiting (sfpages' workspace_mark.mbt)
+          Some(String(tone)) =>
+            c.box(style=others_mark, label=text(marks.value, "othersLabel"), fn() { @sfpages.chat_mark(c, tone) |> ignore })
+            |> ignore
+          _ => if invited { @sfpages.invite_dot(c, tr("android-chat.home.invited")) }
         }
         @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
       })
@@ -206,59 +206,9 @@ let mark_red : Int64 = 0xE5484DFFL
 let mark_yellow : Int64 = 0xF2B01EFFL
 
 ///|
-/// What a workspace has waiting (SettingParts.kt WorkspaceMark): `alert` a red dot with a soft halo, `wait` a blue
-/// ring, `done` a blue dot.
-fn workspace_mark(c : @ui.Ctx, tone : String, label : String) -> Unit {
-  // (what it says to a screen reader: SettingParts.kt WorkspaceMark's contentDescription)
-  c.box(w=Px(10.0), h=Px(10.0), label~, fn() {
-    match tone {
-      "alert" => halo_dot(c, mark_red)
-      "wait" => ring(c, mark_blue)
-      _ => dot(c, mark_blue)
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A dot 8 across in the middle of a mark's 10.
-fn dot(c : @ui.Ctx, color : Int64) -> Unit {
-  c.box(w=Px(8.0), h=Px(8.0), radius=4.0, bg=color, tx=1.0, ty=1.0, fn() {  })
-  |> ignore
-}
-
-///|
-/// A red dot with its halo (the halo 14 across, past the mark's edges).
-fn halo_dot(c : @ui.Ctx, color : Int64) -> Unit {
-  c.box(
-    w=Px(14.0),
-    h=Px(14.0),
-    radius=7.0,
-    bg=@sf.alpha(color, 0.25),
-    tx=-2.0,
-    ty=-2.0,
-    align=ACenter,
-    justify=JCenter,
-    fn() { c.box(w=Px(8.0), h=Px(8.0), radius=4.0, bg=color, fn() {  }) |> ignore },
-  )
-  |> ignore
-}
-
-///|
-/// A hollow ring 9 across, 2 thick.
-fn ring(c : @ui.Ctx, color : Int64) -> Unit {
-  c.box(
-    w=Px(9.0),
-    h=Px(9.0),
-    radius=4.5,
-    border=2.0,
-    border_color=color,
-    tx=0.5,
-    ty=0.5,
-    fn() {  },
-  )
-  |> ignore
-}
+/// What the others have waiting, beside the name: its mark alone.
+// kept across runs: a value (no field of it changes)
+let others_mark : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// The filter's menu chosen on Home (mobile/Home.tsx FilterButton): a filter its list, 奏 and 已归档 their pages.

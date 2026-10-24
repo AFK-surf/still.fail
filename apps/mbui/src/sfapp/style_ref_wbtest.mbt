@@ -53,43 +53,44 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 29599:bfe98887
+    #|waiting narrow 29605:e17bf923
     #|waiting wide 57486:dfcb140d
-    #|waiting-dark narrow 29427:29f8e062
+    #|waiting-dark narrow 29433:42533946
     #|waiting-dark wide 57732:c2eda497
-    #|finding narrow 23487:6f4a19bf
+    #|finding narrow 23493:903a5afb
     #|finding wide 60352:e266dea9
-    #|finding-dark narrow 23379:6bb9808b
+    #|finding-dark narrow 23385:9802e5df
     #|finding-dark wide 60399:ff737e0d
-    #|code narrow 26640:49184c39
+    #|code narrow 26646:665b6f49
     #|code wide 54630:803898fd
-    #|code-dark narrow 26488:5afce163
+    #|code-dark narrow 26494:2465df7
     #|code-dark wide 54568:53279637
-    #|wrong narrow 28061:25d40192
+    #|wrong narrow 28067:fdbb9ee6
     #|wrong wide 56135:e7059966
-    #|wrong-dark narrow 27957:a5f59222
+    #|wrong-dark narrow 27963:44e53e06
     #|wrong-dark wide 56067:88bbb94e
-    #|checking narrow 26657:72a8a4b0
+    #|checking narrow 26663:2136f700
     #|checking wide 62512:ca303ae8
-    #|checking-dark narrow 26505:d4765730
+    #|checking-dark narrow 26511:6b1d8240
     #|checking-dark wide 62538:6e92d4e3
-    #|none narrow 29081:a68cf483
+    #|none narrow 29087:1becf067
     #|none wide 56950:48a84144
-    #|none-dark narrow 28917:239c3fa0
+    #|none-dark narrow 28923:36bd82b0
     #|none-dark wide 57200:606be9b6
-    #|failed narrow 24913:807e0fc7
+    #|failed narrow 24919:35145563
     #|failed wide 52746:6ed37dc3
-    #|failed-dark narrow 24829:6e3375a2
+    #|failed-dark narrow 24835:49180586
     #|failed-dark wide 53028:b46fd63
-    #|refused narrow 27197:6b3f38fe
+    #|refused narrow 27203:2923ffca
     #|refused wide 55104:f2d0a9ac
-    #|refused-dark narrow 27149:e668b0dd
+    #|refused-dark narrow 27155:491dad75
     #|refused-dark wide 55368:8cd47fee
-    #|nocode narrow 28285:2bf94585
+    #|nocode narrow 28291:d4c2328d
     #|nocode wide 57486:dfcb140d
-    #|nocode-dark narrow 28133:34ef053a
+    #|nocode-dark narrow 28139:df21ec9e
     #|nocode-dark wide 57732:c2eda497
     #|
+
 
 
 
