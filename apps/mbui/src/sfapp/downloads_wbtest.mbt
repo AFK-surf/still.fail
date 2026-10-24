@@ -141,7 +141,7 @@ test "downloads: on the desk a file's sheet fills from its foot as the core down
   for scale in [1.0, 2.0, 3.0] {
     let ys = fn(part : Double) -> Array[Double] {
       let out = []
-      for o in file_sheet_fill(scale, part, 0x000000FFL).outlines {
+      for o in @sf.file_tile_fill(scale, part, 0x000000FFL).outlines {
         for i, v in o.0 {
           if i % 2 == 1 {
             out.push(v)
