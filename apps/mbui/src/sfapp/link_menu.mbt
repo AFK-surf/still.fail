@@ -32,15 +32,18 @@ let link_menu : LinkMenu = {
 }
 
 ///|
-/// What a message's words give their rich text for a link held: its menu opened there.
+/// What a message's words give their rich text for a link held by a finger, or right clicked: its menu opened there.
 fn link_held(c : @ui.Ctx, href : String, line : (Double, Double, Double, Double)) -> Unit {
-  // (in the wide frame right clicked: the desktop's menu at the pointer, sfdesk/context_menu.mbt)
+  // (in the wide frame its own menu at the pointer, sfdesk/context_menu.mbt)
   if wide_on.val {
     @sfdesk.context_link(c, href)
     return
   }
+  // under the piece of line: where the finger held it; right clicked (a mouse, whose press is not the click's), its
+  // middle
   let press = c.press()
-  link_menu_at(href, press.x, line.1, line.1 + line.3)
+  let x = if @ui.pointing() is Mouse { line.0 + line.2 / 2.0 } else { press.x }
+  link_menu_at(href, x, line.1, line.1 + line.3)
   link_menu.at = press.frame
 }
 

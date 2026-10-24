@@ -8,7 +8,7 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   let (_, y_ci) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
   let (_, y_top) = t.drawn_of("整理发布清单").unwrap()
   // its news comes (the fixture's first step)
@@ -47,7 +47,7 @@ test "Home: back from a chat to the list changed meanwhile, the list drawn as it
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.tap_text("整理发布清单")
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("搜索全部内容") is None)
@@ -118,7 +118,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   assert_true(t.find("新会话的第一句") is Some(_))
   made.val = true
   // (the frame the list changes in: a row leaving or coming would be set going there)
@@ -153,7 +153,7 @@ test "words sent fly from the field into their bubble" {
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
   t.run_for(@ui.nav_push_ms)
   t.tap_text("发消息")
@@ -203,7 +203,7 @@ test "Home: the first rows, after the list waited, come as they are and a tap on
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   assert_true(t.find("整理发布清单") is None)
   // the list is read: its rows are there, drawn where they are laid out, from the first frame (as the e2e's drive
   // taps them: where they are, as soon as they are still)

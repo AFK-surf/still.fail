@@ -204,7 +204,7 @@ test "a press taken by the app scrolls nothing under it: not a box that scrolls 
 }
 
 ///|
-test "a link held still a long press's time: its hold told once, with where it leads and its piece of line; no tap" {
+test "a link held still a long press's time by a finger: its hold told once, with where it leads and its piece of line; no tap" {
   let held : Array[(String, (Double, Double, Double, Double))] = []
   let tapped : Array[String] = []
   let t = @ui.Tester::new(
@@ -222,6 +222,7 @@ test "a link held still a long press's time: its hold told once, with where it l
     },
     w=300.0,
     h=300.0,
+    platform=2,
   )
   t.frame()
   let (x, y, w, h) = t.run_rects("docs")[0]

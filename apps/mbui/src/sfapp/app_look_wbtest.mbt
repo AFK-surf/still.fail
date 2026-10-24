@@ -13,7 +13,7 @@ fn slack_app_tester(calls : Array[Made]) -> @ui.Tester {
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   open_setting("slack-app:ws1/st1#c1")
   t.draw()
   t.run_for(@ui.nav_push_ms)
@@ -143,7 +143,7 @@ test "a new Slack app's look: it starts as the first buddy, its icon and colour 
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.add_pixels("https://app.still.fail/avatars/backend.webp", 2, 2, FixedArray::make(16, b'\xFF'))
   open_setting("new-connect:ws1/st1")
   t.draw()

@@ -66,7 +66,7 @@ test "people stacked: side by side 5 over the one before, the first drawn over t
   // (their colours: Lin's the sixth, Mo's the fifth)
   let people = [someone("lin", "Lin"), someone("mo", "Mo")]
   let ring = 0x123456FFL
-  let t = @ui.Tester::new(fn(c) { c.box(fn() { people_stack(c, src, people, 16.0, ring~) }) |> ignore })
+  let t = @ui.Tester::new(fn(c) { c.box(fn() { people_stack(c, src, people, 16.0, ring~) }) |> ignore }, platform=2)
   let lin = drawn_in(t, @sf.avatar_color("lin"))
   let mo = drawn_in(t, @sf.avatar_color("mo"))
   assert_eq(lin.length(), 1)
@@ -93,7 +93,7 @@ test "a row's people: the one who started the chat drawn over the rest, ringed i
     "people": [person("lin", "Lin"), person("mo", "Mo"), person("kai", "Kai")],
     "creator": { "id": "mo" },
   })
-  let t = @ui.Tester::new(fn(c) { c.box(fn() { row_aside(c, src, item, "people") }) |> ignore })
+  let t = @ui.Tester::new(fn(c) { c.box(fn() { row_aside(c, src, item, "people") }) |> ignore }, platform=2)
   let lin = drawn_in(t, @sf.avatar_color("lin"))
   let mo = drawn_in(t, @sf.avatar_color("mo"))
   let kai = drawn_in(t, @sf.avatar_color("kai"))

@@ -765,10 +765,11 @@ pub fn Ctx::rich(
       }
     None => ()
   }
-  // a link held still a long press's time: told where it leads and the piece of line held (in the window), once a
-  // press, and the press is the hold's (no tap of the link as it lifts)
+  // a link held still a long press's time by a finger: told where it leads and the piece of line held (in the
+  // window), once a press, and the press is the hold's (no tap of the link as it lifts); a mouse holds nothing (its
+  // right click, above: Pointing)
   match on_link_hold {
-    Some(f) if self.down && self.held_told != self.press_at =>
+    Some(f) if self.down && self.held_told != self.press_at && pointing() is Finger =>
       for k, r in runs {
         let id = link_id(base, k)
         if r.link == "" || !self.pressed(id) {

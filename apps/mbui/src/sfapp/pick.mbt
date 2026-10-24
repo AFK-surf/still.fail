@@ -65,10 +65,10 @@ fn pickable(
 }
 
 ///|
-/// Whether words are picked as a desktop's (a mouse's selection over the wide frame's page, its pill) rather than as a
-/// phone's.
+/// Whether words are picked as a desktop's (a mouse's selection over the page, its pill) rather than as a phone's: by the
+/// hand (@sfbase.mouse_picks).
 fn desk_picks() -> Bool {
-  @sfbase.mouse_picks(wide_on.val)
+  @sfbase.mouse_picks()
 }
 
 ///|

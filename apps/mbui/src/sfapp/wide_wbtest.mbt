@@ -2,7 +2,13 @@
 
 ///|
 /// The app over the fixture in a window `w` wide, its calls kept in `calls` (the fixture answers the rest).
-fn wide_tester(calls : Array[Made], mode? : String = "home", w? : Double = 1280.0, h? : Double = 800.0) -> @ui.Tester {
+fn wide_tester(
+  calls : Array[Made],
+  mode? : String = "home",
+  w? : Double = 1280.0,
+  h? : Double = 800.0,
+  platform? : Int = 0,
+) -> @ui.Tester {
   reset()
   let base = fixture(mode)
   let src : Source = {
@@ -15,7 +21,7 @@ fn wide_tester(calls : Array[Made], mode? : String = "home", w? : Double = 1280.
   if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
   t
 }
 

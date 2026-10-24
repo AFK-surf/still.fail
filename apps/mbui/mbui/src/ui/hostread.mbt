@@ -48,14 +48,24 @@ pub(all) enum Pointing {
 } derive(Eq, Show, Debug)
 
 ///|
-/// What the person points with here (a Tester's: its `platform`'s): a finger on a phone's or a tablet's system (iOS,
+/// What the person points with here (a Tester's: its `pointing`, by default its `platform`'s): a finger on a phone's or a tablet's system (iOS,
 /// Android), a mouse or a trackpad on a desktop's. The one source of how things answer a person's hand: whether
 /// anything is hovered (a finger hovers over nothing: Ctx::hovered, a tooltip, a hover card), how a menu is asked for
 /// (Ctx::menu_asked), what shows only to a pointer resting on it, how a press, a drag and Enter work. Never what the
 /// window's size or the system's size classes decide (the layout: how many panes, how wide, how large the words);
 /// never these by them.
 pub fn pointing() -> Pointing {
-  match h_platform() {
+  match fake.val {
+    Some(f) => f.pointing
+    None => platform_pointing(h_platform())
+  }
+}
+
+///|
+/// What a system is pointed at with: a finger on a phone's or a tablet's (iOS, Android), a mouse or a trackpad on a
+/// desktop's.
+fn platform_pointing(platform : Int) -> Pointing {
+  match platform {
     1 | 2 => Finger
     _ => Mouse
   }

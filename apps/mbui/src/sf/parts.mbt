@@ -2570,11 +2570,12 @@ pub fn options_card(
         if c.clicked(id) && free {
           picked = Some(i)
         }
-        // under the pointer its row's ground, in the wide frame (Decisions.css.ts choice:hover)
-        if wide && free {
+        // under a mouse's pointer its row's ground, in any layout (Decisions.css.ts choice:hover)
+        let mouse = @ui.pointing() is Mouse
+        if mouse && free {
           c.cursor(id, Hand)
         }
-        let hot = wide && free && c.lit(id)
+        let hot = mouse && free && c.lit(id)
         c.box(
           dir=Row,
           w=Fill(1.0),

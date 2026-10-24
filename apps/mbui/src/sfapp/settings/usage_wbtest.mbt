@@ -45,7 +45,7 @@ fn days_tester(v : Json) -> @ui.Tester {
   usage_state.day = ""
   let t = @ui.Tester::new(fn(c) {
     c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_days(c, Some(v)) }) |> ignore }) |> ignore
-  })
+  }, platform=2)
   t.draw()
   t
 }

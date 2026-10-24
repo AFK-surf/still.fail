@@ -50,7 +50,7 @@ test "a station's page in three parts: 概览 the machine and what runs on it, �
 test "a login's link opens its station's page at 设置, where its card is" {
   reset()
   let src = fixture("settings")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   @settings.mark_login("ws1/st1", "login-2")
   open_setting("station:ws1/st1")
   t.draw()

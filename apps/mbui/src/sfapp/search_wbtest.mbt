@@ -3,7 +3,9 @@
 ///|
 /// Home with the search open, its field come up (the list scrolled to it first: it starts out of view).
 fn search_tester() -> @ui.Tester {
-  let t = tester("home")
+  reset()
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.scroll_to(0)
   t.draw()
   t.tap_text("搜索全部内容")

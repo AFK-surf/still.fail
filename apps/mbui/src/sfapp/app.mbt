@@ -328,8 +328,19 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       } else {
         // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
         app.nav.comes_when(fn() { page_ready(src, app.nav.top()) }, page_local_ms)
+        // pointed at with a mouse (a desktop's narrow window): the wheel and the trackpad scroll the lists and a drag
+        // picks words, as on the wide frame's page; a finger drags the lists and holds to pick (pick.mbt)
+        let finger = @ui.pointing() is Finger
+        c.mouse_drags_lists(finger)
         let page_took = c.took_back(fn() {
-          c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg) |> ignore
+          let pages = fn() {
+            c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg) |> ignore
+          }
+          if finger {
+            pages()
+          } else {
+            c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
+          }
         })
         // a place's top page other than the chats, with nothing over it or in it taking back: back goes to the chats,
         // in place

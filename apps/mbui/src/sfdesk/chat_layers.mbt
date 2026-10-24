@@ -26,7 +26,7 @@ fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : In
     layers_own.focus = false
     c.focus_editor(composer_field_key)
   }
-  @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(true), fn(author, words, ts, role) {
+  @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
     c.tell("pick/quote", fn() {
       writing_quote(src, writing(src, draft), {
         "author": Json::string(author),

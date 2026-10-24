@@ -23,6 +23,7 @@ fn fake_core(
   over? : (String, Topic) -> Topic = fn(_, t) { t },
   made? : Ref[Source?] = Ref(None),
   ups? : Map[String, Json] = Map::new(),
+  platform? : Int = 2,
 ) -> @ui.Tester {
   reset()
   // the drafts the fake core has named (its `draft.put`)
@@ -74,7 +75,7 @@ fn fake_core(
   }
   made.val = Some(src)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
   // the chat pushed in over Home
   t.run_for(@ui.nav_push_ms)
   t
@@ -543,7 +544,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
   t.run_for(@ui.nav_push_ms)
   t.tap_text("发消息")
@@ -715,7 +716,7 @@ test "at its end, rows that come: the core told the end is not in view while the
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   assert_eq(ends, [true])
   t.tap_text("发消息")

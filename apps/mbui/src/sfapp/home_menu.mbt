@@ -55,30 +55,42 @@ fn row_has_menu(item : ChatItem) -> Bool {
 }
 
 ///|
-/// Held long (the row's `held` from this press on): its menu opens, once a press.
+/// Held long by a finger (the row's `held` from this press on): its menu opens, once a press, felt as it opens.
 fn row_held(c : @ui.Ctx, id : Int, item : ChatItem) -> Unit {
   let press = c.press()
-  if row_menu_at.at == press.frame || !row_has_menu(item) {
+  if row_menu_at.at == press.frame {
     return
+  }
+  if row_menu(c, id, item, press.x) {
+    row_menu_at.at = press.frame
+    // felt as it opens, once (Home.kt: HapticFeedbackType.LongPress)
+    let at = row_menu_at.at
+    c.after_build("haptic/row-held", fn() {
+      if felt_menu.val != at {
+        felt_menu.val = at
+        @ui.haptic(LongPress)
+      }
+    })
+  }
+}
+
+///|
+/// Row `id`'s menu open under it, `x` across where it was asked (a finger's hold, a mouse's right click): whether it
+/// has one to open.
+fn row_menu(c : @ui.Ctx, id : Int, item : ChatItem, x : Double) -> Bool {
+  if !row_has_menu(item) {
+    return false
   }
   let (top, h) = match c.rect_of(id) {
     Some((_, y, _, h)) => (y, h)
-    None => return
+    None => return false
   }
   row_menu_at.item = Some(item)
-  row_menu_at.x = press.x
+  row_menu_at.x = x
   row_menu_at.top = top
   row_menu_at.h = h
   row_menu_at.open = true
-  row_menu_at.at = press.frame
-  // felt as it opens, once (Home.kt: HapticFeedbackType.LongPress)
-  let at = row_menu_at.at
-  c.after_build("haptic/row-held", fn() {
-    if felt_menu.val != at {
-      felt_menu.val = at
-      @ui.haptic(LongPress)
-    }
-  })
+  true
 }
 
 ///|

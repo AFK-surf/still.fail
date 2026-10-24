@@ -106,7 +106,7 @@ test "a request to use a secret: its title and command, 允许 for the chat (the
   reset()
   let calls = []
   let src = vault_src(["r1"], true, calls)
-  let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
   for w in ["使用「GitHub token」", "gh run rerun 1846 --failed", "允许", "拒绝", "本对话内"] {
     assert_true(t.find(w) is Some(_), msg=w)
@@ -123,7 +123,7 @@ test "a request to use a secret for an item given an hour at most: 允许 for th
   reset()
   let calls = []
   let src = vault_src(["r1"], true, calls, lasts="hour")
-  let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("本对话内") is None)
   t.tap_text("1 小时内")
@@ -138,7 +138,7 @@ test "a request to use a secret for an item given an hour at most: 允许 for th
 ///|
 test "a command that reads the secret itself: said, in the one colour the card has" {
   reset()
-  let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], true, []), mode="env") }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], true, []), mode="env") }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("可读取明文") is Some(_))
 }
@@ -148,7 +148,7 @@ test "a request to keep a secret: 存入 or 不存, kept as once; its kind and a
   reset()
   let calls = []
   let src = vault_src(["r1"], true, calls, save=true)
-  let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true) }, w=390.0, h=844.0, platform=2)
   t.draw()
   for w in ["存入密码「UniFi UX7」", "zzj", "存入", "不存"] {
     assert_true(t.find(w) is Some(_), msg=w)
@@ -166,7 +166,7 @@ test "a request to keep a secret while the vault is not on here: 开启密钥库
   reset()
   let calls = []
   let src = vault_src(["r1"], true, calls, save=true, set_up=false)
-  let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true) }, w=390.0, h=844.0, platform=2)
   t.draw()
   t.tap_text("开启密钥库")
   t.draw()
@@ -178,16 +178,16 @@ test "a request to keep a secret while the vault is not on here: 开启密钥库
 test "a request another's to decide, on a web page, or decided: no buttons, a line saying so" {
   reset()
   let calls = []
-  let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], true, calls), assignee="lin@x.com") }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], true, calls), assignee="lin@x.com") }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("待 林晓 决策") is Some(_))
   assert_true(t.find("允许") is None)
   reset()
-  let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], false, calls)) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], false, calls)) }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("请在客户端批准") is Some(_))
   reset()
-  let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src([], true, calls)) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src([], true, calls)) }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("此申请已处理") is Some(_))
   assert_eq(calls.length(), 0)
@@ -199,7 +199,7 @@ test "how a request ended: one line, its item named" {
   let src = vault_src([], true, [])
   for case in [(false, "granted", "已允许使用「GitHub token」 · 本对话内"), (true, "granted", "已存入密码「UniFi UX7」"), (false, "denied", "已拒绝使用「GitHub token」"), (true, "denied", "未存入「UniFi UX7」")] {
     let (save, status, words) = case
-    let t = @ui.Tester::new(fn(c) { ask_card(c, src, save~, status~) }, w=390.0, h=844.0)
+    let t = @ui.Tester::new(fn(c) { ask_card(c, src, save~, status~) }, w=390.0, h=844.0, platform=2)
     t.draw()
     assert_true(t.find(words) is Some(_), msg=words)
   }

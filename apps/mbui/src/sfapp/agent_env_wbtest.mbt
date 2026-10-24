@@ -29,7 +29,7 @@ test "the variables' field follows the core's text that comes after the sheet op
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   open_setting("station:ws1/st1")
   t.draw()
   t.run_for(@ui.nav_push_ms)

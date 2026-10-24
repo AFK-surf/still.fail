@@ -45,7 +45,7 @@ fn link_tester(mode? : String = "service") -> (@ui.Tester, Asked) {
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   (t, asked)
 }
