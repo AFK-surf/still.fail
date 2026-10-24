@@ -84,14 +84,10 @@ fn stations_listed(src : Source, w : Workspace) -> Array[Json] {
 }
 
 ///|
-/// A profile's page: an account signed in on several stations its own, else the station's copy the row shows.
+/// A profile's page (the web's profilePath): the station's copy the row shows; its page lists the account's other
+/// stations.
 fn profile_route(e : Json?) -> @settings.Route {
-  let signed = items(e, "members").filter(fn(m) { text(Some(m), "role") != "user" }).length()
-  if signed > 1 {
-    Route::ProfileAccount(text(e, "key"))
-  } else {
-    Route::Profile(text(e, "station"), text(field(e, "profile"), "id"))
-  }
+  Route::Profile(text(e, "station"), text(field(e, "profile"), "id"))
 }
 
 ///|
@@ -102,6 +98,8 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : 
     match place_route(src, w, place) {
       // a station's: the desktop's own (station_page.mbt)
       Some(Station(a)) => station_page(c, core, @settings.here_of(core, w.id, w.name), a)
+      // a profile's: the desktop's own (accounts.mbt)
+      Some(Profile(a, id)) => profile_page(c, core, @settings.here_of(core, w.id, w.name), a, id)
       Some(r) => @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
       None => @settings.page(c, core, @settings.here_of(core, w.id, w.name), Route::Stations, root=true)
     }

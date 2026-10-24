@@ -308,6 +308,10 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
     "loginCommand": "",
     "checkText": str(check),
     "checkTone": str(tone),
+    // (the core's words of it: present.ts profile)
+    "kindText": str(if kind == "subscription" { "订阅账号" } else { "Anthropic API" }),
+    "signInProvider": str(if group == "chatgpt" { "ChatGPT" } else { "Claude" }),
+    "checkLine": str("订阅有效"),
     "group": str(group),
     "groupTitle": str(title),
     "makers": obj([]),
@@ -338,6 +342,12 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
     p[kv.0] = kv.1
   }
   Json::object(p)
+}
+
+///|
+/// The made-up station's profiles (Studio's), for the chats' fixture's overview of it too: one made-up world.
+pub fn fixture_profiles() -> Array[Json] {
+  fx_profiles()
 }
 
 ///|

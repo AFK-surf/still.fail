@@ -1434,6 +1434,8 @@ fn fixture_station_overview() -> Json {
   }
   o["processes"] = [{ "pid": 4021, "rssBytes": 1200000000.0 }]
   o["processesText"] = "2 个 agent 进程 · 1.1 GB"
+  // its profiles, as the workspace's list has them (the settings' fixture's)
+  o["profiles"] = Json::array(@settings.fixture_profiles())
   o["updates"] = [
     {
       "id": "station",

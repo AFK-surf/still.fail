@@ -3,40 +3,64 @@
 // PastRow; their css.ts), all of it as the core says it.
 
 ///|
-/// A machine's CPU, memory and disk (MeterDials): each what is left large over ten cells, filled as far as is used,
-/// its name and its total under them; 36 apart. Its colour its level's (green while plenty), its figure the words'.
+/// A machine's CPU, memory and disk (MeterDials): each what is left large over its cells, filled as far as is used,
+/// its name and its total under them.
 fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
-  let t = @sf.theme()
   c.box(style=dl_row, fn() {
     for m in meters {
       let mv = Some(m)
-      let level = text(mv, "level")
-      let ink = match level {
-        "amber" | "warn" => t.p.warn_ink
-        "red" => t.p.red
-        _ => t.p.green
-      }
-      let low = level == "amber" || level == "warn" || level == "red"
-      let used = 100 - @cmp.maximum(0, @cmp.minimum(100, count(mv, "left")))
-      let lit = (used.to_double() / 10.0).round().to_int()
-      c.box(style=dl_dial, fn() {
-        c.box(style=dl_number_line, fn() {
-          c.text(text(mv, "big"), style=if low { dl_number.then(@ui.text_style(color=Data(ink))) } else { dl_number })
-          |> ignore
-          c.text(text(mv, "unit"), style=dl_unit) |> ignore
-        })
-        |> ignore
-        c.box(style=dl_cells, fn() {
-          for i in 0..<10 {
-            c.box(style=if i < lit { dl_cell.then(@ui.style(bg=Data(ink))) } else { dl_cell }, fn() {  }) |> ignore
-          }
-        })
-        |> ignore
-        c.text(text(mv, "title"), style=dl_label) |> ignore
-        c.text(if text(mv, "total") == "" { " " } else { text(mv, "total") }, style=dl_reset) |> ignore
-      })
-      |> ignore
+      dial(c, text(mv, "big"), text(mv, "unit"), 100 - dial_part(count(mv, "left")), text(mv, "level"), text(mv, "title"), text(mv, "total"))
     }
+  })
+  |> ignore
+}
+
+///|
+/// An allowance's windows on its profile's page (QuotaBars, not compact): each what is left large over its cells, as
+/// far as is left, its name and when it refills.
+fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
+  c.box(style=dl_row, fn() {
+    for w in windows {
+      let wv = Some(w)
+      let left = count(wv, "left")
+      dial(c, left.to_string(), "%", dial_part(left), text(wv, "level"), text(wv, "label"), text(wv, "refills"))
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A share kept in 0–100.
+fn dial_part(n : Int) -> Int {
+  @cmp.maximum(0, @cmp.minimum(100, n))
+}
+
+///|
+/// A figure large (Dial), ten cells lit as far as `fill` (0–100) in the colour of its level (green while plenty), its
+/// name and a quiet note under; the figure the words' ink until it runs low.
+fn dial(c : @ui.Ctx, number : String, unit : String, fill : Int, level : String, label : String, note : String) -> Unit {
+  let t = @sf.theme()
+  let ink = match level {
+    "amber" | "warn" => t.p.warn_ink
+    "red" => t.p.red
+    _ => t.p.green
+  }
+  let low = level == "amber" || level == "warn" || level == "red"
+  let lit = (fill.to_double() / 10.0).round().to_int()
+  c.box(style=dl_dial, fn() {
+    c.box(style=dl_number_line, fn() {
+      c.text(number, style=if low { dl_number.then(@ui.text_style(color=Data(ink))) } else { dl_number }) |> ignore
+      c.text(unit, style=dl_unit) |> ignore
+    })
+    |> ignore
+    c.box(style=dl_cells, fn() {
+      for i in 0..<10 {
+        c.box(style=if i < lit { dl_cell.then(@ui.style(bg=Data(ink))) } else { dl_cell }, fn() {  }) |> ignore
+      }
+    })
+    |> ignore
+    c.text(label, style=dl_label) |> ignore
+    c.text(if note == "" { " " } else { note }, style=dl_reset) |> ignore
   })
   |> ignore
 }
