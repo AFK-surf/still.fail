@@ -53,7 +53,7 @@ let login_card_min_w : @ui.Len = Fixed(280.0)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_card_box : @ui.Style = @ui.style(min_w=login_card_min_w, p=S2, gap=S0_5, radius=Xl3, bg=Neutral)
+let login_card_box : @ui.Style = @ui.style(min_w=login_card_min_w, p=@sf.inset_room, gap=S0_5, radius=Xl3, bg=Neutral)
 
 ///|
 // kept across runs: a value (no field of it changes)

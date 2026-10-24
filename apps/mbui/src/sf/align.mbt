@@ -253,12 +253,13 @@ pub fn edge_row(s : Surface, x : Double, first? : Bool = false, last? : Bool = f
 
 ///|
 /// Words in a small panel have room of their own (2026-10-15): the panel is padded only as far as what has a ground
-/// (rows, buttons) stands from its edge (6, as a menu): PANEL_PAD.
-pub let panel_pad : Double = 6.0
+/// (rows, buttons) stands from its edge: the corner ladder's inset (tokens.mbt corner_ladder: a small panel is a card
+/// of the ladder's, its rows as a list card's).
+pub let panel_pad : Double = corner_inset
 
 ///|
 /// Its words stand in by a row's own padding more (TEXT_IN), so a card's words and a menu's rows' words are on one
-/// line, panel_pad + text_in from its edge.
+/// line, panel_pad + text_in from its edge (card_pad, as a page's card's).
 pub let text_in : Double = 10.0
 
 ///|
@@ -266,7 +267,7 @@ pub let text_in : Double = 10.0
 pub let panel_pill : Double = 24.0
 
 ///|
-/// A small panel's corner from what sits in it: `outer`, 6 in (smallPanelInner).
+/// The corner of what sits in a small panel of corner `outer`, its padding in (smallPanelInner): concentric.
 pub fn small_panel_inner(outer : Double) -> Double {
   inner_corner(outer, panel_pad)
 }

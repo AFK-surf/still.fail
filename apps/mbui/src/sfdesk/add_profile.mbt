@@ -470,7 +470,9 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
       let rt = text(lv, "runtime")
       let quota = field(lv, "quota")
       let blocked = text(quota, "state") == "blocked"
-      c.box(style=ap_offer, fn() {
+      // a card of the ladder's: its mark, words and quota in a row 20 in, its button across its foot corners
+      c.box(style=if blocked { ap_offer } else { ap_offer_footed_style() }, fn() {
+        c.box(style=ap_offer_head, fn() {
         c.box(style=ap_offer_mark, fn() { @settings.provider_mark(c, rt, "subscription", ap_offer_glyph, "") }) |> ignore
         // (short of room, its name kept: whether it is signed in leaves its line first, then its plan)
         c.box(style=desk_list_text, keep=true, fn() {
@@ -499,10 +501,13 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
         })
         |> ignore
         @settings.quota_chips(c, quota, small=true)
+        })
+        |> ignore
         if !blocked {
           let busy = is_doing(core, ["profile.useMachineLogin"], [("station", station), ("runtime", rt)])
+          let reach = @sf.foot_across(@sf.button_height())
           if flag(lv, "usable") {
-            if @sf.button(c, @sf.t("web-pages.profiles.useThis"), key="add-profile-machine/" + rt, busy~) {
+            if @sf.button(c, @sf.t("web-pages.profiles.useThis"), key="add-profile-machine/" + rt, busy~, w=Fill(1.0), reach~) {
               (core.call)("profile.useMachineLogin", obj([("station", str(station)), ("runtime", str(rt))]), fn(r) {
                 match r {
                   Ok(v) => {
@@ -514,7 +519,7 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
                 }
               })
             }
-          } else if @sf.button(c, @sf.t("web-pages.profiles.signIn"), key="add-profile-machine/" + rt) {
+          } else if @sf.button(c, @sf.t("web-pages.profiles.signIn"), key="add-profile-machine/" + rt, w=Fill(1.0), reach~) {
             sign_in(rt)
           }
         }
@@ -603,8 +608,20 @@ let ap_uses_below : @ui.Style = @ui.css("w=Full pt=S3_5")
 let ap_offers : @ui.Style = @ui.css("w=Full pb=S7 gap=S1")
 
 ///|
+/// A login of the machine's own (machineLogin): a card of the ladder's, its words 20 in, its mark in its top corner
+/// (round by the ladder's there: mbui works it out), its button across its foot corners (@sf.card_foot_in).
 // kept across runs: a value (no field of it changes)
-let ap_offer : @ui.Style = @ui.css("row w=Full p=S3 gap=S3 align=ACenter radius=Xl3 bg=Card")
+let ap_offer : @ui.Style = @ui.css("w=Full p=S5 gap=S3 radius=Xl3 bg=Card")
+
+///|
+/// With its button: its foot as far in as makes the button concentric with its corner (the theme's button height).
+fn ap_offer_footed_style() -> @ui.Style {
+  ap_offer.then(@sf.foot_pad(@sf.button_height()))
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let ap_offer_head : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)

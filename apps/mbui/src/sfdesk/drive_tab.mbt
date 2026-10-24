@@ -94,7 +94,11 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
   if @sf.touch_system() {
     c.box(style=ftab_narrow, fn() {
       c.box(style=ftab_narrow_list, fn() { station_pick(c, src, ws) }) |> ignore
-      c.box(style=ftab_narrow_foot, fn() { station_pick_add(c, chat) |> ignore }) |> ignore
+      // (in a panel of its own, 添加 in its foot corner concentric with it: @sf.foot_corner)
+      c.box(style=ftab_narrow_foot.then(@sf.foot_corner(@sf.button_height(), ftab_side, ftab_under)), fn() {
+        station_pick_add(c, chat) |> ignore
+      })
+      |> ignore
     })
     |> ignore
     return
@@ -571,4 +575,11 @@ let ftab_narrow_list : @ui.Style = @ui.style(w=Full, h=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftab_narrow_foot : @ui.Style = @ui.css("row w=Full px=S5 pt=S2 pb=S4 justify=JEnd")
+let ftab_narrow_foot : @ui.Style = @ui.css("row w=Full px=S5 pt=S2 justify=JEnd")
+
+///|
+/// 添加's room at its sides and under it, standing alone.
+let ftab_side : Double = 20.0
+
+///|
+let ftab_under : Double = 16.0

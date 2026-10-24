@@ -151,14 +151,16 @@ test "a long pick with a finger at Small: the search in its sheet finds by the w
 }
 
 ///|
-/// A panel: its words, and a button in it that closes it.
+/// A panel: its words, and a button at its foot that closes it (a small panel's: PanelText, PanelFoot, PanelButton).
 fn panel_body(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
   fn(c, close) {
-    c.text("面板里的话", style=paragraph) |> ignore
-    if button(c, "好的", key="ok") {
-      said.push("ok")
-      close()
-    }
+    panel_text(c, fn() { c.text("面板里的话", style=paragraph) |> ignore })
+    panel_foot(c, fn() {
+      if panel_button(c, "ok", "好的", tone=Filled) {
+        said.push("ok")
+        close()
+      }
+    })
   }
 }
 

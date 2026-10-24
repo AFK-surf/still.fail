@@ -345,7 +345,7 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
     }
   }
   let busy = is_doing(core, ["connect.putSlackApp"], [("station", station), ("connect", id)])
-  c.box(style=desk_card, fn() {
+  c.box(style=cd_footed_card(), fn() {
     match sa_approve.get(me) {
       Some(install) =>
         c.box(style=sa_blue.then(@ui.style(bg=Data(@sf.theme().p.blue_bg))), fn() {
@@ -367,7 +367,7 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
     let now = sa_settings(d, settings)
     let changed = now != sa_settings(sa_draft(key, settings), settings)
     let dirty = changed || d.icon != ""
-    c.box(style=cd_card_actions, fn() {
+    c.box(style=cd_foot_actions(), fn() {
       if dirty && @sf.button(c, @sf.t("web-pages.slackApp.revert"), key=key + "/revert", tone=Ghost) {
         sa_drafts.remove(key)
       }
@@ -501,6 +501,9 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
       sa_icon_failed(d, @sf.t("web-pages.slackApp.readImageFailed"))
     }
   }
+  // its heading (as the phone's look: 头像), over what has a ground: so a card's corner it begins in holds words, and
+  // the avatar and the fields under it stand clear of it
+  c.text(@sf.t("android-settings.slack.icon"), style=desk_strong) |> ignore
   c.box(style=sa_look, fn() {
     // its avatar (appAvatar: 136, the settings' corner, on the neutral ground behind its colour): pressed, a picture
     let aid = c.id(d.key + "/avatar")

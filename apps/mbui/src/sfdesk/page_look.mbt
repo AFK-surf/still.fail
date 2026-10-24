@@ -237,7 +237,7 @@ let narrow_card_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 ///|
 /// ListCard: its rows 8 in, its corner concentric round theirs.
 // kept across runs: a value (no field of it changes)
-let narrow_card : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, bg=Card, clip=true)
+let narrow_card : @ui.Style = @ui.style(w=Full, p=@sf.inset_room, radius=@sf.list_card_radius, bg=Card, clip=true)
 
 ///|
 /// A choice of a few (narrow: Seg as wide as the page less 12 each side, 34 high; wide: the web's Segmented at the
@@ -428,7 +428,9 @@ fn look_said_row(c : @ui.Ctx, look : Look, title : String, note : String) -> Uni
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_said_row : @ui.Style = @ui.css("row w=Full px=S3 py=S3 gap=S3 radius=Inner align=ACenter")
+let narrow_said_row : @ui.Style = @ui.css("row w=Full gap=S3 radius=Inner align=ACenter").then(
+  @ui.style(p=@sf.list_words_room),
+)
 
 ///|
 /// A finger's press rippling over a row (ListRow's, its corner concentric with its card's).
@@ -442,7 +444,9 @@ fn finger_ripple(c : @ui.Ctx, id : Int) -> Unit {
 /// A row of a card (ListRow): 12 by 12 in, what it holds 12 apart, its ground concentric with the card's; lit under
 /// the pointer, or a finger's press.
 // kept across runs: a value (no field of it changes)
-let narrow_row : @ui.Style = @ui.css("row w=Full px=S3 py=S3 gap=S3 radius=Inner align=ACenter hovered{bg=Hover}")
+let narrow_row : @ui.Style = @ui.css("row w=Full gap=S3 radius=Inner align=ACenter hovered{bg=Hover}").then(
+  @ui.style(p=@sf.list_words_room),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

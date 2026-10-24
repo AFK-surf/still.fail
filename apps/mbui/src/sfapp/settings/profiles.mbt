@@ -416,7 +416,7 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         // machine's own login's, of the card that says whose it is; a key's, of the card with its key (one card for the
         // account, not a card of a pill over another)
         if !copy && signs_in(pv) {
-          blocks.append(profile_sign_in(c, core, address, pv, status))
+          blocks.append(profile_sign_in(c, core, address, pv, fn(foot) { account_status(c, core, sv, pv, foot~) }))
         } else if !copy && flag(pv, "machine") {
           // on the machine's own login: whose it is is changed on that machine, not here
           let runtime = runtime_label(text(pv, "runtime"))
@@ -439,8 +439,11 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         } else if !copy && keyed.contains(kind) && !flag(field(pv, "access"), "login") {
           blocks.append(profile_key(c, core, address, pv, status))
         } else {
-          // (a trouble's button its last: the card's corner taken from it)
-          blocks.push(fn() { card(c, foot=trouble_button(pv), status) |> ignore })
+          // (a trouble's button its last, in the card's foot corners)
+          let foot = trouble_button(pv)
+          blocks.push(fn() {
+            card(c, foot=if foot { Capsule } else { Words }, fn() { account_status(c, core, sv, pv, foot~) }) |> ignore
+          })
         }
         if text(field(pv, "trouble"), "action") != "quota" {
           blocks.append(quota_section(c, core, address, pv))
@@ -510,7 +513,7 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
 /// of its tone, its words (when the line above is not they) and when it was checked, coloured only where something is
 /// off (its check under way said so; it or its allowance's refresh failed a moment ago, a red mark that says why);
 /// then, in trouble, why and what to do (profile_trouble).
-fn account_status(c : @ui.Ctx, core : Core, sv : Json?, pv : Json?) -> Unit {
+fn account_status(c : @ui.Ctx, core : Core, sv : Json?, pv : Json?, foot? : Bool = false) -> Unit {
   let on = [("station", text(sv, "station")), ("id", text(pv, "id"))]
   let check = field(pv, "check")
   let trouble = field(pv, "trouble")
@@ -565,7 +568,7 @@ fn account_status(c : @ui.Ctx, core : Core, sv : Json?, pv : Json?) -> Unit {
       |> ignore
     })
     |> ignore
-    profile_trouble(c, core, sv, pv)
+    profile_trouble(c, core, sv, pv, foot~)
   })
   |> ignore
 }

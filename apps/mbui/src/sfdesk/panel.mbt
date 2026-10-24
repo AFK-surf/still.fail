@@ -124,6 +124,11 @@ let side_over_w : Double = 460.0
 let side_over : Ref[Bool] = Ref(false)
 
 ///|
+/// Whether the panel being built is a panel of its own on the tape (tape_side): round by the ladder's pane corner.
+// kept across runs: said by tape_side round the panel it builds
+let side_on_tape : Ref[Bool] = Ref(false)
+
+///|
 /// The page under the panel over it: as wide as it is.
 // kept across runs: a value (no field of it changes)
 let panel_page_whole : @ui.Style = @ui.css("w=Full h=Full")
@@ -152,25 +157,49 @@ let side_rule_w : Double = 1.0
 pub let side_bar : @ui.Style = @ui.css("row w=Full h=S11 pl=S2 pr=S3 gap=S2 align=ACenter")
 
 ///|
+/// Its bar as a panel of its own on the tape (laid out Medium, round by the ladder's pane corner): the first tab and the
+/// switch in its top corners as far in as makes them concentric with it (capsules: @sf.capsule_in), its foot as before.
+// kept across runs: a value (no field of it changes)
+pub let side_bar_tape : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  pt=@sf.capsule_room(@sf.pane_corner, bar_button_side),
+  pb=S1_5,
+  pl=@sf.capsule_room(@sf.pane_corner, @sf.side_tab_side),
+  pr=@sf.capsule_room(@sf.pane_corner, bar_button_side),
+  gap=S2,
+  align=ACenter,
+)
+
+///|
 /// Its tabs (sideTabList), 2 apart.
 // kept across runs: a value (no field of it changes)
 pub let side_tab_list : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S0_5, align=ACenter, clip=true)
 
 ///|
-/// A tab (sideTabWrap, sideTab): 30 high, its icon and label 6 apart, 12 in, its close 5 from its end; round 10, the
-/// pointer's ground on it, the selected ground under the one in front.
+/// A tab (sideTabWrap, sideTab): 30 high, its mark (in a 14 room) and label 6 apart, its close 5 from its end, each in
+/// the middle of its end, concentric with it (a service's dot too); a capsule (so in a panel's corner it stands where
+/// its shape is concentric with it), the pointer's ground on it, the selected ground under the one in front.
 // kept across runs: a value (no field of it changes)
 pub let side_tab : @ui.Style = @ui.style(
   row=true,
   h=@sf.side_tab_h,
-  pl=S3,
+  pl=@sf.capsule_end_room(@sf.side_tab_side, side_tab_mark_side),
   pr=S1_25,
   gap=S1_5,
   align=ACenter,
-  radius=@sf.custom_field_r,
+  radius=Full,
   hovered=@ui.patch(bg=Hover),
   selected=@ui.patch(bg=Selected),
 )
+
+///|
+/// Its mark's room: an icon's, a maker's mark's, a service's dot in its middle.
+let side_tab_mark_side : Double = 14.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let side_tab_mark : @ui.Style = @ui.css("w=S3_5 h=S3_5 align=ACenter justify=JCenter")
 
 ///|
 /// Its label: muted, 13; the one in front in the words' colour and 500.
@@ -182,9 +211,9 @@ pub let side_tab_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wr
 pub let side_tab_front : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
 
 ///|
-/// Its close (sideTabClose): 20 square, round 6 (a small mark of its own), the line's ground on it.
+/// Its close (sideTabClose): 20 round, concentric in the tab's end, the line's ground on it.
 // kept across runs: a value (no field of it changes)
-pub let side_tab_close : @ui.Style = @ui.css("w=S5 h=S5 radius=Md align=ACenter justify=JCenter hovered{bg=Line}")
+pub let side_tab_close : @ui.Style = @ui.css("w=S5 h=S5 radius=Full align=ACenter justify=JCenter hovered{bg=Line}")
 
 ///|
 /// What the tab in front shows, under the bar.
@@ -376,7 +405,9 @@ pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit 
       let view = chat_view(v)
       let (tabs, front) = side_of(view)
       side_over.val = true
+      side_on_tape.val = true
       side_panel(c, src, w, r, view, tabs, front)
+      side_on_tape.val = false
     }
     None => ()
   }
@@ -399,7 +430,7 @@ fn side_panel(
     if @ui.window_inset() {
       c.window_drag(bar)
     }
-    c.box(style=side_bar, id=bar, fn() {
+    c.box(style=if side_on_tape.val { side_bar_tape } else { side_bar }, id=bar, fn() {
       c.box(style=side_tab_list, fn() {
         for tab in tabs {
           side_tab_of(c, src, r, v, tab, tab == front)
@@ -510,7 +541,7 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
   let b = c.box(style=side_tab, selected=front, id~, fn() {
     match (agent, service) {
       (Some(a), _) => @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
-      (_, Some(j)) => job_dot(c, text(j, "tone"))
+      (_, Some(j)) => c.box(style=side_tab_mark, fn() { job_dot(c, text(j, "tone")) }) |> ignore
       _ => {
         let icon = if file is Some(_) {
           "file"
@@ -558,5 +589,9 @@ pub fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "
 ///|
 // kept across runs: a value (no field of it changes)
 let bar_icon_button : @ui.Style = @ui.css(
-  #|w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover} pressed{bg=Hover}
+  #|w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} pressed{bg=Hover}
 )
+
+///|
+/// A bar's icon button's side (bar_icon_button: 32): a circle, so in a panel's corner it stands where it is concentric.
+let bar_button_side : Double = 32.0

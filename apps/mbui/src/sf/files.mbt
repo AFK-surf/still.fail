@@ -303,8 +303,9 @@ pub let message_file_corner : Double = 13.0
 pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
 
 ///|
-/// The composer's box's corner: its buttons' pill's inner corner with its padding (COMPOSER_INNER + 12).
-pub let composer_corner : @ui.Radius = rounded(composer_inner + composer_pad)
+/// The composer's box's corner: a card's of the ladder's (its buttons round in its corners its padding in, what waits
+/// in it a block of the ladder's there: composer_inner).
+pub let composer_corner : @ui.Radius = rounded(card_corner)
 
 ///|
 /// A file's card at its widest (fileCard: 236).
@@ -433,7 +434,14 @@ pub fn quote_card(
   }
   let hot = jump && c.lit(source)
   c.box(style=if composer { quote_box_composer } else { quote_box }, fn() {
-    c.box(style=if composer { quote_source_composer } else { quote_source }, id=source, fn() {
+    // (a pin in its top corner: there the ladder's inset from both its edges, concentric with it)
+    let source_look = match (composer, pin != "") {
+      (true, false) => quote_source_composer
+      (true, true) => quote_source_composer_pin
+      (false, false) => quote_source
+      (false, true) => quote_source_pin
+    }
+    c.box(style=source_look, id=source, fn() {
       c.box(style=quote_words, fn() {
         if pin != "" {
           c.box(style=quote_pin, fn() { c.text(pin, style=quote_pin_words) |> ignore }) |> ignore
@@ -466,7 +474,7 @@ pub fn quote_card(
     }
     if remove {
       c.layer(fn() {
-        c.box(style=if composer { quote_remove_at_composer } else { quote_remove_at }, fn() {
+        c.box(style=quote_remove_at, fn() {
           card_button(c, x, "close", t("web-main.quote.remove"))
         })
         |> ignore
@@ -485,20 +493,24 @@ let quote_icon : Double = 11.0
 ///|
 /// quoteCard: 12 round (in the composer its inner corner), the text at 4% over the canvas.
 // kept across runs: a value (no field of it changes)
-let quote_box : @ui.Style = @ui.style(w=Full, radius=Xl, bg=Over(Bg, faint_ground), clip=true)
+let quote_box : @ui.Style = @ui.style(w=Full, radius=rounded(quote_corner), bg=Over(Bg, faint_ground), clip=true)
+
+///|
+/// A quote's corner: a block's of the ladder's, in a message as in the composer (the web's 12 in a message).
+let quote_corner : Double = row_corner
 
 ///|
 // kept across runs: a value (no field of it changes)
 let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=rounded(composer_inner)))
 
 ///|
-/// What sits in the composer's corners is rounded concentric with it (COMPOSER_INNER: a pill's inner corner for its 32
-/// buttons 12 in).
-pub let composer_inner : Double = pill_inner(composer_pad, composer_button)
+/// What sits in the composer's corners is rounded concentric with it, the ladder's next step in.
+pub let composer_inner : Double = row_corner
 
 ///|
-/// The composer's padding and its buttons across (composer.css.ts COMPOSER_PAD, COMPOSER_BUTTON).
-pub let composer_pad : Double = 12.0
+/// The composer's padding (the ladder's inset: its 32 buttons round in its corners, concentric) and its buttons across
+/// (composer.css.ts COMPOSER_BUTTON).
+pub let composer_pad : Double = capsule_in(card_corner, composer_button)
 
 ///|
 pub let composer_button : Double = 32.0
@@ -530,6 +542,16 @@ let quote_said_over : Double = 3.0
 let quote_source_composer : @ui.Style = @ui.style(w=Full, pl=S4, pr=room(quote_end_composer), pt=room(quote_over_composer))
 
 ///|
+/// A page mark's quote: its pin (a capsule 16 high) the ladder's inset from its top and start, concentric with its
+/// corner (capsule_in(quote_corner, 16) = corner_inset).
+// kept across runs: a value (no field of it changes)
+let quote_source_pin : @ui.Style = quote_source.then(@ui.style(pl=inset_room, pt=inset_room))
+
+///|
+// kept across runs: a value (no field of it changes)
+let quote_source_composer_pin : @ui.Style = quote_source_composer.then(@ui.style(pl=inset_room, pt=inset_room))
+
+///|
 // kept across runs: a value (no field of it changes)
 let quote_words : @ui.Style = @ui.css("row w=Full gap=S1 align=AStart")
 
@@ -547,9 +569,10 @@ let quote_text : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted
 let quote_text_hot : @ui.TextStyle = quote_text.then(@ui.text_style(color=Fg))
 
 ///|
-/// quoteCardPin: a page mark's number as its pin, 16 high, the accent's ground, white, its corner 8 8 8 2.
+/// quoteCardPin: a page mark's number as its pin, 16 high, the accent's ground, white; a capsule (a circle for one
+/// figure), so in its quote's corner it stands where its shape is concentric with it (the web's corner 8 8 8 2).
 // kept across runs: a value (no field of it changes)
-let quote_pin : @ui.Style = @ui.css("h=S4 px=S1 radius=Lg bg=Accent align=ACenter justify=JCenter")
+let quote_pin : @ui.Style = @ui.css("h=S4 min_w=S4 px=S1 radius=Full bg=Accent align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -578,10 +601,11 @@ let quote_comment_composer : @ui.Style = @ui.style(w=Full, px=S4, pt=room(quote_
 let quote_said : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg)
 
 ///|
-/// Its ✕ at its top right corner, 6 in (8 in the composer).
+/// Its ✕ at its top right corner, as far in as makes it concentric with it (a circle: capsule_in).
 // kept across runs: a value (no field of it changes)
-let quote_remove_at : @ui.Style = @ui.css("w=Full pt=S1_5 pr=S1_5 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let quote_remove_at_composer : @ui.Style = @ui.css("w=Full pt=S2 pr=S2 align=AEnd")
+let quote_remove_at : @ui.Style = @ui.style(
+  w=Full,
+  pt=capsule_room(quote_corner, card_button_side),
+  pr=capsule_room(quote_corner, card_button_side),
+  align=AEnd,
+)

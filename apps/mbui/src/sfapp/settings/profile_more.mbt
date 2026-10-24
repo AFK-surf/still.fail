@@ -149,7 +149,7 @@ fn allowance_read(p : Json?) -> Bool {
 /// it stands (whose first line its title is: account_head): why, what to do, a command to run where that is it, the
 /// button that does it (a key asked for, its variables, its allowance read again, checked again; signing in is the
 /// card's own, profile_sign_in), one under the other as the card's column has them.
-fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
+fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?, foot? : Bool = false) -> Unit {
   let issue = field(p, "trouble")
   guard issue is Some(Object(_)) else { return }
   let station = text(s, "station")
@@ -157,6 +157,8 @@ fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
   let on = [("station", station), ("id", id)]
   let action = text(issue, "action")
   let online = flag(s, "online")
+  // (its buttons last in their card: in its foot corners, reaching past its words: Foot's Capsule)
+  let reach = if foot { Some(foot_across) } else { None }
   c.box(style=trouble_rows, fn() {
     if text(issue, "detail") != "" {
       c.text(text(issue, "detail"), style=trouble_words) |> ignore
@@ -173,7 +175,7 @@ fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
     let checking = is_doing(core, ["profile.check"], on)
     let refreshing = is_doing(core, ["profile.quota"], on)
     if action != "login" &&
-      button(c, "recover-go", text(issue, "label"), false, enabled=online, busy=checking || refreshing) {
+      button(c, "recover-go", text(issue, "label"), false, enabled=online, busy=checking || refreshing, reach?) {
       match action {
         "key" => ask_key(core, station, p, tr("android-settings.profile.newKey"), tr("android-settings.profile.keyHintShort"))
         "env" => open_env_sheet(core, station, p)
@@ -184,7 +186,7 @@ fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
       }
     }
     if (action == "key" || action == "env") &&
-      button(c, "recover-check", tr("android-settings.profile.recheck"), false, enabled=online, busy=checking) {
+      button(c, "recover-check", tr("android-settings.profile.recheck"), false, enabled=online, busy=checking, reach?) {
       act(core, tr("android-settings.profile.checkWhat"), "profile.check", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.profile.checked"))
     }
   })
@@ -192,8 +194,8 @@ fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
 }
 
 ///|
-/// Whether a profile's trouble ends in a button of its own (all but signing in, which is its card's): its card's
-/// corner then taken from it.
+/// Whether a profile's trouble ends in a button of its own (all but signing in, which is its card's): in its card's
+/// foot corners then.
 fn trouble_button(p : Json?) -> Bool {
   let issue = field(p, "trouble")
   issue is Some(Object(_)) && text(issue, "action") != "login"
@@ -963,7 +965,7 @@ let manual_sign_in_room : @ui.Style = @ui.css("w=Full px=S5 pb=S6")
 /// them; signed in and well, the head alone (signing in again is in its "…", open_profile_menu), and while one asked
 /// from there starts, the wait for its link. Its buttons at its foot, in its corners; the command last instead, its
 /// corner taken from the command's box.
-fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, head : () -> Unit) -> Array[() -> Unit] {
+fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, head : (Bool) -> Unit) -> Array[() -> Unit] {
   let t = @sf.theme()
   let id = text(p, "id")
   let on = [("station", station), ("id", id)]
@@ -987,12 +989,20 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, head :
   let waits = active && (state == "starting" || state == "verifying" || state == "done")
   [
     fn() {
-      // (the command last: the card's corner taken from its box's, CARD_PAD in: concentricOut(COMMAND_BOX_CORNER, CARD_PAD);
-      // signed in and well, no button at its foot: a card's own corner)
-      card(c, foot=!command_last && !waits && asked, corner?=if command_last { Some(Around) } else { None }, fn() {
+      // (in its foot corners its buttons, or the command's box last, or with nothing under its head its trouble's
+      // button, in the head's last; signed in and well, its words)
+      let trouble_last = trouble_button(p) && !active && !asked && !starting
+      let foot = if command_last {
+        Block
+      } else if (!waits && asked) || trouble_last {
+        Capsule
+      } else {
+        Words
+      }
+      card(c, foot~, fn() {
         c.box(style=sign_in_rows, fn() {
           c.box(dir=Row, w=Fill(1.0), fn() {
-            c.box(w=Fill(1.0), fn() { head() }) |> ignore
+            c.box(w=Fill(1.0), fn() { head(trouble_last) }) |> ignore
             if active {
               let cancelling = is_doing(core, ["profile.cancelLogin"], on)
               c.box(style=sign_in_cancel, fn() {
@@ -1023,6 +1033,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, head :
                   tr(if needed && state != "done" { "android-settings.login.signIn" } else { "android-settings.login.again" }),
                   needed,
                   busy=starting,
+                  reach?=if command_last { None } else { Some(foot_start) },
                 ) {
                 start_sign_in(core, station, id)
               }
@@ -1033,7 +1044,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, head :
             })
             |> ignore
             if manual && command != "" {
-              command_box(c, core, command)
+              command_box(c, core, command, reach=block_across)
             }
           } else if starting {
             // signed in again from its "…": the card says it is under way until the station's sign-in says where it is

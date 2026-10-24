@@ -3,15 +3,16 @@
 // here, as a native view under it cannot be blurred), a timeline, the buttons in its corners, the speed as a figure.
 
 ///|
-/// The controls' bar (vvBar): as wide as 1080 allows less 16 either side, 16 off the foot, 2 over its timeline and 6
-/// round the rest, its corner 16; on the raised ground at 72%. It fades out in 320 ms, back in 120.
+/// The controls' bar (vvBar): as wide as 1080 allows less 16 either side, 16 off the foot, 2 over its timeline and the
+/// ladder's inset round the rest, a card of the ladder's (its round buttons in its corners concentric with it); on the
+/// raised ground at 72%. It fades out in 320 ms, back in 120.
 pub let media_bar_most : Double = 1080.0
 
 ///|
 pub let media_bar_in : Double = 16.0
 
 ///|
-pub let media_bar_pad : Double = 6.0
+pub let media_bar_pad : Double = corner_inset
 
 ///|
 pub let media_glass_share : Double = 0.72
@@ -152,7 +153,7 @@ pub fn media_key(
 }
 
 ///|
-/// The speed as a figure (vvRate): 28 high, 46 wide at least, 8 in, its corner 10, on the words at 10%. True on the
+/// The speed as a figure (vvRate): 28 high, 46 wide at least, 8 in, a capsule concentric in the bar's corner, on the words at 10%. True on the
 /// frame after it was pressed.
 pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on : Bool, ink? : MediaInk) -> Bool {
   let ink = ink.unwrap_or(media_ink(false))
@@ -173,7 +174,9 @@ pub let media_strong : Int = 600
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_bar_box : @ui.Style = @ui.css("pl=S1_5 pr=S1_5 pt=S0_5 pb=S1_5 radius=Xl1_5")
+pub let media_bar_box : @ui.Style = @ui.css("pt=S0_5 radius=Xl3").then(
+  @ui.style(pl=inset_room, pr=inset_room, pb=inset_room),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -225,10 +228,22 @@ let media_small_head : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full shadow=Sm"
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_rate_box : @ui.Style = @ui.style(h=S7, min_w=Fixed(media_rate_w), px=S2, radius=Lg, align=ACenter, justify=JCenter)
+let media_rate_box : @ui.Style = @ui.style(
+  h=S7,
+  min_w=Fixed(media_rate_w),
+  px=S2,
+  mr=capsule_room(card_corner, media_rate_h, less=media_bar_pad),
+  radius=Full,
+  align=ACenter,
+  justify=JCenter,
+)
 
 ///|
 let media_rate_w : Double = 46.0
+
+///|
+/// The speed's height (28: S7).
+let media_rate_h : Double = 28.0
 
 ///|
 // kept across runs: a value (no field of it changes)

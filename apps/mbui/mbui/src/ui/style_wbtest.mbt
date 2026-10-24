@@ -618,3 +618,115 @@ test "style: Wash the same on every width, #322D24 at 6.5% (white at 5% in the d
   assert_eq(th.text_size(Xs2), (11.0, 16.0))
   assert_eq(th.text_size(Xs3), (10.0, 14.0))
 }
+
+///|
+/// A card 26 round with `inner` (its corner `own`, `side` square) `inset` in from its top and left, under the light
+/// theme with `ladder` (none: any).
+fn corner_card(inset : Double, own : Double, side : Double, ladder? : Array[Double] = []) -> (Ctx) -> Unit {
+  fn(c) {
+    c.with_theme({ ..Theme::light(), corner_ladder: ladder }, fn() {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(300.0), h=Px(200.0), radius=26.0, bg=0xEEEEEEFFL, pl=inset, pt=inset, align=AStart, fn() {
+          c.box(w=Px(side), h=Px(side), radius=own, bg=0x333333FFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+}
+
+///|
+test "corners: what lies in a container's corner is concentric with it, whatever corner it was given" {
+  let t = Tester::new(corner_card(10.0, 4.0, 40.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, concentric(26.0, 10.0))
+  assert_eq(t.corner_faults(), [])
+  // out of its corner (further in than the container is round): its own
+  let t = Tester::new(corner_card(30.0, 4.0, 40.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, 4.0)
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners: a capsule in a container's corner keeps its shape, and is concentric only where it stands so" {
+  // 32 round 16, 10 in: the container's 26 is its distance and its half
+  let t = Tester::new(corner_card(10.0, 16.0, 32.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, 16.0)
+  assert_eq(t.corner_faults(), [])
+  // 4 in: it would want a corner of 20 round it
+  let t = Tester::new(corner_card(4.0, 16.0, 32.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, 16.0)
+  assert_eq(t.corner_faults().length(), 1)
+  // a box too small for the corner it would have keeps its own, and is said
+  let t = Tester::new(corner_card(4.0, 6.0, 30.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, 6.0)
+  assert_eq(t.corner_faults().length(), 1)
+}
+
+///|
+test "corners: with a ladder, a container with something in its corner and what is there are round by its steps" {
+  let ladder = [34.0, 26.0, 18.0, 10.0]
+  // 10 in: 18, the next step
+  let t = Tester::new(corner_card(10.0, 4.0, 40.0, ladder~))
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // 14 in: concentric, but 14.8, no step (drawn so on purpose: not held to it as it is drawn)
+  let t = Tester::new(corner_card(14.0, 4.0, 40.0, ladder~), corners_held=false)
+  t.draw()
+  assert_eq(g().nodes[3].radius, concentric(26.0, 14.0))
+  assert_eq(t.corner_faults().length(), 1)
+  // a control's own part hugging its edge (2 in): concentric is all
+  let t = Tester::new(corner_card(2.0, 4.0, 60.0, ladder~))
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+/// A card 26 round with a box (`wide` wide, 60 tall, its corner 18: a table) in a strip scrolled sideways across it, 20
+/// in from its left and foot, as a page's words are.
+fn corner_strip(wide : Double) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(w=Px(300.0), h=Px(140.0), radius=26.0, bg=0xEEEEEEFFL, pad=20.0, justify=JEnd, fn() {
+        c.sideways("strip", fn() {
+          c.box(w=Px(wide), h=Px(60.0), radius=18.0, bg=0x333333FFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+/// The box corner_strip draws (its ground).
+fn strip_box() -> Node {
+  let c = g()
+  for i in 0..<c.count {
+    if c.nodes[i].bg == 0x333333FFL {
+      return c.nodes[i]
+    }
+  }
+  abort("no box")
+}
+
+///|
+test "corners: in a strip scrolled sideways with nothing to scroll, a box lies where it is: in the card's corner, concentric" {
+  // as narrow as the strip: still, so the card's corner is its
+  let t = Tester::new(corner_strip(200.0))
+  t.draw()
+  assert_eq(strip_box().radius, concentric(26.0, 20.0))
+  assert_eq(t.corner_faults(), [])
+  // wider: it moves under the strip's edges, so where it is from the corner is not fixed; its own
+  let t = Tester::new(corner_strip(400.0))
+  t.draw()
+  t.draw()
+  assert_eq(strip_box().radius, 18.0)
+  assert_eq(t.corner_faults(), [])
+}

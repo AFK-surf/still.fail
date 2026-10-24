@@ -331,10 +331,10 @@ fn cd_slack_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> U
   let tk = slack_tokens(c, core, station, "connect-slack/" + station + "/" + id, connect=id)
   let saving = is_doing(core, ["connect.put"], [("station", station), ("id", id)])
   @sf.section(c, @sf.t("web-pages.connect.slack"), note=@sf.t("web-pages.connect.slackLead"), fn() {
-    c.box(style=desk_card, fn() {
+    c.box(style=cd_footed_card(), fn() {
       create_app_steps(c, core, station, text(cv, "name"))
       token_fields(c, core, tk)
-      c.box(style=cd_card_actions, fn() {
+      c.box(style=cd_foot_actions(), fn() {
         if @sf.button(
             c,
             @sf.t("web-pages.connect.saveConnect"),
@@ -1005,6 +1005,19 @@ let cd_bullet : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, wr
 /// A card's buttons at its end (pages.css.ts cardActions: 8 apart).
 // kept across runs: a value (no field of it changes)
 let cd_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
+
+///|
+/// A card with its buttons last (cd_foot_actions): its foot as far in as makes them concentric with its corners
+/// (@sf.card_foot_in).
+fn cd_footed_card() -> @ui.Style {
+  desk_card.then(@sf.foot_pad(@sf.button_height()))
+}
+
+///|
+/// A cd_footed_card's buttons at its end, reaching past its words to its foot corner's.
+fn cd_foot_actions() -> @ui.Style {
+  cd_card_actions.then(@sf.foot_across(@sf.button_height()))
+}
 
 ///|
 /// How it runs (Connect.css.ts runCard: a card, its rows 14 apart; runCardRow: 14 apart, at their tops; runCardLabel:

@@ -39,9 +39,12 @@ let xshare_name : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=false
 let xshare_where : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
 
 ///|
-/// What takes the row's room after its name: where it is shared, at its end.
+/// What takes the row's room after its name: where it is shared, at its end, whole or not at all.
 // kept across runs: a value (no field of it changes)
-let xshare_where_box : @ui.Style = @ui.css("w=Full align=AEnd")
+let xshare_where_box : @ui.Style = @ui.css("row w=Full justify=JEnd")
+
+///|
+let xshare_drop_where : Int = 1
 
 ///|
 /// The chat's xsharing in its sheet (ChatInfo.kt ShareRow).
@@ -55,7 +58,11 @@ fn xshare_row(c : @ui.Ctx, r : ChatRef, thread : Double?, share : Json?) -> Unit
   if info_row(c, if may && !busy { "info/xshare" } else { "" }, fn() {
       @sf.icon(c, "users", size=16.0, color=t.p.text) |> ignore
       c.text(tr("web-pages.chat.xshare"), style=xshare_name) |> ignore
-      c.box(style=xshare_where_box, fn() { c.text(text(share, "text"), style=xshare_where) |> ignore }) |> ignore
+      // (short of room, where it is shared left out whole, its sheet saying it)
+      c.box(style=xshare_where_box, fn() {
+        c.box(drop=xshare_drop_where, fn() { c.text(text(share, "text"), style=xshare_where) |> ignore }) |> ignore
+      })
+      |> ignore
       if busy || failed {
         @settings.doing_mark(c, busy, if failed { Some("") } else { None })
       } else if may {

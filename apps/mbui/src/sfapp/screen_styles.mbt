@@ -202,17 +202,18 @@ let keys_capsule_box : @ui.Style = @ui.css("p=S1 radius=Full bg=Floating shadow=
 // ── 接管 ─────────────────────────────────────────────────────────────────
 
 ///|
-/// Who drives it and 接管: a capsule floating still, 480 at most, 14 in at its start and 6 elsewhere, 10 between.
+/// Who drives it and 接管: a capsule floating still, 480 at most, one line high (44: 接管 6 in), its dot and 接管 in its
+/// ends concentric with them (@sf.capsule_in), 10 between.
 // kept across runs: a value (no field of it changes)
 let take_over_box : @ui.Style = @ui.style(
   row=true,
   max_w=@sf.take_over_max,
-  pl=S3_5,
+  pl=@sf.capsule_end_room(take_over_h, take_over_dot_side),
   pr=S1_5,
   py=S1_5,
   gap=S2_5,
   align=ACenter,
-  radius=Xl3,
+  radius=Full,
   bg=Floating,
   shadow=Sm,
 )
@@ -222,8 +223,15 @@ let take_over_box : @ui.Style = @ui.style(
 let take_over_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Warn")
 
 ///|
+/// The capsule's height: 接管's 32 and 6 over and under it; its dot's (8: S2).
+let take_over_h : Double = 44.0
+
+///|
+let take_over_dot_side : Double = 8.0
+
+///|
 // kept across runs: a value (no field of it changes)
-let take_over_words_box : @ui.Style = @ui.css("")
+let take_over_words_box : @ui.Style = @ui.css("w=Cut")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -232,13 +240,14 @@ let take_over_words : @ui.TextStyle = @ui.text_style(
   leading=L4_75,
   weight=Semibold,
   color=Fg,
-  max_lines=2,
+  wrap=false,
+  w=Cut,
 )
 
 ///|
 /// 接管: the main solid button (the ink, the page's colour on it), 32 high, 14 in, its corner 16.
 // kept across runs: a value (no field of it changes)
-let take_over_button : @ui.Style = @ui.css("h=S8 px=S3_5 radius=Xl1_5 bg=Fg align=ACenter justify=JCenter")
+let take_over_button : @ui.Style = @ui.css("h=S8 px=S3_5 radius=Full bg=Fg align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

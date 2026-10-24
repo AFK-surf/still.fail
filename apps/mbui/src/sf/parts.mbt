@@ -32,7 +32,8 @@ pub(all) enum Tone {
 ///|
 /// A button (Button): a 36 pill on the wide screen, the phone's 38 one on a
 /// narrow; an icon before its words if given, a spinner in its place while
-/// `busy`. True on the frame after it was pressed.
+/// `busy`; `reach`, where it stands in a card's foot corners: how its ground reaches past the card's words
+/// (foot_across). True on the frame after it was pressed.
 pub fn button(
   c : @ui.Ctx,
   label : String,
@@ -42,6 +43,7 @@ pub fn button(
   busy? : Bool = false,
   disabled? : Bool = false,
   w? : @ui.Size = Auto,
+  reach? : @ui.Style,
 ) -> Bool {
   let t = theme()
   let p = t.p
@@ -73,9 +75,10 @@ pub fn button(
       Plain => (over(p.canvas, alpha(p.hover, h)), p.line_strong, p.text)
     }
   }
-  let height = if t.narrow { 38.0 } else { button_h }
+  let height = button_height()
   let solid = tone == Primary || tone == DangerSolid
   c.box(
+    style=reach.unwrap_or(@ui.style()),
     dir=Row,
     w~,
     h=Px(height),
@@ -113,6 +116,16 @@ pub fn button(
   )
   |> ignore
   live && c.clicked(id)
+}
+
+///|
+/// A button's height in the theme in force: the phone's 38 on a narrow, else button_h.
+pub fn button_height() -> Double {
+  if theme().narrow {
+    38.0
+  } else {
+    button_h
+  }
 }
 
 ///|
@@ -342,9 +355,9 @@ pub fn menu_item(
   let ink = if danger { t.p.red } else if on { t.p.accent_text } else { t.p.text }
   c.box(
     dir=Row,
-    min_h=34.0,
+    min_h=menu_row_min,
     padx=text_in,
-    pady=7.0,
+    pady=menu_row_over,
     gap=if panel { panel_row_gap } else { menu_row_gap },
     align=ACenter,
     bg=if c.lit(id) { t.p.hover } else { 0L },
@@ -651,9 +664,9 @@ pub fn menu_row(
   c.box(
     dir=Row,
     w=Fill(1.0),
-    min_h=34.0,
-    padx=10.0,
-    pady=7.0,
+    min_h=menu_row_min,
+    padx=text_in,
+    pady=menu_row_over,
     gap=if chooser { chooser_gap } else { menu_gap },
     align=ACenter,
     radius=small_panel_inner(r_menu),
@@ -1458,7 +1471,7 @@ pub fn dialog(
         // overflow: auto, its minimum 0): its title and its buttons stay
         c.capped(key + "/body", c.height, shrinks=true, fn() { c.box(style=dialog_body, inner) |> ignore }) |> ignore
         match footer {
-          Some(f) => c.box(style=dialog_foot, f) |> ignore
+          Some(f) => c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad)), f) |> ignore
           None => c.box(style=dialog_end, fn() {  }) |> ignore
         }
         },
@@ -1504,9 +1517,14 @@ let dialog_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Mute
 let dialog_body : @ui.Style = @ui.css("w=Full pt=S4_5 gap=S4")
 
 ///|
-/// Its buttons: at its end, 8 apart, 24 under what it holds and over its foot.
+/// Its buttons: at its end, 8 apart, 24 under what it holds; the last in its foot corner concentric with it (a pane of
+/// the ladder's: dialog_corner_foot).
 // kept across runs: a value (no field of it changes)
-let dialog_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter gap=S2 py=S6")
+let dialog_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter gap=S2 pt=S6")
+
+///|
+/// A dialog's sides' room (24).
+let dialog_pad : Double = 24.0
 
 ///|
 /// With none, 24 under what it holds.
@@ -1569,18 +1587,31 @@ let field_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted
 ///|
 /// A line to type in (controls.css.ts input, a one-line one: a pill as the buttons beside it are, 36 high at least,
 /// 16 in, a line of the strong grey, the field's hover grey pointed at or written in, on the canvas, its words 14, the
-/// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own.
-/// What is in it now, and whether Enter was pressed in it.
+/// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own;
+/// `small`: 32 high (a small panel's, as its rows: input_box_small). What is in it now, and whether Enter was pressed
+/// in it.
 pub fn input(
   c : @ui.Ctx,
   key : String,
   placeholder? : String = "",
   secret? : Bool = false,
   disabled? : Bool = false,
+  small? : Bool = false,
   field? : @ui.Field,
 ) -> @kit.Field {
   @kit.text_field(c, key, placeholder~, secret~, disabled~, size=input_size, line=input_line, field?, look=fn(c, s, editor) {
-    c.box(id=s.id, style=if s.hovered || s.focused { input_box_hot } else { input_box }, editor) |> ignore
+    let hot = s.hovered || s.focused
+    c.box(
+      id=s.id,
+      style=match (small, hot) {
+        (false, false) => input_box
+        (false, true) => input_box_hot
+        (true, false) => input_box_small
+        (true, true) => input_box_small_hot
+      },
+      editor,
+    )
+    |> ignore
   })
 }
 
@@ -1654,6 +1685,16 @@ let input_box : @ui.Style = @ui.css(
 /// Pointed at or written in: the field's hover grey round it.
 // kept across runs: a value (no field of it changes)
 let input_box_hot : @ui.Style = input_box.then(@ui.css("border_color=FieldHover"))
+
+///|
+/// `small`: 32 high, a small panel's (its search): a capsule its padding in from its corner, concentric with it
+/// (capsule_in(r_menu, 32) = panel_pad), as its rows are.
+// kept across runs: a value (no field of it changes)
+let input_box_small : @ui.Style = input_box.then(@ui.style(min_h=Fixed(menu_row_min), py=room(menu_row_over)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let input_box_small_hot : @ui.Style = input_box_small.then(@ui.css("border_color=FieldHover"))
 
 ///|
 /// A dropdown of choices (parts.tsx Select: mbui's, @kit.select: its options under it, the arrows, letters and Enter
@@ -1915,7 +1956,7 @@ pub fn confirm_dialog(
       if error != "" {
         c.box(style=confirm_error_at, fn() { c.text(error, style=confirm_error) |> ignore }) |> ignore
       }
-      c.box(style=confirm_foot, fn() {
+      c.box(style=confirm_foot.then(dialog_corner_foot(dialog_pad)), fn() {
         if button(c, cancel, key=key + "/cancel", tone=Ghost) {
           closed = true
         }
@@ -1930,9 +1971,10 @@ pub fn confirm_dialog(
 }
 
 ///|
-/// Its frame (dialogAlert: 28 over, 24 in, 8 between its title, its lead and what follows).
+/// Its frame (dialogAlert: 28 over, 24 in, 8 between its title, its lead and what follows; its foot its buttons':
+/// confirm_foot).
 // kept across runs: a value (no field of it changes)
-let confirm_box : @ui.Style = @ui.css("px=S6 pt=S7 pb=S6 gap=S2 border=B1 border_color=Line")
+let confirm_box : @ui.Style = @ui.css("px=S6 pt=S7 gap=S2 border=B1 border_color=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2074,7 +2116,16 @@ let panel_text_box : @ui.Style = @ui.css("w=Full px=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_foot_box : @ui.Style = @ui.css("row w=Full justify=JEnd gap=S1_5 pt=S1")
+let panel_foot_box : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  justify=JEnd,
+  gap=S1_5,
+  pt=S1,
+  // (the last in its panel's foot corner: as far in as makes a pill concentric with it)
+  pr=capsule_room(r_menu, panel_pill, less=panel_pad),
+  pb=capsule_room(r_menu, panel_pill, less=panel_pad),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

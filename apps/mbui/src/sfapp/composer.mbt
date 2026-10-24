@@ -30,10 +30,14 @@ let send_line : Double = 21.0
 ///|
 /// The capsule's corner and its inset (ui/Glass.kt ComposerCorner, ComposerInset); what sits inside it is rounded
 /// concentric with it.
-let composer_corner : Double = 26.0
+let composer_corner : Double = @sf.card_corner
 
 ///|
 let composer_inset : Double = 8.0
+
+///|
+/// What waits in the capsule (its quotes) past its inset, to stand the ladder's inset in from its edges.
+let quote_in : Double = @sf.corner_inset - composer_inset
 
 ///|
 /// What waits to go with the message, in the capsule's top left corner: a picture's tile (its remove button reaching
@@ -2029,7 +2033,8 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
   if d.quotes.length() > 0 {
     // at most 176 tall, the rest scrolled to inside it (Composer.kt: heightIn(max = 176) over verticalScroll)
     c.capped("composer/quotes/" + d.key, 176.0, fn() {
-    c.box(w=Fill(1.0), gap=6.0, fn() {
+    // (blocks of the ladder's in the capsule's corners: the ladder's inset in, its buttons' composer_inset)
+    c.box(w=Fill(1.0), gap=6.0, padx=quote_in, pt=quote_in, fn() {
       for q in d.quotes {
         let close = c.id("composer/unquote/\{q.id}")
         if c.clicked(close) {
@@ -2041,8 +2046,8 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
           c.focus_editor(key)
           d.focus = 0
         }
-        // (concentric with the capsule's, a smooth corner's: @sf.inner_corner, not the radius less the inset)
-        c.box(w=Fill(1.0), radius=@sf.inner_corner(composer_corner, composer_inset), bg=k.card, fn() {
+        // (a block of the ladder's: concentric with the capsule's in its corners, mbui working it out)
+        c.box(w=Fill(1.0), radius=@sf.row_corner, bg=k.card, fn() {
           c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=34.0, pt=9.0, align=AStart, fn() {
             // the quote's mark ahead of whose it is (Composer.kt quoteLine's quoteMark)
             c.box(w=Px(15.0), h=Px(19.5), justify=JCenter, fn() {

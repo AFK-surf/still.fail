@@ -134,8 +134,23 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   // Rail.css.ts rail, top: 56 wide, its places in its middle (9 from its edge; the sidebar reaches over its last 8, so
   // the rail is as wide as the rest), 9 under the last; its top row (41 under the window's buttons, else 5) 6 over its
   // first place; in the bar none, its first place 2 from the bar's top
-  let look = if bar { rail_closed } else { rail_open }
-  let top_h = if bar { 0.0 } else if inset { rail_top_inset + rail_gap } else { rail_top_web + rail_gap }
+  let look = if bar {
+    rail_closed
+  } else if wide.tape {
+    rail_open_tape
+  } else {
+    rail_open
+  }
+  // (in a panel of the tape its first place as far under its top as its places are in from its side)
+  let top_h = if bar {
+    0.0
+  } else if inset {
+    rail_top_inset + rail_gap
+  } else if wide.tape {
+    @sf.rail_in_tape
+  } else {
+    rail_top_web + rail_gap
+  }
   c.box(style=look, moves="rail", id=rail_id, fn() {
     c.box(style=rail_head, fn() {
       // its top row drags the window (the macOS app's buttons in it), not in the closed bar
@@ -224,6 +239,26 @@ let rail_open : @ui.Style = @ui.style(
 let rail_closed : @ui.Style = @ui.style(w=Fixed(rail_closed_w), h=Full, p=S0_5, gap=S1_5, align=AStart)
 
 ///|
+/// The rail open in a panel of the tape (laid out Medium): its places in the panel's corners concentric with it
+/// (@sf.rail_in_tape), what it shows beside the sidebar as much wider.
+// kept across runs: a value (no field of it changes)
+let rail_open_tape : @ui.Style = rail_open.then(
+  @ui.style(
+    w=Fixed(rail_shown_w + rail_tape_more),
+    pl=@sf.rail_in_tape_room,
+    pb=@sf.rail_in_tape_room,
+  ),
+)
+
+///|
+/// The rail's inset open (rail_in: 9).
+let rail_in_px : Double = 9.0
+
+///|
+/// How much more of the rail shows on the tape (its places further in: rail_open_tape), the sidebar as much narrower.
+let rail_tape_more : Double = @sf.rail_in_tape - rail_in_px
+
+///|
 /// What of the rail shows beside the sidebar open: its 56 less the 8 the sidebar reaches over.
 let rail_shown_w : Double = 48.0
 
@@ -298,8 +333,8 @@ let rail_item : @ui.Style = @ui.style(w=Fixed(rail_item_side), h=Fixed(rail_item
 let rail_item_side : Double = 38.0
 
 ///|
-/// A square of the rail (Rail.css.ts item's ground, workspaceItem, workspaceAdd): 30, its corner 9, on `ground`; `id`
-/// to press it; its node.
+/// A ground of the rail (Rail.css.ts item's ground, workspaceItem, workspaceAdd): 30 round, on `ground`; `id` to press
+/// it; its node.
 fn rail_square(c : @ui.Ctx, ground : Int64, body : () -> Unit, id? : Int) -> Int {
   c.box(style=rail_sq.then(@ui.style(bg=Data(ground))), id?, body)
 }

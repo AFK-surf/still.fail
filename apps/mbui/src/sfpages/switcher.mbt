@@ -809,7 +809,8 @@ let switcher_head_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w
 
 ///|
 /// A row (Switcher.css.ts row): 38 high at least, 8 over and under and 12 in, its parts 10 apart, rounded as its panel's
-/// corner leaves for it (concentric); chosen, on the words' 7%.
+/// corner leaves for it (concentric), a row's of the ladder's where it is in none (laid out Small, in the lists' box);
+/// chosen, on the words' 7%.
 // kept across runs: a value (no field of it changes)
 let switcher_row : @ui.Style = @ui.style(
   row=true,
@@ -819,7 +820,7 @@ let switcher_row : @ui.Style = @ui.style(
   py=S2,
   gap=S2_5,
   align=ACenter,
-  radius=Inner,
+  radius=InnerOr(@sf.row_radius),
   selected=@ui.patch(bg=Tint),
 )
 

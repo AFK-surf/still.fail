@@ -650,21 +650,33 @@ let wide_lead : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, w=Full)
 let page_note_box : @ui.Style = @ui.css("w=Full px=S6 pb=S2_5")
 
 ///|
-/// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words 20 in; its corner 22, or concentric
-/// with a button in its corner (`foot`), or `corner` (taken from what else has a ground there: a Seg at its top);
-/// tapped when `key` is given. True on the frame after a tap.
-fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false, corner? : @ui.Radius) -> Bool {
+/// What stands in a card's foot corners (the ladder's: docs/ui-panels.md「圆角阶梯」), so how far in its foot is: a
+/// capsule (a button, a field: settings_button_h high), concentric with the card's corner, reaching past its words to there
+/// (`foot_across`, `foot_start`); a block (a command's box), the ladder's inset, reaching past them to it
+/// (`block_across`), round by the ladder's next step there; or nothing with a ground, its words card_pad in.
+priv enum Foot {
+  Words
+  Capsule
+  Block
+}
+
+///|
+/// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words 20 in; round by the ladder's card
+/// corner, whatever stands in its corners concentric with it (`foot`: what stands in its foot corners); tapped when
+/// `key` is given. True on the frame after a tap.
+fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words) -> Bool {
   let id = if key == "" { 0 } else { c.id(key) }
-  let ground = match corner {
-    Some(r) => card_ground.then(@ui.style(radius=r))
-    None => if foot { card_foot_ground } else { card_ground }
+  let ground = match foot {
+    Words => card_ground
+    Capsule => card_foot_ground
+    Block => card_block_ground
   }
   c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
     c.box(style=ground, id~, fn() {
       body()
-      // Parts.kt Card: clickable over its clip (Smooth: its corner, or a foot's)
+      // Parts.kt Card: clickable over its clip (Smooth: its corner)
       if id != 0 {
-        @motion.ripple(c, id, if foot { @sf.card_pad + 19.0 } else { @sf.card_corner })
+        @motion.ripple(c, id, @sf.card_corner)
       }
     })
     |> ignore
@@ -684,14 +696,44 @@ let card_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 let wide_card_room : @ui.Style = @ui.css("w=Full px=S4 pb=S2_5")
 
 ///|
-/// A card: 20 in (CARD_PAD), 22 round (CARD_CORNER); rippled where it is tapped (an id).
+/// A card: 20 in (CARD_PAD), round by the ladder's card corner; rippled where it is tapped (an id).
 // kept across runs: a value (no field of it changes)
 let card_ground : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card clip")
 
 ///|
-/// A card with a button in its corner: 20 + 19 round.
+///|
+/// A settings button's height (Controls.kt Button: 38).
+pub let settings_button_h : Double = 38.0
+
+///|
+/// A button (`button`) in a card's foot corners, its ground reaching past the card's words to where it is concentric
+/// with the card's corner (@sf.card_foot_in): across the card (what is in it centred), or at its start (a button with
+/// words after it: its words where they were).
 // kept across runs: a value (no field of it changes)
-let card_foot_ground : @ui.Style = card_ground.then(@ui.style(radius=@sf.card_foot_radius))
+pub let foot_across : @ui.Style = @sf.foot_across(settings_button_h)
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_start : @ui.Style = @sf.foot_start(settings_button_h, button_pad)
+
+///|
+/// A block across a card's foot, its ground reaching past the card's words to the ladder's inset.
+// kept across runs: a value (no field of it changes)
+let block_across : @ui.Style = @sf.block_across
+
+///|
+/// A settings button's words in from its ends (button_box: 16).
+let button_pad : Double = 16.0
+
+///|
+/// A card with a block in its foot corners: its foot the ladder's inset.
+// kept across runs: a value (no field of it changes)
+let card_block_ground : @ui.Style = card_ground.then(@ui.style(pb=@sf.inset_room))
+
+///|
+/// A card with a button in its foot corners: its foot as far in as makes it concentric (@sf.foot_pad).
+// kept across runs: a value (no field of it changes)
+let card_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(settings_button_h))
 
 ///|
 /// Rows on one rounded card, no lines between them (Parts.kt ListCard, RowsCard): its rows know they are on one
@@ -739,13 +781,13 @@ let wide_list_ground : @ui.Style = @ui.css("w=Full gap=SPx")
 let on_card : Ref[Bool] = Ref(false)
 
 ///|
-/// A list card: its rows 8 in (LIST_PAD), its corner concentric round theirs (LIST_CARD_CORNER).
+/// A list card: a card of the ladder's, its rows its inset in (LIST_PAD), round by its next step (LIST_ROW_CORNER).
 // kept across runs: a value (no field of it changes)
-let list_ground : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, bg=Card, clip=true)
+let list_ground : @ui.Style = @ui.style(w=Full, p=@sf.inset_room, radius=@sf.list_card_radius, bg=Card, clip=true)
 
 ///|
-/// A row of a list card (Parts.kt ListRow): its ground concentric with the card's (LIST_ROW_CORNER), its words 12 and
-/// 12 in (CARD_PAD less LIST_PAD: 20 from the card's edge), what it holds 12 apart; tapped when `key` is given. True on
+/// A row of a list card (Parts.kt ListRow): its ground concentric with the card's (LIST_ROW_CORNER), what it holds
+/// CARD_PAD less LIST_PAD in all round (20 from the card's edges, as a card's words), 12 apart; tapped when `key` is given. True on
 /// the frame after a tap. `piece`: the row a block of the page's list of its own, a piece of its card (card_piece:
 /// whether it is the card's first row, its last).
 fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, Bool)) -> Bool {
@@ -815,19 +857,19 @@ let card_piece_room : @ui.Style = @ui.css("w=Full px=S3")
 ///|
 /// A list card's piece: its rows 8 in from its sides (LIST_PAD); 8 above the card's first, under its last.
 // kept across runs: a value (no field of it changes)
-let list_piece_ground : @ui.Style = @ui.css("w=Full px=S2")
+let list_piece_ground : @ui.Style = @ui.style(w=Full, px=@sf.inset_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_piece_first : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
+let list_piece_first : @ui.Style = @ui.style(w=Full, px=@sf.inset_room, pt=@sf.inset_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_piece_last : @ui.Style = @ui.css("w=Full px=S2 pb=S2")
+let list_piece_last : @ui.Style = @ui.style(w=Full, px=@sf.inset_room, pb=@sf.inset_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_ground_open : @ui.Style = @ui.css("w=Full p=S2")
+let list_ground_open : @ui.Style = @ui.style(w=Full, p=@sf.inset_room)
 
 ///|
 /// A list card's piece's ground: the card's, its corners (LIST_CARD_CORNER).
@@ -855,7 +897,9 @@ let wide_list_line : @ui.Style = @ui.css(
 ///|
 /// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.
 // kept across runs: a value (no field of it changes)
-let list_line : @ui.Style = @ui.css("row w=Full px=S3 py=S3 gap=S3 radius=Inner align=ACenter")
+let list_line : @ui.Style = @ui.css("row w=Full gap=S3 radius=Inner align=ACenter").then(
+  @ui.style(p=@sf.list_words_room),
+)
 
 ///|
 /// A row's main words, as wide as the row lets them, cut to one line.
@@ -1212,6 +1256,7 @@ pub fn button(
   busy? : Bool = false,
   enabled? : Bool = true,
   danger? : Bool = false,
+  reach? : @ui.Style,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
@@ -1237,7 +1282,12 @@ pub fn button(
     t.p.chip
   }
   // (38 high, off the scale; its ground and ink from what it is)
-  c.box(style=button_box, h=Px(38.0), bg=ground, id~, fn() {
+  // (in a card's foot corners, reaching past its words: `reach`, foot_across or foot_start)
+  let style = match reach {
+    Some(r) => button_box.then(r)
+    None => button_box
+  }
+  c.box(style~, h=Px(settings_button_h), bg=ground, id~, fn() {
     if busy {
       @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
     }
@@ -1296,7 +1346,7 @@ fn wide_button(
     t.p.text
   }
   // (46 high, off the scale; its ground and ink from what it is)
-  c.box(style=wide_button_box, h=Px(46.0), bg=ground, id~, fn() {
+  c.box(style=wide_button_box, h=Px(wide_button_h), bg=ground, id~, fn() {
     if busy {
       @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
     }
@@ -1304,12 +1354,16 @@ fn wide_button(
     c.text(label, style=@sf.body.then(@sf.strong).then(@sf.one_line), color=ink) |> ignore
     // Security.kt WideButton: clickable over its capsule
     if enabled && !busy {
-      @motion.ripple(c, id, 23.0)
+      @motion.ripple(c, id, wide_button_h / 2.0)
     }
   })
   |> ignore
   enabled && !busy && hit(c, id)
 }
+
+///|
+/// A wide button's height (Security.kt WideButton: 46).
+let wide_button_h : Double = 46.0
 
 ///|
 /// WideButton: a capsule as wide as where it is, its words in its middle, 20 from its ends however narrow it is

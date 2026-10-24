@@ -486,14 +486,14 @@ fn usage_notes(c : @ui.Ctx, v : Json?) -> Unit {
 // ── styles (Usage.css.ts) ───────────────────────────────────────────────
 
 ///|
-/// The narrow page's body 12 from its sides, its chart and lists each on a card (16 in, its corner round what lies in
-/// its corner: a share's bar, the lists' choice).
+/// The narrow page's body 12 from its sides, its chart and lists each on a card of the ladder's (its words 20 in;
+/// what lies in its corners, a share's bar, the lists' choice, round by the ladder's there: mbui works it out).
 // kept across runs: a value (no field of it changes)
 let ug_narrow : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_narrow_card : @ui.Style = @ui.css("w=Full p=S4 radius=Around bg=Card")
+let ug_narrow_card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card")
 
 ///|
 /// The page's parts 28 apart (usage).

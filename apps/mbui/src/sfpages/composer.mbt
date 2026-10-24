@@ -807,18 +807,18 @@ let thumb_side : Double = 56.0
 let on_veil : Int64 = 0xFFFFFFFFL
 
 ///|
-/// The capsule (composerBox, one line): its parts on its centre line, 2 apart, 6 in at its start, a pill; in a panel's
-/// corners (the tape's page) concentric with them.
+/// The capsule (composerBox, one line): its parts on its centre line, 2 apart, 8 in all round, a pill 48 high (so in a
+/// panel's corners, the ladder's inset in, concentric with them: the tape's page).
 // kept across runs: a value (no field of it changes)
-let composer_box : @ui.Style = @ui.css("row w=Full gap=SPx pl=S1_5 pr=S1_5 py=S1_5 radius=InnerOr(Full) align=ACenter")
+let composer_box : @ui.Style = @ui.css("row w=Full gap=SPx pl=S2 pr=S2 py=S2 radius=InnerOr(Full) align=ACenter")
 
 ///|
-/// The box (composerBox[data-multiline]): a column 12 in, its parts 10 apart, its corner its buttons' pill's with its
-/// padding (COMPOSER_INNER + 12); in a panel's corners concentric with them.
+/// The box (composerBox[data-multiline]): a column its padding in (@sf.composer_pad: its buttons round in its corners
+/// concentric with it), its parts 10 apart, a card's corner of the ladder's; in a panel's corners concentric with them.
 // kept across runs: a value (no field of it changes)
 let composer_box_open : @ui.Style = @ui.style(
   w=Full,
-  p=S3,
+  p=@sf.composer_pad_room,
   gap=S2_5,
   radius=InnerOr(@sf.composer_corner),
 )
@@ -1176,8 +1176,8 @@ let composer_notice_button : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg)
 let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
 
 ///|
-/// A chat's composer's place while it is a capsule: its buttons (32) 6 in, 12 over it and 16 under it.
-let capsule_room : Double = 32.0 + 2.0 * 6.0 + 12.0 + 16.0
+/// A chat's composer's place while it is a capsule: its buttons (32) 8 in, 12 over it and 16 under it.
+let capsule_room : Double = 32.0 + 2.0 * 8.0 + 12.0 + 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1185,4 +1185,4 @@ let chat_foot : @ui.Style = @ui.css("w=Full pt=S3 pb=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chat_foot_apart : @ui.Style = @ui.css("w=Full pt=S3 pb=S3 align=ACenter")
+let chat_foot_apart : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter").then(@ui.style(pb=@sf.inset_room))

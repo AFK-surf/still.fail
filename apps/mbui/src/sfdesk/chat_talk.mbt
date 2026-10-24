@@ -13,15 +13,19 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   match view {
     Some(v) => {
       latest_key(c, src, r, v)
-      chat_list(c, src, r, v, read, room, settings_core(src, w))
+      chat_list(c, src, r, v, read, room, settings_core(src, w), top=chat_bar_room() + list_head_gap)
     }
     None => {
       // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)
+      // (under the bar, as the list's first row is)
       if error is Some(_) || !new_chat_made(c, r) {
-        @sf.waiting(c, shape=Messages, error=match error {
-          Some(e) => @sf.t("android-chat.chat.unreadable", args=[("error", text(Some(e), "message"))])
-          None => ""
+        c.box(style=@ui.style(w=Full, pt=@sf.under_bar_room()), fn() {
+          @sf.waiting(c, shape=Messages, error=match error {
+            Some(e) => @sf.t("android-chat.chat.unreadable", args=[("error", text(Some(e), "message"))])
+            None => ""
+          })
         })
+        |> ignore
       }
       flight_frame(c, draft)
     }
@@ -78,3 +82,13 @@ fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     }
   }
 }
+
+///|
+/// How tall the chat's bar over the list is (pageBar: 45; in a panel of its own as much taller as puts its buttons in
+/// the panel's corner concentric with it: chat_bar_box_tape), and the list's room under it over its first row (24).
+fn chat_bar_room() -> Double {
+  @sf.wide_bar_h + (if @sf.in_pane() { @sf.tape_bar_over } else { 0.0 })
+}
+
+///|
+let list_head_gap : Double = 24.0

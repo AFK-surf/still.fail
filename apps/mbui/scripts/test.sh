@@ -80,20 +80,21 @@ for t in ${TARGETS:-native}; do
     files=(src/sfapp/*_wbtest.mbt)
     n=${SFAPP_SHARDS:-5}
     runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
+    # (the files that sweep every screen, each a Tester from scratch per screen (screens, squeeze: 10.7 and 7.8 of the
+    # 39 s on Studio, 2026-10-25; corners, every screen in five windows and both languages: 64), a process each beside
+    # the pages', so the run takes the longest of them, not their sum)
+    sweeps=(src/sfapp/screens_wbtest.mbt src/sfapp/squeeze_wbtest.mbt src/sfapp/corners_wbtest.mbt)
+    pages=()
+    for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f "* ]] || pages+=("$f"); done
+    for f in "${sweeps[@]}"; do [ -f "$f" ] && runs+=("$f"); done
     if [ "$n" = 1 ]; then
       # (one: the files that test the pages in one process, every one after the ones moon runs before it, so what one
-      # leaves behind that a later one trips on shows (shards, a process each, hide it); the two that sweep every
-      # screen, each a Tester from scratch per screen (screens, squeeze: 10.7 and 7.8 of the 39 s on Studio,
-      # 2026-10-25), a process each beside it, so the run takes the longest of the three, not their sum)
-      sweeps=(src/sfapp/screens_wbtest.mbt src/sfapp/squeeze_wbtest.mbt)
-      pages=()
-      for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f "* ]] || pages+=("$f"); done
+      # leaves behind that a later one trips on shows (shards, a process each, hide it))
       runs+=("${pages[*]}")
-      for f in "${sweeps[@]}"; do [ -f "$f" ] && runs+=("$f"); done
     else
       for ((k = 0; k < n; k++)); do
         shard=()
-        for ((i = k; i < ${#files[@]}; i += n)); do shard+=("${files[i]}"); done
+        for ((i = k; i < ${#pages[@]}; i += n)); do shard+=("${pages[i]}"); done
         [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
       done
     fi

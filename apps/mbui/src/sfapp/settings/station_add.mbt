@@ -385,9 +385,12 @@ fn add_station_steps(
 }
 
 ///|
-/// A command to run elsewhere, with a button that copies it (Settings.kt CommandBox): on surface2, its corner taken from
-/// its button's, 10 in from its edges.
-fn command_box(c : @ui.Ctx, core : Core, words : String) -> Unit {
+/// A command to run elsewhere, with a button that copies it (Settings.kt CommandBox): on surface2, a block of the
+/// ladder's (round by its row corner), its copy button the ladder's inset in from its top and end, as tall as two of
+/// its lines and its inset under them (so with one or two lines as far from its foot too), round by the ladder's next
+/// step there (mbui works it out). `reach`: in a card's foot corners, how it reaches past the card's words
+/// (block_across).
+fn command_box(c : @ui.Ctx, core : Core, words : String, reach? : @ui.Style) -> Unit {
   let t = @sf.theme()
   let id = c.id("command-copy")
   if hit(c, id) {
@@ -395,30 +398,31 @@ fn command_box(c : @ui.Ctx, core : Core, words : String) -> Unit {
     (core.say)(tr("common.copied"))
   }
   c.box(
+    style=reach.unwrap_or(@ui.style()),
     dir=Row,
     w=Fill(1.0),
     pl=12.0,
-    pr=10.0,
-    pt=10.0,
-    pb=10.0,
+    pr=@sf.corner_inset,
+    pt=@sf.corner_inset,
+    pb=@sf.corner_inset,
     gap=8.0,
     radius=@sf.command_box_corner,
     bg=t.p.card2,
     border=1.0,
     border_color=t.p.line,
     fn() {
-      c.box(w=Fill(1.0), fn() { mono(c, words, size=12.0, line=18.0, wrap=true) }) |> ignore
+      c.box(w=Fill(1.0), fn() { mono(c, words, size=12.0, line=command_line, wrap=true) }) |> ignore
       c.box(
-        w=Px(32.0),
-        h=Px(32.0),
-        radius=8.0,
+        w=Px(command_copy),
+        h=Px(command_copy),
+        radius=@sf.small_corner,
         bg=t.p.chip,
         align=ACenter,
         justify=JCenter,
         id~,
         fn() {
           @sf.icon(c, "copy", size=16.0, color=t.p.text) |> ignore
-          @motion.ripple(c, id, 8.0)
+          @motion.ripple(c, id, @sf.small_corner)
         },
       )
       |> ignore
@@ -426,6 +430,13 @@ fn command_box(c : @ui.Ctx, core : Core, words : String) -> Unit {
   )
   |> ignore
 }
+
+///|
+/// A command's line, and its copy button: two of its lines high.
+let command_line : Double = 18.0
+
+///|
+let command_copy : Double = command_line * 2.0
 
 ///|
 /// A workspace with no station (FirstStation): what a station is, then, for its owners and admins, its first one added

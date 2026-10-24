@@ -165,7 +165,7 @@ fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     let group = text(Some(g), "group")
     blocks.push(fn() {
       let rows = fn() {
-        c.box(style=keys_rows, fn() {
+        c.box(style=if look is Narrow { keys_rows_carded } else { keys_rows }, fn() {
           for a in listed {
             if text(Some(a), "group") == group {
               keys_row(c, core, a)
@@ -267,9 +267,17 @@ fn keys_toggle(c : @ui.Ctx, key : String, words : String) -> Bool {
 let keys_rows : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
+/// The rows on a card (narrow): the first's and the last's keys in its corners as far from both its edges.
+// kept across runs: a value (no field of it changes)
+let keys_rows_carded : @ui.Style = keys_rows.then(@sf.card_rows_reach(keys_row_h, keys_record_h))
+
+///|
 /// (Shortcuts.css.ts row: 40 high at least, 8 apart, the list's words)
 // kept across runs: a value (no field of it changes)
-let keys_row_box : @ui.Style = @ui.css("row w=Full min_h=S10 gap=S2 align=ACenter")
+let keys_row_box : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(keys_row_h), gap=S2, align=ACenter)
+
+///|
+let keys_row_h : Double = 40.0
 
 ///|
 // kept across runs: a value (no field of it changes)

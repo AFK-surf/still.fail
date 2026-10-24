@@ -962,6 +962,10 @@ fn runs_of(
 }
 
 ///|
+/// A code block's copy key's height: a capsule.
+let code_key_h : Double = 24.0
+
+///|
 /// How long a code block says it was copied, after its copy is pressed.
 let copied_ms : Double = 1500.0
 
@@ -993,11 +997,12 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     } else {
       true
     })
-  // the copy key in the block's top right corner: as far from both edges, concentric with it; to a mouse over the code,
-  // quiet (55%) until the pointer is on the block (Prose.css.ts codeBar), to a finger on a row of its own over it (it
-  // hovers over nothing: `pointer: coarse`), whatever the layout
-  let block_radius = 12.0
-  let key_inset = 4.0
+  // the copy key in the block's top right corner: a capsule, as far from both edges as makes it concentric with the
+  // block (a block of the ladder's: row_corner); to a mouse over the code, quiet (55%) until the pointer is on the block
+  // (Prose.css.ts codeBar), to a finger on a row of its own over it (it hovers over nothing: `pointer: coarse`),
+  // whatever the layout
+  let block_radius = row_corner
+  let key_inset = capsule_in(block_radius, code_key_h)
   let over = @ui.pointing() is Mouse
   let block = c.id("sf-code-block/" + code)
   let bar = fn() {
@@ -1006,7 +1011,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       pl=key_inset,
       pr=key_inset,
       pt=key_inset,
-      h=Px(28.0),
+      h=Px(key_inset + code_key_h),
       align=ACenter,
       justify=JEnd,
       fn() {
@@ -1022,11 +1027,11 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
         |> ignore
         c.box(
           dir=Row,
-          h=Px(24.0),
+          h=Px(code_key_h),
           padx=7.0,
           gap=4.0,
           align=ACenter,
-          radius=inner_corner(block_radius, key_inset),
+          radius=code_key_h / 2.0,
           bg=alpha(t.p.canvas, 0.8),
           id~,
           fn() {
@@ -1046,8 +1051,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
               wrap=false,
             )
             |> ignore
-            // Markdown.kt: clip(Smooth(concentric(12, 4))).clickable
-            @motion.ripple(c, id, inner_corner(block_radius, key_inset))
+            @motion.ripple(c, id, code_key_h / 2.0)
           },
         )
         |> ignore
@@ -1215,7 +1219,7 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
     c.sideways(key, padx=bleed, fn() {
       c.box(
         w=Px(total + 2.0),
-        radius=20.0,
+        radius=row_corner,
         border=1.0,
         border_color=w.line,
         bg=table_ground(),
@@ -1329,5 +1333,5 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
 }
 
 ///|
-/// The table head's tint's corner: concentric with the table's frame (20), 1 in from its edge.
-let table_head_radius : Double = inner_corner(20.0, 1.0)
+/// The table head's tint's corner: concentric with the table's frame (a block of the ladder's), 1 in from its edge.
+let table_head_radius : Double = inner_corner(row_corner, 1.0)

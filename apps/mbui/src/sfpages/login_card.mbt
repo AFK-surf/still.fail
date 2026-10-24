@@ -353,7 +353,7 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
 // kept across runs: a value (no field of it changes)
 let lc_card : @ui.Style = @ui.style(
   max_w=Full,
-  p=S2,
+  p=@sf.inset_room,
   gap=S0_5,
   radius=@sf.login_card_corner,
   bg=A(Fg, O5),

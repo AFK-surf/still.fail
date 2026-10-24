@@ -109,8 +109,10 @@ let recent_empty : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=Full
 let recent_rows : @ui.Style = @ui.css("w=Full px=S1_5")
 
 ///|
+/// A chat's row: concentric with what it is in where that is rounded, a row's of the ladder's where it stands alone
+/// (under the fold, on the page's ground).
 // kept across runs: a value (no field of it changes)
-let recent_row : @ui.Style = @ui.css("w=Full radius=Inner clip")
+let recent_row : @ui.Style = @ui.style(w=Full, radius=InnerOr(@sf.row_radius), clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)

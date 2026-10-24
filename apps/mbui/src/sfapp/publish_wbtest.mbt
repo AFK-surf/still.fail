@@ -45,7 +45,11 @@ test "公开分享: the chat's sheet lists its link, 复制 copies it" {
   let (_, mine) = t.find("10 分钟前 · Alice").unwrap()
   let (_, revoke) = t.find_last("撤销").unwrap()
   assert_true((revoke - mine).abs() < 1.0)
-  // (Bob's 复制, the last, under 复制会话链接)
+  // (Bob's 复制, the last, under 复制会话链接: the sheet's last row, brought up from under its foot)
+  match t.find_last("复制") {
+    Some((_, y)) if y > publish_fold => t.wheel(195.0, publish_fold, y - publish_fold)
+    _ => ()
+  }
   tap_last(t, "复制")
   assert_eq(t.clipboard(), "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq-p1")
   assert_true(t.find("已复制链接") is Some(_))
@@ -108,3 +112,7 @@ fn tap_last(t : @ui.Tester, s : String) -> Unit {
     None => abort("no text \"\{s}\" on screen")
   }
 }
+
+///|
+/// Where the chat's sheet's rows are well in view on a phone (844 high): a row under it is brought up to it.
+let publish_fold : Double = 600.0

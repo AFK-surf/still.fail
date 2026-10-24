@@ -75,9 +75,10 @@ test "corners: toasts, fields, segmented choices, a toolbar" {
 
 ///|
 test "corners: a fault names what breaks the rule by its words and place" {
+  // (4 from its side and 10 from its top: its corner worked out cannot be concentric with both)
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
-      c.box(w=Px(200.0), h=Px(80.0), pad=4.0, bg=0xEEEEEEFFL, radius=16.0, fn() {
+      c.box(w=Px(200.0), h=Px(80.0), padx=4.0, pady=10.0, bg=0xEEEEEEFFL, radius=16.0, fn() {
         c.box(pad=8.0, bg=0x3366FFFFL, radius=6.0, fn() { c.text("Send", size=13.0) |> ignore })
         |> ignore
       })

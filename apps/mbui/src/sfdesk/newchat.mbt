@@ -574,7 +574,7 @@ fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
 /// workspace's stations, what is added going into the new chat's draft (DriveTab).
 fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -> Unit {
   c.box(style=side_panel_style, fn() {
-    c.box(style=side_bar, fn() {
+    c.box(style=if @sf.in_pane() { side_bar_tape } else { side_bar }, fn() {
       c.box(style=side_tab_list, fn() {
         let close = c.id("new/files-tab-close")
         c.cursor(close, Hand)
