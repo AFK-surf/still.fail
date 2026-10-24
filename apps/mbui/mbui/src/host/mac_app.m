@@ -808,35 +808,49 @@ static void run_script_step(int step) {
 }
 
 // The window's buttons in the app's top row (an inset window): 16 from its left, centred on its 44, as still.fail's
-// desktop app has them (Electron's trafficLightPosition {16, 15}). AppKit lays its title bar out again when it likes
-// (the window resized, its appearance set dark or light, a button shown), its container back at its own height and
-// the buttons left where they were in it (high in the row): placed again each time it does (watch_buttons).
+// desktop app has them (Electron's trafficLightPosition {16, 15}), as far apart as the system has them. AppKit lays its
+// title bar out again when it likes (the window resized, its appearance set dark or light): its container back at
+// its own height, each button put back in its own place one after the other (NSThemeFrame _updateButtonPositions,
+// each move told before the next is made, and a button not moved again while it is being moved). So the buttons are
+// placed again once AppKit is done, before the window shows it (buttons_moved), never between its moves: placed
+// then, from the places they had then, they were left apart unevenly and the last one where AppKit had put it.
 // Not while the system has them: from as it starts taking the window full screen till it has given it back (its own
-// bar there, the buttons moved by it as it goes); nor what is laid out while they are being placed, this placing's
-// own doing or AppKit's answer to it (in the move to full screen a button keeps its own place, told again each time:
-// placed again on that, they went back and forth till the stack ran out).
-static bool buttons_system, buttons_placing;
+// bar there).
+static bool buttons_system, buttons_placing, buttons_due;
+static double buttons_step;
 
 static void place_buttons(NSWindow *w) {
   NSButton *close = [w standardWindowButton:NSWindowCloseButton];
   NSButton *mini = [w standardWindowButton:NSWindowMiniaturizeButton];
   NSButton *zoom = [w standardWindowButton:NSWindowZoomButton];
   NSView *bar = close.superview.superview;
-  if (!setup_inset || !close || !bar || buttons_system || buttons_placing || (w.styleMask & NSWindowStyleMaskFullScreen))
-    return;
+  if (!setup_inset || !close || !bar || buttons_system || (w.styleMask & NSWindowStyleMaskFullScreen)) return;
+  // (what is laid out while they are placed is this placing's own doing: not told again)
   buttons_placing = true;
-  double bh = close.frame.size.height, gap = mini.frame.origin.x - close.frame.origin.x;
-  double h = bh + 2 * 15.0;
+  double bh = close.frame.size.height, h = bh + 2 * 15.0;
   NSRect f = bar.frame;
   f.size.height = h;
   f.origin.y = w.frame.size.height - h;
   if (!NSEqualRects(bar.frame, f)) bar.frame = f;
   NSArray<NSButton *> *bs = @[ close, mini, zoom ];
   for (NSUInteger i = 0; i < bs.count; i++) {
-    NSPoint o = NSMakePoint(16.0 + i * gap, (h - bh) / 2.0);
+    NSPoint o = NSMakePoint(16.0 + i * buttons_step, (h - bh) / 2.0);
     if (!NSEqualPoints(bs[i].frame.origin, o)) [bs[i] setFrameOrigin:o];
   }
   buttons_placing = false;
+}
+
+// AppKit moved the title bar's container or a button: the buttons placed once it is done with them, before the window
+// is drawn (a block the run loop does once the event or the call it is in has returned, before it shows what changed;
+// at most one waiting).
+static void buttons_moved(NSWindow *w) {
+  if (buttons_placing || buttons_due) return;
+  buttons_due = true;
+  CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, ^{
+    buttons_due = false;
+    place_buttons(w);
+  });
+  CFRunLoopWakeUp(CFRunLoopGetMain());
 }
 
 // The buttons the app's again: the window back from full screen, or it did not go (MBAppDelegate).
@@ -845,19 +859,20 @@ static void buttons_back(NSWindow *w) {
   place_buttons(w);
 }
 
-// The buttons placed as the window opens, and again whenever their title bar's container or one of them is laid out
-// anew (by AppKit, whatever made it: NSViewFrameDidChangeNotification), not after each thing known to do it; the
-// system's from as the window starts going full screen till it is back (or did not go).
+// The buttons placed as the window opens (as far apart as AppKit has them then), and again whenever AppKit lays their
+// title bar's container or one of them out anew (NSViewFrameDidChangeNotification), whatever made it, not after each
+// thing known to do it; the system's from as the window starts going full screen till it is back (or did not go).
 static void watch_buttons(NSWindow *w) {
   NSButton *close = [w standardWindowButton:NSWindowCloseButton];
+  NSButton *mini = [w standardWindowButton:NSWindowMiniaturizeButton];
   NSView *bar = close.superview.superview;
-  if (!close || !bar) return;
+  if (!close || !mini || !bar) return;
+  buttons_step = mini.frame.origin.x - close.frame.origin.x;
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-  for (NSView *v in @[ bar, close, [w standardWindowButton:NSWindowMiniaturizeButton],
-                       [w standardWindowButton:NSWindowZoomButton] ]) {
+  for (NSView *v in @[ bar, close, mini, [w standardWindowButton:NSWindowZoomButton] ]) {
     v.postsFrameChangedNotifications = YES;
     [nc addObserverForName:NSViewFrameDidChangeNotification object:v queue:nil
-                usingBlock:^(NSNotification *n) { place_buttons(w); }];
+                usingBlock:^(NSNotification *n) { buttons_moved(w); }];
   }
   [nc addObserverForName:NSWindowWillEnterFullScreenNotification object:w queue:nil
               usingBlock:^(NSNotification *n) { buttons_system = true; }];
