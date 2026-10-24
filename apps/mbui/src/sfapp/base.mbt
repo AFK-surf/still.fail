@@ -3,6 +3,11 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  drive_player,
+  drive_reader,
+  play_left,
+  reader_key,
+  reader_left,
   type Mark,
   type Viewer,
   type ViewerFrame,

@@ -1,11 +1,13 @@
 // A file of a station's drive as a viewer opens it (@sf.ViewerFile; the web's web/src/drive/viewerFile.ts): read
 // through the core a part at a time (`drive.read`, 4 MB a part, bytes beside the answer), kept on the device as its
 // folder lists it (drive_keep: read whole as `file`, played as `played`); where it was left on this device the core's
-// (the drivePlace topic, `drive.place`); saved as the drive's 下载 saves it.
+// (the drivePlace topic, `drive.place`); saved as the drive's 下载 saves it. A text of it read in the library's reader,
+// a video or a song played in its player, for a page of either frame (the phone's DriveRead and DrivePlay, the
+// desktop's over the whole window).
 
 ///|
 /// The file `at.path` of `at.root` on `at.station`, as its folder (the `drive` topic, as last read) lists it.
-fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerFile {
+pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerFile {
   let root = at.root.unwrap_or("")
   let dir = dv_parent(at.path)
   let name = dv_name(at.path)
@@ -105,7 +107,7 @@ fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerFile 
       })
     },
     save: fn() {
-      say(c, fill("android-misc.drive.downloading", [("name", name)]))
+      say(c, @sf.t("android-misc.drive.downloading", args=[("name", name)]))
       download_drive_file(c, src, at.station, root, at.path, name, listed=listed)
     },
   }
@@ -113,19 +115,19 @@ fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerFile 
 
 ///|
 /// A drive's place as the core's calls and topics name it.
-fn drive_params(station : String, root : String, path : String) -> Map[String, Json] {
+pub fn drive_params(station : String, root : String, path : String) -> Map[String, Json] {
   { "station": Json::string(station), "root": Json::string(root), "path": Json::string(path) }
 }
 
 ///|
 /// The longest subtitle read (a SubRip of a long film is a few hundred KB).
-let subtitle_limit : Int = 4 * 1024 * 1024
+pub let subtitle_limit : Int = 4 * 1024 * 1024
 
 ///|
 /// A file of a drive read whole (`drive.read`, drive_part a part), `limit` bytes at most (below 0: all of it), how much
 /// has come told as it comes (from the size its folder lists, before the first part); kept as `keep` (drive_keep) as
 /// its folder lists it (`listed`: its mtime, its size).
-fn drive_read_all(
+pub fn drive_read_all(
   src : Source,
   station : String,
   root : String,
@@ -177,4 +179,58 @@ fn drive_read_all(
     })
   }
   next()
+}
+
+///|
+/// Where a drive's file read or played is kept as it is left (the library's reader's and player's key).
+pub fn reader_key(at : DriveAt) -> String {
+  at.station + "\n" + at.root.unwrap_or("") + "\n" + at.path
+}
+
+///|
+/// The text `at.path` of `at.root` on `at.station`, read (the web's Reader): back to its folder by name (`back`).
+pub fn drive_reader(c : @ui.Ctx, src : Source, at : DriveAt, back : () -> Unit) -> Unit {
+  let file = drive_viewer_file(c, src, at)
+  @sf.reader(
+    c,
+    reader_key(at),
+    file,
+    markdown=@sf.reads_as_markdown(file.name),
+    back_label=viewer_folder_label(src, at.station, at.root.unwrap_or(""), dv_parent(at.path)),
+    on_back=back,
+  )
+}
+
+///|
+/// The file `at.path` of `at.root` on `at.station`, played (the web's Player: opened where it was left on this device,
+/// the subtitle beside it), its folder's others to go to (`go`: by name), back to its folder by name (`back`).
+pub fn drive_player(c : @ui.Ctx, src : Source, at : DriveAt, back : () -> Unit, go : (DriveAt) -> Unit) -> Unit {
+  let root = at.root.unwrap_or("")
+  let dir = dv_parent(at.path)
+  let file = drive_viewer_file(c, src, at)
+  let entries = items((src.topic)("drive", drive_params(at.station, root, dir)).value, "entries").map(dv_entry)
+  let siblings : Array[@sf.ViewerEntry] = entries.map(fn(e) {
+    { name: e.name, size: e.size, mtime: e.mtime, mime: e.mime, kind: e.kind, dir: e.dir }
+  })
+  @sf.player(
+    c,
+    reader_key(at),
+    file,
+    siblings,
+    back_label=viewer_folder_label(src, at.station, root, dir),
+    on_back=back,
+    on_go=fn(other) { go({ station: at.station, root: at.root, path: dv_join(dir, other) }) },
+  )
+}
+
+///|
+/// A drive's text read, left: where it was, kept.
+pub fn reader_left(at : DriveAt) -> Unit {
+  @sf.reader_let_go(reader_key(at))
+}
+
+///|
+/// A drive's file played, left: where it was kept, the player stopped.
+pub fn play_left(at : DriveAt) -> Unit {
+  @sf.player_let_go(reader_key(at))
 }
