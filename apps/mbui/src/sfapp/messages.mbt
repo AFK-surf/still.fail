@@ -509,17 +509,10 @@ let blocked_row : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 /// all its words and its time under them. A failure (⚠️ at its start) is the pill in red.
 fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Unit {
   let t = @sf.theme()
-  let failed = m.text.has_prefix("⚠️")
-  let mut said = if failed {
-    m.text.view(start_offset="⚠️".length()).to_string().trim_start(chars=" ").to_string()
-  } else {
-    m.text
-  }
-  // a line of the UI, not prose: no 。 at its end
-  let trimmed = said.trim_end(chars=" \n").to_string()
-  if trimmed.has_suffix("。") {
-    said = trimmed.view(end_offset=trimmed.length() - 1).to_string()
-  }
+  // as the core says it is shown (the chat view's `notice`): a failure (its ⚠️ taken for the red), its words as a line
+  // of the UI, where a profile's link begins
+  let failed = m.notice_failed
+  let said = m.notice_words
   let ground = if failed {
     if t.dark {
       0x442322FFL
@@ -548,13 +541,10 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
     None => said
   }
   // in one about a profile (its sign-in failed), what went wrong (after its ：) leads to that profile's page
-  let colon = if m.profile == "" {
-    None
+  let colon = if m.profile != "" && m.notice_link >= 0 && m.notice_link <= said.length() {
+    Some(m.notice_link)
   } else {
-    match said.find("：") {
-      Some(i) => Some(i + "：".length())
-      None => said.find(":").map(fn(i) { i + 1 })
-    }
+    None
   }
   let to_install = match m.install {
     Some(i) if i.action != "" => Some(i)

@@ -176,6 +176,7 @@ fn reset() -> Unit {
   send_flight.val = None
   flying.val = None
   opened_notices.clear()
+  tool_parts.clear()
   flashing.val = ("", 0.0)
   flash_row.val = None
   at_end_env.val = -1
