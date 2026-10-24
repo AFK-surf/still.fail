@@ -9,6 +9,6 @@ tap 星火助手
 wait 1500
 tap Slack app
 wait 1500
-tap 权限 · 已开启 4 / 5 项
+tap 权限 · 已开启 4 / 16 项
 wait 1500
 exit

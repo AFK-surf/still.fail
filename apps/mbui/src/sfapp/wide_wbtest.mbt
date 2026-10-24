@@ -1363,10 +1363,10 @@ test "wide: a Slack connect's app folded on its page as the web's: its look and 
   assert_true(t.find("应用到 Slack") is None, msg="folded")
   t.click(Button, label="Slack app")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("权限 · 已开启 4 / 5") is Some(_), msg="its permissions counted: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("权限 · 已开启 4 / 16") is Some(_), msg="its permissions counted: " + t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("在 Slack 中打开此 app") is Some(_))
   // its permissions unfolded: by section, the one only admins allow marked
-  t.click(Button, label="权限 · 已开启 4 / 5 项")
+  t.click(Button, label="权限 · 已开启 4 / 16 项")
   t.frame()
   for w in ["文件和文档", "主动发私信", "需管理员"] {
     assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(w) { w.0 }).join("|"))

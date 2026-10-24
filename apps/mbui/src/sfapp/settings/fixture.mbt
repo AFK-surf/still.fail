@@ -449,7 +449,7 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
     ("sessions", Json::number(4.0)),
     ("statusText", str(status)),
     ("presence", str(presence)),
-    ("modeText", str(mode_label(mode))),
+    ("modeText", str(if mode == "multi-session" { "每个 thread 一个会话" } else { "所有 thread 共用一个会话" })),
     ("modeShort", str("")),
     ("runtimeText", str("Claude Code")),
     ("runText", str("")),
@@ -467,16 +467,91 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
         },
       ),
     ),
-    (
-      "modeWords",
-      obj([
-        ("multi", obj([("label", str("每个 thread 一个会话")), ("description", str("在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话"))])),
-        ("single", obj([("label", str("所有 thread 共用一个会话")), ("description", str("它看到的所有 thread 都进入同一个会话，适合长期值守的助手"))])),
-        ("mentionOn", str("被 @ 的 thread 中，后续回复无需再 @。")),
-        ("mentionOff", str("频道中它可见的每条消息都会进入会话。")),
-      ]),
-    ),
+    ("modeWords", fx_mode_words(false)),
   ])
+}
+
+///|
+/// How a connect's ways are said, as the core says them (present.ts modeWords): a Feishu one's in its groups' words.
+fn fx_mode_words(feishu : Bool) -> Json {
+  if feishu {
+    obj([
+      ("multi", obj([("label", str("每个群一个会话")), ("description", str("在群里 @ 它开始，之后群里的消息都交给这个会话；@ 它说「新会话」另开一个，话题群的每个话题各一个会话"))])),
+      ("single", obj([("label", str("所有群共用一个会话")), ("description", str("它所在的群和私聊都进入同一个会话，适合长期值守的助手"))])),
+      ("mentionOn", str("被 @ 后，同一个群里的后续消息无需再 @。")),
+      ("mentionOff", str("它所在的群里的每条消息都会进入会话。")),
+    ])
+  } else {
+    obj([
+      ("multi", obj([("label", str("每个 thread 一个会话")), ("description", str("在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话"))])),
+      ("single", obj([("label", str("所有 thread 共用一个会话")), ("description", str("它看到的所有 thread 都进入同一个会话，适合长期值守的助手"))])),
+      ("mentionOn", str("被 @ 的 thread 中，后续回复无需再 @。")),
+      ("mentionOff", str("频道中它可见的每条消息都会进入会话。")),
+    ])
+  }
+}
+
+///|
+/// A Slack app's permissions as the core says them (present.ts slackSections).
+fn fx_sections() -> Json {
+  [
+    obj([
+      ("title", str("消息")),
+      (
+        "groups",
+        [
+          fx_group("base", "读取和回复消息", "", fixed=true),
+          fx_group("public", "在未加入的公开频道发言", ""),
+          fx_group("dm", "主动发私信", ""),
+          fx_group("customize", "使用自定义名称和头像发消息", ""),
+          fx_group("reactions", "表情回应、置顶和书签", ""),
+        ],
+      ),
+    ]),
+    obj([
+      ("title", str("频道和群")),
+      (
+        "groups",
+        [
+          fx_group("channels", "创建和管理频道", ""),
+          fx_group("topics", "修改频道话题和邀请成员", ""),
+          fx_group("connect", "Slack Connect 跨组织频道", "接受邀请需要由能批准 Slack Connect 的人（默认为管理员）安装 app；发送邀请也受工作区设置限制，且仅限付费版"),
+        ],
+      ),
+    ]),
+    obj([
+      ("title", str("文件和文档")),
+      (
+        "groups",
+        [
+          fx_group("files", "读写文件", ""),
+          fx_group("canvases", "读写 canvas", ""),
+          fx_group("lists", "读写列表", ""),
+        ],
+      ),
+    ]),
+    obj([
+      ("title", str("成员和搜索")),
+      (
+        "groups",
+        [
+          fx_group("people", "查看成员资料", ""),
+          fx_group("usergroups", "管理用户组和发起通话", "创建用户组、修改成员需要工作区设置允许，很多工作区仅限管理员；用户组仅限付费版"),
+          fx_group("search", "搜索消息、文件和成员", ""),
+        ],
+      ),
+    ]),
+    obj([
+      ("title", str("其他")),
+      (
+        "groups",
+        [
+          fx_group("extras", "链接预览、提醒和状态", ""),
+          fx_group("more", "状态、元数据和斜杠命令", ""),
+        ],
+      ),
+    ]),
+  ]
 }
 
 ///|
@@ -1074,6 +1149,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             ],
           ),
           ("chosen", obj([("teamId", str("T1")), ("name", str("星火"))])),
+          ("modeWords", fx_mode_words(fx_connect_step.val.has_prefix("feishu"))),
+          ("sections", fx_sections()),
         ]),
       )
     "slackApp" =>
@@ -1093,27 +1170,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               ("groups", obj([("base", Json::boolean(true)), ("public", Json::boolean(true)), ("dm", Json::boolean(true)), ("files", Json::boolean(true))])),
             ]),
           ),
-          // its permissions as the core says them (present.ts slackSections), two of its sections
-          (
-            "sections",
-            [
-              obj([
-                ("title", str("消息")),
-                (
-                  "groups",
-                  [
-                    fx_group("base", "读取和回复消息", "", fixed=true),
-                    fx_group("public", "在未加入的公开频道发言", ""),
-                    fx_group("dm", "主动发私信", ""),
-                  ],
-                ),
-              ]),
-              obj([
-                ("title", str("文件和文档")),
-                ("groups", [fx_group("files", "读写文件", ""), fx_group("connect", "Slack Connect 跨组织频道", "接受邀请需要管理员安装 app")]),
-              ]),
-            ],
-          ),
+          // its permissions as the core says them (present.ts slackSections)
+          ("sections", fx_sections()),
         ]),
       )
     "vaultUses" =>
